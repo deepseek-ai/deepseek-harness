@@ -51,19 +51,44 @@ const DUPLICATE_SAFE_PACKAGES: readonly string[] = [
  * prominent heading in the pull request description.
  */
 const SAFE_HOST_DEPENDENCY_EXPORTS = {
+  '@deepseek-ai/dsh-atomic-write': ['withFileLock', 'writeFileAtomic'],
+  '@deepseek-ai/dsh-computer-use/brand': ['ComputerUseProviderName'],
   '@deepseek-ai/dsh-credentials': ['credentialKey'],
   '@deepseek-ai/dsh-deque': ['Deque'],
+  // The Liveshare wire codec and identity helpers are stateless functions over caller-owned values.
+  '@deepseek-ai/dsh-experimental-liveshare-protocol': [
+    'LIVESHARE_CAPABILITIES', 'LIVESHARE_PROTOCOL_VERSION', 'parseRelayFrame', 'parseShareAccessState',
+    'parseTunnelWorkerCommand', 'parseTunnelWorkerEvent', 'rawText', 'sendFrame', 'unsupportedFrameRefusal',
+    'viewerRequestFields', 'identityFromKey', 'identityKeyOf',
+  ],
   '@deepseek-ai/dsh-llm': ['callConfigEquals'],
+  '@deepseek-ai/dsh-session': ['SessionId'],
   '@deepseek-ai/dsh-session-format': ['sessionFormatLogFilename'],
+  '@deepseek-ai/dsh-storage-domain': ['defineDomain'],
   '@deepseek-ai/dsh-timeout': ['MAX_TIMER_DELAY_MS'],
   '@deepseek-ai/schemastery': ['default'],
 } as const satisfies HostDependencyExports
 
 /** Runtime exports that require every consumer to resolve the provider's shared peer instance. */
 const PEER_REQUIRED_HOST_EXPORTS = {
+  // Profile settings must match the installed Node provider's configuration schema.
+  '@deepseek-ai/dsh-ptc-runtime-node/configuration': ['resolvePersistentExecution'],
+  // CUA checks UserQuestionError and preserves AttachmentError from image admission.
+  '@deepseek-ai/dsh-attachment': ['admitEncodedImages'],
+  '@deepseek-ai/dsh-user-questions': ['UserQuestionError'],
+  // `instanceof` checks need the translator's own class instance.
+  '@deepseek-ai/dsh-experimental-translator': ['TranslationError'],
+  // Stateless; a safe classification would turn the forge panel's forge and worktree peers into dependencies.
+  '@deepseek-ai/dsh-experimental-forge': ['changeRequestKey'],
+  '@deepseek-ai/dsh-experimental-worktree': ['generatedWorktreeName'],
+  // The forge panel matches ctx.fs failures with `instanceof FsError`.
+  '@deepseek-ai/dsh-fs': ['FsError'],
   '@deepseek-ai/dsh-scope': ['carrierKeyOf', 'createScope', 'scopeOf', 'scopeTarget'],
-  '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION'],
+  // appendPluginRecord writes through the Session class's private log; pluginRecordOf is stateless.
+  '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf'],
   '@deepseek-ai/dsh-session-persistence': ['SessionPersistenceNotFoundError'],
+  // Readers recognize a deadline's TimeoutReason only by `instanceof` against their own copy.
+  '@deepseek-ai/dsh-timeout': ['deadline'],
 } as const satisfies HostDependencyExports
 
 /** Exact import specifier to reviewed runtime exports. */
@@ -100,18 +125,4 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** Whether a package manifest declares a dynamically loaded Client entry. */
 export function hasClientDeclaration(dshField: unknown): boolean {
   return isRecord(dshField) && Object.hasOwn(dshField, 'client')
-}
-
-/** Whether the repository policy flattens one package's non-Cordis peers. */
-export function usesFlattenedPackageDependencies(
-  manifestPath: string,
-  packageName: string,
-  dshField: unknown,
-  policy: PackageDependencyPolicy = PACKAGE_DEPENDENCY_POLICY,
-): boolean {
-  if (!manifestPath.startsWith('packages/') || manifestPath.startsWith('packages/experimental/')) return false
-  if (policy.hostPackages.includes(packageName)) return true
-  if (manifestPath.startsWith('packages/client/')) return true
-  const included = hasClientDeclaration(dshField) || policy.clientFaceInclude.includes(packageName)
-  return included && !policy.clientFaceExclude.includes(packageName)
 }

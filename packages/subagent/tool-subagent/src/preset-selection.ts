@@ -1,6 +1,4 @@
 /** Deployment-owned preset choices for one delegation tool. */
-import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 
 /** Optional default and model-selectable preset ids for a spawn tool. */
@@ -16,10 +14,8 @@ export interface PresetSelectionRequest {
   readonly agent_preset?: unknown
 }
 
-/** Validates configured references and resolves model input against the allowlist. */
+/** Validates configured choices and resolves model input against the allowlist. */
 export class SubagentPresetSelection {
-  private descriptions: string[] = []
-
   constructor(private readonly config: PresetSelectionConfig) {
     const { agentPreset, allowedAgentPresets } = config
     if (allowedAgentPresets === undefined) return
@@ -41,34 +37,12 @@ export class SubagentPresetSelection {
     return this.config.allowedAgentPresets
   }
 
-  /** Model-visible selection guidance and configured preset descriptions. */
+  /** Model-visible selection and default guidance. */
   get description(): string {
     const fallback = this.config.agentPreset === undefined
       ? 'Omit to inherit the parent agent\'s current preset.'
       : `Omit to use ${this.config.agentPreset}.`
     return `Agent preset for this child. ${fallback}`
-      + (this.descriptions.length === 0 ? '' : ` Available presets: ${this.descriptions.join('; ')}`)
-  }
-
-  /**
-   * Read configured preset declarations before publishing the tool; mounting validates their activation.
-   * @param ctx - Tool composition containing the preset service.
-   */
-  async validate(ctx: Context): Promise<void> {
-    const presets = ctx.get('agentPresets')
-    if (presets === undefined) throw new Error('tool-subagent: agent preset selection requires the agent-presets service')
-    const ids = new Set([
-      ...this.config.agentPreset === undefined ? [] : [this.config.agentPreset],
-      ...this.config.allowedAgentPresets ?? [],
-    ])
-    const descriptions: string[] = []
-    for (const id of ids) {
-      const preset = await presets.readDocument(id)
-      if (this.choices?.includes(id) && preset.description !== undefined) {
-        descriptions.push(`${id}: ${preset.description}`)
-      }
-    }
-    this.descriptions = descriptions
   }
 
   /**

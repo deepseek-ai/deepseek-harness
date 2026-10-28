@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+  <title>DSH CUA Electron fixture</title>
+  <style>
+    body { margin: 32px; font: 18px system-ui, sans-serif; color: #1f2937; background: #fff; }
+    h1 { font-size: 23px; }
+    button, input { display: block; margin: 16px 0; font: inherit; padding: 10px; }
+    input { width: 470px; }
+    #hover-flow { position: relative; display: inline-block; }
+    #hover-popup { position: absolute; left: 100%; top: 0; width: 230px; padding: 12px; background: #dbeafe; }
+    #hover-popup[hidden] { display: none; }
+    #count { font-size: 24px; }
+  </style>
+</head>
+<body>
+  <h1>Disposable Electron fixture</h1>
+  <button id="increment">Increment Electron</button>
+  <p id="count" role="status">Clicks: 0</p>
+  <label for="text">Electron text</label>
+  <input id="text" type="text" placeholder="Type into Chromium">
+  <div id="hover-flow">
+    <button id="hover-trigger">Reveal hover details</button>
+    <div id="hover-popup" hidden><span>Hover information</span><button id="hover-action">Use hover details</button></div>
+  </div>
+  <script>
+    const button = document.querySelector('#increment')
+    const field = document.querySelector('#text')
+    const label = document.querySelector('#count')
+    let clicks = 0
+    let lastClickTrusted = null
+    let lastInputTrusted = null
+    const flow = document.querySelector('#hover-flow')
+    const popup = document.querySelector('#hover-popup')
+    let hoverTimer
+    let popupClicks = 0
+    let pointerDowns = 0
+    let lastMove = null
+    let popupClickTrusted = null
+    flow.addEventListener('mouseenter', () => {
+      hoverTimer = setTimeout(() => { popup.hidden = false; report() }, 150)
+    })
+    flow.addEventListener('mouseleave', () => { clearTimeout(hoverTimer); popup.hidden = true; report() })
+    document.addEventListener('mousedown', event => {
+      pointerDowns++
+      if (!flow.contains(event.target)) popup.hidden = true
+      report()
+    })
+    document.addEventListener('mousemove', event => { lastMove = { buttons: event.buttons, trusted: event.isTrusted }; report() })
+    document.querySelector('#hover-action').addEventListener('click', event => { popupClicks++; popupClickTrusted = event.isTrusted; report() })
+    function report() { console.log('DSH_CUA_STATE ' + JSON.stringify({ popupOpen: !popup.hidden, popupClicks, popupClickTrusted, pointerDowns, lastMove, clicks, text: field.value, lastClickTrusted, lastInputTrusted })) }
+    button.addEventListener('click', event => { clicks += 1; lastClickTrusted = event.isTrusted; label.textContent = `Clicks: ${clicks}`; report() })
+    field.addEventListener('input', event => { lastInputTrusted = event.isTrusted; report() })
+    report()
+  </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MCP 客户端",
+    "description": "连接 MCP 服务器，并将其工具注册到 Harness。"
+  }
+}

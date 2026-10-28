@@ -15,14 +15,17 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-sdk-client/use-this-package:
-  en: ff421f12a5db28a4
-  zh: 2ca9b71a3458b5e0
+  en: 6c37c21a2e53376b
+  zh: e707d3e81c1242bd
 /deepseek-ai-dsh-sdk-client/use-this-package/running-agent-turns-with-deepseekharness:
   en: 01c58dddd7e62de2
   zh: 6dbd46e244f3f135
 /deepseek-ai-dsh-sdk-client/use-this-package/lower-level-control-with-harnessclient:
-  en: 8778901987da6e59
-  zh: 3d09fe4b0b393a15
+  en: 2eb13706964444cb
+  zh: a2640ec27b83113f
+/deepseek-ai-dsh-sdk-client/use-this-package/native-user-questions:
+  en: ea40f378444c8153
+  zh: 96e29c99aa5c15f0
 /deepseek-ai-dsh-sdk-client/understand-the-implementation:
   en: 8773f50c51da85f0
   zh: 4649ebc69357deb0
@@ -48,8 +51,8 @@
   en: 7abe0be104a791e7
   zh: 445311f78b1069ca
 /deepseek-ai-dsh-sdk-client/known-limitations-and-deferred-work:
-  en: 3f51394ef0699943
-  zh: 6d4c3180fced8db1
+  en: 60100c38c111a0b0
+  zh: 2085486bd36f5e48
 /deepseek-ai-dsh-sdk-client/known-limitations-and-deferred-work/dev-note:
   en: 6177a56f053936a4
   zh: 0f4b20228c2d15da

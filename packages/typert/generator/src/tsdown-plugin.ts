@@ -58,33 +58,12 @@ type GenerationOutcome =
   | { readonly ok: false; readonly error: TypertWorkerError }
 
 /**
- * Create the decorator-lowering and typert-generation plugin for the root tsdown config.
- * @param pluginOptions - package/workspace emission mode and independent program faces.
- * @returns a rolldown-compatible plugin that lowers source decorators and emits local and Host-for-Client artifacts.
+ * Lower standard TypeScript decorators without reading or writing metadata.
+ * @returns a rolldown-compatible transform without metadata generation or artifact writes.
  */
-export function typertPlugin(pluginOptions: TypertPluginOptions = {}): TypertPlugin {
-  const artifactsByRoot = new Map<string, readonly WorkspaceEmitResult[]>()
-  const generations = new Map<string, Promise<GenerationOutcome>>()
-  const emittedWorkspaces = new Set<string>()
-  const workspaceGeneration = (root: string): Promise<GenerationOutcome> => {
-    let generation = generations.get(root)
-    if (generation === undefined) {
-      generation = generateInWorker({
-        root,
-        ...(pluginOptions.faces === undefined ? {} : { faces: pluginOptions.faces }),
-        options: TSC_OWNED_DIAGNOSTICS,
-      })
-      generations.set(root, generation)
-    }
-    return generation
-  }
+export function decoratorPlugin(): Pick<TypertPlugin, 'name' | 'transform'> {
   return {
-    name: 'dsh-typert-generator',
-    buildStart(inputOptions) {
-      // tsdown builds every workspace package concurrently through this one
-      // plugin instance; the first package build to start launches generation.
-      if (pluginOptions.mode === 'workspace') void workspaceGeneration(findWorkspaceRoot(inputOptions.cwd))
-    },
+    name: 'dsh-decorators',
     transform: {
       // Rolldown evaluates the id filter natively, so non-TypeScript modules
       // never cross into this JavaScript hook.
@@ -106,6 +85,38 @@ export function typertPlugin(pluginOptions: TypertPluginOptions = {}): TypertPlu
           map: result.sourceMapText,
         }
       },
+    },
+  }
+}
+
+/**
+ * Create the decorator-lowering and Typert-generation plugin for generation during bundling.
+ * @param pluginOptions - package/workspace emission mode and independent program faces.
+ * @returns a rolldown-compatible plugin that lowers source decorators and emits local and Host-for-Client artifacts.
+ */
+export function typertPlugin(pluginOptions: TypertPluginOptions = {}): TypertPlugin {
+  const artifactsByRoot = new Map<string, readonly WorkspaceEmitResult[]>()
+  const generations = new Map<string, Promise<GenerationOutcome>>()
+  const emittedWorkspaces = new Set<string>()
+  const workspaceGeneration = (root: string): Promise<GenerationOutcome> => {
+    let generation = generations.get(root)
+    if (generation === undefined) {
+      generation = generateInWorker({
+        root,
+        ...(pluginOptions.faces === undefined ? {} : { faces: pluginOptions.faces }),
+        options: TSC_OWNED_DIAGNOSTICS,
+      })
+      generations.set(root, generation)
+    }
+    return generation
+  }
+  return {
+    ...decoratorPlugin(),
+    name: 'dsh-typert-generator',
+    buildStart(inputOptions) {
+      // tsdown builds every workspace package concurrently through this one
+      // plugin instance; the first package build to start launches generation.
+      if (pluginOptions.mode === 'workspace') void workspaceGeneration(findWorkspaceRoot(inputOptions.cwd))
     },
     async writeBundle(bundleOptions) {
       // options.dir is the package's absolute outDir (<package>/lib); its

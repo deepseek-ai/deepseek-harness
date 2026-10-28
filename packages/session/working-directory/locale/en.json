@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session working directories",
+    "description": "Manage session working directories, save directory changes, and provide the model with working-directory context."
+  }
+}

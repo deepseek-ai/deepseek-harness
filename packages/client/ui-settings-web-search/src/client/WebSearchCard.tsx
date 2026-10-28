@@ -1,13 +1,16 @@
 /**
- * The web-search provider's settings page: its endpoint, its per-request
- * search budget, and the key — which is written through the credentials
- * domain, never into the settings section, so the literal never rides a response.
+ * The web-search settings page: the switch between Messages search and the
+ * Search and Fetch APIs, the selected API's endpoint and per-search limit, and
+ * the key — which
+ * is written through the credentials domain, never into the settings section,
+ * so the literal never rides a response.
  */
 
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import { SettingsForm, SettingsSecretField, SettingsValueField } from '@deepseek-ai/dsh-client-ui-primitives'
+import { SettingsForm, SettingsSecretField, SettingsValueField, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { formLabels } from './locales.ts'
+import styles from './WebSearchCard.module.css'
 import type { WebSearchCardFace } from './web-search-card-controller.ts'
 
 /** Props the renderer binds for the web-search page. */
@@ -25,9 +28,24 @@ export function WebSearchCard(props: WebSearchCardProps) {
   const { t } = props
   const state = props.useWebSearchCard(snapshot => snapshot)
   if (props.view === 'summary') return t('description')
-  const disabled = !state.writable
+  const disabled = !state.writable || state.saving
+  const searchApi = state.useSearchApi
+  const limitField = searchApi ? 'count' : 'maxUses'
   return (
     <SettingsForm labels={formLabels(t)} state={state} onSave={props.save} onDiscard={props.discard}>
+      {state.apiSwitchAvailable && (
+        <div className={styles.feature}>
+          <label className={styles.toggleRow}>
+            <span>{t('useSearchApi')}</span>
+            <Switch checked={searchApi} label={t('useSearchApi')} disabled={disabled || state.apiSwitchBlocked}
+              onChange={(checked) => { props.setSearchApi(checked) }} />
+          </label>
+          <p className={styles.hint}>
+            {t('useSearchApiHint')}
+            <a className={styles.link} href={t('searchGuideUrl')} target="_blank" rel="noopener noreferrer">{t('searchGuide')}</a>
+          </p>
+        </div>
+      )}
       <SettingsSecretField
         id="plugin-config-web-search-key"
         label={t('apiKey')}
@@ -44,8 +62,8 @@ export function WebSearchCard(props: WebSearchCardProps) {
       />
       <SettingsValueField
         id="plugin-config-web-search-endpoint"
-        label={t('baseUrl')}
-        hint={t('baseUrlHint')}
+        label={t(searchApi ? 'searchApiBaseUrl' : 'baseUrl')}
+        hint={t(searchApi ? 'searchApiBaseUrlHint' : 'baseUrlHint')}
         overriddenLabel={t('overridden')}
         resetLabel={t('reset')}
         invalidLabel={t('invalidNumber')}
@@ -55,17 +73,17 @@ export function WebSearchCard(props: WebSearchCardProps) {
         onReset={() => { props.resetField('baseURL') }}
       />
       <SettingsValueField
-        id="plugin-config-web-search-max-uses"
-        label={t('maxUses')}
-        hint={t('maxUsesHint')}
+        id={searchApi ? 'plugin-config-web-search-count' : 'plugin-config-web-search-max-uses'}
+        label={t(limitField)}
+        hint={t(searchApi ? 'countHint' : 'maxUsesHint')}
         overriddenLabel={t('overridden')}
         resetLabel={t('reset')}
-        invalidLabel={t('invalidNumber')}
+        invalidLabel={t(searchApi ? 'invalidCount' : 'invalidNumber')}
         numeric
         disabled={disabled}
-        {...state.maxUses}
-        onEdit={(text) => { props.edit('maxUses', text) }}
-        onReset={() => { props.resetField('maxUses') }}
+        {...state[limitField]}
+        onEdit={(text) => { props.edit(limitField, text) }}
+        onReset={() => { props.resetField(limitField) }}
       />
     </SettingsForm>
   )

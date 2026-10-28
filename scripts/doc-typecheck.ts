@@ -138,7 +138,7 @@ function formatDiagnostics(diagnostics: readonly ts.Diagnostic[], blocks: Block[
 /**
  * Reuse the Host aggregate references from a temp project one directory below
  * root. Generated Client API examples opt out because their declarations do
- * not exist until Host tsdown has run.
+ * not exist until source-only Typert generation has run.
  */
 function workspaceReferences(): { path: string }[] {
   const file = join(root, 'tsconfig.host.json')

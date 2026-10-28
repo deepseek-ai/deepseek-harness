@@ -23,6 +23,7 @@ import { AccountQuotaNotice } from '../src/client/AccountQuotaNotice.tsx'
 import type { AccountQuotaNoticeInjected } from '../src/client/AccountQuotaNotice.tsx'
 
 const it = createClientTest({ roster: webApp })
+const withoutAccountAccess = createClientTest({ roster: webApp }, { access: action => action !== 'account/watch' })
 const SELF = '@deepseek-ai/dsh-client-ui-settings-account'
 const view: AccountView = {
   status: 'signed-out', attempt: null,
@@ -35,8 +36,7 @@ function bonus(orderId: string, message = 'Awarded 5.00'): AccountBonusBatch {
   return {
     accountId: 'account-user' as AccountUserId,
     bonuses: [{
-      orderId: orderId as AccountBonusOrderId, campaign: 'dsh_login_bonus', amount: '5.00', currency: 'CNY',
-      grantedAt: '2026-09-21T12:00:00Z', expiresAt: '2099-01-01T00:00:00Z', message,
+      orderId: orderId as AccountBonusOrderId, expiresAt: '2099-01-01T00:00:00Z', message,
     }],
   }
 }
@@ -76,6 +76,15 @@ it('registers account sign-in in a plain browser without the Desktop-only surfac
     expect(c.ctx.slots.entries('shell.overlay').some(entry => entry.options.id === 'desktop-onboarding')).toBe(false)
     expect(operations(c).hooks.account.getSnapshot().desktopOnboardingVisible).toBe(false)
   }
+}, 60_000)
+
+withoutAccountAccess('opens no account stream and registers no account surface while the current Peer may not watch the account', async ({ start }) => {
+  const c = await start()
+  expect(c.mock.streams.end('account/watch')).toBe(0)
+  expect(c.ctx.slots.entries('settings.launcher')).toHaveLength(0)
+  expect(quotaNoticeEntry(c)).toBeUndefined()
+  expect(c.ctx.slots.entries('settings.models.sign-in')).toHaveLength(0)
+  expect(c.ctx.slots.entries('settings.section').some(entry => entry.options.id === 'account')).toBe(false)
 }, 60_000)
 
 it('claims account balance notices from the frame-wide quota chain and declines generic quota', async ({ start }) => {
@@ -207,6 +216,82 @@ it('reports the account sampled by the click when a native read outlasts a sign-
   expect(new URL(String(open.mock.calls.at(-1)![0])).searchParams.get('prefill_uid')).toBe('account-user')
 }, 60_000)
 
+it('publishes one avatar load and retries it through the shared Settings refresh action', async ({ start }) => {
+  const images: HTMLImageElement[] = []
+  vi.stubGlobal('Image', function () {
+    const image = document.createElement('img')
+    images.push(image)
+    return image
+  })
+  const c = await start()
+  const actions = operations(c)
+  const picture: AccountDetails['profile'] = {
+    status: 'ready', value: { id: 'account-user' as AccountUserId, name: 'User', contact: null, avatarUrl: 'https://example.test/avatar.png' },
+  }
+  c.mock.remote.account.getProfile.mockResolvedValue(ok(picture))
+  c.mock.streams.push('account/watch', stored)
+  await vi.waitFor(() => { expect(images).toHaveLength(1) })
+  images[0]!.dispatchEvent(new Event('error'))
+  expect(actions.hooks.account.getSnapshot().avatar?.status).toBe('failed')
+  await actions.refreshAccount()
+  await actions.refreshAccount()
+  expect(images).toHaveLength(2)
+  images[1]!.dispatchEvent(new Event('error'))
+  await actions.refreshAccount()
+  expect(images).toHaveLength(3)
+  images[2]!.dispatchEvent(new Event('load'))
+  expect(actions.hooks.account.getSnapshot().avatar).toEqual({ url: picture.value.avatarUrl, status: 'ready' })
+  await actions.refreshAccount()
+  expect(images).toHaveLength(3)
+  const ready = actions.hooks.account.getSnapshot().avatar!
+  actions.avatarFailed(ready)
+  expect(actions.hooks.account.getSnapshot().avatar?.status).toBe('failed')
+  await actions.refreshAccount()
+  expect(images).toHaveLength(4)
+  images[3]!.dispatchEvent(new Event('load'))
+  const successor = actions.hooks.account.getSnapshot().avatar!
+  actions.avatarFailed(ready)
+  expect(actions.hooks.account.getSnapshot().avatar).toBe(successor)
+  c.mock.streams.push('account/watch', view)
+  await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().view).toEqual(view) })
+  expect(actions.hooks.account.getSnapshot().avatar).toBeUndefined()
+  expect(images[3]!.getAttribute('src')).toBeNull()
+}, 60_000)
+
+it('keeps successful account refreshes silent and reports only failed reads', async ({ start }) => {
+  vi.stubGlobal('dshDesktop', {})
+  const output = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+  const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+  const c = await start()
+  const actions = operations(c)
+  await actions.refreshAccount()
+  c.mock.remote.account.getProfile.mockResolvedValue(ok(profile))
+  c.mock.remote.account.getBalance.mockResolvedValue(ok({ status: 'ready', value: [], bonusWallets: [] }))
+  c.mock.streams.push('account/watch', stored)
+  await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().details?.profile).toEqual(profile) })
+  await actions.refreshAccount()
+  for (const spy of [output, info, log]) {
+    expect(spy.mock.calls.filter(call => String(call[0]).startsWith('[deepseek-account]'))).toEqual([])
+  }
+  c.mock.remote.account.getProfile.mockResolvedValueOnce(ok({ status: 'failed' }))
+  c.mock.remote.account.getBalance.mockRejectedValueOnce(new Error('private-transport-detail'))
+  await actions.refreshAccount()
+  expect(output).toHaveBeenCalledWith('[deepseek-account] account read failed', expect.objectContaining({
+    field: 'profile',
+  }))
+  expect(output).toHaveBeenCalledWith('[deepseek-account] account read failed', expect.objectContaining({
+    field: 'balance',
+  }))
+  expect(JSON.stringify(output.mock.calls)).not.toContain('private-transport-detail')
+  c.mock.remote.account.getBalance.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'private-rpc-detail', {}) })
+  await actions.refreshAccount()
+  expect(output).toHaveBeenCalledWith('[deepseek-account] account read failed', expect.objectContaining({
+    field: 'balance',
+  }))
+  expect(JSON.stringify(output.mock.calls)).not.toContain('private-rpc-detail')
+}, 60_000)
+
 it('coalesces refreshes, publishes independent failures, and rejects stale responses after sign-out or unload', async ({ start }) => {
   vi.stubGlobal('dshDesktop', {})
   const c = await start()
@@ -237,7 +322,8 @@ it('coalesces refreshes, publishes independent failures, and rejects stale respo
   await c.unload(SELF)
   pendingAgain.resolve(ok(profile))
   await request
-  expect(actions.hooks.account.getSnapshot().details?.profile).toEqual({ status: 'failed' })
+  // Unloading ends the grant, which clears the account state; the late profile publishes nothing.
+  expect(actions.hooks.account.getSnapshot()).toMatchObject({ view: undefined, details: undefined })
 }, 60_000)
 
 for (const desktop of [false, true]) it(`uses the browser or Desktop login carrier (Desktop: ${desktop}) and exposes operation errors`, async ({ start, mock }) => {
@@ -450,7 +536,7 @@ it('reads the unnotified bonus in the active locale and acknowledges only after 
   c.mock.remote.account.ackBonusNotified.mockResolvedValue(ok(true))
   c.mock.streams.push('account/watch', stored)
   await vi.waitFor(() => {
-    expect(actions.hooks.account.getSnapshot().notice).toMatchObject({ orderId, message: 'Awarded 5.00' })
+    expect(actions.hooks.account.getSnapshot().notices?.[0]).toMatchObject({ orderId, message: 'Awarded 5.00' })
   })
   expect(c.mock.remote.account.getUnnotifiedBonuses).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en' }))
   // A successful read is not a display, so nothing may be acknowledged yet.
@@ -460,7 +546,7 @@ it('reads the unnotified bonus in the active locale and acknowledges only after 
     expect(c.mock.remote.account.ackBonusNotified).toHaveBeenCalledWith('account-user', orderId, expect.objectContaining({ locale: 'en' }))
   })
   actions.bonusNoticeDismissed(orderId as AccountBonusOrderId)
-  expect(actions.hooks.account.getSnapshot().notice).toBeUndefined()
+  expect(actions.hooks.account.getSnapshot().notices?.[0]).toBeUndefined()
 }, 60_000)
 
 it('keeps the notice and its acknowledgement retry across repeated signed-in frames', async ({ start }) => {
@@ -472,7 +558,7 @@ it('keeps the notice and its acknowledgement retry across repeated signed-in fra
   c.mock.remote.account.getUnnotifiedBonuses.mockResolvedValue(ok(bonus(orderId)))
   c.mock.remote.account.ackBonusNotified.mockResolvedValue({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) })
   c.mock.streams.push('account/watch', stored)
-  await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().notice).toMatchObject({ orderId }) })
+  await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().notices?.[0]).toMatchObject({ orderId }) })
   actions.bonusNoticeShown(orderId as AccountBonusOrderId)
   await vi.waitFor(() => { expect(c.mock.remote.account.ackBonusNotified.mock.calls.length).toBeGreaterThan(0) })
   // One sign-in commits the credential and then updates the attempt; a reconnected
@@ -482,7 +568,7 @@ it('keeps the notice and its acknowledgement retry across repeated signed-in fra
   await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().view).toEqual(stored) })
   // The displayed card stays, no second read replaces it, and the failed
   // acknowledgement keeps backing off instead of stopping until sign-out.
-  expect(actions.hooks.account.getSnapshot().notice).toMatchObject({ orderId })
+  expect(actions.hooks.account.getSnapshot().notices?.[0]).toMatchObject({ orderId })
   expect(c.mock.remote.account.getUnnotifiedBonuses).toHaveBeenCalledOnce()
   await vi.waitFor(() => { expect(c.mock.remote.account.ackBonusNotified.mock.calls.length).toBeGreaterThan(1) }, { timeout: 30_000 })
 }, 60_000)
@@ -497,12 +583,12 @@ it('keeps the notice absent when the bonus read is refused, then shows the next 
   })
   c.mock.streams.push('account/watch', stored)
   await vi.waitFor(() => { expect(c.mock.remote.account.getUnnotifiedBonuses).toHaveBeenCalledOnce() })
-  expect(actions.hooks.account.getSnapshot().notice).toBeUndefined()
+  expect(actions.hooks.account.getSnapshot().notices?.[0]).toBeUndefined()
   expect(c.mock.remote.account.ackBonusNotified).not.toHaveBeenCalled()
   c.mock.remote.account.getUnnotifiedBonuses.mockResolvedValue(ok(bonus(orderId)))
   await actions.refreshAccount()
   await vi.waitFor(() => {
-    expect(actions.hooks.account.getSnapshot().notice).toMatchObject({ orderId, message: 'Awarded 5.00' })
+    expect(actions.hooks.account.getSnapshot().notices?.[0]).toMatchObject({ orderId, message: 'Awarded 5.00' })
   })
 }, 60_000)
 
@@ -513,11 +599,11 @@ it('drops the previous account notice and stops reading after sign-out', async (
   c.mock.remote.account.getUnnotifiedBonuses.mockResolvedValue(ok(bonus('4c1b0000-0000-4000-8000-000000000001')))
   c.mock.streams.push('account/watch', stored)
   await vi.waitFor(() => {
-    expect(actions.hooks.account.getSnapshot().notice?.message).toBe('Awarded 5.00')
+    expect(actions.hooks.account.getSnapshot().notices?.[0]?.message).toBe('Awarded 5.00')
   })
   c.mock.streams.push('account/watch', view)
   await vi.waitFor(() => { expect(actions.hooks.account.getSnapshot().view).toEqual(view) })
-  expect(actions.hooks.account.getSnapshot().notice).toBeUndefined()
+  expect(actions.hooks.account.getSnapshot().notices?.[0]).toBeUndefined()
   // Signing out ends the lifecycle, so no further read follows.
   const reads = c.mock.remote.account.getUnnotifiedBonuses.mock.calls.length
   await new Promise((resolve) => { setTimeout(resolve, 20) })

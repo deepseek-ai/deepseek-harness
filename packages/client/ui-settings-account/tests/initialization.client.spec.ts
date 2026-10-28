@@ -4,11 +4,12 @@ import { expect, it, vi, afterEach } from 'vitest'
 import type { AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 import { apply, type AccountSectionInjected } from '../src/client/index.ts'
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
 
 it.each(['accepted', 'refused', 'disconnected', 'pending'] as const)('initializes account models and keeps reading account state: %s', async (outcome) => {
   vi.stubGlobal('dshDesktop', {})
-  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+  vi.stubEnv('DSH_CLIENT_VERSION', '0.0.0-test')
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {})
   const observed: { status: string | undefined; failed: boolean | undefined }[] = []
   const abort = new AbortController()
   const done = Promise.withResolvers<undefined>()
@@ -28,7 +29,7 @@ it.each(['accepted', 'refused', 'disconnected', 'pending'] as const)('initialize
   let operations: AccountSectionInjected | undefined
   const ctx = {
     effect: (install: () => (() => void) | undefined) => { const dispose = install(); if (dispose) disposers.push(dispose) },
-    locale: { register: () => () => {}, bind: () => (key: string) => key },
+    locale: { register: () => () => {}, bind: () => (key: string) => key, getSnapshot: () => ({ active: 'en' }) },
     configForms: {
       get: () => ({ subscribe: () => () => {}, getSnapshot: () => ({ status: 'loading', value: undefined }) }),
       describe: () => ({ subscribe: () => () => {}, getSnapshot: () => ({ error: null }) }),
@@ -40,6 +41,14 @@ it.each(['accepted', 'refused', 'disconnected', 'pending'] as const)('initialize
       },
       register: (entry: { inject?: () => AccountSectionInjected }) => {
         if (entry.inject) operations = entry.inject()
+        return () => {}
+      },
+    },
+    remoteAccess: {
+      whenAccess: (_action: string, install: () => (() => void) | Iterable<() => void> | undefined) => {
+        const effect = install()
+        if (typeof effect === 'function') disposers.push(effect)
+        else if (effect !== undefined) for (const dispose of effect) disposers.push(dispose)
         return () => {}
       },
     },

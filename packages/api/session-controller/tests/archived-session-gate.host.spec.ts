@@ -1,7 +1,8 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-workspace'
@@ -16,6 +17,7 @@ interface Harness {
 async function harness(): Promise<Harness> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   const archived: SessionId[] = []
   ctx.provide('workspaceRegistry', { get archivedSessionIds() { return archived } } as never)
@@ -29,6 +31,7 @@ async function liveAgent(ctx: Context, session: Session): Promise<Agent> {
     id: session.id,
     options: {},
     session,
+    model: unsupportedModel(),
     inbox: unsupportedInbox(),
     status: 'idle',
     ctx,
@@ -47,7 +50,7 @@ async function liveAgent(ctx: Context, session: Session): Promise<Agent> {
 /** Propose one model step for the Agent; the innermost decision enters. */
 const proposed = (ctx: Context, agent: Agent) => ctx.waterfall(
   'agent/pre-step',
-  { agent, messages: [], turn: 1, step: 1, signal: new AbortController().signal },
+  { modelSelection: { provider: 'mock', model: 'mock' }, agent, messages: [], turn: 1, step: 1, signal: new AbortController().signal },
   () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
 )
 
@@ -107,6 +110,7 @@ describe('Archived-session gate: lifetime', () => {
   it('stops rejecting once the plugin fiber is disposed', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const archived: SessionId[] = []
     ctx.provide('workspaceRegistry', { get archivedSessionIds() { return archived } } as never)

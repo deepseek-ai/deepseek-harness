@@ -94,7 +94,7 @@ function followerContext(ctx: Context, principal: Principal): Context {
   const invocation: RemoteInvocation = {
     request: { namespace: 'workspace', method: 'follow', args: {} },
     service: 'workspaceController',
-    peer: { id: 'workspace-access-peer' as PeerId, ctx, principal, signal: new AbortController().signal, dispose: async () => {} },
+    peer: { id: 'workspace-access-peer' as PeerId, ctx, principal, interactions: 'answer', signal: new AbortController().signal, dispose: async () => {} },
     signal: new AbortController().signal,
     uplink: <In>(): AsyncIterable<In> => ({ [Symbol.asyncIterator]: () => ({ next: async () => ({ done: true, value: undefined }) }) }),
   }

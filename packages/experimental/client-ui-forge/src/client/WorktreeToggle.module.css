@@ -1,0 +1,132 @@
+/* Worktree option at the right of the New Session row: the compact 28px chip
+   geometry and secondary ink of the composer mode controls. */
+.root {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.toggle,
+.base,
+.current {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .toggle:hover:not([data-disabled]),
+  .base:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.toggle[data-disabled] {
+  color: var(--dsw-alias-label-dimmed);
+  cursor: default;
+}
+
+.base {
+  gap: 4px;
+  max-width: 200px;
+  padding-right: 4px;
+}
+
+.current {
+  box-sizing: content-box;
+  max-width: 200px;
+  font-family: inherit;
+}
+
+.current svg {
+  flex: none;
+}
+
+.base:focus-visible,
+.current:focus-visible,
+.toggle:has(.checkbox:focus-visible) {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+.base:disabled {
+  cursor: progress;
+}
+
+.checkbox {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--dsw-alias-brand-primary);
+  cursor: inherit;
+}
+
+.checkbox:focus-visible {
+  outline: none;
+}
+
+.baseLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 120ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.option {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.optionName {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionNote {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .root {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0;
+  }
+
+  .base,
+  .current {
+    max-width: 120px;
+  }
+}

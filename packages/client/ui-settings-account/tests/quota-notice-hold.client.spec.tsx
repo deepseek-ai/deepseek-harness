@@ -64,6 +64,7 @@ function sectionOperations(account: AccountSnapshot, pages: PlatformPages): Acco
     },
     openPlatformPage: pages.open,
     refreshAccount: async () => {},
+    avatarFailed: () => {},
     bonusNoticeShown: () => {}, bonusNoticeDismissed: () => {},
     hasRunningAccountTasks: async () => false,
     contactUs: () => {}, showLogin: () => {}, setOnboarding: () => {},
@@ -79,6 +80,7 @@ function sectionOperations(account: AccountSnapshot, pages: PlatformPages): Acco
 async function bench() {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const runtime = await SlotTestRuntime.create()
+  runtime.ctx.provide('fileDrag', { actions: { prepare: async () => ({ start: () => true, release: () => {} }), reportFailure: () => {} }, read: () => undefined } satisfies import('@deepseek-ai/cordis').Context['fileDrag'])
   disposers.push(() => runtime.dispose())
   const forms = new Map<string, ReturnType<typeof stubConfigForm>['scope']>()
   const formFor = (namespace: string) => {
@@ -93,6 +95,7 @@ async function bench() {
     developerTools: { enabled: createSnapshotStore(true) },
     get: formFor,
   } as never)
+  runtime.ctx.provide('connection', { state: createSnapshotStore('connected') } as never)
   runtime.ctx.provide('layout', { openRightbar: () => {}, closeRightbar: () => {} } as never)
   runtime.ctx.provide('sidebarRight', { openResource: () => {}, openTab: () => {} } as never)
   runtime.ctx.provide('sidebarRightTabs', {
@@ -119,7 +122,7 @@ async function bench() {
   runtime.ctx.uiSession.provide = (next) => { descriptor ??= next; return provide(next) }
   await runtime.mount({ inject: [...injectChat], apply: applyChat })
   if (descriptor === undefined) throw new Error('ui-chat did not provide its standard source')
-  const accountSnapshot = createSnapshotStore<AccountSnapshot>({ view: storedView, details: undefined, failed: false })
+  const accountSnapshot = createSnapshotStore<AccountSnapshot>({ view: storedView, details: undefined, avatar: undefined, failed: false })
   const account = {
     getSnapshot: () => accountSnapshot.getSnapshot(),
     subscribe: (listener: () => void) => accountSnapshot.subscribe(listener),
@@ -366,7 +369,7 @@ describe('shared Platform page ownership', () => {
     await act(async () => { screen.getByRole('button', { name: en.quotaTopUp }).click() })
     expect(b.platform.open).toHaveBeenCalledOnce()
 
-    act(() => { b.account.set({ view: { ...storedView, status: 'signed-out' }, details: undefined, failed: false }) })
+    act(() => { b.account.set({ view: { ...storedView, status: 'signed-out' }, details: undefined, avatar: undefined, failed: false }) })
     expect(b.platform.close).toHaveBeenCalledOnce()
     expect(screen.queryByRole('button', { name: en.backToHarness })).toBeNull()
 

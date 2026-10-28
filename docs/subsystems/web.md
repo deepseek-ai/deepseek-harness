@@ -2,7 +2,7 @@
 
 English | [中文](web.zh.md)
 
-The web access seam — a [capability seam](../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md) that spans **two operations** (search and fetch) on one `ctx.web` service, split across packages: Service Definition ([dsh-web](../../packages/web/web), `ctx.web` + the provider registries), Service Providers ([dsh-web-search-exa](../../packages/web/web-search-exa), [dsh-web-search-perplexity](../../packages/web/web-search-perplexity), [dsh-web-search-deepseek](../../packages/web/web-search-deepseek), [dsh-web-fetch-http](../../packages/web/web-fetch-http)), and Consumer ([dsh-tool-web](../../packages/web/tool-web), the `web_search`/`web_fetch` tool schemas). Web is **one optional capability**, not part of the agent-loop spine — so its vocabulary lives here, not in [core.md](core.md). A search-provider swap does not change how the model asks for a query, and a fetch-provider swap does not change how the model asks for a URL.
+The web access seam — a [capability seam](../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md) that spans **two operations** (search and fetch) on one `ctx.web` service, split across packages: Service Definition ([dsh-web](../../packages/web/web), `ctx.web` + the provider registries), Service Providers ([dsh-web-search-exa](../../packages/web/web-search-exa), [dsh-web-search-perplexity](../../packages/web/web-search-perplexity), [dsh-web-search-deepseek](../../packages/web/web-search-deepseek), [dsh-web-deepseek-api](../../packages/web/web-deepseek-api), [dsh-web-fetch-http](../../packages/web/web-fetch-http)), and Consumer ([dsh-tool-web](../../packages/web/tool-web), the `web_search`/`web_fetch` tool schemas). Web is **one optional capability**, not part of the agent-loop spine — so its vocabulary lives here, not in [core.md](core.md). A search-provider swap does not change how the model asks for a query, and a fetch-provider swap does not change how the model asks for a URL.
 
 Source: [`packages/web/web/src/types.ts`](../../packages/web/web/src/types.ts)
 
@@ -54,15 +54,18 @@ interface WebSearchResult {
 
 ```ts type-equiv
 /**
- * One citeable source. A source always has a URL; `title`, `snippet`, and
- * `publishedAt` are optional because not every provider returns them — forcing
+ * One citeable source. A source always has a URL; `title`, `snippet`, `summary`,
+ * and `publishedAt` are optional because not every provider returns them — forcing
  * adapters to invent them would make the seam lie (Perplexity citations may be
  * URL-only). `dsh-tool-web` renders `title ?? hostname(url)` for display.
  */
 interface WebSearchSource {
   readonly url: string
   readonly title?: string
+  /** Short excerpt suited to display. */
   readonly snippet?: string
+  /** Longer excerpt suited to model reading; consumers bound its length. */
+  readonly summary?: string
   /** Publication/crawl timestamp as a provider-supplied ISO-8601 string. */
   readonly publishedAt?: string
 }
@@ -122,13 +125,15 @@ type WebFetchBody =
 
 A provider's `available(): boolean` is a cheap LOCAL check (credential presence, parseable config) and **must not make network calls**. It is an input to execution-time selection, not a health system: `search()`/`fetch()` read it to pick a usable provider, and a selection failure surfaces as the structured `WebError` the caller routes on — which carries the branchable detail (the missing id or ambiguous candidate set) in its code and message.
 
-Selection never depends on registration, config, or HMR order: a capability has an explicit provider id (config `searchProvider`/`fetchProvider`, or the matching env var feeding the same field), or auto-selects when exactly one usable provider is registered; multiple usable providers with no configured id is `WEB_PROVIDER_AMBIGUOUS`, not first-wins.
+A search or fetch provider may also implement `ready(llmProvider): Promise<boolean>`, a configuration-only check that must not make network calls: it answers whether an operation made for a model request on that chat route has a credential to send. `searchReady(llmProvider?)` and `fetchReady(llmProvider?)` ask only the provider that `search()` or `fetch()` would select, treat a provider without `ready()` as ready, and answer true when selection fails, because the operation reports that failure as a `WebError`. Readiness is not a selection input; `dsh-tool-web` makes it the activation condition of `web_search` and `web_fetch`, so a model step whose route answers false neither declares nor dispatches the tool.
+
+Selection never depends on registration, config, or HMR order: a capability has an explicit provider id (config `searchProvider`/`fetchProvider`, or the matching env var feeding the same field), or auto-selects when exactly one usable provider is registered; multiple usable providers with no configured id is `WEB_PROVIDER_AMBIGUOUS`, not first-wins. Each operation reads the configured id when it runs, so a saved settings change applies to the next search or fetch without remounting `ctx.web`.
 
 ## Fetch network policy
 
 The shipped Cordis, Code, and Standard presets expose `web_fetch` in every sandbox and approval mode without per-call confirmation. File sandbox presets do not govern Web network access. A deployment that needs confirmation must add a `tools/pre-execute` policy or disable fetch.
 
-The HTTP provider resolves each actual request, rejects non-public answers including private IPv4 reached through the active DNS64 prefix, pins the validated address set, and repeats enforcement for each same-origin redirect. A cross-origin redirect requires a new tool call and fresh public-address validation. These checks prevent SSRF access to non-public destinations but do not stop a model from sending data to a public URL.
+The HTTP provider does not restrict destination addresses: `web_fetch` reaches loopback, private-network, and cloud metadata hosts like any other host, and a model can send data to any URL it can reach. A cross-origin redirect requires a new tool call. A deployment that must keep the model away from private destinations needs network confinement, a `tools/pre-execute` policy, or no fetch tool.
 
 ## Errors
 
@@ -136,7 +141,7 @@ The HTTP provider resolves each actual request, rejects non-public answers inclu
 
 ## The service
 
-`WebRuntime` registers search and fetch providers, rejects duplicate ids with `WEB_DUPLICATE_PROVIDER`, and resolves providers at execution time with structured selection errors. The local fetch backend accepts only HTTP(S), rejects credentials, resolves each hostname once, rejects any answer set containing a non-public IPv4 or IPv6 destination or an active-prefix NAT64 translation to non-public IPv4, pins the request connection to the validated addresses, repeats those checks for every same-origin redirect hop, caps redirects, bytes, characters, and time, and decodes the body; the tool owns presentation.
+`WebRuntime` registers search and fetch providers, rejects duplicate ids with `WEB_DUPLICATE_PROVIDER`, and resolves providers at execution time with structured selection errors. The local fetch backend accepts only HTTP(S), rejects credentials, sends each request through the installed proxy policy, repeats URL validation for every same-origin redirect hop, caps redirects, bytes, characters, and time, and decodes the body; the tool owns presentation.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -192,6 +197,16 @@ registerFetchProvider(provider: WebFetchProvider): () => void
 async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>
 
 /**
+ * Whether the provider `search()` would select can authenticate a search made for a
+ * model request on the `llmProvider` chat route. Asks only that provider's `ready()`;
+ * one without `ready()` counts as ready. Makes no network calls. A selection failure
+ * answers true, because `search()` reports that failure as a structured `WebError`.
+ * @param llmProvider - the provider route id of the model request, when known.
+ * @returns false only when the selected provider reports that it cannot authenticate.
+ */
+async searchReady(llmProvider?: string): Promise<boolean>
+
+/**
  * Retrieve one URL through the selected provider. Resolves the provider at
  * call time with the selection rules above; throws {@link WebError} when the
  * capability cannot run. A non-2xx response is a result, not a throw.
@@ -200,6 +215,16 @@ async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearch
  * @returns the retrieval outcome; non-2xx responses resolve descriptively.
  */
 async fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>
+
+/**
+ * Whether the provider `fetch()` would select can authenticate a fetch made for a
+ * model request on the `llmProvider` chat route. Asks only that provider's `ready()`;
+ * one without `ready()` counts as ready. Makes no network calls. A selection failure
+ * answers true, because `fetch()` reports that failure as a structured `WebError`.
+ * @param llmProvider - the provider route id of the model request, when known.
+ * @returns false only when the selected provider reports that it cannot authenticate.
+ */
+async fetchReady(llmProvider?: string): Promise<boolean>
 ```
 
 Source: [`packages/web/web/src/index.ts`](../../packages/web/web/src/index.ts)

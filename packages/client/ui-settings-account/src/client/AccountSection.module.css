@@ -109,8 +109,10 @@
   background: transparent;
 }
 
-.linkButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .linkButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .linkButton:focus-visible {
@@ -126,8 +128,10 @@
   text-underline-offset: 3px;
 }
 
-.unavailableLink:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .unavailableLink:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .unavailableLink:focus-visible {
@@ -143,8 +147,10 @@
   border-color: transparent;
 }
 
-.primary:hover {
-  background: var(--dsw-alias-button-primary-hover);
+@media (hover: hover) {
+  .primary:hover {
+    background: var(--dsw-alias-button-primary-hover);
+  }
 }
 
 .signedOut {

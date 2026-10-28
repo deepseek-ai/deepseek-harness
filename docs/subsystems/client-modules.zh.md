@@ -58,10 +58,22 @@ interface WebBootBatch {
 ```
 
 ```ts type-equiv
+/** Host release identity; two releases are the same when both fields are equal. */
+interface WebBootRelease {
+  /** Release version label. */
+  version: string
+  /** Source commit fixed in when the Host was built; absent when the build recorded none. */
+  commit?: string
+}
+```
+
+```ts type-equiv
 /** The composed client entry graph the host injects as `window.__DSH_BOOT__`. */
 interface WebBootGraph {
   /** Consistency anchor over the current entry and batch descriptors. */
   rev: string
+  /** Host release identity; absent from a Host that publishes none. */
+  release?: WebBootRelease
   /**
    * Composed entries in module-graph order — a dynamic package row precedes
    * rows whose `external` requests that package. Cordis activation order is
@@ -75,17 +87,19 @@ interface WebBootGraph {
 
 首次发布与 HMR 都从入口的 mtime、ctime 和大小派生每个 row 的 `rev`，不对可执行字节求哈希。相同产物会跨 Host 重启保持 revision。初始 descriptor 把 row 划入 bootstrap 与 application 两个调度阶段，每个阶段都可以包含多条 descriptor。URL 只含有序 package 资源列表和从这些 row revision 派生的 revision，阶段名不会进入路由。图组合保持 row 顺序，并在 map 形式 URL 超过 3 KiB 前贪心切分，不拼接脚本，也不读取 map。图 revision 对 entry 与 batch descriptor 求哈希。`immediately` 标记第一阶段的 registration barrier；同一 combo 中的 row 共享脚本传输，不同 combo 则独立加载。
 
+`release` 把本包版本与 client 构建固化进 Host 构建产物的源码 commit 配成一对，不计入图 revision。只有 Host 提供页面启动时的 release，页面才应用图和 rebuilt 帧；其他 release 要等页面刷新（[Host release 变化](../../packages/client/modules/README.zh.md#host-release-changes)）。
+
 ## 扫描
 
 包加入这张表的方式，是在自己的 package.json 中声明 `dsh.client`（`platform: 'web'`、可选的 `inject` 边、可选的 `immediately`），并在 `exports["./client"]` 导出构建好的 bundle。每个 live row 都从自己的 Loader specifier 与所属 tree `baseUrl` 解析；若 `loader.internal.resolveSync` 可用，则使用 Host face import 所用的同一个实现。最近归属的 package manifest 提供浏览器模块 id，因此相对 source 与 built overlay 仍保留包身份。若不同的 active Loader source 解析到同一包名，组合会失败；一个来源卸载后，仍存活的来源无需重启 fiber 即可提供该 row。
 
 扫描是单包增量的；不存在全量重扫代码路径。fiber 构造或 dispose（资源释放）时的每次 cordis `internal/plugin` 发射都把该 fiber 的 entry 名标脏，一次微任务 flush 把每个脏名与实时 loader entry 对账。激活趟以全部当前 entry 灌入同一个脏集合并同步 flush，因此初扫与稳态共享一条实现——但失败姿态相反。激活时，已加载 entry 中的畸形声明或缺失 bundle 会聚合为一个大声的 `AggregateError`，列出每个损坏的包：该 fiber 进入 FAILED，由启动的大声失败 sweep 上报。稳态下，损坏的包只记录一条警告，且不得殃及其他包。
 
-包元数据——包括「非 client 包」这一否定结论——按 Loader specifier 与所属 tree base URL 缓存至重启。同一来源的 fiber 重启会原样复用其 row 与 rev；bundle 内容变更只经 `rebuilt()` 到达图。
+每次对账都会重新读取包 manifest 与 bundle 元数据。同一来源的 fiber 重启若读到相同的声明与 bundle 元数据，就保留其 row 与 rev，且不读取 bundle 字节；声明、client 导出或 bundle 发生变化时，由这次对账发布。没有伴随条目重启的 bundle 重建经 `rebuilt()` 到达图。
 
 ## bundle 路由与 index 注入
 
-`GET`／`HEAD /plugins/??<package-a>/client.js,<package-b>/client.js&rev=<rev>` 寻址一份生成的 combo 脚本；单资源请求采用同一形式，也是 HMR 路径。脚本在首次 `GET` 时只拼接一次，并以 `sourceMappingURL` 结尾，该引用只携带 combo 查询串——`??<package-a>/client.js.map,<package-b>/client.js.map&rev=<rev>`，按脚本自身目录而非文档解析。启动、index 渲染、脚本 `GET` 和 `HEAD` 都不会读取 map 文件；首次 map `GET` 才会读取并校验这些文件、组合一份 Indexed Source Map v3，并缓存该 body。组件有自带 map 时直接用于对应 section；没有时则获得 identity section，其 `sourcesContent` 是捕获的 bundle，source 名取打包后的 `sourceURL` 或插件路由。每条启动请求 URL 按 UTF-8 字节计算都不超过 3 KiB；切分按更长的 map 形式计算。所有 application URL 都会预加载，所有 bootstrap URL 都会在图全局量与 Vite entry 之前执行。已物化响应使用长期 immutable 缓存。未知或被修改的资源列表、缺少 revision 及陈旧 revision 都返回 404，绝不提供其他字节，也不会让 SPA fallback 把 HTML 当作 JavaScript 返回；其他方法返回 405。注入行在每次 index 渲染时携带当前图，因此重新加载总是基于实时组合启动。
+`GET`／`HEAD /plugins/??<package-a>/client.js,<package-b>/client.js&rev=<rev>` 寻址一份生成的 combo 脚本；单资源请求采用同一形式，也是 HMR 路径。`/plugins/<package>/assets/<path>` 提供包发布的图片，该路由由[包 README](../../packages/client/modules/README.zh.md#package-assets) 说明。脚本在首次 `GET` 时只拼接一次，并以 `sourceMappingURL` 结尾，该引用只携带 combo 查询串——`??<package-a>/client.js.map,<package-b>/client.js.map&rev=<rev>`，按脚本自身目录而非文档解析。启动、index 渲染、脚本 `GET` 和 `HEAD` 都不会读取 map 文件；首次 map `GET` 才会读取并校验这些文件、组合一份 Indexed Source Map v3，并缓存该 body。组件有自带 map 时直接用于对应 section；没有时则获得 identity section，其 `sourcesContent` 是捕获的 bundle，source 名取打包后的 `sourceURL` 或插件路由。每条启动请求 URL 按 UTF-8 字节计算都不超过 3 KiB；切分按更长的 map 形式计算。所有 application URL 都会预加载，所有 bootstrap URL 都会在图全局量与 Vite entry 之前执行。已物化响应使用长期 immutable 缓存。未知或被修改的资源列表、缺少 revision 及陈旧 revision 都返回 404，绝不提供其他字节，也不会让 SPA fallback 把 HTML 当作 JavaScript 返回；其他方法返回 405。注入行在每次 index 渲染时携带当前图，因此重新加载总是基于实时组合启动。
 
 ## 服务
 
@@ -103,7 +117,7 @@ interface ClientArtifactBaseline {
 }
 ```
 
-`ClientModuleRegistry`（`ctx.clientModules`，定义于 [`packages/client/modules/src/index.ts`](../../packages/client/modules/src/index.ts)）暴露读取面与重建面；签名见生成的[服务目录](#ctxclientmodules--clientmoduleregistry)。`graph()` 返回当前组合出的图（两次变更之间是同一个稳定对象），`clientPath(id)` 返回 bundle 的绝对路径，`artifactBaseline(id)` 返回读取当前快照前捕获的 bundle stat 值。`fetchBundle()` 解析 HTTP 路由所使用的同一份惰性响应。`rebuilt(id)` 是变化后的 bundle 内容到达图的唯一入口：它从文件系统元数据派生 revision，只有 revision 变化才会读取新字节、重新组合图并发出通知。`onRebuilt` 按发生变化的 bundle 逐个触发并携带新 revision；`onGraphChanged` 在任何一次重新组合了图的 flush 之后触发（行的增删，或 rebuilt 带来的 revision 变化），并采用拉取模型——监听器自行重读 `graph()`。两条通知路径都会兜住监听器异常，因此一个抛错的订阅者既不能让后续订阅者被跳过，也不能杀死触发这次 flush 的一方。
+`ClientModuleRegistry`（`ctx.clientModules`，定义于 [`packages/client/modules/src/index.ts`](../../packages/client/modules/src/index.ts)）暴露读取面与重建面；签名见生成的[服务目录](#ctxclientmodules--clientmoduleregistry)。`graph()` 返回当前组合出的图（两次变更之间是同一个稳定对象），`clientPath(id)` 返回 bundle 的绝对路径，`artifactBaseline(id)` 返回读取当前快照前捕获的 bundle stat 值。`fetchBundle()` 返回与 HTTP 路由相同的响应：惰性的 bundle 响应，以及每次请求都读取的包资源。`rebuilt(id)` 发布没有伴随条目重启的 bundle 重建：它从文件系统元数据派生 revision，只有 revision 变化才会读取新字节、重新组合图并发出通知；条目重启则经对账发布。`onRebuilt` 按发生变化的 bundle 逐个触发并携带新 revision；`onGraphChanged` 在任何一次重新组合了图的 flush 之后触发（行的增删，或 rebuilt 带来的 revision 变化），并采用拉取模型——监听器自行重读 `graph()`。两条通知路径都会兜住监听器异常，因此一个抛错的订阅者既不能让后续订阅者被跳过，也不能杀死触发这次 flush 的一方。
 
 随包提供的 Web 组合通过 [`dsh-client-hmr`](../../packages/client/hmr/README.zh.md) 交付动态图快照。Host 立即转发现有图变化通知，重连会发送当前完整图。图描述浏览器的目标条目，不声明 Host 清理已经完成。产物轮询另外报告重建 revision。仅 source map 变化不会触发重载；新 combo-map URL 只会在 bundle revision 变化后出现，每份 map body 由其首次 `GET` 固定。Client Modules 校验快照，并将对账与重建串行协调；它持有启动创建的条目映射，负责单资源到达、异步移除、未使用模块与样式清理，以及页面本地重试状态。静态平台模块与 bootstrap 保持页面生命周期；Electron 安装属于独立流程。
 
@@ -119,7 +133,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.clientModules` — `ClientModuleRegistry`
 
-The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).
+The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).
 
 ```ts cordis-catalog
 /**
@@ -136,10 +150,15 @@ graph(): WebBootGraph
 clientPath(id: string): string | undefined
 
 /**
- * Serve an advertised revisioned bundle or source map without a Web server.
- * Unknown URLs return 404, unsupported methods return 405, and `HEAD`
- * returns the same immutable headers without materializing a body. Each body
- * is built once on its first `GET`; script construction never reads maps.
+ * Serve an advertised revisioned bundle, source map, chunk, or package asset
+ * without a Web server. Unknown URLs return 404, unsupported methods return
+ * 405, and `HEAD` returns the same immutable headers without materializing a
+ * body. Each bundle body is built once on its first `GET`; script
+ * construction never reads maps. A package asset is read on every request
+ * and answers 304 without a body when `If-None-Match` equals its entity tag;
+ * its body holds the file open until the caller consumes or cancels it. A
+ * bundle, map, or chunk body is the held buffer itself, not a copy, so a
+ * caller must not modify its bytes.
  * @param request - shell-carrier request for a `/plugins` resource.
  * @returns the exact response also exposed by the optional Web route.
  */
@@ -157,7 +176,7 @@ artifactBaseline(id: string): ClientArtifactBaseline | undefined
 
 /**
  * Publish one completed bundle generation (the HMR watch's registration
- * hook — the only entry point through which build changes reach the graph).
+ * hook; an entry restart publishes through reconciliation instead).
  * Unchanged mtime, ctime and size preserve the graph without reading the bundle.
  * @param id - entry id (package name).
  * @returns the current artifact rev, or undefined for an unknown id.
@@ -165,7 +184,8 @@ artifactBaseline(id: string): ClientArtifactBaseline | undefined
 rebuilt(id: string): string | undefined
 
 /**
- * Subscribe to bundle rebuilds; fires only when artifact metadata changes the rev.
+ * Subscribe to bundle rebuilds; fires when {@link rebuilt} changes a rev. A rev an
+ * entry restart publishes reaches only {@link onGraphChanged} listeners.
  * @param listener - receives the entry id and its new bundle rev.
  * @returns the unsubscriber.
  */

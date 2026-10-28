@@ -53,9 +53,14 @@
   transition: color 120ms ease;
 }
 
-.tab:hover:not(:disabled),
 .tab[aria-selected='true'] {
   color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .tab:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .tab:disabled {

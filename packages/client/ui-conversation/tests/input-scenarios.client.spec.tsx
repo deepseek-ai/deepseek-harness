@@ -12,7 +12,10 @@ import './control-row-dom.ts'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { $getRoot, $isElementNode, $isTextNode } from 'lexical'
+import {
+  $createTextNode, $getRoot, $isElementNode, BEFORE_INPUT_COMMAND, COMMAND_PRIORITY_LOW, DELETE_CHARACTER_COMMAND,
+  UNDO_COMMAND,
+} from 'lexical'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { InputTriggerService } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
@@ -206,7 +209,32 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
   const type = (text: string): void => {
     act(() => { shell.setDraft(text) })
   }
-  return { runtime, inputTriggers, controller, shell, wiring, view, textarea, type, sink, serialize, release }
+  /** Press Space and let the claim the key handler applied commit (Lexical commits it on the next microtask). */
+  const space = async (): Promise<void> => {
+    fireEvent.keyDown(textarea, { key: ' ', keyCode: 32 })
+    await act(async () => {})
+  }
+  /** Type at the live caret, as keyboard input after the claimed chip does. */
+  const append = (text: string): void => {
+    act(() => { shell.actions.insertText(text, shell.actions.captureInsertion()) })
+  }
+  /** Dispatch one character deletion and commit it (the command's update lands on the next flush). */
+  const deleteCharacter = (isBackward: boolean): void => {
+    act(() => {
+      shell.editor.dispatchCommand(DELETE_CHARACTER_COMMAND, isBackward)
+      shell.editor.update(() => {}, { discrete: true })
+    })
+  }
+  /** Delete one detect span through the editor, as a Backspace over it does. */
+  const erase = (start: number, end: number): void => {
+    act(() => {
+      shell.editor.update(() => { $replaceDetectSpanWithText({ start, end }, '') }, { discrete: true })
+    })
+  }
+  return {
+    runtime, inputTriggers, controller, shell, wiring, view, textarea,
+    type, space, append, erase, deleteCharacter, sink, serialize, release,
+  }
 }
 
 async function bench(executeImpl?: (line: string) => Promise<SubmitOutcome>) {
@@ -231,12 +259,11 @@ describe('scenario A: menu-pick /goal, type args, enter submits', () => {
     act(() => { b.controller.pick('command', 0) })
     expect(b.shell.snapshot.phase).toBe('claimed')
     expect(b.shell.snapshot.draft).toBe('/goal ')
-    act(() => { b.shell.editor.update(() => {}, { discrete: true }) }) // flush the queued decoration refresh
-    expect(b.view.container.querySelector('[data-lexical-text][style*="business-primary"]')?.textContent).toBe('/goal ')
+    expect(b.view.container.querySelector('[data-composer-command]')?.textContent).toBe('/goal')
     // The zh dictionary owns a hint.goal entry, which overrides the machine's raw hint (production behavior).
     expect(b.textarea.style.getPropertyValue('--dsh-composer-hint')).toBe(JSON.stringify('输入目标，智能体将持续执行'))
     // Continue typing args; hint drops; claim holds.
-    b.type('/goal 发布 v1')
+    b.append('发布 v1')
     expect(b.shell.snapshot.phase).toBe('claimed')
     // Enter: submitting → command execute → commit clears.
     fireEvent.keyDown(b.textarea, { key: 'Enter' })
@@ -285,7 +312,7 @@ describe('scenario D: execute-kind /compact', () => {
     act(() => { b2.shell.setDraft('/compact 现在') })
     fireEvent.keyDown(b2.textarea, { key: 'Enter' })
     // execute with trailing → matchEnter answers undefined → default sink.
-    await vi.waitFor(() => { expect(b2.sink).toHaveBeenCalledWith('/compact 现在', [], 'queue', expect.any(AbortSignal)) })
+    await vi.waitFor(() => { expect(b2.sink).toHaveBeenCalledWith('/compact 现在', [], 'queue', expect.any(AbortSignal), expect.any(Function)) })
     expect(b2.executed).toHaveLength(0)
   })
 })
@@ -317,71 +344,224 @@ describe('scenario: images ride an accepting command through the real pipeline',
   })
 })
 
-describe('scenario H: backspace breaks the token', () => {
-  it.each(['goal', '目标', 'plan', '计划', 'feedback', '反馈'])('keeps /%s claimed when its arguments and separator are deleted', async (name) => {
+describe('scenario H: the command chip deletes whole', () => {
+  it.each(['goal', '目标', 'plan', '计划', 'feedback', '反馈'])('keeps /%s claimed until the chip itself is deleted', async (name) => {
     const { source } = commandSource([{ name, description: name, input: { hint: '目标内容' } }],
       () => Promise.resolve({ kind: 'success' }))
     const b = await scopedBench((triggers) => { triggers.registerSource(source) })
     b.type(`/${name}`)
-    fireEvent.keyDown(b.textarea, { key: ' ', keyCode: 32 })
+    await b.space()
     expect(b.shell.snapshot.phase).toBe('claimed')
-    b.type(`/${name} 这是目标`)
+    b.append('这是目标')
     for (let i = 0; i < 5; i++) {
-      act(() => {
-        b.shell.editor.update(() => {
-          const end = b.shell.snapshot.draft.length
-          $replaceDetectSpanWithText({ start: end - 1, end }, '')
-        }, { discrete: true })
-      })
+      const { end } = b.shell.caretSpan()
+      b.erase(end - 1, end)
     }
     expect(b.shell.snapshot.draft).toBe(`/${name}`)
     expect(b.shell.snapshot.phase).toBe('claimed')
-    expect(b.view.container.querySelector('[data-lexical-text][style*="business-primary"]')?.textContent).toBe(`/${name}`)
-    b.type(`/${name} `)
+    expect(b.view.container.querySelector('[data-composer-command]')?.textContent).toBe(`/${name}`)
+    b.append(' ')
     await act(async () => {})
     expect(b.shell.snapshot.phase).toBe('claimed')
     expect(b.shell.snapshot.draft).toBe(`/${name} `)
-    expect(b.view.container.querySelector('[data-lexical-text][style*="business-primary"]')?.textContent).toBe(`/${name} `)
-    b.type(`/${name}x`)
+    b.erase(0, 1)
     expect(b.shell.snapshot.phase).toBe('plain')
+    expect(b.shell.snapshot.draft).toBe(' ')
+    expect(b.view.container.querySelector('[data-composer-command]')).toBeNull()
   })
 
-  it('keeps text typed at the end of the claimed token when the browser inserts it natively', async () => {
+  it('the first deletion at the chip edge selects the chip and the second removes it', async () => {
     const b = await bench()
     b.type('/goal')
     await vi.waitFor(() => { expect(b.controller.menu.getSnapshot().open).toBe(true) })
-    fireEvent.keyDown(b.textarea, { key: ' ', keyCode: 32 })
+    await b.space()
+    b.append('发布')
+    for (let i = 0; i < 3; i++) {
+      const { end } = b.shell.caretSpan()
+      b.erase(end - 1, end)
+    }
+    expect(b.shell.snapshot.draft).toBe('/goal')
+    const chip = (): Element | null => b.view.container.querySelector('[data-composer-command]')
+    b.deleteCharacter(true)
+    expect(chip()?.hasAttribute('data-selected')).toBe(true)
+    expect(b.textarea.hasAttribute('data-composer-chip-selected')).toBe(true)
     expect(b.shell.snapshot.phase).toBe('claimed')
-    b.type('/goal 发布')
-    // A caret at the token/argument boundary sits at the end of the styled
-    // token node; native insertion writes there and Lexical syncs the DOM
-    // text with setTextContent plus a caret select.
+    b.deleteCharacter(true)
+    expect(chip()).toBeNull()
+    expect(b.shell.snapshot.phase).toBe('plain')
+    expect(b.textarea.hasAttribute('data-composer-chip-selected')).toBe(false)
+  })
+
+  it('a key that deletes nothing, or typing, clears a selected chip without deleting it', async () => {
+    const b = await bench()
+    b.type('/goal')
+    await vi.waitFor(() => { expect(b.controller.menu.getSnapshot().open).toBe(true) })
+    await b.space()
+    b.erase(1, 2)
+    const chip = (): Element | null => b.view.container.querySelector('[data-composer-command]')
+    b.deleteCharacter(true)
+    expect(chip()?.hasAttribute('data-selected')).toBe(true)
+    fireEvent.keyDown(b.textarea, { key: 'Shift' })
+    await act(async () => {})
+    expect(chip()?.hasAttribute('data-selected')).toBe(true)
+    fireEvent.keyDown(b.textarea, { key: 'Escape' })
+    await act(async () => {})
+    expect(chip()?.hasAttribute('data-selected')).toBe(false)
+    expect(b.textarea.hasAttribute('data-composer-chip-selected')).toBe(false)
+    b.deleteCharacter(true)
+    expect(chip()?.hasAttribute('data-selected')).toBe(true)
+    b.append('发布')
+    expect(chip()?.hasAttribute('data-selected')).toBe(false)
+    expect(b.shell.snapshot.draft).toBe('/goal发布')
+    expect(b.shell.snapshot.phase).toBe('claimed')
+  })
+
+  it('a platform deletion shortcut keeps the selection its first press made and deletes on the second', async () => {
+    const b = await bench()
+    b.type('/goal')
+    await vi.waitFor(() => { expect(b.controller.menu.getSnapshot().open).toBe(true) })
+    await b.space()
+    b.erase(1, 2)
+    const chip = (): Element | null => b.view.container.querySelector('[data-composer-command]')
+    // macOS maps Ctrl+H to a backward character deletion inside the same keydown.
+    const pressCtrlH = async (): Promise<void> => {
+      act(() => {
+        fireEvent.keyDown(b.textarea, { key: 'h', ctrlKey: true })
+        b.shell.editor.dispatchCommand(DELETE_CHARACTER_COMMAND, true)
+        b.shell.editor.update(() => {}, { discrete: true })
+      })
+      await act(async () => {})
+    }
+    await pressCtrlH()
+    expect(chip()?.hasAttribute('data-selected')).toBe(true)
+    await pressCtrlH()
+    expect(chip()).toBeNull()
+    expect(b.shell.snapshot.phase).toBe('plain')
+  })
+
+  it('a deletion input event selects the chip first and lets the second one delete it', async () => {
+    const b = await bench()
+    b.type('/goal')
+    await vi.waitFor(() => { expect(b.controller.menu.getSnapshot().open).toBe(true) })
+    await b.space()
+    b.erase(1, 2)
+    const chip = (): Element | null => b.view.container.querySelector('[data-composer-command]')
+    // Lexical's default input handling runs below this probe; iOS deletes a ranged
+    // deleteContentBackward there directly, so the selecting step must consume it first.
+    const reachedDefault = vi.fn(() => false)
+    onTestFinished(b.shell.editor.registerCommand(BEFORE_INPUT_COMMAND, reachedDefault, COMMAND_PRIORITY_LOW))
+    const deleteByInput = (): InputEvent => {
+      const event = new InputEvent('beforeinput', { inputType: 'deleteContentBackward', cancelable: true })
+      act(() => {
+        b.shell.editor.dispatchCommand(BEFORE_INPUT_COMMAND, event)
+        b.shell.editor.update(() => {}, { discrete: true })
+      })
+      return event
+    }
+    expect(deleteByInput().defaultPrevented).toBe(true)
+    expect(reachedDefault).not.toHaveBeenCalled()
+    expect(chip()?.hasAttribute('data-selected')).toBe(true)
+    expect(b.shell.snapshot.phase).toBe('claimed')
+    deleteByInput()
+    expect(reachedDefault).toHaveBeenCalledTimes(1)
+    expect(chip()).toBeNull()
+    expect(b.shell.snapshot.phase).toBe('plain')
+  })
+
+  it('Delete before the chip selects it first and removes it on the second press', async () => {
+    const b = await bench()
+    b.type('/goal')
+    await vi.waitFor(() => { expect(b.controller.menu.getSnapshot().open).toBe(true) })
+    await b.space()
+    b.append('发布')
     act(() => {
       b.shell.editor.update(() => {
         const paragraph = $getRoot().getFirstChild()
-        const token = $isElementNode(paragraph) ? paragraph.getFirstChild() : null
-        if (!$isTextNode(token)) throw new Error('missing token node')
-        token.setTextContent('/goal 立即')
-        token.select(8, 8)
+        if (!$isElementNode(paragraph)) throw new Error('missing paragraph')
+        paragraph.select(0, 0)
       }, { discrete: true })
     })
-    expect(b.shell.snapshot.draft).toBe('/goal 立即发布')
-    expect(b.shell.snapshot.phase).toBe('claimed')
-    act(() => { b.shell.editor.update(() => {}, { discrete: true }) })
-    expect(b.view.container.querySelector('[data-lexical-text][style*="business-primary"]')?.textContent).toBe('/goal ')
+    const chip = (): Element | null => b.view.container.querySelector('[data-composer-command]')
+    b.deleteCharacter(false)
+    expect(chip()?.hasAttribute('data-selected')).toBe(true)
+    b.deleteCharacter(false)
+    expect(chip()).toBeNull()
+    expect(b.shell.snapshot.draft).toBe(' 发布')
+    expect(b.shell.snapshot.phase).toBe('plain')
   })
 
-  it('claim releases automatically; the enter after that goes through adjudication again', async () => {
+  it('keeps text written at the chip boundary out of the chip', async () => {
+    const b = await bench()
+    b.type('/goal')
+    await vi.waitFor(() => { expect(b.controller.menu.getSnapshot().open).toBe(true) })
+    await b.space()
+    b.append('发布')
+    // The caret right after the chip: Lexical writes into the argument text.
+    act(() => {
+      b.shell.editor.update(() => {
+        const paragraph = $getRoot().getFirstChild()
+        if (!$isElementNode(paragraph)) throw new Error('missing paragraph')
+        paragraph.select(1, 1).insertText('立即')
+      }, { discrete: true })
+    })
+    expect(b.shell.snapshot.draft).toBe('/goal立即 发布')
+    expect(b.shell.snapshot.phase).toBe('claimed')
+    expect(b.view.container.querySelector('[data-composer-command]')?.textContent).toBe('/goal')
+  })
+
+  it('deleting the chip releases the claim; the arguments left behind send as a plain message', async () => {
     const b = await bench()
     b.type('/goal')
     await vi.waitFor(() => { expect(b.controller.menu.getSnapshot().open).toBe(true) })
     // Space adjudication claims (space column, leadingInput).
-    fireEvent.keyDown(b.textarea, { key: ' ', keyCode: 32 })
+    await b.space()
     expect(b.shell.snapshot.phase).toBe('claimed')
-    // Backspace into the token: watch break → plain, visuals gone.
-    b.type('/goa ')
+    b.append('发布')
+    b.erase(0, 1)
     expect(b.shell.snapshot.phase).toBe('plain')
-    expect(b.view.container.querySelector('[data-lexical-text][style*="business-primary"]')).toBeNull()
+    expect(b.shell.snapshot.draft).toBe(' 发布')
+    expect(b.view.container.querySelector('[data-composer-command]')).toBeNull()
+    fireEvent.keyDown(b.textarea, { key: 'Enter' })
+    expect(b.sink).toHaveBeenCalledWith('发布', [], 'queue', expect.any(AbortSignal), expect.any(Function))
+    expect(b.execute).not.toHaveBeenCalled()
+  })
+
+  it('typing before the chip turns it into its literal token and releases the claim', async () => {
+    const b = await bench()
+    b.type('/goal')
+    await vi.waitFor(() => { expect(b.controller.menu.getSnapshot().open).toBe(true) })
+    await b.space()
+    b.append('发布')
+    act(() => {
+      b.shell.editor.update(() => {
+        const paragraph = $getRoot().getFirstChild()
+        if (!$isElementNode(paragraph)) throw new Error('missing paragraph')
+        paragraph.getFirstChild()?.insertBefore($createTextNode('看看 '))
+      }, { discrete: true })
+    })
+    expect(b.shell.snapshot.phase).toBe('plain')
+    expect(b.shell.snapshot.draft).toBe('看看 /goal 发布')
+    expect(b.view.container.querySelector('[data-composer-command]')).toBeNull()
+  })
+
+  it('undoing the chip deletion restores the chip and its claim', async () => {
+    const b = await bench()
+    b.type('/goal')
+    await vi.waitFor(() => { expect(b.controller.menu.getSnapshot().open).toBe(true) })
+    await b.space()
+    b.append('发布')
+    b.erase(0, 1)
+    expect(b.shell.snapshot.phase).toBe('plain')
+    act(() => {
+      b.shell.editor.dispatchCommand(UNDO_COMMAND, undefined)
+      b.shell.editor.update(() => {}, { discrete: true }) // the history restore commits on the next flush
+    })
+    expect(b.shell.snapshot.phase).toBe('claimed')
+    expect(b.shell.snapshot.claim?.name).toBe('goal')
+    expect(b.shell.snapshot.draft).toBe('/goal 发布')
+    expect(b.view.container.querySelector('[data-composer-command]')?.textContent).toBe('/goal')
+    fireEvent.keyDown(b.textarea, { key: 'Enter' })
+    await vi.waitFor(() => { expect(b.execute).toHaveBeenCalledWith('/goal 发布', []) })
   })
 })
 
@@ -435,7 +615,7 @@ describe('scenario I: unknown /xyz + enter', () => {
     const b = await bench()
     act(() => { b.shell.setDraft('/xyz 干点啥') })
     fireEvent.keyDown(b.textarea, { key: 'Enter' })
-    await vi.waitFor(() => { expect(b.sink).toHaveBeenCalledWith('/xyz 干点啥', [], 'queue', expect.any(AbortSignal)) })
+    await vi.waitFor(() => { expect(b.sink).toHaveBeenCalledWith('/xyz 干点啥', [], 'queue', expect.any(AbortSignal), expect.any(Function)) })
     await vi.waitFor(() => { expect(b.shell.snapshot.phase).toBe('plain') })
     expect(b.execute).not.toHaveBeenCalled()
   })

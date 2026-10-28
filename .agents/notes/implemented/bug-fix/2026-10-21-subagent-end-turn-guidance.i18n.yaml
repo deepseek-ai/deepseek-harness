@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-21-subagent-end-turn-guidance.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-21-subagent-end-turn-guidance.md
+/agent-note-subagent-end-turn-guidance-stays-in-the-delegation-paragraph:
+  en: bfafb6d348cf2d21
+  zh: 191bedbfa12b6329
+/agent-note-subagent-end-turn-guidance-stays-in-the-delegation-paragraph/problem:
+  en: 36ff1fff46915956
+  zh: 198c8ca7efaeb5b6
+/agent-note-subagent-end-turn-guidance-stays-in-the-delegation-paragraph/decision:
+  en: 47b44ed9313c2ccf
+  zh: 7ad254f8ef88351d
+/agent-note-subagent-end-turn-guidance-stays-in-the-delegation-paragraph/alternatives-considered:
+  en: d52fa1af379dea5b
+  zh: 4e404994f7a607dc
+/agent-note-subagent-end-turn-guidance-stays-in-the-delegation-paragraph/verification:
+  en: be076216381ea64d
+  zh: 2da8d9819c20e2fe
+/agent-note-subagent-end-turn-guidance-stays-in-the-delegation-paragraph/consequences:
+  en: d7c144cbe750a873
+  zh: 602c06d08572481c

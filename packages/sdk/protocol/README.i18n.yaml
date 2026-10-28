@@ -15,14 +15,17 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-sdk-protocol/use-this-package:
-  en: c4ca91b51aab452a
-  zh: 1c77b1deaeb34931
+  en: 4e8a8a89c1e2c0c3
+  zh: 68b555e03ed73374
 /deepseek-ai-dsh-sdk-protocol/use-this-package/framing-and-transport:
   en: be53c71505c0d1b4
   zh: 6210dee577715539
 /deepseek-ai-dsh-sdk-protocol/use-this-package/the-sdk-methods:
-  en: 8057053746fc2755
-  zh: 36d5989488c1a351
+  en: a11a3be122c6418e
+  zh: 134659fa57d64199
+/deepseek-ai-dsh-sdk-protocol/use-this-package/native-user-questions:
+  en: 9dcd999ae8c66b71
+  zh: 174c5fe0cbb0a9e4
 /deepseek-ai-dsh-sdk-protocol/use-this-package/payload-semantics:
   en: 3cf5d4ffbaf37f69
   zh: 23c4450e31c91d67
@@ -48,8 +51,8 @@
   en: ca75c51c89c2c9b0
   zh: 696d26adaf4eda6d
 /deepseek-ai-dsh-sdk-protocol/known-limitations-and-deferred-work:
-  en: c83a6b621a8f8793
-  zh: 32accb03ee0b8ac8
+  en: 7146ace77de7e19c
+  zh: 5eb747177357bb54
 /deepseek-ai-dsh-sdk-protocol/known-limitations-and-deferred-work/dev-note:
   en: 951fa06249790ac1
   zh: da66e7f53df3ab00

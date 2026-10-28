@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Service de gestion des plug-ins",
+    "description": "Gérez les plug-ins et les packages de plug-ins dans la configuration en cours d'exécution, prenant en charge l'installation, la suppression, le démarrage et l'arrêt."
+  }
+}

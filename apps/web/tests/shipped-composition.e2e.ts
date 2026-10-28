@@ -1,3 +1,4 @@
+import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 // Boots the shipped Web composition over the built dist this lane already uses
 // and asserts its catalog, defaults, Loader lifecycle, and one complete Auto
 // producer-to-tool path. Browser scenarios in this lane own visual behavior.
@@ -47,12 +48,13 @@ const AUTO_PARENT_ADJUST = 'AUTO_PARENT_ADJUST'
 /** Identify the one-shot Auto Review request and check its request-only outer input. */
 function isAutoReviewRequest(options: GenerateOptions): boolean {
   if (options.system?.startsWith('REVIEW_POLICY\n') !== true) return false
-  expect(options.messages).toHaveLength(1)
-  const message = options.messages[0]
-  expect(message).toMatchObject({ role: 'user', content: [{ type: 'text' }] })
-  expect(message?.content).toHaveLength(1)
-  expect(message).not.toHaveProperty('id')
-  expect(message).not.toHaveProperty('source')
+  expect(options.messages.length).toBeGreaterThanOrEqual(2)
+  for (const message of options.messages) {
+    expect(message).toMatchObject({ role: 'user', content: [{ type: 'text' }] })
+    expect(message.content).toHaveLength(1)
+    expect(message).not.toHaveProperty('id')
+    expect(message).not.toHaveProperty('source')
+  }
   return true
 }
 
@@ -150,21 +152,19 @@ interface ChildScriptState {
   phase: number
 }
 
-/** Parse the fixed review request sections emitted by the production plugin. */
+/** Parse the history items and pending action emitted by the production plugin. */
 function childReviewSections(options: GenerateOptions): Record<string, unknown> {
-  const block = options.messages[0]?.content[0]
-  if (block?.type !== 'text') throw new Error('shipped child review request has no text body')
-  const labels = ['ENVIRONMENT', 'PROJECT_INSTRUCTIONS', 'FILTERED_HISTORY', 'PENDING_ACTION'] as const
-  const sections: Record<string, unknown> = {}
-  for (const [index, label] of labels.entries()) {
-    const prefix = `${label}\n`
-    const start = block.text.indexOf(prefix)
-    if (start < 0) throw new Error(`shipped child review request is missing ${label}`)
-    const next = labels[index + 1]
-    const end = next === undefined ? block.text.length : block.text.indexOf(`\n\n${next}\n`, start)
-    sections[label] = JSON.parse(block.text.slice(start + prefix.length, end)) as unknown
+  const items = options.messages.slice(1).map((message) => {
+    const block = message.content[0]
+    if (block?.type !== 'text') throw new Error('shipped child review message has no text body')
+    return JSON.parse(block.text) as Record<string, unknown>
+  })
+  const call = items.at(-1)
+  if (call?.kind !== 'tool-call') throw new Error('shipped child review request does not end with its pending call')
+  return {
+    FILTERED_HISTORY: items.slice(0, -1).filter(item => item.kind !== 'tool-schema'),
+    PENDING_ACTION: { name: call.name, arguments: JSON.parse(call.arguments as string) as Record<string, unknown> },
   }
-  return sections
 }
 
 /** One native tool-call completion in the provider-neutral stream vocabulary. */
@@ -468,8 +468,8 @@ function assertLeanChildRecord(agent: Agent): void {
  * gaps: the `cordis_*` toolset executes model-written JavaScript that no
  * sandbox row confines, `mcp_*` servers spawn outside `ctx.shell`, and `ralph`
  * runs unsupervised rounds whose completion is a worker self-report.
- * `web_fetch` is present because public-address enforcement and one-shot
- * approval now confine its model-selected request target. The composition
+ * `web_fetch` is present because it adds no network reach beyond the
+ * mounted shell tools. The composition
  * Agent Note owns the rationale and its sources.
  */
 const EXPECTED_TOOLS = [
@@ -484,6 +484,8 @@ const EXPECTED_TOOLS = [
   'job_list',
   'job_output',
   'list_agents',
+  'list_subagent_models',
+  'plugin_manager',
   'present',
   'read',
   'read_image',
@@ -678,7 +680,7 @@ it('lets a preset producer reach the background-job registry', async () => {
     // `tool-bash` is a preset row and `tasks` is a host registry; the producer
     // resolves it with `ctx.get`, so a registry hidden behind a preset realm
     // fails here — with every task control still listed in the catalog above.
-    const started = await ctx.tools.execute({
+    const started = await executeModelToolFixture(ctx, {
       signal,
       callId: ToolCallId('shipped-bash-background'),
       name: 'bash',
@@ -700,7 +702,7 @@ it('lets a preset producer reach the background-job registry', async () => {
 
     // The controller reads what the producer started: same registry, one
     // owner. A per-preset registry would list nothing here even on success.
-    const listed = await ctx.tools.execute({
+    const listed = await executeToolFixture(ctx, {
       signal,
       callId: ToolCallId('shipped-task-list'),
       name: 'job_list',
@@ -713,7 +715,7 @@ it('lets a preset producer reach the background-job registry', async () => {
 
     // The full round trip: the output a host-plane producer wrote is collected
     // through a preset-plane control, which is the linkage the realm severed.
-    const collected = await ctx.tools.execute({
+    const collected = await executeToolFixture(ctx, {
       signal,
       callId: ToolCallId('shipped-task-output'),
       name: 'job_output',
@@ -789,7 +791,8 @@ it('routes one browser-authored Auto request through the same model and asks the
     .filter(block => block.type === 'text')
     .map(block => block.text)
     .join('') ?? ''
-  expect(reviewInput).toContain('PENDING_ACTION')
+  expect(reviewInput).toContain('ENVIRONMENT')
+  expect(reviewInput).toContain('"kind": "tool-schema"')
   expect(reviewInput).toContain(requestId)
   expect(reviewInput).toContain(targetPath)
   expect(approvalReasons).toEqual([`Auto review denied tool "bash": ${AUTO_RAW_REASON}`])
@@ -982,11 +985,11 @@ it('reviews initially authorized, restricted, and cold-resumed child calls indep
       return found
     }
     expect(historyRole(review('subagent', AUTO_PARENT_AUTHORIZED), AUTO_PARENT_AUTHORIZED))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('subagent', AUTO_PARENT_CONTINUABLE), AUTO_PARENT_CONTINUABLE))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('send_message', AUTO_PARENT_ADJUST), AUTO_PARENT_ADJUST))
-      .toBe('human-instruction')
+      .toBe('user-instruction')
     expect(historyRole(review('bash', AUTO_CHILD_AUTHORIZED), AUTO_CHILD_AUTHORIZED))
       .toBe('direct-parent-instruction')
     expect(historyRole(review('bash', AUTO_CHILD_CONTINUABLE), AUTO_CHILD_CONTINUABLE))
@@ -1034,7 +1037,7 @@ it('rolls back a failed shipped Auto initialization before publishing or interce
       // contribution performs no review, so success proves the failed shipped
       // integration left no pre-execute listener behind. It is not supported
       // Auto execution behavior.
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: new AbortController().signal,
         callId: ToolCallId('shipped-auto-init-rollback-write'),
         name: 'write',

@@ -1,9 +1,12 @@
+import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { es, pt } from '../src/client/locales.ts'
 // @vitest-environment jsdom
 /** Trajectory ledger selection, details, status, and fold behavior. */
 
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { useState, type ComponentProps, type ReactNode } from 'react'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
@@ -11,7 +14,7 @@ import type { MessageImageLoader, MessageImagesOwnerProps } from '@deepseek-ai/d
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { TrajectoryTable as LocalizedTrajectoryTable } from '../src/client/TrajectoryTable.tsx'
 import { deriveTrajectoryLayout, type TrajectoryTurnModel } from '../src/client/layout.ts'
-import { trajectoryRecordId } from '../src/client/trajectory-record.ts'
+import { trajectoryRecordId, type TrajectoryCellProps } from '../src/client/trajectory-record.ts'
 import { t, tZh } from './locale.client.ts'
 
 const loadImage: MessageImageLoader = async () => 'blob:trajectory'
@@ -927,6 +930,26 @@ describe('TrajectoryTable', () => {
     expect(screen.queryByText('Completed')).toBeNull()
   })
 
+  it.each([false, true])('places the request separator after input and prompt rows (waiting: %s)', (waiting) => {
+    const turns: readonly TrajectoryTurnModel[] = [{
+      turn: 2,
+      groups: [{
+        title: 'Step 1',
+        cells: [
+          { index: 1, kind: 'user', text: 'Continue', timeSeconds: 0 },
+          { index: 2, kind: 'context', text: 'Tool added: search', timeSeconds: 0 },
+          { index: 3, kind: 'system', text: 'Tools Updated', timeSeconds: 0 },
+          { index: 4, kind: 'message', text: waiting ? '' : 'Answer', requestOnly: waiting, timeSeconds: 0 },
+        ],
+      }],
+    }]
+    const view = render(<TrajectoryTable turns={turns} {...FOLD_PROPS} />)
+    const rows = [...view.container.querySelectorAll('tr[data-kind]')]
+    const requestRow = screen.getByRole('button', { name: 'Request #1' }).closest('tr')
+    expect(rows.indexOf(requestRow!)).toBe(3)
+    expect(screen.getByRole('row', { name: 'SYSTEM, Tools Updated' }).contains(requestRow)).toBe(false)
+  })
+
   it('marks failed requests and lays coincident request markers left to right', () => {
     const turns: readonly TrajectoryTurnModel[] = [
       {
@@ -1072,13 +1095,13 @@ describe('TrajectoryTable', () => {
     expect(toolTag?.getAttribute('title')).toBeNull()
     expect(toolIcon).toBeTruthy()
 
-    fireEvent.mouseEnter(toolTag as HTMLElement)
+    fireEvent.pointerEnter(toolTag as HTMLElement)
     expect(screen.queryByRole('tooltip')).toBeNull()
-    fireEvent.mouseEnter(toolIcon as HTMLElement)
+    fireEvent.pointerEnter(toolIcon as HTMLElement)
     const tooltip = screen.getByRole('tooltip')
     expect(tooltip.textContent).toBe('TOOL')
     expect(tooltip.getAttribute('data-side')).toBe('right')
-    fireEvent.mouseLeave(toolIcon as HTMLElement)
+    fireEvent.pointerLeave(toolIcon as HTMLElement)
     expect(screen.queryByRole('tooltip')).toBeNull()
   })
 
@@ -1109,6 +1132,103 @@ describe('TrajectoryTable', () => {
 
     expect(turnLabel.textContent).toContain('Turn 1')
     expect(turnLabel.textContent).toContain('#1')
+  })
+
+  it.each([null, false, 0, '', { answer: 42 }])('shows raw value %j above rendered output and releases it across selections', (value) => {
+    const turns: readonly TrajectoryTurnModel[] = [{ turn: 1, groups: [{ title: 'Step 1', cells: [
+      { index: 1, kind: 'tool', text: 'recorded', outputDetail: 'rendered answer', resultSeq: 42, timeSeconds: 0.1 },
+      { index: 2, kind: 'subtool', text: 'historical', outputDetail: 'old answer', timeSeconds: 0.1 },
+    ] }] }]
+    const dispose = vi.fn()
+    const watchToolResult = vi.fn<NonNullable<TableProps['watchToolResult']>>((_seq, publish) => {
+      publish(value)
+      return dispose
+    })
+    const view = render(<TrajectoryTable turns={turns} {...FOLD_PROPS} watchToolResult={watchToolResult} />)
+    fireEvent.click(screen.getByRole('row', { name: /recorded/ }))
+    expect(watchToolResult).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+    const raw = screen.getByRole('region', { name: 'Raw result' })
+    const rendered = screen.getByRole('region', { name: 'Rendered result' })
+    expect(raw.compareDocumentPosition(rendered) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(raw.textContent).toContain(typeof value === 'object' && value !== null ? 'answer:' : JSON.stringify(value))
+    expect(within(rendered).getByText('rendered answer')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Raw result' })).toBeNull()
+    fireEvent.click(screen.getByRole('row', { name: /historical/ }))
+    expect(dispose).toHaveBeenCalledOnce()
+    expect(screen.getByText('Raw results are only available for live tool calls')).toBeTruthy()
+    expect(screen.getByText('old answer')).toBeTruthy()
+    fireEvent.click(screen.getByRole('row', { name: /recorded/ }))
+    expect(screen.queryByText('Raw results are only available for live tool calls')).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: 'Summary' }))
+    expect(dispose).toHaveBeenCalledTimes(2)
+    view.unmount()
+  })
+
+  it.each(['tool', 'subtool'] as const)('shows an in-flight PTC %s as running before retaining its failure output', (kind) => {
+    const cell: TrajectoryCellProps = {
+      index: 1, kind, text: 'pending-call', timeSeconds: null, toolName: 'run_code',
+      inputDetail: JSON.stringify({ code: 'return 42', description: 'pending-call' }),
+    }
+    const turns = (current: TrajectoryCellProps): readonly TrajectoryTurnModel[] => [
+      { turn: 1, groups: [{ title: 'Step 1', cells: [current] }] },
+    ]
+    const view = render(<TrajectoryTable turns={turns(cell)} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /pending-call/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+    const raw = screen.getByRole('region', { name: 'Raw result' })
+    expect(within(raw).getByText('Running…')).toBeTruthy()
+    expect(within(raw).queryByText('Raw results are only available for live tool calls')).toBeNull()
+    view.rerender(<TrajectoryTable turns={turns({
+      ...cell, isError: true, outputDetail: 'Error: execution failed', timeSeconds: 0.1,
+    })} {...FOLD_PROPS} />)
+    expect(within(raw).getByText('Raw results are only available for live tool calls')).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Rendered result' }).textContent).toContain('Error: execution failed')
+  })
+
+  it('keeps rendered output visible when the raw value unloads and ignores stale callbacks', () => {
+    const callbacks: ((value: JsonValue | undefined) => void)[] = []
+    const dispose = vi.fn()
+    const watchToolResult: NonNullable<TableProps['watchToolResult']> = (_seq, publish) => {
+      callbacks.push(publish)
+      publish({ live: true })
+      return dispose
+    }
+    const turns: readonly TrajectoryTurnModel[] = [{ turn: 1, groups: [{ title: 'Step 1', cells: [
+      { index: 1, kind: 'tool', text: 'live result', outputDetail: 'rendered', resultSeq: 42, timeSeconds: 0.1 },
+      { index: 2, kind: 'tool', text: 'historical result', outputDetail: 'historical', timeSeconds: 0.1 },
+    ] }] }]
+    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} watchToolResult={watchToolResult} />)
+    fireEvent.click(screen.getByRole('row', { name: /live result/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+    expect(screen.getByRole('region', { name: 'Raw result' }).textContent).toContain('live:')
+    act(() => { callbacks[0]?.(undefined) })
+    expect(screen.getByText('Raw results are only available for live tool calls')).toBeTruthy()
+    expect(screen.getByText('rendered')).toBeTruthy()
+    fireEvent.click(screen.getByRole('row', { name: /historical result/ }))
+    expect(dispose).toHaveBeenCalledOnce()
+    act(() => { callbacks[0]?.({ live: true }) })
+    expect(screen.getByText('Raw results are only available for live tool calls')).toBeTruthy()
+    expect(screen.getByText('historical')).toBeTruthy()
+  })
+
+  it('keeps both result sections when rendered JSON equals the raw value', () => {
+    const turns: readonly TrajectoryTurnModel[] = [{ turn: 1, groups: [{ title: 'Step 1', cells: [{
+      index: 1, kind: 'tool', text: 'json-result', outputDetail: '{"answer":42}', resultSeq: 42, timeSeconds: 0.1,
+      outputBlocks: [{ type: 'text', content: '{"answer":42}' }],
+    }] }] }]
+    const watchToolResult: NonNullable<TableProps['watchToolResult']> = (_seq, publish) => {
+      publish({ answer: 42 })
+      return () => {}
+    }
+    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} watchToolResult={watchToolResult} />)
+    fireEvent.click(screen.getByRole('row', { name: /json-result/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+    for (const name of ['Raw result', 'Rendered result']) {
+      const section = within(screen.getByRole('region', { name }))
+      expect(section.getByRole('tree').textContent).toContain('answer:42')
+      expect(section.queryAllByRole('button')).toHaveLength(0)
+    }
   })
 
   it('renders a single-text JSON tool result as a JSON tree', () => {
@@ -1329,4 +1449,9 @@ describe('TrajectoryTable', () => {
     expect(screen.getByRole('row', { name: /TOOL/ }).getAttribute('aria-selected')).toBe('false')
     expect(onInspectApplied).not.toHaveBeenCalled()
   })
+})
+
+it('preserves seconds and token units in translated metric labels', () => {
+  expect(makeTranslate(es)('unit.seconds', { value: '1.25' })).toBe('1.25 s')
+  expect(makeTranslate(pt)('unit.tokens', { value: 42 })).toBe('42 tok')
 })

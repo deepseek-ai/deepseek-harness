@@ -17,7 +17,7 @@ import { installWindowDragRecall } from './window-drag/recall.ts'
 import './base.css'
 
 /** Module transport hook replaced by jsdom tests. */
-export type BootSeams = Pick<ClientModuleCreateOptions, 'loadBundle'>
+export type BootSeams = Pick<ClientModuleCreateOptions, 'loadBundle' | 'resolveAsset'>
 
 /** Browser boot entry consumed by `apps/web`. */
 export class AppWebEntry {
@@ -60,18 +60,19 @@ export class AppWebEntry {
       if (moduleLoader === undefined) {
         throw new Error('web boot: window.__ModuleLoader__ bootstrap facade is missing')
       }
-      // A pre-injected transport (the worker preview page) owns bundle bytes;
-      // its loadBundle is the default and explicit seams still win. The global
+      // A pre-injected transport (the worker preview page) owns bundle and asset
+      // bytes; its loadBundle and resolveAsset are the defaults and explicit seams still win. The global
       // is `ClientTransportHooks`, owned by @deepseek-ai/dsh-client-connection;
-      // this structural slice reads one optional member without adding a
+      // this structural slice reads two optional members without adding a
       // package edge.
       const transport = (globalThis as {
-        __DSH_TRANSPORT__?: { loadBundle?: ClientModuleCreateOptions['loadBundle'] }
+        __DSH_TRANSPORT__?: Pick<ClientModuleCreateOptions, 'loadBundle' | 'resolveAsset'>
       }).__DSH_TRANSPORT__
       this.modules = moduleLoader.create({
         boot: win.__DSH_BOOT__,
         staticModules: getStaticModules(),
         ...transport?.loadBundle === undefined ? {} : { loadBundle: transport.loadBundle },
+        ...transport?.resolveAsset === undefined ? {} : { resolveAsset: transport.resolveAsset },
         ...this.seams,
       })
       this.manifest = this.modules.manifest

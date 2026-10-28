@@ -45,9 +45,6 @@
       "path": "../../llm/token-meter"
     },
     {
-      "path": "../../session/session-projection"
-    },
-    {
       "path": "../../storage/storage-domain"
     },
     {

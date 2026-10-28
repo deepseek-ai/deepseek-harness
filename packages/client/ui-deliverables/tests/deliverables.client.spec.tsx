@@ -105,8 +105,8 @@ const turnLocation = (turn: number, deliverables?: DeliverablesTurnData): TurnLo
   return { turn, start: undefined, end: undefined, status: 'closed', steps: [], data }
 }
 
-const produced = (...values: ReadonlyArray<readonly [seq: number, path: string]>): DeliverablesTurnData => ({
-  produced: values.map(([seq, path]) => ({ seq, path })),
+const produced = (...paths: readonly string[]): DeliverablesTurnData => ({
+  produced: paths.map(path => ({ path })),
 })
 
 function tailOwner(
@@ -216,17 +216,27 @@ function deliverablesOf(value: ConversationNodeAssembler, turn = 1): Readonly<De
 }
 
 describe('produced-file Turn data', () => {
-  it('deduplicates paths in first-seen order and stops at the closing Assistant seq', () => {
-    const data = produced(
-      [3, 'out/index.html'],
-      [4, 'out/app.css'],
-      [4, 'out/index.html'],
-      [8, 'after.txt'],
-    )
-    expect(producedForClosing(data, 6)).toEqual(['out/index.html', 'out/app.css'])
-    expect(selectProducedFiles(tailOwner(data, 6))).toEqual(['out/index.html', 'out/app.css'])
+  it('deduplicates paths in first-seen order across the whole turn', () => {
+    const data = produced('out/index.html', 'out/app.css', 'out/index.html', 'after.txt')
+    expect(producedForClosing(data)).toEqual(['out/index.html', 'out/app.css', 'after.txt'])
+    expect(selectProducedFiles(tailOwner(data, 6))).toEqual(['out/index.html', 'out/app.css', 'after.txt'])
     expect(producedForClosing(undefined)).toEqual([])
     expect(selectProducedFiles(tailOwner(undefined, 9, () => {}, 2))).toBeNull()
+  })
+
+  it('includes mutations that settle after the closing reply', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      call(3, 'late', 'write', { file_path: 'late.txt', content: 'late' }),
+      result(4, 'late', false, 1, { path: '/project/late.txt' }),
+      at(5, 'turn/end', { turn: 1 }),
+    ])
+    const data = deliverablesOf(value)
+    // The closing reply at seq 2 shares the step that called write, and no later step wrote text.
+    expect(selectProducedFiles(tailOwner(data, 2))).toEqual(['/project/late.txt'])
+    const opened = vi.fn()
+    producedFileMentions(['/project/late.txt'], opened, path => path, data?.produced).resolve('late.txt')?.open()
+    expect(opened).toHaveBeenCalledWith('/project/late.txt')
   })
 
   it('opens a moved write at its recorded target when an absolute delivery names the same file', () => {
@@ -561,7 +571,7 @@ describe('ChangedFiles card', () => {
     controller = new PresentedOpenController(), locale = en, matched = { changes, presented: [] as never[] }, summaries = servedStore(),
   ) {
     const props = openProps(controller, summaries)
-    props.openChanged.mockResolvedValue(null)
+    props.openChanged.mockResolvedValue({ kind: 'opened' })
     const openFile = vi.fn<(path: string) => void>()
     const view = render(<Deliverables {...props} matched={matched} openFile={openFile} sessionId={SessionId('child-session')} t={makeTranslate(locale)} />)
     return { props, openFile, view }
@@ -871,7 +881,7 @@ describe('plugin registration', () => {
     // resolver whose matches open through the owner-supplied opener.
     const opened: string[] = []
     const owner = tailOwner(
-      produced([2, 'site/report.html']),
+      produced('site/report.html'),
       3,
       (path) => { opened.push(path) },
     )
@@ -881,16 +891,20 @@ describe('plugin registration', () => {
     mentions?.resolve('report.html')?.open()
     expect(opened).toEqual(['site/report.html'])
     const canonical = '/project/child/out/report.txt'
-    const moved = tailOwner({ produced: [{ seq: 2, path: canonical, argumentPath: 'out/report.txt' }] }, 3, previewPath => opened.push(previewPath))
+    const moved = tailOwner({ produced: [{ path: canonical, argumentPath: 'out/report.txt' }] }, 3, previewPath => opened.push(previewPath))
     const movedMentions = service?.forClosing(moved, SessionId('moved-session'))
     movedMentions?.resolve('out/report.txt')?.open()
     expect(opened.at(-1)).toBe(canonical)
     expect(movedMentions?.resolve('out/report.txt')?.title).toBe(canonical)
+    // A delivery recorded after the closing reply still resolves in that reply's prose.
+    const late = tailOwner({ produced: [], presented: [{ path: 'out/late.docx', seq: 5, index: 0 }] }, 3, previewPath => opened.push(previewPath))
+    service?.forClosing(late, SessionId('late-session'))?.resolve('late.docx')?.open()
+    expect(opened.at(-1)).toBe('out/late.docx')
 
     const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetcher)
     const preview = vi.fn<(path: string) => void>()
-    for (const produced of [[], [{ path: 'out/report.docx', seq: 1 }]]) {
+    for (const produced of [[], [{ path: 'out/report.docx' }]]) {
       const delivered = tailOwner({ produced, presented: [{ path: 'out/report.docx', seq: 2, index: 0 }] }, 3, preview)
       const mentions = service?.forClosing(delivered, SessionId('child-session'))
       for (const text of ['report.docx', 'out/report.docx']) {
@@ -913,9 +927,9 @@ describe('plugin registration', () => {
     // The replaced connection may reach a Host that no longer serves the summaries read so far.
     expect(face.hooks.changesSummary.getSnapshot()).toEqual({})
     await face.openPresented(SessionId('child-session'), 2, 0)
-    expect(face.hooks.presentedOpen.getSnapshot()['api/present.open?sessionId=child-session&seq=2&index=0']).toBe('opened')
+    expect(face.hooks.presentedOpen.getSnapshot()['api/present.open?sessionId=child-session&seq=2&index=0']).toBeUndefined()
     await face.openChanged(SessionId('child-session'), 5, 0)
-    expect(face.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=0']).toBe('opened')
+    expect(face.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=0']).toBeUndefined()
     face.openChangesReview({ sessionId: SessionId('child-session'), seq: 5, turn: 3 }, 1)
     expect(openResource).toHaveBeenCalledWith('dsh-resource://changes-review/session/child-session/5/3', { params: { index: 1 } })
     expect((registered as { title(address: string): string }).title('dsh-resource://changes-review/session/child-session/5/3')).toBe('Review · turn 3')
@@ -936,7 +950,7 @@ describe('plugin registration', () => {
     await tabFace.reloadPresentedHost()
     fetcher.mockResolvedValueOnce(new Response(null, { status: 204 }))
     await tabFace.openChanged(SessionId('child-session'), 5, 1)
-    expect(tabFace.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=1']).toBe('opened')
+    expect(tabFace.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=1']).toBeUndefined()
     ctx.emit('connection/reset')
     expect(tabFace.hooks.changesDiff.getSnapshot()).toEqual({})
     // A turn that produced nothing yields no vocabulary at all.
@@ -966,16 +980,27 @@ describe('presented files', () => {
   it('replays deliveries without mutation calls, preserves indices, and isolates turns', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),
-      at(2, 'deliverables/presented', { turn: 1, callId: 'nested', files: [null, { ...file(), description: 'Final report' }] }),
+      at(2, 'deliverables/presented', { turn: 1, callId: 'nested', files: [null, { ...file(), description: 'Final report' }, file('notes.md')] }),
       at(3, 'deliverables/presented', { turn: 1, callId: 'again', files: [{ ...file(), description: 'Updated report' }] }),
       at(4, 'turn/end', { turn: 1 }),
       at(5, 'turn/start', { turn: 2 }),
     ])
-    const first = presentedForClosing(tailOwner(deliverablesOf(value), 3))
-    expect(first).toMatchObject([{ path: 'report.docx', seq: 2, index: 1, description: 'Final report' }])
-    expect(presentedForClosing(tailOwner(deliverablesOf(value), 4)))
-      .toMatchObject([{ path: 'report.docx', seq: 3, description: 'Updated report' }])
+    expect(presentedForClosing(tailOwner(deliverablesOf(value), 4))).toMatchObject([
+      { path: 'report.docx', seq: 3, index: 0, description: 'Updated report' },
+      { path: 'notes.md', seq: 2, index: 2 },
+    ])
     expect(selectDeliverables(tailOwner(deliverablesOf(value, 2), 9))).toBeNull()
+  })
+
+  it('keeps deliveries recorded after the closing reply', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(3, 'deliverables/presented', { turn: 1, callId: 'present', files: [{ ...file(), description: 'Final report' }] }),
+      at(4, 'turn/end', { turn: 1 }),
+    ])
+    // The closing reply at seq 2 shares the step that called present, and no later step wrote text.
+    expect(selectDeliverables(tailOwner(deliverablesOf(value), 2))?.presented)
+      .toMatchObject([{ path: 'report.docx', seq: 3, index: 0, description: 'Final report' }])
   })
 
   it('uses the viewed fork Session in every open action and expands all delivered files', () => {
@@ -987,7 +1012,7 @@ describe('presented files', () => {
     const owner = tailOwner(deliverablesOf(value), 3, preview)
     const matched = selectDeliverables(owner)!
     const props = openProps()
-    props.openPresented.mockResolvedValue(null)
+    props.openPresented.mockResolvedValue({ kind: 'opened' })
     const view = render(<Deliverables {...props} matched={matched} openFile={owner.openFile} sessionId={SessionId('child-session')} t={makeTranslate(en)} />)
     expect(view.container.querySelectorAll('[data-presented-file]')).toHaveLength(4)
     const expand = view.getByRole('button', { name: 'Show all 8 delivered files' })
@@ -1066,7 +1091,7 @@ it('lets one delivered file span the complete row without an expansion control',
 })
 
 
-it.each(['opening', 'opened', 'error'] as const)('shows the %s state and permits retries after failure', (phase) => {
+it.each(['opening', 'error'] as const)('shows the %s state and permits retries after failure', (phase) => {
   const controller = new PresentedOpenController()
   controller.state.set({ 'api/present.open?sessionId=session&seq=2&index=0': phase })
   const props = openProps(controller)

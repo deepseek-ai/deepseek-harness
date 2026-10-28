@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-12-session-projection-registration-handles.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-12-session-projection-registration-handles.md
+/agent-note-asynchronous-projection-registration-and-retained-readers:
+  en: 693349255afbaec8
+  zh: 13bcbf3f40b93b2b
+/agent-note-asynchronous-projection-registration-and-retained-readers/problem:
+  en: 47ba548b869be190
+  zh: c2e5038a56fe741c
+/agent-note-asynchronous-projection-registration-and-retained-readers/decision:
+  en: be0d17bfbd1b59d4
+  zh: 7a23bccdf95c21ff
+/agent-note-asynchronous-projection-registration-and-retained-readers/alternatives-considered:
+  en: e7c66403fab991d2
+  zh: 1580ec29116c7d42
+/agent-note-asynchronous-projection-registration-and-retained-readers/consequences:
+  en: 31ce6f02dd3bf39d
+  zh: bcd29b2146f689b5

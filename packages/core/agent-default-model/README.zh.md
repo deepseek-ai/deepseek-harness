@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-为会话未指定模型的新 agent 提供共享默认 provider 和模型。Provider、模型和推理强度都是即时 Config 字段。保存的选择更新当前 profile patch，并用于后续读取；会话级选择仍由入口负责。
+为会话未指定模型的新 agent 提供共享默认 provider 和模型。Provider、模型和推理强度都是即时 Config 字段。保存的选择更新当前 profile patch，并用于后续读取；会话级选择由[Agent 模型 API](../agent/README.zh.md) 负责。
 
 ## 目录
 
@@ -112,7 +112,7 @@ await ctx.agentDefaultModel.saveSelection({ provider, model, reasoningEffort: 'h
 
 这些限制界定该服务的范围。它们是当前包约束，不是任务积压。
 
-- **单一的进程级默认值**——该服务只拥有一个默认值；按会话的模型选择仍由入口负责。
+- **单一的进程级默认值**——该服务只拥有一个默认值；按会话的模型选择由[Agent 模型 API](../agent/README.zh.md) 负责。
 - **持久化需要 profile 配置编辑器**——没有编辑器时，保存默认值不会保留选择。
 
 <a id="dev-note"></a>

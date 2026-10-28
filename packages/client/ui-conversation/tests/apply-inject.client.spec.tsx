@@ -8,6 +8,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { CommandContribution, CommandUiContract } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ISession, SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import * as messageQuotes from '@deepseek-ai/dsh-message-quotes/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import {
   SlotTestRuntime, stubConfigForm, usePinnedBrowserLanguages,
@@ -22,6 +23,12 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { createConversationStore } from '../src/client/stores.ts'
 import type { SessionInputShell } from '../src/client/input/facade.ts'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    'quote-probe': { kind: 'single'; scope: 'session' }
+  }
+}
 
 usePinnedBrowserLanguages('zh-CN')
 
@@ -38,7 +45,7 @@ function sessionFakeFor() {
   } satisfies SessionBehaviorOverrides
 }
 
-async function bench() {
+async function bench(renderQuote = false) {
   const runtime = await SlotTestRuntime.create()
   const rootUpload = vi.fn(() => Promise.resolve({
     ok: true as const,
@@ -98,9 +105,15 @@ async function bench() {
   runtime.slots.installLocale(locale)
   await runtime.root.declare({
     'main': { kind: 'keyed', scope: 'root' },
-  }, (_props: { renderSlot?: unknown }) => null)
+    'quote-probe': { kind: 'single', scope: 'session' },
+  }, ({ renderFactorySlot, SessionProvider }) => renderQuote ? (
+    <SessionProvider session={rootReference}>
+      {renderFactorySlot('conversation.user.text', { text: '> @literal /review', facts: {} })}
+    </SessionProvider>
+  ) : null)
 
   const feature = await runtime.mount({ inject: [...inject], apply })
+  if (renderQuote) await runtime.mount(messageQuotes)
   runtime.renderRoot()
   const entryOf = (key: 'main.conversation' | 'conversation.session' | 'conversation.session.header' | 'conversation.composer.bar') =>
     runtime.slots.entries(key)[0]!
@@ -145,6 +158,17 @@ async function bench() {
 }
 
 describe('Conversation inject API', () => {
+  it('renders literal quote text through the actual Factory and keyed node registration', async () => {
+    const b = await bench(true)
+    onTestFinished(() => b.runtime.dispose())
+    const errors = vi.fn()
+    const unsubscribe = b.slots.onEntryError(errors)
+    onTestFinished(unsubscribe)
+    await vi.waitFor(() => { expect(document.querySelector('[data-quote-preview-text]')?.textContent).toBe('@literal /review') })
+    expect(document.querySelector('[data-slot-error]')).toBeNull()
+    expect(errors).not.toHaveBeenCalled()
+  })
+
   it('owns the File action, reads its mounted composer availability, and unregisters on disposal', async () => {
     const b = await bench()
     onTestFinished(() => b.runtime.dispose())
@@ -346,14 +370,15 @@ describe('Conversation inject API', () => {
 
     actions.setDraft('hello')
     actions.submit()
-    // Optimistic commit clears the draft at enter; the prompt lands after the
-    // paint-yield inside the send pipeline.
-    expect(state.getSnapshot().draft).toBe('')
+    // The draft stays, read-only, until the Host accepts the prompt that
+    // follows the paint-yield inside the send pipeline.
+    expect(state.getSnapshot()).toMatchObject({ phase: 'sending', draft: 'hello' })
     await vi.waitFor(() => {
       expect(b.sessionFake.prompt).toHaveBeenCalledWith(
         [{ type: 'text', text: 'hello' }], 'queue', expect.any(AbortSignal), expect.any(String),
       )
     })
+    await vi.waitFor(() => { expect(state.getSnapshot().draft).toBe('') })
 
     b.sessionFake.prompt.mockResolvedValueOnce({
       ok: false, error: new RemoteError('session/agent-busy', 'busy', { reason: 'busy' }),
@@ -543,6 +568,27 @@ describe('Conversation inject API', () => {
     expect(b.inputApi(other).state.getSnapshot().draft).toBe('carry me')
     await vi.waitFor(() => { expect(targetUpload).toHaveBeenCalledOnce() })
     expect(b.inputApi(other).state.getSnapshot().attachmentIds).toHaveLength(1)
+    await b.runtime.dispose()
+  })
+
+  it('leaves a draft whose message is still being sent with its Session', async () => {
+    const b = await bench()
+    const pending = Promise.withResolvers<Awaited<ReturnType<ISession['prompt']>>>()
+    b.sessionFake.prompt.mockReturnValueOnce(pending.promise)
+    const { state, actions } = b.inputApi(ROOT)
+    actions.setDraft('in flight')
+    actions.submit()
+    await vi.waitFor(() => { expect(b.sessionFake.prompt).toHaveBeenCalledOnce() })
+    expect(state.getSnapshot().phase).toBe('sending')
+    const other = 'sending-target' as SessionId
+    await b.runtime.sessions.add({ id: other, session: {} })
+    b.connectWorkspace.mockResolvedValueOnce(other)
+    await b.residentApi(ROOT).selectWorkspace('workspace-sending' as WorkspaceId)
+    expect(b.opened).toHaveBeenCalledWith(other)
+    expect(b.inputApi(other).state.getSnapshot().draft).toBe('')
+    expect(state.getSnapshot().draft).toBe('in flight')
+    pending.resolve({ ok: true, value: { accepted: true } })
+    await vi.waitFor(() => { expect(state.getSnapshot()).toMatchObject({ phase: 'plain', draft: '' }) })
     await b.runtime.dispose()
   })
 

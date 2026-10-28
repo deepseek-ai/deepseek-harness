@@ -135,6 +135,52 @@ describe('resolve', () => {
   })
 })
 
+describe('home prefix', () => {
+  let home: string
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'dsh-fs-home-'))
+    vi.stubEnv('HOME', home)
+    vi.stubEnv('USERPROFILE', home)
+    await writeFile(join(home, 'note.txt'), 'home note')
+  })
+  afterEach(async () => {
+    vi.unstubAllEnvs()
+    await rm(home, { recursive: true, force: true })
+  })
+
+  it('resolves and lstats a leading ~ against the home directory', async () => {
+    expect((await fs.resolve('~')).displayPath).toBe(home)
+    const note = await fs.resolve('~/note.txt')
+    expect(note.displayPath).toBe(join(home, 'note.txt'))
+    expect(await fs.readText(note)).toBe('home note')
+    expect((await fs.lstat('~/note.txt'))?.type).toBe('file')
+  })
+
+  it('keeps ~user and later ~ segments relative to cwd', async () => {
+    expect((await fs.resolve('~user/x.txt')).displayPath).toBe(join(dir, '~user', 'x.txt'))
+    expect((await fs.resolve('a/~/b.txt')).displayPath).toBe(join(dir, 'a', '~', 'b.txt'))
+  })
+
+  it.skipIf(process.platform === 'win32')('keeps POSIX ~\\ literal and physical parent traversal after ~/', async () => {
+    expect((await fs.resolve('~\\note.txt')).displayPath).toBe(join(dir, '~\\note.txt'))
+    await mkdir(join(home, 'real', 'sub'), { recursive: true })
+    await writeFile(join(home, 'real', 'a.txt'), 'beside link target')
+    await symlink(join(home, 'real', 'sub'), join(home, 'link'))
+    expect(await fs.readText(await fs.resolve('~/link/../a.txt'))).toBe('beside link target')
+  })
+
+  it.skipIf(process.platform !== 'win32')('expands the Windows ~\\ prefix', async () => {
+    expect((await fs.resolve('~\\note.txt')).displayPath).toBe(join(home, 'note.txt'))
+  })
+
+  it('lists a child literally named ~ under its parent', async () => {
+    await mkdir(join(dir, '~'))
+    const [entry] = await fs.listDir(await fs.resolve('.'))
+    expect(entry?.target.displayPath).toBe(join(dir, '~'))
+    expect(entry?.target.targetKey).toBe(await realpath(join(dir, '~')))
+  })
+})
+
 describe('stat', () => {
   it('returns file metadata, directory type, and undefined for absent', async () => {
     await writeFile(join(dir, 'a.txt'), 'hello')

@@ -126,13 +126,7 @@ async function executeEventSearch(
   const query = toolInput.normalizeQuery(args.query)
   const range = toolInput.sequenceRange(args.seq_from, args.seq_to)
   if (sessionId === caller.id) {
-    const stepStartSeq = caller.boundary?.lastStepStartSeq
-    if (stepStartSeq === undefined) {
-      throw new HarnessError(
-        'current-session search requires an active step boundary',
-        'SESSION_QUERY_TOOL_NO_CURRENT_STEP',
-      )
-    }
+    const stepStartSeq = caller.boundary.lastStepStartSeq
     // `null` (no step started yet) caps the range to a degenerate `to` the
     // filter validation rejects — the loop never runs tools outside a step.
     range.to = Math.min(range.to ?? Number.MAX_SAFE_INTEGER, (stepStartSeq ?? 0) - 1)

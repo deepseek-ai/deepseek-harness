@@ -61,6 +61,35 @@ function parentPathFixture(path: string): string {
   ].join('\n')
 }
 
+/** Build a settled turn whose relative link follows a directory change into a nested checkout. */
+function changedDirectoryFixture(path: string): string {
+  const session = Session.create(SessionId('changed-directory-links-source'))
+  session.append('turn/start', { turn: 1 })
+  const user = session.append('user/message', createUserMessage({
+    content: [{ type: 'text', text: 'Enter the worktree and link its notes.' }], source: { kind: 'user' },
+  }), { surfaceOp: 'append' })
+  session.append('session/title', { title: 'Changed directory links', messageSeqs: [user.seq], source: { kind: 'fallback' } })
+  session.append('working-directory/change', { cwd: '{{cwd}}/.agents/worktrees/w' })
+  session.append('step/start', { turn: 1, step: 1 })
+  session.append('assistant/message', {
+    turn: 1, step: 1, stream: [],
+    message: createAssistantMessage({
+      content: [{ type: 'text', text: `[Worktree notes](${path})` }],
+      source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+    }),
+  }, { surfaceOp: 'append' })
+  session.append('step/end', { turn: 1, step: 1 })
+  session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  return [
+    JSON.stringify({
+      type: 'session', version: SESSION_FORMAT_VERSION, id: '{{sessionId}}', createdAt: 0,
+      cwd: '{{cwd}}', isSeeded: false, delegationDepth: 0,
+    }),
+    ...session.snapshotEvents().map(event => JSON.stringify(event)),
+    '',
+  ].join('\n')
+}
+
 describe('web e2e: Markdown file links', () => {
   let scaffold: WebScaffold
   let browser: Browser
@@ -174,6 +203,29 @@ describe('web e2e: Markdown file links', () => {
     await expect.poll(stored).toContain(sessionFileAddress(id, 'parent.txt'))
     await source.click()
     expect(await tabs.allTextContents()).toEqual(['parent.txt', 'parent.txt'])
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  })
+  it('resolves relative links from the Session\'s current working directory', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-changed-directory-file-links'))
+    const worktree = join(scaffold.workspaceCwd, '.agents/worktrees/w')
+    await mkdir(worktree, { recursive: true })
+    await writeFile(join(scaffold.workspaceCwd, 'notes.txt'), 'original checkout\n')
+    await writeFile(join(worktree, 'notes.txt'), 'worktree checkout\n')
+    const id = await seedSession(scaffold, changedDirectoryFixture('notes.txt'), 'changed-directory-file-links')
+    await page.reload({ waitUntil: 'load' })
+    const workspace = page.getByRole('treeitem').first()
+    await workspace.waitFor()
+    if (await workspace.getAttribute('aria-expanded') !== 'true') await workspace.click()
+    await page.locator(`[data-row-key="session:${id}"]`).click()
+
+    await page.getByRole('button', { name: 'Worktree notes', exact: true }).click()
+    const column = page.locator('[data-rightbar-col]')
+    await expect.poll(() => column.locator('[data-textpreview-path]').textContent()).toBe(join(worktree, 'notes.txt'))
+    await expect.poll(() => column.locator('[data-textpreview-line="1"]').textContent()).toBe('worktree checkout\n')
+    const artifacts = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
+    await mkdir(artifacts, { recursive: true })
+    await page.screenshot({ path: join(artifacts, 'changed-directory-file-links.png'), animations: 'disabled' })
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })

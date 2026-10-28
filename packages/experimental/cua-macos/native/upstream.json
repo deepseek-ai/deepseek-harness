@@ -1,0 +1,67 @@
+{
+  "repository": "https://github.com/trycua/cua",
+  "tag": "cua-driver-rs-v0.28.0",
+  "commit": "1b50c02e2d34734f64d2d22f54eb76cc97b4a663",
+  "license": "MIT",
+  "copiedFiles": [],
+  "adaptedFiles": [
+    {
+      "local": "Sources/CuaNative/KeyboardInput.swift",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs",
+      "changes": "Reimplement the exposed PID keyboard path in Swift, including key aliases, explicit modifier transitions, reverse release and Unicode-scalar typing. Add preconstructed event pairs, cooperative cancellation and configurable Unicode event spacing, and Return/Tab delivery for text controls; omit unreachable global and Screen Sharing paths. Preserve keypad key codes separately from ordinary digits and share modifier flags with pointer input."
+    },
+    {
+      "local": "Sources/CuaNative/WindowPointerInput.swift",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/mouse.rs",
+      "changes": "Reimplement the exposed window-directed click, drag and line-scroll paths in Swift. Preserve routing fields and gesture timing, post each event once, and release this operation’s held button on cooperative cancellation. Preserve fractional movement delays for short or unevenly divided drags. Support middle-button and modifier-bearing clicks and configurable-button drags. Add unpressed hover with no cursor restoration and omit off-window priming clicks so revealed controls remain interactive."
+    },
+    {
+      "local": "Sources/CuaNative/PIDEventPoster.swift",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/input/skylight.rs",
+      "changes": "Use instance-owned dynamic function references for PID posting and window-routing fields. Use public PID delivery only when the private posting function is unavailable. Do not copy private CGEvent memory offsets, authentication objects, global HID delivery or focus restoration."
+    },
+    {
+      "local": "Sources/CuaNative/WindowSpaces.swift",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/windows.rs",
+      "changes": "Reimplement read-only multi-Space membership using the same SkyLight queries from input/skylight.rs. Preserve unknown results and per-window display selection; add the DSH WindowServer front-process observation."
+    },
+    {
+      "local": "Sources/CuaNative/AXAccess.swift",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs",
+      "changes": "Reimplement AX traversal, selected-window filtering and display projection in Swift. Retain CFEqual identity handling, scoped AX references, checked discovery failures, AX-less owned windows and DSH system-panel ownership validation. Batch per-node observation attributes while retaining per-attribute errors and individual reads for unsupported batch APIs. Resolve exact-window AX frames for DSH capture and pointer geometry checks. Include value writability, disabled and selected state in the model-facing tree. Select uniquely matched literal text through AXSelectedTextRange and verify the UTF-16 range without rewriting content."
+    },
+    {
+      "local": "Sources/CuaNative/NativePlatform.swift",
+      "upstream": "libs/cua-driver/rust/crates/platform-macos/src/apps/mod.rs",
+      "changes": "Reimplement application and window discovery using Swift AppKit/CoreGraphics, preserve process-lifetime checks, and isolate AppKit access on the main actor."
+    }
+  ],
+  "localFiles": [
+    "Sources/CuaNative/AXTextFormatter.swift",
+    "Sources/CuaNative/AXWorker.swift",
+    "Sources/CuaNative/ApplicationAuthorization.swift",
+    "Sources/CuaNative/ApplicationDiscovery.swift",
+    "Sources/CuaNative/ClipboardPaste.swift",
+    "Sources/CuaNative/Main.swift",
+    "Sources/CuaNative/NativeProtocol.generated.swift",
+    "Sources/CuaNative/Protocol.swift",
+    "Sources/CuaNative/RequestAdmission.swift",
+    "Sources/CuaNative/RequestCoordinator.swift",
+    "Sources/CuaNative/RequestScheduler.swift",
+    "Sources/CuaNative/Runtime.swift",
+    "Sources/CuaNative/ScreenshotTrace.swift",
+    "Sources/CuaNative/SharedHelperProxy.swift",
+    "Sources/CuaNative/SharedHelperRuntime.swift",
+    "Sources/CuaNative/SharedHelperServer.swift",
+    "Sources/CuaNative/TextSelection.swift",
+    "Sources/CuaNative/WindowCapture.swift",
+    "Sources/CuaNative/WindowGeometry.swift"
+  ],
+  "references": [
+    {
+      "repository": "https://github.com/steipete/Peekaboo",
+      "commit": "d58100100123a2ab63376e86e2b78f9f81aac61e",
+      "use": "Cross-check Swift C function signatures and public CoreGraphics calls; no implementation code copied."
+    }
+  ]
+}

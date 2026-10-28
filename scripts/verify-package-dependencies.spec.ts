@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative, sep } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   PACKAGE_DEPENDENCY_POLICY,
@@ -16,6 +16,7 @@ import {
   fixPackageDependencies,
   formatManagedRuntimeDependencies,
   formatPeerRequiredRuntimeDependencies,
+  readHostBuildEntries,
   readPackageDependencyFacts,
   readPackageDependencyState,
   readWorkspacePackageManifests,
@@ -92,11 +93,11 @@ function facts(manifest: PackageDependencyManifest): PackageDependencyFacts {
   }
 }
 
-function sourceFacts(
+async function sourceFacts(
   files: Readonly<Record<string, string>>,
   manifest: Partial<PackageDependencyManifest> = {},
   role: PackageDependencyRole = 'client-host',
-): PackageDependencyFacts {
+): Promise<PackageDependencyFacts> {
   const root = mkdtempSync(join(tmpdir(), 'dsh-dependency-source-'))
   roots.push(root)
   const subject = pkg('@f/probe', 'packages/g/probe/package.json', manifest)
@@ -244,6 +245,16 @@ describe('package dependency scope', () => {
       'carrierKeyOf', 'createScope', 'scopeOf', 'scopeTarget',
     ])
     expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-typert-protocol']).toBeUndefined()
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-experimental-translator'])
+      .toEqual(['TranslationError'])
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-experimental-forge'])
+      .toEqual(['changeRequestKey'])
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-experimental-worktree'])
+      .toEqual(['generatedWorktreeName'])
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-fs']).toEqual(['FsError'])
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-session'])
+      .toEqual(['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf'])
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-timeout']).toEqual(['deadline'])
   })
 
   it('discovers the Client directory, dsh.client declarations, and configured Host packages', () => {
@@ -291,7 +302,7 @@ describe('package dependency scope', () => {
       expect.stringContaining('clientFaceExclude cannot exempt packages/client package @f/client'),
       expect.stringContaining('clientFaceExclude names @f/host, which declares no dsh.client entry'),
       expect.stringContaining('hostPackages redundantly names Client-faced package @f/dual'),
-      expect.stringContaining('unknown release package @f/missing'),
+      expect.stringContaining('clientFaceInclude names unknown package @f/missing'),
     ]))
   })
 
@@ -341,11 +352,138 @@ describe('package dependency scope', () => {
   })
 })
 
+/** Write a temporary repository whose files are JSON-encoded unless given as strings. */
+function writeWorkspace(files: Readonly<Record<string, string | object>>): string {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-dependency-workspace-'))
+  roots.push(root)
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), typeof content === 'string' ? content : JSON.stringify(content))
+  }
+  return root
+}
+
+const CORDIS_PEER = { peerDependencies: { [CORDIS]: 'workspace:~' }, devDependencies: { [CORDIS]: 'workspace:~' } }
+
+describe('experimental packages and Host build entries', () => {
+  it('applies the published policy to an experimental Client package that declares browser packages as peers', async () => {
+    const root = writeWorkspace({
+      'packages/client/ui-probe/package.json': { name: '@deepseek-ai/dsh-client-ui-probe', ...CORDIS_PEER },
+      'packages/experimental/client-ui-probe/package.json': {
+        name: '@deepseek-ai/dsh-experimental-client-ui-probe',
+        dsh: { client: {} },
+        peerDependencies: { [CORDIS]: 'workspace:~', '@deepseek-ai/dsh-client-ui-probe': 'workspace:*' },
+        devDependencies: { [CORDIS]: 'workspace:~', '@deepseek-ai/dsh-client-ui-probe': 'workspace:*' },
+      },
+      'packages/experimental/client-ui-probe/src/index.ts': 'export function apply() {}\n',
+      'packages/experimental/client-ui-probe/src/client/index.ts':
+        "import { Button } from '@deepseek-ai/dsh-client-ui-probe'\nexport const control = Button\n",
+    })
+
+    const state = await readPackageDependencyState(root, policy())
+
+    expect(state.facts.map(fact => [fact.manifestPath, fact.role])).toContainEqual(
+      ['packages/experimental/client-ui-probe/package.json', 'client-host'],
+    )
+    expect(collectPackageDependencyViolations(state)).toEqual([
+      'packages/experimental/client-ui-probe/package.json: @deepseek-ai/dsh-client-ui-probe (existing non-Cordis peer, '
+      + 'packages/experimental/client-ui-probe/src/client/index.ts) must be devDependencies-only at workspace:*; '
+      + 'found devDependencies + peerDependencies',
+    ])
+  })
+
+  it('accepts an experimental package in the configured Host roster', async () => {
+    const root = writeWorkspace({
+      'packages/experimental/host-probe/package.json': { name: '@deepseek-ai/dsh-experimental-host-probe', ...CORDIS_PEER },
+      'packages/experimental/host-probe/src/index.ts': 'export function apply() {}\n',
+    })
+
+    const state = await readPackageDependencyState(root, policy({ hostPackages: ['@deepseek-ai/dsh-experimental-host-probe'] }))
+
+    expect(state.policyViolations).toEqual([])
+    expect(state.facts.map(fact => [fact.manifestPath, fact.role])).toEqual(
+      [['packages/experimental/host-probe/package.json', 'configured-host']],
+    )
+  })
+
+  it('reads Host Worker entries from the package build configuration', async () => {
+    const root = writeWorkspace({
+      'packages/g/inspect/package.json': {
+        name: '@deepseek-ai/dsh-inspect-probe',
+        dsh: { client: {} },
+        dependencies: { ws: '^8.0.0' },
+        ...CORDIS_PEER,
+      },
+      'packages/g/inspect/tsdown.config.ts': [
+        'export default [',
+        "  { entry: ['lib/types/index.js'], platform: 'node' },",
+        "  { entry: { worker: 'lib/types/worker/entry.js' } },",
+        "  { name: 'client', entry: { client: 'lib/types/client/index.js' }, platform: 'browser' },",
+        ']',
+        '',
+      ].join('\n'),
+      'packages/g/inspect/src/index.ts': 'export function apply() {}\n',
+      'packages/g/inspect/src/worker/entry.ts': "import { WebSocketServer } from 'ws'\nexport const server = WebSocketServer\n",
+      'packages/g/inspect/src/client/index.ts': 'export const client = 1\n',
+    })
+
+    const state = await readPackageDependencyState(root, policy())
+    const subject = state.facts.find(fact => fact.manifestPath === 'packages/g/inspect/package.json')
+    if (subject === undefined) throw new Error('the Worker fixture was not classified')
+
+    expect(subject.hostRuntimeSourceUses.get('ws')).toEqual(['packages/g/inspect/src/worker/entry.ts'])
+    expect(expectedPackageDependencies(subject).get('ws')?.section).toBe('dependencies')
+    expect(collectPackageDependencyViolations(state)).toEqual([])
+  })
+
+  it('evaluates every build face and keeps only Host entries outside the Client source tree', async () => {
+    const root = writeWorkspace({
+      'packages/g/faces/package.json': { name: '@deepseek-ai/dsh-faces-probe' },
+      'packages/g/faces/tsdown.config.ts': [
+        'export default ({ env }: { env: { DSH_BUILD_FACE?: string } }) => env.DSH_BUILD_FACE === \'host\'',
+        "  ? [{ entry: '' }, { entry: { runner: './lib/types/runner.js' }, platform: 'neutral' }]",
+        "  : [{ entry: ['lib/types/index.js', 'src/helper.ts', 'lib/types/optional/*.js'] },",
+        "    { entry: { 'client.node': 'lib/types/client/index.js' }, platform: 'node' },",
+        "    { entry: { client: 'lib/types/client/index.js' }, platform: 'browser' }]",
+        '',
+      ].join('\n'),
+      'packages/g/faces/src/index.ts': 'export {}\n',
+      'packages/g/faces/src/runner.ts': 'export {}\n',
+      'packages/g/faces/src/helper.ts': 'export {}\n',
+      'packages/g/faces/src/client/index.ts': 'export {}\n',
+    })
+    const subject = pkg('@deepseek-ai/dsh-faces-probe', 'packages/g/faces/package.json')
+
+    expect((await readHostBuildEntries(root, subject)).map(path => relative(root, path).split(sep).join('/'))).toEqual([
+      'packages/g/faces/src/helper.ts',
+      'packages/g/faces/src/index.ts',
+      'packages/g/faces/src/runner.ts',
+    ])
+    expect(await readHostBuildEntries(root, pkg('@f/none', 'packages/g/none/package.json'))).toEqual([])
+  })
+
+  it.each([
+    ['export default undefined', 'tsdown config has no default export'],
+    ['export default { entry: [1] }', 'tsdown entry [1] is not a path, a path list, or an output-name map'],
+    ["export default { entry: 'dist/index.js' }", 'tsdown entry dist/index.js cannot map to a source entry'],
+    ["export default { entry: 'lib/types/missing.js' }", 'tsdown entry lib/types/missing.js has no source module'],
+  ])('rejects a build configuration Host entry discovery cannot follow: %s', async (config, message) => {
+    const root = writeWorkspace({
+      'packages/g/broken/package.json': { name: '@deepseek-ai/dsh-broken-probe' },
+      'packages/g/broken/tsdown.config.ts': `${config}\n`,
+      'packages/g/broken/src/index.ts': 'export {}\n',
+    })
+
+    await expect(readHostBuildEntries(root, pkg('@deepseek-ai/dsh-broken-probe', 'packages/g/broken/package.json')))
+      .rejects.toThrow(`packages/g/broken/tsdown.config.ts: ${message}`)
+  })
+})
+
 describe('face-aware source classification', () => {
-  it('keeps generated Host schema imports in dependencies without reading or writing lib', () => {
+  it('keeps generated Host schema imports in dependencies without reading or writing lib', async () => {
     const { root, manifestPath, source } = generatedHostFixture('schema')
     const before = readFileSync(join(root, manifestPath), 'utf8')
-    const state = readPackageDependencyState(root, policy())
+    const state = await readPackageDependencyState(root, policy())
     const subject = state.facts[0]
     if (subject === undefined) throw new Error('generated Host fixture was not classified')
 
@@ -354,7 +492,7 @@ describe('face-aware source classification', () => {
       packageName: 'zod', specifier: 'zod', exportName: 'z',
       sourcePath: 'packages/client/probe/lib/typert.host.js',
     }))
-    const standalone = readPackageDependencyFacts(root, pkg('@fixture/generated', manifestPath, subject.manifest),
+    const standalone = await readPackageDependencyFacts(root, pkg('@fixture/generated', manifestPath, subject.manifest),
       subject.role, state.workspaceNames, policy())
     expect(standalone.hostRuntimeExportUses).toEqual(subject.hostRuntimeExportUses)
     expect(collectPackageDependencyViolations(state)).toEqual([])
@@ -378,9 +516,9 @@ describe('face-aware source classification', () => {
     expect(readFileSync(join(root, 'packages/client/probe/src/index.ts'), 'utf8')).toBe(source)
   })
 
-  it('does not infer a zod runtime dependency from a metadata-only Typert export', () => {
+  it('does not infer a zod runtime dependency from a metadata-only Typert export', async () => {
     const { root } = generatedHostFixture('object')
-    const state = readPackageDependencyState(root, policy())
+    const state = await readPackageDependencyState(root, policy())
     const subject = state.facts[0]
     if (subject === undefined) throw new Error('generated Host fixture was not classified')
 
@@ -392,32 +530,32 @@ describe('face-aware source classification', () => {
     expect(existsSync(join(root, 'packages/client/probe/lib'))).toBe(false)
   })
 
-  it('rejects a declared Host Typert module absent from the Host program', () => {
+  it('rejects a declared Host Typert module absent from the Host program', async () => {
     const { root } = generatedHostFixture('schema')
     rmSync(join(root, 'tsconfig.host.json'))
 
-    expect(() => readPackageDependencyState(root, policy())).toThrow(
+    await expect(readPackageDependencyState(root, policy())).rejects.toThrow(
       'packages/client/probe/package.json: declared Host Typert export has no generated module',
     )
     expect(existsSync(join(root, 'packages/client/probe/lib'))).toBe(false)
   })
 
-  it('propagates generator publication errors without writing or repairing manifests', () => {
+  it('propagates generator publication errors without writing or repairing manifests', async () => {
     const { root, manifestPath } = generatedHostFixture('schema')
     const manifest = JSON.parse(readFileSync(join(root, manifestPath), 'utf8')) as { files: string[] }
     manifest.files = []
     const before = JSON.stringify(manifest)
     writeFileSync(join(root, manifestPath), before)
 
-    expect(() => readPackageDependencyState(root, policy())).toThrow(
+    await expect(readPackageDependencyState(root, policy())).rejects.toThrow(
       'package files must include lib/typert.host.js',
     )
     expect(readFileSync(join(root, manifestPath), 'utf8')).toBe(before)
     expect(existsSync(join(root, 'packages/client/probe/lib'))).toBe(false)
   })
 
-  it('counts browser imports, JSX, type-only references, and augmentations as development inputs', () => {
-    const subject = sourceFacts({
+  it('counts browser imports, JSX, type-only references, and augmentations as development inputs', async () => {
+    const subject = await sourceFacts({
       'src/index.ts': [
         "import { readFile } from 'node:fs'",
         "import { join } from 'path'",
@@ -453,8 +591,8 @@ describe('face-aware source classification', () => {
     ])
   })
 
-  it.each(['client-host', 'configured-host'] as const)('retains Host and shared third-party values in dependencies for %s', (role) => {
-    const subject = sourceFacts({
+  it.each(['client-host', 'configured-host'] as const)('retains Host and shared third-party values in dependencies for %s', async (role) => {
+    const subject = await sourceFacts({
       'src/index.ts': "import 'host-only'; export { shared } from './nested.ts'",
       'src/nested.ts': "export { shared } from 'shared-runtime'",
       'src/client/index.ts': "import 'browser-only'; import 'shared-runtime'",
@@ -466,8 +604,8 @@ describe('face-aware source classification', () => {
     expect(expected.get('shared-runtime')?.section).toBe('dependencies')
   })
 
-  it('uses declared DefinitelyTyped providers only for erased source references', () => {
-    const subject = sourceFacts({
+  it('uses declared DefinitelyTyped providers only for erased source references', async () => {
+    const subject = await sourceFacts({
       'src/index.ts': "import type { ParseResult } from 'papaparse'",
       'src/client/index.ts': "import type { Root } from 'mdast'; import type { Kind } from '@scope/types'",
     }, {
@@ -483,8 +621,8 @@ describe('face-aware source classification', () => {
     expect(subject.manifest.devDependencies?.mdast).toBeUndefined()
   })
 
-  it('never lets a root-provided React type package stand in for react', () => {
-    const subject = sourceFacts({
+  it('never lets a root-provided React type package stand in for react', async () => {
+    const subject = await sourceFacts({
       'src/index.ts': "import type { ReactNode } from 'react'",
       'src/client/index.ts': "import type { Root } from 'react-dom/client'",
     }, { devDependencies: { '@types/react': '~18.3.1', '@types/react-dom': '~18.3.0' } })
@@ -493,9 +631,9 @@ describe('face-aware source classification', () => {
     expect(() => { repairPackageDependencyManifest(subject) }).toThrow('undeclared third-party dependency react')
   })
 
-  it.each(["import 'runtime-library'", 'export const view = <div />'])('does not let type providers satisfy runtime imports or JSX: %s', (source) => {
+  it.each(["import 'runtime-library'", 'export const view = <div />'])('does not let type providers satisfy runtime imports or JSX: %s', async (source) => {
     const name = source.includes('<div') ? 'react' : 'runtime-library'
-    const subject = sourceFacts({
+    const subject = await sourceFacts({
       'src/index.ts': 'export function apply() {}',
       'src/client/index.tsx': source,
     }, { devDependencies: { [`@types/${name}`]: '^1.0.0' } })
@@ -504,8 +642,8 @@ describe('face-aware source classification', () => {
     expect(() => { repairPackageDependencyManifest(subject) }).toThrow(`undeclared third-party dependency ${name}`)
   })
 
-  it('does not treat static browser library entries as Host modules', () => {
-    const subject = sourceFacts({
+  it('does not treat static browser library entries as Host modules', async () => {
+    const subject = await sourceFacts({
       'src/index.tsx': "import 'static-input'; export const view = <div />",
       'src/companion.ts': "import 'browser-companion'",
     }, {
@@ -521,8 +659,8 @@ describe('face-aware source classification', () => {
     }
   })
 
-  it('scans published Node companions, conditional entries, and emitted-tree subpaths from source', () => {
-    const subject = sourceFacts({
+  it('scans published Node companions, conditional entries, and emitted-tree subpaths from source', async () => {
+    const subject = await sourceFacts({
       'src/index.ts': 'export function apply() {}',
       'src/companion.ts': "import 'companion-runtime'; import type { Kind } from 'companion-types'",
       'src/node/helper.ts': "export { helper } from 'node-helper'",
@@ -565,28 +703,58 @@ describe('face-aware source classification', () => {
     { types: './lib/types/missing.d.ts', default: './lib/renamed.js' },
     ['./lib/missing.cjs'],
     './lib/missing/*.js',
-  ])('rejects a published Node entry with no matching source: %j', (target) => {
-    expect(() => sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
+  ])('rejects a published Node entry with no matching source: %j', async (target) => {
+    await expect(sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
       exports: { './node': target },
-    })).toThrow('Host export ./node has no source entry')
+    })).rejects.toThrow('Host export ./node has no source entry')
   })
 
-  it('rejects a Node export outside the source mapping', () => {
-    expect(() => sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
+  it('rejects a Node export outside the source mapping', async () => {
+    await expect(sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
       exports: { './node': './other/node.js' },
-    })).toThrow('Host export ./node cannot map ./other/node.js to a source entry')
+    })).rejects.toThrow('Host export ./node cannot map ./other/node.js to a source entry')
   })
 
-  it('fails when a managed Host package has no Host entry', () => {
+  it.each(['./lib/assets/*', { default: './lib/assets/*.js' }])(
+    'does not classify the package-asset export %j as Host code', async (target) => {
+      const root = writeWorkspace({
+        'packages/client/ui-probe/package.json': {
+          name: '@deepseek-ai/dsh-client-ui-probe',
+          dsh: { client: { platform: 'web' } },
+          exports: {
+            '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
+            './client': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
+            './assets/*': target,
+          },
+          ...CORDIS_PEER,
+        },
+        'packages/client/ui-probe/src/index.ts': 'export function apply() {}\n',
+        'packages/client/ui-probe/src/client/index.ts': "import art from './assets/art.webp'\nexport const image = art\n",
+      })
+
+      const state = await readPackageDependencyState(root, policy())
+
+      expect(state.facts.map(fact => fact.manifestPath)).toEqual(['packages/client/ui-probe/package.json'])
+      expect(collectPackageDependencyViolations(state)).toEqual([])
+    },
+  )
+
+  it('scans other subpaths below ./assets as Host exports', async () => {
+    await expect(sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
+      exports: { './assets/index': './lib/assets/index.js' },
+    })).rejects.toThrow('Host export ./assets/index has no source entry')
+  })
+
+  it('fails when a managed Host package has no Host entry', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-package-missing-host-'))
     roots.push(root)
     const subject = pkg('@f/host', 'packages/g/host/package.json')
 
-    expect(() => readPackageDependencyFacts(root, subject, 'configured-host', new Set([subject.name])))
-      .toThrow('packages/g/host/package.json: Host runtime entry packages/g/host/src/index.ts does not exist')
+    await expect(readPackageDependencyFacts(root, subject, 'configured-host', new Set([subject.name])))
+      .rejects.toThrow('packages/g/host/package.json: Host runtime entry packages/g/host/src/index.ts does not exist')
   })
 
-  it('classifies Host values, required services, and Client build inputs separately', () => {
+  it('classifies Host values, required services, and Client build inputs separately', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-package-faces-'))
     roots.push(root)
     const subject = pkg('@f/dual', 'packages/g/dual/package.json', {
@@ -607,7 +775,7 @@ describe('face-aware source classification', () => {
       mkdirSync(dirname(join(root, path)), { recursive: true })
       writeFileSync(join(root, path), source)
     }
-    const found = readPackageDependencyFacts(root, subject, 'client-host', new Set([
+    const found = await readPackageDependencyFacts(root, subject, 'client-host', new Set([
       CORDIS, '@f/runtime', '@f/types', '@f/nested', '@f/hidden', '@f/browser', '@f/injected',
     ]), policy({
       configurationOnlyDevDependencies: { '@f/dual': ['@f/injected'] },
@@ -618,14 +786,14 @@ describe('face-aware source classification', () => {
     expect([...found.configurationOnlyDevDependencies]).toEqual(['@f/injected'])
     expect([...found.peerRequiredHostDependencies]).toEqual(['@f/types'])
     expect(expectedPackageDependencies(found).get('@f/types')?.section).toBe('peer-dev')
-    const unrelated = readPackageDependencyFacts(root, subject, 'client-host', found.workspaceNames, policy({
+    const unrelated = await readPackageDependencyFacts(root, subject, 'client-host', found.workspaceNames, policy({
       requiredServicePeers: { '@f/other': ['@f/types'] },
     }))
     expect(expectedPackageDependencies(unrelated).get('@f/types')?.section).toBe('devDependencies')
     for (const name of ['@f/missing', '@f/injected']) {
-      expect(() => readPackageDependencyFacts(root, subject, 'client-host', found.workspaceNames, policy({
+      await expect(readPackageDependencyFacts(root, subject, 'client-host', found.workspaceNames, policy({
         requiredServicePeers: { '@f/dual': [name] },
-      }))).toThrow(`requiredServicePeers must name a referenced workspace package: ${name}`)
+      }))).rejects.toThrow(`requiredServicePeers must name a referenced workspace package: ${name}`)
     }
     expect(found.hostRuntimeExportUses).toEqual([
       {
@@ -692,8 +860,8 @@ describe('face-aware source classification', () => {
 })
 
 describe('dependency sections', () => {
-  it.each(['client-only', 'client-host'] as const)('moves unused third-party and CSS inputs to development dependencies for %s', (role) => {
-    const subject = sourceFacts({
+  it.each(['client-only', 'client-host'] as const)('moves unused third-party and CSS inputs to development dependencies for %s', async (role) => {
+    const subject = await sourceFacts({
       'src/index.ts': "import 'host-runtime'",
     }, {
       dependencies: { 'unused-browser-dep': '^1.2.3', '@fontsource/test-font': '~2.0.0', 'host-runtime': '^3.0.0' },
@@ -713,8 +881,8 @@ describe('dependency sections', () => {
     expect(subject.manifest).toEqual(repaired)
   })
 
-  it('preserves unreferenced third-party declarations in configured Host packages', () => {
-    const subject = sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
+  it('preserves unreferenced third-party declarations in configured Host packages', async () => {
+    const subject = await sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
       dependencies: { 'unused-host-dep': '^1.0.0' },
       optionalDependencies: { 'unused-host-optional': '^2.0.0' },
     }, 'configured-host')
@@ -724,8 +892,8 @@ describe('dependency sections', () => {
     expect(subject.manifest.optionalDependencies).toEqual({ 'unused-host-optional': '^2.0.0' })
   })
 
-  it.each(['peerDependencies', 'optionalDependencies'] as const)('rejects browser-only imports declared in %s', (section) => {
-    const subject = sourceFacts({
+  it.each(['peerDependencies', 'optionalDependencies'] as const)('rejects browser-only imports declared in %s', async (section) => {
+    const subject = await sourceFacts({
       'src/index.ts': 'export function apply() {}',
       'src/client/index.ts': "import 'external'",
     }, {
@@ -747,8 +915,8 @@ describe('dependency sections', () => {
     expect(collectPackageDependencyViolations(state)).toEqual([])
   })
 
-  it('rejects a missing third-party declaration and leaves the in-memory manifest unchanged', () => {
-    const subject = sourceFacts({
+  it('rejects a missing third-party declaration and leaves the in-memory manifest unchanged', async () => {
+    const subject = await sourceFacts({
       'src/index.ts': 'export function apply() {}',
       'src/client/index.ts': "import 'undeclared'",
     })
@@ -1003,11 +1171,11 @@ describe('dependency sections', () => {
     ])
   })
 
-  it('rejects required service declarations for unmanaged packages', () => {
+  it('rejects required service declarations for unmanaged packages', async () => {
     const { root } = generatedHostFixture('schema')
-    expect(readPackageDependencyState(root, policy({
+    expect((await readPackageDependencyState(root, policy({
       requiredServicePeers: { '@fixture/missing': [CORDIS] },
-    })).policyViolations).toContain('requiredServicePeers names unmanaged package @fixture/missing')
+    }))).policyViolations).toContain('requiredServicePeers names unmanaged package @fixture/missing')
   })
 
   it('reports wrong sections, workspace ranges, and stale peer metadata', () => {

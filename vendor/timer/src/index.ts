@@ -6,7 +6,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-type WithDispose<T> = T & { dispose: () => void }
+type Scheduled<F extends (...args: any[]) => any> = ((...args: Parameters<F>) => void) & { dispose: () => void }
 
 /** Disposable timer helpers mixed into Cordis contexts. */
 export class TimerService extends Service {
@@ -66,33 +66,37 @@ export class TimerService extends Service {
       }, 'ctx.interval()')
     } else {
       let done: { kind: 'return'; value: any } | { kind: 'throw'; reason: any } | undefined
-      let nextTask: PromiseWithResolvers<IteratorResult<void>> | undefined
+      const nextTasks: PromiseWithResolvers<IteratorResult<void>>[] = []
       const dispose = this.ctx.effect(() => {
         const timer = setInterval(() => {
-          nextTask?.resolve({ done: false, value: undefined })
+          nextTasks.shift()?.resolve({ done: false, value: undefined })
         }, delay)
         return () => {
           clearInterval(timer)
           if (done) return
           done = { kind: 'throw', reason: new Error('Context has been disposed') }
-          nextTask?.reject(done.reason)
+          for (const task of nextTasks.splice(0)) task.reject(done.reason)
         }
       }, 'ctx.interval()')
       return {
         next: () => {
-          if (!done) return (nextTask = Promise.withResolvers()).promise
+          if (!done) {
+            const task = Promise.withResolvers<IteratorResult<void>>()
+            nextTasks.push(task)
+            return task.promise
+          }
           if (done.kind === 'return') return Promise.resolve({ done: true, value: done.value })
           return Promise.reject(done.reason)
         },
         return: (value) => {
           if (!done) done = { kind: 'return', value }
-          nextTask?.resolve({ done: true, value })
+          for (const task of nextTasks.splice(0)) task.resolve({ done: true, value })
           dispose()
           return Promise.resolve({ done: true, value })
         },
         throw: (reason) => {
           if (!done) done = { kind: 'throw', reason }
-          nextTask?.reject(reason)
+          for (const task of nextTasks.splice(0)) task.reject(reason)
           dispose()
           return Promise.resolve({ done: true, value: undefined })
         },
@@ -103,42 +107,44 @@ export class TimerService extends Service {
     }
   }
 
-  private _schedule(label: string, trigger: (args: any[], isDisposed: boolean) => any, isDisposed = false) {
+  private _schedule(label: string, trigger: (args: any[]) => number | NodeJS.Timeout | undefined) {
     let timer: number | NodeJS.Timeout | undefined
+    let isDisposed = false
     const dispose = this.ctx.effect(() => () => {
       isDisposed = true
       clearTimeout(timer)
+      timer = undefined
     }, label)
     const wrapper: any = (...args: any[]) => {
+      if (isDisposed) return
       clearTimeout(timer)
-      timer = trigger(args, isDisposed)
+      timer = trigger(args)
     }
     wrapper.dispose = dispose
     return wrapper
   }
 
   /** Return a throttled function whose timer is disposed with the current fiber. */
-  throttle<F extends (...args: any[]) => void>(callback: F, delay: number, noTrailing?: boolean): WithDispose<F> {
+  throttle<F extends (...args: any[]) => any>(callback: F, delay: number, noTrailing?: boolean): Scheduled<F> {
     let lastCall = -Infinity
     const execute = (...args: any[]) => {
       lastCall = Date.now()
       callback(...args)
     }
-    return this._schedule('ctx.throttle()', (args, isDisposed) => {
+    return this._schedule('ctx.throttle()', (args) => {
       const now = Date.now()
       const remaining = delay - now + lastCall
       if (remaining <= 0) {
         execute(...args)
-      } else if (!isDisposed) {
+      } else if (!noTrailing) {
         return setTimeout(execute, remaining, ...args)
       }
-    }, noTrailing)
+    })
   }
 
   /** Return a debounced function whose timer is disposed with the current fiber. */
-  debounce<F extends (...args: any[]) => void>(callback: F, delay: number): WithDispose<F> {
-    return this._schedule('ctx.debounce()', (args, isDisposed) => {
-      if (isDisposed) return
+  debounce<F extends (...args: any[]) => any>(callback: F, delay: number): Scheduled<F> {
+    return this._schedule('ctx.debounce()', (args) => {
       return setTimeout(callback, delay, ...args)
     })
   }

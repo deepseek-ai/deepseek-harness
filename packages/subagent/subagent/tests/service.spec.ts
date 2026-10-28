@@ -76,13 +76,12 @@ const contexts = new WeakMap<SubagentRuntime, Context>()
 
 async function service(withAgents = true): Promise<{ ctx: Context; subagents: SubagentRuntime }> {
   const ctx = new Context()
-  // The registry is a required injection of SubagentRuntime (its projection
-  // units register in the constructor).
   if (withAgents) {
     await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(AgentLoop, { agents: [] })
   } else {
     await ctx.plugin(SessionProjectionRegistry)
+
   }
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
@@ -112,6 +111,7 @@ describe('SubagentRuntime', () => {
   it('releases its catalog projection binding with the service fiber', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
+
     await mountWorkingDirectoryFixture(ctx)
     const fiber = await ctx.plugin(SubagentRuntime)
     const parent = Session.create(SessionId('catalog-parent'))
@@ -125,7 +125,7 @@ describe('SubagentRuntime', () => {
 
     await fiber.dispose()
 
-    expect(ctx.sessionProjections.stateOf(parent, 'subagentCatalog')).toBeUndefined()
+    expect(ctx.sessionProjections.snapshot(parent).values.subagentCatalog).toBeUndefined()
   })
 
   it('registers, lists, looks up, starts, and removes providers', async () => {

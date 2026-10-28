@@ -3,7 +3,8 @@
  * the host Loader's entries for packages declaring `dsh.client`, composes the
  * `window.__DSH_BOOT__` entry graph (wire single source: {@link WebBootEntry}
  * in `./client/manifest.ts`) in module-graph order, serves one-or-more-plugin
- * combo scripts plus their source maps,
+ * combo scripts plus their source maps, package-local chunks, and the
+ * content-revisioned `./assets/*` exports of active client packages,
  * contributes the registration facade, application preloads, bootstrap scripts,
  * and graph to the webserver's index injection table, and provides the
  * `clientModules` service (the HMR node half's registration/notification
@@ -14,31 +15,35 @@
  * the fiber's entry name dirty; a microtask flush reconciles each dirty name
  * against the live loader entries. The activation pass seeds the same dirty
  * set with all current entries and flushes synchronously, so first scan and
- * steady state share one implementation. Package metadata (including the
- * negative "not a client package" verdict) is cached per Loader specifier and
- * owning-tree base URL until restart. The manifest package name identifies
- * the browser module; distinct active Loader sources for that package are a
- * composition error. Bundle content changes reach the graph only through
- * {@link ClientModuleRegistry.rebuilt}.
+ * steady state share one implementation. Each reconciliation reads the
+ * package manifest and the bundle metadata again, so an entry that restarts
+ * after its package was reinstalled or moved publishes them as they are now;
+ * an unchanged result publishes nothing and does not read the bundle. The
+ * manifest package name identifies the browser module; distinct active Loader
+ * sources for that package are a composition error. Bundle rebuilds outside
+ * an entry restart reach the graph through {@link ClientModuleRegistry.rebuilt}.
  * @module @deepseek-ai/dsh-client-modules
  */
 
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, statSync } from 'node:fs'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, isAbsolute, join } from 'node:path'
+import { Readable } from 'node:stream'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { isDeepStrictEqual } from 'node:util'
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Entry } from '@deepseek-ai/cordis-plugin-loader'
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
+import { PACKAGE_ASSET_SEGMENT, packageAssetMediaType } from './assets.ts'
 import { exactPackageSpecifier, parseDshClient, stripClientSuffix } from './client/manifest.ts'
-import type { WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph } from './client/manifest.ts'
+import type { WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease } from './client/manifest.ts'
 
 export { stripClientSuffix } from './client/manifest.ts'
 export type {
-  BootManifest, BootModuleRow, BootPluginRow, WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph,
+  BootManifest, BootModuleRow, BootPluginRow, WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease,
 } from './client/manifest.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -68,9 +73,11 @@ export interface ClientArtifactBaseline {
   readonly size: number
 }
 
-/** Resolved metadata cached for one Loader specifier and owning-tree base URL until restart. */
+/** Package metadata read from the manifest of one active Loader source. */
 interface PkgMeta extends WebBootRowFields {
   clientPath: string
+  /** The package's own manifest; package-asset requests resolve against it as a self-reference. */
+  manifestPath: string
 }
 
 interface ResolvedPkgMeta {
@@ -84,7 +91,7 @@ interface ClientPackageSource extends ResolvedPkgMeta {
   loaderName: string
   /** Resolution base of the config tree that owns the row. */
   baseUrl: string
-  /** Stable cache and contribution key for this source. */
+  /** Stable source identity and contribution key. */
   sourceKey: string
 }
 
@@ -223,6 +230,41 @@ function artifactRevision(baseline: ClientArtifactBaseline): string {
 
 /** Absolute route prefix serving every plugin resource. */
 const PLUGIN_ROUTE = '/plugins'
+
+/**
+ * `/plugins/<package>/assets/<path>`. A scoped package name spans two segments
+ * (`@scope/name`); an unscoped name never starts with `@`, so `@scope/assets/…`
+ * stays a chunk request of the package `@scope/assets`.
+ */
+const PACKAGE_ASSET_PATH = /^\/plugins\/(@[^/]+\/[^/]+|[^@/][^/]*)\/assets\/(.*)$/
+
+/** Expose a Node read stream as a shell-carrier Response body; cancelling the body closes the stream. */
+function transforStreamBody(stream: Readable): ReadableStream<Uint8Array> {
+  const chunks: AsyncIterator<Uint8Array> = stream[Symbol.asyncIterator]()
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const next = await chunks.next()
+      if (next.done === true) controller.close()
+      else controller.enqueue(next.value)
+    },
+    async cancel() {
+      await chunks.return?.()
+    },
+  })
+}
+
+/**
+ * Expose a held bundle buffer as a Response body without copying it: the
+ * single chunk is the buffer itself, which readers must not modify.
+ */
+function heldBody(buffer: Buffer): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(buffer)
+      controller.close()
+    },
+  })
+}
 
 /** Combo query addressing one ordered plugin-file list. */
 function comboSearch(ids: readonly string[], rev: string, sourceMap = false): string {
@@ -380,11 +422,17 @@ function identitySectionMap(source: string, sourceUrl: string): Record<string, u
   }
 }
 
-/** Run one producer in the first requester's microtask, not off-thread, and share its settlement. */
-function lazyBody(produce: () => Buffer): () => Promise<Buffer> {
+/**
+ * Run one producer in the first requester's microtask, not off-thread, and share its settlement. A rejected run is
+ * dropped once it settles, so the next request produces again.
+ */
+function lazyBody(produce: () => Buffer | Promise<Buffer>): () => Promise<Buffer> {
   let result: Promise<Buffer> | undefined
   return () => {
-    result ??= Promise.resolve().then(produce)
+    result ??= Promise.resolve().then(produce).catch((error: unknown) => {
+      result = undefined
+      throw error
+    })
     return result
   }
 }
@@ -588,19 +636,21 @@ window.__ModuleLoader__={
 
 /**
  * The web plugin table service: incremental `dsh.client` scan + wire composition
- * + bundle route + index injection rows. Construction runs the activation scan
- * synchronously — a malformed declaration or missing bundle among the
+ * + bundle and package-asset route + index injection rows. Construction runs
+ * the activation scan synchronously — a malformed declaration or missing bundle among the
  * already-loaded entries aggregates into one loud throw (FAILED fiber; the
  * boot activation audit reports it).
  */
 export class ClientModuleRegistry extends Service {
   static inject = ['loader']
 
+  /**
+   * Host release identity published in every graph: this package's version, which releases share
+   * with the CLI, and the source commit the client build fixes into the built Host artifact.
+   */
+  private readonly release: WebBootRelease
   private readonly table = new Map<string, WebPluginRecord>()
   private readonly sources = new Map<string, ClientPackageSource>()
-  // Resolution is entry-local: the same specifier can resolve differently in
-  // separate config trees. Negative verdicts remain stable until restart.
-  private readonly pkgMeta = new Map<string, ResolvedPkgMeta | null>()
   private readonly rebuildListeners = new Set<(id: string, rev: string) => void>()
   private readonly graphListeners = new Set<() => void>()
   private readonly dirty = new Set<string>()
@@ -618,6 +668,10 @@ export class ClientModuleRegistry extends Service {
    */
   constructor(ctx: Context) {
     super(ctx, 'clientModules')
+    const { version } = createRequire(import.meta.url)('../package.json') as { version: string }
+    // The client build fixes this read into the built Host artifact.
+    const commit = process.env.DSH_CLIENT_COMMIT_HASH
+    this.release = commit === undefined ? { version } : { version, commit }
     // Subscribe before seeding so a fiber arriving mid-activation lands in the
     // same dirty set (Set idempotence makes the overlap harmless). An entry-less
     // fiber is a child plugin or a manual mount — never a loader row; O(1) drop.
@@ -646,7 +700,7 @@ export class ClientModuleRegistry extends Service {
 
     const registerWebCarrier = (webCtx: Context): void => {
       webCtx.effect(
-        () => webCtx.webServer.register({ kind: 'prefix', path: PLUGIN_ROUTE, handler: this.serveBundle }),
+        () => webCtx.webServer.register({ kind: 'prefix', path: PLUGIN_ROUTE, resource: request => this.fetchBundle(request) }),
         'client-modules: bundle route',
       )
     }
@@ -674,16 +728,22 @@ export class ClientModuleRegistry extends Service {
   }
 
   /**
-   * Serve an advertised revisioned bundle or source map without a Web server.
-   * Unknown URLs return 404, unsupported methods return 405, and `HEAD`
-   * returns the same immutable headers without materializing a body. Each body
-   * is built once on its first `GET`; script construction never reads maps.
+   * Serve an advertised revisioned bundle, source map, chunk, or package asset
+   * without a Web server. Unknown URLs return 404, unsupported methods return
+   * 405, and `HEAD` returns the same immutable headers without materializing a
+   * body. Each bundle body is built once on its first `GET`; script
+   * construction never reads maps. A package asset is read on every request
+   * and answers 304 without a body when `If-None-Match` equals its entity tag;
+   * its body holds the file open until the caller consumes or cancels it. A
+   * bundle, map, or chunk body is the held buffer itself, not a copy, so a
+   * caller must not modify its bytes.
    * @param request - shell-carrier request for a `/plugins` resource.
    * @returns the exact response also exposed by the optional Web route.
    */
   async fetchBundle(request: Request): Promise<Response> {
-    const resource = await this.bundleResource(request.method, request.url)
-    const body = resource.body === undefined ? null : Uint8Array.from(resource.body)
+    const resource = await this.bundleResource(request.method, request.url, request.headers.get('if-none-match') ?? undefined)
+    const body = resource.body === undefined ? null
+      : resource.body instanceof Readable ? transforStreamBody(resource.body) : heldBody(resource.body)
     return new Response(body, {
       status: resource.status,
       ...(resource.headers === undefined ? {} : { headers: resource.headers }),
@@ -705,7 +765,7 @@ export class ClientModuleRegistry extends Service {
 
   /**
    * Publish one completed bundle generation (the HMR watch's registration
-   * hook — the only entry point through which build changes reach the graph).
+   * hook; an entry restart publishes through reconciliation instead).
    * Unchanged mtime, ctime and size preserve the graph without reading the bundle.
    * @param id - entry id (package name).
    * @returns the current artifact rev, or undefined for an unknown id.
@@ -735,7 +795,8 @@ export class ClientModuleRegistry extends Service {
   }
 
   /**
-   * Subscribe to bundle rebuilds; fires only when artifact metadata changes the rev.
+   * Subscribe to bundle rebuilds; fires when {@link rebuilt} changes a rev. A rev an
+   * entry restart publishes reaches only {@link onGraphChanged} listeners.
    * @param listener - receives the entry id and its new bundle rev.
    * @returns the unsubscriber.
    */
@@ -805,7 +866,12 @@ export class ClientModuleRegistry extends Service {
     this.batchResponses = batchResponses
     this.responses = responses
     const batches = artifacts.map(artifact => artifact.descriptor)
-    return { rev: shortHash(JSON.stringify({ entries, batches })), entries, batches }
+    return {
+      rev: shortHash(JSON.stringify({ entries, batches })),
+      release: this.release,
+      entries,
+      batches,
+    }
   }
 
   private notifyGraphChanged(): void {
@@ -821,14 +887,10 @@ export class ClientModuleRegistry extends Service {
   }
 
   private resolveMeta(loaderName: string, baseUrl: string): ResolvedPkgMeta | null {
-    const sourceKey = this.sourceKey(loaderName, baseUrl)
-    const cached = this.pkgMeta.get(sourceKey)
-    if (cached !== undefined) return cached
     const located = this.locatePkgJson(loaderName, baseUrl)
     if (located === undefined) {
       // Not a resolvable package root: loader builtins (cordis:include) and
-      // subpath entries (…/gateway) land here — permanently not a client row.
-      this.pkgMeta.set(sourceKey, null)
+      // subpath entries (…/gateway) land here — not a client row.
       return null
     }
     const { packageName, path: pkgPath } = located
@@ -838,23 +900,19 @@ export class ClientModuleRegistry extends Service {
       packageName,
       dsh !== null && typeof dsh === 'object' ? (dsh as Record<string, unknown>).client : undefined,
     )
-    if (decl === undefined || decl.platform !== 'web') {
-      this.pkgMeta.set(sourceKey, null)
-      return null
-    }
+    if (decl === undefined || decl.platform !== 'web') return null
     const clientRel = clientExportOf(packageName, pkg.exports)
     if (clientRel === undefined) {
       throw new Error(`client-modules: ${packageName} declares dsh.client but exports no "./client" bundle`)
     }
     const meta: PkgMeta = {
       clientPath: join(dirname(pkgPath), clientRel),
+      manifestPath: pkgPath,
       ...(decl.inject !== undefined ? { inject: decl.inject } : {}),
       external: decl.external ?? [],
       immediately: decl.immediately === true,
     }
-    const resolved = { packageName, meta }
-    this.pkgMeta.set(sourceKey, resolved)
-    return resolved
+    return { packageName, meta }
   }
 
   /**
@@ -899,7 +957,7 @@ export class ClientModuleRegistry extends Service {
         : internal.resolveSync(loaderName, baseUrl, {}).url
     } catch {
       // The Loader cannot resolve the name: its row cannot have imported, so
-      // the name is permanently not a client row.
+      // it is not a client row.
       return undefined
     }
     return this.nearestPackage(moduleUrl, expectedPackageName)
@@ -947,20 +1005,16 @@ export class ClientModuleRegistry extends Service {
   }
 
   /**
-   * Read the activation-time bundle snapshot.
+   * Run one filesystem read of a declared client bundle.
    * @param pkgName - package that declares the client bundle.
    * @param clientPath - absolute path of the built client artifact.
-   * @returns the immutable bytes plus the pre-read filesystem baseline.
+   * @param read - the stat or read of `clientPath`.
+   * @returns the read's result.
    * @throws {MissingClientBundleError} when the read fails with `ENOENT`; other filesystem errors are rethrown unchanged.
    */
-  private initialBundleSnapshot(pkgName: string, clientPath: string): {
-    bundle: Buffer
-    baseline: ClientArtifactBaseline
-  } {
+  private readClientBundle<T>(pkgName: string, clientPath: string, read: () => T): T {
     try {
-      const baseline = this.captureArtifactBaseline(clientPath)
-      const bundle = readFileSync(clientPath)
-      return { bundle, baseline }
+      return read()
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       throw new MissingClientBundleError(pkgName, clientPath, error)
@@ -1033,17 +1087,22 @@ export class ClientModuleRegistry extends Service {
     }
     const source = sources[0]
     if (source === undefined) return this.table.delete(packageName)
-    if (this.table.get(packageName)?.sourceKey === source.sourceKey) return false
+    const { clientPath } = source.meta
     // Startup and HMR share revisions so unchanged artifacts survive a server restart.
-    const snapshot = this.initialBundleSnapshot(packageName, source.meta.clientPath)
-    const rev = artifactRevision(snapshot.baseline)
+    const baseline = this.readClientBundle(packageName, clientPath, () => this.captureArtifactBaseline(clientPath))
+    const entry = graphRow(packageName, artifactRevision(baseline), source.meta)
+    const current = this.table.get(packageName)
+    // A restart that finds the same manifest and bundle metadata leaves the published graph as it is, unread.
+    const unchanged = current?.sourceKey === source.sourceKey
+      && isDeepStrictEqual(current.meta, source.meta) && isDeepStrictEqual(current.entry, entry)
+    if (unchanged) return false
     this.table.set(packageName, {
-      entry: graphRow(packageName, rev, source.meta),
+      entry,
       loaderName: source.loaderName,
       sourceKey: source.sourceKey,
       meta: source.meta,
-      bundle: snapshot.bundle,
-      baseline: snapshot.baseline,
+      bundle: this.readClientBundle(packageName, clientPath, () => readFileSync(clientPath)),
+      baseline,
     })
     return true
   }
@@ -1090,7 +1149,9 @@ export class ClientModuleRegistry extends Service {
       const requested = requestUrl.pathname.slice(prefix.length)
       const sourceMap = requested.endsWith('.map')
       const fileName = sourceMap ? requested.slice(0, -'.map'.length) : requested
-      if (!CLIENT_CHUNK.test(fileName)) return undefined
+      // The Node Client entry and its split chunks share this directory but
+      // must never be served as browser factory scripts.
+      if (!CLIENT_CHUNK.test(fileName) || fileName === 'client.node.js' || fileName.startsWith('client.node.')) return undefined
       if (resourceUrl !== chunkUrl(record.entry.id, fileName, record.entry.rev, sourceMap)) return undefined
       return { record, fileName, sourceMap, resourceUrl }
     }
@@ -1105,33 +1166,93 @@ export class ClientModuleRegistry extends Service {
     const clientPath = join(dirname(record.meta.clientPath), fileName)
     if (!existsSync(clientPath)) return undefined
     const sourceMapUrl = chunkMapReference(fileName, record.entry.rev)
-    const resource = (): ComboResource => ({
+    // An on-demand chunk is read asynchronously: a host whose filesystem fetches
+    // lazily requested files on first read can serve it without a blocking read.
+    const resource = async (): Promise<ComboResource> => ({
       id: record.entry.id,
       rev: record.entry.rev,
       clientPath,
       fileName,
-      bundle: readFileSync(clientPath),
+      bundle: await readFile(clientPath),
     })
     const response: LazyResponse = sourceMap
       ? {
-        body: lazyBody(() => buildComboSourceMap([resource()], this.readSourceMap, fileName)),
+        body: lazyBody(async () => buildComboSourceMap([await resource()], this.readSourceMap, fileName)),
         contentType: 'application/json; charset=utf-8',
       }
       : {
-        body: lazyBody(() => buildComboScript([resource()], sourceMapUrl)),
+        body: lazyBody(async () => buildComboScript([await resource()], sourceMapUrl)),
         contentType: 'text/javascript; charset=utf-8',
       }
     this.responses.set(resourceUrl, response)
     return response
   }
 
-  private async bundleResource(method: string | undefined, url: string): Promise<{
+  /**
+   * Answer one package-asset request. Node's `require.resolve` applies the
+   * package's `./assets/*` export as a self-reference, so unexported,
+   * `.`/`..`, missing, and directory paths answer 404. The build writes each
+   * asset's content revision into its file name, so a served path names one
+   * content: the body streams from disk on every request, and the path is the
+   * entity tag.
+   * @param method - request method.
+   * @param record - the active row of the addressed package, or undefined when it is not active.
+   * @param assetPath - percent-encoded path below the package's `assets/` route segment.
+   * @param ifNoneMatch - request `If-None-Match` field.
+   * @returns the route answer.
+   */
+  private assetResponse(
+    method: 'GET' | 'HEAD',
+    record: WebPluginRecord | undefined,
+    assetPath: string,
+    ifNoneMatch: string | undefined,
+  ): {
     status: number
     headers?: Record<string, string>
-    body?: Buffer
+    body?: Readable
+  } {
+    if (record === undefined || assetPath === '') return { status: 404 }
+    let file: string
+    try {
+      file = createRequire(record.meta.manifestPath)
+        .resolve(`${record.entry.id}/${PACKAGE_ASSET_SEGMENT}/${decodeURIComponent(assetPath)}`)
+    } catch {
+      // Unresolvable or malformed paths name no asset.
+      return { status: 404 }
+    }
+    // The resolved file decides the type: Node reads `#` and `?` in the subpath as URL syntax.
+    const mediaType = packageAssetMediaType(file)
+    if (mediaType === undefined) return { status: 404 }
+    const headers: Record<string, string> = {
+      'content-type': mediaType,
+      'cache-control': IMMUTABLE_CACHE,
+      etag: `"${assetPath}"`,
+      'x-content-type-options': 'nosniff',
+      // A directly opened SVG document runs no script.
+      ...(mediaType === 'image/svg+xml' ? { 'content-security-policy': "script-src 'none'" } : {}),
+    }
+    if (ifNoneMatch === headers.etag) return { status: 304, headers }
+    return { status: 200, headers, ...(method === 'HEAD' ? {} : { body: createReadStream(file) }) }
+  }
+
+  /**
+   * Answer one `/plugins` request. A `/plugins/<package>/assets/` path is
+   * answered by the package-asset route alone; any other path is an advertised
+   * combo or its map, a prior startup generation, or a current-revision
+   * package-local chunk, in that order, and otherwise 404.
+   */
+  private async bundleResource(method: string | undefined, url: string, ifNoneMatch: string | undefined): Promise<{
+    status: number
+    headers?: Record<string, string>
+    body?: Buffer | Readable
   }> {
     if (method !== 'GET' && method !== 'HEAD') return { status: 405 }
     const requestUrl = new URL(url, 'http://x')
+    const asset = PACKAGE_ASSET_PATH.exec(requestUrl.pathname)
+    if (asset !== null) {
+      const [, packageName = '', assetPath = ''] = asset
+      return this.assetResponse(method, this.table.get(packageName), assetPath, ifNoneMatch)
+    }
     const resourceUrl = `${requestUrl.pathname}${requestUrl.search}`
     const response = this.responses.get(resourceUrl)
       ?? this.previousBatchResponses.get(resourceUrl)
@@ -1148,12 +1269,6 @@ export class ClientModuleRegistry extends Service {
     return { status: 404 }
   }
 
-  private readonly serveBundle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    /* v8 ignore next -- `?? '/'` arm: node:http always sets url on server requests. */
-    const response = await this.bundleResource(req.method, req.url ?? '/')
-    res.writeHead(response.status, response.headers)
-    res.end(response.body)
-  }
 }
 
 export default ClientModuleRegistry

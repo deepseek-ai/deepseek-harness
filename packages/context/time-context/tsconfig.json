@@ -37,6 +37,9 @@
     },
     {
       "path": "../../session/session-projection"
+    },
+    {
+      "path": "../../util/time"
     }
   ]
 }

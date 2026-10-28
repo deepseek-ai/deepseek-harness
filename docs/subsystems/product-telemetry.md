@@ -2,7 +2,7 @@
 
 English | [中文](product-telemetry.zh.md)
 
-The [product telemetry plugin](../../packages/host/product-telemetry-otel/README.md) sends explicitly selected analytics events through OTLP/HTTP. Its `productTelemetry` service owns submission only; product consumers own when an event occurs and which fields are approved. The exporter collects no Session data or identifiers automatically. The [Desktop analytics consumer](../../packages/client/product-analytics/README.md) selects interaction and live compaction events, adds available login identity, and follows the Desktop launch-time collection switch. Ordinary Web clients do not collect product events.
+The [product telemetry plugin](../../packages/host/product-telemetry-otel/README.md) sends explicitly selected analytics events through OTLP/HTTP. Its `productTelemetry` service owns submission only; product consumers own when an event occurs and which fields are approved. The exporter collects no Session data or identifiers automatically. The [Desktop analytics consumer](../../packages/client/product-analytics/README.md) selects interaction and live compaction events, adds cached static environment and available login identity, and follows the Desktop launch-time collection switch. Ordinary Web clients do not collect product events.
 
 `ProductTelemetryRecord` requires an event name, string body, and Unix-millisecond timestamp. Attributes accept scalar strings, numbers, booleans, and one-level objects of those values (`ProductTelemetryScalar`). Optional severity uses OTel severity numbers and defaults to INFO. Observation time is assigned when the record is enqueued.
 
@@ -51,7 +51,9 @@ Authenticated event intake; disabled instances do not inspect identity or accept
 @Remote({ mode: 'stream' }) async *watchPolicy(signal: AbortSignal): AsyncIterable<boolean>
 
 /**
- * Submit selected Desktop fields; missing identity is omitted and never generated.
+ * Submit selected Desktop fields with cached static environment and fresh identity.
+ * The first intake waits for bounded environment queries; concurrent intakes share them.
+ * Missing identity is omitted; failed environment fields carry fixed reasons.
  * @param event - typed product event without message contents or credentials.
  * @returns after local submission; no delivery or warehouse acknowledgement.
  */

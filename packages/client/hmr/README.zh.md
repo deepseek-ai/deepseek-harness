@@ -78,7 +78,7 @@ fiber 的激活 epoch 会串联其服务提供方的 uid，因此替换提供方
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | node 半侧：bundle stat 轮询、`rebuilt` 上报、`/plugins/events` SSE 通道 |
-| [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：SSE 订阅与共享条目控制器调用 |
+| [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：页面有外壳提供的 `__DSH_TRANSPORT__.fetch`（worker preview 的隧道）时经它订阅 SSE，否则用 `EventSource`；并调用共享条目控制器 |
 | [`src/events.ts`](src/events.ts) | 共享帧类型（`graph` / `rebuilt`）与端点常量 |
 
 </details>

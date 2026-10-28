@@ -202,6 +202,15 @@ function wideNeutralBorders(css: string, exempt: Set<string> = new Set()): strin
   return wide
 }
 
+/** Centered, zero-blur inset strokes with literal widths and neutral border colors. */
+function wideNeutralInsetShadows(css: string): string[] {
+  return parseRules(css).flatMap(rule => rule.declarations
+    .filter(([property, value]) => property === 'box-shadow'
+      && [...value.matchAll(/\binset\s+(?:0(?:px)?\s+){3}(\d*\.?\d+)([a-z%]+)\s+var\(--dsw-alias-border-[\w-]+\)/g)]
+        .some(([, width, unit]) => unit !== 'px' || Number(width) > 0.5))
+    .map(([property, value]) => `${rule.selectors.join(', ')} ${property}: ${value}`))
+}
+
 /**
  * Filled divider lines (a border-token background on a 1px-tall or 1px-wide
  * box) that keep the pre-hairline weight.
@@ -252,6 +261,24 @@ describe('neutral solid borders are hairlines', () => {
       return wideNeutralBorders(readFileSync(file, 'utf8'), exempt)
         .map(line => `${file} ${line}`)
     })
+    expect(wide).toEqual([])
+  })
+
+  it('rejects thick neutral inset strokes while allowing hairlines and state colors', () => {
+    expect(wideNeutralInsetShadows('.a { box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2); }'))
+      .toEqual(['.a box-shadow: inset 0 0 0 1px var(--dsw-alias-border-l2)'])
+    expect(wideNeutralInsetShadows('.a { box-shadow: inset 0 0 0 1em var(--dsw-alias-border-l2); }'))
+      .toEqual(['.a box-shadow: inset 0 0 0 1em var(--dsw-alias-border-l2)'])
+    expect(wideNeutralInsetShadows('.a { box-shadow: inset 0px 0px 0px 0.5px var(--dsw-alias-border-l2); }')).toEqual([])
+    expect(wideNeutralInsetShadows('.a { box-shadow: inset 0 0 0 var(--dsh-hairline-width, 0.5px) var(--dsw-alias-border-l2); }')).toEqual([])
+    expect(wideNeutralInsetShadows('.a { box-shadow: inset 0 0 0 2px var(--dsw-alias-state-business-primary); }')).toEqual([])
+    expect(wideNeutralInsetShadows('.a { box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l2), inset 0 0 0 2px var(--dsw-alias-border-l3); }'))
+      .toEqual(['.a box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l2), inset 0 0 0 2px var(--dsw-alias-border-l3)'])
+  })
+
+  it('keeps literal neutral inset strokes at or below 0.5px under packages/', () => {
+    const wide = packageStylesheets().flatMap(file =>
+      wideNeutralInsetShadows(readFileSync(file, 'utf8')).map(line => `${file} ${line}`))
     expect(wide).toEqual([])
   })
 

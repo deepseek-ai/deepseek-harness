@@ -43,13 +43,18 @@ controlPort.on('message', (message: unknown) => {
   }
 })
 
-try {
-  runtime = await startInspectorWorker(boot)
-  controlPort.postMessage({ type: 'ready', ...runtime.endpoint } satisfies InspectorWorkerControl)
-} catch (error) {
-  controlPort.postMessage({
-    type: 'failure',
-    message: error instanceof Error ? error.message : String(error),
-  } satisfies InspectorWorkerControl)
-  await stop()
+/** Start the Worker server and report readiness, or report the failure and stop. */
+async function main(): Promise<void> {
+  try {
+    runtime = await startInspectorWorker(boot)
+    controlPort.postMessage({ type: 'ready', ...runtime.endpoint } satisfies InspectorWorkerControl)
+  } catch (error) {
+    controlPort.postMessage({
+      type: 'failure',
+      message: error instanceof Error ? error.message : String(error),
+    } satisfies InspectorWorkerControl)
+    await stop()
+  }
 }
+
+void main()

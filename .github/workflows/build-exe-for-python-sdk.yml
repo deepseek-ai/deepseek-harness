@@ -264,6 +264,10 @@ jobs:
       - name: Build single-exe
         env:
           DSH_BUILD_CLIENT_PROFILE: official
+        # Brotli runs at quality 9 through the vendored pkg patch: the same
+        # payload measured 16.3 s at quality 9 against 132.8 s at pkg's default
+        # quality 11, for an archive 10% larger. Which quality each lane uses is
+        # therefore not a workflow choice.
         run: >-
           pnpm exec tsx scripts/build-exe-for-python-sdk.ts --targets=${{ matrix.target }}
           ${{ inputs.ci && github.event_name == 'pull_request' && '--build-artifacts' || '' }}

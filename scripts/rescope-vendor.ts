@@ -12,9 +12,9 @@
  * `cordis.yml`, the Loader's `cordis:` builtin prefix, `cordis-config-entry`,
  * `@deepseek-ai/dsh-tool-cordis`, and `cordiverse/cordis`, and makes the
  * rewrite idempotent because the scoped name's `cordis` is preceded by `/`.
- * Markdown follows the rename inside every fence, and in `docs/` prose too:
- * a tutorial that teaches an unresolvable name is wrong, while prose elsewhere
- * records what was true when it was written.
+ * Markdown follows the token rule in fences and `docs/` prose. Audited product
+ * names stay intact; their source module references and YAML plugin names still
+ * follow the rename. Prose elsewhere records what was true when it was written.
  *
  * Sites the token rule cannot express (dot-notation access, unquoted object
  * keys, regex literals, the vendored-manifest table) are listed in
@@ -31,6 +31,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import ts from 'typescript'
 
 const root = resolve(import.meta.dirname, '..')
 
@@ -66,13 +67,14 @@ interface ExactEdit {
 }
 
 /**
- * A file where an upstream name also appears as a vendor DIRECTORY name or an
- * upstream runtime identifier: the generic pass is disabled for the listed
- * names and {@link EXACT_EDITS} renames the real package-name occurrences.
+ * A file where an upstream name also identifies runtime metadata, directories,
+ * presets, events or locale keys. Its module references and YAML plugin names
+ * still change; fixture owners retain both package spellings throughout.
  */
 interface GenericSkip {
   readonly file: string
   readonly upstream: readonly string[]
+  readonly fixture?: true
 }
 
 const GENERIC_SKIPS: readonly GenericSkip[] = [
@@ -83,8 +85,10 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   // Native schema detection and its fixture share the vendored runtime's Symbol.for identifier.
   { file: 'packages/boot/app-boot/src/config-schema/native.ts', upstream: ['schemastery'] },
   { file: 'packages/boot/app-boot/tests/config-schema.spec.ts', upstream: ['schemastery'] },
+  // The codemod's positive and negative fixtures contain both package spellings.
+  { file: 'scripts/rescope-vendor.spec.ts', upstream: RENAMES.map(rename => rename.upstream), fixture: true },
   // Asserts the vendored-manifest table, which gains an upstream-name column.
-  { file: 'scripts/gen-third-party-notices.spec.ts', upstream: RENAMES.map(rename => rename.upstream) },
+  { file: 'scripts/gen-third-party-notices.spec.ts', upstream: RENAMES.map(rename => rename.upstream), fixture: true },
   // `cordis` is also an agent-preset id, so in these files the bare name is
   // product data, not a package reference. Renaming it changed which preset
   // the creator flow stages and which id the roster reports.
@@ -98,6 +102,33 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   { file: 'apps/cli/tests/profiles/web/tests/fixtures/creator-plugin-manager.mjs', upstream: ['cordis'] },
   { file: 'apps/web/tests/agent-preset-authoring.e2e.ts', upstream: ['cordis'] },
   { file: 'packages/preset/agent-preset-registry/tests/session.spec.ts', upstream: ['cordis'] },
+  { file: 'packages/experimental/creation-recommendations/src/index.ts', upstream: ['cordis'] },
+  { file: 'packages/experimental/creation-recommendations/tests/creation.spec.ts', upstream: ['cordis'] },
+  { file: 'packages/experimental/creation-recommendations/tests/loader-composition.spec.ts', upstream: ['cordis'] },
+  // Preset selection, reminder policy and UI copy use the same product id.
+  { file: 'apps/cli/tests/optional-bundle-transitions.e2e.ts', upstream: ['cordis'] },
+  { file: 'apps/web/tests/agent-preset-selection.e2e.ts', upstream: ['cordis'] },
+  { file: 'apps/web/tests/developer-tools-settings.e2e.ts', upstream: ['cordis'] },
+  { file: 'docs/subsystems/schedule.md', upstream: ['cordis'] },
+  { file: 'docs/subsystems/schedule.zh.md', upstream: ['cordis'] },
+  { file: 'docs/upgrade-guide/v0.2.0-rc.2/schedule-bundle-retired/guide.md', upstream: ['cordis'] },
+  { file: 'docs/upgrade-guide/v0.2.0-rc.2/schedule-bundle-retired/guide.zh.md', upstream: ['cordis'] },
+  { file: 'docs/upgrade-guide/v0.2.1-alpha.1/subagent-preset-composition/guide.md', upstream: ['cordis'] },
+  { file: 'docs/upgrade-guide/v0.2.1-alpha.1/subagent-preset-composition/guide.zh.md', upstream: ['cordis'] },
+  { file: 'docs/user/guide/schedule.md', upstream: ['cordis'] },
+  { file: 'docs/user/guide/schedule.zh.md', upstream: ['cordis'] },
+  { file: 'packages/bundle/web-app/cordis.patch.yml', upstream: ['cordis'] },
+  { file: 'packages/client/ui-agent-preset/src/client/CreatePluginMenuItem.tsx', upstream: ['cordis'] },
+  { file: 'packages/client/ui-agent-preset/src/client/analytics.ts', upstream: ['cordis'] },
+  { file: 'packages/client/ui-agent-preset/tests/analytics.client.spec.ts', upstream: ['cordis'] },
+  { file: 'packages/client/ui-agent-preset/tests/components.client.spec.tsx', upstream: ['cordis'] },
+  { file: 'packages/client/ui-agent-preset/tests/create-plugin-menu-item.client.spec.tsx', upstream: ['cordis'] },
+  { file: 'packages/client/ui-agent-preset/tests/section-store.client.spec.ts', upstream: ['cordis'] },
+  { file: 'packages/client/ui-conversation/src/client/input/submission-analytics.ts', upstream: ['cordis'] },
+  { file: 'packages/client/ui-conversation/tests/service-orchestration.client.spec.ts', upstream: ['cordis'] },
+  { file: 'packages/client/ui-entry-customization/src/client/index.ts', upstream: ['cordis'] },
+  { file: 'packages/client/ui-entry-customization/tests/menu.client.spec.tsx', upstream: ['cordis'] },
+  { file: 'packages/client/ui-workspace/tests/workspaces-service.client.spec.ts', upstream: ['cordis'] },
   // The preset-roster loop names the `cordis` preset id, not a package.
   { file: 'apps/cli/tests/windows-shell.spec.ts', upstream: ['cordis'] },
   // GROUP_ORDER holds `packages/<group>/` directory names, not package names.
@@ -124,6 +155,10 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   { file: 'packages/extensions/tool-cordis/src/providers.ts', upstream: ['cordis'] },
   { file: 'packages/extensions/ui-cordis/src/client/index.ts', upstream: ['cordis'] },
   { file: 'packages/extensions/ui-cordis/src/client/inventory.ts', upstream: ['cordis'] },
+  // Inspector fixtures use the same extension event domain.
+  { file: 'packages/extensions/cordis-host-runner/tests/inspect-registry.spec.ts', upstream: ['cordis'] },
+  { file: 'snapshots/session/cordis-inspect-liveness/client-fixture.mjs', upstream: ['cordis'] },
+  { file: 'snapshots/session/cordis-inspect-timeout/client-fixture.mjs', upstream: ['cordis'] },
   // `cordis/tree` is an Inspector observation topic, not a package subpath.
   { file: 'packages/experimental/inspector/src/shared/bridge/messages/cordis.ts', upstream: ['cordis'] },
   { file: 'packages/experimental/inspector/tests/cordis-query.host.spec.ts', upstream: ['cordis'] },
@@ -261,7 +296,7 @@ const EXACT_EDITS: readonly ExactEdit[] = [
  * identity to share — the framework itself is a requested module-table row
  * (external), while these are ordinary libraries a browser bundle inlines.
  */
-const VENDORED_LIBRARY = /^@deepseek-ai\\/(cosmokit|schemastery)(\\/|$)/
+const VENDORED_LIBRARY = /^@deepseek-ai\\/(?:(?:cosmokit|schemastery)(?:\\/|$)|cordis-plugin-timer$)/
 
 /** Generated descriptor/codec contribution with no shared runtime identity. */`,
     expect: 1,
@@ -470,7 +505,7 @@ function patterns(reverse: boolean): Pattern[] {
     .map(rename => ({
       ...rename,
       token: new RegExp(`(['"\`])${escapeRegExp(rename.from)}((?:/[^'"\`\\s]*)?)\\1`, 'g'),
-      yamlName: new RegExp(`^(\\s*(?:-\\s*)?name:[ \\t]+)${escapeRegExp(rename.from)}([ \\t]*(?:#.*)?)$`, 'gm'),
+      yamlName: new RegExp(`^(\\s*(?:-\\s*)?name:[ \\t]+)(['"]?)${escapeRegExp(rename.from)}((?:/[^\\s'"]*)?)\\2([ \\t]*(?:#.*)?)$`, 'gm'),
     }))
 }
 
@@ -478,45 +513,109 @@ function skipped(file: string, pattern: Pattern): boolean {
   return GENERIC_SKIPS.some(skip => skip.file === file && skip.upstream.includes(pattern.upstream))
 }
 
-function rewriteLine(line: string, file: string, all: readonly Pattern[]): string {
+function rewriteLine(line: string, file: string, all: readonly Pattern[], yaml = false): string {
   let out = line
   for (const pattern of all) {
-    if (skipped(file, pattern)) continue
-    out = out.replace(pattern.token, (_match, quote: string, subpath: string) => `${quote}${pattern.to}${subpath}${quote}`)
-    out = out.replace(pattern.yamlName, (_match, prefix: string, suffix: string) => `${prefix}${pattern.to}${suffix}`)
+    const preserve = skipped(file, pattern)
+    if (!preserve) out = out.replace(pattern.token, (_match, quote: string, subpath: string) => `${quote}${pattern.to}${subpath}${quote}`)
+    if (!preserve || yaml) {
+      out = out.replace(pattern.yamlName, (_match, prefix: string, quote: string, subpath: string, suffix: string) => `${prefix}${quote}${pattern.to}${subpath}${quote}${suffix}`)
+    }
+  }
+  return out
+}
+
+/** Rewrite only module literals whose other same-file uses are product data. */
+function rewriteModules(text: string, file: string, all: readonly Pattern[], sourceName = file): string {
+  const skip = GENERIC_SKIPS.find(entry => entry.file === file)
+  if (!skip || skip.fixture) return text
+  const active = all.filter(pattern => skip.upstream.includes(pattern.upstream))
+  const source = ts.createSourceFile(sourceName, text, ts.ScriptTarget.Latest, true)
+  const edits = new Map<number, { end: number; value: string }>()
+  const visited = new Set<ts.Node>()
+  const visit = (node: ts.Node): void => {
+    if (visited.has(node)) return
+    visited.add(node)
+    let literal: ts.Node | undefined
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node) || ts.isJSDocImportTag(node)) {
+      literal = node.moduleSpecifier
+    } else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
+      literal = node.moduleReference.expression
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      literal = node.argument.literal
+    } else if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === 'require'))) {
+      literal = node.arguments[0]
+    } else if (ts.isModuleDeclaration(node)) {
+      literal = node.name
+    }
+    if (literal && ts.isStringLiteralLike(literal)) {
+      const start = literal.getStart(source) + 1
+      const end = literal.getEnd() - 1
+      const value = text.slice(start, end)
+      const pattern = active.find(entry => value === entry.from || value.startsWith(`${entry.from}/`))
+      if (pattern) edits.set(start, { end, value: pattern.to + value.slice(pattern.from.length) })
+    }
+    ts.forEachChild(node, visit)
+    for (const doc of ts.getJSDocCommentsAndTags(node)) visit(doc)
+  }
+  visit(source)
+  let out = text
+  for (const [start, edit] of [...edits].sort(([left], [right]) => right - left)) {
+    out = out.slice(0, start) + edit.value + out.slice(edit.end)
   }
   return out
 }
 
 /**
- * Rewrite a file's eligible lines.
- *
- * Markdown splits in two. Every fence is code a reader copies or a
- * configuration they mount, so every fence follows the rename regardless of its
- * info string. Prose follows it only under `docs/`, where a sentence quoting
- * `` `cordis` `` teaches an unresolved package name; elsewhere
- * prose is a record of what was true when it was written, and the same spelling
- * can mean something else entirely — the Python SDK's `cordis` option, or the
- * unvendored `@cordisjs/plugin-http`.
+ * Rewrite eligible source, fences and docs prose. Audited names in source and
+ * TypeScript/JavaScript fences change only in module syntax; YAML names remain
+ * eligible too. Other names retain the token rule. Prose outside docs is kept.
  */
 function rewrite(text: string, file: string, all: readonly Pattern[]): { text: string; lines: number } {
   const markdown = file.endsWith('.md')
   const prose = markdown && file.startsWith('docs/')
-  let insideFence = false
-  let lines = 0
-  const out = text.split('\n').map((line) => {
+  const original = text.split('\n')
+  let source = text
+  if (!markdown && /\.(ts|tsx|js|mjs|cjs|tpl)$/.test(file)) source = rewriteModules(text, file, all)
+  let fenceStart: number | undefined
+  let language = ''
+  const out = source.split('\n')
+  const finishFence = (end: number): void => {
+    if (fenceStart === undefined || fenceStart === end || !/^(?:[cm]?[jt]sx?|typescript|javascript)?$/.test(language)) return
+    const extension = language === 'jsx' || language === 'tsx' ? 'tsx' : language === 'js' || language === 'javascript' || language === 'mjs' || language === 'cjs' ? 'js' : 'ts'
+    const body = out.slice(fenceStart, end).join('\n')
+    out.splice(fenceStart, end - fenceStart, ...rewriteModules(body, file, all, `fence.${extension}`).split('\n'))
+  }
+  for (const [index, line] of out.entries()) {
     if (markdown) {
-      if (/^\s*```/.test(line)) {
-        insideFence = !insideFence
-        return line
+      const fence = /^\s*```(\S*)/.exec(line)
+      if (fence) {
+        if (fenceStart === undefined) {
+          fenceStart = index + 1
+          language = fence[1] ?? ''
+        } else {
+          finishFence(index)
+          fenceStart = undefined
+        }
+        continue
       }
-      if (!insideFence && !prose) return line
+      if (fenceStart === undefined && !prose) continue
     }
-    const next = rewriteLine(line, file, all)
-    if (next !== line) lines += 1
-    return next
-  })
-  return { text: out.join('\n'), lines }
+    out[index] = rewriteLine(line, file, all, /\.ya?ml$/.test(file) || (fenceStart !== undefined && (language === 'yaml' || language === 'yml')))
+  }
+  if (fenceStart !== undefined) finishFence(out.length)
+  return { text: out.join('\n'), lines: out.filter((line, index) => line !== original[index]).length }
+}
+
+/**
+ * Apply the CLI's generic package rename with the audited name exceptions.
+ * @param text - Complete source text.
+ * @param file - Repository-relative path with forward slash separators.
+ * @param reverse - Restore upstream package names when true.
+ * @returns Rewritten text and the number of changed lines.
+ */
+export function rescopeText(text: string, file: string, reverse = false): { text: string; lines: number } {
+  return rewrite(text, file, patterns(reverse))
 }
 
 function classify(file: string): string {

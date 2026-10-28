@@ -55,11 +55,15 @@ A fixed Overview above the ledger projects real record start/duration timing fro
 
 The view is a pure projection: Trajectory-owned Definitions assemble business records from the shared Session window — including durable cancellation-finalized prefixes, chunk-only interruption fallbacks, and interrupted Tool records — so Trajectory neither reads nor changes the Chat conversation snapshot. Its steering classifier retains only next-step Inbox IDs through persistent splice state and shares each current claimed batch across later Contexts.
 
-Native and nested PTC Tool results retain their raw structured error details and presentation metadata. Failed records show the error code in the ledger and the error name and code in the inspector.
+User, steering, and context inputs and request prompt changes share their request's Step group in log order, before the request separator and assistant output.
+
+Native and nested PTC Tool results retain their raw structured error details and presentation metadata. The Result tab stacks the live canonical value above the rendered content, with one scroll area for the entire panel and no section height limits. Both JSON trees preview long strings up to 12 lines and allow expansion. In-flight PTC calls show “Running…” until a result is available. Historical, failed, evicted, and unloaded raw results show “Raw results are only available for live tool calls” while rendered content remains available. There is no result-mode preference. The inspector subscribes only to the selected result while the Result tab is open, releasing it on selection changes or disposal; Session unload and connection loss clear the displayed value. JSON primitives, including `null`, remain inspectable. Summary previews continue to show rendered content. Failed records show the error code in the ledger and the error name and code in the inspector.
 
 Tool records begin at durable tool/call events and retain complete argument text with a lazy `args` view, reused by paired results. Chat's transient preparing stage does not create Trajectory tool rows or alter historical tool timing.
 
 A complete appended prompt without a loaded request header appears as a standalone system row; only its known text is available, with no inferred request options or tool catalog. Prepending its request history replaces that standalone presentation without duplicating the prompt. In-history system prompt changes compare against the most recent request state, including earlier prompt updates without a new request header. Each request retains the prompt and change that applied at its own position. Surface replacements, including compaction, restore the last nonempty surviving system prompt even without a new system event; an unloaded prompt remains unavailable until its page arrives.
+
+The Trajectory Host plugin owns `ctx.sessionToolResults` and its `toolResults.watch` Remote stream, which inspects a successful tool’s final post-policy value by Session and result-event sequence. Values are held only in memory for the exact live Session instance: unloading the Session clears pending and committed values and invalidates open inspectors. Cold reads, restored sessions, forks, and exports do not recover or inherit values. A new inspector or reconnect can read retained values while that instance survives. Unloading the Trajectory plugin also clears every value; remounting starts empty even when the Session stays live. The Host config `maxResultsPerSession` defaults to 1000 and must be a positive integer. Pending and committed results share this per-Session count limit; new results evict the oldest entries and notify open inspectors. Committing a retained pending value moves it to the tail; inspection does not extend retention. This limit counts results, not bytes. This capability never writes Session events or projection checkpoints. The browser subscribes only to the selected result, and ordinary failures leave rendered content usable.
 
 ### Virtual rows
 
@@ -67,7 +71,7 @@ Long ledgers initially derive React data from 50 target Nodes ending at the moun
 
 ### Layout
 
-Trajectory asks the conversation shell to float the composer over the full-height ledger, while its responsive vertical scrollers reserve the composer's live height so final rows remain reachable. Scrollable Summary regions keep their scrollbar thumbs transparent until hovered or focused, without changing the reserved scroll geometry. The package provides no service and declares no Context merge.
+Trajectory asks the conversation shell to float the composer over the full-height ledger, while its responsive vertical scrollers reserve the composer's live height so final rows remain reachable. Scrollable Summary regions keep their scrollbar thumbs transparent until hovered or focused, without changing the reserved scroll geometry. The Host and Client compile separately; the Host service loads and unloads with the Trajectory plugin.
 
 </details>
 
@@ -88,7 +92,7 @@ These pages cover the conversation host and the session data this view projects.
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as the package is a browser-side UI plugin layer that registers nothing model-facing.
+None, as the Trajectory UI and its read-only Host inspector register nothing model-facing.
 
 #### KV Cache effect
 

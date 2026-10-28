@@ -254,8 +254,11 @@ describe('Loader config interpolation', () => {
       await provider?.update({ config: { value: 'recovered' } })
       await provider?.update({ disabled: false })
       await ctx.loader.await()
-      await expect(reader?.fiber?.await()).rejects.toThrow('rejected provider')
-      await reader?.fiber?.update(reader.fiber.rawConfig, true)
+      // rc.11 keeps a failed fiber failed after its dependency recovers; recovery requires an explicit update.
+      const failed = reader?.fiber
+      if (failed === undefined) throw new Error('reader entry has no fiber')
+      await expect(failed.await()).rejects.toThrow('rejected provider')
+      await failed.update(failed.rawConfig, true)
       expect(ctx.get('readerResult')).toEqual({ value: 'recovered' })
     } finally {
       await ctx.fiber.dispose()

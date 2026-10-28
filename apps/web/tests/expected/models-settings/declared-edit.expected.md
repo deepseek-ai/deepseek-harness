@@ -1,6 +1,6 @@
 - dialog "设置":
+  - text: 设置
   - navigation:
-    - text: 设置
     - button "通用设置"
     - button "模型"
     - button "内置插件"
@@ -40,6 +40,7 @@
           - text: 模型目录 已自定义模型目录
           - button "恢复默认模型"
           - button "获取可用模型"
+          - button "调整模型顺序 1"
           - textbox "模型 ID 1":
             - /placeholder: 模型 ID
             - text: acme-large
@@ -49,16 +50,50 @@
           - button "删除模型 1"
           - text: 上下文窗口
           - textbox "上下文窗口 1":
-            - /placeholder: 256K
+            - /placeholder: 1M
           - text: 最大输出 token 数
           - textbox "最大输出 token 数 1":
-            - /placeholder: 32K
+            - /placeholder: 128K
           - group "输入类型 1":
             - text: 输入类型
             - checkbox "文本" [checked]
             - text: 文本
             - checkbox "图片" [checked]
             - text: 图片
+          - group "推理等级 1":
+            - text: 推理等级
+            - button "推理等级说明": "?"
+            - switch "推理等级 1" [checked]
+            - combobox "档位 1":
+              - option "off" [selected]
+              - option "minimal"
+              - option "medium"
+              - option "xhigh"
+              - option "max"
+            - textbox "off API 参数值" [disabled]:
+              - /placeholder: 关闭思考
+            - button "删除档位 off"
+            - combobox "档位 2":
+              - option "minimal"
+              - option "low" [selected]
+              - option "medium"
+              - option "xhigh"
+              - option "max"
+            - textbox "low API 参数值":
+              - /placeholder: low
+              - text: low
+            - button "删除档位 low"
+            - combobox "档位 3":
+              - option "minimal"
+              - option "medium"
+              - option "high" [selected]
+              - option "xhigh"
+              - option "max"
+            - textbox "high API 参数值":
+              - /placeholder: high
+              - text: high
+            - button "删除档位 high"
+            - button "添加档位"
           - button "添加模型"
       - button "取消"
       - button "保存"

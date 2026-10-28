@@ -1,0 +1,52 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/tool-subagent-oar/README.md
+/:
+  en: 85780a9fcc4720e5
+  zh: ff5b2d870cf3b73f
+/deepseek-ai-dsh-experimental-tool-subagent-oar:
+  en: 520d9dc51e2b0142
+  zh: 8f332776243107a9
+/deepseek-ai-dsh-experimental-tool-subagent-oar/summary:
+  en: 8adbaf2511d2c47f
+  zh: 1495f6bdb84a30ea
+/deepseek-ai-dsh-experimental-tool-subagent-oar/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 8d1e20b826450ffe
+/deepseek-ai-dsh-experimental-tool-subagent-oar/use-this-package:
+  en: 045000a545e143bb
+  zh: db19a60804c8d561
+/deepseek-ai-dsh-experimental-tool-subagent-oar/use-this-package/when-to-choose-it:
+  en: 368805e5bcffeb0a
+  zh: 9340ff5074ada9e1
+/deepseek-ai-dsh-experimental-tool-subagent-oar/use-this-package/minimal-configuration:
+  en: 5b2b33c1d0fae20a
+  zh: 26bff1e013e2bfcd
+/deepseek-ai-dsh-experimental-tool-subagent-oar/understand-the-implementation:
+  en: 3e8a9fffa9c5afd0
+  zh: 932b6d0b682208ba
+/deepseek-ai-dsh-experimental-tool-subagent-oar/further-exploration:
+  en: a796236202b695f5
+  zh: 8e76361f31517714
+/deepseek-ai-dsh-experimental-tool-subagent-oar/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-tool-subagent-oar/model-experience/external-delegation-tool:
+  en: 8febbb031aa0452d
+  zh: da3f9011631652da
+/deepseek-ai-dsh-experimental-tool-subagent-oar/model-experience/external-delegation-tool/what-the-model-sees:
+  en: 2e0f5274092f794b
+  zh: 83a14e5f7018717f
+/deepseek-ai-dsh-experimental-tool-subagent-oar/model-experience/external-delegation-tool/token-effect:
+  en: 60d7ffec7f4dc858
+  zh: 09f286978df6b4ec
+/deepseek-ai-dsh-experimental-tool-subagent-oar/model-experience/external-delegation-tool/kv-cache-effect:
+  en: 7c1ac0b007b2f0ce
+  zh: 2332a07c6f8bcbdc
+/deepseek-ai-dsh-experimental-tool-subagent-oar/known-limitations-and-deferred-work:
+  en: 5157ca8c4aa1a865
+  zh: 47ad253d87a02838
+/deepseek-ai-dsh-experimental-tool-subagent-oar/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

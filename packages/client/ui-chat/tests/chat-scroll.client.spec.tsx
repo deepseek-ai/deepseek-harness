@@ -43,6 +43,7 @@ function mountScroll(deferCompletedTurns = true, initial: Partial<ChatScrollInpu
     lastIsUser: false,
     steeringId: null,
     submissionId: null,
+    submissionSteers: false,
     running: false,
     deferCompletedTurns,
     transcriptView: 'verbose',
@@ -104,6 +105,164 @@ function mountScroll(deferCompletedTurns = true, initial: Partial<ChatScrollInpu
   }
 }
 
+/** A scrollport of stacked rows whose boxes follow scrollTop; closing a row clamps like a browser. */
+function mountRows(heights: readonly number[]) {
+  const callbacks: { motion?: FlowMotionRows; resize?: () => void } = {}
+  class Observer implements ResizeObserver {
+    constructor(callback: ResizeObserverCallback) { callbacks.resize = () => { callback([], this) } }
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void { delete callbacks.resize }
+  }
+  vi.stubGlobal('ResizeObserver', Observer)
+  const input: ChatScrollInput = {
+    ready: true, order: [], firstSeq: null, lastKey: null, lastIsUser: false,
+    steeringId: null, submissionId: null, submissionSteers: false, running: false, deferCompletedTurns: false,
+    transcriptView: 'standard', loadedTurns: [], hasMore: false, loadingOlder: false,
+    loadOlder: vi.fn(), loadThrough: vi.fn(async () => {}), chatScroll: { read: () => null, save: vi.fn() },
+  }
+  const view = render(<ScrollHarness input={input} onMotion={(motion) => { callbacks.motion = motion }}
+  />)
+  const scroller = within(view.container).getByTestId('scrollport')
+  const column = within(view.container).getByTestId('column')
+  const spacer = scroller.querySelector<HTMLElement>('[data-chat-turn-spacer]')!
+  const sizes = new Map<HTMLElement, number>()
+  const rows = heights.map((height) => {
+    const row = document.createElement('div')
+    sizes.set(row, height)
+    column.append(row)
+    return row
+  })
+  const sizeOf = (row: HTMLElement): number => row.hidden ? 0 : sizes.get(row) ?? 0
+  const docTop = (row: HTMLElement): number => {
+    let top = 0
+    for (const each of rows) {
+      if (each === row) return top
+      top += sizeOf(each)
+    }
+    return top
+  }
+  const content = (): number => rows.reduce((sum, row) => sum + sizeOf(row), 0)
+  const room = (): number => Number.parseFloat(spacer.style.height) || 0
+  const floor = (): number => Math.max(0, content() + room() - 400)
+  let top = 0
+  Object.defineProperties(scroller, {
+    clientHeight: { value: 400 },
+    scrollHeight: { get: () => content() + room() },
+    scrollTop: { get: () => top, set: (value: number) => { top = Math.max(0, Math.min(value, floor())) } },
+    scrollTo: { value: (options: ScrollToOptions) => { top = Math.max(0, Math.min(options.top ?? top, floor())) } },
+    getBoundingClientRect: { value: () => ({ top: 0, bottom: 400, height: 400 }) },
+  })
+  Object.defineProperty(column, 'offsetHeight', { get: content })
+  for (const row of rows) {
+    Object.defineProperty(row, 'getBoundingClientRect', { value: () => {
+      const rowTop = docTop(row) - top
+      return { top: rowTop, bottom: rowTop + sizeOf(row), height: sizeOf(row) }
+    } })
+  }
+  const resize = (): void => { act(() => { callbacks.resize?.() }) }
+  resize()
+  const row = (index: number): HTMLElement => {
+    const found = rows[index]
+    if (found === undefined) throw new Error(`no row ${String(index)}`)
+    return found
+  }
+  return {
+    scroller, row, room, resize,
+    top: () => top,
+    screenTop: (row: HTMLElement) => docTop(row) - top,
+    grow: (row: HTMLElement, by: number) => { sizes.set(row, (sizes.get(row) ?? 0) + by) },
+    /** Close rows at once, as completion-time folding does, then let layout clamp and observe. */
+    close: (...closing: HTMLElement[]) => {
+      act(() => {
+        for (const row of closing) callbacks.motion?.hideNow?.(row, () => { row.hidden = true })
+        top = Math.min(top, floor())
+        callbacks.resize?.()
+      })
+    },
+    /** Close one row while the same commit grows another, as a Turn's duration control does. */
+    closeGrowing: (closing: HTMLElement, grown: HTMLElement, by: number) => {
+      act(() => {
+        callbacks.motion?.hideNow?.(closing, () => { closing.hidden = true })
+        sizes.set(grown, (sizes.get(grown) ?? 0) + by)
+        top = Math.min(top, floor())
+        callbacks.resize?.()
+      })
+    },
+  }
+}
+
+describe('Chat scroll: a closing shrink keeps the content above still', () => {
+  it('keeps the first visible row still and fills the gap below with room', () => {
+    const h = mountRows([700, 100, 200])
+    expect(h.top()).toBe(600)
+    const [first, step, answer] = [h.row(0), h.row(1), h.row(2)]
+    h.close(step)
+    expect(h.screenTop(first)).toBe(-600)
+    expect(h.screenTop(answer)).toBe(100)
+    expect(h.room()).toBe(100)
+  })
+
+  it('moves nothing on screen when the closing rows are above the scrollport', () => {
+    const h = mountRows([200, 300, 500])
+    const [above, visible] = [h.row(0), h.row(2)]
+    h.close(above)
+    expect(h.screenTop(visible)).toBe(-100)
+    expect(h.room()).toBe(0)
+  })
+
+  it('keeps the row that followed a closed first row on screen still', () => {
+    const h = mountRows([500, 600, 100])
+    const [steps, answer] = [h.row(1), h.row(2)]
+    h.close(steps)
+    expect(h.screenTop(answer)).toBe(300)
+    expect(h.room()).toBe(0)
+  })
+
+  it('keeps the nearest surviving row above when no row followed a closed first row on screen', () => {
+    const h = mountRows([500, 900])
+    const [earlier, steps] = [h.row(0), h.row(1)]
+    h.close(steps)
+    // The earlier row would need more room than half the scrollport; the content end stops at the middle.
+    expect(h.screenTop(earlier)).toBe(-300)
+    expect(h.room()).toBe(200)
+  })
+
+  it('lets later growth take the room before following scrolls', () => {
+    const h = mountRows([700, 100, 200])
+    const [step, answer] = [h.row(1), h.row(2)]
+    h.close(step)
+    h.grow(answer, 60)
+    h.resize()
+    expect(h.room()).toBe(40)
+    expect(h.top()).toBe(600)
+  })
+
+  it('leaves a reader away from the tail to the browser', () => {
+    const h = mountRows([700, 100, 200])
+    const step = h.row(1)
+    fireEvent.wheel(h.scroller)
+    h.scroller.scrollTop = 100
+    fireEvent.scroll(h.scroller)
+    act(() => { vi.advanceTimersByTime(500) })
+    h.close(step)
+    expect(h.room()).toBe(0)
+  })
+
+  it('uses the measurement only for the observation of the commit that closed the rows', () => {
+    const h = mountRows([700, 100, 200])
+    const [step, answer] = [h.row(1), h.row(2)]
+    // Growth in the same commit outweighs the closed row, so nothing shrinks to compensate.
+    h.closeGrowing(step, answer, 100)
+    expect(h.room()).toBe(0)
+    // A later shrink follows the tail like any other; the stale measurement does not pull the reader.
+    h.grow(answer, -150)
+    h.resize()
+    expect(h.room()).toBe(0)
+    expect(h.top()).toBe(450)
+  })
+})
+
 const visibleFoldCases = [
   { name: 'E/E', earlier: 2400, steps: 1000, body: 400, viewport: 800, top: 800, input: 80, target: 2080, room: 0 },
   { name: 'E/T', earlier: 600, steps: 1000, body: 100, viewport: 800, top: 200, input: 80, target: 200, room: 220 },
@@ -121,7 +280,7 @@ const visibleFoldCases = [
   { name: 'small viewport', earlier: 200, steps: 900, body: 100, viewport: 300, top: 900, input: 30, target: 200, room: 170 },
 ] as const
 
-function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolean) {
+function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolean, finalSiblingGrowth = 0) {
   let inputHeight = 0
   let submission = 0
   let top: number = test.top
@@ -129,7 +288,7 @@ function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolea
   const onMotion = (value: FlowMotionRows): void => { motion = value }
   let input: ChatScrollInput = {
     ready: false, order: [], firstSeq: null, lastKey: null, lastIsUser: false,
-    steeringId: null, submissionId: null, running: false, deferCompletedTurns: true,
+    steeringId: null, submissionId: null, submissionSteers: false, running: false, deferCompletedTurns: true,
     transcriptView: 'detailed', loadedTurns: [], hasMore: false, loadingOlder: false,
     loadOlder: vi.fn(), loadThrough: vi.fn(async () => {}), chatScroll: { read: () => null, save: vi.fn() },
   }
@@ -146,7 +305,7 @@ function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolea
   const rowHeight = () => row.hidden ? 0 : (row.style.transition !== '' && row.style.transition !== 'none') || row.style.height === ''
     ? test.steps : Number.parseFloat(row.style.height)
   const room = () => Number.parseFloat(spacer.style.height) || 0
-  const contentHeight = () => test.earlier + rowHeight() + test.body + inputHeight
+  const contentHeight = () => test.earlier + rowHeight() + test.body + inputHeight + (row.hidden ? finalSiblingGrowth : 0)
   const floor = () => Math.max(0, contentHeight() + room() - test.viewport)
   const scrollTo = vi.fn((options: ScrollToOptions) => {
     scroller.scrollTop = options.top ?? scroller.scrollTop
@@ -215,6 +374,22 @@ function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolea
 }
 
 describe.each([false, true])('visible input-fold matrix (reduced=%s)', (reduced) => {
+  it.each(['larger input', 'T/B'])('lands on final sibling spacing in the closing frame (%s)', async (name) => {
+    const test = visibleFoldCases.find(test => test.name === name)!
+    const h = mountVisibleFold(test, reduced, 4)
+    h.submit()
+    await act(async () => { await Promise.resolve() })
+    for (let frame = 0; frame < 24 && !h.row.hidden; frame++) {
+      act(() => { vi.advanceTimersByTime(16) })
+    }
+    expect(h.row.hidden).toBe(true)
+    const target = test.target + (test.room === 0 ? 4 : 0)
+    expect(h.scroller.scrollTop).toBe(target)
+    expect(h.room()).toBe(Math.max(0, test.room - 4))
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(h.scroller.scrollTop).toBe(target)
+  })
+
   it.each(visibleFoldCases)('$name lands with only the required visible room', async (test) => {
     const h = mountVisibleFold(test, reduced)
     const positions = [h.bodyTop()]
@@ -362,6 +537,19 @@ describe('Chat scroll collapse timing', () => {
     } else {
       expect(h.scrollTo).not.toHaveBeenCalled()
       expect(h.scroller.scrollTop).toBe(600)
+    }
+  })
+
+  it.each([
+    ['a local steering echo', { submissionId: 'steer', submissionSteers: true }],
+    ['a pending steering message', { steeringId: 'inbox-steer' }],
+  ] as const)('lands %s at once under either fold timing', (_, change) => {
+    for (const deferred of [false, true]) {
+      const h = mountScroll(deferred)
+      h.update(change)
+      expect(h.scrollTo).not.toHaveBeenCalled()
+      expect(h.scroller.scrollTop).toBe(600)
+      h.view.unmount()
     }
   })
 

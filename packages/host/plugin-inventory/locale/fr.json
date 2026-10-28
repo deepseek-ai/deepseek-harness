@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Service de manifeste de plugin",
+    "description": "Fournit une liste en lecture seule des entrées actuelles du plug-in, de l'état d'activation de la configuration et de l'état d'exécution."
+  }
+}

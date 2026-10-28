@@ -1,7 +1,7 @@
 /**
  * Image layout contract shared by the packer and the worker host: the virtual
- * root, where the composed config and the manifest sit inside the image, and
- * the working directories every image carries empty. One definition, two
+ * root, where the manifest sits inside the image, where lazy archives sit beside
+ * it, and the working directories every image carries empty. One definition, two
  * consumers — the packer writes this layout, the worker host mounts it.
  */
 
@@ -15,14 +15,26 @@ export const DEFAULT_ROOT = '/dsh'
  */
 export const IMAGE_FILE_NAME = 'vfs-image.tar.gz'
 
-/** Image path the composed profile is written to; the runtime's Loader reads it. */
-export const IMAGE_CONFIG_PATH = 'config/cordis.yml'
-
 /** Image path of the manifest the runtime reads before it wraps a single module. */
 export const IMAGE_MANIFEST_PATH = 'config/vfs-manifest.json'
 
+/**
+ * Directory, relative to the base image URL, holding the lazy chunk archives:
+ * `lazy/<sha256 of the archive>.tar.gz`, one page chunk each.
+ */
+export const IMAGE_LAZY_DIRECTORY = 'lazy'
+
 /** Home directory under the root; the process shim's `DSH_HOME`/`HOME` default. */
 export const IMAGE_HOME_DIRECTORY = 'home'
+
+/**
+ * Config fields the Worker requires on Loader rows, by row id. The packer writes them into the image's home patch
+ * (`home/cordis.patch.yml`) over each row's composed config: the Worker carries no Zstandard codec, so JSONL Session
+ * logs stay plaintext.
+ */
+export const PLATFORM_ENTRY_CONFIG: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
+  'session-persistence-jsonl': { compression: 'none' },
+}
 
 /** Working directories the host tree expects to exist, empty. */
 export const IMAGE_EMPTY_DIRECTORIES: readonly string[] = ['home/', 'workspace/', 'tmp/']

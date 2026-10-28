@@ -13,13 +13,17 @@
   color: var(--dsw-alias-label-tertiary);
   font: inherit;
   font-size: var(--dsh-content-font-size, 14px);
+  /* One process-row height, so a header fills the slot the running status keeps for it. */
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   text-align: left;
   cursor: pointer;
   transition: color 100ms ease;
 }
 
-.title:hover {
-  color: var(--dsw-alias-label-secondary);
+@media (hover: hover) {
+  .title:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 /* The leading box and its glyph ride the body font-size delta so the icon
@@ -63,12 +67,24 @@
   opacity: 0;
 }
 
-.title:is(:hover, :focus-visible) .activityIcon {
+.title:focus-visible .activityIcon {
   opacity: 0;
 }
 
-.title:is(:hover, :focus-visible) .chevron {
+@media (hover: hover) {
+  .title:hover .activityIcon {
+    opacity: 0;
+  }
+}
+
+.title:focus-visible .chevron {
   opacity: 1;
+}
+
+@media (hover: hover) {
+  .title:hover .chevron {
+    opacity: 1;
+  }
 }
 
 .title[aria-expanded="true"] .activityIcon {
@@ -84,7 +100,7 @@
 }
 
 .body {
-  --dsh-chat-flow-gap: 6px;
+  --dsh-chat-flow-gap: 4px;
   max-height: min(400px, 50vh);
   overflow-y: auto;
   overscroll-behavior-y: auto;
@@ -130,7 +146,7 @@
 }
 .content > * { flex-shrink: 0; }
 .content > :not([hidden]):not(:empty) ~ :not([hidden]):not(:empty) {
-  margin-top: var(--dsh-chat-flow-gap, 6px);
+  margin-top: var(--dsh-chat-flow-gap, 4px);
 }
 .expandedBody {
   max-height: none;

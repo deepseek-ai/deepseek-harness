@@ -1,0 +1,8 @@
+# Explicit experimental integration with only the reviewer response scripted.
+- insert:
+    - id: auto-review
+      name: '@deepseek-ai/dsh-experimental-auto-review'
+    - id: headless-auto-review-fixture
+      name: '../../../../../../../packages/experimental/auto-review/tests/fixtures/headless-reviewer.ts'
+      config:
+        mode: !!js process.env.DSH_AUTO_REVIEW_TEST_MODE

@@ -1,0 +1,87 @@
+name: CI Python
+
+# Python pull-request lanes run in their own workflow so a slow runtime build
+# does not keep the CI run in progress: GitHub re-runs failed jobs only after
+# every job of a run finishes, so each workflow can be re-run without waiting
+# for the others. Branch protection requires this workflow's "python checks
+# passed" verdict beside CI's "all checks passed" and CI Windows' "windows
+# checks passed".
+on:
+  pull_request:
+permissions:
+  contents: read
+
+env:
+  PRIMARY_NODE_VERSION: '24'
+  # CI runs must never report to the production telemetry endpoint baked
+  # into apps/cli/cordis.yml (AppCLIEntry disables the row when set).
+  DSH_TELEMETRY_DISABLED: '1'
+
+# Cancel a superseded pull-request run on a new push, as in ci.yml.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-sdk:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    name: python 3.10 / keyless SDK
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-python@v6.3.0
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - name: Install uv
+        run: python -m pip install uv==0.11.23
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 24
+
+      - name: Test production blame scoring
+        run: uv run --python 3.10 --with-requirements .github/review-ownership/requirements.txt python -m unittest discover -s .github/review-ownership -p 'test_*.py'
+
+      - name: Run complete keyless Python suite
+        run: uv run --python 3.10 --group test --project python/sdk pytest
+
+  # The reusable builder owns each published executable, wheel, clean-install,
+  # keyless black-box, and trusted real-API path. Linux and Windows x64 block
+  # pull requests; Linux ARM64 and both macOS architectures run in
+  # ci-master.yml.
+  python-runtime:
+    if: github.event_name == 'pull_request'
+    needs: python-sdk
+    name: python runtime / release-shaped matrix
+    uses: ./.github/workflows/build-exe-for-python-sdk.yml
+    with:
+      targets: node24-linux-x64,node24-win-x64
+      ci: true
+    secrets:
+      DEEPSEEK_API_KEY_EXTERNAL: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
+
+  # Stable required check for the Python lanes, with the same semantics as
+  # ci.yml's "all checks passed": every blocking job in THIS workflow is
+  # listed in `needs`. The bookkeeping job follows the Linux failover switch
+  # like the other verdicts.
+  python-checks-passed:
+    name: python checks passed
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-4vcpu-ubuntu-2404'
+          || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
+          && github.event.pull_request.user.login != 'dependabot[bot]'
+          && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
+          || 'ubuntu-latest' }}
+    needs: [python-sdk, python-runtime]
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    steps:
+      - name: Fail if any needed job did not succeed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: |
+          echo "::error::Needed job results: ${{ join(needs.*.result, ', ') }}"
+          exit 1
+      - name: Python checks passed
+        run: echo "All needed jobs succeeded (${{ join(needs.*.result, ', ') }})"

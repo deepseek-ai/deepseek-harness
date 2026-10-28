@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Recomendaciones personalizadas",
+    "description": "Muestra tarjetas de recomendación debajo de la respuesta para tus necesidades personalizadas en DSH: cuando quieres una página o una pequeña herramienta para conservar, propone una nueva página personalizada, que se genera en segundo plano al hacer clic en Crear; cuando preguntas cómo hacer algo en esta aplicación o dices que falta una función, recomienda el complemento integrado que la ofrece, que se activa al hacer clic en Habilitar.",
+    "detail": "docs/DETAIL.md"
+  }
+}

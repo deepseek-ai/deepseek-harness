@@ -172,7 +172,6 @@ export class PlatformAccount extends DeepSeekAccount {
     if (!parsed.success) throw new PlatformAuthError('storage')
     if (parsed.data.issuer === this.origin) return
     await this.ctx.credentials.deleteRecord(KEY)
-    console.info('[deepseek-account] stored grant discarded', { reason: 'issuer-mismatch' })
   }
 
   override async getState(): Promise<AccountView> {
@@ -433,7 +432,7 @@ export class PlatformAccount extends DeepSeekAccount {
       } else attempt.callback?.writeHead(204, { 'cache-control': 'no-store' }).end()
     }).catch((error: unknown) => {
       const code = error instanceof PlatformAuthError ? error.code : 'protocol'
-      console.info('[deepseek-account] sign-in failed', { errorCode: code })
+      console.error('[deepseek-account] sign-in failed', { errorCode: code })
       this.update(attempt, { phase: code === 'expired' ? 'expired' : 'failed', errorCode: code })
       this.finishFailedCallback(attempt)
     }).then(async () => {
@@ -613,7 +612,7 @@ export class PlatformAccount extends DeepSeekAccount {
   }
 
   private rejectPayload(stage: string, error: z.ZodError): never {
-    console.info('[deepseek-account] payload rejected', {
+    console.error('[deepseek-account] payload rejected', {
       stage, issues: error.issues.map(issue => ({
         path: issue.path, code: issue.code,
         receivedType: issue.input === null ? 'null' : Array.isArray(issue.input) ? 'array' : typeof issue.input,

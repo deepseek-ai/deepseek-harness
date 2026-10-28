@@ -32,7 +32,7 @@ Web 访问是一个一等能力 seam，遵循[能力 seam Agent Note](2026-06-13
 - 工具绝不会仅仅因为其选定的提供方缺失、配置错误、缺少凭证、存在歧义或暂时不可用就被注销。
 - 提供方在执行时解析，当选定的能力无法运行时返回结构化的 `WebError`。
 
-这使模型 schema 保持稳定，而不将插件加载顺序、凭证状态或 HMR（热模块替换）时序纳入面向模型的约定。如果 web 搜索已启用但不存在可用的搜索提供方，`web_search` 仍然可见，执行时以结构化的 `WebError`（如 `WEB_PROVIDER_UNAVAILABLE` 或 `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`）失败。如果某个提供方在 `dsh-tool-web` 之后出现，下一次执行即可使用它而无需更改 schema。如果某个提供方在调用过程中消失，执行以结构化的 `WebError` 失败，而不是静默选择另一个提供方或回退到 `UNKNOWN_TOOL`。
+这使模型 schema 保持稳定，而不将插件加载顺序、凭证状态或 HMR（热模块替换）时序纳入面向模型的约定。如果 web 搜索已启用但不存在可用的搜索提供方，`web_search` 仍然可见，执行时以结构化的 `WebError`（如 `WEB_PROVIDER_UNAVAILABLE` 或 `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`）失败。发行版的 `dsh-tool-web` 按模型请求收窄了这一点：选中的提供方报告该请求的搜索无法鉴权时，它会[撤下 `web_search`](2026-09-27-web-search-offered-by-provider-readiness.zh.md)。如果某个提供方在 `dsh-tool-web` 之后出现，下一次执行即可使用它而无需更改 schema。如果某个提供方在调用过程中消失，执行以结构化的 `WebError` 失败，而不是静默选择另一个提供方或回退到 `UNKNOWN_TOOL`。
 
 该 seam 刻意不暴露任何观察面——没有注册表变更事件，也没有聚合的能力状态查询。不可用性是调用方通过执行观察到的事实：`search()`/`fetch()` 在调用时解析提供方，并抛出命名了失败原因的结构化 `WebError`。[观察面 Agent Note](../../archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md) 记录了这一判断：基于调用的派生选择与基于启用的注册使得没有消费方需要变更信号或独立于执行和错误路由的可用性探测；未来的提供方状态面板会重新引入它实际消费的最小信号或查询。
 
@@ -60,6 +60,7 @@ flowchart LR
   exa["@deepseek-ai/dsh-web-search-exa"] -->|registerSearchProvider| web["@deepseek-ai/dsh-web / ctx.web"]
   perplexity["@deepseek-ai/dsh-web-search-perplexity"] -->|registerSearchProvider| web
   deepseek["@deepseek-ai/dsh-web-search-deepseek"] -->|registerSearchProvider| web
+  deepseekApi["@deepseek-ai/dsh-web-deepseek-api"] -->|registerSearchProvider / registerFetchProvider| web
   fetchLocal["@deepseek-ai/dsh-web-fetch-http"] -->|registerFetchProvider| web
   toolWeb["@deepseek-ai/dsh-tool-web"] -->|search/fetch| web
   toolWeb -->|ctx.tools.register| webSearch["tool: web_search"]
@@ -151,6 +152,8 @@ interface WebRuntime {
 
 运维覆盖走同一条显式选择路径：`DSH_WEB_SEARCH_PROVIDER=perplexity` 等同于配置 `searchProvider: perplexity`，而非 `dsh-tool-web` 内部的隐式优先级链。
 
+每次搜索或抓取在执行时读取配置的 id，因此保存的设置变更无需重新挂载 `dsh-web` 即对下一次操作选择另一个提供方。网页搜索设置页的开关借此把两种能力同时切换到 [DeepSeek Search 与 Fetch API](../feature/2026-10-15-deepseek-search-fetch-api.zh.md)。
+
 `ctx.web.search()` 和 `ctx.web.fetch()` 在执行时按上述选择规则解析提供方。如果选定的能力不可用，它们抛出带有结构化代码的 `WebError`，如 `WEB_PROVIDER_UNAVAILABLE`、`WEB_PROVIDER_CONFIGURED_MISSING`、`WEB_PROVIDER_CONFIGURED_UNAVAILABLE` 或 `WEB_PROVIDER_AMBIGUOUS`。如果未显式配置提供方且不存在可用提供方，执行错误是通用的 `WEB_PROVIDER_UNAVAILABLE` 情况；刻意不提供对每个不可用提供方的诊断汇总。
 
 ## 搜索请求与结果 schema
@@ -199,7 +202,7 @@ Exa 搜索将提供方扁平 `results[]` 的每一项映射为 `WebSearchSource`
 
 ## Fetch 请求与结果 schema
 
-`web_fetch` 的实现是一个匿名公开 HTTP(S) fetch 提供方 `http`。它从具体 URL 获取字节，解析并固定公开目的地址，应用下述传输卫生措施，解码文本内容，并仅返回最小的模型可用结果：最终 URL、状态码、正文和截断标志。它不携带浏览器 cookie、编辑器凭证、git 凭证、内部认证令牌，也不隐式访问私有服务。
+`web_fetch` 的实现是一个匿名 HTTP(S) fetch 提供方 `http`。它从具体 URL 获取字节，应用下述传输卫生措施，解码文本内容，并仅返回最小的模型可用结果：最终 URL、状态码、正文和截断标志。它不携带浏览器 cookie、编辑器凭证、git 凭证或内部认证令牌。它不限制目的地址。
 
 seam 请求比 OpenCode 的面向模型工具更小：
 
@@ -235,14 +238,12 @@ export type WebFetchBody =
 fetch 提供方的资源控制：
 
 - 仅接受 `http:` 和 `https:` URL；拒绝 URL 中的凭证。
-- 字面 IP 地址或 hostname 一次解析得到的完整结果只能包含全球可达的单播 IPv4 或 IPv6 目的地址。IPv6 解析还会发现当前 DNS64 前缀，并拒绝转换到非公开 IPv4 的 NAT64 地址。loopback、私有、link-local、运营商级 NAT、多播、保留、过渡、转换和映射到私有 IPv4 的 IPv6 地址都会被拒绝。
-- 请求通过 Undici lookup 回调保留这一组已验证地址，不会再次解析 hostname。原 hostname 仍作为 HTTP Host 与 TLS SNI 值，而 DNS rebinding 无法在验证后替换连接目的地址。
 - 强制执行最大 URL 长度、响应字节上限、解码正文字符上限、超时和重定向跳数上限。
 - Abort 信号传播到网络获取和高开销解码。
-- 仅自动跟随同源重定向；每个跟随的跳转都会重新解析公开地址，并把自己的连接固定到解析结果。跨源重定向以 `WEB_REDIRECT_BLOCKED` 失败，要求一次新的工具调用和新的公开地址校验。（Claude Code 的 WebFetch 使用同样的模型——它不自动跟随跨主机重定向，而是将重定向目标返回给模型以发起新调用。）
+- 仅自动跟随同源重定向；每个跟随的跳转都会重复 URL 校验。跨源重定向以 `WEB_REDIRECT_BLOCKED` 失败，要求一次新的工具调用。（Claude Code 的 WebFetch 使用同样的模型——它不自动跟随跨主机重定向，而是将重定向目标返回给模型以发起新调用。）
 - 请求携带显式的产品 User-Agent，而非静默伪装浏览器。
 
-只要 DNS 完整解析结果中存在任一非公开地址，提供方就会拒绝整个结果，而不是静默过滤不安全成员。该 fail-closed 规则可防止连接的地址族选择或回退触及未满足公开网络策略的地址。
+请求使用进程级 dispatcher，因此由已安装的出站代理策略与系统解析器决定连接。loopback、内网与云 metadata 目的地址都可访问。
 
 ## 工具消费方行为
 
@@ -310,17 +311,14 @@ fetch 提供方的资源控制：
 
 在 seam 层面否决。`prompt` 将 fetch 变成 LLM 摘要，并将公开 web 获取耦合到模型提供方。harness seam 应当确定性地获取和解码；`dsh-tool-web` 日后可以将摘要作为展示模式提供，而无需让 `ctx.web` 依赖 `ctx.llm`。
 
-### 验证 DNS 后调用普通 fetch
+<a id="restrict-fetch-to-public-addresses"></a>
+### 只允许抓取公开地址
 
-否决，因为普通 fetch 在打开连接时会再次解析 hostname。攻击者可以在验证时返回公开地址，在第二次解析时返回私有地址。把已验证解析结果通过连接的 lookup 回调传入，可以在保留基于 hostname 的 HTTP 与 TLS 行为的同时关闭这一 rebinding 时间窗口。
-
-### 只阻断看起来像私网的 hostname 字符串，不固定解析地址
-
-否决，因为 hostname 语法无法确定连接目的地址：任意看似公开的名称都可能解析到 loopback、私有网段或云 metadata 地址。地址分类必须在解析后执行，连接回退可使用的每个地址都必须通过校验。
+否决。解析每个 hostname、拒绝任何非公开解析结果并把连接固定到已验证地址，并不能约束模型，因为模型可以通过已挂载的 shell 工具访问相同网络；同时在 DNS 返回非公开地址的主机上（例如使用 fake-IP DNS 的 TUN 模式代理），这会拒绝所有页面。需要阻止模型访问私有目的地址的部署应使用网络隔离、`tools/pre-execute` 策略，或不挂载抓取工具。
 
 ### 在公开抓取前要求逐次审批
 
-已交付的 preset 不采用这一方案。公开地址校验会阻断 SSRF 目的地址，而逐次确认会打断普通浏览，却不能可靠控制公开数据出站：模型可以通过已挂载的 shell 工具访问同一公开网络。要求专门确认步骤的部署可以添加 `tools/pre-execute` 策略或禁用 `web_fetch`。
+已交付的 preset 不采用这一方案。逐次确认会打断普通浏览，却不能可靠控制数据出站：模型可以通过已挂载的 shell 工具访问相同网络。要求专门确认步骤的部署可以添加 `tools/pre-execute` 策略或禁用 `web_fetch`。
 
 ## 后果
 
@@ -332,7 +330,7 @@ fetch 提供方的资源控制：
 
 **提供方状态可能在启动后变化。** 一个工具可能在步骤开始时组装的请求中可见，但在执行前失去其提供方。执行路径重新解析并以结构化错误失败。
 
-**Fetch 是网络边界，不仅仅是只读工具。** 公开地址校验与连接固定可防止 `web_fetch` 触达非公开目的地址，但模型仍可通过公开 URL 泄露数据，抓取文本也仍是不受信任的模型输入。已交付的 `cordis`、`code` 与 `standard` preset 会在所有 sandbox 和审批模式下暴露 `web_fetch`，无需逐次确认。
+**Fetch 是网络边界，不仅仅是只读工具。** `web_fetch` 可以访问主机能访问的任何目的地址，包括 loopback 与内网服务；模型可以通过 URL 泄露数据，抓取文本也仍是不受信任的模型输入。已交付的 `cordis`、`code` 与 `standard` preset 会在所有 sandbox 和审批模式下暴露 `web_fetch`，无需逐次确认。
 
 **大量 web 内容可能损害上下文质量。** 提供方强制执行字节/字符上限并报告 `truncated`；`tool-web` 格式化有界的模型输出，附带清晰的继续或后续引导。
 

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Comando de compresión de contexto",
+    "description": "Permita que el usuario comprima activamente el contexto de la sesión actual mediante un comando."
+  }
+}

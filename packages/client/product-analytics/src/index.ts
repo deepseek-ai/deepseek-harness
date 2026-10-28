@@ -9,6 +9,7 @@ import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-compaction/types'
 import type { ProductEvent } from './events.ts'
+import { collectEnvironment, type EnvironmentAttributes } from './environment.ts'
 
 /** Application-owned collection policy; no user settings surface. */
 export interface Config {
@@ -16,6 +17,10 @@ export interface Config {
   enabled: Volatile<boolean>
   /** Running Desktop release, absent when unavailable. */
   appVersion?: string
+  /** Maximum execution time per static environment query, in milliseconds. */
+  environmentQueryTimeoutMillis: number
+  /** Maximum captured bytes per environment query output stream. */
+  environmentQueryMaxOutputBytes: number
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -27,13 +32,24 @@ declare module '@deepseek-ai/cordis' {
 /** Authenticated event intake; disabled instances do not inspect identity or accept new events. */
 export default class ProductAnalytics extends TypertRemoteService {
   static inject = ['deepseekAccount', 'productTelemetry']
-  static Config = z.object({ enabled: z.boolean().default(true).volatile(), appVersion: z.string() })
+  static Config = z.object({
+    enabled: z.boolean().default(true).volatile(), appVersion: z.string(),
+    environmentQueryTimeoutMillis: z.number().step(1).min(1).max(2_147_483_647).default(5000),
+    environmentQueryMaxOutputBytes: z.number().step(1).min(1).max(2_147_483_647).default(16384),
+  })
   private active = true
+  private readonly environmentLifetime = new AbortController()
+  private environment: Promise<EnvironmentAttributes> | undefined
   private readonly listeners = new Set<() => void>()
 
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'productAnalytics')
-    ctx.effect(() => () => { this.active = false; for (const listener of this.listeners) listener() })
+    ctx.effect(() => async () => {
+      this.active = false
+      for (const listener of this.listeners) listener()
+      this.environmentLifetime.abort()
+      await this.environment
+    })
     ctx.on('loader/volatile-update', () => { for (const listener of this.listeners) listener() })
     ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
     ctx.on('session/event', (session, event) => {
@@ -74,7 +90,9 @@ export default class ProductAnalytics extends TypertRemoteService {
   }
 
   /**
-   * Submit selected Desktop fields; missing identity is omitted and never generated.
+   * Submit selected Desktop fields with cached static environment and fresh identity.
+   * The first intake waits for bounded environment queries; concurrent intakes share them.
+   * Missing identity is omitted; failed environment fields carry fixed reasons.
    * @param event - typed product event without message contents or credentials.
    * @returns after local submission; no delivery or warehouse acknowledgement.
    */
@@ -82,16 +100,27 @@ export default class ProductAnalytics extends TypertRemoteService {
   async report(event: ProductEvent): Promise<void> {
     if (!this.enabled()) return
     try {
-      const identity = await this.ctx.deepseekAccount.getDeviceIdentity().catch(() => undefined)
+      this.environment ??= collectEnvironment({
+        timeoutMillis: this.config.environmentQueryTimeoutMillis,
+        maxOutputBytes: this.config.environmentQueryMaxOutputBytes,
+        signal: this.environmentLifetime.signal,
+      })
+      const [environment, identity] = await Promise.all([
+        this.environment, this.ctx.deepseekAccount.getDeviceIdentity().catch(() => undefined),
+      ])
       if (!this.enabled()) return
+      const { missing_fields: missingFields, ...metadata } = environment
+      const missing = Object.entries(missingFields).sort(([a], [b]) => a.localeCompare(b))
+        .map(([field, reason]) => `${field}=${reason}`).join(',')
       this.ctx.productTelemetry.emit({
         ...event, body: event.eventName,
         attributes: {
           ...event.attributes,
+          ...metadata,
+          ...missing === '' ? {} : { missing_fields: missing },
           ...identity?.deviceId === undefined ? {} : { device_id: identity.deviceId },
           ...identity?.userId === undefined ? {} : { user_id: identity.userId },
           ...this.config.appVersion === undefined ? {} : { app_version: this.config.appVersion },
-          ...identity === undefined ? {} : { os_version: identity.osVersion },
         },
       })
     } catch (error) {

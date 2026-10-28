@@ -389,8 +389,9 @@ describe('contextBreakdown session projection', () => {
     const first = appendUser(session, 'the first of many messages')
     for (let index = 0; index < 24; index += 1) appendUser(session, `message number ${index} with some text`)
     const last = appendUser(session, 'the last message before compaction')
+    const projection = await ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
     const state = () => {
-      const current = ctx.sessionProjections.stateOf(session, 'contextBreakdown')
+      const current = projection.stateOf(session)
       if (current === undefined) throw new Error('registered context breakdown has no state')
       return current
     }
@@ -521,11 +522,12 @@ describe('contextBreakdown session projection', () => {
 
   it('expires an armed shadow price at the next event so a later replacement folds at zero delta', async () => {
     const { ctx, session } = await harness()
+    const breakdown = await ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
     const first = appendUser(session, 'first message')
     const last = appendUser(session, 'last message')
     appendSummaryMeter(ctx, session, first, last)
     session.append('step/start', { turn: 1, step: 1 })
-    expect(ctx.sessionProjections.stateOf(session, 'contextBreakdown')).not.toHaveProperty('claim')
+    expect(breakdown.stateOf(session)).not.toHaveProperty('claim')
     const before = projected(ctx, session)
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'summary' }], source: { kind: 'user' },

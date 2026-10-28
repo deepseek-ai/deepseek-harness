@@ -125,6 +125,8 @@ The wrong form lets instances overwrite each other, makes reclamation timing unk
 
 A business capability lives in its own package and attaches through a registration surface — a registry, `slots.inject`, a waterfall, or an event subscription. A runtime, controller, manager, or gateway carries generic orchestration: it may hold the registry structure and the disposal lifecycle, while the entries are written by the packages that own them, and it never hardcodes a central table of business rows.
 
+Establish whether a new distinction, field, or adapter is needed before choosing its owner; moving an unnecessary concept does not remove its maintenance cost. For required behavior, prefer an existing extension point near its producer or consumer when the local implementation adds little complexity. A producer can declare a feature variant through [declaration merging](../subsystems/core.md#the-map--derived-union-pattern) in its own package, without editing the package that declares the shared type. Obligations common to all consumers belong in the shared owner.
+
 The judged condition is whether the capability declares and registers itself, with the center layer only forwarding and managing lifetime rather than making business decisions. The boundary is that the center layer holds the registry structure and the disposal lifecycle while the entries come from the owning packages. One exception: pure infrastructure — logging, transport, storage — does not attach through a business registration surface. A new branch in a center layer must explain why it cannot live in the owning package.
 
 ```ts
@@ -191,7 +193,7 @@ The wrong form buries behavior changes inside a move, so review cannot separate 
 
 ## Dispose must reach quiescence, not just request it
 
-A teardown that issues kills/aborts but returns before the work stops leaves orphans. Make cleanup async and await the children's exit (kill → await `done`), and close listener/notification registries BEFORE killing so late completions stay silent.
+Await child exit after killing or aborting. Optional notifications may stop early; resources and listeners needed for completion or final persistence must survive until consumers settle. See the [Cordis ownership checks](../../.agents/skills/cordis-styling-nitpicking/SKILL.md#p0-cleanup-dependency-released-before-consumer-completion).
 
 The judged condition is whether teardown awaits actual quiescence or only requests it. The boundary is work with no owner to await — a detached, unobserved task — which the teardown is not obliged to track; anything the component started and can still observe must be awaited before it reports completion.
 

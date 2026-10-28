@@ -3,6 +3,7 @@
 import { createHmac } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
+import type { PeerId } from '@deepseek-ai/dsh-typert-protocol'
 import { BrowserAuth } from '../src/browser-auth.ts'
 import type { ConnectionIndexRequest, ConnectionIndexResponse } from '../src/rpc.ts'
 import { RecordCredentials } from './browser-credentials.ts'
@@ -89,6 +90,73 @@ function exchange(
 
 afterEach(() => {
   vi.useRealTimers()
+})
+
+describe('API credentials', () => {
+  it('refuses a request without a URL before publishing an API operator', async () => {
+    const auth = await createAuth(new RecordCredentials())
+    const publish = vi.fn(() => 'api-operator' as PeerId)
+    const res = response()
+
+    auth.authorizeConnect({ method: 'GET', headers: { host: 'localhost' } }, res.value, false, publish)
+
+    expect(res.state).toEqual({
+      status: 401,
+      headers: { 'cache-control': 'no-store', 'content-type': 'text/plain; charset=utf-8' },
+      body: 'dsh web authentication required; reopen the URL printed by dsh web.\n',
+    })
+    expect(publish).not.toHaveBeenCalled()
+  })
+
+  it('signs the published id and rejects browser confusion, tampering, audience mismatch, and expiry', async () => {
+    vi.useFakeTimers()
+    const store = new RecordCredentials()
+    const auth = await createAuth(store)
+    const authority = '127.0.0.1:3080'
+    const id = 'api-operator' as PeerId
+    const issuedAt = Date.now()
+    const publish = vi.fn(() => id)
+    const res = response()
+    auth.authorizeConnect(request(auth.authenticatedUrl(`http://${authority}/connect`)), {
+      ...res.value,
+      writeHead(status, headers) {
+        expect(publish).toHaveBeenCalledExactlyOnceWith('none')
+        return res.value.writeHead(status, headers)
+      },
+    }, false, publish)
+    const cookie = res.state.headers?.['set-cookie']?.split(';', 1)[0]
+    if (cookie === undefined) throw new Error('API connect did not set a cookie')
+    const [name, value] = cookie.split('=') as [string, string]
+    const payload = { version: 2, authority, id, issuedAt, expiresAt: issuedAt + 30 * 86_400_000 }
+    expect(JSON.parse(Buffer.from(value.split('.')[1]!, 'base64url').toString('utf8'))).toEqual(payload)
+    expect(auth.authenticateApi(request('/', authority, { cookie }))).toBe(id)
+    expect(auth.isAuthenticated(request('/', authority, { cookie }))).toBe(false)
+    expect(auth.authenticateApi(request('/', authority, { cookie: exchange(auth).cookie }))).toBeUndefined()
+    expect(auth.isAuthenticated(request('/', authority, { cookie: cookie.replace('=v2.', '=v1.') }))).toBe(false)
+    expect(auth.authenticateApi(request('/', authority, { cookie: `${cookie.slice(0, -1)}!` }))).toBeUndefined()
+    expect(auth.authenticateApi(request('/', 'localhost:3080', { cookie }))).toBeUndefined()
+    expect(auth.authenticateApi(request('/', '127.0.0.1:3081', { cookie }))).toBeUndefined()
+    expect(auth.authenticateApi(request('/', authority, { cookie }), true)).toBeUndefined()
+    for (const invalid of [
+      { ...payload, version: 3 },
+      { ...payload, authority: 'localhost:3080' },
+      { ...payload, id: '' },
+      { ...payload, id: 42 },
+      { ...payload, id: undefined },
+      { ...payload, issuedAt: issuedAt + 1 },
+      { ...payload, issuedAt: 0.5 },
+      { ...payload, expiresAt: 'later' },
+      { ...payload, expiresAt: issuedAt - 1 },
+    ]) {
+      const invalidCookie = signedCookie(store, name, invalid).replace('=v1.', '=v2.')
+      expect(auth.authenticateApi(request('/', authority, { cookie: invalidCookie }))).toBeUndefined()
+      expect(auth.isAuthenticated(request('/', authority, { cookie: invalidCookie }))).toBe(false)
+    }
+    const shorter = await createAuth(store, 1)
+    expect(shorter.authenticateApi(request('/', authority, { cookie }))).toBeUndefined()
+    vi.setSystemTime(payload.expiresAt)
+    expect(auth.authenticateApi(request('/', authority, { cookie }))).toBeUndefined()
+  })
 })
 
 describe('BrowserAuth', () => {

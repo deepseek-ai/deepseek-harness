@@ -19,7 +19,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import GoalService, { GoalId, applyGoalProjection, foldGoal, goalProjectionDefinition } from '@deepseek-ai/dsh-goal'
 import type { GoalProjection, GoalProjectionState, GoalRef } from '@deepseek-ai/dsh-goal'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -42,6 +42,7 @@ async function liveAgent(ctx: Context, session: Session): Promise<Agent> {
     id: session.id,
     options: {},
     session,
+    model: unsupportedModel(),
     inbox: unsupportedInbox(),
     ctx,
     get status() { return status },
@@ -60,8 +61,8 @@ async function liveAgent(ctx: Context, session: Session): Promise<Agent> {
 async function harness(withGoal: boolean): Promise<Bench> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   if (withGoal) await ctx.plugin(GoalService)
   const session = ctx.sessions.create()
   const agent = await liveAgent(ctx, session)
@@ -235,9 +236,10 @@ describe('goal projection unit', () => {
     const bench = await harness(true)
     bench.ctx.goals.create(bench.agent, { objective: 'poisoned replay' })
     const failure = 'goal replay failed at session event 0: invalid restored goal stream'
-    const state = bench.ctx.sessionProjections.stateOf(bench.session, 'goal')
+    const handle = await bench.ctx.sessionProjections.register(goalProjectionDefinition)
+    const state = handle.stateOf(bench.session)
     expect(state).toBeDefined()
-    Object.assign(state!, { failure })
+    Object.assign(state, { failure })
 
     await expect(agentEvents(bench.ctx, bench.agent).serial('agent/created', { source: 'resume' }))
       .resolves.toBeUndefined()

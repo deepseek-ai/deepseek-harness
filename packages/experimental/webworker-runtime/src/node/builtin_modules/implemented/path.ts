@@ -6,8 +6,10 @@
  * Node). `../../../../tests/node/path-diff.spec.ts` pins the port below to
  * Node's answers.
  * A `node:` proxy has to answer what Node answers, since VFS paths were built with
- * Node semantics. `win32` members throw: the worker host reports
- * `process.platform === 'linux'`, so a Windows branch means a bug.
+ * Node semantics. `win32` members throw, except `isAbsolute`, which
+ * cross-platform callers use to reject Windows absolute paths on any platform:
+ * the worker host reports `process.platform === 'linux'`, so any other Windows
+ * branch means a bug.
  */
 import { DSH_ROOT } from '../../../storage/paths.ts'
 
@@ -367,11 +369,36 @@ const win32Member = (name: string) => (): never => {
   throw new Error(`web-preview: node:path.win32.${name} is unreachable — the worker host reports platform "linux"`)
 }
 
-/** Windows member set: reaching it means a platform branch went the wrong way. */
+const CHAR_BACKWARD_SLASH = 92
+const CHAR_COLON = 58
+
+/** Node's win32 separator test: `/` or `\`. */
+function isWin32Separator(code: number): boolean {
+  return code === CHAR_FORWARD_SLASH || code === CHAR_BACKWARD_SLASH
+}
+
+/** Node's drive-letter test: `A`–`Z` or `a`–`z`. */
+function isWindowsDeviceRoot(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+}
+
+/**
+ * Node's `path.win32.isAbsolute`, a string check cross-platform callers make on every platform.
+ * @param path - Path to classify.
+ * @returns Whether a Windows host would treat the path as absolute.
+ */
+function win32IsAbsolute(path: string): boolean {
+  if (path.length === 0) return false
+  const code = path.charCodeAt(0)
+  return isWin32Separator(code)
+    || (path.length > 2 && isWindowsDeviceRoot(code) && path.charCodeAt(1) === CHAR_COLON && isWin32Separator(path.charCodeAt(2)))
+}
+
+/** Windows member set: reaching a member other than `isAbsolute` means a platform branch went the wrong way. */
 export const win32 = {
   resolve: win32Member('resolve'),
   normalize: win32Member('normalize'),
-  isAbsolute: win32Member('isAbsolute'),
+  isAbsolute: win32IsAbsolute,
   join: win32Member('join'),
   relative: win32Member('relative'),
   dirname: win32Member('dirname'),

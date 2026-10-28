@@ -26,3 +26,39 @@ export const en = {
   'secret.reveal': 'Show secret',
   'secret.hide': 'Hide secret',
 } satisfies Record<SecretMaskKey, string>
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'secret.reveal': 'シークレットを表示',
+  'secret.hide': 'シークレットを隠す',
+} satisfies Record<keyof typeof en, string>
+
+/** Spanish dictionary, checked against the English keys. */
+export const es = {
+  'secret.reveal': 'Mostrar secreto',
+  'secret.hide': 'Ocultar secreto',
+} satisfies Record<keyof typeof en, string>
+
+/** French dictionary, checked against the English keys. */
+export const fr = {
+  'secret.reveal': 'Afficher le secret',
+  'secret.hide': 'Cacher le secret',
+} satisfies Record<keyof typeof en, string>
+
+/** German dictionary, checked against the English keys. */
+export const de = {
+  'secret.reveal': 'Geheimnis zeigen',
+  'secret.hide': 'Geheimnis verbergen',
+} satisfies Record<keyof typeof en, string>
+
+/** Russian dictionary, checked against the English keys. */
+export const ru = {
+  'secret.reveal': 'Показать секрет',
+  'secret.hide': 'Скрыть секрет',
+} satisfies Record<keyof typeof en, string>
+
+/** Portuguese dictionary, checked against the English keys. */
+export const pt = {
+  'secret.reveal': 'Mostrar segredo',
+  'secret.hide': 'Ocultar segredo',
+} satisfies Record<keyof typeof en, string>

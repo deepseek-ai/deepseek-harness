@@ -18,17 +18,21 @@ const overlays = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events')
   class Window extends EventEmitter {
     private destroyed = false
-    readonly webContents = { setWindowOpenHandler: vi.fn() }
+    readonly webContents = Object.assign(new EventEmitter(), { setWindowOpenHandler: vi.fn(),
+      focus: vi.fn(), isDestroyed: () => this.destroyed, loadURL: vi.fn(async () => {}),
+      close: () => { this.destroyed = true; this.webContents.emit('destroyed') },
+    })
     readonly focus = vi.fn()
     readonly show = vi.fn()
     readonly setBounds = vi.fn()
+    readonly setBackgroundColor = vi.fn()
     setMenu() {}
     isDestroyed() { return this.destroyed }
-    destroy() { this.destroyed = true; this.emit('closed') }
+    destroy() { this.destroyed = true; this.webContents.emit('destroyed') }
   }
   return { Window }
 })
-vi.mock('electron', () => ({ ipcMain: ipc, BrowserWindow: overlays.Window, app: { isPackaged: true }, session: { fromPartition: () => ({
+vi.mock('electron', () => ({ ipcMain: ipc, BrowserWindow: overlays.Window, WebContentsView: overlays.Window, app: { isPackaged: true }, session: { fromPartition: () => ({
   setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), setDevicePermissionHandler: vi.fn(),
   setDisplayMediaRequestHandler: vi.fn(), on: vi.fn(), webRequest: { onBeforeRequest: vi.fn() },
 }) } }))
@@ -89,7 +93,7 @@ async function fixture(platform: 'macos' | 'windows' | 'linux' = 'macos') {
   let current: WindowFixture | undefined = window
   const updateMenu = vi.fn()
   const updateOverlays = new DesktopUpdateOverlays()
-  const keyboard = installFixture(() => current, root, platform, updateMenu, window => updateOverlays.input(window as BrowserWindow))
+  const keyboard = installFixture(() => current, root, platform, updateMenu, window => updateOverlays.input(window))
   keyboard.attach(current)
   onTestFinished(() => { keyboard.dispose() })
   const handlers = new Map<string, (event: InvokeFixture, ...args: unknown[]) => unknown>(
@@ -108,12 +112,12 @@ function updateOverlayFixture(f: Awaited<ReturnType<typeof fixture>>) {
   onTestFinished(() => { platform.mockRestore() })
   const parent: WindowFixture & Pick<BrowserWindow, 'getContentBounds'> = Object.assign(f.window, {
     getContentBounds: () => ({ x: 0, y: 0, width: 900, height: 650 }),
+    contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
   })
   Object.assign(f.contents, { insertCSS: vi.fn(async () => 'blur'), removeInsertedCSS: vi.fn(async () => {}) })
   return () => {
-    const overlay = f.updateOverlays.create(parent as BrowserWindow, 'test-overlay-preload', 'Update', false)
+    const overlay = f.updateOverlays.create(parent as BrowserWindow, 'test-overlay-preload')
     onTestFinished(() => { if (!overlay.isDestroyed()) overlay.destroy() })
-    expect(vi.spyOn(overlay, 'show')).not.toHaveBeenCalled()
     return overlay
   }
 }

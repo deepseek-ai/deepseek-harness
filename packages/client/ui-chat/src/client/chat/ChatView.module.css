@@ -22,6 +22,10 @@
 .scroll {
   flex: 1 1 auto;
   min-height: 0;
+  /* Never expose horizontal scrollable overflow: the absolutely positioned
+     text-interaction surface adds it transiently, and the changing scroll range
+     makes the transcript jitter while the tail is pinned. */
+  overflow-x: clip;
   overflow-y: auto;
   /* Sides = composer clearance + 16px: on narrow viewports the transcript
      stays exactly 32px narrower than the input card (the shared width rule). */
@@ -46,7 +50,10 @@
 }
 
 :global([data-conversation-scroll]) .scroll {
-  overflow: visible;
+  /* A host scrollport still owns vertical overflow; horizontal overflow is
+     clipped for the same reason as the self-scrolled case above. */
+  overflow-x: clip;
+  overflow-y: visible;
   flex: 0 0 auto;
   min-height: auto;
 }
@@ -55,6 +62,7 @@
    centered on the same axis as the input box (which caps at chat + 16px); the
    scroller itself stays full-bleed. */
 .column {
+  position: relative;
   max-width: var(--dsh-chat-content-width);
   width: 100%;
   margin: 0 auto;
@@ -64,22 +72,23 @@
 
 /* The flow slot's display:contents anchor preserves layout but not selector ancestry.
    `hidden="until-found"` retains a searchable zero-height box; hidden and empty
-   Seats do not contribute spacing. */
-:is(.column, :global([data-slot="conversation.chat.flow"])) > :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))
-  ~ :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))),
-.column:has(> .older) > :global([data-slot="conversation.chat.flow"])
-  > :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) {
-  margin-top: var(--dsh-chat-flow-gap, 6px);
+   Seats do not contribute spacing. The older-history control precedes the anchor;
+   an ancestor :has() here also invalidates the history on unrelated descendant edits. */
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))
+  ~ :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))),
+.column > .older + :global([data-slot="conversation.chat.flow"])
+  > :not([hidden]):not(.textInteraction):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) {
+  margin-top: var(--dsh-chat-flow-gap, 4px);
 }
 
-/* Process rows sit 6px apart; an Assistant response is separated from its
+/* Process rows sit 4px apart; an Assistant response is separated from its
    neighbours by 12px. */
 .flowItem[data-chat-group-part="response"] {
   --dsh-chat-flow-gap: 12px;
 }
 
 :is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-group-part="response"]:not([hidden]):not(:empty)
-  + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running) {
+  + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running):not(:has(> [data-slot="conversation.chat.node"] > [data-chat-steering-batch])) {
   --dsh-chat-flow-gap: 12px;
 }
 
@@ -106,6 +115,13 @@
   transition: none;
 }
 
+/* A Turn's duration control renders empty until the Turn closes; its gap appears with it in the same
+   frame, so the layout below changes once instead of sliding after the control's own height. */
+.column[data-chat-motion] > [data-chat-flow-kind="turn-process"],
+.column[data-chat-motion] > :global([data-slot="conversation.chat.flow"]) > [data-chat-flow-kind="turn-process"] {
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .column[data-chat-motion] > :not([data-chat-motion]),
   .column[data-chat-motion] > :global([data-slot="conversation.chat.flow"]) > :not([data-chat-motion]) {
@@ -113,11 +129,66 @@
   }
 }
 
-/* The Turn header has 16px clearance from its input and following content. */
+/* The Turn header has 16px clearance from its input and following content. A
+   running Turn's control renders empty until the Turn closes; an echo after it
+   is still an opening input of that Turn, so it keeps the input gap. */
 .flowItem[data-chat-flow-kind="turn-process"],
-.flowItem[data-turn-process-answer],
-:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="turn-process"] + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running) {
+:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="turn-process"]:not(:empty, :has(> [data-slot="conversation.chat.node"]:empty)) + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running):not(:has(> [data-slot="conversation.chat.node"] > [data-chat-steering-batch])),
+:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="turn-process"] + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running):not([data-submission-echo], [data-pending-steering]):not(:has(> [data-slot="conversation.chat.node"] > [data-chat-steering-batch])) {
   --dsh-chat-flow-gap: 16px;
+}
+
+/* Tail slot: the running status and a completed Turn's actions row both take
+   a 16px offset plus a 28px row. The steering renderer marks the first
+   steering row of each claim that Chat orders after the Turn's process
+   control; that row keeps the slot above it, the way a completed Turn's
+   actions row precedes the next user message, while rows claimed together
+   stay 4px apart and opening inputs keep ordinary spacing. The first waiting
+   echo sits directly below the running status, so admission swaps the two
+   without moving any bubble. Neighbour gap rules exclude the batch start so
+   this slot always applies. */
+:is(.column, :global([data-slot="conversation.chat.flow"])) > .flowItem:has(> [data-slot="conversation.chat.node"] > [data-chat-steering-batch="start"]) {
+  --dsh-chat-flow-gap: calc(44px + var(--dsh-content-font-delta, 0px));
+}
+
+.running + [data-pending-steering] {
+  --dsh-chat-flow-gap: 0px;
+}
+
+/* A completed Turn's actions row owns the tail slot; the status can trail it
+   for one frame before the Session stops running, or between queued Turns. */
+.flowItem[data-chat-flow-kind="turn-tail"] + .running {
+  display: none;
+}
+
+/* Steering rows keep their full layout from insertion. Only the status moves:
+   it enters its new slot below them from one slot higher, independent of how
+   many admitted rows it passes or how tall they are. The start therefore sits
+   below the status's previous position by the admitted rows' height; the
+   fade-in covers that difference, so this entrance approximates the move. */
+@media (prefers-reduced-motion: no-preference) {
+  :where(.column > :global([data-slot="conversation.chat.flow"]) > .flowItem[data-chat-flow-kind="steering"]) + .running {
+    animation: running-enters-slot 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* An input fold runs the entrance at zero duration. The switch only changes
+     the duration of an entrance its structural change already created, as if
+     the entrance had it from its start: lifting the switch never replays an
+     entrance older than its duration, and setting it completes a running one.
+     The structural rule is wrapped in :where() so this rule outranks it. */
+  .column[data-input-fold] .running {
+    animation-duration: 0s;
+  }
+}
+
+@keyframes running-enters-slot {
+  from {
+    opacity: 0;
+    translate: 0 calc(-44px - var(--dsh-content-font-delta, 0px));
+  }
+  40% {
+    opacity: 1;
+  }
 }
 
 /* Empty Seats, including retained empty slot anchors, preserve Turn lookup
@@ -140,6 +211,7 @@
 }
 
 .running {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -150,29 +222,50 @@
   line-height: calc(22px + var(--dsh-content-font-delta, 0px));
 }
 
+/* After the Session stops running and before the Turn's actions row arrives, the status keeps its slot
+   unseen so the tail does not shrink for that interval. */
+.running[data-holding] {
+  visibility: hidden;
+  opacity: 0;
+}
+
 /* The last visible row before the status must contain output, not an input.
-   Hidden and empty seats do not separate a user message from the status. */
-:is(.column, :global([data-slot="conversation.chat.flow"])) > :nth-last-child(2 of :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
+   Hidden and empty seats do not separate a user message from the status, and
+   the steering/Inbox echoes after the status are outside the count. */
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
   .flowItem:not([data-chat-flow-kind="user"]):not([data-chat-flow-kind="steering"]):not([data-chat-flow-kind="turn-trigger"]),
   [data-chat-group-key]
 ) ~ .running > .runningDivider {
-  display: block;
+  opacity: 1;
 }
 
+/* Drawn inside the 16px offset above the status row, so showing or hiding it
+   never changes the tail slot's height. */
 .runningDivider {
-  display: none;
-  width: 100%;
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
   height: 0.5px;
-  margin: 8px 0 10px;
   background: color-mix(in srgb, var(--dsw-alias-border-l1) 75%, var(--dsw-alias-border-l2));
+  opacity: 0;
   pointer-events: none;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .runningDivider {
+    transition: opacity 160ms ease;
+  }
+}
+
+/* Same offset and height as the completed Turn's tail actions row. */
 .runningContent {
   display: inline-flex;
   align-items: center;
   min-width: 0;
   gap: 6px;
+  margin-top: 4px;
+  height: calc(28px + var(--dsh-content-font-delta, 0px));
 }
 
 .runningText {
@@ -206,7 +299,7 @@
     .runningWhaleAnimated {
       display: block;
       background: currentColor;
-      mask: url('./running-whale@2x.png') center / 100% 100% no-repeat;
+      mask: url('../assets/running-whale@2x.png') center / 100% 100% no-repeat;
       mask-mode: alpha;
       /* Keep animated-mask repaints on an icon-sized composited layer. */
       will-change: transform;
@@ -294,11 +387,23 @@
   pointer-events: auto;
 }
 
-.toBottom:hover {
-  background: var(--dsw-alias-button-floating-hover);
+@media (hover: hover) {
+  .toBottom:hover {
+    background: var(--dsw-alias-button-floating-hover);
+  }
 }
 
 /* Host open-path refusal: same dialog family as the workspace folder error. */
 .modalAction {
   min-width: 72px;
+}
+
+/* Local surfaces do not contribute flex spacing or selected message text. */
+.column > .textInteraction {
+  position: absolute;
+  /* Remain below the sticky composer while scroll placement catches up. */
+  z-index: 6;
+  visibility: hidden;
+  margin: 0;
+  width: max-content;
 }

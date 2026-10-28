@@ -5,9 +5,15 @@
 #include <cassert>
 #include <string>
 #include "../installer/extract-report.h"
+#include "../installer/directory-report.h"
 
 extern "C" __declspec(dllimport) int __cdecl InstallerReportExtractFailure(
     HWND parent, int code, LPCWSTR archive, LPCWSTR destination, LPCWSTR log, LPCWSTR reportPath, int show,
+    LPCWSTR title, LPCWSTR heading, LPCWSTR hint, LPCWSTR copy, LPCWSTR expand, LPCWSTR collapse, LPCWSTR savedFormat, LPCWSTR unsaved, LPCWSTR copied);
+
+extern "C" __declspec(dllimport) int __cdecl InstallerReportDirectoryFailure(
+    HWND parent, DWORD error, LPCWSTR source, LPCWSTR destination, DWORD restoreError, LPCWSTR backup,
+    LPCWSTR log, LPCWSTR reportPath, int show,
     LPCWSTR title, LPCWSTR heading, LPCWSTR hint, LPCWSTR copy, LPCWSTR expand, LPCWSTR collapse, LPCWSTR savedFormat, LPCWSTR unsaved, LPCWSTR copied);
 
 static bool Contains(const std::wstring& text, const std::wstring& needle) { return text.find(needle) != std::wstring::npos; }
@@ -82,6 +88,21 @@ int wmain() {
     assert(!Contains(excerpt, L"Archive: "));
     assert(Excerpt(Compose(2, L"a", L"b", L"one\r\ntwo", L"t", L"w")) == L"Result: 7-Zip exit code 2 (fatal error)\r\none\r\ntwo");
     assert(Excerpt(Compose(2, L"a", L"b", std::wstring(2000, L'x'), L"t", L"w")).size() < 64 + kExcerptLineLimit + 64);
+    std::wstring attempts;
+    for (int i = 0; i < 30; ++i) attempts += L"restore: Windows error: 5\r\n";
+    const std::wstring directoryFull = directory_report::Compose(5, std::wstring(400, L'x').c_str(), L"target", 5, L"backup", attempts);
+    const std::wstring directoryExcerpt = BoundedExcerpt(Lines(Trim(directoryFull)));
+    assert(Lines(directoryExcerpt).size() <= kExcerptLines + 1);
+    assert(directoryExcerpt.size() <= kExcerptChars + 64);
+    assert(Contains(directoryExcerpt, L"Restoration error: 5"));
+    assert(Contains(directoryExcerpt, L"Preserved backup: backup"));
+    assert(Contains(directoryExcerpt, L" (29 more lines in the saved report)"));
+    assert(Contains(directoryFull, std::wstring(400, L'x')));
+    assert(Contains(directoryFull, attempts));
+    const std::wstring longBackup = L"C:\\Users\\long-account-name\\" + std::wstring(200, L'x') + L".old-{12345678-1234-1234-1234-123456789012}";
+    assert(longBackup.size() > kExcerptLineLimit);
+    assert(Contains(directory_report::Content(5, L"Keep this backup:", 5, longBackup.c_str()), longBackup));
+    assert(!Contains(directory_report::Content(5, L"Try again.", 0, longBackup.c_str()), longBackup));
 
     // A cut inside a multi-byte sequence is trimmed back to a code point boundary.
     std::string partial("abc\xE6\x96\x87\xE4\xBB");
@@ -127,7 +148,24 @@ int wmain() {
         L"title", L"heading", L"hint", L"copy", L"expand", L"collapse", L"saved %s", L"unsaved", L"copied");
     assert(unwritable == 0);
 
-    for (const std::wstring& file : {reportPath, missingLogReport, log}) DeleteFileW(file.c_str());
+    const std::wstring directoryReport = root + L"\\directory.log";
+    assert(InstallerReportDirectoryFailure(nullptr, ERROR_SHARING_VIOLATION, L"C:\\Apps\\\x6587\x4EF6.new", L"C:\\Apps\\\x6587\x4EF6",
+        ERROR_ALREADY_EXISTS, L"C:\\Apps\\\x6587\x4EF6.old", (root + L"\\absent.log").c_str(), directoryReport.c_str(), 0,
+        L"title", L"heading", L"hint", L"copy", L"expand", L"collapse", L"saved %s", L"unsaved", L"copied") == 1);
+    const std::string directorySaved = ReadBytes(directoryReport);
+    for (const std::string& expected : {"Operation: MoveFileExW", "Windows error: 32", "Restoration error: 183",
+        "Preserved backup: C:\\Apps\\\xE6\x96\x87\xE4\xBB\xB6.old"}) {
+        assert(directorySaved.find(expected) != std::string::npos);
+    }
+    assert(InstallerReportDirectoryFailure(nullptr, ERROR_ACCESS_DENIED, L"a", L"", 0, L"", log.c_str(), directoryReport.c_str(), 0,
+        L"title", L"heading", L"hint", L"copy", L"expand", L"collapse", L"saved %s", L"unsaved", L"copied") == 1);
+    const std::string removalSaved = ReadBytes(directoryReport);
+    assert(removalSaved.find("Operation: RemoveDirectoryW") != std::string::npos);
+    assert(removalSaved.find("Preserved backup:") == std::string::npos);
+    assert(InstallerReportDirectoryFailure(nullptr, ERROR_ACCESS_DENIED, L"a", L"", 0, L"", log.c_str(), (log + L"\\impossible.txt").c_str(), 0,
+        L"title", L"heading", L"hint", L"copy", L"expand", L"collapse", L"saved %s", L"unsaved", L"copied") == 0);
+
+    for (const std::wstring& file : {reportPath, missingLogReport, directoryReport, log}) DeleteFileW(file.c_str());
     RemoveDirectoryW((root + L"\\nested\\logs").c_str());
     RemoveDirectoryW((root + L"\\nested").c_str());
     const BOOL removed = RemoveDirectoryW(root.c_str());

@@ -10,7 +10,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { HostObservable, PropsRenderSlots, StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ShortcutCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
-import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
+import { RemoteError, StaticRemoteAccess, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -56,7 +56,7 @@ const workspaceState = (
 
 const ALLOWED: HostObservable<boolean> = createSnapshotStore(true)
 
-async function bench() {
+async function bench(access: 'fake' | 'static' = 'fake') {
   const ctx = new Context()
   const commands = new Map<string, ShortcutCommand>()
   ctx.provide('shortcuts', {
@@ -69,7 +69,10 @@ async function bench() {
   ctx.provide('uiConversation', {})
   await ctx.plugin(SlotRegistry).await()
   const accessSource = vi.fn((_kind: string, _id: string, _action: string): HostObservable<boolean> => ALLOWED)
-  ctx.provide('remoteAccess', { source: accessSource })
+  const stopGuard = vi.fn()
+  const whenResourceAccess = vi.fn((): () => void => stopGuard)
+  if (access === 'static') new StaticRemoteAccess(ctx)
+  else ctx.provide('remoteAccess', { source: accessSource, whenAccess: vi.fn(() => () => {}), whenResourceAccess })
   const create = vi.fn(async (input: { name: string } | { path: string }) => ({
     workspaceId: 'ws-new' as never,
     path: 'name' in input ? `/projects/${input.name}` : input.path,
@@ -162,7 +165,7 @@ async function bench() {
   locale.setLocale('zh')
   ctx.provide('locale', locale)
   return {
-    ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename, commands, accessSource,
+    ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, rename, commands, accessSource, whenResourceAccess, stopGuard,
     retain, using, selectPanel, search, renameSession, binding, fork, pickDirectory, pinSession, unpinSession,
     workspacesSubscribe, initializeDefault, history, scope, sessionOf,
     setWorkspaces: (snapshot: WorkspaceSnapshot): void => { workspaceSnapshot = snapshot },
@@ -233,6 +236,25 @@ describe('ui-workspace apply', () => {
     expect(keyed?.('w1', 'workspace/follow')).toBe(ALLOWED)
     expect(b.accessSource).toHaveBeenCalledWith('workspace', 'w1', 'workspace/follow')
     expect(keyed?.('w1')).toBeUndefined()
+    // `whenAccess` follows the same Workspace resource through the service's resource form.
+    const guarded = vi.fn(() => () => {})
+    expect(b.ctx.uiWorkspace.whenAccess('w1' as WorkspaceId, 'workspace/follow', guarded)).toBe(b.stopGuard)
+    expect(b.whenResourceAccess).toHaveBeenCalledWith('workspace', 'w1', 'workspace/follow', guarded)
+  })
+
+  it('hangs Workspace-guarded effects on the calling plugin, so they leave when it unloads', async () => {
+    const b = await bench('static')
+    onTestFinished(() => b.ctx.fiber.dispose())
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const dispose = vi.fn()
+    const caller = b.ctx.plugin({
+      inject: ['uiWorkspace'],
+      apply: (callerCtx: Context) => { callerCtx.uiWorkspace.whenAccess('w1' as WorkspaceId, 'workspace/follow', () => dispose) },
+    })
+    await caller.await()
+    expect(dispose).not.toHaveBeenCalled()
+    await caller.dispose()
+    expect(dispose).toHaveBeenCalledOnce()
   })
 
   it('reports a default Workspace creation failure through the shared notice overlay', async () => {
@@ -280,6 +302,8 @@ describe('ui-workspace apply', () => {
       kind: 'list', scope: 'root', inject: { hooks: { menuOpenState: menuOpenStateFactory, shortcuts: b.ctx.shortcuts.catalog } },
     })
     expect(b.slots.spec(ROW_ACTION)).toEqual({ kind: 'list', scope: 'root' })
+    expect(b.slots.spec('sidebar.session.row.trailing')).toEqual({ kind: 'list', scope: 'root', inline: true })
+    expect(b.slots.spec('sidebar.session.row.leading')).toEqual({ kind: 'list', scope: 'root', inline: true })
 
     const rows = (key: RowListName) => b.slots.entries(key)
       .map(registration => [registration.options.id, registration.options.order, registration.component, registration.locale])

@@ -15,14 +15,19 @@ function proxy(environment, name, protocols) {
 /**
  * Validate tuning before any build or network operation.
  * @param {NodeJS.ProcessEnv} environment File-owned packaging settings.
- * @returns {{packConcurrency: number, downloadProxy?: string, notarizationProxy?: string}} Resolved settings; empty proxy fields preserve inherited networking.
+ * @returns {{packConcurrency: number, zipCompressionLevel: number, downloadProxy?: string, notarizationProxy?: string}} Resolved settings; empty proxy fields preserve inherited networking.
  */
 export function resolveMacOSPackageSettings(environment) {
   const concurrency = environment.DSH_DESKTOP_MACOS_PACK_CONCURRENCY ?? '4'
   if (!/^[1-9]\d*$/u.test(concurrency) || !Number.isSafeInteger(Number(concurrency))) {
     throw new Error('desktop package: DSH_DESKTOP_MACOS_PACK_CONCURRENCY must be a positive integer')
   }
+  const compression = environment.DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL ?? '3'
+  if (!/^[0-9]$/u.test(compression)) {
+    throw new Error('desktop package: DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL must be an integer from 0 to 9')
+  }
   return {
+    zipCompressionLevel: Number(compression),
     packConcurrency: Number(concurrency),
     downloadProxy: proxy(environment, 'DSH_DESKTOP_MACOS_DOWNLOAD_PROXY', ['http:', 'https:']),
     notarizationProxy: proxy(environment, 'DSH_DESKTOP_MACOS_NOTARIZATION_PROXY', ['http:']),

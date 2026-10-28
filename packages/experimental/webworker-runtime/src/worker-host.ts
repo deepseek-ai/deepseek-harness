@@ -16,17 +16,19 @@
  * message handler before its first await.
  *
  * The tree itself boots through the host's own `boot()` glue loaded from the
- * image, so entry mounting, the activation audit, and its diagnostics are the
- * same code the Node deployment runs. The Worker supplies module loading,
- * profile locations, and the command line.
+ * image, over the profile the image's own app-boot initializes from the shipped
+ * template and composes from the bundles the image carries, so profile
+ * composition, entry mounting, the activation audit, and its diagnostics are the
+ * same code the Node deployment runs. The Worker supplies module loading, the
+ * platform overlay, and the command line.
  * @module @deepseek-ai/dsh-experimental-webworker-runtime/src/worker-host
  */
 import { setActiveModuleLoader, WorkerModuleLoader, type StaticModuleFactory } from './module-system/module-loader.ts'
 import type { ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import type { TypertGateway } from '@deepseek-ai/dsh-api-gateway'
-import type { HostConnectionHandle } from '@deepseek-ai/dsh-client-connection'
+import type { HostConnectionHandle, PeerScope } from '@deepseek-ai/dsh-client-connection'
 import type { AlsCausality } from './polyfill/async-context/als-runtime.ts'
-import { dirname, join } from './module-system/posix-path.ts'
+import { join } from './module-system/posix-path.ts'
 import { installProcessGlobal } from './node/globals/process.ts'
 import type { RequestListener } from './transport/synthetic-http.ts'
 import { TunnelServer, type TunnelPort } from './transport/tunnel.ts'
@@ -34,10 +36,11 @@ import { inflateImage, inflateImageStream } from './storage/image-gzip.ts'
 import { loadVfsImage, loadVfsOverlay, MemoryVfs } from './storage/memory.ts'
 import { setActiveVfs } from './storage/active.ts'
 import { setTextViewer } from './shell/process/xdg-open.ts'
+import { packPackageAssets } from './package-assets.ts'
 import {
-  DEFAULT_ROOT, IMAGE_CONFIG_PATH, IMAGE_EMPTY_DIRECTORIES, IMAGE_HOME_DIRECTORY, IMAGE_MANIFEST_PATH,
-  LOWERING_VERSION,
+  DEFAULT_ROOT, IMAGE_EMPTY_DIRECTORIES, IMAGE_HOME_DIRECTORY, IMAGE_MANIFEST_PATH, LOWERING_VERSION,
 } from './image-layout.ts'
+import { parseImageManifest, type ImageManifest } from './image-manifest.ts'
 
 export { DEFAULT_ROOT } from './image-layout.ts'
 
@@ -65,10 +68,10 @@ export interface LogExporter {
 
 /** Minimal view of the Cordis context the entry itself touches. */
 export interface HostContext {
-  loader: { internal: unknown }
   logger: { exporter(exporter: LogExporter): unknown }
   get(service: string): unknown
   provide(name: string, value: unknown): void
+  plugin(plugin: unknown, config?: unknown): Promise<unknown>
   fiber: { dispose(): Promise<void> }
 }
 
@@ -94,8 +97,6 @@ export interface WorkerHostOptions {
   readonly overlays?: readonly (Uint8Array | string)[]
   /** Virtual root; defaults to {@link DEFAULT_ROOT}. */
   readonly root?: string
-  /** Composed configuration inside the image; defaults to `<root>/config/cordis.yml`. */
-  readonly configPath?: string
   /**
    * Inner arguments the tree parses. The default binds the web server to the
    * loopback authority the tunnel synthesizes.
@@ -107,7 +108,8 @@ export interface WorkerHostOptions {
   readonly env?: Readonly<Record<string, string>>
   /**
    * Image manifest path; defaults to `<root>/config/vfs-manifest.json`. Its
-   * `lowered` field must name this build's wrapper contract.
+   * `lowered` field must name this build's wrapper contract, and its lazy
+   * archives resolve against the image URL.
    */
   readonly manifestPath?: string
   /**
@@ -168,7 +170,6 @@ async function readImage(image: Uint8Array | string): Promise<Uint8Array> {
  */
 export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
   const root = options.root ?? DEFAULT_ROOT
-  const configPath = options.configPath ?? join(root, IMAGE_CONFIG_PATH)
   const port = options.port ?? DEFAULT_PORT
   const tunnel = new TunnelServer({
     port: requireGlobalPort(options.channel),
@@ -185,7 +186,7 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
   const start = async (): Promise<void> => {
     try {
       const home = join(root, IMAGE_HOME_DIRECTORY)
-      installProcessGlobal({ cwd: root, env: { DSH_HOME: home, HOME: home, ...options.env } })
+      const processShim = installProcessGlobal({ cwd: root, env: { DSH_HOME: home, HOME: home, ...options.env } })
 
       const [bytes, overlays] = await Promise.all([
         readImage(options.image),
@@ -202,7 +203,8 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
       vfs = mounted
 
       const manifestPath = options.manifestPath ?? join(root, IMAGE_MANIFEST_PATH)
-      requireLoweredImage(mounted, manifestPath)
+      const manifest = readImageManifest(mounted, manifestPath)
+      deferLazyArchives(mounted, manifest, root, options.image)
       const staticModules: Record<string, StaticModuleFactory> = { ...options.staticModules }
       // Read at require time, not here: the table entry then answers whichever
       // global `installProcessGlobal` left in place, in this role's order.
@@ -219,14 +221,10 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
       setActiveModuleLoader(loader)
       modules = loader
 
-      const require = loader.requireFrom(dirname(configPath))
-      const appBoot = require('@deepseek-ai/dsh-app-boot') as {
-        boot(
-          binName: string,
-          configPath: string,
-          patches: unknown[],
-          prepare: (ctx: HostContext) => void,
-        ): Promise<HostContext>
+      const require = loader.requireFrom(root)
+      const appBoot = require('@deepseek-ai/dsh-app-boot') as AppBootFace
+      const { DSH_LAUNCH_ENVIRONMENT_KEY } = require('@deepseek-ai/dsh-launch-environment') as {
+        DSH_LAUNCH_ENVIRONMENT_KEY: string
       }
       const cmdline = require('@deepseek-ai/dsh-cmdline') as {
         provideCmdline(ctx: unknown, host: {
@@ -238,14 +236,15 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
       // Resolved once the tunnel serves; a failed start never resolves it.
       const started = Promise.withResolvers<void>()
 
-      const { patches, profile } = bootPatches(loader, mounted, configPath, root)
+      const { patches, profile, environment } = prepareProfile(appBoot, mounted, manifest, root, processShim.env)
       const profileConfig = join(profile.dir, 'cordis.yml')
-      const ctx = await appBoot.boot('dsh-webworker', profileConfig, patches, (hostCtx) => {
+      const ctx = await appBoot.boot(BIN_NAME, profileConfig, patches, async (hostCtx) => {
         hostCtx.provide('profileContext', profile)
-        // Before any entry mounts: the Loader would otherwise fall back to the
-        // runtime's own dynamic import for every row.
-        hostCtx.loader.internal = loader.internal
+        hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, environment)
         installLogSink(hostCtx, require)
+        // Package lookup without a runtime resolution: the Worker loader owns
+        // module resolution, so only manifest lookup over the image applies.
+        await hostCtx.plugin(appBoot.PluginPackages, {})
         cmdline.provideCmdline(hostCtx, {
           args: [...(options.cmdlineArgs ?? ['--host', '127.0.0.1', '--port', String(port), '--no-open'])],
           exit: (code: number) => { console.warn(`webworker host: tree requested exit(${String(code)})`) },
@@ -268,13 +267,14 @@ export function createWorkerHost(options: WorkerHostOptions): WorkerHost {
       }
       const handler = connection.createSharedFetchHandler('/api')
       const usage = loader.usage()
-      console.info(`webworker host: tree active (modules=${String(usage.modules)}, data overlays=${String(overlays.length)}, direct lane=connection.createSharedFetchHandler, als causality=${options.alsCausality === undefined ? 'inert' : 'snapshot/restore'}, image lowering=${LOWERING_VERSION})`)
+      console.info(`webworker host: tree active (modules=${String(usage.modules)}, data overlays=${String(overlays.length)}, lazy archives=${String(manifest.lazy.length)}, direct lane=connection.createSharedFetchHandler, als causality=${options.alsCausality === undefined ? 'inert' : 'snapshot/restore'}, image lowering=${LOWERING_VERSION})`)
 
       // The worker tree serves only the page that spawned it, so every call speaks for the browser Peer.
       const peer = connection.browserPeer
       tunnel.serve({
         directFetch: (request: Request) => handler.fetch(request, peer),
-        bootPayload: () => readBootPayload(ctx),
+        bootPayload: () => readBootPayload(ctx, peer),
+        packageAssets: () => packPackageAssets(mounted, root),
         openStream: (endpoint, payload, uplink, signal) =>
           typertGateway.wireStream.open(endpoint, payload, uplink, peer, signal),
         streamFailure: typertGateway.wireStream.failure,
@@ -343,96 +343,109 @@ export function installLogSink(ctx: HostContext, require: (specifier: string) =>
   ctx.logger.exporter(exporter)
 }
 
+/** Diagnostic prefix the launcher passes to app-boot; the Worker boots the same profile code. */
+const BIN_NAME = 'dsh'
+
+/** The app-boot members the Worker boots the tree with, as the image's own app-boot exports them. */
+interface AppBootFace {
+  boot(
+    binName: string,
+    configPath: string,
+    patches: unknown[],
+    prepare: (ctx: HostContext) => Promise<void>,
+  ): Promise<HostContext>
+  loadProfile(binName: string, name: string, installAnchor: string, home: string): LoadedProfile
+  reportSkippedBundles(binName: string, profile: LoadedProfile): void
+  readProfilePatches(binName: string, context: ProfileContext, initialProfile: LoadedProfile): unknown[]
+  loadLayeredEnv(binName: string, cwd: string): unknown
+  PluginPackages: unknown
+}
+
+/** The loaded-profile fields the Worker reads; app-boot's `Profile`. */
+interface LoadedProfile {
+  readonly name: string
+  readonly dir: string
+  readonly patchPath: string
+  readonly layers: readonly { readonly packageName: string }[]
+}
+
 /**
- * Require the mounted image to carry bodies this build can wrap.
+ * Read and validate the mounted image's manifest.
  *
  * The manifest the packer writes is the single source of truth: the worker holds
  * no transform, so an image that was never lowered — or was lowered against
  * different wrapper semantics — cannot be recovered at load and must be rebuilt.
  * @param vfs - Mounted filesystem.
  * @param path - Manifest path inside the image.
- * @throws When the manifest is missing, unreadable, or names another contract.
+ * @returns The validated manifest.
+ * @throws When the manifest is missing, malformed, or names another contract.
  */
-function requireLoweredImage(vfs: MemoryVfs, path: string): void {
+function readImageManifest(vfs: MemoryVfs, path: string): ImageManifest {
   if (!vfs.existsSync(path)) {
     throw new Error(`webworker host: ${path} is missing, so the image records no lowering; rebuild the image`)
   }
-  const parsed: unknown = JSON.parse(vfs.readFileSync(path, 'utf8') as string)
-  if (typeof parsed !== 'object' || parsed === null) {
-    throw new Error(`webworker host: ${path} does not hold an object`)
+  return parseImageManifest(JSON.parse(vfs.readFileSync(path, 'utf8') as string), path)
+}
+
+/**
+ * Register the manifest's lazy archives; each is fetched beside the image on
+ * the first asynchronous read of a file it carries.
+ * @param vfs - Mounted filesystem.
+ * @param manifest - Validated image manifest.
+ * @param root - Virtual root the archives' entries mount under.
+ * @param image - The image bytes or URL; archive names resolve against a URL.
+ * @throws When the image registers lazy archives but arrived as bytes, leaving them unlocatable.
+ */
+function deferLazyArchives(vfs: MemoryVfs, manifest: ImageManifest, root: string, image: Uint8Array | string): void {
+  if (manifest.lazy.length === 0) return
+  if (typeof image !== 'string') {
+    throw new Error('webworker host: the image registers lazy archives, which only an image fetched from a URL can locate')
   }
-  const lowered = (parsed as { lowered?: unknown }).lowered
-  if (lowered !== LOWERING_VERSION) {
-    throw new Error(`webworker host: image was lowered by ${String(lowered)}, this build runs ${LOWERING_VERSION}; rebuild the image`)
+  const base = new URL(image, (globalThis as { location?: { href: string } }).location?.href)
+  for (const archive of manifest.lazy) {
+    const url = new URL(archive.archive, base).href
+    vfs.deferArchive({ name: archive.archive, root, files: archive.files, load: () => readImage(url) })
   }
 }
 
 /**
- * Prepare an editable VFS profile from the packed rows and deployment overlays.
- * ConfigEditor writes overrides beside the insertion rows; reconciliation starts
- * at the empty profile root and retains the Worker deployment overlays.
- * @param loader - Module loader, for the image's YAML reader.
- * @param vfs - Filesystem holding the composed configuration.
- * @param configPath - Composed configuration path.
- * @param root - Virtual root.
- * @returns Profile locations and effective boot patches.
+ * Prepare the profile the served launcher would boot: the image's app-boot
+ * initializes the manifest's shipped profile template under the Worker home
+ * and composes its bundle layers, user layer, and home layer. The profile
+ * context carries the launcher's facts with no command-line overlay; the
+ * image's home patch, written by the packer, carries the Worker's required
+ * row config (`PLATFORM_ENTRY_CONFIG` in `image-layout.ts`).
+ * @param appBoot - The image's app-boot.
+ * @param vfs - Filesystem holding the profile.
+ * @param manifest - Validated image manifest naming the profile and installation.
+ * @param root - Virtual root, the process working directory.
+ * @param env - The process shim's environment, after the launch layers applied.
+ * @returns Effective boot patches, the profile context, and the launch environment snapshot.
+ * @throws When the image names no installation manifest to anchor bundle resolution.
  */
-function bootPatches(
-  loader: WorkerModuleLoader,
+function prepareProfile(
+  appBoot: AppBootFace,
   vfs: MemoryVfs,
-  configPath: string,
+  manifest: ImageManifest,
   root: string,
-): { patches: unknown[]; profile: ProfileContext } {
-  const text = vfs.readFileSync(configPath, 'utf8') as string
-  const include = loader.load(loader.resolve('@deepseek-ai/cordis-plugin-include', root)) as { entryListSchema: unknown }
-  const yaml = loader.load(loader.resolve('js-yaml', root)) as {
-    load(source: string, options: { schema: unknown }): unknown
-    dump(value: unknown, options: { schema: unknown }): string
+  env: Readonly<Record<string, string>>,
+): { patches: unknown[]; profile: ProfileContext; environment: unknown } {
+  if (manifest.installation === undefined) {
+    throw new Error('webworker host: the image names no installation manifest, so no profile bundle can resolve; rebuild the image')
   }
-  let rows: unknown
-  if (configPath.endsWith('.json')) {
-    rows = JSON.parse(text)
-  } else {
-    // The roster's `!!js` scalars need Include's own YAML dialect.
-    rows = yaml.load(text, { schema: include.entryListSchema })
-  }
-  const find = (entries: unknown, id: string): Record<string, unknown> | undefined => {
-    if (!Array.isArray(entries)) return undefined
-    for (const entry of entries as Array<Record<string, unknown>>) {
-      if (entry.id === id) return entry
-      const nested = find(entry.config, id)
-      if (nested !== undefined) return nested
-    }
-    return undefined
-  }
-  const configOf = (row: Record<string, unknown>): Record<string, unknown> =>
-    (typeof row.config === 'object' && row.config !== null && !Array.isArray(row.config)
-      ? row.config
-      : {}) as Record<string, unknown>
-
-  const patches: Array<ProfileContext['overlays'][number]> = []
-  // The worker carries no compression codec, and the VFS is in-memory anyway:
-  // the JSONL backend's plaintext path is the composition's one legal encoding.
-  const jsonl = find(rows, 'session-persistence-jsonl')
-  if (jsonl !== undefined) {
-    patches.push({ id: 'session-persistence-jsonl', config: { ...configOf(jsonl), compression: 'none' } })
-  }
-  const dir = join(root, IMAGE_HOME_DIRECTORY, 'profiles/preview')
+  const home = join(root, IMAGE_HOME_DIRECTORY)
+  const installAnchor = join(root, 'node_modules', manifest.installation, 'package.json')
+  const environment = appBoot.loadLayeredEnv(BIN_NAME, root)
+  const loaded = appBoot.loadProfile(BIN_NAME, manifest.profile, installAnchor, home)
+  appBoot.reportSkippedBundles(BIN_NAME, loaded)
+  // The empty root list the include anchors at; the launcher rewrites it on every boot.
+  vfs.writeFileSync(join(loaded.dir, 'cordis.yml'), '[]\n')
   const profile: ProfileContext = {
-    name: 'preview', dir, patchPath: join(dir, 'cordis.patch.yml'),
-    installAnchor: join(dir, 'package.json'), cwd: root,
-    home: join(root, IMAGE_HOME_DIRECTORY), startedBundles: [],
-    overlays: patches, telemetryDisabledEnv: undefined,
+    name: loaded.name, dir: loaded.dir, patchPath: loaded.patchPath, installAnchor, cwd: root, home,
+    startedBundles: loaded.layers.map(layer => layer.packageName),
+    overlays: [], telemetryDisabledEnv: env.DSH_TELEMETRY_DISABLED,
   }
-  vfs.seed(join(dir, 'package.json'), '{"private":true,"dsh":{"profile":{"bundles":[]}}}\n')
-  vfs.seed(join(dir, 'cordis.yml'), '[]\n')
-  if (!vfs.existsSync(profile.patchPath)) {
-    vfs.seed(profile.patchPath, yaml.dump([{ insert: rows }], { schema: include.entryListSchema }))
-  }
-  const appBoot = loader.load(loader.resolve('@deepseek-ai/dsh-app-boot', root)) as {
-    readProfilePatches(binName: string, profile: ProfileContext): unknown[]
-  }
-  return { patches: appBoot.readProfilePatches('dsh-webworker', profile), profile }
+  return { patches: appBoot.readProfilePatches(BIN_NAME, profile, loaded), profile, environment }
 }
 
 /**
@@ -441,14 +454,15 @@ function bootPatches(
  * from the in-process webserver service, never from the API surface, because
  * the page has no Cordis tree yet.
  * @param ctx - Booted host context.
+ * @param peer - the browser Peer the page speaks for.
  * @returns Boot payload for `GET /__boot__`.
  */
-function readBootPayload(ctx: HostContext): { injections: unknown } {
-  const webServer = ctx.get('webServer') as { collectIndexInjections(): unknown } | undefined
+function readBootPayload(ctx: HostContext, peer: PeerScope): { injections: unknown } {
+  const webServer = ctx.get('webServer') as { collectIndexInjections(peer: PeerScope): unknown } | undefined
   if (webServer === undefined) {
     throw new Error('webworker host: no webServer service, so the page cannot receive its boot injections')
   }
-  return { injections: webServer.collectIndexInjections() }
+  return { injections: webServer.collectIndexInjections(peer) }
 }
 
 /**

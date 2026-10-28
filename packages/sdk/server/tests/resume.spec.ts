@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { ReasoningEffortId, type LlmModelReasoningInfo } from '@deepseek-ai/dsh-llm'
 import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { JsonRpcTransportPeer, SessionEventNotification } from '@deepseek-ai/dsh-sdk-protocol'
@@ -22,13 +23,13 @@ async function storageRoot(): Promise<string> {
   return root
 }
 
-async function runtime(root: string, persistence = true) {
+async function runtime(root: string, persistence = true, reasoning?: LlmModelReasoningInfo) {
   const ctx = new Context()
   cleanups.push(() => ctx.fiber.dispose())
   await mountAgentLoopTestDependencies(ctx)
   if (persistence) await ctx.plugin(JsonlSessionPersistence, { root })
   await ctx.plugin(AgentLoop, { agents: [] })
-  const adapter = new MockAdapter([textResponse('remembered')])
+  const adapter = new MockAdapter([textResponse('remembered')], reasoning)
   ctx.llm.registerAdapter(['mock'], adapter)
   const events: SessionEventNotification[] = []
   const transport: JsonRpcTransportPeer = {
@@ -49,6 +50,102 @@ async function initialized(root: string) {
 }
 
 describe('SDK persisted session resume', () => {
+  it.each([
+    { model: 'mock', effort: undefined, expected: 'high' },
+    { model: 'other', effort: undefined, expected: undefined },
+    { model: 'mock', effort: 'low', expected: 'low' },
+  ])('applies the initialized route and effort on resume: $model / $effort', async ({ model, effort, expected }) => {
+    const root = await storageRoot()
+    const first = await initialized(root)
+    await first.server.prompt({ sessionId: 'saved-effort', contentBlocks: [{ type: 'text', text: 'remember' }] })
+    await first.server.wait({ sessionId: 'saved-effort' })
+    first.ctx.agents.get(SessionId('saved-effort'))!.model.select({
+      provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('high'),
+    })
+    await first.server.shutdown()
+    await first.ctx.fiber.dispose()
+
+    const second = await runtime(root, true, {
+      efforts: [{ id: ReasoningEffortId('high'), name: 'High' }, { id: ReasoningEffortId('low'), name: 'Low' }],
+    })
+    await second.server.initialize({
+      cwd: root, provider: 'mock', model,
+      ...effort === undefined ? {} : { reasoningEffort: ReasoningEffortId(effort) },
+    })
+    await second.server.resume({ sessionId: 'saved-effort' })
+    expect(second.ctx.agents.get(SessionId('saved-effort'))!.model.current()).toEqual({
+      provider: 'mock', model,
+      ...expected === undefined ? {} : { reasoningEffort: expected },
+    })
+  })
+
+  it('restores due reminders through the SDK owner after initialization and shares client resume', async () => {
+    const root = await storageRoot()
+    const first = await initialized(root)
+    await first.server.prompt({ sessionId: 'saved', contentBlocks: [{ type: 'text', text: 'original' }] })
+    await first.server.wait({ sessionId: 'saved' })
+    await first.server.shutdown()
+    await first.ctx.fiber.dispose()
+
+    const { ctx, server, adapter } = await runtime(root)
+    const fallback = vi.fn(async () => { throw new Error('must not activate through the Web controller') })
+    const restoring = ctx.waterfall('schedule/resolve-agent', SessionId('saved'), fallback)
+    expect(ctx.agents.list()).toHaveLength(0)
+    const actualOpen = ctx.sessionPersistence.open.bind(ctx.sessionPersistence)
+    const opened = Promise.withResolvers<undefined>()
+    const gate = Promise.withResolvers<undefined>()
+    const open = vi.spyOn(ctx.sessionPersistence, 'open').mockImplementation(async (...args) => {
+      const handle = await actualOpen(...args)
+      opened.resolve(undefined)
+      await gate.promise
+      return handle
+    })
+    try {
+      await server.initialize({ cwd: tmpdir(), provider: 'mock', model: 'reminder-model', maxTokens: 1234 })
+      await opened.promise
+      const resuming = server.resume({ sessionId: 'saved' })
+      const anotherReminder = ctx.waterfall('schedule/resolve-agent', SessionId('saved'), fallback)
+      gate.resolve(undefined)
+      const [agent, sameAgent] = await Promise.all([restoring, anotherReminder, resuming])
+      expect(sameAgent).toBe(agent)
+      expect(open).toHaveBeenCalledTimes(1)
+      expect(fallback).not.toHaveBeenCalled()
+      expect(agent.session.header.cwd).toBe(root)
+      await server.prompt({ sessionId: 'saved', contentBlocks: [{ type: 'text', text: 'scheduled reminder' }] })
+      await server.wait({ sessionId: 'saved' })
+      expect(adapter.requests[0]).toMatchObject({ model: 'reminder-model', maxTokens: 1234 })
+      await expect(server.resume({ sessionId: 'saved' })).rejects.toThrow('already open')
+      await server.shutdown()
+      expect(ctx.agents.list()).toHaveLength(0)
+    } finally {
+      gate.resolve(undefined)
+    }
+  })
+
+  it('reuses an SDK-owned Session for reminders and releases failed reminder restoration for retry', async () => {
+    const { ctx, server } = await initialized(await storageRoot())
+    const fallback = vi.fn(async () => { throw new Error('unexpected fallback') })
+    const restore = () => ctx.waterfall('schedule/resolve-agent', SessionId('saved'), fallback)
+    await expect(restore()).rejects.toThrow()
+    await server.prompt({ sessionId: 'saved', contentBlocks: [{ type: 'text', text: 'create after failed reminder' }] })
+    await server.wait({ sessionId: 'saved' })
+    const agent = ctx.agents.get(SessionId('saved'))
+    await expect(restore()).resolves.toBe(agent)
+    await expect(server.resume({ sessionId: 'saved' })).rejects.toThrow('already open')
+    expect(fallback).not.toHaveBeenCalled()
+  })
+
+  it('releases a reminder waiting for initialization when the SDK shuts down', async () => {
+    const { ctx, server } = await runtime(await storageRoot())
+    const restoring = ctx.waterfall('schedule/resolve-agent', SessionId('saved'), async () => {
+      throw new Error('unexpected fallback')
+    })
+    const rejected = expect(restoring).rejects.toThrow('shutting down')
+    await server.shutdown()
+    await rejected
+    expect(ctx.agents.list()).toHaveLength(0)
+  })
+
   it('restores a non-main identity, preserves history and origin, and appends a new turn', async () => {
     const root = await storageRoot()
     const first = await initialized(root)
@@ -65,9 +162,14 @@ describe('SDK persisted session resume', () => {
     const restored = second.ctx.agents.get(SessionId('saved-session'))!.session
     expect(restored.header.cwd).toBe(root)
     expect(restored.snapshotEvents().slice(0, original.length)).toEqual(original)
-    expect(restored.snapshotEvents().at(-1)).toMatchObject({ type: 'session/end-seed' })
+    expect(restored.snapshotEvents().slice(original.length)).toMatchObject([
+      { type: 'session/end-seed' },
+      { type: 'model/selection', data: { provider: 'mock', model: 'resumed-model' } },
+    ])
     expect(second.adapter.requests).toHaveLength(0)
-    expect(second.events).toEqual([])
+    expect(second.events).toEqual([
+      { sessionId: 'saved-session', event: restored.snapshotEvents().at(-1) },
+    ])
     await second.server.prompt({ sessionId: 'saved-session', contentBlocks: [{ type: 'text', text: 'what did I say?' }] })
     await second.server.wait({ sessionId: 'saved-session' })
     expect(second.events.length).toBeGreaterThan(0)

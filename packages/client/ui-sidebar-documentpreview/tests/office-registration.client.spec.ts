@@ -13,7 +13,7 @@ import { Config } from '../src/config.ts'
 import { OfficeBody, type OfficeBodyInjected } from '../src/client/office/OfficeBody.tsx'
 import type { OfficeStore } from '../src/client/office/store.ts'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
-import { en, zh } from '../src/client/office/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/office/locales.ts'
 import { en as documentEn } from '../src/client/locales.ts'
 
 vi.mock('../src/client/office/face.ts', async (importOriginal) => {
@@ -91,7 +91,7 @@ async function harness(config: Partial<Config['office']> = {}, missing?: 'remote
 it.each(['remote', 'render', 'files'] as const)('keeps Word and PowerPoint registration and guidance when %s is absent', async (missing) => {
   const h = await harness(undefined, missing)
   try {
-    expect(h.locale.register).toHaveBeenCalledWith('sidebarOffice', { zh, en })
+    expect(h.locale.register).toHaveBeenCalledWith('sidebarOffice', { zh, en, ja, es, fr, de, ru, pt })
     for (const path of ['a.DOC', 'b.DOCX', 'c.PPT', 'd.pptx']) {
       expect(h.registry.candidates(path)[0]!.binaryExtensions).toEqual(['doc', 'docx', 'ppt', 'pptx'])
       expect(h.registry.candidates(path)[0]!.title()).toBe(en.title)

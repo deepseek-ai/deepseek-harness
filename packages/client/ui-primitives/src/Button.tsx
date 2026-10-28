@@ -18,7 +18,7 @@ type ButtonProps = {
 
 /**
  * Render a button.
- * @param props.variant - visual family (default 'ghost').
+ * @param props.variant - visual family (default 'ghost'); outlined buttons use a DPR-aware inset stroke.
  * @param props.size - 'md' 36px control with 12px corners or 'sm' 28px control with 8px corners.
  * @param props.icon - optional leading 16px icon node.
  * @param ref - native button for focus management and overlay anchors.

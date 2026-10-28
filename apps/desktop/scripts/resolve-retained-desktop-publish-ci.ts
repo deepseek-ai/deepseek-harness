@@ -22,11 +22,11 @@ export async function resolveRetainedDesktopPublication(env: NodeJS.ProcessEnv, 
   const repository = env.GITHUB_REPOSITORY
   const source = z.object({ sha: z.string() }).parse(await api(`repos/${repository}/commits/${route.commit}`))
   if (source.sha !== route.commit) throw new Error('desktop publish: source commit not found')
-  if (route.sourceRef === 'master') {
-    const comparison = z.object({ status: z.string() }).parse(await api(`repos/${repository}/compare/${route.commit}...master`))
-    if (!['ahead', 'identical'].includes(comparison.status)) throw new Error('desktop publish: source is not on master')
+  if (!/^dsh-v[0-9][0-9A-Za-z.-]*$/u.test(route.sourceRef)) {
+    const comparison = z.object({ status: z.string() }).parse(await api(`repos/${repository}/compare/${route.commit}...${encodeURIComponent(`refs/heads/${route.sourceRef}`)}`))
+    if (!['ahead', 'identical'].includes(comparison.status)) throw new Error('desktop publish: source is not on the selected repository branch')
   } else {
-    const tagged = z.object({ sha: z.string() }).parse(await api(`repos/${repository}/commits/${route.sourceRef}`))
+    const tagged = z.object({ sha: z.string() }).parse(await api(`repos/${repository}/commits/${encodeURIComponent(`refs/tags/${route.sourceRef}`)}`))
     if (tagged.sha !== route.commit) throw new Error('desktop publish: source tag changed')
   }
   const environment = z.object({ protection_rules: z.array(z.object({ type: z.string(), reviewers: z.array(z.unknown()).optional() })) })

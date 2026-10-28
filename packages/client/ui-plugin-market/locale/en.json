@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Plugin discovery",
+    "description": "Browse configured plugin indexes and install their packages."
+  }
+}

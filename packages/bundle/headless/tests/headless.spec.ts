@@ -13,11 +13,14 @@ import type {
   ResumeAgentOptions,
 } from '@deepseek-ai/dsh-agent'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
-import { LlmAttemptId, ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore from '@deepseek-ai/dsh-session'
+import { LlmAttemptId, ReasoningEffortId, ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import SessionStore, { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
+import ApprovalService, { setApprovalPolicy, type ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import type { Session, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
+import { AgentModel, modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import { createInboxStub, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { apply, Config } from '../src/index.ts'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
@@ -47,6 +50,11 @@ interface BenchOptions {
   readStdin?: () => Promise<string>
   sessionId?: string
   json?: boolean
+  permissionMode?: string
+  startupPermissionMode?: string
+  approvalPolicy?: ApprovalPolicy
+  startupApprovalPolicy?: ApprovalPolicy
+  additionalWritableRoots?: string[]
   observe?: () => Promise<ObservationStub>
   /** Leave the query service unmounted to exercise the fail-loud path. */
   omitSessionQuery?: boolean
@@ -128,6 +136,15 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
   run(): Promise<{ code: number; out: string; err: string; order: string[] }>
 }> {
   const ctx = new Context()
+  if (options.additionalWritableRoots !== undefined
+    || options.startupPermissionMode !== undefined || options.startupApprovalPolicy !== undefined) {
+    ctx.provide('headlessStartup', {
+      task: options.task, sessionId: options.sessionId, json: options.json ?? false,
+      additionalWritableRoots: options.additionalWritableRoots,
+      permissionMode: options.startupPermissionMode,
+      approvalPolicy: options.startupApprovalPolicy,
+    })
+  }
   provideWorkingDirectoryFixture(ctx)
   if (options.filesystemCwd !== undefined) {
     const cwd = options.filesystemCwd
@@ -148,9 +165,12 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
     const inbox = createInboxStub()
     let idle = Promise.resolve()
     let running = false
+    const agentOptions = createOptions.agentOptions ?? {}
+    const projection = await ownerCtx.sessionProjections.register(modelSelectionProjectionDefinition)
     const agent: Agent = {
       id: session.id,
-      options: createOptions.agentOptions ?? {},
+      options: agentOptions,
+      model: new AgentModel(() => projection.stateOf(session), session, agentOptions),
       session,
       inbox,
       get status() { return running ? 'running' : 'idle' },
@@ -225,6 +245,8 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
         ...options.useStdin === true ? {} : { task: options.task ?? 'do the thing' },
         ...options.sessionId === undefined ? {} : { sessionId: options.sessionId },
         ...options.json === undefined ? {} : { json: options.json },
+        ...options.permissionMode === undefined ? {} : { permissionMode: options.permissionMode },
+        ...options.approvalPolicy === undefined ? {} : { approvalPolicy: options.approvalPolicy },
       })
       return { code: await exited, out, err, order }
     },
@@ -232,6 +254,121 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
 }
 
 describe('headless runner', () => {
+  it('does not reuse an earlier completed reason when the final turn has no terminal event', async () => {
+    const test = await bench({ afterPrompt(session, message) {
+      appendTurn(session, 1, message, 'earlier answer', true)
+      session.append('turn/start', { turn: 2 })
+    } }, { json: true })
+    try {
+      const result = await test.run()
+      expect(result.code).toBe(1)
+      const events = result.out.trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>)
+      expect(events.at(-1)).toMatchObject({ type: 'final', text: 'earlier answer', reason: null })
+    } finally { await test.ctx.fiber.dispose() }
+  })
+  it('rejects an explicit preset when its service is absent before submitting work', async () => {
+    const test = await bench({ afterPrompt() { throw new Error('must not run') } }, { permissionMode: 'workspace-write', json: true })
+    try {
+      const result = await test.run()
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('requires the permissionPresets service')
+    } finally { await test.ctx.fiber.dispose() }
+  })
+
+  it('rejects an unknown preset before creating an Agent', async () => {
+    const test = await bench({ afterPrompt() { throw new Error('must not run') } }, {
+      permissionMode: 'missing', useStdin: true, readStdin() { throw new Error('must not read stdin') },
+    })
+    test.ctx.provide('permissionPresets', { resolve() { throw new Error('unknown preset') } } as never)
+    try {
+      const result = await test.run()
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('unknown preset')
+    } finally { await test.ctx.fiber.dispose() }
+  })
+
+  it.each([false, true])('applies the explicit CLI preset ahead of runner config (overridden=%s)', async (overridden) => {
+    let selected: string | undefined
+    const test = await bench({ afterPrompt(session, message) {
+      expect(selected).toBe('workspace-write')
+      appendTurn(session, 1, message, 'done', true)
+    } }, overridden
+      ? { permissionMode: 'danger-full-access', startupPermissionMode: 'workspace-write' }
+      : { permissionMode: 'workspace-write' })
+    test.ctx.provide('permissionPresets', { resolve() {}, set(_session: Session, name: string) { selected = name } } as never)
+    try { expect(await test.run()).toMatchObject({ code: 0 }) }
+    finally { await test.ctx.fiber.dispose() }
+  })
+
+  it('rejects an explicit approval policy without its service before reading stdin', async () => {
+    const test = await bench({ afterPrompt() { throw new Error('must not run') } }, {
+      approvalPolicy: 'never', useStdin: true, readStdin() { throw new Error('must not read stdin') },
+    })
+    try {
+      const result = await test.run()
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('requires the approval service')
+    } finally { await test.ctx.fiber.dispose() }
+  })
+
+  it('keeps an equal explicit approval override without appending another policy event', async () => {
+    let before = 0
+    const test = await bench({
+      before(session) { setApprovalPolicy(session, 'never'); before = session.seq },
+      afterPrompt(session, message) {
+        expect(session.seq).toBe(before)
+        appendTurn(session, 1, message, 'done', true)
+      },
+    }, { approvalPolicy: 'never' })
+    await test.ctx.plugin(ApprovalService, { policy: 'ask' })
+    try { expect(await test.run()).toMatchObject({ code: 0 }) }
+    finally { await test.ctx.fiber.dispose() }
+  })
+
+  it.each([false, true])('applies Auto and approval policy before submitting a user task (resume=%s)', async (resume) => {
+    let selected = resume ? 'auto' : 'workspace-write'
+    const test = await bench({ afterPrompt(session, message) {
+      expect(selected).toBe('auto')
+      expect(test.ctx.approval.overrideOf(session)).toBe('never')
+      expect(message.source).toEqual({ kind: 'user' })
+      appendTurn(session, 1, message, 'done', true)
+    } }, {
+      approvalPolicy: resume ? 'never' : 'ask',
+      ...resume ? {} : { startupApprovalPolicy: 'never' },
+      ...resume ? {
+        sessionId: 'session-exact',
+        observe: async () => ({ header: { cwd: process.cwd() }, events: [], [Symbol.dispose]() {} }),
+      } : { permissionMode: 'auto' },
+    })
+    await test.ctx.plugin(ApprovalService, { policy: 'ask' })
+    if (resume) test.ctx.sessions.create(brandString<SessionId>('session-exact'), { meta: { cwd: process.cwd() } })
+    test.ctx.provide('permissionPresets', {
+      resolve() {},
+      set(session: Session, preset: string) {
+        selected = preset
+        setApprovalPolicy(session, 'ask')
+      },
+    } as never)
+    try { expect(await test.run()).toMatchObject({ code: 0 }) }
+    finally { await test.ctx.fiber.dispose() }
+  })
+
+  it('refuses CLI directory grants omitted by an overriding policy composition', async () => {
+    const test = await bench({ afterPrompt() { throw new Error('must not run') } }, { additionalWritableRoots: ['/extra'] })
+    try {
+      const result = await test.run()
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('requires the sandbox-policy row')
+    }
+    finally { await test.ctx.fiber.dispose() }
+  })
+
+  it.each([true, false])('requires the composed policy to contain each requested directory (included=%s)', async (included) => {
+    const test = await bench({ afterPrompt(session, message) { appendTurn(session, 1, message, 'done', true) } }, { additionalWritableRoots: ['/extra'] })
+    await test.ctx.plugin(SandboxPolicyService, { additionalWritableRoots: included ? ['/extra'] : [] })
+    try { expect((await test.run()).code).toBe(included ? 0 : 1) }
+    finally { await test.ctx.fiber.dispose() }
+  })
   it('waits for parent awakened between idle and child observation', async () => {
     const cleanup = Promise.withResolvers<undefined>()
     const cleaning = Promise.withResolvers<undefined>()
@@ -738,6 +875,32 @@ describe('headless runner', () => {
     await test.ctx.fiber.dispose()
   })
 
+  it.each(['test-model', 'other-model'])('restores explicit effort only for the declared route (%s)', async (savedModel) => {
+    const test = await bench({
+      afterPrompt(session, message, agent) {
+        expect(agent.model.current()).toEqual({
+          provider: 'test-provider', model: 'test-model',
+          ...savedModel === 'test-model' ? { reasoningEffort: 'high' } : {},
+        })
+        appendTurn(session, 1, message, 'resumed answer', true)
+      },
+    }, {
+      sessionId: 'session-effort',
+      observe: () => Promise.resolve({
+        header: { cwd: process.cwd(), origin: 'user' },
+        events: [],
+        [Symbol.dispose]() {},
+      }),
+    })
+    try {
+      const session = test.ctx.sessions.create(brandString<SessionId>('session-effort'), { meta: { cwd: process.cwd() } })
+      session.append('model/selection', { provider: 'test-provider', model: savedModel, reasoningEffort: ReasoningEffortId('high') })
+      expect(await test.run()).toMatchObject({ code: 0, out: 'resumed answer\n', err: '' })
+    } finally {
+      await test.ctx.fiber.dispose()
+    }
+  })
+
   it('rejects a persisted Session recorded in another working directory', async () => {
     const test = await bench({ afterPrompt: () => {} }, {
       sessionId: 'session-exact',
@@ -824,7 +987,7 @@ describe('headless runner', () => {
     })
     const result = await test.run()
     expect(result.code).toBe(1)
-    expect(result.err).toContain('is a subagent or forked session')
+    expect(result.err).toContain('is a subagent session')
     await test.ctx.fiber.dispose()
   })
 
@@ -892,7 +1055,7 @@ describe('headless runner', () => {
     })
     const result = await test.run()
     expect(result.code).toBe(1)
-    expect(result.err).toContain('is a subagent or forked session')
+    expect(result.err).toContain('is a subagent session')
     await test.ctx.fiber.dispose()
   })
 
@@ -998,19 +1161,23 @@ describe('headless runner', () => {
     await test.ctx.fiber.dispose()
   })
 
-  it('rejects a persisted Session linked to a parent', async () => {
-    const test = await bench({ afterPrompt: () => {} }, {
+  it.each([false, true])('resumes an ordinary fork with historical parent metadata: %s', async (legacy) => {
+    const header = { cwd: process.cwd(), ...(legacy ? { parentSession: brandString<SessionId>('parent-1') } : {}) }
+    const test = await bench({
+      afterPrompt(session, message) { appendTurn(session, 1, message, 'fork resumed', true) },
+    }, {
       sessionId: 'session-exact',
-      observe: () => Promise.resolve({
-        header: { cwd: process.cwd(), origin: 'user', parentSession: 'parent-1' },
-        events: [],
-        [Symbol.dispose]() {},
-      }),
+      observe: () => Promise.resolve({ header, events: [], [Symbol.dispose]() {} }),
     })
-    const result = await test.run()
-    expect(result.code).toBe(1)
-    expect(result.err).toContain('is a subagent or forked session')
-    await test.ctx.fiber.dispose()
+    try {
+      const session = test.ctx.sessions.create(brandString<SessionId>('session-exact'), {
+        seed: [], inheritedEventCount: SessionLogOffset(0), meta: { ...header, isSeeded: true },
+      })
+      expect(await test.run()).toMatchObject({ code: 0, out: 'fork resumed\n', err: '' })
+      expect(session.header.parentSession).toBe(header.parentSession)
+    } finally {
+      await test.ctx.fiber.dispose()
+    }
   })
 
   it('propagates a Session query failure that is not a missing log', async () => {

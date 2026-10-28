@@ -10,8 +10,9 @@
 /* 76px with its rule: the height of the Sidebar's tab strip and header row
    (ui-dockkit `.tabStrip` 38px + the pane header's 38px), so the two rules
    meet at the column edge. The rows add up to it — 10px top inset, the 30px
-   title row, the tab strip's 10px margin, a 16px tab line, and its 9px bottom
-   inset — so no row below may grow past its figure. */
+   title row, the tab strip's 10px margin, and a 25px view row. When the views
+   and the More launcher do not fit on one row, the row wraps and the header
+   grows past 76px. */
 .header {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -80,12 +81,29 @@
   padding-inline-start: max(0px, calc(var(--dsh-frame-leading-clearance, 0px) - 20px));
 }
 
+/* Header actions do not shrink, so on a narrow row they overflow the cluster.
+   The cluster clips them, hit testing included, so the next control keeps
+   every click. The trailing padding spans the gap before that control and
+   holds the fade: content that fits ends before it, and only overflowing
+   content reaches it. The 4px block and start padding, offset by negative
+   margins, keeps focus rings inside the clip. `clip` rather than `hidden`
+   keeps the cluster from becoming a scroll container that focus could scroll. */
 .titleCluster {
   display: flex;
   flex: 1;
   align-items: center;
   gap: 10px;
   min-width: 0;
+  --title-cluster-fade: 20px;
+  margin: -4px calc(-1 * var(--title-cluster-fade)) -4px -4px;
+  padding: 4px var(--title-cluster-fade) 4px 4px;
+  overflow: clip;
+  mask-image: linear-gradient(to left, transparent calc(0.3 * var(--title-cluster-fade)), #000 var(--title-cluster-fade));
+}
+
+/* Without utilities the corner's 8px margin is the gap the fade spans. */
+.titleCluster:has(+ .headerUtilities:empty) {
+  --title-cluster-fade: 8px;
 }
 
 /* The auto grid column collapses with an empty or CSS-hidden occupant.
@@ -143,8 +161,10 @@
   line-height: 18px;
 }
 
-button.crumb:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  button.crumb:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .crumbCurrent {
@@ -188,24 +208,44 @@ button.crumb:hover {
   display: none;
 }
 
-/* figma Tab_Group 34:11441: 35px strip, gap 36, pad-left 8, tabs bottom-aligned.
-   Positioned above the header's own paint, so the active bar covers the rule. */
+/* The tab row sits above the header paint so the active bar covers its rule. */
 .tabs {
   grid-column: 1 / -1;
   position: relative;
   z-index: 1;
   display: flex;
-  gap: 36px;
+  gap: 16px 20px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  align-items: flex-start;
+  flex-wrap: wrap;
   margin-top: 10px;
   padding-left: 8px;
 }
 
-/* figma .Tab 34:11442: 13/16 text (figma wt510, rendered 500). The 2px bar
-   reaches 1px past the tab's box to end flush with the header's bottom edge,
-   sitting over the rule. */
+.viewTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  min-width: 0;
+  min-height: 25px;
+}
+
+/* The 16px text line retains 9px below it. The press target extends 10px
+   above the text into the strip's top margin and 10px to each side, matching
+   the inline padding of the Sidebar tab chips (ui-dockkit `.tab`); negative
+   margins keep the layout box at its 25px row and text width. The active bar
+   spans the text and reaches 1px past the tab box to sit over the header
+   rule. */
 .tab {
+  --dsh-tab-hit-inline: 10px;
+
   position: relative;
-  padding: 0 0 9px;
+  box-sizing: border-box;
+  min-height: 35px;
+  margin: -10px calc(-1 * var(--dsh-tab-hit-inline)) 0;
+  padding: 10px var(--dsh-tab-hit-inline) 9px;
   border: none;
   background: transparent;
   font-size: 13px;
@@ -218,9 +258,9 @@ button.crumb:hover {
 .tab::after {
   content: '';
   position: absolute;
-  right: 0;
+  right: var(--dsh-tab-hit-inline);
   bottom: -1px;
-  left: 0;
+  left: var(--dsh-tab-hit-inline);
   height: 2px;
   border-radius: 2px;
   background: transparent;
@@ -235,6 +275,32 @@ button.crumb:hover {
 
 .tabActive::after {
   background: var(--dsw-alias-state-business-primary);
+}
+
+/* The More launcher centers its 22px box on the tab's 16px text line. */
+.viewsMoreAnchor {
+  flex: none;
+}
+
+.viewsMore {
+  width: 22px;
+  height: 22px;
+  margin-top: -3px;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.viewsMoreActive { color: var(--dsw-alias-state-business-primary); }
+
+.tabLabel { display: block; max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.viewsMore[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.viewsMoreMenu {
+  width: 288px;
+  max-width: calc(100vw - 24px);
 }
 
 .viewArea {
@@ -312,9 +378,14 @@ button.crumb:hover {
   left: 4px;
 }
 
-.widthHandle:hover::after,
 .widthHandle[data-dragging]::after {
   opacity: 1;
+}
+
+@media (hover: hover) {
+  .widthHandle:hover::after {
+    opacity: 1;
+  }
 }
 
 /* A drag starts above the composer band. Pointer capture keeps it active when
@@ -527,6 +598,20 @@ button.crumb:hover {
      closer to the card's inner controls below; right keeps the trailing
      preset seat off the card edge. */
   padding: 0 16px 0 20px;
+}
+
+/* Plugin options share the row, pushed to its right edge. */
+.heroOptions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.heroOptions:empty {
+  display: none;
 }
 
 /* Hero: the composer sits inside the session scroll body; center there so

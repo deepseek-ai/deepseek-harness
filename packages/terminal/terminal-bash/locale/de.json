@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Persistentes Shell-Backend",
+    "description": "Stellt ein Shell-Terminal bereit, das den Status über mehrere Aufrufe hinweg beibehält."
+  }
+}

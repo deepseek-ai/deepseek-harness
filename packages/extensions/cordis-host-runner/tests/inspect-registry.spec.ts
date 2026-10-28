@@ -85,7 +85,7 @@ async function connectGatewayClient(): Promise<AbortController> {
     await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
   }, { home: '/fixture' }))
   const connection = new AbortController()
-  const peer: PeerScope = { id: 'inspect-registry-owner' as PeerId, ctx, principal: { kind: 'owner' }, signal: connection.signal, dispose: () => Promise.resolve() }
+  const peer: PeerScope = { id: 'inspect-registry-owner' as PeerId, ctx, principal: { kind: 'owner' }, interactions: 'answer', signal: connection.signal, dispose: () => Promise.resolve() }
   const stream = await ctx.typertGateway.wireStream.open('$events', { args: {} }, (async function* () {})(), peer, connection.signal)
   const client = stream[Symbol.asyncIterator]()
   ctx.effect(() => async () => {

@@ -374,19 +374,15 @@
     - id: tool-subagent-control
       name: '@deepseek-ai/dsh-tool-subagent-control'
 
-    - id: tool-subagent-list-agents
-      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
-
     - id: tool-subagent
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
         provider: spawn
         toolName: subagent
 
-    # Fork omits model selection so provider/model stay equal to the parent and
-    # the inherited history remains eligible for KV Cache reuse. Parent and child
+    # Fork omits model-selection arguments for KV Cache reuse. Parent and child
     # share the messaging tools; return guidance follows the inherited history.
-    # See .agents/notes/implemented/feature/2026-08-18-model-selected-subagent-routes.md
+    # See packages/subagent/tool-subagent/README.md
     # and .agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md.
     - id: tool-subagent-fork
       name: '@deepseek-ai/dsh-tool-subagent'
@@ -461,7 +457,9 @@
     # resolves and validates every destination, and pins every actual connection.
     # Search is a full auxiliary model request with server-side retrieval, so this
     # shipped DeepSeek route gets 60s while the provider-neutral tool default
-    # remains 30s.
+    # remains 30s. The DeepSeek Search and Fetch APIs register as
+    # deepseek-search-api and deepseek-fetch-api with the same credential; the Web
+    # search settings switch selects both in place of these defaults.
     - id: web
       name: '@deepseek-ai/dsh-web'
       config:
@@ -470,6 +468,11 @@
 
     - id: web-search-deepseek
       name: '@deepseek-ai/dsh-web-search-deepseek'
+      config:
+        apiKeyEnv: DEEPSEEK_API_KEY
+
+    - id: web-deepseek-api
+      name: '@deepseek-ai/dsh-web-deepseek-api'
       config:
         apiKeyEnv: DEEPSEEK_API_KEY
 
@@ -487,10 +490,16 @@
 
     # ── rows every mode mounts, whose values each overlay may state ──────────────
 
-    # The tool registry. Presentation mode is a deployment choice; omitting it here
-    # keeps the schema default (native).
+    # Shared tool definitions and the deployment’s native executor.
     - id: tools
       name: '@deepseek-ai/dsh-tools'
+
+    - id: tool-executor-native
+      name: '@deepseek-ai/dsh-tool-executor-native'
+
+    - id: tool-executor-ptc
+      name: '@deepseek-ai/dsh-tool-executor-ptc'
+      disabled: true
 
     # The deployment persona is a deployment choice; plan-mode and tool plugins own
     # their own prompt sections.

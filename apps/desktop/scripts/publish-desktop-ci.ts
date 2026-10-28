@@ -12,11 +12,13 @@ import { desktopPublishCos } from './desktop-publish-cos.ts'
 import { createDesktopPublicationRecord, wasDesktopAttemptPublished, withDesktopChannelLock } from './desktop-publish-record.ts'
 import { publishDesktopRelease } from './desktop-publish.ts'
 import { desktopPublicationFailure } from './desktop-publication-failure.ts'
+import { desktopPublicationSummary } from './desktop-publication-summary.ts'
 import { publishDesktopTag } from './desktop-publish-tag.ts'
+import { desktopPublishQualificationError } from './desktop-publish-qualification.mjs'
 
 const routeSchema = z.object({ runId: z.string(), attempt: z.string(), commit: z.string(), runnerName: z.string(),
   sourceRef: z.string(), channel: z.enum(['nightly', 'latest']),
-  target: z.enum(['mac-arm64', 'win-x64']), preset: z.enum(['test', 'production']) })
+  target: z.enum(['mac-arm64', 'mac-x64', 'win-x64']), preset: z.enum(['test', 'production']) })
 
 /**
  * Check retained bytes, original machine, destination and signatures before reading any upload secret.
@@ -35,7 +37,9 @@ export async function prepareDesktopPublication(env: NodeJS.ProcessEnv, verifySi
     || source.preset !== route.preset) {
     throw new Error('desktop publish: local package differs from the routed request')
   }
-  if (source.qualification !== (source.target === 'win-x64' ? 'signed' : 'notarized')) throw new Error('desktop publish: debugging artifacts cannot be published')
+  const diagnostic = desktopPublishQualificationError(source.qualification)
+  if (diagnostic) throw new Error(diagnostic)
+  if (source.qualification !== (source.target === 'win-x64' ? 'signed' : 'notarized')) throw new Error('desktop publish: package qualification does not match its platform')
   const config = await readDesktopPublishConfig(env.DSH_PACKAGING_CONFIG_DIR!, source.preset)
   const directory = retainedDesktopPath(root, route.runId, route.attempt)
   const environment = source.preset === 'test'
@@ -61,9 +65,8 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     if (mode === '--publish' && !env.DESKTOP_APPROVED_PACKAGE) throw new Error('desktop publish: approved package digest is required')
     if (mode === '--check') {
       if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT, `approval=${approval}\nlabel=${plan.version} → ${manifest.source.channel} / ${plan.target} / ${plan.environment}\n`)
-      if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY,
-        `\n## Confirm Desktop publication\n\nVersion: **${plan.version}**; channel: **${manifest.source.channel}**; environment: **${plan.environment}**; platform: **${plan.target}**\n\nSource: ${manifest.source.sourceRef} @ ${route.commit}\n\nPackage: ${route.runId}, attempt ${route.attempt}\n\nTag: ${plan.environment === 'production' ? `desktop-v${plan.version}` : 'none (test)'}\n\nApproved package SHA-256: ${approval}\n\n` +
-        plan.artifacts.map(file => `- ${file.channelMetadata ? 'Feed' : 'Artifact'}: ${file.key}`).join('\n') + '\n')
+      if (env.GITHUB_STEP_SUMMARY && !env.DESKTOP_APPROVED_PACKAGE) await appendFile(env.GITHUB_STEP_SUMMARY,
+        await desktopPublicationSummary(manifest.source, plan, approval))
       if (env.GITHUB_OUTPUT && config.githubApp) await appendFile(env.GITHUB_OUTPUT,
         `app-client-id=${config.githubApp.clientId}\napp-key-file=${config.githubApp.privateKeyFile}\n`)
       process.stdout.write(`desktop publish: verified ${plan.target} ${plan.version}; no credentials read or COS requests made\n`)

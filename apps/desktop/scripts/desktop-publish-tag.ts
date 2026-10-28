@@ -40,8 +40,32 @@ export async function publishDesktopTag(
     body: JSON.stringify({ ref: `refs/tags/${tag}`, sha: commit }), redirect: 'error', signal: AbortSignal.timeout(30_000),
   })
   if (response.status === 201) { await matches(response); return 'created' }
-  // A parallel platform release may have created the same version tag after our first read.
-  if (response.status === 422) { await response.body?.cancel(); await matches(await get()); return 'present' }
+  const requestId = response.headers.get('x-github-request-id')
+  const identity = requestId !== null && /^[A-Fa-f0-9:]{1,128}$/u.test(requestId) ? `; GitHub request ${requestId}` : ''
+  const failure = `desktop tag: creation failed (HTTP ${response.status}${identity})`
+  // A 422 can reject repository rules as well as report a concurrent tag creation.
+  if (response.status === 422) {
+    let detail: unknown
+    try { detail = await response.json() } catch (error) {
+      // Non-JSON error responses still retain the original HTTP status and request ID.
+    }
+    const rulesRejected = typeof detail === 'object' && detail !== null && 'message' in detail
+      && typeof detail.message === 'string' && detail.message.startsWith('Repository rule violations found')
+    const guidance = rulesRejected ? 'repository rules rejected tag creation; inspect the matching tag rulesets'
+      : 'inspect repository rule insights and App permissions before retrying'
+    let reconciled: Response
+    try { reconciled = await get() } catch (cause) {
+      throw new Error(`${failure}; follow-up tag lookup failed; ${guidance}`, { cause })
+    }
+    if (!reconciled.ok) {
+      await reconciled.body?.cancel()
+      throw new Error(`${failure}; follow-up tag lookup returned HTTP ${reconciled.status}; ${guidance}`)
+    }
+    try { await matches(reconciled) } catch (cause) {
+      throw new Error(`${failure}; follow-up tag verification failed; inspect the existing tag before retrying`, { cause })
+    }
+    return 'present'
+  }
   await response.body?.cancel()
-  throw new Error(`desktop tag: creation failed (HTTP ${response.status}); reconcile the tag before retrying`)
+  throw new Error(`${failure}; reconcile the tag before retrying`)
 }

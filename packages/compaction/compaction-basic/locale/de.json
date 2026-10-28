@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Kontextkomprimierung",
+    "description": "Verwenden Sie das Modell, um historische Inhalte zusammenzufassen, wenn der Kontext einen Schwellenwert erreicht."
+  }
+}

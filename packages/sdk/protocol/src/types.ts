@@ -11,11 +11,14 @@
 import type { ContentBlock, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SubagentStopReason } from '@deepseek-ai/dsh-subagent'
+import type { AskUserQuestionAnswer, AskUserQuestionItem } from '@deepseek-ai/dsh-user-questions/types'
 
 /** Parameters for the process-wide SDK handshake. */
 export interface InitializeParams {
   /** Working directory recorded on every SDK-created session's header. */
   cwd: string
+  /** Enable server-to-client approval/request calls; omission leaves existing answerers in control. */
+  approvalRequests?: boolean
   /** Provider route every SDK-created agent runs on. */
   provider: string
   /** Model name every SDK-created agent runs on (the server may mount a fallback adapter; see `HarnessSdkJsonRpcServer.initialize`). */
@@ -24,6 +27,34 @@ export interface InitializeParams {
   reasoningEffort?: ReasoningEffortId
   /** Optional positive output-token cap inherited by SDK-created agents and their in-process descendants. */
   maxTokens?: number
+  /** Host-provided capabilities; omission retains native in-process answerers. */
+  capabilities?: { userQuestions?: boolean }
+}
+
+/** Runtime-to-host request for one SDK-owned Session's structured user input. */
+export interface SdkUserQuestionRequest {
+  /** Correlates cancellation with this request independently of the JSON-RPC id. */
+  requestId: string
+  /** Session whose tool or approval is waiting. */
+  sessionId: string
+  /** Original questions, including any plan-review detail and presentation intent. */
+  questions: AskUserQuestionItem[]
+}
+
+/** Host answers, one item per original question id. */
+export type SdkUserQuestionAnswer = AskUserQuestionAnswer
+
+/** Runtime cancellation of a pending host question. Late answers are ignored. */
+export interface SdkUserQuestionCancelled {
+  /** Identity from the original question request. */
+  requestId: string
+  /** Session that stopped waiting. */
+  sessionId: string
+}
+
+/** Runtime-to-host requests, handled independently of outbound Session requests. */
+export interface HarnessSdkHostRequestMap {
+  'user-question/ask': { params: SdkUserQuestionRequest; result: SdkUserQuestionAnswer }
 }
 
 /** Wire-stable server identity returned by initialization. */
@@ -135,6 +166,7 @@ export interface SubagentFinishedNotification {
 
 /** Server-to-client notifications by JSON-RPC method name. */
 export interface HarnessSdkNotificationMap {
+  'user-question.cancelled': SdkUserQuestionCancelled
   'session.event': SessionEventNotification
   'session.status': SessionStatusNotification
   'subagent.started': SubagentStartedNotification
@@ -150,4 +182,27 @@ export interface HarnessSdkRequestMap {
   'session/working-directory/get': { params: SessionWorkingDirectoryParams; result: SessionWorkingDirectoryResult }
   'session/working-directory/set': { params: SessionWorkingDirectorySetParams; result: SessionWorkingDirectoryResult }
   'shutdown': { params: undefined; result: Record<string, never> }
+}
+
+/** Internal approval projected to the SDK client without live runtime objects. */
+export interface ApprovalRequestParams {
+  /** Session owning the operation, including an in-process SDK descendant. */
+  sessionId: string
+  /** Tool whose operation needs approval. */
+  toolName: string
+  /** Exact tool call, when the asker supplied one. */
+  callId?: string
+  /** Asker-supplied explanation, when available. */
+  reason?: string
+}
+
+/** One-shot client decision; grants never persist beyond this operation. */
+export interface ApprovalRequestResult {
+  /** Only allowed-once permits the operation. */
+  outcome: 'allowed-once' | 'rejected' | 'cancelled'
+}
+
+/** Requests sent by the server after the client explicitly enables them. */
+export interface HarnessSdkClientRequestMap {
+  'approval/request': { params: ApprovalRequestParams; result: ApprovalRequestResult }
 }

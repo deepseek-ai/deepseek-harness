@@ -32,6 +32,7 @@ it('keeps raw diagnostics out of error tooltips in both locales', () => {
     expect(desktopUpdateErrorSummary({ phase: 'error', failedOperation: 'install', preparationFailure: 'stop-failed',
       message: 'translated or changed copy', technicalDetails: 'private diagnostic' }, messages)).toBe(messages.updateStopFailed)
     for (const [preparationFailure, expected] of [
+      ['fullscreen-timeout', messages.updateFullscreenTimeout],
       ['tasks-changed', messages.updateTasksChanged], ['tasks-unavailable', messages.updateTasksUnavailable],
     ] as const) {
       expect(desktopUpdateErrorSummary({ phase: 'error', failedOperation: 'install', preparationFailure,

@@ -15,6 +15,7 @@ Incremental canonical session-log upload for official DeepSeek LLM API requests.
 
 - [Configuration](#configuration)
 - [Request field](#request-field)
+- [Upload exclusions](#upload-exclusions)
 - [Acceptance and retry](#acceptance-and-retry)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
@@ -41,6 +42,24 @@ For a request carrying a live `sessionId`, the plugin folds the greatest accepte
 
 `maxBytes` bounds the complete serialized field in UTF-8 bytes, including the header and numeric envelope fields. A backlog above the limit drains across consecutive accepted requests, each continuing after the previous `throughSeq`. When the first pending event alone exceeds the limit, the request omits `dsh_session_log`, the plugin logs one warning per blocking event, and the watermark stays before that event until `maxBytes` admits it. An event too large for the runtime to serialize at all is handled the same way, and no `maxBytes` value admits it.
 
+<a id="upload-exclusions"></a>
+## Upload exclusions
+
+Plugins can register synchronous, side-effect-free predicates with `ctx.sessionLogDeepSeek.registerExclusion()`. A predicate receives the live `sessionId` and optional request `purpose`; `true` skips this request's log field and acceptance callback. Any matching predicate excludes the upload. With no matching predicates, normal eligibility applies. A throwing predicate omits this log contribution, and the request-extension registry reports its first preparation failure; the model request continues with other prepared fields.
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-session-log-deepseek'
+
+export function apply(ctx: Context): void {
+  ctx.inject(['sessionLogDeepSeek'], (child) => {
+    child.sessionLogDeepSeek.registerExclusion(request => request.purpose === 'private-operation')
+  })
+}
+```
+
+Registration belongs to the calling plugin and returns an effect disposer. Disposing that registration or unloading its caller removes only that rule. Exclusions run before reading the Session log; other request extensions remain eligible. Prepared in-flight contributions retain their payload and acceptance callback.
+
 <a id="acceptance-and-retry"></a>
 ## Acceptance and retry
 
@@ -48,7 +67,7 @@ The DeepSeek adapter calls the prepared contribution's `accept()` after HTTP 2xx
 
 A crash after server acceptance but before the watermark reaches persistence can replay an accepted range after restart. This is the at-least-once failure direction: uncertainty creates duplicates, never a skipped sequence. The ordinary session checkpoint policy persists the watermark at the next semantic checkpoint; this plugin performs no independent I/O.
 
-Direct requests without a live Session omit `dsh_session_log`. Normal agent, compaction, and session-title calls carry their live Session id.
+Direct requests without a live Session omit `dsh_session_log`. Normal agent, compaction, session-title, and Auto review calls carry their live Session id and use the same upload eligibility.
 
 <a id="model-experience"></a>
 ## Model Experience

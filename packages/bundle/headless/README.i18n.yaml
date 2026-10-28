@@ -18,17 +18,23 @@
   en: 4447012f4c84100d
   zh: faf579ae9f04c096
 /deepseek-ai-dsh-headless/use-this-package/running-a-one-shot-task:
-  en: 89a48af61a38afc3
-  zh: fe202a1bb2c11781
+  en: b3d0ddfb56a1ac7f
+  zh: c1762158e49a4851
 /deepseek-ai-dsh-headless/use-this-package/credentials:
   en: ca8217837ee9c698
   zh: fa20daf27d4e09ef
 /deepseek-ai-dsh-headless/use-this-package/choosing-the-session-identity:
-  en: dbaa2fac63910a4c
-  zh: 4fd5c17815ca444b
+  en: 85120c2d6db2cac4
+  zh: bac532df6c84e755
+/deepseek-ai-dsh-headless/use-this-package/supervising-implementation-tasks:
+  en: b10dee3026e8d999
+  zh: 63eda004e228a48a
+/deepseek-ai-dsh-headless/use-this-package/experimental-auto-review:
+  en: ac060bf78cf157b6
+  zh: 5e099abb8c10b96b
 /deepseek-ai-dsh-headless/use-this-package/machine-readable-output:
-  en: 2804a96e88857b16
-  zh: fe20dc0fb9962785
+  en: c8a90b16023eb04a
+  zh: 58eec3550ea70f34
 /deepseek-ai-dsh-headless/use-this-package/when-to-use-it:
   en: 5262b93dcef0d489
   zh: 1638965b2aabcd38
@@ -39,17 +45,17 @@
   en: be1b73a6d0ee3902
   zh: bdba099685d68b27
 /deepseek-ai-dsh-headless/understand-the-implementation/run-flow:
-  en: 3729fbdc598637da
-  zh: 254c6961b65b9e2b
+  en: fdef19c52550fdf8
+  zh: c4bab4fb6972cf10
 /deepseek-ai-dsh-headless/understand-the-implementation/patch-surface-over-base:
-  en: a22752c052878579
-  zh: 1e42c946d8673eeb
+  en: e192267973792ad1
+  zh: ef78428a68dff9e4
 /deepseek-ai-dsh-headless/understand-the-implementation/exit-mapping:
   en: c2466d3d8a26177a
   zh: b75743bfa2e7723a
 /deepseek-ai-dsh-headless/understand-the-implementation/source-map:
-  en: d82278600e0efdbd
-  zh: 0f546bdba164ef25
+  en: fbda2df5fd109682
+  zh: 3a92aec4d9dfd9c8
 /deepseek-ai-dsh-headless/further-exploration:
   en: 65aebf0f8ab3047c
   zh: 85616d3859073c4b
@@ -60,8 +66,8 @@
   en: 0b0f74b412c7c6d8
   zh: 6e8f918d0c4bf342
 /deepseek-ai-dsh-headless/known-limitations-and-deferred-work:
-  en: 3a6dc9666d852219
-  zh: b764f203815e179e
+  en: 94d8c7731c1435c3
+  zh: d0ddc9dd4e030b3f
 /deepseek-ai-dsh-headless/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

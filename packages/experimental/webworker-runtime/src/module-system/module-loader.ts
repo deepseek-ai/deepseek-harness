@@ -1,8 +1,9 @@
 /**
- * CommonJS module loader over the worker VFS. It fills the `loader.internal`
- * seam Cordis uses for every entry import, and backs the `node:module`
- * `createRequire` proxy that `typert-loader`, `client-modules`, and the plugin
- * package inventory resolve package metadata through.
+ * CommonJS module loader over the worker VFS. It backs the Node internal ESM
+ * loader that `node-addon-require-builtin` answers, which Cordis's Loader uses
+ * for every entry import, and the `node:module` `createRequire` proxy that
+ * `typert-loader`, `client-modules`, and the plugin package inventory resolve
+ * package metadata through.
  *
  * Resolution is a narrowed Node `require` algorithm: `exports` walk with a
  * fixed condition order, extension probing, and one cache keyed by resolved
@@ -11,6 +12,7 @@
  * @module @deepseek-ai/dsh-experimental-webworker-runtime/src/module-system/module-loader
  */
 import { createAlsRuntime, type AlsCausality, type AlsRuntime } from '../polyfill/async-context/als-runtime.ts'
+import { createCascadedLoader, type CascadedLoader } from '../node/internal_modules/esm-loader.ts'
 import { dirname, fileUrlToPath, isAbsolute, join, pathToFileUrl, resolve as resolvePath } from './posix-path.ts'
 import { WRAPPER_PARAMS } from '../image-layout.ts'
 import type { MemoryVfs } from '../storage/memory.ts'
@@ -120,10 +122,12 @@ export class WorkerModuleLoader {
   private readonly modules = new Map<string, ModuleRecord>()
   private readonly manifests = new Map<string, PackageManifest>()
   private readonly stack: string[] = []
+  private cascaded: CascadedLoader | undefined
 
   /**
-   * The Cordis module seam. `parentURL` positions relative specifiers;
-   * import attributes are ignored, as the client implementation does.
+   * Resolution and loading over this mount, in Node's v1 argument order. The cascaded ESM loader
+   * ({@link cascadedLoader}) and the packer call it; `parentURL` positions relative specifiers and import attributes
+   * are ignored.
    */
   readonly internal: {
     readonly version: 'worker'
@@ -162,9 +166,23 @@ export class WorkerModuleLoader {
     }
   }
 
-  private fail(detail: string): never {
+  /**
+   * The `internal/modules/esm/loader` cascaded loader over this mount, created on first use.
+   * @returns This loader's one cascaded loader.
+   */
+  cascadedLoader(): CascadedLoader {
+    return this.cascaded ??= createCascadedLoader(this.internal)
+  }
+
+  /**
+   * Throw this loader's diagnostic.
+   * @param detail - What failed.
+   * @param code - Node error code for a resolution failure Node also reports by code.
+   */
+  private fail(detail: string, code?: 'MODULE_NOT_FOUND' | 'ERR_PACKAGE_PATH_NOT_EXPORTED'): never {
     const chain = this.stack.length === 0 ? '' : ` (importer chain: ${this.stack.join(' -> ')})`
-    throw new Error(`webworker modules: ${detail}${chain}`)
+    const error = new Error(`webworker modules: ${detail}${chain}`)
+    throw code === undefined ? error : Object.assign(error, { code })
   }
 
   /** @returns Directory a base path or URL resolves specifiers from. */
@@ -259,7 +277,7 @@ export class WorkerModuleLoader {
       }
       return this.probe(join(path, 'index'), specifier)
     }
-    return this.fail(`cannot resolve "${specifier}": no file at ${candidates.join(', ')}`)
+    return this.fail(`cannot resolve "${specifier}": no file at ${candidates.join(', ')}`, 'MODULE_NOT_FOUND')
   }
 
   /** @returns The Worker-provided implementation of a static specifier. */
@@ -298,14 +316,17 @@ export class WorkerModuleLoader {
     const rest = specifier.slice(packageName.length).replace(/^\//, '')
     const packageDirectory = join(this.root, 'node_modules', packageName)
     if (!this.vfs.existsSync(join(packageDirectory, 'package.json'))) {
-      return this.fail(`cannot resolve "${specifier}": ${packageDirectory}/package.json is not in the image`)
+      return this.fail(`cannot resolve "${specifier}": ${packageDirectory}/package.json is not in the image`, 'MODULE_NOT_FOUND')
     }
     const manifest = this.manifestOf(packageDirectory)
     const subpath = rest === '' ? '.' : `./${rest}`
     if (manifest.exports !== undefined) {
       const target = this.selectExport(manifest.exports, subpath, packageName)
       if (target === undefined) {
-        return this.fail(`"${packageName}" does not export "${subpath}" under conditions [${[...this.conditions].join(', ')}]`)
+        return this.fail(
+          `"${packageName}" does not export "${subpath}" under conditions [${[...this.conditions].join(', ')}]`,
+          'ERR_PACKAGE_PATH_NOT_EXPORTED',
+        )
       }
       return { kind: 'file', path: this.probe(join(packageDirectory, target), specifier) }
     }

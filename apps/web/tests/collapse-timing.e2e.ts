@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Page, Route } from 'playwright'
+import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { deriveReplayScript } from '@deepseek-ai/dsh-llm-replay'
@@ -12,7 +12,7 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, parseSeedFixture, readPersistedEvents, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, openSettings, saveFailureShot, writeComposerDraft } from './support.ts'
+import { newEnglishPage, openSettings, pinBrowserClock, pinHostClock, saveFailureShot, WEB_FIXTURE_TIME, writeComposerDraft } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/collapse-timing', import.meta.url))
 const SEED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.v3.jsonl', import.meta.url))
@@ -38,8 +38,12 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
   let fixture: string
   let prompt: string
   let replayDir: string
+  let hostClock: ReturnType<typeof pinHostClock> | undefined
 
   beforeAll(async () => {
+    // Seeded and live prompt timestamps share the renderer's fixture day, so a run
+    // that spans Asia/Shanghai midnight renders no date prefix in the aria.
+    if (MODE !== 'record') hostClock = pinHostClock()
     fixture = await readFile(SEED, 'utf8')
     const prompts = fixtureUserPrompts(fixture)
     expect(prompts).toHaveLength(1)
@@ -56,9 +60,10 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
       // This rendering borrows a completed turn and replays only its final response as a continuation.
       compareReplaySession: false,
     })
-    await seedSession(scaffold, fixture, SEED_ID)
+    await seedSession(scaffold, fixture, SEED_ID, undefined, { createdAt: WEB_FIXTURE_TIME })
     browser = await chromium.launch({ headless: true })
     page = await newEnglishPage(browser)
+    if (MODE !== 'record') await pinBrowserClock(page)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.getByRole('button', { name: 'Account menu', exact: true }).waitFor()
@@ -66,8 +71,12 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
 
   afterAll(async () => {
     const failures: unknown[] = []
-    await browser?.close().catch((error: unknown) => failures.push(error))
-    await scaffold?.close().catch((error: unknown) => failures.push(error))
+    try {
+      await browser?.close().catch((error: unknown) => failures.push(error))
+      await scaffold?.close().catch((error: unknown) => failures.push(error))
+    } finally {
+      hostClock?.mockRestore()
+    }
     if (replayDir !== undefined) {
       await rm(replayDir, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
     }
@@ -137,34 +146,23 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
     const input = page.locator('[data-composer-input]').last()
     await writeComposerDraft(page, input, prompt)
     await expectProcess(1, true)
+    const resolved = await scaffold.ctx.sessionController.resolveAgent(SessionId(SEED_ID))
+    if ('error' in resolved) throw resolved.error
+    // Maintenance keeps the accepted message in the inbox, so its echo stays before the Turn starts.
     const release = Promise.withResolvers<undefined>()
-    const promptBlocked = Promise.withResolvers<undefined>()
-    const holdPrompt = async (route: Route): Promise<void> => {
-      promptBlocked.resolve(undefined)
-      await release.promise
-      await route.continue()
-    }
-    await page.route('**/api/session/prompt', holdPrompt)
+    const maintenance = resolved.agent.runMaintenance(() => release.promise)
     try {
       await page.getByRole('button', { name: 'Send message', exact: true }).click()
-      const blockedTimeout = setTimeout(() => {
-        promptBlocked.reject(new Error('session prompt did not reach the route barrier'))
-      }, UI_WAIT.timeout)
-      try {
-        await promptBlocked.promise
-      } finally {
-        clearTimeout(blockedTimeout)
-      }
       await expect.poll(() => page.locator('[data-submission-echo]').count(), UI_WAIT).toBe(1)
       await expectProcess(1, false)
       expect(await page.locator('[data-turn-process="2"]').count()).toBe(0)
       await capture('input-pending.expected.md')
       const settled = scaffold.whenTurnSettled()
       release.resolve(undefined)
+      await maintenance
       expect(await settled).toBe(SEED_ID)
     } finally {
       release.resolve(undefined)
-      await page.unrouteAll({ behavior: 'wait' })
     }
     await expect.poll(() => page.getByText('DONE', { exact: true }).count(), UI_WAIT).toBe(2)
     await expect.poll(() => page.locator('[data-streaming="true"]').count(), UI_WAIT).toBe(0)

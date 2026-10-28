@@ -15,7 +15,7 @@ const python = runtime && join(runtime, 'dependencies/python', process.platform 
 const launch = {
   binScript: join(repo, 'apps/cli/src/bin.ts'), sourceImport: 'tsx/esm' as const, tsconfigPath: join(repo, 'tsconfig.base.json'),
   configPath: 'office.patch.json', processTimeoutMs: 110_000,
-  env: { DSH_PRIMARY_RUNTIME: runtime, DSH_PERMISSION_MODE: 'danger-full-access', DSH_TELEMETRY_DISABLED: '1', DSH_TOOLS_MODE: 'native',
+  env: { DSH_PRIMARY_RUNTIME: runtime, DSH_PERMISSION_MODE: 'danger-full-access', DSH_TELEMETRY_DISABLED: '1',
     HTTP_PROXY: process.env.DSH_OFFICE_TEST_PROXY, HTTPS_PROXY: process.env.DSH_OFFICE_TEST_PROXY },
 }
 
@@ -37,17 +37,23 @@ async function sessionEvents(cwd: string) {
 }
 
 it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mode: 'native' }, { format: 'pdf', mode: 'native' }, { format: 'docx', mode: 'ptc' }])('loads the operation skill and renders $format through the shell in $mode mode', async ({ format, mode }) => {
+  let original: Buffer | undefined
   await runLoaderSmoke({
     label: 'Office CLI rendering', tempDirPrefix: 'dsh-office-render-',
-    ...launch, env: { ...launch.env, DSH_TOOLS_MODE: mode },
+    ...launch,
     binArgs: ['--profile', 'headless', '--patch', 'office.patch.json',
-      `Export page 1 of input.${format} as PNG into preview and check that the exported image is readable. Report briefly in English.`],
+      ...mode === 'ptc' ? ['--patch', join(repo, 'apps/cli/config/examples/ptc.yml')] : [],
+      // Source-content verification can require an authoring skill; this case covers image-only inspection.
+      `Export page 1 of input.${format} as PNG into preview. Check only that the exported image is readable; `
+      + 'do not inspect the source document content or metadata, and keep the source file unchanged. Report briefly in English.'],
     async prepare(cwd) {
       await execa(python!, ['-c', "from docx import Document\nd=Document()\nd.add_heading('Quarterly revenue',0)\nd.add_paragraph('Q1: 12; Q2: 18; Total: 30')\nd.save('input.docx')"], { cwd })
       if (format === 'pdf') await execa(python!, ['-c', "from PIL import Image, ImageDraw\nim=Image.new('RGB',(300,200),'white')\nImageDraw.Draw(im).rectangle((30,30,150,100),fill='black')\nim.save('input.pdf','PDF')"], { cwd })
       await prepareOffice(cwd)
+      original = await readFile(join(cwd, `input.${format}`))
     },
     async inspect(cwd) {
+      expect(await readFile(join(cwd, `input.${format}`))).toEqual(original)
       const events = await sessionEvents(cwd)
       const calls = events.flatMap((event) => {
         if (event.type === 'tool/call') return [event.data]
@@ -63,17 +69,22 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mod
       const pixels = await execa(python!, ['-c', "from pathlib import Path\nfrom PIL import Image\nfiles=list(Path('preview').glob('*.png'))\nassert files\nfor f in files:\n im=Image.open(f).convert('RGBA')\n visible=Image.alpha_composite(Image.new('RGBA',im.size,'white'),im).convert('RGB')\n print('content' if any(a!=b for a,b in visible.getextrema()) else 'blank')"], { cwd })
       expect(pixels.exitCode).toBe(0)
       if (format === 'pdf') expect(pixels.stdout.trim()).toBe('content')
+      const final = events.filter(e => e.type === 'assistant/message').at(-1)?.data.message.content
+        .filter(b => b.type === 'text').map(b => b.text).join(' ')
+      const diagnostic = JSON.stringify({
+        format, mode, callOrder: calls.map(call => call.name), skills, commands, pixels: pixels.stdout, final,
+      }, null, 2)
       const authoring = calls.findIndex(call => call.name === 'skill' && /office-(docx|pptx|xlsx)/u.test(call.arguments))
       if (pixels.stdout.includes('blank')) {
         if (authoring !== -1) {
           const rendered = calls.findIndex(call => (call.name === 'bash' || call.name === 'pwsh') && /\srender\b/u.test(call.arguments))
           expect(authoring, 'content checks after a blank preview may need the format skill').toBeGreaterThan(rendered)
         }
-        const final = events.filter(e => e.type === 'assistant/message').at(-1)?.data.message.content
-          .filter(b => b.type === 'text').map(b => b.text).join(' ')
-        expect(final).toMatch(/visual (?:inspection|check)[^.!?]{0,100}(?:not completed|incomplete|could not be completed|unverified)/iu)
+        expect(final, diagnostic).toMatch(
+          /visual (?:inspection|check)[^.!?]{0,100}(?:not completed|incomplete|could not be completed|unverified)/iu,
+        )
       } else {
-        expect(authoring, JSON.stringify(skills)).toBe(-1)
+        expect(authoring, diagnostic).toBe(-1)
       }
       expect(calls.some(e => e.name === 'read_image')).toBe(true)
     },
@@ -123,6 +134,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF through the op
         .map(call => (JSON.parse(call.arguments) as { command: string }).command).join('\n')
       expect(commands).toMatch(/\sconvert\b/u)
       expect(commands).not.toMatch(/\srender\b/u)
+      expect(commands).not.toMatch(/pypdf|PyPDF2|\bfitz\b|pdfminer|pdfplumber|pdfinfo|pdftotext/iu)
       expect((await readFile(join(cwd, 'result.pdf'))).subarray(0, 5).toString()).toBe('%PDF-')
       expect(await readFile(join(cwd, 'input.docx'))).toEqual(original)
     },

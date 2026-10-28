@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-18-parse-ssh-policy-once.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/simplification/2026-10-18-parse-ssh-policy-once.md
+/agent-note-parse-ssh-policies-once-at-request-admission:
+  en: 0c215d7a2d291857
+  zh: df3c91383d122974
+/agent-note-parse-ssh-policies-once-at-request-admission/problem:
+  en: 3cb8bcfb464726d4
+  zh: f87f7cc23e7d161c
+/agent-note-parse-ssh-policies-once-at-request-admission/proposal:
+  en: 71eb2e823861a3b0
+  zh: 0f6fb08df9b3217f
+/agent-note-parse-ssh-policies-once-at-request-admission/alternatives-considered:
+  en: 98230674c8b68772
+  zh: 068c70ede9914a05
+/agent-note-parse-ssh-policies-once-at-request-admission/acceptance-criteria:
+  en: e48ed6ba31628951
+  zh: 240022dd565487bc
+/agent-note-parse-ssh-policies-once-at-request-admission/risks:
+  en: 0d2e4cd1658f0d1a
+  zh: 6838c9083b629c8b

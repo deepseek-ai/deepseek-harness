@@ -309,6 +309,14 @@ type ScheduleDeleteResult =
   | { readonly id: ScheduleId; readonly deleted: false; readonly code: 'schedule_not_found' }
 ```
 
+```ts type-equiv
+/** Successful Host-wide removal of every ended task, whether or not any remained. */
+interface ScheduleDeleteInactiveResult {
+  /** Ended task rows this call removed; zero when the Host held none. */
+  readonly deleted: number
+}
+```
+
 ## Web 目录
 
 Remote 方法 `schedule.catalog()` 返回活动和未运行的宿主任务及其原始 Session 绑定，先按 `scheduledAt` 升序排列，再按 `id` 字典序排列。它只读取 Schedule domain，不激活 Session 或读取其历史。浏览器消费方接收以下可安全用于浏览器的类型：
@@ -337,7 +345,7 @@ type ScheduleCatalogEntry = ScheduleRecord & {
 }
 ```
 
-Remote 方法 `schedule.list({ sessionId })`、模型 `schedule_list` 和 Session 页头目录仅返回活动任务。模型视图派生的时间 `state` 与存储的生命周期 `status` 仍是不同概念。删除通过 `schedule.delete({ sessionId, id })` 使用条目的原始绑定；绑定不匹配时返回未找到。模型工具传入当前 Agent 的 Session，全局用户界面则传入所选任务的绑定。仅校验绑定并不构成调用者鉴权。无 payload 的 `schedule/changed` 事件通知客户端刷新列表；重新连接后，客户端再次获取当前状态。
+Remote 方法 `schedule.list({ sessionId })`、模型 `schedule_list` 和 Session 页头目录仅返回活动任务。模型视图派生的时间 `state` 与存储的生命周期 `status` 仍是不同概念。删除通过 `schedule.delete({ sessionId, id })` 使用条目的原始绑定；绑定不匹配时返回未找到。模型工具传入当前 Agent 的 Session，全局用户界面则传入所选任务的绑定。仅校验绑定并不构成调用者鉴权。`schedule.deleteInactive()` 删除跨会话的全部未运行（已结束）任务，连同每行携带的已保存的发送记录；成功时以它移除的计数答复 `{ deleted }`；普通失败时不删除任何行；后端报告 `unknown-state` 时可能已移除部分行，并会隔离 Host 的 schedule 领域，之后该领域的操作都会拒绝，直到重新打开。任何拒绝都会先发出 `schedule/changed`，客户端重新读取。自动化任务页面的批量清理使用该方法。未运行任务从不会安排定时器，因此该删除不重算任何目标。无 payload 的 `schedule/changed` 事件通知客户端刷新列表；重新连接后，客户端再次获取当前状态。
 
 随发行版交付的 Web 组合把 `ui-schedule` 与宿主能力一起挂载。[客户端包](../../packages/client/ui-schedule/README.zh.md) 负责目录、空状态与删除控件。页面单独筛选全部、活动和未运行任务，保留未运行任务详情及详情页签条内的原 Session 入口，并要求显式确认删除。“规则”和“任务运行记录”页签将任务设置与按需分页加载的已保存回执分开。回执与未运行状态均不确认模型执行。
 
@@ -431,7 +439,7 @@ type ScheduleDeliveryHistoryResult =
 
 ## 宿主投递
 
-宿主启动时读取持久任务，并将定时器设为最早的活动目标。未运行任务仍可查询，但不会再次安排投递。投递时通过 Session controller 获取原 Session，包括尚未加载的 Session。恢复后重新采样实际时间，并排除时钟回拨后尚未到期的成员；这些任务仍保留定时义务。投递不涉及 Goal 或独立的 Run 完成记录。
+宿主启动时读取持久任务，并将定时器设为最早的活动目标。未运行任务仍可查询，但不会再次安排投递。投递通过 `schedule/resolve-agent` 解析原 Session，包括尚未激活的会话。嵌入方拥有激活过程：SDK 处理方等待初始化，并保留其 Session handle 和模型选项；没有处理方时由 Web Session controller 恢复会话。组合等待其激活提供方就绪后再启动 Schedule。恢复后重新采样实际时间，并排除时钟回拨后尚未到期的成员；这些任务仍保留定时义务。投递不涉及 Goal 或独立的 Run 完成记录。
 
 插件来源的 `followup()` 同步将消息追加到 Session 收件箱。Session flush 成功后，一次任务记录 put 追加带有指令快照的发送记录，并同时存储最新的 `ScheduleDeliveryReceipt`，以及一次性任务的 `inactive` 状态或重复任务的下一目标和状态。同一批次的重复任务共享回执的 `messageId`；每条回执保留该任务已投递的发生时点。投递不会中途引导或取消当前轮次，也不等待模型完成。
 
@@ -509,6 +517,22 @@ async create(sessionId: SessionId, request: ScheduleCreateRequest, signal?: Abor
 @Remote('delete') async delete(request: ScheduleDeleteRequest, signal?: AbortSignal): Promise<ScheduleDeleteResult>
 
 /**
+ * Delete every ended Host task, leaving active tasks armed.
+ *
+ * Ended tasks never schedule another delivery, so the removal changes no pending
+ * target and no timer is recomputed. Rows are enumerated and removed in one FIFO
+ * slot, so a delivery ordered behind this call ends its task after the
+ * enumeration rather than during it. The batch is one domain write: a normal
+ * failure rejects with every listed row still stored, while a backend
+ * `unknown-state` failure may have removed rows and quarantines the Host
+ * domain, so later schedule operations reject until the domain is reopened.
+ * Every rejection announces `schedule/changed` because it does not establish
+ * which rows landed, and clients then re-read the catalog.
+ * @returns Count of removed rows; zero when the Host held no ended task.
+ */
+@Remote('deleteInactive') async deleteInactive(): Promise<ScheduleDeleteInactiveResult>
+
+/**
  * Update the name, instruction, and timing of an active task within the original Session
  * binding without activating the Session or changing saved deliveries.
  *
@@ -547,4 +571,24 @@ Durable task set changed; clients refetch global task and Session-active catalog
 ```
 
 Source: [`packages/schedule/schedule/src/types.ts`](../../packages/schedule/schedule/src/types.ts)
+
+<a id="scheduleresolve-agent--waterfall"></a>
+
+#### `schedule/resolve-agent` — waterfall
+
+Restore a reminder's Session through its embedding's owning controller. Call next() to use the Web Session controller.
+
+```ts cordis-catalog
+/**
+ * Restore a reminder's Session through its embedding's owning controller.
+ * Call next() to use the Web Session controller.
+ * @param sessionId - Original Session receiving the reminder.
+ * @mode waterfall
+ */
+'schedule/resolve-agent'(sessionId: SessionId, next: () => Promise<Agent>): Promise<Agent>
+```
+
+Types: [Agent](core.zh.md) · [SessionId](core.zh.md)
+
+Source: [`packages/schedule/schedule/src/index.ts`](../../packages/schedule/schedule/src/index.ts)
 <!-- END GENERATED cordis-surface -->

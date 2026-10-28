@@ -1,5 +1,7 @@
 /** Validate a completed packaging attempt and route publication back to its original runner. */
 import { z } from 'zod'
+import { desktopPublishRunnersSchema, desktopPackageWorkflows } from './desktop-publish-targets.ts'
+import { desktopPublishQualificationError } from './desktop-publish-qualification.mjs'
 
 const positive = z.number().int().positive()
 const runSchema = z.object({
@@ -9,13 +11,13 @@ const runSchema = z.object({
 })
 const requestSchema = z.object({ source: z.object({
   repository: z.string(), runId: z.string(), attempt: z.string(), commit: z.string().regex(/^[a-f0-9]{40}$/u),
-  workflowCommit: z.string(), sourceRef: z.string().regex(/^(?:master|dsh-v[0-9][0-9A-Za-z.-]*)$/u),
+  workflowCommit: z.string(), sourceRef: z.string().min(1),
   channel: z.enum(['nightly', 'latest']),
-  runnerName: z.string(), target: z.enum(['mac-arm64', 'win-x64']), preset: z.enum(['test', 'production']),
-  qualification: z.enum(['signed', 'notarized']),
-}) })
+  runnerName: z.string(), target: z.enum(['mac-arm64', 'mac-x64', 'win-x64']), preset: z.enum(['test', 'production']),
+  qualification: z.enum(['signed', 'notarized', 'unsigned', 'unnotarized']),
+}).refine(source => source.preset === 'test' || /^(?:master|dsh-v[0-9][0-9A-Za-z.-]*)$/u.test(source.sourceRef),
+  'Production source must be master or dsh-v*') })
 const jobsSchema = z.array(z.object({ name: z.string(), runner_name: z.string().nullable(), conclusion: z.string().nullable() }))
-const routesSchema = z.record(z.string(), z.object({ label: z.string().regex(/^dsh-[a-z0-9-]+$/u), target: z.enum(['mac-arm64', 'win-x64']) }))
 
 /** Validated values handed to the privileged publisher; no caller-selected shell fragments. */
 export interface DesktopPublishRoute {
@@ -26,7 +28,7 @@ export interface DesktopPublishRoute {
   readonly channel: 'nightly' | 'latest'
   readonly runnerName: string
   readonly runnerLabel: string
-  readonly target: 'mac-arm64' | 'win-x64'
+  readonly target: 'mac-arm64' | 'mac-x64' | 'win-x64'
   readonly preset: 'test' | 'production'
 }
 
@@ -44,9 +46,11 @@ export function resolveDesktopPublishRoute(
 ): DesktopPublishRoute {
   const run = runSchema.parse(runValue)
   const { source } = requestSchema.parse(requestValue)
+  const diagnostic = desktopPublishQualificationError(source.qualification)
+  if (diagnostic) throw new Error(diagnostic)
   const jobs = jobsSchema.parse(jobsValue)
-  const routes = routesSchema.parse(routesValue)
-  const workflow = source.target === 'win-x64' ? '.github/workflows/windows-package.yml' : '.github/workflows/macos-package.yml'
+  const routes = desktopPublishRunnersSchema.parse(routesValue)
+  const workflow = desktopPackageWorkflows[source.target]
   if (run.repository.full_name !== repository || source.repository !== repository || run.path !== workflow
     || source.runId !== String(run.id) || source.attempt !== String(run.run_attempt)
     || source.workflowCommit !== run.head_sha
@@ -54,7 +58,7 @@ export function resolveDesktopPublishRoute(
     throw new Error('desktop publish: request does not match the successful packaging attempt')
   }
   const route = routes[source.runnerName]
-  if (!route || route.target !== source.target) throw new Error('desktop publish: original machine has no configured publishing route')
+  if (!route || !route.target.includes(source.target)) throw new Error('desktop publish: original machine has no configured publishing route')
   if (new Set(Object.values(routes).map(value => value.label)).size !== Object.keys(routes).length) {
     throw new Error('desktop publish: each configured machine needs its own unique runner label')
   }

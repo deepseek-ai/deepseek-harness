@@ -34,7 +34,7 @@ function assertVoiceActions(value: Record<string, unknown>): asserts value is Re
   assert(typeof value.hooks === 'object' && value.hooks !== null)
 }
 
-async function fixture(fail = false) {
+async function fixture(fail = false, navigation = true) {
   const ctx = new Context(), unmount = vi.fn(async () => {})
   class Remote extends Service {
     constructor() { super(ctx, 'remote') }
@@ -45,7 +45,7 @@ async function fixture(fail = false) {
   }
   new Remote()
   const openBundle = vi.fn()
-  ctx.provide('pluginNavigation', { openBundle })
+  if (navigation) ctx.provide('pluginNavigation', { openBundle })
   const configure = vi.fn(async () => ({ ok: true, value: {} }))
   const prepare = vi.fn(async () => ({ ok: true, value: {} }))
   const cancelPreparation = vi.fn(async () => ({ ok: true, value: {} }))
@@ -62,6 +62,28 @@ async function fixture(fail = false) {
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot failed') })
   return { ctx, unmount, openBundle, configure, prepare, cancelPreparation, transcribe }
 }
+
+it('starts without the Plugins page navigation and follows its presence', async () => {
+  hostApply()
+  const b = await fixture(false, false)
+  try {
+    await b.ctx.plugin({ inject: [...inject], apply: ctx => mountVoiceInput(ctx, REMOTE) })
+    const entry = b.ctx.slots.entries('conversation.input.activity').find(item => item.component === VoiceInput)
+    const actions = entry!.inject!()
+    assertVoiceActions(actions)
+    expect(actions.hooks.pluginNavigation.getSnapshot()).toBe(false)
+    expect(() => { actions.openSettings() }).not.toThrow()
+    const navigation = b.ctx.plugin({ apply: (ctx: Context) => { ctx.provide('pluginNavigation', { openBundle: b.openBundle } as never) } })
+    await navigation
+    await vi.waitFor(() => { expect(actions.hooks.pluginNavigation.getSnapshot()).toBe(true) })
+    actions.openSettings()
+    expect(b.openBundle).toHaveBeenCalledWith('@deepseek-ai/dsh-experimental-voice-input-bundle')
+    await navigation.dispose()
+    expect(actions.hooks.pluginNavigation.getSnapshot()).toBe(false)
+  } finally {
+    await b.ctx.fiber.dispose()
+  }
+})
 
 it('withdraws its Remote, localized slot and microphone captures on disposal', async () => {
   hostApply()

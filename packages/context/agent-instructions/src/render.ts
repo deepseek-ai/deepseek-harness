@@ -47,6 +47,15 @@ interface RenderedInstructionContext extends RenderedAgentInstructions {
    * that the instruction exists and has no content.
    */
   represented: LoadedInstructionFile[]
+  /** Files whose sections the text holds, in text order, each with the content the text holds. */
+  sections: LoadedInstructionFile[]
+  /**
+   * Intro block of the `<system-reminder>` frame: undefined when the text is
+   * empty or a notice without a frame, and the empty string when the frame has
+   * no intro, as in a change batch or a merged frame whose chains both rendered
+   * without a frame.
+   */
+  intro: string | undefined
 }
 
 /** Structured dynamic state persisted outside model-visible prompt prose. */
@@ -262,8 +271,10 @@ function changedSectionText(item: ChangeRenderItem): string {
 
 /**
  * Render one reconciliation batch and retain only transitions that fit.
+ * User-global and project transitions are budgeted as separate chains, so a
+ * batch holding both can exceed `maxBytes` and is at most twice that size.
  * @param items - ordered state transitions and current file contents.
- * @param maxBytes - maximum UTF-8 bytes allowed in the rendered batch.
+ * @param maxBytes - maximum UTF-8 bytes for each instruction chain in the rendered batch.
  * @returns bounded prompt text and the transitions actually represented by it.
  */
 export function renderInstructionChanges(
@@ -279,7 +290,7 @@ export function renderInstructionChanges(
       return item === undefined ? '' : changedSectionText({ ...item, file })
     },
   }
-  const rendered = renderInstructionContext(items.map(item => item.file), maxBytes, style)
+  const rendered = renderInstructionChains(items.map(item => item.file), maxBytes, style)
   const represented = new Set(rendered.represented.map(file => file.absolutePath))
   return {
     text: rendered.text,
@@ -345,30 +356,36 @@ function truncateToFit(
   return best
 }
 
+function isDisabledBudget(maxBytes: number): boolean {
+  return maxBytes <= 0 || !Number.isFinite(maxBytes)
+}
+
 function renderInstructionContext(
   files: LoadedInstructionFile[],
   maxBytes: number,
   style: RenderStyle,
 ): RenderedInstructionContext {
-  if (maxBytes <= 0 || !Number.isFinite(maxBytes)) {
-    return { text: '', omitted: files, truncated: [], represented: [] }
+  if (isDisabledBudget(maxBytes)) {
+    return { text: '', omitted: files, truncated: [], represented: [], sections: [], intro: undefined }
   }
 
   const fullText = buildInstructionText(files, maxBytes, [], [], style)
   if (byteLength(fullText) <= maxBytes) {
-    return { text: fullText, omitted: [], truncated: [], represented: files }
+    return { text: fullText, omitted: [], truncated: [], represented: files, sections: files, intro: style.intro }
   }
 
   for (let start = 1; start < files.length; start += 1) {
     const included = files.slice(start)
     const omitted = files.slice(0, start).map(file => ({ absolutePath: file.absolutePath, displayPath: file.displayPath }))
     const suffixText = buildInstructionText(included, maxBytes, omitted, [], style)
-    if (byteLength(suffixText) <= maxBytes) return { text: suffixText, omitted, truncated: [], represented: included }
+    if (byteLength(suffixText) <= maxBytes) {
+      return { text: suffixText, omitted, truncated: [], represented: included, sections: included, intro: style.intro }
+    }
   }
 
   const mostSpecific = files.at(-1)
   /* v8 ignore next -- callers only reach this after a non-empty fullText was built. */
-  if (mostSpecific === undefined) return { text: '', omitted: [], truncated: [], represented: [] }
+  if (mostSpecific === undefined) return { text: '', omitted: [], truncated: [], represented: [], sections: [], intro: undefined }
   const omitted = files.slice(0, -1).map(file => ({ absolutePath: file.absolutePath, displayPath: file.displayPath }))
   const originalBytes = byteLength(mostSpecific.content)
 
@@ -383,7 +400,7 @@ function renderInstructionContext(
     const text = buildInstructionText([truncatedFile], maxBytes, omitted, truncated, candidateStyle)
     if (byteLength(text) <= maxBytes) {
       const represented = includedBytes > 0 || originalBytes === 0 ? [mostSpecific] : []
-      return { text, omitted, truncated, represented }
+      return { text, omitted, truncated, represented, sections: [truncatedFile], intro: candidateStyle.intro }
     }
   }
 
@@ -393,21 +410,81 @@ function renderInstructionContext(
     includedBytes: 0,
   }]
   const compactNotice = escapeInstructionFrameBody(markerText(maxBytes, omitted, truncated))
-  const compactWithHeading = escapeInstructionFrameBody(
-    [compactNotice, style.section(withTruncatedContent(mostSpecific, 0))].join('\n\n'),
-  )
+  const heading = withTruncatedContent(mostSpecific, 0)
+  const compactWithHeading = escapeInstructionFrameBody([compactNotice, style.section(heading)].join('\n\n'))
   if (byteLength(compactWithHeading) <= maxBytes) {
     const represented = originalBytes === 0 ? [mostSpecific] : []
-    return { text: compactWithHeading, omitted, truncated, represented }
+    return { text: compactWithHeading, omitted, truncated, represented, sections: [heading], intro: undefined }
   }
   const text = byteLength(compactNotice) <= maxBytes ? compactNotice : truncateUtf8(compactNotice, maxBytes)
-  return { text, omitted, truncated, represented: [] }
+  return { text, omitted, truncated, represented: [], sections: [], intro: undefined }
+}
+
+function isUserGlobalInstruction(file: InstructionFile): boolean {
+  return isUserGlobalDirectory(scopeForDisplayPath(file.displayPath))
+}
+
+/**
+ * Render the user-global chain and the project chain under one `maxBytes` each.
+ *
+ * A disabled budget, files from only one chain, or files that fit within
+ * `maxBytes` together return the single-budget rendering unchanged. Otherwise
+ * each chain renders alone (omit the broadest files, truncate the last file,
+ * then fall back to the compact intro, to the marker with an empty heading,
+ * and to the marker alone), and one frame holds the merged marker when a chain
+ * omitted or truncated a file, one intro when a chain kept its frame, and the
+ * sections of both chains as rendered, in their loaded order, which puts
+ * user-global files first in a baseline. The single-budget rendering replaces a
+ * merged frame longer than twice `maxBytes`.
+ */
+function renderInstructionChains(
+  files: LoadedInstructionFile[],
+  maxBytes: number,
+  style: RenderStyle,
+): RenderedInstructionContext {
+  const whole = renderInstructionContext(files, maxBytes, style)
+  const userGlobal = files.filter(isUserGlobalInstruction)
+  const project = files.filter(file => !isUserGlobalInstruction(file))
+  if (isDisabledBudget(maxBytes) || userGlobal.length === 0 || project.length === 0
+    || (whole.omitted.length === 0 && whole.truncated.length === 0)) return whole
+
+  const chains = [
+    renderInstructionContext(userGlobal, maxBytes, style),
+    renderInstructionContext(project, maxBytes, style),
+  ]
+  // Merged records and sections keep the loaded order, so a reconciliation batch
+  // renders its items in one order whether or not it fits a single budget.
+  const inLoadedOrder = <T extends InstructionFile>(records: T[]): T[] => {
+    const byPath = new Map(records.map(record => [record.absolutePath, record]))
+    return files.flatMap((file) => {
+      const record = byPath.get(file.absolutePath)
+      return record === undefined ? [] : [record]
+    })
+  }
+  const omitted = inLoadedOrder(chains.flatMap(chain => chain.omitted))
+  const sections = inLoadedOrder(chains.flatMap(chain => chain.sections))
+  const represented = inLoadedOrder(chains.flatMap(chain => chain.represented))
+  // A chain truncates only its last file, so the chain whose last file loads
+  // first lists its truncation first.
+  const userGlobalLast = files.findLastIndex(isUserGlobalInstruction)
+  const projectLast = files.findLastIndex(file => !isUserGlobalInstruction(file))
+  const truncated = (userGlobalLast < projectLast ? chains : chains.toReversed()).flatMap(chain => chain.truncated)
+  const intros = chains.flatMap(chain => chain.intro === undefined ? [] : [chain.intro])
+  // A chain that kept the full frame decides the intro; otherwise the first
+  // surviving (compact) intro applies; otherwise there is none.
+  const intro = intros.includes(style.intro) ? style.intro : intros[0] ?? ''
+  const text = buildInstructionText(sections, maxBytes, omitted, truncated, { ...style, intro })
+  // Each chain text fits maxBytes; the merged frame exceeds 2 * maxBytes only by the join beside a
+  // frameless chain or by a chain marker cut to fit, and the single-budget rendering then replaces it
+  // (.agents/notes/implemented/architecture/2026-10-16-separate-instruction-chain-budgets.md).
+  if (byteLength(text) > 2 * maxBytes) return whole
+  return { text, omitted, truncated, represented, sections, intro }
 }
 
 /**
  * Render a baseline together with the exact source files semantically represented in it.
  * @param files - loaded files ordered from broadest to most specific.
- * @param options - rendering byte budget and whether this baseline supersedes a visible predecessor.
+ * @param options - per-chain rendering byte budget and whether this baseline supersedes a visible predecessor.
  * @returns bounded public rendering plus files with surviving content, including genuinely empty files.
  * @internal
  */
@@ -416,14 +493,16 @@ export function renderAgentInstructionSet(
   options: { maxBytes: number; replacePreviousBaseline?: boolean },
 ): { rendered: RenderedAgentInstructions; included: LoadedInstructionFile[] } {
   const style = baselineRenderStyle(files, options.replacePreviousBaseline)
-  const { represented, ...rendered } = renderInstructionContext(files, options.maxBytes, style)
-  return { rendered, included: represented }
+  const { text, omitted, truncated, represented } = renderInstructionChains(files, options.maxBytes, style)
+  return { rendered: { text, omitted, truncated }, included: represented }
 }
 
 /**
- * Render the baseline instruction chain with deterministic precedence budgeting.
+ * Render the baseline instruction chains with deterministic precedence budgeting.
+ * The user-global and project chains are each bounded by `maxBytes`, so a
+ * baseline holding both can exceed `maxBytes` and is at most twice that size.
  * @param files - loaded files ordered from broadest to most specific.
- * @param options - rendering byte budget and whether this baseline supersedes a visible predecessor.
+ * @param options - per-chain rendering byte budget and whether this baseline supersedes a visible predecessor.
  * @returns bounded baseline prompt text and budget diagnostics.
  */
 export function renderAgentInstructions(

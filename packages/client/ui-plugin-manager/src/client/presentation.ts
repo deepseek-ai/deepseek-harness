@@ -1,5 +1,6 @@
 /** Display labels and toast sentences for global plugin management. */
 
+import { EXPERIMENTAL_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import type { IncompatiblePlugin, ManagementError, Registry, RestartReason } from '@deepseek-ai/dsh-api-remotes/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginManagerLocaleKey } from './locales.ts'
@@ -58,6 +59,7 @@ const CODE_KEYS = {
   'bundle-in-use': 'reasonBundleInUse',
   'stale-approval': 'reasonStaleApproval',
   'incompatible-version': 'reasonIncompatibleVersionUnnamed',
+  'unsupported-platform': 'reasonUnsupportedPlatform',
   'operation-error': 'reasonOperationError',
 } satisfies Record<ManagementError['code'], PluginManagerLocaleKey>
 
@@ -90,7 +92,7 @@ export function managementText(error: {
       ? [t('reasonIncompatibleVersionUnnamed')]
       : named.map(plugin => t('reasonIncompatibleVersion', {
         plugin: `${plugin.name}@${plugin.version}`, runtime: plugin.runtimeVersion,
-        peers: Object.entries(plugin.peers).map(([name, range]) => `${name} ${range}`).join(', '),
+        requirements: Object.entries(plugin.requirements).map(([name, range]) => `${name} ${range}`).join(', '),
       }))
     return [...sentences, t(error.installing ? 'reasonIncompatibleInstall' : 'reasonIncompatibleInstalled')].join(t('sentenceSeparator'))
   }
@@ -120,7 +122,7 @@ export function packageText(
   return {
     title: pkg.meta?.title === undefined ? pkg.name : resolveText(pkg.meta.title),
     description: pkg.meta?.description === undefined ? undefined : resolveText(pkg.meta.description) || undefined,
-    beta: pkg.name.startsWith('@deepseek-ai/dsh-experimental-'),
+    beta: EXPERIMENTAL_BUNDLES.has(pkg.name),
   }
 }
 

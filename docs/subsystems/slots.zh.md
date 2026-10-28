@@ -10,6 +10,10 @@ Slots 是 Web Client 的类型化 React 组合系统。[`dsh-client-ui-slots`](.
 
 插件目录声明 `plugins.add.actions`，它是 root 作用域的 list，在添加插件菜单的安装项之后提供 `MenuItemButton` 行。owner 提供 `onDismiss()`，用于开始动作前关闭菜单。该 slot 遵循所属插件页面声明的生命周期。
 
+root 作用域的 list `sidebar.panellist.actions`、`conversation.session.header.views.actions` 和 `sidebar.right.tab.guide.actions` 提供面板行、View 标签和右侧栏引导卡片之后“更多”菜单的菜单行。区域只在其 list 有注册项时画“更多”按钮与菜单，并传入可自定义的入口及其 Pin 状态、`onOpen`、`onPinnedChange` 与 `onDismiss`。面板和 View 入口还通过可选的 `active` 状态标识当前选中项，该状态独立于 Pin 状态。各区域在内存中维护已收起的入口 id；[`ui-entry-customization`](../../packages/client/ui-entry-customization/README.zh.md) 注册随产品提供的菜单行。
+
+[ui-workspace](../../packages/client/ui-workspace/README.zh.md#understand-the-implementation) 记录 Session 行的扩展位置、显示条件和键盘行为。
+
 ## 声明与生命周期
 
 `SlotMap` 是编译期注册表。包通过声明合并写入 key、cardinality（基数）、scope、owner props、keyed props 与可选的 slot 级 inject face。运行时声明则是拥有该渲染位置的组件在 `children` 中给出的对应条目。
@@ -127,6 +131,7 @@ root [AppFrame]
       │     ├─ conversation.session.header.lineage
       │     ├─ conversation.session.header.actions
       │     ├─ conversation.session.header.utilities
+      │     ├─ conversation.session.header.views.actions
       │     └─ conversation.session.header.corner
       └─ calls Factory: conversation.content
 
@@ -134,9 +139,13 @@ Factory: conversation.content [ConversationContent]
 ├─ conversation.session [ConversationSession / DefaultConversationViews]
 │  └─ conversation.view
 │     ├─ id=chat [ChatView]
+│     │  ├─ conversation.chat.text-interaction [list]
 │     │  └─ conversation.chat.flow [ChatFlow]
 │     │     └─ conversation.chat.node [ChatNodeSeat dispatch]
-│     │        ├─ key=user,steering [UserMessageNodeView]
+│     │        ├─ key=user [UserMessageNodeView]
+│     │        │  ├─ conversation.chat.user.before [chain]
+│     │        │  └─ calls Factory: conversation.chat.user.content
+│     │        ├─ key=steering [UserMessageNodeView]
 │     │        │  └─ calls Factory: conversation.chat.user.content
 │     │        ├─ key=assistant-step [AssistantNodeView / AssistantMarkdown]
 │     │        │  ├─ conversation.chat.message.images [MessageImages]
@@ -163,6 +172,7 @@ Factory: conversation.content [ConversationContent]
 │  ├─ conversation.input.permission
 │  ├─ conversation.input.plan
 │  ├─ conversation.input.model
+│  │  └─ conversation.input.model.label
 │  ├─ conversation.input.overlay
 │  ├─ conversation.composer.dock
 │  ├─ conversation.input.left
@@ -173,7 +183,8 @@ Factory: conversation.content [ConversationContent]
 ├─ conversation.hero.brand.mark
 ├─ conversation.hero.workspace
 │  └─ conversation.hero.workspace.directoryFlow
-└─ conversation.hero.agentPreset
+├─ conversation.hero.agentPreset
+└─ conversation.hero.options
 
 Factory: conversation.chat.user.content [UserContent]
 ├─ conversation.chat.user.images [MessageImages]

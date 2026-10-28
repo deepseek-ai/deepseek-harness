@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OAR サブエージェント",
+    "description": "OAR を通じてインストール済みのコーディングエージェントにタスクを委派します。Codex と Claude Code の設定を提供します。"
+  }
+}

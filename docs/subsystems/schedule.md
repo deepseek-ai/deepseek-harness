@@ -309,6 +309,14 @@ type ScheduleDeleteResult =
   | { readonly id: ScheduleId; readonly deleted: false; readonly code: 'schedule_not_found' }
 ```
 
+```ts type-equiv
+/** Successful Host-wide removal of every ended task, whether or not any remained. */
+interface ScheduleDeleteInactiveResult {
+  /** Ended task rows this call removed; zero when the Host held none. */
+  readonly deleted: number
+}
+```
+
 ## Web catalog
 
 The Remote `schedule.catalog()` method returns active and inactive Host tasks with their original Session bindings, ordered by `scheduledAt` ascending and then lexicographically by `id`. It reads only the Schedule domain, without activating Sessions or reading their history. Browser consumers receive this browser-safe type:
@@ -337,7 +345,7 @@ type ScheduleCatalogEntry = ScheduleRecord & {
 }
 ```
 
-The Remote `schedule.list({ sessionId })`, model `schedule_list`, and Session-header catalog return only active tasks. A model view's derived timing `state` remains distinct from stored lifecycle `status`. Deletion uses `schedule.delete({ sessionId, id })` with the entry's original binding; a mismatched binding returns not found. Model tools supply the current Agent's Session, whereas the global user interface supplies the selected task's binding. The binding check alone does not establish caller authorization. The payload-free `schedule/changed` event invalidates client lists; reconnecting clients fetch current state again.
+The Remote `schedule.list({ sessionId })`, model `schedule_list`, and Session-header catalog return only active tasks. A model view's derived timing `state` remains distinct from stored lifecycle `status`. Deletion uses `schedule.delete({ sessionId, id })` with the entry's original binding; a mismatched binding returns not found. Model tools supply the current Agent's Session, whereas the global user interface supplies the selected task's binding. The binding check alone does not establish caller authorization. `schedule.deleteInactive()` removes every ended (inactive) task across Sessions, with the saved delivery records each row carries; on success it answers `{ deleted }` with the count it removed; a normal failed batch rejects with nothing removed; an `unknown-state` failure may have removed rows and quarantines the Host schedule domain, so later schedule operations reject until it is reopened. Any rejection announces `schedule/changed`, and clients then re-read. The Automation tasks page's bulk cleanup uses it. An ended task never arms a timer, so the removal recomputes no target. The payload-free `schedule/changed` event invalidates client lists; reconnecting clients fetch current state again.
 
 The shipped Web composition mounts `ui-schedule` with the Host capability. The [client package](../../packages/client/ui-schedule/README.md) owns the catalog, empty state, and deletion controls. The page separately filters all, active, and inactive tasks, retains inactive details and an original-Session control in the detail tab strip, and requires explicit confirmed deletion. The Rules and Records tabs separate task settings from lazily paged saved receipts. Neither a receipt nor inactive status confirms model execution.
 
@@ -431,7 +439,7 @@ New tasks initialize an empty history. Older task rows without history expose on
 
 ## Host delivery
 
-The Host reads persisted tasks at startup and sets its timer to the earliest active target. Inactive tasks remain queryable but never schedule another delivery. At delivery it resolves the original Session through the Session controller, including cold Sessions. After restoration it samples the wall clock again and excludes members that are no longer due after a rollback; those tasks retain their timer obligation. Neither a Goal nor a separate Run completion record participates in dispatch.
+The Host reads persisted tasks at startup and sets its timer to the earliest active target. Inactive tasks remain queryable but never schedule another delivery. At delivery it resolves the original Session, including cold Sessions, through `schedule/resolve-agent`. The embedding owns activation: the SDK handler waits for initialization and retains its Session handle and model options; without a handler, the Web Session controller restores the Session. The composition waits for its activation provider before starting Schedule. After restoration it samples the wall clock again and excludes members that are no longer due after a rollback; those tasks retain their timer obligation. Neither a Goal nor a separate Run completion record participates in dispatch.
 
 Plugin-sourced `followup()` synchronously appends the message to the Session inbox. After a successful Session flush, one task-record put appends a saved delivery with its instruction snapshot and stores the latest `ScheduleDeliveryReceipt` together with the one-shot's `inactive` status or the recurring task's next target and status. Recurring tasks in the same batch share the receipt's `messageId`; each receipt retains that task's delivered occurrence time. Delivery never steers or cancels the current turn and does not wait for model completion.
 
@@ -509,6 +517,22 @@ async create(sessionId: SessionId, request: ScheduleCreateRequest, signal?: Abor
 @Remote('delete') async delete(request: ScheduleDeleteRequest, signal?: AbortSignal): Promise<ScheduleDeleteResult>
 
 /**
+ * Delete every ended Host task, leaving active tasks armed.
+ *
+ * Ended tasks never schedule another delivery, so the removal changes no pending
+ * target and no timer is recomputed. Rows are enumerated and removed in one FIFO
+ * slot, so a delivery ordered behind this call ends its task after the
+ * enumeration rather than during it. The batch is one domain write: a normal
+ * failure rejects with every listed row still stored, while a backend
+ * `unknown-state` failure may have removed rows and quarantines the Host
+ * domain, so later schedule operations reject until the domain is reopened.
+ * Every rejection announces `schedule/changed` because it does not establish
+ * which rows landed, and clients then re-read the catalog.
+ * @returns Count of removed rows; zero when the Host held no ended task.
+ */
+@Remote('deleteInactive') async deleteInactive(): Promise<ScheduleDeleteInactiveResult>
+
+/**
  * Update the name, instruction, and timing of an active task within the original Session
  * binding without activating the Session or changing saved deliveries.
  *
@@ -547,4 +571,24 @@ Durable task set changed; clients refetch global task and Session-active catalog
 ```
 
 Source: [`packages/schedule/schedule/src/types.ts`](../../packages/schedule/schedule/src/types.ts)
+
+<a id="scheduleresolve-agent--waterfall"></a>
+
+#### `schedule/resolve-agent` — waterfall
+
+Restore a reminder's Session through its embedding's owning controller. Call next() to use the Web Session controller.
+
+```ts cordis-catalog
+/**
+ * Restore a reminder's Session through its embedding's owning controller.
+ * Call next() to use the Web Session controller.
+ * @param sessionId - Original Session receiving the reminder.
+ * @mode waterfall
+ */
+'schedule/resolve-agent'(sessionId: SessionId, next: () => Promise<Agent>): Promise<Agent>
+```
+
+Types: [Agent](core.md) · [SessionId](core.md)
+
+Source: [`packages/schedule/schedule/src/index.ts`](../../packages/schedule/schedule/src/index.ts)
 <!-- END GENERATED cordis-surface -->

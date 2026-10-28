@@ -12,6 +12,8 @@
     "src/client/index.ts",
     "src/client/random-uuid.ts",
     "src/client/rpc.ts",
+    "src/client/socket.ts",
+    "src/connect-protocol.ts",
     "src/loopback-hostname.ts",
     "src/recovery-config.ts",
     "src/rpc.ts"

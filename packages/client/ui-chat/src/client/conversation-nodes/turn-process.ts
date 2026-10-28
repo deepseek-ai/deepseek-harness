@@ -4,7 +4,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import type {} from '@deepseek-ai/dsh-tools/types'
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc/client'
 import { hasAssistantReplyContent } from '../contract/assistant-content.ts'
 import type { AssistantChatData, ChatNode, FinalAssistantChatData } from '../contract/chat-nodes.ts'
 import {
@@ -86,6 +86,46 @@ function processEvidence(event: ConversationEvent): ProcessEvidence | undefined 
     || (event.type === 'tool/result' && event.surfaceOp === 'append')
     || event.type === 'llm/retry') return { kind: 'other', seq: event.seq }
   return undefined
+}
+
+/** Turn of one Step that recorded durable process evidence. */
+export interface ProcessEvidenceState {
+  readonly turn: number
+}
+
+function durableEvidenceStep(event: ConversationEvent): { readonly turn: number; readonly step: number } | undefined {
+  if (processEvidence(event) === undefined) return undefined
+  switch (event.type) {
+    case 'assistant/message':
+    case 'tool/call':
+    case 'tool/result':
+    case 'llm/retry':
+      return { turn: event.data.turn, step: event.data.step }
+    default:
+      return undefined
+  }
+}
+
+/**
+ * State-only record of each Step whose durable events include process evidence, keyed by Turn and Step.
+ * An input follows its Turn's process control exactly when its Turn recorded evidence before it, so an
+ * input reads the nearest earlier record through `reader.previous`. A Step's evidence is logged before
+ * a later Step admits input, so the record a later input reads no longer changes; transient live chunks
+ * are not needed because a Step's durable settlement precedes the next Step's input.
+ */
+export const processEvidenceDefinition: ConversationNodeDefinition<ProcessEvidenceState> = {
+  kind: 'process-evidence',
+  match: (event) => {
+    const coordinates = durableEvidenceStep(event)
+    return coordinates === undefined ? null : { id: `${coordinates.turn}:${coordinates.step}`, role: 'start' }
+  },
+  start: (_context, match) => {
+    const coordinates = durableEvidenceStep(match.event)
+    if (coordinates === undefined) throw new Error('process-evidence start requires durable process evidence')
+    return { turn: coordinates.turn }
+  },
+  update: context => context.state,
+  publication: () => 'none',
 }
 
 function turnLocation(context: ConversationNodeContext<TurnProcessState>): TurnLocation | undefined {
@@ -302,7 +342,7 @@ export const turnProcessDefinition: ConversationNodeDefinition<TurnProcessState>
 }
 
 /**
- * Register the Turn-scoped process disclosure projection.
+ * Register the Turn-scoped process disclosure projection and its per-Step evidence record.
  * @param ctx - owning UI Conversation context.
  */
 export function registerTurnProcess(ctx: Context): void {
@@ -319,6 +359,16 @@ export function registerTurnProcess(ctx: Context): void {
       'step/start': match,
       'step/end': match,
       'turn/end': match,
+    },
+  })
+  const evidence = processEvidenceDefinition.match.bind(processEvidenceDefinition)
+  ctx.uiConversation.events.register({
+    ...processEvidenceDefinition,
+    match: {
+      'assistant/message': evidence,
+      'tool/call': evidence,
+      'tool/result': evidence,
+      'llm/retry': evidence,
     },
   })
 }

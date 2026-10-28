@@ -189,10 +189,16 @@
   text-decoration: none;
 }
 
-.memberButton:hover .memberLabel,
 .memberButton:focus-visible .memberLabel {
   text-decoration: underline dotted;
   text-underline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .memberButton:hover .memberLabel {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
 }
 
 .dotSlot {

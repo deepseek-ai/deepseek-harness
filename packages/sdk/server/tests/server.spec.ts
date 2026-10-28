@@ -12,6 +12,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { randomUUID } from 'node:crypto'
 import AgentRegistry, { type Agent, type AgentHandle } from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -456,6 +457,7 @@ describe('HarnessSdkJsonRpcServer', () => {
   it('forwards whole-agent status without attributing a turn outcome', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const transport = new FakeTransport()
     const server = new HarnessSdkJsonRpcServer(ctx, transport)
@@ -477,7 +479,7 @@ describe('HarnessSdkJsonRpcServer', () => {
     await ctx.fiber.dispose()
   })
 
-  it('notifies the host when a child session is created with parent lineage', async () => {
+  it('notifies the host only for subagent sessions with a direct creator', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-subagent-'))
     const ctx = await makeHarness(storageDir)
     try {
@@ -488,16 +490,22 @@ describe('HarnessSdkJsonRpcServer', () => {
         meta: { cwd: storageDir },
       })
       ctx.sessions.create(SessionId('child-session'), {
-        meta: { cwd: storageDir, parentSession: SessionId('main') },
+        meta: { cwd: storageDir, parentSession: SessionId('main'), origin: 'subagent' },
       })
 
-      expect(transport.notifications).toContainEqual({
+      ctx.sessions.create(SessionId('legacy-fork'), {
+        meta: { cwd: storageDir, parentSession: SessionId('main') },
+      })
+      ctx.sessions.fork(SessionId('child-session'), undefined, SessionId('ordinary-fork'))
+      ctx.sessions.create(SessionId('unparented-subagent'), { meta: { origin: 'subagent' } })
+
+      expect(transport.notifications.filter(item => item.method === 'subagent.started')).toEqual([{
         method: 'subagent.started',
         params: {
           parentSessionId: 'main',
           childSessionId: 'child-session',
         },
-      })
+      }])
 
       await server.shutdown()
     } finally {
@@ -1003,7 +1011,7 @@ describe('HarnessSdkJsonRpcServer', () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-existing-llm-'))
     const ctx = await makeHarness(storageDir)
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
-    await ctx.plugin(LlmDeepSeek)
+    await ctx.plugin(LlmDeepSeek, { models: [{ id: 'preinstalled-model' }] })
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
       const inspect = server as unknown as { hasAdapterFor(provider: string): boolean }
@@ -1153,6 +1161,8 @@ describe('HarnessSdkJsonRpcServer', () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-unsupported-reasoning-'))
     const ctx = await makeHarness(storageDir)
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
+    // A loopback endpoint keeps the fallback-mounted official route off the network; no request is sent.
+    vi.stubEnv('DEEPSEEK_BASE_URL', 'http://127.0.0.1:9/anthropic')
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
       await expect(server.handleRequest('initialize', {

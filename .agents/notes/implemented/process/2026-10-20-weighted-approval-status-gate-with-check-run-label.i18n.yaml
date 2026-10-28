@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-20-weighted-approval-status-gate-with-check-run-label.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-10-20-weighted-approval-status-gate-with-check-run-label.md
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-publishes-the-decision-label-from-an-app:
+  en: 1ea2e345d6bc1058
+  zh: 65f872a0606660b8
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-publishes-the-decision-label-from-an-app/problem:
+  en: f2dc92b64d32bd68
+  zh: 7f24eaaa49a5776f
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-publishes-the-decision-label-from-an-app/decision:
+  en: 5f7ebd56d43445cf
+  zh: 869e144309b85c28
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-publishes-the-decision-label-from-an-app/verification:
+  en: c80da76f52dac191
+  zh: 1f7f8458211e1f5b
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-publishes-the-decision-label-from-an-app/alternatives-considered:
+  en: e3b37e68b3e76d05
+  zh: bb6c917c3fc6b685
+/agent-note-weighted-approval-keeps-its-commit-status-gate-and-publishes-the-decision-label-from-an-app/consequences:
+  en: 79a97b43e268dd04
+  zh: b85691eac68c313f

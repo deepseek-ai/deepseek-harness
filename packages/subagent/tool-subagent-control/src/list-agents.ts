@@ -1,10 +1,8 @@
 /**
  * The globally named `list_agents` tool: a thin model-facing adapter over
  * the continuable projection of `ctx.subagents.listChildren()` and, for the
- * `descendants` scope, `ctx.subagents.listDescendants()`. It stays separately
- * loadable from the root `send_message` plugin so a deployment can register
- * continuation delivery without exposing discovery.
- * @module @deepseek-ai/dsh-tool-subagent-control/list-agents
+ * `descendants` scope, `ctx.subagents.listDescendants()`. The control plugin owns
+ * registration and disposal alongside messaging and interruption.
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -15,9 +13,6 @@ import type {
   SubagentCatalogEntry, SubagentDescendantListEntry, SubagentListEntry,
 } from '@deepseek-ai/dsh-subagent'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-
-export const name = 'tool-subagent-list-agents'
-export const inject = ['tools', 'subagents', 'agents']
 
 type ListAgentsScope = 'children' | 'descendants'
 
@@ -82,7 +77,7 @@ function project(
  * Register the `list_agents` tool.
  * @param ctx - context carrying the tool registry, subagent service, and live Agent registry.
  */
-export function apply(ctx: Context): void {
+export function registerListAgents(ctx: Context): void {
   ctx.tools.register(defineTool({
     name: 'list_agents',
     description:

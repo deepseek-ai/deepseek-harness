@@ -21,6 +21,7 @@ function render(view) {
     'stop-failed': messages.updateStopFailed,
     'tasks-changed': messages.updateTasksChanged,
     'tasks-unavailable': messages.updateTasksUnavailable,
+    'fullscreen-timeout': messages.updateFullscreenTimeout,
   }
   const fallback = failed || update.phase === 'idle' || view.error !== undefined
   let title = policy.title ?? messages.mandatoryTitle

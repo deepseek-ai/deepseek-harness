@@ -25,11 +25,15 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-`session/resume` 在初始化后接受持久化的 `{ sessionId }`，待其 Agent 就绪后返回 `{}`。它通过 `agents.resume()` 加载历史、修复最后一个被中断的轮次，并保留存储的起始目录和当前有效目录，同时应用初始化时选定的模型路由。它不发送新输入。会话缺失、不可读、不兼容或被占用时，请求失败且不创建替代会话。对正在恢复的标识发送提示词时，会等待恢复完成；shutdown 会等待进行中的恢复并释放其 Agent。历史事件保留在日志中，不会作为新通知重新发送。
+当运行时必须服务 SDK 客户端时挂载本插件：把它加入组合了 agent 服务的 `cordis.yml`，启动运行时，客户端即可通过 stdio 连接。常用路径是显式的——插件需要 `agents` 服务；其余每个能力都来自外围插件树。
+
+将 `initialize.approvalRequests` 设为 `true`，即可把内部审批作为服务端到客户端的 `approval/request` 请求发送。桥接通过 `agents.isOwnedBy()` 运行时归属识别 SDK 拥有的 Agent 及其仍在运行的进程内后代，持久化的 `parentSession` 历史关系不决定审批归属；其他 Agent，以及未提供该标志的客户端，继续使用已组合的应答链。审批服务仍在分发前执行 `never` 策略，并记录询问与决定的审计事件。桥接仅接受 `allowed-once`、`rejected` 或 `cancelled`；无效响应、客户端错误或传输断开会产生审批服务的拒绝放行结果 `unavailable`。请求取消时释放待处理的协议等待项；shutdown 在等待 Agent 结束前释放所有此类等待项。迟到响应不能授权已放弃的操作。载荷见[协议](../protocol/README.zh.md)，客户端处理见 [Python 示例](../../../python/sdk/README.zh.md#client-approvals)。
+
+`session/resume` 在初始化后接受持久化的 `{ sessionId }`，待其 Agent 就绪后返回 `{}`。它通过 `agents.resume()` 加载历史、修复最后一个被中断的轮次，并保留存储的起始目录和当前有效目录，同时将初始化时选定的模型路由记录为 Session 选择。省略推理强度时，仅在路由相同的情况下保留已保存的显式强度。它不发送新输入。会话缺失、不可读、不兼容或被占用时，请求失败且不创建替代会话。对正在恢复的标识发送提示词时，会等待恢复完成；shutdown 会等待进行中的恢复并释放其 Agent。历史事件保留在日志中，不会作为新通知重新发送。恢复期间记录的模型选择会在恢复响应前发出新的 `session.event` 通知。
+
+插件在注册提醒激活处理方后发布 `sdkSessionActivation` 就绪标记；SDK 组合让 Schedule 依赖此标记，而非 Web Session controller。定时提醒也通过同一个 SDK Session 所有者投递。启动时已到期的提醒等待 SDK 成功初始化，再使用初始化指定的提供方、模型、推理强度和输出上限恢复会话。客户端可以首次接管提醒恢复的 Session；并发的提醒与客户端恢复共用一个 handle。关闭时释放等待初始化的提醒，并等待已经接纳的恢复完成。
 
 `session/working-directory/get` 接收 `{ sessionId }`；`session/working-directory/set` 接收 `{ sessionId, path }`。两者均返回 `{ cwd }`，并可创建未知 Session，而不启动模型轮次。读取通过工作目录服务恢复缺失目录；修改保留起始目录元数据与权限，并通过已记录的用户上下文告知模型。
-
-当运行时必须服务 SDK 客户端时挂载本插件：把它加入组合了 agent 服务的 `cordis.yml`，启动运行时，客户端即可通过 stdio 连接。常用路径是显式的——插件需要 `agents` 服务；其余每个能力都来自外围插件树。
 
 ### 组装
 
@@ -53,6 +57,11 @@ Stdout 只承载 JSON-RPC 帧，客户端可以逐字节解析；诊断信息应
 
 `session/wait` 观察已有 SDK 会话，直到受管理后代及其触发的根 Agent 后续轮次完成。它拒绝未知或已释放的根 Agent，不会创建会话，并在后代检查期间根 Agent 持续空闲后响应。收件箱消息处于停放状态的空闲子级继续驻留，但不延迟此响应；后续唤醒输入可使其继续运行。完成前发出的会话通知在 stdio 传输上先于响应到达。Agent 的运行时错误会保留在对应的确切会话中，直到后续提交的 `turn/end` 记录结果；否则等待请求会失败，即使错误发生在等待请求之前。终止事件已经记录的错误仍通过会话事件表达，后续成功的活动会清除较早的运行时错误。
 
+<a id="native-user-questions"></a>
+### 原生用户问答
+
+已初始化且声明 `capabilities.userQuestions` 的客户端负责此服务器所拥有的确切根 Agent 的问题。服务器把共享的 `user-questions/request` 事件转为 `user-question/ask` RPC，并在工具或审批消费答案前校验。其他 Agent 和未声明此能力的客户端仍使用原生回答方。工具取消和服务器关闭会中止待决请求并通知宿主；连接失败则返回错误。[协议](../protocol/README.zh.md#native-user-questions)定义载荷结构和错误码。
+
 ### 关闭与退出
 
 插件应答 `shutdown`，刷新响应并 dispose 根上下文，使 SDK 持有的 agent、订阅与持久化达到完全停稳，然后以 0 退出。EOF 与信号退出归 app bin 负责，后者也会 dispose 根上下文。仅卸载此插件会停止服务，但不会退出进程。
@@ -69,13 +78,14 @@ Stdout 只承载 JSON-RPC 帧，客户端可以逐字节解析；诊断信息应
 
 ### 设计理念
 
-本插件是轻量的展示适配器：[`HarnessSdkJsonRpcServer`](src/server.ts) 负责协议方法与通知，传输与具名协议类型来自 `dsh-sdk-protocol`，与客户端 SDK 共享。它订阅会话、agent 与 subagent 生命周期事件，并把它们作为协议通知转发；只有当服务在生命周期建立快照时记录的 `local` 标志为 true 时才转发 subagent 完成事件——提供方名称、子级 id 与持久化谱系均不能证明本地性。
+本插件是轻量的展示适配器：[`HarnessSdkJsonRpcServer`](src/server.ts) 负责协议方法与通知，传输与具名协议类型来自 `dsh-sdk-protocol`，与客户端 SDK 共享。它订阅会话、agent 与 subagent 生命周期事件，并把它们作为协议通知转发；只有当服务在生命周期建立快照时记录的 `local` 标志为 true 时才转发 subagent 完成事件——提供方名称、子级 id 与持久化谱系均不能证明本地性。 `subagent.started` 要求 `origin: subagent` 和直接创建者 ID；普通 fork（包括保留父 ID 的历史会话）不产生此通知。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、stdio 接线、请求分发、共享关闭与退出任务 |
+| [`src/user-questions.ts`](src/user-questions.ts) | 原生问答适配器：宿主转发、答案校验、取消 |
 | [`src/server.ts`](src/server.ts) | `HarnessSdkJsonRpcServer`：协议方法、逐会话 agent 创建、生命周期订阅、清理 |
 
 ### 请求流程

@@ -696,6 +696,22 @@ describe('LlmRuntime', () => {
     }])
   })
 
+  it('detaches advertised model badges, including their translations', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const translated = { text: { en: 'New', zh: '新' }, tone: 'info' as const }
+    const literal = { text: '1017', tone: 'neutral' as const }
+    ctx.llm.registerAdapter(['catalog'], new CatalogAdapter({ id: 'catalog', name: 'Catalog' }, [
+      { provider: 'catalog', id: 'new', name: 'New', badge: translated },
+      { provider: 'catalog', id: 'dated', name: 'Dated', badge: literal },
+    ]))
+    const [first, second] = await ctx.llm.listModels('catalog')
+    expect(first?.badge).toEqual(translated)
+    expect(first?.badge).not.toBe(translated)
+    expect(first?.badge?.text).not.toBe(translated.text)
+    expect(second?.badge).toEqual(literal)
+  })
+
   it('defaults adapters to their route name and an empty advisory model list', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
@@ -1687,4 +1703,20 @@ describe('LlmRuntime', () => {
     handle()
     expect(ctx.llm.listProviders()).toEqual([])
   })
+})
+
+it('delegates image coordinate projections and preserves images for adapters without a resize policy', async () => {
+  const ctx = new Context()
+  await ctx.plugin(LlmRuntime)
+  try {
+    const image = { attachmentId: AttachmentId('sha256:' + 'a'.repeat(64)), mediaType: 'image/png' as const, bytes: 200, width: 640, height: 480 }
+    ctx.llm.registerAdapter(['identity'], new ScriptedAdapter([]))
+    expect(ctx.llm.imageRequestTarget('identity', 'vision', image)).toEqual({ width: 640, height: 480, maxBytes: 200 })
+    class ResizingAdapter extends ScriptedAdapter {
+      override imageRequestTarget() { return { width: 320, height: 240, maxBytes: 100 } }
+    }
+    ctx.llm.registerAdapter(['resized'], new ResizingAdapter([]))
+    expect(ctx.llm.imageRequestTarget('resized', 'vision', image)).toEqual({ width: 320, height: 240, maxBytes: 100 })
+    expect(() => ctx.llm.imageRequestTarget('absent', 'vision', image)).toThrow()
+  } finally { await ctx.fiber.dispose() }
 })

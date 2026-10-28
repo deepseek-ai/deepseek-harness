@@ -27,10 +27,12 @@ import { DeliverablesTail, type DeliverablesInjected } from './Deliverables.tsx'
 import { ReviewTab, type ReviewInjected } from './ReviewTab.tsx'
 import { CHANGES_REVIEW_ID, changesReviewDefinition } from './review-definition.ts'
 import { createReviewStore } from './review-store.ts'
-import { en, NS, zh, type DeliverablesKey } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, NS, zh, type DeliverablesKey } from './locales.ts'
 import {
   deliverablesDefinition, presentedForClosing, producedFileMentions, selectProducedFiles,
 } from './turn-deliverables.ts'
+
+export type { PresentedOpenOutcome, PresentedOpenFailure } from './present-open.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -57,7 +59,7 @@ export function apply(ctx: ClientContext): void {
     diffs.reset()
   })
   ctx.uiConversation.events.register(deliverablesDefinition)
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-deliverables: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-deliverables: dictionaries')
   ctx.slots.inject(
     'conversation.chat.turnTail',
     () => ctx.slots.register({
@@ -107,7 +109,7 @@ export function apply(ctx: ClientContext): void {
       if (paths === null && presented.length === 0) return undefined
       return producedFileMentions([...new Set([...paths ?? [], ...presented.map(file => file.path)])], owner.openFile,
         path => t('presented.previewButton', { name: path }),
-        owner.turn.data.get('deliverables')?.produced.filter(operation => operation.seq <= owner.seq))
+        owner.turn.data.get('deliverables')?.produced)
     },
   }
   ctx.provide('chatFileMentions', mentions)

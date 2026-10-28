@@ -48,6 +48,9 @@
       "path": "../../typert/protocol"
     },
     {
+      "path": "../../util/time"
+    },
+    {
       "path": "../../workspace/workspace"
     }
   ]

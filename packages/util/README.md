@@ -1,5 +1,5 @@
 ---
-description: "Package map for shared utilities: atomic file writes, branded ids, deques, JSON values, harness home paths, launch environment, native commands, output retention, time zones, and timeouts."
+description: "Package map for shared utilities: atomic file writes, branded ids, deques, JSON values, harness home paths, launch environment, native commands, output retention, time and zone vocabulary, timeouts, and official package lists."
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `util/` group gives capability packages shared mechanical primitives instead of duplicate implementations. It covers atomic writes, branded ids, deques, lossless JSON values, UUIDs, Harness-home paths, launch environments, outbound proxy policy, native commands, output retention, time-zone canonicalization, and timeout handling. Every root entry here is a library: it registers no product service or event, and the consuming capability retains the business semantics.
+The `util/` group gives capability packages shared mechanical primitives instead of duplicate implementations. It covers atomic writes, branded ids, deques, lossless JSON values, UUIDs, Harness-home paths, launch environments, outbound proxy policy, native commands, output retention, time-zone, instant, and span vocabulary, and timeout handling. Every root entry here is a library: it registers no product service or event, and the consuming capability retains the business semantics. The exception is `official-bundles`: instead of a mechanical primitive, it holds the installation's and the plugin manager's official package lists as data their consumers apply.
 
 ## Table of Contents
 
@@ -22,12 +22,15 @@ The `util/` group gives capability packages shared mechanical primitives instead
 <a id="packages"></a>
 ## Packages
 
-Each package provides one primitive; open a package page for how to use it.
+Each package provides one primitive or one data set; open a package page for how to use it.
 
 | Package | Role |
 |---|---|
 | [`brand/`](brand/README.md) | Nominal string types and their stateless constructor |
 | [`package-manifest/`](package-manifest/README.md) | Shared TypeScript declarations for package manifests |
+| [`plugin-detail/`](plugin-detail/README.md) | Selects plugin detail documents and reads them from local packages and npm file CDNs |
+| [`plugin-market-index/`](plugin-market-index/README.md) | Validates plugin market index format 1 and builds pinned install arguments |
+| [`official-bundles/`](official-bundles/README.md) | Lists the official bundle and plugin packages the installation ships, offers, installs on demand, retires, and the plugin manager protects or presents |
 | [`crypto/`](crypto/README.md) | Mints RFC 9562 v4 UUIDs from the cross-runtime `crypto.getRandomValues` primitive |
 | [`deque/`](deque/README.md) | Provides amortized constant-time queue operations with bounded vacant storage |
 | [`chunked-list/`](chunked-list/README.md) | Retains immutable list versions with bounded append copying and checkpoint validation |
@@ -41,7 +44,7 @@ Each package provides one primitive; open a package page for how to use it.
 | [`workspace-path/`](workspace-path/README.md) | Provides browser-safe Workspace path and display helpers |
 | [`code-language/`](code-language/README.md) | Maps a filename suffix to the syntax-highlighting language that the Code preview, diff review, and the read card render |
 | [`output-retention/`](output-retention/README.md) | Bounds model-facing output and reports exact omission metadata |
-| [`time/`](time/README.md) | Validates and canonicalizes a caller-reported IANA time zone |
+| [`time/`](time/README.md) | Parses strict instants, local calendars, and caller-reported IANA zones, and holds a millisecond span |
 | [`timeout/`](timeout/README.md) | Deadline arithmetic, signal fusion, and timeout-versus-cancel classification |
 
 -----

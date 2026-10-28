@@ -548,6 +548,31 @@ function closeFileStream(
   stream.destroy()
 }
 
+/** The read-stream fields `_construct` completes. */
+interface ReadDescriptorTarget {
+  fd: number | null
+  pending: boolean
+  emit(event: string, ...args: unknown[]): boolean
+}
+
+/** Open a read stream's descriptor and announce it, completing `_construct`. */
+function openReadDescriptor(
+  stream: ReadDescriptorTarget, path: string, flags: string, callback: (error?: Error | null) => void,
+): void {
+  let fd: number
+  try {
+    fd = openSync(path, flags)
+  } catch (error) {
+    callback(error as Error)
+    return
+  }
+  stream.fd = fd
+  stream.pending = false
+  callback()
+  stream.emit('open', fd)
+  stream.emit('ready')
+}
+
 /** Read stream over one VFS file. */
 export class ReadStream extends Readable {
   /** Resolved path opened by this stream. */
@@ -591,18 +616,16 @@ export class ReadStream extends Readable {
       callback(abortError(this.signal.reason))
       return
     }
-    let fd: number
-    try {
-      fd = openSync(this.path, this.flags)
-    } catch (error) {
-      callback(error as Error)
+    // A file a lazy archive supplies opens once its archive arrived.
+    const arrival = vfs().whenReadable(this.path)
+    if (arrival === undefined) {
+      openReadDescriptor(this, this.path, this.flags, callback)
       return
     }
-    this.fd = fd
-    this.pending = false
-    callback()
-    this.emit('open', fd)
-    this.emit('ready')
+    arrival.then(
+      () => { openReadDescriptor(this, this.path, this.flags, callback) },
+      (error: unknown) => { callback(error as Error) },
+    )
   }
 
   override _read(size: number): void {
@@ -786,7 +809,10 @@ export function opendirSync(path: PathArg): Dir {
  * check here is that every name is a real `node:fs/promises` export.
  */
 export const promises = {
-  readFile: async (path: PathArg, options?: EncodingOption): Promise<Buffer | string> => readFileSync(path, options),
+  readFile: async (path: PathArg, options?: EncodingOption): Promise<Buffer | string> => {
+    await vfs().whenReadable(asPath(path))
+    return readFileSync(path, options)
+  },
   writeFile: async (
     path: PathArg,
     data: string | Uint8Array,
@@ -826,11 +852,15 @@ export const promises = {
       return
     }
     mkdirSync(dirname(target), { recursive: true })
+    await vfs().whenReadable(source)
     writeFileSync(target, bytesOf(source))
   },
   // The VFS keeps both names attached to one file identity until either name is removed.
   link: async (from: PathArg, to: PathArg): Promise<void> => { linkSync(from, to) },
-  open: async (path: PathArg, flags?: string, mode?: number): Promise<FileHandle> => openHandleSync(path, flags, mode),
+  open: async (path: PathArg, flags?: string, mode?: number): Promise<FileHandle> => {
+    await vfs().whenReadable(asPath(path))
+    return openHandleSync(path, flags, mode)
+  },
   opendir: async (path: PathArg): Promise<Dir> => opendirSync(path),
   truncate: async (path: PathArg, length = 0): Promise<void> => {
     vfs().truncateSync(asPath(path), length)

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface de mods Claude Code",
+    "description": "Affichez l'arborescence des extensions de chaque session au-dessus de la zone de saisie et envoyez les actions des boutons au service d'extension."
+  }
+}

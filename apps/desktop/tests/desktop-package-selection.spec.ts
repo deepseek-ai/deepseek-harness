@@ -95,14 +95,24 @@ it('resolves an old locally retained package with publishRequested=false without
     await expect(resolveRetainedDesktopPublication(env, path => path.includes('/environments/') ? { protection_rules: [] } : api(path)))
       .rejects.toThrow(/reviewers/u)
     await expect(resolveRetainedDesktopPublication(env, path => path.includes('/compare/') ? { status: 'diverged' } : api(path)))
-      .rejects.toThrow(/not on master/u)
+      .rejects.toThrow(/not on the selected repository branch/u)
     const manifestPath = join(root, 'releases/42/2/manifest.json')
     const original = await readFile(manifestPath, 'utf8')
     const tagged = await verifyRetainedDesktopRelease(join(root, 'releases'), '42', '2')
+    tagged.source.sourceRef = 'feature/desktop-update'
+    await writeFile(manifestPath, JSON.stringify(tagged))
+    expect(await resolveRetainedDesktopPublication(env, api)).toMatchObject({ sourceRef: 'feature/desktop-update', commit: source.commit })
+    expect(apiCalls).toContain(`repos/owner/repo/compare/${source.commit}...refs%2Fheads%2Ffeature%2Fdesktop-update`)
+    await expect(resolveRetainedDesktopPublication(env, path => path.includes('/compare/') ? { status: 'diverged' } : api(path)))
+      .rejects.toThrow(/selected repository branch/u)
+    await expect(resolveRetainedDesktopPublication(env, (path) => {
+      if (path.includes('/compare/')) throw new Error('branch deleted or missing')
+      return api(path)
+    })).rejects.toThrow(/branch deleted/u)
     tagged.source.sourceRef = 'dsh-v1.0.0'
     await writeFile(manifestPath, JSON.stringify(tagged))
     expect(await resolveRetainedDesktopPublication(env, api)).toMatchObject({ sourceRef: 'dsh-v1.0.0' })
-    await expect(resolveRetainedDesktopPublication(env, path => path.endsWith('/commits/dsh-v1.0.0') ? { sha: 'c'.repeat(40) } : api(path)))
+    await expect(resolveRetainedDesktopPublication(env, path => path.endsWith('/commits/refs%2Ftags%2Fdsh-v1.0.0') ? { sha: 'c'.repeat(40) } : api(path)))
       .rejects.toThrow(/source tag changed/u)
     await writeFile(manifestPath, original)
     await writeFile(join(root, 'releases/42/2/installer.dmg'), 'changed')
@@ -110,4 +120,18 @@ it('resolves an old locally retained package with publishRequested=false without
     await rm(join(root, 'releases/42/2'), { recursive: true })
     await expect(resolveRetainedDesktopPublication(env, api)).rejects.toThrow()
   } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('routes both Mac architectures to one machine without authorizing an unlisted target', () => {
+  const f = fixture()
+  const routes = { mini: { label: 'dsh-mini', target: ['mac-arm64', 'mac-x64'] } }
+  for (const path of ['macos-package.yml', 'macos-intel-package.yml']) {
+    f.run.path = `.github/workflows/${path}`
+    expect(selectDesktopPackage('owner/repo', { package_run_id: '42' }, routes, f.api))
+      .toMatchObject({ runnerName: 'mini', runnerLabel: 'dsh-mini' })
+  }
+  expect(() => selectDesktopPackage('owner/repo', { package_run_id: '42' }, f.routes, f.api)).toThrow(/no configured/u)
+  for (const target of [[], ['mac-x64', 'linux-x64']]) {
+    expect(() => selectDesktopPackage('owner/repo', { package_run_id: '42' }, { mini: { label: 'dsh-mini', target } }, f.api)).toThrow()
+  }
 })

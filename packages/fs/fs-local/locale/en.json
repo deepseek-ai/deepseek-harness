@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Local filesystem",
+    "description": "Access files through the local filesystem."
+  }
+}

@@ -1,3 +1,5 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { chmod, mkdtemp, mkdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -5,13 +7,14 @@ import { tmpdir } from 'node:os'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
+import type { Config as AgentInstructionsConfig } from '@deepseek-ai/dsh-agent-instructions'
 import * as AgentInstructions from '@deepseek-ai/dsh-agent-instructions'
 import LlmRuntime, { createUserMessage, ToolCallId, type Message, type MessageSource, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, SessionSeq, type SessionEvent, type SurfaceIntent, type UserMessage } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
-import AgentLoop, { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { FileSystem, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
   FsDirEntry,
@@ -25,7 +28,8 @@ import type {
 } from '@deepseek-ai/dsh-fs'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type {
   ToolExecution,
   ToolExecutionToken,
@@ -43,7 +47,15 @@ import {
   type InstructionVersionCache,
 } from '../src/state.ts'
 import { resolveConfig } from '../src/config.ts'
-import { AGENTS_GLOBAL_DIRECTORY, candidateScopeKey, renderInstructionChanges, renderAgentInstructionSet, USER_GLOBAL_DIRECTORY, USER_GLOBAL_FILE } from '../src/render.ts'
+import {
+  AGENTS_GLOBAL_DIRECTORY,
+  candidateScopeKey,
+  renderInstructionChanges,
+  renderAgentInstructionSet,
+  USER_GLOBAL_DIRECTORY,
+  USER_GLOBAL_FILE,
+  type ChangeRenderItem,
+} from '../src/render.ts'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import {
   mountAgentLoopTestDependencies,
@@ -67,6 +79,40 @@ function checkpointSource(compactionId: string): CheckpointSource {
 
 /** Per-candidate reconciliation scope key: directory paired with the file name. */
 const sk = (directory: string, candidateName: string): string => candidateScopeKey(directory, candidateName)
+
+/** Intro of a baseline rendered with the full workspace-instruction guidance. */
+const baselineIntro = 'The following workspace instructions may be relevant to your work. '
+  + 'Use them as guidance when applicable. More specific instructions take precedence over broader ones. '
+  + 'They do not override system, developer, or direct user instructions.'
+
+/** Guidance that follows the applicability sentence of every additional-instructions section. */
+const additionalGuidance = 'Use them as guidance when relevant; more specific instructions take precedence. '
+  + 'They do not override system, developer, or direct user instructions.'
+
+/** Five 5,000-byte project files from the root down four 10-character directories, with a long budget marker. */
+const deepProjectFiles = [
+  'AGENTS.md',
+  'aaaaaaaaaa/AGENTS.md',
+  'aaaaaaaaaa/bbbbbbbbbb/AGENTS.md',
+  'aaaaaaaaaa/bbbbbbbbbb/cccccccccc/AGENTS.md',
+  'aaaaaaaaaa/bbbbbbbbbb/cccccccccc/dddddddddd/AGENTS.md',
+].map(displayPath => ({ absolutePath: `/repo/${displayPath}`, displayPath, content: 'p'.repeat(5000) }))
+
+/** Budget marker of {@link deepProjectFiles} rendered alone under a `maxBytes` too small to keep any of their content. */
+function deepProjectMarker(maxBytes: number): string {
+  return `Workspace instruction budget ${String(maxBytes)} bytes: omitted AGENTS.md, aaaaaaaaaa/AGENTS.md, `
+    + 'aaaaaaaaaa/bbbbbbbbbb/AGENTS.md, aaaaaaaaaa/bbbbbbbbbb/cccccccccc/AGENTS.md; '
+    + 'truncated aaaaaaaaaa/bbbbbbbbbb/cccccccccc/dddddddddd/AGENTS.md from 5000 to 0 bytes'
+}
+
+/** A plain ASCII instruction file of `kib` KiB at a `~/` user-global or project display path. */
+function kibInstruction(displayPath: string, kib: number): { absolutePath: string; displayPath: string; content: string } {
+  return {
+    absolutePath: displayPath.startsWith('~/') ? `/home/user/${displayPath.slice(2)}` : `/repo/${displayPath}`,
+    displayPath,
+    content: 'x'.repeat(kib * 1024),
+  }
+}
 
 const testToolSignal = new AbortController().signal
 const isolatedInboxCtx = new Context()
@@ -236,21 +282,22 @@ class BlockingReadFileSystem extends RecordingFileSystem {
   }
 }
 
-async function mountAgentInstructionsPlugin(ctx: Context, config: AgentInstructions.Config): Promise<Awaited<ReturnType<Context['plugin']>>> {
+async function mountAgentInstructionsPlugin(ctx: Context, config: AgentInstructionsConfig): Promise<Awaited<ReturnType<Context['plugin']>>> {
   if (ctx.get('workingDirectory') === undefined) provideWorkingDirectoryFixture(ctx)
-  if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
+  if (ctx.get('sessionProjections') === undefined) if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
+  if (ctx.get('agents') === undefined) await ctx.plugin(AgentRegistry)
   return ctx.plugin(AgentInstructions, config)
 }
 
-async function mountAgentInstructions(ctx: Context, config: AgentInstructions.Config): Promise<Awaited<ReturnType<Context['plugin']>>> {
+async function mountAgentInstructions(ctx: Context, config: AgentInstructionsConfig): Promise<Awaited<ReturnType<Context['plugin']>>> {
   await ctx.plugin(LocalFileSystem, { cwd: '/' })
   return mountAgentInstructionsPlugin(ctx, config)
 }
 
-async function mountFileToolsAndAgentInstructions(ctx: Context, config: AgentInstructions.Config): Promise<Awaited<ReturnType<Context['plugin']>>> {
+async function mountFileToolsAndAgentInstructions(ctx: Context, config: AgentInstructionsConfig): Promise<Awaited<ReturnType<Context['plugin']>>> {
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(LocalFileSystem, { cwd: '/' })
   await ctx.plugin(ToolFs)
   return mountAgentInstructionsPlugin(ctx, config)
@@ -310,7 +357,7 @@ async function agentInstructionsOf(agent: Agent): Promise<UserMessage> {
 
 async function syncAgentInstructions(ctx: Context, agent: Agent): Promise<void> {
   await agentEvents(ctx, agent).waterfall(
-    'agent/pre-step', { messages: [], turn: 1, step: 1, signal: testToolSignal },
+    'agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: testToolSignal },
     async () => ({ kind: 'enter' as const, messages: [] }),
   )
 }
@@ -345,13 +392,13 @@ async function composeBaselinePrefix(ctx: Context, agent: TestAgent): Promise<Me
   const signal = new AbortController().signal
   await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: [], turn: 1, step: 1, signal },
+    { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
   )
   const claimed = claimInbox(agent, 'next-step')
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: claimed, turn: 1, step: 2, signal },
+    { modelSelection: { provider: 'mock', model: 'mock' }, messages: claimed, turn: 1, step: 2, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: claimed }),
   )
   const entered = decision.kind === 'enter' ? decision.messages : []
@@ -1189,6 +1236,566 @@ describe('workspace context rendering', () => {
 
     expect(Buffer.byteLength(rendered.text, 'utf8')).toBeLessThanOrEqual(51)
   })
+
+  it('renders a user-global file and project files that fit one budget as one unmarked chain', () => {
+    const rendered = renderAgentInstructions([
+      { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'Prefer pnpm.' },
+      { absolutePath: '/repo/AGENTS.md', displayPath: 'AGENTS.md', content: 'root rules' },
+      { absolutePath: '/repo/pkg/AGENTS.md', displayPath: 'pkg/AGENTS.md', content: 'package rules' },
+    ], { maxBytes: 65536 })
+
+    expect(rendered).toEqual({
+      text: [
+        '<system-reminder>',
+        baselineIntro,
+        '',
+        'Instructions from: ~/.dsh/AGENTS.md',
+        '',
+        'Prefer pnpm.',
+        '',
+        'Instructions from: AGENTS.md',
+        '',
+        'root rules',
+        '',
+        'Instructions from: pkg/AGENTS.md',
+        '',
+        'package rules',
+        '</system-reminder>',
+      ].join('\n'),
+      omitted: [],
+      truncated: [],
+    })
+  })
+
+  it.each([
+    {
+      layout: '20/30/20 KiB',
+      files: [kibInstruction('~/.dsh/AGENTS.md', 20), kibInstruction('AGENTS.md', 30), kibInstruction('pkg/AGENTS.md', 20)],
+    },
+    { layout: '40/30 KiB', files: [kibInstruction('~/.dsh/AGENTS.md', 40), kibInstruction('AGENTS.md', 30)] },
+    { layout: '63.5/8 KiB', files: [kibInstruction('~/.dsh/AGENTS.md', 63.5), kibInstruction('AGENTS.md', 8)] },
+  ])('keeps every file of the $layout layout when each chain fits its own budget', ({ files }) => {
+    const { rendered, included } = renderAgentInstructionSet(files, { maxBytes: 65536 })
+
+    expect(rendered.omitted).toEqual([])
+    expect(rendered.truncated).toEqual([])
+    expect(included).toEqual(files)
+    expect(rendered.text).toBe(renderAgentInstructions(files, { maxBytes: 1_048_576 }).text)
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeGreaterThan(65536)
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeLessThanOrEqual(2 * 65536)
+  })
+
+  it('omits the harness-home file before the shared-root file when only the user-global chain exceeds its budget', () => {
+    const files = [
+      { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'home '.repeat(100) },
+      { absolutePath: '/home/user/.agents/AGENTS.md', displayPath: '~/.agents/AGENTS.md', content: 'shared rule' },
+      { absolutePath: '/repo/AGENTS.md', displayPath: 'AGENTS.md', content: 'root '.repeat(40) },
+      { absolutePath: '/repo/pkg/AGENTS.md', displayPath: 'pkg/AGENTS.md', content: 'package rule' },
+    ]
+
+    const { rendered, included } = renderAgentInstructionSet(files, { maxBytes: 600 })
+
+    expect(rendered.text).toBe([
+      '<system-reminder>',
+      'Workspace instruction budget 600 bytes: omitted ~/.dsh/AGENTS.md',
+      '',
+      baselineIntro,
+      '',
+      'Instructions from: ~/.agents/AGENTS.md',
+      '',
+      'shared rule',
+      '',
+      'Instructions from: AGENTS.md',
+      '',
+      'root '.repeat(40),
+      '',
+      'Instructions from: pkg/AGENTS.md',
+      '',
+      'package rule',
+      '</system-reminder>',
+    ].join('\n'))
+    expect(rendered.omitted).toEqual([{ absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md' }])
+    expect(rendered.truncated).toEqual([])
+    expect(included).toEqual(files.slice(1))
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeGreaterThan(600)
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeLessThanOrEqual(2 * 600)
+  })
+
+  it('truncates an oversized user-global file within its own budget while the project chain renders whole', () => {
+    const userGlobal = kibInstruction('~/.dsh/AGENTS.md', 70)
+    const files = [
+      userGlobal,
+      { absolutePath: '/repo/AGENTS.md', displayPath: 'AGENTS.md', content: 'root rule' },
+      { absolutePath: '/repo/pkg/AGENTS.md', displayPath: 'pkg/AGENTS.md', content: 'package rule' },
+    ]
+    const truncated = [{ displayPath: '~/.dsh/AGENTS.md', originalBytes: 71680, includedBytes: 65129 }]
+
+    const { rendered, included } = renderAgentInstructionSet(files, { maxBytes: 65536 })
+
+    expect(rendered).toEqual({
+      text: [
+        '<system-reminder>',
+        'Workspace instruction budget 65536 bytes: truncated ~/.dsh/AGENTS.md from 71680 to 65129 bytes',
+        '',
+        baselineIntro,
+        '',
+        'Instructions from: ~/.dsh/AGENTS.md',
+        '',
+        userGlobal.content.slice(0, 65129),
+        '',
+        'Instructions from: AGENTS.md',
+        '',
+        'root rule',
+        '',
+        'Instructions from: pkg/AGENTS.md',
+        '',
+        'package rule',
+        '</system-reminder>',
+      ].join('\n'),
+      omitted: [],
+      truncated,
+    })
+    expect(included).toEqual(files)
+    expect(renderAgentInstructions([userGlobal], { maxBytes: 65536 }).truncated).toEqual(truncated)
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeLessThanOrEqual(2 * 65536)
+  })
+
+  it('records the same omission and truncation for an over-budget project chain as rendering it alone', () => {
+    const project = [
+      { absolutePath: '/repo/AGENTS.md', displayPath: 'AGENTS.md', content: 'root '.repeat(200) },
+      { absolutePath: '/repo/pkg/AGENTS.md', displayPath: 'pkg/AGENTS.md', content: 'leaf '.repeat(100) },
+    ]
+    const projectAlone = renderAgentInstructions(project, { maxBytes: 600 })
+
+    const rendered = renderAgentInstructions([
+      { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'Prefer pnpm.' },
+      ...project,
+    ], { maxBytes: 600 })
+
+    expect(projectAlone.omitted.map(file => file.displayPath)).toEqual(['AGENTS.md'])
+    expect(rendered.omitted).toEqual(projectAlone.omitted)
+    expect(rendered.truncated).toEqual(projectAlone.truncated)
+    expect(rendered.text).toBe([
+      '<system-reminder>',
+      'Workspace instruction budget 600 bytes: omitted AGENTS.md; truncated pkg/AGENTS.md from 500 to 186 bytes',
+      '',
+      baselineIntro,
+      '',
+      'Instructions from: ~/.dsh/AGENTS.md',
+      '',
+      'Prefer pnpm.',
+      '',
+      'Instructions from: pkg/AGENTS.md',
+      '',
+      'leaf '.repeat(100).slice(0, 186),
+      '</system-reminder>',
+    ].join('\n'))
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeLessThanOrEqual(2 * 600)
+  })
+
+  it('keeps a user-global file that fills its budget exactly while the project chain fits only its notice and empty heading', () => {
+    const userGlobal = { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'Use pnpm.' }
+    const project = [
+      { absolutePath: '/repo/AGENTS.md', displayPath: 'AGENTS.md', content: 'r'.repeat(1000) },
+      { absolutePath: '/repo/packages/app/AGENTS.md', displayPath: 'packages/app/AGENTS.md', content: 'a'.repeat(1000) },
+      {
+        absolutePath: '/repo/packages/app/src/feature/AGENTS.md',
+        displayPath: 'packages/app/src/feature/AGENTS.md',
+        content: 'f'.repeat(1000),
+      },
+    ]
+    expect(Buffer.byteLength(renderAgentInstructions([userGlobal], { maxBytes: 320 }).text, 'utf8')).toBe(320)
+    expect(renderAgentInstructions(project, { maxBytes: 320 }).text).toMatch(/^Workspace instruction budget 320 bytes: /)
+
+    const { rendered, included } = renderAgentInstructionSet([userGlobal, ...project], { maxBytes: 320 })
+
+    expect(rendered.text).toBe([
+      '<system-reminder>',
+      'Workspace instruction budget 320 bytes: omitted AGENTS.md, packages/app/AGENTS.md; '
+      + 'truncated packages/app/src/feature/AGENTS.md from 1000 to 0 bytes',
+      '',
+      baselineIntro,
+      '',
+      'Instructions from: ~/.dsh/AGENTS.md',
+      '',
+      'Use pnpm.',
+      '',
+      'Instructions from: packages/app/src/feature/AGENTS.md',
+      '',
+      '',
+      '</system-reminder>',
+    ].join('\n'))
+    expect(rendered.text.split(baselineIntro)).toHaveLength(2)
+    expect(included).toEqual([userGlobal])
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeLessThanOrEqual(2 * 320)
+  })
+
+  it('keeps a user-global file that fills its budget exactly while the project chain fits only its bare notice', () => {
+    const userGlobal = { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'g'.repeat(5) }
+    expect(Buffer.byteLength(renderAgentInstructions([userGlobal], { maxBytes: 316 }).text, 'utf8')).toBe(316)
+    expect(renderAgentInstructions(deepProjectFiles, { maxBytes: 316 }).text).toBe(deepProjectMarker(316))
+
+    const { rendered, included } = renderAgentInstructionSet([userGlobal, ...deepProjectFiles], { maxBytes: 316 })
+
+    expect(rendered.text).toBe([
+      '<system-reminder>',
+      deepProjectMarker(316),
+      '',
+      baselineIntro,
+      '',
+      'Instructions from: ~/.dsh/AGENTS.md',
+      '',
+      'g'.repeat(5),
+      '</system-reminder>',
+    ].join('\n'))
+    expect(included).toEqual([userGlobal])
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeLessThanOrEqual(2 * 316)
+  })
+
+  it('merges a frameless project chain at exactly twice the budget and falls back to one budget one byte above', () => {
+    const userGlobal = (bytes: number): { absolutePath: string; displayPath: string; content: string } => (
+      { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'g'.repeat(bytes) }
+    )
+    const deepestHeading = 'Instructions from: aaaaaaaaaa/bbbbbbbbbb/cccccccccc/dddddddddd/AGENTS.md'
+    expect(renderAgentInstructions(deepProjectFiles, { maxBytes: 318 }).text).toBe(`${deepProjectMarker(318)}\n\n${deepestHeading}\n\n`)
+    expect(renderAgentInstructions([userGlobal(6)], { maxBytes: 318 })).toMatchObject({ omitted: [], truncated: [] })
+
+    const atBound = renderAgentInstructionSet([userGlobal(5), ...deepProjectFiles], { maxBytes: 318 })
+    const overBound = renderAgentInstructionSet([userGlobal(6), ...deepProjectFiles], { maxBytes: 318 })
+
+    expect(atBound.rendered.text).toBe([
+      '<system-reminder>',
+      deepProjectMarker(318),
+      '',
+      baselineIntro,
+      '',
+      'Instructions from: ~/.dsh/AGENTS.md',
+      '',
+      'g'.repeat(5),
+      '',
+      deepestHeading,
+      '',
+      '',
+      '</system-reminder>',
+    ].join('\n'))
+    expect(Buffer.byteLength(atBound.rendered.text, 'utf8')).toBe(2 * 318)
+    expect(atBound.included).toEqual([userGlobal(5)])
+    expect(overBound.rendered.text).toBe('Workspace instruction budget 318 bytes: omitted ~/.dsh/AGENTS.md, AGENTS.md, aaaaaaaaaa/AGENTS.md, '
+      + 'aaaaaaaaaa/bbbbbbbbbb/AGENTS.md, aaaaaaaaaa/bbbbbbbbbb/cccccccccc/AGENTS.md; '
+      + 'truncated aaaaaaaaaa/bbbbbbbbbb/cccccccccc/dddddddddd/AGENTS.md from 5000 to 0 bytes')
+    expect(overBound.rendered.omitted[0]).toEqual({ absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md' })
+    expect(overBound.included).toEqual([])
+  })
+
+  it('keeps both chains whole when each fills its budget exactly and truncates both one byte lower', () => {
+    const files = [
+      { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'g'.repeat(289) },
+      { absolutePath: '/repo/AGENTS.md', displayPath: 'AGENTS.md', content: 'p'.repeat(296) },
+    ]
+    for (const file of files) {
+      expect(Buffer.byteLength(renderAgentInstructions([file], { maxBytes: 600 }).text, 'utf8')).toBe(600)
+    }
+
+    const exact = renderAgentInstructionSet(files, { maxBytes: 600 })
+    const below = renderAgentInstructionSet(files, { maxBytes: 599 })
+
+    expect(exact.rendered).toEqual({ text: renderAgentInstructions(files, { maxBytes: 928 }).text, omitted: [], truncated: [] })
+    expect(Buffer.byteLength(exact.rendered.text, 'utf8')).toBe(928)
+    expect(exact.included).toEqual(files)
+    expect(below.rendered.text.split('\n')[1]).toBe(
+      'Workspace instruction budget 599 bytes: truncated ~/.dsh/AGENTS.md from 289 to 198 bytes, AGENTS.md from 296 to 212 bytes',
+    )
+    expect(below.rendered.omitted).toEqual([])
+    expect(below.included).toEqual(files)
+    expect(Buffer.byteLength(below.rendered.text, 'utf8')).toBeLessThanOrEqual(2 * 599)
+  })
+
+  it('frames both chains under the compact intro when neither chain fits the full intro', () => {
+    const rendered = renderAgentInstructions([
+      { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'g'.repeat(1000) },
+      { absolutePath: '/repo/pkg/AGENTS.md', displayPath: 'pkg/AGENTS.md', content: 'p'.repeat(1000) },
+    ], { maxBytes: 300 })
+
+    expect(rendered.text).toBe([
+      '<system-reminder>',
+      'Workspace instruction budget 300 bytes: truncated ~/.dsh/AGENTS.md from 1000 to 51 bytes, pkg/AGENTS.md from 1000 to 57 bytes',
+      '',
+      'Workspace instructions were omitted or truncated to fit the configured byte budget.',
+      '',
+      'Instructions from: ~/.dsh/AGENTS.md',
+      '',
+      'g'.repeat(51),
+      '',
+      'Instructions from: pkg/AGENTS.md',
+      '',
+      'p'.repeat(57),
+      '</system-reminder>',
+    ].join('\n'))
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeLessThanOrEqual(2 * 300)
+  })
+
+  it('frames the budget notices of both chains without an intro when neither chain fits a frame of its own', () => {
+    const { rendered, included } = renderAgentInstructionSet([
+      { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'g'.repeat(1000) },
+      { absolutePath: '/repo/pkg/AGENTS.md', displayPath: 'pkg/AGENTS.md', content: 'p'.repeat(1000) },
+    ], { maxBytes: 150 })
+
+    expect(rendered.text).toBe([
+      '<system-reminder>',
+      'Workspace instruction budget 150 bytes: truncated ~/.dsh/AGENTS.md from 1000 to 0 bytes, pkg/AGENTS.md from 1000 to 0 bytes',
+      '',
+      'Instructions from: ~/.dsh/AGENTS.md',
+      '',
+      '',
+      '',
+      'Instructions from: pkg/AGENTS.md',
+      '',
+      '',
+      '</system-reminder>',
+    ].join('\n'))
+    expect(included).toEqual([])
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeLessThanOrEqual(2 * 150)
+  })
+
+  it('falls back to the single-budget notice when the merged chain notices would exceed twice the budget', () => {
+    const rendered = renderAgentInstructions([
+      { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'g'.repeat(1000) },
+      { absolutePath: '/repo/pkg/AGENTS.md', displayPath: 'pkg/AGENTS.md', content: 'p'.repeat(1000) },
+    ], { maxBytes: 50 })
+
+    expect(rendered).toEqual({
+      text: 'Workspace instruction budget 50 bytes: omitted ~/.',
+      omitted: [{ absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md' }],
+      truncated: [{ displayPath: 'pkg/AGENTS.md', originalBytes: 1000, includedBytes: 0 }],
+    })
+  })
+
+  it('keeps every two-chain baseline and change batch within twice the budget at every limit', () => {
+    const files = [
+      { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'home '.repeat(200) },
+      { absolutePath: '/home/user/.agents/AGENTS.md', displayPath: '~/.agents/AGENTS.md', content: 'shared '.repeat(30) },
+      { absolutePath: '/repo/AGENTS.md', displayPath: 'AGENTS.md', content: 'root '.repeat(200) },
+      { absolutePath: '/repo/packages/app/AGENTS.md', displayPath: 'packages/app/AGENTS.md', content: 'app '.repeat(100) },
+    ]
+    const actions = ['set', 'replace', 'set', 'remove'] as const
+    const items = files.map((file, index) => ({
+      change: { action: actions[index]!, scope: file.displayPath, path: file.displayPath, digest: 'digest' },
+      file,
+    }))
+
+    for (let maxBytes = 1; maxBytes <= 3000; maxBytes += 1) {
+      expect(Buffer.byteLength(renderAgentInstructions(files, { maxBytes }).text, 'utf8')).toBeLessThanOrEqual(2 * maxBytes)
+      expect(Buffer.byteLength(renderInstructionChanges(items, maxBytes).text, 'utf8')).toBeLessThanOrEqual(2 * maxBytes)
+    }
+  })
+
+  it('truncates multibyte content in both chains on code point boundaries near the limit', () => {
+    const files = [
+      { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: '规'.repeat(400) },
+      { absolutePath: '/repo/AGENTS.md', displayPath: 'AGENTS.md', content: '😀'.repeat(300) },
+    ]
+
+    const rendered = renderAgentInstructions(files, { maxBytes: 700 })
+
+    expect(rendered.truncated).toEqual([
+      { displayPath: '~/.dsh/AGENTS.md', originalBytes: 1200, includedBytes: 297 },
+      { displayPath: 'AGENTS.md', originalBytes: 1200, includedBytes: 312 },
+    ])
+    expect(rendered.text).toContain([
+      'Instructions from: ~/.dsh/AGENTS.md',
+      '',
+      '规'.repeat(99),
+      '',
+      'Instructions from: AGENTS.md',
+      '',
+      '😀'.repeat(78),
+      '</system-reminder>',
+    ].join('\n'))
+    for (let maxBytes = 640; maxBytes <= 720; maxBytes += 1) {
+      const text = renderAgentInstructions(files, { maxBytes }).text
+      expect(text).not.toContain('�')
+      expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(2 * maxBytes)
+    }
+  })
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])('renders nothing from either chain when the budget %s disables loading', (maxBytes) => {
+    const files = [
+      { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'global rule' },
+      { absolutePath: '/repo/AGENTS.md', displayPath: 'AGENTS.md', content: 'root rule' },
+    ]
+    const items = files.map(file => ({
+      change: { action: 'set' as const, scope: file.displayPath, path: file.displayPath, digest: 'digest' },
+      file,
+    }))
+
+    expect(renderAgentInstructions(files, { maxBytes })).toEqual({ text: '', omitted: files, truncated: [] })
+    expect(renderInstructionChanges(items, maxBytes)).toEqual({ text: '', changes: [] })
+  })
+
+  it('retains a user-global change beside project changes when each chain fits its own budget', () => {
+    const items = [
+      {
+        change: { action: 'set' as const, scope: sk(USER_GLOBAL_DIRECTORY, USER_GLOBAL_FILE), path: '~/.dsh/AGENTS.md', digest: 'global' },
+        file: { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'Prefer pnpm.' },
+      },
+      {
+        change: { action: 'set' as const, scope: sk('a', 'AGENTS.md'), path: 'a/AGENTS.md', digest: 'a' },
+        file: { absolutePath: '/repo/a/AGENTS.md', displayPath: 'a/AGENTS.md', content: 'Rule a.' },
+      },
+      {
+        change: { action: 'set' as const, scope: sk('b', 'AGENTS.md'), path: 'b/AGENTS.md', digest: 'b' },
+        file: { absolutePath: '/repo/b/AGENTS.md', displayPath: 'b/AGENTS.md', content: 'Rule b.' },
+      },
+    ]
+    const rendered = renderInstructionChanges(items, 560)
+
+    expect(rendered.changes).toEqual(items.map(item => item.change))
+    expect(rendered.text).toBe([
+      '<system-reminder>',
+      'Additional instructions from: ~/.dsh/AGENTS.md',
+      '',
+      `These user-global instructions apply to all work. ${additionalGuidance}`,
+      '',
+      'Prefer pnpm.',
+      '',
+      'Additional instructions from: a/AGENTS.md',
+      '',
+      `These instructions apply to work under \`a\`. ${additionalGuidance}`,
+      '',
+      'Rule a.',
+      '',
+      'Additional instructions from: b/AGENTS.md',
+      '',
+      `These instructions apply to work under \`b\`. ${additionalGuidance}`,
+      '',
+      'Rule b.',
+      '</system-reminder>',
+    ].join('\n'))
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeGreaterThan(560)
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeLessThanOrEqual(2 * 560)
+  })
+
+  it('drops a user-global change that cannot fit its own budget while retaining the project changes', () => {
+    const items = [
+      {
+        change: { action: 'set' as const, scope: sk(USER_GLOBAL_DIRECTORY, USER_GLOBAL_FILE), path: '~/.dsh/AGENTS.md', digest: 'global' },
+        file: { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'g'.repeat(1000) },
+      },
+      {
+        change: { action: 'replace' as const, scope: sk('a', 'AGENTS.md'), path: 'a/AGENTS.md', digest: 'a' },
+        file: { absolutePath: '/repo/a/AGENTS.md', displayPath: 'a/AGENTS.md', content: 'Rule a.' },
+      },
+      {
+        change: { action: 'remove' as const, scope: sk('b', 'AGENTS.md'), path: 'b/AGENTS.md' },
+        file: { absolutePath: 'removed:b/AGENTS.md', displayPath: 'b/AGENTS.md', content: '' },
+      },
+    ]
+
+    const rendered = renderInstructionChanges(items, 330)
+
+    expect(rendered.changes).toEqual([items[1]!.change, items[2]!.change])
+    expect(rendered.text).toBe([
+      '<system-reminder>',
+      'Workspace instruction budget 330 bytes: truncated ~/.dsh/AGENTS.md from 1000 to 0 bytes',
+      '',
+      'Updated instructions from: a/AGENTS.md',
+      '',
+      'This file changed after it was loaded. Use the following content instead of the previously loaded instructions from this file.',
+      '',
+      'Rule a.',
+      '',
+      'Instructions removed: b/AGENTS.md',
+      '',
+      'The previously loaded instructions from this file no longer apply.',
+      '</system-reminder>',
+    ].join('\n'))
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBeLessThanOrEqual(2 * 330)
+  })
+
+  it('keeps the loaded order of a change batch whose project item precedes its user-global item', () => {
+    const items = (bytes: number): ChangeRenderItem[] => [
+      {
+        change: { action: 'set', scope: sk('a', 'AGENTS.md'), path: 'a/AGENTS.md', digest: 'a' },
+        file: { absolutePath: '/repo/a/AGENTS.md', displayPath: 'a/AGENTS.md', content: 'a'.repeat(bytes) },
+      },
+      {
+        change: { action: 'set', scope: sk(USER_GLOBAL_DIRECTORY, USER_GLOBAL_FILE), path: '~/.dsh/AGENTS.md', digest: 'global' },
+        file: { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'g'.repeat(bytes) },
+      },
+    ]
+    const batchText = (marker: string[], projectBytes: number, userGlobalBytes: number): string => [
+      '<system-reminder>',
+      ...marker,
+      'Additional instructions from: a/AGENTS.md',
+      '',
+      `These instructions apply to work under \`a\`. ${additionalGuidance}`,
+      '',
+      'a'.repeat(projectBytes),
+      '',
+      'Additional instructions from: ~/.dsh/AGENTS.md',
+      '',
+      `These user-global instructions apply to all work. ${additionalGuidance}`,
+      '',
+      'g'.repeat(userGlobalBytes),
+      '</system-reminder>',
+    ].join('\n')
+    const small = items(10)
+    const large = items(1000)
+
+    const fits = renderInstructionChanges(small, 65536)
+    const split = renderInstructionChanges(small, 400)
+    const truncated = renderInstructionChanges(large, 400)
+
+    expect(fits).toEqual({ text: batchText([], 10, 10), changes: small.map(item => item.change) })
+    expect(split).toEqual(fits)
+    expect(Buffer.byteLength(split.text, 'utf8')).toBeGreaterThan(400)
+    expect(truncated).toEqual({
+      text: batchText(['Workspace instruction budget 400 bytes: truncated a/AGENTS.md from 1000 to 41 bytes, ~/.dsh/AGENTS.md from 1000 to 25 bytes', ''], 41, 25),
+      changes: large.map(item => item.change),
+    })
+  })
+
+  it('retains a user-global change beside a frameless project batch at exactly twice the budget and drops it one byte above', () => {
+    const items = (globalBytes: number): ChangeRenderItem[] => [
+      {
+        change: { action: 'set', scope: sk(USER_GLOBAL_DIRECTORY, USER_GLOBAL_FILE), path: '~/.dsh/AGENTS.md', digest: 'global' },
+        file: { absolutePath: '/home/user/.dsh/AGENTS.md', displayPath: '~/.dsh/AGENTS.md', content: 'g'.repeat(globalBytes) },
+      },
+      {
+        change: { action: 'set', scope: sk('a', 'AGENTS.md'), path: 'a/AGENTS.md', digest: 'a' },
+        file: { absolutePath: '/repo/a/AGENTS.md', displayPath: 'a/AGENTS.md', content: 'p'.repeat(5000) },
+      },
+    ]
+    const atBoundItems = items(34)
+    expect(renderInstructionChanges(items(35).slice(0, 1), 321).changes).toHaveLength(1)
+
+    const atBound = renderInstructionChanges(atBoundItems, 321)
+    const overBound = renderInstructionChanges(items(35), 321)
+
+    expect(atBound.changes).toEqual([atBoundItems[0]!.change])
+    expect(atBound.text).toBe([
+      '<system-reminder>',
+      'Workspace instruction budget 321 bytes: truncated a/AGENTS.md from 5000 to 0 bytes',
+      '',
+      'Additional instructions from: ~/.dsh/AGENTS.md',
+      '',
+      `These user-global instructions apply to all work. ${additionalGuidance}`,
+      '',
+      'g'.repeat(34),
+      '',
+      'Additional instructions from: a/AGENTS.md',
+      '',
+      `These instructions apply to work under \`a\`. ${additionalGuidance}`,
+      '',
+      '',
+      '</system-reminder>',
+    ].join('\n'))
+    expect(Buffer.byteLength(atBound.text, 'utf8')).toBe(2 * 321)
+    expect(overBound).toEqual({
+      text: 'Workspace instruction budget 321 bytes: omitted ~/.dsh/AGENTS.md; truncated a/AGENTS.md from 5000 to 0 bytes',
+      changes: [],
+    })
+  })
 })
 
 describe('workspace context request injection', () => {
@@ -1234,7 +1841,7 @@ describe('workspace context request injection', () => {
     const ctx = new Context()
 
     provideWorkingDirectoryFixture(ctx)
-    await expect(mountAgentInstructionsPlugin(ctx, {} as AgentInstructions.Config)).rejects.toThrow(/maxBytes/)
+    await expect(mountAgentInstructionsPlugin(ctx, {} as AgentInstructionsConfig)).rejects.toThrow(/maxBytes/)
   })
 
   it('mounts without requiring a filesystem provider', async () => {
@@ -1247,30 +1854,8 @@ describe('workspace context request injection', () => {
     }
   })
 
-  it('requires projections without making the optional filesystem a static dependency', () => {
-    expect(AgentInstructions.inject).toEqual(['sessionProjections', 'workingDirectory'])
-  })
-
-  it('rejects a file-touch projection when the turn boundary unit is absent', async () => {
-    const ctx = new Context()
-    provideWorkingDirectoryFixture(ctx)
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(AgentInstructions, { maxBytes: 65536 })
-    const exec = stubToolExecution({
-      callId: ToolCallId('missing-turn-boundary'),
-      name: 'read',
-      arguments: { file_path: 'file.txt' },
-      agent: await stubAgent('/virtual/repo'),
-      signal: testToolSignal,
-    })
-
-    expect(() => {
-      ctx.emit('tools/result', exec, {
-        content: [{ type: 'text', text: 'ok' }],
-        isError: false,
-        value: null,
-      })
-    }).toThrow('agent-instructions requires the turnBoundary session projection')
+  it('requires agents without making the optional filesystem a static dependency', () => {
+    expect(AgentInstructions.inject).toEqual(['agents', 'workingDirectory'])
   })
 
   it('does not inject baseline context when no filesystem provider is present', async () => {
@@ -1446,7 +2031,7 @@ describe('workspace context request injection', () => {
     }
   })
 
-  it('keeps duplicate budget-omitted global instructions excluded across steps and resumes', async () => {
+  it('keeps the shared-root duplicate of a user-global file truncated to 0 bytes excluded across steps and resumes', async () => {
     const root = await tempRepo()
     const home = await tempRepo()
     const agents = await tempRepo()
@@ -1458,15 +2043,20 @@ describe('workspace context request injection', () => {
       await write(join(agents, 'AGENTS.md'), `\n${'global instruction '.repeat(100)}\n`)
       pinHarnessHome(home)
       pinAgentsHome(agents)
-      await mountAgentInstructions(ctx, { maxBytes: 700 })
+      // A user-global file is budgeted alone, so it loses all content only at a
+      // budget this small: here its chain keeps only the heading, while the
+      // project chain keeps part of its file under the compact intro.
+      await mountAgentInstructions(ctx, { maxBytes: 244 })
       const original = await stubAgent(root)
       await composeBaselinePrefix(ctx, original)
 
       const contexts = original.session.snapshotEvents().filter(event => event.type === 'user/message'
         && event.data.source.kind === 'agent-instructions')
       expect(contexts).toHaveLength(1)
-      expect(derivedText(original)).toContain('omitted $DSH_HOME/AGENTS.md')
+      expect(derivedText(original)).toContain('truncated $DSH_HOME/AGENTS.md from 1900 to 0 bytes')
+      expect(derivedText(original)).toContain('Instructions from: AGENTS.md\n\nproject')
       expect(derivedText(original)).not.toContain('global instruction')
+      expect(derivedText(original)).not.toContain('$DSH_AGENTS_HOME')
       await syncAgentInstructions(ctx, original)
       await syncAgentInstructions(ctx, original)
       expect(original.inbox.nextStep.filter(message => message.source.kind === 'agent-instructions')).toEqual([])
@@ -1481,6 +2071,65 @@ describe('workspace context request injection', () => {
       vi.unstubAllEnvs()
       await ctx.fiber.dispose()
       for (const path of [root, home, agents]) await rm(path, { recursive: true, force: true })
+    }
+  })
+
+  it('adds the user-global file that a resumed single-budget baseline omitted as one additional transition', async () => {
+    const root = await tempRepo()
+    const home = await tempRepo()
+    const ctx = new Context()
+    try {
+      await mkdir(join(root, '.git'), { recursive: true })
+      await write(join(root, 'AGENTS.md'), 'project rule '.repeat(20))
+      await write(join(home, 'AGENTS.md'), 'global rule '.repeat(20))
+      pinHarnessHome(home)
+      await mountAgentInstructions(ctx, { maxBytes: 700 })
+      const original = await stubAgent(root)
+      await composeBaselinePrefix(ctx, original)
+      expect(derivedText(original)).toContain('Instructions from: $DSH_HOME/AGENTS.md')
+      const userGlobalScope = sk(USER_GLOBAL_DIRECTORY, USER_GLOBAL_FILE)
+      // The fixture models a log recorded under one shared budget: the same
+      // identity, a baseline with only the project file, and its omission notice.
+      const recorded = original.session.snapshotEvents().map((event) => {
+        if (event.type !== 'user/message' || event.data.source.kind !== 'agent-instructions') return event
+        const text = [
+          '<system-reminder>',
+          'Workspace instruction budget 700 bytes: omitted $DSH_HOME/AGENTS.md',
+          '',
+          baselineIntro,
+          '',
+          'Instructions from: AGENTS.md',
+          '',
+          'project rule '.repeat(20),
+          '</system-reminder>',
+        ].join('\n')
+        const changes = event.data.source.changes.filter(change => change.scope !== userGlobalScope)
+        return { ...event, data: { ...event.data, content: [{ type: 'text' as const, text }], source: { ...event.data.source, changes } } }
+      })
+
+      const resumed = await stubAgent(root, recorded)
+      await composeBaselinePrefix(ctx, resumed)
+
+      expect(baselineEvents(resumed)).toHaveLength(1)
+      const transitions = resumed.session.snapshotEvents().filter(event => event.type === 'user/message'
+        && event.data.source.kind === 'agent-instructions'
+        && event.data.source.baseline !== true)
+      expect(transitions).toHaveLength(1)
+      const transition = transitions[0]
+      expect(transition?.type === 'user/message' ? transition.data.source : undefined).toMatchObject({
+        changes: [{ action: 'set', scope: userGlobalScope, path: '$DSH_HOME/AGENTS.md' }],
+      })
+      expect(transition?.type === 'user/message' ? blocksText(transition.data.content) : '').toContain([
+        'Additional instructions from: $DSH_HOME/AGENTS.md',
+        '',
+        `These user-global instructions apply to all work. ${additionalGuidance}`,
+        '',
+        'global rule '.repeat(20),
+      ].join('\n'))
+    } finally {
+      vi.unstubAllEnvs()
+      await ctx.fiber.dispose()
+      for (const path of [root, home]) await rm(path, { recursive: true, force: true })
     }
   })
 
@@ -1724,7 +2373,7 @@ describe('workspace context request injection', () => {
       const original = await stubAgent(root)
       await agentEvents(ctx, original).waterfall(
         'agent/pre-step',
-        { messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
       )
       const inserted = original.inbox.nextStep[0]
@@ -1738,7 +2387,7 @@ describe('workspace context request injection', () => {
       const claimed = claimInbox(resumed, 'next-step')
       const decision = await agentEvents(ctx, resumed).waterfall(
         'agent/pre-step',
-        { messages: claimed, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: claimed, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: claimed }),
       )
       if (decision.kind !== 'enter') throw new Error('recovered baseline was rejected')
@@ -1773,7 +2422,7 @@ describe('workspace context request injection', () => {
       const original = await stubAgent(root)
       await agentEvents(ctx, original).waterfall(
         'agent/pre-step',
-        { messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
       )
       const stale = original.inbox.nextStep[0]
@@ -1788,7 +2437,7 @@ describe('workspace context request injection', () => {
       const staleClaim = claimInbox(resumed, 'next-step')
       const staleDecision = await agentEvents(ctx, resumed).waterfall(
         'agent/pre-step',
-        { messages: staleClaim, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: staleClaim, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: staleClaim }),
       )
 
@@ -1831,7 +2480,7 @@ describe('workspace context request injection', () => {
       const original = await stubAgent(root)
       await agentEvents(originalCtx, original).waterfall(
         'agent/pre-step',
-        { messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
       )
       const stale = original.inbox.nextStep[0]
@@ -1846,7 +2495,7 @@ describe('workspace context request injection', () => {
       const claimed = claimInbox(resumed, 'next-step')
       const decision = await agentEvents(resumedCtx, resumed).waterfall(
         'agent/pre-step',
-        { messages: claimed, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: claimed, turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: claimed }),
       )
 
@@ -1959,7 +2608,7 @@ describe('workspace context request injection', () => {
 
       const decision = await agentEvents(ctx, agent).waterfall(
         'agent/pre-step',
-        { messages: [prompt], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [prompt], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve(downstream),
       )
 
@@ -2551,7 +3200,7 @@ describe('workspace context request injection', () => {
 
       const decision = await agentEvents(ctx, agent).waterfall(
         'agent/pre-step',
-        { messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve(downstream),
       )
 
@@ -2589,7 +3238,7 @@ describe('workspace context request injection', () => {
       expect(baselineEvents(agent)).toHaveLength(1)
 
       await write(join(root, 'AGENTS.md'), 'updated repo rule')
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-remount'),
         name: 'read',
@@ -2673,7 +3322,7 @@ describe('workspace context request injection', () => {
 
       const decision = await agentEvents(ctx, agent).waterfall(
         'agent/pre-step',
-        { messages: [prompt], turn: 2, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [prompt], turn: 2, step: 1, signal: AbortSignal.timeout(requestTimeoutMs) },
         () => Promise.resolve({ kind: 'enter' as const, messages: [prompt] }),
       )
 
@@ -2805,7 +3454,7 @@ describe('workspace context request injection', () => {
 
       await composeBaselinePrefix(ctx, agent)
       await write(join(root, 'AGENTS.md'), 'new root rule with more detail')
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-baseline-change'), name: 'read', arguments: { file_path: 'file.txt' }, agent,
       })
@@ -2837,7 +3486,7 @@ describe('workspace context request injection', () => {
 
       await composeBaselinePrefix(ctx, agent)
       await rm(join(root, 'AGENTS.md'))
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-baseline-remove'), name: 'read', arguments: { file_path: 'file.txt' }, agent,
       })
@@ -3137,7 +3786,7 @@ describe('workspace context request injection', () => {
       const reason = new Error('cancel prefix')
       const pending = agentEvents(ctx, await stubAgent(root)).waterfall(
         'agent/pre-step',
-        { messages: [], turn: 1, step: 1, signal: controller.signal },
+        { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: controller.signal },
         () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
       )
 
@@ -3635,6 +4284,7 @@ describe('dynamic nested workspace context injection', () => {
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(LocalFileSystem, { cwd: '/' })
       await ctx.plugin(ToolFs)
@@ -3761,7 +4411,7 @@ describe('dynamic nested workspace context injection', () => {
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-nested'),
         name: 'read',
@@ -3845,7 +4495,7 @@ describe('dynamic nested workspace context injection', () => {
       })
       const agent = await stubAgent(root)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-configured-nested-candidate'),
         name: 'read',
@@ -3881,7 +4531,7 @@ describe('dynamic nested workspace context injection', () => {
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-nested-overlay'),
         name: 'read',
@@ -3926,7 +4576,7 @@ describe('dynamic nested workspace context injection', () => {
       })
       const agent = await stubAgent(root)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-nested-overlay-disabled'),
         name: 'read',
@@ -3957,7 +4607,7 @@ describe('dynamic nested workspace context injection', () => {
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      const first = await ctx.tools.execute({
+      const first = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-nested-1'),
         name: 'read',
@@ -3965,7 +4615,7 @@ describe('dynamic nested workspace context injection', () => {
         agent,
       })
       await appendAdditionalContexts(ctx, agent)
-      const second = await ctx.tools.execute({
+      const second = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-nested-2'),
         name: 'read',
@@ -3991,6 +4641,7 @@ describe('dynamic nested workspace context injection', () => {
     try {
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(RecordingFileSystem)
       const fs = ctx.fs as RecordingFileSystem
       const instructionPath = join(root, 'pkg/AGENTS.md')
@@ -4003,12 +4654,12 @@ describe('dynamic nested workspace context injection', () => {
       await mountAgentInstructionsPlugin(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      const first = await ctx.tools.execute({
+      const first = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-before-version-fast-path'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
       await appendAdditionalContexts(ctx, agent)
-      const second = await ctx.tools.execute({
+      const second = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-with-version-fast-path'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4032,6 +4683,7 @@ describe('dynamic nested workspace context injection', () => {
     try {
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(RecordingFileSystem)
       const fs = ctx.fs as RecordingFileSystem
       const instructionPath = join(root, 'pkg/AGENTS.md')
@@ -4043,18 +4695,18 @@ describe('dynamic nested workspace context injection', () => {
       await mountAgentInstructionsPlugin(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-before-same-digest-version-change'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
       await appendAdditionalContexts(ctx, agent)
       fs.entries.set(instructionPath, { type: 'file', content: 'same package rule', version: FsVersion('revision-2') })
-      const afterVersionChange = await ctx.tools.execute({
+      const afterVersionChange = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-same-digest-version-change'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
       await syncAgentInstructions(ctx, agent)
-      const afterRefresh = await ctx.tools.execute({
+      const afterRefresh = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-version-cache-refresh'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4080,6 +4732,7 @@ describe('dynamic nested workspace context injection', () => {
     try {
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(RecordingFileSystem)
       const fs = ctx.fs as RecordingFileSystem
       const instructionPath = join(root, 'pkg/AGENTS.md')
@@ -4092,11 +4745,11 @@ describe('dynamic nested workspace context injection', () => {
 
       const firstAgent = await stubAgent(root)
       const secondAgent = await stubAgent(root)
-      const first = await ctx.tools.execute({
+      const first = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-from-first-session'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent: firstAgent,
       })
-      const second = await ctx.tools.execute({
+      const second = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-from-second-session'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent: secondAgent,
       })
@@ -4127,13 +4780,13 @@ describe('dynamic nested workspace context injection', () => {
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-before-change'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
       await appendAdditionalContexts(ctx, agent)
       await write(join(root, 'pkg/AGENTS.md'), 'new package rule with more detail')
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-change'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4173,7 +4826,7 @@ describe('dynamic nested workspace context injection', () => {
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-both-siblings'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4182,7 +4835,7 @@ describe('dynamic nested workspace context injection', () => {
       expect(firstText).toContain('sibling package rule')
       await appendAdditionalContexts(ctx, agent)
       await rm(join(root, 'pkg/AGENTS.md'))
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-one-sibling-removed'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4214,7 +4867,7 @@ describe('dynamic nested workspace context injection', () => {
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-nested-dup-siblings'), name: 'read', arguments: { file_path: join('pkg', 'deep', 'file.txt') }, agent,
       })
@@ -4452,7 +5105,7 @@ describe('dynamic nested workspace context injection', () => {
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-before-dup-convergence'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4461,7 +5114,7 @@ describe('dynamic nested workspace context injection', () => {
       expect(firstText).toContain('initial divergent nested rule')
       await appendAdditionalContexts(ctx, agent)
       await write(join(root, 'pkg/CLAUDE.md'), 'canonical nested rule')
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-dup-convergence'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4492,14 +5145,14 @@ describe('dynamic nested workspace context injection', () => {
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-before-earlier-converges'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
       await appendAdditionalContexts(ctx, agent)
       // Only the earlier candidate changes; the sibling stays byte-identical but now duplicates it.
       await write(join(root, 'pkg/AGENTS.md'), 'secondary nested rule')
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-earlier-converges'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4533,13 +5186,13 @@ describe('dynamic nested workspace context injection', () => {
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-before-remove'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
       await appendAdditionalContexts(ctx, agent)
       await rm(join(root, 'pkg/AGENTS.md'))
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-remove'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4576,7 +5229,7 @@ describe('dynamic nested workspace context injection', () => {
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-before-symlink-dir'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4590,7 +5243,7 @@ describe('dynamic nested workspace context injection', () => {
       await rm(join(root, 'pkg/AGENTS.md'))
       await mkdir(join(root, 'pkg/elsewhere'), { recursive: true })
       await symlink(join(root, 'pkg/elsewhere'), join(root, 'pkg/AGENTS.md'))
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-symlink-dir'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4619,20 +5272,20 @@ describe('dynamic nested workspace context injection', () => {
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-before-tombstone'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
       await appendAdditionalContexts(ctx, agent)
       await rm(join(root, 'pkg/AGENTS.md'))
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-to-create-tombstone'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
       await appendAdditionalContexts(ctx, agent)
       await write(join(root, 'pkg/AGENTS.md'), 'restored package rule')
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-tombstone'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4657,6 +5310,7 @@ describe('dynamic nested workspace context injection', () => {
     try {
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(RecordingFileSystem)
       const fs = ctx.fs as RecordingFileSystem
       fs.entries.set(join(root, '.git'), { type: 'directory' })
@@ -4667,13 +5321,13 @@ describe('dynamic nested workspace context injection', () => {
       await mountAgentInstructionsPlugin(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      const first = await ctx.tools.execute({
+      const first = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-before-provider-failure'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
       await appendAdditionalContexts(ctx, agent)
       fs.throwOnStat.add(join(root, 'pkg/AGENTS.md'))
-      const duringFailure = await ctx.tools.execute({
+      const duringFailure = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-during-provider-failure'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -4700,7 +5354,7 @@ describe('dynamic nested workspace context injection', () => {
       pinHarnessHome(home)
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
-      const first = await ctx.tools.execute({
+      const first = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-before-resume'),
         name: 'read',
@@ -4710,7 +5364,7 @@ describe('dynamic nested workspace context injection', () => {
       await appendAdditionalContexts(ctx, agent)
       const resumed = await stubAgent(root, agent.session.snapshotEvents())
 
-      const afterResume = await ctx.tools.execute({
+      const afterResume = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-resume'),
         name: 'read',
@@ -4739,7 +5393,7 @@ describe('dynamic nested workspace context injection', () => {
       pinHarnessHome(home)
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const original = await stubAgent(root)
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-before-offline-change'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent: original,
       })
@@ -4773,7 +5427,7 @@ describe('dynamic nested workspace context injection', () => {
       pinHarnessHome(home)
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
-      const first = await ctx.tools.execute({
+      const first = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-before-compact'),
         name: 'read',
@@ -4781,7 +5435,7 @@ describe('dynamic nested workspace context injection', () => {
         agent,
       })
       const contextSeq = (await appendAdditionalContexts(ctx, agent))!
-      const visibleBeforeCompact = await ctx.tools.execute({
+      const visibleBeforeCompact = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-while-visible'),
         name: 'read',
@@ -4797,7 +5451,7 @@ describe('dynamic nested workspace context injection', () => {
         sourceEventSeqs: [SessionSeq(contextSeq)],
       })
 
-      const afterCompact = await ctx.tools.execute({
+      const afterCompact = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-compact'),
         name: 'read',
@@ -4832,7 +5486,7 @@ describe('dynamic nested workspace context injection', () => {
       const baseline = baselineEvents(agent)[0]
       expect(baseline).toBeDefined()
 
-      const whileVisible = await ctx.tools.execute({
+      const whileVisible = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-visible-baseline'),
         name: 'read',
@@ -4847,7 +5501,7 @@ describe('dynamic nested workspace context injection', () => {
         sourceEventSeqs: [baseline!.seq],
       })
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-compacted-baseline'),
         name: 'read',
@@ -4856,7 +5510,7 @@ describe('dynamic nested workspace context injection', () => {
       })
       const rearmedContext = (await syncedAgentInstructions(ctx, agent))
       await appendAdditionalContexts(ctx, agent)
-      const afterRearm = await ctx.tools.execute({
+      const afterRearm = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-rearmed-baseline'),
         name: 'read',
@@ -4891,7 +5545,7 @@ describe('dynamic nested workspace context injection', () => {
       pinHarnessHome(home)
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-package'),
         name: 'read',
@@ -4901,7 +5555,7 @@ describe('dynamic nested workspace context injection', () => {
       const firstText = blocksText(((await syncedAgentInstructions(ctx, agent))).content)
       await appendAdditionalContexts(ctx, agent)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-subtree'),
         name: 'read',
@@ -4932,7 +5586,7 @@ describe('dynamic nested workspace context injection', () => {
       pinHarnessHome(home)
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 700 })
       const agent = await stubAgent(root)
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-subtree-omitting-parent'),
         name: 'read',
@@ -4942,7 +5596,7 @@ describe('dynamic nested workspace context injection', () => {
       const firstText = blocksText(((await syncedAgentInstructions(ctx, agent))).content)
       await appendAdditionalContexts(ctx, agent)
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-parent-after-omit'),
         name: 'read',
@@ -4997,7 +5651,7 @@ describe('dynamic nested workspace context injection', () => {
         source: { kind: 'other' },
       }), { surfaceOp: 'append' })
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-spoofed-state'),
         name: 'read',
@@ -5027,14 +5681,14 @@ describe('dynamic nested workspace context injection', () => {
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      const rootResult = await ctx.tools.execute({
+      const rootResult = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-root-file'),
         name: 'read',
         arguments: { file_path: 'root.txt' },
         agent,
       })
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-absolute-nested-file'),
         name: 'read',
@@ -5062,6 +5716,7 @@ describe('dynamic nested workspace context injection', () => {
       const nested = join(root, 'pkg/AGENTS.md')
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(RecordingFileSystem)
       const fs = ctx.fs as RecordingFileSystem
       fs.entries.set(join(root, '.git'), { type: 'directory' })
@@ -5073,7 +5728,7 @@ describe('dynamic nested workspace context injection', () => {
       await mountAgentInstructionsPlugin(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-with-unreadable-nested-instruction'),
         name: 'read',
@@ -5121,7 +5776,7 @@ describe('dynamic nested workspace context injection', () => {
         })],
       }))
 
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-with-downstream'),
         name: 'read',
@@ -5177,7 +5832,7 @@ describe('dynamic nested workspace context injection', () => {
         feedback: [{ type: 'text' as const, text: 'blocked downstream' }],
       }))
 
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-blocked-downstream'),
         name: 'read',
@@ -5210,6 +5865,7 @@ describe('dynamic nested workspace context injection', () => {
       await write(join(root, 'pkg/deep/file.txt'), 'hello')
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(LocalFileSystem, { cwd: '/' })
       await ctx.plugin(ToolFs)
       let shouldBlock = true
@@ -5223,7 +5879,7 @@ describe('dynamic nested workspace context injection', () => {
       await mountAgentInstructionsPlugin(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      const blocked = await ctx.tools.execute({
+      const blocked = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('outer-block-first'),
         name: 'read',
@@ -5234,7 +5890,7 @@ describe('dynamic nested workspace context injection', () => {
       expect(agent.inbox.nextStep).toEqual([])
 
       shouldBlock = false
-      const accepted = await ctx.tools.execute({
+      const accepted = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('outer-block-retry'),
         name: 'read',
@@ -5265,6 +5921,7 @@ describe('dynamic nested workspace context injection', () => {
       await write(join(root, 'pkg/deep/file.txt'), 'hello')
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(LocalFileSystem, { cwd: '/' })
       await ctx.plugin(ToolFs)
       ctx.tools.register(defineContentToolFixture({
@@ -5272,7 +5929,7 @@ describe('dynamic nested workspace context injection', () => {
         description: 'read through a nested dispatch',
         parameters: {},
         async execute(_args, exec) {
-          const nested = await ctx.tools.execute({
+          const nested = await executeToolFixture(ctx, {
             signal: testToolSignal,
             callId: ToolCallId(`${exec.callId}:nested`),
             name: 'read',
@@ -5295,7 +5952,7 @@ describe('dynamic nested workspace context injection', () => {
       await mountAgentInstructionsPlugin(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
 
-      const blocked = await ctx.tools.execute({
+      const blocked = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('composite-first'), name: 'composite-read', arguments: {}, agent,
       })
@@ -5510,7 +6167,7 @@ describe('dynamic nested workspace context injection', () => {
       pinHarnessHome(home)
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 0 })
 
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-with-disabled-budget'),
         name: 'read',
@@ -5535,6 +6192,7 @@ describe('dynamic nested workspace context injection', () => {
     try {
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(RecordingFileSystem)
       const fs = ctx.fs as RecordingFileSystem
       const instructionPath = join(root, 'pkg/AGENTS.md')
@@ -5546,12 +6204,12 @@ describe('dynamic nested workspace context injection', () => {
       await mountAgentInstructionsPlugin(ctx, { maxBytes: 20 })
       const agent = await stubAgent(root)
 
-      const first = await ctx.tools.execute({
+      const first = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-tiny-budget-1'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
       await syncAgentInstructions(ctx, agent)
-      const second = await ctx.tools.execute({
+      const second = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-tiny-budget-2'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -5582,7 +6240,7 @@ describe('dynamic nested workspace context injection', () => {
       pinHarnessHome(home)
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
 
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-missing'),
         name: 'read',
@@ -5613,7 +6271,7 @@ describe('dynamic nested workspace context injection', () => {
       await fiber.dispose()
       const agent = await stubAgent(root)
 
-      const result = await ctx.tools.execute({
+      const result = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('read-after-dispose'),
         name: 'read',
@@ -5710,7 +6368,7 @@ describe('workspace context inbox synchronization', () => {
       pinHarnessHome(home)
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const agent = await stubAgent(root)
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('pending-v1'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -5723,7 +6381,7 @@ describe('workspace context inbox synchronization', () => {
       agent.inbox.append('next-step', duplicate)
 
       await write(join(root, 'pkg/AGENTS.md'), 'pending version two with more detail')
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('pending-v2'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -5734,7 +6392,7 @@ describe('workspace context inbox synchronization', () => {
       expect(blocksText(agent.inbox.nextStep[0]?.content)).not.toContain('pending version one')
 
       await rm(join(root, 'pkg/AGENTS.md'))
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('pending-delete'), name: 'read', arguments: { file_path: join('pkg', 'file.txt') }, agent,
       })
@@ -5770,7 +6428,7 @@ describe('workspace context inbox synchronization', () => {
       controller.abort(new Error('abort pre-step reconciliation'))
 
       await expect(agentEvents(ctx, agent).waterfall(
-        'agent/pre-step', { messages: [], turn: 1, step: 1, signal: controller.signal },
+        'agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal: controller.signal },
         async () => ({ kind: 'enter' as const, messages: [] }),
       )).rejects.toThrow('abort pre-step reconciliation')
 
@@ -5845,14 +6503,14 @@ describe('workspace context inbox synchronization', () => {
       pinHarnessHome(home)
       await mountFileToolsAndAgentInstructions(ctx, { maxBytes: 65536 })
       const original = await stubAgent(root)
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('recover-pending-a'), name: 'read', arguments: { file_path: join('a', 'file.txt') }, agent: original,
       })
       await syncAgentInstructions(ctx, original)
       const resumed = await stubAgent(root, original.session.snapshotEvents())
 
-      await ctx.tools.execute({
+      await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('recover-pending-b'), name: 'read', arguments: { file_path: join('b', 'file.txt') }, agent: resumed,
       })
@@ -5889,7 +6547,7 @@ describe('workspace context inbox synchronization', () => {
       const downstream = { kind: 'enter' as const, messages: claimed }
 
       const decision = await agentEvents(ctx, agent).waterfall(
-        'agent/pre-step', { messages: claimed, turn: 1, step: 1, signal: testToolSignal },
+        'agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, messages: claimed, turn: 1, step: 1, signal: testToolSignal },
         async () => downstream,
       )
 

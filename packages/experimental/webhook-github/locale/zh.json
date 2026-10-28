@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "GitHub Webhook",
+    "description": "验证签名的 GitHub HTTP Webhook，并转发给 Webhook 运行时。"
+  }
+}

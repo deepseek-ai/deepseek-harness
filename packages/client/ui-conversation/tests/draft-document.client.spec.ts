@@ -6,10 +6,14 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { $getRoot, $nodesOfType, REDO_COMMAND, UNDO_COMMAND } from 'lexical'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { DraftReference, DraftSnapshot, Occurrence } from '../src/client/contract/draft-editor.ts'
-import type { DraftAttachmentId, InputTriggerController, PickOutcome, SubmitOutcome } from '../src/client/contract/input.ts'
+import type {
+  CommandClaim, DraftAttachmentId, InputTriggerController, PickOutcome, SubmitOutcome,
+} from '../src/client/contract/input.ts'
 import { parseStoredDraft, resolveDraftInput, snapshotDraft } from '../src/client/draft.ts'
 import { scanTextRefs } from '../src/client/input/decorations.ts'
 import { ReferenceChipNode } from '../src/client/input/editor/chip-node.tsx'
+import { CommandChipNode } from '../src/client/input/editor/command-chip-node.tsx'
+import { QuoteNode } from '../src/client/input/editor/QuoteNode.tsx'
 import { TextRefNode } from '../src/client/input/editor/text-ref.ts'
 import { SessionInputShell, type SessionInputDeps } from '../src/client/input/facade.ts'
 
@@ -78,9 +82,41 @@ function triggerProvider(lexicon: InputTriggerController['lexicon']): InputTrigg
     onSpace: () => false,
     serializeReference: (_source, ref) => Promise.resolve(ref),
     adjudicate: () => Promise.resolve(undefined),
+    resolveClaim: () => Promise.resolve(undefined),
     openReference: () => false,
     toggleSource: () => {},
   }
+}
+
+/** A goal claim whose submissions are recorded. */
+function goalClaim(): CommandClaim & { readonly submitted: string[] } {
+  const submitted: string[] = []
+  return {
+    name: 'goal',
+    token: '/goal ',
+    submitted,
+    submit: (args) => {
+      submitted.push(args)
+      return Promise.resolve({ kind: 'success' })
+    },
+  }
+}
+
+/** Number of command chips in the shell's document. */
+function commandChips(shell: SessionInputShell): number {
+  return shell.editor.getEditorState().read(() => $nodesOfType(CommandChipNode).length)
+}
+
+/** The persisted form of `/goal ship` claimed as a command chip. */
+function storedGoalDraft(): DraftSnapshot {
+  const original = makeShell()
+  original.setDraft('/goal ')
+  expect(original.beginCommand(goalClaim(), { start: 0, end: '/goal '.length, draftRev: original.snapshot.draftRev })).toBe(true)
+  expect(original.actions.insertText('ship', original.actions.captureInsertion())).toBe(true)
+  const stored = parseStoredDraft(JSON.parse(JSON.stringify(original.draftSnapshot)))
+  if (stored === undefined) throw new Error('Expected a stored draft')
+  expect(stored).toEqual({ text: '/goal ship', references: [], command: { token: '/goal ' } })
+  return stored
 }
 
 function expectInitializationBlocked(shell: SessionInputShell): void {
@@ -159,6 +195,32 @@ describe('draft document values', () => {
     expect(parsed?.references[0]).not.toHaveProperty('nodeKey')
   })
 
+  it('carries a leading command token through copy, export, and storage', () => {
+    const input = { text: `/goal ${file.clipboardText}`, references: [{ ...file, offset: 6, length: file.clipboardText.length }], command: { token: '/goal ' } }
+    const resolved = resolveDraftInput(input)
+    expect(resolved).toEqual(input)
+    expect(resolved.command).not.toBe(input.command)
+    const exported = snapshotDraft(input.text, input.references.map(reference => ({ ...reference, occurrenceId: 7 })), '/goal ')
+    expect(exported).toEqual(input)
+    expect(parseStoredDraft(JSON.parse(JSON.stringify(exported)))).toEqual(input)
+    expect(parseStoredDraft({ text: '/目标', references: [], command: { token: '/目标 ' } })).toEqual(
+      { text: '/目标', references: [], command: { token: '/目标 ' } },
+    )
+  })
+
+  it.each<{ name: string; value: unknown }>([
+    { name: 'a token the text does not open', value: { text: 'ship /goal', references: [], command: { token: '/goal ' } } },
+    { name: 'a token without its trigger', value: { text: 'goal ship', references: [], command: { token: 'goal ' } } },
+    { name: 'a token without a name', value: { text: '/ ship', references: [], command: { token: '/ ' } } },
+    { name: 'a non-string token', value: { text: '/goal', references: [], command: { token: 1 } } },
+    { name: 'a reference overlapping the token', value: {
+      text: '/goal', references: [{ source: 'skill', ref: 'goal', label: 'goal', clipboardText: '/goal', offset: 0, length: 5 }],
+      command: { token: '/goal ' },
+    } },
+  ])('rejects a stored command with $name', ({ value }) => {
+    expect(parseStoredDraft(value)).toBeUndefined()
+  })
+
   const valid = documentOf(file)
   const reference = { ...file, offset: 0, length: file.clipboardText.length }
   it.each<{ name: string; value: unknown }>([
@@ -216,6 +278,110 @@ describe('draft documents in the input shell', () => {
     restored.setDraft(stored)
     expect(restored.draftSnapshot).toEqual(original.draftSnapshot)
     expect(chips(restored)).toEqual(chips(original))
+  })
+
+  it('rebuilds a persisted command chip once the trigger pipeline resolves its claim', async () => {
+    const stored = storedGoalDraft()
+    const claim = goalClaim()
+    const resolution = Promise.withResolvers<CommandClaim | undefined>()
+    const resolveClaim = vi.fn<InputTriggerController['resolveClaim']>(() => resolution.promise)
+    const provider: InputTriggerController = { ...triggerProvider(createSnapshotStore(new Map())), resolveClaim }
+    const shell = makeShell({ inputTriggers: () => provider })
+    shell.setDraft(stored)
+    expect(resolveClaim).toHaveBeenCalledWith('/goal', expect.any(AbortSignal))
+    expect(shell.snapshot.phase).toBe('plain')
+    expect(commandChips(shell)).toBe(0)
+    resolution.resolve(claim)
+    await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('claimed') })
+    expect(commandChips(shell)).toBe(1)
+    expect(shell.draftSnapshot).toEqual(stored)
+    // The chip belongs to the restored seed, so undo has no step to revert.
+    shell.editor.dispatchCommand(UNDO_COMMAND, undefined)
+    shell.editor.update(() => {}, { discrete: true })
+    expect(commandChips(shell)).toBe(1)
+    shell.submit()
+    await vi.waitFor(() => { expect(claim.submitted).toEqual(['ship']) })
+  })
+
+  it('restores a command and an atomic quote together without changing their text or offsets', async () => {
+    const original = makeShell()
+    original.setDraft('/goal ')
+    expect(original.insertQuote('selected source text')).toBe(true)
+    expect(original.beginCommand(goalClaim(), { start: 0, end: 6, draftRev: original.snapshot.draftRev })).toBe(true)
+    const stored = parseStoredDraft(JSON.parse(JSON.stringify(original.draftSnapshot)))
+    expect(stored).toEqual({
+      text: '/goal > selected source text ', references: [], command: { token: '/goal ' },
+      quotes: [{ offset: 6, length: 22, text: 'selected source text' }],
+    })
+    if (stored === undefined) throw new Error('Expected a stored draft')
+    const claim = goalClaim()
+    const provider: InputTriggerController = {
+      ...triggerProvider(createSnapshotStore(new Map())),
+      resolveClaim: () => Promise.resolve(claim),
+    }
+    const restored = makeShell({ inputTriggers: () => provider })
+    restored.setDraft(stored)
+    await vi.waitFor(() => { expect(restored.snapshot.phase).toBe('claimed') })
+    expect(commandChips(restored)).toBe(1)
+    expect(restored.editor.getEditorState().read(() => $nodesOfType(QuoteNode).map(node => node.getQuoteText())))
+      .toEqual(['selected source text'])
+    expect(restored.draftSnapshot).toEqual(stored)
+    restored.submit()
+    await vi.waitFor(() => { expect(claim.submitted).toEqual(['> selected source text ']) })
+  })
+
+  it('waits for the trigger pipeline before resolving a restored command chip', async () => {
+    const stored = storedGoalDraft()
+    const resolveClaim = vi.fn<InputTriggerController['resolveClaim']>(() => Promise.resolve(goalClaim()))
+    const pipeline: { provider?: InputTriggerController } = {}
+    const shell = makeShell({ inputTriggers: () => pipeline.provider })
+    shell.setDraft(stored)
+    shell.refreshLexiconSubscription()
+    expect(commandChips(shell)).toBe(0)
+    pipeline.provider = { ...triggerProvider(createSnapshotStore(new Map())), resolveClaim }
+    shell.refreshLexiconSubscription()
+    shell.refreshLexiconSubscription()
+    await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('claimed') })
+    expect(resolveClaim).toHaveBeenCalledTimes(1)
+    expect(commandChips(shell)).toBe(1)
+  })
+
+  it.each<{ name: string; settle: (shell: SessionInputShell, resolution: PromiseWithResolvers<CommandClaim | undefined>) => void }>([
+    { name: 'the draft changed while the claim resolved', settle: (shell, resolution) => {
+      expect(shell.actions.insertText(' now', shell.actions.captureInsertion())).toBe(true)
+      resolution.resolve(goalClaim())
+    } },
+    { name: 'no source claims the token', settle: (_shell, resolution) => { resolution.resolve(undefined) } },
+    { name: 'catalog warmup fails', settle: (_shell, resolution) => { resolution.reject(new Error('catalog unavailable')) } },
+  ])('keeps the literal command token when $name', async ({ settle }) => {
+    const resolution = Promise.withResolvers<CommandClaim | undefined>()
+    const provider: InputTriggerController = {
+      ...triggerProvider(createSnapshotStore(new Map())), resolveClaim: () => resolution.promise,
+    }
+    const shell = makeShell({ inputTriggers: () => provider })
+    shell.setDraft(storedGoalDraft())
+    const literal = shell.snapshot.draft
+    settle(shell, resolution)
+    await setImmediate()
+    expect(shell.snapshot.phase).toBe('plain')
+    expect(commandChips(shell)).toBe(0)
+    expect(shell.snapshot.draft.startsWith(literal)).toBe(true)
+    expect(shell.notices.getSnapshot()).toBeNull()
+  })
+
+  it('aborts a pending command chip restore when a new draft replaces it or the shell disposes', () => {
+    const signals: AbortSignal[] = []
+    const provider: InputTriggerController = {
+      ...triggerProvider(createSnapshotStore(new Map())),
+      resolveClaim: (_token, signal) => { signals.push(signal); return new Promise(() => {}) },
+    }
+    const shell = makeShell({ inputTriggers: () => provider })
+    shell.setDraft(storedGoalDraft())
+    shell.setDraft('plain replacement')
+    expect(signals[0]?.aborted).toBe(true)
+    shell.setDraft(storedGoalDraft())
+    shell.dispose()
+    expect(signals[1]?.aborted).toBe(true)
   })
 
   it.each([
@@ -336,6 +502,31 @@ describe('draft documents in the input shell', () => {
     expect(shell.snapshot.attachmentIds).toEqual([attachment])
   })
 
+  it('lets whenDraftExists keep, append to, or replace an existing draft ahead of clearPreviousDraft', () => {
+    const shell = makeShell()
+    const old = documentOf('existing ', session)
+    shell.setDraft(old)
+    expect(shell.requestDraftInitialization({ prompt: 'ignored', clearPreviousDraft: true, whenDraftExists: 'keep' })).toBe('preserved')
+    expect(shell.draftSnapshot).toEqual(old)
+    expect(shell.requestDraftInitialization({ whenDraftExists: 'append' })).toBe('preserved')
+    expect(shell.requestDraftInitialization({ prompt: '\uFFFC', whenDraftExists: 'append' })).toBe('applied')
+    expect(shell.draftSnapshot).toEqual(old)
+    expect(shell.requestDraftInitialization({ prompt: 'next\nline', whenDraftExists: 'append' })).toBe('applied')
+    expect(shell.draftSnapshot).toEqual({ text: `${old.text}\nnext\nline`, references: old.references })
+    expect(chips(shell)).toHaveLength(1)
+    expect(shell.requestDraftInitialization({ prompt: 'fresh', whenDraftExists: 'replace' })).toBe('applied')
+    expect(shell.draftSnapshot).toEqual({ text: 'fresh', references: [] })
+  })
+
+  it('appends to an attachment-only draft as its whole text', () => {
+    const shell = makeShell()
+    const attachment = 'draft-image' as DraftAttachmentId
+    shell.addAttachments([attachment])
+    expect(shell.requestDraftInitialization({ prompt: 'describe it', whenDraftExists: 'append' })).toBe('applied')
+    expect(shell.snapshot.draft).toBe('describe it')
+    expect(shell.snapshot.attachmentIds).toEqual([attachment])
+  })
+
   it('persists clearing so a persistence rebind and a new shell do not restore references', () => {
     const shell = makeShell()
     shell.setDraft(documentOf(file, ' ', session))
@@ -421,7 +612,7 @@ describe('draft documents in the input shell', () => {
       expectInitializationBlocked(shell)
       outcome.resolve({ kind: 'error', text: 'command refused' })
       await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('claimed') })
-      expect(shell.draftSnapshot).toEqual(draft)
+      expect(shell.draftSnapshot).toEqual({ ...draft, command: { token: '/pending ' } })
     } finally {
       shell.dispose()
       outcome.resolve({ kind: 'error' })
@@ -429,26 +620,30 @@ describe('draft documents in the input shell', () => {
     }
   })
 
-  it.each(['detached default-send', 'attachment'] as const)(
-    'refuses draft initialization during a %s flight despite its editable phase', async (kind) => {
+  it.each(['message', 'attachment-only message'] as const)(
+    'refuses draft initialization and attachments while a %s waits for the Host', async (kind) => {
       const outcome = Promise.withResolvers<SubmitOutcome>()
       const started = Promise.withResolvers<undefined>()
       const sink = vi.fn<SessionInputDeps['defaultSink']>(() => { started.resolve(undefined); return outcome.promise })
       const shell = makeShell({ defaultSink: sink })
       try {
         const sentAttachment = 'sent-image' as DraftAttachmentId
-        if (kind === 'attachment') shell.addAttachments([sentAttachment])
+        const attachmentOnly = kind === 'attachment-only message'
+        if (attachmentOnly) shell.addAttachments([sentAttachment])
         else shell.setDraft('outbound message')
         shell.submit()
         await started.promise
         expect(sink).toHaveBeenCalledOnce()
-        expect(sink.mock.calls[0]?.[1]).toEqual(kind === 'attachment' ? [sentAttachment] : [])
-        shell.setDraft(documentOf('next message ', file))
-        shell.addAttachments(['next-image' as DraftAttachmentId])
-        expect(shell.snapshot.phase).toBe('plain')
+        expect(sink.mock.calls[0]?.[1]).toEqual(attachmentOnly ? [sentAttachment] : [])
+        expect(shell.snapshot.phase).toBe('sending')
+        expect(shell.addAttachments(['next-image' as DraftAttachmentId])).toBe(false)
+        expect(shell.removeAttachment(sentAttachment)).toBe(false)
         expectInitializationBlocked(shell)
         outcome.resolve({ kind: 'error', text: 'flight rejected' })
         await vi.waitFor(() => { expect(shell.notices.getSnapshot()?.text).toBe('flight rejected') })
+        expect(shell.snapshot).toMatchObject({
+          phase: 'plain', draft: attachmentOnly ? '' : 'outbound message', attachmentIds: attachmentOnly ? [sentAttachment] : [],
+        })
         expect(shell.requestDraftInitialization({ prompt: 'after settlement', clearPreviousDraft: true })).toBe('applied')
       } finally {
         shell.dispose()
@@ -457,6 +652,35 @@ describe('draft documents in the input shell', () => {
       }
     },
   )
+
+  it('settles a message the moment its sink reports the Host acceptance, before the sink resolves', async () => {
+    const outcome = Promise.withResolvers<SubmitOutcome>()
+    let accept: (() => void) | undefined
+    const sink = vi.fn<SessionInputDeps['defaultSink']>((_text, _ids, _mode, _signal, onAccept) => {
+      accept = onAccept
+      return outcome.promise
+    })
+    const shell = makeShell({ defaultSink: sink })
+    const sentAttachment = 'sent-image' as DraftAttachmentId
+    try {
+      shell.addAttachments([sentAttachment])
+      shell.setDraft('accepted early')
+      shell.submit()
+      await vi.waitFor(() => { expect(accept).toBeDefined() })
+      expect(shell.snapshot.phase).toBe('sending')
+      accept?.()
+      // In the same call, so the editor has shrunk before the Session renders the echo.
+      expect(shell.snapshot).toMatchObject({ phase: 'plain', draft: '', attachmentIds: [] })
+      outcome.resolve({ kind: 'success' })
+      await outcome.promise
+      await Promise.resolve()
+      expect(shell.snapshot).toMatchObject({ phase: 'plain', draft: '', attachmentIds: [] })
+    } finally {
+      shell.dispose()
+      outcome.resolve({ kind: 'error' })
+      await outcome.promise
+    }
+  })
 
   it('matches a delayed skill lexicon against the current editable document without changing references', async () => {
     const lexicon = createSnapshotStore<ReadonlyMap<'/' | '@', readonly string[]>>(new Map())
@@ -499,7 +723,7 @@ describe('draft documents in the input shell', () => {
     expect(chips(shell)).toMatchObject([{ ref: file.ref, appearance: 'file' }])
   })
 
-  it('restores and persists failed structured sends in submission order after reversed settlement', async () => {
+  it('keeps a structured message and its persisted draft until the Host accepts a retry', async () => {
     const first = Promise.withResolvers<SubmitOutcome>()
     const second = Promise.withResolvers<SubmitOutcome>()
     const provider = triggerProvider(createSnapshotStore<ReadonlyMap<'/' | '@', readonly string[]>>(new Map()))
@@ -508,24 +732,24 @@ describe('draft documents in the input shell', () => {
     const shell = makeShell({ inputTriggers: () => provider, defaultSink: sink })
     const write = vi.fn<(draft: DraftSnapshot) => void>()
     shell.bindDraftPersistence(write)
-    const firstDraft = documentOf('first 🙂 ', file)
-    const secondDraft = documentOf('second ', session)
+    const draft = documentOf('first 🙂 ', file, ' and ', session)
     try {
-      shell.setDraft(firstDraft)
+      shell.setDraft(draft)
       shell.submit()
-      shell.setDraft(secondDraft)
+      await vi.waitFor(() => { expect(sink).toHaveBeenCalledTimes(1) })
+      expect(shell.draftSnapshot).toEqual(draft)
+      expect(write).toHaveBeenLastCalledWith(draft)
+      first.resolve({ kind: 'error', text: 'first rejected' })
+      await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
+      expect(shell.draftSnapshot).toEqual(draft)
+      expect(parseStoredDraft(JSON.parse(JSON.stringify(write.mock.calls.at(-1)?.[0])))).toEqual(draft)
+      expect(chips(shell)).toMatchObject([{ ref: file.ref }, { ref: session.ref }])
+
       shell.submit()
       await vi.waitFor(() => { expect(sink).toHaveBeenCalledTimes(2) })
-      expect(shell.draftSnapshot).toEqual({ text: '', references: [] })
-      second.resolve({ kind: 'error', text: 'second rejected' })
-      await vi.waitFor(() => { expect(shell.draftSnapshot).toEqual(secondDraft) })
-      expect(write).toHaveBeenLastCalledWith(secondDraft)
-      first.resolve({ kind: 'error', text: 'first rejected' })
-      const expected = documentOf('first 🙂 ', file, '\n\nsecond ', session)
-      await vi.waitFor(() => { expect(shell.draftSnapshot).toEqual(expected) })
-      expect(write).toHaveBeenLastCalledWith(expected)
-      expect(parseStoredDraft(JSON.parse(JSON.stringify(write.mock.calls.at(-1)?.[0])))).toEqual(expected)
-      expect(chips(shell)).toMatchObject([{ ref: file.ref }, { ref: session.ref }])
+      second.resolve({ kind: 'success' })
+      await vi.waitFor(() => { expect(shell.draftSnapshot).toEqual({ text: '', references: [] }) })
+      expect(write).toHaveBeenLastCalledWith({ text: '', references: [] })
       expect(shell.requestDraftInitialization({ prompt: 'next', clearPreviousDraft: true })).toBe('applied')
     } finally {
       shell.dispose()
@@ -559,7 +783,7 @@ describe('draft documents in the input shell', () => {
         shell.submit()
         const signal = await started.promise
         expect(signal.aborted).toBe(false)
-        expect(shell.snapshot.phase).toBe('plain')
+        expect(shell.snapshot.phase).toBe('sending')
         expectInitializationBlocked(shell)
         shell.bindDraftPersistence(write)
 
@@ -619,5 +843,16 @@ describe('plain-text reference catalogs', () => {
     expect(scanTextRefs('@"some folder/ trailing', new Map())).toEqual([
       { start: 0, end: 14, trigger: '@' },
     ])
+  })
+
+  it('matches whole file and folder path tokens, never a directory prefix', () => {
+    const slices = (text: string) => scanTextRefs(text, new Map()).map(range => text.slice(range.start, range.end))
+    expect(slices('@src/deep/file.txt， @"/a/nv/SM100 ISA.html" 看 @"a/ b.md"。 @src/.env @C:\\src\\a.ts @src/de'))
+      .toEqual(['@src/deep/file.txt', '@"/a/nv/SM100 ISA.html"', '@"a/ b.md"', '@src/.env', '@C:\\src\\a.ts', '@src/de'])
+    expect(slices('@"dir a/" @src/deep/。 @dir/ 请看 @"src/"，然后 @"open dir/ x'))
+      .toEqual(['@"dir a/"', '@src/deep/', '@dir/', '@"src/"', '@"open dir/'])
+    expect(slices('@person @"" @"a/b')).toEqual([])
+    expect(slices('@"open @')).toEqual([])
+    expect(slices('drill @"open dir/。')).toEqual(['@"open dir/'])
   })
 })

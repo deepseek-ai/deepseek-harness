@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface du mode autorisation",
+    "description": "Définit les autorisations par défaut pour les nouvelles sessions et change le mode d'autorisations pour la session en cours."
+  }
+}

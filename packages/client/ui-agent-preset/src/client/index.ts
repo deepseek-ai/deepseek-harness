@@ -42,8 +42,9 @@ import { AgentPresetSection } from './AgentPresetSection.tsx'
 import type { AgentPresetSectionInjected } from './AgentPresetSection.tsx'
 import { AgentPresetSeatController, type AgentPresetStage } from './seat-store.ts'
 import { AgentPresetSectionController } from './section-store.ts'
-import { en, zh, type AgentPresetSettingsKey } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh, type AgentPresetSettingsKey } from './locales.ts'
 import { AGENT_PRESET_SETTINGS_NS, AgentPresetSettingsController } from './settings-store.ts'
+import { analyticsMode } from './analytics.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -116,17 +117,18 @@ export function apply(ctx: ClientContext): void {
     void unboundSeat.apply()
     for (const seat of seats.values) void seat.apply()
   }), 'ui-agent-preset: Developer tools gate')
+  const mainBlank = () => Object.values(ctx.sessions.list.getSnapshot().byId)
+    .find((session) => {
+      /* v8 ignore next -- retained source counts omit zero-valued entries. */
+      return session.blank && (session.retainedBy.mainView ?? 0) > 0
+    })
   const mainBlankSeat = (): AgentPresetSeatController | undefined => {
-    const summary = Object.values(ctx.sessions.list.getSnapshot().byId)
-      .find((session) => {
-        /* v8 ignore next -- retained source counts omit zero-valued entries. */
-        return session.blank && (session.retainedBy.mainView ?? 0) > 0
-      })
+    const summary = mainBlank()
     const binding = summary === undefined ? undefined : ctx.sessions.binding(summary.id)
     return binding === undefined ? undefined : seatFor(binding)
   }
 
-  ctx.effect(() => ctx.locale.register('settings.agentPreset', { zh, en }), 'ui-agent-preset: settings row dictionaries')
+  ctx.effect(() => ctx.locale.register('settings.agentPreset', { zh, en, ja, es, fr, de, ru, pt }), 'ui-agent-preset: settings row dictionaries')
 
   ctx.effect(() => {
     let requested = 0
@@ -186,7 +188,21 @@ export function apply(ctx: ClientContext): void {
       return {
         hooks: { agentPresetSeat: seat.store, developerTools: ctx.configForms.developerTools.enabled },
         load: () => seat.load(),
-        select: (id: string) => seat.select(id),
+        select: async (id: string) => {
+          const state = seat.store.getSnapshot()
+          const from = analyticsMode(state.current)
+          const to = analyticsMode(id)
+          const enabled = toolsSettings.getSnapshot().value?.enabled
+          const outcome = await seat.select(id)
+          // A bound pick counts once the Host applies it; an unbound pick counts when staged for the next Session.
+          const accepted = outcome.kind === 'applied' || (outcome.kind === 'staged' && sessionId === undefined)
+          if (accepted && from !== undefined && to !== undefined && to !== 'other' && from !== to && enabled !== undefined) {
+            ctx.get('productAnalytics')?.track('agent_preset_switch', {
+              switch_from: from, switch_to: to, code_work_view_enabled: enabled,
+            })
+          }
+          return outcome.kind === 'refused' ? outcome.reason : undefined
+        },
         dismissRefusal: (error) => { seat.dismissRefusal(error) },
         introduced: () => { seat.introduced() },
       }
@@ -199,8 +215,9 @@ export function apply(ctx: ClientContext): void {
 
     const startCreatorDraft = () => {
       // The Host composes the reused draft or new Session; the stage only drives the chip's display and introduction.
-      const seat = mainBlankSeat() ?? unboundSeat
-      seat.stage('cordis', true)
+      // Navigation opens another blank when the main blank lists a different preset, so that blank is not staged.
+      const listed = mainBlank()?.projectionValues?.agentPreset
+      if (typeof listed !== 'string' || listed === 'cordis') (mainBlankSeat() ?? unboundSeat).stage('cordis', true)
       scope.uiWorkspace.startSession(undefined, { clearPreviousDraft: false, agentPreset: 'cordis' })
     }
 

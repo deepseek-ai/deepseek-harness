@@ -78,6 +78,8 @@ interface GalleryCall {
 /** The five successful writes; docs/press.md and src/tokens.css join via other tools. */
 const WRITES = ['site/report.html', 'a/style.css', 'b/style.css', 'site/index.html', 'site/app.js']
 
+const LONG_COMMAND_DESCRIPTION = 'Check every generated stylesheet and component theme against the shared design tokens, inspect the application pages for inconsistent colors, and report all remaining lint failures before publishing the production build'
+
 /** The gallery turn's tool calls, in surface order. */
 const CALLS: GalleryCall[] = [
   ...WRITES.map(path => ({
@@ -165,6 +167,16 @@ const CALLS: GalleryCall[] = [
     name: 'bash',
     args: { command: 'pnpm run lint', description: 'Run the lint gate', workdir: 'site' },
     result: 'style.css: unexpected hex literal\n[exit code: 1]',
+  },
+  {
+    name: 'bash',
+    args: { command: 'pnpm run lint:styles', description: LONG_COMMAND_DESCRIPTION, workdir: 'site' },
+    result: 'theme.css: unexpected hex literal\n[exit code: 1]',
+  },
+  {
+    name: 'bash',
+    args: { command: 'pnpm run build', description: 'Build the site', workdir: 'site' },
+    result: '(no output)\n[timed out after 100ms]\n[exit code: null]',
   },
   {
     name: 'web_search',
@@ -378,6 +390,55 @@ describe('web e2e: clickable links gallery', () => {
     expect(await fetchSummaryLink.getAttribute('target')).toBe('_blank')
 
     await expandTurnProcesses(page)
+    const failedCommands = [
+      { description: 'Run the lint gate', long: false },
+      { description: LONG_COMMAND_DESCRIPTION, long: true },
+    ].map(({ description, long }) => ({
+      row: page.locator('[data-sample="bash"]').filter({ hasText: description }),
+      long,
+    }))
+    try {
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme })
+        await expect.poll(() => page.locator('body').evaluate(element => element.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
+        for (const { row, long } of failedCommands) {
+          const exitBadge = row.getByText('exit code 1', { exact: true })
+          await exitBadge.waitFor()
+          for (const width of ['760px', '260px']) {
+            await row.evaluate((element, value) => { element.style.width = value }, width)
+            const geometry = await exitBadge.evaluate((badge) => {
+              const description = badge.previousElementSibling!
+              const row = badge.closest('[data-sample]')!
+              const textRect = description.getBoundingClientRect()
+              const badgeRect = badge.getBoundingClientRect()
+              const rowRect = row.getBoundingClientRect()
+              return {
+                neutral: getComputedStyle(description).color === getComputedStyle(row).color,
+                fits: badgeRect.right <= rowRect.right + 1 && badgeRect.bottom <= rowRect.bottom + 1,
+                inline: Math.abs(badgeRect.top - textRect.top) < 5,
+                truncated: description.scrollWidth > description.clientWidth,
+                ellipsis: getComputedStyle(description).textOverflow === 'ellipsis',
+                singleLine: Math.abs(rowRect.height - textRect.height) < 1,
+                height: rowRect.height,
+                gap: badgeRect.left - textRect.right,
+              }
+            })
+            const context = JSON.stringify({ width, colorScheme, long, ...geometry })
+            expect(geometry.neutral, context).toBe(true)
+            expect(geometry.fits, context).toBe(true)
+            expect(geometry.inline, context).toBe(true)
+            expect(geometry.singleLine, context).toBe(true)
+            expect(geometry.height, context).toBeCloseTo(24, 0)
+            if (long || width === '760px') expect(geometry.truncated, context).toBe(long)
+            expect(geometry.ellipsis, context).toBe(true)
+            expect(geometry.gap, context).toBeCloseTo(8, 0)
+          }
+        }
+      }
+    } finally {
+      for (const { row } of failedCommands) await row.evaluate((element) => { element.style.width = '' })
+      await page.emulateMedia({ colorScheme: null })
+    }
     // Clicking the collapsed summary link opens the page without expanding the row.
     const fetchPopupPromise = page.waitForEvent('popup')
     await fetchSummaryLink.click()
@@ -397,12 +458,20 @@ describe('web e2e: clickable links gallery', () => {
       /^Edit src\/tokens\.css/,
       /^Grep linkColor/,
       /Run the lint gate|pnpm run lint/,
+      /Build the site/,
     ]) {
       const toggle = page.getByRole('button', { name: row }).first()
       await toggle.waitFor({ timeout: 10_000 })
       const box = await toggle.boundingBox()
       await toggle.click(box === null ? {} : { position: { x: box.width - 8, y: box.height / 2 } })
     }
+    const noExitCommand = page.locator('[data-sample="bash"]').filter({ hasText: 'Build the site' })
+    expect(await noExitCommand.getAttribute('data-state')).toBe('error')
+    expect(await noExitCommand.getByText('no exit code', { exact: true }).count()).toBe(1)
+    const noExitTerminal = page.locator('[data-terminal]').filter({ hasText: 'pnpm run build' })
+    expect(await noExitTerminal.getByText('no exit code', { exact: true }).count()).toBe(1)
+    expect(await noExitTerminal.getByText('[timed out after 100ms]', { exact: true }).count()).toBe(1)
+    expect(await noExitTerminal.getByText('[exit code: null]', { exact: true }).count()).toBe(0)
     // Both generic rows (the unclassified str_replace_editor and the unknown
     // design_tokens_sync) expand to their IN/OUT surfaces.
     const genericRows = page.getByRole('button', { name: /^Tool call/ })

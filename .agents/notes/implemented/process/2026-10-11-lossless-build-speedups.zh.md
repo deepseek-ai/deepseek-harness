@@ -84,7 +84,7 @@ Status: implemented
 - **目的：** 修正工作区根目录的判定。24 个双 face 包带有自己的 `tsconfig.host.json` 叶子配置；只按 `tsconfig.host.json` 向上查找时，每个这样的包都被当作根目录，workspace 模式每次构建为它们各做一次空发现，`package` 模式下双 face 包得不到产物且没有报错。
 - **改动：** 工作区根目录是打包输出最近的、同时包含 `tsconfig.host.json` 与 `packages/` 的祖先目录。
 - **性能：** Host tsdown 14.82 s → 15.39 s（各 3 个样本的中位数），在噪声内。
-- **无损依据：** 仓库根 [`tsdown.config.ts`](../../../../tsdown.config.ts) 只使用 workspace 模式，743 个产物文件逐字节一致。测试 `resolves the workspace root above a dual-face package leaf` 固定该判定。
+- **无损依据：** workspace 模式的比较中，743 个产物文件逐字节一致；[先生成顺序](2026-10-18-source-first-metadata-builds.zh.md)负责当前根构建的生成。测试 `resolves the workspace root above a dual-face package leaf` 固定该判定。
 - **行为差异：** `package` 模式的使用方构建双 face 包时得到该包的 Typert 产物；仓库构建不使用 `package` 模式。
 
 ### 6. Typert 在 Worker Thread 中生成
@@ -118,7 +118,7 @@ Status: implemented
 - **把 `paths` 收窄为各 face 的 reference closure（第 1 项）：** 保留通配键的 328 条版本 Check 为 55.73 s 对 59.08 s（1 个样本），在噪声内；去掉通配键的版本产生 18 个诊断。
 - **拆分 Client 测试聚合程序（第 1 项）：** 每个子程序都必须注入 242 个含模块增强的文件才能通过检查，可见位置数仍为 33–49；拆成 2、4、8 组时 Check 总和基本不变，user CPU 分别增加 9%、30%、57%，只降低 wall，且 4 组与 8 组各出现 1–2 个诊断。
 - **缓存解析结果并把发现队列改为 O(1)（Typert）：** 第 2–4 项之后只剩 28 次表面遍历，约 0.18 s，低于噪声。
-- **在产物构建中把 Typert 移到独立构建步骤（Typert）：** 第 6 项之后 worker 已与打包重叠，剩余收益不超过约 1 s。不需要 bundle 的类型检查运行只读源码的生成步骤（[本地门禁提速](2026-10-12-local-gate-speedups.zh.md)）。
+- **在产物构建中把 Typert 移到独立构建步骤（Typert）：** 第 6 项之后 worker 已与打包重叠，剩余收益不超过约 1 s。不需要 bundle 的类型检查运行只读源码的生成步骤（[本地门禁提速](2026-10-12-local-gate-speedups.zh.md)）。 [先生成顺序决策](2026-10-18-source-first-metadata-builds.zh.md)为了编译依赖顺序而选择独立步骤，并记录无改动构建的代价；公开 worker 插件仍可使用。
 - **按代码内容过滤 `transform`（第 7 项）：** rolldown 以 Rust 正则语义解释 `^` 与 `\s`，在孤立 CR、U+2028 与 BOM 上与 JavaScript 不同，可能漏掉含装饰器的模块。
 - **在 `globalThis` 上建立进程级 manifest 索引（第 8 项）：** 原型收益与第 8 项相当，但它是没有 owner 的进程全局状态，违反[包规则](../../../../packages/AGENTS.md)中的共享状态归属要求。
 - **关闭 tsdown 的 gzip 报告（第 8 项）：** `--no-report` 使 Client tsdown 降低 0.95 s，在 1.56 s 的基线跨度内。

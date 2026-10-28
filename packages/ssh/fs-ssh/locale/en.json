@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH filesystem",
+    "description": "Access remote files through the shared POSIX SSH helper."
+  }
+}

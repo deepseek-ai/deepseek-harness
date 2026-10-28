@@ -74,10 +74,11 @@ export class FsSandboxController {
   /**
    * The policy to stamp onto this mutation: an approved escalation grant (a
    * strictly wider retry resolved through `ctx.approval` before anything
-   * executes), else the Session's standing mode. Repeating the standing mode
-   * requires no approval. The workspace root is the original Session
-   * directory, or the deployment fallback when absent. Validates the escalation argument
-   * pairing first.
+   * executes), else the Session's standing mode. An omitted or repeated mode
+   * permits an omitted or blank justification; repeating the mode needs no
+   * approval. A different mode requires a non-empty justification, and a
+   * non-empty justification without a mode is rejected. The workspace root is
+   * the original Session directory, or the deployment fallback when absent.
    * @param toolName - the mutating tool's name, for the approval audit trail.
    * @param args - the call's escalation arguments.
    * @param exec - the tool-execution context (agent, callId, signal).
@@ -85,8 +86,12 @@ export class FsSandboxController {
    *   unsandboxed backend.
    */
   async resolvePolicy(toolName: string, args: FsEscalationArgs, exec: ToolExecution): Promise<SandboxExecutionPolicy | undefined> {
-    validateEscalationArgs(args.sandbox_permissions, args.justification)
     const standingPolicy = this.policy?.resolve({ ...exec.agent ? { session: exec.agent.session } : {} })
+    if (args.sandbox_permissions !== undefined && args.sandbox_permissions === standingPolicy?.mode) return standingPolicy
+    const justification = args.sandbox_permissions === undefined && args.justification?.trim() === ''
+      ? undefined
+      : args.justification
+    validateEscalationArgs(args.sandbox_permissions, justification)
     if (args.sandbox_permissions === undefined || args.justification === undefined) {
       return standingPolicy
     }

@@ -9,8 +9,8 @@
   en: c8b932b02a4e1c80
   zh: 96c466be1a521f3f
 /agent-note-web-capability-seam-stable-tools-over-multiple-providers/decision:
-  en: b57eb0f268033ff1
-  zh: 4143382a50181414
+  en: 2e08d801099cbe18
+  zh: 8c5ab162ada9cc41
 /agent-note-web-capability-seam-stable-tools-over-multiple-providers/package-topology:
   en: 5ea3ddfae82df181
   zh: 2d05d95e51081696
@@ -18,14 +18,14 @@
   en: b432f80a424c3e49
   zh: faa26925fdd98387
 /agent-note-web-capability-seam-stable-tools-over-multiple-providers/provider-availability-and-selection:
-  en: dff78c46432311a1
-  zh: 58d5db4c3c85b886
+  en: 4e4ec068c2a22383
+  zh: b7030d0f00bfdb74
 /agent-note-web-capability-seam-stable-tools-over-multiple-providers/search-request-and-result-schema:
   en: ec3703b7e7c6b23d
   zh: 325755e6e90092da
 /agent-note-web-capability-seam-stable-tools-over-multiple-providers/fetch-request-and-result-schema:
-  en: f734fdc57a6546c9
-  zh: 027c28cbc584a8c2
+  en: 6dba3b9a51c28b6d
+  zh: 58a93f6ba2d269ea
 /agent-note-web-capability-seam-stable-tools-over-multiple-providers/tool-consumer-behavior:
   en: 62127883453dd79c
   zh: 01503a8177a0ddab
@@ -55,19 +55,16 @@
   zh: 64032ea6ab61b836
 /agent-note-web-capability-seam-stable-tools-over-multiple-providers/alternatives-considered/mirror-claude-code-s-url-prompt-webfetch-shape:
   en: 56a080de39e96056
-  zh: ae4d070aa7657503
-/agent-note-web-capability-seam-stable-tools-over-multiple-providers/alternatives-considered/validate-dns-and-then-call-an-ordinary-fetch:
-  en: aa6c1e7e6374a875
-  zh: 045c8af6cd44c3e1
-/agent-note-web-capability-seam-stable-tools-over-multiple-providers/alternatives-considered/block-private-looking-hostname-strings-without-pinning-resolved-addresses:
-  en: 3d906f3056733479
-  zh: d652723eb5372007
+  zh: 937336a73de70518
+/agent-note-web-capability-seam-stable-tools-over-multiple-providers/alternatives-considered/restrict-fetch-to-public-addresses:
+  en: af3014c0de7ff66f
+  zh: 509040c9183327fe
 /agent-note-web-capability-seam-stable-tools-over-multiple-providers/alternatives-considered/require-per-call-approval-before-public-fetches:
-  en: f8d1fc8e9c9659cf
-  zh: da5792520e35cba0
+  en: 3ea94ffb142d144a
+  zh: 89645f68412f6769
 /agent-note-web-capability-seam-stable-tools-over-multiple-providers/consequences:
-  en: 12fd20ba54818215
-  zh: c1ca000b13666701
+  en: 9774448fd6b21c41
+  zh: 8411c590ad70d5c4
 /agent-note-web-capability-seam-stable-tools-over-multiple-providers/deferred-work:
   en: 48b7b8e7310cd56b
   zh: d406cd6a8a649e58

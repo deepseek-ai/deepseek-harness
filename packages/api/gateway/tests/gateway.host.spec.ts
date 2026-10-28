@@ -153,7 +153,7 @@ class FakeConnectionService extends Service {
 
 function fakeHttpServer(routes: WebRoute[]): Pick<WebServer, 'register' | 'tapIndex' | 'port'> {
   return {
-    register(route) {
+    register(route: WebRoute) {
       if (routes.some(candidate => candidate.kind === route.kind && candidate.path === route.path)) {
         throw new Error(`duplicate route ${route.path}`)
       }
@@ -1286,7 +1286,7 @@ describe('TypertGatewayService', () => {
     })(), { home: '/home/fixture' })
     const carrier = new AbortController()
     const events = (await ctx.typertGateway.wireStream.open(
-      '$events', { args: {} }, (async function* () {})(), ownerPeer(ctx), carrier.signal,
+      '$events', { args: {} }, (async function* () {})(), connection.browserPeer, carrier.signal,
     ))[Symbol.asyncIterator]()
     const opening = await events.next()
     expect(opening).toMatchObject({
@@ -1387,8 +1387,9 @@ describe('TypertGatewayService', () => {
     const removeLookup = registerAgentLookup(ctx, { id: 'agent-1' })
     const removeStrict = registerStrict(ctx, [createDescriptor()])
     let strictActive = true
-    expect(routes).toHaveLength(1)
-    const server = await serveRoute(routes[0]!)
+    const apiRoute = routes.find(route => route.path === '/api')
+    if (apiRoute === undefined) throw new Error('fixture API route was not installed')
+    const server = await serveRoute(apiRoute)
     const cookie = browserCookie(ctx.connection, server.origin)
 
     try {

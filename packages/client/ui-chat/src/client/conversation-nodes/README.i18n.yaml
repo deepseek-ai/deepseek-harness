@@ -12,20 +12,20 @@
   en: 660130914d717369
   zh: 7e0161dbfe788e96
 /chat-conversation-node-rules/table-of-contents:
-  en: 8d953a0b8776ef49
-  zh: b5d9fb42d0eb0630
+  en: a867dae21e71d327
+  zh: c33b815f08497a82
 /chat-conversation-node-rules/how-one-turn-becomes-a-transcript:
-  en: 4248ac4fbe0876ff
-  zh: 620c8eb9ea8e5a15
+  en: 8598bb1e29a37e02
+  zh: d122146ab82568e9
 /chat-conversation-node-rules/how-one-turn-becomes-a-transcript/a-complete-example:
-  en: 82d9651b9d284c1f
-  zh: ec1adc15b33a27cf
+  en: 42cab271580c5b42
+  zh: ff81eb1785e55455
 /chat-conversation-node-rules/how-one-turn-becomes-a-transcript/what-the-reader-sees:
-  en: 91b35cbebe8c2a1d
-  zh: a4fee6d7102bc874
+  en: 75564701ecd3d1bd
+  zh: 9c042288a15d441d
 /chat-conversation-node-rules/whole-turn-folding:
-  en: 42c6f6b9e2433263
-  zh: 651ceb5c22314259
+  en: 5e008ac2ab8de86a
+  zh: d782e34c7cfcb0f2
 /chat-conversation-node-rules/display-modes:
   en: ada5a60d2c46f6a8
   zh: f3eaeb5cb4d9b3de
@@ -33,11 +33,14 @@
   en: b25bf00ce3a6a119
   zh: 0ab47a4014ea5e1e
 /chat-conversation-node-rules/display-modes/collapse-timing:
-  en: ad74c1a610fc50d2
-  zh: 13de05ffedf63f0c
+  en: 34fceb582301b4f8
+  zh: 23bea929ac798bb5
+/chat-conversation-node-rules/display-modes/replies-after-collapse:
+  en: 8e775c43878ae31a
+  zh: 4c1063c0071ebdbd
 /chat-conversation-node-rules/display-modes/group-title-rules:
-  en: 2392290662bc69e8
-  zh: 8872d651c07a8f4c
+  en: f78fb52d4733e6ce
+  zh: 119e5319b23762ba
 /chat-conversation-node-rules/process-grouping:
   en: 3d28b3bb8757bf55
   zh: 3b0f451b48db6048

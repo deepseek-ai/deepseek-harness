@@ -1,8 +1,8 @@
 /**
  * The `process` global the worker needs before any VFS module runs. Cordis
  * reads `process.env` and `process.versions.node` while the Loader is
- * constructed, and `cordis.yml` keeps its `!!js process.*` expressions, so the
- * configuration bytes stay identical to the Node deployment. Third-party Node
+ * constructed, and bundle patch rows keep their `!!js process.*` expressions, so
+ * the configuration bytes stay identical to the Node deployment. Third-party Node
  * packages use the presence of `process.title` to avoid browser-only globals.
  * @module @deepseek-ai/dsh-experimental-webworker-runtime/src/node/globals/process
  */
@@ -11,6 +11,9 @@ import { processAlive, signalProcess } from '../process-table.ts'
 
 /** Virtual executable identity; the worker has no Node binary behind it. */
 const EXEC_PATH = '/dsh/bin/node'
+
+/** Node release whose internal-module members `node-addon-require-builtin` follows in the Worker. */
+const NODE_VERSION = '24.18.0'
 
 /** Construction inputs for {@link installProcessGlobal}. */
 export interface ProcessShimOptions {
@@ -76,11 +79,11 @@ export interface ProcessShim {
 }
 
 /**
- * Publish `globalThis.process`.
+ * Publish `globalThis.process` and Node's `global` alias for the worker lifetime.
  *
- * `versions.node` is `0.0.0` on purpose: it makes Cordis's
- * `ModuleLoader.fromInternal()` return undefined instead of reaching for Node
- * internals, which is what lets the worker install its own module seam.
+ * `versions.node` names the Node release the Worker's `node-addon-require-builtin` internals follow, so Cordis's
+ * `ModuleLoader.fromInternal()` reaches them the way it reaches Node's; `execArgv` stays empty, without
+ * `--expose-internals`.
  * @param options - Root, environment, and argument vector.
  * @returns The published object, for the module proxy table.
  */
@@ -99,8 +102,8 @@ export function installProcessGlobal(options: ProcessShimOptions): ProcessShim {
     platform: 'linux',
     arch: 'x64',
     pid: 1,
-    version: 'v0.0.0',
-    versions: { node: '0.0.0' },
+    version: `v${NODE_VERSION}`,
+    versions: { node: NODE_VERSION },
     cwd: () => options.cwd,
     getBuiltinModule: (id: string): unknown => {
       let resolution
@@ -141,6 +144,7 @@ export function installProcessGlobal(options: ProcessShimOptions): ProcessShim {
     uptime: () => (performance.now() - start) / 1000,
     exit: (code?: number) => { console.warn(`webworker process: exit(${String(code ?? 0)}) requested; the worker keeps running`) },
   }
+  globalThis.global = globalThis
   ;(globalThis as { process?: unknown }).process = shim
   return shim
 }

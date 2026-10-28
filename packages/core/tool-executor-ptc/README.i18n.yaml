@@ -1,0 +1,52 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/core/tool-executor-ptc/README.md
+/:
+  en: 93b346254eff025a
+  zh: 69aa6364ca2ffa7d
+/deepseek-ai-dsh-tool-executor-ptc:
+  en: e253ed9cec03a396
+  zh: 922fde282e2b0fd2
+/deepseek-ai-dsh-tool-executor-ptc/summary:
+  en: 66e159c308afb6c1
+  zh: 29b1a646ae7f918a
+/deepseek-ai-dsh-tool-executor-ptc/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tool-executor-ptc/use-this-package:
+  en: b6b7ffab35e1a725
+  zh: fc5db2524e1507d6
+/deepseek-ai-dsh-tool-executor-ptc/understand-the-implementation:
+  en: 9d4f61c351945d30
+  zh: 1c575526230b0e02
+/deepseek-ai-dsh-tool-executor-ptc/understand-the-implementation/ptc-mode:
+  en: 48f90d4c78ba69d7
+  zh: 5dcbbf23ebc1b803
+/deepseek-ai-dsh-tool-executor-ptc/further-exploration:
+  en: ee69078c38c655a9
+  zh: fb0873407f23c8c5
+/deepseek-ai-dsh-tool-executor-ptc/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/ptc-mode-schema-and-system-prompt:
+  en: eaefd7303f22977d
+  zh: 9c425f9501128224
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/ptc-mode-schema-and-system-prompt/what-the-model-sees:
+  en: 52e1437dc292ad3a
+  zh: 43fcfb76a3715f51
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/ptc-mode-schema-and-system-prompt/what-the-model-sees/typescript-ptc-mode-sdk-instructions-with-bash:
+  en: 3a8df15e4ae32f9e
+  zh: fc4a800ba363e835
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/ptc-mode-schema-and-system-prompt/token-effect:
+  en: 12296fcafc14562c
+  zh: f8e9351bb8c6437d
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/ptc-mode-schema-and-system-prompt/kv-cache-effect:
+  en: 78906628d634441f
+  zh: 492f133aea50cfe3
+/deepseek-ai-dsh-tool-executor-ptc/known-limitations-and-deferred-work:
+  en: 5030c17a9c6a2a85
+  zh: 6334bbe1a1d19cb4
+/deepseek-ai-dsh-tool-executor-ptc/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

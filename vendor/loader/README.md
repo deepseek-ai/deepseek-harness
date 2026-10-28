@@ -50,7 +50,13 @@ For file-backed trees, use `@cordisjs/plugin-include`.
 
 ## Module resolution
 
-Without Node module internals, Loader resolves bare specifiers, package imports and self-references in the nearest package scope containing the configuration file. It writes an ignored `.cordis/resolve.mjs` helper in that scope to preserve native ESM import conditions. Relative specifiers use the configuration URL directly. If no scope exists or helper creation fails, Loader uses its native import fallback; project-only dependencies can then remain unavailable. Node module internals are classified by their available APIs, including the v1 API used by Node 24.0–24.11.
+Without Node module internals, Loader resolves bare specifiers, package imports and self-references in the nearest package scope containing the configuration file. Relative specifiers use the configuration URL directly, and `cordis:` builtins bypass filesystem resolution. Other specifiers, including `node:` builtins and absolute URLs, initialize an ignored `.cordis/resolve.mjs` helper in that scope to preserve native ESM import conditions.
+
+If no scope exists or writing the helper files fails, Loader uses its native import fallback. This fallback emits no diagnostic of its own; project-only dependencies can remain unavailable, and the resulting import error can name the Loader module rather than the configuration project. Failure to import a written helper propagates to the caller without this fallback.
+
+Initialization results are cached for the lifetime of the resolver module, including failed writes and rejected helper imports. Fixing the filesystem does not retry initialization for an already cached scope. Concurrent initialization through filesystem aliases of the same package can contend for the temporary helper files and cause a write failure.
+
+Node module internals are classified by their available APIs, including the v1 API used by Node 24.0–24.11.
 
 ## Volatile configuration
 

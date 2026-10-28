@@ -56,14 +56,14 @@ kind: "package-reference"
 | 模式 | 效果 |
 |---|---|
 | `read-only` | 拒绝写入，必需 sink（如 `/dev/null`）除外 |
-| `workspace-write` | 允许写入工作区根目录及后端定义的临时区域 |
+| `workspace-write` | 允许写入工作区根目录、显式配置的额外根目录及后端定义的临时区域 |
 | `danger-full-access` | 绕过隔离；消费方直接 spawn 原始 argv |
 
 强制执行逐调用报告：`full` 表示后端管辖模式承诺的每个文件操作，`partial` 表示活动后端或较旧的内核 ABI 只管辖子集——Windows ACL 档与较旧的 Landlock ABI 是当前的部分强制执行情形，需要绝对边界的消费方可以拒绝或向上暴露它们。
 
 ### 被拒绝的调用与升权
 
-受限调用被拒绝时，操作会报告指明模式的拒绝标记——`[sandbox: file access denied under <mode> mode]`——组合声明升权能力时还会给出升权提示。模型可以用 `sandbox_permissions`（足以放行的最窄更宽模式）加 `justification` 重试一次完全相同的调用；审批服务为操作取得同意。请求保留审计原因，同时提供英文和中文展示文案，模型给出的理由保持原样。缺失的译文遵循语言服务的回退链，最终回退到英文；请求方负责自己的展示译文。更宽的模式需要审批，且只作用于该次调用。重复指定调用的生效模式无需审批即可成功；更窄的目标仍然无效。
+受限调用被拒绝时，操作会报告指明模式的拒绝标记——`[sandbox: file access denied under <mode> mode]`——组合声明升权能力时还会给出升权提示。模型可以用 `sandbox_permissions`（足以放行的最窄更宽模式）加 `justification` 重试一次完全相同的调用；审批服务为操作取得同意。请求保留审计原因，同时从 `src/locales.ts` 提供英文、中文和日文展示文案，模型给出的理由保持原样。缺失的译文遵循语言服务的回退链，最终回退到英文；请求方负责自己的展示译文。更宽的模式需要审批，且只作用于该次调用。重复指定调用的生效模式无需审批即可成功；更窄的目标仍然无效。
 
 ### 故障关闭行为
 
@@ -92,7 +92,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SandboxProvider` 服务、模式/强制执行/策略类型、故障关闭错误 |
 | [`src/escalation.ts`](src/escalation.ts) | 升权词汇：更宽模式阶梯、参数校验、拒绝与提示标记、审批编排 |
-| [`src/roots.ts`](src/roots.ts) | 可写根目录推导，Seatbelt profile 与进程内 fs 栅栏共享 |
+| [`src/roots.ts`](src/roots.ts) | 共享的工作区和额外根目录验证，以及后端特定的临时区域推导 |
 
 ### 升权编排
 
@@ -100,7 +100,7 @@ kind: "package-reference"
 
 ### 可写根目录
 
-`workspace-write` 意味着「工作区根目录加宿主临时区域」：`writableRoots` 以规范化方式推导该白名单，解析符号链接并去重，使 Seatbelt profile 与进程内 fs 栅栏授予完全相同的根目录。
+`workspaceWritableRoots` 为 bwrap 和 Landlock 推导工作区与显式额外目录。`writableRoots` 为 Seatbelt 和进程内文件系统围栏加入主机临时区域。两者都对根目录去重，并拒绝不存在、不是目录或经过符号链接解析的额外路径。参见[模式定义](../../../docs/subsystems/sandbox.zh.md)。
 
 </details>
 

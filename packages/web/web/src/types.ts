@@ -42,15 +42,18 @@ export interface WebSearchResult {
 }
 
 /**
- * One citeable source. A source always has a URL; `title`, `snippet`, and
- * `publishedAt` are optional because not every provider returns them — forcing
+ * One citeable source. A source always has a URL; `title`, `snippet`, `summary`,
+ * and `publishedAt` are optional because not every provider returns them — forcing
  * adapters to invent them would make the seam lie (Perplexity citations may be
  * URL-only). `dsh-tool-web` renders `title ?? hostname(url)` for display.
  */
 export interface WebSearchSource {
   readonly url: string
   readonly title?: string
+  /** Short excerpt suited to display. */
   readonly snippet?: string
+  /** Longer excerpt suited to model reading; consumers bound its length. */
+  readonly summary?: string
   /** Publication/crawl timestamp as a provider-supplied ISO-8601 string. */
   readonly publishedAt?: string
 }
@@ -103,6 +106,14 @@ export interface WebSearchProvider {
   readonly id: string
   /** Cheap local usability check; must not make network calls. */
   available(): boolean
+  /**
+   * Whether a search made for a model request on the `llmProvider` chat route has a
+   * credential to send. Checks configuration only and must not make network calls.
+   * Omitted = ready.
+   * @param llmProvider - the provider route id of the model request, when known.
+   * @returns false when that request's searches could not authenticate.
+   */
+  ready?(llmProvider: string | undefined): Promise<boolean>
   /** Run one search; honor `signal` for cancellation. */
   search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>
 }
@@ -115,6 +126,14 @@ export interface WebFetchProvider {
   readonly id: string
   /** Cheap local usability check; must not make network calls. */
   available(): boolean
+  /**
+   * Whether a fetch made for a model request on the `llmProvider` chat route has a
+   * credential to send. Checks configuration only and must not make network calls.
+   * Omitted = ready.
+   * @param llmProvider - the provider route id of the model request, when known.
+   * @returns false when that request's fetches could not authenticate.
+   */
+  ready?(llmProvider: string | undefined): Promise<boolean>
   /** Retrieve one URL; honor `signal` for cancellation. */
   fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>
 }

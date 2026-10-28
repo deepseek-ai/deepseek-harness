@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface de fichier de l'espace de travail",
+    "description": "Fournit la lecture des fichiers de l'espace de travail, la liste des répertoires et les mises à jour des informations sur les fichiers."
+  }
+}

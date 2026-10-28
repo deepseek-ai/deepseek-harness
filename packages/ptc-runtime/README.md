@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `ptc-runtime/` group executes model programs against host-provided async functions. The default Node backend starts a fresh process under the configured sandbox policy. Its opt-in `executionMode: persistent-in-memory` keeps a separate confined REPL for each explicit state owner; memory ends with the process or owner. The experimental Python backend uses a fresh CPython process. Failures return as results for callers to diagnose or present to the model.
+The `ptc-runtime/` group executes model programs against host-provided async functions. Node evaluates async function bodies, REPL statements or VM Scripts under the configured file policy. Async function bodies use fresh processes; REPL mode retains one process per explicit state owner; Script retention is optional through `scriptPersistence`. Memory ends with the process or owner. The experimental Python backend uses a fresh CPython process. Failures return as results for callers to diagnose or present to the model.
 
 ## Table of Contents
 
@@ -27,7 +27,7 @@ These three packages together provide program execution; each README describes w
 | Package | Role | ctx key |
 |---|---|---|
 | [`ptc-runtime/`](ptc-runtime/README.md) | Defines what a PTC runtime does: run one program against host-provided bindings and report what it printed and returned | `ctx.ptcRuntime` |
-| [`ptc-runtime-node/`](ptc-runtime-node/README.md) | Executes TypeScript in fresh processes under file policy or an opt-in retained REPL under the same file policy | registers `ctx.ptcRuntime` |
+| [`ptc-runtime-node/`](ptc-runtime-node/README.md) | Evaluates TypeScript as async function bodies, REPL statements or VM Scripts, with file policy and optional retained state | registers `ctx.ptcRuntime` |
 | [`experimental/ptc-runtime-python/`](../experimental/ptc-runtime-python/README.md) | The experimental Python backend: owns the fd-3 wire protocol between a Node host and a CPython subprocess and the CPython runtime implementation | — |
 
 -----

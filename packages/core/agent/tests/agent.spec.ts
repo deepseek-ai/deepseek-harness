@@ -1,4 +1,6 @@
-import { describe, expect, expectTypeOf, it } from 'vitest'
+import { unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { describe, expect, expectTypeOf, it, onTestFinished } from 'vitest'
 import { Context, Service, symbols } from '@deepseek-ai/cordis'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
@@ -21,6 +23,7 @@ function stubAgent(rawId: string, overrides: Partial<Agent> = {}): Agent {
     id,
     options: {},
     session,
+    model: unsupportedModel(),
     inbox: {
       nextTurn: [], nextStep: [],
     } as never,
@@ -39,8 +42,33 @@ function stubAgent(rawId: string, overrides: Partial<Agent> = {}): Agent {
 }
 
 describe('AgentRegistry', () => {
+  it('waits for its projection owner and reads turn positions without a loop', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    const fiber = ctx.plugin(AgentRegistry)
+    expect(ctx.get('agents')).toBeUndefined()
+    await ctx.plugin(SessionProjectionRegistry)
+    await fiber
+    const session = Session.create(SessionId('turn-positions'))
+    expect(ctx.agents.turnBoundaryOf(session)).toEqual({
+      openTurnStartSeq: null, lastStepStartSeq: null, lastStepBoundary: null, lastTurn: 0,
+    })
+    const turn = session.append('turn/start', { turn: 3 })
+    const step = session.append('step/start', { turn: 3, step: 1 })
+    expect(ctx.agents.turnBoundaryOf(session)).toEqual({
+      openTurnStartSeq: turn.seq, lastStepStartSeq: step.seq,
+      lastStepBoundary: { kind: 'start', seq: step.seq }, lastTurn: 3,
+    })
+    session.append('turn/end', { turn: 3, reason: { kind: 'completed' } })
+    expect(ctx.agents.turnBoundaryOf(session)).toMatchObject({ openTurnStartSeq: null, lastTurn: 3 })
+    expect(ctx.sessionProjections.checkpoint(session).turnBoundary).toBeDefined()
+    await fiber.dispose()
+    expect(ctx.sessionProjections.checkpoint(session).turnBoundary).toBeUndefined()
+  })
+
   it('contributes Agent lookup and scoped Context providers while Typert is live', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     const agentFiber = ctx.plugin(AgentRegistry)
     await agentFiber
     await ctx.plugin(TypertRegistry)
@@ -69,6 +97,7 @@ describe('AgentRegistry', () => {
 
   it('registers exact entries, emits lifecycle events, and unregisters on owner disposal', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const lifecycle: string[] = []
     ctx.on('agent/created', ({ agent }) => void lifecycle.push(`created:${agent.id}`))
@@ -88,6 +117,7 @@ describe('AgentRegistry', () => {
 
   it('rejects an agent whose registry and session identities differ', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const agent = stubAgent('agent-id', { session: Session.create(SessionId('session-id')) })
 
@@ -98,6 +128,7 @@ describe('AgentRegistry', () => {
 
   it('tracks runtime creator ownership separately from registry order', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const root = stubAgent('root')
     const child = stubAgent('child')
@@ -119,6 +150,7 @@ describe('AgentRegistry', () => {
 
   it('rolls an entry back and pairs a partially delivered creation when a listener throws', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const lifecycle: string[] = []
     ctx.on('agent/created', ({ agent }) => void lifecycle.push(`created:${agent.id}`))
@@ -132,6 +164,7 @@ describe('AgentRegistry', () => {
 
   it('rolls back asynchronous creation rejection and contains every disposal-listener failure', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const warnings: string[] = []
     const heard: string[] = []
@@ -155,6 +188,7 @@ describe('AgentRegistry', () => {
 
   it('awaits each creation listener before the next listener and registration completion', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
@@ -185,6 +219,7 @@ describe('AgentRegistry', () => {
 
   it('separates entry from announcement and stale/idempotent detach cannot remove a replacement', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const lifecycle: string[] = []
     ctx.on('agent/created', ({ agent }) => void lifecycle.push(`created:${agent.id}`))
@@ -209,6 +244,7 @@ describe('AgentRegistry', () => {
 
   it('defers detach requested by a creation listener until that dispatch unwinds', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const order: string[] = []
     const agent = stubAgent('reentrant')
@@ -304,6 +340,7 @@ describe('AgentRegistry factory seam', () => {
 
   it('requires a factory and delegates through the calling context', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await expect(ctx.agents.create({ sessionId: SessionId('s') })).rejects.toThrow(/no agent factory/)
     const { factory, calls } = stubFactory()
@@ -323,6 +360,7 @@ describe('AgentRegistry factory seam', () => {
 
   it('keeps the runtime parent in options separately from the caller context', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const { factory, calls } = stubFactory()
     ctx.agents.setFactory(factory)
@@ -337,6 +375,7 @@ describe('AgentRegistry factory seam', () => {
 
   it('rejects a second factory and clears the slot with its owner (HMR)', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const owner = await ctx.plugin(Object.assign((inner: Context) => {
       inner.agents.setFactory(stubFactory().factory)
@@ -349,6 +388,7 @@ describe('AgentRegistry factory seam', () => {
 
   it('canonicalizes an already traced Service before tracing it for the caller', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     const states = new WeakMap<object, string[]>()
     class TracedFactory extends Service implements AgentFactory {

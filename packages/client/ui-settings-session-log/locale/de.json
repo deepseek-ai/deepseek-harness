@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Einstellungen zum Hochladen des Sitzungsprotokolls",
+    "description": "Legt fest, ob Sitzungsprotokolle mit DeepSeekAnfragen des offiziellen Modells API hochgeladen werden."
+  }
+}

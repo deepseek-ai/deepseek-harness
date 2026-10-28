@@ -33,13 +33,11 @@ export interface PlanUnitState {
   running: { commandId: CommandId; wanted: boolean } | null
   /** Active state recorded by the latest `request/header`, or null. */
   activeAtLastHeader: boolean | null
+  /** Whether a logged `plan/mode` has ever activated plan mode in this Session. */
+  entered: boolean
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Host plan-mode fold state. */
-    plan: PlanUnitState
-  }
   interface SessionProjectionMap {
     /** Plan collaboration state folded from the plan command lifecycle and `plan/mode` events. */
     plan: PlanProjection

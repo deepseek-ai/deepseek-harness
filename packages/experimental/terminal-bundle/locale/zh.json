@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "持久终端",
-    "description": "让 shell 进程在多次工具调用之间保持运行。"
+    "description": "为智能体提供终端，进程在多次工具调用之间持续在后台运行，因此它可以启动开发服务器或 REPL，稍后再读取输出或继续输入。",
+    "detail": "docs/DETAIL.zh.md"
   }
 }

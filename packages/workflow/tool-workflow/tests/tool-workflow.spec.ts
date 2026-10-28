@@ -1,4 +1,6 @@
-import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { createInboxStub, unsupportedModel, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -6,7 +8,6 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { WorkflowRunId, WorkflowEngine } from '@deepseek-ai/dsh-workflow'
 import type {
   WorkflowAgentEndInfo, WorkflowAgentInfo, WorkflowResult, WorkflowRun,
@@ -103,6 +104,7 @@ async function setup(config?: { toolName?: string; maxResultChars?: number }) {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(StubEngine)
   await ctx.plugin(toolWorkflow, config ?? {})
   const engine = ctx.workflowEngine as StubEngine
@@ -119,7 +121,7 @@ function execute(ctx: Context, args: unknown, extra?: {
   signal?: AbortSignal
   parent?: ToolExecutionToken
 }): Promise<ToolExecutionResult> {
-  return ctx.tools.execute({
+  return executeToolFixture(ctx, {
     signal: testToolSignal,
     callId: ToolCallId('call-1'),
     name: 'workflow',
@@ -394,6 +396,7 @@ describe('dsh-tool-workflow', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(StubEngine)
     const fiber = await ctx.plugin(toolWorkflow, { toolName: 'orchestrate' })
     expect(ctx.tools.get('orchestrate')).toBeDefined()
@@ -449,6 +452,8 @@ describe('dsh-tool-workflow', () => {
       onTestFinished(async () => { await ctx.fiber.dispose() })
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(LocalJobRegistry)
       await ctx.plugin(ToolTasks)
@@ -457,7 +462,8 @@ describe('dsh-tool-workflow', () => {
       const engine = ctx.workflowEngine as StubEngine
       const session = Session.create(SessionId('caller'))
       const parent: Agent = {
-        id: session.id, options: {}, session, inbox: unsupportedInbox(), status: 'idle', ctx,
+        id: session.id, options: {}, session, model: unsupportedModel(),
+        inbox: createInboxStub(), status: 'idle', ctx,
         send: () => {}, followup: () => {}, steer: () => {}, inject: () => {}, cancel: () => {},
         runMaintenance: task => task(new AbortController().signal), whenIdle: () => Promise.resolve(),
       }
@@ -497,7 +503,7 @@ describe('dsh-tool-workflow', () => {
       // Narration is observer-only: every chunk rides the log channel, so the
       // model's job_output before settlement sees status only.
       expect(jobs.readAt(job.id, 0, parent.id).chunks.map(chunk => chunk.channel)).toEqual(['log', 'log', 'log', 'log'])
-      const early = await ctx.tools.execute({
+      const early = await executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('call-early-read'),
         name: 'job_output',
@@ -511,9 +517,16 @@ describe('dsh-tool-workflow', () => {
       const settled = jobs.get(job.id, parent.id)
       expect(settled.detail).toBe('4 agents')
       expect(settled.progress).toBeUndefined()
-      const read = jobs.read(job.id, parent.id)
-      expect(read.result).toContain('workflow "audit" completed (4 agents)')
-      expect(read.result).toContain('"findings": 2')
+      const read = await executeToolFixture(ctx, {
+        signal: testToolSignal,
+        callId: ToolCallId('call-settled-read'),
+        name: 'job_output',
+        arguments: { job_id: jobId },
+        agent: parent,
+      })
+      const readText = (read.content[0] as { text: string }).text
+      expect(readText).toContain('workflow "audit" completed (4 agents)')
+      expect(readText).toContain('"findings": 2')
       expect(engine.disposed).toBe(1)
       // The durable session record still brackets the background run.
       expect(session.snapshotEvents().map(event => event.type)).toEqual([
@@ -626,6 +639,7 @@ describe('dsh-tool-workflow', () => {
       onTestFinished(async () => { await ctx.fiber.dispose() })
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(SessionProjectionRegistry)
       provideWorkingDirectoryFixture(ctx)
       await ctx.plugin(SubagentRuntime)
@@ -659,10 +673,11 @@ describe('dsh-tool-workflow', () => {
       onTestFinished(async () => { await ctx.fiber.dispose() })
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
+      await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(NativeToolExecutor)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(LocalJobRegistry)
       await ctx.plugin(ToolTasks)
-      await ctx.plugin(SessionProjectionRegistry)
       provideWorkingDirectoryFixture(ctx)
       await ctx.plugin(SubagentRuntime)
       ctx.subagents.registerProvider({
@@ -676,7 +691,8 @@ describe('dsh-tool-workflow', () => {
       await ctx.plugin(toolWorkflow, {})
       const session = Session.create(SessionId('caller'))
       const parent: Agent = {
-        id: session.id, options: {}, session, inbox: unsupportedInbox(), status: 'idle', ctx,
+        id: session.id, options: {}, session, model: unsupportedModel(),
+        inbox: createInboxStub(), status: 'idle', ctx,
         send: () => {}, followup: () => {}, steer: () => {}, inject: () => {}, cancel: () => {},
         runMaintenance: task => task(new AbortController().signal), whenIdle: () => Promise.resolve(),
       }
@@ -696,7 +712,14 @@ describe('dsh-tool-workflow', () => {
       expect(jobs.get(jobId, parent.id).detail).toBe('0 agents')
       const ring = jobs.readAt(jobId, 0, parent.id).chunks.map(chunk => chunk.text).join('')
       expect(ring).toContain('halfway')
-      expect(jobs.read(jobId, parent.id).result).toContain('"ok": true')
+      const read = await executeToolFixture(ctx, {
+        signal: testToolSignal,
+        callId: ToolCallId('call-ptc-settled-read'),
+        name: 'job_output',
+        arguments: { job_id: jobId },
+        agent: parent,
+      })
+      expect((read.content[0] as { text: string }).text).toContain('"ok": true')
     }, 15_000)
   })
 })

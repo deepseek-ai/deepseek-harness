@@ -2,9 +2,11 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { monitorEventLoopDelay } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import WebSocket from 'ws'
 import type {} from '@deepseek-ai/dsh-tool-present/types'
 import { deriveReplayScript, parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import {
@@ -20,6 +22,18 @@ const MODE = webSnapshotMode()
 const RECORD_PROMPT = '简单画一个 SVG 表示冯诺依曼架构，保存为 von-neumann.svg，并提供独立文件卡片，方便打开。'
 const FILE = 'von-neumann.svg'
 
+/** Queue counters from the installed ws implementation; payload contents are never recorded. */
+type DiagnosticSocket = WebSocket & {
+  readonly _sender?: { readonly _state: number; readonly _bufferedBytes: number; readonly _queue: readonly unknown[] }
+  readonly _receiver?: { readonly _state: number; readonly _bufferedBytes: number }
+  readonly _socket?: {
+    readonly bytesRead: number
+    readonly bytesWritten: number
+    readonly readableLength: number
+    readonly writableLength: number
+  }
+}
+
 describe('web e2e: requested SVG is explicitly delivered', () => {
   let scaffold: WebScaffold
   let browser: Browser
@@ -27,9 +41,40 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
   let tripwire: ReturnType<typeof watchConsole>
   let cwd: string
   let replayRoot: string | undefined
+  let restoreTransportDiagnostics: (() => void) | undefined
   const connectionDiagnostics: string[] = []
 
   beforeAll(async () => {
+    const loopDelay = monitorEventLoopDelay({ resolution: 20 })
+    loopDelay.enable()
+    const ping = vi.spyOn(WebSocket.prototype, 'ping')
+    const terminated = vi.spyOn(WebSocket.prototype, 'terminate').mockImplementation(function (this: WebSocket) {
+      const socket = this as DiagnosticSocket
+      connectionDiagnostics.push(`Host termination: ${JSON.stringify({
+        readyState: socket.readyState,
+        bufferedBytes: socket.bufferedAmount,
+        pingCalls: ping.mock.contexts.filter(context => context === socket).length,
+        senderState: socket._sender?._state,
+        senderBufferedBytes: socket._sender?._bufferedBytes,
+        senderQueueLength: socket._sender?._queue.length,
+        receiverState: socket._receiver?._state,
+        receiverBufferedBytes: socket._receiver?._bufferedBytes,
+        bytesRead: socket._socket?.bytesRead,
+        bytesWritten: socket._socket?.bytesWritten,
+        readableLength: socket._socket?.readableLength,
+        writableLength: socket._socket?.writableLength,
+        maxEventLoopDelayMs: loopDelay.max / 1e6,
+        p99EventLoopDelayMs: loopDelay.percentile(99) / 1e6,
+      })}`)
+      connectionDiagnostics.push(new Error('Host WebSocket termination').stack ?? 'Host WebSocket termination')
+      terminated.mockRestore()
+      this.terminate()
+    })
+    restoreTransportDiagnostics = () => {
+      terminated.mockRestore()
+      ping.mockRestore()
+      loopDelay.disable()
+    }
     let replayOverride: string | undefined
     if (MODE !== 'record') {
       replayRoot = await mkdtemp(join(tmpdir(), 'dsh-present-svg-replay-'))
@@ -42,7 +87,8 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
     scaffold = await launchWebScaffold({
       compareReplaySession: true,
       extraOverlayPath: fileURLToPath(new URL('./present-svg.overlay.yml', import.meta.url)),
-      ...(replayOverride === undefined ? {} : { replayFixture: FIXTURE, replayOverride }),
+      // Replay the large SVG incrementally to avoid a zero-delay traffic burst.
+      ...(replayOverride === undefined ? {} : { replayFixture: FIXTURE, replayOverride, paceMs: 5 }),
     })
     browser = await chromium.launch()
     page = await browser.newPage({
@@ -53,6 +99,7 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
       if (message.text().startsWith('[connection]')) connectionDiagnostics.push(message.text())
     })
     page.on('websocket', (socket) => {
+      loopDelay.reset()
       const openedAt = Date.now()
       let received = 0
       socket.on('framereceived', () => { received++ })
@@ -67,6 +114,7 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
   })
 
   afterAll(async () => {
+    restoreTransportDiagnostics?.()
     try {
       await browser?.close()
     } finally {
@@ -129,27 +177,31 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
     expect(await changes.getByRole('list').count()).toBe(0)
     expect(await changes.locator('svg').evaluate(icon => icon.innerHTML))
       .toBe(await card.locator('svg').evaluate(icon => icon.innerHTML))
-    expect(await changes.evaluate(element => element.getBoundingClientRect().height)).toBe(62)
-    const appearance = await page.evaluate(() => {
+    await expect.poll(() => changes.evaluate(element => element.isConnected
+      ? element.getBoundingClientRect().height : undefined), { timeout: 10_000 }).toBe(62)
+    // Earlier locator reads do not guarantee both cards remain mounted when the
+    // turn tail updates. Observe their presence and styles in one browser task.
+    await expect.poll(() => page.evaluate(() => {
+      const presentedCard = document.querySelector('[data-presented-file]')
+      const changedCard = document.querySelector('[data-changed-files]')
+      if (presentedCard === null || changedCard === null) return null
       const previous = document.body.getAttribute('data-ds-dark-theme')
       try {
         return [false, true].map((dark) => {
           document.body.toggleAttribute('data-ds-dark-theme', dark)
-          const cards = ['[data-presented-file]', '[data-changed-files]'].map((selector) => {
-            const card = document.querySelector(selector)!
+          const appearance = [presentedCard, changedCard].map((card) => {
             const tile = card.querySelector('svg')!.parentElement!
             return { fill: getComputedStyle(tile).backgroundColor, tileBorder: getComputedStyle(tile).border,
               cardBorder: getComputedStyle(card).border }
           })
-          return { fills: cards.map(card => card.fill), matchingTiles: cards[0]!.tileBorder === cards[1]!.tileBorder,
-            matchingCards: cards[0]!.cardBorder === cards[1]!.cardBorder }
+          return { fills: appearance.map(card => card.fill), matchingTiles: appearance[0]!.tileBorder === appearance[1]!.tileBorder,
+            matchingCards: appearance[0]!.cardBorder === appearance[1]!.cardBorder }
         })
       } finally {
         if (previous === null) document.body.removeAttribute('data-ds-dark-theme')
         else document.body.setAttribute('data-ds-dark-theme', previous)
       }
-    })
-    expect(appearance).toEqual([
+    }), { timeout: 10_000 }).toEqual([
       { fills: ['color(srgb 1 1 1 / 0.5)', 'color(srgb 1 1 1 / 0.5)'], matchingTiles: true, matchingCards: true },
       { fills: ['color(srgb 1 1 1 / 0.05)', 'color(srgb 1 1 1 / 0.05)'], matchingTiles: true, matchingCards: true },
     ])

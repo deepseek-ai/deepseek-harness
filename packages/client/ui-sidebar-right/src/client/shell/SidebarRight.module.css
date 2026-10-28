@@ -38,11 +38,17 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* Hidden docked items sit past the frame's right edge. Unclipped, they widen
+     the frame's scrollable overflow, and a caret reveal (PageUp in a text field
+     outside macOS) scrolls the `overflow: hidden` frame sideways. `clip` keeps
+     that overflow here without making the panel a scroll container, and does
+     not clip fixed floating children, whose containing block is the viewport. */
+  overflow: clip;
   pointer-events: none;
 }
 
-/* Only docked Grid items slide. Their common ancestor remains untransformed,
-   unclipped and without a stacking context, so fixed floating children escape. */
+/* Only docked Grid items slide. Their common ancestor remains untransformed
+   and without a stacking context, so fixed floating children escape. */
 .panel :global([data-dockkit-host='dock']),
 .panel :global([data-dockkit-empty]),
 .panel :global([data-dockkit-divider]) {
@@ -59,6 +65,18 @@
   transform: none;
   visibility: visible;
   transition: transform var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+/* An item mounted by the opening has no closed style to slide from; it starts
+   at the closed position like the items already mounted. Only an opening
+   marks the panel, so items that mount while it stays open, or that a
+   Session switch shows, appear in place. */
+@starting-style {
+  .panel[data-sidebar-right-opening] :global([data-dockkit-host='dock']),
+  .panel[data-sidebar-right-opening] :global([data-dockkit-empty]),
+  .panel[data-sidebar-right-opening] :global([data-dockkit-divider]) {
+    transform: translateX(var(--dsh-sidebar-width));
+  }
 }
 
 .panel[data-sidebar-right-panel='fullscreen'] {
@@ -104,7 +122,10 @@
 @media (prefers-reduced-motion: reduce) {
   .panel :global([data-dockkit-host='dock']),
   .panel :global([data-dockkit-empty]),
-  .panel :global([data-dockkit-divider]) {
+  .panel :global([data-dockkit-divider]),
+  .panel[data-sidebar-right-open] :global([data-dockkit-host='dock']),
+  .panel[data-sidebar-right-open] :global([data-dockkit-empty]),
+  .panel[data-sidebar-right-open] :global([data-dockkit-divider]) {
     transition: none;
   }
 }
@@ -132,8 +153,10 @@
   height: 15px;
 }
 
-.iconButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .iconButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* The expand button's glyph, so collapse and expand share one affordance. */
@@ -145,6 +168,13 @@
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+@media (pointer: coarse) {
+  /* Retain the footprint so hiding the control cannot change its room measurement. */
+  .panelBody :global([data-dockkit-split-control]:has(> [data-dockkit-split-blocked])) {
+    visibility: hidden;
+  }
 }
 
 .unavailable {

@@ -7,7 +7,7 @@ import { dump } from 'js-yaml'
 import { afterEach, describe, expect, it } from 'vitest'
 import { loadPersistenceFormats, runPersistenceFormats } from './persistence-formats.ts'
 import { parseHistoricalPersistenceSnapshot } from './persistence-changes.ts'
-import { canonicalizeSchema, schemaDigest } from './persistence-schema-model.ts'
+import { canonicalizeSchema, encodePersistenceSnapshot, schemaDigest } from './persistence-schema-model.ts'
 import type { PersistenceRoot, PersistenceSchemaInventory, PersistenceType, SchemaNode } from './persistence-schema-model.ts'
 
 const temporary: string[] = []
@@ -57,7 +57,12 @@ function schemaPath(version: number, currentVersion: number): string {
 }
 
 function replaceSnapshot(root: string, version: number, currentVersion: number, snapshot: PersistenceSchemaInventory): void {
-  write(root, schemaPath(version, currentVersion), JSON.stringify(snapshot))
+  write(root, schemaPath(version, currentVersion), encodePersistenceSnapshot(snapshot))
+}
+
+/** Keep a digest's node-table prefix while changing the full digest. */
+function driftDigest(digest: string): string {
+  return digest.slice(0, 16) + '0'.repeat(48)
 }
 
 function saveReference(root: string, version: number, currentVersion: number, snapshot = inventory(version)): void {
@@ -125,14 +130,14 @@ describe('archive current persistence format', () => {
 
     expect(runPersistenceFormats(['--archive', '3'], root)).toBe('Archived Session format v3 to docs/persistence-changes/historical-formats/v3.schema.json.')
     const serialized = readFileSync(join(root, 'docs/persistence-changes/historical-formats/v3.schema.json'), 'utf8')
-    const archived = parseHistoricalPersistenceSnapshot(JSON.parse(serialized))
+    const archived = parseHistoricalPersistenceSnapshot(serialized)
     expect(archived).toEqual({
       ...original,
       types: types.map(type => ({ ...type, sources: [
         'packages/example/src/types.ts', 'packages/other/src/types.ts', 'packages/plain/src/types.ts', 'packages/fragment/src/types.ts',
       ] })),
     })
-    expect(serialized).toBe(JSON.stringify(archived, null, 2) + '\n')
+    expect(serialized).toBe(encodePersistenceSnapshot(archived))
     expect(readFileSync(join(root, 'docs/persistence-schema.json'), 'utf8')).toBe(before)
     expect(existsSync(join(root, 'docs/persistence-changes/historical-formats/v3.md'))).toBe(false)
 
@@ -146,7 +151,7 @@ describe('archive current persistence format', () => {
     const root = fixture(0)
     rmSync(join(root, 'docs/persistence-changes/historical-formats'), { recursive: true })
     expect(runPersistenceFormats(['--root', root, '--archive', '0'])).toBe('Archived Session format v0 to docs/persistence-changes/historical-formats/v0.schema.json.')
-    expect(JSON.parse(readFileSync(join(root, 'docs/persistence-changes/historical-formats/v0.schema.json'), 'utf8'))).toEqual(inventory(0))
+    expect(parseHistoricalPersistenceSnapshot(readFileSync(join(root, 'docs/persistence-changes/historical-formats/v0.schema.json'), 'utf8'))).toEqual(inventory(0))
   })
 
   it.each(['-1', '1.5', '01', '3junk', '9007199254740992'])('rejects an invalid archive version %s', (version) => {
@@ -178,7 +183,7 @@ describe('archive current persistence format', () => {
     const root = fixture()
     const original = inventory(3)
     if (variant === 'invalid-json') write(root, 'docs/persistence-schema.json', '{')
-    else if (variant === 'digest-drift') replaceSnapshot(root, 3, 3, { ...original, roots: [{ ...original.roots[0]!, digest: '0'.repeat(64) }, ...original.roots.slice(1)] })
+    else if (variant === 'digest-drift') replaceSnapshot(root, 3, 3, { ...original, roots: [{ ...original.roots[0]!, digest: driftDigest(original.roots[0]!.digest) }, ...original.roots.slice(1)] })
     else if (variant === 'missing-type') replaceSnapshot(root, 3, 3, { ...original, types: original.types.slice(1) })
     else if (variant === 'missing-source-metadata') edit(root, 'docs/persistence-schema.json', ',"sources":[]', '')
     else replaceSnapshot(root, 3, 3, inventory(2))
@@ -378,11 +383,14 @@ describe('complete persistence format references', () => {
     const root = fixture()
     const original = inventory(1)
     const first = original.roots[0]!
-    const changed = variant === 'duplicate-root' ? { ...original, roots: [...original.roots, first] }
-      : variant === 'invalid-digest' ? { ...original, roots: [{ ...first, digest: '0'.repeat(64) }, ...original.roots.slice(1)] }
-        : variant === 'invalid-graph' ? { ...original, roots: [{ ...first, schema: { root: 0, nodes: [{ kind: 'array', element: 99 }] } }, ...original.roots.slice(1)] }
-          : { ...original, extra: true }
-    write(root, schemaPath(1, 3), JSON.stringify(changed))
+    if (variant === 'duplicate-root') replaceSnapshot(root, 1, 3, { ...original, roots: [...original.roots, first] })
+    else if (variant === 'invalid-digest') replaceSnapshot(root, 1, 3, { ...original, roots: [{ ...first, digest: driftDigest(first.digest) }, ...original.roots.slice(1)] })
+    else {
+      const changed = JSON.parse(encodePersistenceSnapshot(original)) as { nodes: Record<string, unknown>; extra?: boolean }
+      if (variant === 'invalid-graph') changed.nodes[first.digest.slice(0, 16)] = { kind: 'array', element: '9'.repeat(16) }
+      else changed.extra = true
+      write(root, schemaPath(1, 3), JSON.stringify(changed))
+    }
     expect(() => loadPersistenceFormats(root)).toThrow(variant === 'duplicate-root' ? 'duplicate schema root' : variant === 'invalid-digest' ? 'schema digest mismatch' : variant === 'invalid-graph' ? 'unknown schema node' : 'unknown field extra')
   })
 

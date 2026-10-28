@@ -22,7 +22,7 @@ export const PROVIDER_DATA: Record<BuiltinProvider, ProviderData> & Partial<Reco
   'google-vertex': { env: ['GOOGLE_CLOUD_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS', 'GOOGLE_CLOUD_PROJECT', 'GCLOUD_PROJECT', 'GOOGLE_CLOUD_LOCATION'], baseURLEnv: ['GOOGLE_CLOUD_PROJECT', 'GCLOUD_PROJECT', 'GOOGLE_CLOUD_LOCATION'] },
   'groq': { env: ['GROQ_API_KEY'], defaultBaseURL: 'https://api.groq.com/openai/v1' },
   'huggingface': { env: ['HF_TOKEN'], defaultBaseURL: 'https://router.huggingface.co/v1' },
-  'kimi-coding': { env: ['KIMI_API_KEY'], defaultBaseURL: 'https://api.kimi.com/coding' },
+  'kimi-coding': { env: ['KIMI_API_KEY'], defaultBaseURL: 'https://api.kimi.com/coding/v1' },
   'meta': { env: ['META_API_KEY'], defaultBaseURL: 'https://api.meta.ai/v1' },
   'minimax': { env: ['MINIMAX_API_KEY'], defaultBaseURL: 'https://api.minimax.io/anthropic' },
   'minimax-cn': { env: ['MINIMAX_CN_API_KEY'], defaultBaseURL: 'https://api.minimaxi.com/anthropic' },

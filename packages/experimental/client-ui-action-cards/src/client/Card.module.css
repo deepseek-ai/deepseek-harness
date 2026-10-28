@@ -1,0 +1,7 @@
+.card { margin: 16px 0; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg); overflow: hidden; background: var(--dsw-alias-bg-layer-1); font-family: var(--dsw-font-family); color: var(--dsw-alias-label-primary); }
+.body { padding: 12px 20px 20px; }
+.title { display: block; font-size: 16px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
+.text { margin: 8px 0 0; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dsw-alias-label-secondary); }
+.toggle { margin: 8px 0 0; padding-inline: 0; height: auto; min-height: 24px; font-size: 12px; }
+.status { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }
+.footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; }

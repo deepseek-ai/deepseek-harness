@@ -11,6 +11,7 @@ export type DesktopUpdateFailureKind =
   | 'stop-failed'
   | 'tasks-changed'
   | 'tasks-unavailable'
+  | 'fullscreen-timeout'
 
 /** Public semantic preload fields consumed by the settings row. */
 export interface DesktopUpdatePresentation {

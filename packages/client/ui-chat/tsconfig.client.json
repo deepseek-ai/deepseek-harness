@@ -43,9 +43,6 @@
       "path": "../../core/session"
     },
     {
-      "path": "../../core/tools"
-    },
-    {
       "path": "../../interaction/commands"
     },
     {
@@ -68,6 +65,9 @@
     },
     {
       "path": "../../subagent/subagent"
+    },
+    {
+      "path": "../connection/tsconfig.client.json"
     },
     {
       "path": "../locale/tsconfig.client.json"
@@ -116,6 +116,12 @@
     },
     {
       "path": "../product-analytics/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-file-drag"
+    },
+    {
+      "path": "../../core/tool-executor-ptc"
     }
   ],
   "exclude": [

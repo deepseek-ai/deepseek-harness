@@ -4,8 +4,8 @@
  */
 
 import type { IncomingMessage } from 'node:http'
-import { Readable } from 'node:stream'
 import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
+import { Readable } from 'node:stream'
 import type { ConnectionFetchHandler } from './rpc.ts'
 
 /** Default carrier cap for all HTTP RPC bodies: sized for the default

@@ -27,6 +27,7 @@ The boot group launches profile applications and manages their installed composi
 | [`hmr`](hmr/README.md) | Coordinates module and configuration reloads with package mutations | `hmr` |
 | [`config-editor`](config-editor/README.md) | Persists active profile configuration through Loader reconciliation | `configEditor` |
 | [`plugin-manager`](plugin-manager/README.md) | Manages current-profile plugins and bundle packages through shared CLI operations | `pluginManager` |
+| [`plugin-market`](plugin-market/README.md) | Reads the plugin indexes the user configures for Discover and the `plugin_market` tool | `pluginMarket` |
 
 <a id="related-documentation"></a>
 ## Related documentation

@@ -20,7 +20,8 @@
 - 字体大小必须与行高配对；已有角色匹配时使用主题排版变量。
 - 当组件约定要求保留列结构时，源码文本、终端输出和 diff 行不得换行；使用共享滚动条样式，不得定义组件专用滚动条选择器。
 - 呈现规则写在 CSS 中。React 内联样式可以传递组件局部自定义属性值，但不得编码主题分支。
-- 添加过渡动画或仅悬停可见的控件时，保留清晰可见的键盘焦点和减少动态效果行为。
+- 插件样式表中的相对 `url()` 指向本包 `src/client/assets/` 中的文件，构建会将其改写为[包资源](../packages/client/AGENTS.md#dependency-declaration) URL。`data:`、`#fragment`、以 `/` 开头、带 scheme 的引用以及空 `url('')` 引用保持不变，带片段或查询串的相对文件引用会让构建失败，依赖包中的样式表不会被改写。
+- 将 `:hover` 选择器放在 `@media (hover: hover)` 内，不依赖视口宽度。选中、展开、按下和键盘焦点样式保留在该条件之外。无 hover 时，操作保持可见或通过明确控件访问；打开纯悬停预览的指针事件处理忽略触摸。保留清晰可见的键盘焦点和减少动态效果行为。
 - 支持的引擎上，圆角继承 ui-theme `corner-shape.css` 的全局超级椭圆平滑。每个正圆 `border-radius`（`50%`、`100%` 或胶囊半径）必须配对 `corner-shape: round`，使圆形与胶囊保持圆弧；ui-theme 的 corner-shape spec 强制这一配对。
 - 高层级表面（菜单、浮层、对话框、面板、悬浮按钮、输入框）设 `border: 0` 并使用 `box-shadow: var(--dsw-elevation-panel)`、`var(--dsw-elevation-prominent)` 或输入框专用的 `var(--dsw-elevation-soft)`（更大模糊、更低透明度）：0.5px 发丝描边是第一层投影，`--dsw-elevation-stroke-color` 可按表面或状态重绑或抑制描边。不得将 `--dsw-alias-border-*` border 与 lv/elevation 投影配对——ui-theme 的 elevation spec 会拒绝；状态色 border（warn 面板）保持真 border。
 - 存量和新增的下拉菜单、上下文菜单、子菜单及选择菜单使用 `Menu`，自定义内容用 `MenuSurface` 包裹。材质由主题的 `--dsw-menu-surface-fill` 和 `--dsw-menu-backdrop-filter` 组成；功能及平台 CSS 不得覆盖两者。ui-theme 菜单检查拒绝未使用共享容器的 menu/listbox 渲染、材质覆盖和 token 重定义。计划任务自有的 `TaskMenu` 与 `ClockPicker` 是明确例外，保留现有容器和材质（[所属包](../packages/client/ui-schedule/README.zh.md)）。
@@ -28,6 +29,17 @@
 - 菜单背景模糊绘制在独立图层上，保证嵌套菜单和 fixed 浮层的定位及背景采样。macOS 上，`MenuSurface` 仅在各菜单范围内、页面内容后方添加实色底层，使 Chromium 能在原生透明材质上模糊页面内容；CSS 锚点跟随位置及尺寸，卸载时移除底层。没有该底层的浮层使用 `--dsw-specific-menu`，主题在 macOS 上将其设为 94% 不透明度，防止下方文字透出。其他使用该填充的浮起表面也须配套同一模糊；包含 fixed 浮层时，将两者绘制在独立背景层上。
 - 使用中性 `--dsw-alias-border-*` token 的平面边框与分割线一律 `0.5px`——按钮、输入框、卡片、行分割线，以及以填充盒绘制的分隔线（菜单分隔、对话标题栏接缝、markdown `hr`、竖向轨道线）共用发丝线粗细，Chromium 将其绘制为一个设备像素。dashed 记号与状态色 border 保持 1px；spinner 圆环经 spec 的显式豁免保留原宽度。更宽的中性 solid border 会被 ui-theme elevation spec 拒绝。
 - 可点击产物链接（Markdown 锚点、正文文件引用、网页来源与抓取链接、产物 chips、workflow 成员链接）经 `--dsw-alias-link` 着色、`font-weight: 500`，默认无下划线，hover/focus 时为 3px offset 的点状下划线。紧凑 Thinking Markdown 保持 tertiary 文字色和默认点状下划线（[紧凑展示](../packages/client/ui-primitives/README.zh.md#rendering-agent-output)）。带文字的锚点另以 ui-primitives 的 `LinkIconMedium` 分类图形（随 `currentColor`）作前置；目的地是已知外部站点时改用该站点自己的标记而非地球；workflow 成员链接与只包图片的锚点不带图形，工具行文件链接保持其灰色点线示能。
+
+<a id="input-capabilities"></a>
+## 输入能力
+
+`pointer` 与 `hover` 描述浏览器选定的主指针，`any-hover` 则考虑所有可用指针。三者都不检测物理键盘。
+
+- `(pointer: coarse)` 用于依赖指针精度的呈现，例如适合触摸的控件和文本框尺寸。
+- CSS 悬停效果保留在 `(hover: hover)` 下，使以触屏为主的布局无需悬停也能使用。
+- JavaScript 悬停预览在接受 mouse 进入事件时使用 `(any-hover: hover)`，并忽略 touch 进入事件。因此，即使触屏仍是主指针，外接鼠标也能打开预览。如果通过 `any-hover` 启用全部 CSS 悬停样式，触摸产生的 `:hover` 状态也会应用这些样式。
+
+混合输入设备上，鼠标预览可以出现，而基于主指针的 CSS 悬停样式保持关闭。键盘焦点和快捷键提示根据实际键盘交互显示，不依赖这些能力查询；共享行为见 [Menu 与输入方式](../packages/client/ui-primitives/README.zh.md#input-modality)。
 
 <a id="corner-radii-and-settings-cards"></a>
 ## 圆角与设置卡片

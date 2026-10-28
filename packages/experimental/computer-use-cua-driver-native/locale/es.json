@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Uso de la computadora (Cua Driver)",
+    "description": "Deje que el modelo opere el escritorio con el tiempo de ejecución del controlador Cua incluido; necesita permisos de escritorio para la aplicación que inicia dsh."
+  }
+}

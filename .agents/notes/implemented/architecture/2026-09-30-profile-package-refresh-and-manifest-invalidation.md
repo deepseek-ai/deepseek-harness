@@ -113,5 +113,5 @@ Tests need no API key and make no model calls.
 
 - With HMR, supported package operations publish the updated private dependencies and remove unused mappings after plugins stop. Without HMR, a pending startup-bundle disablement defers later publications until restart, preserving running plugins' mappings.
 - In the supported thread, package.json configuration reads use the changed fields; JSON modules retain their own reload behavior. The separate module, loader-thread, and Worker limitations above still apply.
-- Package configuration below expired directories is parsed in JavaScript and must keep the native reader's field and error semantics; tests compare it with the native reader on Node 22, 24, and 26.
+- Package configuration below expired directories is parsed in JavaScript and must keep the native reader's field and error semantics; tests compare it with the native reader on Node 24 and 26.
 - The implementation depends on several Node internal interfaces, and these tests must run again for Node upgrades.

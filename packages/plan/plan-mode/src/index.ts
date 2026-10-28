@@ -12,9 +12,10 @@
  * assembly, then appends `plan/mode` from `agent/pre-step` only when the step
  * is accepted. Same-step request retries reuse their assembly.
  *
- * The exit tool remains registered while plan mode is inactive, so entering
- * or leaving plan mode changes only the prompt section, not the request tool
- * catalog.
+ * The exit tool is disclosed progressively: it is admitted from the first step
+ * whose selected state is active and stays admitted for the rest of the
+ * Session, so leaving plan mode changes only the guidance section. Native
+ * declarations, PTC bindings, and execution share that admission.
  *
  * See packages/plan/plan-mode/README.md.
  *
@@ -33,7 +34,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { UserQuestionError, type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import type { CommandDefinitionId, CommandId } from '@deepseek-ai/dsh-commands'
 import type {} from '@deepseek-ai/dsh-session-projection'
-import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { PlanProjection, PlanUnitState } from './types.ts'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -59,10 +60,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/**
- * The model-facing exit tool's name. It stays registered while plan mode is
- * inactive so the request tool catalog is stable across transitions.
- */
+/** The model-facing exit tool's name, admitted once the Session enters plan mode. */
 export const EXIT_PLAN_MODE = 'exit_plan_mode'
 
 /** Deployment-owned plan guidance. */
@@ -124,6 +122,7 @@ const planUnitStateSchema: ZodType<PlanUnitState> = zod.object({
     wanted: zod.boolean(),
   }).strict().nullable(),
   activeAtLastHeader: zod.boolean().nullable(),
+  entered: zod.boolean(),
 }).strict()
 
 /** Wire payload schema of the `plan` projection. */
@@ -135,9 +134,9 @@ const planProjectionSchema: ZodType<PlanProjection> = zod.object({
 /** Projection of logged plan selections and committed mode. */
 export const planProjectionDefinition = {
   key: 'plan',
-  stateVersion: 3,
+  stateVersion: 4,
   stateSchema: planUnitStateSchema,
-  init: () => ({ active: false, wanted: null, running: null, activeAtLastHeader: null }),
+  init: () => ({ active: false, wanted: null, running: null, activeAtLastHeader: null, entered: false }),
   apply: (state, event) => {
     if (event.type === 'command/run' && event.data.name === 'plan') {
       if (event.data.args === undefined) return state
@@ -151,7 +150,7 @@ export const planProjectionDefinition = {
       return { ...state, wanted, running: null }
     }
     if (event.type === 'plan/mode') {
-      return { ...state, active: event.data.active, wanted: null }
+      return { ...state, active: event.data.active, wanted: null, entered: state.entered || event.data.active }
     }
     if (event.type === 'request/header') {
       return { ...state, activeAtLastHeader: state.active }
@@ -169,14 +168,17 @@ export const planProjectionDefinition = {
 
 /**
  * `ctx.planMode`: owns logged plan state, applies and narrates selected state at step start,
- * the `plan:policy` section, the `/plan` command, and the stable exit tool.
+ * the `plan:policy` section, the `/plan` command, and the conditional exit tool.
  * Client carriers expose the projection's cropped `{ active, pending }` view.
+ * Agent prompt assembly fails while the projection reader is not ready;
+ * callers must await plugin activation before running an agent.
  */
 export class PlanModeController extends Service {
-  static inject = ['tools', 'systemPrompt', 'sessionProjections']
+  static inject = ['tools', 'systemPrompt', 'sessionProjections', 'agents']
 
   /** Validated deployment-owned guidance. */
   private readonly section: string
+  private planProjectionHandle: ProjectionHandle<PlanUnitState> | undefined
 
   /**
    * Latest selection per session awaiting the next accepted in-turn pre-step.
@@ -188,6 +190,19 @@ export class PlanModeController extends Service {
   constructor(ctx: Context, config: PlanModeConfig = { section: '' }) {
     super(ctx, 'planMode')
     this.section = resolveConfig(config).section
+  }
+
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    ctx.systemPrompt.section({
+      name: 'plan:policy',
+      order: ctx.systemPrompt.getSectionOrder('PLAN_POLICY'),
+      text: (context) => {
+        if (context.agent === undefined) return ''
+        return this.selectedActive(context.agent.session) ? this.section : ''
+      },
+    })
+    this.planProjectionHandle = await ctx.sessionProjections.register(planProjectionDefinition)
     let disposed = false
     // Pre-step is outside Session.append publication, so it can append the
     // log-only mode event inside an open turn without re-entering the session.
@@ -212,18 +227,6 @@ export class PlanModeController extends Service {
         : { ...decision, messages: [...decision.messages, narration] }
     })
     ctx.effect(() => () => { disposed = true }, 'dsh-plan-mode: close service lifetime')
-
-    ctx.systemPrompt.section({
-      name: 'plan:policy',
-      order: ctx.systemPrompt.getSectionOrder('PLAN_POLICY'),
-      text: (context) => {
-        if (context.agent === undefined) return ''
-        const pending = this.pendingIntents.get(context.agent.session)
-        return (pending?.active ?? this.loggedActive(context.agent.session)) ? this.section : ''
-      },
-    })
-
-    ctx.sessionProjections.register(planProjectionDefinition)
 
     // The command child activates only when a command registry is composed.
     ctx.inject(['commands'], (commandCtx) => {
@@ -297,8 +300,8 @@ export class PlanModeController extends Service {
       },
       execute: async (args, exec) => {
         const agent = exec.agent
-        if (agent === undefined) throw new Error(`${EXIT_PLAN_MODE} requires a calling agent (no session to switch)`)
-        if (!this.loggedActive(agent.session)) {
+        // Admission outlives plan mode and follows the selected state, so check the committed state.
+        if (agent === undefined || !this.loggedActive(agent.session)) {
           throw new Error(`${EXIT_PLAN_MODE} is only available in plan mode`)
         }
         if (!/^#\s+\S/.test(args.plan.trim())) {
@@ -369,28 +372,31 @@ export class PlanModeController extends Service {
         title: 'Plan review',
         content: result.content,
       }),
-    }))
+    }), { when: ({ agent }) => this.selectedActive(agent.session) || this.planState(agent.session).entered })
   }
 
   private loggedActive(session: Session): boolean {
     return this.planState(session).active
   }
 
+  /** The state a proposed step presents: a pending selection, else the logged state. */
+  private selectedActive(session: Session): boolean {
+    return this.pendingIntents.get(session)?.active ?? this.loggedActive(session)
+  }
+
   private hasOpenTurn(session: Session): boolean {
-    const state = this.ctx.sessionProjections.stateOf(session, 'turnBoundary')
-    if (state === undefined) throw new Error('plan-mode requires the turnBoundary session projection')
-    return state.openTurnStartSeq !== null
+    return this.ctx.agents.turnBoundaryOf(session).openTurnStartSeq !== null
   }
 
   private loggedActiveAtLastHeader(session: Session): boolean | undefined {
     return this.planState(session).activeAtLastHeader ?? undefined
   }
 
-  /** Read the required plan projection state or fail at the first service access. */
   private planState(session: Session): PlanUnitState {
-    const state = this.ctx.sessionProjections.stateOf(session, 'plan')
-    if (state === undefined) throw new Error('plan-mode requires the plan session projection')
-    return state
+    if (this.planProjectionHandle === undefined) {
+      throw new Error('plan mode is not ready; await plugin activation before running an agent')
+    }
+    return this.planProjectionHandle.stateOf(session)
   }
 
   /**

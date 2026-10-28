@@ -159,7 +159,7 @@ function workerExitReport(output: string, pool: string): string | undefined {
 }
 
 describe('coverage fork configuration entry', () => {
-  it('preserves the real Vitest failure and adds metadata before its error report', async ({ signal }) => {
+  it('preserves the real Vitest failure and attributes the same exit Vitest reports', async ({ signal }) => {
     const [stock, diagnostic] = await Promise.all([
       configuredPool('stock', 'exit', signal),
       configuredPool('diagnostic', 'exit', signal),
@@ -196,8 +196,13 @@ describe('coverage fork configuration entry', () => {
     })
     expect(record.files.map(file => file.replaceAll('\\', '/')))
       .toEqual([resolve('scripts/fixtures/coverage-fork.fixture.ts').replaceAll('\\', '/')])
-    expect(output.indexOf('coverage-worker-exit:'))
-      .toBeLessThan(output.indexOf(workerExitReport(output, 'coverage-forks')!))
+    const report = workerExitReport(output, 'coverage-forks')!
+    // A worker error is logged when the channel closes under a send, which precedes the exit the
+    // record describes. Vitest then prints no "Worker exited unexpectedly" line, so only that
+    // line states an order the record can hold.
+    if (report === 'Worker exited unexpectedly') {
+      expect(output.indexOf('coverage-worker-exit:')).toBeLessThan(output.indexOf(report))
+    }
   })
 
   it('keeps a successful configured run silent and successful', async ({ signal }) => {

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sitzungssteuerungsschnittstelle",
+    "description": "Bietet Clients Funktionen zum Lesen von Sitzungen, zur Laufsteuerung und zur Statusaktualisierung."
+  }
+}

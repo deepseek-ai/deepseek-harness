@@ -75,6 +75,29 @@ describe('client bundle build faces', () => {
     expect(() => staticLinked(root, ['lib/types/index.js'])).toThrow(/declares no string package name/)
   })
 
+  it('opts shared Clients into independent Node ESM and browser factory entries', () => {
+    for (const dir of ['client/connection', 'api/gateway', 'typert/registry']) {
+      const configs = clientBundle(packageDir(dir), ['lib/types/index.js'], { dualClient: true })(
+        { env: { DSH_BUILD_FACE: 'client' } },
+      )
+      const node = configs.find(config => config.name?.endsWith('/client-node'))
+      const browser = configs.find(config => config.name?.endsWith('/client'))
+      expect(node?.entry).toEqual({ 'client.node': 'lib/types/client/index.js' })
+      expect(node).toMatchObject({ platform: 'node', format: ['esm'], sourcemap: true })
+      expect(node?.inputOptions).toMatchObject({ resolve: { conditionNames: ['node', 'import', 'module', 'default'] } })
+      expect(node?.outputOptions).toMatchObject({ entryFileNames: 'client.node.js' })
+      expect(browser?.platform).toBe('browser')
+      expect(browser?.outputOptions).toMatchObject({ entryFileNames: 'client.browser.js' })
+      expect(configs.find(config => config.platform === 'node' && config.name?.endsWith('/client'))).toBeUndefined()
+    }
+    const ordinary = clientBundle(REQUESTING_PACKAGE_DIR, ['lib/types/index.js'])(
+      { env: { DSH_BUILD_FACE: 'client' } },
+    )
+    expect(ordinary.some(config => config.name?.endsWith('/client-node'))).toBe(false)
+    expect(ordinary.find(config => config.platform === 'browser')?.outputOptions)
+      .toMatchObject({ entryFileNames: 'client.js' })
+  })
+
   it('watches source in development and consumes emitted JavaScript in the Client build', () => {
     const bundle = clientBundle(REQUESTING_PACKAGE_DIR, ['lib/types/index.js'])
     const development = bundle({ env: {} }).find(config => config.platform === 'browser')
@@ -86,15 +109,42 @@ describe('client bundle build faces', () => {
   })
 })
 
+function dynamicImportFixture(prefix: string): string {
+  const root = mkdtempSync(join(tmpdir(), prefix))
+  onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+  const entry = join(root, 'lib/types/client/index.js')
+  mkdirSync(dirname(entry), { recursive: true })
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: REQUESTING_PACKAGE, type: 'module' }))
+  writeFileSync(entry, 'export const load = () => import("./terminal.js")\n')
+  writeFileSync(join(dirname(entry), 'terminal.js'), 'export const marker = "terminal"\n')
+  return root
+}
+
 describe('client bundle dynamic imports', () => {
+  it('keeps a dual Client browser chunk disjoint from its Node output', async () => {
+    const root = dynamicImportFixture('dsh-dual-client-chunk-')
+    const configs = clientBundle(root, ['lib/types/index.js'], { dualClient: true })(
+      { env: { DSH_BUILD_FACE: 'client' } },
+    )
+    for (const platform of ['node', 'browser'] as const) {
+      const config = configs.find(config => config.name?.endsWith(platform === 'node' ? '/client-node' : '/client'))
+      if (config === undefined) throw new Error(`${platform} config missing`)
+      const builds = await build({
+        ...config, cwd: root, config: false, tsconfig: false,
+        write: false, clean: false, exports: false, report: false, logLevel: 'silent',
+      })
+      try {
+        const names = builds.flatMap(bundle => bundle.chunks).map(chunk => chunk.fileName)
+        expect(names).toContain(platform === 'node' ? 'client.node.js' : 'client.browser.js')
+        expect(names).toContain(platform === 'node' ? 'client.node.terminal.js' : 'client.browser.terminal.js')
+      } finally {
+        for (const bundle of builds) await bundle[Symbol.asyncDispose]()
+      }
+    }
+  })
+
   it('compiles import() to the module loader asynchronous operation', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'dsh-client-dynamic-import-'))
-    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
-    const entry = join(root, 'lib/types/client/index.js')
-    mkdirSync(dirname(entry), { recursive: true })
-    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: REQUESTING_PACKAGE, type: 'module' }))
-    writeFileSync(entry, 'export const load = () => import("./terminal.js")\n')
-    writeFileSync(join(dirname(entry), 'terminal.js'), 'export const marker = "terminal"\n')
+    const root = dynamicImportFixture('dsh-client-dynamic-import-')
     const config = clientConfigs()[0]
     if (config === undefined) throw new Error('client config missing')
 
@@ -182,6 +232,25 @@ describe('client bundle purity gate', () => {
     expect(resolveId('@deepseek-ai/dsh-output-retention')).toBeNull()
     expect(() => resolveId('@deepseek-ai/dsh-spill-policy')).toThrow(/purity/)
     expect(() => resolveId('@deepseek-ai/dsh-spill-policy/notice/internal')).toThrow(/purity/)
+  })
+
+  it('inlines the stateless file-drag entry without admitting its subpaths or UI plugin', () => {
+    expect(resolveId('@deepseek-ai/dsh-util-file-drag')).toBeNull()
+    expect(() => resolveId('@deepseek-ai/dsh-util-file-drag/internal')).toThrow(/purity/)
+    expect(() => resolveId('@deepseek-ai/dsh-client-ui-file-drag')).toThrow(/purity/)
+    const deps = clientConfigs()[0]?.deps as { neverBundle: (specifier: string) => boolean }
+    expect(deps.neverBundle('@deepseek-ai/dsh-util-file-drag')).toBe(false)
+  })
+
+  it('inlines the browser-safe Timer entry while sharing Cordis through the module table', () => {
+    const timer = '@deepseek-ai/cordis-plugin-timer'
+    expect(resolveId(timer)).toBeNull()
+    expect(() => resolveId(`${timer}/src/index.ts`)).toThrow(/purity/)
+    expect(() => resolveId('@deepseek-ai/cordis-plugin-hmr')).toThrow(/purity/)
+    const config = clientConfigs(packageDir('extensions/cordis-client-runner'))[0]
+    const deps = config?.deps as { neverBundle: (specifier: string) => boolean }
+    expect(deps.neverBundle(timer)).toBe(false)
+    expect(deps.neverBundle('@deepseek-ai/cordis')).toBe(true)
   })
 
   it('lets exact generated Remote contributions inline without admitting their package implementation', () => {

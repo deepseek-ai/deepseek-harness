@@ -7,7 +7,7 @@ import { JSON_SCHEMA, load } from 'js-yaml'
 import { readCurrentSessionFormatVersion } from './gen-session-format-catalog.ts'
 import { parseHistoricalPersistenceSnapshot, parsePersistenceSnapshot } from './persistence-changes.ts'
 import { persistenceFormatFactArtifacts } from './persistence-format-facts.ts'
-import { canonicalizeSchema, schemaDigest } from './persistence-schema-model.ts'
+import { canonicalizeSchema, encodePersistenceSnapshot, schemaDigest } from './persistence-schema-model.ts'
 import type { PersistenceSchemaInventory } from './persistence-schema-model.ts'
 import { withoutPersistenceSourceLines } from './persistence-source-metadata.ts'
 
@@ -166,7 +166,7 @@ export function loadPersistenceFormats(root: string): PersistenceFormats {
       if (block !== machineBlock(chinese, document.replace(/\.md$/u, '.zh.md'))) throw new Error(`v${version}: bilingual machine records differ`)
       record = parseRecord(block, version)
     }
-    const inventory = (current ? parsePersistenceSnapshot : parseHistoricalPersistenceSnapshot)(JSON.parse(read(schemaPath)))
+    const inventory = (current ? parsePersistenceSnapshot : parseHistoricalPersistenceSnapshot)(read(schemaPath))
     validateInventory(inventory, version, current)
     const recordedRoots = record?.roots
     if (recordedRoots !== undefined && (recordedRoots.size !== inventory.roots.length
@@ -190,11 +190,11 @@ function archiveCurrentInventory(root: string, requestedVersion: string): string
   if (version !== currentVersion) throw new Error(`Cannot archive v${version}: current writer is v${currentVersion}`)
   const path = `${DIRECTORY}/v${version}.schema.json`
   if (existsSync(join(root, path))) throw new Error(`Cannot archive v${version}: ${path} already exists`)
-  const inventory = parsePersistenceSnapshot(JSON.parse(readFileSync(join(root, CURRENT_SCHEMA), 'utf8')))
+  const inventory = parsePersistenceSnapshot(readFileSync(join(root, CURRENT_SCHEMA), 'utf8'))
   const reachable = validateInventory(inventory, version, true)
   const archive = withoutPersistenceSourceLines({ ...inventory, types: inventory.types.filter(type => reachable.has(type.digest)) })
   mkdirSync(join(root, DIRECTORY), { recursive: true })
-  writeFileSync(join(root, path), JSON.stringify(archive, null, 2) + '\n', { flag: 'wx' })
+  writeFileSync(join(root, path), encodePersistenceSnapshot(archive), { flag: 'wx' })
   return `Archived Session format v${version} to ${path}.`
 }
 

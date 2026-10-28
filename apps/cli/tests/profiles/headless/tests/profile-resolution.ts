@@ -40,7 +40,7 @@ interface ResolutionEvidence {
   sourceToolsCjs: string | null
   sourceLeafCjs: string
   sourceLeafExplicitCjs: string
-  scheduler: boolean
+  executor: boolean
   modules: string[]
 }
 
@@ -139,7 +139,7 @@ export function testProfileResolution(mode: ExampleMode): void {
       const staleTools = join(root, 'stale-tools')
       const staleToolsLink = join(sharedModules, '@deepseek-ai', 'dsh-tools')
       await writePackage(staleTools, { name: '@deepseek-ai/dsh-tools', version: '0.0.0', exports }, {
-        'index.mjs': "export default class Tools {}\nexport const TOOL_RUNTIME_SCHEDULER = Symbol()\nthrow new Error('STALE_DSH_TOOLS')",
+        'index.mjs': "export default class Tools {}\nthrow new Error('STALE_DSH_TOOLS')",
         'index.cjs': "throw new Error('STALE_DSH_TOOLS')",
       })
       const sourceDir = join(sourcePackageDir, 'src')
@@ -183,7 +183,7 @@ export function testProfileResolution(mode: ExampleMode): void {
         'probe.mjs': [
           "import { createRequire } from 'node:module'",
           "import { getEnvironmentData } from 'node:worker_threads'",
-          "import Tools, { TOOL_RUNTIME_SCHEDULER } from '@deepseek-ai/dsh-tools'",
+          "import Tools from '@deepseek-ai/dsh-tools'",
           `import { leaf } from '${leafName}'`,
           `import { leaf as bridgeLeaf } from '${bridgeName}'`,
           `import { external } from '${externalName}'`,
@@ -214,7 +214,7 @@ export function testProfileResolution(mode: ExampleMode): void {
           '      sourceToolsInstance: ctx.tools instanceof SourceTools,',
           `      profileToolsCjs: ${toolsCjsExpression},`,
           '      sourceToolsCjs, sourceLeafCjs, sourceLeafExplicitCjs,',
-          "      scheduler: typeof ctx.tools[TOOL_RUNTIME_SCHEDULER]?.prepare === 'function',",
+          "      executor: typeof ctx.tools.execute === 'function',",
           '      modules: [...ctx.loader.internal.loadCache.keys()]',
           '        .filter(url => /\\/packages\\/core\\/(?:tools|agent-loop)\\//.test(url)),',
           '    }',
@@ -225,6 +225,7 @@ export function testProfileResolution(mode: ExampleMode): void {
         ].join('\n'),
         'cordis.patch.yml': JSON.stringify([
           { id: 'headless-startup', disabled: true },
+          { id: 'sandbox-policy', inject: [], config: { mode: process.env.DSH_PERMISSION_MODE ?? 'workspace-write' } },
           { id: 'headless-runner', disabled: true },
           { id: 'llm-deepseek', disabled: true },
           { insert: [
@@ -291,7 +292,7 @@ export function testProfileResolution(mode: ExampleMode): void {
       expect(evidence.sourceLeafCjs).toBe(evidence.cjs.filename)
       expect(evidence.sourceLeafExplicitCjs).toBe(realpathSync.native(join(sourceDevLeaf, 'index.cjs')))
       expect(evidence.sourceLeafCjs).not.toBe(evidence.sourceLeafExplicitCjs)
-      expect(evidence.scheduler).toBe(true)
+      expect(evidence.executor).toBe(true)
       expect(evidence.execArgv).toEqual(mode === 'src' ? launch.args.slice(0, 2) : [])
       for (const name of ['tools', 'agent-loop']) {
         const selected = mode === 'src' ? 'src/index.ts' : 'lib/index.js'

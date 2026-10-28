@@ -27,13 +27,15 @@ kind: "package-library"
 
 当你构建或调试 SDK 协议端——服务插件、客户端库或使用该协议的自定义工具——时使用本包。它为你提供一个在调用方持有的字节流上承载 JSON-RPC 2.0 的传输，以及每个 SDK 方法与通知的类型化结构。
 
+`InitializeParams.approvalRequests: true` 启用由 `HarnessSdkClientRequestMap` 索引的服务端请求 `approval/request`。`ApprovalRequestParams` 包含 `sessionId`、`toolName`，以及可选的 `callId` 和 `reason`；`ApprovalRequestResult` 为 `{ outcome: "allowed-once" | "rejected" | "cancelled" }`。省略或设为 `false` 时保留现有应答链。只有 `allowed-once` 批准单次操作。取消会丢弃待处理请求及迟到响应；shutdown 和传输断开使待处理决定拒绝放行。客户端等待 Agent 完成期间，必须继续读取并回答请求。
+
 ### 分帧与传输
 
 在你拥有的字节流上，每个 `\n` 结尾的行承载一条 JSON-RPC 2.0 消息。同时带 `id` 与 `method` 的帧是请求，仅 `id` 是响应，仅 `method` 是通知；格式错误的行会被忽略。没有注册处理器的请求应答 `-32601`，处理器失败应答 `-32603`，错误响应会以 `JsonRpcResponseError` 拒绝挂起的请求，并保留协议中的 `code` 与可选 `data`。`start()` 挂接流监听器，`close()` 移除监听器并拒绝挂起请求，但不销毁流。
 
 ### SDK 方法
 
-两个协议端共享同一套方法：七个客户端到服务端请求与四个服务端到客户端通知。
+两个协议端共享同一套方法：客户端到服务端请求、显式启用的服务端到客户端请求，以及服务端通知。
 
 | 方向 | 方法 | 载荷类型 |
 |---|---|---|
@@ -44,16 +46,26 @@ kind: "package-library"
 | 客户端→服务端 | `session/working-directory/get` | `SessionWorkingDirectoryParams` → `SessionWorkingDirectoryResult` |
 | 客户端→服务端 | `session/working-directory/set` | `SessionWorkingDirectorySetParams` → `SessionWorkingDirectoryResult` |
 | client→server | `shutdown` | 无参数 → `{}` |
+| server→client | `approval/request` | `ApprovalRequestParams` → `ApprovalRequestResult` |
+| server→client | `user-question/ask` | `SdkUserQuestionRequest` → `SdkUserQuestionAnswer` |
+| server→client | `user-question.cancelled` | `SdkUserQuestionCancelled` |
 | server→client | `session.event` | `SessionEventNotification`（运行时内每个会话，不过滤） |
 | server→client | `session.status` | `SessionStatusNotification`（整个 agent（智能体）的 `running`/`idle` 转换） |
 | server→client | `subagent.started` | `SubagentStartedNotification` |
 | server→client | `subagent.finished` | `SubagentFinishedNotification`（仅进程内运行） |
 
-`HarnessSdkRequestMap` 与 `HarnessSdkNotificationMap` 按方法名索引这些结构；包根与传输一起导出它们。
+`HarnessSdkRequestMap`、`HarnessSdkClientRequestMap`、`HarnessSdkHostRequestMap` 与 `HarnessSdkNotificationMap` 按方法名索引这些结构；包根与传输一起导出它们。
 
 `session/wait` 接受已有 SDK 会话的 `{ sessionId }`，在根 Agent 持续空闲且活跃的受管理后代工作结束后返回 `{}`。带有停放输入的空闲后代保持驻留，不阻塞这次等待。未知 id，以及没有后续终止事件记录的 Agent 运行时错误，都会使请求失败。等待期间提交的通知在同一传输上先于响应到达；原始 `session.status` 转换仍表示整个 Agent 的状态。
 
 `session/resume` 接受非空的持久化 `{ sessionId }`，恢复该会话后返回 `{}`。它要求先完成初始化并使用原持久化存储，不发送新输入；会话缺失、不可读、不兼容或被占用时，请求失败且不创建替代会话。历史事件保留在存储日志中，通知只报告新提交的事件。
+
+<a id="native-user-questions"></a>
+### 原生用户问答
+
+提供回答能力的宿主设置 `initialize.capabilities.userQuestions: true`。运行时发送带有 `{ requestId, sessionId, questions }` 的 `user-question/ask`；问题保留原始 id、选项、detail 与展示意图。宿主返回 `{ answers: [{ id, selected, custom? }] }`，每个问题 id 必须恰好出现一次。无效答案批次返回 `BAD_ANSWER`，宿主或传输失败返回 `PROVIDER_ERROR`。SDK 不生成替代答案。
+
+`user-question.cancelled` 标识已停止等待的请求。宿主取消自己的工作并丢弃问题；运行时放弃对应的待决 RPC，忽略晚到响应。未声明该能力时，仍由现有进程内回答方处理；缺少回答方则报告 `NO_PROVIDER`。此流程不要求 GUI。
 
 ### 载荷语义
 
@@ -119,7 +131,7 @@ kind: "package-library"
 
 - **无协议版本协商**——握手只携带 `serverInfo.version`（`0.0.1`，客户端不校验）；处于预发布阶段，无兼容承诺。
 - **无取消与会话关闭方法**——客户端放弃轮次的方式是关闭运行时进程；见 [JSON-RPC 服务插件](../server/README.zh.md)。
-- **server→client 请求是未使用的能力**——传输层支持，但服务器从不发送；Python SDK 的应答接口为未来审批流程预留。
+- **问题等待仅属于当前进程**——问题请求 id 不能在运行时重启后继续用于回答。已完成的工具结果通过普通持久化路径保留在 Session 历史中。
 
 <a id="dev-note"></a>
 ### 开发备注

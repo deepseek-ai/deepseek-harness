@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Kopfloses Profil",
+    "description": "Führen Sie eine einzelne Aufgabe direkt mit dem Kernagenten/Sitzungsläufer über die dsh-Basis aus, ohne Host, HTTP oder Browserebene."
+  }
+}

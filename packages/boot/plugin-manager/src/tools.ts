@@ -23,6 +23,7 @@ const ERROR_STEPS: Record<ManagementError['code'], string> = {
   'bundle-in-use': 'Call list_plugins, disable the entries from other layers that still use this bundle, then retry.',
   'stale-approval': 'Call install_bundle again without approvedBuilds to read the current pendingBuilds.',
   'incompatible-version': 'Install a version compatible with the running DSH. A version exemption needs the user\'s explicit acceptance of crash and data-loss risk.',
+  'unsupported-platform': 'This bundle cannot run on the current Host platform; ask the user to use a supported Host.',
   'operation-error': 'Report the diagnostic to the user; retry only after its cause is addressed.',
 }
 
@@ -84,7 +85,7 @@ export const inject = ['tools', 'pluginManager', 'sandboxPolicy']
 export function apply(ctx: Context): void {
   ctx.tools.register(defineTool({
     name: 'plugin_manager',
-    description: 'List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. Live profiles apply changes immediately, including upgrades of installed packages; a change result that is not applied carries nextStep, which says what to do or tell the user. Incompatible DSH peer dependencies block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one.',
+    description: 'List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. Live profiles apply changes immediately, including upgrades of installed packages; a change result that is not applied carries nextStep, which says what to do or tell the user. Unmet DSH version requirements (engines.dsh, else DSH peer dependencies) block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one.',
     parameters: {
       action: { type: 'string', required: true, enum: ['list_plugins', 'list_bundles', 'set_plugin', 'set_bundle', 'install_bundle', 'remove_bundle', 'list_version_exemptions', 'set_version_exemption'], description: 'Management operation.' },
       target: { type: 'string', description: 'Plugin entry id, bundle package name, or installation spec, according to action. For an Official catalog entry, pass list_bundles installTarget.spec to install_bundle.' },
@@ -128,7 +129,10 @@ export function apply(ctx: Context): void {
           const rows = args.action === 'list_plugins' ? await manager.listPlugins() : await manager.listBundles()
           const entries = rows.slice(offset, offset + limit).map(({ meta: _meta, ...row }) =>
             'rows' in row
-              ? { ...row, rows: row.rows.map(({ meta: _rowMeta, ...declared }) => declared) }
+              // GUI listing and update eligibility do not change the tool's management operations.
+              ? (({ updatable: _updatable, listedByDefault: _listedByDefault, ...bundle }) => ({
+                ...bundle, rows: bundle.rows.map(({ meta: _rowMeta, ...declared }) => declared),
+              }))(row)
               : row)
           return JSON.stringify({ entries, total: rows.length,
             nextOffset: offset + entries.length < rows.length ? offset + entries.length : null })

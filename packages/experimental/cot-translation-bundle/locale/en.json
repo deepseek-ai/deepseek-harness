@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Machine translation of reasoning",
-    "description": "Machine translation of expanded reasoning; source text is sent to the selected service"
+    "description": "Translates expanded Think rows into your chosen language as the agent writes them, and View original switches back.",
+    "detail": "docs/DETAIL.md"
   }
 }
