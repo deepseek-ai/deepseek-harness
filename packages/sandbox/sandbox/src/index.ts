@@ -151,14 +151,6 @@ export class SandboxUnavailableError extends HarnessError {
   }
 }
 
-/** The selected backend is available but cannot enforce the requested policy. */
-export class SandboxUnsupportedPolicyError extends HarnessError {
-  constructor(detail: string) {
-    super(detail, 'SANDBOX_UNSUPPORTED_POLICY')
-    this.name = 'SandboxUnsupportedPolicyError'
-  }
-}
-
 declare module '@deepseek-ai/cordis' {
   interface Context {
     sandbox: SandboxProvider

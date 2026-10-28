@@ -238,7 +238,7 @@ const RUNNER_FAILURE_RULES = {
 /**
  * Local process-sandbox provider. Registers as `ctx.sandbox`. Caches the
  * chain verdict and, on the windows-acl rung, the write grants
- * ({@link AclWriteGrant}: standing grants per writable-directory set
+ * ({@link AclWriteGrant}: standing grants per writable directory
  * and the revocable private-temp grant per live session/workspace pair, the
  * latter revoked on provider dispose); the one-time probes spawn nothing
  * else.
