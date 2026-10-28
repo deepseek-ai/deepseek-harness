@@ -182,7 +182,7 @@ export interface RestrictingSidSet {
  * Create the write-restricted token with the mode-selected restricting list
  * (verified on Win11 26200, see the POC-worktree restrict-variant harness):
  *  - read-only:       [logon SID, EVERYONE]
- *  - workspace-write: [logon SID, EVERYONE, workspace SID, optional temp SID]
+ *  - workspace-write: [logon SID, EVERYONE, ...directory SIDs, optional temp SID]
  *
  * The logon SID + EVERYONE keep-alive group is shared by both modes: early
  * DLL init dies with 0xC0000142 and CNG (`\Device\CNG` write trustee —
@@ -207,7 +207,7 @@ export interface RestrictingSidSet {
  * @param api - the binding table.
  * @param currentToken - the process token to restrict.
  * @param logonSid - the copied logon session SID.
- * @param writeSids - the distinct write SIDs forming the workspace and
+ * @param writeSids - the distinct write SIDs forming the directory and
  * optional temp allowlists (workspace-write only; empty under read-only).
  * @param known - the well-known SIDs entering the restricting list.
  * @param mode - selects the restricting list (workspace-write adds the capability SIDs).

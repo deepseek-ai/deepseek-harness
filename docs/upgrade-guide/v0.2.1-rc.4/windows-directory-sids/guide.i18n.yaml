@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.4/windows-directory-sids/guide.md
+/:
+  en: dbd8a58fb86d9bd4
+  zh: 1e8f6661b7c9122d
+/windows-acl-directory-identities:
+  en: fd8ac37f696dac64
+  zh: b5531e3c276b0c88
+/windows-acl-directory-identities/change:
+  en: ae9055a597ae4e32
+  zh: 9fe43036ec0372ac
+/windows-acl-directory-identities/migration:
+  en: 601f6832ab87b74f
+  zh: 568afc8d964c4da7

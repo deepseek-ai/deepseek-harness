@@ -8,7 +8,7 @@
  * acl.spec.ts and runner.spec.ts (win32 only).
  */
 
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Win32Error } from '@deepseek-ai/dsh-win32-process'
@@ -18,7 +18,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import koffi from 'koffi'
 
 import type { NativePtr, Win32Bindings } from '../src/ffi.ts'
-import { AclSandbox } from '../src/index.ts'
+import { AclSandbox, directoryWriteSid } from '../src/index.ts'
 import * as abi from '../src/win32-abi.ts'
 
 const PVOID = koffi.pointer('void')
@@ -29,6 +29,7 @@ type MockFn = ReturnType<typeof vi.fn>
 interface HappyStubs {
   api: Win32Bindings
   setNamedSecurityInfoW: MockFn
+  setEntriesInAclW: MockFn
   convertStringSidToSidW: MockFn
   closeHandle: MockFn
   localFree: MockFn
@@ -178,7 +179,7 @@ function happyStubs(): HappyStubs {
     localFree, closeHandle, getLastError, formatMessageW,
   })
   return {
-    api, setNamedSecurityInfoW, convertStringSidToSidW, closeHandle, localFree,
+    api, setNamedSecurityInfoW, setEntriesInAclW, convertStringSidToSidW, closeHandle, localFree,
     createRestrictedToken, createJobObjectW, getNamedSecurityInfoW, setTokenInformation, addMandatoryAce,
   }
 }
@@ -197,9 +198,20 @@ describe('AclSandbox constructor validation', () => {
   it('resolves relative writable directories to absolute paths', () => {
     const dir = scratch()
     const sandbox = new AclSandbox({ writableDirs: [dir], tempDir: null, mode: 'read-only' })
-    expect(sandbox.writableDirs).toEqual([resolve(dir)])
+    expect(sandbox.writableDirs).toEqual([realpathSync.native(dir)])
     expect(sandbox.mode).toBe('read-only')
     expect(sandbox.tempDir).toBeUndefined()
+  })
+
+  it('derives one SID per canonical directory and keeps read-only free of directory capabilities', () => {
+    const workspace = scratch()
+    const memory = scratch()
+    const dirs = [workspace, memory, workspace]
+    const sandbox = new AclSandbox({ writableDirs: dirs, tempDir: null, mode: 'workspace-write' })
+    const canonical = [workspace, memory].map(path => realpathSync.native(path))
+    expect(sandbox.writableDirs).toEqual(canonical)
+    expect(sandbox.writeSids).toEqual(canonical.map(directoryWriteSid))
+    expect(new AclSandbox({ writableDirs: dirs, tempDir: null, mode: 'read-only' }).writeSids).toEqual([])
   })
 
   it('rejects temp authority under read-only', () => {
@@ -207,8 +219,6 @@ describe('AclSandbox constructor validation', () => {
     const temp = scratch()
     expect(() => new AclSandbox({ writableDirs: [workspace], tempDir: temp, mode: 'read-only' }))
       .toThrow(/read-only does not accept a temp directory/u)
-    expect(() => new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-1', mode: 'read-only' }))
-      .toThrow(/read-only does not accept write SIDs/u)
     expect(() => new AclSandbox({ writableDirs: [workspace], tempDir: null, tempWriteSid: 'S-1-4-9000-1-1', mode: 'read-only' }))
       .toThrow(/read-only does not accept write SIDs/u)
   })
@@ -218,7 +228,6 @@ describe('AclSandbox constructor validation', () => {
     expect(() => new AclSandbox({
       writableDirs: [workspace],
       tempDir: null,
-      writeSid: 'S-1-4-9000-2',
       tempWriteSid: 'S-1-4-9000-2-1',
       mode: 'workspace-write',
     })).toThrow(/temp write SID requires a temp directory/u)
@@ -233,7 +242,6 @@ describe('AclSandbox init', () => {
     const sandbox = new AclSandbox({
       writableDirs: [workspace],
       tempDir: temp,
-      writeSid: 'S-1-4-9000-1',
       tempWriteSid: 'S-1-4-9000-1-1',
       mode: 'workspace-write',
     })
@@ -242,16 +250,48 @@ describe('AclSandbox init', () => {
     expect(setNamedSecurityInfoW).toHaveBeenCalledTimes(2)
   })
 
+  it('places every directory SID and the separate temp SID in the restricted token', async () => {
+    const { convertStringSidToSidW, createRestrictedToken, setEntriesInAclW } = state.stubs as HappyStubs
+    const workspace = scratch()
+    const memory = scratch()
+    const temp = scratch()
+    const parsed: bigint[] = []
+    convertStringSidToSidW.mockImplementation((_sid: string, slot: NativePtr) => {
+      const pointer = BigInt(101 + parsed.length)
+      parsed.push(pointer)
+      koffi.encode(slot, PVOID, pointer)
+      return 1
+    })
+    const sandbox = new AclSandbox({
+      writableDirs: [workspace, memory], tempDir: temp, tempWriteSid: 'S-1-4-9000-1-1', mode: 'workspace-write',
+    })
+    try {
+      await sandbox.init()
+      const expectedSids = [...sandbox.writeSids, sandbox.tempWriteSid]
+      expect(convertStringSidToSidW).toHaveBeenCalledTimes(expectedSids.length)
+      expectedSids.forEach((sid, index) => {
+        expect(convertStringSidToSidW).toHaveBeenNthCalledWith(index + 1, sid, expect.anything())
+      })
+      const call = createRestrictedToken.mock.calls[0]!
+      expect(call[6]).toBe(5)
+      const entries = call[7] as Buffer
+      expect(parsed.map((_pointer, index) => entries.readBigUInt64LE((index + 2) * abi.SID_AND_ATTRIBUTES_SIZE))).toEqual(parsed)
+      const defaultDaclMerge = setEntriesInAclW.mock.calls.find(call => call[2] === 88n)!
+      const defaultEntry = defaultDaclMerge[1] as Buffer
+      expect(defaultEntry.readBigUInt64LE(abi.TRUSTEE_W_OFFSET + abi.TRUSTEE_W_PTSTRNAME_OFFSET)).toBe(parsed[2])
+    } finally { sandbox.dispose() }
+  })
+
   it('requires an explicit private temp directory or null under workspace-write', () => {
     const workspace = scratch()
-    expect(() => new AclSandbox({ writableDirs: [workspace], writeSid: 'S-1-4-9000-2', mode: 'workspace-write' }))
+    expect(() => new AclSandbox({ writableDirs: [workspace], mode: 'workspace-write' }))
       .toThrow(/requires an explicit private temp directory or null/u)
   })
 
   it('applies no grants when the temp dir option is null', async () => {
     const { setNamedSecurityInfoW } = state.stubs as HappyStubs
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-3', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write' })
     await sandbox.init()
     expect(setNamedSecurityInfoW).toHaveBeenCalledTimes(1) // workspace only
   })
@@ -261,7 +301,6 @@ describe('AclSandbox init', () => {
     const sandbox = new AclSandbox({
       writableDirs: [workspace],
       tempDir: join(scratch(), 'missing'),
-      writeSid: 'S-1-4-9000-4',
       tempWriteSid: 'S-1-4-9000-4-1',
       mode: 'workspace-write',
     })
@@ -269,11 +308,14 @@ describe('AclSandbox init', () => {
   })
 
   it('builds a read-only token without parsing a write SID or applying grants', async () => {
-    const { convertStringSidToSidW, setNamedSecurityInfoW } = state.stubs as HappyStubs
+    const { convertStringSidToSidW, setNamedSecurityInfoW, createRestrictedToken } = state.stubs as HappyStubs
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'read-only' })
+    const memory = scratch()
+    const sandbox = new AclSandbox({ writableDirs: [workspace, memory], tempDir: null, mode: 'read-only' })
     await sandbox.init()
     expect(convertStringSidToSidW).not.toHaveBeenCalled()
+    expect(createRestrictedToken.mock.calls[0]![6]).toBe(2)
+    expect(sandbox.writeSids).toEqual([])
     expect(setNamedSecurityInfoW).not.toHaveBeenCalled()
     expect(() => { sandbox.dispose() }).not.toThrow() // no write SID: nothing to revoke or free
   })
@@ -281,7 +323,7 @@ describe('AclSandbox init', () => {
   it('applies no grants when the caller owns the DACLs (manageDacls: false)', async () => {
     const { setNamedSecurityInfoW } = state.stubs as HappyStubs
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-5', mode: 'workspace-write', manageDacls: false })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write', manageDacls: false })
     await sandbox.init()
     expect(setNamedSecurityInfoW).not.toHaveBeenCalled()
     expect(() => { sandbox.dispose() }).not.toThrow() // caller-owned DACLs: nothing to revoke
@@ -289,7 +331,7 @@ describe('AclSandbox init', () => {
 
   it('refuses a second init on the same instance', async () => {
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-6', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write' })
     await sandbox.init()
     await expect(sandbox.init()).rejects.toThrow(/already initialized/u)
   })
@@ -298,23 +340,44 @@ describe('AclSandbox init', () => {
     const { convertStringSidToSidW, setNamedSecurityInfoW } = state.stubs as HappyStubs
     convertStringSidToSidW.mockReturnValue(0)
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-7', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write' })
     await expect(sandbox.init()).rejects.toMatchObject({ api: 'ConvertStringSidToSidW' })
     expect(setNamedSecurityInfoW).not.toHaveBeenCalled()
+  })
+
+  it('frees earlier directory SIDs when parsing a later directory SID fails', async () => {
+    const { convertStringSidToSidW, localFree, setNamedSecurityInfoW, closeHandle } = state.stubs as HappyStubs
+    const workspace = scratch()
+    const memory = scratch()
+    const firstSid = 101n as NativePtr
+    convertStringSidToSidW.mockImplementationOnce((_sid: string, slot: NativePtr) => {
+      koffi.encode(slot, PVOID, firstSid)
+      return 1
+    }).mockReturnValueOnce(0)
+    const sandbox = new AclSandbox({ writableDirs: [workspace, memory], tempDir: null, mode: 'workspace-write' })
+    await expect(sandbox.init()).rejects.toMatchObject({ api: 'ConvertStringSidToSidW' })
+    expect(convertStringSidToSidW).toHaveBeenCalledTimes(sandbox.writeSids.length)
+    sandbox.writeSids.forEach((sid, index) => {
+      expect(convertStringSidToSidW).toHaveBeenNthCalledWith(index + 1, sid, expect.anything())
+    })
+    expect(localFree).toHaveBeenCalledWith(firstSid)
+    expect(setNamedSecurityInfoW).not.toHaveBeenCalled()
+    expect(closeHandle).toHaveBeenCalledWith(2n)
+    expect(sandbox.tempDir).toBeUndefined()
   })
 
   it('rejects a NULL write SID after ConvertStringSidToSidW succeeds', async () => {
     const { convertStringSidToSidW } = state.stubs as HappyStubs
     convertStringSidToSidW.mockImplementation(() => 1) // no out slot write
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-8', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write' })
     await expect(sandbox.init()).rejects.toBeInstanceOf(Win32Error)
   })
 
   it('aggregates failed current and restricted token closes after init', async () => {
     const { closeHandle, createRestrictedToken } = state.stubs as HappyStubs
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-9', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write' })
     const restrictedToken = 99n
     createRestrictedToken.mockImplementation((
       _existing: unknown, _flags: unknown, _dc: unknown, _ds: unknown, _pc: unknown, _pd: unknown,
@@ -361,7 +424,6 @@ describe('AclSandbox init', () => {
     const sandbox = new AclSandbox({
       writableDirs: [workspace],
       tempDir: temp,
-      writeSid: 'S-1-4-9000-10',
       tempWriteSid: 'S-1-4-9000-10-1',
       mode: 'workspace-write',
     })
@@ -391,13 +453,13 @@ describe('AclSandbox spawn', () => {
 
   it('refuses to spawn before init', () => {
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-11', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write' })
     expect(() => sandbox.spawn({ command: 'probe.exe' })).toThrow(/not initialized/u)
   })
 
   it('pipe spawn drains empty pipes and settles with the child exit code', async () => {
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-12', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write' })
     await sandbox.init()
     const child = sandbox.spawn({ command: 'probe.exe', args: ['--flag'], cwd: workspace })
     expect(child.pid).toBe(1234)
@@ -410,7 +472,7 @@ describe('AclSandbox spawn', () => {
   it('inherit spawn settles with empty stdio and closes the kill-on-close job', async () => {
     const { closeHandle } = state.stubs as HappyStubs
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-13', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write' })
     await sandbox.init()
     const child = sandbox.spawn({ command: 'probe.exe', stdio: 'inherit' })
     await expect(child.wait()).resolves.toEqual({ stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), exitCode: 42 })
@@ -420,7 +482,7 @@ describe('AclSandbox spawn', () => {
   it('inherit spawn reports a failed close of the kill-on-close job', async () => {
     const { closeHandle, createJobObjectW } = state.stubs as HappyStubs
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-14', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write' })
     await sandbox.init()
     let jobHandle = 0n
     closeHandle.mockImplementation((handle: NativePtr) => (handle === jobHandle ? 0 : 1))
@@ -433,7 +495,7 @@ describe('AclSandbox spawn', () => {
 describe('AclSandbox dispose', () => {
   it('is a no-op before init', () => {
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-15', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write' })
     expect(() => { sandbox.dispose() }).not.toThrow()
   })
 
@@ -444,7 +506,6 @@ describe('AclSandbox dispose', () => {
     const sandbox = new AclSandbox({
       writableDirs: [workspace],
       tempDir: temp,
-      writeSid: 'S-1-4-9000-16',
       tempWriteSid: 'S-1-4-9000-16-1',
       mode: 'workspace-write',
     })
@@ -456,7 +517,7 @@ describe('AclSandbox dispose', () => {
   it('aggregates SID and token cleanup failures into an AggregateError', async () => {
     const { localFree } = state.stubs as HappyStubs
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-17', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write' })
     await sandbox.init()
     localFree.mockReturnValue(1n)
     expect(() => { sandbox.dispose() }).toThrow(AggregateError)
@@ -465,7 +526,7 @@ describe('AclSandbox dispose', () => {
   it('reports a failed close of the restricted token', async () => {
     const { createRestrictedToken, closeHandle } = state.stubs as HappyStubs
     const workspace = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-18', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, mode: 'workspace-write' })
     let restrictedToken = 0n
     createRestrictedToken.mockImplementation((
       _existing: unknown, _flags: unknown, _dc: unknown, _ds: unknown, _pc: unknown, _pd: unknown,

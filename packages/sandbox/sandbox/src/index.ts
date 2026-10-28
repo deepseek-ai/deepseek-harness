@@ -53,7 +53,7 @@ export interface SandboxExecutionPolicy {
    * Opaque identity of the calling session (the branded `dsh-session`
    * SessionId). Backends key per-session state off it (e.g. windows-acl gives
    * each live session/workspace pair a random private temp directory and SID,
-   * while standing grants are keyed by the complete writable-directory set); absent
+   * while standing grants are keyed by individual writable directories); absent
    * for agentless calls, which fall back to per-call backend state.
    */
   sessionId?: SessionId

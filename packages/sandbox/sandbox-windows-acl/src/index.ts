@@ -13,11 +13,12 @@
  * for the complete boundary). The intersection covers only the object's own
  * access check, so the token is also lowered to Low integrity and every
  * granted directory carries a Low no-write-up label and the ambient-delete
- * deny the `acl` module documents. The write SID identifies the complete
- * canonical writable-directory set ({@link workspaceWriteSid}). Standing
- * ACEs are reusable across calls and sessions with that exact set. Each
- * private temp directory instead receives its own SID, so sibling sessions
- * cannot use a shared directory-set capability to enter one another's temp
+ * deny the `acl` module documents. Each canonical writable directory has a
+ * stable SID ({@link directoryWriteSid}) granted only to that directory.
+ * An execution carries the SIDs of its allowed directories; standing ACEs
+ * are reusable across sessions and permission combinations. Each private
+ * temp directory instead receives its own SID, so sibling sessions cannot
+ * use a shared directory capability to enter one another's temp
  * trees. Unlike the POC, every API failure throws with the API
  * name and exact Win32 code; a child is NEVER spawned unrestricted.
  *
@@ -41,7 +42,7 @@
  * @module @deepseek-ai/dsh-sandbox-windows-acl
  */
 
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, realpathSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Win32Error } from '@deepseek-ai/dsh-win32-process'
 
@@ -55,7 +56,9 @@ import * as abi from './win32-abi.ts'
 
 export { AclWriteGrant } from './grant.ts'
 export { assertPrivateTempDisjoint, assertTempRootOutsideWorkspace } from './path-boundary.ts'
-export { tempWriteSid, workspaceWriteSid } from './workspace-sid.ts'
+import { directoryWriteSid } from './workspace-sid.ts'
+
+export { tempWriteSid, directoryWriteSid } from './workspace-sid.ts'
 export { ACL_DIAGNOSIS_SKILL, registerAclDiagnosisSkill } from './acl-skill.ts'
 /** Construction options: the workspace/temp allowlists and their distinct SID identities. */
 export interface AclSandboxOptions {
@@ -68,17 +71,9 @@ export interface AclSandboxOptions {
    */
   tempDir?: string | null
   /**
-   * The write SID forming the workspace-write allowlist: REQUIRED under
-   * workspace-write, ignored (and must be absent) under read-only. Callers
-   * derive it from the complete canonical writable-directory set via
-   * {@link workspaceWriteSid}. Standing ACEs outlive sandbox instances and
-   * are reusable by later executions carrying that exact set identity.
-   */
-  writeSid?: string
-  /**
    * The private temp directory's write SID. Required whenever
    * workspace-write grants a temp directory, absent otherwise. It must be
-   * distinct from {@link writeSid}, so sibling sessions sharing a workspace
+   * distinct from every directory write SID, so sibling sessions sharing a workspace
    * cannot use the standing workspace capability in one another's temp tree.
    */
   tempWriteSid?: string
@@ -160,9 +155,9 @@ function freeSidBestEffort(
  */
 export class AclSandbox {
   /** Absolute writable directories (constructor-validated). */
-  readonly writableDirs: string[]
-  /** The directory-set SID whose ACEs form the writable allowlist. */
-  readonly writeSid: string | undefined
+  readonly writableDirs: readonly string[]
+  /** The independently derived write SIDs, in the same order as writableDirs; empty under read-only. */
+  readonly writeSids: readonly string[]
   /** The private temp directory's write SID (workspace-write with temp only). */
   readonly tempWriteSid: string | undefined
   /** The file-effect mode — the restricted token's restricting-SID list selection. */
@@ -172,7 +167,7 @@ export class AclSandbox {
   private tempDirResolved: string | null | undefined
   private api: Win32Bindings | undefined
   private token: NativePtr | undefined
-  private writeSidPtr: NativePtr | undefined
+  private readonly directorySidPtrs = new Map<string, NativePtr>()
   private tempWriteSidPtr: NativePtr | undefined
   /** The well-known/logon SID allocations init() makes; freed by dispose() alongside the write SIDs. */
   private sidAllocations: NativePtr[] = []
@@ -181,26 +176,23 @@ export class AclSandbox {
   constructor(options: AclSandboxOptions) {
     this.mode = options.mode
     this.manageDacls = options.manageDacls ?? true
-    this.writableDirs = options.writableDirs.map((directory) => {
+    this.writableDirs = [...new Set(options.writableDirs.map((directory) => {
       const absolute = resolve(directory)
       if (!existsSync(absolute) || !statSync(absolute).isDirectory()) {
         throw new Error(`AclSandbox writable dir does not exist or is not a directory: ${absolute}`)
       }
-      return absolute
-    })
+      return realpathSync.native(absolute)
+    }))]
     this.tempDirOption = options.tempDir
-    this.writeSid = options.writeSid
+    this.writeSids = this.mode === 'workspace-write' ? this.writableDirs.map(directoryWriteSid) : []
     this.tempWriteSid = options.tempWriteSid
-    if (this.mode === 'workspace-write' && this.writeSid === undefined) {
-      throw new Error('AclSandbox workspace-write requires a write SID — derive it from the writable directories via workspaceWriteSid()')
-    }
     if (this.mode === 'workspace-write' && this.tempDirOption === undefined) {
       throw new Error('AclSandbox workspace-write requires an explicit private temp directory or null')
     }
     if (this.mode === 'read-only' && this.tempDirOption !== undefined && this.tempDirOption !== null) {
       throw new Error('AclSandbox read-only does not accept a temp directory')
     }
-    if (this.mode === 'read-only' && (this.writeSid !== undefined || this.tempWriteSid !== undefined)) {
+    if (this.mode === 'read-only' && this.tempWriteSid !== undefined) {
       throw new Error('AclSandbox read-only does not accept write SIDs')
     }
     if (this.mode === 'workspace-write' && this.tempDirOption !== null && this.tempWriteSid === undefined) {
@@ -209,7 +201,7 @@ export class AclSandbox {
     if (this.tempDirOption === null && this.tempWriteSid !== undefined) {
       throw new Error('AclSandbox temp write SID requires a temp directory')
     }
-    if (this.writeSid !== undefined && this.tempWriteSid === this.writeSid) {
+    if (this.tempWriteSid !== undefined && this.writeSids.includes(this.tempWriteSid)) {
       throw new Error('AclSandbox workspace and temp write SIDs must be distinct')
     }
   }
@@ -236,7 +228,11 @@ export class AclSandbox {
         if (parsedSid === null) throw new Win32Error('ConvertStringSidToSidW', api.getLastError(), sid)
         return parsedSid
       }
-      this.writeSidPtr = this.writeSid === undefined ? undefined : parseSid(this.writeSid)
+      if (this.mode === 'workspace-write') {
+        for (const directory of this.writableDirs) {
+          this.directorySidPtrs.set(directory, parseSid(directoryWriteSid(directory)))
+        }
+      }
       this.tempWriteSidPtr = this.tempWriteSid === undefined ? undefined : parseSid(this.tempWriteSid)
 
       const tempDir = this.mode === 'read-only' || this.tempDirOption === null ? null : this.tempDirOption
@@ -254,7 +250,7 @@ export class AclSandbox {
       // manageDacls: false — the caller (the sandbox seam's grant) already
       // materialized the ACEs; this instance must neither add nor remove any.
       // When this instance owns the DACLs, writableDir ACEs are STANDING (the
-      // directory-set reuse cache — dispose() never revokes them, or the next
+      // per-directory reuse cache — dispose() never revokes them, or the next
       // provision would re-propagate the whole tree) and the temp ACE is
       // REVOCABLE (dispose() removes it before the private directory is
       // deleted; the ambient temp root is never granted).
@@ -264,9 +260,9 @@ export class AclSandbox {
       this.sidAllocations.push(lowLabelSid, worldSid)
 
       if (this.manageDacls) {
-        if (this.writeSidPtr !== undefined) {
-          for (const path of this.writableDirs) {
-            grantWrite(api, path, this.writeSidPtr, lowLabelSid, worldSid)
+        if (this.mode === 'workspace-write') {
+          for (const [path, sidPtr] of this.directorySidPtrs) {
+            grantWrite(api, path, sidPtr, lowLabelSid, worldSid)
           }
           if (tempDir !== null && this.tempWriteSidPtr !== undefined) {
             // Record BEFORE granting: grantWrite can throw after a successful
@@ -279,7 +275,8 @@ export class AclSandbox {
       }
       const logonSid = findLogonSid(api, currentToken)
       this.sidAllocations.push(logonSid)
-      const writeSids = [this.writeSidPtr, this.tempWriteSidPtr].filter((sid): sid is NativePtr => sid !== undefined)
+      const writeSids = [...this.directorySidPtrs.values()]
+      if (this.tempWriteSidPtr !== undefined) writeSids.push(this.tempWriteSidPtr)
       restrictedToken = createRestrictedToken(
         api, currentToken, logonSid, writeSids,
         { world: worldSid },
@@ -299,7 +296,7 @@ export class AclSandbox {
       // DACL passes pass-2. Choosing the temp SID prevents default-DACL
       // objects in one session's temp tree from acquiring the shared
       // workspace capability.
-      setTokenDefaultDaclGrant(api, restrictedToken, this.tempWriteSidPtr ?? this.writeSidPtr ?? worldSid)
+      setTokenDefaultDaclGrant(api, restrictedToken, this.tempWriteSidPtr ?? this.directorySidPtrs.values().next().value ?? worldSid)
       if (api.closeHandle(currentToken) === 0) throwLastError(api, 'CloseHandle', 'current process token')
       currentTokenOpen = false
       this.api = api
@@ -322,14 +319,13 @@ export class AclSandbox {
           cleanupFailures.push(cleanupError)
         }
       }
-      for (const [label, sidPtr] of [['workspace write SID', this.writeSidPtr], ['temp write SID', this.tempWriteSidPtr]] as const) {
-        freeSidBestEffort(api, sidPtr, label, cleanupFailures)
-      }
+      for (const sidPtr of this.directorySidPtrs.values()) freeSidBestEffort(api, sidPtr, 'directory write SID', cleanupFailures)
+      freeSidBestEffort(api, this.tempWriteSidPtr, 'temp write SID', cleanupFailures)
       for (const sidPtr of this.sidAllocations.splice(0)) {
         freeSidBestEffort(api, sidPtr, 'init SID allocation', cleanupFailures)
       }
       this.token = undefined
-      this.writeSidPtr = undefined
+      this.directorySidPtrs.clear()
       this.tempWriteSidPtr = undefined
       this.tempDirResolved = undefined
       this.grantedPaths = []
@@ -417,9 +413,8 @@ export class AclSandbox {
         }
       }
     }
-    for (const [label, sidPtr] of [['workspace write SID', this.writeSidPtr], ['temp write SID', this.tempWriteSidPtr]] as const) {
-      freeSidBestEffort(api, sidPtr, label, failures)
-    }
+    for (const sidPtr of this.directorySidPtrs.values()) freeSidBestEffort(api, sidPtr, 'directory write SID', failures)
+    freeSidBestEffort(api, this.tempWriteSidPtr, 'temp write SID', failures)
     const token = this.token
     /* v8 ignore next -- init assigns this.api only after this.token, so an initialized instance always
        has its token; the guard mirrors the write-SID guard. */
@@ -435,7 +430,7 @@ export class AclSandbox {
     }
     this.api = undefined
     this.token = undefined
-    this.writeSidPtr = undefined
+    this.directorySidPtrs.clear()
     this.tempWriteSidPtr = undefined
     this.grantedPaths = []
     if (failures.length > 0) {

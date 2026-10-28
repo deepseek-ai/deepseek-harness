@@ -6,14 +6,14 @@
  */
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { resolvePwshPath } from '@deepseek-ai/dsh-pwsh-local'
-import { AclWriteGrant, tempWriteSid, workspaceWriteSid } from '../src/index.ts'
+import { AclWriteGrant, tempWriteSid, directoryWriteSid } from '../src/index.ts'
 
 const isWin32 = process.platform === 'win32'
 const runnerEntry = fileURLToPath(new URL('../src/runner.ts', import.meta.url))
@@ -48,10 +48,10 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
   let publicProbeDir: string | undefined
 
   beforeAll(() => {
-    scratchRoot = mkdtempSync(join(tmpdir(), 'dsh-acl-runner-'))
+    scratchRoot = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-acl-runner-')))
     writableDir = join(scratchRoot, 'writable')
     mkdirSync(writableDir)
-    isolatedTemp = mkdtempSync(join(tmpdir(), 'dsh-acl-runner-temp-'))
+    isolatedTemp = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-acl-runner-temp-')))
     secretFile = join(scratchRoot, 'secret.txt')
     writeFileSync(secretFile, 'top secret - must stay readable to prove the read boundary')
     escapeFile = join(scratchRoot, 'escaped.txt')
@@ -135,21 +135,23 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
     expect(readFileSync(extraFile, 'utf8')).toBe('retained')
   }, 90_000)
 
-  it('accepts a provider-materialized SID covering the workspace and additional directories', () => {
+  it('accepts one provider-materialized SID per writable directory', () => {
     const extra = mkdtempSync(join(scratchRoot, 'managed-extra-'))
     const privateTemp = mkdtempSync(join(isolatedTemp, 'managed-set-'))
-    const writeSid = workspaceWriteSid(writableDir, [extra])
+    const writeSid = directoryWriteSid(writableDir)
+    const extraSid = directoryWriteSid(extra)
     const privateTempSid = tempWriteSid(privateTemp)
     const directoryGrant = AclWriteGrant.create(writeSid)
+    const extraGrant = AclWriteGrant.create(extraSid)
     const tempGrant = AclWriteGrant.create(privateTempSid)
     try {
       directoryGrant.add(writableDir, true)
-      directoryGrant.add(extra, true)
+      extraGrant.add(extra, true)
       tempGrant.add(privateTemp)
       const target = join(extra, 'managed-write.txt')
       const result = runRunner([
         '--workspace', writableDir, '--temp', privateTemp, '--mode', 'workspace-write',
-        '--writable-root', extra, '--write-sid', writeSid, '--temp-write-sid', privateTempSid,
+        '--writable-root', extra, '--write-sid', writeSid, '--write-sid', extraSid, '--temp-write-sid', privateTempSid,
         '--', process.execPath, '-e', "require('node:fs').writeFileSync(process.argv[1], 'managed')", target,
       ])
       expect(result.error).toBeUndefined()
@@ -158,6 +160,7 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
       expect(readFileSync(target, 'utf8')).toBe('managed')
     } finally {
       directoryGrant.dispose()
+      extraGrant.dispose()
       tempGrant.dispose()
       rmSync(privateTemp, { recursive: true, force: true })
     }
@@ -222,7 +225,7 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
   it('paired SIDs: the runner trusts caller-owned private-temp grants and materializes nothing itself', () => {
     const seamWorkspace = join(scratchRoot, 'seam-workspace')
     mkdirSync(seamWorkspace)
-    const writeSid = workspaceWriteSid(seamWorkspace)
+    const writeSid = directoryWriteSid(seamWorkspace)
     const privateTemp = join(isolatedTemp, 'private-subdir')
     mkdirSync(privateTemp)
     const privateTempSid = tempWriteSid(privateTemp)
@@ -258,7 +261,7 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
   }, 30_000)
 
   it('temp capabilities isolate sibling sessions that share one workspace SID', () => {
-    const writeSid = workspaceWriteSid(writableDir)
+    const writeSid = directoryWriteSid(writableDir)
     const tempA = join(isolatedTemp, 'session-a')
     const tempB = join(isolatedTemp, 'session-b')
     mkdirSync(tempA)
@@ -389,7 +392,7 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
     // it, so the workspace write is denied instead of leaking through the
     // standing ACE. The switch back reuses the SAME standing ACE: the
     // re-upgrade write lands without any re-grant.
-    const writeSid = workspaceWriteSid(writableDir)
+    const writeSid = directoryWriteSid(writableDir)
     const privateTemp = join(isolatedTemp, 'mode-switch-temp')
     mkdirSync(privateTemp)
     const privateTempSid = tempWriteSid(privateTemp)
@@ -506,7 +509,7 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
     const otherTemp = join(scratchRoot, 'other-temp')
     mkdirSync(otherWorkspace)
     mkdirSync(otherTemp)
-    const otherWorkspaceSid = workspaceWriteSid(otherWorkspace)
+    const otherWorkspaceSid = directoryWriteSid(otherWorkspace)
     const otherTempSid = tempWriteSid(otherTemp)
     const otherWorkspaceGrant = AclWriteGrant.create(otherWorkspaceSid)
     const otherTempGrant = AclWriteGrant.create(otherTempSid)
@@ -517,7 +520,7 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
     const ownTemp = join(scratchRoot, 'own-temp')
     mkdirSync(ownWorkspace)
     mkdirSync(ownTemp)
-    const ownWorkspaceSid = workspaceWriteSid(ownWorkspace)
+    const ownWorkspaceSid = directoryWriteSid(ownWorkspace)
     const ownTempSid = tempWriteSid(ownTemp)
     const ownWorkspaceGrant = AclWriteGrant.create(ownWorkspaceSid)
     const ownTempGrant = AclWriteGrant.create(ownTempSid)
@@ -594,7 +597,7 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
     mkdirSync(child)
     writeFileSync(join(granted, 'file.txt'), 'x')
     writeFileSync(join(child, 'deep.txt'), 'x')
-    const grant = AclWriteGrant.create(workspaceWriteSid(granted))
+    const grant = AclWriteGrant.create(directoryWriteSid(granted))
     grant.add(granted, true)
     try {
       const probe = `
@@ -629,7 +632,7 @@ TryOpen 'DIRECTORY' '${child}'
     // not strip the label the second one's child still writes through.
     const shared = join(scratchRoot, 'shared-root')
     mkdirSync(shared)
-    const sidA = workspaceWriteSid(shared)
+    const sidA = directoryWriteSid(shared)
     const sidB = `${sidA}-1`
     const grantA = AclWriteGrant.create(sidA)
     const grantB = AclWriteGrant.create(sidB)
@@ -711,11 +714,13 @@ TryOpen 'DIRECTORY' '${child}'
   }, 90_000)
 
   it('runner-side failure: seam-managed SID flags must be paired and match their owning paths', () => {
-    const writeSid = workspaceWriteSid(writableDir)
+    const writeSid = directoryWriteSid(writableDir)
     const tempSid = tempWriteSid(isolatedTemp)
     const cases = [
       ['--write-sid', writeSid],
       ['--writable-root', worldWritableDir, '--write-sid', writeSid, '--temp-write-sid', tempSid],
+      ['--writable-root', worldWritableDir, '--write-sid', directoryWriteSid(worldWritableDir), '--write-sid', writeSid, '--temp-write-sid', tempSid],
+      ['--write-sid', writeSid, '--write-sid', directoryWriteSid(worldWritableDir), '--temp-write-sid', tempSid],
       ['--write-sid', 'S-1-4-1-2', '--temp-write-sid', tempSid],
       ['--write-sid', writeSid, '--temp-write-sid', 'S-1-4-1-2-1'],
     ]

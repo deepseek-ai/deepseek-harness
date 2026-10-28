@@ -5,9 +5,9 @@
  * classification facts. Missing or unusable confinement fails closed rather
  * than returning the original argv.
  *
- * The windows-acl rung owns standing grants keyed by the complete canonical
- * writable-directory set. Each set has a deterministic write SID; executions
- * with different sets never share that capability. Every live session/workspace
+ * The windows-acl rung owns standing grants keyed by canonical directory.
+ * Each directory has a deterministic write SID, and an execution carries only
+ * the directory SIDs its current policy permits. Every live session/workspace
  * pair has a separate random private temp directory and revocable temp SID.
  * The runner receives both identities and does not manage their DACLs.
  * Enforcement remains partial because hard links alias file objects, reads
@@ -31,7 +31,7 @@ import z from '@deepseek-ai/schemastery'
 import { SandboxProvider, SandboxUnavailableError, canonicalPath, workspaceWritableRoots } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, ConfinedSandboxMode, RunnerFailureRule, SandboxEnforcement, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import { AclWriteGrant, assertPrivateTempDisjoint, assertTempRootOutsideWorkspace, registerAclDiagnosisSkill, tempWriteSid, workspaceWriteSid } from '@deepseek-ai/dsh-sandbox-windows-acl'
+import { AclWriteGrant, assertPrivateTempDisjoint, assertTempRootOutsideWorkspace, registerAclDiagnosisSkill, tempWriteSid, directoryWriteSid } from '@deepseek-ai/dsh-sandbox-windows-acl'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { bwrapProfileArgs, landlockProfileArgs, seatbeltProfileArgs } from './profiles.ts'
 
@@ -259,7 +259,7 @@ export class LocalSandboxProvider extends SandboxProvider {
   private readonly probeTimeoutMs: number
   /** Cached chain verdict; undefined until the first confined wrap needs it. */
   private selectedRunner: SelectedRunner | 'unavailable' | undefined
-  /** Standing grants keyed by the sorted canonical directory set; ACEs outlive the provider. */
+  /** Standing grants keyed by canonical directory; ACEs outlive the provider. */
   private readonly directoryGrants = new Map<string, AclWriteGrant>()
   /** Revocable private temp grants per live session/workspace pair. */
   private readonly tempCapabilities = new Map<string, AclTempCapability>()
@@ -370,13 +370,13 @@ export class LocalSandboxProvider extends SandboxProvider {
       '--temp', temp.dir,
       '--mode', policy.mode,
       ...extraArgs,
-      '--write-sid', workspaceWriteSid(policy.workspaceRoot, roots),
+      ...roots.flatMap(root => ['--write-sid', directoryWriteSid(root)]),
       '--temp-write-sid', temp.writeSid,
     ]
   }
 
   /**
-   * Resolve or materialize the exact writable-directory set's standing ACEs.
+   * Resolve or materialize each permitted directory's standing ACE.
    * Private temp capabilities remain scoped to the session/workspace pair;
    * changing directory sets does not revoke grants held by running processes.
    * Failed temp materialization revokes its grant and removes its directory.
@@ -390,24 +390,24 @@ export class LocalSandboxProvider extends SandboxProvider {
     const key = JSON.stringify([String(sessionId), workspaceRoot])
     const existing = this.tempCapabilities.get(key)
     if (existing !== undefined) assertPrivateTempDisjoint(roots, existing.dir)
-    const writeSid = workspaceWriteSid(workspaceRoot, roots)
-    const grantKey = JSON.stringify([...roots].sort())
-    const cachedGrant = this.directoryGrants.get(grantKey)
-    const directoryGrant = cachedGrant ?? AclWriteGrant.create(writeSid)
-    try {
-      for (const root of roots) directoryGrant.add(root, true)
-    } catch (error) {
-      if (cachedGrant !== undefined) throw error
-      // Standing ACEs remain reusable; only the failed entry's allocations
-      // are released. A later execution retries the complete directory set.
+    for (const root of roots) {
+      const cachedGrant = this.directoryGrants.get(root)
+      const directoryGrant = cachedGrant ?? AclWriteGrant.create(directoryWriteSid(root))
       try {
-        directoryGrant.dispose()
-      } catch (cleanupError) {
-        throw new AggregateError([error, cleanupError], 'sandbox-local windows-acl directory grant failed and its cleanup also failed')
+        directoryGrant.add(root, true)
+      } catch (error) {
+        if (cachedGrant !== undefined) throw error
+        // Standing ACEs remain reusable; only the failed entry's allocations
+        // are released. A later execution retries this directory's grant.
+        try {
+          directoryGrant.dispose()
+        } catch (cleanupError) {
+          throw new AggregateError([error, cleanupError], 'sandbox-local windows-acl directory grant failed and its cleanup also failed')
+        }
+        throw error
       }
-      throw error
+      this.directoryGrants.set(root, directoryGrant)
     }
-    this.directoryGrants.set(grantKey, directoryGrant)
     if (existing !== undefined) return existing
     const tempDir = mkdtempSync(join(tmpdir(), 'dsh-'))
     const tempSid = tempWriteSid(tempDir)

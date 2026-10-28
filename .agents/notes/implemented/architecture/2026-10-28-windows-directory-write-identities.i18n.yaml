@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-28-windows-directory-write-identities.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-28-windows-directory-write-identities.md
+/agent-note-windows-per-directory-write-identities:
+  en: df2c97b00cabb275
+  zh: e09a61baf823ff5e
+/agent-note-windows-per-directory-write-identities/problem:
+  en: ce436e11d96c3c96
+  zh: dcda6f85413a5be6
+/agent-note-windows-per-directory-write-identities/decision:
+  en: edbc0f1001721065
+  zh: a91b9b2c1e19e6d2
+/agent-note-windows-per-directory-write-identities/alternatives-considered:
+  en: d87e2cf9196d66e7
+  zh: 04261fa61efe407b
+/agent-note-windows-per-directory-write-identities/consequences:
+  en: b9c9e40cf1e09f4e
+  zh: 6e69f792bbdd7726

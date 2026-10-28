@@ -1,7 +1,7 @@
 /**
  * Server-side write-grant materialization. The sandbox seam holds one
- * standing grant per writable-directory set and one revocable temp grant per
- * live session/workspace pair. Directory-set identities survive by deterministic
+ * standing grant per writable directory and one revocable temp grant per
+ * live session/workspace pair. Directory identities survive by deterministic
  * derivation and their standing ACE; temp identities derive from random
  * private paths and are deliberately new after a restart.
  *

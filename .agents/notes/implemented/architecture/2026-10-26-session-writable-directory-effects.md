@@ -16,7 +16,7 @@ Registration disposal affects subsequent operations, not already-resolved calls 
 
 Missing, non-directory, and symlinked extra paths stop execution with `SandboxInvalidRootError`, which identifies the path and its problem. Silently skipping a path would hide an invalid grant and let execution proceed with permissions different from those requested. Registration checks path spelling; enforcement validates the physical directory on each call without retaining an earlier resolution. Symlinks remain disallowed, keeping configured and plugin grants under the same validation rules.
 
-Windows standing ACL grants use one deterministic SID per complete sorted, deduplicated canonical directory set. Each new execution resolves or creates that exact set's grant entry; changing the set never broadens the SID of a process already running. Reusing only the workspace identity would accumulate extra-directory authority across Sessions and after disposal. JSON encoding preserves directory boundaries in the hash input; singleton sets retain their existing SID. Standing ACEs remain reusable, while private temp grants keep their separate per-session/workspace identity and lifetime.
+Windows standing ACL grants follow the [per-directory identity decision](2026-10-28-windows-directory-write-identities.md): each new execution carries only its currently permitted directory SIDs, while private temp capabilities remain separate.
 
 ## Alternatives considered
 

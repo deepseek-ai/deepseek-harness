@@ -9,14 +9,14 @@
  * whose per-test lock file is removed in cleanup.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import koffi from 'koffi'
 
 import { buildExplicitAccess, grantWrite, lockFilePath, revokeWrite, withPathLock } from '../src/acl.ts'
-import { AclSandbox } from '../src/index.ts'
+import { AclSandbox, directoryWriteSid } from '../src/index.ts'
 import { createRestrictedToken, makeWellKnownSid } from '../src/token.ts'
 import { allocOverlapped, allocPtrSlot, decodePtr, isInvalidHandle, isNullPtr, win32 } from '../src/ffi.ts'
 import type { NativePtr, Win32Bindings } from '../src/ffi.ts'
@@ -209,7 +209,7 @@ describe.skipIf(!isWin32)('ACL editing', () => {
   })
 
   function scratch(): string {
-    const dir = mkdtempSync(join(tmpdir(), 'dsh-acl-edit-'))
+    const dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-acl-edit-')))
     scratchDirs.push(dir)
     return dir
   }
@@ -364,11 +364,11 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     }
   })
 
-  it('interleaved sandbox instances: A.init → B.init → A.dispose → B.dispose leaves BOTH standing workspace ACEs (the per-workspace reuse cache)', async () => {
+  it('interleaved sandbox instances reuse one standing directory ACE', async () => {
     const api = await win32()
     const dir = scratch()
-    const sandboxA = new AclSandbox({ writableDirs: [dir], tempDir: null, writeSid: 'S-1-4-9000-1', mode: 'workspace-write' })
-    const sandboxB = new AclSandbox({ writableDirs: [dir], tempDir: null, writeSid: 'S-1-4-9000-2', mode: 'workspace-write' })
+    const sandboxA = new AclSandbox({ writableDirs: [dir], tempDir: null, mode: 'workspace-write' })
+    const sandboxB = new AclSandbox({ writableDirs: [dir], tempDir: null, mode: 'workspace-write' })
     await sandboxA.init()
     await sandboxB.init()
     // Workspace ACEs are STANDING: dispose frees the instance's SID
@@ -377,8 +377,29 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     sandboxA.dispose()
     sandboxB.dispose()
     const aces = readDirectAces(api, dir)
-    expect(aces.some(ace => ace.sid === 'S-1-4-9000-1')).toBe(true)
-    expect(aces.some(ace => ace.sid === 'S-1-4-9000-2')).toBe(true)
+    expect(aces.filter(ace => ace.sid === directoryWriteSid(dir))).toHaveLength(1)
+  })
+
+  it('shares a directory capability across sandbox sets without granting it on their other directories', async () => {
+    const api = await win32()
+    const workspaceA = scratch()
+    const workspaceB = scratch()
+    const memory = scratch()
+    const sandboxA = new AclSandbox({ writableDirs: [workspaceA, memory], tempDir: null, mode: 'workspace-write' })
+    const sandboxB = new AclSandbox({ writableDirs: [workspaceB, memory], tempDir: null, mode: 'workspace-write' })
+    try {
+      await sandboxA.init()
+      await sandboxB.init()
+      const dirs = [workspaceA, workspaceB, memory]
+      const directorySids = dirs.map(directoryWriteSid)
+      for (const dir of dirs) {
+        const granted = readDirectAces(api, dir).filter(ace => directorySids.includes(ace.sid))
+        expect(granted.map(ace => ace.sid)).toEqual([directoryWriteSid(dir)])
+      }
+    } finally {
+      sandboxA.dispose()
+      sandboxB.dispose()
+    }
   })
 
   it('dispose revokes the revocable temp ACE and label and keeps the standing workspace pair (self-managed flow)', async () => {
@@ -388,14 +409,13 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     const sandbox = new AclSandbox({
       writableDirs: [workspaceDir],
       tempDir,
-      writeSid: 'S-1-4-9000-3',
       tempWriteSid: 'S-1-4-9000-3-1',
       mode: 'workspace-write',
     })
     await sandbox.init()
     sandbox.dispose()
     const workspaceAces = readDirectAces(api, workspaceDir)
-    expect(workspaceAces.some(ace => ace.sid === 'S-1-4-9000-3')).toBe(true)
+    expect(workspaceAces.some(ace => ace.sid === directoryWriteSid(workspaceDir))).toBe(true)
     expect(readLabelAces(api, workspaceDir)).toEqual([
       { sid: 'S-1-16-4096', mask: abi.SYSTEM_MANDATORY_LABEL_NO_WRITE_UP },
     ])
@@ -407,13 +427,12 @@ describe.skipIf(!isWin32)('ACL editing', () => {
   it('rejects an overlapping private temp directory before applying either capability', async () => {
     const workspaceDir = scratch()
     const nestedTemp = join(workspaceDir, 'temp')
-    const writeSid = 'S-1-4-9000-30'
+    const writeSid = directoryWriteSid(workspaceDir)
     const privateTempSid = 'S-1-4-9000-30-1'
     mkdirSync(nestedTemp)
     const sandbox = new AclSandbox({
       writableDirs: [workspaceDir],
       tempDir: nestedTemp,
-      writeSid,
       tempWriteSid: privateTempSid,
       mode: 'workspace-write',
     })
@@ -424,19 +443,16 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     expect(readDirectAces(api, nestedTemp).some(ace => ace.sid === privateTempSid)).toBe(false)
   })
 
-  it('workspace-write without a write SID fails at construction; the token layer guards the same contract', () => {
+  it('workspace-write requires explicit temp authority and a nonempty token capability list', () => {
     const dir = scratch()
-    expect(() => new AclSandbox({ writableDirs: [dir], tempDir: null, mode: 'workspace-write' }))
-      .toThrow(/requires a write SID/)
-    expect(() => new AclSandbox({ writableDirs: [dir], writeSid: 'S-1-4-1-1', mode: 'workspace-write' }))
+    expect(() => new AclSandbox({ writableDirs: [dir], mode: 'workspace-write' }))
       .toThrow(/requires an explicit private temp directory or null/)
-    expect(() => new AclSandbox({ writableDirs: [dir], tempDir: dir, writeSid: 'S-1-4-1-1', mode: 'workspace-write' }))
+    expect(() => new AclSandbox({ writableDirs: [dir], tempDir: dir, mode: 'workspace-write' }))
       .toThrow(/requires a temp write SID/)
     expect(() => new AclSandbox({
       writableDirs: [dir],
       tempDir: dir,
-      writeSid: 'S-1-4-1-1',
-      tempWriteSid: 'S-1-4-1-1',
+      tempWriteSid: directoryWriteSid(dir),
       mode: 'workspace-write',
     })).toThrow(/must be distinct/)
     expect(() => createRestrictedToken({} as never, 0n as never, 0n as never, [], { world: 0n as never }, 'workspace-write'))
@@ -497,7 +513,7 @@ describe.skipIf(!isWin32)('ACL editing', () => {
   it('the applied grant mask carries DELETE and FILE_DELETE_CHILD (never WRITE_DAC/WRITE_OWNER)', async () => {
     const api = await win32()
     const dir = scratch()
-    const sandbox = new AclSandbox({ writableDirs: [dir], tempDir: null, writeSid: 'S-1-4-1234-5', mode: 'workspace-write' })
+    const sandbox = new AclSandbox({ writableDirs: [dir], tempDir: null, mode: 'workspace-write' })
     try {
       await sandbox.init()
       const grant = readDirectAces(api, dir).find(ace => ace.sid === 'S-1-4-1234-5')
