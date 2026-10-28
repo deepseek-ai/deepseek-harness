@@ -8,7 +8,7 @@ English | [中文](ui-design-review-cases.zh.md)
 
 ## Summary
 
-Use this reference to review an entire page or modal as one visual unit. Judge alignment and spatial grouping across all regions, together with hierarchy, states, color, size and corner geometry. The examples illustrate transferable relationships; they do not define the set of screens to review. Images appear below their corresponding analysis. See the [review cookbook](cookbook/reviewing-ui-design.md) for the workflow and evidence requirements.
+Consult the relevant cases when a design relationship is unclear. Ordinary changes inspect affected relationships in page/modal context; they do not require every case, an inventory or a full-page audit. The whole-interface review sections apply when a comprehensive review is explicitly requested. Examples explain transferable principles rather than coverage. See the [review cookbook](cookbook/reviewing-ui-design.md) for optional detailed methods and the owning workflow for effort levels.
 
 ## Table of Contents
 
