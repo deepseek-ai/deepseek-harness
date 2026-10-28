@@ -65,7 +65,7 @@ Host、客户端与 Desktop 产物构建完成后，在 Windows 仓库根目录�
 
 <a id="verification-evidence"></a>
 
-构建 Desktop 后，`node apps/desktop/scripts/test-update-channels.mjs` 使用本地回环清单和无执行能力的缓存文件检查固定版本的 Electron updater。它验证渠道文件名、禁止降级、灰度命中及下载引用撤销，在 macOS 上还关闭本地交接服务。不运行安装器、Host 或远程发布。此验证不能替代 Windows 和 macOS 的签名安装应用测试。
+构建 Desktop 后，`node apps/desktop/scripts/test-update-channels.mjs` 使用本地回环清单和下载的无执行能力文件检查固定版本的 Electron updater。它验证渠道文件名、禁止降级、灰度命中，以及切换渠道后实际下载缓存和过期确认的撤销，在 macOS 上还关闭 updater 创建的本地交接服务。不运行安装器、Host 或远程发布。此验证不能替代 Windows 和 macOS 的签名安装应用测试。
 
 ## 验证证据
 
