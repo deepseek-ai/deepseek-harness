@@ -656,10 +656,9 @@ export function renderConfigDump(
   const base = parsed as Parameters<typeof applyEntryPatches>[0]
   // snapshot_k = ONE application of layers 1..k flattened, using the exact
   // arguments boot passes for that prefix. snapshot_N is the mounted composition.
-  // The patches are cloned per call: applyEntryPatches detaches the entry
-  // list but pushes `insert` rows by reference from the patch list, so
-  // sharing patch objects across snapshot calls would leak a later
-  // snapshot's mutations into an earlier one's result.
+  // The patches are cloned per call: applyEntryPatches clones entries and
+  // inserted rows but assigns override values such as `config` by reference,
+  // so each snapshot keeps its own copies of those values.
   const snapshot = (count: number, warnings: string[]): ReturnType<typeof applyEntryPatches> => {
     const flattened = structuredClone(layers.slice(0, count).flatMap(layer => layer.patches))
     return applyEntryPatches(base, flattened, (message: string, ...args: unknown[]) => {
@@ -804,8 +803,8 @@ export interface FailLoudProcess {
   exit(code: number): void
 }
 
-// Loader rc.5 derives and drops a rejected promise after a fiber fails. Keep
-// exact reasons already folded into the boot diagnostic visible through the
+// An activation rejection already folded into the boot diagnostic can also
+// reach the process rejection handler. Keep exact reasons visible through the
 // next process rejection checkpoint so the process guard can coalesce them.
 const assembledActivationRejections = new Map<unknown, number>()
 

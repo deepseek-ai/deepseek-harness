@@ -11,7 +11,13 @@ import { createResolve } from '../resolve.ts'
  * - `options` absent: the entry was removed from `group`.
  * - `legacy` absent: the entry was created in `group`.
  * - both present: the entry was updated and now lives in `group`; `from` is
- *   the group it left if the update moved it.
+ *   the group it left if the update moved it within the same tree. A move to
+ *   another tree reports a removal to the source tree and a creation to the
+ *   destination tree.
+ *
+ * `id` is local to the receiving tree; `Entry.id` prefixes it with the parent
+ * tree's path. Only `EntryTree` mutation methods and explicit Fiber saves
+ * report changes; file-driven `EntryGroup` reconciliation does not.
  */
 export interface EntryChange {
   id: string
@@ -66,6 +72,12 @@ export abstract class EntryTree {
     }
   }
 
+  /**
+   * Assign a random tree-local id when `options.id` is absent.
+   * @param options - Entry options; a generated id is written to `options.id`.
+   * @returns The existing or generated id.
+   * @throws When an explicit id contains `EntryTree.sep`, which separates nested tree paths.
+   */
   ensureId(options: Partial<EntryOptions>) {
     if (!options.id) {
       do {
@@ -132,6 +144,9 @@ export abstract class EntryTree {
     const task = entry.update(options, false, true)
     if (entry.parent.tree !== source.tree) {
       source.tree.commit({ id: legacy.id, group: source, legacy })
+      // The destination tree has no previous row, so it receives a creation.
+      entry.parent.tree.commit({ id: legacy.id, group: entry.parent, options: entry.options })
+      return task
     }
     const from = entry.parent === source ? undefined : source
     entry.parent.tree.commit({ id: legacy.id, group: entry.parent, from, options: entry.options, legacy })
