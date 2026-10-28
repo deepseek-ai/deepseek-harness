@@ -128,11 +128,12 @@ export function controlDetails(
         ...(json.nextCursor === undefined ? {} : { caption: t('detail.tasks.nextPage', { cursor: String(json.nextCursor) }) }),
       }
     case 'send_message': {
+      const title = target.replace(/^lead\//u, '')
       const status = detailRecord(json) ? json.status : undefined
-      if (status === 'accepted' || status === 'queued') return receipt(target, {
+      if (status === 'accepted' || status === 'queued') return receipt(title, {
         label: t(status === 'queued' ? 'detail.status.queued' : 'detail.receipt.delivered'), tone: status === 'queued' ? 'warning' : 'success',
       }, t, [], arg(args, 'message'))
-      return text === `message delivered to agent ${target}` ? receipt(target, { label: t('detail.receipt.delivered'), tone: 'success' }, t, [], arg(args, 'message')) : null
+      return text === `message delivered to agent ${target}` ? receipt(title, { label: t('detail.receipt.delivered'), tone: 'success' }, t, [], arg(args, 'message')) : null
     }
     case 'interrupt_agent':
       if (detailRecord(json) && typeof json.previousStatus === 'string') return receipt(target, { label: t('detail.receipt.interrupt'), tone: 'warning' }, t, [{ label: t('detail.field.previousStatus'), value: detailBadge(json.previousStatus, t).label }])

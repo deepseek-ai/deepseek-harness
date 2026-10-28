@@ -91,7 +91,10 @@ describe('control detail adapters', () => {
   it('shows named agent targets in recorded messaging and interruption receipts', () => {
     expect(details('send_message', 'message delivered to agent lead/reviewer', {
       name: 'lead/reviewer', message: 'Review the change.',
-    })?.summary).toBe('lead/reviewer · Message delivered')
+    })).toMatchObject({
+      summary: 'reviewer · Message delivered', expandedSummary: 'reviewer',
+      items: [{ title: 'reviewer', description: 'Review the change.' }],
+    })
     expect(details('interrupt_agent', '{"previousStatus":"running"}', {
       name: 'lead/reviewer',
     })?.items[0]).toMatchObject({
