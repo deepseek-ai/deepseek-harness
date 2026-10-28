@@ -46,6 +46,10 @@
 
 圆角尺度、组件尺寸映射、正圆与胶囊例外、嵌套 hover，以及设置卡片的底色与描边统一由 [DSH 统一圆角规范](ui-radius.zh.md)定义。
 
+## 审查组装后的设计
+
+按 [UI review 基准](ui-design-review-cases.zh.md#review-baseline)，在[整页或整个弹窗](ui-design-review-cases.zh.md#whole-interface-review)中综合判断材质、字体、圆角、响应式行为、反馈和图案。统一比较这个范围内的所有区域与同角色元素；组件分别合规，组合后仍可能出现双描边、分组不一致或焦点被裁切。本规范与主题继续拥有样式规则。
+
 ## 变更系统
 
 在所属 `ui-theme` 样式表中添加或修改共享 token，然后在功能包中使用其语义别名。公共样式约定发生变化时，更新所属包的参考文档。视觉行为遵循[测试策略](testing.zh.md)；[已归档的样式系统 Agent Note](../.agents/notes/archived/process/2026-07-19-web-styling-system.md) 记录框架依据。
