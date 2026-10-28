@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+import { Profiler } from 'react'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -1861,6 +1863,94 @@ describe('WorkspaceBrowser', () => {
     }
   })
 
+  it.each(['clear', 'escape', 'outside'] as const)('animates %s search dismissal without carrying spacing motion through the rail', (dismissal) => {
+    vi.useFakeTimers()
+    try {
+      const b = mount()
+      const add = screen.getByRole('button', { name: '添加工作区' })
+      const header = add.closest('[class*="sectionHeader"]')!
+      // jsdom observes the motion opt-in; the browser suite measures the resulting transitions.
+      const motionEnabled = () => header.className.includes('searchSpacingMotion')
+      expect(motionEnabled()).toBe(false)
+      fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+      expect(motionEnabled()).toBe(true)
+      rerender(b, { wide: false })
+      expect(motionEnabled()).toBe(false)
+      rerender(b, { wide: true })
+      expect(motionEnabled()).toBe(false)
+      const input = screen.getByPlaceholderText<HTMLInputElement>('搜索会话名称')
+      if (dismissal === 'clear') {
+        fireEvent.change(input, { target: { value: 'query' } })
+        fireEvent.click(screen.getByRole('button', { name: '清除搜索' }))
+      } else if (dismissal === 'escape') {
+        fireEvent.change(input, { target: { value: 'query' } })
+        fireEvent.keyDown(input, { key: 'Escape' })
+      } else fireEvent.click(document.body)
+      expect(motionEnabled()).toBe(true)
+      expect(input.value).toBe('')
+      expect(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded')).toBe('false')
+      expect(screen.getByRole('button', { name: '添加工作区' })).toBe(add)
+      expect(add.closest('[class*="sectionHeader"]')).toBe(header)
+      rerender(b, { wide: false })
+      fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+      rerender(b, { wide: true })
+      expect(motionEnabled()).toBe(false)
+      act(() => { vi.advanceTimersByTime(300) })
+      expect(document.activeElement).toBe(screen.getByPlaceholderText('搜索会话名称'))
+      expect(screen.getByRole('button', { name: '添加工作区' })).toBe(add)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves the add button and its open directory flow across rail layout changes', () => {
+    const b = mount({ wide: false })
+    const add = screen.getByRole('button', { name: '添加工作区' })
+    fireEvent.click(add)
+    const flow = screen.getByTestId('directory-flow')
+    for (const wide of [true, false, true]) {
+      rerender(b, { wide })
+      expect(screen.getByRole('button', { name: '添加工作区' })).toBe(add)
+      expect(screen.getByTestId('directory-flow')).toBe(flow)
+    }
+  })
+
+  it.each([false, true])('commits rail search intent before synchronously expanding the shell (prior search: %s)', (usedSearch) => {
+    const layout = createSnapshotStore({ wide: usedSearch })
+    const useLayout = bindSnapshotSelector(layout)
+    const b = mount({ wide: false, expandSidebar: () => { layout.set({ wide: true }) } })
+    const committedSearchStates: boolean[] = []
+    function Shell() {
+      return <WorkspaceBrowser {...b.props} wide={useLayout(state => state.wide)} />
+    }
+    b.view.rerender(<Profiler id="rail-search" onRender={() => {
+      // The shell's external-store update can commit before state queued by a passive effect.
+      if (screen.queryByPlaceholderText('搜索会话名称') === null) return
+      committedSearchStates.push(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded') === 'true')
+    }}><Shell /></Profiler>)
+    if (usedSearch) {
+      fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+      fireEvent.keyDown(screen.getByPlaceholderText('搜索会话名称'), { key: 'Escape' })
+      act(() => { layout.set({ wide: false }) })
+    }
+    committedSearchStates.length = 0
+    fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+    expect(committedSearchStates.length).toBeGreaterThan(0)
+    expect(committedSearchStates.every(Boolean)).toBe(true)
+    expect(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('treats a new shortcut source with no request as idle', () => {
+    const b = mount()
+    fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+    fireEvent.keyDown(screen.getByPlaceholderText('搜索会话名称'), { key: 'Escape' })
+    const controls = createWorkspaceShortcutControls()
+    rerender(b, { useWorkspaceShortcuts: bindSnapshotSelector(controls.state), requestSearch: controls.search })
+    expect(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded')).toBe('false')
+    act(() => { controls.search() })
+    expect(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded')).toBe('true')
+  })
+
   it('rail state renders icon controls that request expansion', () => {
     vi.useFakeTimers()
     try {
@@ -1874,6 +1964,7 @@ describe('WorkspaceBrowser', () => {
       // The wide flip mounts the input and focuses it after the slide.
       rerender(b, { wide: true })
       const input = screen.getByPlaceholderText('搜索会话名称')
+      expect(document.activeElement).not.toBe(input)
       act(() => { vi.advanceTimersByTime(300) })
       expect(document.activeElement).toBe(input)
       // Wide search button is decorative (tabIndex -1, no expand call).

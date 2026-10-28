@@ -1239,6 +1239,34 @@
   user-select: none;
 }
 
+.resultSections {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0 12px;
+}
+
+.resultSection {
+  min-width: 0;
+}
+
+.resultSection .jsonPayload {
+  min-height: 0;
+  overflow: visible;
+}
+
+.resultSection .resultBlocks,
+.resultSection .payload,
+.resultSection .noPayload {
+  min-height: 0;
+  padding: 2px 14px 8px;
+}
+
+.resultTitle {
+  margin: 0;
+  font: inherit;
+}
+
 .overviewTitle {
   display: inline-flex;
   flex: none;

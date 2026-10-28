@@ -220,6 +220,11 @@ export interface ISidebarRight {
    */
   close(tabId: TabId): void
   /**
+   * Hide a tab: close its floating occurrence, or collapse its docked column.
+   * @param tabId - the tab to hide; missing tabs are unchanged.
+   */
+  hide(tabId: TabId): void
+  /**
    * The active tab of the active pane.
    * @returns the record, or `undefined` with no Session on screen.
    */
@@ -455,6 +460,17 @@ export class SidebarRightController implements ISidebarRight {
    */
   close(tabId: TabId): void {
     this.closeIn(this.require().sessionId, tabId)
+  }
+
+  /**
+   * Hide a tab: close its floating occurrence, or collapse its docked column.
+   * @param tabId - the tab to hide; missing tabs are unchanged.
+   */
+  hide(tabId: TabId): void {
+    const layout = this.mountedSurface()?.layout
+    if (layout?.tabs[tabId] === undefined) return
+    if (findTabPane(layout, tabId).host === 'float') this.close(tabId)
+    else if (layout.expanded) this.toggleExpanded()
   }
 
   /**

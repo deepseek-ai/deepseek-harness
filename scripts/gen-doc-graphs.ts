@@ -195,6 +195,30 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns browser authentication and shared HTTP request dispatch; API adapters register endpoints and streams.',
   },
   {
+    key: 'forge',
+    pkg: 'experimental-forge',
+    title: 'Code host change requests',
+    mode: 'seam',
+    implementations: ['experimental-forge-github'],
+    consumers: ['experimental-forge-session', 'experimental-client-ui-forge'],
+    note: 'Providers map remote and change request URLs, look up change requests by head branch, and read status in batches; watchers of one change request share one polling loop.',
+  },
+  {
+    key: 'forgeSession',
+    pkg: 'experimental-forge-session',
+    title: 'Session change request bindings',
+    mode: 'service',
+    consumers: ['experimental-client-ui-forge'],
+    note: 'A Session projection derives bindings from shell results and binding records and publishes their URLs without status to clients; push results trigger head-branch discovery, and Session watchers poll bound change requests through the forge registry.',
+  },
+  {
+    key: 'forgePanel',
+    pkg: 'experimental-client-ui-forge',
+    title: 'Forge panel Remote',
+    mode: 'service',
+    note: 'Streams one panel state per followed Session: a read-only Git inspection in the Session sandbox, the recognized code host and its sign-in, and the bound change requests with polled status.',
+  },
+  {
     key: 'worktrees',
     pkg: 'experimental-worktree',
     title: 'Git worktree creation',
@@ -934,6 +958,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['tool-cordis'],
     note: 'Registers host inspect providers, mirrors the client provider manifest, and routes client queries through the dynamic Cordis transport.',
+  },
+  {
+    key: 'liveshareShares',
+    pkg: 'experimental-liveshare',
+    title: 'Owner share management Remote',
+    mode: 'service',
+    note: 'Publishes the owner share-management operations as one Typert Remote namespace that the owner client face calls; every method delegates to the same operations the same-origin routes used.',
   },
 ]
 

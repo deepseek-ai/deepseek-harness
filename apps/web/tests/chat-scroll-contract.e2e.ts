@@ -6,7 +6,7 @@ import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Page, Route } from 'playwright'
+import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -679,14 +679,11 @@ describe('web e2e: long Chat scroll contract', () => {
             yield chunk
           }
         })
+        const resolved = await world.scaffold.ctx.sessionController.resolveAgent(SessionId(`visible-fold-${scenario.name}`))
+        if ('error' in resolved) throw resolved.error
+        // Maintenance keeps the accepted message in the inbox, so its echo folds the earlier work before the Turn starts.
         const promptGate = Promise.withResolvers<undefined>()
-        const promptBlocked = Promise.withResolvers<undefined>()
-        const holdPrompt = async (route: Route): Promise<void> => {
-          promptBlocked.resolve(undefined)
-          await promptGate.promise
-          await route.continue()
-        }
-        await page.route('**/api/session/prompt', holdPrompt)
+        const maintenance = resolved.agent.runMaintenance(() => promptGate.promise)
         const trace = page.evaluate(({ marker, race }) => new Promise<FoldMotionSample[]>((resolveTrace) => {
           const host = document.querySelector<HTMLElement>('[data-conversation-scroll]')!
           const column = host.querySelector<HTMLElement>('[data-chat-flow]:has(> [data-slot="conversation.chat.flow"])')!
@@ -781,7 +778,7 @@ describe('web e2e: long Chat scroll contract', () => {
               await page.clock.resume()
             }
           } else await page.getByRole('button', { name: 'Send message', exact: true }).click()
-          await promptBlocked.promise
+          await expect.poll(() => page.locator('[data-composer-input]').last().textContent()).toBe('')
           await page.getByText(input, { exact: true }).waitFor()
           await expect.poll(() => page.locator('[data-chat-motion="collapse"]').count()).toBe(0)
           if (scenario.name !== 'cancel-all-during-fold') await expectBottom(page)
@@ -801,6 +798,7 @@ describe('web e2e: long Chat scroll contract', () => {
           })
           await page.locator('[data-conversation-scroll]').evaluate(host => host.dispatchEvent(new Event('dsh-test-fold-growth')))
           promptGate.resolve(undefined)
+          await maintenance
           release()
           await finishBlocked.promise
           await page.getByText('VISIBLE_FOLD_DONE', { exact: false }).waitFor()
@@ -808,8 +806,8 @@ describe('web e2e: long Chat scroll contract', () => {
           await nextPaint(page)
         } finally {
           promptGate.resolve(undefined)
+          await maintenance
           release()
-          await page.unroute('**/api/session/prompt', holdPrompt)
           await page.locator('[data-conversation-scroll]').evaluate(host => host.dispatchEvent(new Event('dsh-test-fold-stop')))
           samples = await trace
           finishGate.resolve(undefined)

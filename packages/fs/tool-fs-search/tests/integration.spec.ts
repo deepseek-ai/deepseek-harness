@@ -207,8 +207,8 @@ describe('search tools over the real subprocess service + the packaged rg', () =
   })
 
   describe('grep', () => {
-    it('greps a directory tree with grouped, line-numbered output', async () => {
-      const result = await call('grep', { pattern: 'alpha' }, agent())
+    it.each([undefined, ''])('greps without a file filter when include is %j', async (include) => {
+      const result = await call('grep', { pattern: 'alpha', ...include !== undefined ? { include } : {} }, agent())
       expect(result.isError).toBe(false)
       const output = text(result)
       expect(output).toContain('Found 3 matches')

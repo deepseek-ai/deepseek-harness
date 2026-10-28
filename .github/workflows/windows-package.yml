@@ -1,29 +1,18 @@
-name: Package Desktop · Windows
+name: Package Desktop · Windows · x64
 
 on:
   workflow_dispatch:
     inputs:
+      source_ref:
+        description: '打包源码：test 支持仓库内分支或 dsh-v* tag；production 仅支持 master 或 dsh-v* tag；源码须包含 CI 适配脚本'
+        type: string
+        default: master
+        required: true
       preset:
         description: '打包环境：选择机器上的 test 或 production 配置；同时决定后续发布环境'
         type: choice
         options: [test, production]
         default: test
-        required: true
-      signing:
-        description: '签名方式：unsigned 仅限内部调试，禁止发布到 test / production 或用于自动更新；需要发布请选择 signed（EV 硬件令牌）'
-        type: choice
-        options: [signed, unsigned]
-        default: signed
-        required: true
-      test_release_id:
-        description: '测试 release ID：32 位小写十六进制随机前缀（非鉴权）；留空使用机器默认值，连续升级测试须保持相同值'
-        type: string
-        default: ''
-        required: false
-      source_ref:
-        description: '打包源码：test 支持仓库内分支或 dsh-v* tag；production 仅支持 master 或 dsh-v* tag；源码须包含 CI 适配脚本'
-        type: string
-        default: master
         required: true
       update_channel:
         description: '升级通道：nightly 或 latest（须为稳定版本）；自动更新不会切换通道'
@@ -42,6 +31,23 @@ on:
         type: string
         default: ''
         required: false
+      test_release_id:
+        description: '测试 release ID：32 位小写十六进制随机前缀（非鉴权）；留空使用机器默认值，连续升级测试须保持相同值'
+        type: string
+        default: ''
+        required: false
+      compression_level:
+        description: '安装器压缩等级：3 打包较快，7 压缩更强；覆盖本轮机器配置'
+        type: choice
+        options: ['3', '7']
+        default: '3'
+        required: true
+      signing:
+        description: '签名方式：unsigned 仅限内部调试，禁止发布到 test / production 或用于自动更新；需要发布请选择 signed（EV 硬件令牌）'
+        type: choice
+        options: [signed, unsigned]
+        default: signed
+        required: true
       cache_namespace:
         description: '缓存测量命名空间：留空使用共享缓存；新名称用于冷缓存，再次使用同名测热缓存，不清除现有缓存'
         type: string
@@ -52,12 +58,6 @@ on:
         type: string
         default: ''
         required: false
-      compression_level:
-        description: '安装器压缩等级：3 打包较快，7 压缩更强；覆盖本轮机器配置'
-        type: choice
-        options: ['3', '7']
-        default: '3'
-        required: true
 
 permissions:
   contents: read

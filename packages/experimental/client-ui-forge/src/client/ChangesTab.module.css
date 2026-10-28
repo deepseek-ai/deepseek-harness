@@ -1,0 +1,624 @@
+/* Changes view: the source header, the toolbar, notices, then one scrolling
+   list of file sections whose headers stick while their lines scroll. */
+.root {
+  --forge-changes-bg: var(--dsw-alias-bg-base);
+  --forge-fill: var(--dsw-static-neutral-50);
+  --forge-diff-empty: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 50%, transparent);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--forge-changes-bg);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+:global(body[data-ds-dark-theme]) .root {
+  --forge-fill: var(--dsw-static-neutral-850);
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 8px 0 14px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.headerIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.headerTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerNumber {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+}
+
+.headerNote {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerEnd {
+  flex: none;
+  margin-left: auto;
+}
+
+.toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  min-height: 38px;
+  padding: 0 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.select {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.select[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .select:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.select:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .select:disabled:hover {
+    background: transparent;
+  }
+}
+
+.select svg {
+  flex: none;
+}
+
+.counts {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  font-family: var(--ds-font-family-code);
+}
+
+.totals {
+  padding: 0 4px;
+}
+
+.added {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.deleted {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.tools {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.tool {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.tool[aria-pressed='true'],
+.tool[aria-expanded='true'],
+.tool[data-expanded] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .tool:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.tool:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.tool svg {
+  width: 15px;
+  height: 15px;
+}
+
+.tool[aria-pressed='true'] .compareIcon {
+  transform: rotate(90deg);
+}
+
+/* A menu row with a path that shortens and its counts. */
+.menuRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.menuPath {
+  flex: 1;
+  min-width: 0;
+}
+
+.menuList {
+  min-width: 280px;
+  max-width: min(420px, 80vw);
+}
+
+.notice {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  background: var(--forge-fill);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.notice > svg {
+  flex: none;
+}
+
+.noticeAction {
+  flex: none;
+  margin-left: auto;
+}
+
+.files {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* The actions of a failed read, side by side. */
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Loading, empty, and failed states without changes to show. */
+.centered {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 24px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  text-align: center;
+}
+
+.file {
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.fileHeader {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 0 4px 0 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  background: var(--forge-changes-bg);
+}
+
+/* A bare chevron: its rotation shows whether the file is expanded, so it takes no fill in any state. */
+.fileToggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .fileToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.file:not([data-expanded]) .fileHeader {
+  border-bottom: 0;
+}
+
+.fileIcon {
+  flex: none;
+}
+
+.filePath {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.fileSpacer {
+  flex: 1;
+  align-self: stretch;
+}
+
+.chevron {
+  transition: transform 120ms ease;
+}
+
+.file:not([data-expanded]) .chevron {
+  transform: rotate(-90deg);
+}
+
+.badge {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--forge-fill);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Lines of one file: one column of grid rows, or two cells per row side by side. */
+.code {
+  overflow-x: auto;
+  font: var(--dsw-font-markdown-code-block);
+}
+
+/* One intrinsic-width track paints every unwrapped unified row across the scrolled width. */
+.code:not([data-wrap]):not([data-split]) {
+  display: grid;
+  grid-template-columns: minmax(max-content, 100%);
+}
+
+.line {
+  display: grid;
+  grid-template-columns: 3.5em 3.5em 1.4em minmax(0, 1fr);
+  box-sizing: border-box;
+  min-height: 22px;
+  line-height: 22px;
+  white-space: pre;
+}
+
+.code:not([data-wrap]):not([data-split]) .line {
+  grid-template-columns: 3.5em 3.5em 1.4em max-content;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 22px;
+  line-height: 22px;
+  white-space: pre;
+}
+
+.cell {
+  display: grid;
+  grid-template-columns: 3.5em minmax(0, 1fr);
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.cell + .cell {
+  border-left: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+/* Unwrapped side-by-side cells cut long lines at the column edge. */
+.cell .text {
+  overflow: hidden;
+}
+
+.code[data-wrap] .line,
+.code[data-wrap] .pair {
+  white-space: pre-wrap;
+}
+
+.code[data-wrap] .text {
+  overflow-wrap: anywhere;
+}
+
+.number {
+  padding-right: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: right;
+  user-select: none;
+}
+
+.sign {
+  text-align: center;
+  user-select: none;
+}
+
+.text {
+  padding: 0 16px 0 6px;
+}
+
+.add {
+  --forge-diff-gutter: var(--dsw-alias-file-diff-added-gutter);
+  --forge-diff-marker: var(--dsw-alias-file-diff-added-marker);
+  background: var(--dsw-alias-file-diff-added-bg);
+}
+
+.del {
+  --forge-diff-gutter: var(--dsw-alias-file-diff-deleted-gutter);
+  --forge-diff-marker: var(--dsw-alias-file-diff-deleted-marker);
+  background: var(--dsw-alias-file-diff-deleted-bg);
+}
+
+.add .number,
+.del .number {
+  background: var(--forge-diff-gutter);
+  color: var(--forge-diff-marker);
+}
+
+.add .sign,
+.del .sign {
+  color: var(--forge-diff-marker);
+}
+
+.context .text {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.empty {
+  background: var(--forge-diff-empty);
+}
+
+/* Collapsed unchanged lines; the row expands them. */
+/* Collapsed unchanged lines, a collapsed large file, and a file whose lines cannot be drawn share one strip;
+   only the first two open on a click. */
+.gap,
+.fileNote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 26px;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  background: var(--forge-fill);
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--dsw-font-family);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+}
+
+.gap {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .gap:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.gap:disabled {
+  cursor: progress;
+}
+
+/* The local changes card of the panel: its toggle and refs, the view link and create action, then its files. */
+.local {
+  min-width: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.localHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px 2px 6px;
+}
+
+.localToggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+}
+
+@media (hover: hover) {
+  .localToggle:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.localToggle svg {
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 120ms ease;
+}
+
+.localToggle[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.localRefs {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.localRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 10px 12px;
+  font-size: 12px;
+}
+
+.localView {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 28px;
+  margin-left: -6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font: inherit;
+}
+
+@media (hover: hover) {
+  .localView:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.localCreate {
+  flex: none;
+  margin-left: auto;
+}
+
+.localFiles {
+  margin: 0;
+  padding: 4px 6px 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  list-style: none;
+}
+
+.localFile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+@media (hover: hover) {
+  .localFile:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.localFile .menuPath {
+  flex: 1;
+}
+
+.localView:focus-visible,
+.localToggle:focus-visible,
+.fileToggle:focus-visible,
+.filePath:focus-visible,
+.localFile:focus-visible,
+.select:focus-visible,
+.gap:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}

@@ -1,0 +1,1 @@
+- text: "dsh-{{worktree}} 工作树 · 基于 release #7 Add the pull request panel 需要处理 · 检查失败"

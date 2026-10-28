@@ -2,10 +2,13 @@
 .sessionRow {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--dsh-sidebar-label-gap);
   border-radius: var(--dsw-radius-md);
+  border-inline: var(--dsh-sidebar-paint-inset) solid transparent;
+  background-clip: padding-box;
+  box-sizing: border-box;
   padding: 0 8px;
-  padding-inline-start: calc(8px + var(--dsh-workspace-indent, 0px));
+  padding-inline-start: calc(var(--dsh-sidebar-row-padding) - var(--dsh-sidebar-paint-inset) + var(--dsh-workspace-indent, 0px));
   cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
@@ -14,12 +17,12 @@
 
 @media (hover: hover) {
   .projectRow:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
+    background-color: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
 .sessionRow.selected {
-  background: var(--dsw-alias-interactive-bg-hover);
+  background-color: var(--dsw-alias-interactive-bg-hover);
 }
 
 .dragPreview {
@@ -35,8 +38,10 @@
   box-sizing: border-box;
   border: none;
   border-radius: var(--dsw-radius-lg);
-  padding: 4px 8px;
+  padding: 4px calc(var(--dsh-sidebar-row-padding) - var(--dsh-sidebar-paint-inset));
+  border-inline: var(--dsh-sidebar-paint-inset) solid transparent;
   background: transparent;
+  background-clip: padding-box;
   cursor: pointer;
   text-align: left;
   color: var(--dsw-alias-label-primary);
@@ -44,12 +49,12 @@
 
 @media (hover: hover) {
   .searchResultRow:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
+    background-color: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
 .searchResultRow.selected {
-  background: var(--dsw-alias-interactive-bg-hover);
+  background-color: var(--dsw-alias-interactive-bg-hover);
 }
 
 .searchResultHeading {
@@ -61,7 +66,7 @@
 .searchResultTitle {
   flex: 0 1 auto;
   min-width: 0;
-  margin-left: 4px;
+  margin: 0 var(--dsh-sidebar-label-gap);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -74,7 +79,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
-  margin-left: 20px;
+  margin-left: calc(16px + var(--dsh-sidebar-label-gap));
 }
 
 .searchResultWorkspace,
@@ -114,14 +119,14 @@
   height: 20px;
 }
 
-/* Session cell (figma): pad 8, a 16px status slot, then a 4px title gap. */
+/* Session titles share the workspace icon slot and compact label gap. */
 .sessionRow {
   height: 32px;
   gap: 0;
 }
 
 .sessionRow .title {
-  margin: 0 6px 0 4px;
+  margin: 0 6px 0 var(--dsh-sidebar-label-gap);
 }
 
 .slot {
@@ -235,6 +240,7 @@
   font-size: 10px;
   line-height: 16px;
   color: var(--dsw-alias-label-tertiary);
+  margin-inline-end: -1px;
 }
 
 .pinIndicator {
@@ -263,12 +269,12 @@
   flex: none;
 }
 
-/* Trailing action buttons surface on hover with bare 16px glyphs. */
+/* The trailing strip keeps a shared gap between its fixed-size control boxes. */
 .rowActions {
   flex: none;
   display: none;
   align-items: center;
-  gap: 15px;
+  gap: 13px;
 }
 
 @media (hover: hover) {
@@ -310,7 +316,7 @@
    unguarded rule would strand that row without its ellipsis. */
 @media (hover: hover) {
   .sessionRow:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
+    background-color: var(--dsw-alias-interactive-bg-hover);
   }
 
   .sessionRow:hover .rowActions,
@@ -347,7 +353,7 @@
    hover fill while its dropdown is up). */
 .projectRow.menuOpen,
 .sessionRow.menuOpen {
-  background: var(--dsw-alias-interactive-bg-hover);
+  background-color: var(--dsw-alias-interactive-bg-hover);
 }
 
 /* Session drag insert marker: a leading chevron and 2px rule between rows,
@@ -362,8 +368,8 @@
   content: '';
   position: absolute;
   z-index: 1;
-  left: 0;
-  right: 4px;
+  left: calc(-1 * var(--dsh-sidebar-paint-inset));
+  right: calc(4px - var(--dsh-sidebar-paint-inset));
   height: 12px;
   background:
     linear-gradient(
@@ -434,19 +440,26 @@
   margin: 0 -4px;
 }
 
+/* Compensated margins keep the 24px target on the compact icon's center. */
 .iconButton {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
+  margin: -4px;
   border: none;
   border-radius: var(--dsw-radius-xs);
   padding: 0;
   background: transparent;
   cursor: pointer;
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* Keep the focus ring on its original compact outline. */
+.iconButton:focus-visible {
+  outline-offset: -2px;
 }
 
 @media (hover: hover) {

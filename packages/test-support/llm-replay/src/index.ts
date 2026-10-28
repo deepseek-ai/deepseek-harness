@@ -23,6 +23,8 @@ import type {
   ContentBlock,
   GenerateOptions,
   LlmImageRequestPricing,
+  LlmModelBadge,
+  LlmModelBadgeTone,
   LlmModelInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
@@ -38,6 +40,7 @@ import { LlmAdapter, LlmError, ReasoningEffortId, expandAssistantStream, offload
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 
 const PACKED_CHUNK_ROW_TYPES = new Set(['text-chunks', 'reasoning-chunks', 'tool-call-chunks'])
+const BADGE_TONES: readonly unknown[] = ['neutral', 'info', 'success', 'warning'] satisfies readonly LlmModelBadgeTone[]
 
 if (sessionFormatCatalog.currentVersion !== SESSION_FORMAT_VERSION) {
   throw new Error(
@@ -107,6 +110,8 @@ export interface ReplayModelConfig {
   systemPromptUpdate?: SystemPromptUpdate
   /** Optional mid-conversation tool declaration mode for a keyless replay route. */
   toolUpdate?: ToolUpdate
+  /** Optional selector badge the replay catalog advertises, so keyless Web scenarios render one. */
+  badge?: LlmModelBadge
 }
 
 /** One provider route exposed by the replay adapter. */
@@ -899,6 +904,7 @@ class ReplayAdapter extends LlmAdapter {
       name: model.name ?? model.id,
       ...model.description === undefined ? {} : { description: model.description },
       ...model.inputModalities === undefined ? {} : { inputModalities: [...model.inputModalities] },
+      ...model.badge === undefined ? {} : { badge: model.badge },
     })))
   }
 
@@ -1143,6 +1149,16 @@ export interface Config {
   paceMs?: number
 }
 
+/** Whether a configured badge has non-blank literal or English-keyed text and a known tone. */
+function displayableBadge(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false
+  const text: unknown = Reflect.get(value, 'text')
+  const texts: unknown[] = typeof text === 'object' && text !== null ? Object.values(text) : [text]
+  return BADGE_TONES.includes(Reflect.get(value, 'tone'))
+    && (typeof text === 'string' || (typeof text === 'object' && text !== null && Object.hasOwn(text, 'en')))
+    && texts.every(entry => typeof entry === 'string' && entry.trim() !== '')
+}
+
 function validateConfiguredModels(providers: ReplayProviderConfig[] | undefined): void {
   for (const provider of providers ?? []) {
     for (const model of provider.models ?? []) {
@@ -1183,6 +1199,12 @@ function validateConfiguredModels(providers: ReplayProviderConfig[] | undefined)
         throw new Error(
           `llm-replay: provider "${provider.id}" model "${model.id}" toolUpdate `
           + 'must be "in-history" or "addition-only" when present',
+        )
+      }
+      if (model.badge !== undefined && !displayableBadge(model.badge)) {
+        throw new Error(
+          `llm-replay: provider "${provider.id}" model "${model.id}" badge needs non-blank text or translations `
+          + 'with an "en" entry, and a neutral, info, success, or warning tone',
         )
       }
     }

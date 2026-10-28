@@ -33,9 +33,3 @@
 .toggle svg { flex: none; width: 14px; height: 14px; }
 @container (max-width: 620px) { .presented { grid-template-columns: minmax(0, 1fr); } }
 .actions { display: inline-flex; flex: none; pointer-events: auto; }
-
-.secondaryText[data-success] { animation-name: success-fade; animation-timing-function: ease-out; animation-fill-mode: forwards; }
-@keyframes success-fade { to { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) {
-  .secondaryText[data-success] { animation-name: none; }
-}

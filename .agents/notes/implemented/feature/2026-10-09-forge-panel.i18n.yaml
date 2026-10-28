@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-09-forge-panel.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-09-forge-panel.md
+/agent-note-change-request-panel-and-worktree-sessions:
+  en: a524673f0d9cc9d8
+  zh: db8a2c1ad8f9c8a3
+/agent-note-change-request-panel-and-worktree-sessions/problem:
+  en: 344bcc7e9825bbc8
+  zh: c1d0f4b54f5b3786
+/agent-note-change-request-panel-and-worktree-sessions/decision:
+  en: b18b287b701aef93
+  zh: 462c0f561f1a0c18
+/agent-note-change-request-panel-and-worktree-sessions/deferred:
+  en: 32ef8af85f4d2f66
+  zh: b82b67f94346399e
+/agent-note-change-request-panel-and-worktree-sessions/alternatives-considered:
+  en: 91b3338f958ad0e9
+  zh: b64f30d333280084
+/agent-note-change-request-panel-and-worktree-sessions/consequences:
+  en: 97976f073b9f65e0
+  zh: 95be3f7f375b0876

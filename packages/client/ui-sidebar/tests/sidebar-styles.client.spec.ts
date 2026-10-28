@@ -33,7 +33,10 @@ describe('SidebarRoot.module.css', () => {
 
   it('shares and cancels the wide shell trailing padding structurally', () => {
     const root = declarations('.root')
-    expect(root?.get('--dsh-sidebar-inline-padding')).toBe('12px')
+    expect(root?.get('--dsh-sidebar-inline-padding')).toBe('8px')
+    expect(root?.get('--dsh-sidebar-row-padding')).toBe('12px')
+    expect(root?.get('--dsh-sidebar-label-gap')).toBe('6px')
+    expect(root?.get('--dsh-sidebar-paint-inset')).toBe('3px')
     expect(root?.get('padding')).toBe('6px var(--dsh-sidebar-inline-padding)')
     expect(declarations('.regionArea')?.get('margin-left')).toBe('-4px')
     expect(declarations('.regionArea')?.get('padding-left')).toBe('4px')
@@ -43,6 +46,18 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.collapsed .regionArea')?.get('margin-left')).toBe('0')
     expect(declarations('.collapsed .regionArea')?.get('padding-left')).toBe('0')
     expect(declarations('.collapsed .regionArea')?.get('margin-right')).toBe('0')
+  })
+
+  it('keeps the reviewed expanded spacing separate from rail and caption controls', () => {
+    expect(declarations('.logoRow')?.get('padding')).toBe('8px 0 8px 8px')
+    expect(declarations('.logoRow')?.get('margin-bottom')).toBe('0')
+    expect(declarations('.newSession')?.get('margin')).toBe('0 calc(var(--dsh-sidebar-paint-inset) + 1px) 10px')
+    expect(declarations('.newSessionContent')?.get('justify-content')).toBe('center')
+    expect(declarations(":global(html[data-platform='darwin']:not([data-fullscreen])) .root:not(.collapsed) > .topStrip > .toggle")?.get('transform')).toBe('translateX(4px)')
+    expect(css).not.toContain(':not(.fading)')
+    expect(declarations(':global([data-windows-titlebar]) .root:not(.collapsed) .newSession')?.has('margin-left')).toBe(false)
+    expect(declarations('.topStrip')?.get('height')).toBe('52px')
+    expect(declarations('.root.collapsed')?.get('padding')).toBe('18px 10px 6px')
   })
 
   it('moves the four upper controls while the settings seat only fades', () => {
@@ -69,7 +84,8 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations('.collapsed .newSession')?.get('width')).toBe('36px')
   })
 
-  it('keeps the slotted brand row at the full artwork height', () => {
+  it('keeps full-size brand artwork with a compact mark-to-name gap', () => {
+    expect(declarations('.brandIdentity')?.get('gap')).toBe('5px')
     expect(declarations('.brandIdentity')?.get('height')).toBe('24px')
     expect(declarations('.brandName')?.get('height')).toBe('24px')
     expect(declarations('.brandName')?.get('line-height')).toBe('24px')

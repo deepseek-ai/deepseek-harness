@@ -1,1 +1,1 @@
-![The Discover tab listing plugins from an added plugin index](preview.svg)
+![Adding a plugin index URL, then installing its plugins from the Discover tab](preview.svg)

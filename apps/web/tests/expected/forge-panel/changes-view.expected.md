@@ -1,0 +1,22 @@
+- img "变更请求状态：需要处理"
+- text: "Add the pull request panel #7"
+- button "在浏览器中打开"
+- button "全部 2 个文件"
+- text: +4 −2
+- button "刷新变更"
+- button "全部折叠"
+- button "左右对比" [pressed]
+- button "自动换行" [pressed]
+- button "收起 panel.ts" [expanded]
+- 'button "复制路径: src/panel.ts"': src/panel.ts
+- text: +2 −2
+- button "panel.ts 的更多操作"
+- text: 1 export const n1 = 1 1 export const n1 = 1 2 export const n2 = 2 2 export const n2 = 'two' 3 export const n3 = 3 3 export const n3 = 3 4 export const n4 = 4 4 export const n4 = 4 5 export const n5 = 5 5 export const n5 = 5
+- button "6 行未变更"
+- text: 12 export const n12 = 12 12 export const n12 = 12 13 export const n13 = 13 13 export const n13 = 13 14 export const n14 = 14 14 export const n14 = 14 15 export const n15 = 15 15 export const n15 = 'fifteen' 16 export const n16 = 16 16 export const n16 = 16 17 export const n17 = 17 17 export const n17 = 17 18 export const n18 = 18 18 export const n18 = 18
+- button "其余未变更的行"
+- button "收起 panel.md" [expanded]
+- 'button "复制路径: docs/panel.md"': docs/panel.md
+- text: 新文件 +2 −0
+- button "panel.md 的更多操作"
+- text: "1 + # Panel 2 + Shows the change requests of a Session."

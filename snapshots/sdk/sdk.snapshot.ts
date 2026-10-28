@@ -159,6 +159,9 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
     patches: [fileURLToPath(new URL('./tool-error-details/runtime.cordis.yml', import.meta.url))],
     expectedFinalResponse: 'ERROR_DETAILS_OK',
   },
+  'ptc-cancel': {
+    patches: [fileURLToPath(new URL('./ptc-cancel/runtime.cordis.yml', import.meta.url))],
+  },
   'ptc-turn': {
     patches: [fileURLToPath(new URL('./ptc-turn/runtime.cordis.yml', import.meta.url))],
     expectedFinalResponse: 'CODE_ONE+CODE_TWO',
@@ -1010,6 +1013,20 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       )
       reconcileCatalogCreationTimes(ordered.map(log => log.content), 'validate')
       const actualContext = contextOf(ordered, cwd)
+      if (scenario.name === 'ptc-cancel') {
+        const events = results.flatMap(result => result.events)
+        expect(events.find(event => event.type === 'tool/result')).toMatchObject({ data: {
+          message: {
+            toolCallId: 'ptc-cancel',
+            isError: true,
+            content: [{ type: 'text', text: 'Error: tool call aborted' }],
+          },
+          error: { name: 'AbortError', code: 'ABORTED' },
+        } })
+        expect(events.find(event => event.type === 'turn/end')).toMatchObject({
+          data: { reason: { kind: 'aborted', reason: { kind: 'user' } } },
+        })
+      }
       if (scenario.name === 'minimal-image-compaction') {
         const events = results.flatMap(result => result.events)
         const failures = events.filter(event => event.type === 'turn/end' && event.data.reason.kind === 'error')

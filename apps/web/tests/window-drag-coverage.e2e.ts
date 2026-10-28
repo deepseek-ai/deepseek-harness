@@ -231,6 +231,41 @@ describe('web e2e: macOS window drag coverage', () => {
     return { page, tripwire }
   }
 
+  it('keeps the macOS sidebar toggle stationary as its expanded content starts fading', async () => {
+    const { page, tripwire } = await desktopPage()
+    try {
+      const open = page.getByRole('button', { name: 'Open sidebar', exact: true })
+      if (await open.isVisible()) await open.click()
+      const toggle = page.getByRole('button', { name: 'Collapse sidebar', exact: true })
+      await toggle.waitFor()
+      const positions = await toggle.evaluate(async (button) => {
+        if (!(button instanceof HTMLButtonElement)) throw new Error('Sidebar toggle is not a button')
+        const root = button.closest('[class*="topStrip"]')!.parentElement!
+        const position = () => ({
+          left: button.getBoundingClientRect().left - root.getBoundingClientRect().left,
+          transform: getComputedStyle(button).transform,
+        })
+        const before = position()
+        // Observe the class change before the 150ms fade can settle under host contention.
+        const fading = await new Promise<ReturnType<typeof position>>((resolve) => {
+          const observer = new MutationObserver(() => {
+            if (![...root.classList].some(name => name.includes('fading'))) return
+            observer.disconnect()
+            resolve(position())
+          })
+          observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+          button.click()
+        })
+        return { before, fading }
+      })
+      expect(positions.before.transform).toBe('matrix(1, 0, 0, 1, 4, 0)')
+      expect(positions.fading).toEqual(positions.before)
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      await page.close()
+    }
+  })
+
   it.each(['darwin', 'win32'] as const)('%s keeps compact Plugins controls below native chrome in both sidebar states', async (platform) => {
     const { page, tripwire } = await desktopPage(platform)
     try {

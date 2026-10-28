@@ -170,7 +170,7 @@ describe('ConversationController', () => {
       if (attachment === undefined) throw new Error('draft attachment missing')
       b.shell.addAttachments([attachment.id])
       b.shell.submit()
-      expect(b.shell.snapshot.attachmentIds).toEqual([])
+      expect(b.shell.snapshot).toMatchObject({ phase: 'sending', attachmentIds: [attachment.id] })
       await b.runtime.sessions.disposeScopes()
       expect(b.root.resolveDraftAttachments([attachment.id])).toEqual([])
       expect(revoked).toHaveBeenCalledWith('blob:detached')
@@ -729,6 +729,29 @@ describe('sendSession submission echo', () => {
       })
       await expect(sending).resolves.toEqual({ kind: 'success' })
       expect(b.root.resolveDraftAttachments(drafts.map(draft => draft.id))).toEqual([])
+    } finally {
+      b.restore()
+    }
+    await b.runtime.dispose()
+  })
+
+  it('reports success once the Session accepts the prompt, ahead of a receipt that later fails', async () => {
+    const b = await echoBench()
+    try {
+      const session = b.runtime.sessions.binding('s1')!.session
+      const receipt = Promise.withResolvers<{ ok: true; value: { accepted: true } }>()
+      b.prompt.mockImplementationOnce(() => receipt.promise)
+      const accept = vi.fn()
+      const sending = b.root.sendSession(session, '收件箱先到', [], 'queue', undefined, accept)
+      const echo = await b.begun
+      await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledOnce() })
+      echo.onAccept?.()
+      // The composer settles inside the Session's acceptance, before the echo renders.
+      expect(accept).toHaveBeenCalledOnce()
+      await expect(sending).resolves.toEqual({ kind: 'success' })
+      // The Host already holds the message, so a receipt lost afterwards changes nothing.
+      receipt.reject(new Error('connection closed after the Host accepted the prompt'))
+      await new Promise(resolve => setTimeout(resolve, 0))
     } finally {
       b.restore()
     }

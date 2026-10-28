@@ -1374,6 +1374,25 @@ describe('headless recorded-session snapshots', () => {
               expect(saved).toContain('id: demo')
               expect(saved).toContain('disabled: false')
             }
+            if (scenario.name === 'toolcall-unused-args') {
+              const events = parseSessionLog(actualLogs[0]!.content)
+              const results = events.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+              expect(results).toHaveLength(6)
+              expect(results.every(result => !result.isError)).toBe(true)
+              for (const extension of ['ts', 'md']) {
+                const grep = results.find(result => result.toolCallId === `call_grep_${extension}`)
+                const text = grep?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+                expect(text).toContain('Found 1 match')
+                expect(text).toContain(`seed/example.${extension}`)
+                expect(text).toContain('marker')
+              }
+              const changes = records(actualLogs[0]!.content)
+                .filter(event => event.type === 'goal/change').map(event => event.data as JsonObject)
+              expect(changes.map(change => change.operation)).toEqual(['create', 'complete'])
+              const original = changes[0]!.goal as JsonObject
+              expect(original).toMatchObject({ objective: 'Find marker in both seed files.', maxGoalRounds: 4 })
+              expect(changes[1]!.goal).toEqual({ ...original, revision: 2, phase: 'complete' })
+            }
             if (scenario.name.startsWith('office-progressive-')) {
               const log = actualLogs[0]!.content
               const results = parseSessionLog(log).flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])

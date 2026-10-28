@@ -553,8 +553,6 @@ export class AgentLoop extends Service implements AgentFactory {
       }
     }
     const untrack = this.ownership.track(dispose)
-    const modelProjectionHandle = this.modelProjectionHandle
-    const inboxProjectionHandle = this.inboxProjectionHandle
     try {
       assertAgentOptions(agentOptions)
       ownerCtx.fiber.assertActive()
@@ -567,11 +565,14 @@ export class AgentLoop extends Service implements AgentFactory {
           : new Error(`agent "${id}" creation aborted`, { cause: callerSignal.reason })
       }
       const lastTurn = loopCtx.agents.turnBoundaryOf(session).lastTurn
+      const projections = {
+        modelSelection: this.modelProjectionHandle.readerFor(session),
+        inbox: this.inboxProjectionHandle.readerFor(session),
+      }
       unfollowOwner = ownerCtx.effect(function* () {
         const created = machine = new ReactLoopAgent(
           loopCtx, id, agentOptions, session,
-          () => modelProjectionHandle.stateOf(session),
-          () => inboxProjectionHandle.stateOf(session),
+          projections,
           lastTurn,
         )
         machineReady.resolve()

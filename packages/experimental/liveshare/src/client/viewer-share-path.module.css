@@ -1,0 +1,7 @@
+/* The pane body is a scroller of its own; the notice sits where the tab's content starts. */
+.unavailable {
+  margin: 0;
+  padding: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+}

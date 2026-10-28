@@ -23,7 +23,13 @@ kind: "package-reference"
 <a id="build-and-service"></a>
 ## 构建与服务
 
-使用 `swift build --package-path packages/experimental/cua-macos/native --configuration release` 构建。二进制位于本目录下的 `.build/release/dsh-cua-native`。Host 将 `--ensure-shared` 作为受管启动命令运行，服务进程随后归属于已连接的客户端，最后一条连接完成清理后退出。`.build/` 不提交到仓库。
+运行 `pnpm --dir packages/experimental/cua-macos run build:native`，在 `native/bin/darwin-<arch>` 下生成带签名的 `DSH Computer Use.app`，`current.json` 选择完整的内容摘要目录。默认使用临时签名；正式打包可传入 `--identity` 指定 Developer ID，并由发布流程完成公证。Host 运行应用内的 `--ensure-shared` 入口，经 LaunchServices 后台启动服务。最后一条连接完成清理后，服务退出。
+
+`native/.build/prepared/<arch>` 和 `native/bin/darwin-<arch>` 中的各代应用不会自动清理。正式打包时使用全新的 `--output-directory`，或确认没有客户端使用后清理打包输出再构建，避免旧应用进入 tarball。安全签名时间戳可能让相同源码生成不同代应用。
+
+启动错误通过当前用户专用、每次启动独立的错误文件和 launcher 的 JSON 错误帧保留错误码与消息。等待启动锁和就绪状态共用一个期限，系统启动应用的耗时计入该预算。就绪记录必须指向本次启动的 PID。新实例启动失败后，launcher 强制终止并等待其退出，再报告失败；清理另有与启动超时等长的期限。连接已有服务失败时不会终止该服务。
+
+应用图标通过 `pnpm --dir packages/experimental/cua-macos run build:icon` 从 [Computer Use 图形](../../cua-bundle/icon.svg)生成。系统授权提示和 DSH 权限页使用这个应用图标。
 
 共享服务在 `/tmp/dsh-cua-<uid>` 下使用仅所有者可访问的 Unix socket，以可执行文件的 SHA-256 区分实例。版本锁选出一个进程，另一个真实可执行路径锁排除同一路径的不同构建。首帧为协议版本 1 的 `hello`，包含运行时标识以及该连接的字节、AX、操作、截图、事件间隔和清理限制。`ready` 返回已核实的运行时标识、PID 和实例 ID。每条连接拥有独立的 AXWorker。stdin/stdout 入口是该服务的诊断代理。
 
@@ -77,7 +83,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 `typeText` 和 `pressKey` 面向所选进程当前获得焦点的控件，不指定窗口。组合键先向 PID 发送修饰键变化，再发送主键，并逆序释放修饰键，不使用全局 HID 队列。后台鼠标操作可能改变键盘焦点。KP_0 和 KP_Enter 等数字键盘名称保留物理键码。文本逐个 Unicode 字符输入，不使用剪贴板。LF、CR 和 CRLF 发送一次 Return，制表符发送 Tab。应用保留缩进和焦点导航等正常编辑行为。每次按下和抬起后等待配置的文本事件间隔，分派完成不证明应用已消费全部事件。取消可能中断部分文本或手势，无法撤销已接收事件。很长的文本可能超过 Host 操作期限。继续输入前应核实应用状态。
 
-负责执行的 host/helper 需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
+`DSH Computer Use.app` 需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
 
 仅供 Host 使用的权限操作为 `permissionStatus {}`、`requestPermission {permission}` 和 `openPermissionSettings {permission}`，其中 permission 为 `accessibility` 或 `screenRecording`。这些操作不出现在模型工具及 `getCapabilities.methods` 中。权限状态包含观察到的 helper 和父进程路径，这些路径不能确定 TCC 归属的应用。系统授权提示负责指出应用并询问用户决定。helper 使用可选的 libSystem 内部接口 `responsibility_get_pid_responsible_for_pid` 查询责任进程，在报告就绪前记录对应应用的名称和图标。接口通过动态加载解析，函数签名与 [Chromium](https://chromium.googlesource.com/chromium/src/+/refs/tags/134.0.6998.28/base/process/process_info_mac.mm) 使用的一致。符号、进程或应用信息不可用时，归属保持未知，不根据最近的 GUI 祖先推断。权限检查独立于这些信息。
 
@@ -101,13 +107,17 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 <a id="verification"></a>
 ## 验证
 
-使用 `python3 packages/experimental/cua-macos/native/tests/test_swift.py` 通过选定 Apple 工具链的 Swift Testing 框架和运行时路径执行离线单元检查；使用 `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` 检查 JSONL 接纳、有序回复和 EOF 退出，不执行桌面操作。应用与协议端到端检查接受 `--helper` 以选择单独构建的对比二进制。
+桌面检查要求给 `DSH Computer Use.app` 授权；临时签名的源码构建变化后可能需要重新授权。`--helper` 指向该应用内的可执行文件。裸二进制仅用于旧版本对比，不支持作为当前 helper 的覆盖路径。
 
-运行 `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper`，通过测试自建的 AppKit fixture 核实并发启动、共享服务 PID、独立句柄、同一应用交接、请求级截图期限、连接清理和信号退出。需要已有辅助功能和屏幕录制权限。`--without-desktop` 将检查限定为协议与进程生命期。
+运行 `python3 packages/experimental/cua-macos/native/tests/startup_e2e.py`，通过 LaunchServices 检查启动即退出、原始错误传递、过期就绪记录拒绝，以及卡住的新实例退出。检查使用自建应用，不申请系统权限。发布单元测试模拟签名；`build:native` 调用真实的 `codesign --verify --strict`，`launcher_identity_e2e.py` 验证 LaunchServices 授权归属。
+
+使用 `python3 packages/experimental/cua-macos/native/tests/test_swift.py` 通过选定 Apple 工具链的 Swift Testing 框架和运行时路径执行离线单元检查；使用 `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` 检查 JSONL 接纳、有序回复和 EOF 退出，不执行桌面操作。应用与协议端到端检查接受 `--helper` 以选择单独构建的对比二进制。 `python3 packages/experimental/cua-macos/native/tests/test_build_app.py` 验证应用发布、签名失败和损坏副本拒绝。
+
+运行 `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper`，通过测试自建的 AppKit fixture 核实并发启动、共享服务 PID、独立句柄、同一应用交接、请求级截图期限、连接清理和信号退出。需要已经给 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。`--without-desktop` 将检查限定为协议与进程生命期。
 
 在已解锁的 macOS GUI 会话中运行 `python3 packages/experimental/cua-macos/native/tests/application_consent_e2e.py --helper /absolute/helper`，需要可用的 Apple Swift 编译器。它创建并清理自己的 AppKit 应用和独立 GUI 进程，检查元数据替换、冷启动与直接启动、共用 Bundle ID、独立程序重启后的持久路径身份，以及删除运行中可执行文件后的选择行为。默认身份检查不需要辅助功能或屏幕录制权限。添加 `--desktop` 可读取完整测试应用的控件，通过状态文件验证 AX 按钮点击，截取窗口，并记录删除可执行文件后的观察结果；此模式要求已有两项系统权限。
 
-在 GUI 登录会话中运行 `python3 packages/experimental/cua-macos/native/tests/launcher_identity_e2e.py --helper /absolute/helper`，验证由 Launch Services 启动的应用先启动另一个 GUI 启动器，再启动 helper。helper 识别外层责任应用，并在启动器退出后保留其名称和图标。检查只使用测试自建的两个应用和 helper，结束后清理对应的 Launch Services 注册，不申请辅助功能或屏幕录制权限。
+在 GUI 登录会话中运行 `python3 packages/experimental/cua-macos/native/tests/launcher_identity_e2e.py`，验证两个嵌套 GUI 启动器启动 helper 后，授权归属仍为 helper 自己，多条连接得到相同名称和图标。检查自行创建应用并清理 LaunchServices 注册，不申请辅助功能或屏幕录制权限。
 
 构建并解锁 Mac 后运行 `python3 packages/experimental/cua-macos/native/tests/axless_e2e.py`，验证应用移除并恢复 AX 根节点的窗口。检查需要已有辅助功能/屏幕录制权限，会拒绝过期元素索引，捕获无 AX 窗口，通过 fixture 状态文件核实坐标点击，并检查恢复。不会修改系统权限设置。
 

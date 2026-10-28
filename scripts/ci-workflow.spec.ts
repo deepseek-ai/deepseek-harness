@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
@@ -1687,6 +1688,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+describe('Policy workflow shells', () => {
+  it.each(['pr-check-on-head-branch.yml', 'pr-check-after-approve.yml', 'pr-check-on-base-branch.yml'])(
+    '%s runs shell blocks that parse',
+    (file) => {
+      if (process.platform === 'win32') return
+      const workflow = loadWorkflow('.github/workflows/' + file)
+      if (!isRecord(workflow.jobs)) throw new TypeError(`${file} must define jobs`)
+      for (const job of Object.values(workflow.jobs)) {
+        if (!isRecord(job) || !Array.isArray(job.steps)) continue
+        for (const step of job.steps) {
+          if (!isRecord(step) || typeof step.run !== 'string') continue
+          const parsed = spawnSync('bash', ['-n'], { input: step.run, encoding: 'utf8' })
+          expect(`${String(step.name ?? step.id)}: ${parsed.status}: ${parsed.stderr}`).toBe(`${String(step.name ?? step.id)}: 0: `)
+        }
+      }
+    },
+  )
+})
+
 describe('Policy workflows', () => {
   const workflows = [
     ['pr-check-on-head-branch.yml', ['master']],
@@ -1716,7 +1736,7 @@ describe('Policy workflows', () => {
   it('keeps the pre-merge build behind the merge step, which honours the mode on its failures', () => {
     const steps = stepsOf(workflowJob(loadWorkflow('.github/workflows/pr-check-on-head-branch.yml'), 'pre-merge'))
     const merge = steps.findIndex(step => step.id === 'merge')
-    const build = steps.findIndex(step => step.name === 'Run the pre-merge command')
+    const build = steps.findIndex(step => step.name === "Run the tree's pre-merge check")
     expect(merge).toBeGreaterThanOrEqual(0)
     expect(build).toBeGreaterThan(merge)
     const merging = steps[merge]
@@ -1726,9 +1746,12 @@ describe('Policy workflows', () => {
       if (typeof step.run !== 'string') continue
       expect(step.run).toContain('"$CHECK_MODE" = block')
     }
-    for (const step of steps.slice(merge + 1)) {
-      if (step.name === 'Run the pre-merge command') continue
-      expect(step.if).toBe("steps.merge.outputs.merged == 'true'")
-    }
+    for (const step of steps.slice(merge + 1)) expect(step.if).toBe("steps.merge.outputs.merged == 'true'")
+    const run = steps[build]?.run
+    if (typeof run !== 'string') throw new TypeError('the pre-merge check step must run a command')
+    expect(run).toContain('node scripts/pre-merge-check.ts')
+    // The script annotates its own failures; the step keeps a mode-aware guard for a check that crashes.
+    expect(run).toContain('exited without reporting')
+    expect(run).toContain('"$CHECK_MODE" = block')
   })
 })

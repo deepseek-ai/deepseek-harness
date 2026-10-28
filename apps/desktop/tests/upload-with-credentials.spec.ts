@@ -12,13 +12,13 @@ const launcher = fileURLToPath(new URL('../scripts/upload-with-credentials.ps1',
 const roots: string[] = []
 const quote = (value: string): string => `'${value.replaceAll("'", "''")}'`
 
-async function check(mode: 'valid' | 'plaintext' | 'blank' | 'missing' | 'upload' | 'upload-latest' | 'upload-failure', deployment = 'production') {
+async function check(mode: 'valid' | 'plaintext' | 'blank' | 'missing' | 'upload' | 'upload-latest' | 'upload-failure' | 'upload-purge' | 'invalid-purge', deployment = 'production') {
   const root = await mkdtemp(join(tmpdir(), 'desktop-credentials-'))
   roots.push(root)
   const credentialPath = join(root, 'credential.clixml')
   let entry = launcher
   let uploadArguments = ''
-  if (mode === 'upload' || mode === 'upload-latest' || mode === 'upload-failure') {
+  if (mode === 'upload' || mode === 'upload-latest' || mode === 'upload-failure' || mode === 'upload-purge' || mode === 'invalid-purge') {
     const scripts = join(root, 'apps/desktop/scripts')
     await mkdir(scripts, { recursive: true })
     entry = join(scripts, 'upload-with-credentials.ps1')
@@ -34,12 +34,12 @@ async function check(mode: 'valid' | 'plaintext' | 'blank' | 'missing' | 'upload
       assert.equal(process.env.DSH_DESKTOP_WINDOWS_TOKEN_PIN, undefined)
       assert.equal(process.env.NODE_OPTIONS, undefined)
       assert.equal(process.argv[2], 'win-x64')
-      assert.deepEqual(process.argv.slice(3), ['--credential-launcher', '--environment', 'production', '--bucket', 'fixture-bucket'${mode === 'upload-latest' ? ", '--latest'" : ''}])
+      assert.deepEqual(process.argv.slice(3), ['--credential-launcher', '--environment', 'production', '--bucket', 'fixture-bucket'${mode === 'upload-purge' ? ", '--latest', '--purge-only'" : mode === 'upload-latest' ? ", '--latest'" : ''}])
       console.log('fixture-id fixture-secret')
       console.error('private service details fixture-secret')
       process.exit(${mode === 'upload-failure' ? 17 : 0})
     `)
-    uploadArguments = ` -Upload -Target win-x64 -Bucket fixture-bucket${mode === 'upload-latest' ? ' -Latest' : ''}`
+    uploadArguments = ` -Upload -Target win-x64 -Bucket fixture-bucket${mode === 'upload-purge' ? ' -Latest -PurgeOnly' : mode === 'invalid-purge' ? ' -PurgeOnly' : mode === 'upload-latest' ? ' -Latest' : ''}`
   }
   const setup = mode === 'missing' ? '' : `
     [pscustomobject]@{
@@ -134,7 +134,14 @@ describe.skipIf(process.platform !== 'win32')('Windows upload credentials', () =
     expect(result.output).not.toContain('child environment verified')
   })
 
-  it.each(['upload', 'upload-latest', 'upload-failure'] as const)('isolates the %s child and sanitizes both output streams', async (mode) => {
+  it('reports invalid purge arguments before decrypting credentials', async () => {
+    const result = await check('invalid-purge')
+    expect(result.code).toBe(1)
+    expect(result.output).toContain('invalid arguments; PurgeOnly requires Latest and production')
+    expect(result.output).not.toContain('stage=decrypt-file')
+  })
+
+  it.each(['upload', 'upload-latest', 'upload-failure', 'upload-purge'] as const)('isolates the %s child and sanitizes both output streams', async (mode) => {
     const result = await check(mode)
     expect(result.code, result.output).toBe(mode === 'upload-failure' ? 1 : 0)
     expect(result.output).toContain('[REDACTED] [REDACTED]')

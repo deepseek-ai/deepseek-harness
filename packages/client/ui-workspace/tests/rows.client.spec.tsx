@@ -349,6 +349,7 @@ describe('workspace browser rows', () => {
 
     expect(screen.getByRole('treeitem').getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByRole('button', { name: '在“Project”中新建会话' }).getAttribute('aria-keyshortcuts')).toBe('Control+N')
+    expect(screen.getByRole('button', { name: '在“Project”中新建会话' }).querySelector('svg')?.getAttribute('width')).toBe('14')
     fireEvent.click(screen.getByRole('button', { name: '在“Project”中新建会话' }))
     expect(onCreate).toHaveBeenCalledOnce()
     expect(onToggle).not.toHaveBeenCalled()

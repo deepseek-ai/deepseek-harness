@@ -131,7 +131,7 @@ describe('web e2e: fresh round trip through the real assembly', () => {
             key: 'Enter', code: 'Enter', bubbles: true, cancelable: true,
           }))
           // sendSession registered its paint yield first. This frame observes the
-          // committed echo while admission remains queued on the following task.
+          // composer holding the message while the Host has not accepted it yet.
           await new Promise<void>((resolve) => { requestAnimationFrame(() => { resolve() }) })
           const echo = document.querySelector<HTMLElement>('[data-submission-echo]')
           return [
@@ -145,6 +145,10 @@ describe('web e2e: fresh round trip through the real assembly', () => {
       expect(await response.json()).toMatchObject({ result: { ok: true, value: { accepted: true } } })
       accepted = true
       await compareOrRefreshGolden(ECHO_EXPECTED, echoSnapshot, MODE)
+      // Acceptance publishes the echo and clears the composer; maintenance keeps the Turn from starting.
+      await page.locator('[data-submission-echo]', { hasText: PROMPT }).waitFor()
+      await expect.poll(() => input.textContent()).toBe('')
+      expect(await input.getAttribute('contenteditable')).toBe('true')
       const row = page.getByRole('tree', { name: 'Sessions', exact: true })
         .locator('[role="treeitem"][aria-selected="true"]')
       await expect.poll(() => row.getAttribute('draggable'), { timeout: 5_000 }).toBe('true')

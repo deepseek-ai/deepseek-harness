@@ -1,5 +1,5 @@
 - bundle: Developer tools
-  description: For troubleshooting: view what DSH recorded for a session in Session log, and debug the DSH backend in Chrome DevTools.
+  description: For troubleshooting: view what DSH recorded for a session in Session log, inspect per-turn and per-step statistics in the Statistics tab, and debug the DSH backend in Chrome DevTools.
 - component: NodeJS inspector
   description: Press Ctrl/Cmd+Shift+. to open Chrome DevTools in the bottom panel for development and debugging.
 - component: Session log
