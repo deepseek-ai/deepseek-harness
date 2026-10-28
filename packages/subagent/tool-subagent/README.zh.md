@@ -29,7 +29,7 @@ kind: "package-reference"
 
 每个委派目标挂载一个实例，且每个实例的 `toolName` 必须不同。工具与其提供方同时存在、同时消失，因此同级加载顺序与提供方重新加载都不会让工具悬空。
 
-工具需要 [subagent-names](../subagent-names/README.zh.md)。可选 `name` 参数选择同级唯一名称，省略时分配首个未使用的 `agent-N`。结果包含子任务 Session id 和完整路径，例如 `lead/reviewer`。命名服务卸载时 Cordis 移除工具，服务恢复时重新注册工具。
+工具需要 [subagent-names](../subagent-names/README.zh.md)。可选 `name` 参数选择同级唯一名称，省略时分配首个未使用的 `agent-N`。命名提示要求使用 `reviewer` 或 `researcher` 等简短角色名称，将任务放在 `description` 中；同类角色通过专业方向或数字后缀区分。结果包含子任务 Session id 和完整路径，例如 `lead/reviewer`。命名服务卸载时 Cordis 移除工具，服务恢复时重新注册工具。
 
 ### 最小配置
 
