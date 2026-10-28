@@ -148,7 +148,67 @@ describe('web e2e: sidebar subagent activity', () => {
     const runningTrigger = page.getByRole('button', { name: '1 subagent running' })
     await runningTrigger.waitFor({ timeout: 10_000 })
     expect(await runningTrigger.locator('[data-state="ongoing"]').count()).toBe(1)
-    await assertFixtureInventory(SNAPSHOT_DIR, ['owner-running.expected.md'])
+    // This directly created owner has no tool preset; the fixture collects its own job.
+    scaffold.ctx.effect(() => scaffold.ctx.jobs.attachController('compact header fixture'), 'compact header job controller')
+    const completion = Promise.withResolvers<{ status: 'completed' }>()
+    const ownerId = parentHandle.agent.id
+    const jobId = scaffold.ctx.jobs.start({
+      kind: 'bash', label: 'Concurrent background work', owner: ownerId,
+      run(handle) {
+        handle.append('Background work is running.\n')
+        return { done: completion.promise, cancel: () => { completion.resolve({ status: 'completed' }) } }
+      },
+    })
+    const viewport = page.viewportSize()!
+    try {
+      const jobTrigger = page.getByRole('button', { name: '1 background job', exact: true })
+      await jobTrigger.waitFor()
+      const controls = [
+        { trigger: runningTrigger, icon: '[data-icon="dsw-icon-users-outline-regular"]', count: '[data-subagent-count]' },
+        { trigger: jobTrigger, icon: '[data-icon="dsw-icon-layers-outline-regular"]', count: '[data-job-count]' },
+      ]
+      for (const { trigger, icon, count } of controls) {
+        expect(await trigger.locator(count).isVisible()).toBe(true)
+        expect(await trigger.locator('[data-state="ongoing"]').isVisible()).toBe(true)
+        expect(await trigger.locator(icon).isVisible()).toBe(false)
+      }
+      await runningTrigger.focus()
+      await page.setViewportSize({ width: 390, height: 700 })
+      for (const { trigger, icon, count } of controls) {
+        await expect.poll(() => trigger.locator(count).isVisible()).toBe(false)
+        expect(await trigger.locator(icon).isVisible()).toBe(true)
+        expect(await trigger.locator('[data-state="ongoing"]').isVisible()).toBe(false)
+      }
+      expect(await runningTrigger.evaluate(element => element === document.activeElement)).toBe(true)
+      await compareOrRefreshGolden(
+        join(SNAPSHOT_DIR, 'compact-running.expected.md'),
+        await captureStableAria(page, 'header:has([data-subagent-action])', scaffold.workspaceCwd),
+        MODE,
+      )
+      await saveFailureShot(page, 'web-e2e-compact-running-icons')
+      await runningTrigger.click()
+      const members = page.locator('[data-subagent-panel]')
+      await members.waitFor()
+      expect(await members.getByRole('treeitem').locator('[data-state="ongoing"]').isVisible()).toBe(true)
+      await page.keyboard.press('Escape')
+      await jobTrigger.click()
+      const jobs = page.getByRole('list', { name: 'Background jobs', exact: true })
+      await jobs.waitFor()
+      expect(await jobs.locator('[data-state="ongoing"]').isVisible()).toBe(true)
+      await page.keyboard.press('Escape')
+      await page.setViewportSize(viewport)
+      for (const { trigger, icon, count } of controls) {
+        await expect.poll(() => trigger.locator(count).isVisible()).toBe(true)
+        expect(await trigger.locator('[data-state="ongoing"]').isVisible()).toBe(true)
+        expect(await trigger.locator(icon).isVisible()).toBe(false)
+      }
+    } finally {
+      completion.resolve({ status: 'completed' })
+      await scaffold.ctx.jobs.wait(jobId, 5_000, ownerId)
+      await page.keyboard.press('Escape')
+      await page.setViewportSize(viewport)
+    }
+    await assertFixtureInventory(SNAPSHOT_DIR, ['owner-running.expected.md', 'compact-running.expected.md'])
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })

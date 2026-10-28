@@ -100,8 +100,20 @@
   transition: transform 120ms ease;
 }
 
+.trigger .compactIcon {
+  display: none;
+}
+
 /* The title-row container drops passive preset text at 540px; this action yields later. */
 @container (max-width: 460px) {
+  .trigger .compactIcon {
+    display: block;
+  }
+
+  .trigger .textModeActivity {
+    display: none;
+  }
+
   .trigger .count {
     display: none;
   }

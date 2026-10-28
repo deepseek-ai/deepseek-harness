@@ -115,9 +115,10 @@ describe('JobListAction visibility', () => {
     expect(screen.getByRole('button', { name: '2 个后台任务' })).toBeDefined()
   })
 
-  it('uses the ongoing loader for running and stopping jobs and layers for idle jobs without a root chevron', () => {
+  it('retains the compact Layers icon through running, stopping, and idle states without a root chevron', () => {
     const { rerender } = render(<JobListAction {...props([job()])} />)
     const trigger = screen.getByRole('button')
+    expect(trigger.querySelector('[data-icon="dsw-icon-layers-outline-regular"]')).not.toBeNull()
     expect(trigger.querySelector('[data-state="ongoing"]')).not.toBeNull()
     expect(trigger.querySelector('[data-icon="dsw-icon-chevron-down-outline-regular"]')).toBeNull()
     rerender(<JobListAction {...props([job({ status: 'stopping' })])} />)

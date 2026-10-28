@@ -597,7 +597,8 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
           }}
         >
           <span className={css.activitySlot} aria-hidden>
-            {liveRows.length > 0 ? <StateDot state="ongoing" /> : <IconLayersOutlineRegular size={14} />}
+            <IconLayersOutlineRegular size={14} className={liveRows.length > 0 ? css.compactIcon : undefined} />
+            {liveRows.length > 0 && <StateDot state="ongoing" className={css.textModeActivity} />}
           </span>
           <span ref={countRef} className={css.count} data-job-count>{countLabel}</span>
         </button>

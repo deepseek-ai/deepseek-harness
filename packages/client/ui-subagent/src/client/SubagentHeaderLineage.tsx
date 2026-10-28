@@ -793,7 +793,8 @@ function CatalogDropdown(props: CatalogDropdownProps) {
             : (
               <>
                 <span className={css.activitySlot} aria-hidden>
-                  {runningCount > 0 ? <StateDot state="ongoing" /> : <IconUsersOutlineRegular size={14} />}
+                  <IconUsersOutlineRegular size={14} className={runningCount > 0 ? css.compactIcon : undefined} />
+                  {runningCount > 0 && <StateDot state="ongoing" className={css.textModeActivity} />}
                 </span>
                 <span ref={countRef} className={css.count} data-subagent-count>{t(totalCountKey, { count: directCount })}</span>
               </>

@@ -32,7 +32,19 @@
   height: 14px;
 }
 
+.trigger .compactIcon {
+  display: none;
+}
+
 @container (max-width: 460px) {
+  .trigger .compactIcon {
+    display: block;
+  }
+
+  .trigger .textModeActivity {
+    display: none;
+  }
+
   .trigger .count {
     display: none;
   }

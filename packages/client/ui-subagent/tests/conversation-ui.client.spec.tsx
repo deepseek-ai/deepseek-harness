@@ -534,7 +534,7 @@ describe('SubagentHeaderLineage', () => {
     expect(count.textContent).toBe('1 个子智能体')
     expect(trigger.querySelector('[data-icon="dsw-icon-chevron-down-outline-regular"]')).toBeNull()
     expect(trigger.querySelector('[data-state="ongoing"]') !== null).toBe(activity === 'running')
-    expect(trigger.querySelector('[data-icon="dsw-icon-users-outline-regular"]') !== null).toBe(activity === 'inactive')
+    expect(trigger.querySelector('[data-icon="dsw-icon-users-outline-regular"]')).not.toBeNull()
     count.style.display = 'none'
     expect(trigger.querySelector('[data-subagent-count]')).toBe(count)
     expect(screen.getByRole('button', { name: trigger.getAttribute('aria-label')! })).toBe(trigger)
