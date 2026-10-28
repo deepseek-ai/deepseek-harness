@@ -359,7 +359,6 @@ export const zh = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
-  updateConfigurationFailed: '更新設定を適用できませんでした。設定ファイルを修正して再起動するか、設定で更新チャンネルを選択してください。',
   cliCommandMenu: 'dsh コマンドを管理…',
   cliCommandTitle: 'dsh コマンドを管理',
   cliCommandLocation: 'デスクトップコマンド: {path}',
@@ -464,6 +463,7 @@ export const ja = {
   checkUpdatesMenu: 'アップデートを確認…',
   reloadPageMenu: 'ページを再読み込み',
   restartAppHostMenu: 'アプリとホストを再起動',
+  updateConfigurationFailed: '更新設定を適用できませんでした。設定ファイルを修正して再起動するか、設定で更新チャンネルを選択してください。',
   updateCheckFailedTitle: 'アップデートの確認に失敗しました',
   updateCheckFailed: 'アップデートを確認できませんでした。後でもう一度お試しください。',
   updateDownloadFailed: 'アップデートをダウンロードできませんでした。もう一度お試しください。',
@@ -537,7 +537,6 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  updateConfigurationFailed: 'No se pudo aplicar la configuración de actualización. Corrige el archivo y reinicia, o selecciona un canal en Ajustes.',
   cliCommandMenu: 'Administrar el comando dsh…',
   cliCommandTitle: 'Administrar el comando dsh',
   cliCommandLocation: 'Comando de escritorio: {path}',
@@ -642,6 +641,7 @@ export const es = {
   checkUpdatesMenu: 'Buscar actualizaciones...',
   reloadPageMenu: 'Recargar página',
   restartAppHostMenu: 'Reiniciar la aplicación y el host',
+  updateConfigurationFailed: 'No se pudo aplicar la configuración de actualización. Corrige el archivo y reinicia, o selecciona un canal en Ajustes.',
   updateCheckFailedTitle: 'Error en la comprobación de actualización',
   updateCheckFailed: 'No se pudo buscar actualizaciones. Inténtelo de nuevo más tarde.',
   updateDownloadFailed: 'No se pudo descargar la actualización. Por favor inténtalo de nuevo.',
@@ -715,7 +715,6 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  updateConfigurationFailed: 'Impossible d’appliquer les paramètres de mise à jour. Corrigez le fichier et redémarrez, ou sélectionnez un canal dans les paramètres.',
   cliCommandMenu: 'Gérer la commande dsh…',
   cliCommandTitle: 'Gérer la commande dsh',
   cliCommandLocation: 'Commande de bureau : {path}',
@@ -820,6 +819,7 @@ export const fr = {
   checkUpdatesMenu: 'Vérifiez les mises à jour…',
   reloadPageMenu: 'Recharger la page',
   restartAppHostMenu: "Redémarrez l'application et l'hôte",
+  updateConfigurationFailed: 'Impossible d’appliquer les paramètres de mise à jour. Corrigez le fichier et redémarrez, ou sélectionnez un canal dans les paramètres.',
   updateCheckFailedTitle: 'Échec de la vérification de la mise à jour',
   updateCheckFailed: 'Impossible de vérifier les mises à jour. Veuillez réessayer plus tard.',
   updateDownloadFailed: 'Impossible de télécharger la mise à jour. Veuillez réessayer.',
@@ -893,7 +893,6 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  updateConfigurationFailed: 'Die Update-Einstellungen konnten nicht angewendet werden. Korrigiere die Datei und starte neu, oder wähle in den Einstellungen einen Update-Kanal.',
   cliCommandMenu: 'dsh-Befehl verwalten…',
   cliCommandTitle: 'dsh-Befehl verwalten',
   cliCommandLocation: 'Desktop-Befehl: {path}',
@@ -998,6 +997,7 @@ export const de = {
   checkUpdatesMenu: 'Nach Updates suchen…',
   reloadPageMenu: 'Seite neu laden',
   restartAppHostMenu: 'Anwendung und Host neu starten',
+  updateConfigurationFailed: 'Die Update-Einstellungen konnten nicht angewendet werden. Korrigiere die Datei und starte neu, oder wähle in den Einstellungen einen Update-Kanal.',
   updateCheckFailedTitle: 'Update-Überprüfung fehlgeschlagen',
   updateCheckFailed: 'Es konnte nicht nach Updates gesucht werden. Bitte versuchen Sie es später noch einmal.',
   updateDownloadFailed: 'Das Update konnte nicht heruntergeladen werden. Bitte versuchen Sie es erneut.',
@@ -1071,7 +1071,6 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  updateConfigurationFailed: 'Не удалось применить настройки обновления. Исправьте файл и перезапустите приложение или выберите канал в настройках.',
   cliCommandMenu: 'Управление командой dsh…',
   cliCommandTitle: 'Управление командой dsh',
   cliCommandLocation: 'Команда Desktop: {path}',
@@ -1176,6 +1175,7 @@ export const ru = {
   checkUpdatesMenu: 'Проверить наличие обновлений…',
   reloadPageMenu: 'Обновить страницу',
   restartAppHostMenu: 'Перезапустите приложение и хост.',
+  updateConfigurationFailed: 'Не удалось применить настройки обновления. Исправьте файл и перезапустите приложение или выберите канал в настройках.',
   updateCheckFailedTitle: 'Проверка обновления не удалась',
   updateCheckFailed: 'Не удалось проверить наличие обновлений. Пожалуйста, повторите попытку позже.',
   updateDownloadFailed: 'Не удалось загрузить обновление. Пожалуйста, попробуйте еще раз.',
@@ -1249,7 +1249,6 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  updateConfigurationFailed: 'Não foi possível aplicar as configurações de atualização. Corrija o arquivo e reinicie, ou selecione um canal nas configurações.',
   cliCommandMenu: 'Gerenciar comando dsh…',
   cliCommandTitle: 'Gerenciar comando dsh',
   cliCommandLocation: 'Comando da área de trabalho: {path}',
@@ -1354,6 +1353,7 @@ export const pt = {
   checkUpdatesMenu: 'Verifique se há atualizações…',
   reloadPageMenu: 'Recarregar página',
   restartAppHostMenu: 'Reinicie o aplicativo e o host',
+  updateConfigurationFailed: 'Não foi possível aplicar as configurações de atualização. Corrija o arquivo e reinicie, ou selecione um canal nas configurações.',
   updateCheckFailedTitle: 'Falha na verificação de atualização',
   updateCheckFailed: 'Não foi possível verificar se há atualizações. Por favor, tente novamente mais tarde.',
   updateDownloadFailed: 'Não foi possível baixar a atualização. Por favor, tente novamente.',
