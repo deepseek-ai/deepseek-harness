@@ -361,7 +361,7 @@ class SkillOutput(TypedDict):
     content: str
 
 class SubagentArgs(TypedDict):
-    # Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness.
+    # Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer.
     name: NotRequired[str]
     # Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.
     cwd: NotRequired[str]
@@ -377,7 +377,7 @@ class SubagentOutput(TypedDict):
     name: str
 
 class SubagentForkArgs(TypedDict):
-    # Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness.
+    # Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer.
     name: NotRequired[str]
     # Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.
     cwd: NotRequired[str]

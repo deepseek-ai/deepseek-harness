@@ -2198,7 +2198,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
   "properties": {
     "name": {
       "type": "string",
-      "description": "Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness."
+      "description": "Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer."
     },
     "cwd": {
       "type": "string",
