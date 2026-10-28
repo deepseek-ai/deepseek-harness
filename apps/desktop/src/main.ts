@@ -1,7 +1,9 @@
-import type { ProductEventMap, ProductEvent } from '@deepseek-ai/dsh-client-product-analytics/types'
-import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
+import type { DesktopChannelState } from '@deepseek-ai/dsh-client-ui-settings-general/types'
+import { DesktopUpdateSettings, DesktopUpdateSettingsError, isDesktopUpdateChannel } from './update-settings.ts'
+import type { ProductEventMap, ProductEvent } from '@deepseek-ai/dsh-client-product-analytics/types'
+import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -421,6 +423,9 @@ async function main(): Promise<void> {
   let updateStoppedHost = false
   let updateStopFailure: DesktopHostUncleanExitError | undefined
   let updateState: DesktopUpdateState = { phase: 'idle' }
+  let channelState: DesktopChannelState | undefined
+  const updatePresentation = (state: DesktopUpdateState) => ({ ...presentDesktopUpdate(state),
+    ...(channelState?.error === undefined ? {} : { configurationError: channelState.error }) })
   const systemLanguages = app.getPreferredSystemLanguages()
   let locale = windowsLanguage === undefined
     ? resolveDesktopStartupLocale(null, systemLanguages) : resolveDesktopLocale(windowsLanguage)
@@ -611,9 +616,9 @@ async function main(): Promise<void> {
     updateState = state
     mandatoryUI?.sync()
     for (const window of BrowserWindow.getAllWindows()) {
-      window.webContents.send(DESKTOP_IPC.updatesPresentation, presentDesktopUpdate(state))
+      window.webContents.send(DESKTOP_IPC.updatesPresentation, updatePresentation(state))
     }
-    if (state.phase === 'error' && state.failedOperation !== 'check') {
+    if (state.phase === 'error' && state.failedOperation !== 'check' && state.failedOperation !== 'configuration') {
       if (state.failedOperation === 'install' && fileDragStopped && !quitting) {
         fileDragCleanups.add(installFileDrag())
         fileDragStopped = false
@@ -675,7 +680,13 @@ async function main(): Promise<void> {
   }
 
   const manifest: unknown = JSON.parse(await readFile(join(app.getAppPath(), 'package.json'), 'utf8'))
-  const updateChannel = desktopUpdateChannel(manifest)
+  const packagedChannel = desktopUpdateChannel(manifest)
+  const channelSettings = new DesktopUpdateSettings(app.getPath('userData'), packagedChannel)
+  const initialChannel = await channelSettings.load()
+  channelState = { channel: initialChannel.kind === 'ready' ? initialChannel.channel : null,
+    packagedChannel, changing: false,
+    ...(initialChannel.kind === 'error' ? { error: initialChannel.error.kind } : {}) }
+  const updateChannel = initialChannel.kind === 'ready' ? initialChannel.channel : packagedChannel
   const updates = new DesktopUpdateCoordinator(
     publishUpdate,
     async () => {
@@ -736,12 +747,22 @@ async function main(): Promise<void> {
     updateChannel,
   )
 
+  if (initialChannel.kind === 'error') updates.suspendConfiguration(initialChannel.error.path)
+  const publishChannel = (state: DesktopChannelState): DesktopChannelState => {
+    channelState = state
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send(DESKTOP_IPC.updatesChannelChanged, state)
+      window.webContents.send(DESKTOP_IPC.updatesPresentation, updatePresentation(updates.state))
+    }
+    return state
+  }
+
   const updateSchedule = new DesktopUpdateSchedule(updates, resolveDesktopUpdateScheduleConfig(process.env))
 
-  const downloadUpdate = async (version: string): Promise<DesktopUpdateState> => {
+  const downloadUpdate = async (version: string, revision = updates.revision): Promise<DesktopUpdateState> => {
     void track('desktop_upgrade_click', {})
     updateJournal?.action('download-requested')
-    const state = await updates.download(version)
+    const state = await updates.download(version, revision)
     if (state.phase !== 'ready' || quitting) return state
     // Only a completed user-driven download opens this prompt; cancelling installation does not reopen it.
     // A confirmation on a hidden window would go unseen, so it waits for the next show; the mandatory
@@ -749,7 +770,7 @@ async function main(): Promise<void> {
     if (!isMandatory()) await windowShown()
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A quit can begin while the show is awaited.
     if (quitting) return state
-    return updates.install(version)
+    return updates.install(version, revision)
   }
   const windowShown = (): Promise<void> => new Promise((resolve) => {
     const window = currentDialogWindow()
@@ -865,9 +886,28 @@ async function main(): Promise<void> {
     windowsLanguage = locale.id
     refreshApplicationMenu()
   })
+  ipcMain.handle(DESKTOP_IPC.updatesChannelGet, (event) => {
+    assertProductSender(event)
+    return channelState
+  })
+  let channelRequests = 0
+  ipcMain.handle(DESKTOP_IPC.updatesChannelSet, async (event, channel: unknown) => {
+    assertProductSender(event)
+    if (!isDesktopUpdateChannel(channel)) throw new Error('desktop update: unsupported channel')
+    if (channelState === undefined) throw new Error('desktop update: settings are not initialized')
+    channelRequests++
+    publishChannel({ ...channelState, changing: true })
+    try {
+      await updates.switchChannel(channel, () => channelSettings.save(channel))
+      return publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: --channelRequests > 0 })
+    } catch (error) {
+      return publishChannel({ ...channelState, changing: --channelRequests > 0,
+        error: error instanceof DesktopUpdateSettingsError ? error.kind : 'apply' })
+    }
+  })
   ipcMain.handle(DESKTOP_IPC.updatesStatus, (event) => {
     assertProductSender(event)
-    return presentDesktopUpdate(updates.state)
+    return updatePresentation(updates.state)
   })
   ipcMain.handle(DESKTOP_IPC.deviceInfo, (event) => {
     assertProductSender(event)
@@ -896,6 +936,10 @@ async function main(): Promise<void> {
   let promptOperation: Promise<void> | undefined
   let policyAuthenticationQueued = false
   const openUpdatePrompt = (manual = false): Promise<void> => {
+    if (channelState?.error !== undefined) {
+      return ordinaryMessageBox({ type: 'error', title: locale.messages.updateFailedTitle,
+        message: locale.messages.updateConfigurationFailed, detail: channelSettings.path }).then(() => {})
+    }
     if (authenticationOperation !== undefined) {
       policyAuth?.focus(); updateDialog.focus()
     }
@@ -913,6 +957,7 @@ async function main(): Promise<void> {
       let progress: Promise<unknown> | undefined
       try {
         let state = updates.state
+        const revision = updates.revision
         if (manual || state.phase === 'idle' || (state.phase === 'error' && state.failedOperation === 'check')) {
           controller = new AbortController()
           ordinaryDialogs.add(controller)
@@ -935,7 +980,7 @@ async function main(): Promise<void> {
         if (state.phase === 'ready' || (state.phase === 'error' && state.failedOperation === 'install')) {
           if (state.version !== undefined) {
             failedOperation = 'install'
-            await showUpdateFailure(await updates.install(state.version))
+            await showUpdateFailure(await updates.install(state.version, revision))
           }
           return
         }
@@ -950,7 +995,7 @@ async function main(): Promise<void> {
         if (!isMandatory() && state.version !== undefined) {
           controller?.abort()
           failedOperation = 'download'
-          await showUpdateFailure(await downloadUpdate(state.version))
+          await showUpdateFailure(await downloadUpdate(state.version, revision))
         }
       } finally {
         controller?.abort()
@@ -1404,7 +1449,7 @@ async function main(): Promise<void> {
     let wasBlocking = false
     mandatoryPolicy = new DesktopMandatoryUpdatePolicy(policyConfig, {
       platform: process.platform as 'win32' | 'darwin', arch: process.arch as 'x64' | 'arm64',
-      channel: updateChannel,
+      get channel() { return updates.selectedChannel },
       bundledDshVersion: app.isPackaged ? readDesktopRuntime(resources.dsh).release.version : app.getVersion(),
     }, (state) => {
       if (state.error !== 'authentication-required') policyAuthenticationQueued = false

@@ -257,3 +257,114 @@ it('keeps a stable-version nightly installation on nightly and rejects prereleas
   expect((await latest.coordinator.check()).phase).toBe('error')
   expect(latest.downloadUpdate).not.toHaveBeenCalled()
 })
+
+
+it('retires a downloaded target and rejects its old confirmation after switching', async () => {
+  const f = fixture()
+  await f.coordinator.check()
+  const revision = f.coordinator.revision
+  await f.coordinator.download('1.1.0-rc.2')
+  const save = vi.fn(async () => {})
+  f.checkForUpdates.mockResolvedValueOnce({ isUpdateAvailable: true, updateInfo: { version: '1.2.0' } })
+  await f.coordinator.switchChannel('latest', save)
+  expect(save).toHaveBeenCalledOnce()
+  expect(f.coordinator.selectedChannel).toBe('latest')
+  expect(f.updater.allowDowngrade).toBe(false)
+  expect(f.coordinator.state).toMatchObject({ phase: 'available', version: '1.2.0' })
+  await f.coordinator.install('1.1.0-rc.2', revision)
+  expect(f.quitAndInstall).not.toHaveBeenCalled()
+})
+
+it('leaves the current target intact if saving the choice fails', async () => {
+  const f = fixture()
+  await f.coordinator.check()
+  await f.coordinator.download('1.1.0-rc.2')
+  await expect(f.coordinator.switchChannel('latest', () => Promise.reject(new Error('read only')))).rejects.toThrow('read only')
+  expect(f.coordinator.selectedChannel).toBe('nightly')
+  expect(f.coordinator.state.phase).toBe('ready')
+  await f.coordinator.install('1.1.0-rc.2')
+  expect(f.quitAndInstall).toHaveBeenCalledOnce()
+})
+
+it('discards a check result that belongs to the previous channel', async () => {
+  const f = fixture()
+  const started = Promise.withResolvers<undefined>()
+  const checked = Promise.withResolvers<{ isUpdateAvailable: boolean; updateInfo: { version: string } }>()
+  f.checkForUpdates.mockImplementationOnce(() => { started.resolve(undefined); return checked.promise })
+  const checking = f.coordinator.check()
+  await started.promise
+  const saved = Promise.withResolvers<undefined>()
+  const switching = f.coordinator.switchChannel('latest', async () => { saved.resolve(undefined) })
+  await saved.promise
+  f.checkForUpdates.mockResolvedValueOnce({ isUpdateAvailable: true, updateInfo: { version: '1.2.0' } })
+  checked.resolve({ isUpdateAvailable: true, updateInfo: { version: '9.0.0-alpha.1' } })
+  await Promise.all([checking, switching])
+  expect(f.states.some(state => state.version === '9.0.0-alpha.1')).toBe(false)
+  expect(f.coordinator.state).toMatchObject({ phase: 'available', version: '1.2.0' })
+})
+
+it('does not check or install while startup channel configuration is invalid', async () => {
+  const f = fixture()
+  f.coordinator.suspendConfiguration('/settings.json')
+  await f.coordinator.check(true)
+  await f.coordinator.download('1.1.0-rc.2')
+  expect(f.checkForUpdates).not.toHaveBeenCalled()
+  expect(f.downloadUpdate).not.toHaveBeenCalled()
+  expect(f.coordinator.state).toMatchObject({ phase: 'error', failedOperation: 'configuration' })
+  await f.coordinator.switchChannel('nightly', async () => {})
+  expect(f.coordinator.state.phase).toBe('available')
+})
+
+
+it('waits for a cancelled download before checking the new channel and ignores late progress', async () => {
+  const f = fixture()
+  const entered = Promise.withResolvers<undefined>()
+  const finished = Promise.withResolvers<string[]>()
+  f.downloadUpdate.mockImplementationOnce(async () => { entered.resolve(undefined); return finished.promise })
+  await f.coordinator.check()
+  const downloading = f.coordinator.download('1.1.0-rc.2')
+  await entered.promise
+  const persisted = Promise.withResolvers<undefined>()
+  const switching = f.coordinator.switchChannel('latest', async () => { persisted.resolve(undefined) })
+  await persisted.promise
+  await Promise.resolve()
+  const count = f.states.length
+  f.events.emit('download-progress', { percent: 99 })
+  f.events.emit('update-downloaded', { version: '1.1.0-rc.2' })
+  expect(f.states).toHaveLength(count)
+  expect(f.checkForUpdates).toHaveBeenCalledTimes(1)
+  f.checkForUpdates.mockResolvedValueOnce({ isUpdateAvailable: true, updateInfo: { version: '1.2.0' } })
+  finished.resolve([])
+  await Promise.all([downloading, switching])
+  expect(f.coordinator.state).toEqual({ phase: 'available', version: '1.2.0' })
+  expect(f.downloadResult).not.toHaveBeenCalled()
+  expect(f.updater.allowDowngrade).toBe(false)
+})
+
+it('rejects a channel switch during installation preparation without persisting it', async () => {
+  const f = fixture()
+  await f.coordinator.check()
+  await f.coordinator.download('1.1.0-rc.2')
+  const preparation = Promise.withResolvers<boolean>()
+  f.beforeRestart.mockReturnValueOnce(preparation.promise)
+  const installing = f.coordinator.install('1.1.0-rc.2')
+  const save = vi.fn(async () => {})
+  await expect(f.coordinator.switchChannel('latest', save)).rejects.toThrow('installation is in progress')
+  expect(save).not.toHaveBeenCalled()
+  preparation.resolve(false)
+  await installing
+  expect(f.coordinator.state.phase).toBe('ready')
+})
+
+
+it('does not accept a channel switch after installer handoff even if a later error is reported', async () => {
+  const f = fixture()
+  await f.coordinator.check()
+  await f.coordinator.download('1.1.0-rc.2')
+  await f.coordinator.install('1.1.0-rc.2')
+  f.events.emit('error', new Error('native updater failed after handoff'))
+  expect(f.coordinator.state.phase).toBe('error')
+  const save = vi.fn(async () => {})
+  await expect(f.coordinator.switchChannel('latest', save)).rejects.toThrow('installation is in progress')
+  expect(save).not.toHaveBeenCalled()
+})

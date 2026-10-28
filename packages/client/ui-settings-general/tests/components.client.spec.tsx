@@ -8,6 +8,8 @@ import { GeneralSection } from '../src/client/GeneralSection.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
 import type { TriggerContentProps } from '../src/client/chrome.tsx'
 import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
+import { DesktopChannelRow } from '../src/client/DesktopChannelRow.tsx'
+import type { DesktopChannelState } from '../src/types.ts'
 import { DeveloperToolsRow } from '../src/client/DeveloperToolsRow.tsx'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
@@ -68,6 +70,12 @@ describe('Desktop collapsed update badge', () => {
     state = { failed: false, opening: false, presentation: { phase: 'error', failure: 'install' } }
     view.rerender(<DesktopUpdateBadge {...props} />)
     expect(screen.getByRole('img', { name: en['desktop.update.retry'] })).toBeTruthy()
+    state = { failed: false, opening: false, presentation: { phase: 'idle', configurationError: 'invalid' } }
+    view.rerender(<DesktopUpdateBadge {...props} />)
+    expect(screen.getByRole('img', { name: en['desktop.channel.unavailable'] })).toBeTruthy()
+    state = { ...state, presentation: { phase: 'idle' } }
+    view.rerender(<DesktopUpdateBadge {...props} />)
+    expect(screen.queryByRole('img')).toBeNull()
     for (const value of ['connecting', 'disconnected'] as const) {
       connection = value
       view.rerender(<DesktopUpdateBadge {...props} />)
@@ -309,4 +317,42 @@ describe('Host release change confirmation', () => {
     prompt({ page: { version: '0.2.1' }, previous: { version: '0.2.1' }, host: undefined })
     expect(screen.getByRole('dialog').textContent).toContain('Service0.2.1UnknownPage0.2.1Unknown')
   })
+})
+
+
+it('shows channel load errors and waits for an explicit selection to settle', async () => {
+  let state: { state?: DesktopChannelState; failed: boolean } = { failed: false }
+  const pending = Promise.withResolvers<undefined>()
+  const select = vi.fn(() => pending.promise)
+  const props = { ...kit, t, select, useChannel: bindSnapshotSelector(createSnapshotStore(state)) }
+  const view = render(<DesktopChannelRow {...props} />)
+  const control = screen.getByRole('button', { name: 'Update channel' })
+  expect(control.hasAttribute('disabled')).toBe(true)
+  state = { failed: true }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  expect(screen.getByRole('alert')).toBeTruthy()
+  state = { failed: false, state: { channel: null, packagedChannel: 'nightly', changing: false, error: 'invalid' } }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  expect(control.textContent).toContain('Configuration unavailable')
+  fireEvent.click(control)
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Stable' }))
+  expect(select).toHaveBeenCalledWith('latest')
+  expect(control.textContent).toContain('Switching')
+  pending.resolve(undefined)
+  await waitFor(() => { expect(control.hasAttribute('disabled')).toBe(false) })
+  state = { failed: false, state: { channel: 'latest', packagedChannel: 'nightly', changing: false } }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  expect(control.textContent).toBe('Stable')
+  fireEvent.click(control)
+  fireEvent.keyDown(document, { key: 'Escape' })
+  await waitFor(() => { expect(screen.queryByRole('menu')).toBeNull() })
+  fireEvent.click(control)
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Development' }))
+  await waitFor(() => { expect(select).toHaveBeenLastCalledWith('nightly') })
+  state = { failed: false, state: { channel: 'nightly', packagedChannel: 'nightly', changing: true } }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  expect(control.hasAttribute('disabled')).toBe(true)
+  state = { ...state, state: { ...state.state!, changing: false } }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  await waitFor(() => { expect(control.textContent).toBe('Development') })
 })

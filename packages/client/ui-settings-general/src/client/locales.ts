@@ -2,6 +2,14 @@
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
+  'desktop.channel.title': '更新渠道',
+  'desktop.channel.description': '正式版仅接收稳定版本；开发版包含预发布版本，可能不稳定。切换不会降级。',
+  'desktop.channel.latest': '正式版',
+  'desktop.channel.nightly': '开发版',
+  'desktop.channel.changing': '正在切换…',
+  'desktop.channel.unavailable': '配置不可用',
+  'desktop.channel.error': '未能应用更新配置。请点击桌面更新入口查看原因。',
+  'desktop.update.configurationFailed': '未能应用更新配置。请点击桌面更新入口查看原因。',
   'trigger': '设置',
   'shortcut.open': '打开设置',
   'desktop.update.available': '新版本',
@@ -51,6 +59,14 @@ export type SettingsKey = keyof typeof zh
 
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
+  'desktop.channel.title': 'Update channel',
+  'desktop.channel.description': 'Stable receives stable releases only. Development includes prereleases and may be unstable. Switching never downgrades.',
+  'desktop.channel.latest': 'Stable',
+  'desktop.channel.nightly': 'Development',
+  'desktop.channel.changing': 'Switching…',
+  'desktop.channel.unavailable': 'Configuration unavailable',
+  'desktop.channel.error': 'Could not apply update settings. Open the desktop update indicator for details.',
+  'desktop.update.configurationFailed': 'Could not apply update settings. Open the desktop update indicator for details.',
   'trigger': 'Settings',
   'shortcut.open': 'Open settings',
   'desktop.update.available': 'Update',
@@ -97,6 +113,14 @@ export const en = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  'desktop.channel.title': '更新チャンネル',
+  'desktop.channel.description': '安定版は正式リリースのみ、開発版は不安定なプレビュー版も受信します。切り替えてもダウングレードしません。',
+  'desktop.channel.latest': '安定版',
+  'desktop.channel.nightly': '開発版',
+  'desktop.channel.changing': '切り替え中…',
+  'desktop.channel.unavailable': '設定を利用できません',
+  'desktop.channel.error': '更新設定を適用できませんでした。デスクトップの更新表示で詳細を確認してください。',
+  'desktop.update.configurationFailed': '更新設定を適用できませんでした。デスクトップの更新表示で詳細を確認してください。',
   'trigger': '設定',
   'shortcut.open': '設定を開く',
   'desktop.update.available': '更新',
@@ -143,6 +167,14 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  'desktop.channel.title': 'Canal de actualizaciones',
+  'desktop.channel.description': 'Estable recibe solo versiones estables. Desarrollo incluye versiones preliminares que pueden ser inestables. Cambiar no instala versiones anteriores.',
+  'desktop.channel.latest': 'Estable',
+  'desktop.channel.nightly': 'Desarrollo',
+  'desktop.channel.changing': 'Cambiando…',
+  'desktop.channel.unavailable': 'Configuración no disponible',
+  'desktop.channel.error': 'No se pudo aplicar la configuración. Abre el indicador de actualización para ver los detalles.',
+  'desktop.update.configurationFailed': 'No se pudo aplicar la configuración. Abre el indicador de actualización para ver los detalles.',
   'trigger': 'Configuración',
   'shortcut.open': 'Abrir configuración',
   'desktop.update.available': 'Actualizar',
@@ -189,6 +221,14 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  'desktop.channel.title': 'Canal de mise à jour',
+  'desktop.channel.description': 'Stable reçoit uniquement les versions stables. Développement inclut des préversions potentiellement instables. Le changement ne rétrograde pas la version.',
+  'desktop.channel.latest': 'Stable',
+  'desktop.channel.nightly': 'Développement',
+  'desktop.channel.changing': 'Changement…',
+  'desktop.channel.unavailable': 'Configuration indisponible',
+  'desktop.channel.error': 'Impossible d’appliquer les paramètres. Ouvrez l’indicateur de mise à jour pour plus de détails.',
+  'desktop.update.configurationFailed': 'Impossible d’appliquer les paramètres. Ouvrez l’indicateur de mise à jour pour plus de détails.',
   'trigger': 'Paramètres',
   'shortcut.open': 'Ouvrir les paramètres',
   'desktop.update.available': 'Mise à jour',
@@ -235,6 +275,14 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  'desktop.channel.title': 'Update-Kanal',
+  'desktop.channel.description': 'Stabil erhält nur stabile Versionen. Entwicklung enthält möglicherweise instabile Vorabversionen. Ein Wechsel führt kein Downgrade durch.',
+  'desktop.channel.latest': 'Stabil',
+  'desktop.channel.nightly': 'Entwicklung',
+  'desktop.channel.changing': 'Wird gewechselt…',
+  'desktop.channel.unavailable': 'Konfiguration nicht verfügbar',
+  'desktop.channel.error': 'Update-Einstellungen konnten nicht angewendet werden. Details finden Sie in der Update-Anzeige.',
+  'desktop.update.configurationFailed': 'Update-Einstellungen konnten nicht angewendet werden. Details finden Sie in der Update-Anzeige.',
   'trigger': 'Einstellungen',
   'shortcut.open': 'Einstellungen öffnen',
   'desktop.update.available': 'Aktualisieren',
@@ -281,6 +329,14 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  'desktop.channel.title': 'Канал обновлений',
+  'desktop.channel.description': 'Стабильный канал получает только стабильные версии. Канал разработки включает предварительные версии. Переключение не понижает версию.',
+  'desktop.channel.latest': 'Стабильный',
+  'desktop.channel.nightly': 'Разработка',
+  'desktop.channel.changing': 'Переключение…',
+  'desktop.channel.unavailable': 'Настройки недоступны',
+  'desktop.channel.error': 'Не удалось применить настройки. Откройте индикатор обновления для подробностей.',
+  'desktop.update.configurationFailed': 'Не удалось применить настройки. Откройте индикатор обновления для подробностей.',
   'trigger': 'Настройки',
   'shortcut.open': 'Открыть настройки',
   'desktop.update.available': 'Обновить',
@@ -327,6 +383,14 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  'desktop.channel.title': 'Canal de atualização',
+  'desktop.channel.description': 'Estável recebe apenas versões estáveis. Desenvolvimento inclui versões preliminares potencialmente instáveis. A mudança não reduz a versão.',
+  'desktop.channel.latest': 'Estável',
+  'desktop.channel.nightly': 'Desenvolvimento',
+  'desktop.channel.changing': 'Alterando…',
+  'desktop.channel.unavailable': 'Configuração indisponível',
+  'desktop.channel.error': 'Não foi possível aplicar as configurações. Abra o indicador de atualização para ver detalhes.',
+  'desktop.update.configurationFailed': 'Não foi possível aplicar as configurações. Abra o indicador de atualização para ver detalhes.',
   'trigger': 'Configurações',
   'shortcut.open': 'Abrir configurações',
   'desktop.update.available': 'Atualizar',

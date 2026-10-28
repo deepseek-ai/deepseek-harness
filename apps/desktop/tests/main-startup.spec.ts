@@ -69,8 +69,8 @@ const harness = await vi.hoisted(async () => {
   })
   const loginShell = vi.fn((base: NodeJS.ProcessEnv, _config: unknown, _options: { signal?: AbortSignal }) => readLoginShell(base))
   const updateCheck = vi.fn(async (_manual?: boolean): Promise<DesktopUpdateState> => updateState)
-  const updateDownload = vi.fn(async (_version: string): Promise<DesktopUpdateState> => updateState)
-  const updateInstall = vi.fn(async (_version: string): Promise<DesktopUpdateState> => updateState)
+  const updateDownload = vi.fn(async (_version: string, _revision?: number): Promise<DesktopUpdateState> => updateState)
+  const updateInstall = vi.fn(async (_version: string, _revision?: number): Promise<DesktopUpdateState> => updateState)
   const popup = vi.fn<(options: { window: FakeWindow; x?: number; y?: number; callback?: () => void }) => void>()
   const menuBuilder = vi.fn<(template: MenuItemConstructorOptions[]) => { popup: typeof popup }>(() => ({ popup }))
   const menu = Object.assign(menuBuilder, { buildFromTemplate: menuBuilder, setApplicationMenu: vi.fn() })
@@ -366,9 +366,23 @@ vi.mock('../src/update-dialog.ts', () => ({ DesktopUpdateDialog: class {
   dispose() {}
 } }))
 vi.mock('../src/update-coordinator.ts', () => ({ DesktopUpdateCoordinator: class {
-  constructor(publish: (state: DesktopUpdateState) => DesktopUpdateState, beforeRestart: () => Promise<boolean>) {
+  selectedChannel: 'nightly' | 'latest' = 'nightly'
+  revision = 0
+  constructor(publish: (state: DesktopUpdateState) => DesktopUpdateState, beforeRestart: () => Promise<boolean>,
+    _updater: unknown, _enabled: unknown, _version: unknown, _downloadResult: unknown, channel: 'nightly' | 'latest') {
+    this.selectedChannel = channel
     harness.prepareUpdate = beforeRestart
     harness.publishUpdate = publish
+  }
+  async switchChannel(channel: 'nightly' | 'latest', persist: () => Promise<void>) {
+    await persist()
+    this.selectedChannel = channel
+    this.revision++
+    harness.updateState = { phase: 'idle' }
+  }
+  suspendConfiguration(detail: string) {
+    harness.updateState = { phase: 'error', failedOperation: 'configuration', message: detail }
+    harness.publishUpdate(harness.updateState)
   }
   get state() { return harness.updateState }
   readonly check = harness.updateCheck
@@ -484,6 +498,40 @@ describe('desktop main startup', () => {
         : 'test-pnpm',
       nodeBin: packaged ? join('desktop-test-resources', 'runtime', 'bin') : join('desktop-test-app', 'scripts', 'node-bin'),
     })
+  })
+
+  it('persists a channel through product IPC and ignores external edits during the process', async () => {
+    configureTestAuthPopup(true)
+    await readyForUpdate()
+    expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toMatchObject({ channel: 'nightly', changing: false })
+    expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'latest')).toEqual({ channel: 'latest', packagedChannel: 'nightly', changing: false })
+    const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ updates: { allowTestAuthPopupWindow: true, channel: 'latest' } })
+    writeFileSync(path, JSON.stringify({ updates: { channel: 'nightly' } }))
+    expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toMatchObject({ channel: 'latest' })
+    expect(harness.windows[0]!.webContents.send).toHaveBeenCalledWith(DESKTOP_IPC.updatesChannelChanged,
+      { channel: 'latest', packagedChannel: 'nightly', changing: false })
+    await expect(invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'alpha')).rejects.toThrow('unsupported channel')
+    expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toMatchObject({ channel: 'latest' })
+  })
+
+  it('reports a corrupt document without replacing it or pretending a UI save succeeded', async () => {
+    await readyForUpdate()
+    const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
+    writeFileSync(path, '{broken')
+    expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'latest')).toMatchObject({ channel: 'nightly', changing: false, error: 'invalid' })
+    expect(readFileSync(path, 'utf8')).toBe('{broken')
+    expect(await invoke(DESKTOP_IPC.updatesStatus, 'app')).toMatchObject({ configurationError: 'invalid' })
+  })
+
+  it('keeps startup channel errors visible and recovers after a valid UI selection', async () => {
+    configureTestAuthPopup(false)
+    const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
+    writeFileSync(path, JSON.stringify({ updates: { channel: 'unknown' } }))
+    await readyForUpdate()
+    expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toMatchObject({ channel: null, error: 'invalid' })
+    expect(harness.hosts).toHaveLength(1)
+    expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'latest')).toEqual({ channel: 'latest', packagedChannel: 'nightly', changing: false })
   })
 
   it('starts the Host with authentication popups disabled when local settings are invalid', async () => {
@@ -778,7 +826,7 @@ describe('desktop main startup', () => {
     await vi.advanceTimersByTimeAsync(0)
     harness.updateState = { phase: 'available', version: '1.0.1-nightly.1' }
     await invoke(DESKTOP_IPC.updatesOpen, 'app')
-    expect(harness.updateDownload).toHaveBeenCalledWith('1.0.1-nightly.1')
+    expect(harness.updateDownload).toHaveBeenCalledWith('1.0.1-nightly.1', 0)
     expect(testAuth.login).not.toHaveBeenCalled()
   })
 
@@ -837,7 +885,7 @@ describe('desktop main startup', () => {
   it('accepts product IPC only from the current application top frame in the owned main window', async () => {
     await readyForUpdate()
     const sender = harness.windows[0]!.webContents
-    for (const channel of [DESKTOP_IPC.updatesStatus, DESKTOP_IPC.deviceInfo]) {
+    for (const channel of [DESKTOP_IPC.updatesStatus, DESKTOP_IPC.updatesChannelGet, DESKTOP_IPC.deviceInfo]) {
       const handler = harness.handlers.get(channel)!
       expect(() => handler({ sender, senderFrame: sender.mainFrame })).not.toThrow()
       for (const event of [
@@ -1521,12 +1569,12 @@ describe('desktop main startup', () => {
     window.visible = false
     const opened = invoke(DESKTOP_IPC.updatesOpen, 'app') as Promise<void>
     await vi.advanceTimersByTimeAsync(0)
-    expect(harness.updateDownload).toHaveBeenCalledWith('1.0.1')
+    expect(harness.updateDownload).toHaveBeenCalledWith('1.0.1', 0)
     expect(harness.updateInstall).not.toHaveBeenCalled()
     window.visible = true
     window.emit('show')
     await opened
-    expect(harness.updateInstall).toHaveBeenCalledWith('1.0.1')
+    expect(harness.updateInstall).toHaveBeenCalledWith('1.0.1', 0)
   })
 
   it('waits for Platform view storage cleanup before an ordinary quit completes', async () => {
@@ -1753,7 +1801,7 @@ describe('desktop main startup', () => {
     await invoke(DESKTOP_IPC.updatesOpen, 'app')
     const messages = harness.dialog.showMessageBox.mock.calls.map(call => (call.at(-1) as { message: string }).message)
     expect(messages).not.toContain(en.mandatoryUnavailable)
-    expect(harness.updateDownload).toHaveBeenCalledExactlyOnceWith('1.0.1-nightly.1')
+    expect(harness.updateDownload).toHaveBeenCalledExactlyOnceWith('1.0.1-nightly.1', 0)
   })
 
   it('does not wait for a pending policy request before proceeding with an ordinary update', async () => {
@@ -1767,7 +1815,7 @@ describe('desktop main startup', () => {
       await invoke(DESKTOP_IPC.updatesOpen, 'app')
     })
     try {
-      await vi.waitFor(() => { expect(harness.updateDownload).toHaveBeenCalledWith('1.0.1-nightly.1') })
+      await vi.waitFor(() => { expect(harness.updateDownload).toHaveBeenCalledWith('1.0.1-nightly.1', 0) })
     } finally {
       policy.resolve(Response.json({ code: 500 }, { status: 503 }))
       await operation
@@ -1854,11 +1902,11 @@ describe('desktop main startup', () => {
     await started.promise
     const repeated = invoke(DESKTOP_IPC.updatesOpen, 'app')
     expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
-    expect(harness.updateDownload).toHaveBeenCalledExactlyOnceWith('1.0.1-nightly.1')
+    expect(harness.updateDownload).toHaveBeenCalledExactlyOnceWith('1.0.1-nightly.1', 0)
     expect(harness.updateInstall).not.toHaveBeenCalled()
     downloading.resolve({ phase: 'ready', version: '1.0.1-nightly.1' })
     await Promise.all([action, repeated])
-    expect(harness.updateInstall).toHaveBeenCalledExactlyOnceWith('1.0.1-nightly.1')
+    expect(harness.updateInstall).toHaveBeenCalledExactlyOnceWith('1.0.1-nightly.1', 0)
     await harness.updateCheck()
     expect(harness.updateInstall).toHaveBeenCalledOnce()
   })

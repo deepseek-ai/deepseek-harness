@@ -105,6 +105,7 @@ export const en = {
   checkUpdatesMenu: 'Check for Updates…',
   reloadPageMenu: 'Reload Page',
   restartAppHostMenu: 'Restart App and Host',
+  updateConfigurationFailed: 'Update settings could not be applied. Fix the configuration file and restart, or select an update channel in Settings.',
   updateCheckFailedTitle: 'Update Check Failed',
   updateCheckFailed: 'Could not check for updates. Please try again later.',
   updateDownloadFailed: 'Could not download the update. Please try again.',
@@ -284,6 +285,7 @@ export const zh = {
   checkUpdatesMenu: '检查更新…',
   reloadPageMenu: '刷新页面',
   restartAppHostMenu: '重启应用与 Host',
+  updateConfigurationFailed: '更新配置无法应用。请修正配置文件并重启，或在设置中选择更新渠道。',
   updateCheckFailedTitle: '更新检查失败',
   updateCheckFailed: '检查更新失败，请稍后重试。',
   updateDownloadFailed: '下载更新失败，请重试。',
@@ -357,6 +359,7 @@ export const zh = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  updateConfigurationFailed: '更新設定を適用できませんでした。設定ファイルを修正して再起動するか、設定で更新チャンネルを選択してください。',
   cliCommandMenu: 'dsh コマンドを管理…',
   cliCommandTitle: 'dsh コマンドを管理',
   cliCommandLocation: 'デスクトップコマンド: {path}',
@@ -534,6 +537,7 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  updateConfigurationFailed: 'No se pudo aplicar la configuración de actualización. Corrige el archivo y reinicia, o selecciona un canal en Ajustes.',
   cliCommandMenu: 'Administrar el comando dsh…',
   cliCommandTitle: 'Administrar el comando dsh',
   cliCommandLocation: 'Comando de escritorio: {path}',
@@ -711,6 +715,7 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  updateConfigurationFailed: 'Impossible d’appliquer les paramètres de mise à jour. Corrigez le fichier et redémarrez, ou sélectionnez un canal dans les paramètres.',
   cliCommandMenu: 'Gérer la commande dsh…',
   cliCommandTitle: 'Gérer la commande dsh',
   cliCommandLocation: 'Commande de bureau : {path}',
@@ -888,6 +893,7 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  updateConfigurationFailed: 'Die Update-Einstellungen konnten nicht angewendet werden. Korrigiere die Datei und starte neu, oder wähle in den Einstellungen einen Update-Kanal.',
   cliCommandMenu: 'dsh-Befehl verwalten…',
   cliCommandTitle: 'dsh-Befehl verwalten',
   cliCommandLocation: 'Desktop-Befehl: {path}',
@@ -1065,6 +1071,7 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  updateConfigurationFailed: 'Не удалось применить настройки обновления. Исправьте файл и перезапустите приложение или выберите канал в настройках.',
   cliCommandMenu: 'Управление командой dsh…',
   cliCommandTitle: 'Управление командой dsh',
   cliCommandLocation: 'Команда Desktop: {path}',
@@ -1242,6 +1249,7 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  updateConfigurationFailed: 'Não foi possível aplicar as configurações de atualização. Corrija o arquivo e reinicie, ou selecione um canal nas configurações.',
   cliCommandMenu: 'Gerenciar comando dsh…',
   cliCommandTitle: 'Gerenciar comando dsh',
   cliCommandLocation: 'Comando da área de trabalho: {path}',

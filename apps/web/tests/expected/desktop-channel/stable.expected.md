@@ -1,0 +1,3 @@
+- group "Update channel":
+  - text: Update channel Stable receives stable releases only. Development includes prereleases and may be unstable. Switching never downgrades.
+  - button "Update channel": Stable

@@ -17,6 +17,8 @@ import { inject } from '../src/client/index.ts'
 import type { DeveloperToolsRowInjected } from '../src/client/DeveloperToolsRow.tsx'
 import { HostReleasePrompt, type HostReleasePromptInjected } from '../src/client/HostReleasePrompt.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
+import type { DesktopChannelRowInjected } from '../src/client/DesktopChannelRow.tsx'
+import type { DesktopChannelBridge } from '../src/types.ts'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
 import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from '../src/client/SettingsDocumentAction.tsx'
@@ -206,6 +208,25 @@ describe('ui-settings-general apply', () => {
     // The (ns, locale) seats are free again — the dictionary disposer ran.
     expect(() => { c.ctx.locale.register(NS, 'zh', {})() }).not.toThrow()
     expect(() => { c.ctx.locale.register(NS, 'en', {})() }).not.toThrow()
+  })
+
+  it('removes the Desktop channel row and shell subscription when its plugin unloads', async ({ mock, start }) => {
+    const unsubscribe = vi.fn()
+    const state = { channel: 'nightly', packagedChannel: 'nightly', changing: false } as const
+    const save = vi.fn(async () => state)
+    const channels: DesktopChannelBridge = { get: async () => state, set: save,
+      subscribe: () => unsubscribe }
+    vi.stubGlobal('dshDesktop', { protocolVersion: 1, updates: { channels,
+      status: async () => ({ phase: 'idle' }), open: async () => {}, subscribe: () => () => {} } })
+    onTestFinished(() => { vi.unstubAllGlobals() })
+    const { c } = await client(mock, start)
+    const row = c.ctx.slots.entries('settings.general.item').find(row => row.options.id === 'desktop-update-channel')!
+    const select = row.inject!().select as DesktopChannelRowInjected['select']
+    await select('latest')
+    expect(save).toHaveBeenCalledWith('latest')
+    await c.unload(SELF)
+    await c.flush()
+    expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
   it('the nav label thunk follows the active locale without re-registration', async ({ mock, start }) => {

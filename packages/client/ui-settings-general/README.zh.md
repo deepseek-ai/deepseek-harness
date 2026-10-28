@@ -63,6 +63,8 @@ Web 与桌面端的通用设置底部显示当前发布版本，使用构建注�
 
 -----
 
+当预加载提供渠道 API 时，桌面版还会在通用设置中提供**更新渠道**。加载、已保存选择和失败状态跟随 Electron 订阅，选择渠道直接调用桌面主进程。普通浏览器不显示该行。文件归属和重启规则见[本地桌面设置](../../../apps/desktop/README.zh.md#local-desktop-settings)。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

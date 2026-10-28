@@ -137,7 +137,7 @@ export class DesktopMandatoryUpdatePolicy {
 
   /**
    * @param config - Resolved deployment settings.
-   * @param identity - Installed software identity, fixed for this application build.
+   * @param identity - Installed software identity; a channel getter may follow an explicit user selection.
    * @param publish - Receives policy changes without controlling downloads or existing tasks.
    * @param request - Anonymous Fetch or the dedicated test-authentication Session transport.
    * @param client - UI build version, language, and UTC offset, sampled for every check.

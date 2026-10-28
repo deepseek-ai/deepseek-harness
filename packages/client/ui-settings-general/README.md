@@ -63,6 +63,8 @@ Access: the settings shell and the `settings.open` shortcut are registered only 
 
 -----
 
+Desktop also contributes an **Update channel** row to General when the preload exposes the channel API. Its loading, saved-choice and failure states follow the Electron subscription; selecting a channel calls the shell directly. Ordinary browsers omit this row. File ownership and restart rules are documented in [local desktop settings](../../../apps/desktop/README.md#local-desktop-settings).
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
