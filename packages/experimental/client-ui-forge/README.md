@@ -40,6 +40,8 @@ Panel text follows the application language: Chinese, English, Japanese, Spanish
 
 `gitCommand`, `gitTimeoutMs`, `graceMs`, `maxOutputBytes`, `readinessTimeoutMs`, `maxBranches`, `worktreePrefix`, `maxDiffBytes`, `maxUntrackedFiles`, and `maxCachedDiffBytes` are listed in the [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-client-ui-forge).
 
+All files opens a searchable directory tree. Single-child directories share a row, and renamed files also match their old path. A wide changes pane shows the same tree beside the diff; its File tree toolbar button hides or restores it without clearing the search, folds, or width. Drag the divider or use its arrow keys to resize the tree. Files and folders reserve the same disclosure column so each child is indented from its parent. Local changes and each PR retain separate tabs. Select code text or use line numbers to select a range within one displayed hunk and side; text selection and copying stay on the starting side. The plus button opens the plain-text comment editor. It accepts newlines and IME composition; only its action buttons submit the comment. Drag its lower edge to adjust the height. Add to input inserts a removable quote into the main composer; multiple quotes are sent together only when the user sends that composer. The GitHub split button starts or adds to a pending review; its menu publishes a single comment immediately. Comments remain beside their code after quoting, queueing, or publishing. Pending comments are edited or removed there. Submit review in the PR title bar opens a centered dialog showing only the pending count, summary, and Comment, Approve, or Request changes. Added and deleted files show only their populated line-number column. Pending reviews and comment records are stored in this browser per Session and tab, including the original PR head commit. Switching Sessions or hiding the pane retains them; closing the tab clears its comments, summary, and decision, and reopening starts an empty review. Published GitHub comments and references already added to the main composer are unaffected. Records whose code changed remain visible below their file, or after the diff when the file is absent. A changed head requires fresh line selections. While the tab remains open, an uncertain write stays blocked across reloads until the user checks GitHub and explicitly permits another submission.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -102,11 +104,11 @@ The browser entry mounts the Remote, then the UI. One stream per Session feeds t
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the working-directory service and the Session's conversation: the notice about a Session's new worktree joins the first request's messages, Continue in the project queues the same kind of notice for the next request, and Create change request sends a user message that asks the Agent for a change request. Inspection, status, diffs, restoring, the Session list, and the rest of the panel add nothing to model requests.
+Indirectly, through the working-directory service and the Session's conversation: the notice about a Session's new worktree joins the first request's messages, Continue in the project queues the same kind of notice for the next request, and Create change request sends a user message that asks the Agent for a change request. Add to input contributes a frozen `## User Comment N` quote containing File, Side, Lines, Source, the diff hunk, and Comment; PR quotes also name the reviewed commit. These quotes enter the normal logged user message only when the composer is sent. Inspection, status, restoring, the Session list, and GitHub review submission add no model context.
 
 #### KV Cache effect
 
-None for a new worktree, as its notice belongs to the first request of the Session, before any cached prefix exists. A notice after Continue in the project and the message Create change request sends are appended after the cached prefix.
+None for a new worktree, as its notice belongs to the first request of the Session, before any cached prefix exists. A notice after Continue in the project and the message Create change request sends, and submitted review quotes are appended after the cached prefix.
 
 ## Known Limitations and Deferred Work
 

@@ -240,6 +240,8 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   openRef.current = open
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null)
   const [fixedPos, setFixedPos] = useState<CSSProperties | null>(null)
+  const close = useRef(onClose)
+  close.current = onClose
   const { arm: armClose, cancel: cancelClose } = usePointerGrace(onClose)
 
   // Portal mode: fixed-position the list from the anchor rect before paint;
@@ -250,6 +252,10 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   useLayoutEffect(() => {
     if (!open || !portal) { setFixedPos(null); return }
     const place = () => {
+      if (rootRef.current?.closest('[inert], [hidden]') != null) {
+        close.current()
+        return
+      }
       let r: DOMRect | null
       if (getAnchorRect !== undefined) {
         r = getAnchorRect()

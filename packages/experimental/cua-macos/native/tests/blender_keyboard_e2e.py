@@ -275,7 +275,7 @@ def main():
     args = parser.parse_args()
     if os.uname().sysname != "Darwin":
         raise RuntimeError("This opt-in check requires macOS")
-    args.helper = (args.helper or support.BINARY).resolve()
+    args.helper = (args.helper or support.default_binary()).resolve()
     args.blender = args.blender.resolve()
     for label, path in [("Blender", args.blender), ("native helper", args.helper)]:
         if not path.is_file() or not os.access(path, os.X_OK):

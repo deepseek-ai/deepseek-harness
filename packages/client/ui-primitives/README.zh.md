@@ -25,7 +25,7 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用本包
 
-`Toast` 在浅色和深色模式下均使用主题的系统提示背景与文字颜色。`Menu` 数据条目与 `MenuItemButton` 组件条目接收功能 owner 提供的有效快捷键，并在末端以无背景的浅灰色文字对齐显示，子菜单也采用同一呈现。主指针为粗指针（`pointer: coarse`）且未使用[键盘导航](#input-modality)时，菜单隐藏这些提示。键盘导航会显示提示，直到下一次指针按下；快捷键绑定始终生效。`ShortcutKeys` 默认以无方块的按键文字显示菜单和行内提示。`tooltip` 变体在深色气泡上使用稍浅的键帽，以加号连接的组合则共用一个填充色块。`Tooltip.shortcutKeys` 将键帽与可选的本地化操作文本垂直居中排列，标签为空时只显示按键。可选的 `className` 供调用方设置交互状态样式。`Modal` 使用框架共享的浮层起点，视口边距至少为 24px。其遮罩不绘制 Windows 顶栏区域，覆盖整个视口的模态层仍阻挡背景点击。`Modal` 与设置外壳通过 `useModalLayer` 共用顶层 Esc 和 Tab 处理，关闭时恢复先前焦点。`closeTopModal(document)` 请求前台弹窗当前的关闭操作；上层菜单或未注册的对话框会阻止关闭其后方弹窗。组件通过 `isBehindModal` 避免将焦点移到嵌套弹窗后方。菜单先消费自己的 Esc，再由模态层处理关闭。 `observeComposition` 为局部弹层和录键处理提供相同的 composition-end 与旧版 IME 保护；调用方随交互生命周期释放其 document 监听。
+`Toast` 在浅色和深色模式下均使用主题的系统提示背景与文字颜色。`Menu` 数据条目与 `MenuItemButton` 组件条目接收功能 owner 提供的有效快捷键，并在末端以无背景的浅灰色文字对齐显示，子菜单也采用同一呈现。主指针为粗指针（`pointer: coarse`）且未使用[键盘导航](#input-modality)时，菜单隐藏这些提示。键盘导航会显示提示，直到下一次指针按下；快捷键绑定始终生效。`ShortcutKeys` 默认以无方块的按键文字显示菜单和行内提示。`tooltip` 变体在深色气泡上使用稍浅的键帽，以加号连接的组合则共用一个填充色块。`Tooltip.shortcutKeys` 将键帽与可选的本地化操作文本垂直居中排列，标签为空时只显示按键。可选的 `className` 供调用方设置交互状态样式。`Modal` 使用框架共享的浮层起点，视口边距至少为 24px。其遮罩不绘制 Windows 顶栏区域，覆盖整个视口的模态层仍阻挡背景点击。`Modal` 与设置外壳通过 `useModalLayer` 共用顶层 Esc 和 Tab 处理，关闭时恢复先前焦点。关闭后保留在 DOM 中的弹窗仅恢复仍停留于内部的焦点，不覆盖已经移到其他位置的焦点。`closeTopModal(document)` 请求前台弹窗当前的关闭操作；上层菜单或未注册的对话框会阻止关闭其后方弹窗。组件通过 `isBehindModal` 避免将焦点移到嵌套弹窗后方。菜单先消费自己的 Esc，再由模态层处理关闭。 `observeComposition` 为局部弹层和录键处理提供相同的 composition-end 与旧版 IME 保护；调用方随交互生命周期释放其 document 监听。
 
 `isMobileDevice()` 识别 iOS 和 Android 手机及平板，供自动聚焦和收起键盘使用。它识别 UA 中的 `Android`、`iPhone`、`iPad` 或 `iPod`，以及报告 `MacIntel` 且触摸点数大于一的 iPad。其他设备（包括 Windows 触屏电脑）返回 false，不受窗口宽度影响。函数缓存首次判断结果，供页面内的所有调用方共享；组件重新挂载会复用该结果，重新加载页面时会再次读取浏览器环境。识别出的移动设备需要用户主动聚焦文本输入框。隐藏移动平台信息的浏览器模式或自定义 UA 可能导致识别失败；未识别的 UA 返回 false。仅凭桌面 UA 无法区分 Android 平板与 Linux 电脑。
 
@@ -104,6 +104,8 @@ kind: "package-library"
 
 `HoverCardGroup` 为一个已挂载的物理列表持有私有状态。设置 `grouped` 的 `HoverCard` 共享首张实际显示卡片的等待：在同一次指针交互中，后续卡片立即替换当前卡片。列表与其当前活动的 portal 卡片构成一次指针交互：指针可进入卡片阅读或复制，再返回其他列表项并立即替换卡片。指针离开两者后，共享等待在活动卡片通过原有指针宽限及关闭生命周期关闭时重置；分组不另设计时器。列表没有活动卡片时，指针离开便立即重置等待。指针位于列表外时，通过键盘聚焦打开行内卡片不会让下一次指针进入跳过等待。互斥显示也包括正在淡出的预览：普通预览关闭保留淡出，但分组内替换会立即移除前一张卡片。未设置 `grouped` 的卡片保持独立。`as="span"` 保留行内文本容器。
 
+锚点的祖先变为 inert 或隐藏时，已打开的悬浮卡片立即关闭。
+
 ### 渲染 agent 输出
 
 纯 Markdown 工具 `formatQuoteText` 规范化 CRLF 和 CR 换行符，再为每行添加 `> ` 前缀。
@@ -134,6 +136,8 @@ kind: "package-library"
 ## 理解实现
 
 `Button` 的 `md` 使用 H36/R12，`sm` 使用 H28/R8，包含描边控件。`outline` 变体保留 0.5px 透明边框用于布局，并通过内阴影绘制描边。描边宽度读取 ui-theme 随设备像素比更新的 `--dsh-hairline-width`，未安装主题时回退到 0.5px。功能样式通过 `--dsh-button-outline-color` 定制描边颜色，并保留边框宽度、透明边框颜色和 box-shadow。菜单与卡片遵循[共享圆角规则](../../../docs/web-styling.zh.md#corner-radii-and-settings-cards)；功能样式保留控件几何。
+
+锚点变为 inert 或隐藏时，portal 菜单会关闭，其所属区域保留的内容继续挂载。
 
 `Menu.listClassName` 独立控制菜单卡片样式，不影响入口容器，也适用于 portal 模式。前置图标使用 `--dsw-alias-menu-icon` 文本色；破坏性操作图标保留错误色。
 

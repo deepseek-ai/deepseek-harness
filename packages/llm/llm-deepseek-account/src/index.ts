@@ -5,7 +5,7 @@ import { ACCOUNT_QUOTA_EXCEEDED_CODE, APP_IDENTITY, LlmError, QUOTA_EXCEEDED_COD
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import {
-  catalogModelInfo, ModelListingCache, refuseListedModel, registerDeepSeekProvider, requestModelListing, resolveAdapterOptions,
+  catalogModelInfo, createModelListingCache, refuseListedModel, registerDeepSeekProvider, requestModelListing, resolveAdapterOptions,
   resolveListedCatalog,
 } from '@deepseek-ai/dsh-llm-deepseek'
 import type { DeepSeekRequestAuth, ListedCatalog, ListingView, ModelListing, ResolvedDeepSeekOptions } from '@deepseek-ai/dsh-llm-deepseek'
@@ -50,16 +50,13 @@ export function apply(ctx: Context, config: Config): void {
       },
     }
   }
-  const catalog = new ModelListingCache({
+  const catalog = createModelListingCache(ctx, name, PROVIDER, {
+    settings: () => settings().catalog,
     credential: async url => account()?.resolveToken(url),
     load: (url, token, signal) => requestModelListing(url, { [TOKEN_HEADER]: token }, signal),
-    now: () => Date.now(),
-    // ACP reserves stdout for protocol messages, including during successful catalog loads.
-    info: (message) => { console.error(LOG_TAG, message) },
-    warn: (message) => { console.warn(LOG_TAG, message) },
   })
   let loggedListing: ModelListing | undefined
-  /** Resolve the catalog for one view, logging the listing's hidden entries once per listing. */
+  /** Resolve the catalog, reporting each listing's hidden entries and dropped badges once. */
   const connectionOf = (view: ListingView): AccountConnection => {
     const resolved = settings()
     const result = resolveListedCatalog({
@@ -96,8 +93,9 @@ export function apply(ctx: Context, config: Config): void {
     admit: (connection, model) => { refuseListedModel(model, connection.catalog.refusals.get(model)) },
     discoverModels: async (provider) => {
       const view = await catalog.view(settings().catalog)
-      return view.authenticated ? discovered(view).catalog.offered.map(model => catalogModelInfo(provider, model)) : []
+      if (!view.authenticated) return []
+      const { offered, badges } = discovered(view).catalog
+      return offered.map(model => catalogModelInfo(provider, model, badges.get(model.id)))
     },
   })
-  ctx.effect(() => () => { catalog.dispose() }, 'llm-deepseek-account: model catalog')
 }

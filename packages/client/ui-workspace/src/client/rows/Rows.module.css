@@ -344,7 +344,8 @@
     display: inline-flex;
   }
 
-  .sessionRow .rowQuickActions {
+  .sessionRow .rowQuickActions,
+  .projectRow[aria-expanded='false'] .rowActions {
     display: none;
   }
 }

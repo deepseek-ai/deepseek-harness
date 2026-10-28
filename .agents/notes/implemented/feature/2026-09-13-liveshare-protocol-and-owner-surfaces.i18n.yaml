@@ -1,0 +1,55 @@
+# Bilingual-pair consistency record for 2026-09-13-liveshare-protocol-and-owner-surfaces.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-13-liveshare-protocol-and-owner-surfaces.md
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague:
+  en: e73b246e19c9b412
+  zh: c87594ad5eccbfb5
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/problem:
+  en: 17bc15d382139909
+  zh: 3eff34b5ddea951e
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/decision:
+  en: a15c7c13f167e5ac
+  zh: a15c7c13f167e5ac
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/decision/what-a-share-is:
+  en: ff1dbb0f7c2355e4
+  zh: 3de92b2e6c5e9e15
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/decision/what-a-reader-can-do:
+  en: 5652ed7f515a2a5d
+  zh: 993378f78f5a4120
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/decision/two-driving-tiers:
+  en: 0b9303333bf482ae
+  zh: 6dfc68ad9e2924c3
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/decision/default-visibility:
+  en: 754705367c350b31
+  zh: e10b6541458c4a45
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/decision/how-shared-work-stays-inside-its-grant:
+  en: fa3ab42895a16ce1
+  zh: 429be63cfb8e55a6
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/decision/keeping-one-branch-across-retries:
+  en: 6b0369dafe34a5aa
+  zh: aea9465216204122
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/decision/who-the-owner-is:
+  en: 7e6d1305782d2822
+  zh: 66fb2cbef0f49d47
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/decision/what-the-reader-sees-at-the-top:
+  en: 44d02a91cf0c5715
+  zh: dabbf6c59ff08e4a
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/decision/when-the-connection-breaks:
+  en: 36ee6e090797806b
+  zh: 21809a0cf990d905
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/decision/how-the-served-page-is-exercised:
+  en: d9cbb8277862587c
+  zh: 867fa6c4db95d09c
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/decision/what-the-package-exposes:
+  en: d13a0df787f212d4
+  zh: 24794e8bf4d92492
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/alternatives-considered:
+  en: 2daeba6e763383e4
+  zh: fe0fe3f7f4d546e7
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/verification:
+  en: 76cc786336c5daf5
+  zh: 98bd2b9cc7d1791c
+/agent-note-liveshare-sharing-a-dsh-session-with-a-colleague/consequences:
+  en: 8a6e06a9fba917e2
+  zh: 68a9d19b15119345

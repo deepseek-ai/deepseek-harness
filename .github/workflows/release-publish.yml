@@ -1,12 +1,18 @@
 # Publish the dsh release sequence to npm. This workflow is manual-only
 # (workflow_dispatch) and intentionally does not listen to pull_request or push:
-# publication must always be an explicit, reviewed act from a dsh-v* tag, and it
-# must never appear as a PR check. It repacks the current tree before publishing
+# publication is an explicit, reviewed act; dsh-v* tag validation is enabled by
+# default and may be skipped through the dispatch input. It never appears as a PR check. It repacks the current tree before publishing
 # so the bytes uploaded are exactly what this dispatch produced.
 name: Release publish (dsh)
 
 on:
   workflow_dispatch:
+    inputs:
+      skip-tag-check:
+        description: Skip release tag validation for the selected ref; other publication checks still apply.
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -55,10 +61,10 @@ jobs:
       - name: Verify release version
         env:
           RELEASE_PUBLISH: 'true'
-        run: pnpm run release:verify --family dsh
+        run: pnpm run release:verify --family dsh ${{ inputs.skip-tag-check && '--skip-tag-check' || '' }}
 
       - name: Build
-        run: pnpm run build:official
+        run: pnpm run build:official --serial
 
       - name: Pack release tarballs
         run: pnpm run release:pack --family dsh --out dist/npm

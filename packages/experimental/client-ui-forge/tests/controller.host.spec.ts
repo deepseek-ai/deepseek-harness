@@ -1518,6 +1518,31 @@ describe('forgePanel actions', () => {
     expect(opened.provider.actions).toEqual(['ready 7', `merge 7 squash ${head}`, `merge 7 rebase ${head}`, 'ready 7', `merge 7 merge ${head}`])
   })
 
+  it('publishes a review only for a visible binding and validates wire ranges before calling the provider', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => ready(state) && polled(state, pullUrl(7)))
+    const request = { kind: 'comment' as const, headSha: 'a'.repeat(40),
+      comment: { path: 'src/app.ts', side: 'R' as const, startLine: 3, endLine: 5, body: 'Please check' } }
+    expect(await opened.ctx.forgePanel.submitReview(opened.session, pullUrl(7), request, signal))
+      .toMatchObject({ ok: false, code: 'unsupported' })
+    const submit = vi.fn(async () => ({ ok: true as const, url: pullUrl(7) }))
+    Object.assign(opened.provider, { submitReview: submit })
+    expect(await opened.ctx.forgePanel.submitReview(opened.session, pullUrl(7), request, signal))
+      .toEqual({ ok: true, url: pullUrl(7) })
+    expect(submit).toHaveBeenCalledTimes(1)
+    await expect(opened.ctx.forgePanel.submitReview(opened.session, pullUrl(8), request, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+    await expect(opened.ctx.forgePanel.submitReview(opened.session, pullUrl(7), { ...request, headSha: 'invalid' }, signal)).rejects.toThrow('Invalid review commit')
+    await expect(opened.ctx.forgePanel.submitReview(opened.session, pullUrl(7), { ...request,
+      comment: { ...request.comment, startLine: 6 } }, signal)).rejects.toThrow('Invalid review comment')
+    await expect(opened.ctx.forgePanel.submitReview(opened.session, pullUrl(7), {
+      kind: 'review', headSha: request.headSha, event: 'comment', body: '', comments: [],
+    }, signal)).rejects.toThrow('Empty review')
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
   it('acts only on change requests visibly bound to the Session that a provider serves', async () => {
     const { repo } = await project()
     const opened = await open(repo)

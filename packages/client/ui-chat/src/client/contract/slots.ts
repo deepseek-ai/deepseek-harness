@@ -209,6 +209,20 @@ export interface ChatNodeInjected {
   }
 }
 
+/**
+ * Owner currency of the message-source decoration above one user message bubble.
+ *
+ * Entry selectors receive the durable message `source` and row kind. A
+ * non-null selection elects the component and reaches it as `matched`.
+ * Entries own their markup and copy; Chat does not interpret the source.
+ */
+export interface UserBeforeOwnerProps {
+  /** Durable message source; Chat does not interpret it. */
+  readonly source: unknown
+  /** Chat row kind that owns the decoration site. */
+  readonly kind: 'user' | 'steering'
+}
+
 /** Stable owner currency delivered to a keyed Chat renderer. */
 export interface ChatNodeOwnerProps {
   /** Renderer-owned Node portion selected by the grouping Definition. */
@@ -422,6 +436,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       keyProps: { [Kind in ChatNodeKind]: { node: ChatNode<Kind> } }
       hookContext: ChatNodeHookContext
       inject: ChatNodeInjected
+    }
+    /**
+     * Message-source decoration owned and rendered by the user Node entry.
+     * Selectors elect one component from the durable source and row kind.
+     * No match renders no visible content; steering and pending rows do not
+     * render this slot.
+     */
+    'conversation.chat.user.before': {
+      kind: 'chain'
+      scope: 'session'
+      owner: UserBeforeOwnerProps
     }
     /**
      * Renderer for one consecutive group of durable message images. The owner

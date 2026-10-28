@@ -42,6 +42,8 @@ kind: "package-reference"
 
 达到 `fetchTimeoutMs` 时，读取信号会以 `FORGE_FETCH_TIMEOUT` 中止。提供方必须在信号中止时停止工作并结束请求；被拒绝的读取会转为 `unavailable` 失败。忽略取消的提供方可能阻塞轮询和服务销毁。
 
+provider 可以实现 `submitReview`，在指定的 head 提交上发布行内评论或完整评审。未实现该能力时，注册表返回不支持；提交结束后会刷新受关注的状态。成功的写操作返回网页 URL；失败区分 head 变化、明确拒绝与结果不明。调用方必须先核对结果不明的操作，再次提交。待提交草稿由消费者管理，不由轮询注册表保存。
+
 -----
 
 <a id="understand-the-implementation"></a>

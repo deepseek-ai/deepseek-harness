@@ -192,6 +192,7 @@ export function ChatView({
     lastIsUser: lastKey !== null && nodeStore.get(lastKey)?.kind === 'user',
     steeringId,
     submissionId: visibleSubmissions.at(-1)?.requestId ?? null,
+    submissionSteers: visibleSubmissions.at(-1)?.placement === 'steering',
     loadedTurns: turnNavigationItems,
     transcriptView,
   })

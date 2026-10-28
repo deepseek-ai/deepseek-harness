@@ -90,6 +90,7 @@ Web 和 Desktop 的数学公式渲染要求支持 WOFF2。[Web 构建](../../../
 | [`src/platform.ts`](src/platform.ts) | `PLATFORM_MODULES` / `PRELOADED_CLIENT_EXTERNALS`：隐式 external 基座 |
 | [`src/seed.ts`](src/seed.ts) | 启动时交给 loader 的静态模块表 |
 | [`src/window-drag/regions.ts`](src/window-drag/regions.ts) | darwin app-region 组合模型，以及 `base.css` 减除的交互元素选择器 |
+| [`src/base.css`](src/base.css) | 页面基础样式与原生窗口拖拽区域；inert 子树不参与拖拽区域计算 |
 | [`src/window-drag/recall.ts`](src/window-drag/recall.ts) | 外壳唯一的窗口拖拽矩形 watcher（electron/electron#32341）：逐帧测量被打标行，并在它们移动期间脉冲 recall 标记 |
 
 </details>

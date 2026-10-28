@@ -40,7 +40,7 @@ The same `/plugins` route serves the images a client package publishes through i
 
 ### What the browser loads
 
-The application combo scripts carry only each plugin's `client.js` entry and register those factories once during boot; module bodies remain lazy and run only at first import or materialization. A source `import()` split by tsdown calls the factory loader's `.async` method with a literal `./client.<name>.js` path; its versioned sibling script arrives only when that expression runs. Rows that share a combo URL share one in-flight script task. A combo whose `<script>` fails to load is requested once more; a combo that loads without registering a row is never re-executed, because the batch script registers its packages in sequence and a replay would stop at the first duplicate registration. In both cases each still-missing row then loads its own one-resource combo URL, so one failed batch costs at most three requests per missing row and leaves the rows it did register untouched. The module system records the last import failure per row (transport, registration, dependency cascade, or factory execution); the Web boot audit reports that text per entry. HMR switches one changed row to its revisioned one-resource combo URL. `<id>/client` and the bare id resolve to the same exports, because a plugin bundle is its package's client half.
+The application combo scripts carry only each plugin's `client.js` entry and register those factories once during boot; module bodies remain lazy and run only at first import or materialization. A source `import()` split by tsdown compiles to `require.async("./client.<name>.js")`; its versioned sibling script arrives only when that expression runs. Rows that share a combo URL share one in-flight script task. A combo whose `<script>` fails to load is requested once more; a combo that loads without registering a row is never re-executed, because the batch script registers its packages in sequence and a replay would stop at the first duplicate registration. In both cases each still-missing row then loads its own one-resource combo URL, so one failed batch costs at most three requests per missing row and leaves the rows it did register untouched. The module system records the last import failure per row (transport, registration, dependency cascade, or factory execution); the Web boot audit reports that text per entry. HMR switches one changed row to its revisioned one-resource combo URL. `<id>/client` and the bare id resolve to the same exports, because a plugin bundle is its package's client half.
 
 ### Live plugin composition
 
@@ -57,8 +57,6 @@ The shell seeds a frozen module table ([`PLATFORM_MODULES`](../web/README.md#the
 ### Build requirements
 
 The host serves built client bundles, so `pnpm run build` must have produced each `lib/client.js` before launch; a missing bundle fails activation loudly with one build instruction and a package/path list. Source launch maps host imports to TypeScript source but still consumes the built client export. The package accepts no plugin config of its own.
-
-The shared Client preset minifies browser factories and lazy chunks unless `NODE_ENV=development`. Minification preserves the function and class names produced by bundling, legal comments, full package license banners, and source maps with original source content. `pnpm run dev:web` and its HMR rebuilds inherit `NODE_ENV`; set it explicitly to `development` for unminified output. Host and Node Client output use separate presets.
 
 -----
 
