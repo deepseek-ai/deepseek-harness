@@ -18,8 +18,8 @@ afterEach(cleanup)
 
 const OP = 'op' as CliOperationId
 const LINK = 'https://meeting.tencent.com/marketplace/tencentmeeting-cli-auth.html?code=fixture'
-const SIGNED_OUT: TencentMeetingState = { account: { state: 'signed-out' } }
-const CONNECTED: TencentMeetingState = { account: { state: 'connected', userName: '测试用户' } }
+const SIGNED_OUT: TencentMeetingState = { account: { state: 'signed-out', skills: 'installed' } }
+const CONNECTED: TencentMeetingState = { account: { state: 'connected', userName: '测试用户', skills: 'installed' } }
 
 function fixture(view?: TencentMeetingState, copy: typeof zh = zh) {
   const state = createSnapshotStore<ConnectionSnapshot>({ view, linked: true, stopped: false, busy: false, notice: undefined })
@@ -93,11 +93,24 @@ it.each([['zh', zh], ['en', en]] as const)('reports a failed sign-in with its co
 })
 
 it('retries an unconfirmed sign-in by checking again', () => {
-  const b = fixture({ account: { state: 'unverified' } })
+  const b = fixture({ account: { state: 'unverified', skills: 'installed' } })
   render(<TencentMeetingConnectionSection {...b.face} />)
   expect(screen.getByText(zh['detail.unavailable'])).toBeTruthy()
   fireEvent.click(button(zh['action.retry']))
   expect(b.face.check).toHaveBeenCalledOnce()
+})
+
+it('reports a guide that is downloading, and retries a failed download by checking again', () => {
+  const b = fixture({ account: { state: 'signed-out', skills: 'downloading' } })
+  render(<TencentMeetingConnectionSection {...b.face} />)
+  expect(screen.getByText(zh['skills.downloading'])).toBeTruthy()
+  expect(screen.queryByRole('button', { name: zh['action.retry'] })).toBeNull()
+  b.set({ view: { account: { state: 'signed-out', skills: 'failed' } } })
+  expect(screen.queryByText(zh['skills.downloading'])).toBeNull()
+  fireEvent.click(button(zh['action.retry']))
+  expect(b.face.check).toHaveBeenCalledOnce()
+  b.set({ view: { account: { state: 'signed-out', skills: 'installed' } } })
+  expect(screen.queryByText(zh['skills.failed'])).toBeNull()
 })
 
 it('explains a stopped Host component and retries even while the stream is offline', () => {

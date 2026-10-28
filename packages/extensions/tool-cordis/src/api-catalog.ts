@@ -9074,7 +9074,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TencentMeetingAccountState',
-    declaration: 'export type TencentMeetingAccountState = {\n    readonly state: \'unchecked\' | \'signed-out\' | \'unverified\';\n} | {\n    readonly state: \'connected\';\n    readonly userName: string;\n};',
+    declaration: 'export type TencentMeetingAccountState = TencentMeetingSignIn & {\n    readonly skills: UpstreamSkillsState;\n};',
   },
   {
     name: 'TencentMeetingOperationFailure',
@@ -9087,6 +9087,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TencentMeetingPhase',
     declaration: 'export type TencentMeetingPhase = \'authorizing\' | \'signing-out\';',
+  },
+  {
+    name: 'TencentMeetingSignIn',
+    declaration: 'export type TencentMeetingSignIn = {\n    readonly state: \'unchecked\' | \'signed-out\' | \'unverified\';\n} | {\n    readonly state: \'connected\';\n    readonly userName: string;\n};',
   },
   {
     name: 'TencentMeetingState',
@@ -9603,6 +9607,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'UpdateTeamTaskRequest',
     declaration: 'export interface UpdateTeamTaskRequest {\n    readonly taskId: TeamTaskId;\n    readonly expectedRevision: number;\n    readonly action: TeamTaskAction;\n    readonly subject?: string;\n    readonly description?: string;\n    readonly blockedBy?: readonly TeamTaskId[];\n    readonly writeScopes?: readonly string[];\n    readonly owner?: string;\n}',
+  },
+  {
+    name: 'UpstreamSkillsState',
+    declaration: 'export type UpstreamSkillsState = \'installed\' | \'downloading\' | \'failed\';',
   },
   {
     name: 'UserMessage',

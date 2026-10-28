@@ -1,10 +1,12 @@
 /** Account operations over a scripted tmeet: status text, sign-in, sign-out, cancellation, and the Remote wiring. */
-import { rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TencentMeetingAccount } from '../src/account.ts'
 import { PROGRAM } from '../src/directory.ts'
@@ -36,6 +38,7 @@ type Script = (process: ScriptedProcess) => void
 let ctx: Context
 let subprocess: ScriptedSubprocess
 let binDir: string
+let skillsDir: string
 let script: Record<string, Script | CliReply[]>
 
 beforeEach(async () => {
@@ -45,6 +48,7 @@ beforeEach(async () => {
   await ctx.plugin(SystemPrompt)
   subprocess = ctx.subprocess as ScriptedSubprocess
   binDir = await createBinDir()
+  skillsDir = await mkdtemp(join(tmpdir(), 'dsh-tencent-meeting-skills-'))
   script = {}
   subprocess.respond = (process) => {
     const handler = script[process.spec.argv.slice(1).join(' ')]
@@ -57,6 +61,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await ctx.fiber.dispose()
   await rm(binDir, { recursive: true, force: true })
+  await rm(skillsDir, { recursive: true, force: true })
 })
 
 const commands = () => subprocess.processes.map(process => process.spec.argv.slice(1).join(' '))
@@ -64,10 +69,13 @@ const errors = (): unknown[] => ctx.logger.buffer.filter(message => message.type
 
 describe('TencentMeetingAccount', () => {
   let account: TencentMeetingAccount
+  /** The upstream guide as the account sees it; a retry starts a download. */
+  let skills: { state: UpstreamSkillsState; retry: () => void }
 
   beforeEach(() => {
     const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable: join(binDir, PROGRAM), commandTimeoutMs: 5_000 })
-    account = new TencentMeetingAccount(cli, ctx.logger)
+    skills = { state: 'installed', retry: () => { if (skills.state === 'failed') skills.state = 'downloading' } }
+    account = new TencentMeetingAccount(cli, ctx.logger, skills)
   })
 
   afterEach(() => account.dispose())
@@ -77,12 +85,27 @@ describe('TencentMeetingAccount', () => {
     return account.snapshot()
   }
 
+  it('restarts a failed download of the guide on each check without waiting for it, and reports the state it leaves', async () => {
+    skills.state = 'failed'
+    script[STATUS] = [NOT_LOGGED_IN]
+    const id = account.start('check')
+    expect(skills.state).toBe('downloading')
+    expect(await settled(id)).toEqual({ account: { state: 'signed-out', skills: 'downloading' }, result: { id, kind: 'check', outcome: 'succeeded' } })
+  })
+
+  it('reports a new state of the guide with the current account', async () => {
+    script[STATUS] = [NOT_LOGGED_IN]
+    await settled(account.start('check'))
+    account.showSkills('failed')
+    expect(account.snapshot().account).toEqual({ state: 'signed-out', skills: 'failed' })
+  })
+
   it.each<[string, CliReply, TencentMeetingState['account']]>([
-    ['a sign-in the server accepts', CONNECTED, { state: 'connected', userName: '测试 用户' }],
-    ['no sign-in', NOT_LOGGED_IN, { state: 'signed-out' }],
-    ['a sign-in the CLI cleared after a failed refresh', SESSION_EXPIRED, { state: 'signed-out' }],
-    ['a sign-in whose refresh token expired', REFRESH_EXPIRED, { state: 'signed-out' }],
-    ['a stored sign-in the server did not confirm', UNVERIFIED, { state: 'unverified' }],
+    ['a sign-in the server accepts', CONNECTED, { state: 'connected', userName: '测试 用户', skills: 'installed' }],
+    ['no sign-in', NOT_LOGGED_IN, { state: 'signed-out', skills: 'installed' }],
+    ['a sign-in the CLI cleared after a failed refresh', SESSION_EXPIRED, { state: 'signed-out', skills: 'installed' }],
+    ['a sign-in whose refresh token expired', REFRESH_EXPIRED, { state: 'signed-out', skills: 'installed' }],
+    ['a stored sign-in the server did not confirm', UNVERIFIED, { state: 'unverified', skills: 'installed' }],
   ])('checks %s', async (_name, reply, expected) => {
     script[STATUS] = [reply]
     const id = account.start('check')
@@ -97,7 +120,7 @@ describe('TencentMeetingAccount', () => {
     script[STATUS] = [reply]
     const result = await settled(account.start('check'))
     expect(result).toEqual({
-      account: { state: 'unchecked' },
+      account: { state: 'unchecked', skills: 'installed' },
       result: { id: result.result?.id, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: reply.exitCode ?? 0 } },
     })
     expect(errors()).toEqual([['tencent-meeting: account operation failed: %o', {
@@ -121,7 +144,7 @@ describe('TencentMeetingAccount', () => {
     authorizing.reply({ stdout: 'Login successful. Start managing your meetings using tmeet.\n' })
 
     expect(await settled(id)).toEqual({
-      account: { state: 'connected', userName: '测试 用户' }, result: { id, kind: 'sign-in', outcome: 'succeeded' },
+      account: { state: 'connected', userName: '测试 用户', skills: 'installed' }, result: { id, kind: 'sign-in', outcome: 'succeeded' },
     })
     expect(commands()).toEqual([LOGIN, STATUS])
     expect(errors()).toEqual([])
@@ -147,7 +170,7 @@ describe('TencentMeetingAccount', () => {
     const cancelling = account.cancel(id)
     expect(account.snapshot().operation).toEqual({ id, kind: 'sign-in', phase: 'cancelling', cancellable: false })
     await cancelling
-    expect(account.snapshot()).toEqual({ account: { state: 'unchecked' }, result: { id, kind: 'sign-in', outcome: 'cancelled' } })
+    expect(account.snapshot()).toEqual({ account: { state: 'unchecked', skills: 'installed' }, result: { id, kind: 'sign-in', outcome: 'cancelled' } })
     expect(subprocess.processes[0]?.terminated).toBe(true)
     expect(errors()).toEqual([])
   })
@@ -162,7 +185,7 @@ describe('TencentMeetingAccount', () => {
     await account.cancel(id)
     signingOut.reply({ stdout: 'Logout success, welcome to use it again.\n' })
 
-    expect(await settled(id)).toEqual({ account: { state: 'signed-out' }, result: { id, kind: 'sign-out', outcome: 'succeeded' } })
+    expect(await settled(id)).toEqual({ account: { state: 'signed-out', skills: 'installed' }, result: { id, kind: 'sign-out', outcome: 'succeeded' } })
     expect(commands()).toEqual([LOGOUT, STATUS])
   })
 
@@ -176,7 +199,7 @@ describe('TencentMeetingAccount', () => {
 
 describe('Tencent Meeting Remote', () => {
   beforeEach(async () => {
-    await ctx.plugin(TencentMeeting, { commandTimeoutMs: 5_000, binDir })
+    await ctx.plugin(TencentMeeting, { commandTimeoutMs: 5_000, binDir, skillsDir, skillsUrls: ['https://codeload.github.com'], skillsTimeoutMs: 120_000 })
   })
 
   it('checks for a new follower, streams each change, and starts checks, sign-ins, and sign-outs', async () => {
@@ -194,8 +217,8 @@ describe('Tencent Meeting Remote', () => {
       return states.at(-1)?.result
     }
     expect(await finished()).toMatchObject({ kind: 'check', outcome: 'succeeded' })
-    expect(states[0]).toMatchObject({ account: { state: 'unchecked' }, operation: { kind: 'check' } })
-    expect(states.at(-1)?.account).toEqual({ state: 'signed-out' })
+    expect(states[0]).toMatchObject({ account: { state: 'unchecked', skills: 'installed' }, operation: { kind: 'check' } })
+    expect(states.at(-1)?.account).toEqual({ state: 'signed-out', skills: 'installed' })
     expect(subprocess.lookups[0]?.command).toBe(join(binDir, 'tmeet'))
     expect(await finished(ctx.tencentMeeting.check())).toMatchObject({ kind: 'check', outcome: 'succeeded' })
 

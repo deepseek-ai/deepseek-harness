@@ -2,8 +2,11 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { CliAccountRuntime, exitFailure, type CliCommandExecutor, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
+import type { UpstreamSkills, UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import type { TencentMeetingAccountState, TencentMeetingOperationFailure, TencentMeetingOperationKind, TencentMeetingPhase } from './types.ts'
+import type {
+  TencentMeetingAccountState, TencentMeetingOperationFailure, TencentMeetingOperationKind, TencentMeetingPhase, TencentMeetingSignIn,
+} from './types.ts'
 
 const LOGIN_LINK = /^authorize url: (https:\/\/\S+)[ \t]*$/u
 
@@ -15,7 +18,7 @@ type Control = CliOperationControl<TencentMeetingPhase, TencentMeetingOperationF
  * after its user-info request succeeds, refreshing the token first when needed.
  * @returns the account, or undefined for output this version does not print.
  */
-function readStatus(stdout: string): TencentMeetingAccountState | undefined {
+function readStatus(stdout: string): TencentMeetingSignIn | undefined {
   if (/^[ \t]*(?:Not logged in|Session has expired)\./mu.test(stdout)) return { state: 'signed-out' }
   if (!/^Logged in$/mu.test(stdout)) return undefined
   if (/^[ \t]*RefreshToken:[ \t]+expired\b/mu.test(stdout)) return { state: 'signed-out' }
@@ -30,18 +33,27 @@ export class TencentMeetingAccount extends CliAccountRuntime<
   /**
    * @param cli - the tmeet executor the account runs commands with and disposes.
    * @param logger - receives classified operation failures.
+   * @param skills - the upstream guide whose state the view carries and whose failed download each check restarts.
    */
-  constructor(cli: CliCommandExecutor, logger: Context['logger']) {
+  constructor(cli: CliCommandExecutor, logger: Context['logger'], private readonly skills: Pick<UpstreamSkills, 'state' | 'retry'>) {
     super({
       name: 'tencent-meeting',
       cli,
       logger,
-      account: { state: 'unchecked' },
+      account: { state: 'unchecked', skills: skills.state },
       check: 'check',
       cancellable: ['authorizing'],
       authorizationHosts: ['meeting.tencent.com'],
       classify: exitFailure,
     })
+  }
+
+  /**
+   * Report the upstream guide's new state with the current account.
+   * @param skills - the state after a download started or settled.
+   */
+  showSkills(skills: UpstreamSkillsState): void {
+    this.publish({ ...this.snapshot().account, skills })
   }
 
   protected async perform(kind: TencentMeetingOperationKind, control: Control, signal: AbortSignal): Promise<void> {
@@ -79,11 +91,13 @@ export class TencentMeetingAccount extends CliAccountRuntime<
     await this.check(control, signal)
   }
 
-  /** Read the default account, publish it, and return it. */
+  /** Restart a failed download of the guide without waiting for it, then read the default account, publish it, and return it. */
   private async check(control: Control, signal: AbortSignal): Promise<TencentMeetingAccountState> {
+    this.skills.retry()
     const result = await control.run('auth-status', ['auth', 'status'], signal)
-    const account = result.exitCode === 0 ? readStatus(result.stdout) : undefined
-    if (account === undefined) throw new Error(`tencent-meeting: auth status exited with ${String(result.exitCode)} or printed an unknown status`)
+    const signIn = result.exitCode === 0 ? readStatus(result.stdout) : undefined
+    if (signIn === undefined) throw new Error(`tencent-meeting: auth status exited with ${String(result.exitCode)} or printed an unknown status`)
+    const account: TencentMeetingAccountState = { ...signIn, skills: this.skills.state }
     this.publish(account)
     return account
   }

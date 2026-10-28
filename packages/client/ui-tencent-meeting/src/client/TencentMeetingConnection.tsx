@@ -1,14 +1,30 @@
 /** Tencent Meeting account surfaces on the Plugins page: the bundle section, title tag, activation guidance, and notices. */
 import { useState, type ReactNode } from 'react'
 import {
-  CliAccountActivation, CliAccountBadge, CliAccountConfirm, CliAccountSection, CliAccountToast, type CliAccountAction,
+  CliAccountActivation, CliAccountBadge, CliAccountConfirm, CliAccountSection, CliAccountToast, type CliAccountAction, type CliAccountNote,
 } from '@deepseek-ai/dsh-client-ui-cli-account'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
+import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills/types'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { TENCENT_MEETING_PACKAGE, presentConnection, type ConnectionFace } from './connection.ts'
 import type { NS } from './locales.ts'
 
 type FaceProps = InjectFace<ConnectionFace> & PropsLocale<typeof NS>
+
+/* jscpd:ignore-start -- CLI app plugins whose guides download report the same states, each from its own dictionary. */
+/** The row that reports a guide that is not in place yet; a failed download offers a check, which restarts it. */
+function skillsNotes(skills: UpstreamSkillsState | undefined, t: FaceProps['t'], check: () => void): CliAccountNote[] {
+  switch (skills) {
+    case undefined:
+    case 'installed': return []
+    case 'downloading': return [{ text: t('skills.downloading') }]
+    case 'failed': return [{ text: t('skills.failed'), action: { label: t('action.retry'), onClick: check } }]
+    /* v8 ignore next -- closed skills state union */
+    default: return assertNever(skills)
+  }
+}
+/* jscpd:ignore-end */
 
 /**
  * The account section on the Tencent Meeting bundle's page.
@@ -46,7 +62,8 @@ export function TencentMeetingConnectionSection(props: FaceProps): ReactNode {
   const failed = 'failed' in shown ? shown.failed : undefined
   return (
     <CliAccountSection t={t} packageName={TENCENT_MEETING_PACKAGE} phase={shown.phase} status={status} busy={snapshot.busy}
-      linked={snapshot.linked} actions={actions} detail={detail} failure={failed === undefined ? undefined : { text: t('failed'), command: failed.failure }}>
+      linked={snapshot.linked} actions={actions} detail={detail} notes={skillsNotes(snapshot.view?.account.skills, t, check)}
+      failure={failed === undefined ? undefined : { text: t('failed'), command: failed.failure }}>
       <CliAccountConfirm t={t} open={confirming} title={t('signOut.title')} body={t('signOut.body')} confirm={t('action.signOut')}
         onClose={() => { setConfirming(false) }} onConfirm={signOut} />
     </CliAccountSection>

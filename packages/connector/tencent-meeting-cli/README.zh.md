@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包是[腾讯会议插件](../tencent-meeting/README.zh.md)的 Host 行。它安装固定版本的 `@tencentcloud/tmeet`，在运行时上下文中把其平台可执行文件的绝对路径告诉模型，并注册一个 `tencent-meeting` skill，其子指南是官方 `tmeet-skill`。它的 `tencentMeeting` Remote 为[腾讯会议插件页面](../../client/ui-tencent-meeting/README.zh.md)检查 CLI 的登录、通过 CLI 的授权页面登录、退出登录，以及取消操作。CLI 把登录保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
+本包是[腾讯会议插件](../tencent-meeting/README.zh.md)的 Host 行。它安装固定版本的 `@tencentcloud/tmeet`，在运行时上下文中把其平台可执行文件的绝对路径告诉模型，并注册一个 `tencent-meeting` skill，其子指南是官方 `tmeet-skill`，从 GitHub 上的腾讯会议 CLI 仓库下载。它的 `tencentMeeting` Remote 为[腾讯会议插件页面](../../client/ui-tencent-meeting/README.zh.md)检查 CLI 的登录、通过 CLI 的授权页面登录、退出登录，以及取消操作。CLI 把登录保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
 
 ## 目录
 
@@ -33,7 +33,9 @@ kind: "package-reference"
 
 插件加载后，技能目录中会多一个 `tencent-meeting` skill。Agent 用 `skill` 工具加载它，用文件工具打开 `tmeet-skill` 子指南及其参考文件，并在当前沙箱和审批策略下通过普通 Shell 工具按这个路径运行 `tmeet`。命令报告未登录或登录过期时，Agent 会请用户在插件页面连接腾讯会议；只有用户要求在对话中完成时，它才运行 `tmeet auth login --no-browser`，并且因为该命令会写入工作区之外，第一次尝试就带 `justification` 申请 `sandbox_permissions`。
 
-在 Plugin Manager 中关闭该行会撤下这个 skill，并从运行时上下文中移除这个路径。CLI 的登录会保留。
+子指南来自 `TencentCloud/tencentmeeting-cli` 标签 `v1.0.18`（提交 `e631b35`）中的 `skills/tmeet-skill/`，不含 `scripts/agent_init.py`。该行加载时下载这个提交的归档，并把校验后的文件保存在 `$DSH_HOME/cache/tencent-meeting/`；文件就位之前，skill 目录中没有 `tencent-meeting` skill，插件页会报告下载状态。下载失败时，由插件页的检查重试。
+
+在 Plugin Manager 中关闭该行会撤下这个 skill，并从运行时上下文中移除这个路径。CLI 的登录和已下载的子指南会保留。
 
 <a id="account-operations"></a>
 ### 账号操作
@@ -56,6 +58,9 @@ kind: "package-reference"
 |---|---|---|
 | `binDir` | 不设置，此时运行当前平台已安装的 `@tencentcloud/tmeet` 可执行文件 | 包含可执行 `tmeet` 的绝对目录 |
 | `commandTimeoutMs` | `30000` | 一次账号检查或退出登录的截止时间，包含可执行文件查找 |
+| `skillsDir` | 无 | 按仓库路径存放 `skills/tmeet-skill/` 文件的目录；设置后不下载子指南 |
+| `skillsUrls` | `['https://codeload.github.com']` | 按顺序尝试的归档下载前缀 |
+| `skillsTimeoutMs` | `120000` | 一个前缀送达完整归档的时限 |
 
 登录最多等待用户 10 分钟，每条命令最多保留 1 MiB stdout；这两个上限由 [CLI 账号库](../cli-account/README.zh.md)固定。tmeet 自身在 5 分钟后停止等待授权。
 
@@ -69,9 +74,9 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 是注册为 `ctx.tencentMeeting` 的 Remote 服务。它解析 `tmeet` 可执行文件，在运行时上下文中把它的路径告诉模型，并在本包的 `skills/` 目录上挂载一个名为 `tencent-meeting` 的[文件系统 skill provider](../../skill/skill-filesystem/README.zh.md)，不包含默认根目录，也不监听变化。`@tencentcloud/tmeet` 在 `dist/` 下为每个平台提供一个按平台命名的可执行文件，其 `bin` 是一个 Node 启动器。因此 [`src/directory.ts`](src/directory.ts) 按 `process.platform` 和 `process.arch`，用与该启动器相同的文件名选出可执行文件，运行时上下文和插件自己的命令都使用这个路径。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并且同一时间只运行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现 tmeet 命令，从 `auth login` 的输出行读取授权链接，并解析 `auth status` 的文本。释放时会取消进行中的操作、中止正在运行的命令，并在其进程退出后结束。
+[`src/index.ts`](src/index.ts) 是注册为 `ctx.tencentMeeting` 的 Remote 服务。它解析 `tmeet` 可执行文件，在运行时上下文中把它的路径告诉模型，并通过[上游技能库](../upstream-skills/README.zh.md)按 [`src/skills.ts`](src/skills.ts) 中的固定信息注册 `tencent-meeting` skill。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。`@tencentcloud/tmeet` 在 `dist/` 下为每个平台提供一个按平台命名的可执行文件，其 `bin` 是一个 Node 启动器。因此 [`src/directory.ts`](src/directory.ts) 按 `process.platform` 和 `process.arch`，用与该启动器相同的文件名选出可执行文件，运行时上下文和插件自己的命令都使用这个路径。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并且同一时间只运行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现 tmeet 命令，从 `auth login` 的输出行读取授权链接，并解析 `auth status` 的文本。释放时会取消进行中的操作、中止正在运行的命令，并在其进程退出后结束。
 
-[`skills/tencent-meeting/SKILL.md`](skills/tencent-meeting/SKILL.md) 是唯一的 skill：DSH 指引、子指南索引，以及打开子指南的方式。[`skills/tencent-meeting/guides/tmeet-skill/`](skills/tencent-meeting/guides/tmeet-skill) 是 `TencentCloud/tencentmeeting-cli` 标签 `v1.0.18`（提交 `e631b35`）中 `skills/tmeet-skill/` 的 `SKILL.md` 和 `references/` 的原样副本，因为上游只在该仓库中发布这个 skill，npm 包里没有。其中的 `scripts/agent_init.py` 用于把调用方 Agent 和模型记录到 CLI 配置中供上游统计，没有复制。文件系统 provider 只发现 `<root>/<name>/SKILL.md`，因此子指南不是独立的 skill。DSH 指引与子指南不一致时，入口要求 Agent 以 DSH 指引为准：使用插件提供的 `tmeet` 而不是自行安装，跳过 `agent_init.py`，并把登录交给插件页面。参考文件是子指南目录中的普通文件。
+[`skills/tencent-meeting/SKILL.md`](skills/tencent-meeting/SKILL.md) 是本包携带的唯一 skill：DSH 指引、子指南索引，以及打开子指南的方式。上游只在其仓库中发布这个子指南，npm 包里没有，因此由该库下载；它是 skill 基础目录下的一组文件，不是独立的 skill。固定信息排除了 `scripts/agent_init.py`，它用于把调用方 Agent 和模型记录到 CLI 配置中供上游统计。DSH 指引与子指南不一致时，入口要求 Agent 以 DSH 指引为准：使用插件提供的 `tmeet` 而不是自行安装，跳过 `agent_init.py`，并把登录交给插件页面。参考文件是子指南目录中的普通文件。
 
 </details>
 
@@ -109,7 +114,7 @@ kind: "package-reference"
 
 #### 模型看到的内容
 
-`tencent-meeting` 的 `skill` 工具结果约 1,200 个字符：DSH 指引、一句话的 `tmeet-skill` 子指南索引，以及打开方式。DSH 指引要求 Agent 按当前运行时上下文给出的绝对路径运行插件提供的 `tmeet`，跳过子指南的安装检查和 `agent_init.py` 步骤，在自己运行 `tmeet auth login --no-browser` 之前先请用户在插件页面连接，并在该命令第一次尝试时就申请 `sandbox_permissions`；两者不一致时以 DSH 指引为准。它的资源目录是 `skills/tencent-meeting`，因此 Agent 用文件工具而不是 `skill` 工具打开 `guides/tmeet-skill/SKILL.md`，并以子指南自己的目录解析其中的相对路径。
+`tencent-meeting` 的 `skill` 工具结果约 1,200 个字符：DSH 指引、一句话的 `tmeet-skill` 子指南索引，以及打开方式。DSH 指引要求 Agent 按当前运行时上下文给出的绝对路径运行插件提供的 `tmeet`，跳过子指南的安装检查和 `agent_init.py` 步骤，在自己运行 `tmeet auth login --no-browser` 之前先请用户在插件页面连接，并在该命令第一次尝试时就申请 `sandbox_permissions`；两者不一致时以 DSH 指引为准。它的资源目录是下载目录，即 `skillsDir` 或 `$DSH_HOME/cache/tencent-meeting/skills-<摘要>`，因此 Agent 用文件工具而不是 `skill` 工具打开 `skills/tmeet-skill/SKILL.md`，并以子指南自己的目录解析其中的相对路径。
 
 #### Token 影响
 
@@ -147,7 +152,9 @@ Tencent Meeting CLI: run `tmeet` by its absolute path "<executable>"; the bare n
 - 命令必须在本 Host 上运行。组合把命令放到别处运行（例如通过 SSH）时，插件仍会加载，但每条运行 `tmeet` 的命令都会因为那里没有这个路径而失败。
 - 插件使用 CLI 的默认配置。在 DSH 中登录或退出登录会影响用户自己的终端，没有 DSH 专用的账号，也没有账号选择。
 - 账号状态来自 tmeet 1.0.18 `auth status` 的纯文本输出，登录链接来自它的 `authorize url:` 行；改变这些文本的 CLI 版本会使检查或登录失败，并给出可重试的结果。服务端没有返回用户名的账号会显示为待确认。
-- 子指南对应上游标签 `v1.0.18`；更新它需要手工复制，之后要对照新的子指南检查入口的索引和 DSH 指引。
+- 子指南对应上游标签 `v1.0.18`；更新它要用 `scripts/upstream-skills-digest.ts` 生成新的固定信息，之后对照新的子指南检查入口的索引和 DSH 指引。
+- 换用新的固定提交后，首次加载需要能访问 GitHub 或配置的镜像；下载成功之前，Agent 没有 `tencent-meeting` skill。
+- 插件卸载或改为固定其他提交后，已下载的子指南仍留在 `$DSH_HOME/cache/tencent-meeting/`。
 
 <a id="dev-note"></a>
 ### 开发备注
@@ -155,6 +162,6 @@ Tencent Meeting CLI: run `tmeet` by its absolute path "<executable>"; the bare n
 <details>
 <summary>维护者工作上下文 — 点击展开</summary>
 
-子指南保留上游的空白字符，包括 `SKILL.md` 中一行只含空格的行和四个没有末尾换行的文件，且没有任何空白豁免：提交新增带行尾空白的上游内容时，pre-commit 的 `git diff --cached --check` 会失败。单元测试和 `tencent-meeting-skills` 会话快照通过 `binDir` 使用替身可执行文件。
+单元测试、`tencent-meeting-skills` 会话快照和 Web 端到端测试通过 `binDir` 使用替身可执行文件，通过 `skillsDir` 使用本地目录，因此都不会下载子指南。
 
 </details>

@@ -1,12 +1,14 @@
-/** The bundled entry skill: its index names exactly the upstream guides, and it reaches the model below the pruner threshold. */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+/** The bundled entry skill: its index names exactly the pinned upstream guide, and it reaches the model below the pruner threshold. */
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { renderSkillContent } from '@deepseek-ai/dsh-skill'
 import { expect, it } from 'vitest'
 
 const entry = fileURLToPath(new URL('../skills/tencent-meeting/', import.meta.url))
-const guides = join(entry, 'guides')
+
+/** The `skills/<guide>/SKILL.md` directories of the pinned selection, as `scripts/upstream-skills-digest.ts` lists them. */
+const PINNED_GUIDES = ['tmeet-skill']
 
 /**
  * `packages/bundle/web-app/presets/standard.patch.yml` prunes a tool result only above `thresholdChars: 8192`
@@ -30,8 +32,7 @@ it('renders the entry below the pruner threshold', () => {
   expect(Array.from(rendered).length).toBeLessThan(PRUNER_THRESHOLD_CHARS)
 })
 
-it('indexes every upstream guide exactly once, and each indexed guide exists', () => {
+it('indexes the guide of the pinned selection exactly once', () => {
   const indexed = [...body().matchAll(/^- `([a-z-]+)`：/gmu)].map(match => match[1] ?? '')
-  expect(indexed.toSorted()).toEqual(readdirSync(guides).toSorted())
-  for (const name of indexed) expect(() => statSync(join(guides, name, 'SKILL.md')), name).not.toThrow()
+  expect(indexed.toSorted()).toEqual(PINNED_GUIDES)
 })

@@ -1,11 +1,18 @@
 /** Credential-free Tencent Meeting account and operation views for Remote clients. */
 
 import type { CliAccountView, CliCommandFailure } from '@deepseek-ai/dsh-cli-account/types'
+import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills/types'
 
 /** The default tmeet account as the latest `auth status` observed it. */
-export type TencentMeetingAccountState =
+export type TencentMeetingSignIn =
   | { readonly state: 'unchecked' | 'signed-out' | 'unverified' }
   | { readonly state: 'connected'; readonly userName: string }
+
+/** The default tmeet account and where the upstream guide stands. */
+export type TencentMeetingAccountState = TencentMeetingSignIn & {
+  /** Whether the guide the `tencent-meeting` skill indexes is in place, downloading, or unavailable until a check retries it. */
+  readonly skills: UpstreamSkillsState
+}
 
 /** The account operations the Plugins page starts. */
 export type TencentMeetingOperationKind = 'check' | 'sign-in' | 'sign-out'

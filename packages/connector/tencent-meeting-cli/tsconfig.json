@@ -15,7 +15,7 @@
       "path": "../../../vendor/schemastery"
     },
     {
-      "path": "../../skill/skill-filesystem"
+      "path": "../upstream-skills"
     },
     {
       "path": "../../util/values"

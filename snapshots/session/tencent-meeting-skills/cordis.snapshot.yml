@@ -49,3 +49,4 @@
       name: '@deepseek-ai/dsh-tencent-meeting-cli'
       config:
         binDir: !!js process.cwd() + '/tmeet-bin'
+        skillsDir: !!js process.cwd() + '/tmeet-skills'

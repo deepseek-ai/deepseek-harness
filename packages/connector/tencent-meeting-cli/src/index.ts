@@ -1,21 +1,22 @@
 /**
- * Tencent Meeting plugin: tells the model the managed tmeet's absolute path, registers its skill, and serves the
- * Plugins page's account operations over Remote. The CLI's default sign-in is shared with the user's own terminal.
+ * Tencent Meeting plugin: tells the model the managed tmeet's absolute path, registers its skill over the upstream guide
+ * it downloads, and serves the Plugins page's account operations over Remote. The CLI's default sign-in is shared with
+ * the user's own terminal.
  * @module @deepseek-ai/dsh-tencent-meeting-cli
  */
 
 /* jscpd:ignore-start -- CLI app plugins compose the same kit, Remote, and skill-loading imports. */
-import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
-import type z from '@deepseek-ai/schemastery'
+import z from '@deepseek-ai/schemastery'
 import { CliAccountConfig, CliCommandExecutor, registerCliPathContext, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
-import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem'
+import { registerUpstreamSkills, UpstreamSkillsConfig } from '@deepseek-ai/dsh-upstream-skills'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { TencentMeetingAccount } from './account.ts'
 import { PROGRAM, resolveCliExecutable } from './directory.ts'
+import { ENTRY, TMEET_SKILLS } from './skills.ts'
 import type { TencentMeetingState } from './types.ts'
 /* jscpd:ignore-end */
 
@@ -28,34 +29,30 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Where tmeet is and how long a command that does not wait for the user may run. */
-export type Config = CliAccountConfig
+/** Where tmeet and the upstream guide come from, a command's deadline, and a download's time limit. */
+export type Config = CliAccountConfig & UpstreamSkillsConfig
 
 /** Registers the CLI and its skill, and owns the account operations the Plugins page drives. */
 export default class TencentMeeting extends TypertRemoteService {
   static inject = ['skills', 'subprocess', 'systemPrompt']
-  static Config: z<Config> = CliAccountConfig
+  static Config: z<Config> = z.intersect([CliAccountConfig, UpstreamSkillsConfig])
 
   private readonly account: TencentMeetingAccount
 
   /**
    * @param ctx - Context carrying the skill registry, subprocess runtime, and system prompt.
-   * @param config - CLI location and command deadline.
-   * @throws when this platform has no packaged `tmeet` or `tmeet` is not executable.
+   * @param config - CLI location, command deadline, and where the upstream guide comes from.
+   * @throws when this platform has no packaged `tmeet`, `tmeet` is not executable, or `skillsDir` is not a directory.
    */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'tencentMeeting')
     const executable = resolveCliExecutable(config.binDir)
     registerCliPathContext(ctx, { name: 'tencent-meeting:cli', product: 'Tencent Meeting', program: PROGRAM, executable })
     const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable, commandTimeoutMs: config.commandTimeoutMs })
-    this.account = new TencentMeetingAccount(cli, ctx.logger)
+    const skills = registerUpstreamSkills(ctx, { name: 'tencent-meeting', entry: ENTRY, set: TMEET_SKILLS, config })
+    this.account = new TencentMeetingAccount(cli, ctx.logger, skills)
     ctx.effect(() => () => this.account.dispose())
-    ctx.plugin(SkillFilesystem, {
-      providerName: 'tencent-meeting',
-      includeDefaultRoots: false,
-      watch: false,
-      bundledSkillDir: fileURLToPath(new URL('../skills/', import.meta.url)),
-    })
+    ctx.effect(() => skills.watch((state) => { this.account.showSkills(state) }))
   }
 
   /* jscpd:ignore-start -- CLI app plugins declare the same Remote methods, each delegating to its own account runtime. */

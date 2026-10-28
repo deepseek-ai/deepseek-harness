@@ -3803,12 +3803,12 @@ export interface Config {
 ## `@deepseek-ai/dsh-tencent-meeting-cli`
 
 - `inject`: `skills` · `subprocess` · `systemPrompt`
-- `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts)
-- `source`: [`packages/connector/tencent-meeting-cli/src/index.ts:32`](../packages/connector/tencent-meeting-cli/src/index.ts)
+- `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts) · [`UpstreamSkillsConfig`](../packages/connector/upstream-skills/src/index.ts)
+- `source`: [`packages/connector/tencent-meeting-cli/src/index.ts:33`](../packages/connector/tencent-meeting-cli/src/index.ts)
 
 ```ts config-catalog
-/** Where tmeet is and how long a command that does not wait for the user may run. */
-export type Config = CliAccountConfig
+/** Where tmeet and the upstream guide come from, a command's deadline, and a download's time limit. */
+export type Config = CliAccountConfig & UpstreamSkillsConfig
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tencent-meeting-cli -->
 

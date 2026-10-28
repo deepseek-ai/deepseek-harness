@@ -20,5 +20,5 @@ description: 腾讯会议插件：通过 tmeet 使用腾讯会议的会议创建
 
 ## 打开子指南
 
-- 子指南不是独立的 skill，不要用 `skill` 工具加载；用文件读取工具打开本技能目录下的 `guides/tmeet-skill/SKILL.md`。
-- 子指南中的相对路径（例如 `references/tmeet-meeting.md`）相对子指南自己的目录 `guides/tmeet-skill/`。
+- 子指南不是独立的 skill，不要用 `skill` 工具加载；用文件读取工具打开本技能目录下的 `skills/tmeet-skill/SKILL.md`。
+- 子指南中的相对路径（例如 `references/tmeet-meeting.md`）相对子指南自己的目录 `skills/tmeet-skill/`。

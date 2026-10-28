@@ -1,6 +1,6 @@
 // Tencent Meeting sign-in, failure, and sign-out through the real Host/Remote/browser composition.
 // A stand-in CLI waits for each authorization page visit and keeps the sign-in on disk.
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -68,8 +68,9 @@ describe.skipIf(process.platform === 'win32')('web e2e: Tencent Meeting plugin a
     binDir = await mkdtemp(join(tmpdir(), 'dsh-tencent-meeting-e2e-'))
     await writeFile(join(binDir, 'tmeet'), TMEET)
     await chmod(join(binDir, 'tmeet'), 0o755)
+    await mkdir(join(binDir, 'skills'))
     const overlay = join(binDir, 'tencent-meeting.overlay.yml')
-    await writeFile(overlay, `- id: tencent-meeting\n  config:\n    binDir: ${JSON.stringify(binDir)}\n`)
+    await writeFile(overlay, `- id: tencent-meeting\n  config:\n    binDir: ${JSON.stringify(binDir)}\n    skillsDir: ${JSON.stringify(join(binDir, 'skills'))}\n`)
     scaffold = await launchWebScaffold({
       extraOverlayPath: [fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)), overlay],
       profile: { packages: [{ dir: TENCENT_MEETING_DIR, enabled: true }] },

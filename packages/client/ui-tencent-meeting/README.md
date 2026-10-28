@@ -38,6 +38,8 @@ Install the [Tencent Meeting plugin bundle](../../connector/tencent-meeting/READ
 | Cannot confirm sign-in right now | **Retry** checks the account again |
 | Tencent Meeting component not running | The Host's `tencent-meeting` row did not load; the section points to the component list for the reason, and **Retry** subscribes to the Host again |
 
+Below the status, a row reports the Tencent Meeting skill while its guide is not in place: one row while the Host downloads it from GitHub, and after a failed download, one row with **Retry**, which checks the account and restarts the download without waiting for it. Neither row appears once the guide is in place.
+
 Leaving the page does not cancel a sign-in, which the Host owns. The authorization page opens from the user's own click, because browsers block a window that opens long after it. A failed sign-in, sign-out, or check shows the general failure notice with the command and exit code; a failed page action shows a toast, and so does a finished sign-in or sign-out. The section notes that the account is shared with `tmeet` in the computer's terminal and that turning the plugin off does not sign it out, and the sign-out confirmation says that the terminal is signed out too.
 
 -----
