@@ -705,7 +705,7 @@
         - listitem:
           - paragraph: task-demo-1
 - button "Inspect"
-- button "Wait for input Wait result" [expanded]
+- button "Wait ended" [expanded]
 - text: Recorded result
 - list:
   - listitem: Wait result Wait ended

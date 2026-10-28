@@ -137,10 +137,16 @@ export function controlDetails(
     case 'interrupt_agent':
       if (detailRecord(json) && typeof json.previousStatus === 'string') return receipt(target, { label: t('detail.receipt.interrupt'), tone: 'warning' }, t, [{ label: t('detail.field.previousStatus'), value: detailBadge(json.previousStatus, t).label }])
       return text === `interrupt requested for agent ${target}` ? receipt(target, { label: t('detail.receipt.interrupt'), tone: 'warning' }, t) : null
-    case 'wait_agent':
+    case 'wait_agent': {
       if (!detailRecord(json) || typeof json.timedOut !== 'boolean') return null
       if (detailRecord(json.noProgress) && typeof json.noProgress.message === 'string') return detailList([{ title: t('detail.wait.noProgress'), description: json.noProgress.message, fields: [] }], t('detail.wait.noProgress'), t)
-      return receipt(t('detail.wait.title'), { label: t(json.timedOut ? 'detail.wait.timeout' : 'detail.wait.changed'), tone: 'neutral' }, t)
+      const label = t(json.timedOut ? 'detail.wait.timeout' : 'detail.wait.ended')
+      return {
+        ...receipt(t('detail.wait.title'), { label, tone: 'neutral' }, t),
+        summary: label,
+        expandedSummary: '',
+      }
+    }
     case 'subagent': {
       const started = /^started (background subagent job|subagent) (\S+)$/u.exec(text)
       if (started !== null) return receipt(arg(args, 'prompt'), { label: t('detail.receipt.started'), tone: 'info' }, t, [{ label: t(started[1] === 'subagent' ? 'detail.field.agent' : 'detail.field.job'), value: started[2] ?? '' }])

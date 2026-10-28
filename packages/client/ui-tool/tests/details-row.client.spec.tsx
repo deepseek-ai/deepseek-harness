@@ -146,12 +146,24 @@ describe('DetailsRow', () => {
     expect(inspect).toHaveBeenCalledOnce()
   })
 
-  it('presents teammate-coordination tools under the two-person team icon', () => {
+  it.each([[false, 'Wait ended'], [true, 'Wait timed out']] as const)('shows one settled wait label with the team icon (%s)', (timedOut, label) => {
     const inspect = vi.fn()
     const expectedIcon = render(<IconUsersOutlineRegular size={14} />).container.querySelector('svg')!.outerHTML
-    const view = render(<DetailsRow {...{ useDisclosure, toolName: 'wait_agent', block: result('wait_agent', { timedOut: true }), inspect, t } as Parameters<typeof DetailsRow>[0]} />)
-    expect(screen.getByText('Wait for input')).toBeTruthy()
+    const view = render(<DetailsRow {...{ useDisclosure, toolName: 'wait_agent', block: result('wait_agent', { timedOut }), inspect, t } as Parameters<typeof DetailsRow>[0]} />)
+    const header = screen.getByRole('button', { expanded: false })
+    expect(header.textContent).toBe(label)
     expect(view.container.querySelector('svg')?.outerHTML).toBe(expectedIcon)
+    fireEvent.click(header)
+    expect(screen.getByRole('button', { expanded: true }).textContent).toBe(label)
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect' }))
+    expect(inspect).toHaveBeenCalledOnce()
+  })
+
+  it('shows a running wait without appending its timeout arguments', () => {
+    const block = { phase: 'start' as const, args: PartialArguments.fromText('{"timeout_ms":30000}'), callId: 'wait', name: 'wait_agent', argsRaw: '{"timeout_ms":30000}', turn: 1, step: 1, time: 1000, subCalls: [] }
+    render(<DetailsRow {...{ useDisclosure, toolName: 'wait_agent', block, t } as Parameters<typeof DetailsRow>[0]} />)
+    const header = screen.getByRole('button', { expanded: false })
+    expect(header.textContent).toBe('Waiting for messages…')
   })
 
   it('registers the supported tool names through the scoped keyed slot', () => {

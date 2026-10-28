@@ -55,12 +55,12 @@ describe('shared detail values', () => {
 
 describe('control detail adapters', () => {
   it.each([
-    [{ timedOut: false }, '等待结果 · 等待结束'],
-    [{ timedOut: true }, '等待结果 · 等待超时'],
+    [{ timedOut: false }, '等待已结束'],
+    [{ timedOut: true }, '等待已超时'],
     [{ timedOut: false, noProgress: { message: 'No pending work' } }, '没有正在运行的子智能体'],
   ] as const)('renders inbox wait results and historical activity diagnostics (%j)', (value, summary) => {
     const translate = makeTranslate(zh, commonZh)
-    expect(translate('tool.title.waitAgent')).toBe('等待输入')
+    expect(translate('tool.title.waitAgent')).toBe('等待消息…')
     expect(detailsCardModel(output('wait_agent', JSON.stringify(value)), translate, 'zh-CN')?.summary).toBe(summary)
   })
 
@@ -106,7 +106,7 @@ describe('control detail adapters', () => {
     expect(details('send_message', '{"status":"queued"}', { agent_id: 'a1', message: 'hello' })?.items[0]?.badge?.label).toBe('Queued')
     expect(details('send_message', 'message delivered to agent reviewer', { name: 'reviewer', message: 'hello' })?.summary).toBe('reviewer · Message delivered')
     expect(details('interrupt_agent', '{"previousStatus":"running"}', { agent_id: 'a1' })?.items[0]?.fields).toContainEqual({ label: 'Previous status', value: 'Running' })
-    expect(details('wait_agent', '{"timedOut":true}')?.summary).toBe('Wait result · Wait timed out')
+    expect(details('wait_agent', '{"timedOut":true}')?.summary).toBe('Wait timed out')
     expect(details('wait_agent', '{"timedOut":false,"noProgress":{"message":"No peer"}}')?.items[0]?.description).toBe('No peer')
     expect(details('subagent', 'started background subagent job job-1', { prompt: 'Do work' })?.items[0]?.fields).toContainEqual({ label: 'Job ID', value: 'job-1' })
     expect(details('subagent', 'A useful reply', { prompt: 'Do work' })?.items[0]?.markdown).toBe('A useful reply')

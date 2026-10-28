@@ -51,6 +51,7 @@ export function DetailsRow({ toolName, block, cwd, home, openFile, inspect, useD
   const titleKey = typeof operation === 'string' && Object.hasOwn(LSP_TITLE_KEYS, operation)
     ? LSP_TITLE_KEYS[operation as keyof typeof LSP_TITLE_KEYS]
     : model.titleKey
+  const isWait = toolName === 'wait_agent'
   return (
     <ToolRow
       useDisclosure={useDisclosure}
@@ -58,8 +59,8 @@ export function DetailsRow({ toolName, block, cwd, home, openFile, inspect, useD
       variant={model.variant}
       toolName={toolName}
       icon={detailIcon(toolName)}
-      title={t(titleKey)}
-      summary={details?.summary ?? details?.items[0]?.title ?? details?.empty ?? model.summary}
+      title={isWait ? details?.summary ?? t(titleKey) : t(titleKey)}
+      summary={isWait ? '' : details?.summary ?? details?.items[0]?.title ?? details?.empty ?? model.summary}
       details={details}
       bodyRaw={model.bodyRaw}
       output={model.output}
