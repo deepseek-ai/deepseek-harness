@@ -44,14 +44,14 @@ Extend existing components, containers and interactions when the capability fits
 - Reuse tokens, values and complete treatments from the target page or nearest established sibling before adding literals; Plugins is the usual full-page reference.
 - Verify colors in light and dark themes; keep ink/background pairs readable, especially dimmed text.
 - Feature CSS you add or change uses **font weight ≤500**; emphasize with size or ink. ui-theme markdown typography tokens are the exception.
-- Use theme typography roles, then the page's scale, then a comparable page's size/spacing ratios. Peers share sizes; keep the scale small (13px is the established row/detail size).
+- Use theme typography roles, then the page's scale, then a comparable page's size/spacing ratios. Do not invent a size for a single element. Peers share sizes; keep the scale small (13px is the established row/detail size).
 - Apply alignment and icon rules to icon/text relationships.
 
 ## Component geometry
 
 Choose component role and size variant, then its container relationship. Compare height, radius, curve, inset and material together; equal radii alone do not establish coherence, and wrapping/expansion alone does not justify larger radii. [Radius standards](../../../docs/ui-radius.md#radius-scale) own values and exceptions.
 
-- **Inset:** coordinate inner/outer curves and inset. Radius subtraction is exact for concentric circular arcs; for superellipses, also inspect diagonal whitespace.
+- **Inset:** coordinate inner/outer curves and inset. Radius subtraction is exact for concentric circular arcs; for superellipses, subtraction is only a nominal sizing rule, so inspect diagonal whitespace as well as side gaps.
 - **Flush or adjoining:** the enclosure owns exposed corners; internal joins stay square. Hover fills and pseudo-elements follow that contour without clipping menus or focus.
 - **Independent child card/group:** use its own role/size tier, not the dialog radius or subtraction of all parent padding.
 - **Circles/capsules:** preserve shape, including avatar container and image, using the theme's round-curve exception; ordinary controls use the shared curve.
@@ -66,7 +66,7 @@ Compare related controls, including small selection controls, at actual size in 
 
 Follow [error handling](../dsh-error-handling/SKILL.md#localized-actionable-visible-reports). Choose feedback by message lifetime:
 
-- Transient success/failure uses the app-wide Toast, with state and rendering in a host that survives the reporting panel/tab, such as a `shell.overlay` entry. Do not toast pending states.
+- Transient success/failure uses the app-wide Toast, with state and rendering in a host that survives the reporting panel/tab, such as a `shell.overlay` entry. A deletion may close its source panel; a Toast owned by that panel would disappear with it. Do not toast pending states.
 - Failed operations retain visible data; failed deletion keeps the row.
 - Surface-owned failures use in-place notices: query failure with Retry or field validation. Keep a compact notice beside populated content; only empty panels center a full error state.
 - Use short plain-language errors, preferably one sentence, without internal jargon except necessary diagnostic codes. Chinese notices of at most two sentences omit the trailing 句号（。）. Reserve space or overlay notices so neighbors do not shift.
@@ -77,7 +77,7 @@ Lists use skeletons; other page-level loads center a bare spinner. Keep one load
 
 ### Overlays and menus
 
-Before merge, verify every menu, popover and tooltip closes on outside click (and Escape when focusable), fits the viewport with an edge margin, and escapes ancestor clipping/neighbor coverage, using portals when needed. Flip only into a side that fits; never oscillate when neither fits.
+Before merge, verify every menu, popover and tooltip closes on outside click (and Escape when focusable), fits the viewport with an edge margin, and escapes ancestor clipping, containing blocks and neighbor coverage, using a portal to body when needed. Flip only into a side that fits; never oscillate when neither fits.
 
 Use shared scrollbar styles and a small inset; bars must stay inside containers without being clipped by rounded corners or edges.
 
