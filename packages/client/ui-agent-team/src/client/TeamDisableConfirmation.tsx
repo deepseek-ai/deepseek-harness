@@ -12,7 +12,7 @@ export interface TeamDisableRequest {
   sessionId: SessionId
 }
 
-/** Confirmation request and Session-bound command supplied by the plugin. */
+/** Confirmation request and Session-bound selection callbacks supplied by the plugin. */
 export interface TeamDisableConfirmationInjected {
   hooks: { disableRequest: HostObservable<TeamDisableRequest | null> }
   cancelDisable: (sessionId: SessionId) => void

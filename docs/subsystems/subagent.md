@@ -2,7 +2,7 @@
 
 English | [中文](subagent.zh.md)
 
-The unified activation API manages local conversations and external executions. Creation ancestry, runtime ownership, and communication belong to the subagent tree. [Subagent controls](../../packages/subagent/tool-subagent-control/README.md) own exact-caller inbox waiting; experimental Team tools add shared tasks, task policy, and Team identity.
+The unified activation API manages local conversations and external executions. Creation ancestry, runtime ownership, and communication belong to the subagent tree. [Subagent controls](../../packages/subagent/tool-subagent-control/README.md) own agent identity and exact-caller inbox waiting; Team tools add shared tasks and task policy.
 
 ## Capabilities and activation requests
 
@@ -495,6 +495,13 @@ startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
 rootOf(caller: Agent): Agent
 
 /**
+ * End current input waits in a tree without adding inbox content or starting Agents.
+ * Listener failures are logged and contained; signals are not retained for later waits.
+ * @param root - exact tree root captured by the operation requesting notification.
+ */
+notifyTreeWaits(root: Agent): void
+
+/**
  * Join progressing subagent tree work for its root. Idle members with parked input
  * stay resident without delaying host completion. Ordinary members return false.
  * @param root - exact live subagent tree root whose member work is awaited.
@@ -641,6 +648,27 @@ Types: [Scoped](scope.md)
 
 Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
 
+<a id="subagentmessage-name--bail"></a>
+
+#### `subagent/message-name` — bail
+
+Resolve visible message attribution from the authenticated sender. The naming provider returns its current name; without a provider the Session id is used. Lookup failures reject the send before inbox acceptance.
+
+```ts cordis-catalog
+/**
+ * Resolve visible message attribution from the authenticated sender.
+ * The naming provider returns its current name; without a provider the Session id is used.
+ * Lookup failures reject the send before inbox acceptance.
+ * @param sender - exact live Agent whose message is being delivered.
+ * @mode bail
+ */
+'subagent/message-name'(this: Scoped<SubagentRuntime>, sender: Agent): string | undefined
+```
+
+Types: [Agent](core.md) · [Scoped](scope.md)
+
+Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
+
 <a id="subagentprovider-added--emit"></a>
 
 #### `subagent/provider-added` — emit
@@ -695,6 +723,26 @@ A provider established a published child. For in-process providers, `ctx.agents.
 ```
 
 Types: [Scoped](scope.md)
+
+Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
+
+<a id="subagenttree-wait-notified--emit"></a>
+
+#### `subagent/tree-wait-notified` — emit
+
+End current input waits in one subagent tree without retaining the signal. Broadcast to all scopes; consumers match the exact live root instance.
+
+```ts cordis-catalog
+/**
+ * End current input waits in one subagent tree without retaining the signal.
+ * Broadcast to all scopes; consumers match the exact live root instance.
+ * @param root - the root whose current tree waits should end.
+ * @mode emit
+ */
+'subagent/tree-wait-notified'(root: Agent): void
+```
+
+Types: [Agent](core.md)
 
 Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
 <!-- END GENERATED cordis-surface -->

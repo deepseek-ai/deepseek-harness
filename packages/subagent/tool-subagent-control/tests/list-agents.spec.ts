@@ -301,7 +301,7 @@ describe('list_agents', () => {
     // Completion reaches the parent through its notice; listing is discovery,
     // so its inactive status must not send the model looking for a result.
     expect(schema?.description).toContain('While you remain active, you will be notified when a direct child finishes')
-    expect(schema?.description).toContain('inactive means it is not currently working')
+    expect(schema?.description).toContain('inactive means no turn is executing')
     // The enum is the closed vocabulary the model renders, so pin it rather than
     // scanning prose that legitimately reads "not to poll for completion".
     const variants = ctx.tools.get('list_agents')?.output.schema.items?.oneOf ?? []

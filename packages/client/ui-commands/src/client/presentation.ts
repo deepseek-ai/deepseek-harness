@@ -30,7 +30,7 @@ interface HostFace {
 }
 
 /** One built-in Host command's face, keyed by its dictionary entries. */
-function hostFace(name: Exclude<BuiltinCommandName, 'team'>, icon: ComponentType<IconProps>): readonly [BuiltinCommandName, HostFace] {
+function hostFace(name: BuiltinCommandName, icon: ComponentType<IconProps>): readonly [BuiltinCommandName, HostFace] {
   return [name, {
     label: `label.${name}`,
     description: `description.${name}`,
@@ -52,8 +52,8 @@ const HOST_FACES: ReadonlyMap<BuiltinCommandName, HostFace> = new Map([
  * The localized menu face of a catalog row.
  * @param descriptor - effective Host command descriptor.
  * @param t - the `command` namespace translator.
- * @returns title, description, and glyph when the built-in command has a menu
- * face; undefined otherwise.
+ * @returns title, description, and glyph for a built-in command; undefined
+ * for any other row, which keeps its catalog description.
  */
 export function builtinRowFace(
   descriptor: CommandDescriptor,

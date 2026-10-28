@@ -3081,10 +3081,10 @@ describe('continuable settlement delivery', () => {
     let childTurns = 0
     const respond = (options: GenerateOptions): StreamChunk[] => {
       const history = JSON.stringify(options.messages)
-      if (!history.includes('Your parent agent id is')) return textResponse('parent ack')
+      if (!history.includes('Your parent agent is')) return textResponse('parent ack')
       childTurns += 1
       if (childTurns > 1) return textResponse('the answer')
-      const parentId = /Your parent agent id is \\"([^\\]+)\\"/.exec(history)![1]!
+      const parentId = /Your parent agent is \\"([^\\]+)\\"/.exec(history)![1]!
       const calls = order.map(name => name === 'noop'
         ? { id: ToolCallId('n1'), name, arguments: '{}' }
         : { id: ToolCallId('s1'), name, arguments: JSON.stringify({ name: parentId, message: 'interim' }) })

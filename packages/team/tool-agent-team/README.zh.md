@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-此包让 subagent（子智能体）树中的每个 agent 创建、认领并完成共享任务。它添加四个任务 schema、共享任务板指导和必需的 Team 身份。普通 subagent 控制工具负责发现、通信、中断和收件箱等待。基础 bundle 加载服务与工具；新 Session 默认关闭 Team 模式。
+此包让 subagent（子智能体）树中的每个 agent 创建、认领并完成共享任务。它添加四个任务 schema 和共享任务板指导。普通 subagent 控制工具负责发现、通信、中断和收件箱等待。基础 bundle 加载服务与工具；新 Session 默认关闭 Team 模式。
 
 ## 目录
 
@@ -88,11 +88,11 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口、已移除键拒绝、Team 策略与身份，以及四个作用域内任务工具 |
+| [`src/index.ts`](src/index.ts) | 插件入口、已移除键拒绝、Team 策略，以及四个作用域内任务工具 |
 
 ### 策略与工具
 
-每个 Agent 作用域均注册一个 `team:policy` 段落、必需的 `team:identity` 上下文和四个任务 schema，包括 fork 子级。树权限从 `ctx.subagents.rootOf(agent)` 派生；`ctx.subagentNames` 提供已绑定的显示名称或原始 Session id。根不可用时，上下文说明共享任务、subagent 发现与通信不可用，不从 Session 创建来源推断父代理。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
+每个启用 Team 的 Agent 作用域均注册一个 `team:policy` 段落和四个任务 schema，包括 fork 子级。树权限从 `ctx.subagents.rootOf(agent)` 派生；`ctx.subagentNames` 提供任务负责人名称。身份、发现、通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)，在切换 Team 模式时保持不变。subagent 运行时负责投递最终结果。
 
 ### 按作用域注册与拆除
 
@@ -128,11 +128,11 @@ kind: "package-reference"
 ##### Team 策略
 
 ```markdown
-A shared task board is available to every agent in your subagent tree. Task owners use agent names from list_agents, or Session ids when no name is bound. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+A shared task board is available in this session. Task owners use agent names from list_agents, or Session ids when no name is bound. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
-Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
+Record expected write scopes on shared tasks and use dependencies when work must be ordered. Write-scope overlap is advisory, not a lock. List tasks, read their details, claim with the current revision, perform the work, then complete the task. Task readiness does not start an agent; use send_message to start an inactive agent when needed.
 
-Task changes end current wait_agent calls in your subagent tree. Changes outside a wait are not retained as notifications, and no task-board messages are added to an inbox. After wait_agent returns, read the latest tasks before acting. Task changes do not start idle agents; use send_message when an agent needs to continue working.
+Task changes end current wait_agent calls in your subagent tree. After wait_agent returns, read the latest tasks before acting.
 ```
 
 #### Token 影响
@@ -142,37 +142,6 @@ Task changes end current wait_agent calls in your subagent tree. Changes outside
 #### KV Cache 影响
 
 该文本对 Lead 与每个后代都相同，并且在插件保持加载期间不会变化，因此它保持稳定的 system prompt 前缀，包括父级与其 `subagent_fork` 子级之间。加载或卸载插件会改变每个成员的 system prompt，并使其已缓存前缀失效。
-
-### Team 身份运行时上下文
-
-#### 模型看到什么
-
-必需的 `team:identity` 上下文对根和队友使用以下文本。根不可用时，上下文明确报告该事实并允许独立工作。可选上下文抑制不能移除该身份；普通运行时上下文机制会在压缩后恢复它。
-
-##### 根身份
-
-```markdown
-You are the Team Lead. Your name is lead.
-Use list_agents({}) to find your teammates and their full names.
-To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).
-```
-
-##### 队友身份
-
-```markdown
-You are a teammate in the Team led by "lead".
-To message your Team Lead, use send_message({ name: "lead", message: "..." }).
-Use list_agents({}) to find your teammates and their full names.
-To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).
-```
-
-#### Token 影响
-
-身份属于完整运行时上下文快照。已保留的稳定上下文不会新增消息。
-
-#### KV Cache 影响
-
-身份通过运行时上下文追加，成员共享的系统文本保持一致。Team 模式中的普通 Session fork 获得自身的根身份；实际提供方的缓存复用仍为尽力而为。
 
 ### 任务工具 schema
 

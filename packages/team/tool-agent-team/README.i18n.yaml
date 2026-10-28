@@ -9,8 +9,8 @@
   en: 533f0cbcca7f6d2e
   zh: df480f25b4808b57
 /deepseek-ai-dsh-tool-agent-team/summary:
-  en: 656bbce0b74cc562
-  zh: 20212fe57a0b04cc
+  en: 3cfb2bbd5dd3b89e
+  zh: 070007c2ee2cec11
 /deepseek-ai-dsh-tool-agent-team/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -36,11 +36,11 @@
   en: 236b044c249412f6
   zh: b4886ad8eff97b8b
 /deepseek-ai-dsh-tool-agent-team/understand-the-implementation/source-map:
-  en: 29ff96b23b25b13e
-  zh: 7d2cdf9be86d1ed4
+  en: a62bfccdba45f5fc
+  zh: 76ea8ed7bcbc9f4b
 /deepseek-ai-dsh-tool-agent-team/understand-the-implementation/policy-and-tools:
-  en: 074f6c475a4ee627
-  zh: 4804edb4cc77c355
+  en: 08168dfd024935d8
+  zh: 1ee6d11782eabe7f
 /deepseek-ai-dsh-tool-agent-team/understand-the-implementation/scoped-registration-and-teardown:
   en: 61f78346d308a38d
   zh: 94bd891a618b462a
@@ -65,24 +65,6 @@
 /deepseek-ai-dsh-tool-agent-team/model-experience/team-policy-system-prompt/kv-cache-effect:
   en: 6723f8e3f2497338
   zh: ca68851b279362e1
-/deepseek-ai-dsh-tool-agent-team/model-experience/team-identity-runtime-context:
-  en: ed8642015d306d6d
-  zh: 31496981d115ba40
-/deepseek-ai-dsh-tool-agent-team/model-experience/team-identity-runtime-context/what-the-model-sees:
-  en: 03e9192abe6c2c8f
-  zh: 273f4238e40721cd
-/deepseek-ai-dsh-tool-agent-team/model-experience/team-identity-runtime-context/what-the-model-sees/root-identity:
-  en: 58d2b04f507baa5f
-  zh: 773786c59605a154
-/deepseek-ai-dsh-tool-agent-team/model-experience/team-identity-runtime-context/what-the-model-sees/teammate-identity:
-  en: f0d12764966d3005
-  zh: 365df450e96cb6e1
-/deepseek-ai-dsh-tool-agent-team/model-experience/team-identity-runtime-context/token-effect:
-  en: b9c8f7524fbe3204
-  zh: 6c61dfb24b4b677a
-/deepseek-ai-dsh-tool-agent-team/model-experience/team-identity-runtime-context/kv-cache-effect:
-  en: 32488ff4b3134dbf
-  zh: 5b76b6a325597ddb
 /deepseek-ai-dsh-tool-agent-team/model-experience/task-tool-schemas:
   en: d6918434714cf05a
   zh: eef799d16e0c8f4b

@@ -20,7 +20,7 @@ import type { ClientSessionContext, ConsumeTokenRequest, InputTriggerPick, Input
 import type { CommandContribution, CommandDecoration, PopupSelectSpec, SelectOption } from '../src/client/contract.ts'
 import type { CommandDescriptor } from '../src/client/directory.ts'
 import { CommandUiRuntime } from '../src/client/service.ts'
-import { de, en, es, fr, ja, pt, ru, zh, type CommandKey } from '../src/client/locales.ts'
+import { en, zh, type CommandKey } from '../src/client/locales.ts'
 
 const sid = (k: string): SessionId => k as SessionId
 
@@ -408,53 +408,6 @@ describe('candidates', () => {
       expect(rows[6]).toMatchObject({ name: 'model', label: '模型', description: '选择本会话使用的模型', icon: Glyph })
       // A third-party command keeps its catalog text and gets no glyph.
       expect(rows[8]).toEqual({ name: 'deploy', description: 'third-party command', section: 'command:section.commands' })
-    })
-
-    it.each([
-      ['en', en], ['zh', zh], ['ja', ja], ['es', es], ['fr', fr], ['de', de], ['ru', ru], ['pt', pt],
-    ] as const)('hides built-in Team candidates but preserves typed commands under %s', async (_locale, dictionary) => {
-      const descriptor = { definitionId: CommandDefinitionId('@deepseek-ai/dsh-agent-team'), name: 'team', description: 'Host description', input: { hint: 'on|off' } }
-      const { source, warm, executeCalls } = await bench({
-        commands: () => Promise.resolve({ commands: [...SHIPPED, descriptor] }),
-        translate: (_namespace, key) => dictionary[key as CommandKey],
-      })
-      await warm(proj('s1'))
-      const rows = await source.candidates(proj('s1'), req(''))
-      expect(rows.map(row => row.name)).toEqual(['goal', 'plan', 'feedback', 'compact', 'permission', 'export', 'deploy'])
-      for (const query of ['team', '团队', '智能体团队协作']) {
-        await expect(source.candidates(proj('s1'), req(query))).resolves.toEqual([])
-      }
-      for (const token of ['/team', '/团队']) {
-        expect(source.matchSpace!(proj('s1'), token)).toHaveProperty('claim.name', 'team')
-        await expect(source.matchClaim!(proj('s1'), token, new AbortController().signal))
-          .resolves.toMatchObject({ name: 'team', token: `${token} ` })
-        for (const args of ['on', 'off']) {
-          const outcome = await source.matchEnter!(proj('s1'), `${token} ${args}`, new AbortController().signal, { attachments: 0 })
-          expect(outcome).toHaveProperty('claim.token', `${token} `)
-          if (outcome === undefined || outcome === 'handled' || !('claim' in outcome)) throw new Error('expected a typed Team claim')
-          await expect(outcome.claim.submit(args, new Context(), [])).resolves.toEqual({ kind: 'success' })
-        }
-      }
-      expect(executeCalls).toEqual(['on', 'off', 'on', 'off'].map(args => ({ sessionId: sid('s1'), line: `/team ${args}`, images: [] })))
-    })
-
-    it('keeps a same-name scoped Team override visible without granting the built-in alias', async () => {
-      const descriptor = { name: 'team', description: 'Scoped team command', input: { hint: '<task>' } }
-      const { source } = await bench({ commands: () => Promise.resolve({ commands: [descriptor] }) })
-      for (const query of ['', 'team']) {
-        const rows = await source.candidates(proj('s1'), req(query))
-        expect(rows).toHaveLength(1)
-        expect(rows[0]).toMatchObject({ name: 'team', description: 'Scoped team command', hint: '<task>' })
-      }
-      expect(source.matchSpace!(proj('s1'), '/team')).toHaveProperty('claim.name', 'team')
-      expect(source.matchSpace!(proj('s1'), '/团队')).toBeUndefined()
-    })
-
-    it('rejects a contribution colliding with the hidden built-in Team command', async () => {
-      const descriptor = { definitionId: CommandDefinitionId('@deepseek-ai/dsh-agent-team'), name: 'team', description: 'Host description' }
-      const { command, source } = await bench({ commands: () => Promise.resolve({ commands: [descriptor] }) })
-      command.register(themeContribution({ name: 'team' }))
-      await expect(source.candidates(proj('s1'), req(''))).rejects.toThrow('contribution /team collides with a host command')
     })
 
     it('a same-name override keeps its own presentation even when it copies the first-party description', async () => {

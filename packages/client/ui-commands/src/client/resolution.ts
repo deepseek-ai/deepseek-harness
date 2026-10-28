@@ -4,7 +4,6 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
 import { en, zh } from './locales.ts'
 
 const BUILTINS = {
-  team: '@deepseek-ai/dsh-agent-team',
   goal: '@deepseek-ai/dsh-command-goal',
   plan: '@deepseek-ai/dsh-plan-mode',
   feedback: '@deepseek-ai/dsh-command-feedback',
@@ -13,7 +12,7 @@ const BUILTINS = {
   export: '@deepseek-ai/dsh-session-log-export',
 } as const
 
-/** Names whose first-party definitions have localized input spellings. */
+/** Names whose first-party definitions have localized client presentation. */
 export type BuiltinCommandName = keyof typeof BUILTINS
 
 /**

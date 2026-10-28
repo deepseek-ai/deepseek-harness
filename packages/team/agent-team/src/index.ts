@@ -2,13 +2,11 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
-import type {} from '@deepseek-ai/dsh-commands'
+import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
-import { emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-session-persistence'
-import { SubagentError } from '@deepseek-ai/dsh-subagent'
+import type {} from '@deepseek-ai/dsh-subagent'
 import { TeamError } from './error.ts'
 import { TeamJournal } from './journal.ts'
 import { teamProjectionDefinition, type TeamProjectionState } from './projection.ts'
@@ -53,7 +51,7 @@ function positiveLimit(name: string, value: number): number {
 }
 
 /** Agent Teams service backed by the exact live Lead Session log. */
-export class TeamService extends Service {
+export class TeamService extends TypertRemoteService {
   static inject = ['agents', 'sessions', 'sessionPersistence', 'sessionProjections', 'subagents']
 
   static Config: z<Config> = z.object({
@@ -81,24 +79,8 @@ export class TeamService extends Service {
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
     this.projection = await ctx.sessionProjections.register(teamProjectionDefinition)
-    this.journal = new TeamJournal(ctx, this.projection, (root) => { this.notifyWaits(root) })
+    this.journal = new TeamJournal(ctx, this.projection, (root) => { ctx.subagents.notifyTreeWaits(root) })
     this.tasks = new TeamTaskBoard(ctx, this.journal, this.maxTasks)
-    ctx.inject(['commands'], (scope) => {
-      scope.commands.register({
-        definitionId: CommandDefinitionId('@deepseek-ai/dsh-agent-team'),
-        name: 'team',
-        description: 'Enable or disable Agent Teams for this Session',
-        input: { hint: 'on|off', attachments: false },
-        handler: async ({ agent, rawInput, signal }) => {
-          const selection = rawInput.trim()
-          if (selection !== 'on' && selection !== 'off') {
-            return { kind: 'error', text: 'Use /team on or /team off.' }
-          }
-          await this.setEnabled(agent, selection === 'on', signal)
-          return { kind: 'success', text: selection === 'on' ? 'Agent Teams enabled.' : 'Agent Teams disabled.' }
-        },
-      })
-    })
   }
 
   /**
@@ -116,34 +98,22 @@ export class TeamService extends Service {
    * The selection takes effect before awaiting consumers or persistence. Task mutations
    * check the current mode when their queued operation starts; admitted operations finish.
    * Current waits end after the selection is flushed.
-   * @param caller - exact live root whose tree receives the selection.
+   * @param agent - exact live root whose tree receives the selection.
    * @param enabled - selected Team mode.
    * @param signal - cancellation checked before changing the selection.
    * @returns fulfillment after the selection flushes and scoped consumers update.
    * @throws when called by a descendant, a consumer fails, or persistence fails. An appended selection remains active;
    * retrying the same selection synchronizes consumers and flushes without a duplicate event.
    */
-  async setEnabled(caller: Agent, enabled: boolean, signal?: AbortSignal): Promise<void> {
-    const root = this.ctx.subagents.rootOf(caller)
-    if (root !== caller) throw new TeamError('change Team mode from the root Session', 'TEAM_LEAD_REQUIRED')
+  @Remote
+  async setEnabled(agent: Agent, enabled: boolean, signal?: AbortSignal): Promise<void> {
+    const root = this.ctx.subagents.rootOf(agent)
+    if (root !== agent) throw new TeamError('change Team mode from the root Session', 'TEAM_LEAD_REQUIRED')
     signal?.throwIfAborted()
     if (this.isEnabled(root) !== enabled) root.session.append('team/mode', { enabled })
     await this.ctx.parallel('team/mode-changed', root)
     await this.ctx.sessions.flush(root.session)
-    this.notifyWaits(root)
-  }
-
-  private notifyWaits(root: Agent): void {
-    for (const agent of this.ctx.agents.list()) {
-      let agentRoot: Agent
-      try {
-        agentRoot = this.ctx.subagents.rootOf(agent)
-      } catch (error: unknown) {
-        if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') continue
-        throw error
-      }
-      if (agentRoot === root) emitAgentEvent(this.ctx, agent, 'agent/wait-notified', {})
-    }
+    this.ctx.subagents.notifyTreeWaits(root)
   }
 
   /**

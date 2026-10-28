@@ -54,7 +54,7 @@ Set `config.interrupt: false` to omit `interrupt_agent`. The default is `true`. 
 <a id="wait_agent"></a>
 ### wait_agent
 
-Waits for the exact caller’s next-step inbox. Pending input returns immediately; later input, including messages, completion notifications, and user steering, ends the wait. Queued next-turn messages, unrelated inboxes, and Agent status changes do not end it. An Agent-scoped in-memory wait signal also ends an active wait; signals are not retained for future waits. The tool neither consumes input nor starts an Agent. `timeout_ms` defaults to 30000 and must be an integer from 10000 through 3600000. Results contain only `timedOut`; cancellation, caller disposal, or plugin unload rejects the wait.
+Waits for the exact caller’s next-step inbox. Pending input returns immediately; later input, including messages, completion notifications, and user steering, ends the wait. Queued next-turn messages, unrelated inboxes, and Agent status changes do not end it. A tree-wide in-memory signal also ends current waits whose captured root is the same live Agent instance; signals are not retained for future waits. Unmanaged delegated Agents can still wait for their own inbox. The tool neither consumes input nor starts an Agent. `timeout_ms` defaults to 30000 and must be an integer from 10000 through 3600000. Results contain only `timedOut`; cancellation, caller disposal, or plugin unload rejects the wait.
 
 ### list_agents
 
@@ -72,11 +72,11 @@ This section explains what the tools delegate to the subagent service; the obser
 
 ### Design concept
 
-`ctx.subagentNames` resolves names synchronously; messaging, interruption, and catalog traversal delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool subscribes to the exact caller’s inbox and wait signals before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement.
+`ctx.subagentNames` resolves names synchronously; messaging, interruption, and catalog traversal delegate to `ctx.subagents`; residency, cold resume, and authorization belong to that service. The wait tool resolves tree membership once at entry, subscribes to the exact caller’s inbox and tree-wait signals before starting the timer and checking pending next-step input, and removes its listeners and timer on every settlement. Unexpected root lookup failures reject before subscribing.
 
 ### Delivery and signal ownership
 
-The execution signal owns work only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-id> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`. Tree membership authorizes communication; the subagent tree root owns runtime instances and capacity.
+The execution signal owns work only until inbox acceptance. Accepted messages cannot be cancelled through this tool. Every message is framed as `Agent <sender-name-or-id> sent a message:` and recorded with `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`. Tree membership authorizes communication; the subagent tree root owns runtime instances and capacity.
 
 ### Listing projection
 
@@ -122,19 +122,19 @@ Fixed schema cost per request, independent of the number or descriptions of chil
 
 The schema prefix stays stable while these tools are available. A parent and its continuable children, including fork children, inherit the same definitions.
 
-### Communication context
+### Identity and communication context
 
 #### What the model sees
 
-The logged `subagent:communication` runtime context tells delegated children their direct creator’s JSON-encoded Session id and how to send findings that change the parent’s next action. Named controls also accept this id. Sending a message does not end the turn. Root Agents and ordinary Session forks receive no communication context; delegated children receive it only when the standard messaging definition is admitted in the current scope and step. Automatic result delivery remains owned by the subagent service.
+Required `subagent:identity` runtime context identifies the root as `lead`, and each delegated child by its full name, direct parent, and root. It is independent of Team mode and tool filtering. Before a name is bound, it explicitly uses the Session id as the agent address; a missing live root is reported without preventing independent work. Required `subagent:communication` context explains discovery and messaging only when their standard tools are admitted. Delegated children also receive guidance to message their parent when a finding changes its next action. Automatic result delivery remains owned by the subagent service.
 
 #### Token effect
 
-One short context entry per delegated child, independent of tree size.
+Two short context entries per agent, independent of tree size.
 
 #### KV Cache effect
 
-Communication guidance is retained as runtime context after inherited history, leaving the shared system prompt and tool definitions unchanged between parent and child. The parent id comes from the child Session header; prompt assembly does not wait for a name binding or read the name map.
+Identity and communication guidance follow inherited history as logged runtime context, leaving the shared system prompt and tool definitions unchanged. Names come from the root mapping; a later binding updates the next request. Required context survives optional-context suppression and is restored after compaction. Team mode changes neither entry.
 
 ### Interrupt result
 
@@ -168,7 +168,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-The first row is `<id> [<status>] — lead: root agent`. Each continuable descendant follows as `<id> [<status>] parent=<parent-id> depth=<n> — <label>`. When a name is available, the text prefixes the label with `<name>: `; canonical rows retain the original `label` and add `name` separately. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics retain the id, reason, parent, and depth, with an optional name after ` — `. Status describes turn activity, not task completion.
+The first row is `<id> [<status>] — lead: root agent`. Each continuable descendant follows as `<id> [<status>] parent=<parent-id> depth=<n> — <label>`. When a name is available, the text prefixes the label with `<name>: `; canonical rows retain the original `label` and add `name` separately. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics retain the id, reason, parent, and depth, with an optional name after ` — `. Status describes turn activity, not task completion, success, or failure.
 
 #### Token effect
 

@@ -137,10 +137,16 @@ export function controlDetails(
     case 'interrupt_agent':
       if (detailRecord(json) && typeof json.previousStatus === 'string') return receipt(target, { label: t('detail.receipt.interrupt'), tone: 'warning' }, t, [{ label: t('detail.field.previousStatus'), value: detailBadge(json.previousStatus, t).label }])
       return text === `interrupt requested for agent ${target}` ? receipt(target, { label: t('detail.receipt.interrupt'), tone: 'warning' }, t) : null
-    case 'wait_agent':
+    case 'wait_agent': {
       if (!detailRecord(json) || typeof json.timedOut !== 'boolean') return null
       if (detailRecord(json.noProgress) && typeof json.noProgress.message === 'string') return detailList([{ title: t('detail.wait.noProgress'), description: json.noProgress.message, fields: [] }], t('detail.wait.noProgress'), t)
-      return receipt(t('detail.wait.title'), { label: t(json.timedOut ? 'detail.wait.timeout' : 'detail.wait.changed'), tone: 'neutral' }, t)
+      const label = t(json.timedOut ? 'detail.wait.timeout' : 'detail.wait.ended')
+      return {
+        ...receipt(t('detail.wait.title'), { label, tone: 'neutral' }, t),
+        summary: label,
+        expandedSummary: '',
+      }
+    }
     case 'subagent':
     case 'subagent_fork': {
       const started = /^started (background subagent job|subagent) (\S+)(?:\nname: (\S+))?$/u.exec(text)

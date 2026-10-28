@@ -1,4 +1,4 @@
-/** Localized /team failures and fallback output from the recorded command. */
+/** Read-only historical /team failures and fallback output. */
 import { useState } from 'react'
 import { DisclosureRow, IconUsersOutlineRegular, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'

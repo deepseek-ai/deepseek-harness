@@ -1,5 +1,5 @@
 /**
- * Lifecycle-edge publication for managed subagent activations.
+ * Contained lifecycle and tree-wait notifications for subagents.
  *
  * The service owns scoped dispatch and listener containment; the manager
  * supplies event payloads from each activation.
@@ -14,9 +14,9 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SubagentResult, SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
 
 /**
- * Publish one lifecycle edge with per-listener exception containment. Run edges
- * carry the subagent tree root that keys scoped dispatch; provider removal has no
- * parent carrier and reaches listeners unscoped.
+ * Publish one notification with per-listener exception containment. Run edges
+ * carry the subagent tree root that keys scoped dispatch. Provider removal and
+ * tree-wait signals reach all scopes; wait consumers match their captured root.
  *
  * The service owns this closure because scoped dispatch keys its carrier by the
  * exact service instance, whose own context filter composes into the carrier;
@@ -26,6 +26,7 @@ export type LifecycleEmitter = {
   (name: 'subagent/start', info: SubagentRunInfo, parent: Agent): void
   (name: 'subagent/end', info: SubagentRunEndInfo, parent: Agent): void
   (name: 'subagent/provider-removed', info: string): void
+  (name: 'subagent/tree-wait-notified', root: Agent): void
 }
 
 /**
@@ -42,8 +43,8 @@ export function createLifecycleEmitter(
   carrier: (parent: Agent) => object,
 ): LifecycleEmitter {
   return (
-    name: 'subagent/start' | 'subagent/end' | 'subagent/provider-removed',
-    info: SubagentRunInfo | SubagentRunEndInfo | string,
+    name: 'subagent/start' | 'subagent/end' | 'subagent/provider-removed' | 'subagent/tree-wait-notified',
+    info: SubagentRunInfo | SubagentRunEndInfo | string | Agent,
     parent?: Agent,
   ): void => {
     const dispatchArgs: unknown[] = parent === undefined

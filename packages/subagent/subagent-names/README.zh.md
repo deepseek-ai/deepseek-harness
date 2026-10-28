@@ -89,7 +89,7 @@ kind: "package-reference"
 
 #### KV Cache 影响
 
-此插件不添加提示词文本或工具 schema。消费方负责模型可见的名称文本及其缓存影响。
+此插件通过 `subagent/message-name` 自动解析消息发送者名称，不添加提示词文本或工具 schema。消费方负责模型可见的名称文本及其缓存影响。
 
 ## 已知限制与待办工作
 

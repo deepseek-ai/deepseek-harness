@@ -9,7 +9,7 @@ import type {} from '@deepseek-ai/dsh-agent'
 import type { NS } from './locales.ts'
 import css from './TeamModeToggle.module.css'
 
-/** Session command supplied by the Client plugin. */
+/** Session selection callbacks supplied by the Client plugin. */
 export interface TeamModeToggleInjected {
   /** Save the selection; null means success, otherwise the string describes the failure. */
   selectTeamMode: (enabled: boolean) => Promise<string | null>
@@ -23,7 +23,7 @@ export type TeamModeToggleProps = PropsRuntime<'conversation.input.model.options
 
 /**
  * Render the saved selection without an optimistic update.
- * @param props - Session projection, menu state, localized copy, and selection command.
+ * @param props - Session projection, menu state, localized copy, and selection callback.
  * @returns the Team switch when the capability projection is available.
  */
 export function TeamModeToggle(props: TeamModeToggleProps) {

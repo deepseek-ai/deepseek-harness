@@ -2,7 +2,7 @@
 
 [English](subagent.md) | 中文
 
-统一的 activation API 管理本地对话和外部执行。创建祖先关系、运行归属和通信由 subagent 树管理。[subagent 控制工具](../../packages/subagent/tool-subagent-control/README.zh.md)负责当前调用者的收件箱等待；实验性 Team 工具添加共享任务、任务策略和 Team 身份。
+统一的 activation API 管理本地对话和外部执行。创建祖先关系、运行归属和通信由 subagent 树管理。[subagent 控制工具](../../packages/subagent/tool-subagent-control/README.zh.md)负责 agent 身份和当前调用者的收件箱等待；Team 工具添加共享任务与任务策略。
 
 ## 能力与 activation 请求
 
@@ -497,6 +497,13 @@ startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
 rootOf(caller: Agent): Agent
 
 /**
+ * End current input waits in a tree without adding inbox content or starting Agents.
+ * Listener failures are logged and contained; signals are not retained for later waits.
+ * @param root - exact tree root captured by the operation requesting notification.
+ */
+notifyTreeWaits(root: Agent): void
+
+/**
  * Join progressing subagent tree work for its root. Idle members with parked input
  * stay resident without delaying host completion. Ordinary members return false.
  * @param root - exact live subagent tree root whose member work is awaited.
@@ -643,6 +650,27 @@ Types: [Scoped](scope.zh.md)
 
 Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
 
+<a id="subagentmessage-name--bail"></a>
+
+#### `subagent/message-name` — bail
+
+Resolve visible message attribution from the authenticated sender. The naming provider returns its current name; without a provider the Session id is used. Lookup failures reject the send before inbox acceptance.
+
+```ts cordis-catalog
+/**
+ * Resolve visible message attribution from the authenticated sender.
+ * The naming provider returns its current name; without a provider the Session id is used.
+ * Lookup failures reject the send before inbox acceptance.
+ * @param sender - exact live Agent whose message is being delivered.
+ * @mode bail
+ */
+'subagent/message-name'(this: Scoped<SubagentRuntime>, sender: Agent): string | undefined
+```
+
+Types: [Agent](core.zh.md) · [Scoped](scope.zh.md)
+
+Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
+
 <a id="subagentprovider-added--emit"></a>
 
 #### `subagent/provider-added` — emit
@@ -697,6 +725,26 @@ A provider established a published child. For in-process providers, `ctx.agents.
 ```
 
 Types: [Scoped](scope.zh.md)
+
+Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
+
+<a id="subagenttree-wait-notified--emit"></a>
+
+#### `subagent/tree-wait-notified` — emit
+
+End current input waits in one subagent tree without retaining the signal. Broadcast to all scopes; consumers match the exact live root instance.
+
+```ts cordis-catalog
+/**
+ * End current input waits in one subagent tree without retaining the signal.
+ * Broadcast to all scopes; consumers match the exact live root instance.
+ * @param root - the root whose current tree waits should end.
+ * @mode emit
+ */
+'subagent/tree-wait-notified'(root: Agent): void
+```
+
+Types: [Agent](core.zh.md)
 
 Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
 <!-- END GENERATED cordis-surface -->

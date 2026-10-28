@@ -27,7 +27,8 @@ const FIXTURE: Record<string, string> = {
     },
     include: ['vendor/**/*.ts', 'packages/**/*.ts'],
   }),
-  'vendor/cordis/src/context.ts': 'export class Context { private brand!: void }\n',
+  'vendor/cordis/src/context.ts':
+    'export class Context { private brand!: void; bail(...args: unknown[]): unknown { return undefined } }\n',
   'vendor/cordis/src/events.ts': [
     'export class EventsService {',
     '  dispatch(type: string, args: unknown[]): unknown[] { return [type, args] }',
@@ -63,6 +64,12 @@ const FIXTURE: Record<string, string> = {
   'packages/fix/pkgc/src/helper.ts':
     "function scriptFire(args: [string]): void { void gEvents.dispatch('emit', args) }\n",
   'packages/fix/pkgc/src/caller.ts': "scriptFire(['pkgc/script-event'])\n",
+  'packages/fix/pkgd/src/index.ts': [
+    "import { Context } from '../../../../vendor/cordis/src/context.ts'",
+    'declare const ctx: Context',
+    "ctx.bail(ctx, 'pkgd/message-name', {})",
+    "const unrelated = { bail: (...args: unknown[]) => args }; unrelated.bail('pkgd/not-an-event')",
+  ].join('\n'),
 }
 
 const root = mkdtempSync(join(tmpdir(), 'gen-doc-graphs-'))
@@ -84,6 +91,11 @@ function dispatchersOf(pkgs: readonly string[], event: string): string[] {
 }
 
 describe('event relation call-site indexing', () => {
+  it('recognizes scoped Cordis bail calls without treating unrelated methods as events', () => {
+    expect(dispatchersOf(['pkgd'], 'pkgd/message-name')).toEqual(['pkgd'])
+    expect(dispatchersOf(['pkgd'], 'pkgd/not-an-event')).toEqual([])
+  })
+
   it('recovers a proven-local helper through the single-file fast path', () => {
     expect(dispatchersOf(['pkga', 'pkgb'], 'pkga/local-event')).toEqual(['pkga'])
   })

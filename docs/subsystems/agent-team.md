@@ -75,7 +75,7 @@ interface TeamTaskSnapshot {
 
 ## Web projection
 
-`agentTeam.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. Mode writes take effect before awaiting tool synchronization or persistence. Task mutations check the current mode when their queued operation starts; admitted mutations may finish. Mode changes wake current waits after flushing. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
+`agentTeam.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. The Web menu calls the same method through `remote.agentTeams.setEnabled`, with the root Session id resolved to its live Agent by the Gateway. Mode writes take effect before awaiting tool synchronization or persistence. Task mutations check the current mode when their queued operation starts; admitted mutations may finish. Mode changes wake current waits after flushing. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
 
 The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted Team record beside the last valid state. Historical member fields remain in persisted projection state but are omitted from the browser view. The task panel labels the root as Lead and other owners from catalog labels, Session titles, or ids.
 
@@ -139,14 +139,14 @@ isEnabled(caller: Agent): boolean
  * The selection takes effect before awaiting consumers or persistence. Task mutations
  * check the current mode when their queued operation starts; admitted operations finish.
  * Current waits end after the selection is flushed.
- * @param caller - exact live root whose tree receives the selection.
+ * @param agent - exact live root whose tree receives the selection.
  * @param enabled - selected Team mode.
  * @param signal - cancellation checked before changing the selection.
  * @returns fulfillment after the selection flushes and scoped consumers update.
  * @throws when called by a descendant, a consumer fails, or persistence fails. An appended selection remains active;
  * retrying the same selection synchronizes consumers and flushes without a duplicate event.
  */
-async setEnabled(caller: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>
+@Remote async setEnabled(agent: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>
 
 /**
  * Create one unowned pending task in the Team Lead log.

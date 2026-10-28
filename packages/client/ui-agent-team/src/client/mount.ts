@@ -36,14 +36,12 @@ export function registerAgentTeamUi(ctx: ClientContext): void {
   ctx.slots.inject('conversation.chat.commandview', () => ctx.slots.register({
     name: 'conversation.chat.commandview', key: 'team', locale: NS,
   }, TeamCommandRow))
-  ctx.inject(['remote', 'remote.commands'], (scope) => {
+  ctx.inject(['remote', 'remote.agentTeams'], (scope) => {
     scope.slots.inject('shell.overlay', function* () {
       const disableRequest = createSnapshotStore<TeamDisableRequest | null>(null)
       const selectTeamMode = async (sessionId: SessionId, enabled: boolean): Promise<string | null> => {
-        const response = await scope.remote.commands.execute(sessionId, enabled ? '/team on' : '/team off', [])
-        if (!response.ok) return response.error.message
-        if (response.value === undefined) return scope.locale.bind(NS)('mode.unavailable')
-        return response.value.result.kind === 'error' ? response.value.result.text : null
+        const response = await scope.remote.agentTeams.setEnabled(sessionId, enabled)
+        return response.ok ? null : response.error.message
       }
       yield () => { disableRequest.set(null) }
       yield scope.slots.register({

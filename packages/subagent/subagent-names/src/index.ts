@@ -48,6 +48,7 @@ export class SubagentNames extends Service {
 
   protected async [Service.init](): Promise<void> {
     this.projection = await this.ctx.sessionProjections.register(subagentNamesProjection)
+    this.ctx.on('subagent/message-name', sender => this.nameOf(sender))
   }
 
   /**

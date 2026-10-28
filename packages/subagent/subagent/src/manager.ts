@@ -63,6 +63,8 @@ interface SubagentHost {
   identityOf(session: Session): SubagentIdentityProjection | undefined
   /** Publish lifecycle events through the owning service's scoped dispatcher. */
   readonly emitLifecycle: LifecycleEmitter
+  /** Resolve display attribution from the live sender through the naming provider. */
+  senderNameOf(sender: Agent): string
 }
 
 /** Inputs shared by fresh and resumed Activation materialization. */
@@ -488,7 +490,7 @@ export class SubagentManager {
     const root = this.rootOf(sender)
     if (sender.id === targetId) throw new SubagentError('send_message requires another agent in the subagent tree', 'UNAUTHORIZED')
     this.assertAdmitting(sender)
-    const message = createAgentMessage(sender, content)
+    const message = createAgentMessage(sender, content, this.host.senderNameOf(sender))
     const activation = this.resident.get(sender.id)
     return this.deliverToMember(root, targetId, [...message.content], {
       signal: options.signal, delivery: 'steer', source: message.source,

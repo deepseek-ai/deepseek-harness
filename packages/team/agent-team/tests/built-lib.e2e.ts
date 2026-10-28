@@ -13,16 +13,24 @@ const artifactUrl = (path: string): string => pathToFileURL(artifact(path)).href
 
 const requiredArtifacts = [
   'packages/team/agent-team/lib/index.js',
+  'packages/team/agent-team/lib/typert.remote-client.js',
 ].every(path => existsSync(artifact(path)))
 
 describe.skipIf(!requiredArtifacts)('Agent Teams built LIB service', () => {
-  it('loads the Host service under plain Node', async () => {
+  it('loads the Host service and validates mode selections through the generated Remote export', async () => {
     const urls = {
       host: artifactUrl('packages/team/agent-team/lib/index.js'),
+      remote: artifactUrl('packages/team/agent-team/lib/typert.remote-client.js'),
     }
     const script = `
       const host = await import(${JSON.stringify(urls.host)})
+      const { default: remote } = await import(${JSON.stringify(urls.remote)})
+      const method = remote.methods['agentTeams/setEnabled']
+      const input = method.input().create()
       console.log(JSON.stringify({
+        acceptsBoolean: [true, false].every(enabled => input.safeParse({ agentId: 'root', enabled }).success),
+        rejectsText: !input.safeParse({ agentId: 'root', enabled: 'on' }).success,
+        rejectsMissingAgent: !input.safeParse({ enabled: true }).success,
         className: host.default.name,
       }))
     `
@@ -31,9 +39,15 @@ describe.skipIf(!requiredArtifacts)('Agent Teams built LIB service', () => {
     expect(result.exitCode, `stderr:\n${result.stderr}`).toBe(0)
     const output = JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '{}') as {
       className: string
+      acceptsBoolean: boolean
+      rejectsText: boolean
+      rejectsMissingAgent: boolean
     }
     expect(output).toEqual({
       className: 'TeamService',
+      acceptsBoolean: true,
+      rejectsText: true,
+      rejectsMissingAgent: true,
     })
   })
 })

@@ -7,7 +7,6 @@
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'token.team': '团队',
   'section.add': '添加',
   'section.commands': '指令',
   'label.goal': '目标',
@@ -43,7 +42,6 @@ export type CommandKey = keyof typeof zh
 
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
-  'token.team': 'team',
   'section.add': 'Add',
   'section.commands': 'Commands',
   'label.goal': 'Goal',
@@ -76,7 +74,6 @@ export const en = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
-  'token.team': 'team',
   'section.add': '追加',
   'section.commands': 'コマンド',
   'label.goal': '目標',
@@ -109,7 +106,6 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  'token.team': 'team',
   'section.add': 'Añadir',
   'section.commands': 'Comandos',
   'label.goal': 'Objetivo',
@@ -142,7 +138,6 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  'token.team': 'team',
   'section.add': 'Ajouter',
   'section.commands': 'Commandes',
   'label.goal': 'Objectif',
@@ -175,7 +170,6 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  'token.team': 'team',
   'section.add': 'Hinzufügen',
   'section.commands': 'Befehle',
   'label.goal': 'Ziel',
@@ -208,7 +202,6 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  'token.team': 'team',
   'section.add': 'Добавить',
   'section.commands': 'Команды',
   'label.goal': 'Цель',
@@ -241,7 +234,6 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  'token.team': 'team',
   'section.add': 'Adicionar',
   'section.commands': 'Comandos',
   'label.goal': 'Objetivo',

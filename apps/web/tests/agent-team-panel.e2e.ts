@@ -7,6 +7,7 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import type {} from '@deepseek-ai/dsh-agent-team'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { CommandId } from '@deepseek-ai/dsh-commands/brand'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
@@ -89,13 +90,6 @@ async function withTeamReceiptPage(
   } finally {
     try { await browser?.close() } finally { await scaffold.close() }
   }
-}
-
-async function submitComposerCommand(page: Page, command: string): Promise<void> {
-  const input = page.locator('[data-composer-input]').first()
-  await writeComposerDraft(page, input, command)
-  await input.press('Enter')
-  await expect.poll(() => input.textContent(), { timeout: 10_000 }).toBe('')
 }
 
 describe('web e2e: agent teamwork panel', () => {
@@ -197,6 +191,8 @@ describe('web e2e: agent teamwork panel', () => {
     await page.keyboard.press('Escape')
     expect(await page.locator('[data-subagent-action]').count()).toBe(0)
     const agent = scaffold.ctx.agents.list()[0]!
+    expect(scaffold.ctx.commands.list(agent).some(command => command.name === 'team')).toBe(false)
+    expect(agent.session.ownEvents().filter(event => event.type === 'command/run' || event.type === 'command/done')).toEqual([])
     const other = await scaffold.ctx.agents.create({ sessionId: SessionId('other-team-mode'), agentOptions: agent.options })
     expect(scaffold.ctx.agentTeams.isEnabled(other.agent)).toBe(false)
     await other.dispose()
@@ -209,13 +205,16 @@ describe('web e2e: agent teamwork panel', () => {
     acknowledgeReloadConnectionLoss(tripwire, beforeReload)
   }, 60_000)
 
-  it('submits Team commands and keeps text editing usable after refocusing', async () => {
+  it('toggles from the model menu and keeps text editing usable after refocusing', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-team-command-input'))
     const input = page.locator('[data-composer-input]').first()
     const agent = scaffold.ctx.agents.list()[0]!
     for (const enabled of [false, true]) {
-      await writeComposerDraft(page, input, `/team ${enabled ? 'on' : 'off'}`)
-      await input.press('Enter')
+      await page.getByRole('button', { name: /^Select model/u }).click()
+      const toggle = page.getByRole('switch', { name: 'Enable agent teamwork', exact: true })
+      await toggle.click()
+      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe(String(enabled))
+      await page.keyboard.press('Escape')
       await expect.poll(() => scaffold.ctx.agentTeams.isEnabled(agent)).toBe(enabled)
       await expect.poll(() => input.textContent()).toBe('')
       await page.getByRole('button', { name: 'Account menu', exact: true }).focus()
@@ -802,6 +801,7 @@ describe('web e2e: agent teamwork panel', () => {
     await expect.poll(() => scaffold.ctx.agentTeams.isEnabled(agent)).toBe(true)
     expect(await dialog.count()).toBe(0)
     await page.keyboard.press('Escape')
+    expect(agent.session.ownEvents().filter(event => event.type === 'command/run' || event.type === 'command/done')).toEqual([])
     expect(tripwire.pageErrors).toEqual([])
   })
 
@@ -834,7 +834,7 @@ describe('web e2e: agent teamwork panel', () => {
   })
 })
 
-it.each(RECEIPT_LOCALES)('hides successful Team command receipts in $language without changing Chat after toggles and reload', async (locale) => {
+it.each(RECEIPT_LOCALES)('toggles teamwork in $language without command records or Chat changes after reload', async (locale) => {
   await withTeamReceiptPage(locale, async (page, scaffold, tripwire) => {
     const agent = scaffold.ctx.agents.list()[0]
     if (agent === undefined) throw new Error('Team receipt fixture has no Agent')
@@ -876,40 +876,58 @@ it.each(RECEIPT_LOCALES)('hides successful Team command receipts in $language wi
       expect(await captureStableAria(page, '[data-chat-flow]', scaffold.workspaceCwd)).toBe(recordedReady)
       await expect.poll(captureLayout).toEqual(recordedLayout)
     }
-    for (const [index, enabled] of [true, false].entries()) {
-      await submitComposerCommand(page, `/team ${enabled ? 'on' : 'off'}`)
-      await expect.poll(() => scaffold.ctx.agentTeams.isEnabled(agent)).toBe(enabled)
-      await expect.poll(() => commandEvents().filter(event => event.type === 'command/done').length).toBe(index + 1)
-      const events = commandEvents()
-      const run = events[index * 2]!
-      expect(run).toMatchObject({
-        type: 'command/run', data: { name: 'team', args: enabled ? ' on' : ' off', source: { kind: 'user' } },
-      })
-      expect(events[index * 2 + 1]).toMatchObject({
-        type: 'command/done', data: { commandId: run.data.commandId, kind: 'success' },
-      })
+    for (const enabled of [true, false]) {
       await page.getByRole('button', { name: locale.modelButton }).click()
-      await expect.poll(() => page.getByRole('switch', { name: locale.toggle, exact: true }).getAttribute('aria-checked')).toBe(String(enabled))
+      const toggle = page.getByRole('switch', { name: locale.toggle, exact: true })
+      await toggle.click()
+      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe(String(enabled))
+      await expect.poll(() => scaffold.ctx.agentTeams.isEnabled(agent)).toBe(enabled)
+      expect(scaffold.ctx.commands.list(agent).some(command => command.name === 'team')).toBe(false)
+      expect(commandEvents()).toEqual([])
       await page.keyboard.press('Escape')
       await assertChatUnchanged()
     }
     await scaffold.ctx.sessions.flush(agent.session)
     const recordedCommands = commandEvents()
-    expect(recordedCommands.map(event => event.type)).toEqual(['command/run', 'command/done', 'command/run', 'command/done'])
+    expect(recordedCommands).toEqual([])
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
     await assertChatUnchanged()
     expect(commandEvents()).toEqual(recordedCommands)
     expect(scaffold.ctx.agentTeams.isEnabled(agent)).toBe(false)
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
+
+    // Historical receipts are read-only fixtures, not invocations of a registered command.
+    for (const args of [' on', ' off']) {
+      const commandId = CommandId(`historical-team-${args.trim()}`)
+      agent.session.append('command/run', { commandId, name: 'team', args, source: { kind: 'user' } })
+      agent.session.append('command/done', { commandId, kind: 'success', text: 'Team mode saved.' })
+    }
+    agent.session.append('command/run', {
+      commandId: CommandId('historical-team-pending'), name: 'team', args: ' on', source: { kind: 'user' },
+    })
+    await scaffold.ctx.sessions.flush(agent.session)
+    const historicalCommands = commandEvents()
+    expect(historicalCommands.map(event => event.type)).toEqual([
+      'command/run', 'command/done', 'command/run', 'command/done', 'command/run',
+    ])
+    const historicalWarningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    await assertChatUnchanged()
+    expect(commandEvents()).toEqual(historicalCommands)
+    expect(scaffold.ctx.agentTeams.isEnabled(agent)).toBe(false)
+    acknowledgeReloadConnectionLoss(tripwire, historicalWarningStart)
   })
 })
 
-it.each(RECEIPT_LOCALES)('shows failed Team commands in $language without a success receipt after reload', async (locale) => {
+it.each(RECEIPT_LOCALES)('renders historical Team failures in $language without a success receipt after reload', async (locale) => {
   await withTeamReceiptPage(locale, async (page, scaffold, tripwire) => {
     const agent = scaffold.ctx.agents.list()[0]
     if (agent === undefined) throw new Error('Team failure fixture has no Agent')
-    await submitComposerCommand(page, '/team invalid')
+    const commandId = CommandId('historical-team-error')
+    agent.session.append('command/run', { commandId, name: 'team', args: ' invalid', source: { kind: 'user' } })
+    agent.session.append('command/done', { commandId, kind: 'error', text: 'Use /team on or /team off.' })
+    await scaffold.ctx.sessions.flush(agent.session)
     const row = page.locator('[data-team-command]')
     const captureFailure = async (): Promise<string> => {
       await row.getByText(locale.failure, { exact: true }).waitFor()

@@ -153,7 +153,31 @@ describe('root Session name mappings', () => {
     await child.dispose()
   })
 
-  it('unregisters only its projection and leaves accepted execution with its owner', async () => {
+  it('resolves message attribution automatically and unregisters it with the naming provider', async () => {
+    const { ctx, parent, namesFiber, start } = await setup(['hang'])
+    const child = await start()
+    const sender = ctx.agents.get(child.childId)!
+    ctx.subagentNames.bind(parent, child.childId, 'lead/reviewer')
+    const steer = vi.spyOn(parent, 'steer')
+    const send = () => ctx.subagents.sendMessage(sender, parent.id, [{ type: 'text', text: 'finding' }], {
+      signal: new AbortController().signal,
+    })
+
+    await send()
+    expect(steer.mock.lastCall?.[0]).toMatchObject({
+      content: [{ type: 'text', text: 'Agent lead/reviewer sent a message: ' }, { type: 'text', text: 'finding' }],
+      source: { kind: 'agent-message', senderSessionId: child.childId },
+    })
+    await namesFiber.dispose()
+    await send()
+    expect(steer.mock.lastCall?.[0].content[0]).toEqual({ type: 'text', text: `Agent ${child.childId} sent a message: ` })
+    await ctx.plugin(SubagentNames)
+    await send()
+    expect(steer.mock.lastCall?.[0].content[0]).toEqual({ type: 'text', text: 'Agent lead/reviewer sent a message: ' })
+    await child.dispose()
+  })
+
+  it('unregisters its projection and leaves accepted execution with its owner', async () => {
     const { ctx, parent, namesFiber, start } = await setup(['hang'])
     const names = ctx.subagentNames
     const reservation = names.reserve(parent, 'reviewer')

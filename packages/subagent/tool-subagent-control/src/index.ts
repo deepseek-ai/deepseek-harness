@@ -12,7 +12,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import type {} from '@deepseek-ai/dsh-subagent'
+import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-subagent-names'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { registerListAgents } from './list-agents.ts'
@@ -40,11 +40,12 @@ export const Config: z<Config> = z.object({
 export function apply(ctx: Context, config: Config = {}): void {
   registerWaitAgent(ctx)
   registerListAgents(ctx)
+  const listAgents = ctx.tools.get('list_agents')
   const sendMessage = defineTool({
     name: 'send_message',
     description:
       'Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. '
-      + 'Returns delivery confirmation, not the agent\'s answer.',
+      + 'Returns delivery confirmation.',
     parameters: {
       name: {
         type: 'string', required: true,
@@ -70,17 +71,45 @@ export function apply(ctx: Context, config: Config = {}): void {
   })
   ctx.tools.register(sendMessage)
   ctx.systemPrompt.context({
+    name: 'subagent:identity',
+    order: ctx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),
+    required: true,
+    interpolate: false,
+    text: ({ agent }) => {
+      if (agent === undefined) return ''
+      try {
+        const root = ctx.subagents.rootOf(agent)
+        if (root === agent) return 'You are the root agent named "lead".'
+        const name = ctx.subagentNames.nameOf(agent)
+        const parent = ctx.subagentNames.nameOf(agent, agent.session.header.parentSession)
+        const self = name === agent.id ? `Your agent address is ${JSON.stringify(name)}.`
+          : `Your name is ${JSON.stringify(name)}.`
+        return `${self} Your parent agent is ${JSON.stringify(parent)}. Your root agent is "lead".`
+      } catch (error: unknown) {
+        if (!(error instanceof SubagentError) || error.code !== 'UNAUTHORIZED') throw error
+        return `Your agent address is ${JSON.stringify(agent.id)}. Your subagent tree root is unavailable. `
+          + 'Continue independent work; subagent discovery and messaging require an active root.'
+      }
+    },
+  })
+  ctx.systemPrompt.context({
     name: 'subagent:communication',
     order: ctx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),
     required: true,
     interpolate: false,
     text: ({ agent, scope, toolSet }) => {
-      if (agent === undefined || agent.session.header.origin !== 'subagent'
-        || ctx.tools.get(sendMessage.name, scope, toolSet) !== sendMessage) return ''
-      const parentId = JSON.stringify(agent.session.header.parentSession)
-      return `Your parent agent id is ${parentId}. Use `
-        + `send_message({ name: ${parentId}, message: "<finding>" }) when a finding changes what the `
-        + 'parent should do next; sending a message does not end your turn.'
+      if (agent === undefined) return ''
+      const guidance: string[] = []
+      if (ctx.tools.get('list_agents', scope, toolSet) === listAgents) {
+        guidance.push('Use list_agents({}) to find agents in your tree and their full names.')
+      }
+      if (ctx.tools.get(sendMessage.name, scope, toolSet) === sendMessage) {
+        guidance.push('Use send_message({ name: "<full agent path>", message: "..." }) to message another agent.')
+        if (agent.session.header.origin === 'subagent') {
+          guidance.push('Message your parent when a finding changes what it should do next; sending a message does not end your turn.')
+        }
+      }
+      return guidance.join('\n')
     },
   })
   if (config.interrupt !== false) ctx.tools.register(defineTool({
