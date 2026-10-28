@@ -12,7 +12,7 @@ description: "把 DSH 页面或弹窗作为整体审查，按设计原则说明�
 
 对齐审查先核对图标完整空间（含有意保留的内部留白）、文字列和间距，再检查实际轮廓。热区不等于图标框；不逐个拉齐 glyph 的像素边缘。判断顺序见[对齐原则](../ui-design-review-cases.zh.md#alignment)。
 
-按[同前景色规则](../../.agents/skills/dsh-ui-icons/SKILL.md#placement-and-use)核对关联图标与文字，包括子菜单值与箭头、搜索占位文字与放大镜；检查明暗主题中的实际颜色和透明度，保留语义例外。
+按[同前景色规则](../../.agents/skills/dsh-client-ui-ux/references/icons.md#placement-and-use)核对关联图标与文字，包括子菜单值与箭头、搜索占位文字与放大镜；检查明暗主题中的实际颜色和透明度，保留语义例外。
 
 ## 目录
 

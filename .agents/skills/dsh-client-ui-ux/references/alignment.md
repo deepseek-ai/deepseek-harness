@@ -1,11 +1,6 @@
----
-name: dsh-ui-alignment
-description: Design or review DSH shared text columns, icon/label placement, tree indentation and centering. Apply before positioning elements and when checking rendered results.
----
-
 # UI alignment
 
-Apply within the [UI development loop](../dsh-client-ui-ux/SKILL.md#required-review-loop). Align comparable peers, including slots for optional icons and actions.
+Apply within the [UI development loop](../SKILL.md#required-review-loop). Align comparable peers, including slots for optional icons and actions.
 
 ## Layout structure first, visual calibration second
 
@@ -34,4 +29,4 @@ For a trigger and its menu, or search field and result rows, compare the complet
 
 Center a button within its own bounds, a welcome group within the main pane, and an empty state within the content remaining below headings/filters. A fixed top margin is not centering. When a short window cannot fit the group, preserve scroll access with a compact top-aligned layout instead of clipping.
 
-Normalize peer control sizes and slots before any necessary small optical offsets; verify comparable uses. Preserve usable, non-overlapping hit targets and do not hide inconsistent parent layout with transforms. Transparent hit padding can exceed the painted icon slot; check neighboring target edges after tightening a cluster. Check [spacing](../dsh-ui-spacing/SKILL.md) without moving the chosen axes; consult [cases](../../../docs/ui-design-review-cases.md#alignment) for uncertain judgments.
+Normalize peer control sizes and slots before any necessary small optical offsets; verify comparable uses. Preserve usable, non-overlapping hit targets and do not hide inconsistent parent layout with transforms. Transparent hit padding can exceed the painted icon slot; check neighboring target edges after tightening a cluster. Check [spacing](spacing.md) without moving the chosen axes; consult [cases](../../../../docs/ui-design-review-cases.md#alignment) for uncertain judgments.

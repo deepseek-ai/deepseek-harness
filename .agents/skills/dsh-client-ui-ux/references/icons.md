@@ -1,11 +1,6 @@
----
-name: dsh-ui-icons
-description: Select, draw, normalize or review DSH action, navigation, file and status icons. Covers system style, optical size, clarity and text relationships; official plugin artwork has its own skill.
----
-
 # UI icons
 
-Apply within the [UI development loop](../dsh-client-ui-ux/SKILL.md#required-review-loop), in the affected page or modal context.
+Apply within the [UI development loop](../SKILL.md#required-review-loop), in the affected page or modal context.
 
 ## Reuse existing icons first
 
@@ -13,7 +8,7 @@ Search the library and comparable UI for the intended meaning and supported vari
 
 Draw only when existing artwork cannot express the meaning or the user requests a distinct design. Before drawing, explain the closest alternatives and the unmet meaning or requested design difference. New glyphs require designer approval before landing; requested drafts can be prepared locally. Do not redraw a shared glyph to fix one consumer.
 
-The [primitives icon contract](../../../packages/client/ui-primitives/README.md#controls-and-icons) and icon source own available variants, stroke scaling and menu sizes; [official artwork](../dsh-official-plugin-artwork/SKILL.md) owns package artwork.
+The [primitives icon contract](../../../../packages/client/ui-primitives/README.md#controls-and-icons) and icon source own available variants, stroke scaling and menu sizes; [official artwork](../../dsh-official-plugin-artwork/SKILL.md) owns package artwork.
 
 ## System style
 
@@ -24,13 +19,13 @@ The [primitives icon contract](../../../packages/client/ui-primitives/README.md#
 
 ## Optical size and clarity before implementation
 
-Use the owning control's supported size and weight. [Shared menu sizes and stroke scaling](../../../packages/client/ui-primitives/README.md#controls-and-icons) belong to primitives; [permission triggers](../../../packages/client/ui-permission-presets/README.md) and [settings navigation](../../../packages/client/ui-settings-general/README.md) belong to their feature packages. A reviewed proposal for a larger or heavier trigger is not a statement that every existing consumer already uses it. Compare at the owning control's size, weight, colors and label, using an outlined circle and rectangular control as references. Open silhouettes may need more extent than dense fills; supporting chevrons, handles and dots keep their roles. Do not normalize by ink area or fill every view box.
+Use the owning control's supported size and weight. [Shared menu sizes and stroke scaling](../../../../packages/client/ui-primitives/README.md#controls-and-icons) belong to primitives; [permission triggers](../../../../packages/client/ui-permission-presets/README.md) and [settings navigation](../../../../packages/client/ui-settings-general/README.md) belong to their feature packages. A reviewed proposal for a larger or heavier trigger is not a statement that every existing consumer already uses it. Compare at the owning control's size, weight, colors and label, using an outlined circle and rectangular control as references. Open silhouettes may need more extent than dense fills; supporting chevrons, handles and dots keep their roles. Do not normalize by ink area or fill every view box.
 
 A shared view-box change affects every consumer at its own CSS size. Inspect both compact menus and larger icon-only controls; a clearer small chevron can become oversized in a floating button. Adjust a consumer’s supported icon size when needed while retaining its button base and hit target.
 
 For softness, check CSS dimensions and ancestor transforms, view box and drawing bounds, stroke versus filled contour, device-pixel placement, then color/opacity. Non-16 view boxes are valid; compare identical artwork before attributing sharpness to inline SVG versus sprites.
 
-Use the [implemented stroke behavior](../../../packages/client/ui-primitives/README.md#controls-and-icons): source stroke widths scale with the SVG viewport, and filled outlines scale as geometry. Do not add non-scaling strokes or convert filled contours during an ordinary placement or reuse fix. A change to that rendering contract belongs to a separately scoped library change with consumer validation; retain intentional silhouettes and knockouts.
+Use the [implemented stroke behavior](../../../../packages/client/ui-primitives/README.md#controls-and-icons): source stroke widths scale with the SVG viewport, and filled outlines scale as geometry. Do not add non-scaling strokes or convert filled contours during an ordinary placement or reuse fix. A change to that rendering contract belongs to a separately scoped library change with consumer validation; retain intentional silhouettes and knockouts.
 
 Check straight-stroke edges at actual DPR after all scaling: center and width jointly determine coverage. Integer source coordinates alone do not guarantee crisp edges. Round positioned overlays in device pixels only when layout places otherwise crisp artwork between pixels; preserve anchoring and viewport containment. Keep antialiasing on curves/diagonals; do not globally round paths or use `crispEdges` to hide placement errors. Partial coverage is legitimate for 1.3px strokes.
 
@@ -52,10 +47,10 @@ Distinguish click target, visible button base, icon slot and painted glyph. Equa
 
 An icon and its associated text for one action, value or input prompt must share foreground color, effective opacity and state changes. This includes submenu value chevrons and search placeholders; inherit the shared role instead of assigning an independent icon token. Typed text and independent clear actions may differ; status, warning and brand roles retain semantic colors. Check computed color and ancestor opacity in both themes. Apply the rule to changed consumers; updating it does not certify untouched UI. Compare native file icons and folder outlines deliberately; do not normalize logos, status dots or decorative illustrations to toolbar icons.
 
-Use the shared Tooltip for unclear icon-only actions and HoverCard for informational content requiring hover or selection; prefer these primitives over ad-hoc `title` attributes. [Responsive UI](../dsh-responsive-ui/SKILL.md) owns mobile tooltips and label collapse. Every right-sidebar tab needs a meaningful icon. Preserve accessible labels and focus; [alignment](../dsh-ui-alignment/SKILL.md) owns positioning and [spacing](../dsh-ui-spacing/SKILL.md) owns gaps.
+Use the shared Tooltip for unclear icon-only actions and HoverCard for informational content requiring hover or selection; prefer these primitives over ad-hoc `title` attributes. [Responsive UI](../../dsh-responsive-ui/SKILL.md) owns mobile tooltips and label collapse. Every right-sidebar tab needs a meaningful icon. Preserve accessible labels and focus; [alignment](alignment.md) owns positioning and [spacing](spacing.md) owns gaps.
 
 ## Verification and handoff
 
 For ordinary icon reuse or placement changes, inspect the affected control at its actual size and relevant states; no fixed size/DPR matrix or separate raster report is required. For new or changed artwork, strokes or rendering, compare affected sizes and weights with peers; check DPR 1 and 2 when stroke scaling or pixel placement can change, and both themes when color or optical weight is affected. Keep before/after captures when needed for the change or requested deliverable. Judge recognition, clipping, center, gaps and neighboring text at actual size; enlarged views diagnose pixels only.
 
-After a set-wide change, trace affected families, consumers and weights, including unchanged artwork whose rendering can change. Use unchanged peers for comparison. An explicitly requested full-set review inventories and compares every glyph under matching conditions. Consolidate duplicate artwork only when necessary for the current fix; record unrelated duplicates separately instead of expanding the task. Consult [cases](../../../docs/ui-design-review-cases.md#icon-optics) for uncertain judgments.
+After a set-wide change, trace affected families, consumers and weights, including unchanged artwork whose rendering can change. Use unchanged peers for comparison. An explicitly requested full-set review inventories and compares every glyph under matching conditions. Consolidate duplicate artwork only when necessary for the current fix; record unrelated duplicates separately instead of expanding the task. Consult [cases](../../../../docs/ui-design-review-cases.md#icon-optics) for uncertain judgments.

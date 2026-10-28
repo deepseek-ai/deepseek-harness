@@ -1,11 +1,11 @@
 ---
 name: dsh-client-ui-ux
-description: Use before DSH user-visible UI changes and during UI review in client, experimental and app packages. Select design rules before coding and verify affected rendered results before handoff.
+description: "Design and review DSH user-visible UI: alignment, spacing, icons, visual foundation, geometry and interaction. Use before UI changes in client, experimental and app packages; verify affected rendered results before handoff."
 ---
 
 # DeepSeek Harness UI development
 
-This entry owns the UI workflow, visual foundation, geometry and interaction guidance. Apply it to the task, not as an exhaustive checklist. Linked owners define specialized rules and values; examples explain judgment, not coverage.
+Use this skill as the entry point for UI design and review. It owns the workflow, visual foundation, geometry and interaction guidance; alignment, spacing and icon details live in its references below. Load only the references relevant to the task; examples explain judgment, not coverage.
 
 <a id="required-review-loop"></a>
 ## UI change workflow
@@ -39,13 +39,13 @@ These effort levels change only the additional design-review procedure. Existing
 
 ## Select the rule owners
 
-Read alignment and spacing before layout changes; otherwise select the applicable owners. Preserve existing relationships and keep each numeric scale with its owner.
+For layout changes, read the alignment and spacing references; for icon selection, drawing or review, read the icon reference. Other tasks use the relevant sections below. Do not load all references by default. Existing responsive and official-artwork skills retain their scopes; numeric scales stay with their implementation owners.
 
-| Decision needed before implementation | Owner |
+| Decision needed before implementation | Section or reference |
 |---|---|
-| Shared axes, text starts, centering, tree indentation, complete icon boxes | [Alignment](../dsh-ui-alignment/SKILL.md) |
-| Semantic groups, inner/outer gaps, repeated rhythm, section separation | [Spacing and grouping](../dsh-ui-spacing/SKILL.md) |
-| Interface icon selection, drawing, supplied-artwork normalization, style, optical weight, icon/label color | [Icons](../dsh-ui-icons/SKILL.md) |
+| Shared axes, text starts, centering, tree indentation, complete icon boxes | [Alignment](references/alignment.md) |
+| Semantic groups, inner/outer gaps, repeated rhythm, section separation | [Spacing and grouping](references/spacing.md) |
+| Interface icon selection, drawing, supplied-artwork normalization, style, optical weight, icon/label color | [Icons](references/icons.md) |
 | Color, typography and existing treatments | [Visual foundation](#visual-foundation); [Web styling](../../../docs/web-styling.md) owns tokens/materials |
 | Component geometry, nested contours and state fills | [Geometry decisions](#component-geometry); [radius standard](../../../docs/ui-radius.md) owns values and exceptions |
 | Feedback lifetime, loading, overlays, scrolling and platform clearance | [Interaction and feedback](#interaction-and-feedback); [error handling](../dsh-error-handling/SKILL.md) owns failure guarantees |
@@ -56,7 +56,7 @@ Read alignment and spacing before layout changes; otherwise select the applicabl
 
 ## Reuse before adding
 
-Extend existing components, containers and interactions when the capability fits. Register right-sidebar content through a slot in the existing sidebar; do not create a separate sidebar. Follow [icon reuse](../dsh-ui-icons/SKILL.md#reuse-existing-icons-first). Before restructuring, read [client instructions](../../../packages/client/AGENTS.md) and [client defensive patterns](../../../docs/defensive-patterns/client-components.md) for component/state ownership and layering.
+Extend existing components, containers and interactions when the capability fits. Register right-sidebar content through a slot in the existing sidebar; do not create a separate sidebar. Follow [icon reuse](references/icons.md#reuse-existing-icons-first). Before restructuring, read [client instructions](../../../packages/client/AGENTS.md) and [client defensive patterns](../../../docs/defensive-patterns/client-components.md) for component/state ownership and layering.
 
 ## Visual foundation
 
@@ -64,7 +64,7 @@ Extend existing components, containers and interactions when the capability fits
 - Verify colors in light and dark themes; keep ink/background pairs readable, especially dimmed text.
 - Feature CSS you add or change uses **font weight ≤500**; emphasize with size or ink. ui-theme markdown typography tokens are the exception.
 - Use theme typography roles, then the page's scale, then a comparable page's size/spacing ratios. Do not invent a size for a single element. Peers share sizes; keep the scale small (13px is the established row/detail size).
-- Apply [alignment](../dsh-ui-alignment/SKILL.md) and the [same-foreground rule](../dsh-ui-icons/SKILL.md#placement-and-use) to icon/text relationships, including value chevrons and search prompts.
+- Apply [alignment](references/alignment.md) and the [same-foreground rule](references/icons.md#placement-and-use) to icon/text relationships, including value chevrons and search prompts.
 
 ## Component geometry
 
@@ -110,7 +110,7 @@ Inspect the composition, then affected internal/cross-group relationships, dista
 
 ## Maintain one owner per rule
 
-Update the existing owner; add a skill and routing row only for a distinct decision. Keep examples in the [case reference](../../../docs/ui-design-review-cases.md); AGENTS and PR workflows link here instead of duplicating rules.
+Update the owning section or reference within this skill; do not expose its design specialties as separate skills. Keep examples in the [case reference](../../../docs/ui-design-review-cases.md); AGENTS and PR workflows link here instead of duplicating rules.
 
 Rule changes state applicability, decisions, exceptions and observable verification; update a distinguishing case and remove superseded statements elsewhere. Declare migration versus future-edit scope without implying existing UI conforms. Automate only mechanically decidable checks. Local review tools consume repository rules and retain source/rule revisions rather than maintaining another standards copy.
 

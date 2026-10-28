@@ -16,7 +16,7 @@ Before drawing a larger image for the top of an official bundle's detail documen
 ## Establish the subject
 
 - Inspect the actual feature, its output, and its owning manifest before drawing. A badge-producing skill may need a tag, not a medal. Reuse designer-supplied assets; do not invent a brand mark or change product names, identifiers, or unrelated icons without approval.
-- Read the [existing artwork](../../../packages/client/ui-primitives/src/plugin-artwork.tsx) and the nearest relevant package SVGs. Borrow one coherent treatment, not every reference's effects. Action icons remain with [the interface icon skill](../dsh-ui-icons/SKILL.md).
+- Read the [existing artwork](../../../packages/client/ui-primitives/src/plugin-artwork.tsx) and the nearest relevant package SVGs. Borrow one coherent treatment, not every reference's effects. Action icons remain with [the UI design entry](../dsh-client-ui-ux/SKILL.md#select-the-rule-owners).
 - Check every affected entry, list, detail, and component row. Bundle artwork and a component's name and icon can have separate metadata owners; changing one does not update the other.
 
 ## Draw and refine

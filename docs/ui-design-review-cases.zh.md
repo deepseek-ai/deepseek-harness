@@ -134,7 +134,7 @@ DSH 的视觉审查优先关注对齐与空间分组。先识别任务和语义�
 <a id="alignment"></a>
 ## 1. 对齐
 
-[对齐 skill](../.agents/skills/dsh-ui-alignment/SKILL.md)负责共享轴线、完整布局框、层级缩进和文字度量；以下案例用于说明这些判断。
+[对齐参考](../.agents/skills/dsh-client-ui-ux/references/alignment.md)负责共享轴线、完整布局框、层级缩进和文字度量；以下案例用于说明这些判断。
 
 ![对齐示意：同类行共享轴线，账号和标题操作保留各自几何关系](assets/ui-design-review/principles-alignment.svg)
 
@@ -216,7 +216,7 @@ DSH 的视觉审查优先关注对齐与空间分组。先识别任务和语义�
 <a id="grouping"></a>
 ## 2. 空间分组
 
-[间距分组 skill](../.agents/skills/dsh-ui-spacing/SKILL.md)负责语义组、组内外间距关系和可见留白；以下案例说明如何应用。
+[间距分组参考](../.agents/skills/dsh-client-ui-ux/references/spacing.md)负责语义组、组内外间距关系和可见留白；以下案例说明如何应用。
 
 ![分组示意：等间距堆叠与分层分组的区别，组内较近，分区之间更远](assets/ui-design-review/principles-grouping.svg)
 
@@ -298,7 +298,7 @@ DSH 的视觉审查优先关注对齐与空间分组。先识别任务和语义�
 
 强调必须表达与任务有关的差异。当前选择、可处理的错误和决策依据，需要稳定可辨；标签和补充信息可以更弱，但让有用的文字难以阅读不是层级设计。联合观察字号、字重、颜色、位置和周围留白；每个标题都把五种强调用满，反而失去有意义的区别。
 
-图标与文字的前景角色及语义例外由[图标专项](../.agents/skills/dsh-ui-icons/SKILL.md)负责；案例 C1 将该规则用于搜索框。
+图标与文字的前景角色及语义例外由[图标参考](../.agents/skills/dsh-client-ui-ux/references/icons.md)负责；案例 C1 将该规则用于搜索框。
 
 字体也是几何的一部分：结合预期字体、长翻译与相关字体设置，比较文字起点、基线和行框。字号配套行高，并遵循[视觉基础](../.agents/skills/dsh-client-ui-ux/SKILL.md#visual-foundation)的字重限制。正文、代码、终端与固定界面角色不必同幅缩放；把差异判为缺陷前，核对[字体设置所有方](../packages/client/ui-theme/README.zh.md)。先修容器分配，不用缩小有用文字来强行对齐。
 
@@ -343,7 +343,7 @@ DSH 的视觉审查优先关注对齐与空间分组。先识别任务和语义�
 <a id="icon-optics"></a>
 ## 7. 图标光学
 
-[图标 skill](../.agents/skills/dsh-ui-icons/SKILL.md)负责界面图标的角色、槽位、颜色和视觉平衡；[官方 artwork](../.agents/skills/dsh-official-plugin-artwork/SKILL.md)保留独立职责。
+[图标参考](../.agents/skills/dsh-client-ui-ux/references/icons.md)负责界面图标的角色、槽位、颜色和视觉平衡；[官方 artwork](../.agents/skills/dsh-official-plugin-artwork/SKILL.md)保留独立职责。
 
 <a id="case-file-optics"></a>
 ### 示例 O1：不同类型图标的光学对齐
