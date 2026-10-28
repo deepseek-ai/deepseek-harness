@@ -215,7 +215,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'fork(opts: { sessionId: SessionId atSeq?: number increaseTitle?: boolean onCreated?: (childId: SessionId) => void /** False refuses source migration; omission preserves the Host default. */ allowMigration?: boolean }): Promise<SessionId>',
         description: 'Fork a session from an exact inclusive prefix of the source; on resolution the child is catalogued and can be explicitly retained.',
-        parameters: [{ name: 'opts', description: 'source session id, the optional exact inclusive boundary seq (a real event seq the caller already knows; a cut inside an open turn is balanced Host-side with synthetic closers, and omission selects the latest completed-turn prefix), and whether to increment an inherited durable title before resolving. `onCreated` observes the catalogued child before that optional rename.' }],
+        parameters: [{ name: 'opts', description: 'source session id, the optional exact inclusive boundary seq (a real event seq the caller already knows; a cut inside an open turn is balanced Host-side with synthetic closers, and omission selects the latest completed-turn prefix), and whether to increment an inherited durable title, skipping numbers listed titles already use, before resolving. `onCreated` observes the catalogued child before that optional rename.' }],
         returns: 'the child session id.',
         throws: ['when the fork fails, or when a requested child-title rename fails after creation.'],
       },

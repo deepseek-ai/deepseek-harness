@@ -132,10 +132,18 @@ function displayTitleOf(title: string | undefined, cwd: string | undefined, id: 
 /**
  * Increment a trailing fork number while preserving its half-width or
  * full-width parentheses; an unnumbered title starts with ` (1)`.
+ * The number keeps increasing while the candidate is already taken.
  * @param title - source session's durable title.
+ * @param taken - durable titles of listed sessions.
  * @returns the title assigned to the fork child.
  */
-function increasedForkTitle(title: string): string {
+function increasedForkTitle(title: string, taken: ReadonlySet<string>): string {
+  let next = incrementedTitle(title)
+  while (taken.has(next)) next = incrementedTitle(next)
+  return next
+}
+
+function incrementedTitle(title: string): string {
   const ascii = /^(.*?)\((\d+)\)$/u.exec(title)
   if (ascii?.[1] !== undefined && ascii[2] !== undefined) {
     return `${ascii[1]}(${BigInt(ascii[2]) + 1n})`
@@ -480,7 +488,9 @@ export class ClientSessions implements ISessions {
     const childId = result.value.sessionId
     opts.onCreated?.(childId)
     if (sourceTitle !== undefined) {
-      const renamed = await this.manager.rename(childId, increasedForkTitle(sourceTitle))
+      const list = this.list.getSnapshot()
+      const taken = new Set(list.ids.flatMap(id => list.byId[id]?.title ?? []))
+      const renamed = await this.manager.rename(childId, increasedForkTitle(sourceTitle, taken))
       if (!renamed.ok) throw new Error(`fork child rename failed: ${renamed.error.code}: ${renamed.error.message}`)
     }
     return childId
