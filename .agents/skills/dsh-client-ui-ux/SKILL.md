@@ -7,16 +7,24 @@ description: Use before DSH user-visible UI changes and during UI review in clie
 
 This entry owns the UI workflow, visual foundation, geometry and interaction guidance. Apply it to the task, not as an exhaustive checklist. Linked owners define specialized rules and values; examples explain judgment, not coverage.
 
-## Required review loop
+<a id="required-review-loop"></a>
+## UI change workflow
 
-Layout, copy, icons, styling and interaction changes trigger this loop. Behavior edits include affected loading, error, disabled, expanded and focus states. Documentation-only edits and refactors with evidence of unchanged rendering need no new captures; state that basis.
+Use applicable design rules for UI changes, including visible loading, error, disabled, expanded and focus states. Choose effort by impact and regression risk; ordinary development does not require a full design audit.
 
-1. **Decide before coding.** Record the task, affected pages/modals, groups, axes, spacing, components and planned evidence in a few task-note sentences. Read applicable owners and select [affected states and consumers](../../../docs/cookbook/reviewing-ui-design.md#review-scope). Preserve starting source and images, including uncommitted UI; new UI may use an honestly labeled sketch or established sibling.
-2. **Implement.** Reuse components and values; resolve structure and axes before optical detail. Expand scope for affected shared consumers, neighbors or states. Batch coherent edits before recapturing, without auditing the whole product per CSS change.
-3. **Inspect the final render.** Check affected relationships and behavior in the assembled page/modal, retain comparable before/after evidence for position changes and run relevant checks. Report inspected, equivalent-by-evidence, unresolved and uninspected scope. Missing scenes, defects or failed checks block complete-validation claims; state gaps and next verification.
-4. **Reconcile before PR/push.** Check cumulative interactions and coverage. Reuse evidence while source, dependencies, content, states and capture conditions remain valid; rerun only missing or invalidated checks. Deliver scope, decisions, evidence, results and gaps.
+| Change | Development checks and records |
+|---|---|
+| Local copy, icon reuse, color or spacing | Apply relevant rules, implement, inspect the affected result in context and run applicable tests. A short result and material gaps suffice; no separate plan, axis drawing, scene inventory, source snapshot or screenshot report is required by this workflow. |
+| Page layout, shared components or global styles | Briefly identify affected relationships, consumers and risk conditions. Inspect distinct affected variants, reusing justified equivalent evidence. Preserve a starting version and before/after images when needed to explain the change, investigate regression risk or satisfy the requested deliverable; these changes do not automatically require a full audit. |
+| Explicit comprehensive review | Agree the requested scope and use the [review cookbook](../../../docs/cookbook/reviewing-ui-design.md) for coverage records, findings and requested evidence. A request for a comparison alone does not expand its scope to the whole product. |
 
-Keep records in the task/local artifacts, not tracked checklists per edit. Read unchanged owners once and examples only for uncertain decisions. Select conditions by risk, not every width × theme × state or fixed screenshot counts. The [cookbook](../../../docs/cookbook/reviewing-ui-design.md) owns evidence procedures; tool success does not establish visual quality.
+Read unchanged owners once; consult examples for uncertain judgments. Inspect relevant states and actual usage sizes, not a fixed screenshot count or every width × theme × state combination. Batch related edits and reuse a current application instance and valid evidence. Documentation-only changes and refactors with evidence of unchanged rendering need no new UI captures; state that basis.
+
+When a before/after comparison is needed, preserve the actual starting implementation, including uncommitted work, and use comparable capture conditions. Never recreate a missing before image and present it as an original. Protect existing work regardless of whether extra evidence is needed.
+
+Before handoff, review or push, check only new cumulative interactions, missing required checks and invalidated evidence; do not repeat completed verification at each stage. Report results and material gaps accurately. Do not claim full coverage or visual acceptance when required scenes or checks are missing.
+
+These effort levels change only the additional design-review procedure. Existing [client test requirements](../../../packages/client/AGENTS.md), [GUI PR GIF requirements](../record-browser-gif/SKILL.md#every-gui-pull-request-includes-a-gif), and [designer/product approval](#design-review-escalation) still apply, including to local changes when their original triggers are met.
 
 ## Select the rule owners
 
@@ -97,4 +105,4 @@ Rule changes state applicability, decisions, exceptions and observable verificat
 
 ## Design review escalation
 
-Obtain designer/product review before landing new pages or interaction patterns, broad shared/global visual changes or unresolved tradeoffs. Routine local corrections need no extra checkpoint. Explicit independent reviews and periodic human audits may widen scope and feed recurring misses into rules; they supplement development checks and create no automatic schedule.
+- A PR with extensive UI changes, or any clearly user-perceivable change to UI or interaction, must get a designer or product review. When no approver holds that role, suggest requesting one from the design/product reviewers (roster as of 2026-09: yx zhang, yifffan, zhangziya, gaokaige; update this list here when membership changes).
