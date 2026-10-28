@@ -137,7 +137,7 @@ The [alignment skill](../.agents/skills/dsh-ui-alignment/SKILL.md) owns shared a
 
 ![Alignment diagram: peer rows share axes while account and header controls retain their own geometry](assets/ui-design-review/principles-alignment.svg)
 
-The schematic distinguishes peer-row axes from account and header geometry; it is not a pixel specification. The [sidebar baseline](../.agents/skills/dsh-ui-alignment/SKILL.md#sidebar-design-baseline) owns current relationships. Compare content, painted backgrounds and hit targets separately; different roles need not share every axis.
+The schematic distinguishes peer-row axes from account and header geometry; it is not a pixel specification. Compare content, painted backgrounds and hit targets separately; different roles need not share every axis.
 
 ### Text metrics and unequal content
 
@@ -156,18 +156,18 @@ The comparison below shows actual preset cards with unequal descriptions. On the
 <a id="case-sidebar-axes"></a>
 ### Example A1: Role-based sidebar alignment
 
-**Scene and relationship.** Compare navigation, workspace rows, conversations and the account area in the expanded sidebar against the recorded master baseline. Include the centered New conversation action and the painted row edges, not only text starts.
+**Scene and relationship.** Compare navigation, workspace rows, conversations and the account area in the expanded sidebar. Include the centered New conversation action and the painted row edges, not only text starts.
 
 **Failure and correction.** Applying one leading-slot width to every role can move titles, enlarge spacing or distort the signed-in account row. Preserve the owning shared variables, compact icon slots and paint insets. Retain deliberate account geometry and hierarchy instead of manufacturing one text axis across all roles.
 
-**Acceptance.** Mark guides only for relationships established by the baseline. Check short and long titles, optional icons, project expansion and signed-in/out account states. Revealing row actions must not move the title start. A list crop does not establish whole-sidebar alignment.
+**Acceptance.** Use guides to compare same-role rows. Check short and long titles, optional icons, project expansion and signed-in/out account states. Revealing row actions must not move the title start. A list crop does not establish whole-sidebar alignment.
 
 <a id="case-action-columns"></a>
 ### Example A2: Distinct header and row action groups
 
 **Scene and relationship.** Workspace search/filter/add and conversation more/archive/pin occupy the trailing sidebar region but have different roles and spacing. Compare repeated rows with each other; compare the header with its own collapsed and expanded search states.
 
-**Failure and correction.** Forcing both groups into one three-slot grid changes the master design. Preserve each group's control sizes, gaps, trailing inset and search transition. Keep the title-to-action separation independent of the gaps inside a cluster.
+**Failure and correction.** Choose control sizes, gaps and trailing insets by group role, including during search expansion. Keep the title-to-action separation independent of the gaps inside a cluster.
 
 **Acceptance.** Show the header and row actions together, then expand search and collapse the sidebar. Verify the intended edge relationships, unclipped hit targets and long-title clearance. Do not add empty actions or offsets merely to make unrelated controls form vertical columns.
 
@@ -253,7 +253,7 @@ Image: IBM Carbon Design System. Follow the annotations between the introduction
 
 **Scene and relationship.** “New conversation” is the main action; plugins/automations/more are a global navigation group; the workspace heading introduces the project list. Equal row heights do not express these different relationships.
 
-**Correction and acceptance.** Keep the navigation rows together, separate that group from the workspace section, and bring the workspace heading closer to the projects it labels. The main action has its own separation. Review the full sidebar with the account area visible; preserve the baseline spacing and role-specific relationships from A1. A larger gap before every project would falsely turn each item into a separate section.
+**Correction and acceptance.** Keep the navigation rows together, separate that group from the workspace section, and bring the workspace heading closer to the projects it labels. The main action has its own separation. Review the full sidebar with the account area visible; compare the role-specific relationships from A1. A larger gap before every project would falsely turn each item into a separate section.
 
 ### Composed whitespace and responsive grouping
 
@@ -285,7 +285,7 @@ Use emphasis to express a task-relevant difference. A current selection, an acti
 
 Use the [icon owner](../.agents/skills/dsh-ui-icons/SKILL.md) for icon/label foreground roles and their semantic exceptions; example C1 applies that rule to search fields.
 
-Typography participates in geometry: compare text starts, baselines and line boxes with the intended font, long translations and relevant font preferences. Pair size with line height and use the weight limits from [visual foundation](../.agents/skills/dsh-client-ui-ux/references/visual-foundation.md). Content, code, terminal and fixed interface roles need not scale identically; check the [font-setting owner](../packages/client/ui-theme/README.md) before treating a deliberate difference as a defect. Correct the container allocation before shrinking useful text to force alignment.
+Typography participates in geometry: compare text starts, baselines and line boxes with the intended font, long translations and relevant font preferences. Pair size with line height and use the weight limits from [visual foundation](../.agents/skills/dsh-client-ui-ux/SKILL.md#visual-foundation). Content, code, terminal and fixed interface roles need not scale identically; check the [font-setting owner](../packages/client/ui-theme/README.md) before treating a deliberate difference as a defect. Correct the container allocation before shrinking useful text to force alignment.
 
 <a id="case-search-color"></a>
 ### Example C1: Color emphasis within one information unit
@@ -312,9 +312,9 @@ State design assigns stable meanings, not just different colors. Selection says 
 <a id="case-sidebar-state"></a>
 ### Example S1: Persistent selection beside temporary hover
 
-**Scene and relationship.** Compare the selected conversation, a neighboring hovered row and an open row menu against the master baseline. Background paint is one cue alongside the current-row semantics and revealed actions; selection and hover do not require different colors.
+**Scene and relationship.** Compare the selected conversation, a neighboring hovered row and an open row menu. Background paint is one cue alongside the current-row semantics and revealed actions; selection and hover do not require different colors.
 
-**Correction and acceptance.** Preserve the master state treatment and verify that selection persists when hover ends or a menu closes. Move between neighboring rows and traverse by keyboard; inspect focus, action visibility and current-row semantics together. Do not introduce a stronger selected fill solely to satisfy this example. Compare the same theme and platform material; an opaque fixture cannot establish translucent Desktop contrast.
+**Correction and acceptance.** Verify that selection persists when hover ends or a menu closes. Move between neighboring rows and traverse by keyboard; inspect focus, action visibility and current-row semantics together. Compare the same theme and platform material; an opaque fixture cannot establish translucent Desktop contrast.
 
 <a id="component-choice"></a>
 ## 6. Component choice
