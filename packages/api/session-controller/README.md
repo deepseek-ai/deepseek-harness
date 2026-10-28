@@ -64,7 +64,7 @@ During uninterrupted following, transcript and steering echoes stay in Chat thro
 
 The user-invocable `skills/list` metadata includes the winning provider’s optional instruction-file `path`. The composer can preview that file without loading every skill body or activating a cold Agent.
 
-Fork copies the exact inclusive event prefix selected by `atSeq`, including a cut inside an open turn, into an independent Session without `parentSession`. Client placeholders likewise omit `parentSessionId`; list indentation applies only to subagent-origin rows, including when historical ordinary forks retain a parent id. Workspace attachment and optional title increments use the source selected for the operation; an increment skips numbers that other listed titles already use. The child records its inherited marker before synthetic fork results and closing events. Omitting `atSeq` selects the latest completed turn and its standalone tail, stopping before the next turn or queued input; a nonexistent event is rejected. The chat action selects a completed turn.
+Fork copies the exact inclusive event prefix selected by `atSeq`, including a cut inside an open turn, into an independent Session without `parentSession`. Client placeholders likewise omit `parentSessionId`; list indentation applies only to subagent-origin rows, including when historical ordinary forks retain a parent id. Workspace attachment and optional title increments use the source selected for the operation; an increment skips numbers that other Host-listed titles already use. The child records its inherited marker before synthetic fork results and closing events. Omitting `atSeq` selects the latest completed turn and its standalone tail, stopping before the next turn or queued input; a nonexistent event is rejected. The chat action selects a completed turn.
 
 A resume blocked by an existing write handle returns `session/writer-held` with the Session id; other resume failures retain `gateway/internal`.
 
@@ -127,6 +127,7 @@ No direct effect; model requests remain owned by the Agent and LLM packages.
 - The image byte cap does not validate decoded dimensions or pixel count.
 - A failed follow resumption remains visible to the caller instead of retrying indefinitely.
 - The raw browser upload is one streaming HTTP request without resumable offsets; a retry sends the file again from byte zero.
+- Fork title increments compare candidates with the Client list before the Host normalizes them: concurrent forks of one source, or a title the Host truncates at its byte limit, can still produce duplicate titles.
 - File-reference completion uses the shared Agent lookup and can resume a cold Session; the `skills/list` catalog is the non-activating alternative for skill metadata.
 - Accepted/running display memory lives only in Client memory and is lost on page reload.
 - That memory is not shared between tabs: one tab can show a converted row while another still shows `New Session` for the same Session.

@@ -1030,6 +1030,7 @@ describe('fork', () => {
       [{ sessionId: 'child-1', title: 'Roadmap (1)' }],
       [{ sessionId: 'child-2', title: 'Roadmap (3)' }],
     ])
+    expect(b.svc.list.getSnapshot().byId[sid('child-2')]?.title).toBe('Roadmap (3)')
   })
 
   it('sends the exact boundary seq verbatim: callers pass real event seqs', async ({ bench }) => {
