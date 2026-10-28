@@ -12,7 +12,7 @@ Use this cookbook for explicitly requested comprehensive reviews and for evidenc
 
 Check the complete icon box, including intentional internal whitespace, text columns and gaps before judging the drawn contour. Hit targets are not icon boxes; do not align each glyph’s painted pixels independently. See the [alignment principle](../ui-design-review-cases.md#alignment).
 
-Check associated icons and text against the [same-foreground rule](../../.agents/skills/dsh-ui-icons/SKILL.md#placement-and-use), including submenu values with chevrons and search placeholders with magnifiers. Compare rendered color and opacity in both themes; preserve semantic exceptions.
+Check associated icons and text against the [same-foreground rule](../../.agents/skills/dsh-client-ui-ux/references/icons.md#placement-and-use), including submenu values with chevrons and search placeholders with magnifiers. Compare rendered color and opacity in both themes; preserve semantic exceptions.
 
 ## Table of Contents
 

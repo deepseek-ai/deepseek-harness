@@ -134,7 +134,7 @@ Use these examples to understand a relationship that is unclear. Apply the same 
 <a id="alignment"></a>
 ## 1. Alignment
 
-The [alignment skill](../.agents/skills/dsh-ui-alignment/SKILL.md) owns shared axes, complete layout boxes, indentation and text metrics. Use the examples below to apply those decisions.
+The [alignment reference](../.agents/skills/dsh-client-ui-ux/references/alignment.md) owns shared axes, complete layout boxes, indentation and text metrics. Use the examples below to apply those decisions.
 
 ![Alignment diagram: peer rows share axes while account and header controls retain their own geometry](assets/ui-design-review/principles-alignment.svg)
 
@@ -216,7 +216,7 @@ The comparison below shows actual preset cards with unequal descriptions. On the
 <a id="grouping"></a>
 ## 2. Spatial grouping
 
-The [spacing skill](../.agents/skills/dsh-ui-spacing/SKILL.md) owns semantic groups, internal/external gap relationships and visible whitespace. The cases below explain how to apply it.
+The [spacing reference](../.agents/skills/dsh-client-ui-ux/references/spacing.md) owns semantic groups, internal/external gap relationships and visible whitespace. The cases below explain how to apply it.
 
 ![Grouping diagram: equally spaced blocks versus a nested section with smaller inner gaps and larger section separation](assets/ui-design-review/principles-grouping.svg)
 
@@ -298,7 +298,7 @@ Make the next reading or decision step visible without turning every text elemen
 
 Use emphasis to express a task-relevant difference. A current selection, an actionable error, and the data needed for a decision deserve stable recognition. Labels and supporting metadata can be quieter, but making useful text difficult to read is not hierarchy. Inspect size, weight, color, position, and surrounding whitespace together; piling all five onto every heading removes meaningful contrast.
 
-Use the [icon owner](../.agents/skills/dsh-ui-icons/SKILL.md) for icon/label foreground roles and their semantic exceptions; example C1 applies that rule to search fields.
+Use the [icon owner](../.agents/skills/dsh-client-ui-ux/references/icons.md) for icon/label foreground roles and their semantic exceptions; example C1 applies that rule to search fields.
 
 Typography participates in geometry: compare text starts, baselines and line boxes with the intended font, long translations and relevant font preferences. Pair size with line height and use the weight limits from [visual foundation](../.agents/skills/dsh-client-ui-ux/SKILL.md#visual-foundation). Content, code, terminal and fixed interface roles need not scale identically; check the [font-setting owner](../packages/client/ui-theme/README.md) before treating a deliberate difference as a defect. Correct the container allocation before shrinking useful text to force alignment.
 
@@ -343,7 +343,7 @@ Keep the control's label, visible bounds, focus behavior, and click target consi
 <a id="icon-optics"></a>
 ## 7. Icon optics
 
-The [icon skill](../.agents/skills/dsh-ui-icons/SKILL.md) owns interface icon roles, slots, color and optical balance. [Official artwork](../.agents/skills/dsh-official-plugin-artwork/SKILL.md) retains its separate role.
+The [icon reference](../.agents/skills/dsh-client-ui-ux/references/icons.md) owns interface icon roles, slots, color and optical balance. [Official artwork](../.agents/skills/dsh-official-plugin-artwork/SKILL.md) retains its separate role.
 
 <a id="case-file-optics"></a>
 ### Example O1: Optical alignment of different icon types

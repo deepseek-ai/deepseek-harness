@@ -115,7 +115,7 @@ One UI feature = one plugin package (`src/client/` browser half). A multi-domain
 
 ## Styling and localization
 
-For UI changes, use the [UI change workflow](../../.agents/skills/dsh-client-ui-ux/SKILL.md#required-review-loop) to match verification effort to impact. Check affected assembled results and shared consumers; ordinary changes do not require a full audit. The existing test ladder below, GUI GIF requirements and designer/product approval remain unchanged.
+Use [dsh-client-ui-ux](../../.agents/skills/dsh-client-ui-ux/SKILL.md) for UI design rules and review requirements. The client test ladder below still applies.
 
 [docs/web-styling.md](../../docs/web-styling.md) is authoritative. Shared `--dsw-*` tokens and global sheets live in `ui-theme/src/styles/`; feature components consume semantic aliases through CSS Modules and `clsx`, with no literal colors, component library, or Tailwind. Code comments are English. Design judgment beyond those rules — feedback surfaces, loading states, overlay safety, platform window adaptation — follows [dsh-client-ui-ux](../../.agents/skills/dsh-client-ui-ux/SKILL.md); responsive layout and telling a mobile or touch client from a desktop one follow [dsh-responsive-ui](../../.agents/skills/dsh-responsive-ui/SKILL.md).
 

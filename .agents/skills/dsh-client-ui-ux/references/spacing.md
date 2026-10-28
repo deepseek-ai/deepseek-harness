@@ -1,11 +1,6 @@
----
-name: dsh-ui-spacing
-description: Design or review DSH semantic grouping, internal/external spacing and repeated rhythm, including wrapped or expanded content.
----
-
 # UI spacing and grouping
 
-Apply within the [UI development loop](../dsh-client-ui-ux/SKILL.md#required-review-loop). Distance should explain which text, input and action belong together.
+Apply within the [UI development loop](../SKILL.md#required-review-loop). Distance should explain which text, input and action belong together.
 
 ### Identify the group before choosing the gap
 
@@ -21,4 +16,4 @@ Judge actual whitespace at normal size, including padding, line-height, glyph wh
 
 When matching two visible gaps, name both pairs of endpoints and include each container’s padding, border and text line box. Equal visible gaps may require unequal margins. A control’s painted edge and a text glyph’s edge are different endpoints; keep that choice stable through review.
 
-Reuse page spacing and [style tokens](../../../docs/web-styling.md), preserve [alignment](../dsh-ui-alignment/SKILL.md) axes, and consult [cases](../../../docs/ui-design-review-cases.md#grouping) for uncertain judgments. This skill defines no numeric scale.
+Reuse page spacing and [style tokens](../../../../docs/web-styling.md), preserve [alignment](alignment.md) axes, and consult [cases](../../../../docs/ui-design-review-cases.md#grouping) for uncertain judgments. This skill defines no numeric scale.
