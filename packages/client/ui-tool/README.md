@@ -31,6 +31,8 @@ Settled foreground commands with a nonzero exit code, a terminating signal, or a
 
 Before dispatch, a named model call appears as one non-expandable row with its tool-owned icon and title. A generic row shows `Tool call · <tool name>`. Read/write/edit show an openable path once `file_path` closes and decodes without errors; write/edit show `NKB` after that path once content arrives, retaining it during execution and after success, before any diff totals. N rounds the decoded input's UTF-16 length up in units of 1024, summing old and new text for edit; it is not file bytes. Error and stopped rows omit the size and diff totals. Command rows show the streamed description. `tool/call` enables the existing call presentation; completing an argument block alone does not start execution.
 
+`subagent` and `subagent_fork` creation rows stream the first line of `description`, retaining it during execution, after creation, and when expanded. After preparation, calls without a description fall back to the first nonempty `prompt` line; missing arguments leave only the tool title. Both tools and `list_subagent_models` use the existing Users icon; `subagent_fork` uses the distinct title “Fork subagent”. Creation receipts, including the named form, show the started state, recorded ID and name, and complete task instructions for both creation tools. Synchronous agent responses remain in the result body; errors retain their failure summary.
+
 ### Registering a business tool view
 
 An owning business package registers its wire Tool name into `tool.call.toolview`:

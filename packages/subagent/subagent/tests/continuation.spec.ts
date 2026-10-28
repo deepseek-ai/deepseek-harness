@@ -2228,8 +2228,10 @@ describe('continuable review regressions', () => {
   })
 
   it('reports this epoch\'s own output, captured while the child was still live', async () => {
-    const { ctx, parent } = await setup([textResponse('first answer'), textResponse('second answer')])
-    parkParent(ctx, parent)
+    const { ctx, parent } = await setup([
+      textResponse('first answer'), textResponse('first acknowledgement'),
+      textResponse('second answer'), textResponse('second acknowledgement'),
+    ])
     const ends: SubagentRunEndInfo[] = []
     ctx.on('subagent/end', (info) => { ends.push(info) })
 
@@ -2239,6 +2241,7 @@ describe('continuable review regressions', () => {
     // Handle disposal unregisters the child, so the edge's content must have
     // been captured before that — an after-the-fact lookup would find nothing.
     expect(ends[0]!.lastAssistantMessage).toEqual([{ type: 'text', text: 'first answer' }])
+    await parent.whenIdle()
 
     // A cold resume is a new epoch: it must report its OWN answer, never the
     // previous epoch's, which the replayed transcript still contains.
@@ -2246,6 +2249,14 @@ describe('continuable review regressions', () => {
     await waitNoActivation(ctx, started.childId)
     await vi.waitFor(() => { expect(ends).toHaveLength(2) })
     expect(ends[1]!.lastAssistantMessage).toEqual([{ type: 'text', text: 'second answer' }])
+    await parent.whenIdle()
+    const notices = settlementNotices(parent)
+    expect(notices).toMatchObject([
+      { description: 'child task', stopReason: 'completed' },
+      { description: 'child task', stopReason: 'completed' },
+    ])
+    expect(notices[0]!.text).toContain('first answer')
+    expect(notices[1]!.text).toContain('second answer')
   })
 
   it('keeps the epoch\'s earlier text past a final empty usage-only message', async () => {
@@ -2781,13 +2792,15 @@ describe('continuable review regressions', () => {
 })
 
 /** Every settlement notice this agent received, in order, as flat text. */
-function settlementNotices(agent: Agent): { sender: string; text: string; summary: string }[] {
+function settlementNotices(agent: Agent) {
   const logged = agent.session.snapshotEvents().flatMap(event => event.type === 'user/message' ? [event.data] : [])
   return [...logged, ...agent.inbox.nextStep, ...agent.inbox.nextTurn].flatMap((message) => {
     if (message.source.kind !== 'subagent-settled') return []
     return [{
       sender: message.source.senderSessionId,
       summary: message.source.summary,
+      stopReason: message.source.stopReason,
+      description: message.source.description,
       text: message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n'),
     }]
   })

@@ -84,6 +84,9 @@ it('continues the parent through default Messages after a reasoning-bearing cont
       { type: 'text', text: 'child answer' },
     ]
     expect(notice?.content).toEqual(closingContent)
+    expect(notice?.source).toMatchObject({
+      stopReason: 'completed', description: 'child task', senderSessionId: started.childId,
+    })
     const noticeWithContext = [
       ...closingContent,
       {

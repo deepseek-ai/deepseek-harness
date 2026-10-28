@@ -292,7 +292,10 @@ describe('external subagent activations', () => {
     } else {
       expect(fixture.parent.inbox.nextTurn).toHaveLength(1)
       const notice = fixture.parent.inbox.nextTurn[0]!
-      expect(notice.source).toMatchObject({ kind: 'subagent-settled', senderSessionId: activation.childId })
+      expect(notice.source).toMatchObject({
+        kind: 'subagent-settled', senderSessionId: activation.childId,
+        stopReason: 'error', description: 'External work',
+      })
       const text = notice.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
       expect(text).toContain('Reviewed three files.')
       expect(text).toContain('Structured result: {"files":3}')
@@ -325,7 +328,10 @@ describe('external subagent activations', () => {
     if (delivery === 'parent') {
       expect(fixture.parent.inbox.nextTurn).toHaveLength(1)
       const notice = fixture.parent.inbox.nextTurn[0]!
-      expect(notice.source).toMatchObject({ kind: 'subagent-settled', senderSessionId: activation.childId })
+      expect(notice.source).toMatchObject({
+        kind: 'subagent-settled', senderSessionId: activation.childId,
+        stopReason: 'completed', description: 'External work',
+      })
       const text = notice.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
       expect(text).toContain('finished')
       expect(text).toContain('Reviewed three files.')

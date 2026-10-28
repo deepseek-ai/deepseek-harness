@@ -6,6 +6,7 @@ import type {
   SessionListState, SessionSummary, SessionSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SubagentAddress, SubagentCatalogEntry } from '@deepseek-ai/dsh-subagent/client'
+import type { TeamTaskId, TeamTaskView } from '@deepseek-ai/dsh-agent-team/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import {
@@ -172,8 +173,8 @@ function HeaderCatalog(props: HeaderCatalogProps) {
 }
 
 describe('SubagentHeaderLineage', () => {
-  it('shows the sibling name above its description and expands it without navigating', () => {
-    const description = 'Check the construction and all bounds. '.repeat(20)
+  it('shows the description above the sibling name and opens the row without a description toggle', () => {
+    const description = 'Check the construction and all bounds. '.repeat(20).trim()
     const input = props(catalog({
       names: [{ childId: CHILD, name: 'lead/tree-checker' }],
       entries: [{ id: CHILD, mode: 'continuable', label: description, activity: 'running' }],
@@ -181,27 +182,35 @@ describe('SubagentHeaderLineage', () => {
     render(<HeaderCatalog {...input} />)
     fireEvent.click(screen.getByRole('button', { name: '1 个子智能体，正在运行' }))
     const row = screen.getByRole('treeitem', { name: /tree-checker/ })
+    const primary = within(row).getByText(description)
     const name = within(row).getByText('tree-checker')
-    const toggle = within(row).getByRole('button', { name: '展开 tree-checker 的描述' })
-    expect(name.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(toggle.textContent).toBe(description)
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.keyDown(toggle, { key: 'Enter' })
-    fireEvent.keyDown(toggle, { key: ' ' })
-    expect(input.openChild).not.toHaveBeenCalled()
-    fireEvent.click(toggle)
-    expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    expect(input.openChild).not.toHaveBeenCalled()
-    fireEvent.click(toggle)
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.keyDown(toggle, { key: 'Escape' })
+    expect(primary.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(row.getAttribute('aria-label')).toMatch(/^Check the construction/)
+    expect(primary.tagName).toBe('SPAN')
+    expect(primary.getAttribute('aria-expanded')).toBeNull()
+    expect(primary.querySelector('svg')).toBeNull()
+    expect(within(row).queryByRole('button', { name: /描述/ })).toBeNull()
+    fireEvent.click(primary)
+    expect(input.openChild).toHaveBeenCalledExactlyOnceWith({ parentSessionId: PARENT, childSessionId: CHILD, mode: 'continuable' })
     expect(screen.queryByRole('treeitem')).toBeNull()
   })
 
-  it('keeps the shared panel reachable with no children while Team mode is enabled', () => {
+  it.each([undefined, ''])('keeps a single name line when the creation description is %s', (label) => {
+    const input = props(catalog({
+      names: [{ childId: CHILD, name: 'lead/tree-checker' }],
+      entries: [{ id: CHILD, mode: 'one-shot', ...label === undefined ? {} : { label }, activity: 'running' }],
+    }))
+    render(<HeaderCatalog {...input} />)
+    fireEvent.click(screen.getByRole('button', { name: '1 个子智能体，正在运行' }))
+    const row = screen.getByRole('treeitem', { name: /tree-checker/ })
+    expect(within(row).getAllByText('tree-checker')).toHaveLength(1)
+    expect(row.getAttribute('aria-label')).toMatch(/^tree-checker/)
+  })
+
+  it('hides an empty Team entry but keeps shared tasks and errors reachable without children', () => {
     const input = props(catalog({ entries: [] }))
     const initial = input.useSessions(state => state)
-    const mode = { enabled: true, tasks: [] }
+    const mode: { enabled: boolean; tasks: TeamTaskView[]; failure?: string } = { enabled: true, tasks: [] }
     const values = { ...initial.projectionsBySession[PARENT]!.values, agentTeam: mode }
     const current = {
       ...input,
@@ -211,11 +220,26 @@ describe('SubagentHeaderLineage', () => {
       renderSlot: () => <section aria-label="Shared tasks">No tasks</section>,
     }
     const view = render(<HeaderCatalog {...current} />)
+    expect(screen.queryByRole('button')).toBeNull()
+    mode.tasks = [{
+      id: 'task-1' as TeamTaskId, revision: 1, subject: 'Plan work', description: 'Prepare tasks before spawning workers',
+      status: 'pending', blockedBy: [], writeScopes: [], ready: true, writeScopeWarnings: [],
+    }]
+    view.rerender(<HeaderCatalog {...current} />)
     fireEvent.click(screen.getByRole('button', { name: '0 个子智能体' }))
     const tree = screen.getByRole('tree')
     const board = screen.getByRole('region', { name: 'Shared tasks' })
     expect(tree.compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    mode.tasks = []
+    view.rerender(<HeaderCatalog {...current} />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
+    mode.failure = 'Invalid task record'
+    view.rerender(<HeaderCatalog {...current} />)
+    expect(screen.getByRole('button', { name: '0 个子智能体' })).toBeTruthy()
+    view.rerender(<HeaderCatalog {...current} useFooterAvailable={select => select(false)} />)
+    expect(screen.queryByRole('button')).toBeNull()
     mode.enabled = false
     view.rerender(<HeaderCatalog {...current} />)
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -1208,7 +1232,7 @@ describe('SubagentHeaderLineage', () => {
     expect(input.refreshProjection).not.toHaveBeenCalled()
     const current = screen.getByRole('treeitem', { name: /tree-checker/ })
     expect(current.getAttribute('aria-current')).toBe('true')
-    expect(within(current).getByText('tree-checker').className).toContain('currentLabel')
+    expect(within(current).getByText('worker').className).toContain('currentLabel')
     expect(within(current).queryByRole('button', { name: '在侧边栏打开 tree-checker' })).toBeNull()
     expect(within(screen.getByRole('treeitem', { name: /reviewer/ })).getByRole('button', { name: '在侧边栏打开 reviewer' })).toBeTruthy()
     fireEvent.click(screen.getByRole('treeitem', { name: /reviewer/ }))

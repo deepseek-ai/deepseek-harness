@@ -106,9 +106,10 @@ export function TeamBoard({
   sessionId, useProjection, useSessions, t,
 }: TeamBoardProps) {
   const team = useProjection('agentTeam')
+  const hasMembers = useSessions(state => (state.projectionsBySession[sessionId]?.values.subagentCatalog?.length ?? 0) > 0)
   if (!team?.enabled) return null
   return (
-    <section className={css.board} aria-label={t('trigger')} data-team-panel>
+    <section className={`${css.board} ${hasMembers ? css.withMembers : ''}`} aria-label={t('trigger')} data-team-panel>
       <h3>{t('tasks')}<span className={css.count}>{team.tasks.length}</span></h3>
       {team.failure !== undefined && (
         <div className={css.error} role="alert"><StateDot state="error" />{t('failure', { message: team.failure })}</div>

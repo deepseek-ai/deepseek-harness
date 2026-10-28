@@ -32,6 +32,10 @@ export interface SubagentSettledMessageSource {
   readonly form: 'notice'
   /** One-line account of how the child ended. */
   readonly summary: string
+  /** Exact execution stop reason; absent on historical notices. Writers always include it. */
+  readonly stopReason?: SubagentResult['stopReason']
+  /** Original task label retained by the settled Activation; omitted when unknown. */
+  readonly description?: string
   /** Session id of the child that settled. */
   readonly senderSessionId: SessionId
 }
@@ -131,6 +135,7 @@ function settlementSummary(childId: SessionId, stopReason: SubagentResult['stopR
  * @param continuable - whether the child can accept another task.
  * @param omitClosingText - replace the closing text when the child's last action
  *   was a message to its direct parent.
+ * @param description - original task label for attribution only; omission leaves it unknown.
  * @returns the durable user-message representation delivered to the parent.
  */
 export function createSettlementMessage(
@@ -138,6 +143,7 @@ export function createSettlementMessage(
   terminal: SubagentResult,
   continuable = true,
   omitClosingText = false,
+  description?: string,
 ): ReturnType<typeof createUserMessage> {
   const summary = settlementSummary(childId, terminal.stopReason, continuable)
   // Parent providers receive this notice as a user message and may reject
@@ -163,6 +169,8 @@ export function createSettlementMessage(
       kind: 'subagent-settled' as const,
       form: 'notice' as const,
       summary: boundContextSummary(summary),
+      stopReason: terminal.stopReason,
+      ...description !== undefined ? { description } : {},
       senderSessionId: childId,
     },
   })

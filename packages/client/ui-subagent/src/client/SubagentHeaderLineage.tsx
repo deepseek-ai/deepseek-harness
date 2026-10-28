@@ -214,7 +214,6 @@ function CatalogRows({
   openChild, openChildAside, refreshProjection, toggleBranch, closeCatalog, t,
 }: CatalogRowsProps & { t: TranslateNS<typeof NS> }) {
   const [now, setNow] = useState(() => Date.now())
-  const [expandedDescriptions, setExpandedDescriptions] = useState<ReadonlySet<SessionId>>(() => new Set())
   const running = catalog.entries.some(entry => entry.activity === 'running')
   useEffect(() => {
     if (!running) return
@@ -258,7 +257,8 @@ function CatalogRows({
         const summary = summaries[entry.id]
         const label = entry.name ?? entry.label ?? entry.id
         const description = entry.name === undefined ? summary?.title : entry.label
-        const descriptionExpanded = expandedDescriptions.has(entry.id)
+        const primaryLabel = description || label
+        const secondaryLabel = description ? label : undefined
         const mode = external ? t('mode.external') : entry.mode === 'unknown' ? t('mode.unknown')
           : entry.mode === 'one-shot' ? t('mode.oneShot') : t('mode.continuable')
         const completed = !external && entry.activity === 'inactive'
@@ -268,7 +268,7 @@ function CatalogRows({
           : completed
             ? t('activity.completed')
             : t('activity.inactive')
-        const secondary = [description, requiresOpening ? t('catalog.migrationRequired') : mode, activity]
+        const secondary = [secondaryLabel, requiresOpening ? t('catalog.migrationRequired') : mode, activity]
           .filter(value => value !== undefined)
           .join(' · ')
         const totalTokens = tokenTotal(summary?.projectionValues?.tokenUsage)
@@ -327,7 +327,7 @@ function CatalogRows({
               aria-disabled={external || undefined}
               aria-level={level}
               aria-current={isCurrent || undefined}
-              aria-label={[label, secondary, metrics].filter(value => value !== '').join(' ')}
+              aria-label={[primaryLabel, secondary, metrics].filter(value => value !== '').join(' ')}
               {...canExpand ? { 'aria-expanded': isExpanded } : {}}
               className={css.row}
               onClick={open}
@@ -351,29 +351,13 @@ function CatalogRows({
                   <StateDot state={entry.activity === 'running' ? 'ongoing' : completed ? 'done' : 'idle'} />
                 </span>
                 <span className={css.content}>
-                  <span className={`${css.label} ${isCurrent ? css.currentLabel : ''}`}>{label}</span>
-                  {description !== undefined && (
-                    <button
-                      type="button"
-                      className={css.description}
-                      aria-expanded={descriptionExpanded}
-                      aria-disabled={external ? false : undefined}
-                      aria-label={t(descriptionExpanded ? 'description.collapse' : 'description.expand', { name: label })}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setExpandedDescriptions((current) => {
-                          const next = new Set(current)
-                          if (next.has(entry.id)) next.delete(entry.id)
-                          else next.add(entry.id)
-                          return next
-                        })
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') event.stopPropagation()
-                      }}
-                    >
-                      <span>{description}</span><IconChevronRightOutlineRegular size={12} />
-                    </button>
+                  <Tooltip label={primaryLabel} onlyWhenClipped portal side="top">
+                    <span className={`${css.label} ${isCurrent ? css.currentLabel : ''}`}>{primaryLabel}</span>
+                  </Tooltip>
+                  {secondaryLabel !== undefined && (
+                    <Tooltip label={secondaryLabel} onlyWhenClipped portal side="top">
+                      <span className={css.secondaryLabel}>{secondaryLabel}</span>
+                    </Tooltip>
                   )}
                   {requiresOpening && <span className={css.summary}>{t('catalog.migrationRequired')}</span>}
                 </span>
@@ -453,6 +437,8 @@ interface CatalogDropdownSharedProps extends InjectFace<SubagentCatalogInjected>
   useSessionStatus: SubagentHeaderLineageProps['useSessionStatus']
   t: TranslateNS<typeof NS>
   withBoard?: boolean
+  /** Retain an empty catalog's entry for shared tasks or a task-board error. */
+  hasBoardContent?: boolean
   renderFooter?: () => ReactNode
 }
 
@@ -667,10 +653,9 @@ function CatalogDropdown(props: CatalogDropdownProps) {
     cancelHoverClose()
   }, [])
 
-  // An enabled board stays reachable before the first child is created.
   const visible = presentedCatalog !== undefined
     && (variant === 'switcher'
-      || withBoard || presentedCatalog.state === 'error'
+      || props.hasBoardContent || presentedCatalog.state === 'error'
       || presentedCatalog.entries.length > 0)
   useEffect(() => {
     if (visible) return
@@ -838,6 +823,8 @@ function RootCatalogAction({
   openChild, openChildAside, refreshProjection, t, renderSlot,
 }: SubagentCatalogActionProps) {
   const teamEnabled = useProjection('agentTeam', team => team?.enabled === true)
+  const hasBoardContent = useProjection('agentTeam', team => team?.enabled === true
+    && (team.tasks.length > 0 || team.failure !== undefined))
   const footerAvailable = useFooterAvailable(value => value)
   return (
     <CatalogDropdown
@@ -845,6 +832,7 @@ function RootCatalogAction({
       rootSessionId={sessionId}
       variant="count"
       withBoard={footerAvailable && teamEnabled}
+      hasBoardContent={footerAvailable && hasBoardContent}
       renderFooter={() => renderSlot('conversation.session.header.actions.subagent.footer', {})}
       useSessions={useSessions}
       useSessionStatus={useSessionStatus}

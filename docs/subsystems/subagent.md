@@ -197,6 +197,10 @@ interface SubagentSettledMessageSource {
   readonly form: 'notice'
   /** One-line account of how the child ended. */
   readonly summary: string
+  /** Exact execution stop reason; absent on historical notices. Writers always include it. */
+  readonly stopReason?: SubagentResult['stopReason']
+  /** Original task label retained by the settled Activation; omitted when unknown. */
+  readonly description?: string
   /** Session id of the child that settled. */
   readonly senderSessionId: SessionId
 }

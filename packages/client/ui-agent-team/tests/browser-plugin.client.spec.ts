@@ -7,6 +7,7 @@ import { TeamModeToggle, type TeamModeToggleInjected } from '../src/client/TeamM
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { TeamBoard } from '../src/client/TeamBoard.tsx'
+import { TeamDisableConfirmation, type TeamDisableConfirmationInjected } from '../src/client/TeamDisableConfirmation.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as nodeApply } from '../src/index.ts'
 
@@ -20,6 +21,7 @@ async function bench() {
     children: {
       'conversation.session.header.actions.subagent.footer': { kind: 'list', scope: 'session' },
       'conversation.input.model': { kind: 'single', scope: 'session' },
+      'shell.overlay': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
   const fiber = ctx.plugin({ inject: [...inject], apply })
@@ -85,8 +87,27 @@ describe('task-board browser plugin', () => {
     await expect(mode.selectTeamMode(true)).resolves.toBe(b.ctx.locale.bind('agent-team')('mode.unavailable'))
     execute.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'connection failed', {}) })
     await expect(mode.selectTeamMode(true)).resolves.toBe('connection failed')
+    const overlayEntry = () => b.ctx.slots.entries('shell.overlay').find(candidate => candidate.component === TeamDisableConfirmation)
+    const overlayValue: object = overlayEntry()!.inject!()
+    const overlay = overlayValue as TeamDisableConfirmationInjected
+    const request = overlay.hooks.disableRequest
+    expect(request.getSnapshot()).toBeNull()
+    const beforeConfirmation = execute.mock.calls.length
+    mode.requestDisableConfirmation()
+    expect(request.getSnapshot()).toEqual({ sessionId: 'chosen-session' })
+    expect(execute).toHaveBeenCalledTimes(beforeConfirmation)
+    overlay.cancelDisable(SessionId('other-session'))
+    expect(request.getSnapshot()).toEqual({ sessionId: 'chosen-session' })
+    execute.mockResolvedValueOnce({ ok: true, value: { commandId: CommandId('team-mode'), result: { kind: 'success', text: 'saved' } } })
+    await expect(overlay.disableTeam(SessionId('chosen-session'))).resolves.toBeNull()
+    expect(execute).toHaveBeenLastCalledWith('chosen-session', '/team off', [])
+    overlay.cancelDisable(SessionId('chosen-session'))
+    expect(request.getSnapshot()).toBeNull()
+    mode.requestDisableConfirmation()
     await b.fiber.dispose()
     expect(entry()).toBeUndefined()
+    expect(overlayEntry()).toBeUndefined()
+    expect(request.getSnapshot()).toBeNull()
   })
 
   it('keeps the node half inert', () => {

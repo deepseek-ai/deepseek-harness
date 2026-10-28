@@ -22,8 +22,6 @@ export const zh = {
   'loading.label': '正在加载子智能体…',
   'load.error': '无法加载子智能体',
   'catalog.migrationRequired': '需要迁移',
-  'description.expand': '展开 {name} 的描述',
-  'description.collapse': '收起 {name} 的描述',
   'retry': '重试',
   'mode.external': '外部任务',
   'mode.oneShot': '一次性',
@@ -68,8 +66,6 @@ export const en: Record<SubagentKey, string> = {
   'loading.label': 'Loading subagents…',
   'load.error': 'Unable to load subagents',
   'catalog.migrationRequired': 'Migration required',
-  'description.expand': 'Expand description for {name}',
-  'description.collapse': 'Collapse description for {name}',
   'retry': 'Retry',
   'mode.external': 'External task',
   'mode.oneShot': 'one-shot',
@@ -100,8 +96,6 @@ export type SubagentKey = keyof typeof zh
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
-  'description.expand': '{name} の説明を展開',
-  'description.collapse': '{name} の説明を折りたたむ',
   'duration.seconds': '{seconds}秒',
   'duration.minutes': '{minutes}分{seconds}秒',
   'duration.hours': '{hours}時間{minutes}分{seconds}秒',
@@ -146,8 +140,6 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  'description.expand': 'Expandir descripción de {name}',
-  'description.collapse': 'Contraer descripción de {name}',
   'duration.seconds': '{seconds}s',
   'duration.minutes': '{minutes}m {seconds}s',
   'duration.hours': '{hours}h {minutes}m {seconds}s',
@@ -192,8 +184,6 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  'description.expand': 'Développer la description de {name}',
-  'description.collapse': 'Réduire la description de {name}',
   'duration.seconds': '{seconds}s',
   'duration.minutes': '{minutes}m {seconds}s',
   'duration.hours': '{hours}h {minutes}m {seconds}s',
@@ -238,8 +228,6 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  'description.expand': 'Beschreibung für {name} erweitern',
-  'description.collapse': 'Beschreibung für {name} einklappen',
   'duration.seconds': '{seconds}s',
   'duration.minutes': '{minutes}m {seconds}s',
   'duration.hours': '{hours}h {minutes}m {seconds}s',
@@ -284,8 +272,6 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  'description.expand': 'Развернуть описание {name}',
-  'description.collapse': 'Свернуть описание {name}',
   'duration.seconds': '{seconds}s',
   'duration.minutes': '{minutes}m {seconds}s',
   'duration.hours': '{hours}h {minutes}m {seconds}s',
@@ -330,8 +316,6 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  'description.expand': 'Expandir descrição de {name}',
-  'description.collapse': 'Recolher descrição de {name}',
   'duration.seconds': '{seconds}s',
   'duration.minutes': '{minutes}m {seconds}s',
   'duration.hours': '{hours}h {minutes}m {seconds}s',

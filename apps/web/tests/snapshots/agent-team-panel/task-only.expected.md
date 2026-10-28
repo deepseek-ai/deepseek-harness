@@ -1,0 +1,9 @@
+- dialog "Subagent sessions":
+  - tree "Subagent sessions"
+  - region "Task board":
+    - heading "Shared tasks 1" [level=3]
+    - article:
+      - strong: Plan before delegation
+      - text: Pending
+      - paragraph: Prepare shared work before creating subagents
+      - text: "task-1Owner: UnownedReady"

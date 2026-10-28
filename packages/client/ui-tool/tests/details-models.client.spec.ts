@@ -99,6 +99,19 @@ describe('control detail adapters', () => {
     })
   })
 
+  it.each(['subagent', 'subagent_fork'])('%s recognizes named creation receipts and retains the complete task', (name) => {
+    const prompt = 'Research CLI agent products.\nCompare business models and write a report.'
+    const model = details(name, 'started subagent child-1\nname: lead/researcher', { description: 'Research CLI agent products', prompt })
+    expect(model?.summary).toBe('Research CLI agent products')
+    expect(model?.items[0]).toEqual({
+      title: 'Started',
+      fields: [{ label: 'Agent ID', value: 'child-1' }, { label: 'Agent name', value: 'lead/researcher' }],
+      groups: [{ label: 'Task', items: [{ description: prompt, fields: [] }] }],
+    })
+    expect(details(name, 'started subagent child-1', { prompt })?.items[0]?.title).toBe('Started')
+    expect(details(name, 'started subagent child-1\nname: lead/researcher\nAdditional reply', { prompt })?.items[0]?.title).toBe('Agent response')
+  })
+
   it('renders receipts, reports malformed formats, and handles truncation', () => {
     expect(details('spawn_teammate', '{"member":{"id":"a1","status":"running"}}', { name: 'A' })?.items[0]).toMatchObject({ title: 'a1', badge: { label: 'Running' } })
     expect(details('team_task_create', '{"id":"task-1","subject":"Review","status":"pending"}')?.summary).toBe('Review')

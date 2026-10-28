@@ -41,6 +41,7 @@ export function bindSubagentActivation(
     childId: child.id,
     runId: SubagentRunId(`fixture:${child.id}`),
     provider: 'fixture',
+    label: undefined,
     root,
     ancestors,
     releaseSlot() {},

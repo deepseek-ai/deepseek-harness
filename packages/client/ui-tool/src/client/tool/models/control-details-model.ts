@@ -141,9 +141,17 @@ export function controlDetails(
       if (!detailRecord(json) || typeof json.timedOut !== 'boolean') return null
       if (detailRecord(json.noProgress) && typeof json.noProgress.message === 'string') return detailList([{ title: t('detail.wait.noProgress'), description: json.noProgress.message, fields: [] }], t('detail.wait.noProgress'), t)
       return receipt(t('detail.wait.title'), { label: t(json.timedOut ? 'detail.wait.timeout' : 'detail.wait.changed'), tone: 'neutral' }, t)
-    case 'subagent': {
-      const started = /^started (background subagent job|subagent) (\S+)$/u.exec(text)
-      if (started !== null) return receipt(arg(args, 'prompt'), { label: t('detail.receipt.started'), tone: 'info' }, t, [{ label: t(started[1] === 'subagent' ? 'detail.field.agent' : 'detail.field.job'), value: started[2] ?? '' }])
+    case 'subagent':
+    case 'subagent_fork': {
+      const started = /^started (background subagent job|subagent) (\S+)(?:\nname: (\S+))?$/u.exec(text)
+      if (started !== null) {
+        const fields = [{ label: t(started[1] === 'subagent' ? 'detail.field.agent' : 'detail.field.job'), value: started[2] ?? '' }]
+        if (started[3] !== undefined) fields.push({ label: t('detail.field.agentName'), value: started[3] })
+        return detailList([{
+          title: t('detail.receipt.started'), fields,
+          groups: [{ label: t('detail.field.task'), items: [{ description: arg(args, 'prompt'), fields: [] }] }],
+        }], arg(args, 'description') || arg(args, 'prompt'), t)
+      }
       return detailList([{ title: t('detail.agent.reply'), markdown: text, fields: [], groups: [{ label: t('detail.field.task'), items: [{ description: arg(args, 'prompt'), fields: [] }] }] }], t('detail.agent.reply'), t)
     }
     case 'list_subagent_models': {

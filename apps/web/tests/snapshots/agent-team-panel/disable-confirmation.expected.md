@@ -1,0 +1,7 @@
+- dialog "Turn off Agent Teams?":
+  - heading "Turn off Agent Teams?" [level=2]
+  - button "Close"
+  - paragraph: Turning off Agent Teams during a conversation stops the use of shared task tools and team coordination instructions. All existing task records will be preserved.
+  - paragraph: Turning it off may affect cache reuse, increase subsequent token usage and costs, and affect collaboration on the current task.
+  - button "Cancel"
+  - button "Confirm turn off"

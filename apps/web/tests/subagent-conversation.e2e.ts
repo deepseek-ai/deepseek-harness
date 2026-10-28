@@ -399,6 +399,40 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     }
   })
 
+  it('shows the description above the name without tooltips for unclipped text or hover navigation', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-catalog-labels'))
+    const trigger = page.getByRole('button', { name: '2 subagents', exact: true })
+    await trigger.click()
+    const panel = page.locator('[data-subagent-panel]')
+    const row = panel.getByRole('treeitem', { name: new RegExp(LABEL) })
+    const primary = row.getByText(LABEL, { exact: true })
+    const secondary = row.getByText('researcher', { exact: true })
+    expect(await primary.evaluate(element => element.tagName)).toBe('SPAN')
+    expect(await secondary.evaluate(element => element.tagName)).toBe('SPAN')
+    const primaryBounds = await primary.boundingBox()
+    const secondaryBounds = await secondary.boundingBox()
+    expect(primaryBounds).not.toBeNull()
+    expect(secondaryBounds).not.toBeNull()
+    expect(primaryBounds!.y + primaryBounds!.height).toBeLessThanOrEqual(secondaryBounds!.y)
+    expect(await row.getAttribute('aria-label')).toMatch(/^event-sourcing researcher researcher /u)
+    expect(await row.getByRole('button', { name: /description/u }).count()).toBe(0)
+    expect(await row.getByRole('button', { name: 'Expand researcher descendants', exact: true }).count()).toBe(1)
+    expect(await row.getByRole('button', { name: 'Open researcher in sidebar', exact: true }).count()).toBe(1)
+    const beforeHover = page.url()
+    for (const label of [primary, secondary]) {
+      expect(await label.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      await label.hover()
+      expect(await page.getByRole('tooltip').count()).toBe(0)
+      expect(page.url()).toBe(beforeHover)
+      expect(await page.getByText(PARENT_PROMPT, { exact: true }).isVisible()).toBe(true)
+      expect(await page.locator('[data-sidebar-chat]').count()).toBe(0)
+    }
+    expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
+    await page.keyboard.press('Escape')
+    await panel.waitFor({ state: 'detached' })
+    await page.locator('[data-composer-input]').first().hover()
+  })
+
   it('recovers a current-format cold child catalog cache miss without activating either level', async () => {
     onTestFailed(() => saveFailureShot(page, 'screenshots/non-migrating-session-reads/web-e2e-subagent-tree'))
     await page.getByRole('button', { name: '2 subagents' }).hover()
@@ -476,7 +510,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
   it('opens the completed child from persistence without activating it', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-open'))
     await page.getByRole('button', { name: '2 subagents' }).hover()
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText('researcher', { exact: true }).click()
+    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(LABEL, { exact: true }).click()
     await expect.poll(
       () => page.getByText(/^Explain event sourcing in one sentence\./).count(),
       { timeout: 15_000 },

@@ -398,9 +398,14 @@
 - text: Recorded result
 - list:
   - listitem:
-    - text: 检查工具卡片布局，并列出三个最值得改进的地方。 Started
+    - text: Started
     - term: Agent ID
     - definition: agent-demo-review
+    - group:
+      - text: Task
+      - list:
+        - listitem:
+          - paragraph: 检查工具卡片布局，并列出三个最值得改进的地方。
 - button "Inspect"
 - button "List subagents 3 agents" [expanded]
 - text: Recorded result

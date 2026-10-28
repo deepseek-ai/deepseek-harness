@@ -146,11 +146,17 @@ describe('DetailsRow', () => {
     expect(inspect).toHaveBeenCalledOnce()
   })
 
-  it('presents teammate-coordination tools under the two-person team icon', () => {
+  it.each([
+    ['wait_agent', 'Wait for input'],
+    ['subagent', 'Create subagent'],
+    ['subagent_fork', 'Fork subagent'],
+    ['list_subagent_models', 'List models'],
+  ])('%s uses the two-person icon and its own title', (name, title) => {
     const inspect = vi.fn()
     const expectedIcon = render(<IconUsersOutlineRegular size={14} />).container.querySelector('svg')!.outerHTML
-    const view = render(<DetailsRow {...{ useDisclosure, toolName: 'wait_agent', block: result('wait_agent', { timedOut: true }), inspect, t } as Parameters<typeof DetailsRow>[0]} />)
-    expect(screen.getByText('Wait for input')).toBeTruthy()
+    const props = { useDisclosure, toolName: name, block: result(name, { timedOut: true }), inspect, t } as Parameters<typeof DetailsRow>[0]
+    const view = render(<DetailsRow {...props} />)
+    expect(screen.getByText(title)).toBeTruthy()
     expect(view.container.querySelector('svg')?.outerHTML).toBe(expectedIcon)
   })
 
@@ -160,7 +166,8 @@ describe('DetailsRow', () => {
       for (const dispose of callback()) dispose()
     })
     detailsToolview.apply({ slots: { inject, register } } as never)
-    expect(register.mock.calls).toHaveLength(37)
+    expect(register.mock.calls).toHaveLength(38)
+    expect(register.mock.calls.map(([spec]) => spec)).toContainEqual({ name: 'tool.call.toolview', key: 'subagent_fork', locale: 'conversation' })
     expect(register.mock.calls.map(([spec]) => spec)).toContainEqual({ name: 'tool.call.toolview', key: 'cordis_inspect_query', locale: 'conversation' })
     expect(register.mock.calls.map(([spec]) => spec)).toContainEqual({ name: 'tool.call.toolview', key: 'schedule_update', locale: 'conversation' })
   })

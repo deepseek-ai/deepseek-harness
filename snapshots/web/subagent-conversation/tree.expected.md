@@ -1,9 +1,7 @@
 - tree "Subagent sessions":
-  - treeitem "researcher event-sourcing researcher · continuable · completed 7.9K tok · {{duration}}" [expanded] [level=1]:
+  - treeitem "event-sourcing researcher researcher · continuable · completed 7.9K tok · {{duration}}" [expanded] [level=1]:
     - button "Collapse researcher descendants"
-    - text: researcher
-    - button "Expand description for researcher": event-sourcing researcher
-    - text: 7.9K tok {{duration}}
+    - text: event-sourcing researcher researcher 7.9K tok {{duration}}
     - button "Open researcher in sidebar"
   - group:
     - treeitem "example editor continuable · completed 0 tok · {{duration}}" [level=2]:

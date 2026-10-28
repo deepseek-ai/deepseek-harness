@@ -991,6 +991,8 @@
               "kind": "subagent-settled",
               "form": "notice",
               "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "stopReason": "completed",
+              "description": "Check direct child",
               "senderSessionId": "{{child-1}}"
             },
             "role": "user",
@@ -1268,6 +1270,8 @@
           "kind": "subagent-settled",
           "form": "notice",
           "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+          "stopReason": "completed",
+          "description": "Check direct child",
           "senderSessionId": "{{child-1}}"
         },
         "role": "user",
@@ -3306,6 +3310,8 @@
                   "kind": "subagent-settled",
                   "form": "notice",
                   "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+                  "stopReason": "completed",
+                  "description": "Check direct child",
                   "senderSessionId": "{{child-1}}"
                 },
                 "role": "user",
@@ -4258,6 +4264,8 @@
               "kind": "subagent-settled",
               "form": "notice",
               "summary": "Background subagent {{child-1}} finished and will do no further work unless you send it more.",
+              "stopReason": "completed",
+              "description": "Check direct child",
               "senderSessionId": "{{child-1}}"
             },
             "role": "user",

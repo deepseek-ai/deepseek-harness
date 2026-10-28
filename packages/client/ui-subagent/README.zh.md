@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-会话页头的普通面包屑使用会话标题，子智能体面包屑使用绑定的同级名称；尚未加载名称绑定的条目使用 label 或 id。当会话的直接目录有子项或读取失败时，后代数量触发器渲染在页头操作区中预设标签之后，不带任何面包屑分隔符。目录缺席或为空时隐藏数量触发器，但根 Session 开启 Agent Teams 时会保留入口，使首位成员创建前也能访问共享任务板。触发器打开该直接目录，报告总数与运行数，并且只在行展开时加载嵌套目录。选择任意深度，即可用该子会话的确切 `{parentSessionId, childSessionId, mode}` 地址打开其对话；也可以使用行尾箭头在右侧 Sidebar 打开同一地址，并在空间允许时优先使用独立分栏。
+会话页头的普通面包屑使用会话标题，子智能体面包屑使用绑定的同级名称；尚未加载名称绑定的条目使用 label 或 id。当会话的直接目录有子项或读取失败时，后代数量触发器渲染在页头操作区中预设标签之后，不带任何面包屑分隔符。目录缺席或为空时隐藏数量触发器，除非根 Session 已开启且可用的 Team 任务板有共享任务或任务记录错误。仅开启 Team 模式不会显示空入口。触发器打开该直接目录，报告总数与运行数，并且只在行展开时加载嵌套目录。选择任意深度，即可用该子会话的确切 `{parentSessionId, childSessionId, mode}` 地址打开其对话；也可以使用行尾箭头在右侧 Sidebar 打开同一地址，并在空间允许时优先使用独立分栏。
 
 本包注册 `dsh-resource://subagentchat/session/<child>?parent=<parent>&mode=<mode>` 资源与 builtin Sidebar tab 类型。资源直接根据地址保留 child 的 `SessionReference`，不刷新 parent 目录，并在 tab 记录关闭时释放 reference。tab 通过 `sidebar.chat.conversation` 渲染共享 `conversation.content` Factory，把局部 View 固定为 Chat，并省略主 Conversation 的 Header 与宽度控制。
 
@@ -33,9 +33,9 @@ kind: "package-reference"
 
 ### 浏览目录
 
-悬停触发器 150ms 后打开目录；指针离开触发器和目录后，经过 120ms 关闭。点击后代数量触发器会固定目录，直到点击外部或按 Escape 关闭。点击会将焦点移入面板，此时 ArrowDown/Home 进入首个树行，ArrowUp/End 进入最后一个树行；Escape 在焦点位于描述按钮时也会关闭面板，并在焦点原本位于面板内时将其送回。点击面包屑标题会导航至对应会话。
+悬停触发器 150ms 后打开目录；指针离开触发器和目录后，经过 120ms 关闭。点击后代数量触发器会固定目录，直到点击外部或按 Escape 关闭。点击会将焦点移入面板，此时 ArrowDown/Home 进入首个树行，ArrowUp/End 进入最后一个树行；Escape 会关闭面板，并在焦点原本位于面板内时将其送回。点击面包屑标题会导航至对应会话。
 
-具名行在上方显示名称，下方显示创建时的描述；历史行保留 label 与由日志支撑的可选 title。描述默认占一行，点击可原地展开或收起。running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的 14px 列宽，并将较小的圆点居中，使 title 与 loading 状态对齐。紧凑的页头触发器会垂直居中活动图标与数量，并保留 4px 水平间距。尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时。键盘导航：ArrowRight/ArrowLeft 展开和折叠分支；ArrowUp/ArrowDown、Home、End 与 Escape 用于导航或关闭树。没有 label 的 one-shot 行回退到其会话 id。只有一行自身的目录加载为空后，它才是已知叶子。
+具名行在上方显示创建时的原始描述，下方显示名称；历史行在 label 或 id 上方显示由日志支撑的可选 title。缺少描述或历史 title 时，该行只显示名称、label 或 id。每条文本均为单行，溢出时以省略号截断；仅在悬停被截断的文本时通过工具提示显示完整内容。running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的 14px 列宽，并将较小的圆点居中，使 title 与 loading 状态对齐。紧凑的页头触发器会垂直居中活动图标与数量，并保留 4px 水平间距。尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时。键盘导航：ArrowRight/ArrowLeft 展开和折叠分支；ArrowUp/ArrowDown、Home、End 与 Escape 用于导航或关闭树。没有 label 的 one-shot 行回退到其会话 id。只有一行自身的目录加载为空后，它才是已知叶子。
 
 ### 续接对话
 

@@ -7,8 +7,11 @@
 }
 
 .board {
-  margin-top: 8px;
   padding: 8px 8px 4px;
+}
+
+.withMembers {
+  margin-top: 8px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 

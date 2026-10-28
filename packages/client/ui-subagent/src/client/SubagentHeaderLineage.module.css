@@ -234,6 +234,7 @@
 }
 
 .label,
+.secondaryLabel,
 .summary {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -249,39 +250,8 @@
   font-weight: 500;
 }
 
-.description {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
+.secondaryLabel {
   color: var(--dsw-alias-label-tertiary);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.description > span {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.description > svg {
-  flex: none;
-  margin-top: 3px;
-}
-
-.description[aria-expanded='true'] > span {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.description[aria-expanded='true'] > svg {
-  transform: rotate(90deg);
 }
 
 .summary,
