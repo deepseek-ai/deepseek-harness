@@ -24,12 +24,6 @@ function productIcon(glyph: IconGlyph, weight: IconWeight): (props: IconProps) =
   )
 }
 
-/** Regular logout arrow and door with a fixed one-pixel stroke. */
-export const IconLogoutOutlineRegular = productIcon('logout-outline', 'regular')
-
-/** Medium logout arrow and door with a fixed 1.3px stroke. */
-export const IconLogoutOutlineMedium = productIcon('logout-outline', 'medium')
-
 /** Regular one-pixel IconNewChatOutline artwork. */
 export const IconNewChatOutlineRegular = productIcon('new-chat-outline', 'regular')
 
