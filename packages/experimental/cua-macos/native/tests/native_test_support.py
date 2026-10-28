@@ -2,6 +2,8 @@
 import json
 from contextlib import ExitStack
 import os
+import platform
+import shutil
 from pathlib import Path
 import select
 import signal
@@ -10,7 +12,33 @@ import time
 from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
-BINARY = ROOT / ".build" / "release" / "dsh-cua-native"
+def default_binary():
+    """Resolve the application produced by native/build_app.py for this host."""
+    architecture = "arm64" if platform.machine() == "arm64" else "x64"
+    directory = ROOT / "bin" / f"darwin-{architecture}"
+    receipt = json.loads((directory / "current.json").read_text())
+    return directory / receipt["bundle"] / "DSH Computer Use.app/Contents/MacOS/dsh-cua-native"
+
+
+def copy_helper(binary, destination):
+    """Retain the app signature; bare reference binaries remain usable for old-version comparisons."""
+    binary = binary.resolve(strict=True)
+    application = binary.parent.parent.parent
+    if application.suffix == ".app":
+        copied = destination / application.name
+        shutil.copytree(application, copied)
+        return copied / "Contents/MacOS" / binary.name
+    copied = destination / "helper"
+    shutil.copy2(binary, copied)
+    return copied
+
+
+def unregister_helper(binary):
+    """Remove LaunchServices registrations before deleting an owned test application."""
+    application = binary.parent.parent.parent
+    if application.suffix == ".app":
+        subprocess.run(["/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
+                        "-u", str(application)], check=True, capture_output=True, timeout=10)
 
 
 def run_cleanup(*actions: Callable[[], None]) -> None:
@@ -74,7 +102,7 @@ def stop_group(process):
 class NativeHelper:
     """One serial helper whose request transcript remains available on failure."""
     def __init__(self, transcript, helper_path=None):
-        binary = Path(helper_path).resolve() if helper_path is not None else BINARY
+        binary = Path(helper_path).resolve() if helper_path is not None else default_binary()
         self.process = subprocess.Popen([str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         text=True, start_new_session=True)
         self.sequence = 0

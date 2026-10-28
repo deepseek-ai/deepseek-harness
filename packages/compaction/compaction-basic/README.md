@@ -148,6 +148,8 @@ The transaction validates the surface span and the durable lock, appends `compac
 | [`src/config.ts`](src/config.ts) | Load-time validation and routed-model policy resolution |
 | [`src/types.ts`](src/types.ts) | `BasicCompactionConfig` and resolved policy vocabulary |
 
+The package root's type declarations add `compaction` to `LlmRequestPurposeMap`. Direct callers constructing compaction requests use `import type {} from '@deepseek-ai/dsh-compaction-basic'` so `GenerateOptions.purpose` includes that key.
+
 </details>
 
 -----

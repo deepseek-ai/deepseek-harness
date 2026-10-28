@@ -44,6 +44,8 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 
 `diff` 运行 `gh pr diff <number> --repo <host>/<owner>/<name> --color never`。`fileText` 经 `gh api` 以 raw 媒体类型读取 `repos/<owner>/<name>/contents/<path>?ref=<commit>`，只接受完整的 40 位或 64 位十六进制提交。`fileUrl` 返回 `https://<host>/<owner>/<name>/blob/<commit>/<path>`。两者的路径都逐段做百分号编码。被拒绝的读取在 HTTP 404 时为 `not-found`，诊断提到身份验证时为 `unauthenticated`，GitHub 报告 `too_large` 错误时（diff 超过其自身大小上限即会如此）为 `too-large`，其余为 `unavailable`，并带有 GitHub 的原因。输出超过 `maxOutputBytes` 的读取为 `too-large`，超过 `timeoutMs` 的为 `unavailable`。
 
+提交评审时先检查 PR 当前的 head，再通过 REST API 发布单条行内评论或一次完整评审，并显式指定 `commit_id`。多行评论携带所属侧及包含端点的起止行号。评审结论为“评论”“批准”或“请求更改”。JSON 请求正文通过标准输入传递。provider 不会重试写操作；发送后的超时、异常响应或服务端错误会返回结果不明，由调用方到 GitHub 核对。检查与写入之间到来的新提交可能让已明确定位到旧提交的评审过时；GitHub 的这些接口不提供原子的 head 前置条件。
+
 -----
 
 <a id="understand-the-implementation"></a>

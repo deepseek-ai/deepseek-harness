@@ -86,6 +86,7 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-inspector-profile',
       '@deepseek-ai/dsh-experimental-inspector',
       '@deepseek-ai/dsh-experimental-liveshare-protocol',
+      '@deepseek-ai/dsh-experimental-liveshare',
       '@deepseek-ai/dsh-personalized-recommendations',
       '@deepseek-ai/dsh-experimental-plugin-market-bundle',
       '@deepseek-ai/dsh-plugin-recommendations',

@@ -38,7 +38,7 @@ export interface ImageManifest {
   readonly visitedEntries: number
   /** Visited entries the transform rewrote. */
   readonly rewrittenEntries: number
-  /** Lazily requested page chunks, one archive each. */
+  /** Page chunks requested only through `require.async`, one archive each. */
   readonly lazy: readonly ImageLazyArchive[]
 }
 

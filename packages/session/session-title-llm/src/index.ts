@@ -6,6 +6,12 @@
  * @module @deepseek-ai/dsh-session-title-llm
  */
 
+declare module '@deepseek-ai/dsh-llm/types' {
+  interface LlmRequestPurposeMap {
+    'session-title': true
+  }
+}
+
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { createUserMessage, BlockAssembler } from '@deepseek-ai/dsh-llm'

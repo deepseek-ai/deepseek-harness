@@ -26,6 +26,8 @@ The panel does not move a Session between existing worktrees. Removing a change 
 
 The panel also shows the changes behind a Session's work in a changes view, a resource tab type of this package. The Remote parses every diff on the Host into files and hunks, so the browser draws them without a patch parser, and bounds each read with `maxDiffBytes` and `maxUntrackedFiles`. Local changes come from confined `git diff` in the Session's execution world, in a scope the user picks: the branch against its fork point by default, or the uncommitted, unstaged, or staged changes; untracked files are read through the Session's filesystem and shown as new files. A change request's changes come from its code host at the head of the binding's latest status, through two provider reads the forge seam gained, `diff` and `fileText`. The Host keeps the patch it read last for each change request, keyed by the head commit and base branch and bounded by `maxCachedDiffBytes`, so reopening, refreshing, and navigating at the same head download nothing again; a host or provider that refuses an answer over its size limit reports the forge failure `too-large`, and the view then offers the change request's web page instead of a retry. Unchanged lines between hunks expand from the file's new side, which is the working tree, the index, or the head commit, and only while that text still matches the hunks. Each inspection also sizes the branch's changes for a local changes card, shown while no open change request carries the checked-out branch; its Create change request sends the Session a user message, so the Agent creates the change request with its own tools and the binding follows from `gh pr create` as for any other.
 
+Review comments capture the file, side, range, complete hunk, and reviewed head when the user selects code. Agent references enter the existing composer quote mechanism, so the user controls batching and the sent message records exactly what the model receives. GitHub writes belong to the optional forge provider operation: preflight checks the current head, the write addresses that commit, and an ambiguous outcome blocks another write until the user reconciles it. Review drafts and inline records belong to a browser tab occurrence, not to the Session log or a GitHub pending review. Switching Sessions retains that occurrence; closing it discards the local state and rejects late write completions. Published GitHub comments remain external records.
+
 ## Deferred
 
 A left-navigation review page next to Plugins and Scheduled tasks, listing the user's pull requests or merge requests on the selected provider, is deferred. It attaches without changing this package's Session surfaces:
@@ -78,6 +80,12 @@ The changes view offers no scope for one commit or for the last turn yet; both w
 **Recognizing a too-large diff from the failure message in the panel.** The message belongs to the provider and its host and changes with them; a failure code lets each provider report its own limits, and the panel branches on the code.
 
 **Creating the change request from the card.** The panel would need to push the branch and compose the title and description; a message lets the Agent do both with its tools and the user's instructions, and keeps one way to bind change requests.
+
+**Sending each line comment immediately to the Agent.** It starts a turn before the user can collect related comments or add a shared instruction; composer references preserve that choice.
+
+**Keeping review drafts after their tab closes.** Reopening the same PR would restore abandoned review state. A tab occurrence gives closing a clear discard meaning while preserving Session switching.
+
+**Automatically retrying a review write.** A lost response does not mean that GitHub rejected the request. Retaining the outgoing request and requiring reconciliation prevents a transport failure from silently duplicating comments.
 
 ## Consequences
 

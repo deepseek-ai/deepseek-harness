@@ -803,6 +803,60 @@ describe('PluginManagerPage', () => {
     expect(b.actions.uninstall).not.toHaveBeenCalled()
   })
 
+  it('keeps a shipped bundle out of both lists until one of its declared rows runs', () => {
+    const hidden = '@deepseek-ai/dsh-experimental-liveshare'
+    const shown = '@deepseek-ai/dsh-experimental-agent-team-profile'
+    const offer = (rows: readonly PackageRow[]): PackageView => pkg({
+      name: hidden, official: true, installed: false, optional: true, removable: false, enabled: false, listedByDefault: false, rows,
+    })
+    const other = pkg({ name: shown, installed: false, optional: true, removable: false, enabled: false })
+    const b = renderTab({ packages: [offer([]), other] })
+    // The default installation carries the package but composes none of its rows: neither the main
+    // list nor the More list offers a card for it.
+    expect(document.querySelector(`[data-plugin-package="${hidden}"]`)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+    expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+    expect(document.querySelector(`[data-plugin-package="${hidden}"]`)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+
+    // A row inserted through cordis.patch.yml runs while the profile selects no such bundle: the card
+    // is listed as experimental exactly like a bundle the profile selected.
+    b.set({
+      packages: [
+        offer([row({ rowId: 'liveshare-viewer-declarations', moduleName: `${hidden}/viewer-declarations` })]),
+        other,
+      ],
+    })
+    const extensions = document.querySelector('[data-plugin-group="extensions"]') as HTMLElement
+    expect(within(extensions).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package')))
+      .toEqual([shown, hidden])
+
+    // Disabling that row takes the card away again, as removing it would.
+    b.set({
+      packages: [
+        offer([row({
+          rowId: 'liveshare-viewer-declarations', moduleName: `${hidden}/viewer-declarations`,
+          enabled: false, phase: null,
+        })]),
+        other,
+      ],
+    })
+    expect(document.querySelector(`[data-plugin-package="${hidden}"]`)).toBeNull()
+  })
+
+  it('does not open a default-hidden bundle by id while its card is hidden', () => {
+    const hidden = '@deepseek-ai/dsh-experimental-liveshare'
+    const b = renderTab({
+      packages: [pkg({
+        name: hidden, official: true, installed: false, optional: true, removable: false, enabled: false,
+        listedByDefault: false,
+      })],
+    })
+    expect(document.querySelector(`[data-plugin-package="${hidden}"]`)).toBeNull()
+    act(() => { b.navigation.actions.setView({ kind: 'package', name: hidden }) })
+    expect(document.querySelector(`[data-plugin-detail="${hidden}"]`)).toBeNull()
+  })
+
   it.each([false, true])('shows an empty list for hidden bundles with errors and installed=%s', (installed) => {
     renderTab({
       packages: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-experimental-terminal-bundle'].map(name => pkg({

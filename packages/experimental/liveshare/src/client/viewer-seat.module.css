@@ -1,0 +1,28 @@
+.seat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border: none;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* A read-only seat is a label, not a control: it states the restriction in its own text. */
+.seat[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note {
+  font-size: 11px;
+  opacity: 0.85;
+}

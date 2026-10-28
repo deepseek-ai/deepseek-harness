@@ -300,6 +300,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Adapters register provider implementations; the loop and compaction call the provider-neutral stream service.',
   },
   {
+    key: 'sessionLogDeepSeek',
+    pkg: 'session-log-deepseek',
+    title: 'Session-log upload policy',
+    mode: 'core',
+    implementations: [],
+    note: 'Plugins register caller-owned exclusions before the canonical Session-log request contribution is prepared; unmatched requests use normal upload eligibility.',
+  },
+  {
     key: 'deepseekLlmApiExtensions',
     pkg: 'deepseek-llm-api-extensions',
     title: 'Official DeepSeek request extensions',
@@ -958,6 +966,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['tool-cordis'],
     note: 'Registers host inspect providers, mirrors the client provider manifest, and routes client queries through the dynamic Cordis transport.',
+  },
+  {
+    key: 'liveshareShares',
+    pkg: 'experimental-liveshare',
+    title: 'Owner share management Remote',
+    mode: 'service',
+    note: 'Publishes the owner share-management operations as one Typert Remote namespace that the owner client face calls; every method delegates to the same operations the same-origin routes used.',
   },
 ]
 

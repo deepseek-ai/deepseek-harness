@@ -1,0 +1,351 @@
+/* The Modal root owns the viewport padding: cards size against its padding box and cap their own
+   growth at 100%, never a second viewport calculation. */
+.modal {
+  width: min(520px, 100%);
+  max-height: 100%;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  max-height: 100%;
+}
+
+.sessionTitle { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.panelHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 16px 10px;
+}
+
+.panelTitleBlock { display: flex; flex-direction: column; min-width: 0; }
+.panelTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.headerGap { flex: 1; }
+
+.iconAction,
+.textAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .iconAction:hover,
+  .textAction:hover {
+    background: var(--dsw-alias-bg-layer-2);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 4px;
+  overflow-y: auto;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.panelFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px 16px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.rowLabel { color: var(--dsw-alias-label-primary); flex-shrink: 0; white-space: nowrap; }
+.hint { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+
+
+.identityName { color: var(--dsw-alias-label-primary); }
+
+.description {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.diagnostics { display: flex; flex-direction: column; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.diagnostics summary, .outgoing summary { cursor: pointer; }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.accountRow { display: flex; align-items: center; gap: 6px; min-height: 24px; }
+.identityAvatar { width: 20px; height: 20px; border-radius: 50%; corner-shape: round; object-fit: cover; }
+
+
+/* The editable address fills its row, and its value stays readable whether or not it is truncated. */
+.relayInput { flex: 1; min-width: 0; }
+.relayInput input { font-family: var(--ds-font-family-code); }
+
+.label {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The share's own permission section, outside the address and account flow above it. */
+.capabilities {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+}
+
+.capabilities legend { padding: 0 4px; }
+
+.linkRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.link {
+  min-width: 0;
+  flex: 1;
+  color: var(--dsw-alias-brand-primary);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+}
+
+.testing {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.testOk {
+  color: var(--dsw-static-green-500);
+  font-size: 12px;
+}
+
+.testWarn {
+  color: var(--dsw-static-amber-500);
+  font-size: 12px;
+}
+
+.testFail {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+}
+
+.requests {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.outgoing {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.noRequests {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.outgoingList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outgoingItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.outgoingTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Fixed title, state, and action columns so every managed share lines up. */
+.managerRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.managerRow strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerRow > :last-child {
+  justify-self: end;
+}
+
+.managerActions {
+  display: flex;
+  gap: 4px;
+  justify-self: end;
+}
+
+/* A long Session title wraps instead of pushing the status off the row. */
+.outgoingTop strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A checkbox and its own words on one line, so the control never reads as the value of the row
+   below the shared right edge. */
+.outgoingToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.online,
+.offline {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.online::before,
+.offline::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-label-tertiary);
+  content: "";
+}
+
+.online::before {
+  background: var(--dsw-static-green-500);
+}
+
+.outgoingLink {
+  color: var(--dsw-alias-brand-primary);
+  overflow-wrap: anywhere;
+}
+
+.outgoingItem time {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.outgoingActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.subjectRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.subjectList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.subjectChip {
+  height: 24px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  corner-shape: round;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.requestList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.requestItem {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.requestItem time {
+  grid-column: 1 / -1;
+  color: var(--dsw-alias-label-tertiary);
+}

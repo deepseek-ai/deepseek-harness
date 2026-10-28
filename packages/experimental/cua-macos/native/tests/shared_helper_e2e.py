@@ -19,7 +19,7 @@ import subprocess
 import tempfile
 import time
 
-from native_test_support import BINARY, ROOT, line, stop
+from native_test_support import copy_helper, default_binary, ROOT, line, stop, unregister_helper
 
 
 CONFIG = {"maxRequestBytes": 1024 * 1024, "maxResponseBytes": 32 * 1024 * 1024,
@@ -97,13 +97,14 @@ def wait_released(path, pid, timeout=10):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--helper", type=Path, default=BINARY)
+    parser.add_argument("--helper", type=Path, default=None)
     parser.add_argument("--without-desktop", action="store_true")
     args = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix="cua-", dir="/tmp") as temporary:
+    args.helper = args.helper or default_binary()
+    with tempfile.TemporaryDirectory(prefix="cua-", dir="/tmp") as temporary, ExitStack() as applications:
         root = Path(temporary)
-        helper = root / "helper"
-        shutil.copy2(args.helper.resolve(strict=True), helper)
+        helper = copy_helper(args.helper, root)
+        applications.callback(unregister_helper, helper)
         key = hashlib.sha256(helper.read_bytes()).hexdigest()
         runtime = root / "r"
         socket_path = runtime / (key + ".sock")

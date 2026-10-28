@@ -89,6 +89,13 @@ html[data-platform='darwin'] :is(
   -webkit-app-region: no-drag;
 }
 
+/* Reset both native region types for inert content. Chromium treats the explicit
+   `none` keyword as `no-drag`, which would erase foreground drag rows. */
+html[data-platform='darwin'] [inert],
+html[data-platform='darwin'] [inert] * {
+  -webkit-app-region: initial;
+}
+
 code,
 pre,
 [data-diff],

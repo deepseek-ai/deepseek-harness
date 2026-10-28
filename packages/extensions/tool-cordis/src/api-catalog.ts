@@ -1285,6 +1285,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
       },
       {
+        signature: 'async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>',
+        description: 'Publish one comment or a completed review, then refresh the watched status.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'explicitly selected commit, comments, and review decision.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'a publication URL or a failure, including an unknown write outcome.',
+      },
+      {
         signature: 'async fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>',
         description: 'Read the text of one file at a commit of a change request\'s repository.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'commit', description: 'commit object name.' }, { name: 'path', description: 'path relative to the repository root.' }, { name: 'signal', description: 'cancellation of the read.' }],
@@ -1386,6 +1392,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'commit', description: 'commit object name, the head commit of the diff.' }, { name: 'path', description: 'path relative to the repository root.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'the text.',
         throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/diff-too-large` when the host or its provider refuses the file over a size limit; `forgePanel/diff-failed` when the host does not provide the file otherwise.'],
+      },
+      {
+        signature: '@Remote async submitReview(session: Session, url: string, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>',
+        description: 'Publish a line comment or completed review for a visible Session binding.',
+        parameters: [{ name: 'session', description: 'Session retaining the change request.' }, { name: 'url', description: 'visible binding URL.' }, { name: 'request', description: 'reviewed head, ranges, plain text, and explicit review decision.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'confirmed publication or a typed failure; unknown outcomes require reconciliation on the host.',
       },
       {
         signature: '@Remote async markReady(session: Session, url: string, signal: AbortSignal): Promise<void>',
@@ -1822,6 +1834,85 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Attach an effect-scoped controller that can read and stop jobs. It serves the owners its registering context\'s scope covers, and start refuses an owner no attached controller serves.',
         parameters: [{ name: 'name', description: 'diagnostic label; duplicate names remain independent.' }],
         returns: 'disposer that detaches this controller.',
+      },
+    ],
+  },
+  {
+    key: 'liveshareShares',
+    summary: 'Owner-only Remote surface over the share-management operations.',
+    description: 'Owner-only Remote surface over the share-management operations.\n\nThe Gateway decides each call through remote access, so a `share-viewer` Peer is refused before a method runs; the owner Peer reaches the one implementation that owns each share-management side effect. `create` takes its Session as the `sessionId` of its single request object, so the Session resource kind\'s default resolver names that Session for the call without a reader declared here.',
+    methods: [
+      {
+        signature: '@Remote(\'create\') create(request: CreateShareRequest): Promise<CreatedShare>',
+        description: 'Publish one Session and store the share.',
+        parameters: [{ name: 'request', description: 'Session, title, access, lifetime, and both switches the owner chose.' }],
+        returns: 'The created share\'s link and stored values.',
+      },
+      {
+        signature: '@Remote(\'list\') list(): Promise<OwnerShareList>',
+        description: 'Refresh titles and Liveshare server authority, then list this host\'s shares.',
+        parameters: [],
+        returns: 'Every share this host publishes.',
+      },
+      {
+        signature: '@Remote(\'stop\') stop(request: StopShareRequest): Promise<StopShareResult>',
+        description: 'Stop one share locally, revoke its forks, and delete its row on the Liveshare server when reachable.',
+        parameters: [{ name: 'request', description: 'Share to stop.' }],
+        returns: 'Whether the row on the Liveshare server still needs a retry.',
+      },
+      {
+        signature: '@Remote(\'updatePermissions\') updatePermissions(request: UpdateSharePermissionsRequest): Promise<SharePermissions>',
+        description: 'Change one share\'s tier, fork switch, or both.',
+        parameters: [{ name: 'request', description: 'Share and the switches to change.' }],
+        returns: 'The permissions the share now carries.',
+      },
+      {
+        signature: '@Remote(\'setCapabilities\') setCapabilities(request: SetShareCapabilitiesRequest): Promise<ShareCapabilities>',
+        description: 'Replace one share\'s exposed plugin endpoints.',
+        parameters: [{ name: 'request', description: 'Share and the selection to store.' }],
+        returns: 'The capability selection the share now carries.',
+      },
+      {
+        signature: '@Remote(\'capabilities\') capabilities(): ShareCapabilityOffers',
+        description: 'Read the endpoints plugins currently offer.',
+        parameters: [],
+        returns: 'The live offer list.',
+      },
+      {
+        signature: '@Remote(\'relay\') relay(): OwnerRelayState',
+        description: 'Read the Liveshare server address the owner saved.',
+        parameters: [],
+        returns: 'The current Liveshare server state, with both address fields absent while none is saved.',
+      },
+      {
+        signature: '@Remote(\'setRelay\') setRelay(request: SetRelayRequest): Promise<OwnerRelayState>',
+        description: 'Choose the Liveshare server address later shares publish to.',
+        parameters: [{ name: 'request', description: 'Normalized address or null to clear the saved one.' }],
+        returns: 'The Liveshare server state after the change.',
+      },
+      {
+        signature: '@Remote(\'identity\') identity(request: OwnerIdentityRequest): Promise<OwnerIdentityStatus>',
+        description: 'Report this host\'s owner identity for one Liveshare server address.',
+        parameters: [{ name: 'request', description: 'Address to report, or the effective one when absent.' }],
+        returns: 'The owner identity status, without the credential.',
+      },
+      {
+        signature: '@Remote(\'audit\') audit(request: ShareAuditRequest): Promise<ShareAudit>',
+        description: 'Read the Liveshare server\'s durable audit trail for one share.',
+        parameters: [{ name: 'request', description: 'Share whose audit is read.' }],
+        returns: 'The audit events, or a structured failure when the Liveshare server cannot answer.',
+      },
+      {
+        signature: '@Remote(\'testRelay\') testRelay(): Promise<RelayConnectivityView>',
+        description: 'Check that the effective Liveshare server answers at all.',
+        parameters: [],
+        returns: 'The anonymous connectivity result.',
+      },
+      {
+        signature: '@Remote(\'testPublish\') testPublish(request: TestPublishRequest): Promise<RelayPublishView>',
+        description: 'Register one throwaway share to check whether this host may publish.',
+        parameters: [{ name: 'request', description: 'Session the throwaway registration names.' }],
+        returns: 'The Liveshare server\'s decision about this host\'s credential.',
       },
     ],
   },
@@ -2693,6 +2784,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'List file and directory candidates for one Agent\'s working directory.',
         parameters: [{ name: 'agent', description: 'target Agent resolved from the Session identity on the wire.' }, { name: 'query', description: 'path text following `@` or `@"`.' }, { name: 'signal', description: 'caller cancellation.' }],
         returns: 'deterministic path-only candidates from the composed provider.',
+      },
+    ],
+  },
+  {
+    key: 'sessionLogDeepSeek',
+    summary: 'Incremental Session-log contributor with caller-owned upload exclusions.',
+    description: 'Incremental Session-log contributor with caller-owned upload exclusions.',
+    methods: [
+      {
+        signature: 'registerExclusion(exclude: SessionLogUploadExclusion): () => Promise<void>',
+        description: 'Exclude matching requests before reading or preparing their log contribution. Any matching rule suppresses both the field and its acceptance callback. With no matching rules, normal upload eligibility applies. A throwing rule fails this contribution; the request-extension registry omits it and reports the error.',
+        parameters: [{ name: 'exclude', description: 'synchronous, side-effect-free predicate; `true` skips this upload.' }],
+        returns: 'effect disposer that removes this registration when called or when the caller unloads.',
       },
     ],
   },
@@ -4889,6 +4993,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'llm/models-updated',
+    mode: 'emit',
+    signature: '\'llm/models-updated\'(provider: string): void',
+    summary: 'A provider\'s advertised models or display metadata changed; consumers reload `listModels()`.',
+    description: 'A provider\'s advertised models or display metadata changed; consumers reload `listModels()`.',
+    parameters: [{ name: 'provider', description: 'route whose model catalog changed.' }],
+  },
+  {
     name: 'llm/stream',
     mode: 'waterfall',
     signature: '\'llm/stream\'(this: LlmRuntime, options: GenerateOptions, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>',
@@ -5621,6 +5733,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type CheckState = \'pending\' | \'success\' | \'failure\' | \'neutral\' | \'skipped\' | \'cancelled\';',
   },
   {
+    name: 'ClaimOutcome',
+    declaration: 'export interface ClaimOutcome {\n    readonly claimed: number;\n    readonly skipped: number;\n}',
+  },
+  {
     name: 'ClientArtifactBaseline',
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
   },
@@ -5881,6 +5997,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly parentAgent?: Agent;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
   {
+    name: 'CreatedShare',
+    declaration: 'export interface CreatedShare {\n    readonly link: string;\n    readonly shareId: string;\n    readonly sessionId: string;\n    readonly sessionMode: \'view\' | \'write\';\n    readonly access: ShareAccess;\n}',
+  },
+  {
     name: 'CreatedWorktree',
     declaration: 'export interface CreatedWorktree {\n    path: string;\n    branch: string;\n    baseCommit: string;\n    repositoryRoot: string;\n}',
   },
@@ -5895,6 +6015,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CreateSessionOptions',
     declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly createdAt?: number;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n}',
+  },
+  {
+    name: 'CreateShareRequest',
+    declaration: 'export interface CreateShareRequest {\n    readonly sessionId: string;\n    readonly sessionTitle?: string;\n    readonly accessMode?: \'open\' | \'selected\';\n    readonly ttlMinutes?: number;\n    readonly allowedSubjectIds?: readonly string[];\n    readonly allowsFork?: boolean;\n    readonly sessionMode?: \'view\' | \'write\';\n}',
   },
   {
     name: 'CreateTeamTaskRequest',
@@ -5982,7 +6106,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'DeepSeekLlmApiExtensionRequest',
-    declaration: 'export interface DeepSeekLlmApiExtensionRequest {\n    readonly body: Readonly<Record<string, DeepSeekLlmApiJson>>;\n    readonly sessionId?: string;\n    readonly purpose?: \'compaction\' | \'session-title\';\n    readonly signal: AbortSignal;\n}',
+    declaration: 'export interface DeepSeekLlmApiExtensionRequest {\n    readonly body: Readonly<Record<string, DeepSeekLlmApiJson>>;\n    readonly sessionId?: string;\n    readonly purpose?: string;\n    readonly signal: AbortSignal;\n}',
   },
   {
     name: 'DeepSeekLlmApiJson',
@@ -6225,6 +6349,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ForgeFailure {\n    readonly code: \'not-found\' | \'unauthenticated\' | \'too-large\' | \'unavailable\';\n    readonly message: string;\n}',
   },
   {
+    name: 'ForgeLineComment',
+    declaration: 'export interface ForgeLineComment {\n    readonly path: string;\n    readonly side: \'L\' | \'R\';\n    readonly startLine: number;\n    readonly endLine: number;\n    readonly body: string;\n}',
+  },
+  {
     name: 'ForgeLocalChanges',
     declaration: 'export interface ForgeLocalChanges {\n    readonly base: string;\n    readonly files: readonly ForgeChangedFile[];\n}',
   },
@@ -6254,7 +6382,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n    markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>;\n    fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>;\n    fileUrl(ref: ChangeRequestRef, commit: string, path: string): string;\n}',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n    markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>;\n    fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>;\n    fileUrl(ref: ChangeRequestRef, commit: string, path: string): string;\n}',
   },
   {
     name: 'ForgeReadiness',
@@ -6263,6 +6391,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeRepository',
     declaration: 'export interface ForgeRepository {\n    readonly forge: string;\n    readonly host: string;\n    readonly owner: string;\n    readonly name: string;\n}',
+  },
+  {
+    name: 'ForgeReviewRequest',
+    declaration: 'export type ForgeReviewRequest = {\n    readonly headSha: string;\n} & ({\n    readonly kind: \'comment\';\n    readonly comment: ForgeLineComment;\n} | {\n    readonly kind: \'review\';\n    readonly event: \'comment\' | \'approve\' | \'request-changes\';\n    readonly body: string;\n    readonly comments: readonly ForgeLineComment[];\n});',
+  },
+  {
+    name: 'ForgeReviewResult',
+    declaration: 'export type ForgeReviewResult = {\n    readonly ok: true;\n    readonly url: string;\n} | {\n    readonly ok: false;\n    readonly code: \'unsupported\' | \'stale\' | \'failed\' | \'unknown\';\n    readonly message: string;\n};',
   },
   {
     name: 'ForgeSessionWorktree',
@@ -6342,7 +6478,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'GenerateOptions',
-    declaration: 'export interface GenerateOptions {\n    provider: string;\n    model: string;\n    reasoningEffort?: ReasoningEffortId;\n    messages: RequestMessage[];\n    system?: string;\n    tools?: ToolSchema[];\n    toolHistory?: ToolHistory;\n    temperature?: number;\n    maxTokens?: number;\n    stop?: string[];\n    signal?: AbortSignal;\n    sessionId?: Branded<\'SessionId\'>;\n    purpose?: \'compaction\' | \'session-title\';\n}',
+    declaration: 'export interface GenerateOptions<Purpose extends string = LlmRequestPurpose> {\n    provider: string;\n    model: string;\n    reasoningEffort?: ReasoningEffortId;\n    messages: RequestMessage[];\n    system?: string;\n    tools?: ToolSchema[];\n    toolHistory?: ToolHistory;\n    temperature?: number;\n    maxTokens?: number;\n    stop?: string[];\n    signal?: AbortSignal;\n    sessionId?: Branded<\'SessionId\'>;\n    purpose?: Purpose;\n}',
   },
   {
     name: 'GenericCallView',
@@ -6721,6 +6857,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface LlmImageRequestPricing {\n    priceImages(images: readonly ImageBlock[]): readonly LlmImageRequestPrice[];\n}',
   },
   {
+    name: 'LlmModelBadge',
+    declaration: 'export interface LlmModelBadge {\n    text: LocalizedText;\n    tone: LlmModelBadgeTone;\n}',
+  },
+  {
+    name: 'LlmModelBadgeTone',
+    declaration: 'export type LlmModelBadgeTone = \'neutral\' | \'info\' | \'success\' | \'warning\';',
+  },
+  {
     name: 'LlmModelContext',
     declaration: 'export interface LlmModelContext {\n    contextWindow: number;\n}',
   },
@@ -6730,7 +6874,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmModelInfo',
-    declaration: 'export interface LlmModelInfo {\n    provider: string;\n    id: string;\n    name: string;\n    description?: string;\n    inputModalities?: readonly ModelModality[];\n}',
+    declaration: 'export interface LlmModelInfo {\n    provider: string;\n    id: string;\n    name: string;\n    description?: string;\n    inputModalities?: readonly ModelModality[];\n    badge?: LlmModelBadge;\n}',
   },
   {
     name: 'LlmModelReasoningInfo',
@@ -6747,6 +6891,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LlmReasoningEffortInfo',
     declaration: 'export interface LlmReasoningEffortInfo {\n    id: ReasoningEffortId;\n    name: string;\n    description?: string;\n}',
+  },
+  {
+    name: 'LlmRequestPurpose',
+    declaration: 'export type LlmRequestPurpose = Extract<keyof LlmRequestPurposeMap, string>;',
+  },
+  {
+    name: 'LlmRequestPurposeMap',
+    declaration: 'export interface LlmRequestPurposeMap {\n}',
   },
   {
     name: 'LlmResolvedModelInfo',
@@ -7022,7 +7174,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ModelCatalogModel',
-    declaration: 'export interface ModelCatalogModel {\n    readonly id: string;\n    readonly name: string;\n    readonly description?: string;\n    readonly reasoning?: ModelReasoning;\n}',
+    declaration: 'export interface ModelCatalogModel {\n    readonly id: string;\n    readonly name: string;\n    readonly description?: string;\n    readonly reasoning?: ModelReasoning;\n    readonly badge?: LlmModelBadge;\n}',
   },
   {
     name: 'ModelMessageSource',
@@ -7135,6 +7287,30 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'OTelEventScalar',
     declaration: 'export type OTelEventScalar = string | number | boolean;',
+  },
+  {
+    name: 'OwnerIdentityRequest',
+    declaration: 'export interface OwnerIdentityRequest {\n    readonly relay?: string;\n}',
+  },
+  {
+    name: 'OwnerIdentityState',
+    declaration: 'export type OwnerIdentityState = \'verified\' | \'expired\' | \'unverified\' | \'relay-unsupported\';',
+  },
+  {
+    name: 'OwnerIdentityStatus',
+    declaration: 'export interface OwnerIdentityStatus {\n    readonly state: OwnerIdentityState;\n    readonly relay: string;\n    readonly displayName?: string;\n    readonly subjectId?: string;\n    readonly avatarUrl?: string;\n    readonly expiresAt?: string;\n    readonly renewed?: boolean;\n    readonly claim?: ClaimOutcome;\n}',
+  },
+  {
+    name: 'OwnerRelayState',
+    declaration: 'export interface OwnerRelayState {\n    readonly configured?: string;\n    readonly override?: string;\n    readonly effective?: string;\n}',
+  },
+  {
+    name: 'OwnerShareList',
+    declaration: 'export interface OwnerShareList {\n    readonly shares: readonly OwnerShareView[];\n}',
+  },
+  {
+    name: 'OwnerShareView',
+    declaration: 'export interface OwnerShareView {\n    readonly shareId: string;\n    readonly sessionId: string;\n    readonly sessionTitle: string;\n    readonly link: string;\n    readonly createdAt: string;\n    readonly expiresAt?: string;\n    readonly allowsFork: boolean;\n    readonly sessionMode: \'view\' | \'write\';\n    readonly viewerCapabilities: readonly ShareCapabilityGroup[];\n    readonly online: boolean;\n    readonly access?: ShareAccess;\n}',
   },
   {
     name: 'PackageResult',
@@ -7531,6 +7707,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RegistryAttempt',
     declaration: 'export interface RegistryAttempt {\n    readonly registry: Registry;\n    readonly problem?: \'not-found\' | \'network\' | \'unknown\';\n    readonly reason?: string;\n}',
+  },
+  {
+    name: 'RelayConnectivityView',
+    declaration: 'export interface RelayConnectivityView {\n    readonly ok: boolean;\n    readonly httpReachable: boolean;\n    readonly blocking: boolean;\n    readonly error?: string;\n}',
+  },
+  {
+    name: 'RelayPublishView',
+    declaration: 'export interface RelayPublishView {\n    readonly ok: boolean;\n    readonly blocking: boolean;\n    readonly error?: string;\n}',
   },
   {
     name: 'Reload',
@@ -8161,6 +8345,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionLogSnapshot {\n    session: SessionHeader;\n    inheritedEventCount: SessionLogOffset;\n    events: SessionEvent[];\n}',
   },
   {
+    name: 'SessionLogUploadExclusion',
+    declaration: 'export type SessionLogUploadExclusion = (request: SessionLogUploadRequest) => boolean;',
+  },
+  {
+    name: 'SessionLogUploadRequest',
+    declaration: 'export interface SessionLogUploadRequest {\n    readonly sessionId: SessionId;\n    readonly purpose?: string;\n}',
+  },
+  {
     name: 'SessionMessage',
     declaration: 'export interface SessionMessage {\n    role: \'user\' | \'assistant\';\n    text: string;\n    toolUses: ToolUseSummary[];\n}',
   },
@@ -8505,6 +8697,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SessionWorkspacePathApplication = NativeFileApplication;',
   },
   {
+    name: 'SetRelayRequest',
+    declaration: 'export interface SetRelayRequest {\n    readonly relayUrl: string | null;\n}',
+  },
+  {
+    name: 'SetShareCapabilitiesRequest',
+    declaration: 'export interface SetShareCapabilitiesRequest {\n    readonly shareId: string;\n    readonly capabilities?: readonly ShareCapabilityGroup[];\n}',
+  },
+  {
     name: 'SettingsDescribeOptions',
     declaration: 'export interface SettingsDescribeOptions {\n    redactSecrets?: boolean;\n}',
   },
@@ -8539,6 +8739,38 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SettingsSecretView',
     declaration: 'export interface SettingsSecretView {\n    path: string[];\n    set: boolean;\n}',
+  },
+  {
+    name: 'ShareAccess',
+    declaration: 'export interface ShareAccess {\n    readonly mode: \'open\' | \'selected\';\n    readonly selected: readonly ShareAccessSelection[];\n    readonly deploymentAllowedSubjectIds: readonly string[];\n    readonly shareAllowedSubjectIds: readonly string[];\n    readonly broadenedByDeploymentSubjects: boolean;\n    readonly identityKeyAcl: true;\n}',
+  },
+  {
+    name: 'ShareAccessSelection',
+    declaration: 'export interface ShareAccessSelection {\n    readonly providerId: string;\n    readonly tenantId: string;\n    readonly subjectId: string;\n    readonly identityKey: string;\n}',
+  },
+  {
+    name: 'ShareAudit',
+    declaration: 'export interface ShareAudit {\n    readonly events: readonly ShareAuditEntryView[];\n}',
+  },
+  {
+    name: 'ShareAuditEntryView',
+    declaration: 'export interface ShareAuditEntryView {\n    readonly id: string;\n    readonly action: string;\n    readonly createdAt: string;\n    readonly actor?: string;\n    readonly detail?: JsonValue;\n}',
+  },
+  {
+    name: 'ShareAuditRequest',
+    declaration: 'export interface ShareAuditRequest {\n    readonly shareId: string;\n}',
+  },
+  {
+    name: 'ShareCapabilities',
+    declaration: 'export interface ShareCapabilities {\n    readonly shareId: string;\n    readonly viewerCapabilities: readonly ShareCapabilityGroup[];\n}',
+  },
+  {
+    name: 'ShareCapabilityGroup',
+    declaration: 'export interface ShareCapabilityGroup {\n    readonly plugin: string;\n    readonly readable: readonly string[];\n    readonly writable: readonly string[];\n}',
+  },
+  {
+    name: 'ShareCapabilityOffers',
+    declaration: 'export interface ShareCapabilityOffers {\n    readonly capabilities: readonly ShareCapabilityGroup[];\n}',
   },
   {
     name: 'ShellExecRequest',
@@ -8759,6 +8991,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'StagedAttachment',
     declaration: 'export type StagedAttachment = {\n    readonly type: \'file\';\n    readonly attachment: FileAttachmentRef;\n} | {\n    readonly type: \'image\';\n    readonly attachment: ImageAttachmentRef;\n    readonly encodedBytes: number;\n};',
+  },
+  {
+    name: 'StopShareRequest',
+    declaration: 'export interface StopShareRequest {\n    readonly shareId: string;\n}',
+  },
+  {
+    name: 'StopShareResult',
+    declaration: 'export interface StopShareResult {\n    readonly ok: true;\n    readonly relay?: \'unreachable\';\n}',
   },
   {
     name: 'StorageBackend',
@@ -9115,6 +9355,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TerminalWaitReason',
     declaration: 'export type TerminalWaitReason = \'stdin_read\' | \'inferred_idle\' | \'timeout\' | \'session_exit\';',
+  },
+  {
+    name: 'TestPublishRequest',
+    declaration: 'export interface TestPublishRequest {\n    readonly sessionId: string;\n}',
   },
   {
     name: 'TextProps',
@@ -9519,6 +9763,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'UpdateBundleOptions',
     declaration: 'export interface UpdateBundleOptions {\n    readonly registry?: Registry;\n    readonly requestId?: PluginInstallRequestId;\n}',
+  },
+  {
+    name: 'UpdateSharePermissionsRequest',
+    declaration: 'export interface UpdateSharePermissionsRequest {\n    readonly shareId: string;\n    readonly sessionMode?: \'view\' | \'write\';\n    readonly allowsFork?: boolean;\n    readonly ttlMinutes?: number | null;\n}',
   },
   {
     name: 'UpdateTeamTaskRequest',

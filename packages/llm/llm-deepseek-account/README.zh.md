@@ -29,11 +29,13 @@ kind: "package-reference"
 
 路由的目录来自账号的 `GET /models` 列表，地址为 Messages `baseURL` 的 origin 加 `/models`（官方端点即 `https://api.deepseek.com/models`），不可配置。列表请求用 `x-dsh-auth-token` 携带账号 token，带上 harness 的 `User-Agent`，并拒绝重定向。
 
-同一凭据的第一次访问会等待列表，最长 `modelsTimeoutMs`。之后的访问直接使用已加载的列表，列表超过 `modelsMaxAgeMs` 后在后台刷新。获取失败或得到空列表时保留上一份；还没有加载到任何列表时，路由提供当前版本内置的目录（`deepseek-flash` 与 `deepseek-v4-pro`）。列表请求返回 HTTP 401 不会清除已保存的登录。每次加载成功、连续失败中的第一次失败及其退回的目录、以及每个被隐藏的列表条目，都会以 `[llm-deepseek-account]` 标签写到 stderr；stdout 保留给协议消息，且不记录任何密钥。每个账号 token 有自己的列表，因此服务端可以先对部分账号开放某个模型。
+同一凭据的第一次访问会等待列表，最长 `modelsTimeoutMs`。首次使用后，Host 每隔 `modelsMaxAgeMs`（默认十分钟）自动刷新，页面空闲时也会刷新。刷新过程中，后续访问直接返回缓存列表。获取失败或得到空列表时保留上一份列表及其角标；还没有加载到任何列表时，路由提供当前版本内置的目录（`deepseek-flash` 与 `deepseek-v4-pro`）。列表请求返回 HTTP 401 不会清除已保存的登录。每次加载成功、连续失败中的第一次失败及其退回的目录、每个被隐藏的列表条目，以及每个被丢弃的角标，都会以 `[llm-deepseek-account]` 标签写到 stderr；stdout 保留给协议消息，且不记录任何密钥。每个账号 token 有自己的列表，因此服务端可以先对部分账号开放某个模型。 列表变化时发出 `llm/models-updated`，已打开的选择器会重新加载，无需刷新页面。省略角标元数据或将其设为 `null` 会清除旧角标，无需单独的清除操作。插件卸载会停止刷新并等待进行中的加载结束。
 
 只有当前版本的 DeepSeek Harness 能用的模型才会出现在目录里。声明了 `client_requirements["deepseek-harness"].min_version` 的模型，在当前版本号按 semver 顺序不低于该版本时提供，预发布号（如 `0.2.0-alpha.1`、`0.2.0-rc.1`）同样参与比较。预发布版本低于同号的正式版本：`min_version: 0.2.1` 会拒绝 `0.2.1-alpha.2`，因此要放行预发布版本的列表应声明它允许的最早一个，如 `0.2.1-alpha.0`。没有这个声明的模型，只有内置目录认识它的 id 时才提供；其余列出的模型保持隐藏。请求一个当前版本不能用的已列出模型时，会在网络请求之前失败：`CLIENT_UPGRADE_REQUIRED` 会写明所需版本和当前版本，否则为 `MODEL_UNSUPPORTED`。列表没有列出的模型 id 照常透传。
 
 提供的模型以列表中的名称、`context_window`、输入模态，以及 Messages 的 system prompt 模式和工具更新模式（`api_capabilities.anthropic_messages.system_prompt_update` 与 `tool_update`）覆盖同 id 的内置条目，内置条目保留图片预算和描述。列表没有给出或设为 `null` 的模式沿用内置值；本版本能读的模式之外的任何值（system prompt 能读 `in-history`，工具能读 `in-history` 或 `addition-only`）都按 `leading-only` 处理，即去掉内置的模式。`max_output_tokens` 限制请求默认值：请求没有指定上限时，发送 `maxTokens` 与该能力上限中较小的一个。列表中的推理档位不被读取；每个模型都提供 `off`、`low`、`high`、`max`。
+
+提供的模型会在 Web 模型选择器中，于名称旁显示列表条目在 `client_metadata["deepseek-harness"].badge` 下声明的角标。`client_metadata` 存放任何版本都可以忽略的客户端专属数据；与 `client_requirements` 不同，其中的内容不会隐藏模型。`badge.text` 是字符串，或以小写语言 id（如 `en`、`zh`、`ja`）为键且包含 `en` 的对象；选择器显示当前语言的文字，没有时显示英文。每段文字去掉首尾空白后须为单行，长度为 1 到 12 个字符；一个 emoji 或带组合符号的字母算作一个字符。`badge.tone` 取 `neutral`、`info`、`success` 或 `warning`；缺省或其他取值按 `neutral` 显示。这条路径上任何一层缺省或为 `null` 时不显示角标，因为本版本没有可回退的内置角标。某一层不是对象或角标无法读取时，角标被丢弃，所属模型照常提供。角标只用于展示：模型请求、Session 事件和面向模型的工具都不携带它。
 
 `modelOverrides` 调整单个模型而不替换整个目录。键是模型 id；值的字段与 [Messages `models` 条目](../llm-deepseek/README.zh.md#minimal-configuration)相同，未设置的字段沿用下层的值。覆盖作用在列表和内置目录之上；不能新增模型，也不能让被拒绝的模型变得可用。列表声明的能力不约束覆盖：覆盖的 `maxTokens` 高于列表的 `max_output_tokens` 时按覆盖值发送，超出服务端限制的请求由服务端拒绝。覆盖指向的模型既不在列表里、内置目录也不认识，或者被列出的模型拒绝时，会成为模型页上该提供方的诊断信息；模型页不为此路由提供编辑器。被拒绝且内置目录不认识的模型，其覆盖要等当前版本能用该模型时才校验。此路由没有 `models` 字段；配置里仍写了它时，加载即失败并提示改用 `modelOverrides`。修改 `$DSH_HOME/profiles/<profile>/cordis.patch.yml`，下一次请求即生效。
 
@@ -51,7 +53,7 @@ kind: "package-reference"
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `modelsTimeoutMs` | `5,000` | 单次列表请求以及首次访问等待的上限 |
-| `modelsMaxAgeMs` | `600,000` | 列表超过这个时长后，下一次访问时刷新；获取失败后同样在这个时长后重试 |
+| `modelsMaxAgeMs` | `600,000` | 首次使用后的自动刷新间隔，失败后也按此间隔重试；`0` 表示只在访问时刷新 |
 | `modelOverrides` | `{}` | 按模型 id 的字段覆盖 |
 
 账号请求的 HTTP 401 与响应正文无关：映射为 `ACCOUNT_TOKEN_INVALID`，并要求账号服务仅在当前 token 仍与请求所用 token 相同时清除凭据。403 和其他错误不会触发清除。账号模块负责退登后打断任务，本插件不遍历 Agent。

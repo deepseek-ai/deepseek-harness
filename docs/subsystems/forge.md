@@ -45,6 +45,8 @@ type ChangeRequestKey = Branded<'ChangeRequestKey'>
 interface ForgeProvider {
   /** Forge family name stored in every repository this provider returns. */
   readonly forge: string
+  /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
+  submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /** Map a Git remote URL to its repository, or undefined when this provider does not serve it. */
   repositoryFromRemote(url: string): ForgeRepository | undefined
   /** Map a change request web URL to its reference, or undefined when this provider does not serve it. */
@@ -244,6 +246,37 @@ interface ForgeActionFailure {
   /** Human-readable cause, usually the host's own message. */
   readonly message: string
 }
+```
+
+`ctx.forge.submitReview` delegates an explicit comment or completed review to the provider. A provider that omits this capability returns unsupported. Consumers retain pending drafts and reconcile unknown write outcomes before resubmitting.
+
+```ts type-equiv
+/** One inline comment addressed to the old or new side of a pull request diff. */
+interface ForgeLineComment {
+  readonly path: string
+  readonly side: 'L' | 'R'
+  readonly startLine: number
+  readonly endLine: number
+  readonly body: string
+}
+```
+
+```ts type-equiv
+/** A single published comment or one completed review containing all pending comments. */
+type ForgeReviewRequest = {
+  /** Commit the user reviewed; providers must check it before writing and address that commit explicitly. */
+  readonly headSha: string
+} & (
+  | { readonly kind: 'comment'; readonly comment: ForgeLineComment }
+  | { readonly kind: 'review'; readonly event: 'comment' | 'approve' | 'request-changes'; readonly body: string; readonly comments: readonly ForgeLineComment[] }
+)
+```
+
+```ts type-equiv
+/** Result of a review write; unknown outcomes must be checked on the host before another submission. */
+type ForgeReviewResult =
+  | { readonly ok: true; readonly url: string }
+  | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
 ```
 
 ## Session bindings
@@ -745,6 +778,15 @@ async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): 
 async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>
 
 /**
+ * Publish one comment or a completed review, then refresh the watched status.
+ * @param ref - change request served by a registered provider.
+ * @param request - explicitly selected commit, comments, and review decision.
+ * @param signal - request cancellation.
+ * @returns a publication URL or a failure, including an unknown write outcome.
+ */
+async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
+
+/**
  * Read the text of one file at a commit of a change request's repository.
  * @param ref - change request served by a registered provider.
  * @param commit - commit object name.
@@ -914,6 +956,16 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * `forgePanel/diff-failed` when the host does not provide the file otherwise.
  */
 @Remote async changeRequestText(session: Session, url: string, commit: string, path: string, signal: AbortSignal): Promise<string>
+
+/**
+ * Publish a line comment or completed review for a visible Session binding.
+ * @param session - Session retaining the change request.
+ * @param url - visible binding URL.
+ * @param request - reviewed head, ranges, plain text, and explicit review decision.
+ * @param signal - request cancellation.
+ * @returns confirmed publication or a typed failure; unknown outcomes require reconciliation on the host.
+ */
+@Remote async submitReview(session: Session, url: string, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
 
 /**
  * Mark a draft change request of a Session ready for review; the change

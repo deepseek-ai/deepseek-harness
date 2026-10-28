@@ -8,6 +8,7 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/web/tests/sidebar-drawer.e2e.ts",
     "apps/web/tests/creation-recommendations.e2e.ts",
     "apps/web/tests/plugin-recommendations.e2e.ts",
     "apps/web/tests/japanese-plugin-metadata.e2e.ts",
@@ -118,7 +119,7 @@
     "apps/web/tests/settings-import.e2e.ts",
     "apps/web/tests/models-settings.e2e.ts",
     "apps/web/tests/deepseek-messages-settings.e2e.ts",
-    "apps/web/tests/deepseek-model-label-1017.e2e.ts",
+    "apps/web/tests/model-badge.e2e.ts",
     "apps/web/tests/deepseek-messages-chat.e2e.ts",
     "apps/web/tests/models-settings-recovery.e2e.ts",
     "apps/web/tests/onboarding-deepseek-config.e2e.ts",
@@ -544,6 +545,7 @@
     { "path": "./packages/experimental/agent-team-profile" },
     { "path": "./packages/experimental/inspector-profile" },
     { "path": "./packages/experimental/liveshare-protocol/tsconfig.host.json" },
+    { "path": "./packages/experimental/liveshare/tsconfig.host.json" },
     { "path": "./packages/experimental/tool-agent-team" },
     { "path": "./packages/workflow/workflow" },
     { "path": "./packages/workflow/workflow-ptc" },

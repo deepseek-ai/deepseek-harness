@@ -634,6 +634,13 @@
   overflow-wrap: anywhere;
 }
 
+@media (pointer: coarse) {
+  .searchInput,
+  .renameInput {
+    font-size: 16px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wide {
     animation: none;

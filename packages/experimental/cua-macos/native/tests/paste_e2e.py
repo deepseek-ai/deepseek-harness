@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import time
 
-from native_test_support import BINARY, ROOT, NativeHelper, line, run_cleanup, stop
+from native_test_support import default_binary, ROOT, NativeHelper, line, run_cleanup, stop
 
 
 def wait_state(path, predicate):
@@ -23,9 +23,10 @@ def wait_state(path, predicate):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--helper", type=Path, default=BINARY)
+    parser.add_argument("--helper", type=Path, default=None)
     parser.add_argument("--artifacts", type=Path)
     args = parser.parse_args()
+    args.helper = args.helper or default_binary()
     transcript = []
     processes = []
     helper = None
