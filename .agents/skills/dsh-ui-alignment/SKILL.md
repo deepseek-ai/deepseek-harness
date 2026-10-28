@@ -19,14 +19,14 @@ Inline SVG `vertical-align: middle` follows font baseline/x-height, not visible 
 
 Name the aligned object and reference container. Equal padding need not align text starts; equal SVG dimensions need not align visible centers.
 
-| Alignment | Required relationship |
-|---|---|
-| Left edge | Same-role labels and reading content share a deliberate text axis across relevant groups. |
-| Horizontal center | Center the whole icon/label unit or empty-state stack in its named container. |
-| Vertical center | Balance single-line peers visually while keeping stable clickable heights. |
-| Baseline / first line | Align mixed-size text baselines; attach leading icons to the intended first line, not the whole paragraph. |
-| Two edges | Anchor left/right groups to their respective edges; preserve internal gaps instead of distributing every icon. |
-| Repeated columns | Align all corresponding slots, not just the last action. |
+| Alignment | Use it for | Judge the actual relationship | Common mistake |
+|---|---|---|---|
+| Left edge | Navigation labels, list titles, field labels, reading content | Same-role text starts on one deliberate axis, including across groups | Every component has its own plausible but different inset |
+| Horizontal center | A standalone primary button or short empty-state stack | Center the icon-plus-label or full stack in the named container | Center the label alone and attach an icon outside it |
+| Vertical center | A single-line icon/label row or peer toolbar controls | Visible centers balance; the whole clickable unit keeps a stable height | Equal CSS heights hide different SVG whitespace or line boxes |
+| Baseline / first line | Mixed text sizes, multiline labels with leading icons | Text baselines agree; an icon belongs to the intended first line | Center an icon beside the entire multiline paragraph |
+| Two edges | Title/action rows and left/right composer groups | Left group follows the content edge; right group follows the trailing edge | Distribute every icon across the available width |
+| Repeated columns | Action clusters, timestamps, file rows | Corresponding slots share centers or edges across rows | Only the last icon aligns; preceding icons drift |
 
 For Chinese/English navigation, identify leading icon centers, text starts and trailing controls by role. Headings, avatars and expandable search may differ. Continue axes only where the composition establishes them, including shared plugin reading edges even when hover paint extends beyond them, and conversation/right-sidebar header heights and baselines.
 
