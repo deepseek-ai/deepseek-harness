@@ -1,6 +1,6 @@
 // WeCom QR-code authorization failures and recovery through the real Host/Remote/browser composition.
 // A stand-in CLI waits for each QR-code page visit and keeps the authorization on disk.
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -59,8 +59,9 @@ describe.skipIf(process.platform === 'win32')('web e2e: WeCom plugin authorizati
     binDir = await mkdtemp(join(tmpdir(), 'dsh-wecom-e2e-'))
     await writeFile(join(binDir, 'wecom-cli'), WECOM_CLI)
     await chmod(join(binDir, 'wecom-cli'), 0o755)
+    await mkdir(join(binDir, 'skills'))
     const overlay = join(binDir, 'wecom.overlay.yml')
-    await writeFile(overlay, `- id: wecom\n  config:\n    binDir: ${JSON.stringify(binDir)}\n`)
+    await writeFile(overlay, `- id: wecom\n  config:\n    binDir: ${JSON.stringify(binDir)}\n    skillsDir: ${JSON.stringify(join(binDir, 'skills'))}\n`)
     scaffold = await launchWebScaffold({
       extraOverlayPath: [fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)), overlay],
       profile: { packages: [{ dir: WECOM_DIR, enabled: true }] },

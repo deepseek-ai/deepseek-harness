@@ -11,7 +11,7 @@ import { createConnection, presentConnection, type ConnectionPresentation } from
 type Operation = NonNullable<WecomState['operation']>
 
 const OP = 'op-1' as CliOperationId
-const UNAUTHORIZED: WecomState = { account: { state: 'unauthorized' } }
+const UNAUTHORIZED: WecomState = { account: { state: 'unauthorized', skills: 'installed' } }
 const FAILED_CONNECT: NonNullable<WecomState['result']> = { id: OP, kind: 'connect', outcome: 'failed', failure: { command: 'auth-init', exitCode: 2 } }
 const FAILED_CHECK: NonNullable<WecomState['result']> = { id: OP, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: 1 } }
 
@@ -22,13 +22,13 @@ function operation(kind: Operation['kind'], phase: Operation['phase'], cancellab
 it.each<[string, WecomState | undefined, ConnectionPresentation]>([
   ['a stopped stream', UNAUTHORIZED, { phase: 'stopped', failed: undefined }],
   ['no view yet', undefined, { phase: 'checking', failed: undefined }],
-  ['an unchecked authorization', { account: { state: 'unchecked' } }, { phase: 'checking', failed: undefined }],
+  ['an unchecked authorization', { account: { state: 'unchecked', skills: 'installed' } }, { phase: 'checking', failed: undefined }],
   ['a check', { ...UNAUTHORIZED, operation: operation('check', 'checking') }, { phase: 'checking', failed: undefined }],
-  ['a first check that failed', { account: { state: 'unchecked' }, result: FAILED_CHECK }, { phase: 'unavailable', failed: FAILED_CHECK }],
+  ['a first check that failed', { account: { state: 'unchecked', skills: 'installed' }, result: FAILED_CHECK }, { phase: 'unavailable', failed: FAILED_CHECK }],
   ['no authorization', UNAUTHORIZED, { phase: 'disconnected', failed: undefined }],
   ['a failed connection', { ...UNAUTHORIZED, result: FAILED_CONNECT }, { phase: 'disconnected', failed: FAILED_CONNECT }],
   ['a cancelled connection', { ...UNAUTHORIZED, result: { id: OP, kind: 'connect', outcome: 'cancelled' } }, { phase: 'disconnected', failed: undefined }],
-  ['an authorized bot', { account: { state: 'authorized' } }, { phase: 'connected', failed: undefined }],
+  ['an authorized bot', { account: { state: 'authorized', skills: 'installed' } }, { phase: 'connected', failed: undefined }],
   ['a QR-code scan', { ...UNAUTHORIZED, operation: operation('connect', 'authorizing', true, 'https://work.weixin.qq.com/qr') },
     { phase: 'connecting', step: 'authorizing', url: 'https://work.weixin.qq.com/qr', cancellable: true }],
   ['a confirmation', { ...UNAUTHORIZED, operation: operation('connect', 'checking') }, { phase: 'connecting', step: 'connecting', url: undefined, cancellable: false }],
@@ -104,13 +104,13 @@ it('connects through the Remote, opens the QR-code page once, and reports the au
   b.face.cancel()
   await settle(b)
   expect(b.remote.cancel).toHaveBeenCalledWith(OP)
-  await b.publish({ account: { state: 'authorized' }, result: { id: OP, kind: 'connect', outcome: 'succeeded' } })
+  await b.publish({ account: { state: 'authorized', skills: 'installed' }, result: { id: OP, kind: 'connect', outcome: 'succeeded' } })
   expect(b.snapshot().notice).toEqual({ seq: 1, kind: 'connected' })
 })
 
 it('checks again without a notice', async () => {
   const b = fixture()
-  await b.publish({ account: { state: 'unchecked' }, result: FAILED_CHECK })
+  await b.publish({ account: { state: 'unchecked', skills: 'installed' }, result: FAILED_CHECK })
   b.face.check()
   await settle(b)
   expect(b.remote.check).toHaveBeenCalledOnce()

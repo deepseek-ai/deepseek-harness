@@ -1,21 +1,22 @@
 /**
  * WeCom plugin: tells the model the managed wecom-cli's absolute path, registers
- * its bundled skills, and serves the Plugins page's authorization over Remote.
- * The CLI's authorization is shared with the user's own terminal.
+ * the `wecom` skill over the upstream guides it downloads, and serves the Plugins
+ * page's authorization over Remote. The CLI's authorization is shared with the
+ * user's own terminal.
  * @module @deepseek-ai/dsh-wecom-cli
  */
 
-import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
-import type z from '@deepseek-ai/schemastery'
+import z from '@deepseek-ai/schemastery'
 import { CliAccountConfig, CliCommandExecutor, registerCliPathContext, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
-import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem'
+import { registerUpstreamSkills, UpstreamSkillsConfig } from '@deepseek-ai/dsh-upstream-skills'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { WecomAccount } from './account.ts'
 import { PROGRAM, resolveCliExecutable } from './directory.ts'
+import { ENTRY, WECOM_SKILLS } from './skills.ts'
 import type { WecomState } from './types.ts'
 
 export type * from './types.ts'
@@ -27,34 +28,30 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Where wecom-cli is and how long a command that does not wait for the user may run. */
-export type Config = CliAccountConfig
+/** Where wecom-cli and the upstream guides come from, a command's deadline, and a download's time limit. */
+export type Config = CliAccountConfig & UpstreamSkillsConfig
 
 /** Registers the CLI and skills, and owns the authorization operations the Plugins page drives. */
 export default class Wecom extends TypertRemoteService {
   static inject = ['skills', 'subprocess', 'systemPrompt']
-  static Config: z<Config> = CliAccountConfig
+  static Config: z<Config> = z.intersect([CliAccountConfig, UpstreamSkillsConfig])
 
   private readonly account: WecomAccount
 
   /**
    * @param ctx - Context carrying the skill registry, subprocess runtime, and system prompt.
-   * @param config - CLI location and command deadline.
-   * @throws when `wecom-cli` is not executable.
+   * @param config - CLI location, command deadline, and where the upstream guides come from.
+   * @throws when `wecom-cli` is not executable or `skillsDir` is not a directory.
    */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'wecom')
     const executable = resolveCliExecutable(config.binDir)
     registerCliPathContext(ctx, { name: 'wecom:cli', product: 'WeCom', program: PROGRAM, executable, scripts: true })
     const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable, commandTimeoutMs: config.commandTimeoutMs })
-    this.account = new WecomAccount(cli, ctx.logger)
+    const skills = registerUpstreamSkills(ctx, { name: 'wecom', entry: ENTRY, set: WECOM_SKILLS, config })
+    this.account = new WecomAccount(cli, ctx.logger, skills)
     ctx.effect(() => () => this.account.dispose())
-    ctx.plugin(SkillFilesystem, {
-      providerName: 'wecom',
-      includeDefaultRoots: false,
-      watch: false,
-      bundledSkillDir: fileURLToPath(new URL('../skills/', import.meta.url)),
-    })
+    ctx.effect(() => skills.watch((state) => { this.account.showSkills(state) }))
   }
 
   /**

@@ -33,28 +33,28 @@ function fixture(view?: WecomState, copy: typeof zh = zh) {
 const button = (name: string) => screen.getByRole('button', { name })
 
 it('offers the next step for each state', () => {
-  const b = fixture({ account: { state: 'unauthorized' } })
+  const b = fixture({ account: { state: 'unauthorized', skills: 'installed' } })
   render(<WecomConnectionSection {...b.face} />)
   expect(screen.getByText(zh['detail.disconnected'])).toBeTruthy()
   expect(screen.getByText(zh.hint)).toBeTruthy()
   fireEvent.click(button(zh['action.connect']))
   expect(b.face.connect).toHaveBeenCalledOnce()
 
-  b.set({ view: { account: { state: 'unauthorized' }, operation: { id: OP, kind: 'connect', phase: 'authorizing', cancellable: true } } })
+  b.set({ view: { account: { state: 'unauthorized', skills: 'installed' }, operation: { id: OP, kind: 'connect', phase: 'authorizing', cancellable: true } } })
   expect(screen.getByText(zh['step.authorizing'])).toBeTruthy()
   expect(screen.queryByRole('button', { name: zh['action.open'] })).toBeNull()
-  b.set({ view: { account: { state: 'unauthorized' }, operation: { id: OP, kind: 'connect', phase: 'authorizing', cancellable: true, authorizationUrl: QR } } })
+  b.set({ view: { account: { state: 'unauthorized', skills: 'installed' }, operation: { id: OP, kind: 'connect', phase: 'authorizing', cancellable: true, authorizationUrl: QR } } })
   expect(screen.getByText(zh['detail.authorizing'])).toBeTruthy()
   fireEvent.click(button(zh['action.open']))
   fireEvent.click(button(zh['action.cancel']))
   expect(b.face.openAuthorization).toHaveBeenCalledOnce()
   expect(b.face.cancel).toHaveBeenCalledOnce()
 
-  b.set({ view: { account: { state: 'unauthorized' }, operation: { id: OP, kind: 'connect', phase: 'checking', cancellable: false } } })
+  b.set({ view: { account: { state: 'unauthorized', skills: 'installed' }, operation: { id: OP, kind: 'connect', phase: 'checking', cancellable: false } } })
   expect(screen.getByText(zh['step.connecting'])).toBeTruthy()
   expect(screen.queryAllByRole('button')).toHaveLength(0)
 
-  b.set({ view: { account: { state: 'authorized' } } })
+  b.set({ view: { account: { state: 'authorized', skills: 'installed' } } })
   expect(screen.getByText(zh['detail.connected'])).toBeTruthy()
   expect(screen.queryAllByRole('button')).toHaveLength(0)
 
@@ -64,22 +64,35 @@ it('offers the next step for each state', () => {
 })
 
 it.each([['zh', zh], ['en', en]] as const)('reports a failed connection with its command and exit code in %s', (_locale, copy) => {
-  const b = fixture({ account: { state: 'unauthorized' }, result: { id: OP, kind: 'connect', outcome: 'failed', failure: { command: 'auth-init', exitCode: 2 } } }, copy)
+  const b = fixture({ account: { state: 'unauthorized', skills: 'installed' }, result: { id: OP, kind: 'connect', outcome: 'failed', failure: { command: 'auth-init', exitCode: 2 } } }, copy)
   render(<WecomConnectionSection {...b.face} />)
   const details = copy['failure.details'].replace('{details}', `auth-init · ${copy['failure.exitCode'].replace('{code}', '2')}`)
   expect(screen.getByRole('alert').textContent).toBe(`${copy.failed} ${details}`)
   expect(button(copy['action.connect'])).toBeTruthy()
 
-  b.set({ view: { account: { state: 'unauthorized' }, result: { id: OP, kind: 'connect', outcome: 'cancelled' } } })
+  b.set({ view: { account: { state: 'unauthorized', skills: 'installed' }, result: { id: OP, kind: 'connect', outcome: 'cancelled' } } })
   expect(screen.queryByRole('alert')).toBeNull()
 })
 
 it('retries an unreadable authorization by checking again', () => {
-  const b = fixture({ account: { state: 'unchecked' }, result: { id: OP, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: 1 } } })
+  const b = fixture({ account: { state: 'unchecked', skills: 'installed' }, result: { id: OP, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: 1 } } })
   render(<WecomConnectionSection {...b.face} />)
   expect(screen.getByText(zh['detail.unavailable'])).toBeTruthy()
   fireEvent.click(button(zh['action.retry']))
   expect(b.face.check).toHaveBeenCalledOnce()
+})
+
+it('reports guides that are downloading, and retries a failed download by checking again', () => {
+  const b = fixture({ account: { state: 'authorized', skills: 'downloading' } })
+  render(<WecomConnectionSection {...b.face} />)
+  expect(screen.getByText(zh['skills.downloading'])).toBeTruthy()
+  expect(screen.queryByRole('button', { name: zh['action.retry'] })).toBeNull()
+  b.set({ view: { account: { state: 'authorized', skills: 'failed' } } })
+  expect(screen.queryByText(zh['skills.downloading'])).toBeNull()
+  fireEvent.click(button(zh['action.retry']))
+  expect(b.face.check).toHaveBeenCalledOnce()
+  b.set({ view: { account: { state: 'authorized', skills: 'installed' } } })
+  expect(screen.queryByText(zh['skills.failed'])).toBeNull()
 })
 
 it('explains a stopped Host component and retries even while the stream is offline', () => {
@@ -93,13 +106,13 @@ it('explains a stopped Host component and retries even while the stream is offli
 })
 
 it('tags only the enabled WeCom bundle', () => {
-  const b = fixture({ account: { state: 'authorized' } })
+  const b = fixture({ account: { state: 'authorized', skills: 'installed' } })
   const pkg = (name: string, enabled = true): PluginPackageRef => ({ name, installed: true, availability: 'profile', official: false, enabled, rows: [] })
   const badge = (subject: PluginsSubject) =>
     <WecomConnectionBadge {...{ ...b.face, subject } as ComponentProps<typeof WecomConnectionBadge>} />
   const { rerender } = render(badge({ kind: 'bundle', pkg: pkg('@deepseek-ai/dsh-wecom') }))
   expect(screen.getByText(zh['badge.connected'])).toBeTruthy()
-  b.set({ view: { account: { state: 'unauthorized' } } })
+  b.set({ view: { account: { state: 'unauthorized', skills: 'installed' } } })
   expect(screen.getByText(zh['badge.disconnected'])).toBeTruthy()
   rerender(badge({ kind: 'bundle', pkg: pkg('@acme/other') }))
   expect(document.body.textContent).toBe('')
@@ -111,11 +124,11 @@ it('guides a newly enabled bundle to connect, and steps aside once authorized', 
   const props = { ...b.face, packageName: '@deepseek-ai/dsh-wecom', onDismiss, onOpenDetails } as ComponentProps<typeof WecomConnectionActivation>
   render(<WecomConnectionActivation {...props} />)
   expect(screen.queryByText(zh['activation.body'])).toBeNull()
-  b.set({ view: { account: { state: 'unauthorized' } } })
+  b.set({ view: { account: { state: 'unauthorized', skills: 'installed' } } })
   fireEvent.click(button(zh['action.connect']))
   expect(onOpenDetails).toHaveBeenCalledOnce()
   expect(b.face.connect).toHaveBeenCalledOnce()
-  b.set({ view: { account: { state: 'authorized' } } })
+  b.set({ view: { account: { state: 'authorized', skills: 'installed' } } })
   expect(onDismiss).toHaveBeenCalledOnce()
 })
 

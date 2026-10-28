@@ -6923,6 +6923,9 @@ importers:
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:*
         version: link:../../typert/protocol
+      '@deepseek-ai/dsh-upstream-skills':
+        specifier: workspace:*
+        version: link:../../connector/upstream-skills
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values
@@ -7388,9 +7391,9 @@ importers:
       '@deepseek-ai/dsh-cli-account':
         specifier: workspace:*
         version: link:../cli-account
-      '@deepseek-ai/dsh-skill-filesystem':
+      '@deepseek-ai/dsh-upstream-skills':
         specifier: workspace:*
-        version: link:../../skill/skill-filesystem
+        version: link:../upstream-skills
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values

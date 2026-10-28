@@ -2,6 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { CliAccountRuntime, exitFailure, type CliCommandExecutor, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
+import type { UpstreamSkills, UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { WecomAccountState, WecomOperationFailure, WecomOperationKind, WecomPhase } from './types.ts'
 
@@ -14,18 +15,27 @@ export class WecomAccount extends CliAccountRuntime<WecomAccountState, WecomOper
   /**
    * @param cli - the wecom-cli executor the account runs commands with and disposes.
    * @param logger - receives classified operation failures.
+   * @param skills - the upstream guides whose state the view carries and whose failed download each check restarts.
    */
-  constructor(cli: CliCommandExecutor, logger: Context['logger']) {
+  constructor(cli: CliCommandExecutor, logger: Context['logger'], private readonly skills: Pick<UpstreamSkills, 'state' | 'retry'>) {
     super({
       name: 'wecom',
       cli,
       logger,
-      account: { state: 'unchecked' },
+      account: { state: 'unchecked', skills: skills.state },
       check: 'check',
       cancellable: ['authorizing'],
       authorizationHosts: ['work.weixin.qq.com'],
       classify: exitFailure,
     })
+  }
+
+  /**
+   * Report the upstream guides' new state with the current authorization.
+   * @param skills - the state after a download started or settled.
+   */
+  showSkills(skills: UpstreamSkillsState): void {
+    this.publish({ ...this.snapshot().account, skills })
   }
 
   protected async perform(kind: WecomOperationKind, control: Control, signal: AbortSignal): Promise<void> {
@@ -54,14 +64,15 @@ export class WecomAccount extends CliAccountRuntime<WecomAccountState, WecomOper
     if ((await this.check(control, signal)).state !== 'authorized') throw new Error('wecom: auth init left no authorization')
   }
 
-  /** Read the authorization state, publish it, and return it. */
+  /** Restart a failed download of the guides without waiting for it, then read the authorization state, publish it, and return it. */
   private async check(control: Control, signal: AbortSignal): Promise<WecomAccountState> {
+    this.skills.retry()
     const result = await control.run('auth-status', ['auth', 'show', '--status'], signal)
     const state = result.stdout.trim()
     if (result.exitCode !== 0 || (state !== 'authorized' && state !== 'unauthorized')) {
       throw new Error(`wecom: auth show --status exited with ${String(result.exitCode)}`)
     }
-    const account: WecomAccountState = { state }
+    const account: WecomAccountState = { state, skills: this.skills.state }
     this.publish(account)
     return account
   }

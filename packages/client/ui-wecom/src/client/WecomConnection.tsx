@@ -1,14 +1,30 @@
 /** WeCom authorization surfaces on the Plugins page: the bundle section, title tag, activation guidance, and notices. */
 import type { ReactNode } from 'react'
 import {
-  CliAccountActivation, CliAccountBadge, CliAccountSection, CliAccountToast, type CliAccountAction,
+  CliAccountActivation, CliAccountBadge, CliAccountSection, CliAccountToast, type CliAccountAction, type CliAccountNote,
 } from '@deepseek-ai/dsh-client-ui-cli-account'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
+import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills/types'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { WECOM_PACKAGE, presentConnection, type ConnectionFace } from './connection.ts'
 import type { NS } from './locales.ts'
 
 type FaceProps = InjectFace<ConnectionFace> & PropsLocale<typeof NS>
+
+/* jscpd:ignore-start -- CLI app plugins whose guides download report the same states, each from its own dictionary. */
+/** The row that reports guides that are not in place yet; a failed download offers a check, which restarts it. */
+function skillsNotes(skills: UpstreamSkillsState | undefined, t: FaceProps['t'], check: () => void): CliAccountNote[] {
+  switch (skills) {
+    case undefined:
+    case 'installed': return []
+    case 'downloading': return [{ text: t('skills.downloading') }]
+    case 'failed': return [{ text: t('skills.failed'), action: { label: t('action.retry'), onClick: check } }]
+    /* v8 ignore next -- closed skills state union */
+    default: return assertNever(skills)
+  }
+}
+/* jscpd:ignore-end */
 
 /**
  * The authorization section on the WeCom bundle's page.
@@ -39,7 +55,8 @@ export function WecomConnectionSection(props: FaceProps): ReactNode {
   }
   return (
     <CliAccountSection t={t} packageName={WECOM_PACKAGE} phase={shown.phase} status={status} busy={snapshot.busy} linked={snapshot.linked}
-      actions={actions} detail={detail} failure={'failed' in shown && shown.failed !== undefined ? { text: t('failed'), command: shown.failed.failure } : undefined} />
+      actions={actions} detail={detail} notes={skillsNotes(snapshot.view?.account.skills, t, check)}
+      failure={'failed' in shown && shown.failed !== undefined ? { text: t('failed'), command: shown.failed.failure } : undefined} />
   )
 }
 

@@ -34,6 +34,6 @@ description: 企业微信插件：通过 wecom-cli 使用企业微信的通讯�
 
 ## 打开子指南
 
-- 子指南不是独立的 skill，不要用 `skill` 工具加载；用文件读取工具打开本技能目录下的 `guides/<名字>/SKILL.md`。
-- 子指南正文按名字提到的技能（例如“wecomcli-shared 技能”“改用 wecomcli-meeting 技能”）就是 `guides/<名字>/SKILL.md`，同样用文件读取工具打开。
-- 子指南中的相对路径（例如 `references/...`、`../wecomcli-calendar/...`）相对该子指南自己的目录 `guides/<名字>/`。
+- 子指南不是独立的 skill，不要用 `skill` 工具加载；用文件读取工具打开本技能目录下的 `skills/<名字>/SKILL.md`。
+- 子指南正文按名字提到的技能（例如“wecomcli-shared 技能”“改用 wecomcli-meeting 技能”）就是 `skills/<名字>/SKILL.md`，同样用文件读取工具打开。
+- 子指南中的相对路径（例如 `references/...`、`../wecomcli-calendar/...`）相对该子指南自己的目录 `skills/<名字>/`。

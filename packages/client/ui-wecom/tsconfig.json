@@ -49,6 +49,9 @@
     },
     {
       "path": "../../connector/cli-account"
+    },
+    {
+      "path": "../../connector/upstream-skills"
     }
   ]
 }

@@ -9578,6 +9578,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface UpdateTeamTaskRequest {\n    readonly taskId: TeamTaskId;\n    readonly expectedRevision: number;\n    readonly action: TeamTaskAction;\n    readonly subject?: string;\n    readonly description?: string;\n    readonly blockedBy?: readonly TeamTaskId[];\n    readonly writeScopes?: readonly string[];\n    readonly owner?: string;\n}',
   },
   {
+    name: 'UpstreamSkillsState',
+    declaration: 'export type UpstreamSkillsState = \'installed\' | \'downloading\' | \'failed\';',
+  },
+  {
     name: 'UserMessage',
     declaration: 'export interface UserMessage extends MessageBase {\n    readonly role: \'user\';\n}',
   },
@@ -9715,7 +9719,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WecomAccountState',
-    declaration: 'export interface WecomAccountState {\n    readonly state: \'unchecked\' | \'unauthorized\' | \'authorized\';\n}',
+    declaration: 'export interface WecomAccountState {\n    readonly state: \'unchecked\' | \'unauthorized\' | \'authorized\';\n    readonly skills: UpstreamSkillsState;\n}',
   },
   {
     name: 'WecomOperationFailure',

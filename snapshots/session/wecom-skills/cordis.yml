@@ -3,3 +3,4 @@
       name: '@deepseek-ai/dsh-wecom-cli'
       config:
         binDir: !!js process.cwd() + '/wecom-bin'
+        skillsDir: !!js process.cwd() + '/wecom-skills'

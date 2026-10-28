@@ -1,10 +1,12 @@
 /** Authorization operations over a scripted wecom-cli: checks, QR-code connection, cancellation, and the Remote wiring. */
-import { rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WecomAccount } from '../src/account.ts'
 import { PROGRAM } from '../src/directory.ts'
@@ -22,6 +24,7 @@ type Script = (process: ScriptedProcess) => void
 let ctx: Context
 let subprocess: ScriptedSubprocess
 let binDir: string
+let skillsDir: string
 let script: Record<string, Script | CliReply[]>
 
 beforeEach(async () => {
@@ -31,6 +34,7 @@ beforeEach(async () => {
   await ctx.plugin(SystemPrompt)
   subprocess = ctx.subprocess as ScriptedSubprocess
   binDir = await createBinDir()
+  skillsDir = await mkdtemp(join(tmpdir(), 'dsh-wecom-skills-'))
   script = {}
   subprocess.respond = (process) => {
     const handler = script[process.spec.argv.slice(1).join(' ')]
@@ -43,6 +47,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await ctx.fiber.dispose()
   await rm(binDir, { recursive: true, force: true })
+  await rm(skillsDir, { recursive: true, force: true })
 })
 
 const commands = () => subprocess.processes.map(process => process.spec.argv.slice(1).join(' '))
@@ -50,10 +55,13 @@ const errors = (): unknown[] => ctx.logger.buffer.filter(message => message.type
 
 describe('WecomAccount', () => {
   let account: WecomAccount
+  /** The upstream guides as the account sees them; a retry starts a download. */
+  let skills: { state: UpstreamSkillsState; retry: () => void }
 
   beforeEach(() => {
     const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable: join(binDir, PROGRAM), commandTimeoutMs: 5_000 })
-    account = new WecomAccount(cli, ctx.logger)
+    skills = { state: 'installed', retry: () => { if (skills.state === 'failed') skills.state = 'downloading' } }
+    account = new WecomAccount(cli, ctx.logger, skills)
   })
 
   afterEach(() => account.dispose())
@@ -64,8 +72,8 @@ describe('WecomAccount', () => {
   }
 
   it.each<[string, CliReply, WecomState['account']]>([
-    ['an authorized bot', AUTHORIZED, { state: 'authorized' }],
-    ['no authorization', UNAUTHORIZED, { state: 'unauthorized' }],
+    ['an authorized bot', AUTHORIZED, { state: 'authorized', skills: 'installed' }],
+    ['no authorization', UNAUTHORIZED, { state: 'unauthorized', skills: 'installed' }],
   ])('checks %s', async (_name, reply, expected) => {
     script[STATUS] = [reply]
     const id = account.start('check')
@@ -80,12 +88,27 @@ describe('WecomAccount', () => {
     script[STATUS] = [reply]
     const result = await settled(account.start('check'))
     expect(result).toEqual({
-      account: { state: 'unchecked' },
+      account: { state: 'unchecked', skills: 'installed' },
       result: { id: result.result?.id, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: reply.exitCode ?? 0 } },
     })
     expect(errors()).toEqual([['wecom: account operation failed: %o', {
       id: result.result?.id, kind: 'check', phase: 'checking', command: 'auth-status', exitCode: reply.exitCode ?? 0,
     }]])
+  })
+
+  it('restarts a failed download of the guides on each check without waiting for it, and reports the state it leaves', async () => {
+    skills.state = 'failed'
+    script[STATUS] = [AUTHORIZED]
+    const id = account.start('check')
+    expect(skills.state).toBe('downloading')
+    expect(await settled(id)).toEqual({ account: { state: 'authorized', skills: 'downloading' }, result: { id, kind: 'check', outcome: 'succeeded' } })
+  })
+
+  it('reports a new state of the guides with the current authorization', async () => {
+    script[STATUS] = [AUTHORIZED]
+    await settled(account.start('check'))
+    account.showSkills('failed')
+    expect(account.snapshot().account).toEqual({ state: 'authorized', skills: 'failed' })
   })
 
   it('connects through the QR-code page, offers only trusted links, and confirms the authorization', async () => {
@@ -102,7 +125,7 @@ describe('WecomAccount', () => {
     await vi.waitFor(() => { expect(account.snapshot().operation).toMatchObject({ phase: 'authorizing', authorizationUrl: QR_LINK }) })
     authorizing.reply({ stdout: 'Authorized\n' })
 
-    expect(await settled(id)).toEqual({ account: { state: 'authorized' }, result: { id, kind: 'connect', outcome: 'succeeded' } })
+    expect(await settled(id)).toEqual({ account: { state: 'authorized', skills: 'installed' }, result: { id, kind: 'connect', outcome: 'succeeded' } })
     expect(commands()).toEqual([INIT, STATUS])
     expect(errors()).toEqual([])
   })
@@ -127,7 +150,7 @@ describe('WecomAccount', () => {
     const cancelling = account.cancel(id)
     expect(account.snapshot().operation).toEqual({ id, kind: 'connect', phase: 'cancelling', cancellable: false })
     await cancelling
-    expect(account.snapshot()).toEqual({ account: { state: 'unchecked' }, result: { id, kind: 'connect', outcome: 'cancelled' } })
+    expect(account.snapshot()).toEqual({ account: { state: 'unchecked', skills: 'installed' }, result: { id, kind: 'connect', outcome: 'cancelled' } })
     expect(subprocess.processes[0]?.terminated).toBe(true)
     expect(errors()).toEqual([])
   })
@@ -147,7 +170,7 @@ describe('WecomAccount', () => {
 
 describe('WeCom Remote', () => {
   beforeEach(async () => {
-    await ctx.plugin(Wecom, { commandTimeoutMs: 5_000, binDir })
+    await ctx.plugin(Wecom, { commandTimeoutMs: 5_000, binDir, skillsDir, skillsUrls: ['https://codeload.github.com'], skillsTimeoutMs: 120_000 })
   })
 
   it('checks for a new follower, streams each change, and starts checks and connections', async () => {
@@ -165,8 +188,8 @@ describe('WeCom Remote', () => {
       return states.at(-1)?.result
     }
     expect(await finished()).toMatchObject({ kind: 'check', outcome: 'succeeded' })
-    expect(states[0]).toMatchObject({ account: { state: 'unchecked' }, operation: { kind: 'check' } })
-    expect(states.at(-1)?.account).toEqual({ state: 'unauthorized' })
+    expect(states[0]).toMatchObject({ account: { state: 'unchecked', skills: 'installed' }, operation: { kind: 'check' } })
+    expect(states.at(-1)?.account).toEqual({ state: 'unauthorized', skills: 'installed' })
     expect(subprocess.lookups[0]?.command).toBe(join(binDir, 'wecom-cli'))
     expect(await finished(ctx.wecom.check())).toMatchObject({ kind: 'check', outcome: 'succeeded' })
 

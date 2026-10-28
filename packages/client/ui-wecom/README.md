@@ -37,6 +37,8 @@ Install the [WeCom plugin bundle](../../connector/wecom/README.md), which insert
 | Cannot read authorization right now | **Retry** checks the authorization again |
 | WeCom component not running | The Host's `wecom` row did not load; the section points to the component list for the reason, and **Retry** subscribes to the Host again |
 
+Below the status, a row reports the WeCom skills while their guides are not in place: one row while the Host downloads them from GitHub, and after a failed download, one row with **Retry**, which checks the authorization and restarts the download without waiting for it. Neither row appears once the guides are in place.
+
 Leaving the page does not cancel a connection, which the Host owns. The QR-code page opens from the user's own click, because browsers block a window that opens long after it. A failed connection or check shows the general failure notice with the command and exit code; a failed page action shows a toast, and so does a finished connection. The section notes that the authorization is shared with `wecom-cli` in the computer's terminal and that turning the plugin off does not revoke it.
 
 -----
