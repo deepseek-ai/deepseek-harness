@@ -103,16 +103,10 @@ async function waitRunning(ctx: Context, id: SessionId): Promise<Agent> {
 }
 
 describe('Tree-owned task boards', () => {
-  it('executes root mode commands and rejects unknown selections without changing mode', async () => {
+  it('does not register a Team slash command', async () => {
     const { ctx, lead } = await setup([], {}, false)
     await ctx.plugin(Commands)
-    expect(ctx.agentTeams.isEnabled(lead)).toBe(false)
-    await expect(ctx.commands.execute(lead, '/team maybe', [], SIGNAL)).resolves.toMatchObject({ result: { kind: 'error' } })
-    expect(ctx.agentTeams.isEnabled(lead)).toBe(false)
-    for (const [command, enabled] of [['on', true], ['off', false]] as const) {
-      await expect(ctx.commands.execute(lead, `/team ${command}`, [], SIGNAL)).resolves.toMatchObject({ result: { kind: 'success' } })
-      expect(ctx.agentTeams.isEnabled(lead)).toBe(enabled)
-    }
+    expect(ctx.commands.list(lead).some(command => command.name === 'team')).toBe(false)
   })
 
   it('rejects disabled task access and descendant mode changes without appending', async () => {

@@ -25,7 +25,7 @@ This package displays shared tasks below the Subagent tree in one header panel. 
 <a id="use-this-package"></a>
 ## Use this package
 
-In the root conversation’s model and reasoning menu, turn on **Use Agent Teams**. New Sessions default to off. While enabled, open the root conversation’s Subagent control to see members above shared tasks. Child conversations keep subagent navigation without a task board or Team switch, including before their subagent address is discovered. The same control remains available before the first member exists. Turning it off retains tasks and subagents. The switch waits for the saved projection and reports failures through the menu host.
+In the root conversation’s model and reasoning menu, turn on **Use Agent Teams**. New Sessions default to off. While enabled, open the root conversation’s Subagent control to see members above shared tasks. Child conversations keep subagent navigation without a task board or Team switch, including before their subagent address is discovered. The same control remains available before the first member exists. Turning it off retains tasks and subagents. The switch calls `remote.agentTeams.setEnabled`, waits for the saved projection and reports failures through the menu host.
 
 The [Web bundle](../../bundle/web-app/README.md) loads this package by default. The Web Client loader mounts the `/client` export; the root Host export is inert, and the package has no user configuration fields.
 

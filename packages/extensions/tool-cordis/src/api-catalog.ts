@@ -361,9 +361,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'whether Team tools and guidance are enabled.',
       },
       {
-        signature: 'async setEnabled(caller: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>',
+        signature: '@Remote async setEnabled(agent: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>',
         description: 'Save a root Session\'s Team selection without stopping children or deleting tasks. The selection takes effect before awaiting consumers or persistence. Task mutations check the current mode when their queued operation starts; admitted operations finish. Current waits end after the selection is flushed.',
-        parameters: [{ name: 'caller', description: 'exact live root whose tree receives the selection.' }, { name: 'enabled', description: 'selected Team mode.' }, { name: 'signal', description: 'cancellation checked before changing the selection.' }],
+        parameters: [{ name: 'agent', description: 'exact live root whose tree receives the selection.' }, { name: 'enabled', description: 'selected Team mode.' }, { name: 'signal', description: 'cancellation checked before changing the selection.' }],
         returns: 'fulfillment after the selection flushes and scoped consumers update.',
         throws: ['when called by a descendant, a consumer fails, or persistence fails. An appended selection remains active; retrying the same selection synchronizes consumers and flushes without a duplicate event.'],
       },

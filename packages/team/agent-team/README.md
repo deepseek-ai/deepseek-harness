@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-New Sessions, including ordinary forks, default to Team mode off. See the [Session-mode upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.md). Select **Use Agent Teams** in the model and reasoning menu, or run `/team on` in the root Session. `/team off` removes Team tools and guidance for the entire tree while retaining tasks and subagents. The saved selection survives restart; a historical task board without a saved selection remains enabled.
+New Sessions, including ordinary forks, default to Team mode off. See the [Session-mode upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.md). Select **Use Agent Teams** in the root Session’s model and reasoning menu. Turning it off removes Team tools and guidance for the entire tree while retaining tasks and subagents. The saved selection survives restart; a historical task board without a saved selection remains enabled.
 
 Mode changes take effect without waiting for queued task mutations. Each mutation checks the current mode when it starts: an admitted operation finishes, while queued work is rejected if Team is still off when it starts. Enabling again permits subsequent operations. A failed synchronization or save leaves an appended selection active; retrying the same selection synchronizes tools and saves without another mode record.
 

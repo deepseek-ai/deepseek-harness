@@ -1,7 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
-import { CommandId } from '@deepseek-ai/dsh-commands/brand'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { TeamModeToggle, type TeamModeToggleInjected } from '../src/client/TeamModeToggle.tsx'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -60,7 +59,7 @@ describe('task-board browser plugin', () => {
     await b.fiber.dispose()
   })
 
-  it('registers the mode switch when Commands arrives and reports each execution outcome', async () => {
+  it('registers the mode switch when Agent Teams arrives and reports each execution outcome', async () => {
     const b = await bench()
     b.ctx.slots.register({
       name: 'conversation.input.model',
@@ -69,21 +68,19 @@ describe('task-board browser plugin', () => {
     const entry = () => b.ctx.slots.entries('conversation.input.model.options')
       .find(candidate => candidate.component === TeamModeToggle)
     expect(entry()).toBeUndefined()
-    const execute = vi.fn<Context['remote']['commands']['execute']>()
-    new TestRemote(b.ctx, { commands: { execute } })
+    const setEnabled = vi.fn<Context['remote']['agentTeams']['setEnabled']>()
+    new TestRemote(b.ctx, { agentTeams: { setEnabled } })
     await vi.waitFor(() => { expect(entry()).toBeDefined() })
     const injected = entry()!.inject as (sessionId: SessionId) => Record<string, unknown>
     const value: object = injected(SessionId('chosen-session'))
     const mode = value as TeamModeToggleInjected
-    execute.mockResolvedValueOnce({ ok: true, value: { commandId: CommandId('team-mode'), result: { kind: 'success', text: 'saved' } } })
+    setEnabled.mockResolvedValueOnce({ ok: true, value: undefined })
     await expect(mode.selectTeamMode(true)).resolves.toBeNull()
-    expect(execute).toHaveBeenLastCalledWith('chosen-session', '/team on', [])
-    execute.mockResolvedValueOnce({ ok: true, value: { commandId: CommandId('team-mode'), result: { kind: 'error', text: 'root required' } } })
-    await expect(mode.selectTeamMode(false)).resolves.toBe('root required')
-    expect(execute).toHaveBeenLastCalledWith('chosen-session', '/team off', [])
-    execute.mockResolvedValueOnce({ ok: true, value: undefined })
-    await expect(mode.selectTeamMode(true)).resolves.toBe(b.ctx.locale.bind('agent-team')('mode.unavailable'))
-    execute.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'connection failed', {}) })
+    expect(setEnabled).toHaveBeenLastCalledWith('chosen-session', true)
+    setEnabled.mockResolvedValueOnce({ ok: true, value: undefined })
+    await expect(mode.selectTeamMode(false)).resolves.toBeNull()
+    expect(setEnabled).toHaveBeenLastCalledWith('chosen-session', false)
+    setEnabled.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'connection failed', {}) })
     await expect(mode.selectTeamMode(true)).resolves.toBe('connection failed')
     await b.fiber.dispose()
     expect(entry()).toBeUndefined()

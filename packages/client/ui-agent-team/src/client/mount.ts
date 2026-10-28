@@ -29,17 +29,15 @@ export const inject = ['slots', 'locale']
  */
 export function registerAgentTeamUi(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'client-ui-agent-team: dictionaries')
-  ctx.inject(['remote', 'remote.commands'], (scope) => {
+  ctx.inject(['remote', 'remote.agentTeams'], (scope) => {
     scope.slots.inject('conversation.input.model.options', () => scope.slots.register({
       name: 'conversation.input.model.options',
       id: 'agent-team',
       locale: NS,
       inject: (sessionId): TeamModeToggleInjected => ({
         selectTeamMode: async (enabled) => {
-          const response = await scope.remote.commands.execute(sessionId, enabled ? '/team on' : '/team off', [])
-          if (!response.ok) return response.error.message
-          if (response.value === undefined) return scope.locale.bind(NS)('mode.unavailable')
-          return response.value.result.kind === 'error' ? response.value.result.text : null
+          const response = await scope.remote.agentTeams.setEnabled(sessionId, enabled)
+          return response.ok ? null : response.error.message
         },
       }),
     }, TeamModeToggle))

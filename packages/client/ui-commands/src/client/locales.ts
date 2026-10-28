@@ -7,9 +7,6 @@
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'label.team': '团队',
-  'description.team': '启用或停用当前会话的智能体团队',
-  'token.team': '团队',
   'section.add': '添加',
   'section.commands': '指令',
   'label.goal': '目标',
@@ -45,9 +42,6 @@ export type CommandKey = keyof typeof zh
 
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
-  'label.team': 'Team',
-  'description.team': 'Enable or disable agent teams for this session',
-  'token.team': 'team',
   'section.add': 'Add',
   'section.commands': 'Commands',
   'label.goal': 'Goal',
@@ -80,9 +74,6 @@ export const en = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
-  'label.team': 'チーム',
-  'description.team': 'このセッションのエージェントチームを有効または無効にする',
-  'token.team': 'team',
   'section.add': '追加',
   'section.commands': 'コマンド',
   'label.goal': '目標',
@@ -115,9 +106,6 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  'label.team': 'Equipo',
-  'description.team': 'Activar o desactivar equipos de agentes para esta sesión',
-  'token.team': 'team',
   'section.add': 'Añadir',
   'section.commands': 'Comandos',
   'label.goal': 'Objetivo',
@@ -150,9 +138,6 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  'label.team': 'Équipe',
-  'description.team': 'Activer ou désactiver les équipes d’agents pour cette session',
-  'token.team': 'team',
   'section.add': 'Ajouter',
   'section.commands': 'Commandes',
   'label.goal': 'Objectif',
@@ -185,9 +170,6 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  'label.team': 'Team',
-  'description.team': 'Agententeams für diese Sitzung aktivieren oder deaktivieren',
-  'token.team': 'team',
   'section.add': 'Hinzufügen',
   'section.commands': 'Befehle',
   'label.goal': 'Ziel',
@@ -220,9 +202,6 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  'label.team': 'Команда',
-  'description.team': 'Включить или отключить команды агентов для этого сеанса',
-  'token.team': 'team',
   'section.add': 'Добавить',
   'section.commands': 'Команды',
   'label.goal': 'Цель',
@@ -255,9 +234,6 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  'label.team': 'Equipe',
-  'description.team': 'Ativar ou desativar equipes de agentes nesta sessão',
-  'token.team': 'team',
   'section.add': 'Adicionar',
   'section.commands': 'Comandos',
   'label.goal': 'Objetivo',

@@ -20,7 +20,7 @@ import type { ClientSessionContext, ConsumeTokenRequest, InputTriggerPick, Input
 import type { CommandContribution, CommandDecoration, PopupSelectSpec, SelectOption } from '../src/client/contract.ts'
 import type { CommandDescriptor } from '../src/client/directory.ts'
 import { CommandUiRuntime } from '../src/client/service.ts'
-import { de, en, es, fr, ja, pt, ru, zh, type CommandKey } from '../src/client/locales.ts'
+import { en, zh, type CommandKey } from '../src/client/locales.ts'
 
 const sid = (k: string): SessionId => k as SessionId
 
@@ -408,28 +408,6 @@ describe('candidates', () => {
       expect(rows[6]).toMatchObject({ name: 'model', label: '模型', description: '选择本会话使用的模型', icon: Glyph })
       // A third-party command keeps its catalog text and gets no glyph.
       expect(rows[8]).toEqual({ name: 'deploy', description: 'third-party command', section: 'command:section.commands' })
-    })
-
-    it.each([
-      ['en', en], ['zh', zh], ['ja', ja], ['es', es], ['fr', fr], ['de', de], ['ru', ru], ['pt', pt],
-    ] as const)('localizes the Team command and restores its menu token under %s', async (_locale, dictionary) => {
-      const descriptor = { definitionId: CommandDefinitionId('@deepseek-ai/dsh-agent-team'), name: 'team', description: 'Host description', input: { hint: 'on|off' } }
-      const { fiber, source, warm } = await bench({
-        commands: () => Promise.resolve({ commands: [descriptor] }),
-        translate: (_namespace, key) => dictionary[key as CommandKey],
-      })
-      onTestFinished(() => fiber.dispose())
-      await warm(proj('s1'))
-      const [row] = await source.candidates(proj('s1'), req(''))
-      expect(row).toMatchObject({ label: dictionary['label.team'], description: dictionary['description.team'] })
-      expect(row?.icon).toBeDefined()
-      expect(menuPick(source, 'team', proj('s1'))).toHaveProperty('claim.token', `/${dictionary['token.team']} `)
-      expect(source.matchSpace!(proj('s1'), '/团队')).toHaveProperty('claim.name', 'team')
-      expect(source.matchSpace!(proj('s1'), '/team')).toHaveProperty('claim.name', 'team')
-      const token = `/${dictionary['token.team']}`
-      expect(source.matchSpace!(proj('s1'), token)).toHaveProperty('claim.name', 'team')
-      await expect(source.matchClaim!(proj('s1'), token, new AbortController().signal))
-        .resolves.toMatchObject({ name: 'team', token: `${token} ` })
     })
 
     it('a same-name override keeps its own presentation even when it copies the first-party description', async () => {

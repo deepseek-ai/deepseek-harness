@@ -10,7 +10,7 @@
     { "path": "../../../vendor/schemastery" },
     { "path": "../../../vendor/cordis" },
     { "path": "../../util/brand" },
-    { "path": "../../interaction/commands" },
+    { "path": "../../typert/protocol" },
     { "path": "../../llm/llm" },
     { "path": "../../core/session" },
     { "path": "../../core/agent" },

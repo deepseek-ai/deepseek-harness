@@ -8,7 +8,6 @@ export const zh = {
   trigger: '任务板',
   'mode.label': '使用智能体团队',
   'mode.failed': '无法确认智能体团队设置已保存，请重试：{message}',
-  'mode.unavailable': '此会话暂时无法切换智能体团队',
   loading: '正在加载任务板…',
   unavailable: '任务板暂不可用',
   failure: '任务记录无效：{message}',
@@ -36,7 +35,6 @@ export const en = {
   trigger: 'Task board',
   'mode.label': 'Use Agent Teams',
   'mode.failed': 'Could not confirm Agent Teams was saved. Try again: {message}',
-  'mode.unavailable': 'Agent Teams cannot be changed in this session',
   loading: 'Loading task board…',
   unavailable: 'Task board is unavailable',
   failure: 'Invalid persisted task record: {message}',
@@ -60,7 +58,6 @@ export const en = {
 export const ja = {
   'mode.label': 'エージェントチームを使用',
   'mode.failed': 'エージェントチーム設定の保存を確認できませんでした。再試行してください: {message}',
-  'mode.unavailable': 'このセッションではエージェントチームを変更できません',
   'trigger': 'タスクボード',
   'loading': 'タスクボードを読み込み中…',
   'unavailable': 'タスクボードは利用できません',
@@ -85,7 +82,6 @@ export const ja = {
 export const es = {
   'mode.label': 'Usar equipos de agentes',
   'mode.failed': 'No se pudo confirmar que se guardó la configuración del equipo. Inténtalo de nuevo: {message}',
-  'mode.unavailable': 'No se puede cambiar el equipo de agentes en esta sesión',
   trigger: 'Tablero de tareas',
   loading: 'Cargando tablero de tareas…',
   unavailable: 'El tablero de tareas no está disponible',
@@ -110,7 +106,6 @@ export const es = {
 export const fr = {
   'mode.label': 'Utiliser les équipes d’agents',
   'mode.failed': 'Impossible de confirmer l’enregistrement des équipes d’agents. Réessayez : {message}',
-  'mode.unavailable': 'Les équipes d’agents ne peuvent pas être modifiées dans cette session',
   trigger: 'Tableau des tâches',
   loading: 'Chargement du tableau des tâches…',
   unavailable: 'Le tableau des tâches n’est pas disponible',
@@ -135,7 +130,6 @@ export const fr = {
 export const de = {
   'mode.label': 'Agententeams verwenden',
   'mode.failed': 'Das Speichern der Agententeams konnte nicht bestätigt werden. Erneut versuchen: {message}',
-  'mode.unavailable': 'Agententeams können in dieser Sitzung nicht geändert werden',
   trigger: 'Aufgabenübersicht',
   loading: 'Aufgabenübersicht wird geladen…',
   unavailable: 'Aufgabenübersicht ist nicht verfügbar',
@@ -160,7 +154,6 @@ export const de = {
 export const ru = {
   'mode.label': 'Использовать команды агентов',
   'mode.failed': 'Не удалось подтвердить сохранение команд агентов. Повторите попытку: {message}',
-  'mode.unavailable': 'В этом сеансе нельзя изменить команды агентов',
   trigger: 'Доска задач',
   loading: 'Загрузка доски задач…',
   unavailable: 'Доска задач недоступна',
@@ -185,7 +178,6 @@ export const ru = {
 export const pt = {
   'mode.label': 'Usar equipes de agentes',
   'mode.failed': 'Não foi possível confirmar que as equipes de agentes foram salvas. Tente novamente: {message}',
-  'mode.unavailable': 'Não é possível alterar as equipes de agentes nesta sessão',
   trigger: 'Quadro de tarefas',
   loading: 'Carregando quadro de tarefas…',
   unavailable: 'O quadro de tarefas não está disponível',
