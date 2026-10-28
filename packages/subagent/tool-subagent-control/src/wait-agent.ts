@@ -3,6 +3,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
 /** Wait failures retain a stable machine-readable reason through tool execution. */
@@ -25,6 +26,13 @@ function waitForInput(
   if (ctx.agents.get(agent.id) !== agent) {
     throw new AgentWaitError('wait_agent requires the exact live calling agent', 'WAIT_UNAVAILABLE')
   }
+  let waitingRoot: Agent | undefined
+  try {
+    waitingRoot = ctx.subagents.rootOf(agent)
+  } catch (error: unknown) {
+    // Unmanaged delegated Agents can still wait for their own inbox.
+    if (!(error instanceof SubagentError && error.code === 'UNAUTHORIZED')) throw error
+  }
   return new Promise((resolve, reject) => {
     const finish = (settle: () => void): void => {
       clearTimeout(timer)
@@ -45,8 +53,10 @@ function waitForInput(
     const offInbox = ctx.on('agent/inbox/inserted', ({ agent: recipient }) => {
       if (recipient === agent) onInput()
     })
-    const offNotified = ctx.on('agent/wait-notified', ({ agent: recipient }) => {
-      if (recipient === agent) finish(() => { resolve({ timedOut: false }) })
+    const offNotified = ctx.on('subagent/tree-wait-notified', (root) => {
+      if (root === waitingRoot && ctx.agents.get(root.id) === root) {
+        finish(() => { resolve({ timedOut: false }) })
+      }
     })
     const offDisposed = ctx.on('agent/disposed', ({ agent: disposed }) => {
       if (disposed === agent) {

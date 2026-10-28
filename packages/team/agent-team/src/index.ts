@@ -4,10 +4,9 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
-import { emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-session-persistence'
-import { SubagentError } from '@deepseek-ai/dsh-subagent'
+import type {} from '@deepseek-ai/dsh-subagent'
 import { TeamError } from './error.ts'
 import { TeamJournal } from './journal.ts'
 import { teamProjectionDefinition, type TeamProjectionState } from './projection.ts'
@@ -80,7 +79,7 @@ export class TeamService extends TypertRemoteService {
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
     this.projection = await ctx.sessionProjections.register(teamProjectionDefinition)
-    this.journal = new TeamJournal(ctx, this.projection, (root) => { this.notifyWaits(root) })
+    this.journal = new TeamJournal(ctx, this.projection, (root) => { ctx.subagents.notifyTreeWaits(root) })
     this.tasks = new TeamTaskBoard(ctx, this.journal, this.maxTasks)
   }
 
@@ -114,20 +113,7 @@ export class TeamService extends TypertRemoteService {
     if (this.isEnabled(root) !== enabled) root.session.append('team/mode', { enabled })
     await this.ctx.parallel('team/mode-changed', root)
     await this.ctx.sessions.flush(root.session)
-    this.notifyWaits(root)
-  }
-
-  private notifyWaits(root: Agent): void {
-    for (const agent of this.ctx.agents.list()) {
-      let agentRoot: Agent
-      try {
-        agentRoot = this.ctx.subagents.rootOf(agent)
-      } catch (error: unknown) {
-        if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') continue
-        throw error
-      }
-      if (agentRoot === root) emitAgentEvent(this.ctx, agent, 'agent/wait-notified', {})
-    }
+    this.ctx.subagents.notifyTreeWaits(root)
   }
 
   /**

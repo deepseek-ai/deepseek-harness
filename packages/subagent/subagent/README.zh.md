@@ -62,6 +62,8 @@ kind: "package-reference"
 
 `rootOf(agent)` 通过托管本地 Agent 已有的 Activation 解析树根，并校验子级和树根的确切存活实例。中间创建者退出不改变该树根；同 id 替代实例不能继承成员身份。普通存活 Agent 返回自身，非托管的委派 Agent 会被拒绝。查询不会激活 Session。
 
+`notifyTreeWaits(root)` 向该树的当前输入等待广播一次进程内信号。等待者匹配进入等待时捕获的确切存活根实例。分发会隔离监听器失败，不添加收件箱内容、不启动 Agent，也不为后续等待保留信号。
+
 ### 子级 preset
 
 进程内 spawn 接受独立的 `agentPreset`；fork 与外部后端拒绝此选项。省略选择时，本地子级加入父方当前的 preset 代际。显式 id 挂载当前可用代际，即使该 id 与父方相同。通过 [`dsh-tool-subagent`](../tool-subagent/README.zh.md#selecting-a-child-preset) 配置模型可选项，并在 [preset 组装](../../preset/agent-preset-registry/README.zh.md)中配置 persona 与工具。冷恢复保留历史子级 descriptor 记录的 persona 和工具限制。

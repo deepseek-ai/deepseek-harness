@@ -138,6 +138,13 @@ declare module '@deepseek-ai/cordis' {
      */
     'subagent/message-name'(this: Scoped<SubagentRuntime>, sender: Agent): string | undefined
     /**
+     * End current input waits in one subagent tree without retaining the signal.
+     * Broadcast to all scopes; consumers match the exact live root instance.
+     * @param root - the root whose current tree waits should end.
+     * @mode emit
+     */
+    'subagent/tree-wait-notified'(root: Agent): void
+    /**
      * A provider became resolvable in the registry.
      * @param provider - the registered provider.
      * @mode emit
@@ -302,6 +309,15 @@ export class SubagentRuntime extends TypertRemoteService {
    */
   rootOf(caller: Agent): Agent {
     return this.requireManager().rootOf(caller)
+  }
+
+  /**
+   * End current input waits in a tree without adding inbox content or starting Agents.
+   * Listener failures are logged and contained; signals are not retained for later waits.
+   * @param root - exact tree root captured by the operation requesting notification.
+   */
+  notifyTreeWaits(root: Agent): void {
+    this.emitLifecycle('subagent/tree-wait-notified', root)
   }
 
   /**
