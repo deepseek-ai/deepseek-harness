@@ -34,6 +34,7 @@ export function HeaderLeadingControls({
     <div className={css.controls}>
       <Tooltip label={t('toggle.open')} shortcutKeys={shortcut?.keys} delayMs={500}>
         <button
+          data-sidebar-opener
           type="button"
           className={css.iconButton}
           aria-label={t('toggle.open')}

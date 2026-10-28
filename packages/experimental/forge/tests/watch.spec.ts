@@ -111,6 +111,9 @@ describe('forge watch', () => {
     expect(provider.fetches).toHaveLength(3)
     await vi.advanceTimersByTimeAsync(60_000)
     expect(provider.fetches).toHaveLength(3)
+    await context.forge.submitReview(ref(1), { kind: 'review', headSha: 'a'.repeat(40), event: 'comment', body: 'Summary', comments: [] }, new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(4)
   })
 
   it('treats unknown mergeability as active work', async () => {

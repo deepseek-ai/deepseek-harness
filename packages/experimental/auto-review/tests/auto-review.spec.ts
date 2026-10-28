@@ -414,8 +414,9 @@ describe('native review request', () => {
       model: 'same-model',
       system: EXPECTED_REVIEW_POLICY,
       temperature: 0,
+      sessionId: session.id,
+      purpose: 'auto-review',
     })
-    expect(request).not.toHaveProperty('sessionId')
     expect(request.maxTokens).toBeUndefined()
     expect(request.tools).toBeUndefined()
     for (const message of request.messages) {

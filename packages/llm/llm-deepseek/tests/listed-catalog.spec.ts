@@ -17,6 +17,7 @@ const PRO = {
   api_capabilities: { anthropic_messages: { system_prompt_update: 'leading-only' } },
 }
 const requires = (version: unknown) => ({ client_requirements: { 'deepseek-harness': { min_version: version } } })
+const shows = (badge: unknown) => ({ client_metadata: { 'deepseek-harness': { badge } } })
 const resolve = (rows: object[] | undefined, overrides: Record<string, ModelOverride> = {}) => resolveListedCatalog({
   listing: rows === undefined ? undefined : parseModelListing({ data: rows }).entries,
   supported: resolveAdapterOptions({}).models,
@@ -33,6 +34,7 @@ describe('without a listing', () => {
     ])
     expect(catalog.resolution).toEqual(catalog.offered)
     expect(catalog.refusals.size).toBe(0)
+    expect(catalog.badges.size).toBe(0)
   })
 
   it('applies overrides and does not judge override ids it cannot see', () => {
@@ -136,6 +138,21 @@ describe('with a listing', () => {
       'model "deepseek-v4-pro" declares no api_capabilities.anthropic_messages',
     ])
     expect(catalog.refusals.get('deepseek-v4-pro')).toEqual({ kind: 'unsupported' })
+  })
+
+  it('collects badges of offered models only and reports a dropped badge', () => {
+    const badge = { text: { en: 'New', zh: '新' }, tone: 'info' }
+    const catalog = resolve([
+      { ...FLASH, ...shows(badge) },
+      { ...PRO, ...shows({ text: '' }) },
+      { ...FLASH, id: 'deepseek-v5', ...shows(badge) },
+    ])
+    expect(catalog.offered.map(model => model.id)).toEqual(['deepseek-flash', 'deepseek-v4-pro'])
+    expect([...catalog.badges]).toEqual([['deepseek-flash', badge]])
+    expect(catalog.offered[0]).not.toHaveProperty('badge')
+    expect(catalog.problems).toEqual([
+      expect.stringMatching(/^model "deepseek-v4-pro" shows no badge: client_metadata\["deepseek-harness"\]\.badge\.text is not a string/),
+    ])
   })
 
   it('keeps bundled knowledge, with overrides, for request resolution of models the listing does not offer', () => {

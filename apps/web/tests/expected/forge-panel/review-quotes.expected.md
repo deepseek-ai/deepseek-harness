@@ -1,0 +1,6 @@
+- textbox "发消息或创建任务, / 调用指令, @ 文件或对话":
+  - paragraph:
+    - button "移除引用"
+    - text: "## User Comment 2 File: src/extra.ts Side: R Lines: 1 Source: Local (branch) Diff hunk: ```diff @@ -0,0 +1,1 @@ +export const extra = 1 ``` Comment: 请检查这项修改"
+    - button "移除引用"
+    - text: "## User Comment 1 File: src/app.ts Side: R Lines: 1 Source: Local (branch) Diff hunk: ```diff @@ -0,0 +1,1 @@ +export const app = 1 ``` Comment: 请解释这行代码"

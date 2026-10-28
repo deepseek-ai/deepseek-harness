@@ -42,6 +42,8 @@ Mount the registry with at least one provider package, such as the GitHub provid
 
 Reaching `fetchTimeoutMs` aborts the fetch signal with `FORGE_FETCH_TIMEOUT`. Providers must stop their work and settle when the signal aborts; rejected fetches become `unavailable` failures. A provider that ignores cancellation can stall polling and service disposal.
 
+Providers may implement `submitReview` to publish a line comment or a completed review at an explicit head commit. The registry returns unsupported when that capability is absent and refreshes watched status after a submission. Successful writes return their web URL; failures distinguish changed heads, refusals, and unknown outcomes. Callers must reconcile unknown outcomes before another submission. Pending drafts belong to the consumer, not the polling registry.
+
 -----
 
 <a id="understand-the-implementation"></a>

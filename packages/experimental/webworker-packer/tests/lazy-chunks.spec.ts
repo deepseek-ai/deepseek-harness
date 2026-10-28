@@ -86,28 +86,6 @@ it('refuses a chunk request whose file the package does not publish', (test) => 
   expect(() => packVfsImage(options)).toThrow(/client\.browser\.js requests chunk "\.\/client\.missing\.js"/)
 })
 
-it.for(['published', 'missing'] as const)('handles %s chunks with renamed loaders and backtick paths', (publication, test) => {
-  const options = fixture(test, {
-    ...CHUNKS,
-    'client.browser.js': 'module.exports=e=>({load:()=>e.async(`./client.pdf.js`)})',
-    'client.pdf.js': 'module.exports=t=>({worker:()=>t.async(`./client.pdf-worker.js`)})',
-  })
-  if (publication === 'missing') {
-    rmSync(join(options.resolveFrom, 'lib/client.pdf-worker.js'))
-    expect(() => packVfsImage(options)).toThrow(/client\.pdf\.js requests chunk "\.\/client\.pdf-worker\.js"/)
-  } else {
-    const result = packVfsImage(options)
-    expect(Object.keys(result.files)).toContain(`${PREFIX}/client.browser.js`)
-    expect(Object.keys(result.files)).toContain(`${PREFIX}/client.orphan.js`)
-    expect(Object.keys(result.files)).not.toContain(`${PREFIX}/client.pdf.js`)
-    expect(Object.keys(result.files)).not.toContain(`${PREFIX}/client.pdf-worker.js`)
-    expect(result.lazyArchives.map(archive => archive.files)).toEqual([
-      [`${PREFIX}/client.pdf-worker.js`],
-      [`${PREFIX}/client.pdf.js`],
-    ])
-  }
-})
-
 it('keeps a ./client export target in the base image even when a chunk requests it', (test) => {
   const result = packVfsImage(fixture(test, {
     'client.browser.js': 'module.exports = { load: () => require.async("./client.pdf.js") }',

@@ -1,0 +1,29 @@
+/* Inline review forms use the same field, action, and badge treatments as settings and conversation controls. */
+.root, .thread { box-sizing: border-box; width: calc(100% - 20px); max-width: 680px; margin: 10px; padding: 12px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: var(--dsw-font-xs-13); font-family: Inter, var(--dsw-font-family); white-space: normal; }
+.root { background: var(--dsw-alias-bg-layer-2); border-radius: var(--dsw-radius-lg); }
+.root:focus-within { border-color: var(--dsw-alias-border-l4); }
+.root[data-split][data-side="R"], .thread[data-split][data-side="R"] { margin-inline-start: clamp(10px, calc(100% - 700px), calc(50% + 10px)); }
+.title { margin-bottom: 12px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+/* Fixed-size textarea layout stays local during typing; native resizing can still change its outer height. */
+.input { display: block; box-sizing: border-box; width: 100%; height: 88px; min-height: 88px; contain: strict; padding: 10px 12px; resize: vertical; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: var(--dsw-radius-md); outline: none; background: var(--dsw-alias-bg-layer-3); color: var(--dsw-alias-label-primary); font: inherit; }
+.input::placeholder { color: var(--dsw-alias-label-dimmed); }
+.input:focus { border-color: var(--dsw-alias-state-business-primary); }
+.root .input { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 10px; margin-top: 10px; border-top: 0.5px solid var(--dsw-alias-border-l2); }
+.cancel { margin-inline-end: auto; }
+.error { margin-top: 8px; color: var(--dsw-alias-state-error-primary); overflow-wrap: anywhere; }
+.gitAction { display: inline-flex; flex: none; align-items: stretch; }
+.gitMain { border-start-end-radius: 0; border-end-end-radius: 0; }
+.gitArrow { width: 30px; padding: 0; border-start-start-radius: 0; border-end-start-radius: 0; border-inline-start: 0.5px solid color-mix(in srgb, var(--dsw-alias-label-primary-foreground) 25%, transparent); }
+.threadHeader { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.author { font-weight: 500; }
+.range { color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.commentBody { white-space: pre-wrap; overflow-wrap: anywhere; }
+.threadActions { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px -8px -4px; }
+.gutter { position: relative; }
+.line { display: block; width: 100%; height: 100%; padding: 0; color: inherit; text-align: inherit; cursor: pointer; border: 0; border-radius: 0; background: transparent; font: inherit; user-select: none; touch-action: pan-y; }
+.selected { background: var(--dsw-alias-interactive-bg-hover); outline: 1px solid var(--dsw-alias-border-l2); outline-offset: -1px; }
+@media (hover: hover) { .line:hover { color: var(--dsw-alias-state-business-primary); } }
+@media (pointer: coarse) { .input { font-size: 16px; } .line { min-height: 28px; } }
+
+.add { position: absolute; inset-inline-start: 2px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--dsw-radius-xs); background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-foreground); cursor: pointer; user-select: none; }

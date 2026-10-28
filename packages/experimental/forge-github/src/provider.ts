@@ -3,12 +3,13 @@
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
   ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
-  ForgeRepository, MergeRequest,
+  ForgeRepository, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from './gh.ts'
 import type { GhOutput, GhRunner } from './gh.ts'
 import { hasGraphqlFields, HEAD_QUERY, mapHeadResponse, mapSnapshotResponse, snapshotQuery } from './graphql.ts'
 import { checkedRepository, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
+import { submitGitHubReview } from './review.ts'
 
 const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
 
@@ -28,6 +29,12 @@ const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i
 export class GitHubProvider implements ForgeProvider {
   readonly forge = 'github'
   private readonly hosts: ReadonlySet<string>
+
+  async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return { ok: false, code: 'failed', message: failure.message }
+    return await submitGitHubReview(this.gh, ref, request, signal)
+  }
 
   /**
    * @param gh - runner that executes `gh` on the host.

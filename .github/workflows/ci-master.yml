@@ -14,6 +14,7 @@ on:
           - larger-runner-benchmark
           - consolidated-runner-benchmark
           - ssh-helper
+          - wine
 
 # New master pushes and manual runs replace obsolete checks in this workflow/ref.
 # Standby drills share cancellation; use completed runs as readiness evidence.
@@ -49,9 +50,9 @@ jobs:
     secrets:
       DEEPSEEK_API_KEY_EXTERNAL: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
 
-  # Wine runs once here, independently of the native serial standby aggregates.
+  # Wine runs on master pushes or an explicit suite=wine dispatch, independently of native standbys.
   windows:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'workflow_dispatch' && inputs.suite == 'wine')
     runs-on: ubuntu-latest
     name: windows node 24 / wine
     timeout-minutes: 15
