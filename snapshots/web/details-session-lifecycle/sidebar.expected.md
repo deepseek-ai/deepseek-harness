@@ -417,8 +417,8 @@
     1000
   ],
   "columns": [
-    56,
-    711,
+    0,
+    767,
     0
   ],
   "columnTransition": "none",

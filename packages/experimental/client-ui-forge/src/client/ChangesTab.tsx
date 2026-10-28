@@ -7,25 +7,33 @@
  * scope summary changes; a read keeps the previous changes on screen until it settles.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconCompareSplitOutlineRegular, IconInfoOutlineRegular,
-  IconListPenOutlineRegular, IconNowrapFillRegular, IconRightUpOutlineRegular, IconWrapFillRegular, Menu, StateDot, Tooltip,
+  IconListPenOutlineRegular, IconNowrapFillRegular, IconRightUpOutlineRegular, IconWorkspaceTreeOutlineRegular, IconWrapFillRegular,
+  Menu, StateDot, Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { SidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { fileAddressFor, pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type {
   ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgeLocalScope, ForgePanelChangeRequest, ForgePanelState,
 } from '../types.ts'
+import type { ForgeReviewRequest, ForgeReviewResult } from '@deepseek-ai/dsh-experimental-forge/types'
+import { sameReviewSource, type ReviewQueue } from './review-queue.ts'
+import { ReviewThread, useFileReview } from './ReviewThread.tsx'
+import type { ReviewActions } from './ReviewComposer.tsx'
+import { SubmitReview } from './SubmitReview.tsx'
+import type { ReviewSelection } from './review.ts'
 import { parseChangesAddress, type ChangesSource } from './changes-address.ts'
 import type { createChangesStore } from './changes-store.ts'
 import { Counts, DiffFile, type DiffFileAction } from './DiffFile.tsx'
+import { FileTreePane } from './FileTreePane.tsx'
+import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from './ChangedFiles.tsx'
 import { drawnLines, matchesHunks, textLines } from './diff-rows.ts'
-import { FileLabel } from './FileLabel.tsx'
 import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
@@ -40,6 +48,12 @@ type ScopeKind = ForgeLocalScope['kind']
 
 /** Business face of the changes tab body. */
 export interface ChangesTabInjected {
+  /** Append a frozen comment to the main input without submitting it. */
+  readonly addReviewToInput: (selection: ReviewSelection) => boolean
+  /** Records retained across Session switches and cleared when this tab occurrence closes. */
+  readonly reviewQueue: (tab: Pick<SidebarRightTabInfo['tab'], 'id' | 'signal'>) => ReviewQueue
+  /** Publish one comment or a completed review; never retries mutations. */
+  readonly submitReview: (url: string, request: ForgeReviewRequest) => Promise<RemoteResult<ForgeReviewResult>>
   /** Panel source while visible; the renderer releases the subscription for an inactive key. */
   readonly keyedHooks: { readonly panel: (visibility: string) => HostObservable<PanelSnapshot> | undefined }
   /** Open the panel stream again after it ended. */
@@ -177,9 +191,12 @@ function badgeOf(file: ForgeDiffFile, data: ChangesData, t: Translate): string {
   return parts.join(' · ')
 }
 
-function ChangeHeader({ url, entry, openLink, t }: {
+function ChangeHeader({ url, entry, openLink, reviewCount, reviewDisabled, onReview, t }: {
   readonly url: string
   readonly entry: ForgePanelChangeRequest | undefined
+  readonly reviewCount: number
+  readonly reviewDisabled: boolean
+  readonly onReview: () => void
   readonly openLink: (url: string) => void
   readonly t: Translate
 }): ReactNode {
@@ -192,8 +209,11 @@ function ChangeHeader({ url, entry, openLink, t }: {
       <ChangeRequestGlyph tone={tone} label={t('change.stateAria', { state: t(TONE_LABEL[tone]) })} />
       <span className={css.headerTitle}>{snapshot === null ? url : snapshot.title}</span>
       {number !== null && <span className={css.headerNumber}>{t('change.number', { number })}</span>}
+      <Button size="sm" variant="outline" className={clsx(css.headerEnd, css.reviewSubmit)} disabled={reviewDisabled} onClick={onReview}>
+        {t('review.submit')}{reviewCount > 0 ? ` (${reviewCount})` : ''}
+      </Button>
       <Tooltip label={t('change.view')} side="bottom">
-        <button type="button" className={clsx(css.tool, css.headerEnd)} aria-label={t('change.view')} onClick={() => { openLink(href) }}>
+        <button type="button" className={css.tool} aria-label={t('change.view')} onClick={() => { openLink(href) }}>
           <IconRightUpOutlineRegular size={14} />
         </button>
       </Tooltip>
@@ -259,40 +279,6 @@ function ScopeMenu({ scope, choose, t }: {
   )
 }
 
-function FilesMenu({ files, jump, t }: {
-  readonly files: readonly ForgeDiffFile[]
-  readonly jump: (path: string) => void
-  readonly t: Translate
-}): ReactNode {
-  const [open, setOpen] = useState(false)
-  return (
-    <Menu
-      open={open}
-      portal
-      align="start"
-      dense
-      autoFocus
-      listClassName={css.menuList}
-      items={files.map(file => ({
-        id: file.path,
-        label: <span className={css.menuRow}><FileLabel path={file.path} className={css.menuPath} /><Counts file={file} t={t} /></span>,
-      }))}
-      onClose={() => { setOpen(false) }}
-      onSelect={(path) => {
-        setOpen(false)
-        jump(path)
-      }}
-      anchor={(
-        <button type="button" className={css.select} aria-haspopup="menu" aria-expanded={open} disabled={files.length === 0}
-          onClick={() => { setOpen(value => !value) }}>
-          {t('diff.allFiles', { count: files.length })}
-          <IconChevronDownOutlineRegular size={12} />
-        </button>
-      )}
-    />
-  )
-}
-
 function Notice({ children, action }: { readonly children: ReactNode; readonly action?: ReactNode }): ReactNode {
   return (
     <div className={css.notice} role="status">
@@ -303,6 +289,19 @@ function Notice({ children, action }: { readonly children: ReactNode; readonly a
   )
 }
 
+
+function OrphanReviews({ path, actions, t }: PropsLocale<typeof NS> & {
+  readonly path: string
+  readonly actions: ReviewActions
+}): ReactNode {
+  const state = useFileReview(actions, path)
+  return <section className={css.reviewFile} data-forge-review-file={path}>
+    <h3>{path}</h3>
+    {state.threads.map(thread => <ReviewThread key={thread.key} thread={thread}
+      actions={actions} locked={state.locked} outdated split={false} t={t} />)}
+  </section>
+}
+
 /**
  * Render the changes tab of one Session.
  * @param props - tab information, the tab's choices, the panel snapshot hook, reads and actions, and copy.
@@ -310,15 +309,59 @@ function Notice({ children, action }: { readonly children: ReactNode; readonly a
  */
 export function ChangesTab({
   useTabInfo, sessionId, useStore, actions, usePanel, reconnect, localDiff, localText, changeRequestDiff, changeRequestText,
-  openLink, copyPath, createChangeRequest, report, t,
+  openLink, copyPath, createChangeRequest, addReviewToInput, reviewQueue, submitReview, report, t,
 }: ChangesTabProps): ReactNode {
   const { tab } = useTabInfo()
   const { navigation, signal } = tab
   const target = useMemo(() => parseChangesAddress(tab.contentId), [tab.contentId])
   if (target === undefined) throw new Error(`forge-panel: not a changes address "${tab.contentId}"`)
   const source = target.source
+  const queue = reviewQueue(tab)
+  useSyncExternalStore(queue.subscribe, queue.getStatus)
+  const reviewState = queue.getSnapshot()
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [reviewBusy, setReviewBusy] = useState(false)
+  useEffect(() => { if (!tab.visible) setReviewOpen(false) }, [tab.visible])
+  const reviewRunning = useRef(false)
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  const publishReview = async (
+    url: string, request: ForgeReviewRequest, complete: (url: string) => boolean,
+  ): Promise<string | undefined> => {
+    if (reviewRunning.current || !queue.begin(request)) return t('review.saveFailed')
+    reviewRunning.current = true
+    setReviewBusy(true)
+    setReviewError(null)
+    try {
+      const response = await submitReview(url, request)
+      if (!response.ok || (!response.value.ok && response.value.code === 'unknown')) {
+        setReviewError(t('review.unknown'))
+        return t('review.unknown')
+      }
+      const result = response.value
+      if (!result.ok) {
+        queue.finish(false)
+        const message = result.code === 'stale' ? t('review.stale') : result.code === 'unsupported'
+          ? t('review.unsupported') : t('review.failed', { message: result.message })
+        setReviewError(message)
+        return message
+      }
+      if (!complete(result.url)) return t('review.unknown')
+      report(request.kind === 'review' ? 'review.submitted' : 'review.published')
+      if (request.kind === 'review') setReviewOpen(false)
+      return undefined
+    } catch (_error) {
+      setReviewError(t('review.unknown'))
+      return t('review.unknown')
+    } finally {
+      reviewRunning.current = false
+      setReviewBusy(false)
+    }
+  }
   const choices = useStore(store => store.byTab[tab.id])
   const [wanted, setWanted] = useState<string | null>(null)
+  const [treeState, setTreeState] = useState<ChangedFilesState>({ query: '', collapsed: {}, selected: null })
+  const [treeVisible, setTreeVisible] = useState(true)
+  const treeId = useId()
   const [chosen, setChosen] = useState<Readonly<Record<string, boolean>>>({})
   // Each navigation applies once; its file, if it names one, opens and scrolls into view.
   useEffect(() => {
@@ -326,6 +369,7 @@ export function ChangesTab({
     actions.navigated(tab.id, navigation.revision)
     const path = navigation.params?.path
     if (path === undefined) return
+    setTreeState(value => ({ ...value, selected: path }))
     setChosen(value => ({ ...value, [path]: true }))
     setWanted(path)
   }, [choices, navigation.revision, navigation.params, actions, tab.id])
@@ -434,6 +478,24 @@ export function ChangesTab({
     return list
   }
 
+  const reviewForm = tab.visible && data !== null && reviewOpen && data.kind === 'change' && <SubmitReview queue={queue}
+    url={data.url} headSha={data.headSha} busy={reviewBusy} error={reviewError} close={() => { setReviewOpen(false) }}
+    check={() => { openLink(data.url) }} reconcile={() => { queue.finish(false); setReviewError(null) }}
+    submit={() => {
+      const latest = queue.getSnapshot()
+      void publishReview(data.url, { kind: 'review', headSha: data.headSha, event: latest.event,
+        body: latest.body, comments: latest.comments.map(item => item.comment) }, url => queue.finish(true, url))
+    }} t={t} />
+
+  const recordActions: ReviewActions = {
+    source: source.kind === 'local' ? { kind: 'local', scope } : { kind: 'change', url: source.url, headSha: data?.kind === 'change' ? data.headSha : '' },
+    records: queue, addToInput: addReviewToInput, openLink,
+  }
+  const absentPaths = [...new Set([...reviewState.comments, ...reviewState.records.map(item => item.selection)]
+    .filter(item => sameReviewSource(item.source, recordActions.source)).map(item => item.comment.path))]
+    .filter(path => !data?.files.some(file => file.path === path))
+  const orphanRecords = absentPaths.map(path => <OrphanReviews key={path} path={path} actions={recordActions} t={t} />)
+
   let body: ReactNode
   if (data === null) {
     if (state === null && snapshot?.disconnected) {
@@ -461,7 +523,7 @@ export function ChangesTab({
       )
     }
   } else if (data.files.length === 0) {
-    body = <div className={css.centered}>{t('diff.empty')}</div>
+    body = <div className={css.files}>{orphanRecords}<div className={css.centered}>{t('diff.empty')}</div></div>
   } else {
     body = (
       <div className={css.files} data-forge-changes-scroll="">
@@ -472,6 +534,19 @@ export function ChangesTab({
               key={path}
               visible={tab.visible}
               file={file}
+              review={{ source: data.kind === 'local' ? { kind: 'local', scope: data.scope } : { kind: 'change', url: data.url, headSha: data.headSha },
+                addToInput: addReviewToInput,
+                records: queue, openLink, reviewStarted: reviewState.comments.length > 0,
+                onQuoted: (selection) => { if (!queue.recordAgent(selection)) report('review.saveFailed') },
+                publishingBlocked: reviewState.uncertain !== null,
+                ...data.kind === 'local' ? {} : {
+                  queue: selection => queue.add(selection),
+                  publish: selection => selection.source.kind === 'change'
+                    ? publishReview(selection.source.url, { kind: 'comment', headSha: selection.source.headSha, comment: selection.comment },
+                      url => queue.published(selection, url))
+                    : Promise.resolve(t('review.stale')),
+                },
+              }}
               expanded={chosen[path] ?? initial.has(path)}
               onToggle={() => { setChosen(value => ({ ...value, [path]: !(value[path] ?? initial.has(path)) })) }}
               large={drawnLines(file) > LARGE_FILE_LINES}
@@ -494,10 +569,21 @@ export function ChangesTab({
             />
           )
         })}
+        {orphanRecords}
       </div>
     )
   }
   const files = data === null ? [] : data.files
+  const navigator: ChangedFilesProps = {
+    files, state: treeState, t,
+    filter: (query) => { setTreeState(value => ({ ...value, query })) },
+    toggle: (path) => { setTreeState(value => ({ ...value, collapsed: { ...value.collapsed, [path]: value.collapsed[path] !== true } })) },
+    jump: (path) => {
+      setTreeState(value => ({ ...value, selected: path }))
+      setChosen(value => ({ ...value, [path]: true }))
+      setWanted(path)
+    },
+  }
   // The toolbar collapses every file while any is expanded, as the files on screen show, and expands every file otherwise.
   const anyExpanded = files.some(file => chosen[file.path] ?? initial.has(file.path))
   const expansionLabel = t(anyExpanded ? 'diff.collapseAll' : 'diff.expandAll')
@@ -511,17 +597,19 @@ export function ChangesTab({
     <div className={css.root} data-forge-changes={source.kind}>
       {source.kind === 'local'
         ? <LocalHeader state={state} scope={scope} createChangeRequest={createChangeRequest} t={t} />
-        : <ChangeHeader url={source.url} entry={entry} openLink={openLink} t={t} />}
+        : <ChangeHeader url={source.url} entry={entry} openLink={openLink} reviewCount={reviewState.comments.length}
+          reviewDisabled={data === null} onReview={() => { setReviewOpen(true) }} t={t} />}
+      {!reviewOpen && reviewState.error !== null && <Notice>{t(reviewState.error === 'load' ? 'review.loadFailed' : 'review.saveFailed')}</Notice>}
+      {!reviewOpen && reviewState.uncertain !== null && !reviewBusy && source.kind === 'change' && <div className={css.reviewNotice} role="alert">
+        <span>{t('review.unknown')}</span>
+        {reviewState.uncertain.kind === 'comment' && <blockquote>{reviewState.uncertain.comment.body}</blockquote>}
+        <Button size="sm" variant="outline" onClick={() => { openLink(source.url) }}>{t('review.recheck')}</Button>
+        <Button size="sm" variant="outline" onClick={() => { queue.finish(false); setReviewError(null) }}>{t('review.confirmRetry')}</Button>
+      </div>}
+      {!reviewOpen && reviewError !== null && reviewState.uncertain === null && <Notice>{reviewError}</Notice>}
       <div className={css.toolbar}>
         {tab.visible && source.kind === 'local' && <ScopeMenu scope={scope} choose={(next) => { actions.scoped(tab.id, next) }} t={t} />}
-        {tab.visible && <FilesMenu
-          files={files}
-          jump={(path) => {
-            setChosen(value => ({ ...value, [path]: true }))
-            setWanted(path)
-          }}
-          t={t}
-        />}
+        {tab.visible && <ChangedFilesMenu {...navigator} visible />}
         {files.length > 0 && <span className={css.totals}><Counts file={{ additions, deletions, binary: false }} t={t} /></span>}
         <span className={css.tools}>
           <Tooltip label={t('diff.refresh')} side="bottom">
@@ -548,6 +636,15 @@ export function ChangesTab({
               {wrap ? <IconNowrapFillRegular /> : <IconWrapFillRegular />}
             </button>
           </Tooltip>
+          <span className={css.treeToggle}>
+            <Tooltip label={t(treeVisible ? 'diff.hideFileTree' : 'diff.showFileTree')} side="bottom">
+              <button type="button" className={css.tool} aria-label={t('diff.fileTree')} aria-expanded={treeVisible}
+                aria-pressed={treeVisible} aria-controls={treeId} disabled={files.length === 0}
+                onClick={() => { setTreeVisible(value => !value) }}>
+                <IconWorkspaceTreeOutlineRegular />
+              </button>
+            </Tooltip>
+          </span>
         </span>
       </div>
       {data !== null && failed !== null && (
@@ -559,7 +656,11 @@ export function ChangesTab({
         <Notice>{t('diff.stale', { count: data.localAhead })}</Notice>
       )}
       {data?.kind === 'local' && data.omitted > 0 && <Notice>{t('diff.omitted', { count: data.omitted })}</Notice>}
-      {body}
+      {reviewForm}
+      <div className={css.body}>
+        {body}
+        {files.length > 0 && <FileTreePane {...navigator} id={treeId} open={treeVisible} />}
+      </div>
     </div>
   )
 }

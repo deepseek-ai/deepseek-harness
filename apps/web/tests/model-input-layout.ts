@@ -27,5 +27,11 @@ export async function assertModelInputLayout(page: Page, editor: Locator): Promi
     }
   } finally {
     await page.setViewportSize(original)
+    // The frame reports its own width to the layout store from a rAF-throttled
+    // ResizeObserver, so the restored viewport is only in force once the shell
+    // has left drawer mode; a capture taken in between reads the narrow frame.
+    if (await page.locator('[data-sidebar-drawer]').count() > 0) {
+      await expect.poll(async () => page.locator('[data-sidebar-drawer]').count(), { timeout: 5_000 }).toBe(0)
+    }
   }
 }

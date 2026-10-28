@@ -1,0 +1,13 @@
+/* Shared-session attribution above a user bubble: one quiet line that ellipsizes a long subject
+   instead of widening the bubble's row. Chat's user row right-aligns and stacks its children. */
+
+.origin {
+  align-self: flex-end;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(18px + var(--dsh-content-font-delta-secondary, 0px));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

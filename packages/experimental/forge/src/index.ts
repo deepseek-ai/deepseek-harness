@@ -7,7 +7,7 @@ import { changeRequestKey } from './keys.ts'
 import { nextPollDelay } from './schedule.ts'
 import type {
   ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config,
-  ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, MergeRequest,
+  ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
 } from './types.ts'
 
 export { changeRequestKey } from './keys.ts'
@@ -231,6 +231,21 @@ export class ForgeService extends Service {
   async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure> {
     return await this.invoke(this.registration(ref.repository.forge), signal,
       (provider, operation) => provider.diff(ref, operation))
+  }
+
+  /**
+   * Publish one comment or a completed review, then refresh the watched status.
+   * @param ref - change request served by a registered provider.
+   * @param request - explicitly selected commit, comments, and review decision.
+   * @param signal - request cancellation.
+   * @returns a publication URL or a failure, including an unknown write outcome.
+   */
+  async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult> {
+    const result = await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.submitReview?.(ref, request, operation)
+        ?? Promise.resolve({ ok: false, code: 'unsupported', message: 'This provider does not support review submission' } as const))
+    this.refresh(ref)
+    return result
   }
 
   /**

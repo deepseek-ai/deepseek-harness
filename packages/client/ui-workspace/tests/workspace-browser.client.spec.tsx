@@ -1951,6 +1951,21 @@ describe('WorkspaceBrowser', () => {
     expect(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded')).toBe('true')
   })
 
+  it('expands an inert drawer with retained wide content before focusing search', () => {
+    vi.useFakeTimers()
+    try {
+      const expandSidebar = vi.fn(() => { b.view.container.removeAttribute('inert') })
+      const b = mount({ wide: true, expandSidebar })
+      b.view.container.setAttribute('inert', '')
+      act(() => { b.controls.search() })
+      expect(expandSidebar).toHaveBeenCalledOnce()
+      act(() => { vi.advanceTimersByTime(300) })
+      expect(document.activeElement).toBe(screen.getByPlaceholderText('搜索会话名称'))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rail state renders icon controls that request expansion', () => {
     vi.useFakeTimers()
     try {

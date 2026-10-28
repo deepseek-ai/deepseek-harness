@@ -44,6 +44,8 @@ A pull request is `mergeReady` when it is open, not a draft, GitHub reports its 
 
 `diff` runs `gh pr diff <number> --repo <host>/<owner>/<name> --color never`. `fileText` reads `repos/<owner>/<name>/contents/<path>?ref=<commit>` through `gh api` with the raw media type and accepts only a full 40- or 64-digit hexadecimal commit. `fileUrl` returns `https://<host>/<owner>/<name>/blob/<commit>/<path>`. Both paths percent-encode each segment. A refused read becomes `not-found` for HTTP 404, `unauthenticated` for a diagnostic that mentions authentication, `too-large` for GitHub's `too_large` error, which a diff over its own size limit draws, and `unavailable` otherwise, with GitHub's message. A read whose output exceeds `maxOutputBytes` becomes `too-large`, and one that outlives `timeoutMs` becomes `unavailable`.
 
+Review submission checks the current pull request head, then posts a single inline comment or one completed review through the REST API with an explicit `commit_id`. Multiline comments carry their side and inclusive start and end lines. Review decisions are Comment, Approve, and Request changes. JSON request bodies travel on stdin. The provider never retries a mutation: a timeout, unexpected response, or server error after dispatch returns an unknown outcome that the caller must reconcile on GitHub. A commit arriving between the check and the write can make the explicitly addressed review outdated; GitHub does not offer an atomic head precondition on these endpoints.
+
 -----
 
 <a id="understand-the-implementation"></a>

@@ -121,6 +121,22 @@ describe('HoverCard', () => {
     expect(screen.getByRole('tooltip').textContent).toBe('Details')
   })
 
+  it.each(['inert', 'hidden'])('dismisses a portal when its retained anchor ancestor becomes %s', async (attribute) => {
+    const view = render(<section><HoverCard anchor={<span>row</span>} content={<div>card body</div>} /></section>)
+    const row = screen.getByText('row')
+    const wrapper = row.parentElement!
+    fireEvent.pointerEnter(wrapper)
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(screen.getByText('card body')).toBeTruthy()
+    await act(async () => { view.container.firstElementChild!.setAttribute(attribute, '') })
+    expect(screen.queryByText('card body')).toBeNull()
+    expect(screen.getByText('row')).toBe(row)
+    view.container.firstElementChild!.removeAttribute(attribute)
+    fireEvent.pointerEnter(wrapper)
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(screen.getByText('card body')).toBeTruthy()
+  })
+
   it('opens after the dwell delay, positioned right of the anchor', () => {
     const { wrapper } = mount()
     fireEvent.pointerEnter(wrapper)

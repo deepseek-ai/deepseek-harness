@@ -138,7 +138,7 @@ describe('CI workflow', () => {
       expect(job.steps).toContainEqual(expect.objectContaining({ run: command }))
     }
     for (const [file, command] of [
-      ['release-publish.yml', 'pnpm run build:official'],
+      ['release-publish.yml', 'pnpm run build:official --serial'],
       ['release-vendor-publish.yml', 'pnpm run build:lib:host'],
     ] as const) {
       expect(workflowJob(loadWorkflow('.github/workflows/' + file), 'pack').steps)
@@ -743,7 +743,7 @@ describe('CI workflow', () => {
     expect(uploadIndex).toBeGreaterThan(benchmarkIndex)
   })
 
-  it('splits the Wine Host TypeScript compile and retains its heap budget', () => {
+  it('splits both Wine TypeScript faces and retains their aggregate heap budgets', () => {
     const wineGates = readFileSync(resolve(root, 'scripts/wine-windows-gates.sh'), 'utf8')
 
     const references = wineGates.indexOf(
@@ -757,6 +757,43 @@ describe('CI workflow', () => {
     expect(references).toBeGreaterThan(metadata)
     expect(aggregate).toBeGreaterThan(references)
     expect(wineGates).not.toContain('-b tsconfig.host.json')
+    const clientReferences = wineGates.indexOf('wine_node "$scratch/logs/client-references.log" --import tsx/esm scripts/compile-referenced-projects.ts client')
+    const clientAggregate = wineGates.indexOf('wine_node "$scratch/logs/client-tsc.log" --max-old-space-size=8192 "$tsc_js" -p tsconfig.client.json --pretty false')
+    expect(clientReferences).toBeGreaterThan(aggregate)
+    expect(clientAggregate).toBeGreaterThan(clientReferences)
+    expect(wineGates).not.toContain('-b tsconfig.client.json')
+    expect(wineGates).toContain('  "$scratch/logs/client-references.log" \\')
+  })
+
+  it('runs only Wine for its manual suite and retains master-push scheduling', () => {
+    const master = loadWorkflow('.github/workflows/ci-master.yml')
+    if (!isRecord(master.on) || !isRecord(master.on.workflow_dispatch)
+      || !isRecord(master.on.workflow_dispatch.inputs) || !isRecord(master.on.workflow_dispatch.inputs.suite)
+      || !isRecord(master.jobs)) throw new TypeError('CI master must define manual suites and jobs')
+    expect(master.on.workflow_dispatch.inputs.suite.options).toEqual([
+      'larger-runner-benchmark', 'consolidated-runner-benchmark', 'ssh-helper', 'wine',
+    ])
+    const wine = workflowJob(master, 'windows')
+    if (typeof wine.if !== 'string') throw new TypeError('Wine must define a trigger condition')
+    for (const [event, ref, suite, expected] of [
+      ['push', 'refs/heads/master', '', true],
+      ['push', 'refs/heads/topic', '', false],
+      ['pull_request', 'refs/pull/42/merge', 'wine', false],
+      ['workflow_dispatch', 'refs/heads/topic', 'wine', true],
+      ['workflow_dispatch', 'refs/tags/dsh-v0.2.2-alpha.2', 'wine', true],
+      ['workflow_dispatch', 'refs/heads/topic', 'ssh-helper', false],
+      ['workflow_dispatch', 'refs/heads/topic', 'larger-runner-benchmark', false],
+      ['workflow_dispatch', 'refs/heads/topic', 'consolidated-runner-benchmark', false],
+    ] as const) {
+      expect(runInNewContext(wine.if, { github: { event_name: event, ref }, inputs: { suite } }, { timeout: 1000 })).toBe(expected)
+    }
+    const enabled = Object.entries(master.jobs).filter(([, job]) => {
+      if (!isRecord(job)) throw new TypeError('CI master jobs must be objects')
+      if (typeof job.if === 'boolean') return job.if
+      if (typeof job.if !== 'string') throw new TypeError('CI master jobs must define trigger conditions')
+      return runInNewContext(job.if, { github: { event_name: 'workflow_dispatch', ref: 'refs/heads/topic' }, inputs: { suite: 'wine' } }, { timeout: 1000 }) === true
+    }).map(([name]) => name)
+    expect(enabled).toEqual(['windows'])
   })
 
   it('cancels superseded master runs without changing the post-merge job inventory', () => {

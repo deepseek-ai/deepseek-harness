@@ -696,6 +696,22 @@ describe('LlmRuntime', () => {
     }])
   })
 
+  it('detaches advertised model badges, including their translations', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const translated = { text: { en: 'New', zh: '新' }, tone: 'info' as const }
+    const literal = { text: '1017', tone: 'neutral' as const }
+    ctx.llm.registerAdapter(['catalog'], new CatalogAdapter({ id: 'catalog', name: 'Catalog' }, [
+      { provider: 'catalog', id: 'new', name: 'New', badge: translated },
+      { provider: 'catalog', id: 'dated', name: 'Dated', badge: literal },
+    ]))
+    const [first, second] = await ctx.llm.listModels('catalog')
+    expect(first?.badge).toEqual(translated)
+    expect(first?.badge).not.toBe(translated)
+    expect(first?.badge?.text).not.toBe(translated.text)
+    expect(second?.badge).toEqual(literal)
+  })
+
   it('defaults adapters to their route name and an empty advisory model list', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)

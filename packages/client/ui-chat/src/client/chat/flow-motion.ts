@@ -23,6 +23,12 @@ export interface FlowMotionRows {
   reveal(element: HTMLElement): void
   /** @param element - row whose active transition should be cancelled without hiding it. */
   cancelMotion(element: HTMLElement): void
+  /**
+   * Hide a row at once, outside a motion scope; the owning viewport measures the layout first.
+   * @param element - visible row.
+   * @param commit - applies the hidden state.
+   */
+  hideNow?(element: HTMLElement, commit: () => void): void
 }
 
 /** Geometry captured before one fold batch changes its boxes. */
@@ -136,9 +142,13 @@ interface OwnedBox {
  * Create animation coordination without cross-viewport broadcasts.
  * @param driver - the viewport's driver for the next batch; null while detached.
  * @param foldingChanged - disable or restore this viewport's native scroll anchoring.
+ * @param beforeInstantHide - measures the layout before a row hides at once outside a motion scope.
  * @returns stable callbacks and cleanup for this viewport's animations.
  */
-export function createFlowMotion(driver: () => InputFoldDriver | null, foldingChanged: (active: boolean) => void): FlowMotion {
+export function createFlowMotion(
+  driver: () => InputFoldDriver | null, foldingChanged: (active: boolean) => void,
+  beforeInstantHide?: (element: HTMLElement) => void,
+): FlowMotion {
   const running = new Map<HTMLElement, () => void>()
   let folding = 0
   const foldIdleListeners = new Set<() => void>()
@@ -477,8 +487,13 @@ export function createFlowMotion(driver: () => InputFoldDriver | null, foldingCh
     for (const cancel of [...running.values()]) cancel()
   }
 
+  function hideNow(element: HTMLElement, commit: () => void): void {
+    beforeInstantHide?.(element)
+    commit()
+  }
+
   return {
-    collapse, reveal, cancelMotion, foldActive, onFoldIdle, cancelInput, resumeInput, clear,
+    collapse, reveal, cancelMotion, foldActive, onFoldIdle, cancelInput, resumeInput, clear, hideNow,
     inputActive: () => batch || (batchScheduled && [...boxes.values()].some(box => box.closing && batchMember(box))),
   }
 }
@@ -496,6 +511,7 @@ function useFlowTransition(motion: FlowMotionRows | undefined, grow: boolean): H
     if (hidden) {
       if (hiddenOrCollapsing(element)) return
       if (mounted && element.closest(MOTION_SCOPE) !== null && motion !== undefined) motion.collapse(element, commit)
+      else if (mounted && motion?.hideNow !== undefined) motion.hideNow(element, commit)
       else commit()
       return
     }

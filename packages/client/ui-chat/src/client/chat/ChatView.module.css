@@ -115,6 +115,13 @@
   transition: none;
 }
 
+/* A Turn's duration control renders empty until the Turn closes; its gap appears with it in the same
+   frame, so the layout below changes once instead of sliding after the control's own height. */
+.column[data-chat-motion] > [data-chat-flow-kind="turn-process"],
+.column[data-chat-motion] > :global([data-slot="conversation.chat.flow"]) > [data-chat-flow-kind="turn-process"] {
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .column[data-chat-motion] > :not([data-chat-motion]),
   .column[data-chat-motion] > :global([data-slot="conversation.chat.flow"]) > :not([data-chat-motion]) {
@@ -163,72 +170,21 @@
   :where(.column > :global([data-slot="conversation.chat.flow"]) > .flowItem[data-chat-flow-kind="steering"]) + .running {
     animation: running-enters-slot 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
+
+  /* An input fold runs the entrance at zero duration. The switch only changes
+     the duration of an entrance its structural change already created, as if
+     the entrance had it from its start: lifting the switch never replays an
+     entrance older than its duration, and setting it completes a running one.
+     The structural rule is wrapped in :where() so this rule outranks it. */
+  .column[data-input-fold] .running {
+    animation-duration: 0s;
+  }
 }
 
 @keyframes running-enters-slot {
   from {
     opacity: 0;
     translate: 0 calc(-44px - var(--dsh-content-font-delta, 0px));
-  }
-  40% {
-    opacity: 1;
-  }
-}
-
-/* While the running Step has no output, the status sits directly below the
-   input. When the first output row appears, the status enters its slot below
-   that row from where it stood: it travels the row's gap plus one 24px row,
-   which follows the content font size. The gap is 4px for a process row or
-   group header (the default declared on `.running`), 12px for a response, and
-   16px after the running Turn's process control, which renders empty until the
-   Turn closes, so it precedes a new Turn's first output. The default sits on
-   the single-class `.running` selector so both variants outrank it. Later
-   output keeps the same animation and does not restart it. */
-:is(.column, :global([data-slot="conversation.chat.flow"])) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))))[data-chat-group-part="response"] ~ .running {
-  --dsh-running-follow: calc(12px + 24px + var(--dsh-content-font-delta, 0px));
-}
-
-:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="turn-process"] + :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))) ~ .running {
-  --dsh-running-follow: calc(16px + 24px + var(--dsh-content-font-delta, 0px));
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  :where(.column > :global([data-slot="conversation.chat.flow"]) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
-    .flowItem:not([data-chat-flow-kind="user"]):not([data-chat-flow-kind="steering"]):not([data-chat-flow-kind="turn-trigger"]),
-  [data-chat-group-key]
-  )) ~ .running {
-    animation: running-follows-output 110ms cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  /* Switches only change the duration of a move its structural change already
-     created. A duration change applies as if the move had it from its start, so
-     turning a switch off never replays a move whose structural change is older
-     than the move's duration, and plays the remainder of one that is younger;
-     turning a switch on completes a running move at once. The structural rules
-     above are wrapped in :where() so these rules outrank them. An input fold
-     runs both moves at zero duration. */
-
-  .column[data-input-fold] .running {
-    animation-duration: 0s;
-  }
-
-  /* While the tail is pinned, following scrolls absorb output growth and the
-     status keeps its on-screen position, so the first-output slide runs at zero
-     duration. Admitted steering still passes its pending echo below the status,
-     so the steering entrance keeps its duration. */
-
-  .column[data-chat-tail-pinned] > :global([data-slot="conversation.chat.flow"]) > :nth-last-child(2 of :not([hidden]):not([data-pending-steering]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty)))):is(
-    .flowItem:not([data-chat-flow-kind="user"]):not([data-chat-flow-kind="steering"]):not([data-chat-flow-kind="turn-trigger"]),
-  [data-chat-group-key]
-  ) ~ .running {
-    animation-duration: 0s;
-  }
-}
-
-@keyframes running-follows-output {
-  from {
-    opacity: 0;
-    translate: 0 calc(-1 * var(--dsh-running-follow));
   }
   40% {
     opacity: 1;
@@ -260,11 +216,17 @@
   flex-direction: column;
   align-items: flex-start;
   --dsh-chat-flow-gap: 12px;
-  --dsh-running-follow: calc(4px + 24px + var(--dsh-content-font-delta, 0px));
   --dsw-alias-label-shimmer: var(--dsw-alias-label-deep-diving-shimmer);
   color: var(--dsw-alias-label-deep-diving);
   font-size: calc(var(--dsh-content-font-size, 14px) - 2px);
   line-height: calc(22px + var(--dsh-content-font-delta, 0px));
+}
+
+/* After the Session stops running and before the Turn's actions row arrives, the status keeps its slot
+   unseen so the tail does not shrink for that interval. */
+.running[data-holding] {
+  visibility: hidden;
+  opacity: 0;
 }
 
 /* The last visible row before the status must contain output, not an input.

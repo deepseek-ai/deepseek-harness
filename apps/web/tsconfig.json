@@ -23,6 +23,7 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
+    "tests/sidebar-drawer.e2e.ts",
     "tests/creation-recommendations.e2e.ts",
     "tests/plugin-recommendations.e2e.ts",
     "tests/japanese-plugin-metadata.e2e.ts",
@@ -127,7 +128,7 @@
     "tests/developer-tools-settings.e2e.ts",
     "tests/models-settings.e2e.ts",
     "tests/deepseek-messages-settings.e2e.ts",
-    "tests/deepseek-model-label-1017.e2e.ts",
+    "tests/model-badge.e2e.ts",
     "tests/deepseek-messages-chat.e2e.ts",
     "tests/models-settings-recovery.e2e.ts",
     "tests/default-model.e2e.ts",

@@ -1,0 +1,19 @@
+/* The same directory rows fit a portal menu and the changes pane's navigation column. */
+.root { box-sizing: border-box; width: 100%; min-width: 0; display: flex; flex-direction: column; min-height: 0; color: var(--dsw-alias-label-primary); font-size: 12px; }
+.search { padding: 8px; }
+.rows { overflow: auto; min-height: 0; padding: 0 4px 6px; }
+.row { box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; min-height: 30px; padding: 4px 6px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.row svg { flex: none; }
+.name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selected { background: var(--dsw-alias-interactive-bg-hover); }
+.chevron { display: inline-flex; flex: 0 0 12px; }
+.collapsed { transform: rotate(-90deg); }
+.empty { padding: 12px 8px; color: var(--dsw-alias-label-secondary); }
+.menu { width: min(360px, calc(100vw - 24px)); }
+.trigger { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; white-space: nowrap; cursor: pointer; }
+.trigger:disabled { color: var(--dsw-alias-label-tertiary); cursor: default; }
+@media (hover: hover) { .row:hover, .trigger:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); } }
+@media (pointer: coarse) { .row { min-height: 44px; } .search input { font-size: 16px; } }
+
+.searchInput { box-sizing: border-box; width: 100%; max-width: 100%; }
+.searchInput input::placeholder { color: var(--dsw-alias-label-secondary); }

@@ -55,7 +55,7 @@ function assistant(message: Message, model: string, onReplayDegrade?: (reason: s
  * @returns the Messages API JSON body.
  */
 export function serialize(
-  options: GenerateOptions, connection: Connection, history: readonly RequestMessage[],
+  options: GenerateOptions<string>, connection: Connection, history: readonly RequestMessage[],
   images: ReadonlyMap<ImageAttachmentRef['attachmentId'], RequestImageAttachment>, access: ImageAttachmentAccessResolver,
   onReplayDegrade?: (reason: string) => void,
   fileIds?: ReadonlyMap<ImageAttachmentRef['attachmentId'], DeepSeekFileId>,
