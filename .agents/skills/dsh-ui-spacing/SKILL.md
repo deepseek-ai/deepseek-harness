@@ -1,26 +1,20 @@
 ---
 name: dsh-ui-spacing
-description: Design or review DSH semantic grouping, internal and external spacing, repeated rhythm, and section separation. Apply before choosing gaps and when content wraps or expands.
+description: Design or review DSH semantic grouping, internal/external spacing and repeated rhythm, including wrapped or expanded content.
 ---
 
 # UI spacing and grouping
 
-Use this decision guidance within the [UI development loop](../dsh-client-ui-ux/SKILL.md#required-review-loop). Apply it to the affected groups in their page or modal context; examples are not a coverage list.
-
-Distance should explain which text, input, and action belong together before the reader needs a border.
+Apply within the [UI development loop](../dsh-client-ui-ux/SKILL.md#required-review-loop). Distance should explain which text, input and action belong together.
 
 ### Identify the group before choosing the gap
 
-Elements belong together because they describe one object, complete one action, or form one repeated unit. DOM siblings, equal backgrounds, or one React component do not establish that relationship. Write the grouping in ordinary language first: “title and description introduce this section”; “these three actions operate on this conversation”; “these cards form the members section, which is separate from the tasks section.” Then position the groups.
+Group elements by one object, action or repeated unit, not DOM siblings, background or React component. State that relationship before positioning. Check each nesting level independently; larger outer gaps do not require larger inner gaps.
 
-A group can contain smaller groups. In a model form, a checkbox and its label form an option; several options form an input-type field; that field joins other fields in one model; multiple models form the model list. Check spacing at each level. A very wide gap inside a higher-level layout does not require every lower-level gap to become larger.
+Without an explicit divider, comparable neighboring groups need visibly greater separation between groups than within them. Equality is only a lower bound against reversal. Repeated compositions share gaps, padding and alignment; label length does not justify unrelated spacing.
 
-For comparable neighboring groups without an explicit divider, the visible separation between groups must be greater than the gap joining elements inside each group. Equality is a lower bound against reversal, not the target when space is carrying the hierarchy. Repeated groups with the same composition share the same internal gap pattern, padding, and alignment. Different label lengths do not justify unrelated spacing rules.
+When wrapping, metadata, subgroups or independent actions increase complexity, increase enclosing separation enough to retain grouping. Do not derive gaps from card area or multiply every margin. Dividers and distinct surfaces may reinforce separation, but headings must remain closer to their own content than to preceding groups.
 
-As a group gains subgroups, wrapping, secondary metadata, or independent operations, its internal structure demands more separation from the next group. Increase the enclosing section gap enough to preserve that distinction. Do not compute space from card area or multiply every margin: a compact icon-and-label pair and a section of multi-line cards need different levels of spacing. A divider or distinct surface can reinforce the boundary, but it must not leave a heading visually attached to the preceding group.
+Judge actual whitespace at normal size, including padding, line-height, glyph whitespace and borders. CSS margin ratios alone do not establish grouping; explanatory labels need one unambiguous owner.
 
-Judge visible whitespace as well as CSS values. Button padding, line-height, glyph whitespace, borders, and margins all contribute. A declared 16px/8px margin pair can still produce an unclear heading relationship. At normal display size, the heading should appear closer to the content it introduces than to the previous section; an explanatory label should have one unambiguous owner.
-
-Use existing page spacing and [style tokens](../../../docs/web-styling.md); this skill does not create a numeric scale. Check shared axes with [alignment](../dsh-ui-alignment/SKILL.md).
-
-See [worked examples](../../../docs/ui-design-review-cases.md#grouping) when the relationship is unclear.
+Reuse page spacing and [style tokens](../../../docs/web-styling.md), preserve [alignment](../dsh-ui-alignment/SKILL.md) axes, and consult [cases](../../../docs/ui-design-review-cases.md#grouping) for uncertain judgments. This skill defines no numeric scale.
