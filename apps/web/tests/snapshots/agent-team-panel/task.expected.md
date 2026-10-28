@@ -1,10 +1,14 @@
 - dialog "Subagent sessions":
+  - heading "Subagents" [level=3]
+  - text: 1 external
   - tree "Subagent sessions":
     - 'treeitem "Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. researcher · External task" [disabled] [level=1]': "Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. researcher"
   - region "Task board":
-    - heading "Shared tasks 1" [level=3]
-    - article:
-      - strong: Agent task
-      - text: In progress
-      - paragraph: Created by the root agent
-      - text: "task-2Owner: LeadWrite scopes: src/web"
+    - heading "Shared tasks 1 in progress" [level=3]
+    - list:
+      - listitem:
+        - button "In progress Agent task" [expanded]:
+          - img "In progress"
+          - text: Agent task
+        - paragraph: Created by the root agent
+        - paragraph: "Owner: Lead"

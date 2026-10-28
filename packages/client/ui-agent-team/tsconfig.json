@@ -17,9 +17,12 @@
     { "path": "../locale/tsconfig.client.json" },
     { "path": "../store" },
     { "path": "../ui-conversation/tsconfig.client.json" },
+    { "path": "../ui-chat/tsconfig.client.json" },
+    { "path": "../../util/values" },
     { "path": "../ui-primitives" },
     { "path": "../ui-renderer" },
     { "path": "../ui-slots" },
-    { "path": "../../core/session" }
+    { "path": "../../core/session" },
+    { "path": "../../subagent/subagent-names" }
   ]
 }

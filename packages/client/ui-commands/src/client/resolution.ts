@@ -13,7 +13,7 @@ const BUILTINS = {
   export: '@deepseek-ai/dsh-session-log-export',
 } as const
 
-/** Names whose first-party definitions have localized client presentation. */
+/** Names whose first-party definitions have localized input spellings. */
 export type BuiltinCommandName = keyof typeof BUILTINS
 
 /**

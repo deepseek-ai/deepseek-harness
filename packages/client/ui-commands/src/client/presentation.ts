@@ -2,7 +2,7 @@
 import type { ComponentType } from 'react'
 import type { InputTriggerCandidate } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import {
-  IconUsersOutlineRegular, IconCompactOutlineRegular, IconDownloadOutlineRegular,
+  IconCompactOutlineRegular, IconDownloadOutlineRegular,
   IconGoalOutlineRegular, IconPaperPlaneOutlineRegular, IconPlanOutlineRegular,
   PermissionIconFullAccessRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -30,7 +30,7 @@ interface HostFace {
 }
 
 /** One built-in Host command's face, keyed by its dictionary entries. */
-function hostFace(name: BuiltinCommandName, icon: ComponentType<IconProps>): readonly [BuiltinCommandName, HostFace] {
+function hostFace(name: Exclude<BuiltinCommandName, 'team'>, icon: ComponentType<IconProps>): readonly [BuiltinCommandName, HostFace] {
   return [name, {
     label: `label.${name}`,
     description: `description.${name}`,
@@ -40,7 +40,6 @@ function hostFace(name: BuiltinCommandName, icon: ComponentType<IconProps>): rea
 
 /** Built-in Host commands whose client face this package owns. */
 const HOST_FACES: ReadonlyMap<BuiltinCommandName, HostFace> = new Map([
-  hostFace('team', IconUsersOutlineRegular),
   hostFace('goal', IconGoalOutlineRegular),
   hostFace('plan', IconPlanOutlineRegular),
   hostFace('feedback', IconPaperPlaneOutlineRegular),
@@ -53,8 +52,8 @@ const HOST_FACES: ReadonlyMap<BuiltinCommandName, HostFace> = new Map([
  * The localized menu face of a catalog row.
  * @param descriptor - effective Host command descriptor.
  * @param t - the `command` namespace translator.
- * @returns title, description, and glyph for a built-in command; undefined
- * for any other row, which keeps its catalog description.
+ * @returns title, description, and glyph when the built-in command has a menu
+ * face; undefined otherwise.
  */
 export function builtinRowFace(
   descriptor: CommandDescriptor,

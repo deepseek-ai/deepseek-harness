@@ -33,7 +33,7 @@ import type { CommandDescriptor } from './directory.ts'
 import { CommandDirectory } from './directory.ts'
 import { PopupSelectController } from './popup.ts'
 import { builtinRowFace, sectionRows } from './presentation.ts'
-import { claimToken } from './resolution.ts'
+import { builtinCommandName, claimToken } from './resolution.ts'
 import type { TokenSegment } from './popup.ts'
 
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
@@ -218,8 +218,8 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
 
   /**
    * Menu candidates: host catalog + contribution availability, built-in rows
-   * localized, then position filtering; sections for an empty query, the
-   * shared name-and-label ranking for a typed one.
+   * localized except for the hidden built-in Team command, then position
+   * filtering; sections for an empty query, shared ranking for a typed one.
    */
   private async candidates(session: ClientSessionContext, req: CandidateRequest): Promise<readonly InputTriggerCandidate[]> {
     const list = await this.directory.ensureReady(session.sessionId, req.signal)
@@ -227,6 +227,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     const seen = new Set<string>()
     for (const c of list) {
       seen.add(c.name)
+      if (builtinCommandName(c) === 'team') continue
       rows.push({
         name: c.name,
         ...(builtinRowFace(c, this.t) ?? { description: c.description }),

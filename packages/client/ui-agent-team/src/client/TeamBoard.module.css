@@ -1,150 +1,165 @@
-.count {
-  color: var(--dsw-alias-label-caption);
-  font-size: 12px;
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-  line-height: 16px;
-}
-
 .board {
-  padding: 8px 8px 4px;
+  min-width: 0;
+  padding: 8px 7px;
 }
 
-.withMembers {
-  margin-top: 8px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
+.board[data-with-members='true'] {
+  margin-top: 4px;
 }
 
-.taskTitle {
+.header {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px 7px;
+  margin: 0 0 4px;
+  padding: 0;
 }
 
-.taskTitle strong {
-  font-size: 13px;
-  font-weight: 500;
+.lead,
+.glyph,
+.chevron {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--dsw-alias-label-tertiary);
 }
 
-.board h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 8px;
+.title {
+  flex: none;
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
   font-weight: 500;
+  line-height: 24px;
 }
 
-.meta {
+.progress {
+  margin-inline-start: 4px;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-}
-
-.error {
-  color: var(--dsw-alias-state-error-primary);
+  font-size: 13px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+  overflow-wrap: anywhere;
 }
 
 .tasks {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-}
-
-.emptyNotice {
-  margin: 0 0 8px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .task {
-  overflow-wrap: anywhere;
-  padding: 11px 13px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-lg);
-  background: var(--dsw-alias-bg-layer-2);
+  min-width: 0;
 }
 
-.taskState {
-  display: inline-flex;
+.taskRow {
+  box-sizing: border-box;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-}
-
-.task p {
-  margin: 5px 0;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
-  white-space: pre-wrap;
-}
-
-.clampedDescription {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.expandToggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  /* Floated ahead of the meta spans: it keeps the first line's top-right
-     corner, so wrapped meta lines continue below it instead of pushing the
-     toggle under content it expands. */
-  float: right;
-  margin-left: 10px;
-  padding: 0;
+  gap: 7px;
+  width: calc(100% + 12px);
+  min-width: 0;
+  margin: 0 -6px;
+  padding: 7px 6px;
   border: 0;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 17px;
+  text-align: left;
   cursor: pointer;
 }
 
-.expandToggle:focus-visible {
-  color: var(--dsw-alias-label-primary);
+.taskRow:focus-visible {
+  outline: none;
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 @media (hover: hover) {
-  .expandToggle:hover {
-    color: var(--dsw-alias-label-primary);
+  .taskRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
-.expandToggle svg {
-  transition: transform 120ms ease;
+.glyph {
+  width: 14px;
+  height: 17px;
 }
 
-.expandToggleOpen {
+.subject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task[data-expanded='true'] .taskRow {
+  align-items: flex-start;
+}
+
+.task[data-expanded='true'] .subject {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.task[data-expanded='true'] .chevron {
   transform: rotate(180deg);
 }
 
-.meta {
-  line-height: 20px;
+.chevron {
+  width: 28px;
+  height: 17px;
 }
 
-.meta > span {
-  margin-right: 10px;
+.details {
+  padding: 0 0 8px 21px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
 }
 
-.notice,
+.description {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.owner {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.description + .owner {
+  margin-top: 6px;
+}
+
+.ownerLabel {
+  flex: none;
+}
+
+.ownerValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .error {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 8px 0;
+  color: var(--dsw-alias-state-error-primary);
   font-size: 12px;
-}
-
-@media (hover: none) {
-  .memberModel {
-    display: inline;
-  }
+  line-height: 18px;
+  overflow-wrap: anywhere;
 }

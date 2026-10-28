@@ -7,6 +7,7 @@ import { TeamModeToggle, type TeamModeToggleInjected } from '../src/client/TeamM
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { TeamBoard } from '../src/client/TeamBoard.tsx'
+import { TeamCommandRow } from '../src/client/TeamCommandRow.tsx'
 import { TeamDisableConfirmation, type TeamDisableConfirmationInjected } from '../src/client/TeamDisableConfirmation.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as nodeApply } from '../src/index.ts'
@@ -108,6 +109,27 @@ describe('task-board browser plugin', () => {
     expect(entry()).toBeUndefined()
     expect(overlayEntry()).toBeUndefined()
     expect(request.getSnapshot()).toBeNull()
+  })
+
+  it('binds Team command receipts to the command slot lifetime without Remote services', async () => {
+    const b = await bench()
+    const entry = () => b.ctx.slots.entries('conversation.chat.commandview').find(value => value.component === TeamCommandRow)
+    expect(entry()).toBeUndefined()
+    b.collapseHeader()
+    const registerParent = () => b.ctx.slots.register({
+      name: 'root',
+      children: { 'conversation.chat.commandview': { kind: 'keyed', scope: 'session' } },
+    } as never, () => null)
+    const collapse = registerParent()
+    await vi.waitFor(() => { expect(entry()).toBeDefined() })
+    expect(entry()).toMatchObject({ options: { key: 'team' }, locale: 'agent-team' })
+    expect(entry()!.inject).toBeUndefined()
+    collapse()
+    expect(entry()).toBeUndefined()
+    registerParent()
+    await vi.waitFor(() => { expect(entry()).toBeDefined() })
+    await b.fiber.dispose()
+    expect(entry()).toBeUndefined()
   })
 
   it('keeps the node half inert', () => {

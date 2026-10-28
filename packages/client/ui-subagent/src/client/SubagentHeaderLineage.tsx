@@ -7,7 +7,8 @@ import {
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconRefreshOutlineRegular, MenuSurface, StateDot, Tooltip,
+  IconChevronRightOutlineRegular, IconRefreshOutlineRegular, IconUsersOutlineRegular,
+  IconCheckOutlineRegular, MenuSurface, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
@@ -208,6 +209,32 @@ function isKnownLeaf(catalog: SubagentCatalogSnapshot | undefined): boolean {
   return catalog?.state === 'ready' && catalog.entries.length === 0
 }
 
+/** Only a local child's last closed, normally completed turn receives the completed marker. */
+function completedEntry(entry: SubagentCatalogSnapshot['entries'][number], summary: SessionSummary | undefined): boolean {
+  return entry.mode !== 'external' && entry.activity === 'inactive'
+    && summary?.projectionValues?.subagentTiming?.lastTurnCompleted === true
+}
+
+/** Count direct catalog members without treating external or other inactive entries as completed. */
+function catalogProgress(entries: SubagentCatalogSnapshot['entries'], summaries: CatalogRowsProps['summaries'], t: TranslateNS<typeof NS>): string {
+  let completed = 0
+  let active = 0
+  let inactive = 0
+  let external = 0
+  for (const entry of entries) {
+    if (entry.mode === 'external') external++
+    else if (entry.activity === 'running') active++
+    else if (completedEntry(entry, summaries[entry.id])) completed++
+    else inactive++
+  }
+  return [
+    ...completed > 0 ? [t('progress.completed', { count: completed })] : [],
+    ...active > 0 ? [t('progress.active', { count: active })] : [],
+    ...inactive > 0 ? [t('progress.inactive', { count: inactive })] : [],
+    ...external > 0 ? [t('progress.external', { count: external })] : [],
+  ].join('\u2002·\u2002')
+}
+
 /** Render one catalog level and recurse only through explicitly expanded rows. */
 function CatalogRows({
   parentSessionId, currentSessionId, catalog, catalogs, summaries, expanded, level,
@@ -261,8 +288,7 @@ function CatalogRows({
         const secondaryLabel = description ? label : undefined
         const mode = external ? t('mode.external') : entry.mode === 'unknown' ? t('mode.unknown')
           : entry.mode === 'one-shot' ? t('mode.oneShot') : t('mode.continuable')
-        const completed = !external && entry.activity === 'inactive'
-          && summary?.projectionValues?.subagentTiming?.lastTurnCompleted === true
+        const completed = completedEntry(entry, summary)
         const activity = external ? undefined : entry.activity === 'running'
           ? t('activity.running')
           : completed
@@ -351,11 +377,11 @@ function CatalogRows({
                   <StateDot state={entry.activity === 'running' ? 'ongoing' : completed ? 'done' : 'idle'} />
                 </span>
                 <span className={css.content}>
-                  <Tooltip label={primaryLabel} onlyWhenClipped portal side="top">
+                  <Tooltip label={primaryLabel} onlyWhenClipped delayMs={500} portal side="top">
                     <span className={`${css.label} ${isCurrent ? css.currentLabel : ''}`}>{primaryLabel}</span>
                   </Tooltip>
                   {secondaryLabel !== undefined && (
-                    <Tooltip label={secondaryLabel} onlyWhenClipped portal side="top">
+                    <Tooltip label={secondaryLabel} onlyWhenClipped delayMs={500} portal side="top">
                       <span className={css.secondaryLabel}>{secondaryLabel}</span>
                     </Tooltip>
                   )}
@@ -374,10 +400,14 @@ function CatalogRows({
                     )}
                   </span>
                 )}
-                {isCurrent || external
-                  ? <span className={css.sidebarSpace} />
-                  : (
-                    <Tooltip label={t('open.sidebar')} side="bottom" align="end">
+                {isCurrent
+                  ? (
+                    <span className={`${css.sidebarSpace} ${css.currentCheck}`} aria-hidden data-subagent-current>
+                      <IconCheckOutlineRegular size={16} />
+                    </span>
+                  )
+                  : external ? <span className={css.sidebarSpace} /> : (
+                    <Tooltip label={t('open.sidebar')} delayMs={500} side="bottom" align="end">
                       <button
                         type="button"
                         className={css.sidebarButton}
@@ -436,7 +466,8 @@ interface CatalogDropdownSharedProps extends InjectFace<SubagentCatalogInjected>
   useSessions: SubagentHeaderLineageProps['useSessions']
   useSessionStatus: SubagentHeaderLineageProps['useSessionStatus']
   t: TranslateNS<typeof NS>
-  withBoard?: boolean
+  /** Section labels are useful only beside a visible shared-task list. */
+  hasSharedTasks?: boolean
   /** Retain an empty catalog's entry for shared tasks or a task-board error. */
   hasBoardContent?: boolean
   renderFooter?: () => ReactNode
@@ -465,9 +496,9 @@ type CatalogDropdownProps = CatalogDropdownSharedProps & (
 const MENU_VIEWPORT_MARGIN = 16
 
 /** Place a portaled catalog below its trigger without crossing the viewport edge. */
-function catalogMenuPosition(trigger: HTMLButtonElement, withBoard: boolean): CSSProperties {
+function catalogMenuPosition(trigger: HTMLButtonElement): CSSProperties {
   const rect = trigger.getBoundingClientRect()
-  const width = Math.min(withBoard ? 500 : 336, window.innerWidth - MENU_VIEWPORT_MARGIN * 2)
+  const width = Math.min(360, window.innerWidth - MENU_VIEWPORT_MARGIN * 2)
   return {
     top: rect.bottom + 5,
     left: Math.min(
@@ -481,7 +512,7 @@ function catalogMenuPosition(trigger: HTMLButtonElement, withBoard: boolean): CS
 function CatalogDropdown(props: CatalogDropdownProps) {
   const {
     rootSessionId, currentSessionId, displayTitle, openTitle, variant,
-    useSessions, useSessionStatus, openChild, openChildAside, refreshProjection, t, withBoard = false,
+    useSessions, useSessionStatus, openChild, openChildAside, refreshProjection, t, hasSharedTasks = false,
   } = props
   const ancestorSwitcher = variant === 'switcher' && openTitle !== undefined
   const projections = useSessions(state => state.projectionsBySession)
@@ -513,6 +544,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
   const [expanded, setExpanded] = useState<ReadonlySet<SessionId>>(() => new Set())
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const countRef = useRef<HTMLSpanElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const hoverOpenTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const hoverCloseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -522,14 +554,15 @@ function CatalogDropdown(props: CatalogDropdownProps) {
     ? undefined
     : catalog?.entries.find(entry => entry.id === currentSessionId)
   const switcherDisplayTitle = currentEntry !== undefined
-    ? currentEntry.name ?? currentEntry.label ?? currentEntry.id
+    ? currentEntry.label || currentEntry.name || currentEntry.id
     : displayTitle
   const directChildren = catalog?.entries ?? []
   const directCount = directChildren.length
   const runningCount = directChildren.filter(entry => entry.activity === 'running').length
+  const progress = catalogProgress(directChildren, summaries, t)
   const totalCountKey = directCount === 1 ? 'count.total.one' : 'count.total.other'
   const runningCountKey = runningCount === 1 ? 'count.running.one' : 'count.running.other'
-  const presentedCatalog: SubagentCatalogSnapshot | undefined = catalog ?? (variant === 'switcher' || withBoard
+  const presentedCatalog: SubagentCatalogSnapshot | undefined = catalog ?? (variant === 'switcher' || props.hasBoardContent
     ? { entries: [], state: 'loading', error: null }
     : undefined)
 
@@ -553,7 +586,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
       /* v8 ignore next -- a queued callback can outlive the trigger */
       if (trigger === null) return
       setOpen(true)
-      setMenuPosition(catalogMenuPosition(trigger, withBoard))
+      setMenuPosition(catalogMenuPosition(trigger))
     }
     else {
       pinnedRef.current = false
@@ -564,13 +597,17 @@ function CatalogDropdown(props: CatalogDropdownProps) {
     if (restoreFocus) queueMicrotask(() => { triggerRef.current?.focus() })
   }
 
+  // CSS owns the header-width breakpoint; interaction reads its result only when scheduling hover.
+  const allowsHoverOpen = (): boolean => variant === 'switcher'
+    || (countRef.current !== null && getComputedStyle(countRef.current).display !== 'none')
+
   const scheduleHoverOpen = (): void => {
     cancelHoverOpen()
     cancelHoverClose()
-    if (open) return
+    if (open || !allowsHoverOpen()) return
     hoverOpenTimer.current = setTimeout(() => {
       hoverOpenTimer.current = undefined
-      changeOpen(true)
+      if (allowsHoverOpen()) changeOpen(true)
     }, 150)
   }
 
@@ -637,7 +674,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
       const trigger = triggerRef.current
       /* v8 ignore next -- native resize or scroll can outlive the trigger */
       if (trigger === null) return
-      setMenuPosition(catalogMenuPosition(trigger, withBoard))
+      setMenuPosition(catalogMenuPosition(trigger))
     }
     placeMenu()
     window.addEventListener('resize', placeMenu)
@@ -646,7 +683,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
       window.removeEventListener('resize', placeMenu)
       document.removeEventListener('scroll', placeMenu, true)
     }
-  }, [open, withBoard])
+  }, [open])
 
   useEffect(() => () => {
     cancelHoverOpen()
@@ -704,63 +741,70 @@ function CatalogDropdown(props: CatalogDropdownProps) {
       onKeyDown={navigate}
       onPointerLeave={scheduleHoverClose}
     >
-      <button
-        ref={triggerRef}
-        onPointerEnter={(event) => {
-          if (event.pointerType !== 'touch') scheduleHoverOpen()
-        }}
-        type="button"
-        className={variant === 'switcher'
-          ? `${css.switcherTrigger} ${ancestorSwitcher ? css.ancestorSwitcherTrigger : ''}`
-          : css.trigger}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={variant === 'switcher'
-          ? t('switcher.aria', { title: switcherDisplayTitle })
-          : t(
-            runningCount > 0 ? runningCountKey : totalCountKey,
-            { count: runningCount > 0 ? runningCount : directCount },
-          )}
-        onClick={openTitle === undefined
-          ? () => {
-            cancelHoverOpen()
-            cancelHoverClose()
-            pinnedRef.current = true
-            if (!open) changeOpen(true)
-            queueMicrotask(() => { menuRef.current?.focus() })
-          }
-          : () => {
-            cancelHoverOpen()
-            if (open) changeOpen(false)
-            openTitle()
-          }}
-        onKeyDown={(event) => {
-          if (event.key !== 'ArrowDown') return
-          event.preventDefault()
-          if (!open) changeOpen(true)
-          queueMicrotask(() => { focusAt(0) })
-        }}
+      <Tooltip
+        label={t(totalCountKey, { count: directCount })}
+        disabled={open || variant === 'switcher'}
+        delayMs={500} portal side="bottom"
       >
-        {variant === 'switcher'
-          ? <span className={css.switcherTitle}>{switcherDisplayTitle}</span>
-          : (
-            <>
-              {runningCount > 0 && (
-                <span className={css.activitySlot}>
-                  <StateDot state="ongoing" />
+        <button
+          ref={triggerRef}
+          onPointerEnter={(event) => {
+            if (event.pointerType !== 'touch') scheduleHoverOpen()
+          }}
+          type="button"
+          className={variant === 'switcher'
+            ? `${css.switcherTrigger} ${ancestorSwitcher ? css.ancestorSwitcherTrigger : ''}`
+            : css.trigger}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label={variant === 'switcher'
+            ? t('switcher.aria', { title: switcherDisplayTitle })
+            : t(
+              runningCount > 0 ? runningCountKey : totalCountKey,
+              { count: runningCount > 0 ? runningCount : directCount },
+            )}
+          onClick={openTitle === undefined
+            ? () => {
+              cancelHoverOpen()
+              cancelHoverClose()
+              if (variant === 'count' && !allowsHoverOpen() && open) {
+                changeOpen(false, true)
+                return
+              }
+              pinnedRef.current = true
+              if (!open) changeOpen(true)
+              queueMicrotask(() => { menuRef.current?.focus() })
+            }
+            : () => {
+              cancelHoverOpen()
+              if (open) changeOpen(false)
+              openTitle()
+            }}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowDown') return
+            event.preventDefault()
+            if (variant === 'count' && !allowsHoverOpen()) pinnedRef.current = true
+            if (!open) changeOpen(true)
+            queueMicrotask(() => { focusAt(0) })
+          }}
+        >
+          {variant === 'switcher'
+            ? <span className={css.switcherTitle}>{switcherDisplayTitle}</span>
+            : (
+              <>
+                <span className={css.activitySlot} aria-hidden>
+                  {runningCount > 0 ? <StateDot state="ongoing" /> : <IconUsersOutlineRegular size={14} />}
                 </span>
-              )}
-              <span className={css.count}>{t(totalCountKey, { count: directCount })}</span>
-            </>
-          )}
-        {variant === 'switcher'
-          ? <SubagentSwitcherIcon />
-          : <IconChevronDownOutlineRegular className={open ? css.triggerOpen : undefined} />}
-      </button>
+                <span ref={countRef} className={css.count} data-subagent-count>{t(totalCountKey, { count: directCount })}</span>
+              </>
+            )}
+          {variant === 'switcher' && <SubagentSwitcherIcon />}
+        </button>
+      </Tooltip>
       {open && createPortal((
         <MenuSurface
           ref={menuRef}
-          className={`${css.menu} ${withBoard ? css.menuWithBoard : ''}`}
+          className={css.menu}
           style={menuPosition}
           role="dialog"
           tabIndex={-1}
@@ -772,6 +816,16 @@ function CatalogDropdown(props: CatalogDropdownProps) {
           onPointerLeave={scheduleHoverClose}
         >
           <div className={css.menuBody}>
+            {hasSharedTasks && (
+              <div className={css.sectionHeader} data-subagent-section-header>
+                <span className={css.sectionIcon} aria-hidden><IconUsersOutlineRegular size={14} /></span>
+                <h3 className={css.sectionTitle}>{t('section.title')}</h3>
+                {progress && <span className={css.sectionProgress}>{progress}</span>}
+              </div>
+            )}
+            {hasSharedTasks && presentedCatalog.state === 'ready' && directCount === 0 && (
+              <p className={css.sectionEmpty}>{t('section.empty')}</p>
+            )}
             <div role="tree" aria-label={t('tree.aria')}>
               <CatalogRows
                 parentSessionId={rootSessionId}
@@ -822,17 +876,17 @@ function RootCatalogAction({
   sessionId, useProjection, useSessions, useSessionStatus, useFooterAvailable,
   openChild, openChildAside, refreshProjection, t, renderSlot,
 }: SubagentCatalogActionProps) {
-  const teamEnabled = useProjection('agentTeam', team => team?.enabled === true)
-  const hasBoardContent = useProjection('agentTeam', team => team?.enabled === true
-    && (team.tasks.length > 0 || team.failure !== undefined))
+  const hasSharedTasks = useProjection('agentTeam', team => team?.enabled === true
+    && team.tasks.some(task => task.status !== 'deleted'))
+  const hasTaskFailure = useProjection('agentTeam', team => team?.enabled === true && team.failure !== undefined)
   const footerAvailable = useFooterAvailable(value => value)
   return (
     <CatalogDropdown
       key={sessionId}
       rootSessionId={sessionId}
       variant="count"
-      withBoard={footerAvailable && teamEnabled}
-      hasBoardContent={footerAvailable && hasBoardContent}
+      hasSharedTasks={footerAvailable && hasSharedTasks}
+      hasBoardContent={footerAvailable && (hasSharedTasks || hasTaskFailure)}
       renderFooter={() => renderSlot('conversation.session.header.actions.subagent.footer', {})}
       useSessions={useSessions}
       useSessionStatus={useSessionStatus}

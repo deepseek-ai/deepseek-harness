@@ -13,6 +13,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TeamDisableConfirmation, type TeamDisableConfirmationInjected, type TeamDisableRequest } from './TeamDisableConfirmation.tsx'
 import { TeamModeToggle, type TeamModeToggleInjected } from './TeamModeToggle.tsx'
 import { TeamBoard } from './TeamBoard.tsx'
+import { TeamCommandRow } from './TeamCommandRow.tsx'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type TeamKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -32,6 +33,9 @@ export const inject = ['slots', 'locale']
  */
 export function registerAgentTeamUi(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'client-ui-agent-team: dictionaries')
+  ctx.slots.inject('conversation.chat.commandview', () => ctx.slots.register({
+    name: 'conversation.chat.commandview', key: 'team', locale: NS,
+  }, TeamCommandRow))
   ctx.inject(['remote', 'remote.commands'], (scope) => {
     scope.slots.inject('shell.overlay', function* () {
       const disableRequest = createSnapshotStore<TeamDisableRequest | null>(null)
