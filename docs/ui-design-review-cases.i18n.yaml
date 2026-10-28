@@ -12,11 +12,11 @@
   en: 75120a3fd02294c9
   zh: 498343d7b9b30e46
 /ui-design-principles-and-review-cases/table-of-contents:
-  en: 683b785991a7952d
-  zh: e0a9f88db5cf9c45
+  en: c5680dfc600a7495
+  zh: c76ec05c69f1e93c
 /ui-design-principles-and-review-cases/what-a-review-must-judge:
-  en: e51c9f121c18c998
-  zh: 93b35a247216be09
+  en: eeff4a5f5e487908
+  zh: 51eab38ccd10190b
 /ui-design-principles-and-review-cases/review-the-entire-page-or-modal-as-one-unit:
   en: 324c8d9a0ff36ebb
   zh: 3a4c64e15b59f98f
@@ -36,8 +36,8 @@
   en: f8b0f72251aa044f
   zh: a8b05ce5f3da4221
 /ui-design-principles-and-review-cases/principle-examples:
-  en: 1ff7bb879b274363
-  zh: 4659578bcdea82a3
+  en: 7b8a8bdc5acc11d6
+  zh: 96820c11d2e61787
 /ui-design-principles-and-review-cases/1-alignment:
   en: 31d18363696173e9
   zh: d2bbca62e7ea0120
@@ -51,14 +51,20 @@
   en: 81d165cc1c5c1f7e
   zh: 4aef022e141ced64
 /ui-design-principles-and-review-cases/1-alignment/example-a3-alignment-between-rows-and-compound-controls:
-  en: 0f387b953c8c3e34
-  zh: 5362d3467a65ec59
+  en: 9e7fae1a4e649ffd
+  zh: c3992d7dbedbb247
 /ui-design-principles-and-review-cases/1-alignment/example-a4-centering-a-content-group-within-its-container:
   en: 478771b47daf2cba
   zh: 0eee64751cff6c94
 /ui-design-principles-and-review-cases/1-alignment/example-a5-visible-size-and-center-of-peer-controls:
-  en: dbbb588cbae149f0
-  zh: 1352a6eb01d8340f
+  en: 376359e2a1de44e9
+  zh: 2a0b0e4472efefb7
+/ui-design-principles-and-review-cases/1-alignment/example-a6-text-starts-across-triggers-and-menus:
+  en: 1afbbce3f4908bf2
+  zh: aaf54b32b90a2c82
+/ui-design-principles-and-review-cases/1-alignment/example-a7-choosing-the-close-control-edge:
+  en: c5e9a409c13637bc
+  zh: 37c915f187d6e9f7
 /ui-design-principles-and-review-cases/2-spatial-grouping:
   en: f50b8851f4ee2ac3
   zh: 63076543756c294e
@@ -90,8 +96,8 @@
   en: 56ecb557d54c1c2e
   zh: ede48f8451af4111
 /ui-design-principles-and-review-cases/4-information-hierarchy/example-c1-color-emphasis-within-one-information-unit:
-  en: ae07e8886d00c5bb
-  zh: 1229ab4ae6394c0b
+  en: c17aea1873e9a1a6
+  zh: dc7a8df8a60e582d
 /ui-design-principles-and-review-cases/5-control-states:
   en: d247699132b484a0
   zh: b71e25d834ce2633
@@ -105,8 +111,11 @@
   en: 21c39c7bbfd87382
   zh: e30f9a6593b32265
 /ui-design-principles-and-review-cases/7-icon-optics/example-o1-optical-alignment-of-different-icon-types:
-  en: 3301d847dac58dc9
-  zh: 1eba9e56df9a39f2
+  en: 3858a85bdf6ee111
+  zh: 9c8242a594df069f
+/ui-design-principles-and-review-cases/7-icon-optics/example-o2-shared-artwork-at-different-consumer-sizes:
+  en: 6f29eb80bfe3baf4
+  zh: eb3161af01dd752e
 /ui-design-principles-and-review-cases/8-control-geometry-and-corner-relationships:
   en: 262cfa8e7dfb969f
   zh: 4987ad06db795885

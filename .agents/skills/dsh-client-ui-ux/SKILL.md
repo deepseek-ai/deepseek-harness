@@ -56,7 +56,7 @@ Read alignment and spacing before layout changes; otherwise select the applicabl
 
 ## Reuse before adding
 
-Extend existing components, containers and interactions when the capability fits. Register right-sidebar content in the existing sidebar. Follow [icon reuse](../dsh-ui-icons/SKILL.md#reuse-existing-icons-first). Before restructuring, read [client instructions](../../../packages/client/AGENTS.md) and [client defensive patterns](../../../docs/defensive-patterns/client-components.md) for component/state ownership and layering.
+Extend existing components, containers and interactions when the capability fits. Register right-sidebar content through a slot in the existing sidebar; do not create a separate sidebar. Follow [icon reuse](../dsh-ui-icons/SKILL.md#reuse-existing-icons-first). Before restructuring, read [client instructions](../../../packages/client/AGENTS.md) and [client defensive patterns](../../../docs/defensive-patterns/client-components.md) for component/state ownership and layering.
 
 ## Visual foundation
 
@@ -64,7 +64,7 @@ Extend existing components, containers and interactions when the capability fits
 - Verify colors in light and dark themes; keep ink/background pairs readable, especially dimmed text.
 - Feature CSS you add or change uses **font weight ≤500**; emphasize with size or ink. ui-theme markdown typography tokens are the exception.
 - Use theme typography roles, then the page's scale, then a comparable page's size/spacing ratios. Do not invent a size for a single element. Peers share sizes; keep the scale small (13px is the established row/detail size).
-- Apply alignment and icon rules to icon/text relationships.
+- Apply [alignment](../dsh-ui-alignment/SKILL.md) and the [same-foreground rule](../dsh-ui-icons/SKILL.md#placement-and-use) to icon/text relationships, including value chevrons and search prompts.
 
 ## Component geometry
 

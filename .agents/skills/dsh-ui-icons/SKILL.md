@@ -13,7 +13,7 @@ Search the library and comparable UI for the intended meaning and supported vari
 
 Draw only when existing artwork cannot express the meaning or the user requests a distinct design. Before drawing, explain the closest alternatives and the unmet meaning or requested design difference. New glyphs require designer approval before landing; requested drafts can be prepared locally. Do not redraw a shared glyph to fix one consumer.
 
-The [primitives catalog](../../../packages/client/ui-primitives/README.md#component-catalog) and icon source own available variants and stroke values; [official artwork](../dsh-official-plugin-artwork/SKILL.md) owns package artwork.
+The [primitives icon contract](../../../packages/client/ui-primitives/README.md#controls-and-icons) and icon source own available variants, stroke scaling and menu sizes; [official artwork](../dsh-official-plugin-artwork/SKILL.md) owns package artwork.
 
 ## System style
 
@@ -21,6 +21,18 @@ The [primitives catalog](../../../packages/client/ui-primitives/README.md#compon
 - Use simple geometry and restrained rounding. Around 1px at a 16px design size is a starting point for softened corners, not a rule for every turn. Preserve useful sharp corners.
 - Default to monochrome outlines inheriting `currentColor`, without gradients, shadows, textures or 3D effects. Preserve intentional fills, status dots, selected marks and knockouts. File, site, plugin and brand artwork retain their own palettes and roles.
 - Balance structure and whitespace without requiring symmetry; avoid accidental tilt or a top-heavy silhouette. Preserve meaningful direction. Use gaps, overlap, nesting and broken obscured lines to clarify complex meanings; avoid accidental tangencies, dark knots and disappearing gaps at actual size. Add contour detail only when it improves recognition; do not force every subject into a closed outline.
+
+## Optical size and clarity before implementation
+
+Use the owning control's supported size and weight. [Shared menu sizes and stroke scaling](../../../packages/client/ui-primitives/README.md#controls-and-icons) belong to primitives; [permission triggers](../../../packages/client/ui-permission-presets/README.md) and [settings navigation](../../../packages/client/ui-settings-general/README.md) belong to their feature packages. A reviewed proposal for a larger or heavier trigger is not a statement that every existing consumer already uses it. Compare at the owning control's size, weight, colors and label, using an outlined circle and rectangular control as references. Open silhouettes may need more extent than dense fills; supporting chevrons, handles and dots keep their roles. Do not normalize by ink area or fill every view box.
+
+A shared view-box change affects every consumer at its own CSS size. Inspect both compact menus and larger icon-only controls; a clearer small chevron can become oversized in a floating button. Adjust a consumer’s supported icon size when needed while retaining its button base and hit target.
+
+For softness, check CSS dimensions and ancestor transforms, view box and drawing bounds, stroke versus filled contour, device-pixel placement, then color/opacity. Non-16 view boxes are valid; compare identical artwork before attributing sharpness to inline SVG versus sprites.
+
+Use the [implemented stroke behavior](../../../packages/client/ui-primitives/README.md#controls-and-icons): source stroke widths scale with the SVG viewport, and filled outlines scale as geometry. Do not add non-scaling strokes or convert filled contours during an ordinary placement or reuse fix. A change to that rendering contract belongs to a separately scoped library change with consumer validation; retain intentional silhouettes and knockouts.
+
+Check straight-stroke edges at actual DPR after all scaling: center and width jointly determine coverage. Integer source coordinates alone do not guarantee crisp edges. Round positioned overlays in device pixels only when layout places otherwise crisp artwork between pixels; preserve anchoring and viewport containment. Keep antialiasing on curves/diagonals; do not globally round paths or use `crispEdges` to hide placement errors. Partial coverage is legitimate for 1.3px strokes.
 
 ## Draw a new icon
 
@@ -38,19 +50,9 @@ Apply the same system style and verification criteria as new artwork. Inspect SV
 
 Distinguish click target, visible button base, icon slot and painted glyph. Equal targets or SVG dimensions do not imply equal optical size; compare silhouette, stroke, whitespace and center beside the label. Fix containers and unintended CSS overrides first. Correct shared artwork only when the imbalance follows it across uses.
 
-An icon and label for one action normally share foreground and state changes. Search icons and placeholders form one prompt; typed text and independent clear actions may differ. Verify opacity, stroke and background in both themes. Status, warning and brand roles may use different colors. Compare native file icons and folder outlines deliberately; do not normalize logos, status dots or decorative illustrations to toolbar icons.
+An icon and its associated text for one action, value or input prompt must share foreground color, effective opacity and state changes. This includes submenu value chevrons and search placeholders; inherit the shared role instead of assigning an independent icon token. Typed text and independent clear actions may differ; status, warning and brand roles retain semantic colors. Check computed color and ancestor opacity in both themes. Apply the rule to changed consumers; updating it does not certify untouched UI. Compare native file icons and folder outlines deliberately; do not normalize logos, status dots or decorative illustrations to toolbar icons.
 
-Use the shared Tooltip for unclear icon-only actions and HoverCard for informational content requiring hover or selection. [Responsive UI](../dsh-responsive-ui/SKILL.md) owns mobile tooltips and label collapse. Every right-sidebar tab needs a meaningful icon. Preserve accessible labels and focus; [alignment](../dsh-ui-alignment/SKILL.md) owns positioning and [spacing](../dsh-ui-spacing/SKILL.md) owns gaps.
-
-## Optical size and clarity before implementation
-
-Ordinary menus use 14px Regular icons with 1px strokes; compact menus retain 12px. Permission triggers and settings-navigation peers use 16px slots; permission-menu rows retain 14px. Compare at the owning control's size, weight, colors and label, using an outlined circle and rectangular control as references. Open silhouettes may need more extent than dense fills; supporting chevrons, handles and dots keep their roles. Do not normalize by ink area or fill every view box.
-
-For softness, check CSS dimensions and ancestor transforms, view box and drawing bounds, stroke versus filled contour, device-pixel placement, then color/opacity. Non-16 view boxes are valid; compare identical artwork before attributing sharpness to inline SVG versus sprites.
-
-Regular strokes stay **1 CSS px**, Medium **1.3 CSS px** across sizes. Use non-scaling strokes, including inline composites. Filled outlines ignore stroke width: convert line contours to real strokes when consistent weight requires it; retain intentional silhouettes and knockouts.
-
-Check straight-stroke edges at actual DPR after all scaling: center and width jointly determine coverage. Integer source coordinates alone do not guarantee crisp edges. Round positioned overlays in device pixels only when layout places otherwise crisp artwork between pixels; preserve anchoring and viewport containment. Keep antialiasing on curves/diagonals; do not globally round paths or use `crispEdges` to hide placement errors. Partial coverage is legitimate for 1.3px strokes.
+Use the shared Tooltip for unclear icon-only actions and HoverCard for informational content requiring hover or selection; prefer these primitives over ad-hoc `title` attributes. [Responsive UI](../dsh-responsive-ui/SKILL.md) owns mobile tooltips and label collapse. Every right-sidebar tab needs a meaningful icon. Preserve accessible labels and focus; [alignment](../dsh-ui-alignment/SKILL.md) owns positioning and [spacing](../dsh-ui-spacing/SKILL.md) owns gaps.
 
 ## Verification and handoff
 
