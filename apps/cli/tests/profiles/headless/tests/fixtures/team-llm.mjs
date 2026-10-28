@@ -204,7 +204,7 @@ class TeamFixtureAdapter extends LlmAdapter {
     if (workflowChild) chunks = textChunks('Fresh workflow child complete.')
     else if (task?.startsWith('RESEARCHER_MARK:')) chunks = researcher(options.messages)
     else if (task?.startsWith('IMPLEMENTER_MARK:')) chunks = implementer(options.messages)
-    else if (role?.includes('You are the Team Lead.')) chunks = lead(options.messages)
+    else if (role?.startsWith('Your name is "lead".')) chunks = lead(options.messages)
     else throw new Error('Team runtime context is missing a recognized identity')
     for (const chunk of chunks) {
       options.signal?.throwIfAborted()
