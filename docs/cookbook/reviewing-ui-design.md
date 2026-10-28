@@ -12,8 +12,6 @@ Use this workflow for impact-scoped UI changes and explicitly requested whole-in
 
 Check the complete icon box, including intentional internal whitespace, text columns and gaps before judging the drawn contour. Hit targets are not icon boxes; do not align each glyph’s painted pixels independently. See the [alignment principle](../ui-design-review-cases.md#alignment).
 
-For sidebar review, record the current master revision and follow the [sidebar design baseline](../../.agents/skills/dsh-ui-alignment/SKILL.md#sidebar-design-baseline). Capture its relevant roles and states before comparing the working version. Older illustrations and reports cannot establish the current layout or justify restoring superseded geometry.
-
 ## Table of Contents
 
 - [1. Define the page or modal in scope](#proposition)

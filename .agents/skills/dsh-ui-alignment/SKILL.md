@@ -32,13 +32,7 @@ Specify what is aligning to what. Distinguish the element's layout box, its visi
 
 For left-to-right Chinese and English navigation, identify the leading icon center, text start and trailing controls by role. Continue an axis across groups only where the owning design establishes that relationship. Headings, account avatars and expandable search controls can use different geometry. DOM nesting alone neither requires nor forbids an indent.
 
-### Sidebar design baseline
-
-Use the current master sidebar design as the reference for layout, spacing, alignment and states. Verify the base revision and record it with the review evidence. Read the [sidebar](../../../packages/client/ui-sidebar/README.md), [workspace](../../../packages/client/ui-workspace/README.md) and [account](../../../packages/client/ui-settings-account/README.md) owners and their styles before proposing a correction. Keep their shared spacing variables, icon slots and painted insets; compare hover and selected backgrounds with the intended button edges separately from content axes.
-
-Compare same-role rows and preserve their title starts when actions appear. Do not force the signed-in account row onto the navigation text axis, or the workspace header’s search/filter/add controls onto conversation action columns. Search expansion and collapsed-rail states have their own layout. A retained icon correction does not authorize changing these relationships. Inspect the assembled sidebar in the relevant states; an older case image or isolated row cannot override the baseline.
-
-For other layouts, preserve established cross-panel relationships: plugin content shares its reading edge even when hover paint extends beyond it; conversation and right-sidebar header rows share their intended heights and horizontal baselines. Choose the relationship from the composition, not merely from similar CSS values.
+Consider cross-panel relationships: plugin content shares its reading edge even when hover paint extends beyond it; conversation and right-sidebar header rows share their intended heights and horizontal baselines. Choose the relationship from the composition, not merely from similar CSS values.
 
 Centering always has a reference rectangle. A centered button uses its own bounds; a welcome area uses the main pane; an empty state generally uses the content space remaining below the page heading and filters. A fixed top margin is not vertical centering. If a short window cannot contain that group, preserve scroll access and use a compact top-aligned layout instead of clipping it. Two-edge alignment also operates on groups: keep each group's internal gaps fixed as the space between groups grows.
 

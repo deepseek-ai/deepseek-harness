@@ -21,9 +21,6 @@ As a group gains subgroups, wrapping, secondary metadata, or independent operati
 
 Judge visible whitespace as well as CSS values. Button padding, line-height, glyph whitespace, borders, and margins all contribute. A declared 16px/8px margin pair can still produce an unclear heading relationship. At normal display size, the heading should appear closer to the content it introduces than to the previous section; an explanatory label should have one unambiguous owner.
 
-
-Preserve the [sidebar design baseline](../dsh-ui-alignment/SKILL.md#sidebar-design-baseline) when reviewing its groups, including state-specific spacing. Do not replace its established rhythm with a case diagram’s dimensions.
-
 Use existing page spacing and [style tokens](../../../docs/web-styling.md); this skill does not create a numeric scale. Check shared axes with [alignment](../dsh-ui-alignment/SKILL.md).
 
 See [worked examples](../../../docs/ui-design-review-cases.md#grouping) when the relationship is unclear.

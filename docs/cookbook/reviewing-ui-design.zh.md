@@ -12,8 +12,6 @@ description: "把 DSH 页面或弹窗作为整体审查，按设计原则说明�
 
 对齐审查先核对图标完整空间（含有意保留的内部留白）、文字列和间距，再检查实际轮廓。热区不等于图标框；不逐个拉齐 glyph 的像素边缘。判断顺序见[对齐原则](../ui-design-review-cases.zh.md#alignment)。
 
-侧栏审查记录当前 master 版本，并遵循[侧栏设计基线](../../.agents/skills/dsh-ui-alignment/SKILL.md#sidebar-design-baseline)。先保留相关角色与状态的基线，再比较工作版本。旧示意图和报告不能证明当前布局，也不能作为恢复已被取代的几何关系的理由。
-
 ## 目录
 
 - [1. 确定受审页面或弹窗](#proposition)
