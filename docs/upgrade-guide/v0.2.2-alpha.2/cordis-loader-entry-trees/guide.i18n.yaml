@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-alpha.2/cordis-loader-entry-trees/guide.md
 /:
-  en: 4b668dd74d0315b9
-  zh: a1885d2bbb4ef33e
+  en: 02dfa517303f3206
+  zh: abf9a22603299cc7
 /loader-entry-tree-reports-and-include-persistence:
   en: dc27815908c90cd9
   zh: e9cc077d4d3fdbec
 /loader-entry-tree-reports-and-include-persistence/change:
-  en: 2436912b9554b6dd
-  zh: ff4582ebc4672662
+  en: 6ada19e725d5c04e
+  zh: efbc6183cfd094e1
 /loader-entry-tree-reports-and-include-persistence/migration:
-  en: cd7db13e17bfd339
-  zh: be43c51c78e55439
+  en: 574f30ad53da1e66
+  zh: 1b9914c4ead412f7

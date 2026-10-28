@@ -30,7 +30,7 @@ Intentionally **not** vendored (verified unused by this set): `reggol`, `@cordis
 
 ## Local modifications
 
-Keep this log exhaustive — every divergence from upstream must be listed. Each entry has a stable ID: remove an entry when its divergence no longer exists, and never renumber or reuse IDs. The next new entry is V27.
+Keep this log exhaustive — every divergence from upstream must be listed. Each entry has a stable ID: remove an entry when its divergence no longer exists, and never renumber or reuse IDs. The next new entry is V28.
 - **V1 · `hmr/src/index.ts`**: removed the `./locales/en-US.yml` / `./locales/zh-CN.yml` imports, the `.i18n({...})` call on the `Config` schema, and the `src/locales/` directory. Rationale: those imports require a runtime YAML loader hook (`@cordisjs/unyaml`) that we do not vendor; the i18n texts only localize config descriptions.
 - **V2 · All `package.json` files**: regenerated for Harness releases with scoped names, release versions, publication metadata, precise bundled-runtime and `lib/types/**/*.d.ts` / `.d.ts.map` file entries, source exports where applicable, and declaration metadata pointing at `lib/types`. References within the vendored set use `workspace:~`. HMR declares `esbuild` as a direct dev dependency for its imported `BuildFailure` type, and Loader requires `node-addon-require-builtin@^0.1.4` to match published app runtimes.
 - **V3 · All `tsconfig.json` files**: regenerated to extend the repo-root `tsconfig.base.json`, emit TypeScript intermediates to `lib/types`, and declare project references.
@@ -50,6 +50,7 @@ Keep this log exhaustive — every divergence from upstream must be listed. Each
 - **V24 · `timer/locale/{en,zh}.json` display metadata**: local English and Chinese titles and descriptions for the Settings plugin inventory. `timer/package.json` exports and publishes these locale resources.
 - **V25 · Loader lifecycle adaptations**: before a combined context/config update, Loader refreshes dependencies locally, which prevents activation against stale isolation bindings; disabled-entry updates await disposal. Failed fibers require an explicit update after correcting their input or dependencies. Core retains the effect hardening in V6; rc.11 owns dependency teardown ordering and superseded-activation handling.
 - **V26 · `loader/src/config/tree.ts` cross-tree move reports**: `EntryTree.update()` reports a move into another tree as a removal to the source tree and a creation, without `legacy` or `from`, to the destination tree. Upstream reports the destination as an update with `legacy`, which the Include journal records as a partial row for an id that its file does not contain. Covered by `scripts/cordis-entry-commit.spec.ts`.
+- **V27 · `loader/src/config/tree.ts` explicit ids with `:`**: `ensureId()` accepts explicit ids containing `EntryTree.sep`; upstream rejects them. Generated bundles from `@deepseek-ai/dsh-creation-recommendations` prefix their row ids with `<package name>:`, and installed profiles already contain such rows. `resolve()` still splits ids on `:`, so these entries cannot be addressed by nested path. Covered by `scripts/cordis-entry-commit.spec.ts` and `packages/experimental/creation-recommendations/tests/loader-composition.spec.ts`.
 
 ### Resolver adaptations
 

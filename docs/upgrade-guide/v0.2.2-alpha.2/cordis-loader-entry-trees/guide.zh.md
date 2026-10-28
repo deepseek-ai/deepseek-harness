@@ -1,6 +1,6 @@
 ---
 kind: upgrade-guide
-description: "Loader 条目树通过 commit(change) 报告变更并拒绝含冒号的 id，Include 通过 journal 持久化这些变更。"
+description: "Loader 条目树通过 commit(change) 报告变更，Include 通过 journal 持久化这些变更。"
 ---
 
 # Loader 条目树变更报告与 Include 持久化
@@ -12,14 +12,12 @@ description: "Loader 条目树通过 commit(change) 报告变更并拒绝含冒�
 `@deepseek-ai/cordis-plugin-loader` 跟随 Loader 1.0.0-rc.8，`@deepseek-ai/cordis-plugin-include` 跟随 Include 1.1.1。受影响的是 `cordis.yml` 与 patch 文件、继承 `EntryTree` 的代码，以及调用 `applyEntryPatches` 或依赖 Include 写盘的代码。
 
 - 移除了 `EntryTree.write()`。子类改为实现 `commit(change: EntryChange)`，它会同步收到每一次创建、更新、移动、删除和显式 Fiber 保存。内存树实现为空操作。
-- 含 `:` 的条目 `id` 会被拒绝，因为 `:` 用于分隔嵌套树路径。此前 `id: foo:bar` 这样的配置行可以挂载；现在会记录一条错误并跳过该行，程序化调用 `create()` 会抛出异常。
 - `applyEntryPatches(data, patches, warn)` 总是返回克隆后的条目，没有 patch 时也一样，插入行同样会被克隆。调用方不能再通过结果修改输入。
 - Include 通过与最新文件协调的 journal 持久化运行时变更。文件编辑在字段冲突时优先，并记录为冲突。对 patch 所拥有字段和插入行的修改会写入父 Include 的 patch。`flush()` 等待待处理的写入，并在仍有未保存变更时拒绝；`refresh()` 和 `stop()` 返回相同的结果。
 
 ## 迁移
 
-1. 在 `cordis.yml`、profile patch 和 `--patch` 覆盖层中重命名含 `:` 的条目 id，例如把 `foo:bar` 改为 `foo-bar`，并同步更新引用它们的 patch。
-2. 在 `EntryTree` 子类中把 `write()` 换成 `commit(change)`。根据 `change.options` 和 `change.legacy` 持久化：缺少 `legacy` 表示创建，缺少 `options` 表示删除。
-3. 只修改 `applyEntryPatches` 返回的结果。
-4. 需要运行时变更落盘时，await `include.flush()`；对于 patch 所拥有的变更，先 flush 子 Include，再 flush 其父 Include。
-5. 启动应用，确认没有记录 `entry id must not contain ":"` 错误，并且 `flush()` 之后运行时编辑已出现在配置文件中。
+1. 在 `EntryTree` 子类中把 `write()` 换成 `commit(change)`。根据 `change.options` 和 `change.legacy` 持久化：缺少 `legacy` 表示创建，缺少 `options` 表示删除。
+2. 只修改 `applyEntryPatches` 返回的结果。
+3. 需要运行时变更落盘时，await `include.flush()`；对于 patch 所拥有的变更，先 flush 子 Include，再 flush 其父 Include。
+4. 启动应用，确认 `flush()` 之后运行时编辑已出现在配置文件中。

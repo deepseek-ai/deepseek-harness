@@ -73,18 +73,17 @@ export abstract class EntryTree {
   }
 
   /**
-   * Assign a random tree-local id when `options.id` is absent.
+   * Assign a random tree-local id when `options.id` is absent. Explicit ids
+   * may contain `EntryTree.sep`; `resolve()` and `resolveGroup()` cannot
+   * address such entries by nested path.
    * @param options - Entry options; a generated id is written to `options.id`.
    * @returns The existing or generated id.
-   * @throws When an explicit id contains `EntryTree.sep`, which separates nested tree paths.
    */
   ensureId(options: Partial<EntryOptions>) {
     if (!options.id) {
       do {
         options.id = Math.random().toString(16).slice(2, 10)
       } while (this.store[options.id])
-    } else if (options.id.includes(EntryTree.sep)) {
-      throw new Error(`entry id must not contain "${EntryTree.sep}": ${options.id}`)
     }
     return options.id!
   }
