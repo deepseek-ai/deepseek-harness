@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-util-time",
-  "description": "Zero-dependency time vocabulary shared by wire boundaries: canonicalClientTimeZone (IANA zone validation and canonicalization only, no formatting)",
-  "version": "0.2.1-alpha.2",
+  "description": "Time vocabulary shared by the boundaries that accept a caller's zone, a wall-clock selector, or an elapsed time: canonicalClientTimeZone (IANA zone validation and canonicalization), strict RFC 3339 instant, local-calendar, and zone resolution, and a millisecond Duration span",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -26,6 +26,9 @@
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
+  "dependencies": {
+    "@js-temporal/polyfill": "0.5.1"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"
   },

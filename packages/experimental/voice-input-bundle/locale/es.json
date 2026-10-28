@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Entrada de voz",
+    "description": "Transcribe grabaciones localmente con SenseVoice; El primer uso requiere instalar dependencias.",
+    "detail": "docs/DETAIL.md"
+  }
+}

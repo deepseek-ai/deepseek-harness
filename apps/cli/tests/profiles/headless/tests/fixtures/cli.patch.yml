@@ -35,3 +35,15 @@
 - insert:
     - id: cli-mock-llm
       name: '../../../../../../../packages/test-support/loader-smoke/tests/fixtures/cli-mock-llm.ts'
+
+- id: sandbox-policy
+  inject: []
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()
+
+# A search key reference no runner sets: the turn runs as a deployment without
+# web search credentials, whatever the launching environment exports.
+- id: web-search-deepseek
+  config:
+    apiKeyEnv: DSH_KEYLESS_SMOKE_SEARCH_KEY

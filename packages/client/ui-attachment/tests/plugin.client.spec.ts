@@ -33,6 +33,7 @@ async function bench() {
       'tool.call.images': { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
+  ctx.provide('fileDrag', { actions: fileDrag, read: () => undefined })
   const registerFactory = vi.spyOn(ctx.slots, 'registerFactory')
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
@@ -46,10 +47,12 @@ describe('attachment plugin', () => {
 
   it('registers all entries and removes them with the plugin fiber', async () => {
     const { ctx, fiber, registerFactory } = await bench()
-    expect(inject).toEqual(['slots'])
-    expect(registerFactory).toHaveBeenCalledWith({
+    expect(inject).toEqual(['slots', 'fileDrag'])
+    expect(registerFactory.mock.calls[0]?.[0]).toMatchObject({
       name: 'conversation.images.content', scope: 'root', locale: 'conversation',
-    }, MessageImagesContent)
+    })
+    expect(typeof registerFactory.mock.calls[0]?.[0].inject).toBe('function')
+    expect(registerFactory.mock.calls[0]?.[1]).toBe(MessageImagesContent)
     expect(ctx.slots.snapshot('factory:conversation.images.content')).toHaveLength(1)
     expect(ctx.slots.entries('conversation.input.attachments')).toMatchObject([{
       locale: 'conversation', component: ComposerAttachments,
@@ -63,3 +66,5 @@ describe('attachment plugin', () => {
     expect(ctx.slots.snapshot('factory:conversation.images.content')).toHaveLength(0)
   })
 })
+
+const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }

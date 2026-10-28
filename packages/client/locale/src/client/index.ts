@@ -20,9 +20,10 @@ import {
   LOCALE_ID_PATTERN, LOCALE_IDS, LOCALE_PREFERENCE_FIELD, LOCALE_SETTINGS_NAMESPACE,
   type BuiltInLocaleId, type LocaleId, type LocaleSettings,
 } from '../locale-settings.ts'
-import { en, zh, type CommonKey } from '../locales/index.ts'
+import { en, ja, es, fr, de, ru, pt, zh, type CommonKey } from '../locales/index.ts'
 import {
-  en as settingsEn, zh as settingsZh, type SettingsLocaleKey,
+  en as settingsEn, ja as settingsJa, es as settingsEs, fr as settingsFr,
+  de as settingsDe, ru as settingsRu, pt as settingsPt, zh as settingsZh, type SettingsLocaleKey,
 } from '../locales/settings.ts'
 import type { LanguageRowInjected } from './LanguageRow.tsx'
 import { LanguageRow } from './LanguageRow.tsx'
@@ -114,7 +115,7 @@ export const COMMON_NS = 'common'
 /** Namespace owning this feature's settings-row copy. */
 export const SETTINGS_NS = 'settings.locale'
 
-/** The two locales and dictionaries shipped by this package. */
+/** The baseline locales required by typed dictionary registrations. */
 const BUILT_IN_LOCALE_METADATA = {
   zh: { label: '中文', fallback: 'en' },
   en: { label: 'English' },
@@ -378,15 +379,18 @@ export class LocaleRuntime {
    * Register a declared namespace's dictionaries, all locales in one call —
    * the typed form: each dictionary is checked against the namespace's
    * {@link LocaleNamespaceMap} key union (a missing or extra key is a
-   * compile error), and every shipped locale is required (bilingual balance
+   * compile error), and both baseline locales are required (bilingual balance
    * enforced at registration). Duplicate (ns, locale) throws (single occupant; a
    * namespace's texts have one owner). Registration bumps the revision so
    * mounted outlets pick up late-arriving dictionaries.
    * @param ns - a namespace merged into LocaleNamespaceMap.
-   * @param dicts - complete dictionaries keyed by built-in locale id.
+   * @param dicts - complete baseline dictionaries and optional dictionaries for additional locale ids.
    * @returns disposer removing every locale registered by this call (idempotent).
    */
-  register<N extends Extract<keyof LocaleNamespaceMap, string>>(ns: N, dicts: Record<BuiltInLocaleId, LocaleDictOf<N>>): () => void
+  register<N extends Extract<keyof LocaleNamespaceMap, string>>(
+    ns: N,
+    dicts: Record<BuiltInLocaleId, LocaleDictOf<N>> & Record<LocaleId, LocaleDictOf<N>>,
+  ): () => void
   /**
    * Single-locale untyped form for language-pack contributions and namespaces
    * outside the merge table.
@@ -576,8 +580,11 @@ export async function apply(ctx: ClientContext): Promise<void> {
   }
   const host = ctx.configForms.get<LocaleSettings>(LOCALE_SETTINGS_NAMESPACE)
   const locale = new LocaleRuntime(ctx, host, bootstrap)
-  locale.register(COMMON_NS, { zh, en })
-  locale.register(SETTINGS_NS, { zh: settingsZh, en: settingsEn })
+  for (const [id, label] of [['ja', '日本語'], ['es', 'Español'], ['fr', 'Français'], ['de', 'Deutsch'], ['ru', 'Русский'], ['pt', 'Português']] as const) {
+    ctx.effect(() => locale.addLanguage({ id, label, fallback: 'en' }), `locale: ${id} language`)
+  }
+  ctx.effect(() => locale.register(COMMON_NS, { zh, en, ja, es, fr, de, ru, pt }), 'locale: common dictionaries')
+  ctx.effect(() => locale.register(SETTINGS_NS, { zh: settingsZh, en: settingsEn, ja: settingsJa, es: settingsEs, fr: settingsFr, de: settingsDe, ru: settingsRu, pt: settingsPt }), 'locale: settings dictionaries')
   ctx.provide('locale', locale)
   if (bridge !== undefined) {
     ctx.on('locale/change', (snapshot) => { bridge.onChange(snapshot.active) })

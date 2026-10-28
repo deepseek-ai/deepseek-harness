@@ -2,6 +2,7 @@
  * Tests for the mcp-client plugin's `apply` lifecycle entry point.
  * Isolated file so vi.mock of the MCP SDK doesn't pollute other test suites.
  */
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import assert from 'node:assert/strict'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -56,6 +57,7 @@ async function mountRegistry(): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   return ctx
 }
 
@@ -255,6 +257,7 @@ describe('apply (plugin lifecycle)', () => {
     const first = new Context()
     await first.plugin(SystemPrompt)
     await first.plugin(ToolRuntime)
+    await first.plugin(NativeToolExecutor)
     await apply(first, stdioConfig)
 
     await first.fiber.dispose()
@@ -265,6 +268,7 @@ describe('apply (plugin lifecycle)', () => {
     const second = new Context()
     await second.plugin(SystemPrompt)
     await second.plugin(ToolRuntime)
+    await second.plugin(NativeToolExecutor)
     await expect(apply(second, stdioConfig)).resolves.toBeUndefined()
     await second.fiber.dispose()
   })

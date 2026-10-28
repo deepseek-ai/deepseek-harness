@@ -49,7 +49,7 @@ The plugin config defines the preset table and the default for fresh sessions. E
 | `presets` | `workspace-write`, `danger-full-access` | Table of preset name → sandbox/approval bundle |
 | `defaultPreset` | inferred | Preset pinned into fresh sessions; required when composition defaults match no preset |
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-permission-presets) is the exhaustive source for every accepted field and its JSDoc. `custom` is reserved for the derived not-a-preset state, while `auto` is reserved for the Auto review integration. Mounting requires a confining bash executor (one that reports a `sandboxMode`) and the approval service.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-permission-presets) is the exhaustive source for every accepted field and its JSDoc. `custom` is reserved for the derived not-a-preset state, while `auto` is reserved for the Auto review integration. Mounting requires a confining bash executor (one that reports a `sandboxMode`), the approval service, and the Agent registry.
 
 ### Switching presets
 
@@ -61,7 +61,7 @@ Clients render selectable entries from the process catalog: configured presets i
 
 ### Session defaults
 
-The `permission` settings namespace holds `defaultPreset` for future sessions and accepts configured presets only. Session creation reads it, applies it to the sandbox mode and approval policy, and records the applied preset as a `permission/preset` selection. Later settings changes never alter an existing session. A resumed seed, including an explicitly empty one marked by `session/end-seed`, preserves its effective permission and receives only missing durable facts rather than the latest user default; a persisted `auto` identity requires the live Auto registration and its admission before publication.
+The `permission` settings namespace holds `defaultPreset` for future sessions and accepts configured presets only. Agent creation reads it, applies it to the Session's sandbox mode and approval policy, and records the applied preset as a `permission/preset` selection. Later settings changes never alter an existing session. A resumed seed, including an explicitly empty one marked by `session/end-seed`, preserves its effective permission and receives only missing durable facts rather than the latest user default; a persisted `auto` identity requires the live Auto registration and its admission before publication.
 
 -----
 
@@ -86,17 +86,17 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 
 ### Read side and `custom`
 
-`current(session)` reads the required `permissions` projection, whose unit folds the three whole-value knob events over the composition defaults (`ctx.shell.sandboxMode` and the approval config). The host state also retains whether `session/end-seed` has occurred, so session pinning distinguishes an explicitly empty restored seed from a genuinely fresh session without rescanning the log. A still-matching last selection wins shared-bundle ties, and a recorded Auto selection also matches the `never` approval policy; otherwise the first configured match wins; otherwise the derived `CUSTOM_PRESET` is returned. A missing projection key fails explicitly.
+`current(session)` reads the required `permissions` projection, whose unit folds the three whole-value knob events over the composition defaults (`ctx.shell.sandboxMode` and the approval config). The host state also retains whether `session/end-seed` has occurred, so session pinning distinguishes an explicitly empty restored seed from a genuinely fresh session without rescanning the log. A still-matching last selection wins shared-bundle ties, and a recorded Auto selection also matches the `never` approval policy; otherwise the first configured match wins; otherwise the derived `CUSTOM_PRESET` is returned. The service acquires its state reader during activation.
 
 `optionOf(name)` returns a configured entry, the live Auto entry, or the display-only `custom` entry. It throws only when the name matches none of those; a withdrawn Auto entry is unavailable.
 
 ### Session pinning and blank reuse
 
-Mounting pins every live and future session: a genuinely fresh session gains the configured default preset and both knob facts, while seeded or partially initialized sessions keep their effective knob values and gain only missing durable facts. The projection-owned seed marker makes this decision from the same incremental state as the knob values. A stored `auto` identity fails publication when the Auto integration is absent or rejects admission; the service neither rewrites it nor silently derives Full access.
+Mounting pins the Sessions of every live and future Agent: a genuinely fresh session gains the configured default preset and both knob facts, while seeded or partially initialized sessions keep their effective knob values and gain only missing durable facts. The projection-owned seed marker makes this decision from the same incremental state as the knob values. The service installs its `agent/created` listener before starting projection registration, so creation during activation fails instead of skipping pinning. `prepend: true` places pinning before ordinary creation observers, which may read the recorded permission facts. A later listener using `prepend` can run earlier and must not assume pinning has finished. While its reader is not ready, Agent creation rolls back; callers must await plugin activation before creating or restoring Agents. Creating a Session without an Agent does not initialize permissions. A stored `auto` identity fails publication when the Auto integration is absent or rejects admission; the service neither rewrites it nor silently derives Full access.
 
 ### Catalog, projection, and optional command
 
-The service requires `ctx.sessionProjections` and registers a `permissions` projection containing only `currentValue`. Its process-level `catalog()` Remote returns one complete selectable snapshot. Registering or removing Auto emits the payload-free `permission-presets/catalog-changed` notification, so clients subscribe first and then re-read the catalog without appending a Session event, publishing a Session projection frame, or changing Session sequence. The `/permission` command registers only when a `ctx.commands` registry is composed. Calls that derive the current preset or pin an initial selection fail explicitly when the projection key is absent.
+The service requires `ctx.sessionProjections` and awaits registration of `permissions`; its client view contains only `currentValue`. Its process-level `catalog()` Remote returns one complete selectable snapshot. Registering or removing Auto emits the payload-free `permission-presets/catalog-changed` notification, so clients subscribe first and then re-read the catalog without appending a Session event, publishing a Session projection frame, or changing Session sequence. The `/permission` command registers only when a `ctx.commands` registry is composed. Calls that derive the current preset or pin an initial selection use the retained projection handle.
 
 </details>
 

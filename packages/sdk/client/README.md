@@ -25,11 +25,13 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+Use this client when TypeScript code must drive a complete Harness runtime from another process and you can name the runtime executable explicitly. The common path is minimal: construct a `DeepSeekHarness` with a launch spec, run prompts, and close it so the child process is always reaped.
+
+For client-owned approvals, call `harness.client.start()`, install `harness.client.onRequest(handler)`, then call `harness.start()` with `approvalRequests: true` in the Harness options. The handler receives `approval/request` parameters and returns `{ outcome: "allowed-once" | "rejected" | "cancelled" }`; a rejected handler returns a JSON-RPC error and the runtime fails that approval closed. A replacement client needs its own handler; a closed client cannot restart. Native user questions keep their `onUserQuestion` callback. Enabling approvals without the additional-request handler returns an unknown-request error and fails approvals closed as `unavailable`. Without the opt-in, existing approval answerers remain in control. See the [wire protocol](../protocol/README.md) for request fields and cancellation.
+
 `await harness.resumeSession(savedId)` restores a persisted session from the configured `dshHome` and returns a `HarnessSession` ready for `run()`. Save the original session id and reuse its home and workspace. Restoration preserves conversation history and its directory, repairs an interrupted final turn, and sends no new input. Missing, unreadable, incompatible, or occupied sessions reject without creating a replacement. `session(id)` remains a lazy handle for an in-process session; it does not request persisted restoration. Shell, browser, and other external processes are not restored by this API.
 
 `HarnessSession.getWorkingDirectory()` reads the effective directory; `setWorkingDirectory(path)` changes it and returns the validated absolute path. Either method creates an unknown Session without starting a model turn. Relative paths use the Session's current directory. Origin metadata, permissions, and existing processes remain unchanged. `HarnessClient` exposes the same methods with a leading `sessionId` argument.
-
-Use this client when TypeScript code must drive a complete Harness runtime from another process and you can name the runtime executable explicitly. The common path is minimal: construct a `DeepSeekHarness` with a launch spec, run prompts, and close it so the child process is always reaped.
 
 ### Running agent turns with DeepSeekHarness
 
@@ -58,6 +60,13 @@ The subprocess starts lazily on first use and stays owned by the instance across
 Task-owning consumers can subscribe before `prompt()`, then call `request('session/wait', { sessionId })` and drain queued notifications with `tryNext()`. This waits for managed descendants and their root summary turns; `HarnessSession.run()` retains its next-idle interval. `validatedSessionEvent()` validates the event envelope and the assistant/turn fields consumed by SDK readers before they enter an output fold.
 
 The client exports typed errors for every failure mode: `JsonRpcResponseError` (a wire error response, code and data preserved), `RequestTimeoutError` (a configured bound elapsed), `SdkProtocolError` (a response outside the documented protocol), and `TransportClosedError` (the runtime is gone — the message carries the exit code and a bounded stderr tail). `close()` requests protocol `shutdown` (bounded by `shutdownTimeoutMs`, default 1000 ms), then walks a stdin-EOF → SIGTERM → SIGKILL ladder until the process has exited; it is idempotent, and a closed client refuses reuse. `HarnessClientOptions.env` replaces the child environment entirely when given (`undefined` inherits the parent's); callers own credential policy — `scrubbedParentEnv` from `dsh-subprocess` is the shared scrub base for isolation-minded launches.
+
+<a id="native-user-questions"></a>
+### Native user questions
+
+Pass `onUserQuestion` to `DeepSeekHarness` or `HarnessClient` to answer the built-in `ask_user_question` tool through the native SDK protocol. The callback receives `{ requestId, sessionId, questions }` and `{ signal }`; return `{ answers: [{ id, selected, custom? }] }`, using one item per question id. Your application owns the UI or simulated-user policy. The SDK automatically advertises the callback at initialization and can receive answers while other requests are pending. `HarnessClient.initialize()` starts the process when needed; an explicit `start()` is optional.
+
+Observe the signal to release host work when the runtime cancels the question, disconnects, or the client closes. The SDK stops awaiting cancelled callbacks and ignores their later answers. A throwing callback reports a provider error; missing or malformed answers never count as approval. Without a callback, native in-process answerers remain available, and a missing answerer reports `NO_PROVIDER`.
 
 -----
 
@@ -127,7 +136,7 @@ These limits define when the client is a poor fit or needs special care. They ar
 - **No bundled-runtime resolution** — the client resolves the same-version `@deepseek-ai/dsh` package (or a caller-provided `dshBin`); packaged-executable discovery stays Python-side until a TypeScript distribution consumer exists.
 - **No mid-turn cancel** — the wire has no prompt-cancel method; abandoning a turn means closing the runtime (see the [protocol limitations](../protocol/README.md#known-limitations-and-deferred-work)).
 - **No per-prompt result** — low-level `prompt()` returns only an enqueue receipt; high-level `run()` owns receipt-to-idle collection, and abandoning it means closing the runtime.
-- **Client→server notifications and server→client requests are unimplemented** on both wire ends; the transport carries them for future approval flows.
+- **Callbacks must release their own resources** — the SDK delivers cancellation through `AbortSignal`; application work that ignores it may continue after the SDK stops awaiting its answer.
 
 <a id="dev-note"></a>
 ### Dev Note

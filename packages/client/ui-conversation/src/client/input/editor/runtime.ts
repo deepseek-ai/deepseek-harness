@@ -2,17 +2,23 @@
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { LexicalEditor, NodeKey } from 'lexical'
 import {
-  $addUpdateTag, $createParagraphNode, $createTextNode, $getRoot, $getSelection, $isRangeSelection,
-  BLUR_COMMAND, CLEAR_HISTORY_COMMAND, COMMAND_PRIORITY_CRITICAL, createEditor, HISTORY_MERGE_TAG, PASTE_TAG,
-  RootNode, SELECTION_CHANGE_COMMAND, SKIP_DOM_SELECTION_TAG,
+  $addUpdateTag, $createParagraphNode, $createTextNode, $getAdjacentNode, $isTextNode,
+  $getRoot, $getSelection, $getNodeByKey, $isRangeSelection,
+  BLUR_COMMAND, CLEAR_HISTORY_COMMAND, COMMAND_PRIORITY_BEFORE_CRITICAL, COMMAND_PRIORITY_CRITICAL, createEditor,
+  HISTORY_MERGE_TAG, PASTE_TAG,
+  RootNode, SELECTION_CHANGE_COMMAND, SKIP_DOM_SELECTION_TAG, KEY_BACKSPACE_COMMAND, KEY_DELETE_COMMAND, HISTORY_PUSH_TAG,
 } from 'lexical'
 import { registerPlainText } from '@lexical/plain-text'
 import { createEmptyHistoryState, registerHistory } from '@lexical/history'
 import { mergeRegister } from '@lexical/utils'
-import type { DraftReference, ReferenceInsert } from '../../contract/draft-editor.ts'
+import type { DraftQuote, DraftReference, ReferenceInsert } from '../../contract/draft-editor.ts'
+import type { CommandClaim } from '../../contract/input.ts'
+import { QuoteNode, $createQuoteNode, $isQuoteNode, REMOVE_QUOTE_COMMAND } from './QuoteNode.tsx'
+import type { QuoteNodeLabels } from './QuoteNode.tsx'
 import { registerReferenceActivation } from './reference-activation.ts'
 import { ReferenceChipNode, $createReferenceChipNode } from './chip-node.tsx'
-import { refreshClaimDecoration, registerClaimDecoration } from './claim-decor.ts'
+import { CommandChipNode, $createCommandChipNode, registerCommandChipSeat } from './command-chip-node.tsx'
+import { registerCommandChipSelection } from './command-chip-selection.ts'
 import { registerTextRefDecoration, rescanTextRefs, TextRefNode } from './text-ref.ts'
 import type { EditorProjection } from './projection.ts'
 import { $composerLayout, $projectComposer, detectOffsetOfClipboardOffset } from './projection.ts'
@@ -24,8 +30,8 @@ type Lexicon = ReadonlyMap<'/' | '@', readonly string[]>
 /** Model callbacks read at the same editor registration and update points. */
 interface DraftEditorRuntimeDeps {
   readonly onUpdate: () => void
+  readonly quoteLabels: () => QuoteNodeLabels
   readonly openReference: (source: string | undefined, reference: Pick<ReferenceInsert, 'ref' | 'appearance'>) => boolean
-  readonly activeClaimToken: () => string | null
   readonly lexicon: () => Lexicon
   readonly resolveLexicon: () => ObservableSnapshot<Lexicon> | undefined
 }
@@ -38,14 +44,34 @@ interface DraftEditorRuntimeDeps {
  */
 const REFERENCE_PLACEHOLDER_RE = /[\uE100-\uE11D\uFFFC]/gu
 
+/**
+ * Append one paragraph per line of `text` to the editor root and move the caret
+ * to the end. Must run inside an editor update.
+ * @param text - sanitized plain text.
+ */
+function $appendParagraphs(text: string): void {
+  const root = $getRoot()
+  for (const line of text.split('\n')) {
+    const paragraph = $createParagraphNode()
+    if (line !== '') paragraph.append($createTextNode(line))
+    root.append(paragraph)
+  }
+  root.selectEnd()
+}
+
 /** Undo merge window for contiguous typing, in ms (the old machine's mergeWindowMs). */
 const HISTORY_MERGE_DELAY_MS = 1000
+
+/** Editor update that removes submitted content while retaining any newer draft suffix. */
+export const DRAFT_SUBMITTED_TAG = 'dsh-draft-submitted'
 
 /** One model-owned editor; registration and disposal remain with its model. */
 export class DraftEditorRuntime {
   /** The editor bound by the Composer's contenteditable host. */
   readonly editor: LexicalEditor
-  private projected: EditorProjection = { detectText: '', clipboardText: '', occurrences: [], selection: null, caret: null }
+  private projected: EditorProjection = {
+    detectText: '', clipboardText: '', occurrences: [], quotes: [], selection: null, caret: null, command: undefined,
+  }
   /** Stable occurrence ids per chip NodeKey (undo restores keys, so ids survive it too). */
   private readonly occurrenceIds = new Map<NodeKey, number>()
   private occurrenceSeq = 0
@@ -57,7 +83,7 @@ export class DraftEditorRuntime {
   constructor(private readonly deps: DraftEditorRuntimeDeps) {
     this.editor = createEditor({
       namespace: 'dsh-composer',
-      nodes: [ReferenceChipNode, TextRefNode],
+      nodes: [ReferenceChipNode, CommandChipNode, TextRefNode, QuoteNode],
       onError: (error) => { throw error },
     })
   }
@@ -77,6 +103,10 @@ export class DraftEditorRuntime {
     }
     const unregister = mergeRegister(
       registerPlainText(this.editor),
+      this.editor.registerNodeTransform(QuoteNode, (node) => { node.setLabels(this.deps.quoteLabels()) }),
+      this.editor.registerCommand(REMOVE_QUOTE_COMMAND, key => this.removeQuote(key), COMMAND_PRIORITY_CRITICAL),
+      this.editor.registerCommand(KEY_BACKSPACE_COMMAND, event => this.deleteAdjacentQuote(event, true), COMMAND_PRIORITY_BEFORE_CRITICAL),
+      this.editor.registerCommand(KEY_DELETE_COMMAND, event => this.deleteAdjacentQuote(event, false), COMMAND_PRIORITY_BEFORE_CRITICAL),
       this.editor.registerCommand(BLUR_COMMAND, () => {
         // Finish this batch before an explicit focus can restore its updated selection.
         this.editor.update(preserveExternalSelection, { discrete: true })
@@ -88,8 +118,9 @@ export class DraftEditorRuntime {
         this.deps.openReference(source, reference)),
       registerHistory(this.editor, createEmptyHistoryState(), HISTORY_MERGE_DELAY_MS),
       this.editor.registerUpdateListener(() => { this.deps.onUpdate() }),
-      registerClaimDecoration(this.editor, () => this.deps.activeClaimToken()),
-      registerTextRefDecoration(this.editor, () => this.deps.lexicon(), () => this.deps.activeClaimToken()),
+      registerCommandChipSeat(this.editor),
+      registerCommandChipSelection(this.editor),
+      registerTextRefDecoration(this.editor, () => this.deps.lexicon()),
       () => {
         this.lexiconOff?.()
         this.lexiconOff = undefined
@@ -167,17 +198,28 @@ export class DraftEditorRuntime {
    */
   setDraft(text: string): void {
     const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
-    if (clean === this.projection.clipboardText && this.projection.occurrences.length === 0) return
+    if (clean === this.projection.clipboardText && this.projection.occurrences.length === 0 && this.projection.quotes.length === 0) return
     this.editor.update(() => {
-      const root = $getRoot()
-      root.clear()
-      for (const line of clean.split('\n')) {
-        const paragraph = $createParagraphNode()
-        if (line !== '') paragraph.append($createTextNode(line))
-        root.append(paragraph)
-      }
-      root.selectEnd()
+      $getRoot().clear()
+      $appendParagraphs(clean)
     }, { discrete: true, tag: HISTORY_MERGE_TAG })
+  }
+
+  /**
+   * Add plain text after the current draft as new paragraphs, keeping its text
+   * and references; an empty draft takes the text as its whole content.
+   * Placeholder-sanitized; the caret lands at the end; merged into history
+   * like {@link setDraft}.
+   * @param text - plain text to add.
+   */
+  appendDraft(text: string): void {
+    const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
+    if (clean === '') return
+    if (this.projection.clipboardText === '' && this.projection.occurrences.length === 0) {
+      this.setDraft(clean)
+      return
+    }
+    this.editor.update(() => { $appendParagraphs(clean) }, { discrete: true, tag: HISTORY_MERGE_TAG })
   }
 
   /**
@@ -262,6 +304,28 @@ export class DraftEditorRuntime {
   }
 
   /**
+   * Replace a span with a command chip followed by the claim token's
+   * argument separator, unless the separator already follows.
+   * @param span - detect-coordinate range.
+   * @param claim - the command claim the chip anchors.
+   * @param tail - the character following the range before editing.
+   * @param mergeHistory - merge into the previous history entry (a restored
+   * draft's chip is part of its seed, not an undoable step).
+   * @returns whether the range mapped and the edit applied.
+   */
+  insertCommand(span: DetectSpan, claim: CommandClaim, tail: string, mergeHistory = false): boolean {
+    const separator = claim.token.slice(claim.token.trimEnd().length)
+    let applied = false
+    this.applyEdit(() => {
+      const nodes = separator === '' || tail === separator.charAt(0)
+        ? [$createCommandChipNode(claim)]
+        : [$createCommandChipNode(claim), $createTextNode(separator)]
+      applied = $replaceDetectSpanWithNodes(span, nodes)
+    }, mergeHistory ? HISTORY_MERGE_TAG : undefined)
+    return applied
+  }
+
+  /**
    * Insert an ordered file-reference batch after the live selection without deleting it.
    * @param references - validated references in source order.
    * @returns whether the live insertion position accepted the batch.
@@ -280,9 +344,58 @@ export class DraftEditorRuntime {
     return applied
   }
 
-  /** Refresh claim-token decoration after the model's claim changes. */
-  refreshClaimDecoration(): void {
-    refreshClaimDecoration(this.editor)
+  /**
+   * Insert one quote after the retained draft selection as an independent undo edit.
+   * @param text - nonblank selected transcript text.
+   * @param labels - current localized editor controls.
+   * @returns whether the insertion position accepted the node.
+   */
+  insertQuote(text: string, labels: QuoteNodeLabels): boolean {
+    let applied = false
+    this.applyEdit(() => {
+      const projection = $projectComposer(key => this.occurrenceIdOf(key))
+      const at = projection.selection?.end ?? projection.detectText.length
+      applied = $replaceDetectSpanWithNodes({ start: at, end: at }, [$createQuoteNode(text, labels), $createTextNode(' ')])
+    }, PASTE_TAG)
+    return applied
+  }
+
+  /** Remove one quote node and leave the editor caret at its former position. */
+  private removeQuote(key: NodeKey): boolean {
+    const node = $getNodeByKey(key)
+    if (!$isQuoteNode(node)) return false
+    const parent = node.getParent()
+    const offset = node.getIndexWithinParent()
+    const separator = node.getNextSibling()
+    $addUpdateTag(HISTORY_PUSH_TAG)
+    if ($isTextNode(separator) && separator.getTextContent().startsWith(' ')) {
+      const remaining = separator.getTextContent().slice(1)
+      if (remaining === '') separator.remove()
+      else separator.setTextContent(remaining)
+    }
+    node.remove()
+    const caret = Math.min(offset, parent?.getChildrenSize() ?? 0)
+    parent?.select(caret, caret)
+    queueMicrotask(() => { this.editor.getRootElement()?.focus({ preventScroll: true }) })
+    return true
+  }
+
+  /** Delete the QuoteNode immediately beside one collapsed caret. */
+  private deleteAdjacentQuote(event: KeyboardEvent, backward: boolean): boolean {
+    const selection = $getSelection()
+    if (!$isRangeSelection(selection) || !selection.isCollapsed()) return false
+    let adjacent = $getAdjacentNode(selection.anchor, backward)
+    if (!$isQuoteNode(adjacent) && backward && selection.anchor.type === 'text') {
+      const anchor = selection.anchor.getNode()
+      if ($isTextNode(anchor)
+        && selection.anchor.offset === 1
+        && anchor.getTextContent().startsWith(' ')) {
+        adjacent = anchor.getPreviousSibling()
+      }
+    }
+    if (!$isQuoteNode(adjacent)) return false
+    event.preventDefault()
+    return this.removeQuote(adjacent.getKey())
   }
 
   /**
@@ -302,15 +415,17 @@ export class DraftEditorRuntime {
       const root = $getRoot()
       root.clear()
       root.selectEnd()
-    }, { discrete: true, tag: HISTORY_MERGE_TAG })
+    }, { discrete: true, tag: [HISTORY_MERGE_TAG, DRAFT_SUBMITTED_TAG] })
   }
 
   /**
    * Import semantic content or a model-selected failure snapshot with fresh reference nodes.
    * @param draft - clipboard text.
    * @param occurrences - reference occurrences in clipboard order.
+   * @param quotes - atomic quotes in clipboard order.
+   * @param labels - localized quote controls.
    */
-  restoreDraft(draft: string, occurrences: readonly DraftReference[]): void {
+  restoreDraft(draft: string, occurrences: readonly DraftReference[], quotes: readonly DraftQuote[] = [], labels: QuoteNodeLabels = { remove: '' }): void {
     this.editor.update(() => {
       const root = $getRoot()
       root.clear()
@@ -328,15 +443,26 @@ export class DraftEditorRuntime {
         }
       }
       let cursor = 0
-      for (const occurrence of occurrences) {
+      const spans = [
+        ...occurrences.map(reference => ({ kind: 'reference' as const, value: reference })),
+        ...quotes.map(quote => ({ kind: 'quote' as const, value: quote })),
+      ].sort((a, b) => a.value.offset - b.value.offset)
+      for (const span of spans) {
+        const occurrence = span.value
         appendText(draft.slice(cursor, occurrence.offset))
+        if (span.kind === 'quote') {
+          paragraph.append($createQuoteNode(span.value.text, labels))
+          cursor = occurrence.offset + occurrence.length
+          continue
+        }
+        const reference = span.value
         paragraph.append(new ReferenceChipNode({
-          source: occurrence.source,
-          ref: occurrence.ref,
-          label: occurrence.label,
-          ...(occurrence.appearance === undefined ? {} : { appearance: occurrence.appearance }),
-          clipboardText: occurrence.clipboardText,
-        }, occurrence.invalid === true))
+          source: reference.source,
+          ref: reference.ref,
+          label: reference.label,
+          ...(reference.appearance === undefined ? {} : { appearance: reference.appearance }),
+          clipboardText: reference.clipboardText,
+        }, reference.invalid === true))
         cursor = occurrence.offset + occurrence.length
       }
       appendText(draft.slice(cursor))

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-sdk-app",
   "description": "The dsh SDK profile bundle: stdio JSON-RPC serving and process lifecycle over dsh-base",
-  "version": "0.2.1-alpha.2",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -20,9 +20,11 @@
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./src/*": "./src/*",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "cordis.patch.yml",
     "lib/types/**/*.d.ts"
@@ -39,7 +41,17 @@
     "@deepseek-ai/schemastery": "workspace:~",
     "commander": "^15.0.0",
     "@deepseek-ai/dsh-skill-office": "workspace:*",
-    "@deepseek-ai/dsh-tool-workspace-dependencies": "workspace:*"
+    "@deepseek-ai/dsh-tool-workspace-dependencies": "workspace:*",
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
+    "@deepseek-ai/dsh-client-file-upload": "workspace:*",
+    "@deepseek-ai/dsh-workspace": "workspace:*",
+    "@deepseek-ai/dsh-schedule": "workspace:*",
+    "@deepseek-ai/dsh-time-context": "workspace:*",
+    "@deepseek-ai/dsh-tool-schedule": "workspace:*",
+    "@deepseek-ai/dsh-tool-ask-user": "workspace:*",
+    "@deepseek-ai/dsh-tool-present": "workspace:*",
+    "@deepseek-ai/dsh-file-reference-local": "workspace:*",
+    "@deepseek-ai/dsh-deliverable-file-references": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

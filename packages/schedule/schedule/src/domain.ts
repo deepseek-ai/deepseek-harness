@@ -4,6 +4,20 @@
  */
 
 import { Temporal } from '@js-temporal/polyfill'
+import {
+  MAX_FOUR_DIGIT_YEAR_MS,
+  MIN_FOUR_DIGIT_YEAR_MS,
+  canonicalizeTimeZone as canonicalizeSharedTimeZone,
+  formatFourDigitYearInstant,
+  fourDigitYearEpoch,
+  isFourDigitYearInstant,
+  parseLocalCalendar,
+  parseOffsetInstant,
+  resolveLocalInstant,
+} from '@deepseek-ai/dsh-util-time'
+import type {
+  InstantRejection, LocalCalendarRejection, LocalCalendarTime, TimeZoneRejection,
+} from '@deepseek-ai/dsh-util-time'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import type {
@@ -50,19 +64,7 @@ export const MAX_TITLE_LENGTH = 120
  */
 export const CRON_SEARCH_HORIZON_YEARS = 400
 
-const MIN_FOUR_DIGIT_YEAR_MS = Date.parse('0001-01-01T00:00:00.000Z')
-const MAX_FOUR_DIGIT_YEAR_MS = Date.parse('9999-12-31T23:59:59.999Z')
-const UTC_INSTANT = /^(?!0000)\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{3}Z$/
-const OFFSET_INSTANT = new RegExp(
-  String.raw`^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})`
-  + String.raw`T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})`
-  + String.raw`(?:\.(?<fraction>\d{1,3}))?(?<zone>Z|(?<sign>[+-])`
-  + String.raw`(?<offsetHour>\d{2}):(?<offsetMinute>\d{2}))$`,
-)
-const LOCAL_DATE = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/
-const LOCAL_TIME = /^(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?:\.(?<fraction>\d{1,3}))?$/
 const LOCAL_CLOCK_TIME = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?$/
-const IANA_ZONE = /^[A-Za-z][A-Za-z0-9_+.-]*(?:\/[A-Za-z0-9_+.-]+)+$/
 
 /** Error from malformed or transition-invalid durable Schedule data. */
 export class ScheduleLogError extends Error {
@@ -252,116 +254,63 @@ function decodeId(value: unknown): ScheduleIdType {
   return ScheduleId(value)
 }
 
+/** Stable Schedule diagnostic for a `scheduledAt` outside the canonical profile. */
+const NON_CANONICAL_INSTANT_MESSAGE = 'scheduledAt must be a canonical four-digit-year RFC 3339 UTC instant'
+
 /** Validate one canonical four-digit-year UTC instant. */
 function decodeInstant(value: unknown): string {
-  if (typeof value !== 'string' || !UTC_INSTANT.test(value)) {
-    throw new ScheduleLogError('scheduledAt must be a canonical four-digit-year RFC 3339 UTC instant')
+  if (typeof value !== 'string') {
+    throw new ScheduleLogError(NON_CANONICAL_INSTANT_MESSAGE)
   }
-  const epoch = Date.parse(value)
-  if (!Number.isFinite(epoch) || new Date(epoch).toISOString() !== value) {
-    throw new ScheduleLogError('scheduledAt is not a real UTC calendar instant')
-  }
+  const parsed = fourDigitYearEpoch(value)
+  if (parsed.kind === 'rejected') throw new ScheduleLogError(instantDiagnostic(parsed.reason))
   return value
 }
 
-interface CalendarParts {
-  readonly year: number
-  readonly month: number
-  readonly day: number
-  readonly hour: number
-  readonly minute: number
-  readonly second: number
-  readonly millisecond: number
+/**
+ * Map one shared instant rejection onto the stable stored-data diagnostic.
+ * @param reason - Reason the shared vocabulary refused the instant.
+ * @returns The Schedule log diagnostic for that refusal.
+ */
+function instantDiagnostic(reason: InstantRejection): string {
+  switch (reason) {
+    case 'not_a_calendar_date':
+      return 'scheduledAt is not a real UTC calendar instant'
+    case 'not_rfc3339':
+    case 'out_of_range':
+    case 'invalid_numeric_offset':
+      return NON_CANONICAL_INSTANT_MESSAGE
+    /* v8 ignore next 3 -- the shared parser returns a closed rejection union. */
+    default: {
+      const unreachable: never = reason
+      throw new ScheduleLogError(`unknown instant rejection ${String(unreachable)}`)
+    }
+  }
 }
 
-/** Read one required named regular-expression group as a number. */
-function groupNumber(groups: Record<string, string | undefined>, name: string): number {
-  const value = groups[name]
-  /* v8 ignore next -- successful fixed regexes always provide every requested group. */
-  if (value === undefined) throw new ScheduleInputError('invalid_rule', 'The at value has an invalid shape.')
-  return Number(value)
-}
-
-/** Convert exact calendar fields to a UTC-shaped epoch while rejecting normalization. */
-function calendarEpoch(parts: CalendarParts): number {
-  const value = new Date(0)
-  value.setUTCHours(0, 0, 0, 0)
-  value.setUTCFullYear(parts.year, parts.month - 1, parts.day)
-  value.setUTCHours(parts.hour, parts.minute, parts.second, parts.millisecond)
-  const epoch = value.getTime()
-  if (!Number.isFinite(epoch)
-    || value.getUTCFullYear() !== parts.year
-    || value.getUTCMonth() + 1 !== parts.month
-    || value.getUTCDate() !== parts.day
-    || value.getUTCHours() !== parts.hour
-    || value.getUTCMinutes() !== parts.minute
-    || value.getUTCSeconds() !== parts.second
-    || value.getUTCMilliseconds() !== parts.millisecond) {
-    throw new ScheduleInputError('invalid_rule', 'The at value must be a real ISO calendar date and time.')
+/**
+ * Map one shared zone rejection onto the stable Schedule input code.
+ * @param reason - Reason the shared vocabulary refused the name.
+ * @param cause - Platform refusal the shared vocabulary caught, when it carried one.
+ * @returns The public Schedule diagnostic for that refusal.
+ */
+function timeZoneError(reason: TimeZoneRejection, cause?: unknown): ScheduleInputError {
+  const options = cause === undefined ? undefined : { cause }
+  switch (reason) {
+    case 'blank':
+    case 'padded':
+    case 'not_area_location':
+    case 'unsupported':
+      return new ScheduleInputError('invalid_time_zone', 'time_zone must be UTC or a valid IANA Area/Location name.', options)
+    /* v8 ignore next 2 -- the shared parser does not answer not_canonical_shape for a canonical zone. */
+    case 'not_canonical_shape':
+      return new ScheduleInputError('invalid_time_zone', 'time_zone must resolve to UTC or an IANA Area/Location name.', options)
+    /* v8 ignore next 3 -- TimeZoneRejection is closed; this arm only makes adding a reason a compile error. */
+    default: {
+      const unreachable: never = reason
+      return unreachable
+    }
   }
-  return epoch
-}
-
-/** Normalize an optional one-to-three digit fractional second to milliseconds. */
-function milliseconds(value: string | undefined): number {
-  return value === undefined ? 0 : Number(value.padEnd(3, '0'))
-}
-
-/** Require a safe, representable, strictly future UTC target. */
-function futureInstant(epoch: number, now: number): string {
-  if (!Number.isSafeInteger(now) || !Number.isSafeInteger(epoch)
-    || epoch < MIN_FOUR_DIGIT_YEAR_MS || epoch > MAX_FOUR_DIGIT_YEAR_MS) {
-    throw new ScheduleInputError(
-      'time_out_of_range',
-      'The scheduled time must be representable as a four-digit-year RFC 3339 UTC instant.',
-    )
-  }
-  if (epoch <= now) {
-    throw new ScheduleInputError('not_future', 'The scheduled time must be strictly in the future.')
-  }
-  const instant = new Date(epoch).toISOString()
-  /* v8 ignore next -- an in-range integral Date always formats as the canonical UTC profile. */
-  if (!UTC_INSTANT.test(instant)) {
-    throw new ScheduleInputError(
-      'time_out_of_range',
-      'The scheduled time must be representable as a four-digit-year RFC 3339 UTC instant.',
-    )
-  }
-  return instant
-}
-
-/** Parse a strict RFC 3339 instant whose numeric offset is part of the input. */
-function parseOffsetInstant(value: string): number {
-  const match = OFFSET_INSTANT.exec(value)
-  const groups = match?.groups
-  if (groups === undefined) {
-    throw new ScheduleInputError(
-      'invalid_rule',
-      'at must use YYYY-MM-DDTHH:mm:ss with optional 1-3 digit fractional seconds and an explicit Z or numeric offset.',
-    )
-  }
-  const parts: CalendarParts = {
-    year: groupNumber(groups, 'year'),
-    month: groupNumber(groups, 'month'),
-    day: groupNumber(groups, 'day'),
-    hour: groupNumber(groups, 'hour'),
-    minute: groupNumber(groups, 'minute'),
-    second: groupNumber(groups, 'second'),
-    millisecond: milliseconds(groups['fraction']),
-  }
-  if (parts.year === 0 || parts.hour > 23 || parts.minute > 59 || parts.second > 59) {
-    throw new ScheduleInputError('invalid_rule', 'The at value must be a real ISO calendar date and time.')
-  }
-  const localEpoch = calendarEpoch(parts)
-  if (groups['zone'] === 'Z') return localEpoch
-  const offsetHour = groupNumber(groups, 'offsetHour')
-  const offsetMinute = groupNumber(groups, 'offsetMinute')
-  if (offsetHour > 23 || offsetMinute > 59
-    || (groups['sign'] === '-' && offsetHour === 0 && offsetMinute === 0)) {
-    throw new ScheduleInputError('invalid_rule', 'The at numeric offset is invalid.')
-  }
-  const direction = groups['sign'] === '+' ? 1 : -1
-  return localEpoch - direction * (offsetHour * 60 + offsetMinute) * 60_000
 }
 
 /**
@@ -370,67 +319,82 @@ function parseOffsetInstant(value: string): number {
  * @returns The runtime's canonical IANA name.
  */
 export function canonicalizeTimeZone(value: string): string {
-  if (value.length === 0 || value.trim() !== value || (value !== 'UTC' && !IANA_ZONE.test(value))) {
-    throw new ScheduleInputError('invalid_time_zone', 'time_zone must be UTC or a valid IANA Area/Location name.')
-  }
-  let canonical: string
-  try {
-    canonical = new Intl.DateTimeFormat('en-US', { timeZone: value }).resolvedOptions().timeZone
-  } catch (error: unknown) {
-    throw new ScheduleInputError(
-      'invalid_time_zone',
-      'time_zone must be UTC or a valid IANA Area/Location name.',
-      { cause: error },
-    )
-  }
-  /* v8 ignore next -- Intl returns the requested canonical zone or an IANA canonical alias. */
-  if (canonical !== 'UTC' && !IANA_ZONE.test(canonical)) {
-    throw new ScheduleInputError('invalid_time_zone', 'time_zone must resolve to UTC or an IANA Area/Location name.')
-  }
-  return canonical
+  const resolved = canonicalizeSharedTimeZone(value)
+  if (resolved.kind === 'rejected') throw timeZoneError(resolved.reason, resolved.cause)
+  return resolved.timeZone
 }
 
 /** Parse strict local calendar fields without consulting a process time zone. */
-function parseLocalAt(value: LocalAtInput): CalendarParts {
-  const dateMatch = LOCAL_DATE.exec(value.date)
-  const timeMatch = LOCAL_TIME.exec(value.time)
-  const date = dateMatch?.groups
-  const time = timeMatch?.groups
-  if (date === undefined || time === undefined) {
-    throw new ScheduleInputError(
-      'invalid_rule',
-      'Local at requires date YYYY-MM-DD and time HH:mm:ss with optional one-to-three digit milliseconds.',
-    )
+function parseLocalAt(value: LocalAtInput): LocalCalendarTime {
+  const parsed = parseLocalCalendar(value.date, value.time)
+  if (parsed.kind === 'rejected') {
+    throw new ScheduleInputError('invalid_rule', localCalendarDiagnostic(parsed.reason))
   }
-  const parts: CalendarParts = {
-    year: groupNumber(date, 'year'),
-    month: groupNumber(date, 'month'),
-    day: groupNumber(date, 'day'),
-    hour: groupNumber(time, 'hour'),
-    minute: groupNumber(time, 'minute'),
-    second: groupNumber(time, 'second'),
-    millisecond: milliseconds(time['fraction']),
-  }
-  if (parts.year === 0 || parts.hour > 23 || parts.minute > 59 || parts.second > 59) {
-    throw new ScheduleInputError('invalid_rule', 'The local at value must be a real ISO calendar date and time.')
-  }
-  calendarEpoch(parts)
-  return parts
+  return parsed.time
 }
 
-/** Resolve only the earlier overlap instant; a gap fails the local-field round trip. */
-function localInstant(local: Temporal.PlainDateTime, timeZone: string): number | undefined {
-  const zoned = local.toZonedDateTime(timeZone, { disambiguation: 'earlier' })
-  return zoned.toPlainDateTime().equals(local) ? zoned.epochMilliseconds : undefined
+/** Map one shared local-calendar rejection onto the stable Schedule diagnostic. */
+function localCalendarDiagnostic(reason: LocalCalendarRejection): string {
+  switch (reason) {
+    case 'malformed':
+      return 'Local at requires date YYYY-MM-DD and time HH:mm:ss with optional one-to-three digit milliseconds.'
+    case 'not_a_calendar_date':
+      return 'The at value must be a real ISO calendar date and time.'
+    case 'out_of_range':
+      return 'The local at value must be a real ISO calendar date and time.'
+    /* v8 ignore next 3 -- the shared parser returns a closed rejection union. */
+    default: {
+      const unreachable: never = reason
+      throw new Error(`unknown local calendar rejection ${String(unreachable)}`)
+    }
+  }
 }
 
 /** Resolve a local one-shot, rejecting nonexistent wall-clock times. */
-function resolveLocalInstant(parts: CalendarParts, timeZone: string): number {
-  const target = localInstant(Temporal.PlainDateTime.from(parts, { overflow: 'reject' }), timeZone)
+function resolveLocalAt(parts: LocalCalendarTime, timeZone: string): number {
+  const target = resolveLocalInstant(parts, timeZone)
   if (target === undefined) {
     throw new ScheduleInputError('invalid_rule', 'The local at time does not exist in the selected time zone.')
   }
   return target
+}
+
+/** Require a safe, representable, strictly future UTC target. */
+function futureInstant(epoch: number, now: number): string {
+  const instant = formatFourDigitYearInstant(epoch)
+  if (!Number.isSafeInteger(now) || instant === undefined) {
+    throw new ScheduleInputError(
+      'time_out_of_range',
+      'The scheduled time must be representable as a four-digit-year RFC 3339 UTC instant.',
+    )
+  }
+  if (epoch <= now) {
+    throw new ScheduleInputError('not_future', 'The scheduled time must be strictly in the future.')
+  }
+  return instant
+}
+
+/** Parse a strict RFC 3339 instant whose numeric offset is part of the input. */
+function parseAtOffsetInstant(value: string): number {
+  const parsed = parseOffsetInstant(value)
+  if (parsed.kind === 'accepted') return parsed.epoch
+  switch (parsed.reason) {
+    case 'not_rfc3339':
+      throw new ScheduleInputError(
+        'invalid_rule',
+        'at must use YYYY-MM-DDTHH:mm:ss with optional 1-3 digit fractional seconds and an explicit Z or numeric offset.',
+      )
+    case 'invalid_numeric_offset':
+      throw new ScheduleInputError('invalid_rule', 'The at numeric offset is invalid.')
+    case 'not_a_calendar_date':
+    case 'out_of_range':
+      throw new ScheduleInputError('invalid_rule', 'The at value must be a real ISO calendar date and time.')
+    /* v8 ignore next 3 -- the shared parser returns a closed rejection union. */
+    default: {
+      const unreachable: never = parsed.reason
+      throw new Error(`unknown instant rejection ${String(unreachable)}`)
+    }
+  }
 }
 
 /** Decode the exact v1 after record shape. */
@@ -794,9 +758,7 @@ export function resolveEveryOccurrence(
 ): RecurringOccurrence {
   const target = Date.parse(record.scheduledAt)
   const interval = record.everySeconds * 1_000
-  if (!Number.isSafeInteger(acceptedAt)
-    || acceptedAt < MIN_FOUR_DIGIT_YEAR_MS
-    || acceptedAt > MAX_FOUR_DIGIT_YEAR_MS) {
+  if (!isFourDigitYearInstant(acceptedAt)) {
     throw new ScheduleLogError('every acceptedAt must be a representable four-digit-year instant')
   }
   if (!Number.isSafeInteger(interval) || interval <= 0) {
@@ -813,7 +775,7 @@ export function resolveEveryOccurrence(
   }
   const occurrenceAt = new Date(occurrence).toISOString()
   const next = occurrence + interval
-  if (!Number.isSafeInteger(next) || next > MAX_FOUR_DIGIT_YEAR_MS) {
+  if (!isFourDigitYearInstant(next)) {
     return Object.freeze({ occurrenceAt })
   }
   return Object.freeze({
@@ -854,7 +816,7 @@ function nextMatchingTarget(
   }
   for (; Temporal.PlainDate.compare(date, lastDate) <= 0; date = date.add({ days: 1 })) {
     if (!matches(date)) continue
-    const target = localInstant(date.toPlainDateTime(time), timeZone)
+    const target = resolveLocalInstant(date.toPlainDateTime(time), timeZone)
     if (target === undefined) continue
     if (target > MAX_FOUR_DIGIT_YEAR_MS) return undefined
     if (target >= MIN_FOUR_DIGIT_YEAR_MS && target > now) return new Date(target).toISOString()
@@ -874,7 +836,7 @@ function latestDueOccurrence(
   let date = localDate(acceptedAt, 'UTC').add({ days: 1 })
   for (;; date = date.subtract({ days: 1 })) {
     if (!matches(date)) continue
-    const candidate = localInstant(date.toPlainDateTime(time), timeZone)
+    const candidate = resolveLocalInstant(date.toPlainDateTime(time), timeZone)
     if (candidate === undefined || candidate > acceptedAt) continue
     // A committed target remains due even if current tzdata places the rule before it.
     return Math.max(candidate, savedTarget)
@@ -883,8 +845,7 @@ function latestDueOccurrence(
 
 /** Resolve a wall-clock rule only when its decision is at a representable four-digit-year instant. */
 function acceptedDecision(selector: string, acceptedAt: number): number {
-  if (!Number.isSafeInteger(acceptedAt)
-    || acceptedAt < MIN_FOUR_DIGIT_YEAR_MS || acceptedAt > MAX_FOUR_DIGIT_YEAR_MS) {
+  if (!isFourDigitYearInstant(acceptedAt)) {
     throw new ScheduleLogError(`${selector} acceptedAt must be a representable four-digit-year instant`)
   }
   return acceptedAt
@@ -1022,7 +983,7 @@ function nextCronTarget(parsed: ParsedCronExpression, timeZone: string, floor: n
     if (matches(date)) {
       for (const time of times) {
         if (date.equals(firstDate) && Temporal.PlainTime.compare(time, floorTime) < 0) continue
-        const target = localInstant(date.toPlainDateTime(time), timeZone)
+        const target = resolveLocalInstant(date.toPlainDateTime(time), timeZone)
         if (target === undefined) continue
         if (target > MAX_FOUR_DIGIT_YEAR_MS) return undefined
         if (target >= MIN_FOUR_DIGIT_YEAR_MS && target > floor) return new Date(target).toISOString()
@@ -1076,7 +1037,7 @@ function latestCronOccurrence(
       // An earliest time that a DST gap removes leaves the bound to the first time
       // that does exist, and a date with no existing time keeps the full walk.
       const earliest = times.reduce<number | undefined>(
-        (found, time) => found ?? localInstant(date.toPlainDateTime(time), timeZone),
+        (found, time) => found ?? resolveLocalInstant(date.toPlainDateTime(time), timeZone),
         undefined,
       )
       if (earliest !== undefined && earliest > decision) {
@@ -1084,7 +1045,7 @@ function latestCronOccurrence(
         continue
       }
       for (const time of [...times].reverse()) {
-        const candidate = localInstant(date.toPlainDateTime(time), timeZone)
+        const candidate = resolveLocalInstant(date.toPlainDateTime(time), timeZone)
         if (candidate === undefined || candidate > decision || candidate < MIN_FOUR_DIGIT_YEAR_MS) continue
         // A committed target remains due even if current tzdata places the rule before it.
         return Math.max(candidate, savedTarget)
@@ -1320,7 +1281,7 @@ export function createAtScheduleRecord(
 export function parseAtInput(at: AtInput): number {
   let target: number
   if (typeof at === 'string') {
-    target = parseOffsetInstant(at)
+    target = parseAtOffsetInstant(at)
   } else if (isRecord(at)) {
     if (!hasExactKeys(at, ['date', 'time', 'time_zone'])) {
       throw new ScheduleInputError('invalid_rule', 'Local at must contain exactly date, time, and time_zone.')
@@ -1337,7 +1298,7 @@ export function parseAtInput(at: AtInput): number {
       time: at['time'],
       time_zone: rawTimeZone,
     }
-    target = resolveLocalInstant(parseLocalAt(local), canonicalizeTimeZone(rawTimeZone))
+    target = resolveLocalAt(parseLocalAt(local), canonicalizeTimeZone(rawTimeZone))
   } else {
     throw new ScheduleInputError('invalid_rule', 'at must be an explicit-offset string or local calendar object.')
   }
@@ -1407,7 +1368,7 @@ export function createDailyScheduleRecord(
     throw new ScheduleInputError('invalid_prompt', 'prompt must be non-empty after trimming.')
   }
   const { time, timeZone } = parseDailyInput(daily)
-  if (!Number.isSafeInteger(now) || now < MIN_FOUR_DIGIT_YEAR_MS || now > MAX_FOUR_DIGIT_YEAR_MS) {
+  if (!isFourDigitYearInstant(now)) {
     throw new ScheduleInputError('time_out_of_range', 'Daily creation time must be a representable four-digit-year UTC instant.')
   }
   const scheduledAt = nextDailyTarget(dailyTime(time), timeZone, now)
@@ -1460,7 +1421,7 @@ export function createWeeklyScheduleRecord(
     throw new ScheduleInputError('invalid_prompt', 'prompt must be non-empty after trimming.')
   }
   const { time, timeZone, weekdays } = parseWeeklyInput(weekly)
-  if (!Number.isSafeInteger(now) || now < MIN_FOUR_DIGIT_YEAR_MS || now > MAX_FOUR_DIGIT_YEAR_MS) {
+  if (!isFourDigitYearInstant(now)) {
     throw new ScheduleInputError('time_out_of_range', 'Weekly creation time must be a representable four-digit-year UTC instant.')
   }
   const scheduledAt = nextWeeklyTarget(weeklyTime(time), timeZone, weekdays, now)
@@ -1494,7 +1455,7 @@ export function createCronScheduleRecord(
     throw new ScheduleInputError('invalid_prompt', 'prompt must be non-empty after trimming.')
   }
   const { expression, timeZone } = parseCronInput(cron)
-  if (!Number.isSafeInteger(now) || now < MIN_FOUR_DIGIT_YEAR_MS || now > MAX_FOUR_DIGIT_YEAR_MS) {
+  if (!isFourDigitYearInstant(now)) {
     throw new ScheduleInputError('time_out_of_range', 'Cron creation time must be a representable four-digit-year UTC instant.')
   }
   const scheduledAt = nextCronTarget(parseCronExpression(expression), timeZone, now)

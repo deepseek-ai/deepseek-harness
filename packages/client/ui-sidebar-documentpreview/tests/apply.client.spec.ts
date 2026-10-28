@@ -31,7 +31,7 @@ import { LazyPdfBody } from '../src/client/pdf/LazyPdfBody.tsx'
 import { LazyExcelBody } from '../src/client/excel/LazyExcelBody.tsx'
 import { PDF_BODY_ID } from '../src/client/pdf/index.ts'
 import { CodeBody } from '../src/client/code/CodeBody.tsx'
-import { en, zh } from '../src/client/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/locales.ts'
 import type { textFace } from '../src/client/face.ts'
 import type { TextStore } from '../src/client/store.ts'
 import { FILE, SESSION, TAB_ID, byteResult, createResources, page } from './fixtures.client.ts'
@@ -47,6 +47,7 @@ interface Recorded {
 
 async function boot() {
   const ctx = new Context()
+  ctx.provide('fileDrag', { actions: { prepare: async () => ({ start: () => true, release: () => {} }), reportFailure: () => {} }, read: () => undefined } satisfies import('@deepseek-ai/cordis').Context['fileDrag'])
   ctx.provide('resources', createResources())
   ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) } } as never)
   const tabs = new SidebarRightTabRegistry(ctx)
@@ -85,7 +86,7 @@ describe('ui-sidebar-documentpreview apply', () => {
     const { tabs, registered, dictionaries } = await boot()
     expect(tabs.get(TEXTPREVIEW_KIND)?.priority).toBe('fallback')
     expect(tabs.get(TEXTPREVIEW_KIND)?.id).toBe(TEXTPREVIEW_ID)
-    expect(dictionaries.get('sidebarDocumentPreview')).toEqual({ zh, en })
+    expect(dictionaries.get('sidebarDocumentPreview')).toEqual({ zh, en, ja, es, fr, de, ru, pt })
     // The seat key is the implementation's id, not the kind: an extension may
     // take the kind over, and the seat must still find this body.
     expect(registered.map(entry => [entry.name, entry.key, entry.locale, entry.component])).toEqual([

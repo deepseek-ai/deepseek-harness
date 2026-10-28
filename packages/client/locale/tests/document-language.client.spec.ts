@@ -103,7 +103,7 @@ describe('document language', () => {
     const observer = new MutationObserver(() => {})
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] })
     try {
-      const remove = locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' })
+      const remove = locale.addLanguage({ id: 'it', label: 'Italiano', fallback: 'en' })
       expect(observer.takeRecords()).toHaveLength(0)
       remove()
       expect(observer.takeRecords()).toHaveLength(0)

@@ -15,7 +15,9 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
-import type { ModelSelection, ModelSelectionProjection } from '@deepseek-ai/dsh-api-session-controller/types'
+import type { ModelSelection } from '@deepseek-ai/dsh-agent/types'
+import type { ModelSelectionProjection } from '@deepseek-ai/dsh-agent/types'
+import { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
 import type { CommandContribution, PopupSelectSpec, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ModelSelectInjected } from '../src/client/slots.ts'
 import { apply, inject } from '../src/client/index.ts'
@@ -98,7 +100,7 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
         model: payload.model,
         ...payload.reasoningEffort === undefined
           ? {}
-          : { reasoningEffort: payload.reasoningEffort },
+          : { reasoningEffort: ReasoningEffortId(payload.reasoningEffort) },
       }
       projections.get(payload.sessionId)?.set({ lastUsed: null, next: selected })
       return Promise.resolve({ ok: true as const, value: { selected } })
@@ -223,6 +225,14 @@ describe('ui-model-selection dual entry', () => {
     expect(b.seat().inject).toBeTypeOf('function')
     // Copy rides the standard locale seat.
     expect(b.seat().locale).toBe('model')
+  })
+
+  it.each([['zh', '新'], ['en', 'New']] as const)('resolves seat badge text for the active %s locale', async (locale, expected) => {
+    const b = await bench(locale)
+    b.mint('s1')
+    const face = b.seat().inject!(sid('s1'))
+    expect(face.resolveText({ en: 'New', zh: '新' })).toBe(expected)
+    expect(face.resolveText('1017')).toBe('1017')
   })
 
   it.each(['zh', 'en'] as const)('shows names and providers without catalog descriptions (%s)', async (locale) => {
@@ -382,6 +392,27 @@ describe('ui-model-selection dual entry', () => {
     })
   })
 
+  it('replaces and removes badges in an open directory on model catalog notifications', async () => {
+    const b = await bench()
+    try {
+      b.mint('s1')
+      const face = b.seat().inject!(sid('s1'))
+      for (const badge of [{ text: 'New', tone: 'info' as const }, { text: 'Updated', tone: 'success' as const }, undefined]) {
+        b.setGroups(GROUPS.map(group => ({
+          ...group, models: group.models.map(model => ({ ...model, ...(badge === undefined ? {} : { badge }) })),
+        })))
+        b.remote.emit('llm/models-updated', ['deepseek-official'])
+        await vi.waitFor(() => {
+          expect(face.directory.getSnapshot().status).toBe('ready')
+          expect(face.directory.getSnapshot().groups[0]?.models[0]?.badge).toEqual(badge)
+        })
+      }
+      expect(face.directory.getSnapshot().current?.model).toBe('deepseek-v4-flash')
+    } finally {
+      await b.ctx.fiber.dispose()
+    }
+  })
+
   it('retains the selected model while refreshing its catalog', async () => {
     const b = await bench()
     b.mint('s1')
@@ -446,12 +477,12 @@ describe('ui-model-selection dual entry', () => {
   it('retains saved effort for existing and new sessions after credentials disappear', async () => {
     const b = await bench()
     try {
-      b.setHostCurrent({ provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'max' })
+      b.setHostCurrent({ provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: ReasoningEffortId('max') })
       b.mint('existing')
       const existing = b.ctx.modelDirectories.directoryFor(sid('existing'))
       await existing.load()
       b.setProjected(sid('existing'), { lastUsed: null,
-        next: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'high' } })
+        next: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: ReasoningEffortId('high') } })
       b.setRoutable(false)
       b.remote.emit('settings/document-updated', ['llm-deepseek', 1])
       expect(existing.store.getSnapshot().retainedEffort).toBe('High')
@@ -544,7 +575,7 @@ it.each([false, true])('reports accepted switches with blank=%s and no refused s
   const scope = b.mint('analytics', blank)
   try {
     const face = b.seat().inject!(sid('analytics'))
-    await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'max' })
+    await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: ReasoningEffortId('max') })
     expect(b.track).toHaveBeenCalledWith('model_switch', { ...blank ? {} : { session_id: 'analytics' }, switch_from: 'deepseek-official/deepseek-v4-flash', switch_to: 'deepseek-official/deepseek-v4-pro' })
     b.track.mockClear()
     await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' })

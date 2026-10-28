@@ -1,15 +1,17 @@
 /** Helper leases, stream ownership and request validation over the administrative wire. */
 import { createHash, randomUUID } from 'node:crypto'
-import { readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { createHelperHarness } from './fixtures/helper.ts'
 import { runSshHelper } from '../src/helper.ts'
 import { RemoteProcesses } from '../src/helper-processes.ts'
-import { helloSchema, preparedSchema, targetSchema } from '../src/schemas.ts'
+import { helloSchema, preparedSchema, targetSchema, writeResultSchema } from '../src/schemas.ts'
 import { SSH_MAX_TEXT_STREAMS } from '../src/protocol.ts'
 
 const entryPath = fileURLToPath(new URL('../src/helper-entry.ts', import.meta.url))
@@ -47,13 +49,13 @@ describe.skipIf(process.platform === 'win32')('SSH helper wire and lifecycle bou
     const test = await createHelperHarness(false)
     try {
       for (const params of [
-        { protocol: 1, workspace: test.root, leaseMs: 3000 },
-        { protocol: 2, workspace: 'relative', leaseMs: 3000 },
-        { protocol: 2, workspace: test.root, leaseMs: 2999 },
+        { protocol: 2, workspace: test.root, leaseMs: 3000 },
+        { protocol: 3, workspace: 'relative', leaseMs: 3000 },
+        { protocol: 3, workspace: test.root, leaseMs: 2999 },
       ]) await expect(test.client.request('hello', params, helloSchema)).rejects.toThrow()
       const bootstrapPath = `${test.root}/bootstrap.js`
       await writeFile(bootstrapPath, 'export const identity = "test"\n')
-      const facts = await test.client.request('hello', { protocol: 2, workspace: test.root, leaseMs: 3000, bootstrapPath }, helloSchema)
+      const facts = await test.client.request('hello', { protocol: 3, workspace: test.root, leaseMs: 3000, bootstrapPath }, helloSchema)
       expect(facts.bootstrapHash).toBe(createHash('sha256').update(await readFile(bootstrapPath)).digest('hex'))
     } finally { await test.close() }
   })
@@ -61,7 +63,7 @@ describe.skipIf(process.platform === 'win32')('SSH helper wire and lifecycle bou
   it('refuses an external bootstrap for an executable helper', async () => {
     const test = await createHelperHarness(false, 30_000, 'executable')
     try {
-      await expect(test.client.request('hello', { protocol: 2, workspace: test.root, leaseMs: 3000, bootstrapPath: '/external/process.js' }, helloSchema))
+      await expect(test.client.request('hello', { protocol: 3, workspace: test.root, leaseMs: 3000, bootstrapPath: '/external/process.js' }, helloSchema))
         .rejects.toThrow('embedded PTC bootstrap')
       expect((await test.hello()).kind).toBe('executable')
     } finally { await test.close() }
@@ -218,6 +220,63 @@ describe.skipIf(process.platform === 'win32')('SSH helper wire and lifecycle bou
       await rejected
       await expect(stat(test.facts!.root)).rejects.toMatchObject({ code: 'ENOENT' })
     } finally { close.mockRestore(); await expect(test.close()).rejects.toBe(failure) }
+  })
+
+  it('validates explicit physical writable roots over the wire without granting aliases', async () => {
+    const base = await realpath(await mkdtemp(join(homedir(), '.dsh-ssh-policy-')))
+    onTestFinished(() => rm(base, { recursive: true, force: true }))
+    const test = await createHelperHarness()
+    onTestFinished(() => test.close())
+    const workspace = join(base, 'workspace')
+    const extra = join(base, 'extra')
+    const outside = join(base, 'outside')
+    const alias = join(base, 'alias')
+    await mkdir(workspace)
+    await mkdir(extra)
+    await mkdir(outside)
+    await symlink(extra, alias, 'dir')
+    const target = (path: string) => ({ targetKey: path, displayPath: path })
+    const policy = { mode: 'workspace-write' as const, workspaceRoot: workspace, additionalWritableRoots: [extra, extra], sessionId: 'ssh-extra-grant' }
+    try {
+      const written = await test.client.request('fs.write', {
+        target: target(join(extra, 'allowed.txt')), content: 'ok', policy,
+      }, writeResultSchema)
+      expect(written.operation).toBe('create')
+      expect(await readFile(join(extra, 'allowed.txt'), 'utf8')).toBe('ok')
+      await expect(test.client.request('fs.write', {
+        target: target(join(workspace, 'empty-roots.txt')), content: 'ok', policy: { ...policy, additionalWritableRoots: [] },
+      }, writeResultSchema)).resolves.toMatchObject({ operation: 'create' })
+
+      await expect(test.client.request('fs.write', {
+        target: target(join(extra, 'alias.txt')), content: 'no', policy: { ...policy, additionalWritableRoots: [alias] },
+      }, writeResultSchema)).rejects.toThrow('use the physical directory path')
+
+      // A sibling directory is still denied under the same widened policy.
+      await expect(test.client.request('fs.write', {
+        target: target(join(outside, 'denied.txt')), content: 'no', policy,
+      }, writeResultSchema)).rejects.toThrow(/workspace-write/u)
+
+      // Absence of the extra root denies the same target.
+      await expect(test.client.request('fs.write', {
+        target: target(join(extra, 'baseline.txt')), content: 'no',
+        policy: { mode: 'workspace-write', workspaceRoot: workspace },
+      }, writeResultSchema)).rejects.toThrow(/workspace-write/u)
+
+      // Read-only grants nothing even when the extra roots arrive on the wire.
+      await expect(test.client.request('fs.write', {
+        target: target(join(extra, 'readonly.txt')), content: 'no',
+        policy: { mode: 'read-only', workspaceRoot: workspace, additionalWritableRoots: [alias] },
+      }, writeResultSchema)).rejects.toThrow(/read-only/u)
+
+      // The strict decoder rejects a relative execution-world root.
+      await expect(test.client.request('fs.write', {
+        target: target(join(extra, 'relative.txt')), content: 'no',
+        policy: { ...policy, additionalWritableRoots: ['relative'] },
+      }, writeResultSchema)).rejects.toThrow()
+    } finally {
+      await test.close()
+      await rm(base, { recursive: true, force: true })
+    }
   })
 
   it('routes process and terminal lifecycle operations while rejecting unknown ids', async () => {

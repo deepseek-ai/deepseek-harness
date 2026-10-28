@@ -1,6 +1,6 @@
 - dialog "设置":
+  - text: 设置
   - navigation:
-    - text: 设置
     - button "通用设置"
     - button "模型"
     - button "内置插件"
@@ -32,6 +32,7 @@
           - text: 模型目录 已自定义模型目录
           - button "恢复默认模型"
           - button "获取可用模型"
+          - button "调整模型顺序 1"
           - textbox "模型 ID 1":
             - /placeholder: 模型 ID
             - text: gpt-6-astra
@@ -42,11 +43,11 @@
           - button "删除模型 1"
           - text: 上下文窗口
           - textbox "上下文窗口 1":
-            - /placeholder: 256K
+            - /placeholder: 1M
             - text: 272K
           - text: 最大输出 token 数
           - textbox "最大输出 token 数 1":
-            - /placeholder: 32K
+            - /placeholder: 128K
             - text: 128K
           - group "输入类型 1":
             - text: 输入类型

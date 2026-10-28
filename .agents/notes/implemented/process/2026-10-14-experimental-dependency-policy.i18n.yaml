@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-14-experimental-dependency-policy.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-10-14-experimental-dependency-policy.md
+/agent-note-experimental-packages-follow-the-same-dependency-declaration-rules:
+  en: ec44b9c40ce4bb25
+  zh: 2e5731c96fa82ba8
+/agent-note-experimental-packages-follow-the-same-dependency-declaration-rules/problem:
+  en: ee78aec260872b62
+  zh: 005e4c3c2b54a9ef
+/agent-note-experimental-packages-follow-the-same-dependency-declaration-rules/decision:
+  en: 081508647fade940
+  zh: 496cffe0fba8544f
+/agent-note-experimental-packages-follow-the-same-dependency-declaration-rules/alternatives-considered:
+  en: 28c320fb3547502d
+  zh: 9563fd1709ed8b54
+/agent-note-experimental-packages-follow-the-same-dependency-declaration-rules/consequences:
+  en: cc50e617e4893a30
+  zh: c2d2b9efd2955127
+/agent-note-experimental-packages-follow-the-same-dependency-declaration-rules/testing:
+  en: 9542331ca97ac00a
+  zh: 34857e7b85128c7b

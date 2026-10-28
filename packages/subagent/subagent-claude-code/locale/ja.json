@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Claude Code サブエージェント",
+    "description": "Claude Code のネイティブの認証と設定を使用して、単独のタスクを委派します。"
+  }
+}

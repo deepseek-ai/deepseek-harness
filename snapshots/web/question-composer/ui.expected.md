@@ -1,8 +1,8 @@
 - region "Which color do you prefer?":
   - text: Pick one
-  - heading "Which color do you prefer?" [level=2]
   - button "Collapse the question card" [expanded]
   - button "Dismiss all questions"
+  - heading "Which color do you prefer?" [level=2]
   - group:
     - checkbox "Blue": Blue A cool recessive hue that reads as calm and trustworthy in long reading sessions and dense dashboards.
     - checkbox "Green": Green A restful mid-spectrum hue with the highest perceived brightness, easiest on the eye over long sessions.
@@ -13,3 +13,4 @@
   - status
   - button "Skip"
   - button "Submit" [disabled]
+Choice descriptions: [{"label":"Blue","description":"A cool recessive hue that reads as calm and trustworthy in long reading sessions and dense dashboards."},{"label":"Green","description":"A restful mid-spectrum hue with the highest perceived brightness, easiest on the eye over long sessions."}]

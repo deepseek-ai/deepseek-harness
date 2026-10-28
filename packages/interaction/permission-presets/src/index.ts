@@ -12,10 +12,11 @@
  * @module dsh-permission-presets
  */
 import type {} from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-agent'
 
 import type { Volatile } from '@deepseek-ai/cordis'
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
@@ -29,7 +30,7 @@ import type {} from '@deepseek-ai/dsh-shell'
 import type { ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import { APPROVAL_POLICIES, setApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 // Type-only: resolves the required projection service and optional settings/command children.
-import type {} from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-commands'
 import type { PermissionCatalog, PermissionSelection, PresetOption } from './types.ts'
 
@@ -38,13 +39,6 @@ export type * from './types.ts'
 declare module '@deepseek-ai/cordis' {
   interface Context {
     permissionPresets: PermissionPresetService
-  }
-}
-
-declare module '@deepseek-ai/dsh-session-projection/types' {
-  interface SessionProjectionStateMap {
-    /** Latest logged permission overrides and constructor-seed status. */
-    permissions: PermissionProjectionState
   }
 }
 
@@ -198,11 +192,13 @@ export class PermissionPresetService extends TypertRemoteService {
     defaultPreset: z.string().volatile(),
   })
 
-  static inject = ['shell', 'approval', 'sessions', 'sessionProjections']
+  static inject = ['shell', 'approval', 'sessions', 'agents', 'sessionProjections']
 
   private readonly presets: Record<string, PresetSpec>
   private autoAdmit: (() => void) | undefined
   private defaultSettings: () => PermissionSettings
+
+  private permissionProjectionHandle: ProjectionHandle<PermissionProjectionState> | undefined
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'permissionPresets')
@@ -230,11 +226,17 @@ export class PermissionPresetService extends TypertRemoteService {
       if (!Object.hasOwn(this.presets, defaultPreset)) throw new Error(`permission: unknown default preset "${defaultPreset}"`)
       return { defaultPreset }
     }
+  }
 
+  protected async [Service.init](): Promise<void> {
+    const ctx = this.ctx
+    ctx.on('agent/created', ({ agent }) => {
+      this.pinInitialPermission(agent.session)
+    }, { prepend: true })
     const selectionSchema = zod.object({
       currentValue: zod.string().min(1),
     }) as zod.ZodType<PermissionSelection>
-    ctx.sessionProjections.register({
+    this.permissionProjectionHandle = await ctx.sessionProjections.register({
       key: 'permissions',
       stateVersion: 2,
       stateSchema: permissionStateSchema,
@@ -242,11 +244,8 @@ export class PermissionPresetService extends TypertRemoteService {
       apply: applyPermissionEvent,
       wire: { viewSchema: selectionSchema, view: state => ({ currentValue: this.derive(state) }) },
     })
-    ctx.on('session/created', (session) => {
-      this.pinInitialPermission(session)
-    })
-    for (const session of ctx.sessions.list()) {
-      this.pinInitialPermission(session)
+    for (const agent of ctx.agents.list()) {
+      this.pinInitialPermission(agent.session)
     }
 
     // The /permission command: the one write path a web client uses (the
@@ -326,9 +325,10 @@ export class PermissionPresetService extends TypertRemoteService {
   }
 
   private permissionState(session: Session): PermissionProjectionState {
-    const state = this.ctx.sessionProjections.stateOf(session, 'permissions')
-    if (state === undefined) throw new Error('permission: permissions session projection is not registered')
-    return state
+    if (this.permissionProjectionHandle === undefined) {
+      throw new Error('permission: presets are not ready; await plugin activation before creating or restoring a session')
+    }
+    return this.permissionProjectionHandle.stateOf(session)
   }
 
   /**
@@ -418,12 +418,13 @@ export class PermissionPresetService extends TypertRemoteService {
   }
 
   /**
-   * Fill every missing permission fact before a session is published. A
+   * Fill every missing permission fact during Agent creation. A
    * genuinely fresh session uses the current user default; seeded or partially
    * initialized sessions preserve their effective knob values and only gain
    * the missing durable facts. A stored Auto identity requires its live
    * integration and passes its admission check before
-   * publication.
+   * creation completes. Creation while the permission reader is still registering
+   * fails so the publishing caller can roll back.
    */
   private pinInitialPermission(session: Session): void {
     const state = this.permissionState(session)

@@ -31,6 +31,8 @@ kind: "package-reference"
 
 下载或重试前，**模型下载源**提供自动选择及 Host 公布的源。SenseVoice 默认提供 Hugging Face 和 HF-Mirror；固定私有部署仅显示配置的源。手动选择只使用指定源，自动选择沿用提供方的比较与回退策略。当前卡片中的重试会保留选择，不修改部署配置或识别偏好。准备期间不能改源，资源就绪后隐藏源选择器。
 
+`pluginNavigation` 为可选服务：没有它时插件照常启动，设置对话框只在该服务存在时提供详情按钮。
+
 -----
 
 <a id="understand-the-implementation"></a>

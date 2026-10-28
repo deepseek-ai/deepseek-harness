@@ -16,11 +16,14 @@
  */
 import type { LexicalEditor } from 'lexical'
 import {
+  $getAdjacentNode, $getSelection, $isElementNode, $isLineBreakNode, $isRangeSelection, $isTextNode,
+  KEY_DOWN_COMMAND, MOVE_TO_END,
   COMMAND_PRIORITY_CRITICAL, KEY_ARROW_DOWN_COMMAND, KEY_ARROW_UP_COMMAND, KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND, KEY_SPACE_COMMAND, KEY_TAB_COMMAND, PASTE_COMMAND,
 } from 'lexical'
 import { mergeRegister } from '@lexical/utils'
 import type { ArbitrateKey, ArbitrateOutcome } from '../../contract/draft-editor.ts'
+import { $isQuoteNode } from './QuoteNode.tsx'
 
 /** The bar-supplied behavior behind each intercepted gesture. */
 export interface ComposerKeymapHandlers {
@@ -49,6 +52,118 @@ function isComposingEvent(event: KeyboardEvent, recentlyComposing: () => boolean
   // keyCode 229 is the legacy IME-composition signal engines emit without isComposing.
   // oxlint-disable-next-line typescript/no-deprecated
   return event.isComposing || event.keyCode === 229 || recentlyComposing()
+}
+
+function isApplePlatform(): boolean {
+  return typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+}
+
+/** Whether the browser caret touches one side of an atomic quote element. */
+function domCaretTouches(element: HTMLElement, backward: boolean): boolean {
+  const selection = element.ownerDocument.defaultView?.getSelection()
+  if (selection === null || selection === undefined || !selection.isCollapsed) return false
+  const focus = selection.focusNode
+  if (focus === null) return false
+  const parent = element.parentNode
+  if (parent === null) return false
+  const offset = selection.focusOffset
+  if (focus === parent) {
+    return focus.childNodes.item(backward ? offset - 1 : offset) === element
+  }
+  if (focus.nodeType === Node.TEXT_NODE) {
+    const size = focus.textContent?.length ?? 0
+    if (backward ? offset !== 0 : offset !== size) return false
+  } else if (backward ? offset !== 0 : offset !== focus.childNodes.length) {
+    return false
+  }
+  let boundary = focus
+  while (boundary.parentNode !== null && boundary.parentNode !== parent) {
+    if ((backward ? boundary.previousSibling : boundary.nextSibling) !== null) return false
+    boundary = boundary.parentNode
+  }
+  return boundary.parentNode === parent
+    && (backward ? boundary.previousSibling : boundary.nextSibling) === element
+}
+
+/** Find an atomic quote immediately beside both editor and browser carets. */
+function adjacentQuote(editor: LexicalEditor, backward: boolean) {
+  const selection = $getSelection()
+  if (!$isRangeSelection(selection) || !selection.isCollapsed()) return null
+  const adjacent = $getAdjacentNode(selection.focus, backward)
+  if (!$isQuoteNode(adjacent)) return null
+  const element = editor.getElementByKey(adjacent.getKey())
+  return element !== null && domCaretTouches(element, backward) ? adjacent : null
+}
+
+function lineLeadingQuoteBeforeSelection(editor: LexicalEditor) {
+  let quote = adjacentQuote(editor, true)
+  if (quote === null) return null
+  let previous = quote.getPreviousSibling()
+  while (previous !== null) {
+    if ($isLineBreakNode(previous)) return quote
+    if ($isQuoteNode(previous)) {
+      quote = previous
+      previous = previous.getPreviousSibling()
+      continue
+    }
+    if (!$isTextNode(previous)) return null
+    const text = previous.getTextContent()
+    const lastBreak = text.lastIndexOf('\n')
+    if (lastBreak >= 0) return text.slice(lastBreak + 1) === '' ? quote : null
+    if (text.trim() !== '') return null
+    const precedingQuote = previous.getPreviousSibling()
+    if (!$isQuoteNode(precedingQuote)) return null
+    quote = precedingQuote
+    previous = quote.getPreviousSibling()
+  }
+  return quote
+}
+
+/** Put the browser caret before an adjacent line-leading quote. */
+function moveBeforeQuote(editor: LexicalEditor, event: KeyboardEvent): boolean {
+  if (event.shiftKey) return false
+  const quote = lineLeadingQuoteBeforeSelection(editor)
+  if (quote === null) return false
+  const element = editor.getElementByKey(quote.getKey())
+  if (element === null) return false
+  const view = element.ownerDocument.defaultView
+  if (view === null) return false
+  const domSelection = view.getSelection()
+  if (domSelection === null) return false
+  const range = element.ownerDocument.createRange()
+  range.setStartBefore(element)
+  range.collapse(true)
+  domSelection.removeAllRanges()
+  domSelection.addRange(range)
+  event.preventDefault()
+  return true
+}
+
+/** Move from immediately before a quote to the end of its hard line. */
+function movePastQuote(editor: LexicalEditor, event: KeyboardEvent): boolean {
+  if (!isApplePlatform() || event.key !== 'ArrowRight' || !event.metaKey
+    || event.ctrlKey || event.altKey || event.shiftKey) return false
+  const quote = adjacentQuote(editor, false)
+  if (quote === null) return false
+  const block = quote.getParent()
+  if (!$isElementNode(block)) return false
+  let lineEnd = quote.getIndexWithinParent() + 1
+  while (lineEnd < block.getChildrenSize()) {
+    const child = block.getChildAtIndex(lineEnd)
+    if ($isLineBreakNode(child)) break
+    if ($isTextNode(child)) {
+      const hardBreak = child.getTextContent().indexOf('\n')
+      if (hardBreak >= 0) {
+        event.preventDefault()
+        child.select(hardBreak, hardBreak)
+        return true
+      }
+    }
+    lineEnd += 1
+  }
+  event.preventDefault()
+  block.select(lineEnd, lineEnd)
+  return true
 }
 
 /**
@@ -101,6 +216,13 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
       root?.addEventListener('compositionend', onCompositionEnd)
       syncComposition()
     }),
+    editor.registerCommand(KEY_DOWN_COMMAND, (event) => {
+      if (!isApplePlatform() || !event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false
+      const key = event.key.toLowerCase()
+      if (key === 'a') return moveBeforeQuote(editor, event)
+      return false
+    }, COMMAND_PRIORITY_CRITICAL),
+    editor.registerCommand(MOVE_TO_END, event => movePastQuote(editor, event), COMMAND_PRIORITY_CRITICAL),
     editor.registerUpdateListener(syncComposition),
     editor.registerCommand(KEY_ARROW_UP_COMMAND, arrow('up'), COMMAND_PRIORITY_CRITICAL),
     editor.registerCommand(KEY_ARROW_DOWN_COMMAND, arrow('down'), COMMAND_PRIORITY_CRITICAL),
@@ -115,7 +237,7 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
     ),
     editor.registerCommand(KEY_ESCAPE_COMMAND, (event) => {
       // Escape layering: an open overlay closes; claimed without an overlay
-      // does NOT release (backspacing the token is the only exit gesture).
+      // does NOT release (deleting the command chip is the only exit gesture).
       handlers.dismissPopup()
       if (handlers.arbitrate('escape', isComposingEvent(event, recentlyComposing)) === 'consumed') {
         event.preventDefault()
@@ -127,7 +249,7 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
       if (isComposingEvent(event, recentlyComposing)) return false
       const consumed = handlers.space()
       if (consumed) {
-        event.preventDefault() // claim token already carries the trailing separator
+        event.preventDefault() // the command chip insertion already carries its separator
         return true
       }
       return false

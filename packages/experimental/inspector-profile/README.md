@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Enable this optional bundle to inspect Session data in the Sidebar and open NodeJS Inspector in the bottom panel. It enables both inspectors and Host fetch capture; the bundle itself is off by default in Plugin Manager.
+Enable this optional bundle to inspect Session data in the Sidebar, open NodeJS inspector in the bottom panel, and add the Statistics conversation tab. It enables both inspectors, the Statistics view, and Host fetch capture; the bundle itself is off by default in Plugin Manager.
 
 ## Table of Contents
 
@@ -24,11 +24,11 @@ Enable this optional bundle to inspect Session data in the Sidebar and open Node
 <a id="use-this-package"></a>
 ## Use this package
 
-Enable **Developer Tools** in Plugin Manager's official group. This selects `@deepseek-ai/dsh-experimental-inspector-profile` for the current Web profile.
+Open **Plugins**, select **More** beside **Experimental plugins**, and enable **Developer tools**; once on, it also appears on the main list. This selects `@deepseek-ai/dsh-experimental-inspector-profile` for the current Web profile.
 
-Open **Session Log** from the Sidebar's new-tab menu or guide. [Session Inspector](../session-inspector/README.md) provides one view with selectable Raw Log and Chat Group presentations; Raw Log is selected initially.
+The **Statistics** tab beside Chat and Trajectory shows per-turn and per-step context, timing, cache, and tool cost; see the [performance view package](../client-ui-stats/README.md). Open **Session log** from the Sidebar's new-tab menu or guide. [Session Inspector](../session-inspector/README.md) provides one view with selectable Raw log and Chat group presentations; Raw log is selected initially.
 
-Press **Ctrl/Cmd+Shift+.** to open or collapse **NodeJS Inspector** in the bottom panel with the packaged DevTools frontend. Enabling this bundle starts the local debugging backend and unredacted Host fetch capture; no user override or debugging argument is required.
+Press **Ctrl/Cmd+Shift+.** to open or collapse **NodeJS inspector** in the bottom panel with the packaged DevTools frontend. Enabling this bundle starts the local debugging backend and unredacted Host fetch capture; no user override or debugging argument is required.
 
 -----
 
@@ -38,7 +38,7 @@ Press **Ctrl/Cmd+Shift+.** to open or collapse **NodeJS Inspector** in the botto
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) enables Session Inspector and the NodeJS Inspector backend with `captureFetch: true`, independently of debugging flags. See the Inspector [README](../inspector/README.md) for debugging and capture behavior. Each plugin owns its behavior and lifetime.
+[`cordis.patch.yml`](cordis.patch.yml) enables Session Inspector, the Statistics conversation view, and the NodeJS inspector backend with `captureFetch: true`, independently of debugging flags. See the Inspector [README](../inspector/README.md) for debugging and capture behavior. Each plugin owns its behavior and lifetime.
 
 </details>
 

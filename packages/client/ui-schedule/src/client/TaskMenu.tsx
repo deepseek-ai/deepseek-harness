@@ -11,7 +11,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
-  IconCheckOutlineRegular, useAnchoredPosition, useDismissOnOutsidePointer,
+  IconCheckOutlineRegular, isMobileDevice, useAnchoredPosition, useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './TaskMenu.module.css'
 
@@ -114,8 +114,9 @@ function isLabel(entry: TaskMenuEntry): entry is TaskMenuLabel {
  * @param props.portal - render the list into document.body, fixed-positioned
  * from the anchor rect (follows scroll and resize while open).
  * @param props.header - owner content pinned above the scrolling rows; a control
- * it marks `data-menu-field` takes the keyboard once the list is placed, which
- * is the frame a portaled list becomes focusable in.
+ * it marks `data-menu-field` takes the keyboard on desktop once the list is placed,
+ * which is the frame a portaled list becomes focusable in. Phones and tablets
+ * require explicit field focus.
  * @param props.className - extra class on the anchor wrapper span.
  * @param props.listClassName - extra class on the dropdown card itself.
  * @returns the anchor wrapper with the conditional list.
@@ -175,7 +176,7 @@ export function TaskMenu({ open, anchor, items = [], selectedId, onSelect, onClo
       handedOver.current = false
       return
     }
-    if (handedOver.current) return
+    if (handedOver.current || isMobileDevice()) return
     const list = listRef.current
     /* v8 ignore next -- the list is rendered in the same commit that sets `open`, before this effect runs. */
     if (list === null) return

@@ -66,22 +66,6 @@
       }
     },
     {
-      "name": "exit_plan_mode",
-      "description": "Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. The user may approve (carry out the plan from your next step) or keep planning — their feedback comes back in the tool result; revise and present again.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "plan": {
-            "type": "string",
-            "description": "The complete plan, as markdown, starting with a # heading that names it."
-          }
-        },
-        "required": [
-          "plan"
-        ]
-      }
-    },
-    {
       "name": "get_goal",
       "description": "Read the current session goal, including the id and revision that update_goal requires.",
       "parameters": {
@@ -139,23 +123,6 @@
         "required": [
           "job_id"
         ]
-      }
-    },
-    {
-      "name": "list_agents",
-      "description": "List subagents you started, with their ids, labels, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "scope": {
-            "type": "string",
-            "description": "children (default) lists direct children, which accept send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent.",
-            "enum": [
-              "children",
-              "descendants"
-            ]
-          }
-        }
       }
     },
     {

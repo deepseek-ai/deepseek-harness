@@ -22,8 +22,8 @@ export class ManagementFailure extends Error {
 /**
  * Drop the exemption status from an unexempted compatibility result.
  * @param issue Result whose exemption is not active.
- * @returns The package, runtime, and rejected peer ranges.
+ * @returns The package, runtime, and unmet DSH requirements.
  */
 export function incompatiblePlugin(issue: PluginCompatibility): IncompatiblePlugin {
-  return { name: issue.name, version: issue.version, runtimeVersion: issue.runtimeVersion, peers: issue.peers }
+  return { name: issue.name, version: issue.version, runtimeVersion: issue.runtimeVersion, requirements: issue.requirements }
 }

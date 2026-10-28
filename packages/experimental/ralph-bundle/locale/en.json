@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Ralph loops",
-    "description": "Run explicitly requested repeated work with fresh agents."
+    "description": "Ask for a Ralph loop with a goal, and the agent starts a fresh agent on it round after round until the goal is met, a blocker is reported, or the round limit is reached.",
+    "detail": "docs/DETAIL.md"
   }
 }

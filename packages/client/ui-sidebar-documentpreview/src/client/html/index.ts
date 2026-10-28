@@ -6,7 +6,7 @@ import { hostFileOf } from '../rpc.ts'
 import { HtmlBody } from './HtmlBody.tsx'
 import type { HtmlBodyInjected } from './HtmlBody.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import { en, zh } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 
 /** HTML implementation identity, shared by metadata and the keyed slot. */
 export const HTML_BODY_ID = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/html'
@@ -26,7 +26,7 @@ export function htmlBodyDefinition(title: () => string): DocumentPreviewDefiniti
  */
 export function apply(ctx: Context): void {
   const t = ctx.locale.bind('documentHtml')
-  ctx.effect(() => ctx.locale.register('documentHtml', { zh, en }))
+  ctx.effect(() => ctx.locale.register('documentHtml', { zh, en, ja, es, fr, de, ru, pt }))
   ctx.effect(() => ctx.documentPreviews.register(htmlBodyDefinition(() => t('title'))))
   ctx.effect(() => ctx.slots.inject('sidebar.right.tab.document', () => ctx.slots.register(
     {

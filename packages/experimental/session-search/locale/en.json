@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Session search",
-    "description": "Give Agents tools to search and read earlier sessions from the current workspace."
+    "description": "Ask about earlier work, such as “How did we fix the pool leak last week?”, and the agent searches your earlier sessions in the same workspace to answer.",
+    "detail": "docs/DETAIL.md"
   }
 }

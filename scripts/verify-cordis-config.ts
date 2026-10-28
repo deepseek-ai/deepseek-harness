@@ -119,7 +119,8 @@ function validateClientHalvesDeclared(): string[] {
 }
 
 /**
- * No shipped agent preset may repeat a row the host composition still runs.
+ * No shipped agent preset may repeat an unscoped row the host composition still runs.
+ * Tool executors select through the mounting scope and may appear on both planes.
  *
  * A preset contributes what ONE session adds to the host's registries. A row
  * active on both planes is therefore mounted twice — once per process and once
@@ -157,7 +158,7 @@ function validatePresetPlaneSeparation(): string[] {
   const active = new Set([...rowIds(hostFile), ...overlayRows].filter(id => !disabled.has(id)))
   for (const file of overlayFiles) {
     for (const definition of presetDefinitions(loadEntries(file))) {
-      for (const id of collectRowIds(definition.plugins)) {
+      for (const id of exclusivePlaneRowIds(definition.plugins)) {
         if (active.has(id)) problems.push(`${file}#${definition.id}: row "${id}" is also active in the host composition; a row belongs to exactly one plane`)
       }
     }
@@ -178,10 +179,15 @@ function loadEntries(file: string): unknown[] {
  * @returns the declared ids.
  */
 function rowIds(file: string): Set<string> {
-  return collectRowIds(loadEntries(file))
+  return exclusivePlaneRowIds(loadEntries(file))
 }
 
-function collectRowIds(rows: unknown): Set<string> {
+/**
+ * Collect rows that cannot be shared between the host and a preset.
+ * @param rows - parsed Loader entries, including inserts and groups.
+ * @returns ids excluding the executor plugins whose registrations are scope-owned.
+ */
+export function exclusivePlaneRowIds(rows: unknown): Set<string> {
   const ids = new Set<string>()
   const walk = (value: unknown): void => {
     if (isUnknownArray(value)) {
@@ -189,7 +195,9 @@ function collectRowIds(rows: unknown): Set<string> {
       return
     }
     if (!isRecord(value)) return
-    if (typeof value.id === 'string' && typeof value.name === 'string') ids.add(value.id)
+    if (typeof value.id === 'string' && typeof value.name === 'string'
+      && value.name !== '@deepseek-ai/dsh-tool-executor-native'
+      && value.name !== '@deepseek-ai/dsh-tool-executor-ptc') ids.add(value.id)
     walk(value.insert)
     if (isCordisGroupEntry(value)) walk(value.config)
   }
@@ -396,8 +404,8 @@ export function bundlePluginDependencyErrors(
   return missingPluginDependencies(
     // A Bundle may mount its own package (for example, its provider or runtime row).
     references.filter(reference => packageNameFromSpecifier(reference.name) !== manifest.name),
-    manifest.dependencies ?? {},
-    `${manifestPath} dependencies`,
+    { ...manifest.dependencies, ...manifest.optionalDependencies },
+    `${manifestPath} dependencies or optionalDependencies`,
   )
 }
 

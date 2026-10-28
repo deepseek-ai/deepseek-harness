@@ -34,8 +34,10 @@
   overflow: hidden;
 }
 
-.badge:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .badge:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .badge[data-active] {
@@ -296,8 +298,10 @@
   cursor: pointer;
 }
 
-.transitionActions button:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .transitionActions button:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .transitionActions button:disabled {
@@ -328,9 +332,11 @@
   cursor: pointer;
 }
 
-.actionButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
+@media (hover: hover) {
+  .actionButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .actionButton:disabled {

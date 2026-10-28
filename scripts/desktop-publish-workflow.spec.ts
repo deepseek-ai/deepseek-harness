@@ -18,6 +18,15 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
   }>
 }
 
+it('rejects debugging packages before dependency setup and pins the checked attempt for routing', () => {
+  const steps = workflow.jobs.route!.steps
+  const preflight = steps.findIndex(step => step.id === 'preflight')
+  expect(preflight).toBeGreaterThan(0)
+  expect(preflight).toBeLessThan(steps.findIndex(step => step.uses?.startsWith('pnpm/')))
+  expect(steps[preflight]?.run).toBe('node apps/desktop/scripts/preflight-desktop-publish.mjs')
+  expect(steps.find(step => step.id === 'route')?.env?.DESKTOP_PACKAGE_ATTEMPT).toBe('${{ steps.preflight.outputs.attempt }}')
+})
+
 it('selects packages manually and gates production secrets with the production Environment', () => {
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
   expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: {

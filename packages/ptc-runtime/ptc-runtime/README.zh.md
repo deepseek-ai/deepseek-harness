@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用 `dsh-ptc-runtime` 执行调用宿主异步函数的模型程序。请求返回无损 JSON、捕获日志或结构化失败；Promise 拒绝表示调用方误用。提供方隔离不同状态所有者，并声明源码是异步函数体还是 REPL 语句。提供方可以为显式所有者保留内存，直到释放，但不会从 Session 恢复这些内存。语言与隔离描述符标识语法和执行基底，不提供安全保证。
+使用 `dsh-ptc-runtime` 执行调用宿主异步函数的模型程序。请求返回无损 JSON、捕获日志或结构化失败；Promise 拒绝表示调用方误用。提供方隔离不同状态所有者，并声明源码是异步函数体、REPL 语句还是脚本。`retainsState` 报告提供方是否为显式所有者保留内存，直到释放，但不会从 Session 恢复这些内存。语言与隔离描述符标识语法和执行基底，不提供安全保证。
 
 ## 目录
 
@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当你要组合一个执行模型程序的部署、直接消费 `ctx.ptcRuntime`，或构建运行程序的后端时，选择本包。`dsh-tools` 中的 PTC mode 用它执行工具程序，`dsh-workflow-ptc` 用它编排工作流。每个消费方负责返回给模型的内容。
+当你要组合一个执行模型程序的部署、直接消费 `ctx.ptcRuntime`，或构建运行程序的后端时，选择本包。`dsh-tool-executor-ptc` 用它执行工具程序，`dsh-workflow-ptc` 用它编排工作流。每个消费方负责返回给模型的内容。
 
 ### 运行一个程序
 
-传入程序和绑定命名空间，依次调用 `resolve(request)` 和 `run(spec)`。解析阶段验证 cwd、超时与沙盒选项，并应用提供方默认值。`programFormat` 选择支持顶层 `await`、`return` 的异步函数体，或支持顶层声明、`await` 和末尾表达式的 REPL 语句。无损 JSON 完成值进入 `result.value`，文本进入 `result.logs`，失败进入 `result.error`。
+传入程序和绑定命名空间，依次调用 `resolve(request)` 和 `run(spec)`。解析阶段验证 cwd、超时与沙盒选项，并应用提供方默认值。`programFormat: PtcProgramFormat` 选择支持顶层 `await`、`return` 的异步函数体，或支持顶层声明、`await` 和末尾表达式的 REPL/Script 语句。Node Script 提供方转换顶层 await 并等待完成值；其[声明限制](../ptc-runtime-node/README.zh.md#known-limitations-and-deferred-work)适用于转换后的程序。无损 JSON 完成值进入 `result.value`，文本进入 `result.logs`，失败进入 `result.error`。
 
 ```text
 const spec = ctx.ptcRuntime.resolve({
@@ -66,7 +66,7 @@ binding-global 与 error-class 名称是语言可移植的：必须匹配 `[A-Za
 
 ### 设计理念
 
-本包是 PTC 执行能力 seam 的 Service Definition 角色（[能力 seam](../../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.zh.md)）：一个注册为 `ctx.ptcRuntime` 的抽象 `PtcRuntime extends Service`，加上提供方与消费方共享的词汇。提供方继承 `PtcRuntime`、实现 `resolve` 和 `run` 并注册服务。`dsh-tools` 中的 PTC mode 负责工具绑定，`dsh-workflow-ptc` 负责工作流钩子与子 agent。按约定，运行时不了解工具与会话：它接收程序、具名异步绑定和已解析执行选项，然后返回捕获输出、执行结果与适用的沙箱事实。
+本包是 PTC 执行能力 seam 的 Service Definition 角色（[能力 seam](../../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.zh.md)）：一个注册为 `ctx.ptcRuntime` 的抽象 `PtcRuntime extends Service`，加上提供方与消费方共享的词汇。提供方继承 `PtcRuntime`、实现 `resolve` 和 `run` 并注册服务。`dsh-tool-executor-ptc` 负责工具绑定，`dsh-workflow-ptc` 负责工作流钩子与子 agent。按约定，运行时不了解工具与会话：它接收程序、具名异步绑定和已解析执行选项，然后返回捕获输出、执行结果与适用的沙箱事实。
 
 ### 服务 API
 
@@ -113,7 +113,7 @@ binding-global 与 error-class 名称是语言可移植的：必须匹配标识�
 <a id="model-experience"></a>
 ## 模型体验
 
-通过 `dsh-tools` 中的 PTC mode 与工作流适配器间接提供；它们通过各自的工具结果呈现程序结果。
+通过 `dsh-tool-executor-ptc` 与工作流适配器间接提供；它们通过各自的工具结果呈现程序结果。
 
 #### KV Cache 影响
 

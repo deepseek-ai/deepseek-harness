@@ -1,0 +1,48 @@
+.panels { display: grid; gap: 32px; margin: 0; font-size: 13px; }
+.panel { display: grid; gap: 12px; min-width: 0; }
+.card { min-width: 0; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); }
+.card > * + * { border-top: 0.5px solid var(--dsw-alias-border-l3); }
+.panel p { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 1.6; }
+.panel h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.panel h4 { margin: 0; font-size: 13px; font-weight: 500; color: var(--dsw-alias-label-secondary); }
+.permission, .apps li { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.permission, .group, .emptyState, .notice { padding: 16px; }
+.permission { min-height: 80px; box-sizing: border-box; }
+.defaultSetting > p { margin: 0 16px 16px; }
+.permission > div:first-child, .apps li > div { flex: 1; min-width: 140px; }
+.notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.group { display: grid; gap: 4px; }
+.apps { display: grid; padding: 0; margin: 0; list-style: none; }
+.apps li { padding: 12px 0; }
+.apps li:last-child { padding-bottom: 0; }
+.panel strong { font-weight: 500; }
+.panel .error { color: var(--dsw-alias-state-error-primary); overflow-wrap: anywhere; }
+.application { display: flex; align-items: center; gap: 10px; }
+.application strong { min-width: 0; overflow-wrap: anywhere; }
+.application img { flex-shrink: 0; object-fit: contain; }
+.applicationBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-primary);
+  vertical-align: middle;
+}
+.applicationBadge img { flex-shrink: 0; object-fit: contain; }
+.applicationBadge > span { min-width: 0; overflow-wrap: anywhere; }
+.permissionAction, .buttonPlaceholder { width: 168px; flex-shrink: 0; }
+.permissionAction[data-configured]:disabled { opacity: 1; color: var(--dsw-alias-label-primary); cursor: default; }
+.buttonPlaceholder, .appPlaceholder, .appsPlaceholder {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-skeleton);
+}
+.buttonPlaceholder { height: 28px; }
+.appPlaceholder { width: 160px; height: 1.6em; }
+.appsPlaceholder { display: block; color: transparent; }
+
+.iconPlaceholder { display: inline-block; width: 32px; height: 32px; flex-shrink: 0; }

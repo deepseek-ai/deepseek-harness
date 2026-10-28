@@ -88,22 +88,6 @@
       }
     },
     {
-      "name": "exit_plan_mode",
-      "description": "Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. The user may approve (carry out the plan from your next step) or keep planning — their feedback comes back in the tool result; revise and present again.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "plan": {
-            "type": "string",
-            "description": "The complete plan, as markdown, starting with a # heading that names it."
-          }
-        },
-        "required": [
-          "plan"
-        ]
-      }
-    },
-    {
       "name": "glob",
       "description": "Find files, not directories, whose paths match a glob pattern, including hidden and ignored files. Returns up to 4 paths in modification-time order; a larger result is sampled across top-level entries and reports where the complete list was saved.",
       "parameters": {

@@ -39,21 +39,33 @@
 .typeColumn { width: 190px; }
 .typeHeader { display: flex; align-items: center; gap: 6px; }
 .typeFilterButton { display: inline-flex; border: none; border-radius: 3px; padding: 2px; background: transparent; color: inherit; cursor: pointer; }
-.typeFilterButton:hover, .typeFilterButton[aria-pressed='true'] { color: var(--dsw-alias-state-business-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.typeFilterButton[aria-pressed='true'] { color: var(--dsw-alias-state-business-primary); background: var(--dsw-alias-interactive-bg-hover); }
+@media (hover: hover) {
+  .typeFilterButton:hover { color: var(--dsw-alias-state-business-primary); background: var(--dsw-alias-interactive-bg-hover); }
+}
 .typeFilterPanel { position: fixed; z-index: 1250; width: 290px; max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow: auto; box-sizing: border-box; padding: 10px; color: var(--dsw-alias-label-primary); font-size: 11px; }
 .typeFilterInput { width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 4px; background: transparent; color: inherit; font: inherit; }
 .typeFilterHelp { margin: 6px 0; color: var(--dsw-alias-label-secondary); }
 .typeFilterOptions { max-height: 180px; overflow: auto; }
 .typeFilterOptions button { display: block; width: 100%; padding: 4px 6px; border: none; background: transparent; color: inherit; font: inherit; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-.typeFilterOptions button:hover, .typeFilterOptions button[aria-selected='true'] { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-state-business-primary); }
+.typeFilterOptions button[aria-selected='true'] { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-state-business-primary); }
+@media (hover: hover) {
+  .typeFilterOptions button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-state-business-primary); }
+}
 .typeFilterActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .typeFilterActions button { border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 4px; padding: 3px 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .contextRow .record { color: var(--dsw-alias-label-tertiary); }
 .locationColumn { width: 65px; }
 .timeColumn { width: 100px; }
-.table tr:hover, .selected { background: var(--dsw-alias-interactive-bg-hover); }
+.selected { background: var(--dsw-alias-interactive-bg-hover); }
+@media (hover: hover) {
+  .table tr:hover { background: var(--dsw-alias-interactive-bg-hover); }
+}
 .sticky { position: sticky; }
-.table .sticky, .table .sticky:hover { background: var(--dsw-alias-bg-module-platform); }
+.table .sticky { background: var(--dsw-alias-bg-module-platform); }
+@media (hover: hover) {
+  .table .sticky:hover { background: var(--dsw-alias-bg-module-platform); }
+}
 .sticky.selected .record { color: var(--dsw-alias-state-business-primary); }
 .identity { color: var(--dsw-alias-label-tertiary); }
 .identityText { display: block; overflow: hidden; text-overflow: ellipsis; }
@@ -62,12 +74,19 @@
 .preview { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .details { display: flex; flex: 0 0 40%; flex-direction: column; min-height: 0; max-height: 80%; overflow: hidden; }
 .detailsResize { flex: none; height: 5px; cursor: row-resize; touch-action: none; user-select: none; background: var(--dsw-alias-border-l2); }
-.detailsResize:hover, .detailsResize:active, .detailsResize:focus-visible { background: var(--dsw-alias-state-business-primary); }
+.detailsResize:active,
+.detailsResize:focus-visible { background: var(--dsw-alias-state-business-primary); }
+@media (hover: hover) {
+  .detailsResize:hover { background: var(--dsw-alias-state-business-primary); }
+}
 .details pre { flex: 1; min-height: 0; margin: 0; padding: 8px; font-size: inherit; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .modeSelector { border: none; background: var(--dsw-alias-bg-module-platform); color: inherit; font: inherit; padding: 2px 4px; }
 .modeControls { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
 .pickButton { display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; padding: 3px; }
-.pickButton:hover, .pickButton[aria-pressed='true'] { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-state-business-primary); }
+.pickButton[aria-pressed='true'] { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-state-business-primary); }
+@media (hover: hover) {
+  .pickButton:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-state-business-primary); }
+}
 .pickNotice { flex: none; padding: 4px 8px; color: var(--dsw-alias-label-secondary); border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
 .chatPick { position: fixed; z-index: 1201; pointer-events: none; background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 15%, transparent); outline: 1px solid var(--dsw-alias-state-business-primary); border-radius: 4px; }
 .chatPickMask { position: fixed; z-index: 1200; pointer-events: auto; background: transparent; cursor: crosshair; touch-action: none; }
@@ -80,7 +99,9 @@
 .objectValue { color: var(--dsw-alias-label-secondary); }
 .objectMuted { color: var(--dsw-alias-label-tertiary); }
 .objectReference, .objectBreadcrumbs button { border: none; background: transparent; padding: 0; color: var(--dsw-alias-state-business-primary); cursor: pointer; font: inherit; text-align: left; }
-.objectReference:hover { text-decoration: underline; }
+@media (hover: hover) {
+  .objectReference:hover { text-decoration: underline; }
+}
 .objectBreadcrumbs { position: sticky; top: -8px; z-index: 1; margin: -8px -8px 8px; padding: 6px 8px; overflow: auto; background: var(--dsw-alias-bg-module-platform); border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
 .objectBreadcrumbs ol { display: flex; align-items: center; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .objectBreadcrumbs li { display: flex; align-items: center; gap: 6px; flex: none; }

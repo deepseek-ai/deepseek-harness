@@ -27,10 +27,14 @@ export const VFS_EXAMPLE_SESSION_IDS = {
   main: SessionId('preview-showcase'),
   oneShot: SessionId('preview-architecture-review'),
   continuable: SessionId('preview-follow-up-builder'),
+  spacing: SessionId('preview-turn-spacing'),
 } as const
 
 /** Stable title rendered in the root Session list. */
 export const VFS_EXAMPLE_TITLE = 'WebWorker Preview Showcase'
+
+/** Title of the multi-Turn spacing sample in the root Session list. */
+export const VFS_EXAMPLE_SPACING_TITLE = 'Turn spacing sample'
 
 /** Oldest prompt, intentionally outside the first 50-message history page. */
 export const VFS_EXAMPLE_OLDEST_MESSAGE = 'History checkpoint 01: verify deterministic preview state.'
@@ -196,6 +200,12 @@ function readResult(): { text: string; meta: unknown } {
     text: `<path>PREVIEW.md</path>\n<type>file</type>\n<content>\n${lines.map(line => `${String(line.number)}: ${line.text}`).join('\n')}\n\n(End of file - total ${String(lines.length)} lines)\n</content>`,
     meta: { path: 'PREVIEW.md', offset: 1, lines, totalLines: lines.length, lang: 'md' },
   }
+}
+
+/** Render the workspace task file the way a `read` result shows it. */
+function tasksReadResult(): string {
+  const lines = TASKS.trimEnd().split('\n')
+  return `<path>data/tasks.json</path>\n<type>file</type>\n<content>\n${lines.map((text, index) => `${String(index + 1)}: ${text}`).join('\n')}\n\n(End of file - total ${String(lines.length)} lines)\n</content>`
 }
 
 function galleryCalls(): GalleryCall[] {
@@ -432,6 +442,149 @@ function continuableLog(): SessionEvent[] {
   return log.events
 }
 
+/** One step of the multi-Turn spacing sample: reasoning, tool calls, or a closing body. */
+interface SpacingStep {
+  /** Assistant message id. */
+  readonly id: string
+  /** Reasoning text shown in the step's Think row. */
+  readonly reasoning?: string
+  /** Tool calls issued in this step, each with its recorded result. */
+  readonly calls?: readonly GalleryCall[]
+  /** Closing Markdown body for a step without tool calls. */
+  readonly body?: string
+}
+
+function addSpacingTurn(
+  log: EventLog,
+  turn: number,
+  prompt: { readonly id: string; readonly text: string },
+  steps: readonly SpacingStep[],
+): void {
+  log.add({ type: 'turn/start', data: { turn } })
+  log.add(userMessage(prompt.id, prompt.text))
+  if (turn === 1) {
+    log.add({
+      type: 'session/title',
+      data: { title: VFS_EXAMPLE_SPACING_TITLE, messageSeqs: [], source: { kind: 'user' } },
+    })
+  }
+  for (const [index, step] of steps.entries()) {
+    const stepNumber = index + 1
+    log.add({ type: 'step/start', data: { turn, step: stepNumber } })
+    const content: unknown[] = []
+    if (step.reasoning !== undefined) content.push({ type: 'reasoning', text: step.reasoning })
+    for (const call of step.calls ?? []) {
+      content.push({ type: 'tool-call', id: call.id, name: call.name, arguments: JSON.stringify(call.args) })
+    }
+    if (step.body !== undefined) content.push({ type: 'text', text: step.body })
+    log.add(assistantMessage(step.id, turn, stepNumber, content))
+    for (const call of step.calls ?? []) {
+      log.add({
+        type: 'tool/call',
+        data: { turn, step: stepNumber, callId: call.id, name: call.name, arguments: JSON.stringify(call.args) },
+      })
+      log.add({
+        type: 'tool/result',
+        data: {
+          turn,
+          step: stepNumber,
+          message: {
+            id: `${call.id}-result`,
+            role: 'tool',
+            toolCallId: call.id,
+            source: { kind: 'tool', callId: call.id },
+            content: [{ type: 'text', text: call.result }],
+            isError: false,
+          },
+        },
+        surfaceOp: 'append',
+      })
+    }
+    log.add({ type: 'step/end', data: { turn, step: stepNumber } })
+  }
+  log.add({ type: 'turn/end', data: { turn, reason: { kind: 'completed' } } })
+}
+
+/**
+ * Three Turns with multi-step processes and multi-paragraph bodies, so the
+ * preview shows the tightened process-row gap beside the reply clearance.
+ */
+function spacingLog(): SessionEvent[] {
+  const log = new EventLog(CREATED_AT + 300_000)
+  addSpacingTurn(log, 1, {
+    id: 'preview-spacing-user-1',
+    text: 'Show how multiple Turns and their process steps sit on the tightened spacing.',
+  }, [
+    {
+      id: 'preview-spacing-1-tools',
+      reasoning: 'Read the workspace guide, then list the files this sample references.',
+      calls: [
+        { id: 'preview-spacing-read', name: 'read', args: { file_path: 'PREVIEW.md' }, result: readResult().text },
+        {
+          id: 'preview-spacing-glob', name: 'glob', args: { pattern: '**/*', path: '.' },
+          result: 'PREVIEW.md\ndata/tasks.json\nsrc/preview.ts',
+        },
+      ],
+    },
+    {
+      id: 'preview-spacing-1-command',
+      reasoning: 'Confirm the sample command result before writing the body.',
+      calls: [{
+        id: 'preview-spacing-bash', name: 'bash',
+        args: { command: "printf 'spacing sample 1\\n'", description: 'Print the first spacing sample marker' },
+        result: 'spacing sample 1\n',
+      }],
+    },
+    {
+      id: 'preview-spacing-1-body',
+      body: '## Turn 1 — setup\n\nThis Turn has three steps: two process steps and one closing body. Inside an expanded group the process rows use the tightened gap, while this body keeps the reply clearance from the rows above.\n\nExpand the Turn control above to compare the tightened process rhythm with the reply rhythm.',
+    },
+  ])
+  addSpacingTurn(log, 2, {
+    id: 'preview-spacing-user-2',
+    text: 'Continue the sample with a second body and a shorter process.',
+  }, [
+    {
+      id: 'preview-spacing-2-tools',
+      reasoning: 'Search the sample workspace for the spacing note.',
+      calls: [{
+        id: 'preview-spacing-grep', name: 'grep',
+        args: { pattern: 'preview', path: '.', include: '*.{md,ts,json}' },
+        result: 'PREVIEW.md:3:This deterministic workspace is bundled with the browser-only preview.\nsrc/preview.ts:1:export const previewStatus = \'ready\'',
+      }],
+    },
+    {
+      id: 'preview-spacing-2-body',
+      body: '## Turn 2 — follow-up\n\nA shorter Turn still separates its process group from this body by the reply clearance, so consecutive Turns stay readable.\n\nThe gap between the previous Turn and this user message is the ordinary flow gap.',
+    },
+  ])
+  addSpacingTurn(log, 3, {
+    id: 'preview-spacing-user-3',
+    text: 'Finish the sample with one more multi-step Turn.',
+  }, [
+    {
+      id: 'preview-spacing-3-tools',
+      reasoning: 'Read the task list and print the final sample marker.',
+      calls: [
+        {
+          id: 'preview-spacing-tasks', name: 'read', args: { file_path: 'data/tasks.json' },
+          result: tasksReadResult(),
+        },
+        {
+          id: 'preview-spacing-final-bash', name: 'bash',
+          args: { command: "printf 'spacing sample complete\\n'", description: 'Print the final spacing sample marker' },
+          result: 'spacing sample complete\n',
+        },
+      ],
+    },
+    {
+      id: 'preview-spacing-3-body',
+      body: '## Turn 3 — closing\n\nThe last Turn has a two-step shape: one process step and one closing body.\n\nSpacing sample complete: compare these process rows with the reply clearance around each Turn body.',
+    },
+  ])
+  return log.events
+}
+
 function header(
   id: SessionHeader['id'],
   createdAt: number,
@@ -524,6 +677,7 @@ function scheduleTasks(): Readonly<Record<string, unknown>> {
 /** Build current-generation fixture files as fixture-relative UTF-8 text; committed predecessors remain untouched. */
 export function buildVfsExampleFiles(): ReadonlyMap<string, string> {
   const main = mainLog()
+  const spacing = spacingLog()
   const project = projectKey(WORKSPACE)
   const sessionPath = (id: string): string =>
     `home/sessions/${project}/${id}/${generationLogFilename(SESSION_FORMAT_VERSION, 'none')}`
@@ -544,6 +698,18 @@ export function buildVfsExampleFiles(): ReadonlyMap<string, string> {
             title: { ver: 1, seq: main.events.at(-1)?.seq ?? -1, val: VFS_EXAMPLE_TITLE },
           },
         },
+        [VFS_EXAMPLE_SESSION_IDS.spacing]: {
+          identity: {
+            formatVersion: SESSION_FORMAT_VERSION,
+            createdAt: CREATED_AT + 300_000,
+            cwd: WORKSPACE,
+            isSeeded: false,
+            inheritedEventCount: 0,
+          },
+          rows: {
+            title: { ver: 1, seq: spacing.at(-1)?.seq ?? -1, val: VFS_EXAMPLE_SPACING_TITLE },
+          },
+        },
       },
     },
   }, null, 2)}\n`
@@ -556,6 +722,10 @@ export function buildVfsExampleFiles(): ReadonlyMap<string, string> {
     [sessionPath(VFS_EXAMPLE_SESSION_IDS.main), renderLog(
       header(VFS_EXAMPLE_SESSION_IDS.main, CREATED_AT),
       main.events,
+    )],
+    [sessionPath(VFS_EXAMPLE_SESSION_IDS.spacing), renderLog(
+      header(VFS_EXAMPLE_SESSION_IDS.spacing, CREATED_AT + 300_000),
+      spacing,
     )],
     [sessionPath(VFS_EXAMPLE_SESSION_IDS.oneShot), renderLog(
       header(VFS_EXAMPLE_SESSION_IDS.oneShot, CREATED_AT + 100_000, {

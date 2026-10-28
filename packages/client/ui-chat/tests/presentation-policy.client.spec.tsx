@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import type { TranscriptViewMode } from '../src/chat-settings.ts'
-import { COLLAPSE_TIMINGS, derivePresentationPolicy, presentationPolicyFor, type ChatPresentationPolicy, type CollapseTiming } from '../src/client/presentation-policy.ts'
+import {
+  COLLAPSE_TIMINGS, FOLDED_REPLIES, derivePresentationPolicy, presentationPolicyFor,
+  type ChatPresentationPolicy, type CollapseTiming, type FoldedReplies,
+} from '../src/client/presentation-policy.ts'
 
 afterEach(cleanup)
 
@@ -16,29 +19,36 @@ describe('Chat presentation policy', () => {
     ['verbose', false, 'none', true, false],
   ] as const)('maps %s to stable presentation capabilities', (mode, foldCompletedTurns, stepGrouping, settledReasoningPreview, liveProcessDetail) => {
     const policy = presentationPolicyFor(mode)
-    expect(policy).toEqual({ mode, collapseTiming: 'completion', foldCompletedTurns, stepGrouping, settledReasoningPreview, liveProcessDetail })
+    expect(policy).toEqual({
+      mode, collapseTiming: 'completion', foldedReplies: 'all', foldCompletedTurns, stepGrouping, settledReasoningPreview, liveProcessDetail,
+    })
     expect(presentationPolicyFor(mode)).toBe(policy)
     expect(presentationPolicyFor(mode, 'completion')).toBe(policy)
+    expect(presentationPolicyFor(mode, 'completion', 'all')).toBe(policy)
     const deferred = presentationPolicyFor(mode, 'next-input')
     expect(deferred).toEqual({ ...policy, collapseTiming: 'next-input' })
     expect(presentationPolicyFor(mode, 'next-input')).toBe(deferred)
     expect(deferred).not.toBe(policy)
+    const finalOnly = presentationPolicyFor(mode, 'completion', 'final')
+    expect(finalOnly).toEqual({ ...policy, foldedReplies: 'final' })
+    expect(presentationPolicyFor(mode, 'completion', 'final')).toBe(finalOnly)
   })
 
-  it('keeps all eight mode and timing policies distinct and stable', () => {
+  it('keeps all sixteen mode, timing, and folded-reply policies distinct and stable', () => {
     const policies = new Set<ChatPresentationPolicy>()
     for (const mode of ['compact', 'standard', 'detailed', 'verbose'] as const) {
       for (const timing of COLLAPSE_TIMINGS) {
-        policies.add(presentationPolicyFor(mode, timing))
+        for (const replies of FOLDED_REPLIES) policies.add(presentationPolicyFor(mode, timing, replies))
       }
     }
-    expect(policies.size).toBe(8)
+    expect(policies.size).toBe(16)
   })
 
-  it('forwards both preferences and removes both subscriptions on disposal', () => {
+  it('forwards all three preferences and removes their subscriptions on disposal', () => {
     const mode = createSnapshotStore<TranscriptViewMode>('compact')
     const timing = createSnapshotStore<CollapseTiming>('completion')
-    const policy = derivePresentationPolicy(mode, timing)
+    const replies = createSnapshotStore<FoldedReplies>('all')
+    const policy = derivePresentationPolicy(mode, timing, replies)
     const listener = vi.fn()
     const dispose = policy.subscribe(listener)
     expect(policy.getSnapshot()).toBe(presentationPolicyFor('compact'))
@@ -50,16 +60,20 @@ describe('Chat presentation policy', () => {
     expect(policy.getSnapshot()).toBe(presentationPolicyFor('detailed', 'next-input'))
     timing.set('next-input')
     expect(listener).toHaveBeenCalledTimes(2)
+    replies.set('final')
+    expect(listener).toHaveBeenCalledTimes(3)
+    expect(policy.getSnapshot()).toBe(presentationPolicyFor('detailed', 'next-input', 'final'))
     dispose()
     mode.set('verbose')
     timing.set('completion')
-    expect(listener).toHaveBeenCalledTimes(2)
+    replies.set('all')
+    expect(listener).toHaveBeenCalledTimes(3)
   })
 
   it('renders only consumers whose selected field changes', () => {
     const mode = createSnapshotStore<TranscriptViewMode>('compact')
     const timing = createSnapshotStore<CollapseTiming>('completion')
-    const usePresentation = bindSnapshotSelector(derivePresentationPolicy(mode, timing))
+    const usePresentation = bindSnapshotSelector(derivePresentationPolicy(mode, timing, createSnapshotStore<FoldedReplies>('all')))
     const foldRender = vi.fn()
     const previewRender = vi.fn()
     function Fold() {

@@ -12,6 +12,7 @@ import { publint, type Message, type PackFile } from 'publint'
 import { formatMessage } from 'publint/utils'
 import ts from 'typescript'
 import { defaultParallelism } from './parallelism.ts'
+import { isBrowserBundleFormatFalsePositive } from './publint-browser-format.ts'
 
 const CONCURRENCY_ENV = 'DSH_PUBLINT_CONCURRENCY'
 const repositoryRoot = resolve(import.meta.dirname, '..')
@@ -175,22 +176,6 @@ function relativeImports(file: string, sourceText: string): RelativeImport[] {
   }
   visit(source)
   return imports
-}
-
-/**
- * publint reads the CommonJS interop preamble inside the prebuilt browser
- * bundles and reports CJS-written-as-ESM. Node never resolves those files:
- * `lib/client.js` is evaluated by the page module system as a classic script,
- * and `lib/worker.js` by `new Worker(url, { type: 'module' })` — both outside
- * the Node resolution publint models. Exactly that verdict on exactly those
- * files is suppressed; every other publint error stays fatal.
- */
-function isBrowserBundleFormatFalsePositive(message: Message): boolean {
-  if (message.code !== 'FILE_INVALID_FORMAT') return false
-  const filePath = (message.args as { actualFilePath?: string }).actualFilePath ?? ''
-  const exportKey = Array.isArray(message.path) ? message.path.join('/') : ''
-  return /(^|\/)lib\/(client|worker)\.js$/.test(filePath)
-    || /(^|\/)\.\/(client|worker)$/.test(exportKey)
 }
 
 async function runPublint(target: PackageTarget): Promise<PublintResult> {

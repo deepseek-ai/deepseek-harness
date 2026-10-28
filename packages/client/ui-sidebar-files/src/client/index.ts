@@ -20,7 +20,7 @@ import { FILES_ID, filesDefinition } from './definition.tsx'
 import { createList, createWatch, filesFace } from './face.ts'
 import { FilesBody } from './FilesBody.tsx'
 import { FilesTitle } from './FilesTitle.tsx'
-import { en, zh } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 import { createFilesStore } from './store.ts'
 
 export type { SidebarFilesKey } from './locales.ts'
@@ -79,7 +79,7 @@ export function apply(ctx: ClientContext): void {
     }), 'ui-sidebar-files: shortcut')
   })
   ctx.effect(() => ctx.sidebarRightTabs.register(filesDefinition(t)), 'ui-sidebar-files: files type')
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sidebar-files: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-sidebar-files: dictionaries')
 
   const store = createFilesStore()
   const inject = filesFace(createList(ctx.remote), createWatch(ctx.remote))

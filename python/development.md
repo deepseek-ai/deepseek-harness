@@ -38,7 +38,7 @@ uv run --project python/sdk python scripts/smoke-python-runtime.py \
   --scenario sdk-minimal --exe dist-exe/deepseek-harness-sdk-runtime-macos-arm64
 ```
 
-SDK scenarios compare committed expected output under `scripts/snapshots/python-sdk-single-exe/`. `minimal/model-visible.json` pins the Linux/macOS `sdk-minimal` profile's assembled system prompts, advertised tool schemas, and model-visible messages; `minimal/win-x64/model-visible.json` pins its PowerShell counterpart. `authoring/model-visible.json` pins the Linux/macOS Office authoring catalog and dependency result; `authoring/win-x64/model-visible.json` pins the Windows catalog, including the ACL diagnostic skill. A plugin that contributes an unintended system section or user message therefore fails the job, and every message the profile emits is compared. `advanced/` pins one complex process's SDK result and parent/child session logs across every target. `restart/` launches two complete SDK runtime processes against one persistence root and snapshots their isolated model histories, high-level results, and separate durable logs across every target. `sdk-minimal-in-history` reuses the persistent-shell and editor scenario with a section that changes after the first successful shell call. `minimal-in-history/prompt-history.json` pins both prompt versions, the unchanged leading prompt in later requests, appended SDK system-message events, and `request/context.systemPromptUpdate`; tool schemas stay fixed and the editor file is checked independently. `sdk-dynamic-tools` pins native tool additions and removals in `dynamic-tools/tool-history.json`, including historical header references and agreement between Python SDK results, notifications, and persisted events. Rerun the owning scenario with `--update-snapshots` and review that diff before committing it.
+SDK scenarios compare committed expected output under `scripts/snapshots/python-sdk-single-exe/`. `minimal/model-visible.json` pins the Linux/macOS `sdk-minimal` profile's assembled system prompts, advertised tool schemas, and model-visible messages; `minimal/win-x64/model-visible.json` pins its PowerShell counterpart. `authoring/model-visible.json` pins the Linux/macOS Office authoring catalog and dependency result; `authoring/win-x64/model-visible.json` pins the Windows catalog, including the ACL diagnostic skill. A plugin that contributes an unintended system section or user message therefore fails the job, and every message the profile emits is compared. `advanced/` pins one complex process's SDK result and parent/child session logs across every target. `restart/` launches two complete SDK runtime processes against one persistence root and snapshots their isolated model histories, high-level results, and separate durable logs across every target. Its resumed turn initializes a different model and pins the persisted selection, request route, and SDK event sequence. `sdk-minimal-in-history` reuses the persistent-shell and editor scenario with a section that changes after the first successful shell call. `minimal-in-history/prompt-history.json` pins both prompt versions, the unchanged leading prompt in later requests, appended SDK system-message events, and `request/context.systemPromptUpdate`; tool schemas stay fixed and the editor file is checked independently. `sdk-dynamic-tools` pins native tool additions and removals in `dynamic-tools/tool-history.json`, including historical header references and agreement between Python SDK results, notifications, and persisted events. Rerun the owning scenario with `--update-snapshots` and review that diff before committing it.
 
 `scheduler-recovery/` records a failed tool turn and a subsequent completed turn. It preserves the original `UNKNOWN` turn error, the first tool's completed result, and `TOOL_OUTCOME_UNKNOWN` / `TOOL_NOT_STARTED` results for the remaining calls. `sdk-snapshot` and `all` include this case; `--scenario sdk-recovery` runs it alone.
 
@@ -61,10 +61,18 @@ Alternatively export a non-empty `DSH_HOME`. The SDK rejects a launch that would
 
 Repository contributors can select either development route; both execute the normal `dsh --profile sdk` launcher:
 
-- Set `DSH_RUNTIME_MODE=node` to use the built Node carrier on system Node `>=22.19`. The build script refreshes this carrier, but distributions never include or auto-select it.
+- Set `DSH_RUNTIME_MODE=node` to use the built Node carrier on system Node `>=24.9`. The build script refreshes this carrier, but distributions never include or auto-select it.
 - Set `dsh_bin` to the absolute built `apps/cli/lib/bin.js` path to exercise the checkout's CLI directly. Supply an explicit `dsh_home`, plus `profile` and ordered `patches` as needed.
 
 `python/sdk/tests/manual_sdk_agent_smoke.py` uses the internal `_launch_args` test adapter to exercise the unbuilt TypeScript CLI under tsx. Arbitrary argv replacement is intentionally absent from the public SDK.
+
+The manual [shutdown example](sdk/tests/manual_sdk_shutdown_smoke.py) uses ordinary SDK calls: run one short real-model turn, close immediately with the default 1-second budget, then open another runtime and restore the same session. Install the SDK/runtime and set `DEEPSEEK_API_KEY` before running:
+
+```sh
+python python/sdk/tests/manual_sdk_shutdown_smoke.py
+```
+
+The example prints the close duration and history files, retains its temporary directory, and lets restoration failures raise normally. Recovery uses a separate 30-second shutdown budget. Reproduction depends on the host and first-turn timing; successful restoration does not establish a shutdown latency bound. This manual example is not collected by pytest.
 
 ## Build distributions
 

@@ -12,29 +12,32 @@
   en: cd94b4a8dae32670
   zh: 333b8603e77f92d7
 /deepseek-ai-dsh-client-ui-settings-general/table-of-contents:
-  en: 2843d46e95311bce
-  zh: ec11bdeb5d3ce818
+  en: 83760d53b3ee5fb8
+  zh: 30dd8802d4ffdcb7
 /deepseek-ai-dsh-client-ui-settings-general/use-this-package:
-  en: 8b75b6fc5a0951e3
-  zh: 90c54f660988588b
+  en: d427d20b4dab6653
+  zh: 84e80592f0a30a9f
 /deepseek-ai-dsh-client-ui-settings-general/use-this-package/the-general-section:
-  en: 8b8a7c6287bb303b
-  zh: 19535112531aedd5
+  en: de35e867b2a56d73
+  zh: 6d4e5c912636f889
 /deepseek-ai-dsh-client-ui-settings-general/use-this-package/opening-the-configuration-file:
   en: 597df68b5913e8d7
   zh: bc9114f3e877679a
 /deepseek-ai-dsh-client-ui-settings-general/use-this-package/onboarding-steps:
-  en: 27f0f6ec55f00228
-  zh: 69b47ff1efd81c17
+  en: ba55fe92bf49dc5a
+  zh: 9a0e1345496a0ae6
 /deepseek-ai-dsh-client-ui-settings-general/understand-the-implementation:
-  en: 41726bcd4ae37c0a
-  zh: d994b70ca7997da8
+  en: 9c8c35ae0e672b14
+  zh: 503c8e9d24a93d88
 /deepseek-ai-dsh-client-ui-settings-general/understand-the-implementation/ledger-projections:
   en: 3e3c2c72f87e8b23
   zh: 12b10ba2d37c9077
 /deepseek-ai-dsh-client-ui-settings-general/understand-the-implementation/connection-recovery:
   en: e37fb7df883ea356
   zh: c972524e56c6d6c2
+/deepseek-ai-dsh-client-ui-settings-general/understand-the-implementation/host-release-changes:
+  en: d464f726b026c39a
+  zh: c949e5f4d65a639f
 /deepseek-ai-dsh-client-ui-settings-general/understand-the-implementation/document-availability:
   en: ff1aec9eb1a87a79
   zh: eb91ab8bef59742d
@@ -51,8 +54,8 @@
   en: ca75c51c89c2c9b0
   zh: de54f3467ef3b9be
 /deepseek-ai-dsh-client-ui-settings-general/known-limitations-and-deferred-work:
-  en: 97dd637a320ac334
-  zh: faa5c512c56a128e
+  en: b04b2de0ec3624b9
+  zh: d9b295d415937274
 /deepseek-ai-dsh-client-ui-settings-general/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

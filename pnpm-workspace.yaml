@@ -55,6 +55,8 @@ allowBuilds:
   msgpackr-extract: false
 
 minimumReleaseAgeExclude:
+  # Native Codex and Claude tests qualify this exact release with its local patches.
+  - '@botiverse/oar@0.67.0'
   # Office engines and their API are qualified and released together by the kit repository.
   - '@deepseek-ai/libreoffice-kit@0.1.5'
   - '@deepseek-ai/libreoffice-kit-darwin-arm64@0.1.5'
@@ -64,8 +66,8 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/libreoffice-kit-wasm@0.1.5'
   # Fresh pi-ai releases carry the model catalog updates that are the whole
   # point of bumping it; waiting out the release age would defeat that.
-  - '@earendil-works/pi-ai@1.1.0'
-  - '@earendil-works/pi-telemetry@1.1.0'
+  - '@earendil-works/pi-ai@1.3.0'
+  - '@earendil-works/pi-telemetry@1.3.0'
   # This addon release recognizes the Electron 44.7.0 Node/V8 fingerprint used by Desktop.
   - node-addon-native-custom-loader@0.1.9
   - node-addon-require-builtin-darwin-arm64@0.1.9
@@ -106,11 +108,15 @@ minimumReleaseAgeExclude:
   # Desktop packaging requires this Electron fingerprint with node-addon-require-builtin 0.1.9.
   - electron@44.7.0
 patchedDependencies:
-  '@earendil-works/pi-ai@1.1.0': patches/@earendil-works__pi-ai@1.1.0.patch
+  '@botiverse/oar@0.67.0': patches/@botiverse__oar@0.67.0.patch
+  '@earendil-works/pi-ai@1.3.0': patches/@earendil-works__pi-ai@1.3.0.patch
   '@electron/osx-sign@1.3.3': patches/@electron__osx-sign@1.3.3.patch
   '@fortune-sheet/core@1.0.4': patches/@fortune-sheet__core@1.0.4.patch
   '@fortune-sheet/react@1.0.4': patches/@fortune-sheet__react@1.0.4.patch
   '@yao-pkg/pkg@6.21.0': patches/@yao-pkg__pkg@6.21.0.patch
   app-builder-lib@26.17.0: patches/app-builder-lib@26.17.0.patch
   exceljs@4.4.0: patches/exceljs@4.4.0.patch
+  lexical@0.49.0: patches/lexical@0.49.0.patch
+  mdast-util-gfm-autolink-literal@2.0.1: patches/mdast-util-gfm-autolink-literal@2.0.1.patch
+  micromark-extension-gfm-autolink-literal@2.1.0: patches/micromark-extension-gfm-autolink-literal@2.1.0.patch
   node-pty@1.2.0-beta.15: patches/node-pty@1.2.0-beta.15.patch

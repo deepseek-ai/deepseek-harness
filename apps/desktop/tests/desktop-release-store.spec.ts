@@ -69,3 +69,16 @@ it('rejects traversal and manifest identity or file inventory tampering', async 
   await writeFile(join(path, 'manifest.json'), JSON.stringify({ ...manifest, files: [{ ...manifest.files[0], name: '../installer.exe' }] }))
   await expect(verifyRetainedDesktopRelease(root, '100', '1')).rejects.toThrow()
 })
+
+it('retains test branch identity while rejecting production branch manifests', async () => {
+  const { root, file, source } = await fixture()
+  source.sourceRef = 'feature/desktop-update'
+  await expect(retainDesktopRelease(root, { ...source, preset: 'production' }, [file])).rejects.toThrow(/Production source/u)
+  const directory = await retainDesktopRelease(root, source, [file])
+  expect((await verifyRetainedDesktopRelease(root, source.runId, source.attempt)).source.sourceRef).toBe(source.sourceRef)
+  const path = join(directory, 'manifest.json')
+  const manifest = await verifyRetainedDesktopRelease(root, source.runId, source.attempt)
+  manifest.source.preset = 'production'
+  await writeFile(path, JSON.stringify(manifest))
+  await expect(verifyRetainedDesktopRelease(root, source.runId, source.attempt)).rejects.toThrow(/Production source/u)
+})

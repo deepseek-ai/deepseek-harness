@@ -9,8 +9,8 @@
   en: b711ded29c7b9a17
   zh: cbccba927743f35f
 /deepseek-ai-dsh-agent-loop/summary:
-  en: 9256331cd3baf930
-  zh: 02b4c10cf3286eb3
+  en: b2971780b74fd785
+  zh: 05a3043f49fb646d
 /deepseek-ai-dsh-agent-loop/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,14 +18,14 @@
   en: 35a960c0100a6aa4
   zh: 438e133fb4c24a9e
 /deepseek-ai-dsh-agent-loop/use-this-package/configure-declarative-agents:
-  en: 96295035babf4f90
-  zh: 8848f9497019ee63
+  en: d5ac4be018308358
+  zh: 4c429a40f666abfb
 /deepseek-ai-dsh-agent-loop/use-this-package/create-or-resume-agents-programmatically:
   en: 82ec792637e8e57f
   zh: e32f8ec5ee17afcf
 /deepseek-ai-dsh-agent-loop/use-this-package/what-a-step-does:
-  en: 15ce4783b53532a2
-  zh: b04a18337281237a
+  en: b789acbbfd6a3094
+  zh: 85b4d093ae23ce7d
 /deepseek-ai-dsh-agent-loop/understand-the-implementation:
   en: ce7e776e9d516bdb
   zh: 59d2751743db7795
@@ -33,20 +33,20 @@
   en: 030202c112f89366
   zh: 621d53ed755cafa3
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/request-headers-and-adapter-defaults:
-  en: b3b3f0ad930961c3
-  zh: f281e27136e686bc
+  en: 21547fd3591f1ff7
+  zh: 80b622e5a0827505
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/source-map:
-  en: 2a8b93869eb5a2f9
-  zh: ddab8e738d188a61
+  en: ec2bf804bd1a5439
+  zh: 316e767507e859ef
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/creation-and-teardown:
-  en: d079cf181ece9267
-  zh: 047f76fecfc5497c
+  en: eaaed8cc22640221
+  zh: 557e2e67888ef7f6
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/persistence-integration:
-  en: 3c5721bc00a0bbf4
-  zh: 711f832343ffbb75
+  en: 3b48a480036bd5df
+  zh: 28cea2036b0dccee
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/turn-and-step-flow:
-  en: 28939261ccc7defe
-  zh: 9d157a321307ebd4
+  en: ad92c751515520ff
+  zh: ca6b24db5ab4e471
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/failure-and-cancellation:
   en: eea56903c4ff82f5
   zh: c0d5abb5767780ed
@@ -66,8 +66,8 @@
   en: ad93d8d61968a25d
   zh: 268ff858b0fa96e8
 /deepseek-ai-dsh-agent-loop/model-experience/complete-conversation-request/kv-cache-effect:
-  en: c002d27c825d04e8
-  zh: b0dbdd95d3b3b6b5
+  en: 12a2fc9e3654ddbf
+  zh: 133b7ca59925c82a
 /deepseek-ai-dsh-agent-loop/model-experience/retained-message-history:
   en: 50d33d852dec1e28
   zh: ec15695304f25f38

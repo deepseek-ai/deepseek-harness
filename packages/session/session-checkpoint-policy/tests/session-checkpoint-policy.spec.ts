@@ -1,3 +1,5 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -36,6 +38,7 @@ async function setup(): Promise<Context> {
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(TestPersistence)
   await ctx.plugin(checkpointPolicy)
   return ctx
@@ -107,14 +110,17 @@ describe('session-checkpoint-policy request boundary', () => {
 })
 
 describe('session-checkpoint-policy tool and step boundaries', () => {
-  it('awaits the checkpoint before a top-level tool body', async () => {
+  it('awaits the checkpoint before a top-level tool body', async ({ onTestFinished }) => {
     const ctx = await setup()
     const session = ctx.sessions.create(SessionId('tool-checkpoint'))
     const agent = { session } as Agent
     const gate = Promise.withResolvers<undefined>()
+    onTestFinished(() => { gate.resolve(undefined) })
+    const entered = Promise.withResolvers<undefined>()
     const order: string[] = []
     ctx.on('session/flush', async () => {
       order.push('flush:start')
+      entered.resolve(undefined)
       await gate.promise
       order.push('flush:end')
     })
@@ -124,26 +130,29 @@ describe('session-checkpoint-policy tool and step boundaries', () => {
       execute: async () => { order.push('tool'); return null },
     })
 
-    const pending = ctx.tools.execute({
+    const pending = executeToolFixture(ctx, {
       callId: ToolCallId('write-1'), name: 'write', arguments: {}, agent,
       signal: new AbortController().signal,
     })
-    await Promise.resolve()
+    await entered.promise
     expect(order).toEqual(['flush:start'])
     gate.resolve(undefined)
     await expect(pending).resolves.toMatchObject({ isError: false })
     expect(order).toEqual(['flush:start', 'flush:end', 'tool'])
   })
 
-  it('does not dispatch when cancellation lands during the tool checkpoint', async () => {
+  it('does not dispatch when cancellation lands during the tool checkpoint', async ({ onTestFinished }) => {
     const ctx = await setup()
     const session = ctx.sessions.create(SessionId('tool-checkpoint-cancel'))
     const agent = { session } as Agent
     const controller = new AbortController()
     const gate = Promise.withResolvers<undefined>()
+    onTestFinished(() => { gate.resolve(undefined) })
+    const entered = Promise.withResolvers<undefined>()
     const order: string[] = []
     ctx.on('session/flush', async () => {
       order.push('flush:start')
+      entered.resolve(undefined)
       await gate.promise
       order.push('flush:end')
     })
@@ -153,11 +162,11 @@ describe('session-checkpoint-policy tool and step boundaries', () => {
       execute: async () => { order.push('tool'); return null },
     })
 
-    const pending = ctx.tools.execute({
+    const pending = executeToolFixture(ctx, {
       callId: ToolCallId('write-cancelled'), name: 'write', arguments: {}, agent,
       signal: controller.signal,
     })
-    await Promise.resolve()
+    await entered.promise
     expect(order).toEqual(['flush:start'])
     controller.abort('cancelled during checkpoint')
     gate.resolve(undefined)
@@ -184,7 +193,7 @@ describe('session-checkpoint-policy tool and step boundaries', () => {
       output: { schema: { type: 'null' }, render: () => [] },
       execute: async () => { ran = true; return null },
     })
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       callId: ToolCallId('write-2'), name: 'write', arguments: {}, agent,
       signal: new AbortController().signal,
     })
@@ -204,7 +213,7 @@ describe('session-checkpoint-policy tool and step boundaries', () => {
       output: { schema: { type: 'null' }, render: () => [] },
       execute: async () => null,
     })
-    await ctx.tools.execute({
+    await executeToolFixture(ctx, {
       callId: ToolCallId('nested-1'), name: 'nested', arguments: {}, agent,
       parent: Symbol('outer') as never,
       signal: new AbortController().signal,
@@ -220,7 +229,7 @@ describe('session-checkpoint-policy tool and step boundaries', () => {
     ctx.on('session/flush', (current) => { flushed.push(current.id) })
     const signal = new AbortController().signal
     await agentEvents(ctx, agent).waterfall(
-      'agent/pre-step', { messages: [], turn: 1, step: 1, signal },
+      'agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal },
       () => Promise.resolve({ kind: 'enter', messages: [] }),
     )
     expect(flushed).toEqual([session.id])
@@ -235,6 +244,7 @@ describe('session-checkpoint-policy lifecycle', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(TestPersistence)
     const session = ctx.sessions.create(SessionId('disposed-policy'))
     let flushes = 0

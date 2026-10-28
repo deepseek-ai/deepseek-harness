@@ -1,0 +1,28 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {"key":"event:web/deepseek-search-llm-request","kind":"event","event":"web/deepseek-search-llm-request","surface":false,"digest":"0c556c9b9f2a96238a6b9bbb99e748206cbff2ed6203041c9571f04ae5802f52"}
+  ],
+  "types": [],
+  "nodes": {
+    "0116b1f89c05221d": {"kind":"literal","value":"web_search_20250305"},
+    "0657d3ca5ac4e7bf": {"kind":"primitive","type":"number"},
+    "0b9b8facbe2c1977": {"kind":"literal","value":"disabled"},
+    "0c556c9b9f2a9623": {"kind":"object","properties":[{"name":"data","type":"abd6ca62a5ab1665","optional":false},{"name":"ignorable","type":"dacf3d5f3e4ff619","optional":true},{"name":"seq","type":"0657d3ca5ac4e7bf","optional":false},{"name":"time","type":"0657d3ca5ac4e7bf","optional":false},{"name":"type","type":"6f611bed14b21065","optional":false}],"indices":[]},
+    "2d11ca7b0d4493e2": {"kind":"object","properties":[{"name":"max_uses","type":"0657d3ca5ac4e7bf","optional":false},{"name":"name","type":"935c8d486292b13c","optional":false},{"name":"type","type":"0116b1f89c05221d","optional":false}],"indices":[]},
+    "37ff65426bcf130f": {"kind":"object","properties":[{"name":"type","type":"0b9b8facbe2c1977","optional":false}],"indices":[]},
+    "4aed17ec726b5397": {"kind":"tuple","elements":[{"type":"2d11ca7b0d4493e2","optional":false,"rest":false}]},
+    "4cd48f3e5108bd6e": {"kind":"primitive","type":"string"},
+    "4e44c9118152f682": {"kind":"literal","value":"text"},
+    "4e88776858652856": {"kind":"object","properties":[{"name":"text","type":"4cd48f3e5108bd6e","optional":false},{"name":"type","type":"4e44c9118152f682","optional":false}],"indices":[]},
+    "68f44f59e91c4139": {"kind":"literal","value":"user"},
+    "6f611bed14b21065": {"kind":"literal","value":"web/deepseek-search-llm-request"},
+    "8f6d609794bf5afc": {"kind":"tuple","elements":[{"type":"4e88776858652856","optional":false,"rest":false}]},
+    "935c8d486292b13c": {"kind":"literal","value":"web_search"},
+    "9a2a9029f8d7ede0": {"kind":"object","properties":[{"name":"content","type":"8f6d609794bf5afc","optional":false},{"name":"role","type":"68f44f59e91c4139","optional":false}],"indices":[]},
+    "9c001ecb5e1d3c38": {"kind":"object","properties":[{"name":"max_tokens","type":"0657d3ca5ac4e7bf","optional":false},{"name":"messages","type":"b993441f8ce7d27b","optional":false},{"name":"model","type":"4cd48f3e5108bd6e","optional":false},{"name":"thinking","type":"37ff65426bcf130f","optional":true},{"name":"tools","type":"4aed17ec726b5397","optional":false}],"indices":[]},
+    "abd6ca62a5ab1665": {"kind":"object","properties":[{"name":"apiVersion","type":"4cd48f3e5108bd6e","optional":false},{"name":"body","type":"9c001ecb5e1d3c38","optional":false},{"name":"endpoint","type":"4cd48f3e5108bd6e","optional":false}],"indices":[]},
+    "b993441f8ce7d27b": {"kind":"tuple","elements":[{"type":"9a2a9029f8d7ede0","optional":false,"rest":false}]},
+    "dacf3d5f3e4ff619": {"kind":"literal","value":true}
+  }
+}

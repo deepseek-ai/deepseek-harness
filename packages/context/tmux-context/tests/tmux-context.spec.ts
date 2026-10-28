@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
@@ -8,7 +8,9 @@ import { ShellExecutor } from '@deepseek-ai/dsh-shell'
 import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import * as tmuxContext from '@deepseek-ai/dsh-tmux-context'
 import type { Config } from '@deepseek-ai/dsh-tmux-context'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, mountAgentLoopTestDependencies, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 
 /** Empty offset readers for fakes that never produce output. */
 const silentReader = { readFrom: (fromByte: number) => ({ text: '', nextOffset: fromByte, lossy: false }) }
@@ -93,8 +95,8 @@ async function mount(
   withBash = false,
 ): Promise<{ ctx: Context; bash: FakeBash | undefined }> {
   const ctx = new Context()
-  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   let bash: FakeBash | undefined
   if (withBash) {
     await ctx.plugin(FakeBash)
@@ -109,6 +111,7 @@ function sessionAgent(session: Session, id = 'agent'): Agent {
     id: SessionId(id),
     options: {},
     session,
+    model: unsupportedModel(),
     inbox: unsupportedInbox(),
     status: 'running',
     ctx: new Context(),
@@ -151,7 +154,7 @@ async function fire(
 ): Promise<void> {
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: [], turn, step, signal },
+    { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn, step, signal },
     () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
   )
   if (decision.kind === 'enter') {
@@ -167,6 +170,61 @@ afterEach(() => {
 })
 
 describe('tmux-context injection', () => {
+  it.each(['ready', 'cancelled', 'disposed', 'failed'] as const)('handles a %s registration before querying the first turn location', async (outcome) => {
+    const ctx = new Context()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    onTestFinished(async () => {
+      release.resolve(undefined)
+      await ctx.fiber.dispose()
+    })
+    await mountAgentLoopTestDependencies(ctx)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    await ctx.plugin(FakeBash)
+    const bash = ctx.shell as FakeBash
+    const adapter = new MockAdapter([textResponse('ready')])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = await ctx.agentLoop.create(SessionId('initial-tmux'), { provider: 'mock', model: 'mock' })
+    const register = ctx.sessionProjections.register.bind(ctx.sessionProjections)
+    vi.spyOn(ctx.sessionProjections, 'register').mockImplementation(async (definition) => {
+      const handle = await register(definition)
+      if (definition.key === 'tmuxContext') {
+        entered.resolve(undefined)
+        await release.promise
+      }
+      return handle
+    })
+    const fiber = ctx.plugin(tmuxContext, {})
+    await entered.promise
+    const preparing = Promise.withResolvers<undefined>()
+    ctx.on('agent/pre-step', (_payload, next) => {
+      preparing.resolve(undefined)
+      return next()
+    }, { prepend: true })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'where is this terminal?' }], source: { kind: 'user' } }))
+    await preparing.promise
+    if (outcome === 'cancelled') agent.cancel({ kind: 'user' })
+    const disposal = outcome === 'disposed' ? fiber.dispose() : undefined
+    if (outcome === 'failed') {
+      const rejected = expect(Promise.resolve(fiber)).rejects.toThrow('tmux registration failed')
+      release.reject(new Error('tmux registration failed'))
+      await rejected
+    } else {
+      release.resolve(undefined)
+      await (disposal ?? fiber)
+    }
+    await agent.whenIdle()
+
+    expect(bash.commands).toHaveLength(outcome === 'ready' ? 1 : 0)
+    expect(contextTexts(agent.session)).toHaveLength(outcome === 'ready' ? 1 : 0)
+    expect(adapter.requests).toHaveLength(outcome === 'ready' ? 1 : 0)
+    if (outcome === 'ready') {
+      expect(adapter.requests[0]?.messages.flatMap(message => message.content)).toContainEqual({
+        type: 'text', text: contextTexts(agent.session)[0],
+      })
+    }
+  })
+
   it('injects the tmux location on the first step of a turn', async () => {
     const { ctx } = await mount({}, true)
     const session = Session.create(SessionId('first'))

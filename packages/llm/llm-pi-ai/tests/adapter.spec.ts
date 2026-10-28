@@ -153,6 +153,27 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.requests[0]).not.toHaveProperty('dsh_plugin_packages')
   })
 
+  it('routes OpenCode Go requests by Session id through its required session header', async () => {
+    const server = await mockServer([{ events: textEvents }, { events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['opencode-go'], adapterOf({
+      'opencode-go': { apiKeyEnv: 'PI_TEST_KEY', baseURL: `${server.url}/v1` },
+    }))
+
+    await assemble(ctx, {
+      provider: 'opencode-go',
+      model: 'deepseek-v4.1-flash',
+      messages: [],
+      sessionId: 'opencode-session' as never,
+    })
+    await assemble(ctx, { provider: 'opencode-go', model: 'deepseek-v4.1-flash', messages: [] })
+
+    expect(server.paths).toEqual(['/v1/chat/completions', '/v1/chat/completions'])
+    expect(server.headers[0]?.['x-opencode-session']).toBe('opencode-session')
+    expect(server.headers[1]).not.toHaveProperty('x-opencode-session')
+  })
+
   it('uses a dynamic request effort and reports unsupported efforts before network I/O', async () => {
     const server = await mockServer([{ events: textEvents }, { events: textEvents }])
     const ctx = await harness(server.url, { reasoning: 'max' })
@@ -1111,4 +1132,11 @@ it.each([
   if (error instanceof LlmError && error.code === 'MISSING_CREDENTIAL') {
     expect(await adapter.listModels('deepseek')).toEqual([])
   } else await expect(adapter.listModels('deepseek')).rejects.toBe(error)
+})
+
+it('resolves the exact pi-ai image budget for screenshot coordinates', () => {
+  const adapter = adapterOf({ deepseek: { apiKeyEnv: 'PI_TEST_KEY', requestImagePixelBudget: 10_000, requestImageMaxBytes: 50_000 } })
+  expect(adapter.imageRequestTarget('deepseek', 'deepseek-flash', { ...IMAGE_REF, width: 1000, height: 1000 }))
+    .toEqual({ width: 100, height: 100, maxBytes: 50_000 })
+  expect(() => adapter.imageRequestTarget('missing', 'deepseek-flash', IMAGE_REF)).toThrow('does not own provider')
 })

@@ -30,8 +30,8 @@
   en: 053e2c485eec2613
   zh: 2817da00572c789f
 /defensive-patterns/a-business-capability-owns-itself:
-  en: 7588b8dba9279dac
-  zh: 2760468ede60220c
+  en: f74f2467e507455f
+  zh: fe1bae04be5ad63a
 /defensive-patterns/changes-carry-performance-evidence:
   en: 0d6855d1ae0ef4ae
   zh: 0f771999398ce052
@@ -39,8 +39,8 @@
   en: 6213e051f51437b8
   zh: 853580b3a4fec100
 /defensive-patterns/dispose-must-reach-quiescence-not-just-request-it:
-  en: eeb9fe3158484618
-  zh: 97187d4dbe4d75ee
+  en: d487ad57fdb16472
+  zh: eb5efe8b079b9521
 /defensive-patterns/contain-callback-exceptions-in-the-dispatcher:
   en: ae2332afa54cb253
   zh: db51fedb070d9a83

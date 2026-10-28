@@ -171,6 +171,14 @@ const homeAndGuide = pairedPages([
     order: 2,
   },
   {
+    source: 'docs/user/guide/plugin-market.md',
+    route: 'guide/plugin-market.md',
+    label: { root: '插件索引', en: 'Plugin indexes' },
+    sidebar: { root: 'zh-guide', en: 'en-guide' },
+    section: { root: '集成', en: 'Integrations' },
+    order: 2,
+  },
+  {
     source: 'docs/user/guide/mcp-memory.md',
     route: 'guide/mcp-memory.md',
     label: { root: '记忆 MCP', en: 'Memory MCP' },

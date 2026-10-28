@@ -1,13 +1,17 @@
 .root { flex: 1; min-width: 0; }
+.root[data-inset='true'] { margin-inline: 2px; }
 .anchor { width: 100%; }
-.trigger { user-select: none; display: flex; align-items: center; width: 100%; height: 44px; gap: 8px; padding: 6px; border: 0; border-radius: var(--dsw-radius-md); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 14px; cursor: pointer; }
-.trigger[data-collapsed='true'] { box-sizing: border-box; width: 36px; height: 36px; justify-content: center; gap: 0; padding: 0; }
-.trigger:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.trigger { user-select: none; display: flex; align-items: center; width: 100%; height: 44px; gap: 8px; padding: 6px calc(var(--dsh-sidebar-row-padding) - var(--dsh-sidebar-paint-inset)); border: 0; border-inline: var(--dsh-sidebar-paint-inset) solid transparent; box-sizing: border-box; border-radius: var(--dsw-radius-md); background: transparent; background-clip: padding-box; color: var(--dsw-alias-label-primary); font: inherit; font-size: 14px; cursor: pointer; }
+.trigger[data-signed-out='false']:not([data-collapsed='true']) { padding: 6px; border-inline: 0; background-clip: border-box; }
+.trigger[data-collapsed='true'] { box-sizing: border-box; width: 36px; height: 36px; justify-content: center; gap: 0; padding: 0; border-inline: 0; background-clip: border-box; }
+@media (hover: hover) {
+  .trigger:hover { background-color: var(--dsw-alias-interactive-bg-hover); }
+}
 .avatar { display: flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; border-radius: 50%;
   corner-shape: round; background: var(--dsw-alias-bg-skeleton); color: var(--dsw-alias-label-tertiary); }
 .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Signed-out launcher: a 32px More row carrying the 14px ellipsis. */
-.trigger[data-signed-out='true']:not([data-collapsed='true']) { height: 32px; padding: 6px 2px 6px 6px; line-height: 20px; }
+.trigger[data-signed-out='true']:not([data-collapsed='true']) { height: 32px; padding: 6px calc(var(--dsh-sidebar-row-padding) - var(--dsh-sidebar-paint-inset)); line-height: 20px; }
 
 /* Signed-out menu card and rows; listClassName reaches the portaled card. */
 .signedOutMenu[role='menu'] {

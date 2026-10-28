@@ -29,6 +29,7 @@ import { renderTexToReact } from './katex.tsx'
 import { LinkIconMedium, classifyLinkPath } from '../LinkIcon.tsx'
 import { useMarkdownDelegate } from './MarkdownDelegate.tsx'
 import { HoverCard } from '../HoverCard.tsx'
+import { DraggableImage } from '../DraggableImage.tsx'
 import { ImageLightbox } from '../ImageLightbox.tsx'
 import { ImagePreview } from '../ImagePreview.tsx'
 import type { PositionedBlock } from './incremental.ts'
@@ -77,12 +78,17 @@ function remoteImageUrl(url: string): string | undefined {
   }
 }
 
-/** Rewritten images may use Web media protocols or the Desktop application's file route. */
+/** Authenticated Host media routes as the Desktop application addresses them. */
+const DESKTOP_MEDIA_ROUTES = [
+  'dsh-app://app/api/file?', 'dsh-app://app/api/plugin-market/detail-file?', 'dsh-app://app/api/plugin-manager/detail-file?',
+]
+
+/** Rewritten images may use Web media protocols or the Desktop application's media routes. */
 function vocabularyImageUrl(url: string): string | undefined {
   try {
     const protocol = new URL(url).protocol
     return protocol === 'http:' || protocol === 'https:' || protocol === 'blob:' || protocol === 'data:'
-      || url.startsWith('dsh-app://app/api/file?')
+      || DESKTOP_MEDIA_ROUTES.some(route => url.startsWith(route))
       ? url
       : undefined
   } catch {
@@ -98,13 +104,38 @@ function vocabularyImageUrl(url: string): string | undefined {
  * caller.
  * @param url - The authored markdown destination.
  * @param pathImages - Rewriting vocabulary, when the render pass has one.
+ * @param load - The mounted image's load number for rewritten URLs.
  * @returns The displayable image URL, or undefined.
  */
-function imageSource(url: string, pathImages: MarkdownPathImages | undefined): string | undefined {
+function imageSource(url: string, pathImages: MarkdownPathImages | undefined, load: number): string | undefined {
   const remote = remoteImageUrl(sanitizeUrl(normalizeUri(url)))
   if (remote !== undefined) return remote
   const rewritten = pathImages?.resolve(url)
-  return rewritten === undefined ? undefined : vocabularyImageUrl(rewritten)
+  const allowed = rewritten === undefined ? undefined : vocabularyImageUrl(rewritten)
+  return allowed === undefined ? undefined : freshImageUrl(allowed, load)
+}
+
+// A module counter, not useId: useId derives from tree position, so images at
+// the same position in two sessions would share a URL.
+let imageLoads = 0
+const nextImageLoad = (): number => ++imageLoads
+
+/**
+ * Tag a Host file-route image URL with its mount's load number. Browsers reuse
+ * a same-URL image within one document despite `no-store`, so without the tag
+ * a newly rendered image of a rewritten file would show the earlier bytes.
+ * @param url - Absolute resolved image URL; URLs outside the `api/file` route stay unchanged.
+ * @param load - Number allocated once per mounted image or file link.
+ * @returns The URL with a `load` query parameter, or the unchanged URL.
+ */
+function freshImageUrl(url: string, load: number): string {
+  let fresh: URL
+  try { fresh = new URL(url) }
+  catch { return url } // Only an unparsable owner-supplied URL throws; it is emitted as before.
+  if (!fresh.pathname.endsWith('/api/file')) return url
+  // Appending preserves the resolver's existing query encoding.
+  fresh.search = `${fresh.search === '' ? '?' : `${fresh.search}&`}load=${load}`
+  return fresh.href
 }
 
 /** Link/image reference targets collected from a document (first definition per identifier wins, as in CommonMark). */
@@ -158,7 +189,8 @@ export interface MarkdownPathImages {
    * Resolve one authored image destination.
    * @param value - The destination exactly as the markdown author wrote it.
    * @returns A displayable absolute URL, or undefined when the destination
-   * names no displayable image — it then stays inert alt text.
+   * names no displayable image — it then stays inert alt text. The renderer
+   * appends a per-mount `load` query parameter to `api/file` route results.
    */
   resolve(value: string): string | undefined
 }
@@ -193,6 +225,8 @@ export interface MarkdownRenderContext {
   readonly fileMentions: MarkdownFileMentions | undefined
   /** Local-path image vocabulary; absent wherever no rewriting owner exists. */
   readonly pathImages: MarkdownPathImages | undefined
+  /** Raw HTML renders nothing instead of literal text. */
+  readonly omitHtml: boolean
   /** Inside an anchor's children: interactive mentions must not nest there. */
   readonly inLink?: boolean
   /** Reference targets visible to this pass. */
@@ -331,8 +365,8 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
       return <code key={key}>{value}</code>
     }
     case 'html':
-      // No HTML parser enters the pipeline: raw HTML stays literal text.
-      return node.value
+      // No HTML parser enters the pipeline: raw HTML is literal text, or nothing where the owner omits it.
+      return context.omitHtml ? null : node.value
     case 'code':
       return renderCode(node, key, context)
     case 'math':
@@ -483,8 +517,8 @@ function renderTable(node: Md.Table, key: Key, context: MarkdownRenderContext): 
   // column and wrap instead (deepsuite chat TableWrapper parity).
   const wide = columns >= 4 && context.inBlockquote !== true
   return (
-    // Wide tables rest with overflow-x hidden (the hover-revealed bar in
-    // MarkdownText.module.css), which drops Chromium's implicit scroller
+    // On hover-capable inputs, wide tables rest with overflow-x hidden (the
+    // hover-revealed bar in MarkdownText.module.css), dropping Chromium's implicit scroller
     // focusability — the explicit tabindex keeps them keyboard-reachable,
     // and :focus-visible restores scrolling.
     <div
@@ -584,10 +618,12 @@ function MarkdownFileLink({ file, glyph, children }: {
   readonly children: ReactNode[]
 }): ReactNode {
   const { openFile, fileImages } = useMarkdownDelegate()
+  const [load] = useState(nextImageLoad)
   if (openFile === undefined) return <>{children}</>
   // Pure-image anchors already contain their preview and keep one navigation target.
   const preview = glyph && classifyLinkPath(file.path) === 'image' ? fileImages : undefined
-  const src = preview?.resolve(file.path)
+  const resolved = preview?.resolve(file.path)
+  const src = resolved === undefined ? undefined : freshImageUrl(resolved, load)
   const anchor = (
     <button
       type="button"
@@ -635,8 +671,10 @@ function MarkdownImage({ destination, alt, pathImages, streaming, inLink }: {
   inLink: boolean
 }): ReactNode {
   const { fileImages } = useMarkdownDelegate()
+  const [load] = useState(nextImageLoad)
   const file = streaming ? undefined : parseFileLink(destination)
-  const src = (file === undefined ? undefined : fileImages?.resolve(file.path)) ?? imageSource(destination, pathImages)
+  const resolved = file === undefined ? undefined : fileImages?.resolve(file.path)
+  const src = resolved === undefined ? imageSource(destination, pathImages, load) : freshImageUrl(resolved, load)
   if (src === undefined) return <span className={css.imageAlt}>{alt}</span>
   return <LoadedMarkdownImage key={src} src={src} alt={alt} destination={destination} preview={inLink ? undefined : fileImages} />
 }
@@ -651,9 +689,19 @@ function LoadedMarkdownImage({ src, alt, destination, preview }: {
   const [open, setOpen] = useState(false)
   const close = useCallback(() => { setOpen(false) }, [])
   if (failed) return <span className={css.imageAlt}>{preview === undefined ? '' : `${preview.labels.failed} · `}{alt || destination}</span>
-  const img = <img className={css.image} src={src} alt={alt}
-    onError={() => { setFailed(true) }} loading="lazy" decoding="async" referrerPolicy="no-referrer" />
-  if (preview === undefined) return img
+  const imageProps = { className: css.image, src, alt, onError: () => { setFailed(true) },
+    loading: 'lazy' as const, decoding: 'async' as const, referrerPolicy: 'no-referrer' as const }
+  if (preview === undefined) return <img {...imageProps} />
+  const file = parseFileLink(destination)
+  const localFileName = file?.path.split(/[\\/]/u).at(-1)
+  const urlFileName = destination.split('/').at(-1)?.split(/[?#]/u)[0]
+  const exportName = localFileName || urlFileName || 'image'
+  const img = <DraggableImage
+    fileDrag={preview.fileDrag}
+    {...imageProps}
+    resourceAddress={file === undefined ? undefined : preview.resourceAddress?.(file.path)}
+    name={exportName}
+  />
   return <>
     <button type="button" className={css.imageButton} title={preview.labels.open}
       aria-label={alt ? `${preview.labels.open}: ${alt}` : preview.labels.open}

@@ -15,7 +15,7 @@ import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, parseSeedFixture, realizeSeedFixture, renderSeedFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { openSettings, newEnglishPage, pinBrowserClock, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
+import { openSettings, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/message-actions', import.meta.url))
 // Borrowed read-only: this scenario needs any settled user+assistant pair, not
@@ -191,7 +191,7 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
   let browser: Browser
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
-  let unpinBrowserClock: (() => void) | undefined
+  let hostClock: ReturnType<typeof pinHostClock> | undefined
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold()
@@ -212,16 +212,23 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     await seedSession(scaffold, raw, SEED_ID, undefined, { createdAt: WEB_FIXTURE_TIME - 90_000 })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
-    unpinBrowserClock = await pinBrowserClock(page)
+    // Fork summaries use Host time; placeholders use browser time. Each pin
+    // starts at the fixture date, so keep these calls adjacent: setup between
+    // them can create enough clock skew to reverse the fork order.
+    hostClock = pinHostClock()
+    await pinBrowserClock(page)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
   }, 120_000)
 
   afterAll(async () => {
-    unpinBrowserClock?.()
-    await browser?.close()
-    await scaffold?.close()
+    try {
+      await browser?.close()
+      await scaffold?.close()
+    } finally {
+      hostClock?.mockRestore()
+    }
   })
 
   it.skipIf(MODE === 'record')('enables branch only on the completed transcript tail', async () => {
@@ -364,13 +371,15 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
   it.skipIf(MODE === 'record')('forks through the settled-message and session-row actions', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-message-fork'))
     // The second answer is followed by another completed user turn in the source.
+    const existing = new Set(scaffold.ctx.agents.list().map(agent => agent.id))
     await page.getByRole('button', { name: 'Branch into a new conversation' }).nth(1).click()
     await expect.poll(
-      () => scaffold.ctx.agents.list().find(agent => agent.session.header.parentSession === SessionId(SEED_ID)),
+      () => scaffold.ctx.agents.list().find(agent => !existing.has(agent.id)),
       { timeout: 15_000 },
     ).toBeDefined()
     const child = scaffold.ctx.agents.list().find(agent =>
-      agent.session.header.parentSession === SessionId(SEED_ID))!
+      !existing.has(agent.id))!
+    expect(child.session.header.parentSession).toBeUndefined()
     expect(child.inbox.nextTurn).toEqual([])
     expect(child.session.snapshotEvents().some(event => event.type === 'agent/inbox/spliced'
       && event.data.inserted.some(message => message.content.some(part =>
@@ -398,11 +407,13 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     const buttonBox = await actionButton.boundingBox()
     if (buttonBox === null) throw new Error('fork source row action has no layout box')
     await page.mouse.click(buttonBox.x + buttonBox.width / 2, buttonBox.y + buttonBox.height / 2)
+    const beforeNested = new Set(scaffold.ctx.agents.list().map(agent => agent.id))
     await page.getByRole('menuitem', { name: 'Fork session' }).click()
     await expect.poll(
-      () => scaffold.ctx.agents.list().filter(agent => agent.session.header.parentSession !== undefined).length,
+      () => scaffold.ctx.agents.list().filter(agent => !beforeNested.has(agent.id)).length,
       { timeout: 15_000 },
-    ).toBe(2)
+    ).toBe(1)
+    expect(scaffold.ctx.agents.list().find(agent => !beforeNested.has(agent.id))!.session.header.parentSession).toBeUndefined()
     await expect.poll(
       () => page.locator('[role="treeitem"]').count(),
       { timeout: 10_000 },
@@ -438,8 +449,10 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     expect(scaffold.ctx.agents.get(id)).toBeUndefined()
     await row.hover()
     await row.locator('button[aria-label^="Session actions for "]').click()
+    const existing = new Set(scaffold.ctx.agents.list().map(agent => agent.id))
     await page.getByRole('menuitem', { name: 'Fork session', exact: true }).click()
-    await expect.poll(() => scaffold.ctx.agents.list().some(agent => agent.session.header.parentSession === id)).toBe(true)
+    await expect.poll(() => scaffold.ctx.agents.list().some(agent => !existing.has(agent.id))).toBe(true)
+    expect(scaffold.ctx.agents.list().find(agent => !existing.has(agent.id))!.session.header.parentSession).toBeUndefined()
     expect(scaffold.ctx.agents.get(id)).toBeUndefined()
     expect(await row.getAttribute('aria-selected')).not.toBe('true')
   })
@@ -474,6 +487,7 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
       if (path === '/api/session/fork') forkRequests.push(path)
     }
     page.on('request', trackFork)
+    const existing = new Set(scaffold.ctx.agents.list().map(agent => agent.id))
     try {
       await row.hover()
       await row.locator('button[aria-label^="Session actions for "]').click()
@@ -494,7 +508,7 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
       expect(await readdir(directory)).toContain(`session.v${SESSION_FORMAT_VERSION}.jsonl.zstd`)
       expect(await readFile(predecessor)).toEqual(source)
       expect(forkRequests).toEqual(['/api/session/fork'])
-      expect(scaffold.ctx.agents.list().filter(agent => agent.session.header.parentSession === id)).toEqual([])
+      expect(scaffold.ctx.agents.list().filter(agent => !existing.has(agent.id) && agent.id !== id)).toEqual([])
     } finally {
       page.off('request', trackFork)
     }

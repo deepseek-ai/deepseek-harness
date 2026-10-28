@@ -7,6 +7,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { resolve } from 'node:path'
+import { SdkUserQuestionBridge } from './user-questions.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { admitEncodedImages, type EncodedImageAttachment, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -14,10 +15,14 @@ import { createUserMessage, ReasoningEffortId, type ContentBlock, type LlmRuntim
 import { carrierKeyOf, type Scoped } from '@deepseek-ai/dsh-scope'
 import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-working-directory'
+import type {} from '@deepseek-ai/dsh-user-approval'
+
+import type {} from '@deepseek-ai/dsh-schedule'
 import type SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import type {
+  ApprovalRequestParams,
   InitializeParams,
   InitializeResult,
   JsonRpcTransportPeer,
@@ -93,13 +98,59 @@ export class HarnessSdkJsonRpcServer {
   private shutdownTask: Promise<Record<string, never>> | undefined
   private shuttingDown = false
   private initialized = false
+  private approvalRequests = false
+  private readonly lifetime = new AbortController()
+  private readonly userQuestions: SdkUserQuestionBridge
+  private readonly initialization = Promise.withResolvers<void>()
+  /** Restored by a reminder and available for the client's first resume. */
+  private readonly scheduledSessions = new Map<string, Promise<SessionRecord>>()
 
   constructor(
     private readonly ctx: Context,
     private readonly transport: JsonRpcTransportPeer,
     private readonly options: HarnessSdkJsonRpcServerOptions = {},
   ) {
+    this.disposers.push(ctx.on('approval/request', async (request, next) => {
+      if (!this.approvalRequests || !this.ownsAgent(request.agent)) return next()
+      const params: ApprovalRequestParams = {
+        sessionId: request.agent.session.id,
+        toolName: request.toolName,
+        ...(request.callId === undefined ? {} : { callId: request.callId }),
+        ...(request.reason === undefined ? {} : { reason: request.reason }),
+      }
+      const signal = request.signal === undefined
+        ? this.lifetime.signal
+        : AbortSignal.any([request.signal, this.lifetime.signal])
+      const result = await this.transport.request('approval/request', params, signal)
+      if (result === null || typeof result !== 'object' || !('outcome' in result)
+        || (result.outcome !== 'allowed-once' && result.outcome !== 'rejected' && result.outcome !== 'cancelled')) {
+        throw new TypeError('approval/request response requires an allowed-once, rejected, or cancelled outcome')
+      }
+      return result.outcome
+    }))
     const serverOptions = this.options
+    this.userQuestions = new SdkUserQuestionBridge(ctx, transport, agent =>
+      this.sessions.get(agent.session.id)?.handle.agent === agent)
+    this.disposers.push(ctx.on('schedule/resolve-agent', async (sessionId) => {
+      // Startup delivery must wait for the SDK model route and output limit.
+      await this.initialization.promise
+      if (this.shuttingDown) throw new Error('SDK server is shutting down')
+      const existing = this.sessions.get(sessionId)
+      const pending = this.sessionCreations.get(sessionId)
+      if (existing !== undefined) {
+        this.assertLiveAgent(existing, sessionId)
+        return existing.handle.agent
+      }
+      if (pending !== undefined) return (await pending).handle.agent
+      const restoration = this.openSession(sessionId, true)
+      this.scheduledSessions.set(sessionId, restoration)
+      try {
+        return (await restoration).handle.agent
+      } catch (error) {
+        this.scheduledSessions.delete(sessionId)
+        throw error
+      }
+    }))
     this.disposers.push(ctx.on('session/event', (session, event) => {
       const record = this.sessions.get(session.id)
       if (event.type === 'turn/end' && record?.handle.agent.session === session
@@ -119,7 +170,7 @@ export class HarnessSdkJsonRpcServer {
     }))
     this.disposers.push(ctx.on('session/created', (session) => {
       const parentSession = session.header.parentSession
-      if (parentSession === undefined) return
+      if (session.header.origin !== 'subagent' || parentSession === undefined) return
       const payload: SubagentStartedNotification = {
         parentSessionId: String(parentSession),
         childSessionId: String(session.id),
@@ -153,6 +204,9 @@ export class HarnessSdkJsonRpcServer {
    * @returns server identity for the handshake.
    */
   async initialize(params: InitializeParams): Promise<InitializeResult> {
+    if (params.approvalRequests !== undefined && typeof params.approvalRequests !== 'boolean') {
+      throw new TypeError('initialize approvalRequests must be a boolean')
+    }
     if (params.reasoningEffort !== undefined
       && (typeof params.reasoningEffort !== 'string' || params.reasoningEffort.length === 0)) {
       throw new TypeError('initialize reasoningEffort must be a non-empty string')
@@ -184,7 +238,10 @@ export class HarnessSdkJsonRpcServer {
     this.model = model
     this.reasoningEffort = reasoningEffort
     this.maxTokens = params.maxTokens
+    this.approvalRequests = params.approvalRequests === true
+    this.userQuestions.enabled = params.capabilities?.userQuestions === true
     this.initialized = true
+    this.initialization.resolve()
     return { serverInfo: { name: 'deepseek-harness-sdk-runtime', version: '0.0.1' } }
   }
 
@@ -223,6 +280,13 @@ export class HarnessSdkJsonRpcServer {
     if (!this.initialized) throw new Error('SDK server is not initialized')
     if (this.shuttingDown) throw new Error('SDK server is shutting down')
     const sessionId = params.sessionId
+    const restoration = this.scheduledSessions.get(sessionId)
+    if (restoration !== undefined) {
+      this.scheduledSessions.delete(sessionId)
+      const record = await restoration
+      this.assertLiveAgent(record, sessionId)
+      return {}
+    }
     if (this.sessions.has(sessionId) || this.sessionCreations.has(sessionId)) {
       throw new Error(`SDK session is already open or opening: ${sessionId}`)
     }
@@ -254,6 +318,20 @@ export class HarnessSdkJsonRpcServer {
         return {}
       }
     }
+  }
+
+  private ownsAgent(agent: Agent): boolean {
+    const agents = this.ctx.agents
+    if (agents.get(agent.id) !== agent) return false
+    const liveAgents = agents.list()
+    const ancestors = new Set([agent])
+    for (const current of ancestors) {
+      if (this.sessions.get(current.session.id)?.handle.agent === current) return true
+      for (const parent of liveAgents) {
+        if (agents.isOwnedBy(current.id, parent)) ancestors.add(parent)
+      }
+    }
+    return false
   }
 
   private assertLiveAgent(rec: SessionRecord, sessionId: string): void {
@@ -302,9 +380,13 @@ export class HarnessSdkJsonRpcServer {
 
   private async performShutdown(): Promise<Record<string, never>> {
     this.shuttingDown = true
+    this.lifetime.abort(new Error('SDK server is shutting down'))
+    this.userQuestions.close()
+    this.initialization.resolve()
     const pendingCreations = [...this.sessionCreations.values()]
     await Promise.allSettled(pendingCreations)
     this.sessionCreations.clear()
+    this.scheduledSessions.clear()
     const records = [...this.sessions.values()]
     this.sessions.clear()
     const failures: unknown[] = []
@@ -378,6 +460,7 @@ export class HarnessSdkJsonRpcServer {
 
   private async getOrCreateSession(sessionId: string): Promise<SessionRecord> {
     if (this.shuttingDown) throw new Error('SDK server is shutting down')
+    this.scheduledSessions.delete(sessionId)
     const existing = this.sessions.get(sessionId)
     if (existing) return existing
     const pending = this.sessionCreations.get(sessionId)
@@ -409,6 +492,17 @@ export class HarnessSdkJsonRpcServer {
     const handle = await (resume ? this.ctx.agents.resume({
       resumeSessionId: brandString<SessionId>(sessionId),
       agentOptions,
+      // The initialized route replaces the restored Session's model selection.
+      setup: (_agentCtx, agent) => {
+        const previous = agent.model.current()
+        const selection = { ...agentOptions }
+        if (selection.reasoningEffort === undefined && previous !== undefined
+          && previous.provider === selection.provider && previous.model === selection.model
+          && previous.reasoningEffort !== undefined) {
+          selection.reasoningEffort = previous.reasoningEffort
+        }
+        agent.model.select(selection)
+      },
     }) : this.ctx.agents.create({
       sessionId: brandString<SessionId>(sessionId),
       meta: { cwd: this.cwd },

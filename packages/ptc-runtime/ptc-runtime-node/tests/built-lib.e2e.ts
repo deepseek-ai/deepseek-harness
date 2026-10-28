@@ -16,7 +16,8 @@ const built = ['lib/index.js', 'lib/process.js'].every(file => existsSync(join(p
   && existsSync(join(pkgDir, '../ptc-runtime/lib/index.js'))
 
 describe.skipIf(!built)('built lib real load path (plain node)', () => {
-  it('runs a TypeScript program with a binding through lib/index.js and its lib/process.js entry', async () => {
+  it.each(['per-call', 'vm-script'] as const)('runs TypeScript and bindings through published exports in %s mode', async (executionMode) => {
+    const program = 'const doubled: number = await tools.double({ n: 21 }); console.log("halfway", doubled); let failure; try { await tools.fail({}) } catch (error) { failure = { typed: error instanceof ToolCallError, name: error.name, toolName: error.toolName, message: error.message } }; ' + (executionMode === 'per-call' ? 'return { doubled, failure };' : '({ doubled, failure })')
     const script = `
       const { Context } = await import('@deepseek-ai/cordis')
       const { NodePtcRuntime } = await import('@deepseek-ai/dsh-ptc-runtime-node')
@@ -27,9 +28,9 @@ describe.skipIf(!built)('built lib real load path (plain node)', () => {
       }
       const { default: SandboxPolicy } = await import('@deepseek-ai/dsh-sandbox-policy')
       await ctx.plugin(SandboxPolicy, { mode: 'read-only' })
-      await ctx.plugin(NodePtcRuntime, {})
+      await ctx.plugin(NodePtcRuntime, ${JSON.stringify({ executionMode })})
       const result = await ctx.ptcRuntime.run(ctx.ptcRuntime.resolve({
-        program: 'const doubled: number = await tools.double({ n: 21 }); console.log("halfway", doubled); let failure; try { await tools.fail({}) } catch (error) { failure = { typed: error instanceof ToolCallError, name: error.name, toolName: error.toolName, message: error.message } } return { doubled, failure };',
+        program: ${JSON.stringify(program)},
         bindings: [{
           global: 'tools',
           functions: {
@@ -42,7 +43,7 @@ describe.skipIf(!built)('built lib real load path (plain node)', () => {
       await ctx.fiber.dispose()
       console.log(JSON.stringify(result))
     `
-    const { exitCode, stdout, stderr } = await execa(process.execPath, ['--input-type=module', '-e', script], {
+    const resultProcess = await execa(process.execPath, ['--input-type=module', '-e', script], {
       cwd: pkgDir,
       stdin: 'ignore',
       timeout: 55_000,
@@ -50,8 +51,10 @@ describe.skipIf(!built)('built lib real load path (plain node)', () => {
       reject: false,
     })
 
-    expect(exitCode, `stderr:\n${stderr}`).toBe(0)
-    const lastLine = stdout.trim().split('\n').at(-1) ?? ''
+    expect(resultProcess.timedOut).toBe(false)
+    expect(resultProcess.signal).toBeUndefined()
+    expect(resultProcess.exitCode, resultProcess.stderr).toBe(0)
+    const lastLine = resultProcess.stdout.trim().split('\n').at(-1) ?? ''
     const result = JSON.parse(lastLine) as { value?: unknown; logs: string[]; error?: unknown }
     expect(result.error).toBeUndefined()
     expect(result.value).toEqual({

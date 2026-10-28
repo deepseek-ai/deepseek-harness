@@ -15,9 +15,11 @@ const wallet = z.object({
   currency: z.enum(['CNY', 'USD']), balance: z.string().regex(decimal),
 })
 const summary = z.object({ normal_wallets: z.array(wallet), bonus_wallets: z.array(wallet) })
+// Protocol responses are JSON-decoded; metadata keeps any JSON value without field validation.
+const bonusMetadata = z.custom<Exclude<AccountBonusNotification['campaign'], undefined>>().optional()
 const bonus = z.object({
-  order_id: z.uuid(), campaign: z.string(), amount: z.string().regex(decimal),
-  currency: z.enum(['CNY', 'USD']), granted_at: z.string(), expires_at: z.string(), msg: z.string(),
+  campaign: bonusMetadata, amount: bonusMetadata, currency: bonusMetadata, granted_at: bonusMetadata,
+  order_id: z.string(), title: z.string().nullish().transform(value => value ?? undefined), expires_at: z.string().nullish().transform(value => value ?? ''), msg: z.string(),
 })
 // The shared response reader already unwraps biz_data, so the payload is the bonus list itself.
 const unnotified = z.array(bonus)
@@ -29,23 +31,39 @@ const unnotified = z.array(bonus)
 export function profile(value: unknown): AccountProfile {
   const parsed = user.safeParse(value)
   if (!parsed.success) throw new PlatformAuthError('protocol')
-  const { email, mobile, mobile_number: mobileNumber, id_profile: identity } = parsed.data
+  return projectProfile(parsed.data)
+}
+
+function projectProfile(value: z.infer<typeof user>): AccountProfile {
+  const { email, mobile, mobile_number: mobileNumber, id_profile: identity } = value
   return {
-    id: parsed.data.id == null ? null : parsed.data.id as AccountUserId,
+    id: value.id == null ? null : value.id as AccountUserId,
     avatarUrl: identity?.picture || null,
     name: identity?.name || null, contact: mobile || mobileNumber || email || null,
   }
+}
+
+function accountPayload<T>(schema: z.ZodType<T>, value: unknown, field: 'profile' | 'balance' | 'bonus'): T {
+  const parsed = schema.safeParse(value)
+  if (!parsed.success) {
+    console.error(`[deepseek-account] ${field} schema rejected`, {
+      issues: parsed.error.issues.map(issue => ({ path: issue.path, code: issue.code })),
+    })
+    throw new PlatformAuthError('protocol')
+  }
+  return parsed.data
 }
 
 const queries: { [K in keyof AccountDetails]: {
   path: '/auth-api/v0/users/current' | '/api/v0/users/get_user_summary'
   parse: (value: unknown) => AccountDetails[K]
 } } = {
-  profile: { path: '/auth-api/v0/users/current', parse: value => ({ status: 'ready', value: profile(value) }) },
+  profile: { path: '/auth-api/v0/users/current', parse: value => ({
+    status: 'ready', value: projectProfile(accountPayload(user, value, 'profile')),
+  }) },
   balance: { path: '/api/v0/users/get_user_summary', parse: (value) => {
-    const parsed = summary.safeParse(value)
-    if (!parsed.success) throw new PlatformAuthError('protocol')
-    return { status: 'ready', value: parsed.data.normal_wallets, bonusWallets: parsed.data.bonus_wallets }
+    const parsed = accountPayload(summary, value, 'balance')
+    return { status: 'ready', value: parsed.normal_wallets, bonusWallets: parsed.bonus_wallets }
   } },
 }
 
@@ -79,11 +97,14 @@ export async function readAccountDetail<K extends keyof AccountDetails>(field: K
  */
 export async function readUnnotifiedBonuses(origin: string, token: string,
   signal: AbortSignal, headers: Record<string, string>): Promise<readonly AccountBonusNotification[]> {
-  const parsed = unnotified.safeParse(await requestUnnotifiedBonuses(origin, token, signal, headers))
-  if (!parsed.success) throw new PlatformAuthError('protocol')
-  return parsed.data.map(row => ({
-    orderId: row.order_id as AccountBonusOrderId, campaign: row.campaign, amount: row.amount,
-    currency: row.currency, grantedAt: row.granted_at, expiresAt: row.expires_at, message: row.msg,
+  const parsed = accountPayload(unnotified, await requestUnnotifiedBonuses(origin, token, signal, headers), 'bonus')
+  return parsed.map(row => ({
+    ...(row.campaign === undefined ? {} : { campaign: row.campaign }),
+    ...(row.amount === undefined ? {} : { amount: row.amount }),
+    ...(row.currency === undefined ? {} : { currency: row.currency }),
+    ...(row.granted_at === undefined ? {} : { grantedAt: row.granted_at }),
+    orderId: row.order_id as AccountBonusOrderId, expiresAt: row.expires_at, message: row.msg,
+    ...(row.title === undefined ? {} : { title: row.title }),
   }))
 }
 

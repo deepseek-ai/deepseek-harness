@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "point de contrôle de session",
+    "description": "Enregistrez les enregistrements de session avant les demandes de modèle et les opérations d'outils pouvant avoir des effets externes."
+  }
+}

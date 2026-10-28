@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Persistent terminals",
-    "description": "Keep shell processes alive across tool calls."
+    "description": "Gives the agent terminals whose processes keep running in the background between tool calls, so it can start a dev server or REPL and come back later to read output or type input.",
+    "detail": "docs/DETAIL.md"
   }
 }

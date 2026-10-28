@@ -105,10 +105,10 @@ function preflight(
       const issue = evaluatePluginCompatibility(manifest, exemptions)
       return issue === undefined || issue.exempted ? undefined : pluginCompatibilityWarning(issue)
     } catch (error) {
-      // Peer metadata that cannot be read or validated is refused rather than silently admitted.
+      // Requirement metadata that cannot be read or validated is refused rather than silently admitted.
       /* v8 ignore next -- every reader and parser used here rejects with an Error. */
       const detail = error instanceof Error ? error.message : String(error)
-      return `its declared peer dependencies cannot be validated: ${detail}`
+      return `its declared dsh requirements cannot be validated: ${detail}`
     }
   }
   const deny = (row: EntryOptions, reason: string): void => {

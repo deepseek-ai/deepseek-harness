@@ -1,0 +1,20 @@
+# Preserve the explicitly selected pre-desktop recorded compositions.
+# New SDK default-context scenarios do not apply this patch.
+
+- id: present
+  disabled: true
+
+- id: tool-ask-user
+  disabled: true
+
+- id: tool-schedule
+  disabled: true
+
+- id: file-reference-local
+  disabled: true
+
+- id: deliverable-file-references
+  disabled: true
+
+- id: time-context
+  disabled: true

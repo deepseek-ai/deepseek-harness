@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Ralph 循环",
-    "description": "使用新智能体执行用户明确要求的循环工作。"
+    "description": "要求用 Ralph 循环完成一个目标后，智能体会一轮接一轮地启动新的智能体处理它，直到目标达成、报告受阻或达到轮次上限。",
+    "detail": "docs/DETAIL.zh.md"
   }
 }

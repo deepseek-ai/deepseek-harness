@@ -9,6 +9,8 @@
 import { pathToFileURL } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { inspect, parseEnv } from 'node:util'
+import { captureStartupComposition, type StartupCompositionDiagnostic } from './startup-diagnostics.ts'
+export type { StartupCompositionDiagnostic, StartupPluginState, StartupServiceState } from './startup-diagnostics.ts'
 import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { Context, type Fiber, type FiberState } from '@deepseek-ai/cordis'
@@ -22,14 +24,13 @@ export { sanitizeProfile } from './profile-sanitize.ts'
 export { getDshRuntimeVersion, evaluatePluginCompatibility, pluginCompatibilityWarning, type PluginCompatibility } from './plugin-compatibility.ts'
 export {
   PROFILE_COMPATIBILITY_FILENAME, readProfileCompatibility, readProfileVersionExemptions,
-  setProfileVersionExemption, type ProfileCompatibility,
+  setProfileVersionExemption, validatePluginVersionExemption, type ProfileCompatibility,
 } from './profile-compatibility.ts'
 import { prepareProfilePatches } from './compatibility-preflight.ts'
 import { ProfileRuntimeResolution, type RuntimeResolution } from './profile.ts'
 import { ResolutionRestartRequired } from './profile-resolution/resolver.ts'
 export { prepareProfileEntries, prepareProfilePatches } from './compatibility-preflight.ts'
 export { readPluginMeta, resolvePluginResource } from './package-meta.ts'
-export { ON_DEMAND_BUNDLES, OFFICIAL_ON_DEMAND_CATALOG, type OfficialBundleCatalogEntry } from './official-bundles.ts'
 export { generateConfigSchema, type ConfigSchemaDump, type NativeConfigSchema } from './config-schema/index.ts'
 export { createConfigProjector, LOADER_EXPRESSION_SCHEMA, type ConfigProjection } from './config-schema/projector.ts'
 export { isNativeConfigSchema } from './config-schema/native.ts'
@@ -55,12 +56,11 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+export { assertBundlePlatform, UnsupportedBundlePlatformError } from './bundle-platform.ts'
 export {
   composeEntries,
   createRuntimeResolution,
   ProfileRuntimeResolution,
-  DEFAULT_PROFILE_BUNDLES,
-  OPTIONAL_BUNDLES,
   bundlePatchFiles,
   bundlePatchPaths,
   initProfile,
@@ -68,7 +68,6 @@ export {
   loadProfile,
   loadProfileDirectory,
   PROFILE_PATCH_FILENAME,
-  PROFILE_TEMPLATES,
   PROFILES_DIR,
   readProfileManifest,
   reportSkippedBundles,
@@ -83,7 +82,6 @@ export {
   type RuntimeResolutionOptions,
   type RuntimeResolutionEntry,
   type RuntimeResolution,
-  type ProfileTemplate,
 } from './profile.ts'
 export {
   PluginPackages,
@@ -386,13 +384,13 @@ async function recompose(
     const prepared = prepareProfilePatches(ctx, patches, parentURL, binName)
     applying = true
     const retried = [...new Set([...running, ...withResolution ? [...ctx.loader.entries()].filter(importFailed) : []])]
-    const priorOptions = new Map(retried.map(row => [row, row.options]))
+    // Group.update replaces its data array and attempts every row it still lists, including failed imports.
+    const priorData = new Map(retried.map(row => [row, row.parent.data]))
     try {
       await entry.update({ config: { ...includeConfig, patches: prepared } })
     } finally {
-      // Group replaces options when it attempts a row, including failed imports.
-      // Only untouched rows still need an explicit retry after the awaited update.
-      await resume(ctx, retried.filter(row => row.options === priorOptions.get(row)))
+      // Only rows whose Group did not update still need an explicit retry after the awaited update.
+      await resume(ctx, retried.filter(row => row.parent.data === priorData.get(row)))
     }
     await Promise.allSettled(previousFibers.map(fiber => fiber.await()))
     await ctx.loader.await()
@@ -948,6 +946,8 @@ const FIBER_DISPOSED = 4 as FiberState.DISPOSED
  */
 const requiredStartupEntryIds = new Set<string>([
   'agent-loop',
+  'tool-executor-native',
+  'tool-executor-ptc',
   'webserver',
   'web-runtime',
   'modules',
@@ -1003,6 +1003,8 @@ interface StartupLogRecord {
 
 /** Startup audit failure with non-enumerable metadata and original failures as its cause. */
 export class StartupError extends Error {
+  /** Plugin states captured before disposal, excluding configuration values. */
+  composition?: StartupCompositionDiagnostic
   /** Root configuration and startup logs, attached by boot after disposal. */
   startup?: { configurationPath: string; messages: readonly StartupLogRecord[] }
 
@@ -1016,6 +1018,7 @@ export class StartupError extends Error {
     Object.defineProperties(this, {
       entries: { enumerable: false },
       startup: { enumerable: false },
+      composition: { enumerable: false },
     })
   }
 }
@@ -1233,6 +1236,11 @@ export async function boot(
     await auditStartupEntries(ctx, binName)
     return ctx
   } catch (cause) {
+    if (cause instanceof StartupError) {
+      try { cause.composition = captureStartupComposition(ctx) } catch (error) {
+        ctx.logger.warn('Startup composition diagnostic unavailable', error)
+      }
+    }
     // Root-fiber disposal contains cleanup failures per observer (Cordis
     // fiber.ts hardening) and a repeated call returns the settled single-shot
     // result, so this await cannot reject and replace `cause`.

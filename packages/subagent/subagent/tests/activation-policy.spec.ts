@@ -228,8 +228,8 @@ describe('in-process policy inheritance', () => {
       await expect(readFile(blocked, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
       expect(ctx.sandboxPolicy.overrideOf(child.session)).toBe('read-only')
 
-      setSandboxMode(child.session, 'danger-full-access')
-      expect(ctx.sandboxPolicy.overrideOf(child.session)).toBe('danger-full-access')
+      expect(() => { setSandboxMode(child.session, 'danger-full-access') }).toThrow('cannot append outside a SessionStore')
+      expect(ctx.sandboxPolicy.overrideOf(child.session)).toBe('read-only')
     } finally {
       await run.dispose()
     }

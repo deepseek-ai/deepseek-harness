@@ -1,0 +1,51 @@
+# Agent Note: Offer web_search and web_fetch only while the selected provider is ready
+
+Status: implemented
+
+English | [中文](2026-09-27-web-search-offered-by-provider-readiness.zh.md)
+
+## Problem
+
+`dsh-tool-web` registers `web_search` whenever search is enabled, and the [web capability seam decision](2026-06-24-web-capability-seam.md) keeps it visible while the selected provider cannot run. The shipped search provider, `dsh-web-search-deepseek`, authenticates a search with the DeepSeek account token only for a model request on the `deepseek-account` route; every other route needs a configured API key. A Session on an API-key route without a search key was therefore offered a tool whose every call failed with `WEB_PROVIDER_CREDENTIAL_MISSING`. Sessions in one Host can use different routes, a Session can switch routes between requests, and the Web app registers `web_search` once per agent preset, so no registration decision matches every request. The Search and Fetch APIs of `dsh-web-deepseek-api`, which the Web search settings switch selects together, need that credential for both operations, so the same Session was also offered a `web_fetch` whose every call failed.
+
+## Decision
+
+Each role of the web capability seam owns one part of a per-step check:
+
+- **Service Definition.** `WebSearchProvider` and `WebFetchProvider` have an optional `ready(llmProvider)` that answers whether an operation made for a model request on that chat route has a credential to send. It checks configuration only and makes no network calls. `ctx.web.searchReady(llmProvider?)` and `ctx.web.fetchReady(llmProvider?)` resolve the provider with the same rules as `search()` and `fetch()` and return its answer. A provider without `ready()` counts as ready, and a selection failure answers true because the operation reports that failure as a structured `WebError`.
+- **Service Provider.** `dsh-web-search-deepseek` answers true when the route is `deepseek-account` and `ctx.deepseekAccount.resolveToken()` returns a token for the configured search endpoint, when the section carries a literal `apiKey`, or when `ctx.credentials.describe()` reports the `apiKeyEnv` reference configured (without that service, when the launching environment carries it). It checks credentials in the order `search()` resolves them, and a failed account-token or credential-store read answers false, because `search()` fails on that read instead of trying the next credential. The Search and Fetch API providers of `dsh-web-deepseek-api` share one credential and answer the same way for their API base; their transport repeats these checks, so neither package depends on the other. The providers name no tool or prompt section.
+- **Consumer.** `dsh-tool-web` registers `web_search` and `web_fetch` with [step activation conditions](../../../../packages/core/tools/README.md#conditional-tools) that ask `ctx.web.searchReady()` and `ctx.web.fetchReady()` about the route of the step's model selection. The agent loop resolves conditions before it assembles the step, so the declared tools, the `tool:web_search` and `tool:web_fetch` prompt sections, PTC program bindings, and dispatch all read the same admitted set.
+
+The route decides only whether the account token is checked before the API key, which happens on the `deepseek-account` route; an API key counts on every route, so a conversation on another provider's model is offered the DeepSeek web tools whenever a DeepSeek key is configured. The providers do not compare the chat route's endpoint with their own: each operation sends the configured key, `DEEPSEEK_API_KEY` by default, to the configured endpoint, even when the official route chats through a gateway.
+
+Only presence decides: no API key value is read and no endpoint is contacted, so a wrong key or an endpoint that does not serve the native `web_search_20250305` server tool keeps the tool admitted. A step that does not admit a web tool also refuses calls to it as `UNKNOWN_TOOL`, so a model that repeats an earlier call reaches no provider; an operation made outside a model step resolves its credential when it runs and fails with `WEB_PROVIDER_CREDENTIAL_MISSING` when there is none.
+
+The request header records the assembled tools, so the agent loop announces each change through tool-registry updates. A route switch, a stored key, or a removed key changes the next request; DeepSeek routes load a returning tool as a deferred addition, and routes without tool-update support receive the complete tool list.
+
+## Alternatives considered
+
+**Let the DeepSeek provider remove `web_search` in its own assemble listener.** The seam stays unchanged, but the provider then names another package's tool, prompt section, and PTC transport, and it removes the tool even when the deployment selects another search provider, such as Exa, whose searches would succeed.
+
+**Extend `available()`.** It is synchronous and takes no request, while this check reads an asynchronous credential store and depends on the request's route. A route-dependent `available()` would also make provider selection depend on the conversation.
+
+**Read the route from the Session's latest `request/context` event instead of passing it.** That event records the previous request, so a new Session's first request and the first request after a model switch would be decided for the wrong route or for none.
+
+**Register or unregister `web_search` in `dsh-tool-web`.** Registration is shared by every Session of an agent preset, while credentials depend on each request's route. Unregistering would also make `toolOrder` entries and subagent `toolFilter` restrictions that name `web_search` fail.
+
+**Remove `web_search` from the assembled request.** A `system-prompt/assemble` listener could drop the declaration and its section, but the tool would stay executable, so a model that repeats an earlier call would still run it, and PTC programs would still bind it. Prompt assembly also no longer carries tool declarations.
+
+**Offer search only on the DeepSeek account route.** Account tokens are issued only for the official endpoint, so a gateway key could never reach DeepSeek. But every shipped profile defaults to the `deepseek-official` route, so search would be off by default, including the official API-key case.
+
+**Withhold the tools from other providers' conversations unless search has a key of its own.** A search from another model's conversation bills the DeepSeek key, but DeepSeek search is one of the services that key pays for, and a user who configured it expects search to work whatever model chats. The Web search settings page saves its key under `apiKeyEnv`, `DEEPSEEK_API_KEY` by default, which the chat route also reads, so a key entered there could never serve another model; a `routes` setting that opens them would be one more thing a user has to find.
+
+**Compare the official chat route's endpoint with the search endpoint.** Withholding the tools or the key when the two endpoints differ in origin keeps a gateway's key away from DeepSeek, but the providers would have to find the chat route's configuration themselves. Taking the first active `dsh-llm-deepseek-api-key` Loader row answers for an unrelated instance when a composition isolates several, which disables a correct route or lets a gateway key through; only the route's owner knows which endpoint serves a request, and an endpoint field in `dsh-llm` would reach the browser through the Remote `listProviders()`. The check would also withhold search from users who chat through a proxy or development endpoint with a key the official search endpoint accepts. Without it, a gateway user's search fails at the configured endpoint.
+
+**Keep the tool offered and fail at execution.** The model spends a call on a search that cannot authenticate, and the failure repeats on every attempt.
+
+**Probe the key or endpoint before offering the tool.** A network request per model request adds latency and cost; the user controls configuration, not its validity at that moment.
+
+## Consequences
+
+`dsh-web` gains public members: the optional `ready()` of both provider interfaces, `WebRuntime.searchReady()`, and `WebRuntime.fetchReady()`. Each readiness method is the smallest query its one consumer needs, which is how the [observation-surface decision](../../archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md) lets a status query return; neither reports availability or selection failures. The Exa, Perplexity, and HTTP fetch providers implement no `ready()`, so their behavior is unchanged, and `web_fetch` stays admitted whenever the switch leaves HTTP fetch selected. A step that does not admit a web tool leaves it out of PTC program bindings too. An endpoint that cannot serve the native server tool keeps the tool admitted and fails each call. Removing a tool on an unchanged route changes the declared tools and misses the prompt cache once; a model switch already invalidates it. Searches and fetches from other providers' conversations bill the configured DeepSeek key, and a deployment whose official route chats through a gateway sends the gateway's key to the configured endpoint, the official one by default, where each operation fails unless that endpoint accepts the key. The DeepSeek web packages read no Loader rows and depend on no LLM package.
+
+Unit tests pin each role: `packages/web/web/tests/web.spec.ts` covers which provider `searchReady()` and `fetchReady()` ask and their answer on selection failure, `packages/web/web-search-deepseek/tests/deepseek.spec.ts` and `packages/web/web-deepseek-api/tests/readiness.spec.ts` cover each credential case of `ready()` on the account route and on other routes, and `packages/web/tool-web/tests/tool-web.spec.ts` resolves step admission of both tools through the real prompt, tool, and executor services, including the `UNKNOWN_TOOL` refusal of a call in a step that withheld the tool. In real compositions, the shipped headless keyless smoke test and the `web-search-unconfigured` recorded-session snapshot, whose search key references are unset, pin the withheld search tool. Snapshot replays supply a placeholder DeepSeek key, so their tool lists do not depend on the runner's environment; with it, the `pi-ai-conversation-updates` conversation on a pi-ai route keeps `web_search`.

@@ -1,3 +1,5 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as fs from 'node:fs/promises'
 import { lstat, mkdir, mkdtemp, readFile, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,6 +11,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import z from '@deepseek-ai/schemastery'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -249,16 +252,17 @@ it('loads the real tool through Cordis, exposes payload paths in place, and unre
     await ctx.plugin(Loader)
     ctx.loader.builtins.include = Include
     Object.assign(ctx.loader.builtins, {
-      agents: AgentRegistry, systemPrompt: SystemPrompt, tools: ToolRuntime, dependencies: workspaceDependencies,
+      agents: AgentRegistry, systemPrompt: SystemPrompt, tools: ToolRuntime,
+      toolExecutor: NativeToolExecutor, dependencies: workspaceDependencies,
     })
     const config = join(directory, 'cordis.yml')
-    await writeFile(config, `- name: cordis:agents\n- name: cordis:systemPrompt\n- name: cordis:tools\n- name: cordis:dependencies\n  config:\n    source: ${JSON.stringify(source)}\n`)
+    await writeFile(config, `- name: cordis:agents\n- name: cordis:systemPrompt\n- name: cordis:tools\n- name: cordis:toolExecutor\n- name: cordis:dependencies\n  config:\n    source: ${JSON.stringify(source)}\n`)
     await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(config).href } })
     await ctx.loader.await()
     for (const entry of ctx.loader.entries()) await entry.fiber?.await()
     const environment = { ...process.env }
     const request = { signal: new AbortController().signal, name: 'load_workspace_dependencies', arguments: {} }
-    const results = await Promise.all(['first', 'second'].map(id => ctx.tools.execute({ ...request, callId: ToolCallId(id) })))
+    const results = await Promise.all(['first', 'second'].map(id => executeToolFixture(ctx, { ...request, callId: ToolCallId(id) })))
     for (const result of results) {
       expect(result.isError).toBe(false)
       expect(result.content).toEqual([{ type: 'text', text: JSON.stringify(workspaceDependencyPaths(source, manifest), undefined, 2) }])
@@ -302,12 +306,14 @@ it('rejects a payload whose Node.js or pnpm version is malformed', async () => {
 async function tool(config: workspaceDependencies.Config) {
   const ctx = new Context()
   try {
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     const fiber = ctx.plugin(workspaceDependencies, config)
     await fiber
-    const execute = () => ctx.tools.execute({
+    const execute = () => executeToolFixture(ctx, {
       signal: new AbortController().signal, name: 'load_workspace_dependencies',
       arguments: {}, callId: ToolCallId('dependencies'),
     })

@@ -9,7 +9,6 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { ON_DEMAND_BUNDLES, OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { join } from 'node:path'
 import {
@@ -36,6 +35,7 @@ describe('web e2e: plugin configuration pages', () => {
     // below, that half registers its row's configuration into the page.
     scaffold = await launchWebScaffold({
       extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),
+      deepSeekSearch: { apiKeyEnv: 'DSH_PLUGIN_CONFIG_E2E_UNUSED_KEY' },
       profile: { packages: [{ dir: join(FIXTURE_PLUGINS, 'fixture-live-client') }] },
     })
     browser = await chromium.launch()
@@ -110,8 +110,16 @@ describe('web e2e: plugin configuration pages', () => {
     await more.focus()
     await page.keyboard.press('Enter')
     await panel.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
+    // The More list omits the shipped bundles whose own rows do not run (the visibility rule lives in
+    // ui-plugin-manager), so it holds fewer cards than the installed optional-bundle list.
+    const bundles = await scaffold.ctx.pluginManager.listBundles()
+    const hiddenBundles = new Set([
+      '@deepseek-ai/dsh-experimental-terminal-bundle',
+      '@deepseek-ai/dsh-experimental-liveshare',
+    ])
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
-      .toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
+      .toBe(bundles.filter(bundle => !hiddenBundles.has(bundle.name)
+        && bundle.official && (bundle.listedByDefault !== false || bundle.enabled || bundle.installed)).length)
     expect(await basic.count()).toBe(0)
     expect(await extensions.count()).toBe(0)
     expect(await panel.locator('[data-plugin-group="bundles"]').count()).toBe(0)
@@ -133,6 +141,66 @@ describe('web e2e: plugin configuration pages', () => {
     await compareOrRefreshGolden(OFFICIAL_EXPECTED, snapshot, MODE)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
+
+  it('switches search and fetch to the Search and Fetch APIs together and preserves each API’s endpoint', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-search-api-settings'))
+    const panel = await openPlugins()
+    await openPage(panel, '网页搜索')
+    const toggle = panel.getByRole('switch', { name: '启用新版 Web 搜索 API', exact: true })
+    const endpoint = panel.locator('#plugin-config-web-search-endpoint')
+    const maxUses = panel.getByLabel('单次请求最多搜索次数', { exact: true })
+    const save = panel.getByRole('button', { name: '保存', exact: true })
+    expect(await toggle.getAttribute('aria-checked')).toBe('false')
+    expect(await panel.getByRole('link', { name: '网页搜索与抓取指南', exact: true }).getAttribute('href'))
+      .toBe('https://api-docs.deepseek.com/zh-cn/guides/search')
+    expect(await panel.getByLabel('Messages API 基础地址', { exact: true }).count()).toBe(1)
+    expect(await maxUses.inputValue()).toBe('5')
+    expect(await endpoint.inputValue()).toBe('')
+    expect(await save.isDisabled()).toBe(true)
+    await endpoint.fill('https://messages.test/anthropic/v1')
+    await save.click()
+    await expect.poll(() => save.isDisabled()).toBe(true)
+    await toggle.focus()
+    await page.keyboard.press('Space')
+    expect(await panel.getByLabel('Search / Fetch API 基础地址', { exact: true }).count()).toBe(1)
+    expect(await endpoint.inputValue()).toBe('https://api.deepseek.com/v1/tools')
+    expect(await maxUses.count()).toBe(0)
+    const count = panel.getByLabel('每次搜索结果数', { exact: true })
+    expect(await count.inputValue()).toBe('10')
+    await count.fill('51')
+    await panel.getByText('请填 1–50 的整数；留空表示使用默认值。', { exact: true }).waitFor()
+    expect(await save.isDisabled()).toBe(true)
+    expect(await toggle.isDisabled()).toBe(true)
+    await count.fill('10')
+    expect(await settingsDocument()).not.toContain('searchProvider: deepseek-search-api')
+    await endpoint.fill('https://search-api.test/api/v1/tools')
+    await save.click()
+    await expect.poll(() => save.isDisabled()).toBe(true)
+    await expect.poll(settingsDocument).toContain('searchProvider: deepseek-search-api')
+    await expect.poll(settingsDocument).toContain('fetchProvider: deepseek-fetch-api')
+    await expect.poll(settingsDocument).toContain('baseURL: https://search-api.test/api/v1/tools')
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await openPlugins()
+    await openPage(panel, '网页搜索')
+    expect(await toggle.getAttribute('aria-checked')).toBe('true')
+    expect(await endpoint.inputValue()).toBe('https://search-api.test/api/v1/tools')
+    const snapshot = await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'web-search.expected.md'), snapshot, MODE)
+    await panel.getByRole('button', { name: '恢复默认', exact: true }).click()
+    expect(await endpoint.inputValue()).toBe('https://api.deepseek.com/v1/tools')
+    await save.click()
+    await expect.poll(() => save.isDisabled()).toBe(true)
+    await expect.poll(settingsDocument).not.toContain('https://search-api.test/api/v1/tools')
+    await toggle.click()
+    expect(await endpoint.inputValue()).toBe('https://messages.test/anthropic/v1')
+    await save.click()
+    await expect.poll(() => save.isDisabled()).toBe(true)
+    await expect.poll(settingsDocument).not.toContain('searchProvider: deepseek-search-api')
+    await expect.poll(settingsDocument).not.toContain('fetchProvider: deepseek-fetch-api')
+    expect(await settingsDocument()).toContain('baseURL: https://messages.test/anthropic/v1')
+    expect(tripwire.pageErrors).toEqual([])
+  })
 
   it('saves subagent limits and resets them to the deployment defaults', async () => {
     const panel = await openPlugins()
@@ -379,7 +447,7 @@ describe('web e2e: plugin configuration pages', () => {
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     expect(tripwire.warnings).toEqual([])
-    await assertFixtureInventory(SNAPSHOT_DIR, ['bundle.expected.md', 'official.expected.md', 'row.expected.md', 'subagent.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['bundle.expected.md', 'official.expected.md', 'row.expected.md', 'subagent.expected.md', 'web-search.expected.md'])
   })
 
 

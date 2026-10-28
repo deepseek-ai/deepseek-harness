@@ -678,10 +678,12 @@ class Hmr extends Service {
       activated: Fiber[] = [],
     ) => {
       for (const [previousFiber, implementation] of replacements.getActiveImplementations(this.ctx, plugin, fibers)) {
-        const fiber = previousFiber.fiber.parent.registry.plugin(implementation, previousFiber.config, this.getOuterStack).ctx.fiber
+        const wrapper = previousFiber.fiber.parent.registry.plugin(implementation, previousFiber.config, this.getOuterStack)
+        const fiber = wrapper.ctx.fiber
         if (previousFiber.entry !== undefined) {
           fiber.entry = previousFiber.entry
-          previousFiber.entry.fiber = fiber
+          // Like Loader activation, store the registry wrapper; identity checks compare `.ctx.fiber`.
+          previousFiber.entry.fiber = wrapper
         }
         activated.push(fiber)
       }
@@ -1045,13 +1047,13 @@ function namespaceOf(job: ModuleJob | undefined): unknown {
 }
 
 /**
- * The jobs a module job links to. Node 24+ may expose them as an array; Node 22 keeps the job of a failed import
+ * The jobs a module job links to. The v2 loader may expose them as an array; v1 keeps the job of a failed import
  * whose links reject, and such a job contributes no links.
  */
 async function linkedJobs(job: ModuleJob): Promise<ModuleJob[]> {
-  /* v8 ignore next -- CI coverage runs Node 24+, which drops failed jobs from the cache */
+  /* v8 ignore next -- CI coverage uses the v2 loader, which drops failed jobs from the cache */
   const linked = await Promise.resolve(job.linked).catch((_error: unknown) => [])
-  // Node 22 may return a null-prototype array without methods or an iterator.
+  // The v1 loader may return a null-prototype array without methods or an iterator.
   return Array.from(linked)
 }
 

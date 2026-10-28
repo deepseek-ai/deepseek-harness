@@ -1,13 +1,16 @@
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry, { installModelSelection, type Agent, type ModelSelectionRef } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import LlmRuntime, { createUserMessage, LlmError, type GenerateOptions } from '@deepseek-ai/dsh-llm'
+import { installModelSelection } from '@deepseek-ai/dsh-agent'
+import LlmRuntime, { createUserMessage, LlmError, ReasoningEffortId, type GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { toPiContext } from '@deepseek-ai/dsh-llm-pi-ai/src/context.ts'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -29,6 +32,7 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { personaPrefix: '', personaSuffix: '' })
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   capable.systemPromptUpdate = 'in-history'
@@ -39,9 +43,8 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
   ctx.on('system-prompt/assemble', async (_assembly, _context, next) => ({
     ...await next(), sections: [{ name: 'test', text: prompt, order: 0 }],
   }))
-  const selection: ModelSelectionRef = { current: { provider: 'capable', model: 'model' }, assembled: undefined }
   const agent = await ctx.agentLoop.create(SessionId('admission'), { provider: 'capable', model: 'model' })
-  installModelSelection(agent.ctx, selection)
+  installModelSelection(agent.ctx)
   ctx.on('llm/stream', (request, next) => {
     // Rebuild from copied source events, not the live projection's cached state.
     const subject = ctx.agents.get(request.sessionId!)!
@@ -50,7 +53,7 @@ async function harness(capable = new MockAdapter(Array.from({ length: 8 }, () =>
     expect(request.system).toBeUndefined()
     return next()
   })
-  return { ctx, agent, capable, plain, selection, setPrompt: (text: string) => { prompt = text } }
+  return { ctx, agent, capable, plain, setPrompt: (text: string) => { prompt = text } }
 }
 
 async function send(agent: Agent, text: string) {
@@ -120,7 +123,7 @@ describe('prepared-route prompt admission', () => {
       expect(request.messages.filter(message => message.role === 'developer')).toEqual([])
     })
 
-    it.each(['explicit', 'replacement'] as const)('rebuilds prompt and declarations at a %s series start', async (reason) => {
+    it.each(['explicit', 'replacement'] as const)('rebuilds declarations without re-baselining an unchanged prompt at a %s series start', async (reason) => {
       const h = await harness()
       h.capable.toolUpdate = toolUpdate
       await send(h.agent, 'first')
@@ -141,7 +144,13 @@ describe('prepared-route prompt admission', () => {
       await send(h.agent, 'add fetch')
 
       const request = h.capable.requests.at(-1)!
-      expectPlain(request, 'prompt two')
+      const previous = h.capable.requests.at(-2)!
+      // The rendering is unchanged: the surviving prompt node keeps its place and the new series
+      // only rebuilds declarations. Rewriting node 0 would invalidate the provider prefix.
+      expect(systemTexts(request)).toEqual([
+        [{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }],
+      ])
+      expect(request.messages[0]).toEqual(previous.messages[0])
       expect(request.tools?.find(tool => tool.name === 'fetch')?.deferLoading).not.toBe(true)
       expect(request.messages.filter(message => message.role === 'developer')).toEqual([])
       const header = h.agent.session.snapshotEvents().filter(event => event.type === 'request/header').at(-1)
@@ -183,7 +192,7 @@ describe('prepared-route prompt admission', () => {
     h.setPrompt('prompt three')
     await send(h.agent, 'third')
     expect(systemTexts(h.capable.requests[2]!)).toHaveLength(3)
-    h.selection.current = { provider, model: 'model' }
+    h.agent.model.select({ provider, model: 'model' })
     h.setPrompt('')
     await send(h.agent, 'clear')
     const adapter = provider === 'capable' ? h.capable : h.plain
@@ -214,7 +223,7 @@ describe('prepared-route prompt admission', () => {
     expect(JSON.stringify(adapter.requests.at(-1)!)).not.toContain('prompt ')
   })
 
-  it.each(['explicit', 'tools'] as const)('normalizes surviving prompt versions with unchanged text at a %s series start', async (reason) => {
+  it.each(['explicit', 'tools'] as const)('keeps surviving prompt versions with unchanged text at a %s series start', async (reason) => {
     const h = await harness()
     await send(h.agent, 'first')
     h.setPrompt('prompt two')
@@ -231,10 +240,50 @@ describe('prepared-route prompt admission', () => {
       }))
     }
     await send(h.agent, 'third')
-    expectPlain(h.capable.requests[2]!, 'prompt two')
+    const previous = h.capable.requests[1]!
+    const request = h.capable.requests[2]!
+    // The rendering is unchanged, so the new series keeps the surviving prompt node: the whole
+    // previous request stays a wire prefix instead of moving the prompt into message 0.
+    expect(systemTexts(request)).toEqual([
+      [{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }],
+    ])
+    expect(request.messages.slice(0, previous.messages.length)).toEqual(previous.messages)
     const header = h.agent.session.snapshotEvents().filter(event => event.type === 'request/header').at(-1)
     expect(header?.data.reason).toBe(reason === 'explicit' ? 'series' : 'change')
-    if (reason === 'tools') expect(header?.data.startsSeries).toBe(true)
+    if (reason === 'tools') {
+      // A tool-schema change starts the prompt series without a system event. The header records
+      // the declaration change without `startsSeries`; the unsupported-route projection supplies
+      // the complete active set, while tool history keeps its incremental baseline.
+      expect(header?.data.startsSeries).toBeUndefined()
+      expect(request.tools?.map(tool => tool.name)).toEqual(['extra'])
+    }
+  })
+
+  it('keeps the cached prefix at a compaction series start when the prompt text is unchanged', async () => {
+    const h = await harness()
+    await send(h.agent, 'first')
+    h.setPrompt('prompt two')
+    await send(h.agent, 'second')
+    const previous = h.capable.requests[1]!
+
+    // A prune/compaction replaces the last admitted user message: the surface changes, so the
+    // next step starts a new request series while the appended prompt node still holds the
+    // rendered text.
+    const seq = h.agent.session.surface.nodes.findLast(node => h.agent.session.eventAt(node)?.type === 'user/message')!
+    h.agent.session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'compacted history' }], source: { kind: 'test-compaction' },
+    }), { surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq }, sourceEventSeqs: [seq] })
+    await send(h.agent, 'third')
+
+    // Folding the prompt back into node 0 would move the system segment to wire message 0 and
+    // miss the provider prefix cache from the first token, although no prompt text changed.
+    const request = h.capable.requests[2]!
+    expect(systemTexts(request)).toEqual([
+      [{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }],
+    ])
+    // The replacement shadows the previous request's last admitted message, so the shared wire
+    // prefix is everything before it.
+    expect(request.messages.slice(0, previous.messages.length - 1)).toEqual(previous.messages.slice(0, -1))
   })
 
   it.each([false, true])('reconciles compaction retries without replaying admission, older tail survives=%s', async (retainOlder) => {
@@ -287,7 +336,7 @@ describe('prepared-route prompt admission', () => {
     h.setPrompt('prompt two')
     await send(h.agent, 'second')
     expect(systemTexts(h.capable.requests[1]!)).toHaveLength(2)
-    h.selection.current = { provider: 'plain', model: 'model' }
+    h.agent.model.select({ provider: 'plain', model: 'model' })
     if (changed) h.setPrompt('prompt three')
     await send(h.agent, 'third')
     expectPlain(h.plain.requests[0]!, changed ? 'prompt three' : 'prompt two')
@@ -305,9 +354,9 @@ describe('prepared-route prompt admission', () => {
 
   it('appends on the first capable request after a plain route', async () => {
     const h = await harness()
-    h.selection.current = { provider: 'plain', model: 'model' }
+    h.agent.model.select({ provider: 'plain', model: 'model' })
     await send(h.agent, 'first')
-    h.selection.current = { provider: 'capable', model: 'model' }
+    h.agent.model.select({ provider: 'capable', model: 'model' })
     h.setPrompt('prompt two')
     await send(h.agent, 'second')
     expect(systemTexts(h.capable.requests[0]!)).toEqual([
@@ -350,20 +399,31 @@ describe('prepared-route prompt admission', () => {
       return next()
     })
     await send(resumed, 'resume')
-    expect(systemTexts(h.capable.requests[2]!)).toEqual(replace
-      ? [[{ type: 'text', text: 'prompt two' }]]
-      : [[{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }]])
+    const previous = h.capable.requests[1]!
+    const request = h.capable.requests[2]!
+    // The first resumed pre-step replacement still starts a series, but an unchanged rendering
+    // keeps both prompt versions in place instead of re-baselining node 0.
+    expect(systemTexts(request)).toEqual([
+      [{ type: 'text', text: 'prompt one' }], [{ type: 'text', text: 'prompt two' }],
+    ])
+    expect(request.messages[0]).toEqual(previous.messages[0])
+    if (!replace) expect(request.messages.slice(0, previous.messages.length)).toEqual(previous.messages)
     expect(resumed.session.snapshotEvents().filter(event => event.type === 'request/header').map(event => event.data.reason))
       .toEqual(['initial', 'resume'])
   })
 
-  it('normalizes restored history under the resumed instance route', async () => {
+  it('normalizes restored history after explicitly selecting the declared resume route', async () => {
     const h = await harness()
     await send(h.agent, 'first')
     h.setPrompt('prompt two')
     await send(h.agent, 'second')
     const seed = h.agent.session.snapshotEvents()
-    const { agent: resumed } = await h.ctx.agents.create({ sessionId: SessionId('resumed'), agentOptions: { provider: 'plain', model: 'model' }, seed: [...seed] })
+    const { agent: resumed } = await h.ctx.agents.create({
+      sessionId: SessionId('resumed'),
+      agentOptions: { provider: 'plain', model: 'model' },
+      seed: [...seed],
+      setup: (_ctx, agent) => { agent.model.select({ provider: 'plain', model: 'model' }) },
+    })
     await send(resumed, 'resume')
     expectPlain(h.plain.requests[0]!, 'prompt two')
     expect(resumed.session.snapshotEvents().filter(event => event.type === 'request/header').at(-1)?.data.reason).toBe('resume')
@@ -398,13 +458,78 @@ describe('prepared-route prompt admission', () => {
     expect(types.filter(type => ['system/message', 'user/message', 'request/header'].includes(type))).toEqual([])
   })
 
+  it.each([
+    { selected: undefined, proposed: ReasoningEffortId('high') },
+    { selected: ReasoningEffortId('high'), proposed: ReasoningEffortId('low') },
+    { selected: ReasoningEffortId('high'), proposed: undefined },
+  ])('rejects an agent/request effort change from $selected to $proposed before input admission', async ({ selected, proposed }) => {
+    const adapter = new MockAdapter([textResponse('never')], {
+      efforts: [{ id: ReasoningEffortId('low'), name: 'Low' }, { id: ReasoningEffortId('high'), name: 'High' }],
+      defaultEffort: ReasoningEffortId('low'),
+    })
+    const h = await harness(adapter)
+    h.agent.model.select({
+      provider: 'capable', model: 'model', ...selected === undefined ? {} : { reasoningEffort: selected },
+    })
+    h.ctx.on('agent/request', async (_payload, next) => {
+      const { reasoningEffort: _effort, ...config } = await next()
+      return { ...config, ...proposed === undefined ? {} : { reasoningEffort: proposed } }
+    })
+
+    await send(h.agent, 'reject the changed effort')
+    expect(adapter.requests).toEqual([])
+    const events = h.agent.session.snapshotEvents()
+    expect(events.filter(event => ['request/header', 'user/message', 'system/message'].includes(event.type))).toEqual([])
+    expect(events.at(-1)).toMatchObject({
+      type: 'turn/end', data: { reason: { kind: 'error', error: {
+        message: `agent "admission": agent/request proposed reasoning effort "${proposed ?? 'adapter default'}" after step preparation fixed "${selected ?? 'adapter default'}"; use agent.model.select() before step preparation`,
+      } } },
+    })
+  })
+
+  it('retains the captured selection for a retry and uses a pending choice on the next step', async () => {
+    const adapter = new MockAdapter([
+      () => { throw new LlmError('retry this request', 'SERVER') },
+      textResponse('recovered'),
+    ], { efforts: [{ id: ReasoningEffortId('high'), name: 'High' }] })
+    const h = await harness(adapter)
+    const selection = { provider: 'capable', model: 'model', reasoningEffort: ReasoningEffortId('high') }
+    h.agent.model.select(selection)
+    const prepared: (Readonly<ModelSelection> | undefined)[] = []
+    h.ctx.on('system-prompt/assemble', (_assembly, context, next) => {
+      prepared.push(context.modelSelection)
+      return next()
+    })
+    h.ctx.on('agent/pre-step', ({ modelSelection }, next) => {
+      prepared.push(modelSelection)
+      return next()
+    })
+    h.ctx.on('agent/request-error', () => {
+      h.agent.model.select({ provider: 'plain', model: 'next-model' })
+      return Promise.resolve({ kind: 'retry' as const })
+    })
+
+    await send(h.agent, 'retry once')
+    expect(prepared).toEqual([selection, selection])
+    expect(adapter.requests.map(({ provider, model, reasoningEffort }) => ({ provider, model, reasoningEffort })))
+      .toEqual([selection, selection])
+    expect(h.plain.requests).toHaveLength(0)
+    expect(h.agent.model.current())
+      .toEqual({ provider: 'plain', model: 'next-model' })
+
+    await send(h.agent, 'use the pending choice')
+    expect(h.plain.requests[0]).toMatchObject({ provider: 'plain', model: 'next-model' })
+    expect(h.ctx.sessionProjections.snapshot(h.agent.session).values.modelSelection)
+      .toEqual({ lastUsed: { provider: 'plain', model: 'next-model' }, next: { provider: 'plain', model: 'next-model' } })
+  })
+
   it('keeps generic config changes and concurrent selection on the same prepared route', async () => {
     const h = await harness()
     await send(h.agent, 'first')
     h.setPrompt('prompt two')
     h.ctx.on('agent/request', async (_payload, next) => {
       const config = await next()
-      h.selection.current = { provider: 'plain', model: 'model' }
+      h.agent.model.select({ provider: 'plain', model: 'model' })
       return { ...config, temperature: 0.5, maxTokens: 100 }
     })
     await send(h.agent, 'second')

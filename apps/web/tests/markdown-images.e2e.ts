@@ -166,7 +166,6 @@ describe('web e2e: Markdown image rendering', () => {
   let browser: Browser
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
-  let unpinBrowserClock: (() => void) | undefined
   const mediaResponses = new Map<string, number>()
 
   beforeAll(async () => {
@@ -180,7 +179,8 @@ describe('web e2e: Markdown image rendering', () => {
     await writeFile(join(scaffold.workspaceCwd, 'corrupt.png'), 'invalid image')
     const oversized = await open(join(scaffold.workspaceCwd, 'oversized.png'), 'w')
     try {
-      await oversized.truncate(20 * 1024 * 1024 + 1)
+      // One byte over attachment-local's default maxImageBytes (50 MiB), which also bounds /api/file.
+      await oversized.truncate(50 * 1024 * 1024 + 1)
     } finally {
       await oversized.close()
     }
@@ -191,7 +191,7 @@ describe('web e2e: Markdown image rendering', () => {
       { createdAt: WEB_FIXTURE_TIME - 60_000 })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
-    unpinBrowserClock = await pinBrowserClock(page)
+    await pinBrowserClock(page)
     tripwire = watchConsole(page)
     page.on('response', (response) => {
       const url = new URL(response.url())
@@ -204,7 +204,6 @@ describe('web e2e: Markdown image rendering', () => {
   }, 120_000)
 
   afterAll(async () => {
-    unpinBrowserClock?.()
     await browser?.close()
     await scaffold?.close()
     if (imageOrigin !== undefined) await stopServer(imageOrigin.server)
@@ -277,7 +276,7 @@ describe('web e2e: Markdown image rendering', () => {
     await page.getByText(`Image preview unavailable · ${join(scaffold.workspaceCwd, 'corrupt.png')}`, { exact: true }).waitFor()
     expect(mediaResponses).toEqual(new Map([
       [join(scaffold.workspaceCwd, 'valid.png'), 200],
-      [`${scaffold.workspaceCwd}/./local-image.png`, 200],
+      [join(scaffold.workspaceCwd, 'local-image.png'), 200],
       [join(scaffold.workspaceCwd, 'test workspace/测试图.png'), 200],
       [join(scaffold.workspaceCwd, 'test workspace/测试#100%.png'), 200],
       [join(scaffold.workspaceCwd, 'oversized.png'), 413],
@@ -321,6 +320,15 @@ describe('web e2e: Markdown image rendering', () => {
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, ['ui.expected.md'])
+    const input = page.locator('[data-composer-input]').first()
+    await workspaceImage.dragTo(input)
+    const dragged = page.getByRole('group', { name: 'Pending attachments', exact: true }).getByRole('img')
+    await dragged.waitFor({ state: 'visible' })
+    expect(Buffer.from(await dragged.evaluate(async (node: HTMLImageElement) =>
+      Array.from(new Uint8Array(await (await fetch(node.src)).arrayBuffer()))))).toEqual(PNG)
+    expect(await input.innerText()).toBe('')
+    expect(await page.getByRole('dialog', { name: 'Image preview', exact: true }).count()).toBe(0)
+    await page.getByRole('button', { name: 'Remove image valid.png', exact: true }).click()
     await link.evaluate((element) => { element.scrollIntoView({ block: 'end' }) })
     await page.mouse.move(0, 0)
     await link.hover()

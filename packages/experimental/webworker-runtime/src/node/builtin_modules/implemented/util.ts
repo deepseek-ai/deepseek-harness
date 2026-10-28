@@ -127,6 +127,33 @@ export function deprecate<F>(fn: F): F {
   return fn
 }
 
+/**
+ * Node's `ERR_INVALID_ARG_TYPE` refusal for {@link inherits}.
+ * @param name - Argument name.
+ * @param expected - Expected type.
+ * @param actual - Received value.
+ * @returns The error to throw.
+ */
+function invalidArgType(name: string, expected: string, actual: unknown): TypeError {
+  return Object.assign(new TypeError(`The "${name}" argument must be of type ${expected}. Received ${String(actual)}`), {
+    code: 'ERR_INVALID_ARG_TYPE',
+  })
+}
+
+/**
+ * Node's `util.inherits`: link `ctor.prototype` to `superCtor.prototype` and record `ctor.super_`.
+ * @param ctor - Constructor that inherits.
+ * @param superCtor - Constructor inherited from.
+ */
+export function inherits(ctor: unknown, superCtor: unknown): void {
+  if (ctor === undefined || ctor === null) throw invalidArgType('ctor', 'Function', ctor)
+  if (superCtor === undefined || superCtor === null) throw invalidArgType('superCtor', 'Function', superCtor)
+  const parent = (superCtor as { prototype?: object }).prototype
+  if (parent === undefined) throw invalidArgType('superCtor.prototype', 'Object', parent)
+  Object.defineProperty(ctor, 'super_', { value: superCtor, writable: true, configurable: true })
+  Object.setPrototypeOf((ctor as { prototype: object }).prototype, parent)
+}
+
 /** Text decoder class, as `node:util` re-exports it. */
 const TextDecoderClass = globalThis.TextDecoder
 
@@ -151,6 +178,6 @@ type NodeFace = Partial<Omit<typeof import('node:util'), 'promisify' | 'callback
 
 /** CommonJS default export: the members `require()` hands a caller of this module. */
 export default {
-  promisify, callbackify, inspect, format, isDeepStrictEqual, types, parseArgs, deprecate,
+  promisify, callbackify, inspect, format, isDeepStrictEqual, types, parseArgs, deprecate, inherits,
   TextDecoder: TextDecoderClass, TextEncoder: TextEncoderClass,
 } satisfies NodeFace

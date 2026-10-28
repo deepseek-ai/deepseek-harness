@@ -1,30 +1,36 @@
 /**
- * VFS image packer: turns one composed profile plus a package index into the single
- * gzip-compressed tar the browser runtime inflates and mounts as its filesystem.
+ * VFS image packer: turns a package roster plus a package index into the single
+ * gzip-compressed tar the browser runtime inflates and mounts as its filesystem,
+ * and the lazy archives beside it.
  *
  * Nothing is compiled here. The image carries the repository's real build products,
  * so a preview deployment debugs exactly what the served deployment ships. What the
  * pass does add is the pack-time module transform and the manifest that records the
- * wrapper contract it was transformed against.
+ * wrapper contract it was transformed against. No composed configuration is packed:
+ * the worker host composes the profile's bundle layers from the packages the roster
+ * materializes, as the served launcher does.
  *
- * This module holds no repository knowledge: paths, globs, and the composition come
- * in as parameters, so the same library packs a different tree by being called
+ * This module holds no repository knowledge: paths, globs, and the roster come in as
+ * parameters, so the same library packs a different tree by being called
  * differently. Locating those inputs is the CLI's job.
  * @module @deepseek-ai/dsh-experimental-webworker-packer/src/pack
  */
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { gzipSync } from 'node:zlib'
 
 import {
   lowerModuleSource, MemoryVfs, packTar, WorkerModuleLoader,
-  DEFAULT_ROOT, IMAGE_CONFIG_PATH, IMAGE_EMPTY_DIRECTORIES, IMAGE_MANIFEST_PATH,
+  DEFAULT_ROOT, IMAGE_EMPTY_DIRECTORIES, IMAGE_HOME_DIRECTORY, IMAGE_LAZY_DIRECTORY, IMAGE_MANIFEST_PATH,
   IMAGE_OVERLAY_DIRECTORIES,
   MODULE_PROXIES, MODULE_PROXY_PREFIXES, REPLACED_EXTERNAL_PACKAGES,
+  type ImageLazyArchive, type ImageManifest,
 } from '@deepseek-ai/dsh-experimental-webworker-runtime'
 import picomatch from 'picomatch'
 import yaml from 'js-yaml'
-import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
+import { entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import { PROFILE_PATCH_FILENAME } from '@deepseek-ai/dsh-app-boot'
 import { WRAPPER_CONTRACT, type ImageFiles, type TransformOutcome } from './transform-image.ts'
 import { EXCLUDE, EXCLUDE_WORKSPACE, IMAGE_ENTRY_SEEDS, PAGE_ASSETS } from './rules.ts'
 
@@ -33,15 +39,8 @@ export { DEFAULT_ROOT } from '@deepseek-ai/dsh-experimental-webworker-runtime'
 /** Image path of the manifest; the layout contract's name, re-exported for callers. */
 export const MANIFEST_PATH: string = IMAGE_MANIFEST_PATH
 
-/** Image path of the composed profile; the layout contract's name, re-exported for callers. */
-export const CONFIG_PATH: string = IMAGE_CONFIG_PATH
-
-/**
- * Manifest field the runtime judges the image by: the wrapper contract every packed
- * body was emitted against. The runtime refuses an image whose value is not its own
- * contract, because those bodies assume different wrapper semantics.
- */
-const CONTRACT_FIELD = 'lowered'
+/** Image path of the home patch: `$DSH_HOME/cordis.patch.yml` under the Worker home. */
+export const HOME_PATCH_PATH = `${IMAGE_HOME_DIRECTORY}/${PROFILE_PATCH_FILENAME}`
 
 /** Exclude matcher over tree-root-relative paths ({@link EXCLUDE}). */
 const excluded = picomatch([...EXCLUDE], { dot: true })
@@ -70,12 +69,25 @@ export interface ConfigTree extends ImageTree {
   readonly scanRoster?: boolean
 }
 
+/** The installation whose manifest alone anchors bundle resolution inside the image. */
+export interface ImageInstallation {
+  /** Package name the manifest is mounted under, `node_modules/<name>/package.json`. */
+  readonly name: string
+  /** Absolute path of the manifest to copy. */
+  readonly manifest: string
+}
+
 /** Everything the packer needs that it cannot know by itself. */
 export interface PackOptions {
-  /** Composed profile, `!!js` intact, as the CLI's `--dump-default-config` produced it. */
-  readonly config: string
-  /** Profile name, recorded in the manifest. */
+  /** Shipped profile template the worker host boots, recorded in the manifest. */
   readonly profile: string
+  /**
+   * Package names whose dependency closures the image materializes: the bundles the
+   * image offers and every package their patch rows name.
+   */
+  readonly roster: readonly string[]
+  /** Installation manifest copied alone, without its package or dependency closure. */
+  readonly installation?: ImageInstallation
   /** Virtual root the image mounts under; defaults to {@link DEFAULT_ROOT}. */
   readonly root?: string
   /** Package name to absolute directory, for workspace and vendored packages. */
@@ -86,6 +98,8 @@ export interface PackOptions {
   readonly configTrees?: readonly ConfigTree[]
   /** Empty directories to create; defaults to `home/`, `workspace/`, `tmp/`. */
   readonly emptyDirectories?: readonly string[]
+  /** Patch rows written to {@link HOME_PATCH_PATH}, which the image's app-boot reads as the home layer. */
+  readonly homePatch?: readonly PatchOptions[]
   /**
    * Extra sweep roots: image specifiers requested by code outside the image.
    * Defaults to the worker assembly's own entries.
@@ -93,12 +107,24 @@ export interface PackOptions {
   readonly entries?: readonly string[]
 }
 
+/** One lazy chunk archive to write beside the base image. */
+export interface PackedLazyArchive {
+  /** Path relative to the base image, `lazy/<sha256 of image>.tar.gz`; the digest names the archive, and the Worker does not verify it. */
+  readonly name: string
+  /** The gzip-compressed tar archive. */
+  readonly image: Uint8Array
+  /** Image paths the archive carries. */
+  readonly files: readonly string[]
+}
+
 /** What one pack produced, for the caller to report or assert on. */
 export interface PackResult {
   /** The gzip-compressed tar archive to write; the runtime inflates it at mount. */
   readonly image: Uint8Array
-  /** Every entry, before zipping; the manifest is already among them. */
+  /** Every base-image entry, before zipping; the manifest is already among them. */
   readonly files: ImageFiles
+  /** Page chunks moved out of the base image, one archive each, in path order. */
+  readonly lazyArchives: readonly PackedLazyArchive[]
   /** Package name to how many files it contributed, in materialization order. */
   readonly packages: ReadonlyMap<string, number>
   /** How many of them came from the workspace rather than from `node_modules`. */
@@ -145,34 +171,25 @@ function packageNameOf(specifier: string): string {
 }
 
 /**
- * Collect module-specifier `name` fields from parsed entry rows, recursively
- * through nested `config` row lists (groups). Builtin rows (`cordis:group`)
- * and preset metadata documents carry names that are not module specifiers;
- * only names with a scope or a path separator count.
- * @param rows - Parsed YAML value; anything but an entry array is ignored.
+ * Collect package names from entry rows and patch lists, recursively through
+ * `insert` lists and nested `config` row lists (groups). Builtin rows
+ * (`cordis:group`), preset metadata documents, and file-relative entries carry
+ * names that are not package specifiers; only scoped names and bare names
+ * with a subpath count.
+ * @param rows - Parsed YAML value; anything but a row array is ignored.
  * @param names - Package names collected so far.
  */
-function moduleNamesOf(rows: unknown, names: Set<string>): void {
+export function collectModuleNames(rows: unknown, names: Set<string>): void {
   if (!Array.isArray(rows)) return
   for (const row of rows) {
     if (typeof row !== 'object' || row === null) continue
-    const { name, config } = row as { name?: unknown; config?: unknown }
-    if (typeof name === 'string' && (name.startsWith('@') || name.includes('/'))) {
+    const { name, config, insert } = row as { name?: unknown; config?: unknown; insert?: unknown }
+    if (typeof name === 'string' && !name.startsWith('.') && (name.startsWith('@') || name.includes('/'))) {
       names.add(packageNameOf(name))
     }
-    moduleNamesOf(config, names)
+    collectModuleNames(config, names)
+    collectModuleNames(insert, names)
   }
-}
-
-/**
- * Package names the composition names.
- * @param config - Composed profile; `!!js` scalars parse under Include's dialect.
- * @returns Package names, deduplicated.
- */
-function rosterOf(config: string): string[] {
-  const names = new Set<string>()
-  moduleNamesOf(yaml.load(config, { schema: entryListSchema }), names)
-  return [...names]
 }
 
 /**
@@ -190,7 +207,7 @@ function treeRosterOf(root: string): string[] {
         continue
       }
       if (!entry.name.endsWith('.yml') && !entry.name.endsWith('.yaml')) continue
-      moduleNamesOf(yaml.load(readFileSync(absolute, 'utf8'), { schema: entryListSchema }), names)
+      collectModuleNames(yaml.load(readFileSync(absolute, 'utf8'), { schema: entryListSchema }), names)
     }
   }
   walk(root)
@@ -562,6 +579,60 @@ function materialize(
   return { files, packages, missing }
 }
 
+/**
+ * Request form the dynamic Client build emits for a package-local chunk: a
+ * literal `require.async("./client.<name>.js")`, served by the Host on demand.
+ */
+const CHUNK_REQUEST = /\brequire\.async\(\s*(["'])(\.\/client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js)\1\s*\)/g
+
+/**
+ * Image paths every materialized package's `./client` export names, under any
+ * condition: those load eagerly, so a chunk request never makes them lazy.
+ * @param files - Image entries.
+ * @param packages - Materialized package names.
+ * @returns Eager Client entry paths.
+ */
+function clientEntriesOf(files: ImageFiles, packages: Iterable<string>): Set<string> {
+  const decoder = new TextDecoder()
+  const entries = new Set<string>()
+  const collect = (name: string, target: unknown): void => {
+    if (typeof target === 'string') entries.add(`node_modules/${name}/${target.replace(/^\.\//, '')}`)
+    else if (typeof target === 'object' && target !== null) for (const value of Object.values(target)) collect(name, value)
+  }
+  for (const name of packages) {
+    const bytes = files[`node_modules/${name}/package.json`]
+    if (bytes === undefined) continue
+    const manifest = JSON.parse(decoder.decode(bytes)) as { exports?: Record<string, unknown> }
+    collect(name, manifest.exports?.['./client'])
+  }
+  return entries
+}
+
+/**
+ * Page chunks requested only through `require.async`, in path order.
+ * @param files - Image entries after the sweep.
+ * @param eager - Eager Client entry paths, never lazy.
+ * @returns Image paths to move into lazy archives.
+ * @throws When a page asset requests a chunk its package does not publish.
+ */
+function lazyChunksOf(files: ImageFiles, eager: ReadonlySet<string>): string[] {
+  const decoder = new TextDecoder()
+  const lazy = new Set<string>()
+  for (const [name, bytes] of Object.entries(files)) {
+    if (!pageAsset(name)) continue
+    const directory = name.slice(0, name.lastIndexOf('/'))
+    for (const match of decoder.decode(bytes).matchAll(CHUNK_REQUEST)) {
+      const request = match[2] as string
+      const target = `${directory}/${request.slice(2)}`
+      if (files[target] === undefined) {
+        throw new Error(`vfs image: ${name} requests chunk "${request}", which the package does not publish`)
+      }
+      if (!eager.has(target)) lazy.add(target)
+    }
+  }
+  return [...lazy].sort()
+}
+
 /** Gzip header byte that records the packing platform; RFC 1952 §2.3.1 spells 255 "unknown". */
 const GZIP_OS_UNKNOWN = 255
 
@@ -593,11 +664,14 @@ function compressImage(archive: Uint8Array): Uint8Array {
  * The manifest's claim is all-or-nothing: it names the one contract every packed body
  * was emitted against. A module the transform cannot express therefore fails the pack
  * rather than downgrading the image, because a mostly-transformed image boots into
- * errors far from their cause.
- * @param options - Composition, package index, and paths.
- * @returns The compressed image plus what went into it.
+ * errors far from their cause. Page chunks requested through `require.async` leave
+ * the base image for deterministic archives named by their content digest, which the manifest registers.
+ * @param options - Roster, installation, package index, and paths.
+ * @returns The compressed image, its lazy archives, and what went into them.
  * @throws When a config tree or workspace directory named in the options is missing,
- * because a silently thinner image fails much later and much less clearly.
+ * because a silently thinner image fails much later and much less clearly; when the
+ * installation is also a materialized package; or when a page asset requests a chunk
+ * its package does not publish.
  */
 export function packVfsImage(options: PackOptions): PackResult {
   const root = options.root ?? DEFAULT_ROOT
@@ -610,12 +684,21 @@ export function packVfsImage(options: PackOptions): PackResult {
   }
 
   const roster = [...new Set([
-    ...rosterOf(options.config),
+    ...options.roster,
     ...configTrees.filter(tree => tree.scanRoster === true).flatMap(tree => treeRosterOf(tree.directory)),
   ])]
   const { files, packages, missing } = materialize(roster, options)
+  const installation = options.installation
+  if (installation !== undefined) {
+    if (packages.has(installation.name)) {
+      throw new Error(`vfs image: installation ${installation.name} is also materialized; its manifest must enter the image alone`)
+    }
+    files[`node_modules/${installation.name}/package.json`] = readFileSync(installation.manifest)
+  }
+  if (options.homePatch !== undefined && options.homePatch.length > 0) {
+    files[HOME_PATCH_PATH] = encoder.encode(yaml.dump(options.homePatch, { schema: entryListSchema, noRefs: true }))
+  }
 
-  files[CONFIG_PATH] = encoder.encode(options.config)
   for (const tree of configTrees) collectTree(tree.directory, files, tree.mount, relativePath => !excluded(relativePath))
 
   const executables = dropExecutables(files)
@@ -623,14 +706,29 @@ export function packVfsImage(options: PackOptions): PackResult {
   const { swept, transform, javascriptEntries, droppedJavascriptEntries, unresolvedExternalRequests } =
     sweepImage(files, options, rootPackages, root)
 
-  swept[MANIFEST_PATH] = encoder.encode(`${JSON.stringify({
+  const lazyArchives: PackedLazyArchive[] = []
+  const lazy: ImageLazyArchive[] = []
+  for (const path of lazyChunksOf(swept, clientEntriesOf(swept, packages.keys()))) {
+    const bytes = swept[path] as Uint8Array
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- the image is a plain path map
+    delete swept[path]
+    const image = compressImage(packTar({ [path]: bytes }))
+    const name = `${IMAGE_LAZY_DIRECTORY}/${createHash('sha256').update(image).digest('hex')}.tar.gz`
+    lazyArchives.push({ name, image, files: [path] })
+    lazy.push({ archive: name, files: [{ path, size: bytes.byteLength }] })
+  }
+
+  const manifest: ImageManifest = {
     root,
     profile: options.profile,
-    [CONTRACT_FIELD]: WRAPPER_CONTRACT,
-    javascriptEntries,
+    ...installation === undefined ? {} : { installation: installation.name },
+    lowered: WRAPPER_CONTRACT,
+    javascriptEntries: javascriptEntries - lazy.length,
     visitedEntries: transform.visited,
     rewrittenEntries: transform.rewritten,
-  }, null, 2)}\n`)
+    lazy,
+  }
+  swept[MANIFEST_PATH] = encoder.encode(`${JSON.stringify(manifest, null, 2)}\n`)
 
   for (const directory of options.emptyDirectories ?? IMAGE_EMPTY_DIRECTORIES) {
     swept[directory] = new Uint8Array(0)
@@ -639,13 +737,14 @@ export function packVfsImage(options: PackOptions): PackResult {
   return {
     image: compressImage(packTar(swept)),
     files: swept,
+    lazyArchives,
     packages,
     workspacePackages: [...packages.keys()].filter(name => options.workspaces.has(name)).length,
     roster,
     missing,
     executables,
     pageBundles: Object.keys(swept).filter(name => pageAsset(name)),
-    javascriptEntries,
+    javascriptEntries: manifest.javascriptEntries,
     droppedJavascriptEntries,
     unresolvedExternalRequests,
     transform,

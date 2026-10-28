@@ -63,6 +63,8 @@ Create `hello-plugin/cordis.patch.yml`. The patch is a YAML array like the `--pa
 
 `patch` also accepts an ordered list of files, for example `["./base.patch.yml", "./web.patch.yml"]`; the launcher applies them in that order as one layer, and each file's relative plugin paths resolve beside that file. A package without the `dsh.bundle` declaration still installs, but only as a plain dependency: `dsh plugin` prints a warning and activates no layer. Use that package format for a library that plugin packages import rather than a plugin users enable.
 
+Declare the DSH releases the bundle supports with an `engines.dsh` SemVer range, for example `"engines": { "dsh": ">=0.2.0 <0.3.0" }`. Installation and profile startup refuse a bundle whose range the running DSH does not satisfy; without `engines.dsh`, they check its `@deepseek-ai/dsh*` peer dependency ranges instead ([rule](../../../../packages/boot/app-boot/README.md#profiles)).
+
 ### The profile manifest
 
 A profile directory holds two files:

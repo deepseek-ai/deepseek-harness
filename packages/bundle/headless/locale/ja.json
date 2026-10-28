@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ヘッドレスプロファイル",
+    "description": "dsh-base 上でコアの Agent/Session ランナーを直接使用して単一タスクを実行し、Host、HTTP、ブラウザのレイヤーを含みません。"
+  }
+}

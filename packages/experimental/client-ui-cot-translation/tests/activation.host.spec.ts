@@ -6,8 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import RemoteAccessService from '@deepseek-ai/dsh-api-remote-access'
-import SessionController from '@deepseek-ai/dsh-api-session-controller'
+import { createSessionTestController } from '../../../api/session-controller/tests/test-remote.ts'
 import Translator from '@deepseek-ai/dsh-experimental-translator'
 import { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -67,8 +66,9 @@ async function fixture(origin?: 'subagent') {
     saveSelection: async () => {},
   } as never)
   ctx.provide('fileUploads', { registerAgentResolver: () => () => {} } as never)
-  await ctx.plugin(RemoteAccessService)
-  const sessions = new SessionController(ctx, { nativeOpen: false })
+  const sessions = await createSessionTestController(ctx, {
+    nativeOpen: false, cwd: root, defaultModelSelection: () => ({ provider: 'unused', model: 'unused' }),
+  })
   await ctx.plugin(Translator, Translator.Config({ bingEndpoint: `http://127.0.0.1:${address.port}/bing` }))
   const ui = ctx.plugin(CotTranslationController, {})
   await ui

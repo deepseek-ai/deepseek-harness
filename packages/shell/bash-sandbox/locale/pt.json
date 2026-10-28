@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Execução de sandbox Bash",
+    "description": "Execute comandos Bash dentro das permissões atuais do sandbox."
+  }
+}

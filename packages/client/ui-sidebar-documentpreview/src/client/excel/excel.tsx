@@ -55,7 +55,7 @@ export function ExcelBody({ content, format, limits, t, loading }: LoadedExcelBo
       <span>{t('unsupportedNotice', { features: state.value.unsupportedFeatures.map(feature => t(feature)).join(t('featureSeparator')) })}</span>
     </div>}
     <div ref={workbookRef} className={`${css.workbook} ${hasFormulas ? css.withFormulaWarning : ''}`}>
-      {hasFormulas && <Tooltip portal label={t('formulaWarning')} side="bottom" delayMs={500}>
+      {hasFormulas && <Tooltip portal openOnClick label={t('formulaWarning')} side="bottom" delayMs={500}>
         <button type="button" className={css.formulaWarning} aria-label={t('formulaWarning')} data-excel-formula-warning>
           <IconWarningTriangleOutlineRegular size={14} />
         </button>

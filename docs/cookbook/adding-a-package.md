@@ -14,7 +14,7 @@ packages/<group>/<pkg>/
                    # ../../../vendor/cordis (+ ../../../vendor/schemastery if
                    # you use Config, + ../../<group>/<dep> for each dsh dep)
   src/index.ts     # service default export or plugin (name/inject/apply/Config)
-  locale/en.json   # optional display metadata: meta.title and meta.description
+  locale/en.json   # optional display metadata: meta.title, meta.description, and meta.detail
   locale/zh.json   # translations using the same fields
   README.md        # service API, events, extension points, design notes,
                    # + gated Model Experience context blocks or short form
@@ -136,7 +136,7 @@ Merge these entries into `package.json`, retaining existing runtime exports and 
 }
 ```
 
-Keep language files together in `locale/`, with `en.json` as the discovery entry. Fields are optional; present values must be non-empty strings. Missing files or fields permit fallback, while malformed JSON or invalid fields produce a per-plugin diagnostic.
+Keep language files together in `locale/`, with `en.json` as the discovery entry. Fields are optional; present values must be non-empty strings. English `meta.title` and `meta.description` use sentence case: capitalize only the first word, proper nouns, and product names, as in `Git worktrees` ([rule](../../.agents/skills/dsh-prose-standard/SKILL.md#required-coverage-by-prose-location)). At runtime, missing files or fields permit fallback, while malformed JSON or invalid fields produce a per-plugin diagnostic. First-party packages and plugin templates must provide `ja.json`, `es.json`, `fr.json`, `de.json`, `ru.json`, and `pt.json` covering every field present in `en.json` or optional `zh.json`, preserving placeholders, slash commands, and API field names; detail paths may point to the existing English document. Subpath resources under `locale/<subpath>/` follow the same checks. English descriptions explain user-visible behavior and end with sentence punctuation. Run `pnpm run check:i18n` to verify JSON metadata and UI dictionary completeness; the JSON checks also run in `check:all`, CI static checks, and hygiene.
 
 Fields fall back independently before view-specific name formatting, using the existing locale language chain first:
 
@@ -146,6 +146,8 @@ Fields fall back independently before view-specific name formatting, using the e
 Export `<package name>/locale/en.json` for locale lookup; expose `<package name>/package.json` for package-field fallback or an icon declaration. A subpath plugin such as `<package name>/search` is not a package and never reads a `package.json`, even one exported at `./search/package.json`; it uses `./search/locale/*.json` for text and `./search/icon` for its image.
 
 For an image on bundle cards, details, and component rows, a package-root plugin sets top-level `"icon": "./icon.svg"` in its exported manifest, or exports `./icon` when that field is omitted. A subpath plugin exports its own icon, such as `"./search/icon": "./search.svg"`. Include each image in `files`. A manifest `icon` is relative to the manifest's directory; absolute paths, URLs, paths outside that directory, and symlinks resolving outside it are rejected. An exported icon resolves through Node exports like locale resources and must remain inside its package. SVG, PNG, JPEG (`.jpg`/`.jpeg`), and WebP files are supported up to 256 KiB. Images must be self-contained; SVG is rendered as an image, not inline HTML. The Host returns a data URL without activating the plugin. Invalid declarations or unreadable files produce a metadata diagnostic while retaining valid text, without trying the export; missing or undecodable images use the panel's default artwork.
+
+A bundle can also set `meta.detail` to a Markdown file path relative to the package root, such as `"docs/DETAIL.md"` in `locale/en.json` and `"docs/DETAIL.zh.md"` in `locale/zh.json`; it is read from these files at the package root. The path uses `/`, stays inside the package, ends in `.md` or `.markdown`, and has no package-field fallback; keep its images beside it, and list its top-level directory, such as `docs`, in `files` right after the locale resources, as `check-workspace-constraints` requires. The named file must exist in a subdirectory of the package; a root-level document is rejected because its neighboring images would not be published. A bundle's page in **Plugins**, and its index entry page when the [custom plugin indexes bundle](../../packages/experimental/plugin-market-bundle/README.md) is on, show the file for the active UI language as the plugin's detail document. Without `meta.detail` they show the package README, and an index entry page then falls back to the declared repository's README; the [document order](../../packages/util/plugin-detail/README.md#document-order) defines the rules. Write it for users, and reference images by paths relative to the file.
 
 Installed bundle cards and details, component lists and configuration details, and Settings' plugin inventory display this metadata, including disabled and preset plugins. Reads do not activate plugins.
 

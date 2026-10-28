@@ -20,18 +20,23 @@ import * as net from '../../src/node/builtin_modules/mock/net.ts'
 import * as sqlite from '../../src/node/builtin_modules/mock/sqlite.ts'
 import * as stream from '../../src/node/builtin_modules/implemented/stream.ts'
 import * as vm from '../../src/node/builtin_modules/mock/vm.ts'
+import * as repl from '../../src/node/builtin_modules/mock/repl.ts'
 import * as workerThreads from '../../src/node/builtin_modules/mock/worker_threads.ts'
 import * as nodePty from '../../src/node/external_packages/node-pty.ts'
 import * as libreofficeKit from '../../src/node/external_packages/libreoffice-kit.ts'
 import * as execa from '../../src/node/external_packages/execa.ts'
 import * as got from '../../src/node/external_packages/got.ts'
 import * as piAi from '../../src/node/external_packages/pi-ai.ts'
+import * as piCodingAgent from '../../src/node/external_packages/pi-coding-agent.ts'
 import * as ripgrep from '../../src/node/external_packages/ripgrep.ts'
 import * as ws from '../../src/node/external_packages/ws.ts'
 import { REPLACED_EXTERNAL_PACKAGES } from '../../src/node/external_packages/replaced-externals.ts'
 import * as os from '../../src/node/builtin_modules/implemented/os.ts'
 import * as perfHooks from '../../src/node/builtin_modules/implemented/perf_hooks.ts'
 import { DSH_HOME, DSH_TMP } from '../../src/storage/paths.ts'
+
+/** Node's standard code for a feature the running platform cannot provide. */
+const PLATFORM_UNAVAILABLE = 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM'
 
 /** Every refusal writes its message to the console before throwing; keep the run quiet. */
 const quiet = (): void => { vi.spyOn(console, 'error').mockImplementation(() => {}) }
@@ -43,6 +48,7 @@ const CALLED: [string, Record<string, unknown>, readonly string[]][] = [
   ['node:net', net, ['createServer', 'connect']],
   ['node:sqlite', sqlite, ['backup']],
   ['node:vm', vm, ['createContext', 'runInContext', 'runInNewContext', 'runInThisContext', 'isContext']],
+  ['node:repl', repl, ['start']],
   ['node:worker_threads', workerThreads, ['MessageChannel', 'MessagePort', 'markAsUntransferable', 'receiveMessageOnPort']],
   // The rest of `node:child_process` runs commands (see child-process.spec.ts);
   // these three need a real process, so they stay refusals.
@@ -50,6 +56,16 @@ const CALLED: [string, Record<string, unknown>, readonly string[]][] = [
   ['node-pty', nodePty, ['spawn', 'open']],
   ['execa', execa, ['execa']],
   ['got', got.default, ['post']],
+  ['@earendil-works/pi-coding-agent', piCodingAgent, [
+    'getAgentDir', 'initTheme', 'createAgentSessionServices', 'createAgentSessionFromServices',
+    'createBashToolDefinition', 'createMcpExtension', 'defineTool', 'resolveCliModel',
+  ]],
+  ['@earendil-works/pi-coding-agent', { create: piCodingAgent.ModelRuntime.create }, ['create']],
+  ['@earendil-works/pi-coding-agent', { create: piCodingAgent.SettingsManager.create }, ['create']],
+  ['@earendil-works/pi-coding-agent', {
+    create: piCodingAgent.SessionManager.create, open: piCodingAgent.SessionManager.open,
+    inMemory: piCodingAgent.SessionManager.inMemory, list: piCodingAgent.SessionManager.list,
+  }, ['create', 'open', 'inMemory', 'list']],
   ['@deepseek-ai/pi-ai', piAi, [
     'createProvider', 'createModels', 'openAICompletionsApi', 'openAIResponsesApi', 'anthropicMessagesApi',
     'isContextOverflow', 'getSupportedThinkingLevels', 'builtinModels',
@@ -63,17 +79,21 @@ const CONSTRUCTED: [string, Record<string, unknown>, readonly string[]][] = [
   ['node:worker_threads', workerThreads, ['Worker']],
   ['node:perf_hooks', perfHooks, ['PerformanceObserver']],
   ['ws', ws, ['WebSocket']],
+  ['@earendil-works/pi-coding-agent', piCodingAgent, [
+    'ModelRegistry', 'ProjectTrustStore', 'ModelRuntime', 'SettingsManager', 'SessionManager',
+  ]],
 ]
 
 describe('not-implemented stubs', () => {
-  it('names the module and the symbol, and reports before throwing', () => {
+  it('names the module and the symbol, carries the Node platform code, and reports before throwing', () => {
     const reported = vi.spyOn(console, 'error').mockImplementation(() => {})
     const error = notAvailableError('node:zlib', 'gzipSync')
     expect(error.message).toBe('web-preview: node:zlib.gzipSync is not available in the worker host')
+    expect(error.code).toBe(PLATFORM_UNAVAILABLE)
     expect(reported).toHaveBeenCalledWith(error.message)
 
     const stub = notImplementedFail('node:zlib', 'gzipSync')
-    expect(() => stub()).toThrow(error.message)
+    expect(() => stub()).toThrow(expect.objectContaining({ message: error.message, code: PLATFORM_UNAVAILABLE }))
   })
 
   for (const [module, namespace, members] of CALLED) {
@@ -98,8 +118,16 @@ describe('not-implemented stubs', () => {
     })
   }
 
+  it('refuses node:worker_threads construction with the Node platform code', () => {
+    quiet()
+    expect(() => new workerThreads.MessageChannel()).toThrow(expect.objectContaining({ code: PLATFORM_UNAVAILABLE }))
+    expect(() => new workerThreads.Worker('')).toThrow(expect.objectContaining({ code: PLATFORM_UNAVAILABLE }))
+  })
+
   it('keeps the CommonJS interop marker and a default export on every replaced module', () => {
-    for (const namespace of [dnsPromises, net, sqlite, vm, workerThreads, childProcess, stream, ws, nodePty, piAi, os, perfHooks, got]) {
+    for (const namespace of [
+      dnsPromises, net, sqlite, vm, repl, workerThreads, childProcess, stream, ws, nodePty, piAi, piCodingAgent, os, perfHooks, got,
+    ]) {
       const holder = namespace as { __esModule?: unknown; default?: unknown }
       expect(holder.__esModule).toBe(true)
       expect(holder.default).toBeDefined()
@@ -123,6 +151,14 @@ describe('constructible-but-inert fakes', () => {
 })
 
 describe('replaced external packages', () => {
+  it('refuses Pi agent creation with the Node platform code', () => {
+    quiet()
+    expect(() => piCodingAgent.createAgentSessionServices()).toThrow(expect.objectContaining({
+      code: PLATFORM_UNAVAILABLE,
+      message: 'web-preview: @earendil-works/pi-coding-agent.createAgentSessionServices is not available in the worker host',
+    }))
+  })
+
   it('reports Office conversion as unavailable without creating a Node worker', async () => {
     quiet()
     await expect(libreofficeKit.createConverter()).rejects.toMatchObject({

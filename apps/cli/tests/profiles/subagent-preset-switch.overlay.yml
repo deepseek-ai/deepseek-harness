@@ -1,0 +1,27 @@
+- insert:
+    - id: preset-delegate-a
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: delegate-a
+        plugins:
+          - name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: spawn
+              allowedAgentPresets: [standard, ptc, minimal]
+          - name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: fork
+              toolName: subagent_fork
+    - id: preset-delegate-b
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: delegate-b
+        plugins:
+          - name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: spawn
+              allowedAgentPresets: [standard, ptc, minimal]
+          - name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: fork
+              toolName: subagent_fork

@@ -3,6 +3,7 @@ import { Service, type Context } from '@deepseek-ai/cordis'
 import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import { TerminalView, type TerminalRemote } from './model.ts'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
@@ -11,6 +12,7 @@ import { preferredShell, rememberShell } from './shell-preference.ts'
 import { TerminalCloseRequests, type TerminalCloseRequest } from './close-requests.ts'
 import { TerminalWindowHold } from './retention.ts'
 import { TerminalBindings } from './bindings.ts'
+import { TerminalInventory } from './inventory.ts'
 
 export type { TerminalView, TerminalViewState, TerminalViewIssue, TerminalRenderFrame, TerminalRemote } from './model.ts'
 
@@ -43,6 +45,7 @@ export class ClientTerminals extends Service {
   private readonly closed = new Set<WebTerminalId>(this.requests.pending().map(request => request.id))
   private disposed = false
   private readonly views = new Map<SessionId, Map<string, TerminalView>>()
+  private readonly inventories = new Map<SessionId, TerminalInventory>()
   private readonly bindings = new TerminalBindings()
   private readonly holds = new Map<SessionId, Map<WebTerminalId, TerminalWindowHold>>()
   private readonly releasing = new Set<Promise<void>>()
@@ -54,14 +57,28 @@ export class ClientTerminals extends Service {
    */
   constructor(ctx: Context, private readonly remote: TerminalRemote) {
     super(ctx, 'webTerminals')
+    const connection = ctx.get('connection') as ConnectionHandle
+    let connected = connection.generation.getSnapshot() !== undefined
+    ctx.on('connection/reset', () => {
+      if (!connected) { connected = true; return }
+      for (const [sessionId, inventory] of this.inventories) {
+        void inventory.reset()?.catch((error: unknown) => {
+          if (!this.disposed) {
+            this.ctx.logger.warn('Terminal list refresh failed; retry terminal recovery', { sessionId, error })
+          }
+        })
+      }
+    })
     ctx.effect(() => async () => {
       this.disposed = true
+      const listing = [...this.inventories.values()].map(inventory => inventory.dispose())
+      this.inventories.clear()
       const detaching = [...this.views.values()].flatMap(views => [...views.values()].map(view => view.dispose()))
       this.views.clear()
       this.bindings.clear()
       const holds = [...this.holds.values()].flatMap(holds => [...holds.values()].map(hold => hold.dispose()))
       this.holds.clear()
-      await Promise.all([...detaching, ...holds, ...this.releasing, ...this.closing.values()])
+      await Promise.all([...listing, ...detaching, ...holds, ...this.releasing, ...this.closing.values()])
     }, 'terminal-controller.client.views')
     for (const request of this.requests.pending()) this.cleanup(request)
   }
@@ -83,13 +100,22 @@ export class ClientTerminals extends Service {
       const saved = terminalId ?? this.bindings.get(sessionId, contentId)
       const id = saved ?? randomUUID() as WebTerminalId
       this.bindings.set(sessionId, contentId, id)
-      view = new TerminalView(sessionId, this.remote, this.ctx.remote, id, saved === undefined, shellPath,
+      view = new TerminalView(sessionId, this.remote, this.ctx.remote, this.inventory(sessionId), id, saved === undefined, shellPath,
         signal => this.hold(sessionId, id).ready(signal))
       views.set(key, view)
       this.reconcileHolds()
       void view.refresh()
     }
     return view
+  }
+
+  private inventory(sessionId: SessionId): TerminalInventory {
+    let inventory = this.inventories.get(sessionId)
+    if (inventory === undefined) {
+      inventory = new TerminalInventory(() => this.remote.list(sessionId))
+      this.inventories.set(sessionId, inventory)
+    }
+    return inventory
   }
 
   /**
@@ -183,16 +209,16 @@ export class ClientTerminals extends Service {
   }
 
   /**
-   * Query Host terminals without a live view or unfinished close.
+   * Read shared Session discovery without a live view or unfinished close.
    * @param sessionId - Session being displayed.
+   * @param refresh - explicitly replace settled discovery, including a previous failure.
    * @returns terminals available for opening as recovered tabs.
    */
-  async recover(sessionId: SessionId): Promise<WebTerminalInfo[]> {
-    const result = await this.remote.list(sessionId)
-    if (!result.ok) throw new Error(result.error.message)
+  async recover(sessionId: SessionId, refresh: boolean = false): Promise<WebTerminalInfo[]> {
+    const available = await this.inventory(sessionId).read(refresh)
     const held = new Set([...(this.views.get(sessionId)?.values() ?? [])].map(view => view.id))
     const closing = new Set(this.requests.pending().map(request => request.id))
-    return result.value.filter(info => !held.has(info.id) && !closing.has(info.id) && !this.closed.has(info.id))
+    return [...available.values()].filter(info => !held.has(info.id) && !closing.has(info.id) && !this.closed.has(info.id))
   }
 
   /**
@@ -213,6 +239,7 @@ export class ClientTerminals extends Service {
         const result = await this.remote.close(record.sessionId, record.id)
         if (!result.ok) throw result.error
       }
+      this.inventories.get(record.sessionId)?.remove(record.id)
       this.requests.remove(record.id)
     })().catch((error: unknown) => {
       if (remoteErrorOf(error)?.code === 'session/not-found') {
@@ -232,7 +259,7 @@ export class ClientTerminals extends Service {
 }
 
 /** Required Client transport and terminal namespace. */
-export const inject = ['remote', 'remote.terminal']
+export const inject = ['remote', 'remote.terminal', 'connection']
 
 /**
  * Install the Client terminal models.

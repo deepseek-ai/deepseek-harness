@@ -23,19 +23,11 @@
 # restatement keeps the Web values on one ephemeral in-memory index; a
 # deployment enabling content search overrides `openAt` to `first-search` in a
 # later patch layer, which defers the node:sqlite import and in-memory handle
-# to the first search so Node 22 startup stays quiet.
+# to the first search so startup stays quiet.
 - id: session-query-sqlite
   config:
     path: ':memory:'
     openAt: never
-
-- id: tools
-  config:
-    # TEMPORARY workaround: DSH_TOOLS_MODE (native|ptc) opts a whole dsh
-    # process into PTC mode while per-session tool-presentation selection is being
-    # designed; unset keeps the schema default (native). Remove the env seam
-    # once the web UI owns the choice per session.
-    mode: !!js process.env.DSH_TOOLS_MODE
 
 # ── web-only host rows, the transport layer, and the browser roster ─────────
 
@@ -61,8 +53,8 @@
         enabled: true
         appVersion: !!js process.env.DSH_CLIENT_VERSION
 
-    # Host-owned opt-in sampled when a new Web session receives its preset
-    # delegation tools. The Plugins page edits this settings namespace.
+    # Host-owned authorization sampled at Agent creation. The Plugins page
+    # edits this settings namespace independently of the selected preset.
     - id: subagent-model-selection-settings
       name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 
@@ -329,6 +321,9 @@
     - id: ui-approval
       name: '@deepseek-ai/dsh-client-ui-approval'
 
+    - id: message-quotes
+      name: '@deepseek-ai/dsh-message-quotes'
+
     - id: ui-chat
       name: '@deepseek-ai/dsh-client-ui-chat'
 
@@ -339,12 +334,18 @@
     - id: ui-attachment
       name: '@deepseek-ai/dsh-client-ui-attachment'
 
+    - id: ui-file-drag
+      name: '@deepseek-ai/dsh-client-ui-file-drag'
+
     # Tool call tree, generic fallback, and keyed business Tool views.
     - id: ui-tool
       name: '@deepseek-ai/dsh-client-ui-tool'
 
     - id: ui-cordis
       name: '@deepseek-ai/dsh-client-ui-cordis'
+
+    - id: deliverable-file-references
+      name: '@deepseek-ai/dsh-deliverable-file-references'
 
     # Turn tail: the changed-files card and delivery cards under each closing
     # assistant message. Remove this entry to turn the surface off; the tail
@@ -419,6 +420,11 @@
     # sessions created later. Absent a roster it renders nothing.
     - id: ui-agent-preset
       name: '@deepseek-ai/dsh-client-ui-agent-preset'
+
+    # Region-local More menus: pin or unpin plugin launchers and start a
+    # plugin draft.
+    - id: entry-customization
+      name: '@deepseek-ai/dsh-client-ui-entry-customization'
 
     - id: ui-settings-session-log
       name: '@deepseek-ai/dsh-client-ui-settings-session-log'
@@ -550,9 +556,6 @@
 # chooses is which delegation TOOLS its agent sees, below.
 
 - id: tool-subagent-control
-  disabled: true
-
-- id: tool-subagent-list-agents
   disabled: true
 
 - id: tool-subagent

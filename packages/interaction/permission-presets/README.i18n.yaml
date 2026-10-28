@@ -18,8 +18,8 @@
   en: 0b93409c92e2a769
   zh: 4b4e10636760bb15
 /deepseek-ai-dsh-permission-presets/use-this-package/configuring-presets:
-  en: 3b3fe69be228870a
-  zh: af3f146f86615ad4
+  en: c561222e0c816e45
+  zh: bdab7b277c9564b7
 /deepseek-ai-dsh-permission-presets/use-this-package/switching-presets:
   en: ede3169d799a7578
   zh: cb88e3ade597e486
@@ -27,8 +27,8 @@
   en: 628a5bdd956e206c
   zh: 172be9a9748d65ce
 /deepseek-ai-dsh-permission-presets/use-this-package/session-defaults:
-  en: 88218998b169a203
-  zh: 7a3646ff0ca28549
+  en: a7077315c4898bf0
+  zh: 3e5f530bb4a8ffa8
 /deepseek-ai-dsh-permission-presets/understand-the-implementation:
   en: f5c37bc882b3f0d1
   zh: 8203bea78976aefc
@@ -39,14 +39,14 @@
   en: b01849a5fa73aae9
   zh: cbd7fcf50117502b
 /deepseek-ai-dsh-permission-presets/understand-the-implementation/read-side-and-custom:
-  en: c9ca792038f44654
-  zh: 83cc2641c800c114
+  en: 76deeb5fbcdf7525
+  zh: e96ad7e107947c23
 /deepseek-ai-dsh-permission-presets/understand-the-implementation/session-pinning-and-blank-reuse:
-  en: 893cea88bce22903
-  zh: 2431e19ced670511
+  en: 88a6095e3e4a8ec8
+  zh: 150ab4dc54292c77
 /deepseek-ai-dsh-permission-presets/understand-the-implementation/catalog-projection-and-optional-command:
-  en: 2e79bec74274b054
-  zh: 256526ab1b4b55e9
+  en: 341f80202edd66a3
+  zh: bd8ebb9d011b547f
 /deepseek-ai-dsh-permission-presets/further-exploration:
   en: ca27c3e438cffdc5
   zh: ae5d25ae55e5d503

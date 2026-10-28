@@ -60,8 +60,33 @@
   padding: 14px 16px;
 }
 
-.reject:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover-danger);
-  color: var(--dsw-alias-state-error-primary);
-  border-color: transparent;
+@media (hover: hover) {
+  .reject:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-danger);
+    color: var(--dsw-alias-state-error-primary);
+    --dsh-button-outline-color: transparent;
+  }
 }
+
+.subject {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 16px;
+}
+
+.subject img {
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.description {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.withSubject .body { text-align: left; }
+.withSubject .actionRow { flex-wrap: wrap; }

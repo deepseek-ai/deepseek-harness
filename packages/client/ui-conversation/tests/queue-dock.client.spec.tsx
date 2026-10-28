@@ -148,6 +148,21 @@ function imageRow(id: string, refId: string, text = ''): UserMessage {
 }
 
 describe('QueueDock', () => {
+  it('keeps the same quote preview when a queued echo hands off to Host content', () => {
+    const requestId = 'quote-handoff' as SessionSnapshot['pendingSubmissions'][number]['requestId']
+    const content = [{ type: 'text' as const, text: '> @literal /review' }]
+    const initial = { ...snapshotWith([]), pendingSubmissions: [{ requestId, placement: 'queued' as const,
+      time: 1000, text: content[0]!.text, attachments: [] }] }
+    const source = liveSession(initial)
+    const view = render(<QueueDock {...kitFor(initial)} useSession={source.useSession} useProjection={source.useProjection} />)
+    expect(view.container.querySelector('[data-quote-preview-text]')?.textContent).toBe('@literal /review')
+    const queued: UserMessage = { ...row('accepted-quote', ''), content, source: { kind: 'user', rpcId: requestId } }
+    act(() => { source.push(snapshotWith([queued])) })
+    expect(view.container.querySelectorAll('[data-quote-preview]')).toHaveLength(1)
+    expect(view.container.querySelector('[data-quote-preview-text]')?.textContent).toBe('@literal /review')
+    expect(view.container.querySelector('[data-ref-chip]')).toBeNull()
+  })
+
   it.each(['ABC', 'ACB', 'BAC', 'BCA', 'CAB', 'CBA'])(
     'keeps repeated queued submissions in Dock through acceptance and FIFO claims (%s)', (hostOrder) => {
       const pending: SessionSnapshot['pendingSubmissions'] = ['A', 'B', 'C'].map(id => ({
@@ -384,7 +399,7 @@ describe('QueueDock', () => {
       const single = snapshotWith([row('i-tip', 'queued draft')])
       const source = liveSession(single)
       const view = render(<QueueDock {...kitFor(single)} useSession={source.useSession} useProjection={source.useProjection} />)
-      fireEvent.mouseEnter(view.getByLabelText('删除排队消息'))
+      fireEvent.pointerEnter(view.getByLabelText('删除排队消息'))
       act(() => { vi.advanceTimersByTime(500) })
       const tooltip = view.getByRole('tooltip')
       expect(tooltip.textContent).toBe('删除排队消息')

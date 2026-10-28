@@ -7,3 +7,4 @@
 - button "New terminal Run commands in the Session workspace"
 - button "Choose shell"
 - button "Browser Browse web pages"
+- button "More tools"

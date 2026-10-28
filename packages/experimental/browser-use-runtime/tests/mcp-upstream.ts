@@ -1,4 +1,6 @@
 /** Real upstream MCP browser checks against private loopback pages and disposable Chromium. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -58,7 +60,7 @@ export async function verifyMcpBrowser(
       browserConfig = { mode: 'attach', endpoint: `http://127.0.0.1:${port}` }
     }
     const modules = new Map<string, unknown>([
-      ['browserUse', BrowserUse], ['prompt', SystemPrompt], ['tools', Tools], ['llm', Llm],
+      ['browserUse', BrowserUse], ['prompt', SystemPrompt], ['tools', Tools], ['toolExecutor', NativeToolExecutor], ['llm', Llm],
       ['sessions', Sessions], ['agents', Agents], ['loop', AgentLoop], ['projections', Projections], ['browser', provider],
       ['fs', LocalFileSystem], ['workingDirectory', WorkingDirectory],
     ])
@@ -82,7 +84,7 @@ export async function verifyMcpBrowser(
     const schemas = ctx.tools.schemas(owner.agent)
     expect(schemas.length).toBeGreaterThan(5)
     expect(schemas.every(tool => tool.name.startsWith(`mcp__${namespace}__`))).toBe(true)
-    const result = await ctx.tools.execute({ agent: owner.agent, name: `mcp__${namespace}__${navigate.name}`, arguments: navigate.arguments(url), callId: ToolCallId('navigate'), signal: new AbortController().signal })
+    const result = await executeToolFixture(ctx, { agent: owner.agent, name: `mcp__${namespace}__${navigate.name}`, arguments: navigate.arguments(url), callId: ToolCallId('navigate'), signal: new AbortController().signal })
     expect(result.isError, JSON.stringify(result.content)).toBe(false)
     expect(observed.has(`/${namespace}-${mode}`)).toBe(true)
     expect(result.content.length).toBeGreaterThan(0)

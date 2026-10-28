@@ -1,3 +1,4 @@
+import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -96,7 +97,7 @@ function runCode(
   signal: AbortSignal = testToolSignal,
   agent?: Agent,
 ): Promise<ToolExecutionResult> {
-  return harness.tools.execute({
+  return executeModelToolFixture(harness, {
     callId: ToolCallId(`keyless-code-${++keylessCall}`),
     name: RUN_CODE_NAME,
     arguments: { code, description: 'Run the e2e program' },
@@ -308,7 +309,7 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
       return { provider: provider.id, names: inspected.data.tools.map(tool => tool.name) };
     `, testToolSignal, agent))
 
-    expect(value).toEqual({ provider: 'Tool', names: ['cordis_inspect_list', 'cordis_inspect_query', 'run_code'] })
+    expect(value).toEqual({ provider: 'Tool', names: ['cordis_inspect_list', 'cordis_inspect_query'] })
   })
 })
 

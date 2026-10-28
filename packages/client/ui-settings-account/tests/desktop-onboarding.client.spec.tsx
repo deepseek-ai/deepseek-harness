@@ -36,7 +36,7 @@ function mount(step: DesktopOnboardingState['progress']['step'] = 'welcome', bal
         return saved
       }}
       account={{ view: { status: 'credential-stored', attempt: null, links: { usageUrl: 'https://example.com/usage', topUpUrl: 'https://example.com/top_up' } },
-        failed: false, details: balance === 'loading' ? {} : { balance: balance === 'failed' ? { status: 'failed' } : { status: 'ready', bonusWallets: balance === 'bonus' ? [{ currency: 'CNY', balance: '1' }] : [], value: [{ currency: 'CNY', balance: balance === 'zero' || balance === 'bonus' ? '0E-16' : '12.34' }] } } }}
+        avatar: undefined, failed: false, details: balance === 'loading' ? {} : { balance: balance === 'failed' ? { status: 'failed' } : { status: 'ready', bonusWallets: balance === 'bonus' ? [{ currency: 'CNY', balance: '1' }] : [], value: [{ currency: 'CNY', balance: balance === 'zero' || balance === 'bonus' ? '0E-16' : '12.34' }] } } }}
       openPlatformPage={openPlatformPage} />
   }
   render(<App />)

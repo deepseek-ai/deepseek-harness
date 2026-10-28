@@ -1,0 +1,29 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/loader" },
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../app-boot" },
+    { "path": "../plugin-manager" },
+    { "path": "../../util/plugin-market-index" },
+    { "path": "../../util/package-manifest" },
+    { "path": "../../util/timeout" },
+    { "path": "../../util/values" },
+    { "path": "../../settings/settings" },
+    { "path": "../../typert/protocol" },
+    { "path": "../../core/tools" },
+    { "path": "../../util/brand" },
+    { "path": "../../subprocess/subprocess" },
+    { "path": "../../client/connection/tsconfig.host.json" },
+    { "path": "../../util/plugin-detail" },
+    { "path": "../../util/atomic-write" }
+  ]
+}

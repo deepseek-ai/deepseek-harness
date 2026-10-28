@@ -13,7 +13,7 @@ function objectWithForgedIntrinsicPrototype(revoked = false): Record<string, unk
   return Object.assign(Object.create(prototype) as Record<string, unknown>, { value: 1 })
 }
 
-describe('snapshotJsonValue', () => {
+describe('snapshotJsonValue and isJsonValue', () => {
   it('copies the complete JSON scalar vocabulary and rejects unsupported scalars', () => {
     const unsupportedFunction = (): void => {}
 
@@ -118,6 +118,111 @@ describe('snapshotJsonValue', () => {
     expect(snapshotJsonValue(array)).toEqual([{ value: { accepted: true } }])
     expect(objectReads).toBe(1)
     expect(arrayReads).toBe(1)
+  })
+
+  it.each(['snapshot', 'predicate'] as const)('keeps captured keys and lengths with depth-first getter reads in %s mode', (mode) => {
+    const reads: string[] = []
+    const items: unknown[] = [0, 1]
+    Object.defineProperty(items, 0, {
+      enumerable: true,
+      get: () => {
+        reads.push('item')
+        items[1] = 7
+        items.push('added')
+        return { get child() { reads.push('child'); return 3 } }
+      },
+    })
+    const source = {
+      get items() {
+        reads.push('items')
+        Object.defineProperty(source, 'added', {
+          enumerable: true,
+          get: () => { reads.push('added'); return 9 },
+        })
+        return items
+      },
+      get tail() { reads.push('tail'); return 4 },
+    }
+
+    const result = mode === 'snapshot' ? snapshotJsonValue(source) : isJsonValue(source)
+
+    expect(result).toEqual(mode === 'snapshot' ? { items: [{ child: 3 }, 7], tail: 4 } : true)
+    expect(reads).toEqual(['items', 'item', 'child', 'tail'])
+  })
+
+  it.each(['snapshot', 'predicate'] as const)('rejects an array slot deleted by an earlier getter in %s mode', (mode) => {
+    const source = [0, 1]
+    Object.defineProperty(source, 0, {
+      enumerable: true,
+      get: () => {
+        Reflect.deleteProperty(source, 1)
+        return 0
+      },
+    })
+
+    expect(mode === 'snapshot' ? snapshotJsonValue(source) : isJsonValue(source))
+      .toBe(mode === 'snapshot' ? undefined : false)
+  })
+
+  it.each(['snapshot', 'predicate'] as const)('uses one captured Proxy index schedule in %s mode', (mode) => {
+    for (const secondLength of [2, 1.5, Number.NaN]) {
+      let coercions = 0
+      const length = {
+        valueOf() {
+          coercions += 1
+          if (coercions > 2) throw new Error('length was coerced again')
+          return coercions === 1 ? 2 : secondLength
+        },
+      }
+      const source = new Proxy([1, 2], {
+        get(target, key): unknown {
+          if (key === 'length') return length
+          const value: unknown = Reflect.get(target, key)
+          return value
+        },
+      })
+      const expected = Number.isNaN(secondLength) ? [] : secondLength === 2 ? [1, 2] : undefined
+
+      const result = mode === 'snapshot' ? snapshotJsonValue(source) : isJsonValue(source)
+
+      expect(result).toEqual(mode === 'snapshot' ? expected : expected !== undefined)
+      expect(coercions).toBe(2)
+    }
+  })
+
+  it.each([false, true])('does not read an array slot outside a fractional Proxy length, throwing slot=%s', (throwing) => {
+    let reads = 0
+    const source = new Proxy([42], {
+      get(target, key): unknown {
+        if (key === 'length') return 1 - Number.EPSILON / 2
+        if (key === '0') {
+          reads += 1
+          if (throwing) throw new Error('array slot must not be read')
+        }
+        const value: unknown = Reflect.get(target, key)
+        return value
+      },
+    })
+
+    expect(JSON.stringify(source)).toBe('[]')
+    expect(snapshotJsonValue(source)).toEqual([])
+    expect(isJsonValue(source)).toBe(true)
+    expect(reads).toBe(0)
+  })
+
+  it('detaches every occurrence of a shared child in a wide array', () => {
+    const shared = { nested: [{ value: 1 }] }
+    const source = Array.from({ length: 4_096 }, () => shared)
+
+    expect(isJsonValue(source)).toBe(true)
+    const snapshot = snapshotJsonValue(source)!
+    expect(snapshot).toEqual(source)
+    shared.nested[0]!.value = 2
+    snapshot[0]!.nested[0]!.value = 3
+
+    expect(source.at(-1)?.nested[0]?.value).toBe(2)
+    expect(snapshot[0]?.nested[0]?.value).toBe(3)
+    expect(snapshot.at(-1)?.nested[0]?.value).toBe(1)
   })
 
   it('accepts deeply nested valid JSON without using the JavaScript call stack', () => {

@@ -77,10 +77,10 @@ export class SessionHandleClosedError extends Error {
 }
 
 /**
- * A backend-resolved, per-session local artifact location. Carried only by
- * refusal diagnostics ({@link SessionFormatUnsupportedError}) so a user can
- * find the raw log a build refused to interpret; it is not a consumer-facing
- * query — log access goes through a session handle's `read`.
+ * A backend-resolved, per-Session local artifact path used by observational
+ * snapshots and refusal diagnostics. It names a backend target for the Session
+ * and does not authorize reads; log access still goes through a session
+ * handle's `read`. It is not persisted Session content.
  */
 export interface SessionLocation {
   /** Backend-specific artifact kind, for example `jsonl`. */

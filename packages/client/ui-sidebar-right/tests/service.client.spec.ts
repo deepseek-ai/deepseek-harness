@@ -624,11 +624,35 @@ describe('SidebarRightController — a tab\'s own actions', () => {
   })
 })
 
+describe('SidebarRightController — hiding tabs', () => {
+  it('collapses a docked tab and closes a floating tab without toggling the dock', () => {
+    const { controller, publish, layout, tabOf } = harness()
+    publish()
+    controller.openResource('dsh-resource://file/session/s-test/a.txt')
+    const docked = tabOf('a.txt')
+    controller.hide(docked)
+    expect(layout().expanded).toBe(false)
+    expect(layout().tabs[docked]).toBeDefined()
+    controller.hide(docked)
+    expect(layout().expanded).toBe(false)
+    controller.openResource('dsh-resource://file/session/s-test/b.txt')
+    const floating = tabOf('b.txt')
+    controller.float(floating)
+    const expanded = layout().expanded
+    controller.hide(floating)
+    expect(layout().tabs[floating]).toBeUndefined()
+    expect(layout().expanded).toBe(expanded)
+    controller.hide(floating)
+    expect(layout().expanded).toBe(expanded)
+  })
+})
+
 describe('SidebarRightController — the readable slice', () => {
   it('answers for the no-session case rather than throwing', () => {
     const { controller } = harness()
     expect(controller.isExpanded()).toBe(false)
     expect(controller.active()).toBeUndefined()
+    controller.hide('missing' as TabId)
   })
 
   it('reports the last committed surface', () => {

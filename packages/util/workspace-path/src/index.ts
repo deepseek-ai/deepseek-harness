@@ -21,7 +21,7 @@ export function isAbsoluteWorkspacePath(path: string): boolean {
 /**
  * Resolve a Workspace-relative path into the Host-facing spelling used by path operations.
  * @param cwd - Session Workspace root, when known.
- * @param path - Absolute or Workspace-relative path.
+ * @param path - Absolute or Workspace-relative path; leading `./` segments are dropped when joining.
  * @returns an absolute path when a Workspace root is available, otherwise the original path.
  */
 export function resolveWorkspacePath(cwd: string | undefined, path: string): string {
@@ -29,7 +29,7 @@ export function resolveWorkspacePath(cwd: string | undefined, path: string): str
   if (cwd === undefined || cwd === '') return path
   const separator = isWindowsStylePath(cwd) && cwd.includes('\\') ? '\\' : '/'
   const base = cwd.replace(/[/\\]+$/, '')
-  const relative = path.replace(/^[/\\]+/, '')
+  const relative = path.replace(/^(?:\.?[/\\])+/, '')
   return `${base}${separator}${relative}`
 }
 

@@ -1,0 +1,25 @@
+- id: session-telemetry-otel
+  disabled: true
+- id: headless-startup
+  disabled: true
+- id: headless-runner
+  disabled: true
+- insert:
+    - id: product-telemetry-otel
+      name: '@deepseek-ai/dsh-host-product-telemetry-otel'
+      config:
+        endpoint: !!js process.env.DSH_PRODUCT_TELEMETRY_TEST_ENDPOINT
+        serviceName: dsh-environment-test
+        serviceVersion: synthetic-release
+        compression: none
+    - id: product-analytics
+      name: '@deepseek-ai/dsh-client-product-analytics'
+      config:
+        enabled: true
+        appVersion: synthetic-release
+
+- id: sandbox-policy
+  inject: []
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()

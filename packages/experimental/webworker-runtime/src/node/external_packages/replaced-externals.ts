@@ -8,6 +8,7 @@
 /** Package or subpath specifiers served from the worker bundle instead of the VFS. */
 export const REPLACED_EXTERNAL_PACKAGES: readonly string[] = [
   '@earendil-works/pi-ai',
+  '@earendil-works/pi-coding-agent',
   '@vscode/ripgrep',
   '@deepseek-ai/libreoffice-kit',
   '@deepseek-ai/node-addon-system/flock',
@@ -15,6 +16,7 @@ export const REPLACED_EXTERNAL_PACKAGES: readonly string[] = [
   'node-pty',
   'execa',
   'got',
+  'node-addon-require-builtin',
   'sharp',
   'ws',
 ]

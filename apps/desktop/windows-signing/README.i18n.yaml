@@ -18,23 +18,29 @@
   en: 0c261f3948178d55
   zh: 1086cd882468ad8f
 /windows-signing-and-runner-operations/machine-setup-and-runner-startup:
-  en: ba3de07cc9553056
-  zh: 887e652c40d57091
+  en: bb889e9514678d1c
+  zh: 48cbec1e907d6a2b
+/windows-signing-and-runner-operations/machine-setup-and-runner-startup/supervised-startup:
+  en: cada81c15a20ecc2
+  zh: 80b7a4af7b1e0e5d
+/windows-signing-and-runner-operations/machine-setup-and-runner-startup/optional-network-dependency:
+  en: 60f34f8637b3c252
+  zh: 805435964ab20263
 /windows-signing-and-runner-operations/signing-configuration:
   en: 4b5548818375eb9a
   zh: 8c975adbb1dca9c8
 /windows-signing-and-runner-operations/signing-and-timestamp-completion:
-  en: e42565e00283e3f6
-  zh: 584a33f07b50fd5b
+  en: a8d23c931cafc236
+  zh: 28fd4860549cdc7b
 /windows-signing-and-runner-operations/failure-records-and-operator-recovery:
   en: 5401b605a2f3a44e
   zh: fc1f6ee667bcd20d
 /windows-signing-and-runner-operations/signature-cache-and-concurrent-stages:
-  en: 24032af67e83a003
-  zh: 76894f57a9dfed52
+  en: 6e8208d19ad510e5
+  zh: eee42e8938c0f603
 /windows-signing-and-runner-operations/verification-limits:
-  en: 94a471410c84a1c7
-  zh: 115228e4ca36581d
+  en: 53f1fe23f54af84e
+  zh: d219606367ff2d72
 /windows-signing-and-runner-operations/dev-note:
   en: b75c8458928b72b9
   zh: 003ba4e17b4b5269

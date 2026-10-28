@@ -3,14 +3,20 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/session-projection.md
 /session-projections:
-  en: a6ab5134ca1771fd
-  zh: 523039a9d84e3f97
+  en: b2789f5257a935c5
+  zh: 12d430a9cd454592
 /session-projections/the-unit:
-  en: fad897af8b8839ff
-  zh: 3c68c5256973bc39
+  en: d48814d3ab0e997f
+  zh: d0337d8eba097a63
 /session-projections/the-snapshot-and-the-change-feed:
-  en: a49a57c600c3cbd0
-  zh: c92f00b8a9d71bad
+  en: 630c1041f41f89bf
+  zh: a3361bdead116cd7
+/session-projections/summary-reads:
+  en: d2bc9bcc775acfb7
+  zh: b1d2ba74496305b8
+/session-projections/summary-reads/summary-vocabulary:
+  en: 6a93a4e1682fd6e6
+  zh: 28729129c3d8a3b1
 /session-projections/the-registry-ctx-sessionprojections:
-  en: 50e79c1bc16abb63
-  zh: 200ecbf0e4ab19d2
+  en: 67fe0f49dee90e25
+  zh: c23de3a2803040f0

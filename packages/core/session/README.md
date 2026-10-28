@@ -29,7 +29,9 @@ Mount `dsh-session` wherever a session must exist. It creates and holds event-so
 
 ### Create and inspect sessions
 
-`ctx.sessions.create()` builds a live session bound to the calling fiber; `get(id)` and `list()` find sessions, and `fork()` creates a child session from a stable prefix of a live one.
+`ctx.sessions.create()` builds a live session bound to the calling fiber; `get(id)` and `list()` find sessions, and `fork()` creates an independent session from a stable prefix of a live one. It copies history, `cwd`, `isSeeded`, and the inherited event count without recording a source relationship. `parentSession` records a subagent’s direct creator; historical ordinary forks may retain their source there, so classification uses `origin`.
+
+Independent `Session.create()` and `Session.fromRestore()` instances accept events and plugin records without sending `session/event`. A `SessionStore` takes ownership through `prepare()` or `enter()`; writes then require store membership and a completed synchronous `session/created` announcement. Creation listeners are read-only and see all existing history; entering an independent instance does not replay that history as `session/event`. Failed announcement or removal leaves writes disabled. Removal emits `session/disposed` only if `session/created` began, including a failed announcement; an entered but never announced instance emits neither notification.
 
 ```text
 const session = ctx.sessions.create(sessionId, { meta: { cwd: '/workspace' } })
@@ -39,7 +41,7 @@ ctx.sessions.list()              // every live session, in creation order
 
 ### Append and derive
 
-`session.append(type, data, opts?)` commits one typed event — it snapshots and freezes the payload, validates it as lossless JSON, and notifies observers. `session.deriveMessages()` projects the log into the `Message[]` the model sees, incrementally and cached:
+`session.append(type, data, opts?)` commits one typed event. It rejects read-only instances before reading payload fields, snapshots and freezes valid JSON, then rechecks write permission before committing and notifying observers. `session.deriveMessages()` projects the log into the `Message[]` the model sees, incrementally and cached:
 
 ```text
 session.append('user/message', { role: 'user', content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } },

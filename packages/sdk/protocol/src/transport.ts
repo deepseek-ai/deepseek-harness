@@ -36,10 +36,11 @@ export interface JsonRpcTransportPeer {
    * Send a request and await its response.
    * @param method - the JSON-RPC method name.
    * @param params - the request parameters object.
+   * @param signal - optional cancellation; removes the pending waiter, rejects on abort, and ignores late responses.
    * @returns the result; rejects with {@link JsonRpcResponseError} on an error
    * response, and with a plain `Error` on a write failure or closure.
    */
-  request(method: string, params: object): Promise<unknown>
+  request(method: string, params: object, signal?: AbortSignal): Promise<unknown>
   /**
    * Send a notification; omitted params produce no `params` member.
    * @param method - the JSON-RPC method name.
@@ -56,11 +57,14 @@ interface PendingRequest {
 /**
  * Line-delimited endpoint over caller-owned streams. {@link start} attaches
  * listeners; {@link close} detaches them and rejects pending requests without
- * destroying the streams. Missing request handlers return `-32601`; handler
+ * destroying the streams. Closure, input end, and input errors permanently reject
+ * later outbound requests with the first failure; start does not reset that failure.
+ * Missing request handlers return `-32601`; handler
  * failures return `-32603`. Notifications without a handler are dropped.
  */
 export class JsonRpcLineTransport implements JsonRpcTransportPeer {
   private buffer = ''
+  private failure: Error | undefined
   private readonly decoder = new StringDecoder('utf8')
   private started = false
   private requestHandler: RequestHandler | undefined
@@ -82,7 +86,8 @@ export class JsonRpcLineTransport implements JsonRpcTransportPeer {
   }
 
   /**
-   * Detach listeners and reject pending requests. Safe before {@link start}.
+   * Detach listeners and reject pending and future outbound requests. Safe before
+   * {@link start}; starting again does not reset the request failure.
    */
   close(): void {
     this.input.off('data', this.onData)
@@ -119,6 +124,7 @@ export class JsonRpcLineTransport implements JsonRpcTransportPeer {
    * @returns the result; rejects per {@link JsonRpcTransportPeer.request}.
    */
   request(method: string, params: object, signal?: AbortSignal): Promise<unknown> {
+    if (this.failure !== undefined) return Promise.reject(this.failure)
     const id = `req_${randomUUID().replaceAll('-', '')}`
     const message = { jsonrpc: '2.0', id, method, params }
     return new Promise((resolve, reject) => {
@@ -262,6 +268,7 @@ export class JsonRpcLineTransport implements JsonRpcTransportPeer {
   }
 
   private failPending(error: Error): void {
+    this.failure ??= error
     const pending = [...this.pending.values()]
     this.pending.clear()
     for (const waiter of pending) waiter.reject(error)

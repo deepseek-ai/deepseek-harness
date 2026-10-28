@@ -10,12 +10,19 @@
   -webkit-box-decoration-break: clone;
 }
 
-.reference:hover {
-  background: var(--dsw-alias-state-business-tertiary);
+@media (hover: hover) {
+  .reference:hover {
+    background: var(--dsw-alias-state-business-tertiary);
+  }
 }
 
 .openable {
   cursor: pointer;
+}
+
+/* A command chip selected by its first deletion keystroke keeps the hover tint until the next deletion removes it. */
+[data-composer-command][data-selected] > .reference {
+  background: var(--dsw-alias-state-business-tertiary);
 }
 
 .textRef {

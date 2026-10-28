@@ -6,6 +6,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - navigation "Turn navigation":
   - button "Jump to turn 1"
   - button "Jump to turn 2"
@@ -23,7 +24,7 @@
 - 'button "Think There''s a `packages` directory. Let me look inside to see what packages are available."'
 - button "Bash List packages directory contents"
 - button "Think There are 4 packages:"
-- button "Failed Bash Randomly pick one package directory"
+- button "Failed Bash Randomly pick one package directory exit code 127"
 - 'button "Think shuf is not available on macOS. I''ll use a different approach for random selection. Let me use $RANDOM in bash or use `sort -R` or Python."'
 - button "Bash Randomly select one package with Python"
 - 'button "Think The random pick for turn 1 is `packages/context/session-reference`. Now I''ll output its file structure. Let me get the file tree."'

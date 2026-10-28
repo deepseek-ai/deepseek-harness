@@ -184,9 +184,11 @@
   color: var(--dsw-alias-menu-icon);
 }
 
-.drill:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .drill:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 /* Heading row above a source group: non-interactive small grey text,
@@ -256,16 +258,25 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.crumb:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .crumb:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 /* The step the list is already showing reads as a label, not an action. */
-.crumbCurrent,
-.crumbCurrent:hover {
+.crumbCurrent {
   background: transparent;
   color: var(--dsw-alias-label-primary);
   cursor: default;
+}
+
+@media (hover: hover) {
+  .crumbCurrent:hover {
+    background: transparent;
+    color: var(--dsw-alias-label-primary);
+    cursor: default;
+  }
 }
 .crumbSeparator {
   flex: none;

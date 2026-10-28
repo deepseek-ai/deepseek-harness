@@ -46,6 +46,30 @@ describe('TranscriptViewPolicy', () => {
     }
   })
 
+  it('keeps every reply by default, persists an explicit folded-reply choice, and adopts saved values', () => {
+    const host = stubConfigForm<ChatSettings>()
+    const policy = new TranscriptViewPolicy(host.scope)
+    const changed = vi.fn()
+    const unsubscribe = policy.foldedReplies.subscribe(changed)
+    try {
+      expect(policy.foldedReplies.getSnapshot()).toBe('all')
+      policy.setFoldedReplies('all')
+      expect(changed).not.toHaveBeenCalled()
+      policy.setFoldedReplies('final')
+      expect(policy.foldedReplies.getSnapshot()).toBe('final')
+      expect(host.set).toHaveBeenCalledExactlyOnceWith('foldedReplies', 'final')
+      host.publish({ value: { linkOpening: 'sidebar', performanceUsage: 'detailed', foldedReplies: 'all' }, revision: 2 })
+      expect(policy.foldedReplies.getSnapshot()).toBe('all')
+      host.publish({ value: { linkOpening: 'sidebar', performanceUsage: 'detailed' }, revision: 3 })
+      expect(policy.foldedReplies.getSnapshot()).toBe('all')
+      expect(changed).toHaveBeenCalledTimes(2)
+      expect(host.set).toHaveBeenCalledTimes(1)
+    } finally {
+      unsubscribe()
+      policy.dispose()
+    }
+  })
+
   it('restores both saved preferences in each new instance', () => {
     const host = stubConfigForm<ChatSettings>()
     host.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed' }, revision: 1, writable: true })

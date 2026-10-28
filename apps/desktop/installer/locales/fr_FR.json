@@ -1,0 +1,40 @@
+{
+  "nsisLanguage": "FRENCH",
+  "strings": {
+    "INSTALLER_INSTALL": "Installer maintenant",
+    "INSTALLER_FINISH": "Terminer",
+    "INSTALLER_NATIVE_PROGRESS": "Préparation de l'installation… %d%%",
+    "INSTALLER_PROGRESS_EXTRACT": "Extraction de fichiers… %d%%",
+    "INSTALLER_PROGRESS_COPY": "Installation des fichiers… %d%%",
+    "INSTALLER_PROGRESS_REGISTER": "Finition de l'installation… %d%%",
+    "INSTALLER_PROGRESS_CLEAN": "Nettoyage des fichiers temporaires… %d%%",
+    "INSTALLER_CHOOSE_PATH": "Choisissez un emplacement",
+    "INSTALLER_BROWSE": "Parcourir",
+    "INSTALLER_LAUNCH": "Lancez-vous maintenant",
+    "INSTALLER_LAUNCH_FAILED": "DeepSeek Harness n'a pas pu être lancé. Réessayez ou désactivez Lancer maintenant et fermez le programme d'installation.",
+    "INSTALLER_UI_ERROR": "Le programme d'installation n'a pas pu initialiser sa fenêtre. Fermez-le et réessayez.",
+    "INSTALLER_THEME_ERROR": "Utilisez /THEME=auto, /THEME=light ou /THEME=dark.",
+    "INSTALLER_FAILED": "L'installation n'est pas terminée. Fermez ce programme d'installation et réessayez. Si le problème persiste, téléchargez à nouveau le programme d'installation.",
+    "INSTALLER_RUNNING": "DeepSeek Harness est en cours d'exécution. Quittez-le de la barre d'état système et réessayez.",
+    "INSTALLER_DIRECTORY_FAILED": "Le répertoire d'installation n'a pas pu être remplacé.",
+    "INSTALLER_DIRECTORY_HINT": "Vérifiez l'accès au répertoire d'installation et fermez les programmes à l'aide de ses fichiers, puis réexécutez le programme d'installation. Copiez les détails de l'erreur si le problème persiste.",
+    "INSTALLER_DIRECTORY_RESTORE_HINT": "L'installation précédente n'a pas pu être restaurée. Conservez le répertoire de sauvegarde indiqué dans les détails de l'erreur et contactez l'assistance avant de procéder à une nouvelle installation.",
+    "INSTALLER_PATH_INVALID": "Choisissez un chemin de dossier local complet. Les racines du lecteur, les dossiers système, les liens et les caractères spéciaux ne sont pas pris en charge.",
+    "INSTALLER_PATH_OWNERSHIP": "Choisissez un dossier vide ou le dossier d'installation DeepSeek Harness enregistré.",
+    "INSTALLER_PATH_WRITABLE": "Cet emplacement n'est pas accessible en écriture. Choisissez un dossier disponible pour l'utilisateur actuel.",
+    "INSTALLER_DISK_SPACE": "Il n'y a pas assez d'espace disque libre. Choisissez un autre emplacement.",
+    "INSTALLER_PER_USER": "Ce programme d'installation prend en charge uniquement l'utilisateur actuel. Désinstallez d’abord l’installation existante pour tous les utilisateurs.",
+    "INSTALLER_EXTRACT_FAILED": "Les fichiers de l'application n'ont pas pu être extraits.",
+    "INSTALLER_EXTRACT_HINT": "Un logiciel de sécurité a peut-être bloqué un fichier ou le disque est peut-être plein. Fermez ce programme d'installation et réessayez. Si l'échec persiste, envoyez-nous les détails de l'erreur ci-dessous.",
+    "INSTALLER_EXTRACT_COPY": "Copier les détails de l'erreur",
+    "INSTALLER_EXTRACT_EXPAND": "Afficher les détails",
+    "INSTALLER_EXTRACT_COLLAPSE": "Masquer les détails",
+    "INSTALLER_EXTRACT_SAVED": "Le rapport complet a été enregistré dans %s",
+    "INSTALLER_EXTRACT_UNSAVED": "Le rapport complet n'a pas pu être enregistré. Utilisez Copier les détails de l'erreur pour le conserver.",
+    "INSTALLER_EXTRACT_COPIED": "Les détails de l'erreur ont été copiés dans le presse-papiers."
+  },
+  "uninstaller": {
+    "welcome": "Bienvenue",
+    "finished": "a été supprimé"
+  }
+}

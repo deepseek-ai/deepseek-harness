@@ -8,22 +8,29 @@
  * entry of its own, so there is always exactly one body and the shipped one
  * cannot be outvoted by accident.
  *
- * The shipped guide is a muted compass over the entry capsules every
- * registered type contributed, centred in the body, and nothing else — no
- * heading, as a browser start page shows its doors without a caption. While
- * at most four entries are listed, a capsule with a description shows it
- * under the title; a longer list drops every description to stay light.
+ * The shipped guide is a muted compass over the pinned entry capsules every
+ * registered type contributed, centred in the body, with no heading, as a
+ * browser start page shows its doors without a caption. While at most four
+ * capsules are visible, a capsule with a description shows it under the title;
+ * a longer list drops every description to stay light. A More card follows
+ * while `sidebar.right.tab.guide.actions` has registrations.
  * Picking one opens that type as a page
  * in this tab's place, so the guide is a doorway rather than a page that stays
  * open.
  */
-import { ShortcutKeys } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useState } from 'react'
+import { Menu, ShortcutKeys } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { ReactNode } from 'react'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { ChainRenderOpts, HookContextOf, InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  ChainRenderOpts, HookContextOf, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
+} from '@deepseek-ai/dsh-client-ui-slots'
+import type { SidebarRightGuideActionsOwnerProps } from '../../contract/slots.ts'
 import type { SidebarRightGuideBox } from '../../tab-registry.ts'
 import { CompassGlyph, CubeGlyph } from './GuideTitle.tsx'
+import { GuideMoreIcon } from './GuideMoreIcon.tsx'
+import { FIXED_GUIDE_KIND, guideEntryId } from './guide-pins.ts'
 import css from './GuideBody.module.css'
 
 /** What the guide body needs from its host beyond the framework shares. */
@@ -32,14 +39,24 @@ export interface GuideInjected {
   readonly hooks: {
     readonly shortcuts: ObservableSnapshot<readonly ShortcutCatalogEntry[]>
     readonly guideEntries: ObservableSnapshot<readonly SidebarRightGuideBox[]>
+    /** Unpinned `kind:id` card ids held in memory until plugin reload. */
+    readonly entryPins: ObservableSnapshot<readonly string[]>
+    /** Whether `sidebar.right.tab.guide.actions` has registrations. */
+    readonly entryActions: ObservableSnapshot<boolean>
   }
+  /**
+   * Show or unpin one guide card; cards of kind `files` are ignored.
+   * @param id - `kind:id` card id.
+   * @param pinned - Whether the card shows on the guide.
+   */
+  readonly setPinned: (id: string, pinned: boolean) => void
 }
 
 /** The guide body's composed props: the tab it draws, its chain child, and the entries. */
 export type GuideBodyProps =
   & PropsRuntime<'sidebar.right.pane.tab'>
-  & PropsRenderSlots<'sidebar.right.tab.guide' | 'sidebar.right.tab.guide.entry'>
-  & InjectFace<GuideInjected>
+  & PropsRenderSlots<'sidebar.right.tab.guide' | 'sidebar.right.tab.guide.entry' | 'sidebar.right.tab.guide.actions'>
+  & InjectFace<GuideInjected> & PropsLocale<'sidebarRight'>
 
 /** Entry count past which the guide drops the capsules' descriptions to stay light. */
 const MAX_DESCRIBED_ENTRIES = 4
@@ -74,6 +91,30 @@ function EntryBox({ entry, described, onPick, shortcut }: {
   )
 }
 
+type GuideMoreMenuProps =
+  Omit<SidebarRightGuideActionsOwnerProps, 'onDismiss'>
+  & Pick<GuideBodyProps, 'renderSlot'>
+  & { readonly label: string }
+
+/** The guide's More card; its menu rows come from `sidebar.right.tab.guide.actions` and span at least the card width. */
+function GuideMoreMenu({ label, entries, onOpen, onPinnedChange, renderSlot }: GuideMoreMenuProps): ReactNode {
+  const [open, setOpen] = useState(false)
+  const onDismiss = (): void => { setOpen(false) }
+  return (
+    <Menu open={open} onClose={onDismiss} portal autoFocus minWidthFromAnchor align="end"
+      className={css.moreAnchor} listClassName={css.moreMenu}
+      anchor={(
+        <button type="button" className={css.entry} aria-label={label} aria-haspopup="menu" aria-expanded={open}
+          onClick={() => { setOpen(value => !value) }}>
+          <span className={css.entryIcon}><GuideMoreIcon /></span>
+          <span className={css.entryText}><span className={css.entryTitle}>{label}</span></span>
+        </button>
+      )}>
+      {renderSlot('sidebar.right.tab.guide.actions', { entries, onOpen, onPinnedChange, onDismiss })}
+    </Menu>
+  )
+}
+
 /** The shipped guide: the tab's own compass over the doors out of the column. */
 function ShippedGuide({ children }: { children: ReactNode }): ReactNode {
   return (
@@ -85,15 +126,20 @@ function ShippedGuide({ children }: { children: ReactNode }): ReactNode {
 }
 
 /** The guide tab's body, replaceable through its chain child. */
-export function GuideBody({ useTabInfo, useGuideEntries, renderSlot, renderSlotChain, useShortcuts }: GuideBodyProps): ReactNode {
+export function GuideBody({
+  useTabInfo, useGuideEntries, renderSlot, renderSlotChain, useShortcuts, useEntryPins, useEntryActions, setPinned, t,
+}: GuideBodyProps): ReactNode {
   const shortcuts = useShortcuts(entries => entries)
   const { tab } = useTabInfo()
   const entries = useGuideEntries(entries => entries)
+  const unpinned = useEntryPins(ids => ids)
+  const hasEntryActions = useEntryActions(registered => registered)
+  const visibleEntries = entries.filter(entry => entry.kind === FIXED_GUIDE_KIND || !unpinned.includes(guideEntryId(entry)))
   const options = {
     hookContext: useTabInfo,
     fallback: (
-      <ShippedGuide>{entries.map((entry) => {
-        const described = entries.length <= MAX_DESCRIBED_ENTRIES
+      <ShippedGuide>{visibleEntries.map((entry) => {
+        const described = visibleEntries.length <= MAX_DESCRIBED_ENTRIES
         const description = described ? entry.description?.() : undefined
         return <div key={JSON.stringify([entry.providerId, entry.id])} className={css.entryCell}>
           {renderSlot('sidebar.right.tab.guide.entry', {
@@ -105,7 +151,21 @@ export function GuideBody({ useTabInfo, useGuideEntries, renderSlot, renderSlotC
               onPick={(selected) => { tab.actions.openTab(selected.kind, { replaceTab: true }) }} />,
           })}
         </div>
-      })}</ShippedGuide>
+      })}
+      {hasEntryActions && (
+        <GuideMoreMenu
+          label={t('tab.guide.more')}
+          entries={entries.filter(entry => entry.kind !== FIXED_GUIDE_KIND)
+            .map(entry => ({ id: guideEntryId(entry), label: entry.title(), pinned: !unpinned.includes(guideEntryId(entry)) }))}
+          onOpen={(id) => {
+            const entry = entries.find(candidate => guideEntryId(candidate) === id)
+            if (entry !== undefined) tab.actions.openTab(entry.kind, { replaceTab: true })
+          }}
+          onPinnedChange={setPinned}
+          renderSlot={renderSlot}
+        />
+      )}
+      </ShippedGuide>
     ),
   } satisfies ChainRenderOpts & { hookContext: HookContextOf<'sidebar.right.tab.guide'> }
   return renderSlotChain('sidebar.right.tab.guide', {}, options)

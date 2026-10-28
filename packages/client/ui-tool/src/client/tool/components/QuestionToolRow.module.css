@@ -24,6 +24,8 @@
   height: 13px;
 }
 
-.panelButton:hover {
-  background: var(--dsw-alias-button-floating-hover);
+@media (hover: hover) {
+  .panelButton:hover {
+    background: var(--dsw-alias-button-floating-hover);
+  }
 }

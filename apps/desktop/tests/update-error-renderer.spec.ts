@@ -243,3 +243,19 @@ it.each(['en', 'zh-CN'])('records mandatory update guidance and actions across i
   })
   await expect(JSON.stringify(snapshots, null, 2) + '\n').toMatchFileSnapshot(`./expected/update-guidance-${language}.json`)
 })
+
+it.each(['en', 'zh-CN'])('shows fullscreen recovery guidance directly in the mandatory update page: %s', async (language) => {
+  const p = page('mandatory-update')
+  const locale = resolveDesktopLocale(language)
+  const state: MandatoryUpdateView = { locale, deferred: false, policy: { blocking: true, checking: false },
+    update: { phase: 'error', failedOperation: 'install', preparationFailure: 'fullscreen-timeout',
+      version: '0.1.6-nightly.1', message: 'different shell locale' } }
+  const action = vi.fn(async () => {})
+  Object.defineProperty(p.dom.window, 'dshMandatoryUpdate', { value: {
+    status: async () => state, action, subscribe: () => () => {},
+  } satisfies MandatoryUpdateApi })
+  p.run()
+  await expect.poll(() => p.element('error').textContent).toBe(locale.messages.updateFullscreenTimeout)
+  expect((p.element('technical-details') as HTMLDetailsElement).open).toBe(false)
+  expect(action).not.toHaveBeenCalled()
+})

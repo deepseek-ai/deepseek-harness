@@ -11,6 +11,7 @@
     "src/browser-auth.ts",
     "src/client/random-uuid.ts",
     "src/client/rpc.ts",
+    "src/connect-protocol.ts",
     "src/http-bridge.ts",
     "src/index.ts",
     "src/loopback-hostname.ts",

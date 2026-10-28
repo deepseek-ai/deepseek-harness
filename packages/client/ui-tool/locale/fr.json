@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Affichage des appels d'outils",
+    "description": "Affiche le processus d'appel de l'outil, les relations imbriquées et l'interface de résultat de chaque outil."
+  }
+}

@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
+import type { IndexInjection, WebServer } from '@deepseek-ai/dsh-host-webserver'
 import * as HostPlugin from '../src/index.ts'
 import { liveConfig, omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
 import { plainConfig } from '../../../settings/settings/src/schema.ts'
@@ -8,11 +8,14 @@ import {
   DEFAULT_PREFERENCE, Config, apply,
 } from '@deepseek-ai/dsh-client-ui-theme'
 
+/** The Peer an index render speaks for; this listener reads no field of it. */
+const PAGE_PEER = { principal: { kind: 'owner' } } as Parameters<WebServer['renderIndex']>[1]
+
 
 /** Collect the injection table the way an index render or boot payload does. */
 function collect(ctx: Context): IndexInjection[] {
   const table: IndexInjection[] = []
-  ctx.emit('webserver/index-inject', table)
+  ctx.emit('webserver/index-inject', table, PAGE_PEER)
   return table
 }
 

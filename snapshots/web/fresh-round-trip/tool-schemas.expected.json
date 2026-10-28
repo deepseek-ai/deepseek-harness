@@ -2,7 +2,7 @@
   "initial": [
     {
       "name": "ask_user_question",
-      "description": "Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding.",
+      "description": "Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding. An answer item with empty selected and no custom means the user skipped that question: continue without it, do not ask it again, and do not treat the skip as permission.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -171,22 +171,6 @@
       }
     },
     {
-      "name": "exit_plan_mode",
-      "description": "Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. The user may approve (carry out the plan from your next step) or keep planning — their feedback comes back in the tool result; revise and present again.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "plan": {
-            "type": "string",
-            "description": "The complete plan, as markdown, starting with a # heading that names it."
-          }
-        },
-        "required": [
-          "plan"
-        ]
-      }
-    },
-    {
       "name": "get_goal",
       "description": "Read the current session goal, including the id and revision that update_goal requires.",
       "parameters": {
@@ -324,8 +308,86 @@
       }
     },
     {
+      "name": "list_subagent_models",
+      "description": "Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "Registered LLM provider id."
+          },
+          "model": {
+            "type": "string",
+            "description": "Exact model id; requires provider."
+          }
+        }
+      }
+    },
+    {
+      "name": "plugin_manager",
+      "description": "List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. Live profiles apply changes immediately, including upgrades of installed packages; a change result that is not applied carries nextStep, which says what to do or tell the user. Unmet DSH version requirements (engines.dsh, else DSH peer dependencies) block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Management operation.",
+            "enum": [
+              "list_plugins",
+              "list_bundles",
+              "set_plugin",
+              "set_bundle",
+              "install_bundle",
+              "remove_bundle",
+              "list_version_exemptions",
+              "set_version_exemption"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "description": "Plugin entry id, bundle package name, or installation spec, according to action. For an Official catalog entry, pass list_bundles installTarget.spec to install_bundle."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Required for set operations; defaults to true for installation. For set_version_exemption, true grants and false revokes."
+          },
+          "runtimeVersion": {
+            "type": "string",
+            "description": "For set_version_exemption: exact DSH version from list_version_exemptions. Target must be the manifest package-name@version, not an alias or version range."
+          },
+          "acceptRisk": {
+            "type": "boolean",
+            "description": "For granting an exemption: true only after warning the user about possible crashes and data loss and receiving explicit permission for this exact plugin/runtime pair. General installation permission is not enough."
+          },
+          "approvedBuilds": {
+            "type": "array",
+            "description": "For install_bundle: pass names from pendingBuilds only after the user explicitly approves running their install scripts in the conversation. This grants persistent permission for this profile.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "registry": {
+            "type": "string",
+            "description": "For install_bundle: the npm registry URL asked first, when the user names one; otherwise the configured registry is asked, and its configured fallbacks while a registry is unreachable."
+          },
+          "offset": {
+            "type": "number",
+            "description": "Zero-based list offset; defaults to 0."
+          },
+          "limit": {
+            "type": "number",
+            "description": "List page size, from 1 to 100; defaults to 25."
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
+    },
+    {
       "name": "present",
-      "description": "Declare existing files as final deliverables for the user. Use it when the user needs a separate file, especially Office documents, spreadsheets, and slide decks; prefer your final response when that suffices. The user opens the current files; their contents are not copied.",
+      "description": "Declare existing files as final deliverables for the user. Hosts may show presented files only after your turn ends, so call it once the files are final. If the user needs to review files earlier, such as before a tool call that waits for their answer, link them in your message instead. Use it when the user needs a separate file, especially Office documents, spreadsheets, and slide decks; prefer your final response when that suffices. The user opens the current files; their contents are not copied.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -702,7 +764,7 @@
     },
     {
       "name": "subagent",
-      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes. Supply `provider` and `model` together. Omitted values use child defaults, falling back to compatible parent values. When the effective route changes, an omitted `reasoning_effort` uses the model's default.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -717,6 +779,18 @@
           "prompt": {
             "type": "string",
             "description": "The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Child LLM provider id."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model id within that provider."
+          },
+          "reasoning_effort": {
+            "type": "string",
+            "description": "Model-specific reasoning effort id."
           }
         },
         "required": [

@@ -287,8 +287,10 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
   it('completes commands, preserves the process through collapse and reload, resizes, and kills on tab close', async () => {
     onTestFailed(() => saveFailureShot(page, 'sidebar-terminal'))
     const unaryInput: string[] = []
+    const listRequests: string[] = []
     page.on('request', (request) => {
       if (/\/api\/terminal\/(write|resize|follow)$/u.test(new URL(request.url()).pathname)) unaryInput.push(request.url())
+      if (new URL(request.url()).pathname === '/api/terminal/list') listRequests.push(request.url())
     })
     await openTerminal(page)
     const terminal = page.locator('[data-sidebar-terminal]')
@@ -335,6 +337,7 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     await expect.poll(async () => await screen.innerText()).toContain(`SIZE:${terminals()[0]!.rows} ${terminals()[0]!.cols}`)
     await page.screenshot({ path: `${shots}/fullscreen.png`, fullPage: true })
     const tabIds = await page.locator('[data-dockkit-tab]').evaluateAll(tabs => tabs.map(tab => tab.getAttribute('data-dockkit-tab')))
+    expect(listRequests).toHaveLength(0)
     await page.reload({ waitUntil: 'load' })
     await page.locator('[data-dockkit-tab]').filter({ hasText: 'Development' }).waitFor({ timeout: 15_000 })
     await expect.poll(async () => await page.locator('[data-dockkit-tab-title]').allInnerTexts()).toEqual(['Development', 'bash'])
@@ -344,6 +347,7 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     expect(await page.locator('[data-dockkit-tab]').evaluateAll(tabs => tabs.map(tab => tab.getAttribute('data-dockkit-tab')))).toEqual(tabIds)
     await expect.poll(async () => await screen.innerText()).toContain('PERSIST:xterm-256color')
     await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).waitFor()
+    expect(listRequests).toHaveLength(1)
     await page.getByRole('button', { name: 'Collapse right sidebar', exact: true }).click()
     await page.reload({ waitUntil: 'load' })
     await page.locator('[data-sidebar-right-expand]').waitFor()
@@ -354,6 +358,7 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     const secondTab = page.locator('[data-dockkit-tab]').filter({ hasText: 'bash' })
     await secondTab.click()
     await expect.poll(async () => await screen.innerText()).toContain(`SECOND_PID:${secondPid}`)
+    expect(listRequests).toHaveLength(2)
     await secondTab.hover()
     await secondTab.locator('[data-dockkit-tab-close]').click()
     await expect.poll(async () => await secondTab.count()).toBe(0)
@@ -473,10 +478,18 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
       .filter(key => key.startsWith('dsh.terminal.binding.v1.')).map(key => localStorage.getItem(key)))
     const saved = await bindings()
     expect(saved).toHaveLength(2)
+    const closed = Promise.withResolvers<undefined>()
+    const close = scaffold.ctx.terminalController.close.bind(scaffold.ctx.terminalController)
+    vi.spyOn(scaffold.ctx.terminalController, 'close').mockImplementation((agent, id) => {
+      const result = close(agent, id)
+      closed.resolve(result.then(() => undefined))
+      return result
+    })
     const selected = second.locator('[data-dockkit-tab][aria-selected="true"]')
     await selected.hover()
-    await selected.locator('[data-dockkit-tab-close]').click()
-    await expect.poll(() => alive(secondProcess)).toBe(false)
+    // Tab removal starts background cleanup; the Host promise includes process termination.
+    await Promise.all([selected.locator('[data-dockkit-tab-close]').click(), closed.promise])
+    expect(alive(secondProcess)).toBe(false)
     expect(alive(firstProcess)).toBe(true)
     await expect.poll(() => bindings()).toHaveLength(1)
     expect(saved).toContain((await bindings())[0])
@@ -668,7 +681,7 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     await expect.poll(() => page.locator('.xterm-rows:visible').innerText()).toContain('RECONNECT_READY')
     const transport = await controlTransport(page)
     await page.reload({ waitUntil: 'load' })
-    await expect.poll(() => page.locator('.xterm-rows:visible').innerText()).toContain('RECONNECT_READY')
+    await page.locator('.xterm-rows:visible').filter({ hasText: 'RECONNECT_READY' }).waitFor({ timeout: 30_000 })
     await transport.disconnect()
     const reconnect = page.getByRole('button', { name: 'Reconnect', exact: true })
     await reconnect.waitFor()

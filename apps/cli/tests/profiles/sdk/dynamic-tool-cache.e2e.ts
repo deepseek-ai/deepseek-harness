@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { TokenUsage } from '@deepseek-ai/dsh-llm'
+import { lastAssistantStreamChunk, type RetryPolicyConfig, type TokenUsage } from '@deepseek-ai/dsh-llm'
 import { DeepSeekHarness } from '@deepseek-ai/dsh-sdk-client'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { describe, expect, it, onTestFinished } from 'vitest'
@@ -22,6 +22,8 @@ interface ObservedRequest {
   step: number
   body: {
     system?: string
+    max_tokens: number
+    thinking: { type: string }
     messages: { role: string; content: { type: string; text?: string; tool?: { name: string } }[] }[]
     tools?: { name: string; defer_loading?: true }[]
   }
@@ -70,7 +72,7 @@ function registryChanges(previous: ObservedRequest, request: ObservedRequest): {
 }
 
 describe.skipIf(!process.env.DEEPSEEK_API_KEY)('SDK native tool updates with real DeepSeek', () => {
-  it.each([false, true])('keeps the preceding conversation cached after a tool addition (prompt update: %s)', { retry: 0 }, async (updatePrompt) => {
+  it.each([false, true])('keeps the preceding conversation cached after a tool addition (prompt update: %s)', async (updatePrompt) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-sdk-tool-cache-'))
     onTestFinished(async () => { await rm(root, { recursive: true, force: true }) })
     const sampleLabel = `CACHE_SAMPLE_${randomUUID()}`
@@ -80,10 +82,9 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('SDK native tool updates with rea
     await writeFile(patch, JSON.stringify([
       { id: 'llm-deepseek', config: {
         apiKeyEnv: 'DEEPSEEK_API_KEY', thinking: 'disabled', maxTokens: 1024,
-        retryPolicy: { maxRetries: 0 },
+        retryPolicy: { mode: 'normal', maxRetries: 0 } satisfies RetryPolicyConfig,
         models: [{ id: 'deepseek-flash', systemPromptUpdate: 'in-history', toolUpdate: 'addition-only' }],
       } },
-      { id: 'tools', config: { mode: 'native' } },
       { id: 'session-log-deepseek', disabled: true },
       { id: 'plugin-package-inventory-deepseek', disabled: true },
       { insert: [{ id: 'sdk-dynamic-tool-cache-fixture', name: fixturePath, config: { evidencePath, callsPath, sampleLabel, updatePrompt } }] },
@@ -101,13 +102,19 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('SDK native tool updates with rea
     const run = async (prompt: string) => {
       const result = await session.run(prompt)
       events.push(...result.events)
+      const failures = result.events.filter(event => event.type === 'assistant/attempt').map(event => ({
+        turn: event.data.turn,
+        step: event.data.step,
+        reason: lastAssistantStreamChunk(event.data.stream, 'finish')?.reason,
+      }))
+      expect(failures, `Provider request failures: ${JSON.stringify(failures)}`).toEqual([])
       return result.finalResponse
     }
-    await run('Do not call tools. Reply READY.')
+    expect(await run('Do not call tools. Reply READY.')).toContain('READY')
     // Unique user history makes hits on shared profile instructions insufficient.
     const records = Array.from({ length: 96 }, (_, index) => `record-${index}: ${randomUUID()}`).join('\n')
-    await run(`Keep these reference records. Do not call tools. Reply READY.\n${records}`)
-    await run('Keep the reference records. Do not call tools. Reply READY.')
+    expect(await run(`Keep these reference records. Do not call tools. Reply READY.\n${records}`)).toContain('READY')
+    expect(await run('Keep the reference records. Do not call tools. Reply READY.')).toContain('READY')
     expect(await run(`Use cache_tool_control with action add. After it returns, call ${sampleTool} exactly once and report the generated sample label. This is synthetic example data for this run. Call these separately in order.`)).toContain(sampleLabel)
     expectCalledBefore(await recordedCalls(callsPath), 'add', 'sample')
     expect(await run('Use cache_tool_control with action remove. Whether it removes the sample tool or reports that it is not registered, reply REMOVED and do not call the sample tool.')).toContain('REMOVED')
@@ -115,7 +122,6 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('SDK native tool updates with rea
     expectCalledBefore(calls, 'sample', 'remove')
 
     const requests = (await readFile(evidencePath, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as ObservedRequest)
-    expect(events.filter(event => event.type === 'assistant/attempt')).toHaveLength(0)
     expect(requests).toHaveLength(events.filter(event => event.type === 'assistant/message').length)
     const [initial, history, warm] = requests
     const addedIndex = requests.findIndex(request => request.stage === 'added')
@@ -123,6 +129,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('SDK native tool updates with rea
     const added = requests[addedIndex]
     const removed = requests.find(request => request.stage === 'removed')
     if (!initial || !history || !warm || !before || !added || !removed) throw new Error('Missing cache transition requests')
+    expect(initial.body).toMatchObject({ max_tokens: 1024, thinking: { type: 'disabled' } })
     const historyInput = totalInput(usageFor(history, events))
     const precedingInput = totalInput(usageFor(before, events))
     const cached = usageFor(added, events).cacheReadTokens ?? 0

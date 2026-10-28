@@ -7,7 +7,9 @@
   },
   "files": [
     "src/index.ts",
-    "src/events.ts"
+    "src/events.ts",
+    "src/environment.ts",
+    "src/environment-query.ts"
   ],
   "references": [
     {

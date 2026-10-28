@@ -58,6 +58,27 @@ with DeepSeekHarness(dsh_home="/absolute/path/to/saved-home") as harness:
     result = session.run("Continue the task.")
 ```
 
+<a id="client-approvals"></a>
+## Client approvals
+
+This low-level example receives one approval and rejects it. Use a dedicated request-handling thread or loop for a full run: `next_request()` blocks, and the request handler must run concurrently with `session/wait` or a high-level `run()`. Set `approval_requests=True` on `HarnessClient.initialize()` or `DeepSeekHarnessConfig` only when that handler is ready. Omission preserves the runtime's answerer chain. Decisions are one-shot; invalid responses and lost connections fail closed, and cancellation discards late replies. `ApprovalRequestResult` validates response values when constructing decisions.
+
+```py
+from deepseek_harness import ApprovalRequestParams, HarnessClient, HarnessConfig
+
+with HarnessClient(HarnessConfig(dsh_home="/absolute/path/to/dsh-home")) as client:
+    client.initialize(cwd="/absolute/path/to/workspace", provider="deepseek-official",
+                      model="deepseek-v4-flash", approval_requests=True)
+    client.session_prompt("main", [{"type": "text", "text": "Run the operation requiring approval."}])
+    request = client.next_request()
+    if request.method == "approval/request":
+        question = ApprovalRequestParams.model_validate(request.payload)
+        print(question.toolName, question.reason)
+        client.respond(request.id, {"outcome": "rejected"})
+    else:
+        client.respond_error(request.id, code=-32601, message="Unsupported client request")
+```
+
 ## Customize plugins
 
 Persistent customization belongs to a `dsh` profile. Initialize the shipped SDK profile and install an external bundle with the runtime wheel's `dsh` command:
@@ -86,6 +107,12 @@ with DeepSeekHarness(
 `provider` selects a provider route registered by the chosen Cordis composition; `model` is the model id resolved by that adapter. `reasoning_effort` is an optional non-empty adapter-owned identifier for that exact route; omission preserves the model's own default. `max_tokens` is an optional positive per-request output-token cap for the root agent and its in-process descendants; omission leaves the provider default in control. Initialization rejects a missing adapter, unavailable model, or unsupported effort before a prompt runs. Compaction summaries keep the separate limit configured by their compaction plugin. The bundled default composition registers `deepseek-official`. A custom composition can mount `llm-pi-ai`, configure provider-specific credentials/endpoints there, and select any provider/model present in pi-ai's installed catalog.
 
 The shipped `sdk-minimal` profile is a standalone explicit tree rather than an overlay on `dsh-base`. Select it with `profile="sdk-minimal"`; the ordinary `model` argument is the sole runtime model selection, including for model ids outside the adapter's advisory catalog. It provides a platform-selected persistent shell, `read_image`, `working_directory`, local execution, JSONL sessions, and automatic compaction. Text file tools, settings, managed credentials, telemetry, Web tools, and the full default tool roster remain available through the separate full `sdk` and `web` profiles. SDK prompt text does not execute `/compact`.
+
+## Native user questions
+
+Pass `on_user_question` to `DeepSeekHarnessConfig`, `DeepSeekHarness`, or `HarnessConfig` to answer the built-in `ask_user_question` tool through the native SDK protocol. The callback receives a `UserQuestionRequest` (`request_id`, `session_id`, and the original `questions`) and a `threading.Event` signalling cancellation. Return `UserQuestionAnswer` or a JSON object shaped as `{"answers": [{"id": "question-id", "selected": ["option label"], "custom": "optional free text"}]}`. Each original question id must appear exactly once. The application supplies its UI or simulated-user policy; the SDK does not choose answers.
+
+Callbacks run on separate threads so the reader can process cancellation and other requests. They may run concurrently and may make further client requests. Release callback-owned work when the cancellation Event is set. Closing the client signals outstanding callbacks and gives their workers a shared 0.5-second join window; callbacks that ignore cancellation may continue, but their late answers cannot reach the runtime or a later process. A callback exception becomes a protocol error, and an absent callback retains existing native answerers or reports `NO_PROVIDER`.
 
 ## Results and notifications
 

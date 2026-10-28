@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Ejecución de la zona de pruebas de Bash",
+    "description": "Ejecute comandos Bash dentro de los permisos actuales de la zona de pruebas."
+  }
+}

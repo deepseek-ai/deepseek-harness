@@ -54,8 +54,25 @@ describe('Fiber configuration access', () => {
     expect(hook).toHaveBeenCalledOnce()
     expect(fiber.effectiveConfig).toBe(initial)
     expect(apply).toHaveBeenCalledOnce()
-    await fiber.restart()
+    await wrapper.restart()
     expect(fiber.effectiveConfig).toBe(raw)
+    expect(apply).toHaveBeenCalledTimes(2)
+  })
+
+  it('publishes updates through registry wrappers to the canonical fiber', async () => {
+    const ctx = root()
+    const initial = { value: 1 }
+    const apply = vi.fn()
+    const wrapper = ctx.plugin(apply, initial)
+    await wrapper
+    const raw = { value: 2 }
+    await wrapper.update(raw)
+    await wrapper.await()
+    expect(apply).toHaveBeenLastCalledWith(wrapper.ctx, raw)
+    expect(wrapper.rawConfig).toBe(raw)
+    expect(wrapper.effectiveConfig).toBe(raw)
+    expect(wrapper.ctx.fiber.rawConfig).toBe(raw)
+    expect(wrapper.ctx.fiber.effectiveConfig).toBe(raw)
     expect(apply).toHaveBeenCalledTimes(2)
   })
 

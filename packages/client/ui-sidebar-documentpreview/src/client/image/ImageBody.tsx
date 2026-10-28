@@ -1,5 +1,7 @@
 /** Complete image bytes rendered in a shared zoom viewport. */
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { DraggableImage } from '@deepseek-ai/dsh-client-ui-primitives'
+import { bindImagePan } from './pan.ts'
 import type { PropsLocale, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { DocumentPreviewProps } from '../document/contract.ts'
@@ -24,8 +26,13 @@ const IMAGE_MEDIA_TYPES = {
 
 type ImageMediaType = typeof IMAGE_MEDIA_TYPES[keyof typeof IMAGE_MEDIA_TYPES]
 
+/** Image-only operations injected alongside the shared zoom lifecycle. */
+export interface ImageBodyInjected extends ZoomInjected {
+  readonly fileDrag: import('@deepseek-ai/dsh-client-ui-primitives').FileDragActions
+}
+
 /** Standard document props plus the image renderer's dictionary. */
-export type ImageBodyProps = DocumentPreviewProps & PropsLocale<'sidebarImage'> & PropsStore<ZoomStore> & ZoomInjected
+export type ImageBodyProps = DocumentPreviewProps & PropsLocale<'sidebarImage'> & PropsStore<ZoomStore> & ImageBodyInjected
 
 type ImageSource =
   | {
@@ -33,6 +40,7 @@ type ImageSource =
     readonly data: Uint8Array<ArrayBuffer>
     readonly mediaType: ImageMediaType
     readonly url: string
+    readonly file: File
   }
   | { readonly kind: 'failed'; readonly data: Uint8Array<ArrayBuffer>; readonly mediaType: ImageMediaType }
 
@@ -71,15 +79,16 @@ export function ImageBody(props: ImageBodyProps): ReactNode {
     if (data === undefined || mediaType === undefined) return
     let url: string | undefined
     try {
-      url = URL.createObjectURL(new Blob([data], { type: mediaType }))
-      setSource({ kind: 'ready', data, mediaType, url })
+      const file = new File([data], pathPartsOf(path).name, { type: mediaType })
+      url = URL.createObjectURL(file)
+      setSource({ kind: 'ready', data, mediaType, url, file })
     } catch {
       setSource({ kind: 'failed', data, mediaType })
     }
     return () => {
       if (url !== undefined) URL.revokeObjectURL(url)
     }
-  }, [data, mediaType])
+  }, [data, mediaType, path])
 
   if (data === undefined || mediaType === undefined) {
     return <p className={css.status} role="alert">{t('unsupported')}</p>
@@ -93,15 +102,29 @@ export function ImageBody(props: ImageBodyProps): ReactNode {
     controls: t('zoomControls'), menu: t('zoomMenu'), out: t('zoomOut'), into: t('zoomIn'),
     fitWidth: t('zoomFitWidth'), value: percent => t('zoomValue', { percent }),
   }
-  return <LoadedImage key={source.url} url={source.url} name={name} preference={preference}
-    onPreference={setPreference} labels={labels} signal={tab.signal}
-    scrollportRef={props.scrollportRef} t={t} />
+  return <LoadedImage
+    fileDrag={props.fileDrag}
+    resourceAddress={resourceAddress}
+    key={source.url}
+    url={source.url}
+    name={name}
+    file={source.file}
+    preference={preference}
+    onPreference={setPreference}
+    labels={labels}
+    signal={tab.signal}
+    scrollportRef={props.scrollportRef}
+    t={t}
+  />
 }
 
 /** SVG stays in the browser's static image mode because its bytes only reach an img Blob URL. */
-function LoadedImage({ url, name, preference, onPreference, labels, signal, scrollportRef, t }: {
+function LoadedImage({ url, name, file, resourceAddress, preference, onPreference, labels, signal, scrollportRef, t, fileDrag }: {
+  readonly fileDrag: ImageBodyInjected['fileDrag']
   readonly url: string
   readonly name: string
+  readonly file: File
+  readonly resourceAddress: string
   readonly preference: ZoomPreference
   readonly onPreference: (preference: ZoomPreference) => void
   readonly labels: ZoomLabels
@@ -109,21 +132,37 @@ function LoadedImage({ url, name, preference, onPreference, labels, signal, scro
   readonly scrollportRef: ImageBodyProps['scrollportRef']
   readonly t: ImageBodyProps['t']
 }): ReactNode {
+  const releasePan = useRef<() => void>()
+  const attachImage = useCallback((image: HTMLImageElement | null): void => {
+    releasePan.current?.()
+    releasePan.current = image === null ? undefined : bindImagePan(image)
+  }, [])
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading')
   const [width, setWidth] = useState<number>()
-  return <ZoomViewport preference={preference} intrinsicWidth={width} horizontalInset={24}
-    labels={labels} signal={signal} scrollportRef={scrollportRef} onPreference={onPreference}>
+  return <ZoomViewport
+    preference={preference}
+    intrinsicWidth={width}
+    horizontalInset={24}
+    labels={labels}
+    signal={signal}
+    scrollportRef={scrollportRef}
+    onPreference={onPreference}
+  >
     <div className={css.frame} data-image-preview>
       {state === 'loading' && <LoadingIndicator label={t('loading')} />}
       {state === 'failed' && <p className={css.status} role="alert">{t('failed')}</p>}
       <div className={`${css.surface} ${zoomSurfaceClass}`} data-document-zoom-surface
         style={{ '--document-zoom-width': `${width ?? 0}px` } as CSSProperties} hidden={state !== 'ready'}>
-        <img
+        <DraggableImage
+          fileDrag={fileDrag}
+          resourceAddress={resourceAddress}
+          ref={attachImage}
           className={css.image}
           src={url}
           alt={t('preview', { name })}
           decoding="async"
-          draggable={false}
+          name={name}
+          original={file}
           referrerPolicy="no-referrer"
           onLoad={(event) => { setWidth(event.currentTarget.naturalWidth); setState('ready') }}
           onError={() => { setState('failed') }}

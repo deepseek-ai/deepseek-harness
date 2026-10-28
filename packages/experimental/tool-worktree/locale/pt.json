@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Árvores de trabalho Git",
+    "description": "Peça para trabalhar em um novo branch, e o agente cria um worktree do Git separado e continua lá, deixando seu checkout atual como está.",
+    "detail": "docs/DETAIL.md"
+  }
+}

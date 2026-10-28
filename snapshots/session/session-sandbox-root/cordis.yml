@@ -7,3 +7,12 @@
   config:
     mode: !!js "process.env.DSH_PERMISSION_MODE ?? (process.env.DSH_SNAPSHOT === undefined ? 'workspace-write' : 'danger-full-access')"
     workspaceRoot: /tmp
+    additionalWritableRoots: !!js "[process.cwd() + '/extra']"
+
+- id: headless-runner
+  inject: [headlessStartup]
+  config:
+    task: !!js ctx.headlessStartup.task
+    sessionId: !!js ctx.headlessStartup.sessionId
+    json: !!js ctx.headlessStartup.json
+    permissionMode: workspace-write

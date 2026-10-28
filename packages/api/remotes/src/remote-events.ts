@@ -11,6 +11,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-deepseek-account/types'
 import type {} from '@deepseek-ai/dsh-permission-presets/types'
 import type {} from '@deepseek-ai/dsh-plugin-manager/types'
+import type {} from '@deepseek-ai/dsh-plugin-market/types'
 import type {} from '@deepseek-ai/dsh-schedule/client'
 import type { TypertForwardableEventEntry } from '@deepseek-ai/dsh-typert-protocol'
 
@@ -43,10 +44,13 @@ export const API_REMOTE_FORWARDED_EVENTS = [
   { event: 'cordis/inspect-query', mode: 'emit' },
   { event: 'cordis/inspect-query-resolved', mode: 'emit' },
   { event: 'llm/adapters-updated', mode: 'emit' },
+  { event: 'llm/models-updated', mode: 'emit' },
   { event: 'permission-presets/catalog-changed', mode: 'emit' },
   { event: 'plugin-manager/changed', mode: 'emit' },
   { event: 'plugin-manager/install-log', mode: 'emit' },
   { event: 'plugin-manager/install-state', mode: 'emit' },
+  { event: 'plugin-manager/update-state', mode: 'emit' },
+  { event: 'plugin-market/changed', mode: 'emit' },
   { event: 'settings/document-updated', mode: 'emit' },
   { event: 'schedule/changed', mode: 'emit' },
   { event: 'user-questions/request', mode: 'waterfall' },

@@ -1,0 +1,3 @@
+.entryName { display: flex; align-items: center; gap: 8px; }
+.entryTitle { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.activeMark { flex: none; margin-left: auto; }

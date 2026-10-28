@@ -287,7 +287,7 @@ it.each([false, true])('only offers a description tooltip when the card clips it
   const disconnect = vi.spyOn(ResizeObserver.prototype, 'disconnect')
   vi.useFakeTimers()
   view({ rows: [{ id: 'mine', isDefault: false, description: 'Preset description' }] })
-  fireEvent.mouseEnter(screen.getByText('Preset description'))
+  fireEvent.pointerEnter(screen.getByText('Preset description'))
   act(() => { vi.advanceTimersByTime(400) })
   expect(screen.queryByRole('tooltip')?.textContent ?? null).toBe(overflow ? 'Preset description' : null)
   cleanup()

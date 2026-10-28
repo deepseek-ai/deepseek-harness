@@ -110,6 +110,21 @@ describe('searchCardModel', () => {
     })
   })
 
+  it('keeps the matches card when the recorded include is empty', () => {
+    const call = { name: 'grep', argsRaw: '{"pattern":"foo","path":"src","include":""}' }
+    expect(searchCardModel(settledGrep({ call }))).toEqual(searchCardModel(settledGrep()))
+    expect(searchCardModel(settledGrep({ call, isError: true }))).toBeNull()
+  })
+
+  it.each([null, false, 7, [], {}, ' ', '\t\n', '!*.ts', '*.ts,*.md'])(
+    'keeps invalid include %j on the generic path',
+    (include) => {
+      expect(searchCardModel(settledGrep({
+        call: { name: 'grep', argsRaw: JSON.stringify({ pattern: 'foo', include }) },
+      }))).toBeNull()
+    },
+  )
+
   it('derives a paths card from glob result metadata, carrying the truncation signal', () => {
     // Empty block content isolates the truncation signal from the recovery arm.
     expect(searchCardModel(settledGlob({ content: [], meta: pathsMeta({ truncated: true, total: 20 }) }))).toEqual({
@@ -196,9 +211,12 @@ describe('chat row search body (GenericToolCard fallback)', () => {
     fireEvent.click(view.container.querySelector('[data-expandable]')!)
   }
 
-  it('the expanded body is the grouped matches, capped tighter than the panel', () => {
+  it.each([undefined, ''])('the expanded body groups matches when include is %j', (include) => {
     expect(CHAT_SEARCH_MAX_LINES).toBeLessThan(16)
-    const view = render(<GenericToolCard {...ownerProps(settledGrep(), 'grep')} />)
+    const block = settledGrep({
+      call: { name: 'grep', argsRaw: JSON.stringify({ pattern: 'foo', path: 'src', ...include === undefined ? {} : { include } }) },
+    })
+    const view = render(<GenericToolCard {...ownerProps(block, 'grep')} />)
     // Collapsed: the one-line summary row only, no card.
     expect(view.queryByText(/const foo = 1/)).toBeNull()
     toggleRow(view)

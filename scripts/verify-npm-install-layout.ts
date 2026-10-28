@@ -24,17 +24,19 @@ const DEPENDENCY_FIELDS = ['dependencies', 'optionalDependencies', 'peerDependen
  * edges of its peer target (`canPlacePeers` calls `checkCanPlaceNoCurrent`,
  * which walks `depValid` over that target's edges), so resolution time grows
  * with this product and not with the package count alone. Measured on an idle
- * M-series host: 277 package(s) x 2524 internal edge(s) = 699,148 unit(s) cost
- * 180.7 s of npm time out of 185.1 s end to end. The budget adds 25% headroom
+ * M5 Pro with Node 24.17.0 and npm 11.13.0: 320 package(s) x 2836 internal
+ * edge(s) = 907,520 unit(s) cost 71.03–97.73 s of npm time; the 315-package,
+ * 2782-edge graph took 75.27 s on the same host. The budget adds 25% headroom
  * for ordinary product growth, so a graph that grows here fails with its own
  * measured counts instead of failing on whichever runner happens to be slow.
  * Raising it requires re-measuring the resolution and recording the new counts.
  */
-export const MAX_RESOLUTION_WORK_UNITS = 875_000
+export const MAX_RESOLUTION_WORK_UNITS = 1_134_400
 
 /**
  * Measured npm seconds per resolution work unit on the reference host: 180.66 s
- * for the 699,148 units of the graph the budget was derived from.
+ * for 699,148 units. This conservative hang-guard calibration also covers the
+ * current 907,520-unit graph measured at 71.03–97.73 s on an M5 Pro.
  */
 const SECONDS_PER_WORK_UNIT = 2.6e-4
 

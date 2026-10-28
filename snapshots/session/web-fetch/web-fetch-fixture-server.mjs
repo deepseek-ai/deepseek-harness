@@ -1,7 +1,7 @@
 /**
  * Deterministic HTTP provider for the web-fetch snapshot scenario: a small
- * HTML page (headings, named entities, a GFM table, nested formatting) on a
- * OS-assigned loopback port behind the real address-pinned transport. Recording
+ * UTF-8 HTML page with a malformed charset declaration on an
+ * OS-assigned loopback port behind the real HTTP transport. Recording
  * and replay therefore exercise fetch and markdown rendering without external
  * network while retaining the recorded request URL.
  */
@@ -14,10 +14,10 @@ const RECORDED_URL = 'http://public.test:43117/menu.html'
 const PAGE = `<!doctype html>
 <html><head><title>Menu</title><style>.x{color:red}</style><script>ignored()</script></head>
 <body>
-<h1>Caf&eacute; menu</h1>
+<h1>Café menu</h1>
 <p>Prices include <strong>service &amp; <em>tax</em></strong> &mdash; updated daily.</p>
 <ul><li>Espresso</li><li>Flat white</li></ul>
-<table><thead><tr><th>Drink</th><th>Price</th></tr></thead><tbody><tr><td>Espresso</td><td>&euro;2</td></tr><tr><td>Flat white</td><td>&euro;3</td></tr></tbody></table>
+<table><thead><tr><th>Drink</th><th>Price</th></tr></thead><tbody><tr><td>Espresso</td><td>€2</td></tr><tr><td>Flat white</td><td>€3</td></tr></tbody></table>
 <p>See <a href="https://fixture.invalid/specials">today&rsquo;s specials</a>.</p>
 </body></html>
 `
@@ -45,12 +45,7 @@ export async function apply(ctx) {
   let transportUrl
   let startupError
 
-  const resolveAddresses = async (hostname) => {
-    if (hostname !== 'public.test') throw new Error(`unexpected snapshot hostname: ${hostname}`)
-    return [{ address: '127.0.0.1', family: 4 }]
-  }
-
-  const provider = new HttpFetchProvider(LIMITS, resolveAddresses)
+  const provider = new HttpFetchProvider(LIMITS)
   const unregister = ctx.web.registerFetchProvider({
     id: provider.id,
     available: () => provider.available(),
@@ -67,7 +62,7 @@ export async function apply(ctx) {
       label: 'web-fetch-fixture-server',
       requestListener: (req, res) => {
         if (req.url === '/menu.html') {
-          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+          res.writeHead(200, { 'content-type': 'text/html; charset=gbk,utf-8' })
           res.end(PAGE)
           return
         }
@@ -76,6 +71,7 @@ export async function apply(ctx) {
       },
       onListening: (address) => {
         transportUrl = new URL(RECORDED_URL)
+        transportUrl.hostname = '127.0.0.1'
         transportUrl.port = String(address.port)
         readiness.resolve(undefined)
       },

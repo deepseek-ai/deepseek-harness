@@ -12,11 +12,12 @@ import { validateMacOSSignatureCacheDirectory } from './macos-signature-cache-di
 import { resolveMacOSPackageSettings } from './macos-package-settings.mjs'
 import { resolveWindowsSignatureCacheDirectory } from './windows-signature-cache-directory.mjs'
 import { resolveWindowsPackageSettings } from './windows-package-settings.mjs'
+import { resolveDesktopTargetBuildPaths } from './desktop-build-paths.mjs'
 
 const APP_ROOT = fileURLToPath(new URL('..', import.meta.url))
-const SHARED_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_RELEASE_ID|DOWNLOAD_(?:TEST|PROD)_(?:ORIGIN|COS_BUCKET|COS_SECRET_ID|COS_SECRET_KEY))$/u
-const WINDOWS_SETTING = /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN|SIGNATURE_CACHE_DIR|SIGNATURE_CACHE_CONCURRENCY)$/u
-const MACOS_SETTING = /^(?:DSH_DESKTOP_MACOS_(?:SIGNING_IDENTITY|TEAM_ID|SIGNATURE_CACHE_DIR|PACK_CONCURRENCY|DOWNLOAD_PROXY|NOTARIZATION_PROXY)|APPLE_(?:API_KEY|API_KEY_ID|API_ISSUER|ID|APP_SPECIFIC_PASSWORD|TEAM_ID|KEYCHAIN|KEYCHAIN_PROFILE)|CSC_(?:LINK|KEY_PASSWORD))$/u
+const SHARED_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_RELEASE_ID|DOWNLOAD_PROD_EO_ZONE_ID|DOWNLOAD_(?:TEST|PROD)_(?:ORIGIN|COS_BUCKET|COS_SECRET_ID|COS_SECRET_KEY))$/u
+const WINDOWS_SETTING = /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN|SIGNATURE_CACHE_DIR|SIGNATURE_CACHE_CONCURRENCY|PACK_CONCURRENCY|COMPRESSION_LEVEL)$/u
+const MACOS_SETTING = /^(?:DSH_DESKTOP_MACOS_(?:SIGNING_IDENTITY|TEAM_ID|SIGNATURE_CACHE_DIR|PACK_CONCURRENCY|ZIP_COMPRESSION_LEVEL|DOWNLOAD_PROXY|NOTARIZATION_PROXY)|APPLE_(?:API_KEY|API_KEY_ID|API_ISSUER|ID|APP_SPECIFIC_PASSWORD|TEAM_ID|KEYCHAIN|KEYCHAIN_PROFILE)|CSC_(?:LINK|KEY_PASSWORD))$/u
 const AMBIENT_RELEASE_SETTING = /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|MANDATORY_UPDATE_.*|WINDOWS_.*|MACOS_.*)|APPLE_.*|(?:WIN_)?CSC_.*|DOWNLOAD_(?:TEST|PROD)_.*)$/iu
 const FILE_SETTINGS = ['DSH_DESKTOP_WINDOWS_CER_FILE', 'DSH_DESKTOP_WINDOWS_SIGNTOOL', 'APPLE_API_KEY', 'APPLE_KEYCHAIN', 'CSC_LINK']
 
@@ -35,7 +36,10 @@ export function localMacOSPackageEnvironment(environment = process.env) {
 
 /**
  * Read a machine preset when selected, otherwise the target's required dotenv; no ambient release fallback.
+ * PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL overrides the Mac file setting with 3 or 7; an empty value is invalid.
+ * Any defined Mac ZIP override rejects Windows, including an empty value; nonempty Windows overrides reject macOS.
  * PACKAGE_TEST_RELEASE_ID overrides the test preset only; blank retains its configured ID.
+ * PACKAGE_WINDOWS_COMPRESSION_LEVEL selects 3 or 7 for Windows workflow builds; blank retains the file setting.
  * @param {'win32' | 'darwin'} platform Target platform.
  * @param {NodeJS.ProcessEnv} environment Parent environment, retained only for unrelated build tools.
  * @param {string} appRoot Desktop application directory; relative credential paths resolve here.
@@ -43,6 +47,17 @@ export function localMacOSPackageEnvironment(environment = process.env) {
  * @returns {NodeJS.ProcessEnv} Isolated environment with file-owned release settings.
  */
 export function loadDesktopPackageEnvironment(platform, environment = process.env, appRoot = APP_ROOT, options = {}) {
+  const compression = environment.PACKAGE_WINDOWS_COMPRESSION_LEVEL
+  if (compression !== undefined && compression !== '') {
+    if (platform !== 'win32' || !['3', '7'].includes(compression)) {
+      throw new Error('desktop package: PACKAGE_WINDOWS_COMPRESSION_LEVEL requires Windows and a choice of 3 or 7')
+    }
+  }
+  const zipCompression = environment.PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL
+  if (zipCompression !== undefined) {
+    if (platform !== 'darwin') throw new Error('desktop package: PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL requires macOS')
+    if (!['3', '7'].includes(zipCompression)) throw new Error('desktop package: workflow ZIP compression must be 3 or 7')
+  }
   const preset = environment.DSH_PACKAGING_PRESET
   let path = join(appRoot, platform === 'win32' ? '.env.windows' : '.env.macos')
   if (preset !== undefined) {
@@ -53,8 +68,8 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
   }
   const platformSetting = platform === 'win32' ? WINDOWS_SETTING : MACOS_SETTING
   const publicPlatformSetting = platform === 'win32'
-    ? /^DSH_DESKTOP_WINDOWS_SIGNATURE_CACHE_(?:DIR|CONCURRENCY)$/u
-    : /^DSH_DESKTOP_MACOS_(?:SIGNATURE_CACHE_DIR|PACK_CONCURRENCY|DOWNLOAD_PROXY|NOTARIZATION_PROXY)$/u
+    ? /^DSH_DESKTOP_WINDOWS_(?:SIGNATURE_CACHE_(?:DIR|CONCURRENCY)|PACK_CONCURRENCY|COMPRESSION_LEVEL)$/u
+    : /^DSH_DESKTOP_MACOS_(?:SIGNATURE_CACHE_DIR|PACK_CONCURRENCY|ZIP_COMPRESSION_LEVEL|DOWNLOAD_PROXY|NOTARIZATION_PROXY)$/u
   const settings = readSettings(path, name => preset === undefined
     ? SHARED_SETTING.test(name) || platformSetting.test(name)
     : /^(?:DSH_DESKTOP_(?:APP_ID|AUTO_UPDATE_ENV|NPM_REGISTRY|MANDATORY_UPDATE_(?:CONFIG|(?:TEST|PROD)_ORIGIN))|DOWNLOAD_TEST_(?:ORIGIN|RELEASE_ID))$/u.test(name) || publicPlatformSetting.test(name))
@@ -67,6 +82,10 @@ export function loadDesktopPackageEnvironment(platform, environment = process.en
           ? /^DSH_DESKTOP_WINDOWS_(?:CER_FILE|SIGNTOOL|KEY_CONTAINER|TOKEN_PIN)$/u.test(name)
           : MACOS_SETTING.test(name) && !publicPlatformSetting.test(name)))
     }
+  }
+  if (compression !== undefined && compression !== '') settings.DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL = compression
+  if (zipCompression !== undefined) {
+    settings.DSH_DESKTOP_MACOS_ZIP_COMPRESSION_LEVEL = zipCompression
   }
   const releaseId = environment.PACKAGE_TEST_RELEASE_ID?.trim()
   if (releaseId) {
@@ -134,6 +153,7 @@ function requireReadableFile(environment, name) {
  * @returns {void}
  */
 export function validateDesktopPackageEnvironment(environment, target, options = {}) {
+  resolveDesktopTargetBuildPaths(environment, target.platform, target.arch)
   resolveDesktopAppId(environment)
   resolveNpmRegistry(environment)
   if (target.platform !== 'darwin' || !options.unsigned) resolveDesktopPolicyEnvironment(environment)

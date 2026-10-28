@@ -5,7 +5,6 @@ import z from '@deepseek-ai/schemastery'
 import { FsError } from '@deepseek-ai/dsh-fs'
 import { defineTool, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-session-projection'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { PresentedFile } from './types.ts'
 
@@ -24,7 +23,7 @@ export const Config: z<Config> = z.object({
 })
 
 /** Services used by the scoped delivery tool. */
-export const inject = ['tools', 'fs', 'sessionProjections', 'workingDirectory']
+export const inject = ['tools', 'fs', 'agents', 'workingDirectory']
 
 /**
  * Register present with durable file references in its tool result.
@@ -39,6 +38,8 @@ export function apply(ctx: Context, config: Config): void {
   ctx.tools.register(defineTool({
     name: 'present',
     description: 'Declare existing files as final deliverables for the user. '
+      + 'Hosts may show presented files only after your turn ends, so call it once the files are final. '
+      + 'If the user needs to review files earlier, such as before a tool call that waits for their answer, link them in your message instead. '
       + 'Use it when the user needs a separate file, especially Office documents, spreadsheets, and slide decks; '
       + 'prefer your final response when that suffices. The user opens the current files; their contents are not copied.',
     parameters: {
@@ -76,8 +77,8 @@ export function apply(ctx: Context, config: Config): void {
     },
     async execute(args, exec) {
       if (exec.agent === undefined) throw new Error('present requires an agent Session')
-      const boundary = ctx.sessionProjections.stateOf(exec.agent.session, 'turnBoundary')
-      if (boundary === undefined || boundary.openTurnStartSeq === null) throw new Error('present requires an open turn')
+      const boundary = ctx.agents.turnBoundaryOf(exec.agent.session)
+      if (boundary.openTurnStartSeq === null) throw new Error('present requires an open turn')
       if (args.files.length === 0 || args.files.length > config.maxFiles) throw new Error(`present accepts 1 to ${config.maxFiles} files`)
       const cwd = await ctx.workingDirectory.ensure(exec.agent, exec.signal)
       const options = { cwd, signal: exec.signal }

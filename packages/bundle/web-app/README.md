@@ -88,7 +88,7 @@ When you launch `dsh --profile web` over SSH, the URL line still prints but the 
 
 ### Per-session agent setup
 
-Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Creator's plugin-management tool is enabled only when the Host provides an editable profile.
+Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Standard and Creator enable the plugin-management tool only when the Host provides an editable profile.
 
 -----
 
@@ -102,7 +102,7 @@ The bundle is one patch layer of five files plus one runtime glue plugin: `cordi
 
 ### Patch semantics
 
-A patch replaces the targeted row's whole `config`, so each web row restates every key it owns: the persona prefix template, the `DSH_TOOLS_MODE` PTC mode opt-in, and the `session-query-sqlite` values on the base rows, then `insert` adds the web host rows, transport, and browser roster. The `webserver`, `web-runtime`, and `connection` rows inject the `webStartup` provider and read their invocation values directly; Connection composes its accepted authorities from `ctx.webStartup.trustedHosts`, and the Host/Origin fence accepts the listener's bind IP independently of that list. The per-agent tool rows the base mounts process-wide are disabled here and the preset roster takes over; the reasoning for each host-plane versus preset-plane decision is inline in the patch.
+A patch replaces the targeted row's whole `config`, so each web row restates every key it owns: the persona prefix template and the `session-query-sqlite` values on the base rows, then `insert` adds the web host rows, transport, and browser roster. The `webserver`, `web-runtime`, and `connection` rows inject the `webStartup` provider and read their invocation values directly; Connection composes its accepted authorities from `ctx.webStartup.trustedHosts`, and the Host/Origin fence accepts the listener's bind IP independently of that list. The bundle inherits native tool execution; a [PTC overlay](../../../apps/cli/config/examples/ptc.yml) changes the deployment executor. The per-agent tool rows the base mounts process-wide are disabled here and the preset roster takes over; the reasoning for each host-plane versus preset-plane decision is inline in the patch.
 
 ### Advertised application URL
 

@@ -16,6 +16,7 @@ import type { DesktopUpdatePresentation } from '../src/types.ts'
 const SELF = '@deepseek-ai/dsh-client-ui-settings-general'
 const SIDEBAR = '@deepseek-ai/dsh-client-ui-sidebar'
 const it = createClientTest({ roster: webApp })
+const withoutSettingsAccess = createClientTest({ roster: webApp }, { access: action => action !== 'settings/describe' })
 /** The whole roster's first boot pays the cold module transform of every plugin package. */
 const COLD_BOOT_TIMEOUT_MS = 60_000
 
@@ -77,13 +78,18 @@ describe('ui-settings-general shell', () => {
   }, COLD_BOOT_TIMEOUT_MS)
 
   it('declares its services', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'remote.settings', 'configForms', 'shortcuts'])
+    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'remote.settings', 'configForms', 'shortcuts', 'modules', 'remoteAccess'])
   })
 
   it('occupies sidebar.settings, declared by ui-sidebar, and declares every child slot', async ({ start }) => {
     const c = await start()
     expect(c.ctx.slots.entries('sidebar.settings').map(entry => entry.component)).toEqual([SettingsRoot])
     for (const name of CHILD_NAMES) expect(c.ctx.slots.spec(name)).toEqual(CHILD_SPECS[name])
+  }, COLD_BOOT_TIMEOUT_MS)
+
+  withoutSettingsAccess('leaves sidebar.settings unoccupied while the current Peer may not read the settings description', async ({ start }) => {
+    const c = await start()
+    expect(c.ctx.slots.entries('sidebar.settings')).toEqual([])
   }, COLD_BOOT_TIMEOUT_MS)
 
   it('projects the section ledger: product sections in order, defaults for bare rows, stable snapshots', async ({ start }) => {

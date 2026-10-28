@@ -1,13 +1,17 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it } from 'vitest'
-import { provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { createInboxStub, unsupportedModel, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { renderToolsSdk } from '@deepseek-ai/dsh-tools'
-import type { ToolSdkSchema } from '@deepseek-ai/dsh-tools/src/ts-types.ts'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { renderToolsSdk } from '@deepseek-ai/dsh-tool-executor-ptc'
+import type { ToolSdkSchema } from '@deepseek-ai/dsh-tool-executor-ptc/src/ts-types.ts'
 import TerminalSessionService, { TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import type { TerminalBackend, TerminalBackendSession, TerminalSendOperation, TerminalSendRead, TerminalSendRequest, TerminalSessionStatus, TerminalSignal } from '@deepseek-ai/dsh-terminal'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
@@ -20,7 +24,8 @@ async function fakeAgent(ctx: Context, rawId: string): Promise<Agent> {
   const id = SessionId(rawId)
   const session = Session.create(id)
   const agent: Agent = {
-    id, options: {}, session, inbox: unsupportedInbox(),
+    id, options: {}, session, model: unsupportedModel(),
+    inbox: createInboxStub(),
     status: 'idle',
     ctx: scope.ctx,
     send: () => {},
@@ -114,6 +119,8 @@ async function setupBase(jobs: boolean) {
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(TerminalSessionService)
   const stub = stubBackend()
@@ -129,11 +136,11 @@ let callNumber = 0
 const TOOL_NAMES = ['terminal_open', 'terminal_send', 'terminal_read', 'terminal_signal', 'terminal_close', 'terminal_list'] as const
 const testToolSignal = new AbortController().signal
 function call(ctx: Context, name: string, args: unknown, agent?: Agent) {
-  return ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId(`pty-call-${++callNumber}`), name, arguments: args, ...agent ? { agent } : {} })
+  return executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId(`pty-call-${++callNumber}`), name, arguments: args, ...agent ? { agent } : {} })
 }
 
 function callWithSignal(ctx: Context, name: string, args: unknown, agent: Agent, signal: AbortSignal) {
-  return ctx.tools.execute({ callId: ToolCallId(`pty-call-${++callNumber}`), name, arguments: args, agent, signal })
+  return executeToolFixture(ctx, { callId: ToolCallId(`pty-call-${++callNumber}`), name, arguments: args, agent, signal })
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
@@ -493,7 +500,7 @@ describe('tool-terminal task integration', () => {
     stub.sessions[0]!.autoSettle = false
     const controller = new AbortController()
     const pending = callWithSignal(ctx, 'terminal_send', { sessionId: 'pty-1', text: 'sleep' }, agent, controller.signal)
-    await Promise.resolve()
+    await expect.poll(() => stub.sessions[0]!.operation).toBeDefined()
     controller.abort()
     stub.sessions[0]!.operation?.cancel()
     expect((await pending).isError).toBe(true)

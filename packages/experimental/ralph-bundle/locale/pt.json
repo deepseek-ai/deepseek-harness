@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Loops de Ralph",
+    "description": "Peça um loop Ralph com um objetivo, e o agente inicia um novo agente nele rodada após rodada até que o objetivo seja atingido, um bloqueio seja informado ou o limite de rodadas seja alcançado.",
+    "detail": "docs/DETAIL.md"
+  }
+}

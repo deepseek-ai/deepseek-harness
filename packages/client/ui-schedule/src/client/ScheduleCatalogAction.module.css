@@ -22,10 +22,16 @@
   cursor: pointer;
 }
 
-.trigger:hover,
 .trigger:focus-visible {
   color: var(--dsw-alias-label-secondary);
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .trigger:hover {
+    color: var(--dsw-alias-label-secondary);
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .trigger svg {
@@ -75,16 +81,20 @@
   position: relative;
 }
 
-.rowTask:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .rowTask:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .rowOverdue {
   background: var(--dsw-alias-state-warn-tertiary);
 }
 
-.rowOverdue:hover {
-  background: var(--dsw-alias-state-warn-tertiary);
+@media (hover: hover) {
+  .rowOverdue:hover {
+    background: var(--dsw-alias-state-warn-tertiary);
+  }
 }
 
 .body {
@@ -173,10 +183,16 @@
   cursor: pointer;
 }
 
-.deleteButton:hover,
 .deleteButton:focus-visible {
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .deleteButton:hover {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .deleteButton:disabled {

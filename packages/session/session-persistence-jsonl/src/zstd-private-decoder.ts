@@ -41,7 +41,7 @@ function privateZstdStream(
   const errorKey = Reflect.ownKeys(stream).find((key): key is symbol => (
     typeof key === 'symbol' && key.description === 'kError'
   ))
-  /* v8 ignore next -- one test runtime exposes one Node-private shape; the Node 22/24/26 matrix checks compatibility. */
+  /* v8 ignore next -- one test runtime exposes one Node-private shape; the Node 24/26 matrix checks compatibility. */
   if (
     typeof handle !== 'object' || handle === null
     || typeof (handle as { writeSync?: unknown }).writeSync !== 'function'

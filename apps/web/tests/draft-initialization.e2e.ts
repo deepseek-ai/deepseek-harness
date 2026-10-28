@@ -8,7 +8,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ClientModuleLoaderTarget } from '@deepseek-ai/dsh-client-modules/client'
 import { formatSessionReferenceMention } from '@deepseek-ai/dsh-session-reference'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
-import { newEnglishPage } from './support.ts'
+import { newEnglishPage, writeComposerDraft } from './support.ts'
 
 const SCREENSHOTS = fileURLToPath(new URL('../../../.artifacts/screenshots', import.meta.url))
 const FILE_NAME = 'notes 雪.md'
@@ -28,6 +28,7 @@ interface DraftSnapshot {
     clipboardText: string
     invalid?: boolean
   }[]
+  command?: { token: string }
 }
 
 const EMPTY: DraftSnapshot = { text: '', references: [] }
@@ -311,6 +312,27 @@ it('preserves drafts through explicit Workspace draft navigation and treats empt
   await page.reload({ waitUntil: 'load' })
   await assertDraft(page, secondId, EMPTY)
   await assertUnsubmitted(scaffold, [firstId, secondId])
+  expect(console.pageErrors).toEqual([])
+  expect(console.warnings).toEqual([])
+})
+
+it('rebuilds a claimed command chip from the stored draft after reload without submitting', async () => {
+  const { scaffold, page, console, firstId } = await launchDraftFixture()
+  const input = composer(page)
+  await writeComposerDraft(page, input, '/')
+  await page.getByRole('listbox').getByRole('option', { name: 'Goal Set or view the goal for a long-running task', exact: true }).click()
+  await expect.poll(() => input.textContent(), SETTLE).toBe('/goal ')
+  await input.press('End')
+  await page.keyboard.insertText('ship')
+  const stored = { text: '/goal ship', references: [], command: { token: '/goal ' } }
+  await expect.poll(() => storedDraft(page, firstId), SETTLE).toEqual(stored)
+  await page.reload({ waitUntil: 'load' })
+  await expect.poll(() => selectedSession(page), SETTLE).toBe(firstId)
+  await expect.poll(() => composer(page).locator('[data-composer-command]').textContent(), SETTLE).toBe('/goal')
+  await expect.poll(() => composer(page).getAttribute('data-phase'), SETTLE).toBe('claimed')
+  expect(await composer(page).textContent()).toBe('/goal ship')
+  expect(await storedDraft(page, firstId)).toEqual(stored)
+  await assertUnsubmitted(scaffold, [firstId])
   expect(console.pageErrors).toEqual([])
   expect(console.warnings).toEqual([])
 })

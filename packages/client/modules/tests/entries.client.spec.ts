@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply as provideModules, createClientModuleSystem } from '../src/client/index.ts'
-import type { ClientBundleRegistration, ClientModuleLoaderTarget, WebBootEntry, WebBootGraph } from '../src/client/index.ts'
+import type { ClientBundleRegistration, ClientModuleLoaderTarget, WebBootRelease, WebBootEntry, WebBootGraph } from '../src/client/index.ts'
 
 const contexts: Context[] = []
 afterEach(async () => {
@@ -514,4 +514,142 @@ it('cleans styles from a materialized factory superseded before its entry is cre
   expect(b.fetched).toEqual([row('a').url, row('a', 'r1').url])
   expect(effects).toEqual({ mounted: 1, disposed: 0, hits: 0 })
   expect(document.querySelectorAll('style[data-plugin=a]')).toHaveLength(1)
+})
+
+describe('Host release changes', () => {
+  const built = (release: WebBootRelease | undefined, ...entries: WebBootEntry[]): WebBootGraph => ({
+    ...graph(...entries), ...(release === undefined ? {} : { release }),
+  })
+  const r1: WebBootRelease = { version: '1.0.0', commit: 'aaaaaaa' }
+  const r2: WebBootRelease = { version: '1.0.0', commit: 'bbbbbbb' }
+  const r3: WebBootRelease = { version: '2.0.0' }
+  const warning = (from: string, to: string) =>
+    `client-modules: Host release changed from ${from} to ${to}; plugin updates pause until this page reloads`
+
+  it('applies graphs and rebuilt frames of the boot release without announcing anything', async () => {
+    const effects = { mounted: 0, disposed: 0, hits: 0 }
+    const b = await bench(built(r1, row('pet')), { pet: visible('pet', effects) })
+    const listener = vi.fn()
+    b.modules.entries.releaseChange.subscribe(listener)
+    await b.modules.entries.sync(built({ ...r1 }, row('pet')))
+    expect(effects).toEqual({ mounted: 1, disposed: 0, hits: 0 })
+    await b.modules.entries.sync(built(r1, row('pet', 'r1')))
+    await b.modules.entries.reload('pet', 'r2')
+    expect(effects).toEqual({ mounted: 3, disposed: 2, hits: 0 })
+    expect(listener).not.toHaveBeenCalled()
+    expect(b.modules.entries.releaseChange.getSnapshot()).toBeUndefined()
+  })
+
+  it('applies nothing from another release and announces it once', async () => {
+    const effects = { mounted: 0, disposed: 0, hits: 0 }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const b = await bench(built(r1, row('pet')), { pet: visible('pet', effects) })
+    const listener = vi.fn()
+    const unsubscribe = b.modules.entries.releaseChange.subscribe(listener)
+    // A different commit of the same version is another release.
+    await b.modules.entries.sync(built(r2, row('pet', 'r1'), row('cat')))
+    await b.modules.entries.reload('pet', 'r2')
+    expect(effects).toEqual({ mounted: 1, disposed: 0, hits: 0 })
+    expect(b.modules.loadCache.has('cat')).toBe(false)
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: r1, previous: r1, host: r2 })
+    expect(warn).toHaveBeenCalledWith(warning(JSON.stringify(r1), JSON.stringify(r2)))
+    // Later frames of the same Host release neither apply nor announce again.
+    await b.modules.entries.sync(built({ ...r2 }, row('pet', 'r3')))
+    expect(listener).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledOnce()
+    // Another Host release replaces the announcement; an unsubscribed listener hears nothing more.
+    await b.modules.entries.sync(built(r3, row('pet', 'r3')))
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: r1, previous: r2, host: r3 })
+    expect(warn).toHaveBeenLastCalledWith(warning(JSON.stringify(r2), JSON.stringify(r3)))
+    expect(listener).toHaveBeenCalledTimes(2)
+    unsubscribe()
+    await b.modules.entries.sync(built(r2, row('pet', 'r3')))
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(effects.mounted).toBe(1)
+  })
+
+  it('withdraws the announcement and replaces only changed modules when the Host returns to the boot release', async () => {
+    const pet = { mounted: 0, disposed: 0, hits: 0 }
+    const cat = { mounted: 0, disposed: 0, hits: 0 }
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const b = await bench(built(r1, row('pet'), row('cat')), { pet: visible('pet', pet), cat: visible('cat', cat) })
+    await b.modules.entries.sync(built(r2, row('pet', 'r1'), row('cat', 'r1')))
+    // The boot release's graph is compared with the graph the page last applied.
+    await b.modules.entries.sync(built(r1, row('pet'), row('cat', 'r1')))
+    expect(b.modules.entries.releaseChange.getSnapshot()).toBeUndefined()
+    expect(pet).toEqual({ mounted: 1, disposed: 0, hits: 0 })
+    expect(cat).toEqual({ mounted: 2, disposed: 1, hits: 0 })
+    await b.modules.entries.reload('pet', 'r2')
+    expect(pet).toEqual({ mounted: 2, disposed: 1, hits: 0 })
+  })
+
+  it('stops announcing a dismissed Host release but still applies nothing from it', async () => {
+    const effects = { mounted: 0, disposed: 0, hits: 0 }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const b = await bench(built(r1, row('pet')), { pet: visible('pet', effects) })
+    // Dismissing without an announcement leaves nothing to remember.
+    b.modules.entries.dismissRelease()
+    await b.modules.entries.sync(built(r2, row('pet', 'r1')))
+    b.modules.entries.dismissRelease()
+    expect(b.modules.entries.releaseChange.getSnapshot()).toBeUndefined()
+    await b.modules.entries.sync(built(r2, row('pet', 'r2')))
+    await b.modules.entries.reload('pet', 'r3')
+    expect(b.modules.entries.releaseChange.getSnapshot()).toBeUndefined()
+    expect(effects).toEqual({ mounted: 1, disposed: 0, hits: 0 })
+    // Only the last dismissed release stays quiet.
+    await b.modules.entries.sync(built(r3, row('pet', 'r3')))
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: r1, previous: r2, host: r3 })
+    await b.modules.entries.sync(built(r2, row('pet', 'r3')))
+    expect(b.modules.entries.releaseChange.getSnapshot()).toBeUndefined()
+    await b.modules.entries.sync(built(r3, row('pet', 'r3')))
+    b.modules.entries.dismissRelease()
+    await b.modules.entries.sync(built(r2, row('pet', 'r3')))
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: r1, previous: r3, host: r2 })
+    expect(warn).toHaveBeenCalledTimes(4)
+    expect(effects.mounted).toBe(1)
+  })
+
+  it('announces a graph of another release even when its format cannot be read', async () => {
+    const effects = { mounted: 0, disposed: 0, hits: 0 }
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const b = await bench(built(r1, row('pet')), { pet: visible('pet', effects) })
+    await b.modules.entries.sync({ rev: 'next', release: r3, entries: 'another format' })
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: r1, previous: r1, host: r3 })
+    // A release that cannot be read counts as absent and still differs from the boot release.
+    await b.modules.entries.sync({ release: { version: 3 } })
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: r1, previous: r3, host: undefined })
+    expect(effects.mounted).toBe(1)
+    // A graph of the boot release is still fully validated.
+    expect(() => b.modules.entries.sync({ rev: 'next', release: r1, entries: 'another format' })).toThrow('entries must be an array')
+  })
+
+  it('treats an absent release as one identity', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const b = await bench(graph(), {})
+    await b.modules.entries.sync(graph())
+    expect(b.modules.entries.releaseChange.getSnapshot()).toBeUndefined()
+    await b.modules.entries.sync(built(r3))
+    expect(b.modules.entries.releaseChange.getSnapshot()).toEqual({ page: undefined, previous: undefined, host: r3 })
+    expect(warn).toHaveBeenCalledWith(warning('none', JSON.stringify(r3)))
+    b.modules.entries.dismissRelease()
+    await b.modules.entries.sync(graph())
+    expect(b.modules.entries.releaseChange.getSnapshot()).toBeUndefined()
+    // A Host that publishes no release counts as another release for a page that booted with one.
+    const versioned = await bench(built(r1), {})
+    await versioned.modules.entries.sync(graph())
+    expect(versioned.modules.entries.releaseChange.getSnapshot()).toEqual({ page: r1, previous: r1, host: undefined })
+  })
+
+  it('notifies every subscriber when one of them throws', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const b = await bench(built(r1), {})
+    const failure = new Error('subscriber')
+    const listener = vi.fn()
+    b.modules.entries.releaseChange.subscribe(() => { throw failure })
+    b.modules.entries.releaseChange.subscribe(listener)
+    await b.modules.entries.sync(built(r2))
+    expect(listener).toHaveBeenCalledOnce()
+    expect(error).toHaveBeenCalledWith('client-modules: release change subscriber failed', failure)
+  })
 })

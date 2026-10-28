@@ -32,7 +32,7 @@ export const Config: z<Config> = z.object({
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
 function teamPolicy(interrupt: boolean): string {
-  return `Agent Teams is available in this session, but create teammates only when the user explicitly asks to use Agent Teams or teammates.
+  return `Agent Teams is available in this session
 
 The Team Lead and all teammates share the same working directory and filesystem. Edits are immediately visible to every member. Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
 

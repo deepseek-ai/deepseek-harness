@@ -603,7 +603,7 @@ describe('dsh web keyless CLI smoke', () => {
     }
   }, 120_000)
 
-  it('DSH_TOOLS_MODE=ptc collapses the provider wire tools to run_code with the SDK prompt section', async () => {
+  it.each(['native', 'ptc'] as const)('selects the %s executor through profile overlays and ignores the retired environment selector', async (mode) => {
     requireDist()
     const workspace = mkdtempSync(join(tmpdir(), 'dsh-web-ptc-'))
 
@@ -632,14 +632,17 @@ describe('dsh web keyless CLI smoke', () => {
     const tsxLoader = pathToFileURL(createRequire(join(REPO_ROOT, 'package.json')).resolve('tsx')).href
     const child = spawn(
       process.execPath,
-      ['--import', tsxLoader, join(REPO_ROOT, 'apps/cli/src/bin.ts'), 'web', '--no-open', '--port', '0'],
+      ['--import', tsxLoader, join(REPO_ROOT, 'apps/cli/src/bin.ts'), 'web',
+        ...mode === 'ptc' ? ['--patch', join(REPO_ROOT, 'apps/cli/config/examples/ptc.yml')] : [],
+        '--no-open', '--port', '0',
+      ],
       {
         cwd: workspace,
         env: {
           ...process.env,
           DEEPSEEK_API_KEY: 'keyless-web-ptc',
           DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}`,
-          DSH_TOOLS_MODE: 'ptc',
+          DSH_TOOLS_MODE: mode === 'native' ? 'ptc' : 'native',
           DSH_HOME: join(workspace, '.dsh'),
           DSH_AGENTS_HOME: join(workspace, '.agents'),
           TSX_TSCONFIG_PATH: join(REPO_ROOT, 'tsconfig.json'),
@@ -662,9 +665,15 @@ describe('dsh web keyless CLI smoke', () => {
           setTimeout(() => { reject(new Error('provider request not received in 10s')) }, 10_000).unref()
         }),
       ])
-      expect(captured.tools?.map(tool => tool.name)).toEqual(['run_code'])
-      expect(captured.system).toContain('## Writing code for run_code')
-      expect(captured.system).toContain('declare const tools')
+      if (mode === 'ptc') {
+        expect(captured.tools?.map(tool => tool.name)).toEqual(['run_code'])
+        expect(captured.system).toContain('## Writing code for run_code')
+        expect(captured.system).toContain('declare const tools')
+      } else {
+        expect(captured.tools?.map(tool => tool.name)).not.toContain('run_code')
+        expect(captured.tools?.length).toBeGreaterThan(0)
+        expect(captured.system).not.toContain('## Writing code for run_code')
+      }
     } finally {
       const closed = child.exitCode === null
         ? new Promise<void>((resolveClose) => { child.once('close', () => { resolveClose() }) })

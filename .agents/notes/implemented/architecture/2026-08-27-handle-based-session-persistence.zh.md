@@ -36,6 +36,7 @@ Status: implemented
 
 ## 相关
 
+- [清理依赖生命周期](../../proposed/architecture/2026-10-09-cordis-cleanup-dependency-lifetimes.zh.md)提议保留有序清理期间发出的最终事件，收紧本决定允许的根释放尾部丢失，同时保留句柄所有权与存储格式。
 - [作为抽象服务的会话持久化](../../../../packages/session/session-persistence/README.zh.md)——本 Note 重塑的 seam；其接口列表已反映句柄 API。
 - [持久化 export() 与预发布读取路径精简](../../archived/simplification/2026-08-27-persistence-export-and-pre-release-trims.md)——预备性的移除，包括已退役的冷空白探测。
 - [保留可忽略的外部会话事件](2026-08-30-retain-ignorable-external-session-events.zh.md)——读取侧的拒绝约定，现经由 `storage-contract` 辅助函数共享。

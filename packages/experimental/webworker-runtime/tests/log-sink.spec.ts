@@ -20,6 +20,7 @@ function harness(): { register: () => LogExporter; requested: string[] } {
     logger: { exporter: (exporter: LogExporter) => { registered = exporter; return undefined } },
     get: () => undefined,
     provide: () => {},
+    plugin: async () => undefined,
     fiber: { dispose: async () => {} },
   }
   const require = (specifier: string): unknown => {

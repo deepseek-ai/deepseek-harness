@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Complemento API herramienta de consulta",
+    "description": "Deje que AI consulte el servidor y el navegador para ver si hay API disponible antes de desarrollar el complemento."
+  }
+}

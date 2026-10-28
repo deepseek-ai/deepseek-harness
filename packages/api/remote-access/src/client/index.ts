@@ -2,8 +2,11 @@
  * Client face: starts from the access snapshot the index injected, follows
  * the calling Peer's snapshot stream, provides the `remoteAccess` Client
  * service whose `source(kind, id, action)` answers for any declared-kind
- * resource, and publishes `useRemoteAccess(action)` on the global resource.
- * Domain UI adapters publish their own resource Hooks over `source()`. Every
+ * resource and whose `whenAccess(action, callback)` keeps effects installed
+ * while the global resource allows an action, and publishes
+ * `useRemoteAccess(action)` on the global resource. Domain UI adapters
+ * publish their own resource Hooks over `source()` and their own
+ * `whenAccess` over `whenResourceAccess()`. Every
  * answer is a boolean: true for the owner, false without a snapshot or after
  * a non-owner stream fails; the Host enforces every call regardless.
  * @module @deepseek-ai/dsh-api-remote-access/client
@@ -18,7 +21,7 @@ import { parseInjectedBaseline } from './state.ts'
 export type {
   RemoteAccessAction, RemoteAccessEndpoint, RemoteAccessFrame, RemoteAccessGrant, RemoteAccessResource, TypertResourceKind,
 } from '../types.ts'
-export type { ClientRemoteAccess, RemoteEndpoint } from './mount.ts'
+export type { AccessEffect, ClientRemoteAccess, RemoteEndpoint } from './mount.ts'
 
 /** Required Client services: the Remote mount face and the Slot registry. */
 export const inject = ['remote', 'slots']

@@ -1,7 +1,8 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SessionResources } from '../src/index.ts'
@@ -11,12 +12,14 @@ const contexts: Context[] = []
 async function fixture() {
   const ctx = new Context()
   contexts.push(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   async function owner(id: string) {
     const fiber = ctx.plugin(() => {})
     const session = Session.create(SessionId(id))
     const agent: Agent = {
       id: session.id, session, ctx: fiber.ctx, options: {}, status: 'idle',
+      model: unsupportedModel(),
       inbox: unsupportedInbox(), send() {}, followup() {}, inject() {}, cancel() {},
       steer: () => ({ outcome: Promise.resolve({ status: 'rejected' as const }) }),
       runMaintenance: task => task(new AbortController().signal),

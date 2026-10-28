@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for adding-a-plugin-preview.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/cookbook/adding-a-plugin-preview.md
+/cookbook-add-a-plugin-feature-preview:
+  en: a0db5c6e164abfa1
+  zh: 792c831c20a41e5d
+/cookbook-add-a-plugin-feature-preview/1-decide-whether-an-image-helps:
+  en: 0b401d0094e3b8ae
+  zh: d9eaedfaf8be012e
+/cookbook-add-a-plugin-feature-preview/2-draw-one-fixed-size-svg:
+  en: 3a28640aa605dce8
+  zh: c5336958f92b5a70
+/cookbook-add-a-plugin-feature-preview/3-make-it-the-detail-document:
+  en: ad09702c601e05a6
+  zh: ae03649d34ab08b1
+/cookbook-add-a-plugin-feature-preview/4-page-behavior:
+  en: 20ce358cb110104c
+  zh: abb8d72fed81f3c8
+/cookbook-add-a-plugin-feature-preview/5-validate-and-review:
+  en: 2888c02bac267662
+  zh: 5b0e95611c8d5d94

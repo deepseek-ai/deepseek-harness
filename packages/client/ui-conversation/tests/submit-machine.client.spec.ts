@@ -1,15 +1,19 @@
 /**
  * SubmitMachine behavior: enter routing, adjudication outcomes, the claimed
- * lifecycle and its integrity watch, settlement (commit-draft and claim
- * re-entry decisions), anti-backwash, and per-session isolation. Text-edit
- * semantics live in the editor (lexical-editor-core spec) — the machine only
- * observes drafts through event payloads.
+ * lifecycle that follows the leading command chip, settlement (commit-draft
+ * and claim re-entry decisions), anti-backwash, and per-session isolation.
+ * Text-edit semantics live in the editor (lexical-editor-core spec) — the
+ * machine only observes the document through event payloads.
  */
 import { describe, expect, it } from 'vitest'
 import type { CommandClaim } from '../src/client/contract/input.ts'
-import type { InputEffect, SubmitAttempt } from '../src/client/contract/input.ts'
+import type { DraftAttachmentId, InputEffect, SubmitAttempt } from '../src/client/contract/input.ts'
 import { SubmitMachine } from '../src/client/input/machine.ts'
 import { scanTextRefs } from '../src/client/input/decorations.ts'
+
+function attachmentId(id: string): DraftAttachmentId {
+  return id as DraftAttachmentId
+}
 
 function claimOf(name: string, hint?: string): CommandClaim {
   return {
@@ -30,7 +34,7 @@ function effectAt<T extends InputEffect['type']>(
 
 /** Drive plain → adjudicating and hand back the minted attempt. */
 function enterAdjudicating(m: SubmitMachine, draft: string, mode: 'queue' | 'steer' = 'queue'): SubmitAttempt {
-  const fx = m.dispatch({ type: 'enter', mode, draft })
+  const fx = m.dispatch({ type: 'enter', mode, draft, occurrences: [], quotes: [], attachmentIds: [] })
   return effectAt(fx, 0, 'adjudicate').attempt
 }
 
@@ -38,42 +42,76 @@ function enterAdjudicating(m: SubmitMachine, draft: string, mode: 'queue' | 'ste
 function enterSubmitting(m: SubmitMachine, name: string, args: string): { attempt: SubmitAttempt; claim: CommandClaim } {
   const claim = claimOf(name)
   m.dispatch({ type: 'claim', claim })
-  const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: claim.token + args })
+  const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: claim.token + args, occurrences: [], quotes: [], attachmentIds: [] })
   return { attempt: effectAt(fx, 0, 'begin-submit').attempt, claim }
 }
 
 function staleAttempt(): SubmitAttempt {
-  return { seq: 9999, signal: new AbortController().signal, draftSnapshot: '', mode: 'queue' }
+  return {
+    seq: 9999, signal: new AbortController().signal, draftSnapshot: '', occurrences: [], quotes: [], attachmentIds: [], mode: 'queue',
+  }
 }
 
 describe('submit-machine: plain × enter', () => {
   it('empty and whitespace-only drafts produce nothing', () => {
     const m = new SubmitMachine()
-    expect(m.dispatch({ type: 'enter', mode: 'queue', draft: '' })).toEqual([])
-    expect(m.dispatch({ type: 'enter', mode: 'queue', draft: '  \n ' })).toEqual([])
+    expect(m.dispatch({ type: 'enter', mode: 'queue', draft: '', occurrences: [], quotes: [], attachmentIds: [] })).toEqual([])
+    expect(m.dispatch({ type: 'enter', mode: 'queue', draft: '  \n ', occurrences: [], quotes: [], attachmentIds: [] })).toEqual([])
     expect(m.state.phase).toBe('plain')
   })
 
-  it('non-command text falls to the default sink with the draft and mode', () => {
+  it('non-command text is sent with the draft and mode and stays until the Host accepts it', () => {
     const m = new SubmitMachine()
-    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: 'hello' })
+    const attachmentIds = [attachmentId('image-1')]
+    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: 'hello', occurrences: [], quotes: [], attachmentIds })
+    expect(fx).toHaveLength(1)
     const sink = effectAt(fx, 0, 'default-sink')
     expect(sink.draft).toBe('hello')
     expect(sink.mode).toBe('queue')
-    expect(sink.attempt.draftSnapshot).toBe('hello')
-    expect(effectAt(fx, 1, 'commit-draft').retainSuffixOf).toBe('hello')
+    expect(sink.attempt).toMatchObject({ draftSnapshot: 'hello', attachmentIds })
+    expect(m.state.phase).toBe('sending')
+    expect(m.dispatch({ type: 'enter', mode: 'queue', draft: 'again', occurrences: [], quotes: [], attachmentIds: [] })).toEqual([])
+
+    const accepted = m.dispatch({ type: 'sink-settled', attempt: sink.attempt, ok: true, outcome: { kind: 'success' } })
+    expect(effectAt(accepted, 0, 'commit-draft').retainSuffixOf).toBeNull()
     expect(m.state.phase).toBe('plain')
+  })
+
+  it('returns a refused or failed message to editing unchanged with its notice', () => {
+    const m = new SubmitMachine()
+    const refused = effectAt(m.dispatch({ type: 'enter', mode: 'queue', draft: 'kept', occurrences: [], quotes: [], attachmentIds: [] }), 0, 'default-sink')
+    expect(m.dispatch({ type: 'sink-settled', attempt: refused.attempt, ok: false, outcome: { kind: 'error' } })).toEqual([])
+    expect(m.state.phase).toBe('plain')
+
+    const failed = effectAt(m.dispatch({ type: 'enter', mode: 'queue', draft: 'kept', occurrences: [], quotes: [], attachmentIds: [] }), 0, 'default-sink')
+    expect(m.dispatch({ type: 'sink-settled', attempt: failed.attempt, ok: false, message: 'offline' }))
+      .toEqual([{ type: 'notice', level: 'error', text: 'offline' }])
+    expect(m.state.phase).toBe('plain')
+
+    const informed = effectAt(m.dispatch({ type: 'enter', mode: 'queue', draft: 'sent', occurrences: [], quotes: [], attachmentIds: [] }), 0, 'default-sink')
+    expect(m.dispatch({
+      type: 'sink-settled', attempt: informed.attempt, ok: true, outcome: { kind: 'success', text: 'queued' },
+    })).toEqual([{ type: 'commit-draft', retainSuffixOf: null }, { type: 'notice', level: 'info', text: 'queued' }])
+    expect(m.dispatch({ type: 'sink-settled', attempt: informed.attempt, ok: true })).toEqual([])
+  })
+
+  it('sends an attachment-only draft as a message', () => {
+    const m = new SubmitMachine()
+    const attachmentIds = [attachmentId('image-only')]
+    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: '  ', occurrences: [], quotes: [], attachmentIds })
+    expect(effectAt(fx, 0, 'default-sink').attempt.attachmentIds).toEqual(attachmentIds)
+    expect(m.state.phase).toBe('sending')
   })
 
   it('retains an explicit steer mode on the default sink effect', () => {
     const m = new SubmitMachine()
-    const fx = m.dispatch({ type: 'enter', mode: 'steer', draft: 'go' })
+    const fx = m.dispatch({ type: 'enter', mode: 'steer', draft: 'go', occurrences: [], quotes: [], attachmentIds: [] })
     expect(effectAt(fx, 0, 'default-sink').mode).toBe('steer')
   })
 
   it('leading "/" enters adjudicating with a minted attempt carrying the draft snapshot', () => {
     const m = new SubmitMachine()
-    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: '/goal write tests' })
+    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: '/goal write tests', occurrences: [], quotes: [], attachmentIds: [] })
     const adjudicate = effectAt(fx, 0, 'adjudicate')
     expect(adjudicate.draft).toBe('/goal write tests')
     expect(adjudicate.attempt.draftSnapshot).toBe('/goal write tests')
@@ -83,13 +121,13 @@ describe('submit-machine: plain × enter', () => {
 
   it('leading is judged after trim including newlines', () => {
     const m = new SubmitMachine()
-    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: ' \n /goal x' })
+    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: ' \n /goal x', occurrences: [], quotes: [], attachmentIds: [] })
     expect(effectAt(fx, 0, 'adjudicate').draft).toBe(' \n /goal x')
   })
 
   it('a non-whitespace prefix before "/" is not leading — default sink', () => {
     const m = new SubmitMachine()
-    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: 'see /goal' })
+    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: 'see /goal', occurrences: [], quotes: [], attachmentIds: [] })
     expect(effectAt(fx, 0, 'default-sink').draft).toBe('see /goal')
   })
 })
@@ -122,10 +160,11 @@ describe('submit-machine: adjudication outcomes', () => {
     const attempt = enterAdjudicating(m, '/unknown thing', 'steer')
     const fx = m.dispatch({ type: 'adjudicated', attempt, outcome: undefined })
     const sink = effectAt(fx, 0, 'default-sink')
+    expect(fx).toHaveLength(1)
     expect(sink.draft).toBe('/unknown thing')
     expect(sink.mode).toBe('steer')
-    expect(effectAt(fx, 1, 'commit-draft').retainSuffixOf).toBe('/unknown thing')
-    expect(m.state.phase).toBe('plain')
+    expect(sink.attempt).toBe(attempt)
+    expect(m.state.phase).toBe('sending')
   })
 
   it("'handled' lands plain with zero effects (popup shell path)", () => {
@@ -146,7 +185,7 @@ describe('submit-machine: adjudication outcomes', () => {
   it('enter is a no-op while adjudicating (pending lock)', () => {
     const m = new SubmitMachine()
     enterAdjudicating(m, '/goal x')
-    expect(m.dispatch({ type: 'enter', mode: 'queue', draft: '/goal x' })).toEqual([])
+    expect(m.dispatch({ type: 'enter', mode: 'queue', draft: '/goal x', occurrences: [], quotes: [], attachmentIds: [] })).toEqual([])
     expect(m.state.phase).toBe('adjudicating')
   })
 
@@ -192,41 +231,45 @@ describe('submit-machine: claimed lifecycle', () => {
     expect(m.state.phase).toBe('submitting')
   })
 
-  it('editing the command name releases back to plain', () => {
+  it('holds the claim while the leading command chip stays and releases it when the chip goes', () => {
     const m = new SubmitMachine()
-    m.dispatch({ type: 'claim', claim: claimOf('goal') })
-    m.dispatch({ type: 'draft-changed', draft: '/goal args fine' })
+    const claim = claimOf('goal')
+    m.dispatch({ type: 'claim', claim })
+    m.dispatch({ type: 'draft-changed', command: claim })
     expect(m.state.phase).toBe('claimed')
-    m.dispatch({ type: 'draft-changed', draft: '/goa' })
+    m.dispatch({ type: 'draft-changed', command: undefined })
     expect(m.state.phase).toBe('plain')
     expect(m.state.claim).toBeUndefined()
+  })
+
+  it('re-enters claimed when a history restore brings the command chip back', () => {
+    const m = new SubmitMachine()
+    const claim = { ...claimOf('goal'), token: '/目标 ' }
+    m.dispatch({ type: 'draft-changed', command: claim })
+    expect(m.state.phase).toBe('claimed')
+    expect(m.state.claim?.token).toBe('/目标 ')
   })
 
   it.each([
     ['goal', '/goal '], ['goal', '/目标 '], ['plan', '/plan '], ['plan', '/计划 '],
     ['feedback', '/feedback '], ['feedback', '/反馈 '],
-  ])('retains %s as %s without its separator and submits an empty argument', (name, token) => {
+  ])('submits %s claimed as %s without its separator with an empty argument', (name, token) => {
     const m = new SubmitMachine()
-    m.dispatch({ type: 'claim', claim: { ...claimOf(name), token } })
-    for (const draft of [token + '这是目标', token, token.trimEnd(), token, token.trimEnd()]) {
-      m.dispatch({ type: 'draft-changed', draft })
-      expect(m.state.phase).toBe('claimed')
-      expect(m.state.claim?.name).toBe(name)
-    }
-    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: token.trimEnd() })
+    const claim = { ...claimOf(name), token }
+    m.dispatch({ type: 'claim', claim })
+    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: token.trimEnd(), occurrences: [], quotes: [], attachmentIds: [] })
     const begin = effectAt(fx, 0, 'begin-submit')
     expect(begin.args).toBe('')
-    m.dispatch({ type: 'submit-settled', attempt: begin.attempt, ok: false, draft: token.trimEnd() })
+    m.dispatch({ type: 'submit-settled', attempt: begin.attempt, ok: false, command: claim })
     expect(m.state.phase).toBe('claimed')
     expect(m.state.claim?.name).toBe(name)
   })
 
-  it.each(['/目', '/目标x', '/目标/文件', '', '看看 /目标'])('releases a goal claim for %j', (draft) => {
+  it('reads arguments typed directly against the chip without a separator', () => {
     const m = new SubmitMachine()
     m.dispatch({ type: 'claim', claim: { ...claimOf('goal'), token: '/目标 ' } })
-    m.dispatch({ type: 'draft-changed', draft })
-    expect(m.state.phase).toBe('plain')
-    expect(m.state.claim).toBeUndefined()
+    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: '/目标发布', occurrences: [], quotes: [], attachmentIds: [] })
+    expect(effectAt(fx, 0, 'begin-submit').args).toBe('发布')
   })
 
   it('explicit release returns to plain when nothing is in flight', () => {
@@ -240,7 +283,7 @@ describe('submit-machine: claimed lifecycle', () => {
   it('enter begins the submit transaction: args = draft minus token, multi-line legal', () => {
     const m = new SubmitMachine()
     m.dispatch({ type: 'claim', claim: claimOf('goal') })
-    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: '/goal line one\nline two' })
+    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: '/goal line one\nline two', occurrences: [], quotes: [], attachmentIds: [] })
     expect(effectAt(fx, 0, 'begin-submit').args).toBe('line one\nline two')
   })
 })
@@ -249,8 +292,8 @@ describe('submit-machine: submitting transaction', () => {
   it('enter and claim are locked while submitting; draft-changed is recorded without leaving submitting', () => {
     const m = new SubmitMachine()
     enterSubmitting(m, 'goal', 'x')
-    expect(m.dispatch({ type: 'enter', mode: 'queue', draft: '/goal x' })).toEqual([])
-    m.dispatch({ type: 'draft-changed', draft: 'typed during flight' })
+    expect(m.dispatch({ type: 'enter', mode: 'queue', draft: '/goal x', occurrences: [], quotes: [], attachmentIds: [] })).toEqual([])
+    m.dispatch({ type: 'draft-changed', command: undefined })
     expect(m.state.phase).toBe('submitting')
   })
 
@@ -258,7 +301,7 @@ describe('submit-machine: submitting transaction', () => {
     const m = new SubmitMachine()
     const { attempt } = enterSubmitting(m, 'goal', 'x')
     const fx = m.dispatch({
-      type: 'submit-settled', attempt, ok: true, draft: '/goal x',
+      type: 'submit-settled', attempt, ok: true, command: undefined,
       outcome: { kind: 'success', text: 'goal saved' },
     })
     expect(effectAt(fx, 0, 'commit-draft').retainSuffixOf).toBe('/goal x')
@@ -271,49 +314,49 @@ describe('submit-machine: submitting transaction', () => {
     const m = new SubmitMachine()
     const { attempt } = enterSubmitting(m, 'goal', 'x')
     const fx = m.dispatch({
-      type: 'submit-settled', attempt, ok: false, draft: 'deviated',
+      type: 'submit-settled', attempt, ok: false, command: undefined,
       outcome: { kind: 'error', text: 'rejected' },
     })
     expect(effectAt(fx, 0, 'notice')).toMatchObject({ level: 'error', text: 'rejected' })
     expect(m.state.phase).toBe('plain')
   })
 
-  it('rollback with an undeviated draft keeps the claim and re-enters claimed', () => {
+  it('a failed settlement re-enters claimed while the command chip still leads', () => {
     const m = new SubmitMachine()
-    const { attempt } = enterSubmitting(m, 'goal', 'x')
-    m.dispatch({ type: 'submit-settled', attempt, ok: false, draft: '/goal x', message: 'transport' })
+    const { attempt, claim } = enterSubmitting(m, 'goal', 'x')
+    const fx = m.dispatch({ type: 'submit-settled', attempt, ok: false, command: claim, message: 'transport' })
+    expect(effectAt(fx, 0, 'notice')).toMatchObject({ level: 'error', text: 'transport' })
     expect(m.state.phase).toBe('claimed')
     expect(m.state.claim?.token).toBe('/goal ')
   })
 
-  it('rollback with a deviated draft only notices — the newer input wins', () => {
+  it('a failed settlement without the command chip only notices and returns to plain', () => {
     const m = new SubmitMachine()
     const { attempt } = enterSubmitting(m, 'goal', 'x')
-    const fx = m.dispatch({ type: 'submit-settled', attempt, ok: false, draft: 'rewritten', message: 'transport' })
+    const fx = m.dispatch({ type: 'submit-settled', attempt, ok: false, command: undefined, message: 'transport' })
     expect(effectAt(fx, 0, 'notice')).toMatchObject({ level: 'error', text: 'transport' })
     expect(m.state.phase).toBe('plain')
     expect(m.state.claim).toBeUndefined()
   })
 
-  it('enter-path rollback cannot re-enter claimed when the snapshot never carried the bare token prefix', () => {
+  it('enter-path rollback returns to plain because an adjudicated claim has no command chip', () => {
     const m = new SubmitMachine()
-    const attempt = enterAdjudicating(m, '  /goal x')
+    const attempt = enterAdjudicating(m, '/goal x')
     m.dispatch({ type: 'adjudicated', attempt, outcome: { claim: claimOf('goal') } })
-    m.dispatch({ type: 'submit-settled', attempt, ok: false, draft: '  /goal x', message: 'nope' })
-    // The snapshot carries leading whitespace the token never had: plain, claim cleared.
+    m.dispatch({ type: 'submit-settled', attempt, ok: false, command: undefined, message: 'nope' })
     expect(m.state.phase).toBe('plain')
     expect(m.state.claim).toBeUndefined()
   })
 
   it('a stale settle after rollback + resubmit is dropped (anti-backwash)', () => {
     const m = new SubmitMachine()
-    const { attempt: first } = enterSubmitting(m, 'goal', 'x')
-    m.dispatch({ type: 'submit-settled', attempt: first, ok: false, draft: '/goal x', message: 'try again' })
-    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: '/goal x' })
+    const { attempt: first, claim } = enterSubmitting(m, 'goal', 'x')
+    m.dispatch({ type: 'submit-settled', attempt: first, ok: false, command: claim, message: 'try again' })
+    const fx = m.dispatch({ type: 'enter', mode: 'queue', draft: '/goal x', occurrences: [], quotes: [], attachmentIds: [] })
     const second = effectAt(fx, 0, 'begin-submit').attempt
-    expect(m.dispatch({ type: 'submit-settled', attempt: first, ok: true, draft: '/goal x' })).toEqual([])
+    expect(m.dispatch({ type: 'submit-settled', attempt: first, ok: true, command: claim })).toEqual([])
     expect(m.state.phase).toBe('submitting')
-    m.dispatch({ type: 'submit-settled', attempt: second, ok: true, draft: '/goal x' })
+    m.dispatch({ type: 'submit-settled', attempt: second, ok: true, command: claim })
     expect(m.state.phase).toBe('plain')
   })
 
@@ -322,17 +365,17 @@ describe('submit-machine: submitting transaction', () => {
     const { attempt } = enterSubmitting(m, 'goal', 'x')
     m.dispatch({ type: 'release' })
     expect(attempt.signal.aborted).toBe(true)
-    expect(m.dispatch({ type: 'submit-settled', attempt, ok: true, draft: '' })).toEqual([])
+    expect(m.dispatch({ type: 'submit-settled', attempt, ok: true, command: undefined })).toEqual([])
     expect(m.state.phase).toBe('plain')
   })
 
-  it('send-committed clears unconditionally (image-only sends have no draft to retain)', () => {
+  it('drops a settlement for a message the composer released', () => {
     const m = new SubmitMachine()
-    const fx = m.dispatch({ type: 'send-committed' })
-    expect(effectAt(fx, 0, 'commit-draft').retainSuffixOf).toBeNull()
-    const busy = new SubmitMachine()
-    enterSubmitting(busy, 'goal', 'x')
-    expect(busy.dispatch({ type: 'send-committed' })).toEqual([])
+    const sink = effectAt(m.dispatch({ type: 'enter', mode: 'queue', draft: 'gone', occurrences: [], quotes: [], attachmentIds: [] }), 0, 'default-sink')
+    m.dispatch({ type: 'release' })
+    expect(sink.attempt.signal.aborted).toBe(true)
+    expect(m.dispatch({ type: 'sink-settled', attempt: sink.attempt, ok: true })).toEqual([])
+    expect(m.state.phase).toBe('plain')
   })
 })
 
@@ -341,11 +384,11 @@ describe('submit-machine: per-session isolation', () => {
     const a = new SubmitMachine()
     const b = new SubmitMachine()
     const { attempt } = enterSubmitting(a, 'goal', 'x')
-    const fx = b.dispatch({ type: 'enter', mode: 'queue', draft: 'hello' })
+    const fx = b.dispatch({ type: 'enter', mode: 'queue', draft: 'hello', occurrences: [], quotes: [], attachmentIds: [] })
     expect(effectAt(fx, 0, 'default-sink').draft).toBe('hello')
-    a.dispatch({ type: 'submit-settled', attempt, ok: true, draft: '/goal x' })
+    a.dispatch({ type: 'submit-settled', attempt, ok: true, command: undefined })
     expect(a.state.phase).toBe('plain')
-    expect(b.state.phase).toBe('plain')
+    expect(b.state.phase).toBe('sending')
   })
 })
 

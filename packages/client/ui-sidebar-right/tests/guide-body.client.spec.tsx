@@ -19,7 +19,9 @@ import type { IconProps } from '@deepseek-ai/dsh-client-ui-primitives'
 import { GuideBody } from '../src/client/tabs/guide/GuideBody.tsx'
 import type { GuideBodyProps } from '../src/client/tabs/guide/GuideBody.tsx'
 import type { SidebarRightGuideBox } from '../src/client/tab-registry.ts'
-import { allowAllAccess, bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import type { SidebarRightGuideActionsOwnerProps } from '../src/client/contract/slots.ts'
+import { en } from '../src/client/locales.ts'
 import css from '../src/client/tabs/guide/GuideBody.module.css'
 
 afterEach(cleanup)
@@ -32,7 +34,7 @@ const standard: GlobalStandardProps & SessionStandardProps = {
   usePanelInfo: unused, useSessions: unused, useSessionStatus: unused,
   useSessionRetainInfo: unused, useResource: unused, useWorkspaces: unused,
   ...allowAllAccess,
-  inputActions: { captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
+  inputActions: { insertQuote: () => false, captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
     addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused },
 }
 
@@ -59,8 +61,12 @@ function box(kind: string, order: number, icon?: SidebarRightGuideBox['icon'], d
  * fallback, which is what the chain does with no registrant.
  */
 function mountGuide(entries: readonly SidebarRightGuideBox[], custom?: (key: string) => ReactNode,
-  shortcuts: readonly ShortcutCatalogEntry[] = []) {
+  shortcuts: readonly ShortcutCatalogEntry[] = [], unpinned: readonly string[] = [], actions = false) {
   const guideEntries = createSnapshotStore<readonly SidebarRightGuideBox[]>(entries)
+  const entryPins = createSnapshotStore<readonly string[]>(unpinned)
+  const entryActions = createSnapshotStore(actions)
+  const setPinned = vi.fn<GuideBodyProps['setPinned']>()
+  let actionsOwner: SidebarRightGuideActionsOwnerProps | undefined
   const openTab = vi.fn()
   const renderSlot = vi.fn<GuideBodyProps['renderSlotChain']>((_seat, _owner, options) => options?.fallback)
   const props: GuideBodyProps = {
@@ -71,17 +77,79 @@ function mountGuide(entries: readonly SidebarRightGuideBox[], custom?: (key: str
         navigation: { address: TAB.contentId, params: undefined, revision: 0 },
         actions: { bindCommands: vi.fn(() => vi.fn()), openResource: vi.fn(), openTab, close: vi.fn() } } }),
     useGuideEntries: bindSnapshotSelector(guideEntries),
+    useEntryPins: bindSnapshotSelector(entryPins),
+    useEntryActions: bindSnapshotSelector(entryActions),
+    setPinned,
+    t: makeTranslate(en),
     renderSlotChain: renderSlot,
-    renderSlot: vi.fn((_slot: string, _owner: unknown, options?: RenderOpts) =>
-      (options?.entryKey === undefined ? undefined : custom?.(options.entryKey)) ?? options?.fallback),
+    renderSlot: vi.fn((slot: string, owner: unknown, options?: RenderOpts) => {
+      if (slot === 'sidebar.right.tab.guide.actions') {
+        actionsOwner = owner as SidebarRightGuideActionsOwnerProps
+        return <button type="button" role="menuitem" onClick={actionsOwner.onDismiss}>Guide action</button>
+      }
+      return (options?.entryKey === undefined ? undefined : custom?.(options.entryKey)) ?? options?.fallback
+    }),
   }
   const view = render(<GuideBody {...props} />)
   const boxes = (): string[] =>
     [...view.container.querySelectorAll('[data-sidebar-right-guide-entry]')].map(node => node.getAttribute('data-sidebar-right-guide-entry') ?? '')
-  return { view, guideEntries, openTab, renderSlot, entrySlot: props.renderSlot, boxes, useTabInfo: props.useTabInfo }
+  return {
+    view, guideEntries, entryPins, openTab, setPinned, renderSlot, entrySlot: props.renderSlot, boxes, useTabInfo: props.useTabInfo,
+    actionsOwner: () => {
+      if (actionsOwner === undefined) throw new Error('guide actions not rendered')
+      return actionsOwner
+    },
+  }
 }
 
 describe('GuideBody', () => {
+  it('hides unpinned cards by kind and entry id while Files stays', () => {
+    const files = box('files', 10), terminal = box('terminal', 20), notes = box('notes', 30)
+    const b = mountGuide([files, terminal, notes], undefined, [], ['files:files-10', 'terminal:terminal-20', 'removed:entry'])
+    expect(b.boxes()).toEqual(['files', 'notes'])
+    expect(b.view.queryByRole('button', { name: 'More tools' })).toBeNull()
+    act(() => { b.entryPins.set(['notes:notes-30']) })
+    expect(b.boxes()).toEqual(['files', 'terminal'])
+  })
+
+  it('draws the More card after the cards and hands its menu the customizable cards', () => {
+    const files = box('files', 10), terminal = box('terminal', 20), notes = box('notes', 30)
+    const b = mountGuide([files, terminal, notes], undefined, [], ['terminal:terminal-20'], true)
+    const more = b.view.getByRole('button', { name: 'More tools' })
+    const guide = b.view.container.querySelector('[data-sidebar-right-guide]')
+    expect(guide?.lastElementChild?.contains(more)).toBe(true)
+    expect(more.getAttribute('aria-haspopup')).toBe('menu')
+    const glyph = more.querySelector('svg')
+    expect(glyph?.getAttribute('width')).toBe('22')
+    expect(glyph?.getAttribute('height')).toBe('22')
+    expect(glyph?.getAttribute('stroke')).toBe('#A6B2C7')
+    expect(glyph?.getAttribute('aria-hidden')).toBe('true')
+    expect(glyph?.querySelectorAll('path')).toHaveLength(4)
+    fireEvent.click(more)
+    expect(more.getAttribute('aria-expanded')).toBe('true')
+    expect(b.actionsOwner().entries).toEqual([
+      { id: 'terminal:terminal-20', label: 'terminal title', pinned: false },
+      { id: 'notes:notes-30', label: 'notes title', pinned: true },
+    ])
+    b.actionsOwner().onPinnedChange('terminal:terminal-20', true)
+    expect(b.setPinned).toHaveBeenCalledExactlyOnceWith('terminal:terminal-20', true)
+    b.actionsOwner().onOpen('removed:entry')
+    expect(b.openTab).not.toHaveBeenCalled()
+    b.actionsOwner().onOpen('terminal:terminal-20')
+    expect(b.openTab).toHaveBeenCalledExactlyOnceWith('terminal', { replaceTab: true })
+    fireEvent.click(b.view.getByRole('menuitem', { name: 'Guide action' }))
+    expect(b.view.queryByRole('menu')).toBeNull()
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('chooses description density from the visible cards', () => {
+    const cards = [box('a', 10, Glyph, 'a desc'), box('b', 20), box('c', 30), box('d', 40), box('e', 50)]
+    const b = mountGuide(cards, undefined, [], ['e:e-50'])
+    expect(b.view.container.querySelector('[data-sidebar-right-guide-entry="a"]')?.textContent).toBe('a titlea desc')
+    act(() => { b.entryPins.set([]) })
+    expect(b.view.container.querySelector('[data-sidebar-right-guide-entry="a"]')?.textContent).toBe('a title')
+  })
+
   it('shows configured guide bindings and omits cleared key labels', () => {
     for (const keys of [['Ctrl', 'P'], []]) {
       const entry: ShortcutCatalogEntry = { id: 'workspace.files' as never, label: 'Files', aliases: [],

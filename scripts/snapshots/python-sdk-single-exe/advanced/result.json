@@ -98,7 +98,7 @@
         "content": [
           {
             "type": "text",
-            "text": "Serial agent creation completed."
+            "text": "Serial agent creation completed. Ordinary and nested forks are independent; historical fork metadata remains readable."
           }
         ],
         "source": {
@@ -1628,7 +1628,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Serial agent creation completed."
+                "text": "Serial agent creation completed. Ordinary and nested forks are independent; historical fork metadata remains readable."
               }
             ],
             "source": {
@@ -2585,6 +2585,70 @@
       "payload": {
         "sessionId": "{{child-1}}",
         "event": {
+          "type": "subagent/descriptor",
+          "seq": 0,
+          "time": 0,
+          "data": {
+            "version": 3,
+            "mode": "continuable",
+            "provider": "spawn",
+            "label": "Check direct child",
+            "agentProvider": "deepseek-official",
+            "agentModel": "smoke-model",
+            "agentReasoningEffort": "high"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "sandbox/mode",
+          "seq": 1,
+          "time": 0,
+          "data": {
+            "mode": "danger-full-access",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "approval/policy",
+          "seq": 2,
+          "time": 0,
+          "data": {
+            "policy": "never",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "permission/preset",
+          "seq": 3,
+          "time": 0,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
           "type": "agent/inbox/spliced",
           "seq": 4,
           "time": 0,
@@ -3403,6 +3467,70 @@
       "payload": {
         "parentSessionId": "{{parent}}",
         "childSessionId": "{{child-2}}"
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "subagent/descriptor",
+          "seq": 0,
+          "time": 0,
+          "data": {
+            "version": 3,
+            "mode": "continuable",
+            "provider": "spawn",
+            "label": "advanced-exe-snapshot child 1",
+            "agentProvider": "deepseek-official",
+            "agentModel": "smoke-model",
+            "agentReasoningEffort": "high"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "sandbox/mode",
+          "seq": 1,
+          "time": 0,
+          "data": {
+            "mode": "danger-full-access",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "approval/policy",
+          "seq": 2,
+          "time": 0,
+          "data": {
+            "policy": "never",
+            "source": "delegation"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "permission/preset",
+          "seq": 3,
+          "time": 0,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        }
       }
     },
     {

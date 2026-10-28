@@ -23,9 +23,9 @@ Schedule 将一次性、固定周期、按每日、按每周以及 cron 本地�
 <a id="use-this-package"></a>
 ## 使用此包
 
-随发行版交付的 Web 组合把此服务与 storage-domain、Session controller 一起挂载。其 `Config` 声明 `deliveryHistoryDays`（默认 30）与 `deliveryHistoryRecords`（默认 200）。存储后端路由由 storage-domain 管理；会话模型与 preset 恢复由 Session controller 管理。Schedule 无法在 headless 或仅 SDK 的组合中单独挂载：投递需要 Host 的 Web Session controller 和 Session 持久化后端，因为只有在 Session 确认 `session/flush` 之后一次投递才会提交。
+随发行版交付的 Web 组合把此服务与 storage-domain、Session controller 一起挂载。其 `Config` 声明 `deliveryHistoryDays`（默认 30）与 `deliveryHistoryRecords`（默认 200）。存储后端路由由 storage-domain 管理；会话模型与 preset 恢复由 Session controller 管理。投递通过 `schedule/resolve-agent` 请求会话所属的控制器激活原 Session；没有处理方时使用 Web Session controller。SDK server 提供自己的处理方，不挂载 Web 控制器。Web 恢复在 `ctx.inject(['sessionController'])` 内注册；存储和管理不等待 Web 控制器。控制器就绪或重新挂载时，会重新检查到期任务。SDK 组合在其自身激活处理方就绪后挂载 Schedule。投递仍需要 Session 持久化后端，因为只有在 Session 确认 `session/flush` 之后一次投递才会提交。
 
-提醒工具 `schedule_create`、`schedule_list`、`schedule_delete` 和 `schedule_update` 来自 [`@deepseek-ai/dsh-tool-schedule`](../tool-schedule/README.zh.md)，由 preset 挂载；本包提供这些工具调用的宿主服务。更新原地替换一条提醒的名称、指令或时间，保留其 id 与已保存记录；相对的 `after` 延迟不支持更新。创建时需要非空提示文本、标题，且必须只提供以下六个选择器之一：
+提醒工具 `schedule_create`、`schedule_list`、`schedule_delete` 和 `schedule_update` 来自 [`@deepseek-ai/dsh-tool-schedule`](../tool-schedule/README.zh.md)，由 Web preset 和 SDK bundle 挂载；本包提供这些工具调用的宿主服务。更新原地替换一条提醒的名称、指令或时间，保留其 id 与已保存记录；相对的 `after` 延迟不支持更新。创建时需要非空提示文本、标题，且必须只提供以下六个选择器之一：
 
 | 选择器 | 示例 | 时间语义 |
 |---|---|---|
@@ -44,7 +44,7 @@ Schedule 将一次性、固定周期、按每日、按每周以及 cron 本地�
 
 cron 输入携带 `expression` 和 `time_zone`。表达式是标准五字段 Vixie 形式 `minute hour day-of-month month day-of-week`：minute 0-59、hour 0-23、day-of-month 1-31、month 1-12、day-of-week 0-7，其中 `0` 和 `7` 都表示周日。每个字段接受 `*`、单个值、`a-b` 范围、`n >= 1` 的 `*/n` 与 `a-b/n` 步长，以及由这些形式组成的逗号分隔列表。`L`、`W`、`#`、`JAN`/`MON` 名称、`@daily` 风格宏、六字段表达式、超出范围的值、反向范围、零步长和空字段都会以 `invalid_rule` 拒绝，且错误信息会指出违规字段。由于该方言只有五个字段，最小间隔为一分钟。创建时存储规范化表达式：重复值合并，相邻的值与范围合并，均匀步长写为 `a-b/n`，而以 `*` 开头的字段写为星号步长（匹配全部取值时写 `*`，否则写最宽的星号步长并追加其余取值），步长 `1` 被移除，周日统一写为 `0`。不以 `*` 开头的字段绝不会变成星号步长，因此下文的日规则在存储后保持不变。持久化解码器拒绝非规范化的已存储表达式，因此记录始终保存规范化文本。day-of-month 或 day-of-week 中任一为星号字段时，本地日期需两个字段都匹配；两者都不是星号字段时，匹配任一字段即可。字段文本以 `*` 开头即为星号字段，与它匹配的取值集合无关，因此步长星号字段与其他字段同时约束，而不是替代它。首个目标是该时区内本地日期与时间匹配的第一个严格未来时点，使用与 Daily 相同的缺口跳过与重叠取较早时点规则。完整方言与规范化规则见 [cron 时间语义](../../../docs/subsystems/schedule.zh.md#cron-wall-clock-input)。
 
-提醒绑定到调用 Agent 的会话。共享的 `schedule` Remote namespace 提供 `catalog`，返回活动和未运行的宿主任务及其原始会话 id，并提供带明确会话 id 的 `list`、`history`、`update` 和 `delete`。Remote `list` 和模型 `schedule_list` 仅返回活动任务。目录条目的 `lastDelivery` 仅保留最近一次回执；目录和列表响应均不包含已保存的发送历史。这些操作均不激活 Agent 或读取会话日志。显式删除会阻止后续投递，保留原会话和已经入队的消息，并移除已存储的任务行及其已保存的发送记录：任务从 `list` 和 `catalog` 中消失、不再调度，`history` 对相同的 `(sessionId, id)` 返回 `schedule_not_found`。
+提醒绑定到调用 Agent 的会话。共享的 `schedule` Remote namespace 提供 `catalog`，返回活动和未运行的宿主任务及其原始会话 id，并提供带明确会话 id 的 `list`、`history`、`update` 和 `delete`。它还提供 `deleteInactive`，删除所有会话中全部未运行（界面显示为「已结束」）任务并返回移除的行数；未运行任务从不会安排定时器，因此该删除不重算任何目标，且该批删除是一次持久写入，普通失败时不删除任何行，调用以拒绝结束而不返回计数；后端报告 `unknown-state` 时可能已移除部分行，并会隔离 Host 的 schedule 领域，之后该领域的操作都会拒绝，直到重新打开；任何拒绝都会先发出 `schedule/changed`，客户端重新读取。Remote `list` 和模型 `schedule_list` 仅返回活动任务。目录条目的 `lastDelivery` 仅保留最近一次回执；目录和列表响应均不包含已保存的发送历史。这些操作均不激活 Agent 或读取会话日志。显式删除会阻止后续投递，保留原会话和已经入队的消息，并移除已存储的任务行及其已保存的发送记录：任务从 `list` 和 `catalog` 中消失、不再调度，`history` 对相同的 `(sessionId, id)` 返回 `schedule_not_found`。
 
 归档仍有活动提醒的会话会被拒绝，直到这些提醒停止；选择停止它们会删除全部活动提醒，取消归档不会把它们带回来。
 
@@ -62,13 +62,13 @@ cron 输入携带 `expression` 和 `time_zone`。表达式是标准五字段 Vix
 
 `ScheduleService` 拥有一个版本 1 的 `schedule` domain、全局唯一的任务 id 和一个宿主定时器。每条任务同时存储会话绑定、记录及 `active` 或 `inactive` 状态；仅活动任务驱动定时器。已存储但缺少状态的记录规范化为 `active`，不会扫描或重建历史会话。管理写入与投递写入共用一个 FIFO。更新在队列内比较完整预期记录并采样 `Date.now()`；一次任务 put 修改规则、名称或指令，不替换绑定或发送历史。创建、删除和更新在排队结束、持久化开始前重新检查传入的取消信号；写入一旦开始，取消不会将其回滚。定时器重新读取实际时间，包括时钟回拨时在会话恢复后重新核对到期成员，并分段处理超过平台定时器上限的延迟。同一会话到期的 Every、Daily、Weekly 和 Cron 任务合并为一条消息；每条任务在投递判断后分别推进。即使批次中另一条任务持久化失败，已成功推进的任务仍参与宿主下一次定时计算。
 
-投递通过 `sessionController.resolveAgent` 解析原会话。插件来源的 `followup()` 同步将消息追加到会话收件箱；会话 flush 成功后确认持久投递。随后一次任务行 put 更新 `lastDelivery`，将实际回执与已发送提示文本快照追加到 `deliveryHistory.records`，并保存单次任务的 `inactive` 状态或周期任务的下一目标时间。回执包含发生时点 `scheduledAt`、确认时间 `deliveredAt` 和 `messageId`；它确认收件箱投递，不表示模型执行。flush 或任务 put 失败均不发布新的已保存记录。会话持久化与任务 put 是两次独立的持久写入；会话 flush 后崩溃或任务写入失败可能留下未记入发送记录的已投递消息，并再次投递相同提醒。
+投递通过 `schedule/resolve-agent` 解析原会话；仅在 Web 控制器已注入时，Web 回退路径才调用 `sessionController.resolveAgent`。插件来源的 `followup()` 同步将消息追加到会话收件箱；会话 flush 成功后确认持久投递。随后一次任务行 put 更新 `lastDelivery`，将实际回执与已发送提示文本快照追加到 `deliveryHistory.records`，并保存单次任务的 `inactive` 状态或周期任务的下一目标时间。回执包含发生时点 `scheduledAt`、确认时间 `deliveredAt` 和 `messageId`；它确认收件箱投递，不表示模型执行。flush 或任务 put 失败均不发布新的已保存记录。会话持久化与任务 put 是两次独立的持久写入；会话 flush 后崩溃或任务写入失败可能留下未记入发送记录的已投递消息，并再次投递相同提醒。
 
 版本 1 的可选 `deliveryHistory` 保留在任务行中，其从旧到新排列的 `records` 和 `earlierRecordsUnavailable` 标志与状态及目标时间共同提交。新任务的记录为空，标志为 false。读取没有历史的任务时，仅呈现其已有的 `lastDelivery`（若存在），不含提示文本快照，标志为 true；读取不重写任务，也不从会话日志或当前提示文本重建缺失的投递或提示文本。后续追加保留 true 标志及已有回执。存储历史拒绝重复消息 id，以及与 `lastDelivery` 不一致的最新回执。
 
 可选的 `earlierRecordsPruned` 标志记录追加时确实删除过旧记录的事实，在后续投递和重启后保持为 true，不从 `earlierRecordsUnavailable` 推断。已有任务行缺少此标志时，裁剪情况视为未确认。历史接口返回该标志及当前宿主保留上限；读取不裁剪记录。
 
-`schedule/changed` 在任务变更提交后通知客户端。时间更新仅在任务 put 提交后请求重新计算定时器。工具与浏览器使用同一服务；查询和删除直接读取存储。重新计算后至多保留一个待触发定时器，包括投递期间发生的变更。关闭时取消它，等待已接受的工作结束，再关闭 domain。投递调度准入失败会记录日志而不自动重试，不会使已持久化的管理结果失效。存储校验和清理注册失败仍会拒绝初始化。恢复的 Agent 由 Session controller 拥有。
+`schedule/changed` 在任务变更提交后通知客户端。时间更新仅在任务 put 提交后请求重新计算定时器。工具与浏览器使用同一服务；查询和删除直接读取存储。重新计算后至多保留一个待触发定时器，包括投递期间发生的变更。关闭时取消它，等待已接受的工作结束，再关闭 domain。投递调度准入失败会记录日志而不自动重试，不会使已持久化的管理结果失效。存储校验和清理注册失败仍会拒绝初始化。恢复的 Agent 由激活提供方拥有。
 
 Schedule domain 声明整 unit 布局，因为任务是权威数据。路由到 JSON 后端时，文件不可读、文档损坏、版本不受支持或任务非法都会拒绝启动，而不是发布部分任务目录。恢复失败不会改写 `schedule.json`，初始不存在的文件则作为空 domain 打开；修复该文件后可按相同任务身份重新打开。注册启动通过 `Service.init` 等待存储校验与运行时初始化；打开期间卸载会释放已取得的 domain，而不开始投递。
 

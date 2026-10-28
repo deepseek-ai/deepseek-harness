@@ -188,16 +188,18 @@ export interface PeerScope {
   readonly principal: Principal
   /** Aborted once the Peer is disposed. */
   readonly signal: AbortSignal
+  /** Participation in forwarded interactions; independent of RBAC. */
+  readonly interactions: 'answer' | 'none'
   dispose(): Promise<void>
 }
 ```
 
-`@deepseek-ai/dsh-client-connection` 实现唯一的 Peer 类 `Peer(owner, { principal })`，用 `createScope(owner, peer)` 建立，与 Agent 建自己的 scope 是同一机制：Peer 对象就是 ScopeKey，`peer.ctx` 承接连接期效果，scope 结束时 `peer.signal` 中止，`dispose()` 让 fiber 静默。Connection 在服务 apply 时以 owner principal 创建 `connection.browserPeer`；principal、`createPeer()` 与访问检查归 [Peer 身份属性与 Remote 方法级访问控制](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.zh.md)。
+`@deepseek-ai/dsh-client-connection` 实现唯一的 Peer 类 `Peer(owner, { principal, interactions? })`，用 `createScope(owner, peer)` 建立，与 Agent 建自己的 scope 是同一机制：Peer 对象就是 ScopeKey，`peer.ctx` 承接连接期效果，scope 结束时 `peer.signal` 中止，`dispose()` 让 fiber 静默。Connection 在服务 apply 时以 owner principal 创建 `connection.browserPeer`；principal、`createPeer()` 与访问检查归 [Peer 身份属性与 Remote 方法级访问控制](../../implemented/architecture/2026-10-12-peer-principal-and-remote-access.zh.md)。
 
 | 成员 | 语义 |
 | --- | --- |
 | `connection.browserPeer: PeerScope` | 所有通过认证的浏览器连接共享的 Peer；principal 为 owner；随 connection 生灭 |
-| `connection.admit(request): PeerAdmission` | 过既有的 `requestRejection`：被拒返回 `{ rejection: 401 \| 403 }`，否则返回 `{ peer: browserPeer }`。将来的接纳方在这里接入 |
+| `connection.admit(request): PeerAdmission` | 检查 Host/Origin 与浏览器或 API 签名 Cookie；返回 `{ rejection: 401 \| 403 }` 或凭据对应的存活 Peer；API Peer 在 connect 时发布，并由其生命周期 socket 负责释放 |
 
 网关 `handleUpgrade(req, socket, head, peer)` 为该 socket 绑一个固定 Peer 的 opener，并在 `peer.ctx.effect` 里登记 socket 关闭；scope 已失效时改为直接以 1001 关闭 socket。`InvokeRemoteRequest.peer`、`RemoteStreamOpener` 与 `wireStream.open` 的 `peer` 形参均为 required，每个进程内调用方都显式给出 Peer，网关不自建 Peer。按 id 查 Peer、Peer 的开关事件，都等第一个需要它们的消费者出现时再加。
 
@@ -307,6 +309,7 @@ credit 帧留待需要持续大流量上行的消费者出现时再加；inbox �
 | Peer | 升级时接纳为一个 `PeerScope`，该 socket 上所有流的 `invocation.peer` 都是它 |
 | 项校验 | 有 uplink codec 时逐项严格解码，失败即整条流以既有的 `gateway/input-invalid` 失败（details `{ endpoint, field: 'uplink' }`）；无 codec 时只做 JSON 安全校验 |
 | 帧大小 | 单帧沿用 `ws` 的 `maxPayload`；inbox 上限限制累计量 |
+| 帧压缩 | Gateway 配置 `websocketCompression` 为 `'deflate'`（默认）时，每条连接协商 `permessage-deflate`；少于 1024 个字符的帧不压缩。见[压缩决定](2026-10-18-websocket-permessage-deflate.zh.md) |
 
 ### 进程内与 worker 载体
 
@@ -390,6 +393,8 @@ export type RemoteStreamOpener = (
 // index.ts Config addition
 /** Uplink inbox limit per logical stream, in UTF-8 bytes of frames (default 262144). */
 readonly streamInboxBytes?: number
+/** Per-message WebSocket compression; 'none' disables the extension (default 'deflate'). */
+readonly websocketCompression?: 'none' | 'deflate'
 ```
 
 `prepareInvocation`：
@@ -451,7 +456,7 @@ cancel : missing → ignore; otherwise control.abort(new Error('Remote stream ca
 | `dsh-typert-registry` | 加载校验 `uplink.codec` 为有效的严格 codec |
 | `dsh-typert-generator`（`model.ts`、`analyzer.ts`、`emitter.ts`） | `remoteResultType` 识别 `RemoteStream<Out, In>` 并生成 `uplink` boundary；描述符输出 `uplink: { codec }`；生成的 Client 签名返回 `RemoteStreamHandle<Out, In>`；参数循环只认业务参数与末位 `signal` |
 | `dsh-client-connection`（`peer.ts`、`rpc.ts`、`rpc-host.ts`、`index.ts`） | `Peer` 类；`connection.browserPeer` 与 `admit`；`/api` 与升级路由经 `admit` 取 Peer；`rpc.open` 的可选 `uplink` |
-| `dsh-api-gateway` Host（`stream-protocol.ts`、`stream-server.ts`、`types.ts`、`index.ts`） | `item` / `end` 帧；`UplinkInbox`；`Config.streamInboxBytes`；`GatewayInvocation` 与 `extend({ invocation })`；`UplinkDecoder`；`handleUpgrade(req, socket, head, peer)` |
+| `dsh-api-gateway` Host（`stream-protocol.ts`、`stream-server.ts`、`types.ts`、`index.ts`） | `item` / `end` 帧；`UplinkInbox`；`Config.streamInboxBytes` 与 `Config.websocketCompression`；`GatewayInvocation` 与 `extend({ invocation })`；`UplinkDecoder`；`handleUpgrade(req, socket, head, peer)` |
 | `dsh-api-gateway` Client（`client/index.ts`、`client/stream-client.ts`） | `invokeStream` 返回句柄；上行泵由句柄的队列驱动 |
 | `dsh-webworker-runtime`、`dsh-remote-mock` | worker 隧道的两种上行帧与 `serveStream` 组装；`StreamHandle.uplink`；直接代理返回真句柄 |
 | 文档 | gateway、api 组、connection、protocol、generator 的 README；`docs/api-gateway`；`docs/subsystems/typert` 的 type-equiv 块；config 与 Cordis 目录 |

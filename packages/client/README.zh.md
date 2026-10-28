@@ -82,6 +82,8 @@ kind: "package-group"
 | [`ui-settings-subagent/`](ui-settings-subagent/README.zh.md) | 在插件页提供子智能体设置页 | — |
 | [`ui-settings-web-search/`](ui-settings-web-search/README.zh.md) | 在插件页提供网页搜索设置页 | — |
 | [`ui-plugin-manager/`](ui-plugin-manager/README.zh.md) | 贡献侧栏的“插件”面板：安装、启用、停用、重试与组合已安装的包 | — |
+| [`ui-entry-customization/`](ui-entry-customization/README.zh.md) | 添加分区域的“更多”菜单，固定或收起插件入口，并开始创建插件的草稿 | — |
+| [`ui-plugin-market/`](ui-plugin-market/README.zh.md) | 为“插件”页面贡献“发现”标签页：浏览市场索引并安装其中的组合包 | — |
 | [`ui-settings-plugin-inventory/`](ui-settings-plugin-inventory/README.zh.md) | 向「插件」设置贡献只读的 Host Loader 清单标签页 | — |
 | [`ui-deliverables/`](ui-deliverables/README.zh.md) | 生成改动文件卡片及其对比 tab、交付文件卡片与可点击的最终响应文件引用 | — |
 | [`ui-message-feedback/`](ui-message-feedback/README.zh.md) | 提供消息赞踩，以及从赞踩、`/feedback` 或会话标题栏菜单打开的反馈弹窗 | `ctx.feedbackUi` |

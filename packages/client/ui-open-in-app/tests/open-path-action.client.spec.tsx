@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
 /**
  * The two document-preview path controls: hidden until the Host reports a
- * desktop, busy only for their own gesture, and announcing a failure once
- * through their own toast.
+ * desktop, busy only for their own gesture, and reporting each settled outcome
+ * once to the app-wide announcement seat instead of rendering one itself.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { OpenPathAction, type OpenPathActionProps } from '../src/client/OpenPathAction.tsx'
 import { OpenPathEmptyAction, type OpenPathEmptyActionProps } from '../src/client/OpenPathEmptyAction.tsx'
-import type { OpenInAppPathAction, OpenInAppPathFailure } from '../src/client/open-path.ts'
+import type { OpenInAppPathAction } from '../src/client/open-path.ts'
+import type { OpenInAppOutcome } from '../src/client/outcome.ts'
 import { useOpenTargetGesture } from '../src/client/OpenTargetButton.tsx'
 import { zh } from '../src/client/locales.ts'
 
@@ -27,13 +28,15 @@ interface Bench {
   props: OpenPathActionProps & OpenPathEmptyActionProps
   desktop: ReturnType<typeof createSnapshotStore<boolean | null>>
   loadDesktop: ReturnType<typeof vi.fn>
-  openPath: ReturnType<typeof vi.fn<(path: string, action: OpenInAppPathAction) => Promise<OpenInAppPathFailure | null>>>
+  openPath: ReturnType<typeof vi.fn<(path: string, action: OpenInAppPathAction) => Promise<OpenInAppOutcome>>>
+  report: Mock<(outcome: OpenInAppOutcome) => void>
 }
 
 function bench(over: { desktop?: boolean | null; openPath?: Bench['openPath'] } = {}): Bench {
   const desktop = createSnapshotStore<boolean | null>(over.desktop === undefined ? true : over.desktop)
   const loadDesktop = vi.fn(async () => {})
-  const openPath = over.openPath ?? vi.fn(async () => null)
+  const openPath = over.openPath ?? vi.fn(async (): Promise<OpenInAppOutcome> => ({ kind: 'opened' }))
+  const report = vi.fn<(outcome: OpenInAppOutcome) => void>()
   function useSelector<T, R>(source: { getSnapshot(): T }): (select: (value: T) => R) => R {
     return select => select(source.getSnapshot())
   }
@@ -43,9 +46,10 @@ function bench(over: { desktop?: boolean | null; openPath?: Bench['openPath'] } 
     loadDesktop,
     applications: vi.fn(async () => [{ id: '/Music.app', name: 'Music', default: true, icon: null }]),
     openPath,
+    report,
     t,
   } as Bench['props']
-  return { props, desktop, loadDesktop, openPath }
+  return { props, desktop, loadDesktop, openPath, report }
 }
 
 describe('OpenPathAction visibility', () => {
@@ -89,8 +93,8 @@ describe('OpenPathAction gestures', () => {
     expect(b.openPath).toHaveBeenLastCalledWith(ABSOLUTE_PATH, 'open', '/Music.app')
   })
 
-  it('disables both halves while its own gesture settles and leaves no failure on the control', async () => {
-    const settled = Promise.withResolvers<OpenInAppPathFailure | null>()
+  it('disables both halves while its own gesture settles and reports the failure it settled on', async () => {
+    const settled = Promise.withResolvers<OpenInAppOutcome>()
     const b = bench({ openPath: vi.fn(() => settled.promise) })
     const { container } = render(<OpenPathAction {...b.props} />)
     const main = await screen.findByRole('button', { name: t('open.title', { app: 'Music' }) })
@@ -100,10 +104,12 @@ describe('OpenPathAction gestures', () => {
     expect(container.querySelector('[data-open-path]')?.getAttribute('data-state')).toBe('busy')
     fireEvent.click(main)
     expect(b.openPath).toHaveBeenCalledOnce()
-    await act(async () => { settled.resolve('openError'); await settled.promise })
+    await act(async () => { settled.resolve({ kind: 'failed', failure: 'openError' }); await settled.promise })
     expect(main).toHaveProperty('disabled', false)
     expect(container.querySelector('[data-open-path]')?.getAttribute('data-state')).toBe('idle')
-    expect(screen.getByRole('alert').textContent).toContain(zh['path.openError'])
+    expect(b.report).toHaveBeenCalledTimes(1)
+    expect(b.report).toHaveBeenCalledWith({ kind: 'failed', failure: 'openError' })
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 })
 
@@ -117,35 +123,27 @@ describe('OpenPathEmptyAction', () => {
     await act(async () => {})
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: zh['path.open'] })) })
     expect(b.openPath).toHaveBeenCalledWith(ABSOLUTE_PATH, 'open', undefined)
+    expect(b.report).toHaveBeenCalledWith({ kind: 'opened' })
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('announces a failed open once through its own toast, which leaves after its hold and fade', async () => {
-    vi.useFakeTimers()
-    const b = bench({ openPath: vi.fn(async () => 'openError' as const) })
+  it('reports an acknowledged reveal and a failed open to the announcement seat, rendering none itself', async () => {
+    const revealed = bench({ openPath: vi.fn(async (): Promise<OpenInAppOutcome> => ({ kind: 'revealed' })) })
+    render(<OpenPathEmptyAction {...revealed.props} applications={async () => []} />)
+    await act(async () => {})
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: zh['path.reveal'] })) })
+    expect(revealed.report).toHaveBeenCalledWith({ kind: 'revealed' })
+    cleanup()
+
+    const b = bench({ openPath: vi.fn(async (): Promise<OpenInAppOutcome> => ({ kind: 'failed', failure: 'openError' })) })
     render(<OpenPathEmptyAction {...b.props} />)
     await act(async () => {})
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: zh['path.open'] })) })
-    expect(screen.getAllByRole('alert')).toHaveLength(1)
-    expect(screen.getByRole('alert').textContent).toContain(zh['path.openError'])
-    act(() => { vi.advanceTimersByTime(4_000) })
+    expect(b.report).toHaveBeenCalledTimes(1)
+    expect(b.report).toHaveBeenCalledWith({ kind: 'failed', failure: 'openError' })
+    // The banner belongs to this plugin's overlay entry, which outlives the control.
     expect(screen.queryByRole('alert')).toBeNull()
   })
-})
-
-it('dismisses a failure on schedule even when its owner rerenders', async () => {
-  vi.useFakeTimers()
-  const b = bench({ openPath: vi.fn(async () => 'openError' as const) })
-  const view = render(<OpenPathEmptyAction {...b.props} />)
-  await act(async () => {})
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: zh['path.open'] })) })
-  act(() => { vi.advanceTimersByTime(2_000) })
-  view.rerender(<OpenPathEmptyAction {...b.props} />)
-  await act(async () => {})
-  act(() => { vi.advanceTimersByTime(1_999) })
-  expect(screen.getByRole('alert')).toBeTruthy()
-  act(() => { vi.advanceTimersByTime(1) })
-  expect(screen.queryByRole('alert')).toBeNull()
 })
 
 
@@ -218,13 +216,16 @@ it('uses reveal as the default only when no application is registered', async ()
 
 
 it('coalesces repeated gestures before the busy state renders', async () => {
-  const pending = Promise.withResolvers<OpenInAppPathFailure | null>()
+  const pending = Promise.withResolvers<OpenInAppOutcome>()
   const b = bench({ openPath: vi.fn(() => pending.promise) })
-  const { result } = renderHook(() => useOpenTargetGesture(() => b.openPath(ABSOLUTE_PATH, 'open'), t))
+  const { result } = renderHook(() => useOpenTargetGesture(() => b.openPath(ABSOLUTE_PATH, 'open'), b.report))
   act(() => { result.current.act({ kind: 'default' }); result.current.act({ kind: 'default' }) })
   expect(b.openPath).toHaveBeenCalledOnce()
-  await act(async () => { pending.resolve(null) })
+  expect(b.report).not.toHaveBeenCalled()
+  await act(async () => { pending.resolve({ kind: 'opened' }) })
   expect(result.current.pending).toBe(false)
+  expect(b.report).toHaveBeenCalledOnce()
+  expect(b.report).toHaveBeenCalledWith({ kind: 'opened' })
 })
 
 

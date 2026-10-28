@@ -21,20 +21,20 @@
   en: 0a4240d88cca240a
   zh: 8f5f1527caf571cd
 /agent-note-client-plugin-loading-lazy-factories-cordis-lifecycle-and-hot-reload/decision/the-loading-flow-end-to-end:
-  en: 7dac236d6add3c3c
-  zh: 2a43a923a0646bb0
+  en: 15fb56befd328339
+  zh: 0ffb10ada7e52805
 /agent-note-client-plugin-loading-lazy-factories-cordis-lifecycle-and-hot-reload/decision/live-graph-reconciliation:
   en: 37e2fa1fe5cb2b95
   zh: 80e513db87709cb4
 /agent-note-client-plugin-loading-lazy-factories-cordis-lifecycle-and-hot-reload/decision/hot-reload-one-driver-plugin-self-watched-bundles:
-  en: f8b591d4c41ef492
-  zh: bc70f1cd540b7753
+  en: c1fdcb3e6f074a7a
+  zh: b08c7b1ff25acb09
 /agent-note-client-plugin-loading-lazy-factories-cordis-lifecycle-and-hot-reload/package-ownership:
   en: 94ca0d09e6fd1e3a
   zh: d5949a2bdec795ba
 /agent-note-client-plugin-loading-lazy-factories-cordis-lifecycle-and-hot-reload/consequences:
-  en: 6a96d9ac06c222e5
-  zh: b2814ab58348e831
+  en: 16e1f2467c559315
+  zh: a714ec6ff2722cf1
 /agent-note-client-plugin-loading-lazy-factories-cordis-lifecycle-and-hot-reload/alternatives-considered:
   en: b8f036f50cff7cd8
   zh: 6d623c4a1f4314b1

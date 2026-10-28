@@ -317,6 +317,7 @@ export class SettingsForms extends Service {
         this.ownerContext.emit('settings/document-updated', entry.options.id as SettingsNamespace, revision)
       }
       const value = projectForm(form, plainConfig(entry.fiber.effectiveConfig))
+      // Inherited layers omit profile fields, so only interpolate and validate them, without the running fiber's config hooks.
       const resolved: unknown = interpolate(entry.fiber.ctx, inherited)
       const base = projectForm(form, plainConfig(inheritedConfig(entry.fiber.runtime, resolved)))
       const user = projectForm(form, override)

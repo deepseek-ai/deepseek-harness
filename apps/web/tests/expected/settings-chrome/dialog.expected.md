@@ -1,6 +1,6 @@
 - dialog "设置":
+  - text: 设置
   - navigation:
-    - text: 设置
     - button "通用设置"
     - button "模型"
     - button "内置插件"
@@ -24,6 +24,8 @@
   - button "详细"
   - text: 工作步骤收起时机 选择何时自动收起工作步骤
   - button "回答结束后"
+  - text: 收起后显示的回复 工作步骤收起后，保留哪些助手回复
+  - button "全部回复"
   - text: 显示代码工作视图 开启后，显示轨迹、本轮代码差异，可选择完整的 Agent 预设切换
   - switch "显示代码工作视图"
   - text: 快捷键

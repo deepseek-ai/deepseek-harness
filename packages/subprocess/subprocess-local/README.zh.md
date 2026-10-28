@@ -83,7 +83,7 @@ Linux 普通进程和终端进程即使在 bootstrap 消费启动请求前被取
 
 ### 设计理念
 
-每次 spawn 都为信号发送与完全停稳选择同一个 owner。受支持的 Linux 普通命令与终端启动使用临时 user-systemd scope，受支持的 Windows 普通命令使用由 helper 持有、关闭时终止成员的 Job。macOS、旧版或不可用的 user-systemd，以及不可用的 Windows 原生支持使用既有 detached 进程组、`taskkill` 或终端会话观察，并只告警一次。native 路径可能已经启动命令后，本提供方绝不会通过 fallback 重放该命令。
+每次 spawn 都为信号发送与完全停稳选择同一个 owner。受支持的 Linux 普通命令与终端启动使用临时 user-systemd scope，受支持的 Windows 普通命令使用由 helper 持有、关闭时终止成员的 Job。macOS、不可用的 user-systemd，以及不可用的 Windows 原生支持使用既有 detached 进程组、`taskkill` 或终端会话观察，并只告警一次。native 路径可能已经启动命令后，本提供方绝不会通过 fallback 重放该命令。
 
 ### 源码地图
 
@@ -146,8 +146,8 @@ spill 文件以 `0600` 权限、`O_EXCL` 与随机名称在 `0700` 每进程目�
 这些限制说明本提供方何时不合适，或何时需要特别的运维注意。它们是当前包约束，不是通用平台对比或任务积压。
 
 - **Linux 直接进程退出没有独立截止时间**——直接 `SIGKILL` 获得确认后，不可中断的内核 I/O 可能让 dispose 无限期等待；`graceMs` 和 scope 查询的轮询预算不限制此等待。
-- **native ownership 有明确宿主要求**——Linux 需要可读的 user manager 与 `systemd-run --expand-environment=no`；旧版 systemd 使用带告警的 PGID fallback。macOS 因没有受支持的公开 persistent owner，始终使用该 fallback。
-- **native 选择具有有界的每次 spawn 成本**——Linux 会重复检查 bootstrap 入口、libc `execve`/`fcntl` bindings、存活的 user manager 与 literal-argv scope 支持，直到这套完整探测首次成功；后续符合条件的普通命令或终端 spawn 只重新检查存活的 user manager。Windows 会在每次普通 spawn 前重新检查 runner 入口、bindings 与当前 Job 支持。Linux 深度探测的成功状态与 fallback 告警去重会在提供方生命周期内持续保留。所有探测都会在用户命令可能运行前完成，子进程探测的超时为 5 秒。每次 Linux 启动都会创建私有请求目录，以 50 毫秒间隔检查尚未确定的 scope 建立状态；scope 已建立且仍 active 后，查询间隔按指数增长，最多为 5 秒。Windows 普通命令会保留一个 runner 与一条 IPC 通道，直到 Job 报告活动进程数为零。目标会直接继承标准句柄，不使用 named-pipe stdio 或结果文件。
+- **native ownership 有明确宿主要求**——Linux 需要可读的 user manager，且其 `systemd-run` 支持 `--collect`（systemd 236 及以上）并保持 scope 参数按字面传递：254 及以上版本传入 `--expand-environment=no`，更早版本的 scope 模式从不展开参数，因此不传该选项。没有可用 user manager 的宿主使用带告警的 PGID fallback。macOS 因没有受支持的公开 persistent owner，始终使用该 fallback。
+- **native 选择具有有界的每次 spawn 成本**——Linux 在第一次符合条件的普通命令或终端 spawn 时检查 bootstrap 入口、libc `execve`/`fcntl` bindings、可连接的 user manager 与 literal-argv scope 支持，并保留这一结论，探测失败或超时的结论也是如此。user manager 以内核 unix socket 表（`/proc/net/unix`）中同一网络命名空间里在 `$XDG_RUNTIME_DIR/systemd/private`（`systemd-run --user` 连接 manager 所用的 socket）上监听的进程来识别；读取该表的耗时与表的大小成正比。结论为可用时，若经 `PATH` 找到的 `systemd-run` 的设备号、inode、大小或修改时间发生变化，下一次符合条件的 spawn 会重新探测；否则每次都会确认 manager：有监听者时无需子进程即可确认；否则由一次 `systemctl --user show` 查询决定，查询失败时这次 spawn 使用 fallback。bootstrap 从未消费 launch request 的 scope 启动（例如发给卡死但仍在监听的 manager）会让这条命令失败，在该失败到达之前发起的 scope 启动也会失败，下一次符合条件的 spawn 会重新探测。结论为不可用时，只有出现不同的监听者才会重新探测，因此之后才启动的 manager 无需重启即可被使用。Windows 会在每次普通 spawn 前重新检查 runner 入口、bindings 与当前 Job 支持。fallback 告警去重同样在提供方生命周期内持续保留。所有探测都会在用户命令可能运行前完成；每次子进程探测的超时为 5 秒，`systemd-run` 拒绝 `--expand-environment=no` 时会去掉该选项再探测一次。每次 Linux 启动都会创建私有请求目录，以 50 毫秒间隔检查尚未确定的 scope 建立状态；scope 已建立且仍 active 后，查询间隔按指数增长，最多为 5 秒。Windows 普通命令会保留一个 runner 与一条 IPC 通道，直到 Job 报告活动进程数为零。目标会直接继承标准句柄，不使用 named-pipe stdio 或结果文件。
 - **Windows Job inheritance 有明确排除项**——普通后代默认继承 Job，但 breakaway 进程不在保证范围。目标只在 Job 分配后启动；runner 若在 create-to-assignment 极窄区间遭外力终止，可能留下 suspended target。
 - **Windows 终端信号是控制台级的**——SIGINT 以 `\x03` Ctrl-C 输入写入投递，由控制台宿主（Windows 上为 node-pty 自带的 OpenConsole）转为控制台级 CTRL_C 事件；SIGTSTP 与 SIGHUP 被拒绝（不可用）；不带 `/F` 的 `taskkill` 无法终止控制台进程，因此拆卸的 TERM 档是 `/F` 升级前的宽限等待。Windows 就绪没有精确的 stdin-wait 档：prompt-marker 快路径把 shell pid 作为伪前台进程组比较，其余由静默与计时档覆盖。
 - **Windows 终端分配依赖 node-pty 自带的控制台宿主资产**——每个 Windows 终端都以 `useConptyDll: true` 启动，分配时按 node-pty 自身 addon 的相对位置解析 `conpty/conpty.dll` 与 `OpenConsole.exe`；资产缺失或解包错误会让 `spawnTerminal` 抛错，而不是回退到操作系统控制台宿主。node-pty 把该选项标为实验性，升级 node-pty 可能改变这一行为。见[自带控制台宿主说明](../../../.agents/notes/implemented/bug-fix/2026-09-28-pty-bundled-console-host.zh.md)。

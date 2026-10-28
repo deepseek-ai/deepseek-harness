@@ -204,7 +204,7 @@ async function main(): Promise<void> {
   const packages = readWorkspacePackageManifests(root)
   const workspaceVersions = new Map(packages.all.map(pkg => [pkg.name, currentVersion(pkg)]))
   const releaseByName = new Map(packages.release.map(pkg => [pkg.name, pkg]))
-  const state = readPackageDependencyState(root)
+  const state = await readPackageDependencyState(root)
   if (state.policyViolations.length > 0) throw new Error(state.policyViolations.join('\n'))
   const base = cloneIndex(buildRegistryIndex(root))
   for (const facts of state.facts) applyFactsToRegistry(base, facts, workspaceVersions)
@@ -216,11 +216,11 @@ async function main(): Promise<void> {
   for (const name of candidates) {
     if (!discovered.includes(name)) throw new Error(`${name} is not a reachable unconfigured Host candidate`)
   }
-  const candidateFacts = new Map(candidates.map((name) => {
+  const candidateFacts = new Map(await Promise.all(candidates.map(async (name) => {
     const pkg = releaseByName.get(name)
     if (pkg === undefined) throw new Error(`release set has no ${name}`)
-    return [name, readPackageDependencyFacts(root, pkg, 'configured-host', state.workspaceNames)]
-  }))
+    return [name, await readPackageDependencyFacts(root, pkg, 'configured-host', state.workspaceNames)] as const
+  })))
 
   const baselineSeconds = await measure(base, targetVersion, options.finalistRuns, options.timeoutMs)
   const baseline = median(baselineSeconds)

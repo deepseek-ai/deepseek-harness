@@ -64,19 +64,34 @@
   height: 14px;
 }
 
-.trigger:hover,
 .trigger:focus-visible {
   color: var(--dsw-alias-label-primary);
 }
 
-.switcherTrigger:hover,
+@media (hover: hover) {
+  .trigger:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
 .switcherTrigger:focus-visible {
   color: var(--dsw-alias-label-primary);
 }
 
-.ancestorSwitcherTrigger:hover,
+@media (hover: hover) {
+  .switcherTrigger:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
 .ancestorSwitcherTrigger:focus-visible {
   color: var(--dsw-alias-label-tertiary);
+}
+
+@media (hover: hover) {
+  .ancestorSwitcherTrigger:hover {
+    color: var(--dsw-alias-label-tertiary);
+  }
 }
 
 .trigger svg,
@@ -156,9 +171,14 @@
   outline: none;
 }
 
-.row:hover > .clickarea,
 .row:focus-visible > .clickarea {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .row:hover > .clickarea {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .clickarea {
@@ -207,8 +227,10 @@
   height: 12px;
 }
 
-.disclosure:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .disclosure:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .disclosureOpen {
@@ -263,14 +285,19 @@
   grid-row: 2;
 }
 
-.sidebarButton {
-  display: inline-flex;
+.sidebarButton,
+.sidebarSpace {
+  box-sizing: border-box;
   flex: none;
-  align-items: center;
-  justify-content: center;
   width: 28px;
   height: 28px;
   margin: 4px 0;
+}
+
+.sidebarButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 6px;
   border: 0;
   border-radius: var(--dsw-radius-sm);
@@ -279,10 +306,16 @@
   cursor: pointer;
 }
 
-.sidebarButton:hover,
 .sidebarButton:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .sidebarButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .children {
@@ -362,6 +395,8 @@
   height: 12px;
 }
 
-.refresh:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .refresh:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }

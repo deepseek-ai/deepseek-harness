@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Ferramentas de desenvolvedor",
+    "description": "Para solução de problemas: veja em «Registro da sessão» o que o DSH registrou de uma sessão, consulte contexto, tempos, cache e custo de ferramentas por turno e etapa na aba «Estatísticas» e depure o backend do DSH no Chrome DevTools.",
+    "detail": "docs/DETAIL.md"
+  }
+}

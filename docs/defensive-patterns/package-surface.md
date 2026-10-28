@@ -78,6 +78,7 @@ A `package.json` `exports` map uses only the standard key set, in which every ke
 
 - Standard keys, each with one meaning repo-wide, across `packages/*/*/package.json` and `apps/*/package.json`: `.` (the package entry), `./package.json` (toolchain access, not a semantic export), `./src/*` (source passthrough for tests and tools, whose documented status is still open), `./client` (the browser entry, paired with the `dsh.client` declaration), `./types` (the type entry), `./typert` (the typert type runtime), `./remote` (the `@Remote` call surface), `./locale/*.json` (locale resources), `./cordis.patch.yml` (the bundle patch layer declared by `dsh.bundle`). Counts are not listed here because they rot on the next package; the recompute command below prints them.
 - Keys outside that set (`./brand` in 5 packages, `./worker` in 4, `./startup`, `./runner`, and `./protocol` in 2 each, plus many one-off keys) have no documented meaning; they are pending review, not a pattern to copy.
+- `dsh-tools` additionally exposes `./pipeline` for reusable invocation stages and batch scheduling. Its main and pipeline bundles share runtime chunks to preserve error-class identity; workspace constraints check the export targets and publication files.
 - Judged condition: does a change add an export key outside the standard set?
 - Exception: none by default; a new key changes the owning document and the check first, with the domain owner's confirmation.
 - Recompute the distribution:
@@ -222,3 +223,10 @@ const previous = hooks.resolve
 hooks.resolve = (specifier, context, next) =>
   pinned.has(specifier) ? pinned.get(specifier) : previous(specifier, context, next)
 ```
+
+## Package modules do not await at module scope
+
+A package source module starts its asynchronous work inside a function it calls, such as an explicit `main()` that handles its own rejection, and never uses `await`, `for await`, or `await using` at module scope: a module-scope wait makes every importer's evaluation wait, turns a rejection into a module-evaluation failure, and cannot be lowered to the synchronous CommonJS wrapper of the browser-worker image.
+
+- Judged by [verify-no-top-level-await.ts](../../scripts/verify-no-top-level-await.ts), run as `pnpm run verify-no-top-level-await` and by `scripts/run-gates.ts` as the `no-top-level-await` gate; it parses every `packages/*/*/src/**/*.{ts,tsx}` file and excludes executables by declaration only: a source that starts with `#!`, or the source of a `lib/` output that the package's `bin` field names.
+- Exception: none.

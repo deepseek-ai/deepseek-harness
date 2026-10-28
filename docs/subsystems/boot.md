@@ -10,13 +10,25 @@ The [boot package group](../../packages/boot/README.md) owns launcher-provided p
 
 `PluginInfo` carries module identity, effective enablement, fiber phase and optional display `meta`, plus a unique `patchId` or a `readOnlyReason`.
 
-`BundleInfo.official` identifies project-maintained shipped optional bundles and on-demand catalog entries independently of installation. `availability` identifies a readable installation-provided or profile package, or `missing`; on-demand catalog entries exclude undeclared transitive copies. `installed` records the profile dependency declaration. An on-demand `installTarget` carries the host-derived exact spec and version. `BundleInfo` also carries the package name, optional installed version, selected enablement, removal availability, optional resolution error, and, for a bundle the profile's own dependency supplies and the installation does not, `source`: that dependency as a spec `pnpm add` accepts. Its optional `meta` and each `BundleRowInfo.meta` contain display text or a metadata diagnostic; Clients select a language at render time.
+`BundleInfo.official` identifies project-maintained shipped optional bundles and on-demand catalog entries independently of installation. `availability` identifies a readable installation-provided or profile package, or `missing`; on-demand catalog entries exclude undeclared transitive copies. `installed` records the profile dependency declaration. An on-demand `installTarget` carries the host-derived exact spec and version. `BundleInfo` also carries the package name, optional installed version, selected enablement, removal availability, update eligibility (`updatable`), optional resolution or unsupported-platform error, and, for a bundle the profile's own dependency supplies and the installation does not, `source`: that dependency as a spec `pnpm add` accepts. Its optional `meta` and each `BundleRowInfo.meta` contain display text or a metadata diagnostic; Clients select a language at render time.
 
 `InstallBundleOptions.saveExact` passes `--save-exact` to the shared package installer. `InstallBundleOptions.enabled` defaults to true. False installs without selecting the bundle layer. `approvedBuilds` grants persistent script permission to the supplied pending package names before installation. `registry` names the registry asked first; absent, the configured one.
+
+`BundleDetail` is a profile bundle's long description: `{ status: 'found' }` with its `origin` (`locale` or `readme`), its `path` inside the package, and its `markdown`, or `{ status: 'none' }`; [`readBundleDetail`](../../packages/boot/plugin-manager/README.md#bundle-detail-documents) documents the order and the image route. `NpmFileSource` names a public npm file CDN, `jsdelivr`, `unpkg`, or `npmmirror`; a read's `npmFileSources` lists the ones to ask first.
 
 `PluginRegistries` carries the configured first registry, `null` for the one pnpm's own configuration names, the fallbacks asked after it, and `resolved`, the URL pnpm's own configuration names or `null` while unread. `InspectOptions.registry` names the registry a lookup asks first.
 
 `ChangeResult.changed` reports a disk edit independently of `application`: `applied`, `restart-required`, `overridden` or `failed`. Optional `error` carries a localizable code and external diagnostic. `packageResult` records the pnpm exit code, bounded output, truncation flag and complete diagnostic log path, plus `timedOut` when the manager terminated a run that stopped printing. A terminated run is classified `timeout` whatever exit status the signal left behind, so installation and removal report failure instead of success and no further registry is asked. `pendingBuilds` lists undecided packages across the profile; `approvedBuilds` records the names granted permission by this operation; `registries` lists the registries an installation asked, in order; `bundle` and `version` name the package a finished installation added and its manifest version; `failedAt` says whether the last failed run could not reach the registry it asked or the host a git or tarball spec is fetched from.
+
+## Market records
+
+[Plugin Market](../../packages/boot/plugin-market/README.md) reads index format 1, validated by [`dsh-plugin-market-index`](../../packages/util/plugin-market-index/README.md).
+
+`MarketIndexSummary` carries one configured index URL with the `title` and `description` of its last successful read and, when the last read failed, its `error`.
+
+`MarketQuery` selects one page of an index: fuzzy `text`, a `category`, `labels` that must all be present, a `MarketSort`, `offset`, `limit` up to 100, `refresh` to fetch again instead of using a cached document, and `fetchedAt` to continue the pages of one document. `MarketSearchResult` carries the index URL, `title`, optional `description`, market `metadata`, the document's `fetchedAt`, the page's `entries`, the `total` number of matches, and the `nextOffset`. Each `MarketListingEntry` adds `defaultVersion`, the version installed by default, and `installation`, the profile's status for the package name; each of its `versions` adds `install`, the exact spec and optional first registry for `installBundle`, and `compatibility`, the evaluation of its `engines.dsh` including a version exemption.
+
+`PluginDetail` is a market entry's long description: `{ status: 'found' }` with its `origin` (`locale`, `readme`, or `repository`), its `markdown`, and a `document` id whose images `GET /api/plugin-market/detail-file` serves, or `{ status: 'none' }`. The [plugin market documents the order](../../packages/boot/plugin-market/README.md#plugin-detail-documents) its sources are read in.
 
 ## Profile reconciliation
 
@@ -57,6 +69,53 @@ interface PendingModule {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxactioncards--actioncards"></a>
+
+### `ctx.actionCards` — `ActionCards`
+
+Card tool, kind registry, Session projection, user actions and status notices.
+
+```ts cordis-catalog
+/**
+ * Register one action kind for the caller's lifetime.
+ * @param kind - the kind's skill, details schema, verbs and handler.
+ * @returns disposer removing the kind; actions on its cards are then unavailable.
+ * @throws when another kind already registered the same action.
+ */
+register<Details>(kind: ActionCardKind<Details>): () => void
+
+/**
+ * Record a card decision in the Session log; the next model request reports it.
+ * @param agent - agent whose Session owns the card.
+ * @param decision - the card's new state.
+ * @throws when no kind ever registered the decision's action with this service, or its phase is one the projection derives.
+ */
+record(agent: Agent, decision: ActionCardDecision): void
+
+/**
+ * Read the cards of one Session.
+ * @param session - a Session whose projections are prepared.
+ * @returns proposals and decisions by call id.
+ */
+view(session: Session): ActionCardView
+
+/**
+ * Apply a user action to a logged card. Shared checks run first, then the kind reconciles the card; `dismiss` is
+ * recorded here and every other verb goes to the card's kind. `dismiss` also works on an unstarted card whose kind
+ * is no longer registered. Concurrent actions on one card share one operation.
+ * @param agent - live root resolved from the displayed Session.
+ * @param callId - the card's `propose_action` call id.
+ * @param verb - `dismiss` or one of the kind's verbs.
+ * @param payload - kind-defined fields such as a chosen location.
+ * @returns acceptance of background work, the decision in effect, or a refusal.
+ */
+@Remote act(agent: Agent, callId: ToolCallId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>
+```
+
+Types: [Agent](core.md) · [Session](session.md) · [ToolCallId](core.md)
+
+Source: [`packages/experimental/action-cards/src/index.ts`](../../packages/experimental/action-cards/src/index.ts)
+
 <a id="ctxconfigeditor--configeditor"></a>
 
 ### `ctx.configEditor` — `ConfigEditor`
@@ -83,6 +142,14 @@ async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: 
 ```
 
 Source: [`packages/boot/config-editor/src/index.ts`](../../packages/boot/config-editor/src/index.ts)
+
+<a id="ctxheadlessstartup--headlessstartupvalues"></a>
+
+### `ctx.headlessStartup` — `HeadlessStartupValues`
+
+What the runner row reads from HEADLESS_STARTUP_SERVICE.
+
+Source: [`packages/bundle/headless/src/startup.ts`](../../packages/bundle/headless/src/startup.ts)
 
 <a id="ctxhmr--hmr"></a>
 
@@ -135,6 +202,20 @@ Source: [`packages/boot/hmr/src/index.ts`](../../packages/boot/hmr/src/index.ts)
 Manage profile files and apply their declared reload lifecycle.
 
 ```ts cordis-catalog
+/**
+ * Read a bundle's long description: the Markdown file its locale `meta.detail` names in `language`, otherwise its
+ * README. An installed bundle is read from its directory without network access; an official bundle the installation
+ * offers before it is installed is read from the npm file CDNs at its offered version. Nothing is cached.
+ * @param name - the bundle's package name, as `listBundles()` lists it.
+ * @param language - the display language, such as `zh-CN`; documents fall back through its prefixes to English.
+ * @param options - `npmFileSources` names npm file CDNs to ask first for an offered bundle, in order, such as the one
+ *   a Client measured as fastest; configured CDNs it omits follow, and CDNs that are not configured are not asked.
+ * @returns the document with its origin and path, or `none`.
+ * @throws {RemoteError} `plugin-manager/unknown-bundle`, `plugin-manager/invalid-language`, or
+ *   `plugin-manager/detail-unavailable`.
+ */
+@Remote async readBundleDetail(name: string, language: string, options?: { npmFileSources?: NpmFileSource[] }): Promise<BundleDetail>
+
 /** Read exact plugin-version exemptions saved in this profile.
  * @returns Accepted package-name@version keys with the runtime versions they may run on, and any
  * record or file problem the reader rejected, which the caller reports instead of failing.
@@ -175,6 +256,30 @@ Manage profile files and apply their declared reload lifecycle.
  */
 @Remote async inspect(spec: string, options?: InspectOptions, signal?: AbortSignal): Promise<PluginSpecInspection>
 
+/** Read the published versions newer than an installed registry package's version, from the first registry that answers.
+ * Official bundles follow the DSH version and are not listed.
+ * @param name Installed profile dependency name.
+ * @param options The registry asked first; absent, the one the package was installed from in this process, else the configured one.
+ * @param signal Ends the lookups early.
+ * @returns At most `versionListLimit` newer versions, newest first, with their tags, deprecation, bundle declaration,
+ * and DSH compatibility, and the registry that answered; or why no list could be read, with every registry asked.
+ */
+@Remote async listVersions(name: string, options?: ListVersionsOptions, signal?: AbortSignal): Promise<PluginVersionList>
+
+/**
+ * Replace an installed registry bundle with a newer published version. The target is checked on the registry first:
+ * it must exist, declare a bundle, and accept the running DSH version, or nothing changes. With HMR the installed
+ * version is removed, so its plugins stop, and the target is installed with the same selection; when that
+ * installation fails or is cancelled, the removed version is installed again from the registry it came from.
+ * Without HMR the target is installed over the running version and the result reports the restart.
+ * @param name Installed profile dependency name.
+ * @param version Exact published version newer than the installed one.
+ * @param options The registry asked first, as for `listVersions`, and the request id naming the progress and the
+ * target installation's logs and cancellation.
+ * @returns The versions, the last step that ran with its result, and the reinstallation when one ran.
+ */
+@Remote async updateBundle(name: string, version: string, options?: UpdateBundleOptions): Promise<PluginUpdateResult>
+
 /** Persist a plugin entry's desired enablement and apply it on live profiles.
  * @param id Loader entry identity returned by listPlugins.
  * @param enabled Whether the plugin should run.
@@ -192,7 +297,9 @@ Manage profile files and apply their declared reload lifecycle.
 /**
  * Install a package using the same pnpm implementation as dsh plugin. GitHub
  * repositories get a connection check bounded by githubConnectionTimeoutMs before pnpm starts;
- * only network failures or timeouts stop installation, while pnpm owns authentication and transport fallback. A run
+ * only network failures or timeouts stop installation, while pnpm owns authentication and transport fallback. An
+ * HTTP(S) Git URL on another host is installed over SSH instead when access probes bounded by gitTransportTimeoutMs
+ * find that only SSH can read it. A run
  * that fails, is cancelled, or adds a package without a bundle patch restores
  * `package.json` and `pnpm-lock.yaml` as they were; downloaded files can stay.
  * @param spec One package spec, including local paths relative to the invocation directory.
@@ -225,6 +332,95 @@ Manage profile files and apply their declared reload lifecycle.
 ```
 
 Source: [`packages/boot/plugin-manager/src/index.ts`](../../packages/boot/plugin-manager/src/index.ts)
+
+<a id="ctxpluginmarket--pluginmarket"></a>
+
+### `ctx.pluginMarket` — `PluginMarket`
+
+Fetches, validates, and caches configured market indexes; annotates entries with the profile's installation facts.
+
+```ts cordis-catalog
+/**
+ * List the configured index sources without fetching them.
+ * @returns every source in order, with the title of its last successful read and, when the last read failed, its error.
+ */
+@Remote listIndexes(): MarketIndexSummary[]
+
+/**
+ * Replace the configured index sources through Settings, without remounting this service.
+ * `plugin-market/changed` announces the committed list. A URL already configured is kept as written, so a client can
+ * add or remove sources beside one that `listIndexes` reports as unusable.
+ * @param urls - index URLs in display order.
+ * @throws {RemoteError} `plugin-market/invalid-index-url` for an invalid new URL or a repeated URL;
+ * `plugin-market/settings-unavailable` without Settings or a profile entry.
+ */
+@Remote async setIndexes(urls: string[]): Promise<void>
+
+/**
+ * Return one page of the plugins of a configured index that match a query. Concurrent reads of a URL share one
+ * fetch; a successful document is reused for `cacheTtlMs` unless `refresh` is set. Matching and ordering read only
+ * the document; installation status and compatibility are computed for the returned page on every call.
+ * @param url - a configured index URL.
+ * @param query - text, filters, order, page, and whether to bypass the cached document.
+ * @returns the index header, the page's plugins with each plugin's default version and installation status and each
+ *   version's compatibility and install arguments, the number of matches, and the next page's offset.
+ * @throws {RemoteError} `plugin-market/invalid-query`, `plugin-market/unknown-index`, `plugin-market/invalid-index-url`,
+ *   `plugin-market/fetch-failed`, or `plugin-market/invalid-index`.
+ */
+@Remote async search(url: string, query: MarketQuery): Promise<MarketSearchResult>
+
+/**
+ * Read one plugin of a configured index, using the cached document as `search` does.
+ * @param url - a configured index URL.
+ * @param name - the plugin's package name.
+ * @returns the plugin with its default version, installation status, and annotated versions; undefined when the
+ *   index does not list it.
+ * @throws {RemoteError} `plugin-market/unknown-index`, `plugin-market/invalid-index-url`, `plugin-market/fetch-failed`,
+ *   or `plugin-market/invalid-index`.
+ */
+async entry(url: string, name: string): Promise<MarketListingEntry | undefined>
+
+/**
+ * Read the long description of one listed version of a plugin market entry, from the version's source: the npm file
+ * CDNs for a public npm version, or its pinned Git commit. The Markdown file the package's locale `meta.detail` names
+ * in `language` comes first, then the package's README, then the README of the entry's `repository`, or for an npm
+ * version without one, of its `package.json` `repository`, at the default branch. An npm version from another
+ * registry has no readable package files, so only the entry's `repository` is read.
+ * @param url - a configured index URL.
+ * @param name - the plugin's package name.
+ * @param version - one listed version.
+ * @param language - the display language, such as `zh-CN`; documents fall back through its prefixes to English.
+ * @param options - `refresh` reads again instead of reusing a result cached for `cacheTtlMs`; `npmFileSources` names
+ *   npm file CDNs to ask first for an npm version, in order; configured CDNs it omits follow, and CDNs that are not
+ *   configured are not asked.
+ * @returns the document with its origin and image document id, or `none`.
+ * @throws {RemoteError} the failures of `search`, `plugin-market/unknown-plugin` for an unlisted plugin or version,
+ *   `plugin-market/invalid-query`, or `plugin-market/detail-unavailable`.
+ */
+@Remote async readEntryDetail( url: string, name: string, version: string, language: string, options?: { refresh?: boolean; npmFileSources?: NpmFileSource[] }, ): Promise<PluginDetail>
+```
+
+Source: [`packages/boot/plugin-market/src/index.ts`](../../packages/boot/plugin-market/src/index.ts)
+
+<a id="ctxpluginrecommendations--pluginrecommendations"></a>
+
+### `ctx.pluginRecommendations` — `PluginRecommendations`
+
+Catalog lookups for card text and the enabling behind the `enable_official_plugin` card.
+
+```ts cordis-catalog
+/**
+ * Read the current catalog text for a logged card.
+ * @param agent - Exact live root resolved by the Gateway from the Session id.
+ * @param callId - The card's `propose_action` call id, never a package supplied by the browser.
+ * @returns the plugin's title, description and selection, or a refusal when the card names no available official plugin.
+ */
+@Remote async describe(agent: Agent, callId: ToolCallId): Promise<RecommendationDetails>
+```
+
+Types: [Agent](core.md) · [ToolCallId](core.md)
+
+Source: [`packages/experimental/plugin-recommendations/src/index.ts`](../../packages/experimental/plugin-recommendations/src/index.ts)
 
 <a id="ctxpluginregistryprobe--pluginregistryprobe"></a>
 
@@ -366,4 +562,59 @@ An installation moved between its Host phases. `installing` is announced once pe
 ```
 
 Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin-manager/src/types.ts)
+
+<a id="plugin-manageroperation--parallel"></a>
+
+#### `plugin-manager/operation` — parallel
+
+One manager invocation started or ended; subscribers run independently without delaying management.
+
+```ts cordis-catalog
+/**
+ * One manager invocation started or ended; subscribers run independently without delaying management.
+ * @mode parallel
+ * @param operation - Correlated operation facts; a start without an end has an unknown outcome.
+ */
+'plugin-manager/operation'(operation: PluginOperation): void | Promise<void>
+```
+
+Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin-manager/src/types.ts)
+
+<a id="plugin-managerupdate-state--emit"></a>
+
+#### `plugin-manager/update-state` — emit
+
+An update moved to its next step: checking the target, removing the installed version, installing the target, or reinstalling the removed version after the target failed. Announced once per step.
+
+```ts cordis-catalog
+/**
+ * An update moved to its next step: checking the target, removing the installed version, installing the target,
+ * or reinstalling the removed version after the target failed. Announced once per step.
+ * @mode emit
+ * @param progress - the update's request id and step.
+ */
+'plugin-manager/update-state'(progress: PluginUpdateProgress): void
+```
+
+Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin-manager/src/types.ts)
+
+<a id="plugin-market-events"></a>
+
+### `plugin-market/*` events
+
+<a id="plugin-marketchanged--emit"></a>
+
+#### `plugin-market/changed` — emit
+
+The configured index sources changed.
+
+```ts cordis-catalog
+/**
+ * The configured index sources changed.
+ * @mode emit
+ */
+'plugin-market/changed'(): void
+```
+
+Source: [`packages/boot/plugin-market/src/types.ts`](../../packages/boot/plugin-market/src/types.ts)
 <!-- END GENERATED cordis-surface -->

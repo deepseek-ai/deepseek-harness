@@ -32,7 +32,7 @@ Search and fetch are separate tools but one web-access seam. `ctx.web` owns prov
 - A tool is never unregistered merely because its selected provider is missing, misconfigured, missing credentials, ambiguous, or temporarily unavailable.
 - The provider is resolved at execution time, and a structured `WebError` is returned when the selected capability cannot run.
 
-This keeps the model schema stable without making plugin load order, credential state, or HMR timing part of the model-facing contract. If web search is enabled but no usable search provider exists, `web_search` remains visible and execution fails with a structured `WebError` such as `WEB_PROVIDER_UNAVAILABLE` or `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`. If a provider appears after `dsh-tool-web`, the next execution can use it without changing the schema. If a provider disappears mid-call, execution fails with a structured `WebError` instead of silently choosing another provider or falling through to `UNKNOWN_TOOL`.
+This keeps the model schema stable without making plugin load order, credential state, or HMR timing part of the model-facing contract. If web search is enabled but no usable search provider exists, `web_search` remains visible and execution fails with a structured `WebError` such as `WEB_PROVIDER_UNAVAILABLE` or `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`. `dsh-tool-web` narrows this per model request: it [withholds `web_search` while the selected provider reports that the request's search cannot authenticate](2026-09-27-web-search-offered-by-provider-readiness.md). If a provider appears after `dsh-tool-web`, the next execution can use it without changing the schema. If a provider disappears mid-call, execution fails with a structured `WebError` instead of silently choosing another provider or falling through to `UNKNOWN_TOOL`.
 
 The seam deliberately exposes no observation surface — no registry-change event and no aggregated capability-status query. Unavailability is a fact a caller observes by executing: `search()`/`fetch()` resolve the provider at call time and throw the structured `WebError` that names what failed. [The observation-surface Agent Note](../../archived/simplification/2026-07-04-drop-unconsumed-web-observation-surface.md) records that judgment: derived-on-call selection and enablement-based registration leave no consumer that needs a change signal or an availability probe distinct from executing and routing the error, and a future provider-status panel reintroduces the smallest signal or query it actually consumes.
 
@@ -60,6 +60,7 @@ flowchart LR
   exa["@deepseek-ai/dsh-web-search-exa"] -->|registerSearchProvider| web["@deepseek-ai/dsh-web / ctx.web"]
   perplexity["@deepseek-ai/dsh-web-search-perplexity"] -->|registerSearchProvider| web
   deepseek["@deepseek-ai/dsh-web-search-deepseek"] -->|registerSearchProvider| web
+  deepseekApi["@deepseek-ai/dsh-web-deepseek-api"] -->|registerSearchProvider / registerFetchProvider| web
   fetchLocal["@deepseek-ai/dsh-web-fetch-http"] -->|registerFetchProvider| web
   toolWeb["@deepseek-ai/dsh-tool-web"] -->|search/fetch| web
   toolWeb -->|ctx.tools.register| webSearch["tool: web_search"]
@@ -151,6 +152,8 @@ The "single provider auto-selects" rule is for tests, demos, and simple deployme
 
 Operational overrides feed the same explicit selection path: `DSH_WEB_SEARCH_PROVIDER=perplexity` is equivalent to config `searchProvider: perplexity`, not a hidden priority chain inside `dsh-tool-web`.
 
+Each search or fetch reads the configured id when it runs, so a saved settings change selects another provider for the next operation without remounting `dsh-web`. The Web search settings switch relies on this to move both capabilities to the [DeepSeek Search and Fetch APIs](../feature/2026-10-15-deepseek-search-fetch-api.md) at once.
+
 `ctx.web.search()` and `ctx.web.fetch()` resolve the provider at execution time using the selection rules above. If the selected capability is unavailable, they throw `WebError` with a structured code such as `WEB_PROVIDER_UNAVAILABLE`, `WEB_PROVIDER_CONFIGURED_MISSING`, `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`, or `WEB_PROVIDER_AMBIGUOUS`. If no provider is explicitly configured and no usable provider exists, the execution error is the generic `WEB_PROVIDER_UNAVAILABLE` case; there is deliberately no diagnostic summary of every unavailable provider.
 
 ## Search request and result schema
@@ -199,7 +202,7 @@ Full page retrieval remains the job of `web_fetch(url)`. Search snippets are dis
 
 ## Fetch request and result schema
 
-The `web_fetch` implementation is an anonymous public HTTP(S) fetch provider, `http`. It fetches bytes from a concrete URL, resolves and pins public destinations, applies the transport hygiene below, decodes textual content, and returns only the minimal model-useful result: final URL, status code, body, and truncation. It carries no browser cookies, editor credentials, git credentials, internal auth tokens, or implicit access to private services.
+The `web_fetch` implementation is an anonymous HTTP(S) fetch provider, `http`. It fetches bytes from a concrete URL, applies the transport hygiene below, decodes textual content, and returns only the minimal model-useful result: final URL, status code, body, and truncation. It carries no browser cookies, editor credentials, git credentials, or internal auth tokens. It does not restrict destination addresses.
 
 The seam request stays smaller than OpenCode's model-facing tool:
 
@@ -235,14 +238,12 @@ The provider owns safe resource retrieval: URL validation, HTTP transport, redir
 The fetch provider's resource controls:
 
 - Only `http:` and `https:` URLs are accepted; credentials in URLs are rejected.
-- A literal address or the complete result of one hostname lookup must contain only globally reachable unicast IPv4 or IPv6 destinations. IPv6 resolution also discovers the active DNS64 prefix and rejects NAT64 addresses that translate to non-public IPv4. Loopback, private, link-local, carrier-grade NAT, multicast, reserved, transition, translation, and private IPv4-mapped IPv6 addresses are rejected.
-- The request retains that validated address set in an Undici lookup callback instead of resolving the hostname again. The original hostname remains the HTTP Host and TLS SNI value, while DNS rebinding cannot replace the connection destination after validation.
 - Maximum URL length, response byte cap, decoded body character cap, timeout, and redirect hop cap are enforced.
 - Abort signals propagate through network fetches and expensive decoding.
-- Only same-origin redirects are followed automatically; each followed hop performs a fresh public-address lookup and pins its own connection. A cross-origin redirect fails with `WEB_REDIRECT_BLOCKED`, requiring a fresh tool call and fresh public-address validation. (Claude Code's WebFetch uses this same model — it does not auto-follow a cross-host redirect; it returns the redirect target to the model for a fresh call.)
+- Only same-origin redirects are followed automatically; each followed hop repeats URL validation. A cross-origin redirect fails with `WEB_REDIRECT_BLOCKED`, requiring a fresh tool call. (Claude Code's WebFetch uses this same model — it does not auto-follow a cross-host redirect; it returns the redirect target to the model for a fresh call.)
 - Requests carry an explicit product user agent rather than silently impersonating a browser.
 
-The provider rejects an entire DNS answer set when any address is not public instead of silently filtering the unsafe members. This fail-closed rule prevents connection-family selection or fallback from reaching an address that did not satisfy the public-network policy.
+Requests use the process-wide dispatcher, so the installed outbound proxy policy and the system resolver decide the connection. Loopback, private-network, and cloud metadata destinations are reachable.
 
 ## Tool consumer behavior
 
@@ -310,17 +311,13 @@ Rejected for the first version. Those providers often return extracted or summar
 
 Rejected for the seam. `prompt` turns fetch into LLM summarization and couples public-web retrieval to a model provider. The harness seam should fetch and decode deterministically; `dsh-tool-web` can later offer summaries as a presentation mode without making `ctx.web` depend on `ctx.llm`.
 
-### Validate DNS and then call an ordinary fetch
+### Restrict fetch to public addresses
 
-Rejected because an ordinary fetch resolves the hostname again when it opens the connection. An attacker can return a public address during validation and a private address during the second lookup. Passing the validated answer set through the connection's lookup callback closes that rebinding interval while preserving hostname-based HTTP and TLS behavior.
-
-### Block private-looking hostname strings without pinning resolved addresses
-
-Rejected because hostname syntax does not establish the connection destination: an arbitrary public-looking name can resolve to loopback, a private range, or a cloud metadata address. Address classification belongs after resolution, and every address available to connection fallback must pass it.
+Rejected. Resolving each hostname, rejecting any non-public answer, and pinning the connection to the validated set does not confine the model, which reaches the same networks through mounted shell tools, and it refuses every page on hosts whose DNS answers with non-public addresses, such as TUN-mode proxies with fake-IP DNS. Deployments that must keep the model away from private destinations need network confinement, a `tools/pre-execute` policy, or no fetch tool.
 
 ### Require per-call approval before public fetches
 
-Rejected for the shipped presets. Public-address validation blocks SSRF destinations, while per-call confirmation would interrupt ordinary browsing without controlling public data egress reliably: a model can reach the same public network through mounted shell tools. Deployments that require a dedicated confirmation step can add a `tools/pre-execute` policy or disable `web_fetch`.
+Rejected for the shipped presets. Per-call confirmation would interrupt ordinary browsing without controlling data egress reliably: a model can reach the same networks through mounted shell tools. Deployments that require a dedicated confirmation step can add a `tools/pre-execute` policy or disable `web_fetch`.
 
 ## Consequences
 
@@ -332,7 +329,7 @@ Rejected for the shipped presets. Public-address validation blocks SSRF destinat
 
 **Provider state can change after startup.** A tool can be visible in the request assembled at step start and lose its provider before execution. The execution path resolves again and fails with a structured error.
 
-**Fetch is a network boundary, not just a read-only tool.** Public-address validation and connection pinning prevent `web_fetch` from reaching non-public destinations, but a model can still disclose data through a public URL and fetched text remains untrusted model input. The shipped `cordis`, `code`, and `standard` presets expose `web_fetch` in every sandbox and approval mode without per-call confirmation.
+**Fetch is a network boundary, not just a read-only tool.** `web_fetch` reaches any destination the host can, including loopback and private-network services, a model can disclose data through a URL, and fetched text remains untrusted model input. The shipped `cordis`, `code`, and `standard` presets expose `web_fetch` in every sandbox and approval mode without per-call confirmation.
 
 **Large web content can damage context quality.** Providers enforce byte/character caps and report `truncated`; `tool-web` formats bounded model output with clear continuation or follow-up guidance.
 

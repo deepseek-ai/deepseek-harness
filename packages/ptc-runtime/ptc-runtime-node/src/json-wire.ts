@@ -1,5 +1,5 @@
 /**
- * Lossless-JSON snapshots for the dependency-free source bootstrap closure.
+ * Lossless-JSON snapshots shared by the host and the source bootstrap closure.
  * @module @deepseek-ai/dsh-ptc-runtime-node/json-wire
  */
 

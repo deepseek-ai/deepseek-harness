@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-部署每次可启用一个计算机操作提供方。加载另一个提供方时会失败，并报告已注册的提供方名称。各提供方提供自己的工具和桌面操作。本包不添加模型可见工具，也不协调并发 Session。
+部署每次可启用一个计算机操作提供方。加载另一个提供方时会失败，并报告已注册的提供方名称。DSH 原生 CUA 和 Cua Driver 适配包都使用此注册器。各提供方提供自己的工具和桌面操作。本包不添加模型可见工具，也不协调并发 Session。
 
 ## 目录
 
@@ -53,6 +53,9 @@ kind: "package-reference"
 ## 延伸阅读
 
 - [计算机操作](../../../docs/subsystems/computer-use.zh.md) — 提供方选择和共享桌面限制。
+- [Computer Use 组合包](../../experimental/cua-bundle/README.zh.md)：启用 DSH 原生 CUA 和权限管理功能。
+- [共享 CUA 库](../../experimental/cua/README.zh.md)：应用与窗口对象、工具执行和应用授权。
+- [macOS CUA 提供方](../../experimental/cua-macos/README.zh.md)：DSH 的 Swift 实现和原生辅助进程生命周期。
 - [Cua Driver MCP 提供方](../../experimental/computer-use-cua-driver-mcp/README.zh.md) — 使用已安装的驱动。
 - [Cua Driver 原生提供方](../../experimental/computer-use-cua-driver-native/README.zh.md) — 使用 npm 运行时。
 

@@ -10,6 +10,8 @@ The Web Host runs tool-capable Sessions with the current operating-system user's
 
 ## Decision
 
+Browser callers follow this decision; independent CLI/MCP admission is owned by the [API connect decision](2026-10-09-operator-scoped-connect-handshake.md).
+
 `dsh-client-connection` authenticates the complete Host API before dispatch. Every API Proxy method, Remote unary call, generic Connection channel, and Remote WebSocket stream requires the same browser session; endpoint ownership and method names do not alter authority. The existing Host/Origin checks run first and retain their DNS-rebinding and cross-site-request role, returning 403 when they fail. A trusted Host without a valid browser session receives 401. The browser-trust rules remain owned by the [carrier-level browser trust decision](2026-07-28-api-browser-trust-boundary.md).
 
 Each Host process generates a random launch token, retained by the root application context across Connection hot reloads. `dsh-web-app` prints and opens the normal root URL with that token in the query once per process. `frontend-static` asks Connection to authorize index responses: only `GET /?token=...` exchanges the process token for a cookie, then redirects to clean `./`; the token is not accepted on API paths or in an Authorization header. An obsolete token paired with a valid cookie redirects to clean `./`. Missing and invalid credentials receive one minimal 401 response. Static non-index assets remain public.

@@ -37,6 +37,7 @@ function updateCopy(state: DesktopUpdatePresentation, t: SettingsTranslate): { l
       'stop-failed': t('desktop.update.stopFailed'),
       'tasks-changed': t('desktop.update.tasksChanged'),
       'tasks-unavailable': t('desktop.update.tasksUnavailable'),
+      'fullscreen-timeout': t('desktop.update.fullscreenTimeout'),
     }
     return { label, detail: failures[state.failure ?? 'install'] }
   }

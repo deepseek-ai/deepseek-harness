@@ -6,10 +6,12 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Begin your reply with the plain sentence "Reading the workspace now." as text, and in that same message call the bash tool with the command "echo alpha". After the tool result, reply with the single word DONE and stop. {{clock}}
 - button "Copy"
 - status: Completed
 - button "Completed in {{duration}}"
+- paragraph: Reading the workspace now.
 - paragraph: DONE
 - button "Copy"
 - button "Good response"

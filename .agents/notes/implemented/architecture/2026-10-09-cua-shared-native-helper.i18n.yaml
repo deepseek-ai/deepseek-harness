@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-09-cua-shared-native-helper.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-09-cua-shared-native-helper.md
+/agent-note-shared-native-cua-process-with-agent-scoped-state:
+  en: 65056aee19bf6b22
+  zh: 9823fa0c33497ff9
+/agent-note-shared-native-cua-process-with-agent-scoped-state/problem:
+  en: 386864a282e5ad58
+  zh: a4ea75ec70eb7778
+/agent-note-shared-native-cua-process-with-agent-scoped-state/decision:
+  en: 11bab6870c3d802f
+  zh: a22114f2217a3a41
+/agent-note-shared-native-cua-process-with-agent-scoped-state/alternatives-considered:
+  en: 883f71387f599160
+  zh: 4b5f1450be799397
+/agent-note-shared-native-cua-process-with-agent-scoped-state/consequences:
+  en: 518a4abf2c4c95be
+  zh: 72bf2b9817975368

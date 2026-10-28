@@ -24,6 +24,7 @@ import type {
 } from '@deepseek-ai/dsh-fs'
 import {
   applyLiteralEdit,
+  expandHomePrefix,
   listDirectory,
   localDisplayPath,
   normalizeLineEndings,
@@ -132,7 +133,7 @@ export class LocalFileSystem extends FileSystem {
 
   override async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
     if (opts?.signal?.aborted) throw new FsError('resolve aborted', 'FS_ABORTED')
-    const local = await resolveLocalTarget(opts?.cwd ?? this.config.cwd, path)
+    const local = await resolveLocalTarget(opts?.cwd ?? this.config.cwd, expandHomePrefix(path))
     if (opts?.signal?.aborted) throw new FsError('resolve aborted', 'FS_ABORTED')
     return { targetKey: local.targetKey, displayPath: local.displayPath }
   }
@@ -166,7 +167,7 @@ export class LocalFileSystem extends FileSystem {
     if (signal?.aborted) throw new FsError('lstat aborted', 'FS_ABORTED')
     if (path.trim().length === 0) throw new FsError('file_path must be a non-empty string', 'FS_NOT_FOUND')
     const cwd = opts?.cwd ?? this.config.cwd
-    const info = await probeNoFollow(localDisplayPath(cwd, path))
+    const info = await probeNoFollow(localDisplayPath(cwd, expandHomePrefix(path)))
     if (signal?.aborted) throw new FsError('lstat aborted', 'FS_ABORTED')
     if (!info) return undefined
     return { version: info.version, type: info.type, size: info.size }

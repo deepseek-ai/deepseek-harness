@@ -1,6 +1,6 @@
 /** Loader resolves configuration imports in their project when Node internals are unavailable. */
 import { Context } from '@deepseek-ai/cordis'
-import Loader, { ModuleLoader } from '@deepseek-ai/cordis-plugin-loader'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { existsSync } from 'node:fs'
 import * as fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -100,14 +100,5 @@ describe('Loader project resolution', () => {
     expect(await createResolve('https://example.com/cordis.yml')).toBeUndefined()
     const tree = await treeFor('https://example.com/cordis.yml')
     expect(await tree.import('node:path')).toMatchObject({ join })
-  })
-
-  it('uses the running Node loader signature selected by its module-job API', () => {
-    const loader = ModuleLoader.fromInternal()
-    expect(loader).toBeDefined()
-    const resolved = loader!.version === 'v2'
-      ? loader!.resolveSync(import.meta.url, { specifier: 'node:path', attributes: {} })
-      : loader!.resolveSync('node:path', import.meta.url, {})
-    expect(resolved.url).toBe('node:path')
   })
 })

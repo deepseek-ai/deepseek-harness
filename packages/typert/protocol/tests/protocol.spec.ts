@@ -412,6 +412,12 @@ describe('typert-protocol Remote declarations', () => {
     expect(() => { directSecond[0]!.call(reverseService) }).toThrow('conflicting invocation markers')
   })
 
+  it('leaves bindings without a Cordis Context free of an invocation accessor', () => {
+    const service = { ctx: {} }
+    expect(bindTypertRemote(service, 'plain')).toEqual({ service, serviceKey: 'plain', namespace: 'plain' })
+    expect(Object.hasOwn(service.ctx, 'invocation')).toBe(false)
+  })
+
   it('rejects ambiguous binding names', () => {
     expect(() => bindTypertRemote({}, '')).toThrow('service key')
     expect(() => bindTypertRemote({}, 'goals', { namespace: 'api/goals' })).toThrow('namespace')

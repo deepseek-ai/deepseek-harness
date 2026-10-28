@@ -48,7 +48,7 @@ function mount(initiallyDone = false, initiallyLoading = false) {
   }
   let account: AccountSnapshot = {
     view: { status: 'credential-stored', attempt: null, links: { usageUrl: 'https://example.com/usage', topUpUrl: 'https://example.com/top_up' } },
-    failed: false, details: undefined,
+    failed: false, details: undefined, avatar: undefined,
   }
   // This entry consumes only its injected selectors; the shell owns the global hooks.
   const globals = {} as GlobalStandardProps

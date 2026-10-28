@@ -101,6 +101,7 @@ function props(
     useChat: unused,
     useTrajectory: unused,
     inputActions: {
+      insertQuote: () => false,
       captureInsertion: unused,
       insertText: unused,
       setDraft: unused,
@@ -139,7 +140,7 @@ function summary(id: SessionId, updatedAt: number): SessionSummary {
 
 function hoverCatalog(trigger: HTMLElement): void {
   vi.useFakeTimers()
-  fireEvent.mouseEnter(trigger)
+  fireEvent.pointerEnter(trigger)
   act(() => { vi.advanceTimersByTime(150) })
 }
 
@@ -336,6 +337,19 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.queryByRole('tree')).toBeNull()
   })
 
+  it('keeps touch entry closed and opens the catalog when tapped', async () => {
+    vi.useFakeTimers()
+    render(<HeaderCatalog {...props(catalog())} />)
+    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const touch = new Event('pointerover', { bubbles: true })
+    Object.defineProperty(touch, 'pointerType', { value: 'touch' })
+    fireEvent(trigger, touch)
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+    expect(screen.queryByRole('tree')).toBeNull()
+    fireEvent.click(trigger)
+    expect(screen.getByRole('tree')).toBeTruthy()
+  })
+
   it('opens on hover and preserves the portaled-menu crossing grace', async () => {
     vi.useFakeTimers()
     const advance = async (duration: number): Promise<void> => {
@@ -346,7 +360,7 @@ describe('SubagentHeaderLineage', () => {
     const triggerRect = vi.spyOn(trigger, 'getBoundingClientRect')
       .mockReturnValue({ bottom: 40, left: 50 } as DOMRect)
 
-    fireEvent.mouseEnter(trigger)
+    fireEvent.pointerEnter(trigger)
     await advance(149)
     expect(screen.queryByRole('tree')).toBeNull()
     await advance(1)
@@ -357,19 +371,19 @@ describe('SubagentHeaderLineage', () => {
     fireEvent.resize(window)
     expect(menu.style.top).toBe('65px')
     expect(menu.style.left).toBe('70px')
-    fireEvent.mouseLeave(trigger.parentElement!)
-    fireEvent.mouseEnter(menu)
+    fireEvent.pointerLeave(trigger.parentElement!)
+    fireEvent.pointerEnter(menu)
     await advance(120)
     expect(screen.getByRole('tree')).toBeTruthy()
 
-    fireEvent.mouseLeave(menu)
+    fireEvent.pointerLeave(menu)
     await advance(119)
     expect(screen.getByRole('tree')).toBeTruthy()
     await advance(1)
     expect(screen.queryByRole('tree')).toBeNull()
 
     hoverCatalog(trigger)
-    fireEvent.mouseLeave(trigger.parentElement!)
+    fireEvent.pointerLeave(trigger.parentElement!)
     view.unmount()
     await advance(120)
   })
@@ -385,28 +399,29 @@ describe('SubagentHeaderLineage', () => {
 
     fireEvent.click(trigger)
     const menu = screen.getByRole('tree')
-    fireEvent.mouseEnter(trigger)
-    fireEvent.mouseLeave(root)
+    fireEvent.pointerEnter(trigger)
+    fireEvent.pointerLeave(root)
     await advance(300)
     expect(screen.getByRole('tree')).toBe(menu)
-    fireEvent.mouseEnter(menu.parentElement!)
-    fireEvent.mouseLeave(menu.parentElement!)
+    fireEvent.pointerEnter(menu.parentElement!)
+    fireEvent.pointerEnter(menu.parentElement!, { pointerType: 'touch' })
+    fireEvent.pointerLeave(menu.parentElement!)
     await advance(300)
     expect(screen.getByRole('tree')).toBe(menu)
     fireEvent.pointerDown(document.body)
     expect(screen.queryByRole('tree')).toBeNull()
 
-    fireEvent.mouseEnter(trigger)
+    fireEvent.pointerEnter(trigger)
     await advance(150)
     const hovered = screen.getByRole('tree')
     fireEvent.click(trigger)
-    fireEvent.mouseLeave(root)
+    fireEvent.pointerLeave(root)
     await advance(300)
     expect(screen.getByRole('tree')).toBe(hovered)
     fireEvent.keyDown(hovered, { key: 'Escape' })
     expect(screen.queryByRole('tree')).toBeNull()
-    fireEvent.mouseEnter(trigger)
-    fireEvent.mouseLeave(root)
+    fireEvent.pointerEnter(trigger)
+    fireEvent.pointerLeave(root)
     await advance(300)
     expect(screen.queryByRole('tree')).toBeNull()
   })
@@ -415,13 +430,13 @@ describe('SubagentHeaderLineage', () => {
     vi.useFakeTimers()
     render(<HeaderCatalog {...props(catalog())} />)
     const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
-    fireEvent.mouseOver(trigger, { relatedTarget: document.body })
+    fireEvent.pointerOver(trigger, { relatedTarget: document.body })
     await act(async () => { await vi.advanceTimersByTimeAsync(150) })
     const menu = screen.getByRole('tree').parentElement!
-    fireEvent.mouseOut(trigger, { relatedTarget: menu })
-    fireEvent.mouseOver(menu, { relatedTarget: trigger })
-    fireEvent.mouseOut(menu, { relatedTarget: trigger })
-    fireEvent.mouseOver(trigger, { relatedTarget: menu })
+    fireEvent.pointerOut(trigger, { relatedTarget: menu })
+    fireEvent.pointerOver(menu, { relatedTarget: trigger })
+    fireEvent.pointerOut(menu, { relatedTarget: trigger })
+    fireEvent.pointerOver(trigger, { relatedTarget: menu })
     await act(async () => { await vi.advanceTimersByTimeAsync(150) })
     expect(screen.getByRole('tree').parentElement).toBe(menu)
   })
@@ -430,9 +445,9 @@ describe('SubagentHeaderLineage', () => {
     vi.useFakeTimers()
     render(<HeaderCatalog {...props(catalog())} />)
     const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
-    fireEvent.mouseOver(trigger, { relatedTarget: document.body })
+    fireEvent.pointerOver(trigger, { relatedTarget: document.body })
     await act(async () => { await vi.advanceTimersByTimeAsync(150) })
-    fireEvent.mouseOut(trigger, { relatedTarget: document.body })
+    fireEvent.pointerOut(trigger, { relatedTarget: document.body })
     fireEvent.click(trigger, { detail: 0 })
     await act(async () => { await vi.advanceTimersByTimeAsync(120) })
     expect(screen.getByRole('tree')).toBeTruthy()
@@ -465,7 +480,7 @@ describe('SubagentHeaderLineage', () => {
     const view = render(<HeaderCatalog {...props(catalog())} />)
     const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
 
-    fireEvent.mouseEnter(trigger)
+    fireEvent.pointerEnter(trigger)
     await vi.advanceTimersByTimeAsync(149)
     view.rerender(<HeaderCatalog {...props(catalog({ entries: [] }))} />)
     expect(screen.queryByRole('button')).toBeNull()
@@ -1084,6 +1099,8 @@ describe('SubagentHeaderLineage', () => {
     const current = screen.getByRole('treeitem', { name: /worker/ })
     expect(current.getAttribute('aria-current')).toBe('true')
     expect(within(current).getByText('worker').className).toContain('currentLabel')
+    expect(within(current).queryByRole('button', { name: '在侧边栏打开 worker' })).toBeNull()
+    expect(within(screen.getByRole('treeitem', { name: /reviewer/ })).getByRole('button', { name: '在侧边栏打开 reviewer' })).toBeTruthy()
     fireEvent.click(screen.getByRole('treeitem', { name: /reviewer/ }))
     expect(input.openChild).toHaveBeenCalledWith({
       parentSessionId: PARENT,
@@ -1154,7 +1171,7 @@ describe('SubagentHeaderLineage', () => {
     expect(switcher.className).toContain('ancestorSwitcherTrigger')
     expect(screen.queryByRole('button', { name: /1 个子智能体/ })).toBeNull()
     vi.useFakeTimers()
-    fireEvent.mouseEnter(switcher.parentElement!)
+    fireEvent.pointerEnter(switcher.parentElement!)
     fireEvent.click(switcher)
     expect(input.openTitle).toHaveBeenCalledOnce()
     act(() => { vi.advanceTimersByTime(150) })

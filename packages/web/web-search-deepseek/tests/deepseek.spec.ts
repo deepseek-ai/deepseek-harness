@@ -1,16 +1,17 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
-import WebRuntime, { WebError } from '@deepseek-ai/dsh-web'
+import WebRuntime, { WebError, type WebSearchResult } from '@deepseek-ai/dsh-web'
 import {
   DeepSeekSearchProvider,
   DEEPSEEK_PROVIDER_ID,
@@ -203,6 +204,7 @@ describe('DeepSeekSearchProvider request mapping', () => {
       max_tokens: 4096,
       messages: [{ role: 'user', content: [{ type: 'text', text: 'Perform a web search for the query: hello' }] }],
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+      thinking: { type: 'disabled' },
     }
     expect(JSON.parse(init.body as string)).toEqual(body)
     expect(recordRequest).toHaveBeenCalledOnce()
@@ -470,12 +472,11 @@ describe('DeepSeekSearchProvider error handling', () => {
       .rejects.toThrow(expect.objectContaining({
         code: 'WEB_PROVIDER_ERROR',
         message: 'DeepSeek API error (HTTP 429): rate limited\n\n'
-          + 'The web search request used endpoint "https://api.deepseek.test/anthropic/v1/messages". '
+          + 'The web request used endpoint "https://api.deepseek.test/anthropic/v1/messages". '
           + 'Search endpoint configuration is separate from chat. If that endpoint is not intended, '
-          + 'guide the user to Settings > Plugins > Plugin configuration > Web search, where they can '
-          + 'change and save Endpoint. If that settings page is unavailable, the user can set '
-          + 'DEEPSEEK_SEARCH_BASE_URL or configure web-search-deepseek.baseURL to a trusted '
-          + 'Anthropic-compatible Messages API base. Only the user should choose or change the endpoint.',
+          + 'guide the user to Plugins > Built-in plugin settings > Web search, where they can '
+          + 'change and save Messages API base URL. If that settings page is unavailable, the user can set '
+          + 'web-search-deepseek.baseURL to a trusted DeepSeek endpoint. Only the user should choose or change the endpoint.',
       }))
   })
 
@@ -544,7 +545,7 @@ describe('DeepSeekSearchProvider error handling', () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('connection refused'))))
     const error = await rejectedWebError(searchProvider(options).search({ query: 'q' }))
     expect(error.code).toBe('WEB_PROVIDER_ERROR')
-    expect(error.message).toContain('The web search request used endpoint "https://api.deepseek.test/anthropic/v1/messages".')
+    expect(error.message).toContain('The web request used endpoint "https://api.deepseek.test/anthropic/v1/messages".')
   })
 
   it('strict mode flows through search(): a prose-only response throws WEB_PROVIDER_ERROR', async () => {
@@ -704,6 +705,7 @@ describe('web-search-deepseek account route selection', () => {
     const ctx = new Context()
     try {
       await ctx.plugin(SessionStore)
+      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
       ctx.provide('deepseekAccount', {
@@ -735,5 +737,215 @@ describe('web-search-deepseek account route selection', () => {
     expect(asked).toEqual([])
     expect(headers['x-api-key']).toBe('ds-key')
     expect(headers).not.toHaveProperty('x-dsh-auth-token')
+  })
+})
+
+describe('web-search-deepseek search readiness', () => {
+  const mounted: Context[] = []
+  let savedKey: string | undefined
+
+  beforeEach(() => {
+    savedKey = process.env.DEEPSEEK_API_KEY
+    delete process.env.DEEPSEEK_API_KEY
+  })
+
+  afterEach(async () => {
+    await Promise.all(mounted.splice(0).map(ctx => ctx.fiber.dispose()))
+    if (savedKey === undefined) delete process.env.DEEPSEEK_API_KEY
+    else process.env.DEEPSEEK_API_KEY = savedKey
+  })
+
+  interface Setup {
+    config?: Record<string, unknown>
+    account?: Pick<DeepSeekAccount, 'resolveToken'>
+    credentialsDir?: string
+  }
+
+  /**
+   * An account double applying the account service's token policy: a token is
+   * released only for the official inference origin.
+   * @param asked - receives every URL the account is asked to authenticate.
+   * @returns the account double.
+   */
+  function officialOriginAccount(asked: string[] = []): Pick<DeepSeekAccount, 'resolveToken'> {
+    return {
+      resolveToken: (url: string) => {
+        asked.push(url)
+        return Promise.resolve(new URL(url).origin === 'https://api.deepseek.com' ? 'account-token' : undefined)
+      },
+    }
+  }
+
+  /**
+   * Mount the web seam with the DeepSeek provider selected for search.
+   * @param setup - provider config, account double, and credential store.
+   * @returns the composed context.
+   */
+  async function compose(setup: Setup = {}): Promise<Context> {
+    const ctx = new Context()
+    mounted.push(ctx)
+    await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
+    if (setup.credentialsDir !== undefined) {
+      await ctx.plugin(LocalCredentialProvider, { path: join(setup.credentialsDir, '.credentials.yaml'), watch: false })
+    }
+    if (setup.account !== undefined) ctx.provide('deepseekAccount', setup.account as DeepSeekAccount)
+    await ctx.plugin(deepseekPlugin, setup.config ?? {})
+    return ctx
+  }
+
+  it('is not ready on an API-key route without a search key', async () => {
+    const ctx = await compose()
+    expect(await ctx.web.searchReady('deepseek-official')).toBe(false)
+  })
+
+  it('becomes ready once a search key is stored', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-web-search-ready-'))
+    try {
+      const ctx = await compose({ credentialsDir: dir })
+      expect(await ctx.web.searchReady('deepseek-official')).toBe(false)
+      await ctx.credentials.set(credentialRef('DEEPSEEK_API_KEY'), 'stored-key')
+      expect(await ctx.web.searchReady('deepseek-official')).toBe(true)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('is ready when the provider config carries a literal key', async () => {
+    const ctx = await compose({ config: { apiKey: 'ds-key' } })
+    expect(await ctx.web.searchReady('deepseek-official')).toBe(true)
+  })
+
+  it('is ready when the launch environment supplies the key', async () => {
+    process.env.DEEPSEEK_API_KEY = 'env-key'
+    const ctx = await compose()
+    expect(await ctx.web.searchReady('deepseek-official')).toBe(true)
+  })
+
+  it('is ready on the account route when the account authenticates the search endpoint', async () => {
+    const asked: string[] = []
+    const ctx = await compose({ account: officialOriginAccount(asked) })
+    expect(await ctx.web.searchReady('deepseek-account')).toBe(true)
+    expect(asked).toEqual(['https://api.deepseek.com/anthropic/v1/messages'])
+  })
+
+  it('asks the account only for the account route', async () => {
+    const asked: string[] = []
+    const ctx = await compose({ account: officialOriginAccount(asked) })
+    expect(await ctx.web.searchReady('deepseek-official')).toBe(false)
+    expect(await ctx.web.searchReady(undefined)).toBe(false)
+    expect(asked).toEqual([])
+  })
+
+  it.each<[string, Setup]>([
+    ['a search endpoint outside the account origin', { config: { baseURL: 'https://gateway.test/anthropic/v1' }, account: officialOriginAccount() }],
+    ['a signed-out account', { account: { resolveToken: () => Promise.resolve(undefined) } }],
+    ['an empty account token', { account: { resolveToken: () => Promise.resolve('') } }],
+    ['an unreadable account grant', { account: { resolveToken: () => Promise.reject(new Error('unreadable grant')) } }],
+    ['no account service', {}],
+  ])('is not ready on the account route with %s and no search key', async (_label, setup) => {
+    const ctx = await compose(setup)
+    expect(await ctx.web.searchReady('deepseek-account')).toBe(false)
+  })
+
+  it.each<[string, Record<string, unknown>, Record<string, string>, boolean]>([
+    ['the DeepSeek key', {}, { DEEPSEEK_API_KEY: 'env-key' }, true],
+    ['a literal key', { apiKey: 'ds-key' }, {}, true],
+    ['no key', {}, {}, false],
+  ])('answers for a model request on another provider route with %s, as on any route', async (_label, config, env, expected) => {
+    const saved = Object.fromEntries(Object.keys(env).map(name => [name, process.env[name]]))
+    Object.assign(process.env, env)
+    try {
+      const ctx = await compose({ config })
+      expect(await ctx.web.searchReady('openai')).toBe(expected)
+    } finally {
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined) Reflect.deleteProperty(process.env, name)
+        else process.env[name] = value
+      }
+    }
+  })
+
+  it('is ready without a model route when a search key exists', async () => {
+    process.env.DEEPSEEK_API_KEY = 'env-key'
+    const ctx = await compose()
+    expect(await ctx.web.searchReady(undefined)).toBe(true)
+  })
+
+  it('is not ready when the credential store cannot be read', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-web-search-store-'))
+    try {
+      const ctx = await compose({ credentialsDir: dir })
+      await ctx.credentials.set(credentialRef('DEEPSEEK_API_KEY'), 'stored-key')
+      vi.spyOn(ctx.credentials, 'describe').mockRejectedValue(new Error('credential store unreadable'))
+      expect(await ctx.web.searchReady('deepseek-official')).toBe(false)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it.each<[string, Setup, string | undefined]>([
+    ['a literal key', { config: { apiKey: 'ds-key' } }, undefined],
+    ['a launch environment key', {}, 'env-key'],
+  ])('is not ready on the account route when the account grant cannot be read, even with %s', async (_label, setup, envKey) => {
+    if (envKey !== undefined) process.env.DEEPSEEK_API_KEY = envKey
+    const fetchMock = vi.fn(async () => jsonResponse(searchResponse()))
+    vi.stubGlobal('fetch', fetchMock)
+    const ctx = await compose({ ...setup, account: { resolveToken: () => Promise.reject(new Error('account storage unreadable')) } })
+    expect(await ctx.web.searchReady('deepseek-account')).toBe(false)
+    // A search on that route reads the same grant before any key and fails instead of trying the key.
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
+    const session = ctx.sessions.create(SessionId('web-search-unreadable-grant'))
+    session.append('turn/start', { turn: 1 })
+    session.append('request/context', { provider: 'deepseek-account', model: 'deepseek-v4-flash' })
+    const failure = await rejectedWebError(ctx.agents.withInitiator({ session } as Agent, () => ctx.web.search({ query: 'q' })))
+    expect(failure.code).toBe('WEB_PROVIDER_ERROR')
+    expect(failure.message).toContain('account storage unreadable')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('web-search-deepseek on any model route', () => {
+  /**
+   * Run one search for a Session whose latest model request used `route`.
+   * @param route - provider route the Session's request context records.
+   * @param config - provider config; without it the search uses `DEEPSEEK_API_KEY`, here set to `env-key`.
+   * @returns the fetch mock with the search result or its rejection.
+   */
+  async function searchOn(route: string, config: Record<string, unknown> = {}) {
+    const fetchMock = vi.fn(async (_input: string, _init?: RequestInit) => jsonResponse(searchResponse()))
+    vi.stubGlobal('fetch', fetchMock)
+    const savedKey = process.env.DEEPSEEK_API_KEY
+    process.env.DEEPSEEK_API_KEY = 'env-key'
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SessionStore)
+      await ctx.plugin(SessionProjectionRegistry)
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
+      await ctx.plugin(deepseekPlugin, config)
+      const session = ctx.sessions.create(SessionId(`web-search-route-${route}`))
+      session.append('turn/start', { turn: 1 })
+      session.append('request/context', { provider: route, model: 'gpt-5' })
+      const search = ctx.agents.withInitiator({ session } as Agent, () => ctx.web.search({ query: 'q' }))
+      const outcome: { result?: WebSearchResult; error?: unknown } = await search.then(
+        result => ({ result }), (error: unknown) => ({ error }))
+      return { fetchMock, ...outcome }
+    } finally {
+      await ctx.fiber.dispose()
+      if (savedKey === undefined) Reflect.deleteProperty(process.env, 'DEEPSEEK_API_KEY')
+      else process.env.DEEPSEEK_API_KEY = savedKey
+    }
+  }
+
+  it.each<[string, Record<string, unknown>, string]>([
+    ['the DeepSeek key', {}, 'env-key'],
+    ['a literal key', { apiKey: 'search-key' }, 'search-key'],
+  ])('searches with %s for a conversation on another provider route', async (_label, config, key) => {
+    const { fetchMock, result } = await searchOn('openai', config)
+    expect(result).toMatchObject({ truncated: false })
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect((init?.headers as Record<string, string>)['x-api-key']).toBe(key)
   })
 })

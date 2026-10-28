@@ -1,12 +1,12 @@
 import {
-  useEffect, useMemo, useRef, useState,
+  useEffect, useId, useMemo, useRef, useState,
   type ChangeEvent, type FocusEvent, type KeyboardEvent,
 } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronLeftOutlineRegular,
   IconChevronRightOutlineRegular, IconChevronUpOutlineRegular, IconCloseOutlineRegular,
-  IconEditOutlineRegular, MarkdownText,
+  IconEditOutlineRegular, MarkdownText, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { planReviewOf, type QuestionAnswer, type QuestionCardSnapshot, type QuestionComposerProps } from './contract/slots.ts'
 import type { PendingQuestion } from './contract/slots.ts'
@@ -27,6 +27,16 @@ const REMOVED_CARD: QuestionCardSnapshot = {
   state: 'open', waitState: 'counting', countdown: undefined, channel: 'none', closed: true,
 }
 
+/** Long copy the user expanded on one question: the question itself or an option description by index. */
+interface ExpandedCopy {
+  /** Index of the question the expansions belong to. */
+  readonly index: number
+  /** Expanded copy of that question: `'question'` or an option index. */
+  readonly copies: ReadonlySet<'question' | number>
+}
+
+const NOTHING_EXPANDED: ExpandedCopy['copies'] = new Set()
+
 /**
  * Split the conventional recommendation suffix without changing the answer value.
  * @param label - Original option label returned if selected.
@@ -39,10 +49,14 @@ export function parseRecommendedLabel(label: string): { label: string; recommend
     : { label, recommended: false }
 }
 
-/** Only a marked first choice is an implicit draft; the user still submits it. */
-function recommendedFirstOption(question: PendingQuestion['questions'][number]): string | undefined {
-  const label = question.options?.[0]?.label
-  return label !== undefined && parseRecommendedLabel(label).recommended ? label : undefined
+/**
+ * Implicit draft selection the user still submits: every marked choice of a
+ * multi-select question, or a marked first choice of a single-select question.
+ */
+function recommendedOptions(question: PendingQuestion['questions'][number]): string[] {
+  const labels = (question.options ?? []).map(option => option.label)
+  const candidates = question.multiSelect === true ? labels : labels.slice(0, 1)
+  return candidates.filter(label => parseRecommendedLabel(label).recommended)
 }
 
 /** Accept persisted progress only when it still describes this question batch. */
@@ -157,6 +171,7 @@ type QuestionFlowProps =
   { pending: PendingQuestion } & Pick<QuestionComposerProps, 't' | 'useStore' | 'useQuestionCard' | 'actions'>
 
 function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: QuestionFlowProps) {
+  const descriptionIdPrefix = useId()
   const questions = pending.questions
   // A read-only card built from a settled call's transcript: the same panel
   // over the recorded answers, with nothing left to submit.
@@ -171,9 +186,8 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
     return questions.map((item) => {
       const answer = recorded.get(item.id)
       const custom = answer?.custom ?? ''
-      const recommended = review === undefined ? recommendedFirstOption(item) : undefined
       return {
-        selected: answer === undefined && recommended !== undefined ? [recommended] : [...answer?.selected ?? []],
+        selected: answer !== undefined ? [...answer.selected] : review === undefined ? recommendedOptions(item) : [],
         custom,
         // A recorded answer with no selection and no custom text was skipped.
         skipped: answer !== undefined && answer.selected.length === 0 && custom === '',
@@ -241,8 +255,25 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
   // oxlint-disable-next-line typescript/no-non-null-assertion
   const draft = drafts[index]!
   const hasOptions = (question.options?.length ?? 0) > 0
+  // CSS decides which copy is clipped; only the user's expansions are state,
+  // and they apply only while their question is the one shown.
+  const [expandedCopy, setExpandedCopy] = useState<ExpandedCopy>({ index, copies: NOTHING_EXPANDED })
+  const expanded = expandedCopy.index === index ? expandedCopy.copies : NOTHING_EXPANDED
+
+  const questionToggleLabel = t(expanded.has('question') ? 'text.collapse' : 'text.expand')
+
+  const toggleCopy = (copy: 'question' | number): void => {
+    const copies = new Set(expanded)
+    if (!copies.delete(copy)) copies.add(copy)
+    setExpandedCopy({ index, copies })
+  }
 
   const replaceProgress = (nextIndex: number, nextDrafts: QuestionDraftAnswer[]): void => {
+    if (nextIndex !== index) {
+      // Another question starts at its top with its long copy collapsed.
+      if (answerSurface.current !== null) answerSurface.current.scrollTop = 0
+      setExpandedCopy({ index: nextIndex, copies: NOTHING_EXPANDED })
+    }
     actions.replace(pending.key, {
       index: nextIndex,
       drafts: nextDrafts,
@@ -436,12 +467,16 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
         aria-labelledby={`question-${pending.key}-${String(index)}`}
       >
         <header className={css.header}>
-          <div className={css.headingBlock}>
-            {question.header !== undefined && <div className={css.eyebrow}>{question.header}</div>}
-            <h2 className={css.title} id={`question-${pending.key}-${String(index)}`}>
-              {question.question}
-            </h2>
-          </div>
+          {(question.header !== undefined || minimized) && (
+            <div className={css.headingBlock}>
+              {question.header !== undefined && <div className={css.eyebrow}>{question.header}</div>}
+              {minimized && (
+                <h2 className={css.title} id={`question-${pending.key}-${String(index)}`}>
+                  {question.question}
+                </h2>
+              )}
+            </div>
+          )}
           <div className={css.headerActions}>
             {countdown !== undefined && card.waitState !== 'waiting' && card.waitState !== 'editing' && card.waitState !== 'continued' && (
               <span className={css.waitStatus}>
@@ -492,6 +527,27 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
               onFocusCapture={focusAnswerSurface}
               onBlurCapture={blurAnswerSurface}
             >
+              <div className={css.questionTitle} data-expanded={expanded.has('question') || undefined}>
+                <h2
+                  className={clsx(css.title, css.titlePreview)}
+                  id={`question-${pending.key}-${String(index)}`}
+                >
+                  {question.question}
+                </h2>
+                <Tooltip label={questionToggleLabel} side="top" portal>
+                  <button
+                    type="button"
+                    className={clsx(css.iconButton, css.copyToggle, css.questionToggle)}
+                    aria-label={questionToggleLabel}
+                    aria-expanded={expanded.has('question')}
+                    aria-controls={`question-${pending.key}-${String(index)}`}
+                    aria-describedby={`question-${pending.key}-${String(index)}`}
+                    onClick={() => { toggleCopy('question') }}
+                  >
+                    {expanded.has('question') ? <IconChevronUpOutlineRegular /> : <IconChevronDownOutlineRegular />}
+                  </button>
+                </Tooltip>
+              </div>
               {question.detail !== undefined && (
                 <div className={css.detail}><MarkdownText text={question.detail} labels={markdownLabels} /></div>
               )}
@@ -499,40 +555,73 @@ function QuestionFlow({ pending, t, useStore, useQuestionCard, actions }: Questi
                 {(question.options ?? []).map((option, optionIndex) => {
                   const selected = draft.selected.includes(option.label)
                   const display = parseRecommendedLabel(option.label)
+                  const hasDescription = option.description !== undefined && option.description.trim() !== ''
+                  const descriptionExpanded = expanded.has(optionIndex)
+                  const descriptionToggleLabel = t(descriptionExpanded ? 'text.collapse' : 'text.expand')
+                  const descriptionId = `${descriptionIdPrefix}-question-${String(index)}-option-${String(optionIndex)}-description`
                   return (
-                    <button
-                      type="button" key={`${option.label}-${String(optionIndex)}`}
-                      className={clsx(css.option, selected && question.multiSelect !== true && css.optionSelected)}
-                      role={question.multiSelect === true ? 'checkbox' : 'radio'}
-                      aria-checked={selected}
-                      aria-label={display.label}
-                      disabled={locked}
-                      onClick={() => { choose(option.label) }}
-                      onKeyDown={(event) => {
-                        if (event.key !== 'Enter') return
-                        event.preventDefault()
-                        submitDrafts(drafts)
-                      }}
+                    <div
+                      key={`${option.label}-${String(optionIndex)}`}
+                      className={clsx(
+                        css.optionRow,
+                        !locked && css.optionRowInteractive,
+                        selected && question.multiSelect !== true && css.optionSelected,
+                      )}
+                      data-option-row
+                      data-expanded={descriptionExpanded || undefined}
                     >
-                      {question.multiSelect === true
-                        ? (
-                          <span className={clsx(css.checkbox, selected && css.checkboxChecked)} aria-hidden="true">
-                            {selected && <IconCheckOutlineRegular size={12} />}
+                      <button
+                        type="button"
+                        className={css.option}
+                        role={question.multiSelect === true ? 'checkbox' : 'radio'}
+                        aria-checked={selected}
+                        aria-label={display.label}
+                        aria-describedby={hasDescription ? descriptionId : undefined}
+                        disabled={locked}
+                        onClick={() => { choose(option.label) }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter') return
+                          event.preventDefault()
+                          submitDrafts(drafts)
+                        }}
+                      >
+                        {question.multiSelect === true
+                          ? (
+                            <span className={clsx(css.checkbox, selected && css.checkboxChecked)} aria-hidden="true">
+                              {selected && <IconCheckOutlineRegular size={12} />}
+                            </span>
+                          )
+                          : <span className={css.number}>{optionIndex + 1}</span>}
+                        <span className={css.optionCopy}>
+                          <span className={css.optionLine} data-option-line>
+                            <span className={css.optionLabel}>{display.label}</span>
+                            {display.recommended && (
+                              <span className={css.badge}>{t('option.recommended')}</span>
+                            )}
                           </span>
-                        )
-                        : <span className={css.number}>{optionIndex + 1}</span>}
-                      <span className={css.optionCopy}>
-                        <span className={css.optionLine}>
-                          <span className={css.optionLabel}>{display.label}</span>
-                          {display.recommended && (
-                            <span className={css.badge}>{t('option.recommended')}</span>
-                          )}
-                          {option.description !== undefined && (
-                            <span className={css.description}>{option.description}</span>
+                          {hasDescription && (
+                            <span id={descriptionId} className={css.description} data-option-description>
+                              {option.description}
+                            </span>
                           )}
                         </span>
-                      </span>
-                    </button>
+                      </button>
+                      {hasDescription && (
+                        <Tooltip label={descriptionToggleLabel} side="top" portal>
+                          <button
+                            type="button"
+                            className={clsx(css.iconButton, css.copyToggle, css.descriptionToggle)}
+                            aria-label={descriptionToggleLabel}
+                            aria-expanded={descriptionExpanded}
+                            aria-controls={descriptionId}
+                            aria-describedby={descriptionId}
+                            onClick={() => { toggleCopy(optionIndex) }}
+                          >
+                            {descriptionExpanded ? <IconChevronUpOutlineRegular /> : <IconChevronDownOutlineRegular />}
+                          </button>
+                        </Tooltip>
+                      )}
+                    </div>
                   )
                 })}
 

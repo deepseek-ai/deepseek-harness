@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Stockage de données structuré",
+    "description": "Enregistrez les données clé-valeur par somme de contrôle de la structure des données et informez les autres plug-ins des modifications."
+  }
+}
