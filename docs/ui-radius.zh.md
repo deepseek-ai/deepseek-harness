@@ -18,7 +18,7 @@
 <a id="scope"></a>
 ## 范围与依据
 
-本参考文档规定 DSH Web 和 Desktop 的圆角尺度及组件应用规则。局部视觉调整限定在指定组件或组件族内，不自动改变全局尺度。
+本参考文档规定 DSH Web 和 Desktop 的圆角尺度、曲线规则及组件例外。应用时按 [UI 设计 skill 的几何判断](../.agents/skills/dsh-client-ui-ux/SKILL.md#component-geometry)选择并审查。局部视觉调整限定在指定组件或组件族内，不自动改变全局尺度。
 
 通用样式职责见 [Web UI 样式参考](web-styling.zh.md)。共享数值位于 [`base.css`](../packages/client/ui-theme/src/styles/base.css)，曲线行为位于 [`corner-shape.css`](../packages/client/ui-theme/src/styles/corner-shape.css)。修改规则时同步更新主题实现及本规范的中英文版本。
 
