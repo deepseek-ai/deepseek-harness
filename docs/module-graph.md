@@ -232,6 +232,7 @@ flowchart TD
   end
   subgraph group_connector["packages/connector"]
     pkg_cli_account["cli-account"]
+    pkg_upstream_skills["upstream-skills"]
     pkg_wecom["wecom"]
     pkg_wecom_cli["wecom-cli"]
   end
@@ -534,6 +535,7 @@ flowchart TD
   pkg_hmr --> pkg_cmdline
   pkg_cli_account --> pkg_subprocess
   pkg_cli_account --> pkg_system_prompt
+  pkg_upstream_skills --> pkg_skill
   pkg_wecom_cli --> pkg_skill
   pkg_wecom_cli --> pkg_subprocess
   pkg_wecom_cli --> pkg_system_prompt
@@ -1690,6 +1692,7 @@ flowchart TD
 | [`attachment-local`](../packages/attachment/attachment-local) | `attachment` | [`attachment`](../packages/attachment/attachment), [`home-paths`](../packages/util/home-paths) |
 | [`hmr`](../packages/boot/hmr) | `boot` | [`app-boot`](../packages/boot/app-boot), [`cmdline`](../packages/boot/cmdline) |
 | [`cli-account`](../packages/connector/cli-account) | `connector` | [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt) |
+| [`upstream-skills`](../packages/connector/upstream-skills) | `connector` | [`skill`](../packages/skill/skill) |
 | [`wecom-cli`](../packages/connector/wecom-cli) | `connector` | [`skill`](../packages/skill/skill), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`typert-protocol`](../packages/typert/protocol) |
 | [`deliverable-file-references`](../packages/deliverables/deliverable-file-references) | `deliverables` | [`system-prompt`](../packages/core/system-prompt) |
 | [`experimental-computer-use-cua-driver-mcp`](../packages/experimental/computer-use-cua-driver-mcp) | `experimental` | [`computer-use`](../packages/computer-use/computer-use) |
