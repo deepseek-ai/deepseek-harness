@@ -1,5 +1,5 @@
 ---
-description: "connector 分组地图：通过现有 Skill、Shell 与 subprocess 能力把第三方服务接入 agent 的应用插件，以及它们共用的 CLI 账号库。"
+description: "connector 分组地图：通过现有 Skill、Shell 与 subprocess 能力把第三方服务接入 agent 的应用插件，以及它们共用的库。"
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-本分组中的每个应用插件安装到 profile 后，即可在对话中使用一个第三方服务。插件组合 skill（技能）、运行时上下文和 subprocess 等现有能力，并把应用特有的配置和模型指引保留在自己的包内。由厂商 CLI 保管用户账号的插件，共用 CLI 账号库来执行命令和账号操作。
+本分组中的每个应用插件安装到 profile 后，即可在对话中使用一个第三方服务。插件组合 skill（技能）、运行时上下文和 subprocess 等现有能力，并把应用特有的配置和模型指引保留在自己的包内。由厂商 CLI 保管用户账号的插件，共用 CLI 账号库来执行命令和账号操作；上游技能只存在于厂商 GitHub 仓库的插件，通过上游技能库下载它们。
 
 ## 目录
 
@@ -25,6 +25,7 @@ kind: "package-group"
 | 包 | 职责 | ctx 键 |
 |---|---|---|
 | [`cli-account/`](cli-account/README.zh.md) | 为 CLI 应用插件按绝对路径运行厂商 CLI，在运行时上下文中把这个路径告诉模型，并在 Host 上一次执行一个账号操作 | — |
+| [`upstream-skills/`](upstream-skills/README.zh.md) | 从厂商 GitHub 仓库的固定提交下载 CLI 应用插件入口技能索引的上游文件，校验并缓存，再在这些文件之上列出入口技能 | — |
 
 -----
 

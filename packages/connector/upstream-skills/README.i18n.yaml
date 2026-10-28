@@ -1,0 +1,52 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/connector/upstream-skills/README.md
+/:
+  en: a027a2cdcf7631e7
+  zh: 0bcc9c5ad299bb5c
+/deepseek-ai-dsh-upstream-skills:
+  en: f3158e9291ae2f3d
+  zh: 58b89910c6fa6980
+/deepseek-ai-dsh-upstream-skills/summary:
+  en: fbba750a184bcc37
+  zh: 8243965fcde1aa56
+/deepseek-ai-dsh-upstream-skills/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 5b6bd00fce5371c3
+/deepseek-ai-dsh-upstream-skills/use-this-package:
+  en: bbff250eba0f1b89
+  zh: b20a47f82d8ab6e0
+/deepseek-ai-dsh-upstream-skills/use-this-package/when-to-use-it:
+  en: 572b474112a3b1d2
+  zh: ddca0ffabad5eaca
+/deepseek-ai-dsh-upstream-skills/use-this-package/entry-point:
+  en: c3e1b60c8e4e023a
+  zh: e51792ead0b00e7f
+/deepseek-ai-dsh-upstream-skills/use-this-package/kept-files-and-verification:
+  en: cd4d442693abdb36
+  zh: b0845b8d37496151
+/deepseek-ai-dsh-upstream-skills/use-this-package/pinning-a-commit:
+  en: 78a5744ffb34a667
+  zh: d9fb0a2ac7730b2c
+/deepseek-ai-dsh-upstream-skills/use-this-package/shared-config:
+  en: 3f3a4be4530b6314
+  zh: 1cca96a68c8ae41e
+/deepseek-ai-dsh-upstream-skills/understand-the-implementation:
+  en: bd132294ce3c09ab
+  zh: b5eca377dad8d48c
+/deepseek-ai-dsh-upstream-skills/further-exploration:
+  en: 60965f68389a4cad
+  zh: dc8e251f38301b9f
+/deepseek-ai-dsh-upstream-skills/model-experience:
+  en: c9e4d94bb8653482
+  zh: b07dbd392f17bab0
+/deepseek-ai-dsh-upstream-skills/model-experience/kv-cache-effect:
+  en: 2a09699bc1130758
+  zh: 972fc624936c8c2f
+/deepseek-ai-dsh-upstream-skills/known-limitations-and-deferred-work:
+  en: d8bc6e48b5f87ddd
+  zh: 108a1e7fa61ad1c0
+/deepseek-ai-dsh-upstream-skills/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea
