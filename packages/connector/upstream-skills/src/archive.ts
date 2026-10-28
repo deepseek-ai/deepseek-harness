@@ -23,7 +23,8 @@ function isKept(selection: UpstreamSkillSelection, path: string): boolean {
  * @param selection - which files to keep.
  * @param maxBytes - the most bytes the kept files may hold; reading stops at the entry that exceeds it.
  * @returns the kept files keyed by their path relative to the repository root.
- * @throws when an entry path is empty, `.`, `..`, or holds a backslash, entries sit under more than one top-level
+ * @throws when an entry path is empty, `.`, `..`, or holds a backslash (on Windows node-tar has already turned backslashes
+ *   into slashes, so the segments they separate are checked instead), entries sit under more than one top-level
  *   directory, a kept path is not a regular file or appears twice, the kept files exceed `maxBytes`, the license file is
  *   missing, or the archive is malformed.
  */

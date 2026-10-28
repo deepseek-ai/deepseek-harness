@@ -236,6 +236,7 @@ flowchart TD
     pkg_cli_account["cli-account"]
     pkg_tencent_meeting["tencent-meeting"]
     pkg_tencent_meeting_cli["tencent-meeting-cli"]
+    pkg_upstream_skills["upstream-skills"]
   end
   subgraph group_context["packages/context"]
     pkg_agent_instructions["agent-instructions"]
@@ -540,6 +541,7 @@ flowchart TD
   pkg_tencent_meeting_cli --> pkg_subprocess
   pkg_tencent_meeting_cli --> pkg_system_prompt
   pkg_tencent_meeting_cli --> pkg_typert_protocol
+  pkg_upstream_skills --> pkg_skill
   pkg_deliverable_file_references --> pkg_system_prompt
   pkg_experimental_computer_use_cua_driver_mcp --> pkg_computer_use
   pkg_experimental_forge_github --> pkg_experimental_forge
@@ -1693,6 +1695,7 @@ flowchart TD
 | [`hmr`](../packages/boot/hmr) | `boot` | [`app-boot`](../packages/boot/app-boot), [`cmdline`](../packages/boot/cmdline) |
 | [`cli-account`](../packages/connector/cli-account) | `connector` | [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt) |
 | [`tencent-meeting-cli`](../packages/connector/tencent-meeting-cli) | `connector` | [`skill`](../packages/skill/skill), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`typert-protocol`](../packages/typert/protocol) |
+| [`upstream-skills`](../packages/connector/upstream-skills) | `connector` | [`skill`](../packages/skill/skill) |
 | [`deliverable-file-references`](../packages/deliverables/deliverable-file-references) | `deliverables` | [`system-prompt`](../packages/core/system-prompt) |
 | [`experimental-computer-use-cua-driver-mcp`](../packages/experimental/computer-use-cua-driver-mcp) | `experimental` | [`computer-use`](../packages/computer-use/computer-use) |
 | [`experimental-forge-github`](../packages/experimental/forge-github) | `experimental` | [`experimental-forge`](../packages/experimental/forge), [`subprocess`](../packages/subprocess/subprocess) |
