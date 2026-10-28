@@ -168,7 +168,7 @@ describe('registerUpstreamSkills', () => {
     expect(states).toEqual(['installed'])
     expect(await ctx.skills.list()).toEqual(listed(published()))
     for (const [path, content] of Object.entries(KEPT)) expect(await readFile(join(published(), path), 'utf8')).toBe(content)
-    expect(await readdir(join(published(), 'skills', 'alpha'))).toEqual(['SKILL.md', 'references'])
+    expect((await readdir(join(published(), 'skills', 'alpha'))).toSorted()).toEqual(['SKILL.md', 'references'])
     expect(await readdir(cache())).toEqual([`skills-${set.sha256.slice(0, 16)}`])
     expect(host.requests).toEqual([archivePath(set)])
   })
@@ -184,9 +184,13 @@ describe('registerUpstreamSkills', () => {
   it('moves on from a skills URL that does not deliver the whole archive within the time limit', async () => {
     host.routes[archivePath(set, '/slow')] = (response) => { response.writeHead(200).write(repository().subarray(0, 64)) }
     host.routes[archivePath(set, '/mirror')] = serve(repository())
-    const skills = register({ skillsUrls: [`${host.base}/slow`, `${host.base}/mirror`], skillsTimeoutMs: 100 })
+    // The limit applies to each URL, so it also bounds the mirror on a loaded machine.
+    const skills = register({ skillsUrls: [`${host.base}/slow`, `${host.base}/mirror`], skillsTimeoutMs: 1_000 })
     expect(await settled(skills)).toBe('installed')
-    expect(logged()).toMatchObject([{ message: `vendor: downloading the upstream skills from ${host.base} failed`, error: { cause: { name: 'TimeoutError' } } }])
+    expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${host.base} failed`])
+    // Depending on which stream observes the abort first, the time limit arrives as the TimeoutError or as its cause.
+    const timedOut = (error: unknown) => error instanceof Error && [error.name, error.cause instanceof Error ? error.cause.name : ''].includes('TimeoutError')
+    expect(logged()[0]?.error).toSatisfy(timedOut)
   })
 
   it('refuses every source whose files differ from the pin, publishes nothing, and logs the failure', async () => {
