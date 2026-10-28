@@ -9,9 +9,9 @@ Apply within the [UI development loop](../dsh-client-ui-ux/SKILL.md#required-rev
 
 ### Layout structure first, visual calibration second
 
-Distinguish click target, painted button, complete icon box and drawn contour. Intentional icon whitespace belongs to the layout box; enlarging a target must not move that box. Check containers, slots, columns, gaps and unintended overrides before optical corrections. Neither matching CSS boxes nor aligning every painted contour alone establishes balance.
+Distinguish click target, painted button, complete icon box and drawn contour. Intentional icon whitespace belongs to the layout box; do not remove it merely because painted pixels miss a guide. Enlarging a target must not move that box. Check containers, slots, columns, gaps and unintended overrides before optical corrections. Neither matching CSS boxes nor aligning every painted contour alone establishes balance.
 
-A glyph inconsistent across uses belongs to its icon owner. A composition-specific optical correction needs a scoped justification and comparison with peers. Preserve intended hierarchy: a child icon may align with parent text, but DOM nesting alone does not determine indentation. Extra hit padding is not a visible edge.
+A glyph inconsistent across uses belongs to its icon owner. A composition-specific optical correction needs a scoped justification and comparison with peers. Preserve intended hierarchy: a child icon may align with parent text, but DOM nesting alone does not determine indentation. When comparing a bare icon with a bordered control, extra hit padding is not a shared visible edge.
 
 Inline SVG `vertical-align: middle` follows font baseline/x-height, not visible text center. Check font, size, line height and icon box across CJK, Latin, monospace and wrapping. Do not make multiline links unwrappable just to center an icon.
 
@@ -30,6 +30,6 @@ Name the aligned object and reference container. Equal padding need not align te
 
 For Chinese/English navigation, identify leading icon centers, text starts and trailing controls by role. Headings, avatars and expandable search may differ. Continue axes only where the composition establishes them, including shared plugin reading edges even when hover paint extends beyond them, and conversation/right-sidebar header heights and baselines.
 
-Center within the button, main pane or content remaining below headings/filters, as appropriate. A fixed top margin is not centering. When a short window cannot fit the group, preserve scroll access with a compact top-aligned layout instead of clipping.
+Center a button within its own bounds, a welcome group within the main pane, and an empty state within the content remaining below headings/filters. A fixed top margin is not centering. When a short window cannot fit the group, preserve scroll access with a compact top-aligned layout instead of clipping.
 
 Normalize peer control sizes and slots before any necessary small optical offsets; verify comparable uses. Preserve usable hit targets and do not hide inconsistent parent layout with transforms. Check [spacing](../dsh-ui-spacing/SKILL.md) without moving the chosen axes; consult [cases](../../../docs/ui-design-review-cases.md#alignment) for uncertain judgments.
