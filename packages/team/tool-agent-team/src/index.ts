@@ -121,15 +121,9 @@ function install(agent: Agent, ctx: Context): () => void {
       interpolate: false,
       text: () => {
         try {
-          const root = ctx.subagents.rootOf(agent)
-          return root === agent
-            ? `You are the Team Lead. Your name is lead.
+          return `Your name is ${JSON.stringify(ctx.subagentNames.nameOf(agent))}. Your team lead is "lead".
 Use list_agents({}) to find your teammates and their full names.
-To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).`
-            : `You are a teammate in the Team led by "lead".
-To message your Team Lead, use send_message({ name: "lead", message: "..." }).
-Use list_agents({}) to find your teammates and their full names.
-To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).`
+Use send_message({ name: "<full agent path>", message: "..." }) to message a teammate.`
         } catch (error: unknown) {
           if (!(error instanceof SubagentError) || error.code !== 'UNAUTHORIZED') throw error
           return 'Your Team root agent is unavailable. Continue independent work; shared tasks, subagent discovery, and messaging require an active root.'

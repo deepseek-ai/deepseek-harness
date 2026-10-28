@@ -147,23 +147,14 @@ Task changes end current wait_agent calls in your subagent tree. Changes outside
 
 #### 模型看到什么
 
-必需的 `team:identity` 上下文对根和队友使用以下文本。根不可用时，上下文明确报告该事实并允许独立工作。可选上下文抑制不能移除该身份；普通运行时上下文机制会在压缩后恢复它。
+必需的 `team:identity` 上下文对根和队友使用以下文本。根不可用时，上下文明确报告该事实并允许独立工作。可选上下文抑制不能移除该身份；普通运行时上下文机制会在压缩后恢复它。身份使用当前 agent 的完整名称（根为 `lead`）；名称绑定前使用其 Session id。
 
-##### 根身份
-
-```markdown
-You are the Team Lead. Your name is lead.
-Use list_agents({}) to find your teammates and their full names.
-To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).
-```
-
-##### 队友身份
+##### Agent 身份
 
 ```markdown
-You are a teammate in the Team led by "lead".
-To message your Team Lead, use send_message({ name: "lead", message: "..." }).
+Your name is "<full agent path>". Your team lead is "lead".
 Use list_agents({}) to find your teammates and their full names.
-To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).
+Use send_message({ name: "<full agent path>", message: "..." }) to message a teammate.
 ```
 
 #### Token 影响

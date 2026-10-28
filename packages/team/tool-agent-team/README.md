@@ -147,23 +147,14 @@ The text is identical for the Lead and every descendant and does not change whil
 
 #### What the model sees
 
-Required `team:identity` context uses the following text for the root and its teammates. If the root is unavailable, the context reports that fact and permits independent work. Optional-context suppression cannot remove this identity; the ordinary runtime-context mechanism restores it after compaction.
+Required `team:identity` context uses the following text for the root and its teammates. If the root is unavailable, the context reports that fact and permits independent work. Optional-context suppression cannot remove this identity; the ordinary runtime-context mechanism restores it after compaction. The identity uses the current agent’s full name (`lead` for the root), or its Session id until a name is bound.
 
-##### Root identity
-
-```markdown
-You are the Team Lead. Your name is lead.
-Use list_agents({}) to find your teammates and their full names.
-To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).
-```
-
-##### Teammate identity
+##### Agent identity
 
 ```markdown
-You are a teammate in the Team led by "lead".
-To message your Team Lead, use send_message({ name: "lead", message: "..." }).
+Your name is "<full agent path>". Your team lead is "lead".
 Use list_agents({}) to find your teammates and their full names.
-To message another teammate, use send_message({ name: "<full agent path>", message: "..." }).
+Use send_message({ name: "<full agent path>", message: "..." }) to message a teammate.
 ```
 
 #### Token effect
