@@ -73,6 +73,13 @@ jobs:
       - name: Run blocking Windows builds
         shell: pwsh
         run: pnpm run check:ci:windows-blocking
+      - name: Verify Desktop update channel transitions
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          pnpm --filter @deepseek-ai/dsh-desktop exec install-electron
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node apps/desktop/scripts/test-update-channels.mjs
       - name: Parse Windows runner supervision scripts
         shell: pwsh
         run: |
