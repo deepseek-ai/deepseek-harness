@@ -107,6 +107,8 @@ The theme resolves the card fill to `--dsw-alias-bg-layer-2` and the stroke to `
 
 Flat neutral borders use the shared 0.5px hairline. Elevated menus, popovers, dialogs, and panels use `border: 0` with the existing `--dsw-elevation-*` material, whose shadow includes the hairline. Do not add a second neutral border over that stroke or add a shadow to an ordinary settings card merely to distinguish its tab. Preserve semantic state-colored borders and the existing translucent-menu backdrop behavior.
 
+A page-level radius review compares roles and silhouettes together, including native small selection controls. Token compliance only establishes membership in the scale; it does not establish that adjacent roles or nested contours look coherent. Use the [geometry cases](ui-design-review-cases.md#geometry) for the comparison method, while this document remains the owner of values and curve rules.
+
 <a id="verification"></a>
 ## Apply and verify
 

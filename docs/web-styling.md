@@ -46,6 +46,10 @@ On a mixed-input device, a mouse preview can appear while the primary-pointer CS
 
 The [DSH unified corner-radius standard](ui-radius.md) defines the radius scale, component size mapping, circle and capsule exceptions, nested hover geometry, and settings-card fills and strokes.
 
+## Review the assembled design
+
+Use the [UI review baseline](ui-design-review-cases.md#review-baseline) to combine these material and typography rules with radius, responsive behavior, feedback and artwork guidance across the [entire page or modal](ui-design-review-cases.md#whole-interface-review). Compare all regions and same-role elements within that unit; individually compliant components can still form doubled edges, inconsistent grouping or clipped focus indicators. This document and the theme remain the styling owners.
+
 ## Changing the system
 
 Add or change a shared token in the owning `ui-theme` sheet, then consume its semantic alias from feature packages. Update the owning package reference when a public styling contract changes. Visual behavior follows the [testing policy](testing.md); the [archived styling-system Agent Note](../.agents/notes/archived/process/2026-07-19-web-styling-system.md) records framework rationale.
