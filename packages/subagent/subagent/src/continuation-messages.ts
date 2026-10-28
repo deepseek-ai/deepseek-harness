@@ -56,15 +56,17 @@ function agentMessageSource(sender: Agent): AgentMessageSource {
  * Build the model-visible and durable representation of one Agent message.
  * @param sender - exact live Agent that authored the message.
  * @param content - model-visible message blocks supplied by the sender.
+ * @param senderName - resolved sender name or Session id for the visible attribution.
  * @returns the durable user-message representation delivered to the recipient.
  */
 export function createAgentMessage(
   sender: Agent,
   content: ContentBlock[],
+  senderName: string,
 ): ReturnType<typeof createUserMessage> {
   return createUserMessage({
     content: [
-      { type: 'text' as const, text: `Agent ${sender.id} sent a message: ` },
+      { type: 'text' as const, text: `Agent ${senderName} sent a message: ` },
       ...content,
     ],
     source: agentMessageSource(sender),

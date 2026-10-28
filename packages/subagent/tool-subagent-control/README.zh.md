@@ -76,7 +76,7 @@ kind: "package-reference"
 
 ### 投递与信号所有权
 
-执行信号只负责收件箱接受前的工作。已接受的消息不能通过此工具撤回。每条消息以 `Agent <sender-id> sent a message:` 为前缀，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`。树成员身份授予通信权限；subagent 树根管理运行时实例和容量。
+执行信号只负责收件箱接受前的工作。已接受的消息不能通过此工具撤回。每条消息以 `Agent <sender-name-or-id> sent a message:` 为前缀，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`。树成员身份授予通信权限；subagent 树根管理运行时实例和容量。
 
 ### 列表投影
 
@@ -122,19 +122,19 @@ kind: "package-reference"
 
 这些工具可用期间，schema 前缀保持稳定。父级与其可继续子级（包括 fork 子级）继承相同的定义。
 
-### 通信上下文
+### 身份与通信上下文
 
 #### 模型看到什么
 
-持久记录的 `subagent:communication` 运行时上下文向委派子级提供其直接创建者经 JSON 编码的 Session id，并说明如何发送会改变父级下一步行动的发现。命名控制工具也接受该 id。发送消息不会结束轮次。根 Agent 和普通 Session fork 不接收通信上下文；委派子级仅在标准通信定义于当前作用域和 step 中可用时接收。自动结果交付仍由 subagent 服务负责。
+必需的 `subagent:identity` 运行时上下文将根标识为 `lead`，并为每个委派子级提供完整名称、直接父级和根。它不依赖 Team 模式或工具过滤。名称绑定前，它明确使用 Session id 作为 agent 地址；在线根缺失时报告该事实，同时允许独立工作。必需的 `subagent:communication` 上下文仅在标准工具可用时说明发现与通信方式。委派子级还收到向父级发送会改变其下一步行动的发现的指导。自动结果交付仍由 subagent 服务负责。
 
 #### Token 影响
 
-每个委派子级接收一条简短上下文，长度与树规模无关。
+每个 agent 接收两条简短上下文，长度与树规模无关。
 
 #### KV Cache 影响
 
-通信指导作为运行时上下文保留在继承历史之后，父子级共享的系统提示词和工具定义不变。父级 id 来自子级 Session 头；提示组装不等待名称绑定，也不读取名称映射。
+身份与通信指导作为持久记录的运行时上下文追加在继承历史之后，共享系统提示词和工具定义保持不变。名称来自根映射；后续绑定会更新下一次请求。必需上下文不受可选上下文抑制影响，并会在压缩后恢复。Team 模式不改变这两项。
 
 ### 中断结果
 
@@ -168,7 +168,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-首行为 `<id> [<status>] — lead: root agent`。各可继续后代随后显示为 `<id> [<status>] parent=<parent-id> depth=<n> — <label>`。名称可用时，文本在标签前增加 `<name>: `；规范结果行保留原始 `label`，并另加 `name`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断保留 id、原因、父级与深度，并可在 ` — ` 后显示名称。状态描述轮次活动，不表示任务完成。
+首行为 `<id> [<status>] — lead: root agent`。各可继续后代随后显示为 `<id> [<status>] parent=<parent-id> depth=<n> — <label>`。名称可用时，文本在标签前增加 `<name>: `；规范结果行保留原始 `label`，并另加 `name`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断保留 id、原因、父级与深度，并可在 ` — ` 后显示名称。状态描述轮次活动，不表示任务完成、成功或失败。
 
 #### Token 影响
 

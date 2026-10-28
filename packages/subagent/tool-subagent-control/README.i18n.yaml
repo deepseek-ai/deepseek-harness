@@ -39,8 +39,8 @@
   en: b3cadf07711bf1ba
   zh: 3cd7c3147e64c1c1
 /deepseek-ai-dsh-tool-subagent-control/understand-the-implementation/delivery-and-signal-ownership:
-  en: 65137f5fe14ebb7f
-  zh: ce00e4f32709246a
+  en: 186b5c0fad1a176b
+  zh: 6c3a104e7f4ba0fe
 /deepseek-ai-dsh-tool-subagent-control/understand-the-implementation/listing-projection:
   en: ee3136b09f0c9ef2
   zh: 5cbe189bb857fdc7
@@ -65,18 +65,18 @@
 /deepseek-ai-dsh-tool-subagent-control/model-experience/tool-schema/kv-cache-effect:
   en: 53a81243f3acd543
   zh: 472cf727e5180501
-/deepseek-ai-dsh-tool-subagent-control/model-experience/communication-context:
-  en: 95d76d1aba983086
-  zh: b645a3837ec17ef4
-/deepseek-ai-dsh-tool-subagent-control/model-experience/communication-context/what-the-model-sees:
-  en: adb5b38af8f1cfb1
-  zh: 2a7f2779ed5e8a9f
-/deepseek-ai-dsh-tool-subagent-control/model-experience/communication-context/token-effect:
-  en: 24d9c15986cb4d3d
-  zh: 6fb66cf84f8bc812
-/deepseek-ai-dsh-tool-subagent-control/model-experience/communication-context/kv-cache-effect:
-  en: be04fa8fa539cad0
-  zh: 797fd37af7d32f90
+/deepseek-ai-dsh-tool-subagent-control/model-experience/identity-and-communication-context:
+  en: fc88c8ffb8ebc083
+  zh: 0baf2e5df37d813e
+/deepseek-ai-dsh-tool-subagent-control/model-experience/identity-and-communication-context/what-the-model-sees:
+  en: 5329c2fc2adafcde
+  zh: 74a20f232bfc31ce
+/deepseek-ai-dsh-tool-subagent-control/model-experience/identity-and-communication-context/token-effect:
+  en: a09538db53078cc6
+  zh: 1bc3c3f585acd312
+/deepseek-ai-dsh-tool-subagent-control/model-experience/identity-and-communication-context/kv-cache-effect:
+  en: 8126fbb896622f24
+  zh: 9e057beb0a1f9cee
 /deepseek-ai-dsh-tool-subagent-control/model-experience/interrupt-result:
   en: d64e936e83e89a2b
   zh: b9905c33af6cca45
@@ -105,8 +105,8 @@
   en: 094e55d258f2ec2e
   zh: f364bc9046530bff
 /deepseek-ai-dsh-tool-subagent-control/model-experience/listing-result/what-the-model-sees:
-  en: aeef4da057b78b1f
-  zh: f500ca4ceab1f87a
+  en: 158de3d51543f110
+  zh: 374e68c0afb8aecb
 /deepseek-ai-dsh-tool-subagent-control/model-experience/listing-result/token-effect:
   en: 027aaeb808238388
   zh: 5b974abc429d9e23

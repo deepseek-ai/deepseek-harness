@@ -130,6 +130,14 @@ declare module '@deepseek-ai/cordis' {
 
   interface Events {
     /**
+     * Resolve visible message attribution from the authenticated sender.
+     * The naming provider returns its current name; without a provider the Session id is used.
+     * Lookup failures reject the send before inbox acceptance.
+     * @param sender - exact live Agent whose message is being delivered.
+     * @mode bail
+     */
+    'subagent/message-name'(this: Scoped<SubagentRuntime>, sender: Agent): string | undefined
+    /**
      * A provider became resolvable in the registry.
      * @param provider - the registered provider.
      * @mode emit
@@ -216,6 +224,7 @@ export class SubagentRuntime extends TypertRemoteService {
       const manager = new SubagentManager(childCtx, {
         identityOf: session => identityProjection.stateOf(session).identity,
         emitLifecycle: this.emitLifecycle,
+        senderNameOf: sender => this.ctx.bail(scopeTarget(this, sender), 'subagent/message-name', sender) ?? sender.id,
       }, () => this.config.maxActiveSubagents.get())
       this.manager = manager
       childCtx.effect(() => () => {

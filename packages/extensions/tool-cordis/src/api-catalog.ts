@@ -4707,6 +4707,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'info', description: 'run identity, durable direct creator `parentSessionId`, and terminal outcome.' }],
   },
   {
+    name: 'subagent/message-name',
+    mode: 'bail',
+    signature: '\'subagent/message-name\'(this: Scoped<SubagentRuntime>, sender: Agent): string | undefined',
+    summary: 'Resolve visible message attribution from the authenticated sender.',
+    description: 'Resolve visible message attribution from the authenticated sender. The naming provider returns its current name; without a provider the Session id is used. Lookup failures reject the send before inbox acceptance.',
+    parameters: [{ name: 'sender', description: 'exact live Agent whose message is being delivered.' }],
+  },
+  {
     name: 'subagent/provider-added',
     mode: 'emit',
     signature: '\'subagent/provider-added\'(provider: SubagentProvider): void',

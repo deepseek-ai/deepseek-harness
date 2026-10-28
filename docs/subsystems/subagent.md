@@ -2,7 +2,7 @@
 
 English | [中文](subagent.zh.md)
 
-The unified activation API manages local conversations and external executions. Creation ancestry, runtime ownership, and communication belong to the subagent tree. [Subagent controls](../../packages/subagent/tool-subagent-control/README.md) own exact-caller inbox waiting; experimental Team tools add shared tasks, task policy, and Team identity.
+The unified activation API manages local conversations and external executions. Creation ancestry, runtime ownership, and communication belong to the subagent tree. [Subagent controls](../../packages/subagent/tool-subagent-control/README.md) own agent identity and exact-caller inbox waiting; Team tools add shared tasks and task policy.
 
 ## Capabilities and activation requests
 
@@ -634,6 +634,27 @@ A published child settled. Scope-filtered dispatch uses the same subagent tree-r
 ```
 
 Types: [Scoped](scope.md)
+
+Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
+
+<a id="subagentmessage-name--bail"></a>
+
+#### `subagent/message-name` — bail
+
+Resolve visible message attribution from the authenticated sender. The naming provider returns its current name; without a provider the Session id is used. Lookup failures reject the send before inbox acceptance.
+
+```ts cordis-catalog
+/**
+ * Resolve visible message attribution from the authenticated sender.
+ * The naming provider returns its current name; without a provider the Session id is used.
+ * Lookup failures reject the send before inbox acceptance.
+ * @param sender - exact live Agent whose message is being delivered.
+ * @mode bail
+ */
+'subagent/message-name'(this: Scoped<SubagentRuntime>, sender: Agent): string | undefined
+```
+
+Types: [Agent](core.md) · [Scoped](scope.md)
 
 Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
 

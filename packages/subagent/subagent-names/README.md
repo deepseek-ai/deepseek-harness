@@ -89,7 +89,7 @@ Indirectly, through the [delegation tool](../tool-subagent/README.md) and [contr
 
 #### KV Cache effect
 
-This plugin adds no prompt text or tool schema. Its consumers own any model-visible name text and its cache effect.
+This plugin resolves message sender names through `subagent/message-name` and adds no prompt text or tool schema. Its consumers own any model-visible name text and its cache effect.
 
 ## Known Limitations and Deferred Work
 
