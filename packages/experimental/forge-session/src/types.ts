@@ -99,3 +99,10 @@ declare module '@deepseek-ai/dsh-session/types' {
     'plugin:forge-session/binding': BindingRecord
   }
 }
+
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionMap {
+    /** Every change request bound to the Session, hidden ones included, in binding order. */
+    forgeChangeRequests: readonly BindingState[]
+  }
+}

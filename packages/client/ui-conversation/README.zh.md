@@ -68,6 +68,8 @@ Queue 预览启用空白折叠和文档边缘 trim，保留 emoji，并使用 CS
 <a id="shell-and-standard-props"></a>
 ## Shell 与标准 props
 
+宽度小于 768px 时，Web 的 View 标签与页头的 20px 左内边距对齐。桌面客户端和较宽的 Web 窗口保留标签额外的 8px 左内边距。
+
 共享图片插槽属性将展示选择与持久化引用分开：`thumbnail` 请求完整缩放的附件列表缩略图，`compact` 请求裁剪的图片方块。每张图片可通过可选的 `label` 提供无障碍展示名称；加载和缓存标识仍使用原始附件引用。`MessageImagesContentInput` 为 root 作用域的 `conversation.images.content` Factory 增加可选的完整 `MessageImageLabels`。消息、工具及 Factory 输入显式携带视图提供的授权 `loadImage` 回调；读取和 URL 缓存仍由资源所有者负责。[ui-attachment](../ui-attachment/README.zh.md) 提供该 Factory，负责渲染与灯箱。
 
 在粗指针设备上，composer 的草稿字号至少为 16px，以避免获得焦点时浏览器自动放大；更大的字号偏好仍然生效。
@@ -82,7 +84,7 @@ composer 在挂载、切换 Session 和解除锁定时使用共享的[文字输�
 
 关闭代码工作工具时，外壳仅隐藏 Trajectory；其他插件贡献的 View 仍然可用。可用 View 少于两个时隐藏 View 标签栏。在 Trajectory 激活时关闭代码工作工具会返回 Chat；已保存的 View 偏好和 Session 记录保持不变。开启后，Trajectory 恢复可用。View 所有者接收可用列表，使导航操作跟随相同的可见性。
 
-root 作用域的 `conversation.session.header.views.actions` list 有注册项时，标签行中的 View 标签之后显示带提示框的**更多会话视图**按钮。它打开的菜单以该 list 的注册项为菜单行。每个注册项接收 `entries`（按注册顺序的头部之外的 View，含 `id`、`label`、`pinned` 与 `active`；不含 Chat）、在本 Session 选择 View 的 `onOpen(id)`、`onPinnedChange(id, pinned)`，以及关闭菜单的 `onDismiss()`。头部在内存中保存所有 Session 共用的已收起 View id 列表；标签栏不显示已收起的 View，并将已注册的 Chat 放在首位，确保它始终留在更多菜单外。插件重新加载时 Pin 选择重置，不读取旧 localStorage 值。标签栏是否显示按可用 View 计算，不按已固定的 View 计算，因此其他 View 全部收起时，标签栏和“更多”仍然显示。收起当前激活的 View 会立即隐藏其标签，但不会切走其内容。更多菜单仅包含头部之外的 View，通过 `active` 标识当前 View。头部读取当前行可用宽度，为更多按钮与内边距预留 48px，每个标签估算 120px，其余 View 按注册顺序进入更多。单个 ResizeObserver 观察标签行，使窗口缩放和侧栏展开能够更新分组；当前选中项变化不改变顺序。标签行移除时断开观察。如果环境没有 ResizeObserver，仍按初始宽度计算，但不继续观察。当前 View 收起时，更多按钮高亮并在提示框中显示其名称。每个标签按字符宽度估算文本宽度；只有估算结果超过 88px 单元格时，才通过提示框提供全名。至少保留一个优先展示的外部标签。未注册 View 的 id 保留在内存 Pin 列表中，直到插件重新加载。
+root 作用域的 `conversation.session.header.views.actions` list 有注册项时，标签行中的 View 标签之后显示带提示框的**更多会话视图**按钮。它打开的菜单以该 list 的注册项为菜单行。每个注册项接收 `entries`（按注册顺序的头部之外的 View，含 `id`、`label`、`pinned` 与 `active`；不含 Chat）、在本 Session 选择 View 的 `onOpen(id)`、`onPinnedChange(id, pinned)`，以及关闭菜单的 `onDismiss()`。头部在内存中保存所有 Session 共用的已收起 View id 列表；标签栏不显示已收起的 View，并将已注册的 Chat 放在首位，确保它始终留在更多菜单外。插件重新加载时 Pin 选择重置，不读取旧 localStorage 值。标签栏是否显示按可用 View 计算，不按已固定的 View 计算，因此其他 View 全部收起时，标签栏和“更多”仍然显示。收起当前激活的 View 会立即隐藏其标签，但不会切走其内容。更多菜单仅包含头部之外的 View，通过 `active` 标识当前 View。头部读取当前行可用宽度，为更多按钮与内边距预留 48px，每个标签估算 120px，其余 View 按注册顺序进入更多。单个 ResizeObserver 观察标签行，使窗口缩放和侧栏展开能够更新分组；当前选中项变化不改变顺序。标签行移除时断开观察。如果环境没有 ResizeObserver，仍按初始宽度计算，但不继续观察。当前 View 收起时，更多按钮高亮。每个标签按字符宽度估算文本宽度；只有估算结果超过 88px 单元格时，才通过提示框提供全名。至少保留一个优先展示的外部标签。未注册 View 的 id 保留在内存 Pin 列表中，直到插件重新加载。
 
 输入框注册「文件」命令动作，负责其标题、可用性和原生文件选择器回调。菜单可用性与实际调用都读取已挂载输入框当前的附件接收策略。输入框卸载或锁定后该动作不可用，插件 dispose（资源释放）时移除注册。回调绑定留在输入模块内部。
 

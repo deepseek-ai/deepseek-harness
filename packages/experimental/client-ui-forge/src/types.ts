@@ -70,6 +70,8 @@ export interface ForgeWorktreeState {
   readonly locked: boolean
   /** Whether a step has started; no worktree is created afterwards. */
   readonly stepped: boolean
+  /** The Session's working directory as its log last recorded it, or null when none is recorded. */
+  readonly cwd: string | null
   /** Whether a restoration started without a successful completion, including across reloads. */
   readonly restoring: boolean
 }
@@ -158,6 +160,26 @@ export interface ForgePanelWorktree {
   /** What a message of the Session waits for before its turn starts, or null while none waits. */
   readonly waiting: ForgeWorktreeWaiting | null
 }
+
+/**
+ * The last polled state of one change request that a listed Session binds, as
+ * the Session list shows it.
+ */
+export type ForgeChangeRequestListState = Pick<
+  ChangeRequestSnapshot, 'url' | 'title' | 'state' | 'draft' | 'checksRollup' | 'reviewDecision' | 'mergeability'
+> & {
+  /** Change request number on its code host. */
+  readonly number: number
+}
+
+/**
+ * One frame of `forgePanel.changeRequestStates`: the known state of every
+ * change request the reader may see first, then the states that changed or
+ * became visible since the previous frame.
+ */
+export type ForgeChangeRequestStatesFrame =
+  | { readonly type: 'baseline'; readonly states: readonly ForgeChangeRequestListState[] }
+  | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
 
 /** One bound change request in the panel state. */
 export interface ForgePanelChangeRequest extends SessionChangeRequest {
@@ -361,5 +383,12 @@ declare module '@deepseek-ai/dsh-session/types' {
   interface PluginRecordMap {
     /** A request, withdrawal, or creation of the worktree a Session starts in. */
     'plugin:client-ui-forge/worktree': WorktreeRecord
+  }
+}
+
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionMap {
+    /** The worktree the panel created for the Session while the Session works in it, else null. */
+    forgeWorktree: ForgeSessionWorktree | null
   }
 }

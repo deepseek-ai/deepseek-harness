@@ -86,9 +86,10 @@ flowchart LR
   pkg_llm_replay["llm-replay"]
   pkg_agent_loop["agent-loop"]
   pkg_compaction_basic["compaction-basic"]
+  pkg_session_log_deepseek["session-log-deepseek"]
+  svc_sessionLogDeepSeek["ctx.sessionLogDeepSeek<br/>Session-log upload policy"]
   pkg_deepseek_llm_api_extensions["deepseek-llm-api-extensions"]
   svc_deepseekLlmApiExtensions["ctx.deepseekLlmApiExtensions<br/>Official DeepSeek request extensions"]
-  pkg_session_log_deepseek["session-log-deepseek"]
   pkg_plugin_package_inventory_deepseek["plugin-package-inventory-deepseek"]
   pkg_token_meter["token-meter"]
   svc_tokenMeter["ctx.tokenMeter<br/>Replay token measurement"]
@@ -314,6 +315,8 @@ flowchart LR
   pkg_cordis_host_runner["cordis-host-runner"]
   svc_dynamicCordisRunner["ctx.dynamicCordisRunner<br/>Dynamic Cordis package host runner"]
   svc_cordisInspect["ctx.cordisInspect<br/>Dynamic Cordis inspect registry"]
+  pkg_experimental_liveshare["experimental-liveshare"]
+  svc_liveshareShares["ctx.liveshareShares<br/>Owner share management Remote"]
   pkg_action_cards --> svc_actionCards
   pkg_agent --> svc_agents
   pkg_agent_default_model --> svc_agentDefaultModel
@@ -371,6 +374,7 @@ flowchart LR
   pkg_experimental_forge --> svc_forge
   pkg_experimental_forge_github --> svc_forge
   pkg_experimental_forge_session --> svc_forgeSession
+  pkg_experimental_liveshare --> svc_liveshareShares
   pkg_experimental_ptc_runtime_python --> svc_ptcRuntime
   pkg_experimental_speech_to_text --> svc_speechToText
   pkg_experimental_speech_to_text_sensevoice --> svc_speechToText
@@ -421,6 +425,7 @@ flowchart LR
   pkg_schedule --> svc_schedule
   pkg_session --> svc_sessions
   pkg_session_log_deepseek --> svc_deepseekLlmApiExtensions
+  pkg_session_log_deepseek --> svc_sessionLogDeepSeek
   pkg_session_persistence --> svc_sessionPersistence
   pkg_session_persistence_jsonl --> svc_sessionPersistence
   pkg_session_projection --> svc_sessionProjections
@@ -671,6 +676,7 @@ flowchart LR
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | 宿主会在会话事件之前提交已接受的图片；提供方适配器将已授权的持久引用解析为提供方原生内容。 |
 | `ctx.fileUploads` | `core` | [`client-file-upload`](../packages/client/file-upload) | - | [`api-session-controller`](../packages/api/session-controller) | - | 负责流式接收、持久存储和暂存回执生命周期；Session Controller 将回执绑定到已接受的提交。 |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | 适配器注册提供方实现；agent loop（智能体循环）与压缩功能调用提供方无关的流服务。 |
+| `ctx.sessionLogDeepSeek` | `core` | [`session-log-deepseek`](../packages/session/session-log-deepseek) | - | - | - | 插件在准备权威 Session 日志请求贡献前注册归调用方所有的排除条件；没有条件匹配的请求应用普通上传资格判断。 |
 | `ctx.deepseekLlmApiExtensions` | `seam` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | [`session-log-deepseek`](../packages/session/session-log-deepseek), [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | [`llm-deepseek`](../packages/llm/llm-deepseek) | - | 插件准备彼此独立的顶层字段；官方适配器会合并这些字段，并在 HTTP 接受后提交其交付状态。 |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | 拥有按会话隔离的回放折叠区；压力消费方共享不可变且带修订版本的测量结果。 |
 | `ctx.toolResultPruner` | `core` | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | 在摘要压缩前，通过可回放的单节点表层替换来改写过大的当前工具结果。 |
@@ -753,5 +759,6 @@ flowchart LR
 | `ctx.lsp` | `seam` | [`lsp`](../packages/lsp/lsp) | [`lsp-stdio`](../packages/lsp/lsp-stdio) | [`tool-lsp`](../packages/lsp/tool-lsp) | - | 提供方注册与选择，加上恰好四种操作的标准化查询执行；该 seam 不提供协议逃生口，后端必须转换为标准化请求和结果。 |
 | `ctx.dynamicCordisRunner` | `core` | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) | - | [`tool-cordis`](../packages/extensions/tool-cordis) | - | 拥有内存定义注册表、Host 半的 vm 沙箱和 request-run 往返流程；浏览器页面通过其 Remote 命名空间在线访问同一服务。 |
 | `ctx.cordisInspect` | `core` | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) | - | [`tool-cordis`](../packages/extensions/tool-cordis) | - | 注册 Host inspect 提供方、镜像 Client 提供方 manifest，并通过动态 Cordis 传输路由 Client 查询。 |
+| `ctx.liveshareShares` | `service` | [`experimental-liveshare`](../packages/experimental/liveshare) | - | - | - | 以单个 Typert Remote 命名空间发布 owner 分享管理操作，供 owner 客户端面调用；每个方法都委托给同源路由原先使用的同一组操作。 |
 
 维护模式：混合模式。服务从 Cordis 声明中发现；接口、实现和消费方角色在 `scripts/gen-doc-graphs.ts` 中分类，并设有完整性守卫。

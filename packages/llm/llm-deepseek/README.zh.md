@@ -118,7 +118,7 @@ Files 模式通过 `maxRequestFilesBytes` 与 `maxImagesPerRequest` 限制保留
 
 非 2xx 响应以稳定 code 失败：`AUTH`（401/403）、`QUOTA`、`RATE_LIMIT`、`CONTEXT_WINDOW_EXCEEDED`、`INVALID_REQUEST`、`SERVER` 以及其他情况的 `HTTP_<status>`；响应前传输失败抛出 `TRANSPORT`，调用方中止抛出 `ABORTED`，流空闲超时抛出 `TIMEOUT`。请求扩展字段冲突，或直接提供的 `prepareExtensions` 拒绝准备时，使用 `REQUEST_EXTENSION` 失败，并在消息中附上原因链；2xx 后接受失败只记录告警，响应仍会继续流式返回。当提供方未指出 file id 时，规范化图片拒绝会列出所有可能附件及其持久位置。陈旧文件拒绝会在一次上传索引更新中删除全部点名映射（或该次尝试使用的全部映射），并允许一次替换模型请求。协议违规抛出 `STREAM_CLOSED` 或 `MALFORMED_RESPONSE`；不带内容块的终止 `stop` 变成 `EMPTY_RESPONSE`，默认重试策略会重试它。官方路由缺少 API Key 的请求以 `MISSING_CREDENTIAL` 失败；格式错误的凭据以 `INVALID_CREDENTIAL` 失败，并点名需要修复的引用——绝不包含密钥的任何部分。
 
-提供方插件负责目录可用性：API key 路由在能解析到 API key 时提供配置中的 `models`，在官方端点上且 `models` 为内置目录时改为提供官方模型列表；账号路由在登录时提供账号的模型列表（见 [API key](../llm-deepseek-api-key/README.zh.md) 与[账号](../llm-deepseek-account/README.zh.md)提供方）。传输层提供内置目录、目录条目字段的 schema 和能力解析，以及两条路由共用的列表机制：`requestModelListing`、按凭据区分的 `ModelListingCache`，以及带客户端版本门控的 `resolveListedCatalog` 与 `refuseListedModel`。提供方还可以提供 `connect(signal)`：在提供方自己的工作（例如加载目录）完成后，为精确模型查询和预备调用解析连接；以及 `admit(connection, model)`：在网络请求之前拒绝某个模型。
+提供方插件负责目录可用性：API key 路由在能解析到 API key 时提供配置中的 `models`，在官方端点上且 `models` 为内置目录时改为提供官方模型列表；账号路由在登录时提供账号的模型列表（见 [API key](../llm-deepseek-api-key/README.zh.md) 与[账号](../llm-deepseek-account/README.zh.md)提供方）。传输层提供内置目录、目录条目字段的 schema 和能力解析，以及两条路由共用的列表机制：`requestModelListing`、按凭据区分的 `ModelListingCache`（由 `createModelListingCache` 持有，负责自动刷新、通知与插件清理），以及带客户端版本门控和列表角标的 `resolveListedCatalog` 与 `refuseListedModel`；`catalogModelInfo` 把列表角标附到公布的条目上。角标文字拒绝控制字符、Unicode 行分隔符、双向控制符及仅由空白或默认可忽略字符组成的字符串，组合 emoji 仍有效。提供方还可以提供 `connect(signal)`：在提供方自己的工作（例如加载目录）完成后，为精确模型查询和预备调用解析连接；以及 `admit(connection, model)`：在网络请求之前拒绝某个模型。
 
 -----
 

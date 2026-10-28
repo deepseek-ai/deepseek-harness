@@ -84,9 +84,10 @@ flowchart LR
   pkg_llm_replay["llm-replay"]
   pkg_agent_loop["agent-loop"]
   pkg_compaction_basic["compaction-basic"]
+  pkg_session_log_deepseek["session-log-deepseek"]
+  svc_sessionLogDeepSeek["ctx.sessionLogDeepSeek<br/>Session-log upload policy"]
   pkg_deepseek_llm_api_extensions["deepseek-llm-api-extensions"]
   svc_deepseekLlmApiExtensions["ctx.deepseekLlmApiExtensions<br/>Official DeepSeek request extensions"]
-  pkg_session_log_deepseek["session-log-deepseek"]
   pkg_plugin_package_inventory_deepseek["plugin-package-inventory-deepseek"]
   pkg_token_meter["token-meter"]
   svc_tokenMeter["ctx.tokenMeter<br/>Replay token measurement"]
@@ -312,6 +313,8 @@ flowchart LR
   pkg_cordis_host_runner["cordis-host-runner"]
   svc_dynamicCordisRunner["ctx.dynamicCordisRunner<br/>Dynamic Cordis package host runner"]
   svc_cordisInspect["ctx.cordisInspect<br/>Dynamic Cordis inspect registry"]
+  pkg_experimental_liveshare["experimental-liveshare"]
+  svc_liveshareShares["ctx.liveshareShares<br/>Owner share management Remote"]
   pkg_action_cards --> svc_actionCards
   pkg_agent --> svc_agents
   pkg_agent_default_model --> svc_agentDefaultModel
@@ -369,6 +372,7 @@ flowchart LR
   pkg_experimental_forge --> svc_forge
   pkg_experimental_forge_github --> svc_forge
   pkg_experimental_forge_session --> svc_forgeSession
+  pkg_experimental_liveshare --> svc_liveshareShares
   pkg_experimental_ptc_runtime_python --> svc_ptcRuntime
   pkg_experimental_speech_to_text --> svc_speechToText
   pkg_experimental_speech_to_text_sensevoice --> svc_speechToText
@@ -419,6 +423,7 @@ flowchart LR
   pkg_schedule --> svc_schedule
   pkg_session --> svc_sessions
   pkg_session_log_deepseek --> svc_deepseekLlmApiExtensions
+  pkg_session_log_deepseek --> svc_sessionLogDeepSeek
   pkg_session_persistence --> svc_sessionPersistence
   pkg_session_persistence_jsonl --> svc_sessionPersistence
   pkg_session_projection --> svc_sessionProjections
@@ -669,6 +674,7 @@ flowchart LR
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.fileUploads` | `core` | [`client-file-upload`](../packages/client/file-upload) | - | [`api-session-controller`](../packages/api/session-controller) | - | Owns streaming intake, durable storage, and staged receipt lifetime; the Session controller binds receipts to accepted submissions. |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
+| `ctx.sessionLogDeepSeek` | `core` | [`session-log-deepseek`](../packages/session/session-log-deepseek) | - | - | - | Plugins register caller-owned exclusions before the canonical Session-log request contribution is prepared; unmatched requests use normal upload eligibility. |
 | `ctx.deepseekLlmApiExtensions` | `seam` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | [`session-log-deepseek`](../packages/session/session-log-deepseek), [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | [`llm-deepseek`](../packages/llm/llm-deepseek) | - | Plugins prepare independent top-level fields; the official adapter merges them and commits their delivery state after HTTP acceptance. |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Owns isolated per-session replay folds; pressure consumers share immutable revisioned measurements. |
 | `ctx.toolResultPruner` | `core` | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Rewrites oversized current tool results through replayable single-node surface replacements before summary compaction. |
@@ -751,5 +757,6 @@ flowchart LR
 | `ctx.lsp` | `seam` | [`lsp`](../packages/lsp/lsp) | [`lsp-stdio`](../packages/lsp/lsp-stdio) | [`tool-lsp`](../packages/lsp/tool-lsp) | - | Provider registration and selection plus normalized query execution over exactly four operations; the seam offers no protocol escape hatch, so a backend translates into the normalized request and result. |
 | `ctx.dynamicCordisRunner` | `core` | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) | - | [`tool-cordis`](../packages/extensions/tool-cordis) | - | Owns the in-memory definition registry, the vm sandbox for host halves, and the request-run round trip; browser pages reach the same service over the wire through its remote namespace. |
 | `ctx.cordisInspect` | `core` | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) | - | [`tool-cordis`](../packages/extensions/tool-cordis) | - | Registers host inspect providers, mirrors the client provider manifest, and routes client queries through the dynamic Cordis transport. |
+| `ctx.liveshareShares` | `service` | [`experimental-liveshare`](../packages/experimental/liveshare) | - | - | - | Publishes the owner share-management operations as one Typert Remote namespace that the owner client face calls; every method delegates to the same operations the same-origin routes used. |
 
 Maintenance mode: hybrid: services are discovered from Cordis declarations; interface/implementation/consumer roles are classified in `scripts/gen-doc-graphs.ts` with a completeness guard.

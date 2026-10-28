@@ -45,15 +45,18 @@ const SETTLED: Record<Exclude<ChecksRollup, 'failure'>, Exclude<CiSummary['kind'
 /** The most urgent fact of an open change request that the collapsed card names. */
 export type ChangeRequestFlag = 'changesRequested' | 'conflicting' | 'draft'
 
+/** The facts of a change request that decide its tone. */
+export type ToneFacts = Pick<ChangeRequestSnapshot, 'state' | 'draft' | 'checksRollup' | 'reviewDecision' | 'mergeability'>
+
 /**
  * Pick the glyph tone of a change request: an open draft is always `draft`;
  * any other open one is `blocked` while its checks failed, changes were
  * requested, or it conflicts with its base, and running checks, a pending
  * review, and an unknown mergeability only wait and keep it `open`.
- * @param snapshot - latest snapshot, or null before the first one.
+ * @param snapshot - latest snapshot or listed state, or null before the first one.
  * @returns the tone.
  */
-export function toneOf(snapshot: ChangeRequestSnapshot | null): ChangeRequestTone {
+export function toneOf(snapshot: ToneFacts | null): ChangeRequestTone {
   if (snapshot === null) return 'unknown'
   if (snapshot.state !== 'open') return snapshot.state
   if (snapshot.draft) return 'draft'

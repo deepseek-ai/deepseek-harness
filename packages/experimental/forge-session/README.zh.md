@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-无需单独的登记簿，即可列出一个 Session 正在处理的 pull request。一个仅宿主侧的投影从 Session 自己的 `gh pr create`、`gh pr view`、`gh pr edit`、`gh pr checkout` 与 `git push` shell 结果以及绑定记录派生绑定。每次推送后，以及 forge 面板等调用方报告 Session 所在的分支时，服务为该分支查找打开状态的变更请求（change request，即 pull request 或 merge request），并记录尚未绑定的那些。监听一个 Session 时，会通过 `ctx.forge` 轮询其已绑定的变更请求。
+无需单独的登记簿，即可列出一个 Session 正在处理的 pull request。一个投影从 Session 自己的 `gh pr create`、`gh pr view`、`gh pr edit`、`gh pr checkout` 与 `git push` shell 结果以及绑定记录派生绑定。每次推送后，以及 forge 面板等调用方报告 Session 所在的分支时，服务为该分支查找打开状态的变更请求（change request，即 pull request 或 merge request），并记录尚未绑定的那些。监听一个 Session 时，会通过 `ctx.forge` 轮询其已绑定的变更请求。Session 摘要把绑定带给客户端。
 
 ## 目录
 
@@ -50,7 +50,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-`forgeChangeRequests` 投影没有客户端视图。它保存等待第一个结果的 shell 调用、每个绑定及其隐藏状态，以及每个被推送分支和最近一次报告它的结果的序号。`turn/end` 会丢弃仍在等待的调用。服务收到 `tool/result` 事件时，只对序号等于该事件序号的推送执行发现，并在绑定数组变化时刷新监听方。销毁服务会中止查找并丢弃其结果。
+`forgeChangeRequests` 投影保存等待第一个结果的 shell 调用、每个绑定及其隐藏状态，以及每个被推送分支和最近一次报告它的结果的序号。`turn/end` 会丢弃仍在等待的调用。它的客户端视图随 Session 摘要下发，按首次记录的顺序列出每个绑定的 URL、来源与隐藏状态；只有等待中的调用或推送变化时，视图保持同一引用。服务收到 `tool/result` 事件时，只对序号等于该事件序号的推送执行发现，并在绑定数组变化时刷新监听方。销毁服务会中止查找并丢弃其结果。
 
 | 源码 | 职责 |
 |---|---|
@@ -76,7 +76,7 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-无：绑定、发现记录与轮询到的状态都留在宿主侧；绑定记录不会进入模型请求。
+无：绑定、发现记录与轮询到的状态都不会进入模型请求；客户端通过 Session 摘要看到绑定。
 
 #### KV Cache 影响
 

@@ -76,4 +76,5 @@ export const EXPERIMENTAL_BUNDLES: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-experimental-badge-skill-bundle',
   '@deepseek-ai/dsh-experimental-ralph-bundle',
   '@deepseek-ai/dsh-experimental-plugin-market-bundle',
+  '@deepseek-ai/dsh-experimental-liveshare',
 ])

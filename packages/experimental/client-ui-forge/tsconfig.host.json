@@ -13,6 +13,7 @@
     "src/panel.ts",
     "src/parse.ts",
     "src/patch-cache.ts",
+    "src/states.ts",
     "src/types.ts",
     "src/worktree.ts"
   ],
@@ -22,6 +23,9 @@
     },
     {
       "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../api/remote-access/tsconfig.host.json"
     },
     {
       "path": "../../core/agent"
@@ -39,10 +43,19 @@
       "path": "../../sandbox/sandbox-policy"
     },
     {
+      "path": "../../session-query/session-query"
+    },
+    {
       "path": "../../session/session-projection"
     },
     {
+      "path": "../../session/session-projection-cache"
+    },
+    {
       "path": "../../session/working-directory"
+    },
+    {
+      "path": "../../storage/storage-domain"
     },
     {
       "path": "../../subprocess/subprocess"

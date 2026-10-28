@@ -170,6 +170,13 @@
   min-height: 0;
 }
 
+@media (pointer: coarse) {
+  /* Retain the footprint so hiding the control cannot change its room measurement. */
+  .panelBody :global([data-dockkit-split-control]:has(> [data-dockkit-split-blocked])) {
+    visibility: hidden;
+  }
+}
+
 .unavailable {
   margin: 0;
   padding: 12px;

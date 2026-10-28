@@ -45,6 +45,8 @@ type ChangeRequestKey = Branded<'ChangeRequestKey'>
 interface ForgeProvider {
   /** Forge family name stored in every repository this provider returns. */
   readonly forge: string
+  /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
+  submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /** Map a Git remote URL to its repository, or undefined when this provider does not serve it. */
   repositoryFromRemote(url: string): ForgeRepository | undefined
   /** Map a change request web URL to its reference, or undefined when this provider does not serve it. */
@@ -246,9 +248,40 @@ interface ForgeActionFailure {
 }
 ```
 
+`ctx.forge.submitReview` delegates an explicit comment or completed review to the provider. A provider that omits this capability returns unsupported. Consumers retain pending drafts and reconcile unknown write outcomes before resubmitting.
+
+```ts type-equiv
+/** One inline comment addressed to the old or new side of a pull request diff. */
+interface ForgeLineComment {
+  readonly path: string
+  readonly side: 'L' | 'R'
+  readonly startLine: number
+  readonly endLine: number
+  readonly body: string
+}
+```
+
+```ts type-equiv
+/** A single published comment or one completed review containing all pending comments. */
+type ForgeReviewRequest = {
+  /** Commit the user reviewed; providers must check it before writing and address that commit explicitly. */
+  readonly headSha: string
+} & (
+  | { readonly kind: 'comment'; readonly comment: ForgeLineComment }
+  | { readonly kind: 'review'; readonly event: 'comment' | 'approve' | 'request-changes'; readonly body: string; readonly comments: readonly ForgeLineComment[] }
+)
+```
+
+```ts type-equiv
+/** Result of a review write; unknown outcomes must be checked on the host before another submission. */
+type ForgeReviewResult =
+  | { readonly ok: true; readonly url: string }
+  | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
+```
+
 ## Session bindings
 
-`ctx.forgeSession` derives each Session's bindings from its own log: `gh pr create` results bind the URLs they print, `gh pr view`, `gh pr edit`, and `gh pr checkout` calls bind the change request they act on, and `git push` results trigger head-branch discovery through `ctx.forge`; the panel also reports the branch its checkout tracks for the same discovery. Track, dismiss, and discovery actions are `plugin:forge-session/binding` records, which stay outside the model-visible conversation. The `forgeChangeRequests` projection stays on the Host. The [Session binding README](../../packages/experimental/forge-session/README.md#use-this-package) owns the recognition and discovery rules.
+`ctx.forgeSession` derives each Session's bindings from its own log: `gh pr create` results bind the URLs they print, `gh pr view`, `gh pr edit`, and `gh pr checkout` calls bind the change request they act on, and `git push` results trigger head-branch discovery through `ctx.forge`; the panel also reports the branch its checkout tracks for the same discovery. Track, dismiss, and discovery actions are `plugin:forge-session/binding` records, which stay outside the model-visible conversation. The `forgeChangeRequests` projection's client view, which the Session summary carries, lists the bindings without their status. The [Session binding README](../../packages/experimental/forge-session/README.md#use-this-package) owns the recognition and discovery rules.
 
 ```ts type-equiv
 /**
@@ -506,6 +539,32 @@ interface ForgeBranches {
 }
 ```
 
+The Session list reads through the same Remote. `changeRequestStates` streams `ForgeChangeRequestStatesFrame` values: a `baseline` with the last known `ForgeChangeRequestListState` of every change request that a listed Session the caller may read binds, then the states that change. One Host run serves every stream; it takes the bindings of loaded Sessions from `ctx.forgeSession` and those of other Sessions from their cached Session summary without loading them, keeps each bound change request subscribed, including closed requests polled at the idle cadence to detect reopening, and stores every change, so a restart shows the last known states before the next poll. The Session summary also carries the `forgeWorktree` projection's client view: the created worktree while the Session's directory is that worktree or lies below it, else null.
+
+```ts type-equiv
+/**
+ * The last polled state of one change request that a listed Session binds, as
+ * the Session list shows it.
+ */
+type ForgeChangeRequestListState = Pick<
+  ChangeRequestSnapshot, 'url' | 'title' | 'state' | 'draft' | 'checksRollup' | 'reviewDecision' | 'mergeability'
+> & {
+  /** Change request number on its code host. */
+  readonly number: number
+}
+```
+
+```ts type-equiv
+/**
+ * One frame of `forgePanel.changeRequestStates`: the known state of every
+ * change request the reader may see first, then the states that changed or
+ * became visible since the previous frame.
+ */
+type ForgeChangeRequestStatesFrame =
+  | { readonly type: 'baseline'; readonly states: readonly ForgeChangeRequestListState[] }
+  | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
+```
+
 The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`; both return files that the Host parsed into `ForgeDiffFile` hunks. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the panel's local changes card.
 
 ```ts type-equiv
@@ -719,6 +778,15 @@ async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): 
 async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>
 
 /**
+ * Publish one comment or a completed review, then refresh the watched status.
+ * @param ref - change request served by a registered provider.
+ * @param request - explicitly selected commit, comments, and review decision.
+ * @param signal - request cancellation.
+ * @returns a publication URL or a failure, including an unknown write outcome.
+ */
+async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
+
+/**
  * Read the text of one file at a commit of a change request's repository.
  * @param ref - change request served by a registered provider.
  * @param commit - commit object name.
@@ -784,6 +852,20 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @returns panel states in publication order.
  */
 @Remote({ mode: 'stream' }) async *follow(session: Session, signal: AbortSignal): AsyncIterable<ForgePanelState>
+
+/**
+ * Stream the last known state of every change request that a listed
+ * Session the caller may read binds: the stored states first, then each
+ * state a poll changes or a new binding reveals. Listing reads no Session
+ * log: loaded Sessions report their bindings, others the cached Session
+ * summary, and a Session without one shows nothing until it is opened.
+ * Closed requests are polled at the idle cadence so reopening is observed. The
+ * stream ends when `signal` aborts or the Remote stops.
+ * @param signal - ends the stream.
+ * @returns frames in publication order.
+ * @throws when the Host lacks the Session query, projection cache, storage, or Session store service.
+ */
+@Remote({ mode: 'stream' }) async *changeRequestStates(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame>
 
 /**
  * List the local branches that can start a worktree of the Session's current checkout.
@@ -874,6 +956,16 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * `forgePanel/diff-failed` when the host does not provide the file otherwise.
  */
 @Remote async changeRequestText(session: Session, url: string, commit: string, path: string, signal: AbortSignal): Promise<string>
+
+/**
+ * Publish a line comment or completed review for a visible Session binding.
+ * @param session - Session retaining the change request.
+ * @param url - visible binding URL.
+ * @param request - reviewed head, ranges, plain text, and explicit review decision.
+ * @param signal - request cancellation.
+ * @returns confirmed publication or a typed failure; unknown outcomes require reconciliation on the host.
+ */
+@Remote async submitReview(session: Session, url: string, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
 
 /**
  * Mark a draft change request of a Session ready for review; the change

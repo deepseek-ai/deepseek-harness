@@ -1,37 +1,59 @@
-/** Per-Session panel stream sources, the store behind action notices, and the tab visibility store. */
+/**
+ * Host stream sources (per-Session panel states and the change request states
+ * of the Session list), the store behind action notices, and the tab visibility store.
+ */
 
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ForgePanelState } from '../types.ts'
+import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelState } from '../types.ts'
 import type { ForgePanelKey } from './locales.ts'
 
-/** What the panel surfaces of one Session read. */
-export interface PanelSnapshot {
-  /** Latest state from the Host, or null before the first one arrives. */
-  readonly state: ForgePanelState | null
+/** What a stream source publishes: the value its frames built, and whether the stream ended while read. */
+export interface StreamSnapshot<S> {
+  /** Value built from the frames so far. */
+  readonly state: S
   /** Whether the stream ended while surfaces still read it. */
   readonly disconnected: boolean
 }
 
-/** One open stream of panel states. */
-export interface PanelStream extends AsyncIterable<ForgePanelState> {
+/** What the panel surfaces of one Session read; `state` is null before the first one arrives. */
+export type PanelSnapshot = StreamSnapshot<ForgePanelState | null>
+
+/** One open Host stream. */
+export interface HostStream<F> extends AsyncIterable<F> {
   /** Close the stream. */
   dispose: () => void
 }
 
-/** Stream opener and connection-reset subscription of one Session's source. */
-export interface PanelSourceDeps {
+/** One open stream of panel states. */
+export type PanelStream = HostStream<ForgePanelState>
+
+/** Stream opener and connection-reset subscription of a source. */
+export interface StreamSourceDeps<F> {
   /**
-   * Open the Host stream of the Session.
+   * Open the Host stream.
    * @param signal - aborts the stream.
    * @returns the stream.
    */
-  readonly open: (signal: AbortSignal) => PanelStream
+  readonly open: (signal: AbortSignal) => HostStream<F>
   /**
    * Subscribe to transport resets, after which an open stream no longer delivers.
    * @param listener - called on each reset.
    * @returns the unsubscribe function.
    */
   readonly subscribeReset: (listener: () => void) => () => void
+}
+
+/** Stream opener and connection-reset subscription of one Session's panel source. */
+export type PanelSourceDeps = StreamSourceDeps<ForgePanelState>
+
+/** A value built from a Host stream that runs only while a surface subscribes. */
+export interface StreamSource<S> {
+  /** Snapshot observable; the renderer binds it as a selector hook. */
+  readonly observable: HostObservable<StreamSnapshot<S>>
+  /** Open the stream again after it ended; a no-op while it runs or nobody subscribes. */
+  readonly reconnect: () => void
+  /** Close the stream and the reset subscription and drop every subscriber. */
+  readonly close: () => void
 }
 
 /** Panel state of one Session, streamed only while a surface subscribes. */
@@ -44,22 +66,23 @@ export interface PanelSource {
   readonly close: () => void
 }
 
-const EMPTY: PanelSnapshot = { state: null, disconnected: false }
-
 /**
- * Create the panel source of one Session. The first subscriber opens the
- * stream and the last one closes it; the last state stays readable for the
- * next subscriber. A stream that ends or fails while subscribed marks the
- * snapshot disconnected until `reconnect` or a transport reset reopens it.
+ * Create a source that folds a Host stream into one value. The first
+ * subscriber opens the stream and the last one closes it; the value stays
+ * readable for the next subscriber. A stream that ends or fails while
+ * subscribed marks the snapshot disconnected until `reconnect` or a transport
+ * reset reopens it.
  * @param deps - stream opener and reset subscription.
+ * @param initial - value before the first frame.
+ * @param fold - the value after one frame.
  * @returns the source.
  */
-export function createPanelSource(deps: PanelSourceDeps): PanelSource {
-  let snapshot = EMPTY
+export function createStreamSource<F, S>(deps: StreamSourceDeps<F>, initial: S, fold: (state: S, frame: F) => S): StreamSource<S> {
+  let snapshot: StreamSnapshot<S> = { state: initial, disconnected: false }
   const listeners = new Set<() => void>()
-  let running: { readonly controller: AbortController; readonly stream: PanelStream } | undefined
+  let running: { readonly controller: AbortController; readonly stream: HostStream<F> } | undefined
   let stopReset: (() => void) | undefined
-  const publish = (next: PanelSnapshot): void => {
+  const publish = (next: StreamSnapshot<S>): void => {
     snapshot = next
     for (const listener of [...listeners]) listener()
   }
@@ -76,9 +99,9 @@ export function createPanelSource(deps: PanelSourceDeps): PanelSource {
     if (snapshot.disconnected) publish({ ...snapshot, disconnected: false })
     void (async () => {
       try {
-        for await (const state of opened.stream) {
+        for await (const frame of opened.stream) {
           if (running !== opened) return
-          publish({ state, disconnected: false })
+          publish({ state: fold(snapshot.state, frame), disconnected: false })
         }
       } catch (error) {
         void error // A failed stream is reported as the disconnection below.
@@ -99,28 +122,52 @@ export function createPanelSource(deps: PanelSourceDeps): PanelSource {
     stop()
   }
   return {
-    hooks: {
-      panel: {
-        getSnapshot: () => snapshot,
-        subscribe(listener) {
-          listeners.add(listener)
-          if (listeners.size === 1) {
-            stopReset = deps.subscribeReset(() => {
-              stop()
-              reconnect()
-            })
-            start()
-          }
-          return () => {
-            listeners.delete(listener)
-            if (listeners.size === 0) close()
-          }
-        },
+    observable: {
+      getSnapshot: () => snapshot,
+      subscribe(listener) {
+        listeners.add(listener)
+        if (listeners.size === 1) {
+          stopReset = deps.subscribeReset(() => {
+            stop()
+            reconnect()
+          })
+          start()
+        }
+        return () => {
+          listeners.delete(listener)
+          if (listeners.size === 0) close()
+        }
       },
     },
     reconnect,
     close,
   }
+}
+
+/**
+ * Create the panel source of one Session: the latest state the Host streamed.
+ * @param deps - stream opener and reset subscription.
+ * @returns the source.
+ */
+export function createPanelSource(deps: PanelSourceDeps): PanelSource {
+  const source = createStreamSource<ForgePanelState, ForgePanelState | null>(deps, null, (_previous, state) => state)
+  return { hooks: { panel: source.observable }, reconnect: source.reconnect, close: source.close }
+}
+
+/**
+ * The known change request states after one `changeRequestStates` frame: a
+ * baseline replaces them, and a change replaces the states it carries.
+ * @param states - states by URL before the frame.
+ * @param frame - the frame.
+ * @returns states by URL after the frame.
+ */
+export function foldStates(
+  states: ReadonlyMap<string, ForgeChangeRequestListState>,
+  frame: ForgeChangeRequestStatesFrame,
+): ReadonlyMap<string, ForgeChangeRequestListState> {
+  const next = frame.type === 'baseline' ? new Map<string, ForgeChangeRequestListState>() : new Map(states)
+  for (const state of frame.states) next.set(state.url, state)
+  return next
 }
 
 /** One action notice; `seq` keys the toast so a repeated notice restarts it. */

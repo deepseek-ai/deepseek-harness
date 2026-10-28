@@ -22,6 +22,7 @@ async function fakeGh(): Promise<string> {
     '#!/bin/sh',
     'case "$1" in',
     '  echo) printf "%s|" "$@"; printf "\\nprompt=%s token=%s pager=[%s]\\n" "$GH_PROMPT_DISABLED" "${GH_TOKEN:-unset}" "$GH_PAGER" ;;',
+    '  input) cat ;;',
     '  fail) echo oops >&2; exit 3 ;;',
     '  sleep) sleep 5 ;;',
     '  big) head -c 5000 /dev/zero | tr "\\0" x ;;',
@@ -33,6 +34,12 @@ async function fakeGh(): Promise<string> {
 }
 
 describe.skipIf(process.platform === 'win32')('gh runner', () => {
+  it('delivers review JSON through stdin without interpreting shell syntax', async () => {
+    const run = ghRunner({ ghCommand: await fakeGh(), timeoutMs: 5_000, maxOutputBytes: 10_000 })
+    const body = JSON.stringify({ body: 'Check `$(secret)`\n检查边界' })
+    await expect(run(['input'], new AbortController().signal, body)).resolves.toEqual({ exitCode: 0, stdout: body, stderr: '' })
+  })
+
   it('runs gh with literal arguments and a scrubbed, non-interactive environment', async () => {
     vi.stubEnv('GH_TOKEN', 'secret-token')
     const run = ghRunner({ ghCommand: await fakeGh(), timeoutMs: 5_000, maxOutputBytes: 10_000 })

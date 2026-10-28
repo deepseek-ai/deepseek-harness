@@ -142,7 +142,10 @@ Factory: conversation.content [ConversationContent]
 │     │  ├─ conversation.chat.text-interaction [list]
 │     │  └─ conversation.chat.flow [ChatFlow]
 │     │     └─ conversation.chat.node [ChatNodeSeat dispatch]
-│     │        ├─ key=user,steering [UserMessageNodeView]
+│     │        ├─ key=user [UserMessageNodeView]
+│     │        │  ├─ conversation.chat.user.before [chain]
+│     │        │  └─ calls Factory: conversation.chat.user.content
+│     │        ├─ key=steering [UserMessageNodeView]
 │     │        │  └─ calls Factory: conversation.chat.user.content
 │     │        ├─ key=assistant-step [AssistantNodeView / AssistantMarkdown]
 │     │        │  ├─ conversation.chat.message.images [MessageImages]

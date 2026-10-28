@@ -281,6 +281,7 @@ describe('DockSurface', () => {
     expect(disabled.hasAttribute('disabled')).toBe(true)
     expect(disabled.parentElement?.getAttribute('aria-label')).toBe(TEST_LABELS.splitPaneDisabled)
     expect(disabled.getAttribute('data-dockkit-split-blocked')).toBe('budget')
+    expect(disabled.parentElement?.hasAttribute('data-dockkit-split-control')).toBe(true)
     intents.splitPane.mockClear()
     const hint = disabled.parentElement!
     fireEvent.pointerDown(hint, { pointerType: 'touch' })

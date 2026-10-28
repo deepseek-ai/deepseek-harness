@@ -119,6 +119,7 @@ describe('beginSubmission', () => {
   for (const { mode, running, target, placement } of [
     { mode: 'queue', running: false, target: 'next-turn', placement: 'transcript' },
     { mode: 'steer', running: true, target: 'next-step', placement: 'steering' },
+    { mode: 'queue', running: true, target: 'next-turn', placement: 'queued' },
   ] as const) {
     for (const path of ['projection', 'durable event'] as const) {
       it(`accepts a ${placement} prompt once the Inbox holds it, ahead of the Host receipt (${path})`, async ({ mock, start }) => {
@@ -384,8 +385,11 @@ describe('observed retirement', () => {
       await pushEvent(mock, { type: 'agent/inbox/spliced', seq: SessionSeq(1), time: 2,
         data: { target: 'next-step', start: 0, inserted: [steerMessage] } })
       flush()
-      expect(pending()).toEqual(['opening', 'steering'])
-      expect(queueRetired).toHaveBeenCalledExactlyOnceWith({ reason: 'observed', attachments: [imageRef('queued-image')] })
+      // A queued echo waits for the inbox projection the queue dock renders, not the history event.
+      expect(pending()).toEqual(projectionFirst ? ['opening', 'steering'] : ['opening', 'queued', 'steering'])
+      if (projectionFirst) {
+        expect(queueRetired).toHaveBeenCalledExactlyOnceWith({ reason: 'observed', attachments: [imageRef('queued-image')] })
+      } else expect(queueRetired).not.toHaveBeenCalled()
       await pushEvent(mock, ev.turnStart(SessionSeq(2), 1))
       await pushEvent(mock, { type: 'agent/inbox/spliced', seq: SessionSeq(3), time: 4,
         data: { target: 'next-step', start: 0, removedCount: 1, inserted: [] } })
@@ -396,15 +400,17 @@ describe('observed retirement', () => {
       await pushEvent(mock, ev.stepStart(SessionSeq(5), 1, 1))
       await pushEvent(mock, { type: 'user/message', seq: SessionSeq(6), time: 7, surfaceOp: 'append', data: steerMessage })
       flush()
-      expect(pending()).toEqual(projectionFirst ? ['opening'] : ['opening', 'steering'])
+      expect(pending()).toEqual(projectionFirst ? ['opening'] : ['opening', 'queued', 'steering'])
       expect(normalRetired).not.toHaveBeenCalled()
       if (!projectionFirst) expect(steerRetired).not.toHaveBeenCalled()
       await pushEvent(mock, { type: 'user/message', seq: SessionSeq(7), time: 8, surfaceOp: 'append', data: normalMessage })
       flush()
       if (!projectionFirst) {
-        expect(pending()).toEqual(['opening', 'steering'])
+        expect(pending()).toEqual(['opening', 'queued', 'steering'])
         session.projections.apply('inbox', accepted, SessionSeq(1))
+        await Promise.resolve()
         flush()
+        expect(queueRetired).toHaveBeenCalledExactlyOnceWith({ reason: 'observed', attachments: [imageRef('queued-image')] })
         expect(normalRetired).not.toHaveBeenCalled()
         session.projections.apply('inbox', claimed, SessionSeq(4))
         await Promise.resolve()
@@ -461,16 +467,21 @@ describe('observed retirement', () => {
     expect(onRetire).toHaveBeenCalledExactlyOnceWith({ reason: 'observed', attachments: refs })
   })
 
-  for (const target of ['next-step', 'next-turn'] as const) {
-    it(`retires canceled or unadmitted ${target} input without removing still-pending input`, async ({ mock, start }) => {
+  for (const { target, running, mode, placement } of [
+    { target: 'next-step', running: true, mode: 'steer', placement: 'steering' },
+    { target: 'next-turn', running: false, mode: 'steer', placement: 'transcript' },
+    { target: 'next-turn', running: true, mode: 'queue', placement: 'queued' },
+  ] as const) {
+    it(`retires canceled or unadmitted ${placement} input without removing still-pending input`, async ({ mock, start }) => {
       const session = await sessionBench(mock, start, SID)
       await session.open()
-      session.handleRunning(target === 'next-step')
+      session.handleRunning(running)
       const canceled = vi.fn()
       const rejected = vi.fn()
-      const first = await submitAccepted(session, { mode: 'steer', text: 'cancel', attachments: [], onRetire: canceled })
-      const second = await submitAccepted(session, { mode: 'steer', text: 'reject', attachments: [], onRetire: rejected })
-      const unclaimed = await submitAccepted(session, { mode: 'steer', text: 'later', attachments: [] })
+      const first = await submitAccepted(session, { mode, text: 'cancel', attachments: [], onRetire: canceled })
+      const second = await submitAccepted(session, { mode, text: 'reject', attachments: [], onRetire: rejected })
+      const unclaimed = await submitAccepted(session, { mode, text: 'later', attachments: [] })
+      expect(session.getSnapshot().pendingSubmissions.map(echo => echo.placement)).toEqual([placement, placement, placement])
       const foreign = createUserMessage({ source: { kind: 'user' }, content: [] })
       await pushEvent(mock, {
         type: 'agent/inbox/spliced', seq: SessionSeq(0), time: 1,

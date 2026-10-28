@@ -522,6 +522,7 @@ export class PluginManager extends TypertRemoteService {
         catch (error) { platformError = managementError(error) }
         const error = platformError ?? targetError ?? (enabled ? { code: 'not-bundle' as const } : undefined)
         bundles.push({ name, official, availability: 'missing', ...catalogMeta, ...target, enabled, installed, optional,
+          ...offered.listedByDefault === undefined ? {} : { listedByDefault: offered.listedByDefault },
           ...platformError?.code === 'unsupported-platform' ? { listedByDefault: false } : {},
           removable: enabled, rows: [], overrides: [],
           ...error === undefined ? {} : { error } })

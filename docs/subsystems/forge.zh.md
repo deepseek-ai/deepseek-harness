@@ -45,6 +45,8 @@ type ChangeRequestKey = Branded<'ChangeRequestKey'>
 interface ForgeProvider {
   /** Forge family name stored in every repository this provider returns. */
   readonly forge: string
+  /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
+  submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /** Map a Git remote URL to its repository, or undefined when this provider does not serve it. */
   repositoryFromRemote(url: string): ForgeRepository | undefined
   /** Map a change request web URL to its reference, or undefined when this provider does not serve it. */
@@ -246,9 +248,40 @@ interface ForgeActionFailure {
 }
 ```
 
+`ctx.forge.submitReview` 将明确指定的评论或完整评审交给 provider；未实现此能力的 provider 返回不支持。消费者保存待提交草稿，并在再次提交前核对结果不明的写操作。
+
+```ts type-equiv
+/** One inline comment addressed to the old or new side of a pull request diff. */
+interface ForgeLineComment {
+  readonly path: string
+  readonly side: 'L' | 'R'
+  readonly startLine: number
+  readonly endLine: number
+  readonly body: string
+}
+```
+
+```ts type-equiv
+/** A single published comment or one completed review containing all pending comments. */
+type ForgeReviewRequest = {
+  /** Commit the user reviewed; providers must check it before writing and address that commit explicitly. */
+  readonly headSha: string
+} & (
+  | { readonly kind: 'comment'; readonly comment: ForgeLineComment }
+  | { readonly kind: 'review'; readonly event: 'comment' | 'approve' | 'request-changes'; readonly body: string; readonly comments: readonly ForgeLineComment[] }
+)
+```
+
+```ts type-equiv
+/** Result of a review write; unknown outcomes must be checked on the host before another submission. */
+type ForgeReviewResult =
+  | { readonly ok: true; readonly url: string }
+  | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
+```
+
 ## Session 绑定
 
-`ctx.forgeSession` 从每个 Session 自己的日志派生其绑定：`gh pr create` 的结果绑定其输出的 URL，`gh pr view`、`gh pr edit` 与 `gh pr checkout` 调用绑定它们所操作的变更请求，`git push` 的结果通过 `ctx.forge` 触发按 head 分支的发现；面板也会报告其检出所跟踪的分支，触发同样的发现。track、dismiss 与发现操作都是 `plugin:forge-session/binding` 插件记录，位于模型可见对话之外。`forgeChangeRequests` 投影只位于宿主侧。识别与发现规则见 [Session 绑定 README](../../packages/experimental/forge-session/README.zh.md#use-this-package)。
+`ctx.forgeSession` 从每个 Session 自己的日志派生其绑定：`gh pr create` 的结果绑定其输出的 URL，`gh pr view`、`gh pr edit` 与 `gh pr checkout` 调用绑定它们所操作的变更请求，`git push` 的结果通过 `ctx.forge` 触发按 head 分支的发现；面板也会报告其检出所跟踪的分支，触发同样的发现。track、dismiss 与发现操作都是 `plugin:forge-session/binding` 插件记录，位于模型可见对话之外。`forgeChangeRequests` 投影的客户端视图随 Session 摘要下发，列出绑定但不含其状态。识别与发现规则见 [Session 绑定 README](../../packages/experimental/forge-session/README.zh.md#use-this-package)。
 
 ```ts type-equiv
 /**
@@ -506,6 +539,32 @@ interface ForgeBranches {
 }
 ```
 
+会话列表经同一个 Remote 读取。`changeRequestStates` 以流的形式推送 `ForgeChangeRequestStatesFrame`：先是一个 `baseline`，包含调用方可读的已列出 Session 所绑定的每个变更请求最近一次已知的 `ForgeChangeRequestListState`，之后是发生变化的状态。宿主用一次运行服务所有流：已加载 Session 的绑定取自 `ctx.forgeSession`，其他 Session 的绑定取自缓存的 Session 摘要而不加载它们；每个已绑定的变更请求保持订阅，已关闭的按空闲间隔轮询以检测重新打开，每次变化都会存储，因此重启后在下次轮询之前就能显示最近已知的状态。Session 摘要还带有 `forgeWorktree` 投影的客户端视图：Session 的目录就是所创建的 worktree 或位于其下时为该 worktree，否则为 null。
+
+```ts type-equiv
+/**
+ * The last polled state of one change request that a listed Session binds, as
+ * the Session list shows it.
+ */
+type ForgeChangeRequestListState = Pick<
+  ChangeRequestSnapshot, 'url' | 'title' | 'state' | 'draft' | 'checksRollup' | 'reviewDecision' | 'mergeability'
+> & {
+  /** Change request number on its code host. */
+  readonly number: number
+}
+```
+
+```ts type-equiv
+/**
+ * One frame of `forgePanel.changeRequestStates`: the known state of every
+ * change request the reader may see first, then the states that changed or
+ * became visible since the previous frame.
+ */
+type ForgeChangeRequestStatesFrame =
+  | { readonly type: 'baseline'; readonly states: readonly ForgeChangeRequestListState[] }
+  | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
+```
+
 变更视图经同一个 Remote 读取。`localDiff` 读取 Session 检出的某个 `ForgeLocalScope`；`changeRequestDiff` 经提供方的 `diff` 读取已绑定变更请求在其最新状态 head 处的变更；两者返回的文件都已在宿主上解析为 `ForgeDiffFile` 的 hunk。`localText` 与 `changeRequestText` 读取一个文件的新版本，用来补出 hunk 之间未变更的行。每次检查还会把 `branch` 范围的规模统计为 `ForgePanelState.local`，供面板的变更卡片使用。
 
 ```ts type-equiv
@@ -719,6 +778,15 @@ async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): 
 async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>
 
 /**
+ * Publish one comment or a completed review, then refresh the watched status.
+ * @param ref - change request served by a registered provider.
+ * @param request - explicitly selected commit, comments, and review decision.
+ * @param signal - request cancellation.
+ * @returns a publication URL or a failure, including an unknown write outcome.
+ */
+async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
+
+/**
  * Read the text of one file at a commit of a change request's repository.
  * @param ref - change request served by a registered provider.
  * @param commit - commit object name.
@@ -784,6 +852,20 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @returns panel states in publication order.
  */
 @Remote({ mode: 'stream' }) async *follow(session: Session, signal: AbortSignal): AsyncIterable<ForgePanelState>
+
+/**
+ * Stream the last known state of every change request that a listed
+ * Session the caller may read binds: the stored states first, then each
+ * state a poll changes or a new binding reveals. Listing reads no Session
+ * log: loaded Sessions report their bindings, others the cached Session
+ * summary, and a Session without one shows nothing until it is opened.
+ * Closed requests are polled at the idle cadence so reopening is observed. The
+ * stream ends when `signal` aborts or the Remote stops.
+ * @param signal - ends the stream.
+ * @returns frames in publication order.
+ * @throws when the Host lacks the Session query, projection cache, storage, or Session store service.
+ */
+@Remote({ mode: 'stream' }) async *changeRequestStates(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame>
 
 /**
  * List the local branches that can start a worktree of the Session's current checkout.
@@ -874,6 +956,16 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * `forgePanel/diff-failed` when the host does not provide the file otherwise.
  */
 @Remote async changeRequestText(session: Session, url: string, commit: string, path: string, signal: AbortSignal): Promise<string>
+
+/**
+ * Publish a line comment or completed review for a visible Session binding.
+ * @param session - Session retaining the change request.
+ * @param url - visible binding URL.
+ * @param request - reviewed head, ranges, plain text, and explicit review decision.
+ * @param signal - request cancellation.
+ * @returns confirmed publication or a typed failure; unknown outcomes require reconciliation on the host.
+ */
+@Remote async submitReview(session: Session, url: string, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
 
 /**
  * Mark a draft change request of a Session ready for review; the change

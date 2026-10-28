@@ -16,8 +16,11 @@ import {
 } from '../src/client/rows/Rows.tsx'
 import type { GroupNode, SearchResultNode, SessionNode } from '../src/client/tree.ts'
 import { en, zh } from '../src/client/locales.ts'
+import rowCss from '../src/client/rows/Rows.module.css'
 
 afterEach(cleanup)
+beforeEach(() => { vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(any-hover: hover)' })) })
+afterEach(() => { vi.unstubAllGlobals() })
 
 const t = makeTranslate(zh, commonZh) as never
 const tEn = makeTranslate(en, commonEn) as never
@@ -349,6 +352,7 @@ describe('workspace browser rows', () => {
 
     expect(screen.getByRole('treeitem').getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByRole('button', { name: '在“Project”中新建会话' }).getAttribute('aria-keyshortcuts')).toBe('Control+N')
+    expect(screen.getByRole('button', { name: '在“Project”中新建会话' }).querySelector('svg')?.getAttribute('width')).toBe('14')
     fireEvent.click(screen.getByRole('button', { name: '在“Project”中新建会话' }))
     expect(onCreate).toHaveBeenCalledOnce()
     expect(onToggle).not.toHaveBeenCalled()
@@ -414,6 +418,11 @@ describe('workspace browser rows', () => {
       }
 
       geometry(320, 180)
+      const touch = new Event('pointerover', { bubbles: true })
+      Object.defineProperty(touch, 'pointerType', { value: 'touch' })
+      fireEvent(row, touch)
+      vi.advanceTimersByTime(1000)
+      expect(title.scrollLeft).toBe(0)
       fireEvent.pointerEnter(row)
       // The first frame only records the clock; travel begins on the second.
       vi.advanceTimersByTime(16)
@@ -1164,6 +1173,8 @@ describe('workspace browser rows', () => {
       expect(row.querySelector('[data-state="ongoing"]')).toBeNull()
       expect(row.textContent).toContain(label)
       expect(title.nextElementSibling?.textContent).toBe(compactLabel)
+      expect(rowCss.timestamp).toBeTypeOf('string')
+      expect(title.nextElementSibling?.firstElementChild?.classList.contains(rowCss.timestamp!)).toBe(false)
       expect(row.querySelector('[class*="time"]')?.getAttribute('aria-hidden')).toBe('true')
       expect(row.textContent).not.toContain('刚刚')
 

@@ -9,6 +9,7 @@ import { appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import type {} from '@deepseek-ai/dsh-working-directory'
 import { z } from 'zod'
 import type {
   ForgeMissingWorktree, ForgeSessionWorktree, ForgeWorktreeCreation, ForgeWorktreeFailure, ForgeWorktreeRestoration, ForgeWorktreeState,
@@ -18,7 +19,7 @@ import type {
 /** Plugin record type of worktree requests, withdrawals, and creations. */
 export const WORKTREE_RECORD = 'plugin:client-ui-forge/worktree'
 
-const EMPTY: ForgeWorktreeState = { request: null, created: null, locked: false, stepped: false, restoring: false }
+const EMPTY: Omit<ForgeWorktreeState, 'cwd'> = { request: null, created: null, locked: false, stepped: false, restoring: false }
 
 const worktreeSchema: z.ZodType<ForgeSessionWorktree> = z.object({
   path: z.string().min(1),
@@ -42,21 +43,28 @@ const stateSchema: z.ZodType<ForgeWorktreeState> = z.object({
   locked: z.boolean(),
   stepped: z.boolean(),
   restoring: z.boolean(),
+  cwd: z.string().min(1).nullable(),
 }).strict()
 
 /**
- * The host-only `forgeWorktree` unit. `request` and `cancel` records change
- * the request until the first `turn/start` or creation; the first `created`
- * record of an open request applies until the first `step/start`. Records
- * outside those periods leave the state unchanged. Restoration start and completion
- * records retain whether the created checkout is unavailable across reloads.
+ * The `forgeWorktree` unit. `request` and `cancel` records change the request
+ * until the first `turn/start` or creation; the first `created` record of an
+ * open request applies until the first `step/start`. Records outside those
+ * periods leave the state unchanged. The unit also follows the Session's
+ * working directory, so clients, including the Session summary, see the
+ * created worktree only while that directory is the worktree or lies below it.
+ * Restoration records retain incomplete checkout recovery across reloads.
  */
 export const forgeWorktreeProjection = {
   key: 'forgeWorktree',
-  stateVersion: 3,
+  stateVersion: 4,
   stateSchema,
-  init: () => EMPTY,
+  init: header => ({ ...EMPTY, cwd: header.cwd ?? null }),
   apply,
+  wire: {
+    viewSchema: worktreeSchema.nullable(),
+    view: state => state.created !== null && state.cwd !== null && within(state.created.path, state.cwd) ? state.created : null,
+  },
 } satisfies ProjectionDefinition<'forgeWorktree', ForgeWorktreeState>
 
 /**
@@ -85,6 +93,8 @@ function apply(state: ForgeWorktreeState, event: SessionEvent): ForgeWorktreeSta
       return state.locked ? state : { ...state, locked: true }
     case 'step/start':
       return state.stepped ? state : { ...state, stepped: true }
+    case 'working-directory/change':
+      return state.cwd === event.data.cwd ? state : { ...state, cwd: event.data.cwd }
     // Every other event type, including plugin records, which sit outside SessionEventMap.
     default:
       return applyRecord(state, event)

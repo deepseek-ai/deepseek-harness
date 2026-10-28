@@ -775,7 +775,7 @@ describe('ConversationRoot resident composer', () => {
     act(() => { b.actionsOwner().onOpen('inspector') })
     expect(external()).toEqual(['Chat', 'Trajectory', 'Timeline'])
     expect(b.actionsOwner().entries.find(entry => entry.id === 'inspector')?.active).toBe(true)
-    expect(b.view.getByRole('button', { name: '更多会话视图 · Inspector' })).toBeTruthy()
+    expect(b.view.getByRole('button', { name: zh['session.moreViews'] })).toBeTruthy()
     const reads = readWidth.mock.calls.length
     width = 1000
     fireEvent(window, new Event('resize'))
@@ -802,7 +802,7 @@ describe('ConversationRoot resident composer', () => {
     width = 300
     act(() => { fireResize(row) })
     expect(external()).toEqual(['chat', 'trajectory'])
-    fireEvent.click(b.view.getByRole('button', { name: '更多会话视图 · notes' }))
+    fireEvent.click(b.view.getByRole('button', { name: zh['session.moreViews'] }))
     expect(b.actionsOwner().entries.map(entry => entry.id)).toEqual(['timeline', 'inspector', 'notes'])
     expect(b.actionsOwner().entries.find(entry => entry.id === 'notes')?.active).toBe(true)
     width = 1000

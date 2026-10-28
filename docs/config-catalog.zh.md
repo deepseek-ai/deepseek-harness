@@ -708,13 +708,30 @@ export type ThemePreference = typeof THEME_PREFERENCES[number]
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-theme -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-trajectory -->
+<a id="deepseek-aidsh-client-ui-trajectory"></a>
+
+## `@deepseek-ai/dsh-client-ui-trajectory`
+
+- `inject`: `sessions` · `typert`
+- `source`: [`packages/client/ui-trajectory/src/index.ts:25`](../packages/client/ui-trajectory/src/index.ts)
+
+```ts config-catalog
+/** Count limit for each live Session's transient tool results. */
+export interface Config {
+  /** Maximum retained results per Session, including values awaiting a result event. */
+  maxResultsPerSession: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-trajectory -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-compaction-basic -->
 <a id="deepseek-aidsh-compaction-basic"></a>
 
 ## `@deepseek-ai/dsh-compaction-basic`
 
 - `inject`: `llm` · `tokenMeter` · `sessions`
-- `source`: [`packages/compaction/compaction-basic/src/types.ts:40`](../packages/compaction/compaction-basic/src/types.ts)
+- `source`: [`packages/compaction/compaction-basic/src/types.ts:46`](../packages/compaction/compaction-basic/src/types.ts)
 
 ```ts config-catalog
 /** Basic compaction configuration with an optional exact-target policy table. */
@@ -1035,7 +1052,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:296`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:318`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -1111,14 +1128,14 @@ export type Config = CuaConfig
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:205`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:230`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
 export interface Config {
   /** Poll interval in milliseconds while checks run or mergeability is unknown. */
   activeIntervalMs?: number
-  /** Poll interval in milliseconds for an open change request whose checks have settled. */
+  /** Poll interval in milliseconds for a closed request or an open request whose checks have settled. */
   idleIntervalMs?: number
   /** Largest delay in milliseconds between polls after consecutive failures. */
   maxBackoffMs?: number
@@ -2219,8 +2236,8 @@ export type PiAiThinkingTokenBudgetField = NonNullable<OpenAICompletionsCompat['
 ## `@deepseek-ai/dsh-llm-replay`
 
 - `inject`: `llm`
-- `refs`: [`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · [`SystemPromptUpdate`](../packages/llm/llm/src/index.ts) · [`ToolUpdate`](../packages/llm/llm/src/index.ts)
-- `source`: [`packages/test-support/llm-replay/src/index.ts:1129`](../packages/test-support/llm-replay/src/index.ts)
+- `refs`: [`LlmModelBadge`](../packages/llm/llm/src/index.ts) · [`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · [`SystemPromptUpdate`](../packages/llm/llm/src/index.ts) · [`ToolUpdate`](../packages/llm/llm/src/index.ts)
+- `source`: [`packages/test-support/llm-replay/src/index.ts:1135`](../packages/test-support/llm-replay/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the {@link ReplayConfig} inputs, each defaulting to its `DSH_SNAPSHOT_*` env var in `apply`. */
@@ -2290,6 +2307,8 @@ export interface ReplayModelConfig {
   systemPromptUpdate?: SystemPromptUpdate
   /** Optional mid-conversation tool declaration mode for a keyless replay route. */
   toolUpdate?: ToolUpdate
+  /** Optional selector badge the replay catalog advertises, so keyless Web scenarios render one. */
+  badge?: LlmModelBadge
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-replay -->
@@ -2980,7 +2999,7 @@ export interface JsonRpcConfig {
 
 - `inject`: `deepseekLlmApiExtensions` · `sessions`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/session/session-log-deepseek/src/index.ts:39`](../packages/session/session-log-deepseek/src/index.ts)
+- `source`: [`packages/session/session-log-deepseek/src/index.ts:47`](../packages/session/session-log-deepseek/src/index.ts)
 
 ```ts config-catalog
 /** Session-log request contribution configuration. */
@@ -4818,7 +4837,6 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-conversation` | — | [`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-cordis` | — | [`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-creation-recommendations` | — | [`packages/experimental/client-ui-creation-recommendations/src/index.ts`](../packages/experimental/client-ui-creation-recommendations/src/index.ts) |
-| `@deepseek-ai/dsh-client-ui-deepseek-model-label-1017` | — | [`packages/client/ui-deepseek-model-label-1017/src/index.ts`](../packages/client/ui-deepseek-model-label-1017/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-deliverables` | `connection` · `sessionQuery` · `sessionController` · `workspaceFiles` · `fs` · `sandboxPolicy` · `workspaceChanges` | [`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-directory-picker-browse` | — | [`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-directory-picker-native` | — | [`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts) |
@@ -4858,7 +4876,6 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-skill` | — | [`packages/client/ui-skill/src/index.ts`](../packages/client/ui-skill/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-subagent` | — | [`packages/client/ui-subagent/src/index.ts`](../packages/client/ui-subagent/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-tool` | — | [`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts) |
-| `@deepseek-ai/dsh-client-ui-trajectory` | — | [`packages/client/ui-trajectory/src/index.ts`](../packages/client/ui-trajectory/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-user-questions` | — | [`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-workflow-run` | — | [`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-workspace` | — | [`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts) |
@@ -4973,6 +4990,7 @@ export interface Config {
 | `@deepseek-ai/dsh-experimental-cot-translation-bundle` | — | [`packages/experimental/cot-translation-bundle/src/index.ts`](../packages/experimental/cot-translation-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-forge-bundle` | — | [`packages/experimental/forge-bundle/src/index.ts`](../packages/experimental/forge-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-inspector-profile` | — | [`packages/experimental/inspector-profile/src/index.ts`](../packages/experimental/inspector-profile/src/index.ts) |
+| `@deepseek-ai/dsh-experimental-liveshare` | — | [`packages/experimental/liveshare/src/index.ts`](../packages/experimental/liveshare/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-liveshare-protocol` | — | [`packages/experimental/liveshare-protocol/src/index.ts`](../packages/experimental/liveshare-protocol/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-plugin-market-bundle` | — | [`packages/experimental/plugin-market-bundle/src/index.ts`](../packages/experimental/plugin-market-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-ralph-bundle` | — | [`packages/experimental/ralph-bundle/src/index.ts`](../packages/experimental/ralph-bundle/src/index.ts) |

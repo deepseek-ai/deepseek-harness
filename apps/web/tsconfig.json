@@ -23,6 +23,7 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
+    "tests/sidebar-drawer.e2e.ts",
     "tests/creation-recommendations.e2e.ts",
     "tests/plugin-recommendations.e2e.ts",
     "tests/japanese-plugin-metadata.e2e.ts",
@@ -67,6 +68,7 @@
     "tests/subagent-fork-schedule.snapshot.ts",
     "tests/live-interactions.e2e.ts",
     "tests/question-composer.e2e.ts",
+    "tests/question-composer-recommended.e2e.ts",
     "tests/question-ptc.e2e.ts",
     "tests/approval-composer.e2e.ts",
     "tests/ptc-escalation.e2e.ts",
@@ -126,7 +128,7 @@
     "tests/developer-tools-settings.e2e.ts",
     "tests/models-settings.e2e.ts",
     "tests/deepseek-messages-settings.e2e.ts",
-    "tests/deepseek-model-label-1017.e2e.ts",
+    "tests/model-badge.e2e.ts",
     "tests/deepseek-messages-chat.e2e.ts",
     "tests/models-settings-recovery.e2e.ts",
     "tests/default-model.e2e.ts",
@@ -157,6 +159,7 @@
     "tests/stats-paged-history.e2e.ts",
     "tests/stats-truncated-tooltip.e2e.ts",
     "tests/sidebar-scrollbar.e2e.ts",
+    "tests/sidebar-alignment.e2e.ts",
     "tests/sidebar-title-hover-scroll.e2e.ts",
     "tests/rail-search-expand.e2e.ts",
     "tests/conversation-column-overflow.e2e.ts",

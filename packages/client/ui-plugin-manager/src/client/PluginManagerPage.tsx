@@ -100,6 +100,18 @@ function AddPluginMenu({ t, disabled, openInstall, renderSlot }: {
 const HIGHLIGHT_MS = 2_400
 
 /**
+ * Whether any plugin row this bundle's patch declares is running.
+ *
+ * A default-hidden bundle's rows may run without the profile selecting it, for example through
+ * `cordis.patch.yml`; that run state is the effective enablement the lists offer.
+ * @param pkg - the bundle as the Host reports it.
+ * @returns whether at least one declared row runs.
+ */
+function rowsRunning(pkg: PackageView): boolean {
+  return pkg.rows.some(row => row.enabled)
+}
+
+/**
  * Whether the main list shows an official optional bundle: any bundle outside `MORE_BUNDLES`, and any held-back one the profile enabled.
  * @param pkg - the official bundle as the Host reports it.
  * @returns whether the main list shows it.
@@ -1546,7 +1558,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   // The page omits profile bundles and persistent terminals. Other installed or offered bundles and
   // unreadable selections remain manageable; Settings' Plugin list inspects the full Host inventory.
   const listed = state.packages.filter(pkg => !HIDDEN_BUNDLES.has(pkg.name)
-    && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed)
+    && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed || rowsRunning(pkg))
     && (pkg.installed || pkg.official || pkg.error !== undefined))
   const mine = listed.filter(pkg => !pkg.official)
   const official = listed.filter(pkg => pkg.official)
@@ -1559,7 +1571,9 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const more = ordered
   const loaded = state.status === 'ready' || state.status === 'error'
   const refreshing = state.refreshStatus === 'refreshing'
-  const openPkg = view.kind === 'package' || view.kind === 'row' ? listed.find(pkg => pkg.name === view.name) : undefined
+  const openPkg = view.kind === 'package' || view.kind === 'row'
+    ? listed.find(pkg => pkg.name === view.name)
+    : undefined
   const openItem = view.kind === 'item' ? ledger.items.find(item => item.id === view.id) : undefined
   const openRow = view.kind === 'row' && openPkg !== undefined ? openPkg.rows.find(row => row.rowId === view.rowId) : undefined
   const onInstalled = tab === INSTALLED_TAB

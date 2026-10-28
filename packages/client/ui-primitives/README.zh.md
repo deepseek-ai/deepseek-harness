@@ -25,7 +25,7 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用本包
 
-`Toast` 在浅色和深色模式下均使用主题的系统提示背景与文字颜色。`Menu` 数据条目与 `MenuItemButton` 组件条目接收功能 owner 提供的有效快捷键，并在末端以无背景的浅灰色文字对齐显示，子菜单也采用同一呈现。主指针为粗指针（`pointer: coarse`）且未使用[键盘导航](#input-modality)时，菜单隐藏这些提示。键盘导航会显示提示，直到下一次指针按下；快捷键绑定始终生效。`ShortcutKeys` 默认以无方块的按键文字显示菜单和行内提示。`tooltip` 变体在深色气泡上使用稍浅的键帽，以加号连接的组合则共用一个填充色块。`Tooltip.shortcutKeys` 将键帽与可选的本地化操作文本垂直居中排列，标签为空时只显示按键。可选的 `className` 供调用方设置交互状态样式。`Modal` 使用框架共享的浮层起点，视口边距至少为 24px。其遮罩不绘制 Windows 顶栏区域，覆盖整个视口的模态层仍阻挡背景点击。`Modal` 与设置外壳通过 `useModalLayer` 共用顶层 Esc 和 Tab 处理，关闭时恢复先前焦点。`closeTopModal(document)` 请求前台弹窗当前的关闭操作；上层菜单或未注册的对话框会阻止关闭其后方弹窗。组件通过 `isBehindModal` 避免将焦点移到嵌套弹窗后方。菜单先消费自己的 Esc，再由模态层处理关闭。 `observeComposition` 为局部弹层和录键处理提供相同的 composition-end 与旧版 IME 保护；调用方随交互生命周期释放其 document 监听。
+`Toast` 在浅色和深色模式下均使用主题的系统提示背景与文字颜色。`Menu` 数据条目与 `MenuItemButton` 组件条目接收功能 owner 提供的有效快捷键，并在末端以无背景的浅灰色文字对齐显示，子菜单也采用同一呈现。主指针为粗指针（`pointer: coarse`）且未使用[键盘导航](#input-modality)时，菜单隐藏这些提示。键盘导航会显示提示，直到下一次指针按下；快捷键绑定始终生效。`ShortcutKeys` 默认以无方块的按键文字显示菜单和行内提示。`tooltip` 变体在深色气泡上使用稍浅的键帽，以加号连接的组合则共用一个填充色块。`Tooltip.shortcutKeys` 将键帽与可选的本地化操作文本垂直居中排列，标签为空时只显示按键。可选的 `className` 供调用方设置交互状态样式。`Modal` 使用框架共享的浮层起点，视口边距至少为 24px。其遮罩不绘制 Windows 顶栏区域，覆盖整个视口的模态层仍阻挡背景点击。`Modal` 与设置外壳通过 `useModalLayer` 共用顶层 Esc 和 Tab 处理，关闭时恢复先前焦点。关闭后保留在 DOM 中的弹窗仅恢复仍停留于内部的焦点，不覆盖已经移到其他位置的焦点。`closeTopModal(document)` 请求前台弹窗当前的关闭操作；上层菜单或未注册的对话框会阻止关闭其后方弹窗。组件通过 `isBehindModal` 避免将焦点移到嵌套弹窗后方。菜单先消费自己的 Esc，再由模态层处理关闭。 `observeComposition` 为局部弹层和录键处理提供相同的 composition-end 与旧版 IME 保护；调用方随交互生命周期释放其 document 监听。
 
 `isMobileDevice()` 识别 iOS 和 Android 手机及平板，供自动聚焦和收起键盘使用。它识别 UA 中的 `Android`、`iPhone`、`iPad` 或 `iPod`，以及报告 `MacIntel` 且触摸点数大于一的 iPad。其他设备（包括 Windows 触屏电脑）返回 false，不受窗口宽度影响。函数缓存首次判断结果，供页面内的所有调用方共享；组件重新挂载会复用该结果，重新加载页面时会再次读取浏览器环境。识别出的移动设备需要用户主动聚焦文本输入框。隐藏移动平台信息的浏览器模式或自定义 UA 可能导致识别失败；未识别的 UA 返回 false。仅凭桌面 UA 无法区分 Android 平板与 Linux 电脑。
 
@@ -59,7 +59,7 @@ kind: "package-library"
 | `ConnectionIndicator` | 行内连接恢复控件，覆盖断线、重试与已恢复三种状态。 |
 | `DisclosureRow` | 24px 紧凑折叠行，标题与内容左右排列。标题行默认使用 tertiary，悬停时使用 secondary；文字与图标继承该颜色，不受能否展开及开合状态影响，调用方可提供功能专属覆盖。语义状态色保持显式指定。收起时悬停预览向下箭头，展开后持续显示向上箭头。`headerAccessory` 将独立操作放在折叠触发区域和流光之外；有此操作时，标题行收窄到内容宽度。使用浅层 prop 比较进行 memo；内容未变时，保持回调与 React 节点 prop 的引用稳定。 |
 | `AnimatedRows` | 带键列表的位移动画：移动为 200 ms，进出淡变为 100 ms。列表内发生指针或键盘输入后才启用，遵循减少动态效果设置，加载或替换视图时直接完成。为行标记 `data-row-key` 并传入对应的 `rowKeys`，为父容器设置定位以承载不可交互的退出层；`role` 和 `label` 由调用方提供。 |
-| `useRowDragPreview` | 使用不可交互的离屏行副本生成原生拖拽预览。传入设置表面底色的类名；拖拽来自子级手柄时，将行元素传给 `start`；`clear` 和卸载会移除副本。 |
+| `useRowDragPreview` | 使用不可交互的离屏行副本生成原生拖拽预览。可选的 `inheritedProperties` 列表指定离屏包装层需要复制其计算值的 CSS 自定义属性；省略时不复制。列表引用需保持稳定，因为替换列表会清除活动预览。未列出的自定义属性按预览所在位置的正常继承规则生效。传入设置表面底色的类名；拖拽来自子级手柄时，将行元素传给 `start`；`clear` 和卸载会移除副本。 |
 | `TextShimmer` | 同一道高光从左到右扫过一行的标题、分隔符、摘要与后缀：首次等待 300ms，扫动一秒，再静止 500ms。遮罩覆盖内容宽度，并限制在可见行宽内，相对垂直方向倾斜 15°，峰值区域平坦，两侧柔和渐隐。移动的装饰层始终裁剪在行内，不会扩大可滚动区域。底色继承调用方的颜色，包括悬停变化；主题提供半透明高光。图标和箭头放在 `TextShimmer` 外，只有文字和分隔符参与扫光。字符串子节点沿用稳定的文字接口；嵌套的 `TextShimmer` 共用外层动画。活动期间组合子节点渲染两次，因此不得带副作用或元素 id。分隔符标记 `data-shimmer-decoration`，让填色参与扫光。`DisclosureRow` 将 `contentClassName` 传给文字区域，将 `contentLayoutClassName` 传给内部布局。惰性装饰副本不参与交互、选区和无障碍访问；文字更新保留动画，减少动态效果模式保留静态底色。 |
 | `Modal` | 页面遮罩之上的居中对话框。嵌套对话框可通过 `onKeyDownCapture` 在文档级 Escape 处理器之前拦截按键。 色层与弹窗淡入，背景模糊始终完整生效，并遵循减少动态效果偏好。调用方已模糊源页面时设置 `backdropBlur={false}`。 |
 | `RiskConfirmation` | 以显式复选框把关的敏感操作确认。 |
@@ -104,11 +104,15 @@ kind: "package-library"
 
 `HoverCardGroup` 为一个已挂载的物理列表持有私有状态。设置 `grouped` 的 `HoverCard` 共享首张实际显示卡片的等待：在同一次指针交互中，后续卡片立即替换当前卡片。列表与其当前活动的 portal 卡片构成一次指针交互：指针可进入卡片阅读或复制，再返回其他列表项并立即替换卡片。指针离开两者后，共享等待在活动卡片通过原有指针宽限及关闭生命周期关闭时重置；分组不另设计时器。列表没有活动卡片时，指针离开便立即重置等待。指针位于列表外时，通过键盘聚焦打开行内卡片不会让下一次指针进入跳过等待。互斥显示也包括正在淡出的预览：普通预览关闭保留淡出，但分组内替换会立即移除前一张卡片。未设置 `grouped` 的卡片保持独立。`as="span"` 保留行内文本容器。
 
+锚点的祖先变为 inert 或隐藏时，已打开的悬浮卡片立即关闭。
+
 ### 渲染 agent 输出
 
 纯 Markdown 工具 `formatQuoteText` 规范化 CRLF 和 CR 换行符，再为每行添加 `> ` 前缀。
 
-最近的 `MarkdownDelegateProvider` 提供可选的 `openExternalLink` 和 `openFile` 导航回调。嵌套 Provider 替换外层能力，回调变化无需重新构建 Markdown 即可到达已渲染链接。其 `openFile` 使本地 Markdown 链接在落定后可点击。绝对路径和工作区相对路径支持百分号转义以及 `#L24` / `#L24-L30` 片段；范围定位到起始行。含反斜杠且无 URL 协议（盘符不算 URL 协议）的目标，若不含 `/`，或在字母或数字前有反斜杠，即为 Windows 路径。此类路径保留所有反斜杠（包括标点前的反斜杠），仍会解码字符引用，因此 `D:\repo\.github` 不会被读作转义的 `.`。文件名中的字面 `?` 和 `#` 必须百分号编码。悬停提示使用解码后的路径，并在标签为空时提供可访问名称。回调接收解码后的路径和可选行号，渲染器保留标签并显示文件图标。不传回调时，本地链接仍为文本。URL 协议、查询串、不支持的片段及格式错误的目标不会传给文件打开器。
+最近的 `MarkdownDelegateProvider` 提供可选的 `openExternalLink` 和 `openFile` 导航回调。嵌套 Provider 替换外层能力，回调变化无需重新构建 Markdown 即可到达已渲染链接。其 `openFile` 使本地 Markdown 链接在落定后可点击。路径支持百分号转义、`#L24` / `#L24-L30` 片段或 `:24` / `:24-30` / `:24:5` 后缀。范围定位到起始行；列号会被移除但不参与定位。有片段时不解析后缀。零、超出安全整数范围的值、倒序范围及不支持的片段只打开文件，不指定行号。文件名中的字面 `?`、`#` 和数字冒号后缀必须百分号编码。含反斜杠且无 URL 协议（盘符不算 URL 协议）的目标，若不含 `/`，或在字母或数字前有反斜杠，即为 Windows 路径。此类路径保留所有反斜杠（包括标点前的反斜杠），仍会解码字符引用，因此 `D:\repo\.github` 不会被读作转义的 `.`。悬停提示使用解码后的路径，并在标签为空时提供可访问名称。回调接收该路径和可选行号；标签与文件图标保留。不传回调时，本地链接仍为文本。查询串、格式错误的转义和控制字符不会传给文件打开器。
+
+明确的 `./`、`../`、斜杠或反斜杠开头的路径（包括 UNC），以及 `C:/work/file.ts` 这样的 Windows 盘符路径优先于 URL 解析。其余目标若能被绝对 URL 解析器接受，就保留为 URL：`index.ts:24`、`Makefile:12` 和 `localhost:3000` 均为链接，不补协议，也不预先检查能否打开。文件引用使用 `./index.ts:24`。其他目标视为路径。正文链接禁止 `javascript:`、`vbscript:`、`data:` 和 `blob:`；其余可解析的协议保留原生导航。HTTP(S) 链接保留委托导航和修饰键点击行为。不添加点击后的失败提示。
 
 `MarkdownText` 渲染不可信的 GFM 与 TeX 公式、阻止不安全的链接与图片，并可把已解析的文件提及转换为显式控件。删除线需要 `~~`；单个 `~`（如 `10~20`）保持字面文本。裸 URL 在非 ASCII 标点或符号（如 `。`、`，`）前结束，紧随其后的中文正文不会并入链接。外层 `MarkdownDelegateProvider` 会接收普通点击产生的已净化 HTTP(S) URL；带修饰键的点击和 Provider 外的链接保留原生外部 anchor 行为。`omitHtml` 不渲染原始 HTML，而不是将其显示为原样文本，用于为 HTML 渲染器编写的文档。当 owner 传入 `pathImages` 词表时，本地媒体路径的图片目标只在落定渲染阶段重写为可展示 URL（与 file mentions 相同的流式门）；不传词表时本地目标保持惰性 alt 文本。重写后的图片支持 HTTP(S)、data、blob 及桌面端 `dsh-app://app/api/file`、`dsh-app://app/api/plugin-market/detail-file` 与 `dsh-app://app/api/plugin-manager/detail-file` 路由；正文直接书写的桌面端 URL 仍保持惰性。加载或解码失败后，图片替换为作者的 alt 文本；alt 为空时显示原始目标路径；`fileImages` 还提供本地化的失败提示前缀。图片源变化后可重新加载。每个挂载的图片会为解析得到的 Host `api/file` 地址追加 `load` 查询参数，因为浏览器在同一文档内会无视 `no-store` 复用相同 URL 的图片；因此覆盖后的文件在新渲染的图片中会加载当前内容，每次重新挂载都会重新请求该文件；Host 文件路由会把该请求重定向到当前文件版本的可缓存地址。回复流式输出时，它冻结已完成的块、按已完成行推进顶层未闭合 fence，并从保存的 Shiki grammar state 为该 fence 增量高亮。已完成的 token 行进入固定大小的 React 分组，后续分片只 reconcile 正在增长的分组；最终全量解析解决跨文档语法时，未变化的 fence 会保留该 DOM。`TerminalBlock`、`ReadBlock`、`DiffBlock`、`SearchBlock` 与 `WebBlock` 把对应的工具结果意图渲染为带复制控件、溢出处理及适用时 ANSI 处理的卡片。`JsonTree` 与 `JsonBlock` 以只读方式检查 JSON 值；`UserTextRun` 渲染不做解析的文本，`ReferenceChip` 渲染业务已解析的标签。显式传入 `onActivate` 后，胶囊成为可由键盘操作的按钮；重复指针点击和已有文本选区不触发激活，键盘激活仍然可用。标签继承所属容器的换行规则。识别和 JSON 变换由 [ui-conversation](../ui-conversation/README.zh.md#sent-user-text) 负责。
 
@@ -134,6 +138,8 @@ kind: "package-library"
 ## 理解实现
 
 `Button` 的 `md` 使用 H36/R12，`sm` 使用 H28/R8，包含描边控件。`outline` 变体保留 0.5px 透明边框用于布局，并通过内阴影绘制描边。描边宽度读取 ui-theme 随设备像素比更新的 `--dsh-hairline-width`，未安装主题时回退到 0.5px。功能样式通过 `--dsh-button-outline-color` 定制描边颜色，并保留边框宽度、透明边框颜色和 box-shadow。菜单与卡片遵循[共享圆角规则](../../../docs/web-styling.zh.md#corner-radii-and-settings-cards)；功能样式保留控件几何。
+
+锚点变为 inert 或隐藏时，portal 菜单会关闭，其所属区域保留的内容继续挂载。
 
 `Menu.listClassName` 独立控制菜单卡片样式，不影响入口容器，也适用于 portal 模式。前置图标使用 `--dsw-alias-menu-icon` 文本色；破坏性操作图标保留错误色。
 

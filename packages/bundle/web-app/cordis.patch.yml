@@ -413,9 +413,6 @@
     - id: ui-model-selection
       name: '@deepseek-ai/dsh-client-ui-model-selection'
 
-    - id: ui-deepseek-model-label-1017
-      name: '@deepseek-ai/dsh-client-ui-deepseek-model-label-1017'
-
     - id: ui-permission
       name: '@deepseek-ai/dsh-client-ui-permission-presets'
 

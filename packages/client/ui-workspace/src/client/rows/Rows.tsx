@@ -11,7 +11,7 @@
  * session and workspace hover cards are suppressed while a menu is open.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { RefObject } from 'react'
+import type { PointerEvent, RefObject } from 'react'
 import clsx from 'clsx'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import {
@@ -27,6 +27,13 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/clie
 import type { MenuOpenState, WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
 import css from './Rows.module.css'
+
+/** Sidebar-owned layout values needed by row copies mounted outside the sidebar. */
+const DRAG_PREVIEW_PROPERTIES = [
+  '--dsh-sidebar-row-padding',
+  '--dsh-sidebar-label-gap',
+  '--dsh-sidebar-paint-inset',
+] as const
 
 /** The standard locale seat, prop-passed from the browser root. */
 type RowTranslate = WorkspaceBrowserProps['t']
@@ -101,11 +108,15 @@ function restTitle(title: HTMLSpanElement): void {
  * @param title - ref to the row's clipping title element.
  * @returns stable pointer enter/leave handlers for the row.
  */
-function useTitleMarquee(title: RefObject<HTMLSpanElement | null>): { enter: () => void; leave: () => void } {
+function useTitleMarquee(title: RefObject<HTMLSpanElement | null>): {
+  enter: (event: PointerEvent) => void
+  leave: () => void
+} {
   const frame = useRef(0)
   useEffect(() => () => { cancelAnimationFrame(frame.current) }, [])
   return useMemo(() => ({
-    enter: (): void => {
+    enter: (event: PointerEvent): void => {
+      if (event.pointerType === 'touch') return
       /* v8 ignore next -- defensive: the title span renders unconditionally. */
       if (title.current === null) return
       const element = title.current
@@ -279,7 +290,7 @@ function ProjectRow({
   const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
   const active = containsCurrentDescendant || (group.expanded && group.containsCurrent)
   const [menuOpen, setMenuOpen] = useState(false)
-  const dragPreview = useRowDragPreview(css.dragPreview as string)
+  const dragPreview = useRowDragPreview(css.dragPreview as string, DRAG_PREVIEW_PROPERTIES)
   const workspaceMenuItems = [
     ...access.rename ? [{ id: 'rename', label: t('rename'), icon: <IconEditOutlineRegular /> }] : [],
     ...access.delete ? [{ id: 'delete', label: t('delete.workspace'), icon: <IconTrashOutlineRegular />, danger: true }] : [],
@@ -349,7 +360,7 @@ function ProjectRow({
               aria-label={t('actions.newSession.aria', { name: label })}
               onClick={(e) => { e.stopPropagation(); onCreate() }}
             >
-              <IconNewChatOutlineRegular />
+              <IconNewChatOutlineRegular size={14} />
             </button>
           </Tooltip>
         )}
@@ -643,7 +654,7 @@ export function SessionNodeItem({
   const reorderable = useSessionAccess(node.id, 'workspace/insertSessionBefore')
   const draggable = drag !== undefined && reorderable && !row.blank && !row.archived
   const [menuOpen, setMenuOpen] = useState(false)
-  const dragPreview = useRowDragPreview(css.dragPreview as string)
+  const dragPreview = useRowDragPreview(css.dragPreview as string, DRAG_PREVIEW_PROPERTIES)
   // The menu's open state, bound into the row entries' `useMenuOpenState` hook.
   const menuOpenState = useMemo((): MenuOpenState => [menuOpen, setMenuOpen], [menuOpen])
   const rowRef = useRef<HTMLDivElement>(null)
@@ -659,7 +670,6 @@ export function SessionNodeItem({
     rowRef.current?.scrollIntoView({ block: 'nearest' })
     onReveal()
   }, [onReveal])
-  // Figma session cell: pad 8, status slot 16, then a 4px title gap.
   const ownRow = (
     <div
       ref={rowRef}
@@ -743,7 +753,7 @@ export function SessionNodeItem({
       {!row.blank && (
         <span className={css.rowResting}>
           <span
-            className={css.time}
+            className={clsx(css.time, primaryStatus.trailingLabel === undefined && css.timestamp)}
             aria-hidden={primaryStatus.trailingLabel === undefined ? undefined : true}
           >
             {primaryStatus.trailingLabel ?? timeLabel(row.updatedAt, now, t)}

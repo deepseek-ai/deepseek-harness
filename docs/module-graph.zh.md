@@ -168,7 +168,6 @@ flowchart TD
     pkg_client_ui_chat["client-ui-chat"]
     pkg_client_ui_commands["client-ui-commands"]
     pkg_client_ui_conversation["client-ui-conversation"]
-    pkg_client_ui_deepseek_model_label_1017["client-ui-deepseek-model-label-1017"]
     pkg_client_ui_deliverables["client-ui-deliverables"]
     pkg_client_ui_directory_picker_browse["client-ui-directory-picker-browse"]
     pkg_client_ui_directory_picker_native["client-ui-directory-picker-native"]
@@ -289,6 +288,7 @@ flowchart TD
     pkg_experimental_forge_session["experimental-forge-session"]
     pkg_experimental_inspector["experimental-inspector"]
     pkg_experimental_inspector_profile["experimental-inspector-profile"]
+    pkg_experimental_liveshare["experimental-liveshare"]
     pkg_experimental_liveshare_protocol["experimental-liveshare-protocol"]
     pkg_experimental_plugin_market_bundle["experimental-plugin-market-bundle"]
     pkg_experimental_ptc_runtime_python["experimental-ptc-runtime-python"]
@@ -501,6 +501,7 @@ flowchart TD
   pkg_credentials_local --> pkg_credentials
   pkg_credentials_local --> pkg_home_paths
   pkg_credentials_local --> pkg_launch_environment
+  pkg_experimental_liveshare --> pkg_scope
   pkg_anonymous_user_id --> pkg_brand
   pkg_anonymous_user_id --> pkg_home_paths
   pkg_lsp --> pkg_brand
@@ -1547,7 +1548,6 @@ flowchart TD
 | [`client-ui-chat`](../packages/client/ui-chat) | `client` | — |
 | [`client-ui-commands`](../packages/client/ui-commands) | `client` | — |
 | [`client-ui-conversation`](../packages/client/ui-conversation) | `client` | — |
-| [`client-ui-deepseek-model-label-1017`](../packages/client/ui-deepseek-model-label-1017) | `client` | — |
 | [`client-ui-deliverables`](../packages/client/ui-deliverables) | `client` | — |
 | [`client-ui-directory-picker-browse`](../packages/client/ui-directory-picker-browse) | `client` | — |
 | [`client-ui-directory-picker-native`](../packages/client/ui-directory-picker-native) | `client` | — |
@@ -1658,6 +1658,7 @@ flowchart TD
 | [`computer-use`](../packages/computer-use/computer-use) | `computer-use` | [`brand`](../packages/util/brand) |
 | [`authorization`](../packages/credentials/authorization) | `credentials` | [`credentials`](../packages/credentials/credentials), [`llm`](../packages/llm/llm) |
 | [`credentials-local`](../packages/credentials/credentials-local) | `credentials` | [`atomic-write`](../packages/util/atomic-write), [`credentials`](../packages/credentials/credentials), [`home-paths`](../packages/util/home-paths), [`launch-environment`](../packages/util/launch-environment) |
+| [`experimental-liveshare`](../packages/experimental/liveshare) | `experimental` | [`scope`](../packages/core/scope) |
 | [`anonymous-user-id`](../packages/identity/anonymous-user-id) | `identity` | [`brand`](../packages/util/brand), [`home-paths`](../packages/util/home-paths) |
 | [`lsp`](../packages/lsp/lsp) | `lsp` | [`brand`](../packages/util/brand), [`llm`](../packages/llm/llm) |
 | [`storage-domain`](../packages/storage/storage-domain) | `storage` | [`storage`](../packages/storage/storage) |

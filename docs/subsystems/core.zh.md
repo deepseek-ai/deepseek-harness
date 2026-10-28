@@ -460,12 +460,13 @@ declare module '@deepseek-ai/dsh-llm' {
 }
 ```
 
-五个规范 map 使用此模式；插件作者扩展它们：
+六个规范 map 使用此模式；插件作者扩展它们：
 
 | Map | 包 | 派生 | 目录 |
 |---|---|---|---|
 | `ContentBlockMap` | dsh-llm | `ContentBlock` | [llm-streaming.md](llm-streaming.zh.md#content-blocks-and-messages) |
 | `MessageSourceMap` | dsh-llm | `MessageSource` | [llm-streaming.md](llm-streaming.zh.md#content-blocks-and-messages) |
+| `LlmRequestPurposeMap` | dsh-llm | `LlmRequestPurpose` | [llm-streaming.zh.md](llm-streaming.zh.md#the-model-request-and-result) |
 | `FinishReasonMap` | dsh-llm | `FinishReason` | [llm-streaming.md](llm-streaming.zh.md#the-model-request-and-result) |
 | `TurnEndReasonMap` | dsh-session | `TurnEndReason` | [session.md](session.zh.md) |
 | `SessionEventMap` | dsh-session | `SessionEvent` | [session.md](session.zh.md) |

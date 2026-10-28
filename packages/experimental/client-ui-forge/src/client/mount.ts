@@ -13,7 +13,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-experimental-client-ui-forge/remote'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import type { ForgePanelChangeRequest } from '../types.ts'
+import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelChangeRequest } from '../types.ts'
+import { ReviewQueue } from './review-queue.ts'
+import { formatReviewComment, type ReviewSelection } from './review.ts'
 import { ActionToast } from './ActionToast.tsx'
 import { CHANGES_ID, changesDefinition } from './changes-address.ts'
 import { createChangesStore } from './changes-store.ts'
@@ -23,8 +25,11 @@ import { ForgeTab, type ForgeTabInjected } from './ForgeTab.tsx'
 import { ForgeTabTitle } from './ForgeTabTitle.tsx'
 import { HeaderButton, type HeaderButtonInjected } from './HeaderButton.tsx'
 import { de, en, es, fr, ja, NS, pt, ru, zh, type ForgePanelKey } from './locales.ts'
+import type { SessionListInjected } from './session-list.ts'
+import { SessionHoverForge } from './SessionHoverForge.tsx'
+import { SessionRowForge } from './SessionRowForge.tsx'
 import {
-  createNoticeSource, createPanelSource, createVisibilitySource, type PanelSource, type VisibilitySource,
+  createNoticeSource, createPanelSource, createStreamSource, createVisibilitySource, foldStates, type PanelSource, type VisibilitySource,
 } from './source.ts'
 import { numberOf } from './status.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from './WorktreeProgress.tsx'
@@ -51,6 +56,7 @@ function openLink(url: string): void {
 interface SessionStores {
   readonly panel: PanelSource
   readonly visibility: VisibilitySource
+  readonly reviews: WeakMap<AbortSignal, ReviewQueue>
   readonly release: () => void
 }
 
@@ -76,7 +82,7 @@ function registerUi(ctx: Context): void {
         panel.close()
         stores.delete(sessionId)
       }, 'forge-panel: release Session state')
-      store = { panel, visibility: createVisibilitySource(), release: () => { void dispose() } }
+      store = { panel, visibility: createVisibilitySource(), reviews: new WeakMap(), release: () => { void dispose() } }
       stores.set(sessionId, store)
     }
     return store
@@ -106,6 +112,16 @@ function registerUi(ctx: Context): void {
       () => { notices.report('toast.prompted', { tone: 'success', params: { text } }) },
       () => { notices.report('toast.promptFailed') },
     )
+  }
+  const addReviewToInput = (sessionId: SessionId, selection: ReviewSelection): boolean => {
+    const scope = ctx.sessions.scope(sessionId)
+    const conversation = scope?.get('conversation')
+    if (scope === undefined || conversation === undefined) return false
+    const input = conversation.input.for(scope)
+    const numbers = Array.from(input.state.getSnapshot().draft.matchAll(/(?:^|\n)(?:> )?## User Comment (\d+)/g), match => Number(match[1]))
+    if (!input.insertQuote(formatReviewComment(selection, Math.max(0, ...numbers) + 1))) return false
+    input.focus()
+    return true
   }
   /** How toasts name a change request: its number, else its title, else its URL. */
   const nameOf = (entry: ForgePanelChangeRequest): string => {
@@ -176,16 +192,39 @@ function registerUi(ctx: Context): void {
   const changesFace = (sessionId: SessionId): ChangesTabInjected => {
     const store = storesOf(sessionId)
     return {
-      hooks: { panel: store.panel.hooks.panel },
+      keyedHooks: { panel: visibility => visibility === 'visible' ? store.panel.hooks.panel : undefined },
       reconnect: store.panel.reconnect,
       localDiff: (scope, signal) => ctx.remote.forgePanel.localDiff(sessionId, scope, signal),
       localText: (scope, path) => ctx.remote.forgePanel.localText(sessionId, scope, path),
       changeRequestDiff: (url, signal) => ctx.remote.forgePanel.changeRequestDiff(sessionId, url, signal),
       changeRequestText: (url, commit, path) => ctx.remote.forgePanel.changeRequestText(sessionId, url, commit, path),
+      addReviewToInput: selection => addReviewToInput(sessionId, selection),
+      reviewQueue: ({ id, signal }) => {
+        let queue = store.reviews.get(signal)
+        if (queue === undefined) {
+          const records = new ReviewQueue(`dsh.forge-review.tab.v1.${JSON.stringify([sessionId, id])}`)
+          queue = records
+          store.reviews.set(signal, records)
+          const clear = (): void => { if (!records.close()) notices.report('review.saveFailed') }
+          if (signal.aborted) clear()
+          else {
+            const release = ctx.effect(() => {
+              const close = (): void => { clear(); void release() }
+              signal.addEventListener('abort', close, { once: true })
+              return () => { signal.removeEventListener('abort', close) }
+            }, 'forge-panel: review tab lifetime')
+          }
+        }
+        return queue
+      },
+      submitReview: (url, request) => ctx.remote.forgePanel.submitReview(sessionId, url, request),
       openLink,
       copyPath,
       createChangeRequest: () => { createChangeRequest(sessionId) },
-      report: (key, params) => { notices.report(key, params === undefined ? {} : { params }) },
+      report: (key, params) => {
+        notices.report(key, { tone: key === 'review.published' || key === 'review.submitted' ? 'success' : 'failure',
+          ...params === undefined ? {} : { params } })
+      },
     }
   }
   const progressFace = (sessionId: SessionId): WorktreeProgressInjected => {
@@ -263,6 +302,19 @@ function registerUi(ctx: Context): void {
     name: 'shell.overlay', id: 'forge-panel.toast', locale: NS,
     inject: () => ({ hooks: notices.hooks, dismiss: notices.dismiss }),
   }, ActionToast))
+  // One stream of change request states serves every Session row while any row reads it.
+  const states = createStreamSource<ForgeChangeRequestStatesFrame, ReadonlyMap<string, ForgeChangeRequestListState>>({
+    open: signal => ctx.remote.forgePanel.changeRequestStates(signal),
+    subscribeReset: listener => ctx.on('connection/reset', listener),
+  }, new Map(), foldStates)
+  ctx.effect(() => () => { states.close() }, 'forge-panel: change request states')
+  const listFace = (): SessionListInjected => ({ hooks: { states: states.observable } })
+  ctx.slots.inject('sidebar.session.row.trailing', () => ctx.slots.register({
+    name: 'sidebar.session.row.trailing', id: 'forge-panel.row', order: 10, locale: NS, inject: listFace,
+  }, SessionRowForge))
+  ctx.slots.inject('sidebar.session.row.hover', () => ctx.slots.register({
+    name: 'sidebar.session.row.hover', id: 'forge-panel.row', order: 20, locale: NS, inject: listFace,
+  }, SessionHoverForge))
 }
 
 /**

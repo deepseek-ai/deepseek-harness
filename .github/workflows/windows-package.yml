@@ -53,11 +53,6 @@ on:
         type: string
         default: ''
         required: false
-      build_root:
-        description: '独立构建根目录：填写绝对路径，每次任务创建独立源码副本；留空使用 runner 工作区'
-        type: string
-        default: ''
-        required: false
 
 permissions:
   contents: read
@@ -82,7 +77,6 @@ jobs:
       PACKAGE_TEST_RELEASE_ID: ${{ inputs.test_release_id }}
       PACKAGE_SIGNING: ${{ inputs.signing }}
       PACKAGE_CACHE_NAMESPACE: ${{ inputs.cache_namespace }}
-      PACKAGE_BUILD_ROOT: ${{ inputs.build_root }}
       PACKAGE_WINDOWS_COMPRESSION_LEVEL: ${{ inputs.compression_level }}
     steps:
       - name: Reset packaging checkout
@@ -106,7 +100,7 @@ jobs:
         run: |
           $helpers = Join-Path $env:RUNNER_TEMP "packaging-helpers-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           New-Item -ItemType Directory -Path $helpers -ErrorAction Stop | Out-Null
-          foreach ($name in @('windows-packaging-priority.ps1', 'windows-build-workspace.mjs')) {
+          foreach ($name in @('windows-packaging-priority.ps1')) {
             Copy-Item -LiteralPath (Join-Path 'apps/desktop/scripts' $name) -Destination $helpers -ErrorAction Stop
           }
           "PACKAGE_CI_HELPERS=$helpers" >> $env:GITHUB_ENV
@@ -140,17 +134,6 @@ jobs:
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
-      - name: Select packaging workspace
-        id: build_workspace
-        env:
-          PACKAGE_SOURCE_SHA: ${{ steps.checkout.outputs.commit }}
-        run: |
-          if (!$env:PACKAGE_BUILD_ROOT) {
-            "directory=$env:GITHUB_WORKSPACE" >> $env:GITHUB_OUTPUT
-          } else {
-            node "$env:PACKAGE_CI_HELPERS/windows-build-workspace.mjs"
-            exit $LASTEXITCODE
-          }
       - name: Configure persistent pnpm store
         # PNPM_HOME belongs to this run; keep downloaded packages outside its temporary directory.
         env:
@@ -167,7 +150,6 @@ jobs:
           "DSH_DESKTOP_PACKAGE_CACHE_DIR=$env:DSH_DESKTOP_PACKAGE_CACHE_DIR" >> $env:GITHUB_ENV
           "PNPM_CONFIG_STORE_DIR=$storeRoot" >> $env:GITHUB_ENV
       - name: Install locked dependencies
-        working-directory: ${{ steps.build_workspace.outputs.directory }}
         run: |
           & "$env:PACKAGE_CI_HELPERS/windows-packaging-priority.ps1" -BestEffort
           node -e "const os=require('node:os'); console.log(JSON.stringify({node:process.version,availableParallelism:os.availableParallelism(),logicalCpus:os.cpus().length,totalMemoryBytes:os.totalmem(),freeMemoryBytes:os.freemem()}))"
@@ -178,12 +160,10 @@ jobs:
           exit $LASTEXITCODE
       - name: Validate preset and resolve build version
         id: settings
-        working-directory: ${{ steps.build_workspace.outputs.directory }}
         env:
           PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
         run: node apps/desktop/scripts/prepare-windows-ci.mjs
       - name: Check packaging configuration and toolchain
-        working-directory: ${{ steps.build_workspace.outputs.directory }}
         env:
           PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
         run: |
@@ -192,23 +172,16 @@ jobs:
           pnpm @packageArgs
           exit $LASTEXITCODE
       - name: Build installer and verify packaged runtime
-        working-directory: ${{ steps.build_workspace.outputs.directory }}
         env:
           PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
-          PACKAGE_BUILD_TEMP: ${{ steps.build_workspace.outputs.temporaryDirectory }}
         run: |
           & "$env:PACKAGE_CI_HELPERS/windows-packaging-priority.ps1" -BestEffort
-          if ($env:PACKAGE_BUILD_TEMP) {
-            $env:TEMP = $env:PACKAGE_BUILD_TEMP
-            $env:TMP = $env:PACKAGE_BUILD_TEMP
-          }
           $packageArgs = @('run', 'package:desktop:win:x64', '--build-version', $env:PACKAGE_VERSION)
           if ($env:PACKAGE_SIGNING -eq 'unsigned') { $packageArgs += '--unsigned' }
           pnpm @packageArgs
           exit $LASTEXITCODE
       - name: Retain complete package outside the checkout
         id: retained
-        working-directory: ${{ steps.build_workspace.outputs.directory }}
         env:
           PACKAGE_SOURCE_SHA: ${{ steps.checkout.outputs.commit }}
           PACKAGE_VERSION: ${{ steps.settings.outputs.version }}
@@ -219,7 +192,7 @@ jobs:
         with:
           name: windows-package-logs-${{ github.run_id }}-${{ github.run_attempt }}
           include-hidden-files: true
-          path: ${{ steps.build_workspace.outputs.directory || github.workspace }}/apps/desktop/.desktop-build/packaging-runs/
+          path: ${{ github.workspace }}/apps/desktop/.desktop-build/packaging-runs/
           if-no-files-found: warn
           retention-days: 14
       - name: Retain verified unsigned installer
@@ -242,8 +215,3 @@ jobs:
           path: ${{ steps.retained.outputs.directory }}/*
           if-no-files-found: error
           retention-days: 14
-      - name: Remove isolated packaging workspace
-        if: success() && inputs.build_root != ''
-        env:
-          PACKAGE_SOURCE_SHA: ${{ steps.checkout.outputs.commit }}
-        run: node "$env:PACKAGE_CI_HELPERS/windows-build-workspace.mjs" --remove

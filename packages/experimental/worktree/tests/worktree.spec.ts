@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { access, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises'
-import { join, normalize, sep } from 'node:path'
+import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
@@ -454,7 +454,7 @@ describe('restoring removed worktrees', () => {
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
   })
 
-  it('retains a caller cancellation reason when restoration is cancelled before its allocation starts', async () => {
+  it.each([new Error('caller stopped'), 'caller stopped'])('retains cancellation reason %s when restoration is cancelled before its allocation starts', async (reason) => {
     const root = await repo()
     ctx = await harness(root)
     const agent = testAgent(ctx, root)
@@ -463,7 +463,7 @@ describe('restoring removed worktrees', () => {
     const controller = new AbortController()
     const resolveExecutable = ctx.subprocess.resolveExecutable.bind(ctx.subprocess)
     const probe = vi.spyOn(ctx.subprocess, 'resolveExecutable').mockImplementation(async (command, env, signal) => {
-      if (command === 'node') controller.abort('caller stopped')
+      if (command === 'node') controller.abort(reason)
       return resolveExecutable(command, env, signal)
     })
     try {
@@ -559,11 +559,12 @@ it('does not remove a registration when its directory reappears during restorati
   const created = await ctx.worktrees.create(agent, { name: 'topic' })
   await rm(created.path, { recursive: true, force: true })
   const resolve = ctx.fs.resolve.bind(ctx.fs)
+  const target = await resolve(created.path)
   let targetReads = 0
   const probe = vi.spyOn(ctx.fs, 'resolve').mockImplementation(async (path, options) => {
-    // Git records Windows worktree paths with forward slashes.
-    if (normalize(path) === normalize(created.path) && ++targetReads === 2) await mkdir(created.path)
-    return resolve(path, options)
+    const resolved = await resolve(path, options)
+    if (resolved.targetKey === target.targetKey && ++targetReads === 2) await mkdir(created.path)
+    return resolved
   })
   try {
     await expect(ctx.worktrees.restore(agent, created)).rejects.toThrow('worktree path already exists')

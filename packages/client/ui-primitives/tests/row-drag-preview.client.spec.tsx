@@ -6,8 +6,8 @@ import { useRowDragPreview } from '../src/useRowDragPreview.ts'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
-function Row({ handle }: { handle: boolean }) {
-  const preview = useRowDragPreview('surface')
+function Row({ handle, properties }: { handle: boolean; properties?: readonly `--${string}`[] | undefined }) {
+  const preview = useRowDragPreview('surface', properties)
   return <div
     data-row-key="row"
     style={{ paddingInlineStart: '32px' }}
@@ -23,8 +23,8 @@ function Row({ handle }: { handle: boolean }) {
   </div>
 }
 
-function fixture(handle: boolean) {
-  const view = render(<Row handle={handle} />)
+function fixture(handle: boolean, properties?: readonly `--${string}`[]) {
+  const view = render(<Row handle={handle} properties={properties} />)
   const button = screen.getByRole('button')
   const row = button.parentElement as HTMLElement
   vi.spyOn(row, 'getBoundingClientRect').mockReturnValue(new DOMRect(5, 10, 200, 40))
@@ -63,6 +63,47 @@ describe('row drag preview', () => {
     const third = start()
     unmount()
     expect(third.isConnected).toBe(false)
+  })
+
+  it('copies only requested custom properties without enumerating computed styles', () => {
+    const { row, start } = fixture(false, ['--row-inset', '--row-label-gap'])
+    const original = globalThis.getComputedStyle
+    const computed = document.createElement('div').style
+    computed.cssText = original(row).cssText
+    computed.setProperty('--row-inset', '3px')
+    computed.setProperty('--row-label-gap', '6px')
+    computed.setProperty('--unrelated-theme-color', 'red')
+    const enumerate = vi.spyOn(computed, 'item')
+    vi.spyOn(globalThis, 'getComputedStyle').mockImplementation((element, pseudo) =>
+      element === row ? computed : original(element, pseudo))
+    const image = start()
+    expect(image.style.getPropertyValue('--row-inset')).toBe('3px')
+    expect(image.style.getPropertyValue('--row-label-gap')).toBe('6px')
+    expect(image.style.getPropertyValue('--unrelated-theme-color')).toBe('')
+    expect(enumerate).not.toHaveBeenCalled()
+    expect(row.style.getPropertyValue('--row-inset')).toBe('')
+    expect(row.style.getPropertyValue('--row-label-gap')).toBe('')
+  })
+
+  it('does not copy custom properties to the wrapper when no list is supplied', () => {
+    const { row, start } = fixture(false)
+    row.style.setProperty('--unrelated-theme-color', 'red')
+    expect(start().style.getPropertyValue('--unrelated-theme-color')).toBe('')
+  })
+
+  it.each([false, true])('keeps a preview through rerenders with a stable property list (configured: %s)', (configured) => {
+    const properties = configured ? ['--row-inset'] as const : undefined
+    const { start, rerender } = fixture(false, properties)
+    const image = start()
+    rerender(<Row handle={false} properties={properties} />)
+    expect(image.isConnected).toBe(true)
+    rerender(<Row handle={false} properties={['--row-label-gap']} />)
+    expect(image.isConnected).toBe(false)
+  })
+
+  it('leaves a requested but undefined custom property unset', () => {
+    const { start } = fixture(false, ['--missing'])
+    expect(start().style.getPropertyValue('--missing')).toBe('')
   })
 
   it('removes a rejected custom preview while allowing native drag cleanup', () => {
