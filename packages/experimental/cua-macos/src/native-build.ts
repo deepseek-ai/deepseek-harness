@@ -108,7 +108,7 @@ export async function buildNativeExecutable(spec: NativeBuildSpec): Promise<stri
  */
 export async function prepareNativeExecutable(spec: NativeBuildSpec): Promise<string> {
   if (await isSourcePackage(spec.packageRoot)) return buildNativeExecutable(spec)
-  const directory = join(spec.packageRoot.replace('/app.asar/', '/app.asar.unpacked/'), 'native', 'bin', `darwin-${spec.architecture}`)
+  const directory = join(spec.packageRoot.replace(/([\\/])app\.asar(?=[\\/])/u, '$1app.asar.unpacked'), 'native', 'bin', `darwin-${spec.architecture}`)
   let executable: string
   try { executable = await nativeExecutablePath(directory) }
   catch (error) {
