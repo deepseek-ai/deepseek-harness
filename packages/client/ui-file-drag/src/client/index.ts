@@ -14,7 +14,7 @@ import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 export interface FileDragService {
   readonly actions: FileDragActions
   /** Native application preparation, absent when this carrier cannot drag local application bundles. */
-  readonly application: {
+  readonly application?: {
     /** @param reference Provider-issued application identity. @param signal Preparation cancellation. @returns Native drag preparation. */
     prepare(reference: ApplicationDragReference, signal: AbortSignal): Promise<PreparedFileDrag>
   } | undefined
