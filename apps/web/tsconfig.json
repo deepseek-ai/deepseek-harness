@@ -182,6 +182,7 @@
     "tests/file-upload-round.e2e.ts",
     "tests/message-actions.e2e.ts",
     "tests/open-in-app-ssh.e2e.ts",
+    "tests/open-in-app-menus.e2e.ts",
     "tests/fork-mid-turn.e2e.ts",
     "tests/message-feedback.e2e.ts",
     "tests/markdown-images.e2e.ts",

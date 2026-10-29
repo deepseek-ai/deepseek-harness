@@ -21,6 +21,7 @@
     { "path": "../../client/locale/tsconfig.client.json" },
     { "path": "../../client/store" },
     { "path": "../../client/ui-commands" },
+    { "path": "../../client/ui-context-menu" },
     { "path": "../../client/ui-conversation/tsconfig.client.json" },
     { "path": "../../client/ui-layout" },
     { "path": "../../client/ui-message-feedback" },

@@ -35,7 +35,7 @@ The formatter reads the committed raw log, so a compaction surface replacement n
 
 The clipboard is one browser-wide destination, so this plugin instance runs one copy at a time. On hosts with `ClipboardItem` and `navigator.clipboard.write`, the write starts synchronously from the click with a promised `text/plain` Blob while the transcript is read; other hosts fall back to the shared clipboard helper after preparation. A request made while a copy is pending joins that operation and keeps the first click's Session. Every Session Header reflects copying in `aria-busy` and disables its copy row until the operation settles. Success, preparation-failure, or clipboard-failure feedback uses the root overlay toast. Disposal aborts the read and prevents later text from reaching the Blob; an operating-system clipboard write already accepted cannot be rolled back.
 
-When `ui-message-feedback` is mounted, the same menu also offers `Feedback`, which opens its existing Session feedback dialog. Opening or dismissing that form does not export the Session or submit feedback. The feedback row follows the feedback plugin's availability; both export actions remain available independently.
+When `ui-message-feedback` is mounted, the same menu also offers `Feedback`, which opens its existing Session feedback dialog. Opening or dismissing that form does not export the Session or submit feedback. The feedback row follows the feedback plugin’s availability; both export actions remain independently available. [`ui-open-in-app`](../../client/ui-open-in-app/README.md) contributes its application submenu in a separated group after download and before feedback.
 
 ### When to choose it
 
@@ -61,7 +61,7 @@ export function convertTranscript(events: readonly SessionEvent[], sourcePath?: 
   name: '@deepseek-ai/dsh-session-log-export'
 ```
 
-The Web bundle mounts the package with Connection, `dsh-commands`, `dsh-client-ui-commands`, `dsh-client-ui-conversation`, and `dsh-client-ui-layout`. The layout package declares the `shell.overlay` seat used by copy feedback; the other client packages provide the Header seat, locale, and command surface.
+The Web bundle mounts the package with Connection, `dsh-commands`, `dsh-client-ui-commands`, `dsh-client-ui-conversation`, `dsh-client-ui-context-menu`, and `dsh-client-ui-layout`. The context-menu service renders the shared Header popup; layout declares the copy-feedback `shell.overlay` seat. The other client packages provide Header, locale, and command services.
 
 ### Configuration
 
@@ -100,7 +100,7 @@ This section explains how the package wires the export control and points at the
 
 The package has two halves. The Host half ([`src/index.ts`](src/index.ts)) registers the `/export` command and contributes the exact `GET`/`HEAD /api/session.export` and `/api/session.markdown` Fetch routes to Connection; [`src/archive.ts`](src/archive.ts) builds the bounded ZIP stream, and [`src/markdown.ts`](src/markdown.ts) renders the Markdown transcript. The browser half ([`src/client/index.ts`](src/client/index.ts)) provides the shared download and Markdown copy controllers and UI, and observes `command/executed` so only the submitting browser starts a download.
 
-The Header’s More action uses the shared compact Button, with a 28px square target and the same radius and hover fill as the right-sidebar expand control.
+The Header’s More action uses the shared compact Button, with a 28px square target and the same radius and hover fill as the right-sidebar expand control. Its captured `sessionHeader` target is declaration-merged by this package and remains independent of Session-row and title context actions. Export and optional feedback contributions observe their controller, availability, and locale sources; the button observes the shared active target for expanded state. The Session-scoped download dialog remains mounted beside the trigger, while menu focus and dismissal belong to the shared overlay.
 
 ### Download flow
 

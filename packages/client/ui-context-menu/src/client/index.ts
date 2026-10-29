@@ -33,7 +33,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** Optional React rows for existing extension positions; data contributions need no renderer. */
     'contextMenu.content': { kind: 'keyed'; scope: 'root'; owner: { target: ContextMenuTarget; dismiss: () => void } }
   }
-  interface LocaleNamespaceMap { /** Menu operation feedback. */ contextMenu: 'failed' }
+  interface LocaleNamespaceMap { /** Menu operation feedback. */ contextMenu: 'failed' | 'back' }
 }
 
 /** Maximum time to prepare each contribution before omitting its pending actions. */
@@ -141,7 +141,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     }
   }, 'context menu: lifetime')
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-    name: 'shell.overlay', id: 'context-menu', store,
+    name: 'shell.overlay', id: 'context-menu', store, locale: 'contextMenu',
     children: {
       'contextMenu.content': { kind: 'keyed', scope: 'root' },
       'contextMenu.icon': { kind: 'keyed', scope: 'root', inline: true },

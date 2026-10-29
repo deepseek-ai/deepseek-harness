@@ -1,25 +1,19 @@
 // @vitest-environment jsdom
-import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useSyncExternalStore } from 'react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { GlobalStandardProps, SessionStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
-import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { SessionLogDownloadController } from '../src/client/controller.ts'
-import { SessionMarkdownCopyController, type SessionMarkdownClipboard } from '../src/client/copy-controller.ts'
+import { SessionMarkdownCopyController } from '../src/client/copy-controller.ts'
 import { SessionLogDownloadHeaderAction } from '../src/client/HeaderAction.tsx'
 import type { SessionLogDownloadHeaderProps } from '../src/client/HeaderAction.tsx'
 import { en } from '../src/client/locales.ts'
 
 const SID = 'session-export-header' as SessionId
-const clipboard: SessionMarkdownClipboard = {
-  supportsDeferredWrite: () => false,
-  writeDeferred: async () => {},
-  writeText: async () => true,
-}
-const dictionary: Record<string, string> = en
-const translate: SessionLogDownloadHeaderProps['t'] = key => dictionary[key] ?? key
+const translate: SessionLogDownloadHeaderProps['t'] = makeTranslate(en)
 const unused = (): never => { throw new Error('This isolated component does not consume framework hooks') }
 const standard: GlobalStandardProps & SessionStandardProps = {
   sessionId: SID, useSession: unused, useProjection: unused, useAccess: () => true,
@@ -31,169 +25,74 @@ const standard: GlobalStandardProps & SessionStandardProps = {
     addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused },
 }
 
-function bindSnapshot<State>(store: ObservableSnapshot<State>) {
-  return function useSnapshot<T>(selector: (state: State) => T): T {
-    return useSyncExternalStore(
-      listener => store.subscribe(listener),
-      () => selector(store.getSnapshot()),
-    )
-  }
-}
-
-function bench(feedbackAvailable = false, copyController = new SessionMarkdownCopyController(
-  async () => new Response('markdown'),
-  clipboard,
-)) {
-  const controller = new SessionLogDownloadController(async () => new Response('zip'), vi.fn())
-  const request = vi.fn((sessionId: SessionId) => controller.download(sessionId))
-  const copyMarkdown = vi.fn((sessionId: SessionId) => copyController.copy(sessionId))
-  const dismiss = vi.fn((sessionId: SessionId) => { controller.dismiss(sessionId) })
-  const openFeedback = vi.fn()
-  const feedback = createSnapshotStore(feedbackAvailable)
-  const useSessionLogDownload = bindSnapshot(controller.store)
-  const useSessionMarkdownCopy = bindSnapshot(copyController.store)
+function bench() {
+  const gate = Promise.withResolvers<Response>()
+  const controller = new SessionLogDownloadController(() => gate.promise, vi.fn())
+  const copyController = new SessionMarkdownCopyController(async () => new Response('markdown'))
+  const active = createSnapshotStore<ContextMenuTarget | null>(null)
+  const openMenu = vi.fn()
   const props: SessionLogDownloadHeaderProps = {
     ...standard,
-    useSessionLogDownload,
-    useSessionMarkdownCopy,
-    useFeedbackAvailable: bindSnapshot(feedback),
-    openFeedback,
-    request,
-    copyMarkdown,
-    dismiss,
+    useSessionLogDownload: bindSnapshotSelector(controller.store),
+    useSessionMarkdownCopy: bindSnapshotSelector(copyController.store),
+    useHeaderMenu: bindSnapshotSelector(active),
+    openMenu,
+    request: sessionId => controller.download(sessionId),
+    dismiss: (sessionId) => { controller.dismiss(sessionId) },
     t: translate,
   }
   const view = render(<SessionLogDownloadHeaderAction {...props} />)
-  return { controller, copyController, request, copyMarkdown, openFeedback, feedback, view }
+  return { controller, copyController, active, openMenu, props, view, gate }
 }
 
 afterEach(cleanup)
 
-describe('Session export Header action', () => {
-  it('opens Session feedback and closes the menu without starting a download', () => {
-    const b = bench(true)
-    fireEvent.click(b.view.getByRole('button', { name: 'More actions' }))
-    fireEvent.click(b.view.getByRole('menuitem', { name: 'Feedback' }))
-    expect(b.openFeedback).toHaveBeenCalledWith(SID)
-    expect(b.request).not.toHaveBeenCalled()
-    expect(b.view.queryByRole('menu')).toBeNull()
-  })
-
-  it('keeps export available without the feedback plugin', () => {
+describe('Session export Header trigger', () => {
+  it('captures its Session and button anchor for the shared menu and restores a focusable trigger', () => {
     const b = bench()
-    fireEvent.click(b.view.getByRole('button', { name: 'More actions' }))
-    expect(b.view.queryByRole('menuitem', { name: 'Feedback' })).toBeNull()
-    expect(b.view.getByRole('menuitem', { name: 'Copy Session as Markdown' })).toBeTruthy()
-    expect(b.view.getByRole('menuitem', { name: 'Download session log' })).toBeTruthy()
-  })
-
-  it('updates the open menu when feedback becomes available, unloads, and reloads', () => {
-    const b = bench()
-    fireEvent.click(b.view.getByRole('button', { name: 'More actions' }))
-    expect(b.view.queryByRole('menuitem', { name: 'Feedback' })).toBeNull()
-
-    act(() => { b.feedback.set(true) })
-    expect(b.view.getByRole('menuitem', { name: 'Feedback' })).toBeTruthy()
-    act(() => { b.feedback.set(false) })
-    expect(b.view.queryByRole('menuitem', { name: 'Feedback' })).toBeNull()
-    expect(b.view.getByRole('menuitem', { name: 'Download session log' })).toBeTruthy()
-
-    act(() => { b.feedback.set(true) })
-    fireEvent.click(b.view.getByRole('menuitem', { name: 'Feedback' }))
-    expect(b.openFeedback).toHaveBeenCalledWith(SID)
-    expect(b.request).not.toHaveBeenCalled()
-    expect(b.view.queryByRole('menu')).toBeNull()
-  })
-
-  it('copies Markdown from the menu and closes it without starting a download', async () => {
-    const b = bench()
-    fireEvent.click(b.view.getByRole('button', { name: 'More actions' }))
-    expect(b.view.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
-      'Copy Session as Markdown',
-      'Download session log',
-    ])
-    fireEvent.click(b.view.getByRole('menuitem', { name: 'Copy Session as Markdown' }))
-    await waitFor(() => { expect(b.copyMarkdown).toHaveBeenCalledWith(SID) })
-    expect(b.request).not.toHaveBeenCalled()
-    expect(b.view.queryByRole('menu')).toBeNull()
-    expect(b.copyController.store.getSnapshot().notice?.kind).toBe('success')
-  })
-
-  it('disables only the copy row while a copy is pending', async () => {
-    const gate = Promise.withResolvers<Response>()
-    const copyController = new SessionMarkdownCopyController(() => gate.promise, clipboard)
-    const b = bench(true, copyController)
-    const pending = copyController.copy(SID)
-    expect(copyController.store.getSnapshot().copying).toBe(true)
-
     const button = b.view.getByRole('button', { name: 'More actions' })
-    await waitFor(() => { expect(button.getAttribute('aria-expanded')).toBe('false') })
+    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue(new DOMRect(40, 50, 28, 28))
     fireEvent.click(button)
-    const copyItem = b.view.getByRole('menuitem', { name: 'Copy Session as Markdown' })
-    await waitFor(() => { expect((copyItem as HTMLButtonElement).disabled).toBe(true) })
-    expect((b.view.getByRole('menuitem', { name: 'Download session log' }) as HTMLButtonElement).disabled).toBe(false)
-    expect((b.view.getByRole('menuitem', { name: 'Feedback' }) as HTMLButtonElement).disabled).toBe(false)
-    expect(button.getAttribute('aria-busy')).toBe('true')
-
-    gate.resolve(new Response('markdown'))
-    await pending
-    expect(b.copyController.store.getSnapshot().copying).toBe(false)
-    await waitFor(() => { expect((copyItem as HTMLButtonElement).disabled).toBe(false) })
-    expect(button.getAttribute('aria-busy')).toBe('false')
+    expect(b.openMenu).toHaveBeenCalledExactlyOnceWith(SID, { x: 40, y: 78 })
+    expect(document.activeElement).toBe(button)
+    expect(button.getAttribute('aria-haspopup')).toBe('menu')
+    expect(button.hasAttribute('data-context-menu-trigger')).toBe(true)
+    expect(b.view.queryByRole('menu')).toBeNull()
   })
 
-  it('opens the more-actions menu and downloads through the shared controller', async () => {
+  it('derives expanded state from only the matching Header target and preserves the button across changes', () => {
     const b = bench()
     const button = b.view.getByRole('button', { name: 'More actions' })
-    expect(button.querySelector('svg')).not.toBeNull()
     expect(button.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(button)
+    act(() => { b.active.set({ kind: 'sessionHeader', value: { sessionId: SID } }) })
     expect(button.getAttribute('aria-expanded')).toBe('true')
-    fireEvent.click(b.view.getByRole('menuitem', { name: 'Download session log' }))
-    await waitFor(() => { expect(b.request).toHaveBeenCalledWith(SID) })
-    expect(b.view.queryByRole('menuitem', { name: 'Download session log' })).toBeNull()
-    expect(await b.view.findByRole('dialog', { name: 'Session download started' })).toBeTruthy()
+    act(() => { b.active.set({ kind: 'session', value: { sessionId: SID, displayTitle: 'Same Session' } }) })
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    act(() => { b.active.set({ kind: 'sessionHeader', value: { sessionId: 'another' as SessionId } }) })
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    b.view.rerender(<SessionLogDownloadHeaderAction {...b.props} sessionId={'another' as SessionId} />)
+    expect(b.view.getByRole('button', { name: 'More actions' })).toBe(button)
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    act(() => { b.active.set(null) })
+    expect(button.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('closes the menu on Escape without downloading', () => {
+  it('retains the Session-scoped download dialog and busy state after the shared menu closes', async () => {
     const b = bench()
-    fireEvent.click(b.view.getByRole('button', { name: 'More actions' }))
-    expect(b.view.getByRole('menuitem', { name: 'Download session log' })).toBeTruthy()
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(b.view.queryByRole('menuitem', { name: 'Download session log' })).toBeNull()
-    expect(b.request).not.toHaveBeenCalled()
-  })
-
-  it('disables the download row while either entry path downloads this Session', async () => {
-    const b = bench(true)
-    let release!: (response: Response) => void
-    const pending = new Promise<Response>((resolve) => { release = resolve })
-    const controller = new SessionLogDownloadController(() => pending, vi.fn())
-    const useSessionLogDownload = bindSnapshot(controller.store)
-    const rerendered: SessionLogDownloadHeaderProps = {
-      ...standard,
-      useSessionLogDownload,
-      useSessionMarkdownCopy: bindSnapshot(b.copyController.store),
-      useFeedbackAvailable: bindSnapshot(b.feedback),
-      openFeedback: b.openFeedback,
-      request: (sessionId: SessionId) => controller.download(sessionId),
-      copyMarkdown: b.copyMarkdown,
-      dismiss: (sessionId: SessionId) => { controller.dismiss(sessionId) },
-      t: translate,
-    }
-    b.view.rerender(<SessionLogDownloadHeaderAction {...rerendered} />)
-
-    const download = controller.download(SID)
     const button = b.view.getByRole('button', { name: 'More actions' })
-    await waitFor(() => { expect(button.getAttribute('aria-busy')).toBe('true') })
-    fireEvent.click(button)
-    const item = b.view.getByRole('menuitem', { name: 'Download session log' })
-    expect((item as HTMLButtonElement).disabled).toBe(true)
-    expect((b.view.getByRole('menuitem', { name: 'Copy Session as Markdown' }) as HTMLButtonElement).disabled).toBe(false)
-    expect((b.view.getByRole('menuitem', { name: 'Feedback' }) as HTMLButtonElement).disabled).toBe(false)
-    release(new Response('zip'))
-    await download
+    let pending!: Promise<void>
+    act(() => { pending = b.controller.download(SID) })
+    expect(button.getAttribute('aria-busy')).toBe('true')
+    expect(button.hasAttribute('disabled')).toBe(false)
+    expect(b.view.getByRole('dialog')).toBeTruthy()
+    await act(async () => { b.gate.resolve(new Response('zip')); await pending })
     await waitFor(() => { expect(button.getAttribute('aria-busy')).toBe('false') })
-    expect((item as HTMLButtonElement).disabled).toBe(false)
+    expect(b.view.getByRole('dialog', { name: 'Session download started' })).toBeTruthy()
+    act(() => { b.controller.dismiss(SID) })
+    expect(b.view.queryByRole('dialog')).toBeNull()
+    act(() => { b.copyController.store.set({ ...b.copyController.store.getSnapshot(), copying: true }) })
+    expect(button.getAttribute('aria-busy')).toBe('true')
+    act(() => { b.copyController.store.set({ ...b.copyController.store.getSnapshot(), copying: false }) })
+    expect(button.getAttribute('aria-busy')).toBe('false')
   })
 })

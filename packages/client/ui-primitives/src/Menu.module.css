@@ -31,7 +31,7 @@
   left: 0;
   z-index: 100;
   min-width: 144px;
-  max-width: 360px;
+  max-width: min(360px, calc(100vw - 24px));
 }
 
 /* Legacy slots can render no rows; keep empty context popups out of layout. */
@@ -64,9 +64,8 @@
 /* Viewport fit: the card stops 12px short of the viewport's top/bottom edges
  * (the portal MARGIN in Menu.tsx; the top side widens to the frame's published
  * overlay inset) and taller content scrolls inside
- * .viewport, so a pinned .footer stays visible. Menus with submenu rows skip
- * this class — the overflow clip would crop the side card, so they rely on
- * staying short. */
+ * .viewport, so a pinned .footer stays visible. Submenus escape the scroll
+ * clip through their own body portal. */
 .scrollable {
   max-height: calc(100vh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
 }
@@ -290,24 +289,22 @@
   display: block;
 }
 
-/* The submenu aligns with the parent's bottom edge. Its hit bridge covers
- * the menu inset and the 6px gap so pointer movement keeps it open. */
+/* Child cards remain mounted while resizing between side and single-panel views. */
 .submenu {
-  position: absolute;
-  top: auto;
-  bottom: -4px;
-  left: calc(100% + 10px);
-  z-index: 101;
+  position: fixed;
+  z-index: 1101;
   min-width: 163px;
+  max-width: min(360px, calc(100vw - 24px));
 }
 
-.submenu::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -10px;
-  width: 10px;
+/* Retain the parent's geometry and rows for placement and focus restoration. */
+.parentPage {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.submenu > .item {
+  flex: none;
 }
 
 .list[data-menu-phase='dismiss'],

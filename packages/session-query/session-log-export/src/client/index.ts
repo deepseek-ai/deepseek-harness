@@ -9,6 +9,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-message-feedback/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import { IconCopyOutlineRegular, IconDownloadOutlineRegular, IconPaperPlaneOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SessionLogDownloadController } from './controller.ts'
 import { SessionMarkdownCopyController } from './copy-controller.ts'
 import { SessionMarkdownCopyToast, type SessionMarkdownCopyToastInjected } from './CopyToast.tsx'
@@ -21,6 +23,13 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
+  interface ContextMenuTargetMap {
+    /** Header utilities, independent of Session-row and title context actions. */
+    sessionHeader: { readonly sessionId: SessionId }
+  }
+}
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     'session-log-download': SessionLogDownloadKey
@@ -29,11 +38,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 export type { SessionLogDownloadEntry, SessionLogDownloadState } from './controller.ts'
 
-export const inject = ['slots', 'locale']
+export const inject = ['slots', 'locale', 'contextMenus']
 
 /**
  * Provide the download controller and mount its modal, the Markdown copy
- * controller and its root toast, and both Header actions.
+ * controller and its root toast, and the shared Header menu actions.
  * @param ctx - browser context carrying slots and locale services.
  */
 export function apply(ctx: ClientContext): void {
@@ -50,6 +59,34 @@ export function apply(ctx: ClientContext): void {
       return () => { feedbackAvailable.set(false) }
     }, 'session-log-download: feedback availability')
   })
+  const t = ctx.locale.bind(NS)
+  ctx.slots.inject('contextMenu.icon', function* () {
+    for (const [key, Icon] of Object.entries({
+      'session-log-download.copy': IconCopyOutlineRegular,
+      'session-log-download.download': IconDownloadOutlineRegular,
+      'session-log-download.feedback': IconPaperPlaneOutlineRegular,
+    })) yield ctx.slots.register({ name: 'contextMenu.icon', key }, Icon)
+  })
+  ctx.effect(() => ctx.contextMenus.register({
+    id: 'session-log-download.export', target: 'sessionHeader', order: 100,
+    observe: () => [controller.store, copyController.store, ctx.locale],
+    resolve: ({ sessionId }) => [
+      { id: 'copy', label: t('menu.copyMarkdown'), icon: { key: 'session-log-download.copy' },
+        disabled: copyController.store.getSnapshot().copying, run: () => copyController.copy(sessionId) },
+      { id: 'download', label: t('menu.download'), icon: { key: 'session-log-download.download' },
+        disabled: controller.store.getSnapshot().bySession[sessionId]?.status === 'downloading',
+        run: () => controller.download(sessionId) },
+    ],
+  }), 'session-log-download: Header exports')
+  ctx.effect(() => ctx.contextMenus.register({
+    id: 'session-log-download.feedback', target: 'sessionHeader', order: 600,
+    observe: () => [feedbackAvailable, ctx.locale],
+    resolve: ({ sessionId }) => feedbackAvailable.getSnapshot() ? [{
+      id: 'feedback', label: t('menu.feedback'), icon: { key: 'session-log-download.feedback' }, separatorBefore: true,
+      // The feedback plugin can unload between menu preparation and selection.
+      run: () => { ctx.get('feedbackUi')?.openSession(sessionId) },
+    }] : [],
+  }), 'session-log-download: Header feedback')
   ctx.on('command/executed', (sessionId, commandName, result) => {
     if (commandName === 'export' && result.kind === 'success') void controller.download(sessionId)
   })
@@ -70,13 +107,15 @@ export function apply(ctx: ClientContext): void {
       hooks: {
         sessionLogDownload: controller.store,
         sessionMarkdownCopy: copyController.store,
-        feedbackAvailable,
+        headerMenu: ctx.contextMenus.active,
       },
       request: (sessionId: SessionId) => controller.download(sessionId),
-      copyMarkdown: (sessionId: SessionId) => copyController.copy(sessionId),
       dismiss: (sessionId: SessionId) => { controller.dismiss(sessionId) },
-      // The feedback plugin can unload between the menu render and this click.
-      openFeedback: (sessionId: SessionId) => { ctx.get('feedbackUi')?.openSession(sessionId) },
+      openMenu: (sessionId, point) => {
+        const active = ctx.contextMenus.active.getSnapshot()
+        if (active?.kind === 'sessionHeader' && active.value.sessionId === sessionId) ctx.contextMenus.close()
+        else ctx.contextMenus.open({ kind: 'sessionHeader', value: { sessionId } }, point)
+      },
     }),
   }, SessionLogDownloadHeaderAction))
 }

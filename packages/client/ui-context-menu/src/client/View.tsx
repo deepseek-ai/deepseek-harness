@@ -1,7 +1,7 @@
 /** Shared Web renderer for Client menu contributions. */
 import { Menu, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsStore, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsStore, PropsRenderSlots, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Shortcuts, ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { createMenuStore } from './store.ts'
 import type { MenuActionView } from './types.ts'
@@ -39,14 +39,15 @@ export interface MenuOverlayInjected {
   select: (id: string) => void
 }
 type Props = PropsStore<ReturnType<typeof createMenuStore>>
-  & PropsRenderSlots<'contextMenu.content' | 'contextMenu.icon'> & InjectFace<MenuOverlayInjected>
+  & PropsRenderSlots<'contextMenu.content' | 'contextMenu.icon'> & InjectFace<MenuOverlayInjected> & PropsLocale<'contextMenu'>
 
 /** @param props - registered state, target-specific legacy rows, and actions. @returns one menu and persistent feedback. */
-export function MenuOverlay({ useStore, actions, renderSlot, close, select, returnFocus, useCatalog }: Props) {
+export function MenuOverlay({ useStore, actions, renderSlot, close, select, returnFocus, useCatalog, t }: Props) {
   const catalog = useCatalog(value => value)
   const { target, point, items, notice, occurrence, closing, replacing } = useStore(s => s)
   return <>
     <Menu key={occurrence} open={target !== null} anchor={null} portal autoFocus contextual returnFocus={returnFocus}
+      submenuBackLabel={t('back')}
       exiting={closing ? replacing ? 'replace' : 'dismiss' : undefined}
       getAnchorRect={() => new DOMRect(point.x, point.y, 0, 0)}
       items={menuEntries(items.filter(item => !item.afterContent), catalog, renderSlot)}

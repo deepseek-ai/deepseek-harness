@@ -24,6 +24,9 @@
       "path": "../../host/open-in-app"
     },
     {
+      "path": "../../session-query/session-log-export/tsconfig.client.json"
+    },
+    {
       "path": "../locale/tsconfig.client.json"
     },
     {

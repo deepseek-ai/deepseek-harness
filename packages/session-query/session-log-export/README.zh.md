@@ -35,7 +35,7 @@ kind: "package-reference"
 
 剪贴板是浏览器范围的唯一目标，因此本插件实例一次只运行一项复制。在支持 `ClipboardItem` 与 `navigator.clipboard.write` 的宿主上，控制器会在点击时请求延迟的 `ClipboardItem` 写入，同时加载文档相对的 `api/session.markdown?sessionId=<id>` 路由；其他宿主在准备完成后回退到共享剪贴板助手。复制进行中到达的请求会加入该操作，并保留第一次点击的 Session。所有 Session Header 通过 `aria-busy` 反映复制状态，并在操作结束前禁用各自的复制行。成功、准备失败或剪贴板失败通过根 overlay 浮层反馈。释放会中止读取，并阻止后续文本进入由 Promise 提供的 Blob；操作系统已经接受的剪贴板写入无法回滚。
 
-挂载 `ui-message-feedback` 时，同一菜单还提供“反馈”，打开已有的 Session 反馈弹窗。打开或关闭该弹窗不会导出 Session 或提交反馈。反馈入口随反馈插件的可用状态显示；两个导出操作保持独立可用。
+挂载 `ui-message-feedback` 时，同一菜单还提供“反馈”，打开已有的 Session 反馈弹窗。打开或关闭该弹窗不会导出 Session 或提交反馈。反馈入口随反馈插件的可用状态显示；两个导出操作保持独立可用。[`ui-open-in-app`](../../client/ui-open-in-app/README.zh.md) 在下载之后、反馈之前的独立分隔组中贡献应用子菜单。
 
 ### 何时选择
 
@@ -61,7 +61,7 @@ export function convertTranscript(events: readonly SessionEvent[], sourcePath?: 
   name: '@deepseek-ai/dsh-session-log-export'
 ```
 
-Web bundle 将本包与 Connection、`dsh-commands`、`dsh-client-ui-commands`、`dsh-client-ui-conversation` 和 `dsh-client-ui-layout` 一起挂载。layout 包声明复制反馈使用的 `shell.overlay` 座位；其他客户端包提供 Header 座位、locale 与命令界面。
+Web bundle 将本包与 Connection、`dsh-commands`、`dsh-client-ui-commands`、`dsh-client-ui-conversation`、`dsh-client-ui-context-menu` 和 `dsh-client-ui-layout` 一起挂载。右键菜单服务渲染共享的头部菜单；layout 声明复制反馈使用的 `shell.overlay` 插槽。其他客户端包提供 Header、locale 与命令服务。
 
 ### 配置
 
@@ -100,7 +100,7 @@ Web bundle 将本包与 Connection、`dsh-commands`、`dsh-client-ui-commands`�
 
 本包分为两部分。Host 半包（[`src/index.ts`](src/index.ts)）注册 `/export` 命令，并向 Connection 贡献精确的 `GET`/`HEAD /api/session.export` 与 `/api/session.markdown` Fetch 路由；[`src/archive.ts`](src/archive.ts) 构建有界 ZIP 流，[`src/markdown.ts`](src/markdown.ts) 渲染 Markdown 记录。浏览器半包（[`src/client/index.ts`](src/client/index.ts)）提供共享下载与 Markdown 复制控制器和 UI，并观察 `command/executed`，因此只有提交命令的浏览器会启动下载。
 
-Header 的更多操作入口使用公共紧凑 Button，点击区域为 28px 正方形，与右侧栏展开控件共用圆角和 hover 底色。
+Header 的更多入口使用公共紧凑 Button，点击区域为 28px 正方形，与右侧栏展开控件共用圆角和 hover 底色。本包通过声明合并定义被捕获的 `sessionHeader` 目标，独立于会话行及标题右键操作。导出及可选反馈贡献观察各自的控制器、可用性与语言源；按钮通过共享活动目标显示展开状态。会话范围的下载弹窗保持挂载在按钮旁，菜单焦点和关闭由共享浮层管理。
 
 ### 下载流程
 
