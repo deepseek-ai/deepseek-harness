@@ -1185,6 +1185,154 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-forge-session -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-im -->
+<a id="deepseek-aidsh-experimental-im"></a>
+
+## `@deepseek-ai/dsh-experimental-im`
+
+- `inject`: `satori` · `agents` · `sessions` · `sessionPersistence` · `storageDomain` · `attachments`
+- `source`: [`packages/experimental/im/src/api.ts:222`](../packages/experimental/im/src/api.ts)
+
+```ts config-catalog
+/**
+ * Deployment configuration of the IM host: the admission rules plus the limits the store, the send pipeline and the
+ * `im_*` tools enforce. The schemastery value with the field defaults lives in `config.ts`.
+ */
+export interface ImConfig {
+  /** Ordered admission rules; the first match admits. Chats matched by no source are neither stored nor emitted. */
+  sources: ImSourceConfig[]
+  /** Minimum age before settled records may expire, ms. */
+  retentionMs: number
+  /** Maximum retained message records per chat. */
+  maxRecords: number
+  /** Maximum UTF-8 bytes of one stored inbound record. */
+  maxInputBytes: number
+  /** Interval of the dispatch loop, delivery recovery and retention sweep, ms. */
+  retryIntervalMs: number
+  /** Inbound media admission: whether admitted images and files are downloaded for the model, and their bounds. */
+  media: {
+    /** Download admitted images and files so the model can read them; `false` keeps only their labels. */
+    download: boolean
+    /** Maximum bytes of one downloaded resource (default 10 MiB). */
+    maxBytes: number
+    /** Maximum resources downloaded for one message (default 9). */
+    maxItems: number
+  }
+  /** Outbound publication limits. */
+  send: {
+    /** Maximum UTF-8 bytes of one published text part (default 30 KB). */
+    maxBytes: number
+    /** Maximum bytes of one referenced media file (default 10 MiB). */
+    maxMediaBytes: number
+    /** Deadline of one publication operation in milliseconds (default 30 s). */
+    operationTimeoutMs: number
+  }
+  /** `im_*` tools (registered when the `tools` service exists). */
+  tools: {
+    /** Register only the read tools, so the session never publishes or records a task status. */
+    readOnly: boolean
+    /** Maximum UTF-8 bytes of one tool result text (default 64 KiB). */
+    maxReadBytes: number
+    /** Maximum messages of one `im_history` page (default 50). */
+    maxHistoryItems: number
+  }
+  /**
+   * Default dispatcher: the innermost `im/message` listener. Absent, a message no listener handled is ignored;
+   * present, every addressed message no listener handled reaches one shared hosted session (`im:dispatcher`).
+   */
+  defaultDispatch?: ImDispatcherConfig | undefined
+}
+
+/**
+ * One ordered admission rule: the first rule matching a chat admits it, and a chat matched by no rule is neither
+ * stored nor emitted. `writable` grants sessions the right to publish into the chat.
+ */
+export interface ImSourceConfig {
+  /** Stable operator id (branded as {@link ImSourceId} on `ImChat.source`). */
+  id: string
+  /** Bot id `lark:cli_xxx` | `qq:102106848` | `*`. */
+  bot: string
+  /** Platform chat ids; absent or empty = any chat of the bot. */
+  chats?: string[]
+  /** Sender allowlist (platform user ids); absent or empty = any. */
+  users?: string[]
+  /** Sessions may publish into these chats. */
+  writable: boolean
+  /** `all` (default; history needs non-addressed messages) or only addressed messages. */
+  store: 'all' | 'addressed'
+}
+
+/**
+ * The default dispatcher of messages no other listener handled: one hosted session (key `im:dispatcher`, owner
+ * `dispatcher`) that accumulates a binding per chat it hears and reads every message with a chat header.
+ */
+export interface ImDispatcherConfig {
+  /** Agent preset of the dispatcher session. */
+  agentPreset: string
+  /** Explicit model-provider route. */
+  provider: string
+  /** Model id on the configured provider route. */
+  model: string
+  /** Absolute working directory of the dispatcher session. */
+  cwd: string
+  /** Output renderer id (default `none`: only the agent's own IM tools publish). */
+  output: string
+  /** How a dispatched message reaches the agent (default `steer`). */
+  delivery: ImDeliveryMode
+  /** The prompt section rendered for the dispatcher session only. */
+  prompt: {
+    /** Unique section name in the system prompt (default `im:dispatcher`). */
+    name: string
+    /** Position among the sections (default 81, right after `tool:im`). */
+    order: number
+    /** Guidance text of the dispatcher session. */
+    text: string
+  }
+}
+
+/** How a delivery reaches the session's agent: wake or join the running turn, queue a turn, or add context without waking. */
+export type ImDeliveryMode = 'steer' | 'followup' | 'inject'
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-im -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-im-session-commands -->
+<a id="deepseek-aidsh-experimental-im-session-commands"></a>
+
+## `@deepseek-ai/dsh-experimental-im-session-commands`
+
+- `inject`: `im` · `commands` · `agents`
+- `source`: [`packages/experimental/im-session-commands/src/config.ts:9`](../packages/experimental/im-session-commands/src/config.ts)
+
+```ts config-catalog
+/** Operator configuration of the slash commands: who may act, which names pass through, and the reply language. */
+export interface SessionCommandsConfig {
+  /** `all` lets every sender act; `admins` restricts privileged commands to {@link admins}. */
+  allow: SessionCommandAllow
+  /**
+   * Sender ids allowed to run privileged commands when `allow` is `admins`: a bare platform user id
+   * (`ou_xxx`), or `botId|userId` to pin one platform.
+   */
+  admins: string[]
+  /** Command names forwarded to the dsh command registry (`/compact` by default). */
+  passthrough: string[]
+  /** Session owners `/clear` and `/new` may reset (the default dispatch session is owned by `dispatcher`). */
+  resettable: string[]
+  /** Reply language; `zh` by default. */
+  locale: SessionCommandsLocale
+}
+
+/** Who may run a privileged command (`/stop`, `/clear`, `/new`, passthrough). */
+export type SessionCommandAllow = 'all' | 'admins'
+
+/**
+ * Reply strings of the session-commands plugin: every reply the plugin publishes goes through one table so an operator
+ * can switch language with `config.locale` (`zh` by default).
+ */
+
+export type SessionCommandsLocale = 'zh' | 'en'
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-im-session-commands -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-inspector -->
 <a id="deepseek-aidsh-experimental-inspector"></a>
 
@@ -4991,6 +5139,7 @@ export interface Config {
 | `@deepseek-ai/dsh-experimental-browser-use-runtime` | — | [`packages/experimental/browser-use-runtime/src/index.ts`](../packages/experimental/browser-use-runtime/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-cot-translation-bundle` | — | [`packages/experimental/cot-translation-bundle/src/index.ts`](../packages/experimental/cot-translation-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-forge-bundle` | — | [`packages/experimental/forge-bundle/src/index.ts`](../packages/experimental/forge-bundle/src/index.ts) |
+| `@deepseek-ai/dsh-experimental-im-bundle` | — | [`packages/experimental/im-bundle/src/index.ts`](../packages/experimental/im-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-inspector-profile` | — | [`packages/experimental/inspector-profile/src/index.ts`](../packages/experimental/inspector-profile/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-liveshare` | — | [`packages/experimental/liveshare/src/index.ts`](../packages/experimental/liveshare/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-liveshare-protocol` | — | [`packages/experimental/liveshare-protocol/src/index.ts`](../packages/experimental/liveshare-protocol/src/index.ts) |
