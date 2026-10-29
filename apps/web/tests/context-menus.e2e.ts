@@ -1,6 +1,7 @@
 /** Context gestures against built plugins, seeded Sessions, and original files. */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
@@ -38,7 +39,10 @@ describe.each(['MacIntel', 'Win32', 'Linux x86_64'])('web context menus on %s', 
   let scaffold: WebScaffold, browser: Browser, page: Page
   let tripwire: ReturnType<typeof watchConsole>
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({ openInAppEnvironment: createLaunchEnvironmentSnapshot([{ source: 'process', values: { SSH_CONNECTION: '10.0.0.2 55000 10.0.0.9 22' } }]) })
+    scaffold = await launchWebScaffold({
+      openInAppEnvironment: createLaunchEnvironmentSnapshot([{ source: 'process', values: { SSH_CONNECTION: '10.0.0.2 55000 10.0.0.9 22' } }]),
+      extraOverlayPath: fileURLToPath(new URL('./context-menus.overlay.yml', import.meta.url)),
+    })
     await mkdir(join(scaffold.workspaceCwd, 'folder'))
     await scaffold.ctx.workspaceRegistry.create(join(scaffold.workspaceCwd, 'folder'), 'Menu workspace')
     await writeFile(join(scaffold.workspaceCwd, 'first.txt'), 'FIRST\nSECOND\nTHIRD\n')
