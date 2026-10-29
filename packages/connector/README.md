@@ -33,7 +33,7 @@ Each application plugin in this group is installed into a profile to use one thi
 
 - [Skill subsystem reference](../../docs/subsystems/skills.md) — the registry and provider contract that connector skills use.
 - [System prompt](../core/system-prompt/README.md) — the registry that orders and renders runtime context.
-- [CLI plugin page pieces](../client/ui-cli-account/README.md) — the Plugins page half of the CLI account library.
+- [CLI account surfaces](../client/ui-cli-account/README.md) — the Plugins page registry where CLI app plugins show their accounts.
 
 -----
 
