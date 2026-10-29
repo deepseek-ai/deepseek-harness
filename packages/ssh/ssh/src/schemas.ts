@@ -1,5 +1,6 @@
 /** Strict JSON validation for SSH helper requests and remote observations. */
 import { z } from 'zod'
+import { FS_ERROR_CODES } from '@deepseek-ai/dsh-fs'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import { SSH_PROTOCOL_VERSION } from './protocol.ts'
 
@@ -37,6 +38,29 @@ export const editSchema = z.object({ oldString: z.string(), newString: z.string(
 export const writeResultSchema = z.object({ operation: z.enum(['create', 'update']), version: z.string(), before: z.string().nullable(), after: z.string() }).strict()
 /** Atomic edit observation. */
 export const editResultSchema = z.object({ version: z.string(), before: z.string(), after: z.string() }).strict()
+/** Parsed patch hunk admitted at the remote JSON boundary. */
+export const hunkSchema = z.object({
+  lineNumber: z.number().int().positive(), context: z.string().optional(),
+  oldLines: z.array(z.string()), newLines: z.array(z.string()),
+  isEndOfFile: z.boolean(),
+}).strict().transform(({ context, ...hunk }) => context === undefined ? hunk : { ...hunk, context })
+/** Source version guard used by patch, delete, and move. */
+export const versionGuardSchema = z.object({ version: z.string() }).strict()
+/** Optional move patch and independent source/destination guards. */
+export const moveOptionsSchema = z.object({
+  hunks: z.array(hunkSchema).optional(), expectedSource: versionGuardSchema.optional(),
+  expectedDestination: intentSchema.optional(),
+}).strict()
+/** Bounded, nullable content basis for a completed deletion. */
+export const deleteResultSchema = z.object({ before: z.string().nullable() }).strict()
+/** Move completion preserves a published destination even when source removal fails. */
+export const moveResultSchema = z.discriminatedUnion('sourceDeleted', [
+  z.object({ sourceBefore: z.string().nullable(), destination: writeResultSchema, sourceDeleted: z.literal(true) }).strict(),
+  z.object({ sourceBefore: z.string().nullable(), destination: writeResultSchema, sourceDeleted: z.literal(false), sourceFailure: z.object({
+    code: z.enum(FS_ERROR_CODES),
+    message: z.string(),
+  }).strict() }).strict(),
+])
 /** Explicit child environment; null encodes an environment tombstone. */
 export const environmentSchema = z.record(z.string(), z.string().nullable())
 const collection = z.object({

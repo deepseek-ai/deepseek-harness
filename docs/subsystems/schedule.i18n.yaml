@@ -3,38 +3,47 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/schedule.md
 /host-wide-schedule:
-  en: 71c4686e65a7c7f9
-  zh: dfba124c28db2f63
-/host-wide-schedule/durable-records:
-  en: 41cd197b5c74bfa3
-  zh: 18ed11259036d726
+  en: d977861519ae2e36
+  zh: 910ba93329cfe56b
+/host-wide-schedule/durable-tasks:
+  en: 5ddc67179a897c74
+  zh: 47024e886fa70abf
+/host-wide-schedule/storage-versioning:
+  en: ad9b7b25eebb91b3
+  zh: 6158c5cc9ef12a7f
+/host-wide-schedule/recurrence-rules:
+  en: f68c0b3ff09ce20e
+  zh: 9fc4470739ff640c
 /host-wide-schedule/absolute-time-input:
-  en: a07f1a7153b0074f
-  zh: f3c584db1073e49d
-/host-wide-schedule/daily-wall-clock-input:
-  en: 2d249edc3dfccb8a
-  zh: 33fecda132b03b84
+  en: a7c1c1b63ffb19cf
+  zh: 9b00f818c4774ad8
+/host-wide-schedule/daily-and-weekly-input:
+  en: a4c09868c5009bef
+  zh: 511ec3d7ae6b0d98
 /host-wide-schedule/fixed-rate-input-and-catch-up:
-  en: d2b5997cce3806dc
-  zh: 2483ba9e38ad3cf3
-/host-wide-schedule/cron-wall-clock-input:
-  en: 1ba9ae84f05d8919
-  zh: 5b4abfdcddbbcae0
-/host-wide-schedule/historical-session-changes:
-  en: d3bdcf22dd771a7d
-  zh: 11af3e617a7ef3fd
-/host-wide-schedule/active-views-and-management:
-  en: 93798ad69f74ddd5
-  zh: 634126ad8accc356
-/host-wide-schedule/web-catalog:
-  en: 3377a013bf8cbfb7
-  zh: c5666dc3f28b087f
+  en: 79fb76147de2d82c
+  zh: 8a75d2bc1229caf3
+/host-wide-schedule/cron-input:
+  en: 0019e68edcba3717
+  zh: 82efc84f09bb8062
+/host-wide-schedule/rrule-input:
+  en: f93ebb99c73f5d38
+  zh: 8b5787f0ea845ad2
+/host-wide-schedule/delivery-targets:
+  en: d10b60799a055427
+  zh: 68d33f2f59f826b8
+/host-wide-schedule/task-management:
+  en: 7a979f8fef09af59
+  zh: 475d982686030c50
 /host-wide-schedule/timing-edits:
-  en: ce5d2095a3ad2e82
-  zh: 167b3715f8eaffc1
+  en: 93c882d1c1924527
+  zh: 750b73ab93c9517a
 /host-wide-schedule/saved-delivery-records:
-  en: 077aa6573d9ede1a
-  zh: 0acea592a6e3630a
+  en: 968ae643ca6533a9
+  zh: ec47298b370b2b05
 /host-wide-schedule/host-delivery:
-  en: d5fc5b853529b139
-  zh: 4cc5eba14f9660e6
+  en: 362e9b4c26f90b5a
+  zh: 37a9882fcf5bafc1
+/host-wide-schedule/historical-session-changes:
+  en: 0df44daf6df88577
+  zh: 178d9dc601ac2843

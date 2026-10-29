@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-tool-fs` to let a model read UTF-8 files with line numbers, read supported images, create or atomically replace files, and apply targeted literal edits. Results are capped, and failures provide stable error codes and recovery instructions. Add `dsh-fs-observation-policy` when writes and edits must follow a successful read; without it, mutations remain atomic but are unconditional. Image reads require durable attachment storage and an image-capable routed model. Choose the sibling discovery package for glob or grep searches.
+Use `dsh-tool-fs` to let a model read UTF-8 files with line numbers, read supported images, create or atomically replace files, apply targeted literal edits, and apply Codex-style multi-file patches. Results are capped, and failures provide stable error codes and recovery instructions. Add `dsh-fs-observation-policy` when writes and edits must follow a successful read; without it, mutations remain atomic but are unconditional. Image reads require durable attachment storage and an image-capable routed model. Choose the sibling discovery package for glob or grep searches.
 
 ## Table of Contents
 
@@ -39,7 +39,7 @@ A backend, the policy plugin, then the tools; the attachment store is optional a
 - name: '@deepseek-ai/dsh-tool-fs'
 ```
 
-The policy plugin is optional: without it the tools run against the bare provider (unconditional write, overwrite, and edit with no observed-state). A deployment that loads these tools is expected to also load it, so the behavior is read-before-write/edit. `read_image` registers only while a durable `ctx.attachments` service is mounted; execution additionally refuses on a route whose exact model does not declare image input, so a text route's durable history stays free of image blocks.
+The policy plugin is optional: without it the tools run against the bare provider (unconditional write, overwrite, edit, and patch with no observed state). A deployment that loads these tools is expected to also load it, so the behavior is read-before-write/edit/patch. `read_image` registers only while a durable `ctx.attachments` service is mounted; execution additionally refuses on a route whose exact model does not declare image input, so a text route's durable history stays free of image blocks.
 
 ### The tools
 
@@ -49,12 +49,13 @@ The policy plugin is optional: without it the tools run against the bare provide
 | `read_image` | `file_path` | Reads and persists a PNG/JPEG/WebP/GIF source; an extension-less path (normalized attachment object paths included) is identified from its file signature; normalization can downscale it before the next model request, so the model need not create a thumbnail first |
 | `write` | `file_path`, `content` | Creates or fully replaces a file; with the policy plugin, overwriting requires a prior `read` at the unchanged version, creating does not |
 | `edit` | `file_path`, `old_string`, `new_string`, `replace_all?` | Literal replacement requiring a unique match unless `replace_all` is true; with the policy plugin, requires a prior `read` and an unchanged file |
+| `apply_patch` | `input`, sandbox escalation fields when available | Add/update/delete/move with whole-patch admission and known partial effects |
 
 Field names are snake_case to match Claude Code and existing harness tool schemas. The `write` and `edit` path descriptions ask the model to emit `file_path` before the content or replacement strings; this guides streaming presentation but does not enforce JSON member order. Successes return compact envelopes — a read window, an image reference, or a `Created file`/`Updated file` confirmation — and `write`/`edit` derive replayable diff-card metadata for UI presentation.
 
 ### Configuration
 
-All keys are optional. The `read`, `readImage`, `write`, and `edit` switches default to `true`; set a switch to `false` to omit that tool and its guidance. All four may be disabled. Enabling `readImage` still requires an attachment store and an image-capable model. Read caps remain validated when `read` is disabled.
+All keys are optional. The `read`, `readImage`, `write`, and `edit` switches default to `true`; set a switch to `false` to omit that tool and its guidance. `applyPatch` defaults to `false`, so the default composition registers no `apply_patch`; the shipped `tool-fs` rows that enable `edit` ([`dsh-base`](../../bundle/base/cordis.patch.yml) and the Web `standard`, `ptc`, and `cordis` presets) state `applyPatch: false`, and changing that one line to `true` adds the tool beside `edit`. All five tools may be disabled. Enabling `readImage` still requires an attachment store and an image-capable model. Read caps remain validated when `read` is disabled.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -62,6 +63,7 @@ All keys are optional. The `read`, `readImage`, `write`, and `edit` switches def
 | `readImage` | `true` | Register `read_image` while an attachment store is mounted |
 | `write` | `true` | Register `write` and its guidance |
 | `edit` | `true` | Register `edit` and its guidance |
+| `applyPatch` | `false` | Register `apply_patch` and its guidance |
 | `readLimit` | `2000` | Default and maximum lines returned by one `read` call |
 | `readMaxLineLength` | `2000` | Characters kept per line before truncation |
 | `readMaxBytes` | `51200` | Byte cap on one `read` call's selected lines; overflow ends the window with a capped footer |
@@ -79,6 +81,8 @@ With the policy plugin mounted, `write` and `edit` obtain their guard from the `
 
 ### Failures and recovery
 
+For `apply_patch`, syntax and preflight refusals throw with `isError: true` before any disk change. `FsError` preserves filesystem codes; `PatchToolError extends HarnessError` carries `PATCH_SYNTAX` and `PATCH_SYMLINK_SOURCE`. Once commit starts, the tool returns a value with `isError: false` even on failure or uncertainty, so known partial effects retain their diff metadata; a call cancelled during commit receives the tool registry's abort result like every other tool, and its completed changes remain visible through Review. `phase`, `cancelled`, ordered `operations` and `affectedPaths` describe the commit; each operation retains its index, kind, display paths, patch line, status, diagnostic and known changes. Full `before`/`after` text serves rendering and PTC; the Session stores the rendered result plus `meta.diffs` and `meta.stopped`. Creations store no diff, as for `write`; deletions and move sources store a removal diff only when the provider returned a bounded basis, using `newText: ''` because `FileDiff.newText` cannot be null.
+
 Failures are normalized as `Error: <message>` with a structured code preserved for callers. Stable messages include `file_path must be a non-empty string`, `limit must be less than or equal to <max>`, `cannot read "<path>": not found`, `cannot read "<path>": not a regular file`, and the image-route refusal `cannot read "<path>" as an image: model "<model>" does not declare image input; switch to an image-capable model to read images`. `FS_NOT_OBSERVED` is normalized to `cannot modify "<path>": file has not been read — read the file, then retry`, independent of whether the policy or provider rejected the operation; `FS_STALE_VERSION` retains the provider's reason and appends `— re-read the file, then retry`. After the reread confirms absence, `edit` reports `FS_NOT_FOUND` instead of repeating a stale remedy, while `write` uses guarded creation.
 
 -----
@@ -93,7 +97,7 @@ This section explains the design decisions behind the tool suite and points at t
 
 ### Design concept
 
-The tools are the executor; policy is an event gate. The tools inject no policy service and inspect no cache — each mutation asks the single intent slot for its guard through `ctx.waterfall`, and each operation emits `fs/observed` only after it succeeded. Reads do exactly one provider `stat` (type and size routing plus the observed version); mutations do none, because the guard comes from the intent slot and the provider re-checks under its lock.
+The tools are the executor; policy is an event gate. The tools inject no policy service and inspect no cache — each mutation asks the single intent slot for its guard through `ctx.waterfall`, and each operation emits `fs/observed` only after it succeeded. Reads do exactly one provider `stat` (type and size routing plus the observed version); `write` and `edit` do none, because the guard comes from the intent slot and the provider re-checks under its lock.
 
 ### Source map
 
@@ -103,9 +107,15 @@ The tools are the executor; policy is an event gate. The tools inject no policy 
 | [`src/read.ts`](src/read.ts) | `read` executor: one stat, streaming decision, window build, observation |
 | [`src/read-image.ts`](src/read-image.ts) | `read_image` executor: route and media-type gates, bounded bytes, attachment save |
 | [`src/write.ts`](src/write.ts) | `write` executor: intent waterfall, atomic write, observation |
+| [`src/apply-patch.ts`](src/apply-patch.ts), [`apply-patch-output.ts`](src/apply-patch-output.ts) | `apply_patch` registration, strict commit values and compact diagnostics |
+| [`src/apply-patch-presentation.ts`](src/apply-patch-presentation.ts) | Pure call previews and known result diffs |
 | [`src/edit.ts`](src/edit.ts) | `edit` executor: intent waterfall, literal edit, observation |
+| [`src/patch/index.ts`](src/patch/index.ts), [`types.ts`](src/patch/types.ts) | Internal `executePatch` entry and serializable per-operation reports |
+| [`src/patch/plan.ts`](src/patch/plan.ts) | Parse and resolve Session-relative paths; preserve ordered operations sharing a canonical target |
+| [`src/patch/preflight.ts`](src/patch/preflight.ts) | Simulate preceding successes and collect observation, type, text, and hunk failures before any write |
+| [`src/patch/execute.ts`](src/patch/execute.ts) | Reacquire guards, commit sequentially, record actual effects, and classify uncertain failures |
 | [`src/read-render.ts`](src/read-render.ts) | Cordis-free windowing and envelope formatting |
-| [`src/sandbox.ts`](src/sandbox.ts) | Escalation API shared by `write`/`edit`: policy resolution and denial-marker mapping |
+| [`src/sandbox.ts`](src/sandbox.ts) | Escalation API shared by the mutating tools: policy resolution and denial-marker mapping |
 | [`src/error.ts`](src/error.ts) | Stable model-facing diagnostics for guarded-mutation failures |
 | [`src/mutation-result.ts`](src/mutation-result.ts) | Successful mutation observation and canonical result paths |
 
@@ -113,9 +123,15 @@ The tools are the executor; policy is an event gate. The tools inject no policy 
 
 All four tools share one flow shape: resolve the path with the calling session's cwd, run the applicable gate, perform exactly one provider operation, and emit `fs/observed` only after success. `read` and `read_image` pay one `stat` for type and size routing; `write` and `edit` pay none because their guard comes from the intent slot, and provider failures surface as typed `FsError` results. The per-tool executors live in `src/read.ts`, `src/read-image.ts`, `src/write.ts`, and `src/edit.ts`.
 
+The internal patch executor accepts a raw patch and an already resolved sandbox policy. It builds an ordered plan, preflights all operations against simulated state, then commits through `writeText`, `patchText`, `deleteFile`, or one `moveFile` call. A refused preflight operation has no simulated effect, and any refusal prevents every write. Sandbox containment is not simulated: the provider decides it at each commit, as for `write` and `edit`, so a denied operation stops the patch with the earlier operations retained. A syntax report carries the parser failure; a preflight report lists the refused operations; a commit report keeps one entry per operation with `completed`, `failed`, `unknown`, or `skipped` status and known LF text changes. Unresolved paths retain their raw patch spelling; resolved paths use provider display paths. Programming errors reject the call.
+
 ### Observation and concurrency
 
 `fs/observed` fires after the operation succeeded via a plain `ctx.emit`; a listener is contractually a synchronous, side-effect-only recorder, so async or fallible observation does not belong on this event. `read` opts into concurrent scheduling because its only mutation is the synchronous version recorder; recorder races fail closed when a later `write` or `edit` re-checks the version under its target lock, and both mutation tools remain exclusive.
+
+Patch preflight reads never emit `fs/observed`. The first preflight operation on a target dispatches its intent; later operations on that target use the simulated state. Each commit dispatches its intents again to obtain current guards. Add and update record presence, delete records absence, and move records its destination plus source absence only after successful removal; a partial move is `failed` with a destination-only change. The move source baseline comes from `moveFile` under its lock.
+
+After a mutation rejects with `FS_IO_ERROR`, the executor compares each affected target's version with a fresh `stat`. Unchanged targets mean a known failure; a changed target or failed comparison means `unknown`, which records no observation or change. `FS_ABORTED` is always `unknown`: a cancelled remote request rejects while the provider may still be writing. Execution stops at the first failed or unknown commit, or before an operation whose signal is aborted.
 
 </details>
 
@@ -240,6 +256,47 @@ Only a failing call adds these retained tokens.
 
 Append-only; newly visible content follows the reusable request prefix and does not invalidate existing KV-cache entries.
 
+### Apply patch
+
+#### What the model sees
+
+The `apply_patch` schema requires one `input` string (the Codex parameter name, which models trained on that tool send unprompted) containing `*** Begin Patch` / `*** End Patch`, Add/Update/Delete headers, optional Move to, and context/add/remove hunk lines. Paths are Session-relative. A confining backend adds the same escalation fields as write/edit. Success lines group A/M/D and a completed move reports `M <destination>`, matching Codex rust-v0.158.0. An empty patch renders `Success. No operations in patch.`. A stopped patch includes only the applicable Completed, Failed, Outcome unknown and Not executed sections; unknown outcomes end with the re-read remedy. Syntax errors keep the parser message.
+
+##### System guidance
+
+```markdown
+Prefer apply_patch over separate edit calls for changes across files or separated regions. Read a file before updating, deleting, or moving it (the default fs-observation-policy requires it), unless you just created or edited it in this session. The whole patch is checked first (syntax, hunk matching, missing files) and a rejected patch changes nothing; once applying starts, operations run in order, stop at the first failure, and are not rolled back, so re-read affected files before retrying when needed.
+```
+
+##### Result examples
+
+```markdown
+Success. Updated the following files:
+A src/new.ts
+M src/a.ts
+D src/obsolete.ts
+
+Patch stopped after 1 of 3 operations.
+Completed:
+M src/a.ts
+Failed:
+- operation 2 (move src/b.ts -> src/c.ts, patch line 6): source removal denied
+  destination src/c.ts was written; source src/b.ts remains
+Not executed:
+- operation 3 (add src/d.ts)
+
+Patch rejected before any change (1 problems):
+- operation 1 (update src/a.ts, patch line 2): cannot modify "src/a.ts": file has not been read — read the file, then retry
+```
+
+#### Token effect
+
+The default tool set adds one patch tool schema and three guidance sentences to the first request. Commit output scales with operation count and diagnostics, not file size.
+
+#### KV Cache effect
+
+Stable while the visible tools are unchanged; call/result text appends to history.
+
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -247,6 +304,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 These limits define when the tool suite is a poor fit or needs special operational care. They are current package constraints, not a general filesystem comparison or a task backlog.
 
+- **Patch commits do not roll back** — earlier successes and a published move destination remain on disk after a later failure, and an `unknown` result requires re-reading the affected files before retrying.
 - **No model-facing directory listing ships** — `ctx.fs.listDir` serves provider code such as skill discovery, while the sibling `dsh-tool-fs-search` package supplies ripgrep-backed `glob` and `grep` rather than extending the filesystem seam.
 - **`read` handles UTF-8 text files only** — images use the separate `read_image` tool; PDF, audio, and video remain deferred. A directory target is `FS_NOT_REGULAR_FILE`.
 - **Extension-declared media type** — an extension selects the declared type and the attachment store's magic-byte validation stays authoritative; a correctly formatted image under a wrong extension is refused with the rename remedy rather than sniffed. Only a path with no extension is identified from its file signature.

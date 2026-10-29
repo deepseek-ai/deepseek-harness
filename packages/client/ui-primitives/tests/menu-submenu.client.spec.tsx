@@ -283,6 +283,52 @@ describe('Menu submenus', () => {
     expect(screen.getByRole('menuitem', { name: 'First app' })).toBeDefined()
   })
 
+  it.each(['Other action', 'Plugin action'])('keeps keyboard navigation after hovering root row %s', (name) => {
+    render(<Fixture />)
+    openMenu()
+    const parent = screen.getByRole('menuitem', { name: 'Applications' })
+    fireEvent.click(parent)
+    const menu = childMenu()
+    const target = screen.getByRole('menuitem', { name })
+    pointer(menu, 'pointerover', 'mouse', parent)
+    pointer(menu, 'pointerout', 'mouse', target)
+    pointer(target, 'pointerover', 'mouse', menu)
+    expect(screen.queryByRole('menuitem', { name: 'First app' })).toBeNull()
+    expect(document.activeElement).toBe(parent)
+    fireEvent.keyDown(parent, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Other action' }))
+  })
+
+  it('keeps child keyboard navigation when hover replaces its submenu', () => {
+    render(<Menu open anchor={null} onClose={() => {}} items={[
+      entries[0]!,
+      { id: 'next', label: 'Next group', submenu: [{ id: 'next-one', label: 'Next choice' }] },
+    ]} />)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Applications' }))
+    const menu = childMenu()
+    const next = screen.getByRole('menuitem', { name: 'Next group' })
+    pointer(menu, 'pointerover', 'mouse')
+    pointer(menu, 'pointerout', 'mouse', next)
+    pointer(next, 'pointerover', 'mouse', menu)
+    expect(screen.queryByRole('menuitem', { name: 'First app' })).toBeNull()
+    expect(document.activeElement).toBe(next)
+    fireEvent.keyDown(next, { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Next choice' }))
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' })
+    expect(document.activeElement).toBe(next)
+  })
+
+  it('does not return to the submenu parent when a root row already holds focus', () => {
+    render(<Fixture />)
+    openMenu()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Applications' }))
+    const target = screen.getByRole('menuitem', { name: 'Other action' })
+    act(() => { target.focus() })
+    pointer(target, 'pointerover', 'mouse')
+    expect(screen.queryByRole('menuitem', { name: 'First app' })).toBeNull()
+    expect(document.activeElement).toBe(target)
+  })
+
   it('returns child focus after pointer grace so root arrow navigation can continue', () => {
     render(<Fixture />)
     openMenu()

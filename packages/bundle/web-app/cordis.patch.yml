@@ -129,7 +129,7 @@
       name: '@deepseek-ai/dsh-api-workspace-files'
 
     # The Schedule service owns the task store and delivers each due occurrence
-    # as a follow-up in its original Session. The clock reading and the four
+    # as a follow-up to the task's target Session. The clock reading and the four
     # reminder tools belong to the `standard`, `cordis`, and `ptc` presets,
     # which declare them in their own scope.
     - id: schedule
