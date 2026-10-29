@@ -62,9 +62,12 @@ export class PtcExecutor implements ToolExecutor {
 
   /**
    * Clear one Agent's retained environment without executing program code.
+   * Cancellation or Agent disposal can discard the queued notice after state is cleared.
    * @param agent - Exact owner supplied to program executions.
    * @returns After process and nested-call cleanup and a queued model-visible state-loss notice.
-   * @throws CodeResetFailedError if cleanup fails; later programs remain blocked until reset succeeds.
+   * @throws Error if no supported runtime is available, without changing admission.
+   * @throws CodeResetFailedError if the runtime does not retain state, without changing admission;
+   * or if cleanup or notice admission fails, blocking programs until a reset retry succeeds.
    */
   reset(agent: Agent): Promise<void> {
     return resetPtcEnvironment(this.ctx, this.calls, agent)

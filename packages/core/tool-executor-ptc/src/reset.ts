@@ -8,7 +8,7 @@ import type { PtcCalls } from './ptc-calls.ts'
 import { requirePtcRuntime } from './ptc.ts'
 
 /**
- * Terminate an owned environment and queue a durable notice for the next model request.
+ * Terminate an owned environment and queue context for the next model request.
  * @param ctx - Executor context containing the runtime provider.
  * @param calls - Complete calls whose cancellation and cleanup precede success.
  * @param agent - Exact owner of the retained environment.
@@ -18,12 +18,13 @@ export async function resetPtcEnvironment(ctx: Context, calls: PtcCalls, agent: 
   const runtime = requirePtcRuntime(ctx)
   if (!runtime.retainsState) throw new CodeResetFailedError('The PTC runtime does not retain an environment')
   try {
-    await calls.reset(agent.session.id, () => runtime.release(agent))
+    await calls.reset(agent.session.id, () => runtime.release(agent), () => {
+      agent.inject(createUserMessage({
+        content: [{ type: 'text', text: 'The host reset the program environment. All retained variables have been cleared. The next run_code starts fresh. Completed tool effects have not been undone.' }],
+        source: { kind: 'ptc-mode' },
+      }))
+    })
   } catch (error) {
     throw new CodeResetFailedError(`Program environment reset failed: ${toolErrorMessage(error)}. State may not be cleared; retry the host reset before running more code.`)
   }
-  agent.inject(createUserMessage({
-    content: [{ type: 'text', text: 'The host reset the program environment. All retained variables have been cleared. The next run_code starts fresh. Completed tool effects have not been undone.' }],
-    source: { kind: 'ptc-mode' },
-  }))
 }

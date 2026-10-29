@@ -90,6 +90,46 @@
       {
         "type": "tool-call-delta",
         "index": 0,
+        "id": "call_blocked",
+        "name": "run_code",
+        "argumentsDelta": "{\"code\":\"kept.value\",\"description\":\"Check that failed reset blocks code until host recovery\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_blocked",
+          "name": "run_code",
+          "arguments": "{\"code\":\"kept.value\",\"description\":\"Check that failed reset blocks code until host recovery\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 10,
+          "outputTokens": 5
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
         "id": "call_check",
         "name": "run_code",
         "argumentsDelta": "{\"code\":\"({ retained: typeof kept, file: (await tools.bash({ command: \\\"cat kept.txt\\\", description: \\\"Read the saved value after reset\\\" })).stdout.text.trim() })\",\"description\":\"Check cleared variables and completed file effects\"}"

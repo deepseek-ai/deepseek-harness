@@ -4,6 +4,7 @@ import SandboxPolicy, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { PtcCalls } from '../src/ptc-calls.ts'
+import { CodeRunFailedError } from '../src/errors.ts'
 
 async function setup() {
   const ctx = new Context()
@@ -96,8 +97,9 @@ it('resets from the host while a call is stuck and blocks admission until releas
   let activeSignal: AbortSignal | undefined
   const first = calls.run(session.id, signal, () => undefined, async (current) => { activeSignal = current; await cleanup.promise })
   const release = vi.fn(async () => { releaseStarted.resolve(undefined); await released.promise })
-  const reset = calls.reset(session.id, release)
-  const nextBody = vi.fn(async () => 'fresh')
+  const notify = vi.fn()
+  const reset = calls.reset(session.id, release, notify)
+  const nextBody = vi.fn(async () => { expect(notify).toHaveBeenCalledOnce(); return 'fresh' })
   const next = calls.run(session.id, signal, () => undefined, nextBody)
   try {
     expect(activeSignal?.aborted).toBe(true)
@@ -108,6 +110,7 @@ it('resets from the host while a call is stuck and blocks admission until releas
     released.resolve(undefined)
     await released.promise
     expect(nextBody).not.toHaveBeenCalled()
+    expect(notify).not.toHaveBeenCalled()
     cleanup.resolve(undefined)
     await reset
     expect(await next).toBe('fresh')
@@ -130,11 +133,22 @@ it('waits for call cleanup after release fails and refuses code until an explici
     expect(nextBody).not.toHaveBeenCalled()
     cleanup.resolve(undefined)
     await Promise.all([first, rejection, nextRejection])
-    await expect(calls.run(session.id, signal, mode, nextBody)).rejects.toThrow('release failed')
+    await expect(calls.run(session.id, signal, mode, nextBody)).rejects.toThrow(CodeRunFailedError)
+    await expect(calls.run(session.id, signal, mode, nextBody)).rejects.toThrow('ask the host to retry reset')
     expect(nextBody).not.toHaveBeenCalled()
     await calls.reset(session.id, async () => {})
     expect(await calls.run(session.id, signal, mode, async () => 'fresh')).toBe('fresh')
   } finally { cleanup.resolve(undefined); await Promise.allSettled([first, reset, next]) }
+})
+
+it('keeps admission blocked if the reset notice cannot be queued', async () => {
+  const { session, calls, mode, signal } = await setup()
+  await expect(calls.reset(session.id, async () => {}, () => { throw new Error('notice failed') })).rejects.toThrow('notice failed')
+  const next = vi.fn(async () => 'fresh')
+  await expect(calls.run(session.id, signal, mode, next)).rejects.toThrow('ask the host to retry reset')
+  expect(next).not.toHaveBeenCalled()
+  await calls.reset(session.id, async () => {})
+  expect(await calls.run(session.id, signal, mode, next)).toBe('fresh')
 })
 
 it('waits for an idle reset during executor disposal and refuses further resets', async () => {

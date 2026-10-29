@@ -16,7 +16,7 @@ export class CodeRunFailedError extends HarnessError {
   }
 }
 
-/** A host reset failed; retained state cannot be trusted until reset succeeds. */
+/** A host reset is unsupported or failed; cleanup failures require an explicit retry. */
 export class CodeResetFailedError extends HarnessError {
   constructor(message: string) {
     super(message, 'CODE_RESET_FAILED')

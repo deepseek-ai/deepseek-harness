@@ -2,6 +2,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
+import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
+import { CodeRunFailedError } from './errors.ts'
 
 interface Call {
   mode: SandboxMode | undefined
@@ -55,7 +57,9 @@ export class PtcCalls {
     for (;;) {
       const reset = this.resets.get(sessionId)
       if (reset !== undefined) {
-        await reset.done
+        try { await reset.done } catch (error) {
+          throw new CodeRunFailedError(`Program environment is unavailable after a failed host reset: ${toolErrorMessage(error)}. State may not be cleared; ask the host to retry reset before running more code.`)
+        }
         continue
       }
       const pending = [...this.calls.get(sessionId) ?? []].filter(call => call.signal.aborted)
@@ -83,9 +87,10 @@ export class PtcCalls {
    * A failed release blocks new calls until a later reset succeeds.
    * @param sessionId - Calling Session.
    * @param release - Host operation that terminates and cleans the owned environment.
+   * @param notify - Queue the state-loss notice after cleanup and before admitting new calls.
    * @returns Completion after release and all canceled calls settle; concurrent resets share it.
    */
-  reset(sessionId: SessionId, release: () => Promise<void>): Promise<void> {
+  reset(sessionId: SessionId, release: () => Promise<void>, notify?: () => void): Promise<void> {
     if (this.disposed) return Promise.reject(new Error('PTC tool executor disposed'))
     const previous = this.resets.get(sessionId)
     if (previous !== undefined && !previous.settled) return previous.done
@@ -95,13 +100,16 @@ export class PtcCalls {
     const calls = [...this.calls.get(sessionId) ?? []]
     for (const call of calls) call.controller.abort(new Error('PTC environment reset'))
     void Promise.allSettled([Promise.resolve().then(release), ...calls.map(call => call.done)]).then((results) => {
-      reset.settled = true
       const failure = results.find(result => result.status === 'rejected')
-      if (failure !== undefined) done.reject(failure.reason)
-      else {
-        this.resets.delete(sessionId)
-        done.resolve(undefined)
-      }
+      if (failure !== undefined) throw failure.reason
+      notify?.()
+    }).then(() => {
+      reset.settled = true
+      this.resets.delete(sessionId)
+      done.resolve(undefined)
+    }, (error: unknown) => {
+      reset.settled = true
+      done.reject(error)
     })
     return reset.done
   }
