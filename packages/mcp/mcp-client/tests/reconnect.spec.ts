@@ -42,7 +42,7 @@ const {
       await mockConnect.call(this)
     }
     close = mockClose
-    getServerCapabilities = () => ({ tools: {} })
+    getServerCapabilities = (): object => ({ tools: {} })
     getInstructions(): string | undefined { return undefined }
     listResources = async () => ({ resources: [] })
     listTools = mockListTools
@@ -222,8 +222,9 @@ describe('reconnect supervisor', () => {
       const failure = new Error('transport rejected private-token')
       mockCallTool.mockRejectedValue(failure)
       vi.spyOn(instances[0]!, 'listResources').mockRejectedValue(failure)
+      vi.spyOn(instances[0]!, 'getServerCapabilities').mockReturnValue({ tools: {}, resources: {} })
       for (const name of ['mcp__srv__remote', 'list_mcp_resources']) {
-        const result = await ctx.tools.execute({
+        const result = await executeToolFixture(ctx, {
           name, arguments: name === 'list_mcp_resources' ? { server: 'srv' } : {},
           callId: nextCallId(), signal: testToolSignal,
         })
@@ -246,7 +247,7 @@ describe('reconnect supervisor', () => {
       await handle.ready
       const message = 'upstream rejected Bearer test-secret'
       mockCallTool.mockResolvedValue({ isError: true, content: [{ type: 'text', text: message }] })
-      const result = await ctx.tools.execute({ name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: testToolSignal })
+      const result = await executeToolFixture(ctx, { name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: testToolSignal })
       expect(result.isError).toBe(true)
       if (!result.isError) throw new Error('expected MCP failure')
       expect(result.error.message).toBe(expandTemplates ? 'upstream rejected Bearer [redacted]' : message)

@@ -237,9 +237,9 @@ export default class McpServerManager extends TypertRemoteService {
     }
     const owner = this.ctx.fiber
     const registrations = this.registrations
-    this.ctx.on('internal/config', function (this: Fiber, _raw, next) {
+    this.ctx.on('internal/config', (fiber, next) => {
       const raw: unknown = next()
-      if (this !== owner) return raw
+      if (fiber !== owner) return raw
       const servers = McpServerManager.Config(raw as ConfigInput).servers.get()
       validateEntries(servers)
       const taken = Object.keys(servers).find(name => registrations.has(name))
