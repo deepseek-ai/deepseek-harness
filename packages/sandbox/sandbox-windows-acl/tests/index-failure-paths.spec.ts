@@ -223,6 +223,16 @@ describe('AclSandbox constructor validation', () => {
       .toThrow(/read-only does not accept write SIDs/u)
   })
 
+  it('requires a distinct SID for private temp writes', () => {
+    const workspace = realpathSync.native(scratch())
+    const temp = scratch()
+    expect(() => new AclSandbox({ writableDirs: [workspace], tempDir: temp, mode: 'workspace-write' }))
+      .toThrow(/requires a temp write SID/u)
+    expect(() => new AclSandbox({
+      writableDirs: [workspace], tempDir: temp, tempWriteSid: directoryWriteSid(workspace), mode: 'workspace-write',
+    })).toThrow(/must be distinct/u)
+  })
+
   it('rejects a temp SID when temp writes are disabled', () => {
     const workspace = scratch()
     expect(() => new AclSandbox({
@@ -250,11 +260,11 @@ describe('AclSandbox init', () => {
     expect(setNamedSecurityInfoW).toHaveBeenCalledTimes(2)
   })
 
-  it('places every directory SID and the separate temp SID in the restricted token', async () => {
+  it.each([true, false])('places directory SIDs in the token and selects the default DACL (private temp: %s)', async (privateTemp) => {
     const { convertStringSidToSidW, createRestrictedToken, setEntriesInAclW } = state.stubs as HappyStubs
     const workspace = scratch()
     const memory = scratch()
-    const temp = scratch()
+    const temp = privateTemp ? scratch() : null
     const parsed: bigint[] = []
     convertStringSidToSidW.mockImplementation((_sid: string, slot: NativePtr) => {
       const pointer = BigInt(101 + parsed.length)
@@ -263,22 +273,24 @@ describe('AclSandbox init', () => {
       return 1
     })
     const sandbox = new AclSandbox({
-      writableDirs: [workspace, memory], tempDir: temp, tempWriteSid: 'S-1-4-9000-1-1', mode: 'workspace-write',
+      writableDirs: [workspace, memory], tempDir: temp, mode: 'workspace-write',
+      ...(privateTemp ? { tempWriteSid: 'S-1-4-9000-1-1' } : {}),
     })
     try {
       await sandbox.init()
-      const expectedSids = [...sandbox.writeSids, sandbox.tempWriteSid]
+      const expectedSids = [...sandbox.writeSids]
+      if (sandbox.tempWriteSid !== undefined) expectedSids.push(sandbox.tempWriteSid)
       expect(convertStringSidToSidW).toHaveBeenCalledTimes(expectedSids.length)
       expectedSids.forEach((sid, index) => {
         expect(convertStringSidToSidW).toHaveBeenNthCalledWith(index + 1, sid, expect.anything())
       })
       const call = createRestrictedToken.mock.calls[0]!
-      expect(call[6]).toBe(5)
+      expect(call[6]).toBe(expectedSids.length + 2)
       const entries = call[7] as Buffer
       expect(parsed.map((_pointer, index) => entries.readBigUInt64LE((index + 2) * abi.SID_AND_ATTRIBUTES_SIZE))).toEqual(parsed)
       const defaultDaclMerge = setEntriesInAclW.mock.calls.find(call => call[2] === 88n)!
       const defaultEntry = defaultDaclMerge[1] as Buffer
-      expect(defaultEntry.readBigUInt64LE(abi.TRUSTEE_W_OFFSET + abi.TRUSTEE_W_PTSTRNAME_OFFSET)).toBe(parsed[2])
+      expect(defaultEntry.readBigUInt64LE(abi.TRUSTEE_W_OFFSET + abi.TRUSTEE_W_PTSTRNAME_OFFSET)).toBe(parsed[privateTemp ? 2 : 0])
     } finally { sandbox.dispose() }
   })
 

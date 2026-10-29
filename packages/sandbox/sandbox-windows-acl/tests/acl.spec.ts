@@ -443,18 +443,7 @@ describe.skipIf(!isWin32)('ACL editing', () => {
     expect(readDirectAces(api, nestedTemp).some(ace => ace.sid === privateTempSid)).toBe(false)
   })
 
-  it('workspace-write requires explicit temp authority and a nonempty token capability list', () => {
-    const dir = scratch()
-    expect(() => new AclSandbox({ writableDirs: [dir], mode: 'workspace-write' }))
-      .toThrow(/requires an explicit private temp directory or null/)
-    expect(() => new AclSandbox({ writableDirs: [dir], tempDir: dir, mode: 'workspace-write' }))
-      .toThrow(/requires a temp write SID/)
-    expect(() => new AclSandbox({
-      writableDirs: [dir],
-      tempDir: dir,
-      tempWriteSid: directoryWriteSid(dir),
-      mode: 'workspace-write',
-    })).toThrow(/must be distinct/)
+  it('workspace-write requires a nonempty token capability list', () => {
     expect(() => createRestrictedToken({} as never, 0n as never, 0n as never, [], { world: 0n as never }, 'workspace-write'))
       .toThrow(/requires at least one write SID/)
   })
