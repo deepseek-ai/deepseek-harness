@@ -25,11 +25,11 @@ export const Config: z<Config> = z.object({})
 const REMOVED_CONFIG_KEYS = ['interrupt', 'freshProvider', 'forkProvider'] as const
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
-const TEAM_POLICY = `A shared task board is available in this session. Task owners use agent names from list_agents, or Session ids when no name is bound. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+const TEAM_POLICY = `A shared task board is available to every agent in your subagent tree. Task owners use agent names from list_agents, or Session ids when no name is bound. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
-Record expected write scopes on shared tasks and use dependencies when work must be ordered. Write-scope overlap is advisory, not a lock. List tasks, read their details, claim with the current revision, perform the work, then complete the task. Task readiness does not start an agent; use send_message to start an inactive agent when needed.
+Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
-Task changes end current wait_agent calls in your subagent tree. After wait_agent returns, read the latest tasks before acting.`
+Task changes end current wait_agent calls in your subagent tree. Changes outside a wait are not retained as notifications, and no task-board messages are added to an inbox. After wait_agent returns, read the latest tasks before acting. Task changes do not start idle agents; use send_message when an agent needs to continue working.`
 
 /** One shared task, matching the public `TeamTaskView`. */
 const TASK_VIEW_SCHEMA = {
@@ -114,6 +114,22 @@ function install(agent: Agent, ctx: Context): () => void {
       name: 'team:policy',
       order: scoped.systemPrompt.getSectionOrder('TEAM_POLICY'),
       text: TEAM_POLICY,
+    }))
+    register(scoped.systemPrompt.context({
+      name: 'team:identity',
+      order: scoped.systemPrompt.getContextOrder('TEAM_IDENTITY'),
+      required: true,
+      interpolate: false,
+      text: () => {
+        try {
+          return `Your name is ${JSON.stringify(ctx.subagentNames.nameOf(ctx.subagents.rootOf(agent).session, agent.id))}. Your team lead is "lead".
+Use list_agents({}) to find your teammates and their full names.
+Use send_message({ name: "<full agent path>", message: "..." }) to message a teammate.`
+        } catch (error: unknown) {
+          if (!(error instanceof SubagentError) || error.code !== 'UNAUTHORIZED') throw error
+          return 'Your Team root agent is unavailable. Continue independent work; shared tasks, subagent discovery, and messaging require an active root.'
+        }
+      },
     }))
     register(scoped.tools.register(defineTool({
       name: 'team_task_create',

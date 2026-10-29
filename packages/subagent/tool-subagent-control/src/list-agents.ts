@@ -80,7 +80,7 @@ export function registerListAgents(ctx: Context): () => void {
       + 'Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. '
       + 'Rows also include available names alongside Session ids. '
       + 'You can message any other agent in the subagent tree listed as running or inactive. '
-      + 'running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. '
+      + 'running means it is working; inactive means it is not currently working. '
       + 'While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. '
       + 'Use send_message to continue the conversation.',
     parameters: {},

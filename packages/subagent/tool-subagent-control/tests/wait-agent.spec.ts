@@ -53,12 +53,11 @@ async function startWait(ctx: Context, agent: Agent, args: unknown = {}, signal 
 }
 
 describe('wait_agent', () => {
-  it('registers with shared root identity and no Team policy', async () => {
+  it('registers without Team policy or root communication context', async () => {
     const { ctx, agent } = await setup()
     const assembled = await ctx.systemPrompt.assemble({ agent, scope: agent })
     expect(assembled.sections.some(section => section.name === 'subagent:policy')).toBe(false)
-    expect(assembled.contexts.some(context => context.name === 'team:identity')).toBe(false)
-    expect(renderContextSnapshot(assembled)).toContain('You are the root agent named "lead".')
+    expect(assembled.contexts.some(context => context.name === 'subagent:identity' || context.name === 'team:identity')).toBe(false)
     expect(renderContextSnapshot(assembled)).not.toContain('Your parent agent id')
     expect(ctx.tools.get('wait_agent', agent)).toBeDefined()
     expect(JSON.stringify(ctx.tools.schemas(agent))).not.toMatch(/\b(?:Team|teammate|Lead)\b/)

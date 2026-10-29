@@ -122,19 +122,19 @@ Fixed schema cost per request, independent of the number or descriptions of chil
 
 The schema prefix stays stable while these tools are available. A parent and its continuable children, including fork children, inherit the same definitions.
 
-### Identity and communication context
+### Communication context
 
 #### What the model sees
 
-Required `subagent:identity` runtime context identifies the root as `lead`, and each delegated child by its full name, direct parent, and root. It is independent of Team mode and tool filtering. Before a name is bound, it explicitly uses the Session id as the agent address; a missing live root is reported without preventing independent work. Required `subagent:communication` context explains discovery and messaging only when their standard tools are admitted. Delegated children also receive guidance to message their parent when a finding changes its next action. Automatic result delivery remains owned by the subagent service.
+The logged `subagent:communication` runtime context tells delegated children their direct creator’s JSON-encoded Session id and how to send findings that change the parent’s next action. Named controls also accept this id. Sending a message does not end the turn. Root Agents and ordinary Session forks receive no communication context; delegated children receive it only when the standard messaging definition is admitted in the current scope and step. Automatic result delivery remains owned by the subagent service.
 
 #### Token effect
 
-Two short context entries per agent, independent of tree size.
+One short context entry per delegated child, independent of tree size.
 
 #### KV Cache effect
 
-Identity and communication guidance follow inherited history as logged runtime context, leaving the shared system prompt and tool definitions unchanged. Names come from the root mapping; a later binding updates the next request. Required context survives optional-context suppression and is restored after compaction. Team mode changes neither entry.
+Communication guidance is retained as runtime context after inherited history, leaving the shared system prompt and tool definitions unchanged between parent and child. The parent id comes from the child Session header; prompt assembly does not wait for a name binding or read the name map.
 
 ### Interrupt result
 
@@ -168,7 +168,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-The first row is `<id> [<status>] — lead: root agent`. Each continuable descendant follows as `<id> [<status>] parent=<parent-id> depth=<n> — <label>`. When a name is available, the text prefixes the label with `<name>: `; canonical rows retain the original `label` and add `name` separately. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics retain the id, reason, parent, and depth, with an optional name after ` — `. Status describes turn activity, not task completion, success, or failure.
+The first row is `<id> [<status>] — lead: root agent`. Each continuable descendant follows as `<id> [<status>] parent=<parent-id> depth=<n> — <label>`. When a name is available, the text prefixes the label with `<name>: `; canonical rows retain the original `label` and add `name` separately. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics retain the id, reason, parent, and depth, with an optional name after ` — `. Status describes turn activity, not task completion.
 
 #### Token effect
 

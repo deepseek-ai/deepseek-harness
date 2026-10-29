@@ -253,13 +253,13 @@ describe('dsh-tool-subagent-control', () => {
     expect(texts[0]).toBe('fork task')
     expect(texts[1]).toContain('Your final answer is delivered automatically')
     expect(texts[1]).not.toContain('send_message')
-    expect(JSON.stringify(adapter.requests[1]!.messages)).toContain('Your parent agent is')
+    expect(JSON.stringify(adapter.requests[1]!.messages)).toContain('Your parent agent id is')
     expect(loaded.events.some(event => event.type === 'user/message' && event.data.source.kind === 'runtime-context'
-      && JSON.stringify(event.data.content).includes('Your parent agent is'))).toBe(true)
+      && JSON.stringify(event.data.content).includes('Your parent agent id is'))).toBe(true)
     expect(adapter.requests[1]!.messages[0]).toEqual(adapter.requests[0]!.messages[0])
   })
 
-  it('uses the root name without exposing its raw id in logged identity context', async () => {
+  it('JSON-encodes communication ids in logged runtime context', async () => {
     const { ctx } = await setup([textResponse('child done')])
     const parent = await ctx.agentLoop.create(SessionId('parent"\nagent'), { provider: 'mock', model: 'mock' })
     parkParent(ctx, parent)
@@ -273,11 +273,11 @@ describe('dsh-tool-subagent-control', () => {
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const prompt = loaded.events.find(event => event.type === 'user/message' && event.data.source.kind === 'runtime-context'
-      && event.data.content.some(block => block.type === 'text' && block.text.includes('Your parent agent is')))
+      && event.data.content.some(block => block.type === 'text' && block.text.includes('Your parent agent id is')))
     if (prompt?.type !== 'user/message') throw new Error('expected logged communication context')
     const guidance = text(prompt.data)
 
-    expect(guidance).toContain('Your parent agent is "lead"')
+    expect(guidance).toContain(`Your parent agent id is ${JSON.stringify(parent.id)}`)
     expect(guidance).not.toContain(parent.id)
   })
 
@@ -292,36 +292,23 @@ describe('dsh-tool-subagent-control', () => {
       sessionId: SessionId('ordinary-fork'), meta: { parentSession: parent.id },
     })
     const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
-    expect(await communication()).toContain('Message your parent')
+    expect(await communication()).toContain(`Your parent agent id is ${JSON.stringify(parent.id)}`)
     for (const agent of [undefined, parent, fork]) {
       expect(renderContextSnapshot(await ctx.systemPrompt.assemble(agent === undefined ? {} : { agent, scope: agent })))
-        .not.toContain('Message your parent')
+        .not.toContain('Your parent agent id')
     }
     const off = child.ctx.tools.register(defineTool({
       name: 'send_message', description: 'A different tool.', parameters: {},
       output: { schema: { type: 'object', additionalProperties: false, properties: {} }, render: () => [] },
       execute: () => Promise.resolve({}),
     }))
-    expect(await communication()).not.toContain('Message your parent')
-    expect(await communication()).toContain('Your agent address is "communication-child"')
+    expect(await communication()).not.toContain('Your parent agent id')
     off()
-    expect(await communication()).toContain('Message your parent')
+    expect(await communication()).toContain('Your parent agent id')
     child.ctx.tools.restrict({ deny: ['send_message'] })
     const toolSet = await ctx.tools.resolve({ agent: child, modelSelection: { provider: 'mock', model: 'mock' }, signal: testToolSignal })
     expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child, toolSet })))
-      .not.toContain('Message your parent')
-    toolSet.dispose()
-  })
-
-  it('keeps required identity while both discovery and messaging are filtered', async () => {
-    const { ctx, parent } = await setup([])
-    ctx.systemPrompt.suppressRuntimeContext()
-    parent.ctx.tools.restrict({ deny: ['send_message', 'list_agents'] })
-    const toolSet = await ctx.tools.resolve({ agent: parent, modelSelection: { provider: 'mock', model: 'mock' }, signal: testToolSignal })
-    const context = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: parent, scope: parent, toolSet }))
-    expect(context).toContain('You are the root agent named "lead".')
-    expect(context).not.toContain('Use list_agents')
-    expect(context).not.toContain('Use send_message')
+      .not.toContain('Your parent agent id')
     toolSet.dispose()
   })
 
@@ -357,7 +344,7 @@ describe('dsh-tool-subagent-control', () => {
     const childRequest = JSON.stringify(adapter.requests[0]!.messages)
     expect(childRequest.includes('Your final answer is delivered automatically')).toBe(delivery === 'parent')
     expect(childRequest).not.toContain('send_message')
-    expect(childRequest).not.toContain('Your parent agent is')
+    expect(childRequest).not.toContain('Your parent agent id')
     expect(followup.mock.calls.some(([message]) => message.source.kind === 'subagent-settled')).toBe(delivery === 'parent')
   })
 
@@ -522,7 +509,7 @@ describe('dsh-tool-subagent-control', () => {
       setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, parent) },
     })
     const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
-    expect(await communication()).toContain('Your parent agent is')
+    expect(await communication()).toContain('Your parent agent id')
     const names = ['send_message', 'list_agents', 'wait_agent']
     if (config.interrupt !== false) names.push('interrupt_agent')
     for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
@@ -534,9 +521,9 @@ describe('dsh-tool-subagent-control', () => {
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
     await fiber.dispose()
     for (const name of names) expect(ctx.tools.get(name)).toBeUndefined()
-    expect(await communication()).not.toContain('Your parent agent is')
+    expect(await communication()).not.toContain('Your parent agent id')
     const reloaded = await ctx.plugin(tool)
-    expect(await communication()).toContain('Your parent agent is')
+    expect(await communication()).toContain('Your parent agent id')
     for (const name of ['send_message', 'interrupt_agent', 'list_agents', 'wait_agent']) {
       expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
     }

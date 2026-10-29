@@ -195,7 +195,7 @@ class TeamFixtureAdapter extends LlmAdapter {
     const workflowChild = initial?.content[0]?.text === 'TEAM_WORKFLOW_CHILD'
     const context = options.messages.findLast(message => message.source?.kind === 'runtime-context')
     const section = name => context?.source.sections?.find(candidate => candidate.name === name)?.text
-    const role = section('subagent:identity')
+    const role = section('team:identity')
     const task = initial?.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
     if (!workflowChild && (!tools.includes('subagent') || !tools.includes('workflow') || !tools.includes('team_task_create'))) {
       throw new Error('Team profile is missing delegation, workflow, or task tools')
@@ -204,7 +204,7 @@ class TeamFixtureAdapter extends LlmAdapter {
     if (workflowChild) chunks = textChunks('Fresh workflow child complete.')
     else if (task?.startsWith('RESEARCHER_MARK:')) chunks = researcher(options.messages)
     else if (task?.startsWith('IMPLEMENTER_MARK:')) chunks = implementer(options.messages)
-    else if (role?.startsWith('You are the root agent named "lead".')) chunks = lead(options.messages)
+    else if (role?.startsWith('Your name is "lead".')) chunks = lead(options.messages)
     else throw new Error('Team runtime context is missing a recognized identity')
     for (const chunk of chunks) {
       options.signal?.throwIfAborted()
