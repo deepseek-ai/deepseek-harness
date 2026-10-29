@@ -34,13 +34,16 @@ export function TeamModeToggle(props: TeamModeToggleProps) {
 }
 
 /** Read and change the selection only for root Sessions. */
-function RootTeamModeToggle({ useProjection, locked, reportFailure, selectTeamMode, requestDisableConfirmation, t }: TeamModeToggleProps) {
+function RootTeamModeToggle({
+  useProjection, locked, dismiss, reportFailure, selectTeamMode, requestDisableConfirmation, t,
+}: TeamModeToggleProps) {
   const mode = useProjection('agentTeam')
   const modelSelection = useProjection('modelSelection')
   const [pending, setPending] = useState(false)
   if (mode === undefined) return null
   const select = (enabled: boolean): void => {
     if (!enabled && modelSelection !== undefined && modelSelection.lastUsed !== null) {
+      dismiss()
       requestDisableConfirmation()
       return
     }

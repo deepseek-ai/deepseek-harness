@@ -347,6 +347,12 @@
   white-space: nowrap;
 }
 
+.row[aria-disabled="true"] .label,
+.row[aria-disabled="true"] .secondaryLabel {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .label {
   color: inherit;
   font-size: 13px;

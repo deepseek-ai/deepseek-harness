@@ -61,7 +61,7 @@ composer 菜单中的模型名称和推理等级均使用 400（regular）字重
 
 当会话被其他写句柄占用时，模型选择失败提示用户退出其他正在运行的 DSH 后重试。
 
-会话级列表 slot `conversation.input.model.options` 在模型与推理等级选项下方追加控件。Owner props 提供 `locked` 和 `reportFailure(message)`；贡献方读取自身投影并提供专用命令。启用的开关按钮参与菜单键盘导航。
+会话级列表 slot `conversation.input.model.options` 在模型与推理等级选项下方追加控件。Owner props 提供 `locked`、`reportFailure(message)` 和 `dismiss()`，后者关闭菜单并同步聚焦触发按钮，供贡献方随后打开其他浮层；贡献方读取自身投影并提供专用命令。启用的开关按钮参与菜单键盘导航。
 
 -----
 

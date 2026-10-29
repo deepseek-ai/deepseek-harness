@@ -528,6 +528,10 @@ export function ModelSelect(
               )}
               {renderSlot('conversation.input.model.options', {
                 locked: locked || busy,
+                dismiss: () => {
+                  close()
+                  triggerRef.current?.focus()
+                },
                 reportFailure: (message) => { setToast({ seq: ++toastSeq.current, text: message }) },
               })}
             </>

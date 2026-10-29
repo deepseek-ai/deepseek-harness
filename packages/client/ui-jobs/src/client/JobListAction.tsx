@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { JobsSnapshot, JobView, ObservedJob } from '@deepseek-ai/dsh-api-job-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -339,6 +339,7 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
  * @returns the trigger and its popover list, or null when there is nothing to show.
  */
 export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob, t }: JobListActionProps) {
+  const activityId = useId()
   const jobs = useJobs(state => state.rows[sessionId]) ?? NO_JOBS
   const observedViews = useJobs(state => state.observed)
   const [menuState, setMenuState] = useState<{ sessionId: SessionId; mode: 'closed' | 'hover' | 'pinned' }>(
@@ -586,6 +587,7 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
           className={css.trigger}
           aria-expanded={open}
           aria-label={countLabel}
+          aria-describedby={liveRows.length > 0 ? activityId : undefined}
           onPointerEnter={hoverEnter}
           onPointerLeave={hoverLeave}
           onClick={() => { changeOpen(!open || (allowsHoverOpen() && menuState.mode !== 'pinned')) }}
@@ -603,6 +605,7 @@ export function JobListAction({ sessionId, useJobs, watchRows, observe, killJob,
           <span ref={countRef} className={css.count} data-job-count>{countLabel}</span>
         </button>
       </Tooltip>
+      {liveRows.length > 0 && <span id={activityId} hidden>{t('section.live')}</span>}
       {open
         ? createPortal(
           <MenuSurface

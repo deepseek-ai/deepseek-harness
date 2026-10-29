@@ -163,6 +163,7 @@ describe('web e2e: sidebar subagent activity', () => {
     try {
       const jobTrigger = page.getByRole('button', { name: '1 background job', exact: true })
       await jobTrigger.waitFor()
+      expect(await jobTrigger.evaluate(element => document.getElementById(element.getAttribute('aria-describedby')!)?.textContent)).toBe('Running')
       const controls = [
         { trigger: runningTrigger, icon: '[data-icon="dsw-icon-users-outline-regular"]', count: '[data-subagent-count]' },
         { trigger: jobTrigger, icon: '[data-icon="dsw-icon-layers-outline-regular"]', count: '[data-job-count]' },
@@ -180,6 +181,7 @@ describe('web e2e: sidebar subagent activity', () => {
         expect(await trigger.locator('[data-state="ongoing"]').isVisible()).toBe(false)
       }
       expect(await runningTrigger.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(await jobTrigger.evaluate(element => document.getElementById(element.getAttribute('aria-describedby')!)?.textContent)).toBe('Running')
       await compareOrRefreshGolden(
         join(SNAPSHOT_DIR, 'compact-running.expected.md'),
         await captureStableAria(page, 'header:has([data-subagent-action])', scaffold.workspaceCwd),

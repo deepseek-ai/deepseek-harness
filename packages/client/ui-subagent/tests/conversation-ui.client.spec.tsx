@@ -1695,3 +1695,23 @@ it('shows external membership without an execution status or child Session navig
   expect(input.openChild).not.toHaveBeenCalled()
   expect(input.openChildAside).not.toHaveBeenCalled()
 })
+
+
+it.each([false, true])('closes a pinned wide catalog on its next click (hover first: %s)', async (hoverFirst) => {
+  vi.useFakeTimers()
+  render(<HeaderCatalog {...props(catalog())} />)
+  const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+  if (hoverFirst) {
+    fireEvent.pointerEnter(trigger)
+    await act(async () => { await vi.advanceTimersByTimeAsync(150) })
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+  }
+  fireEvent.click(trigger)
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  expect(trigger.getAttribute('aria-expanded')).toBe('true')
+  fireEvent.click(trigger)
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  expect(document.activeElement).toBe(trigger)
+})

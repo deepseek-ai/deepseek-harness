@@ -83,11 +83,11 @@ describe('JobListAction count copy', () => {
     const translate: JobListActionProps['t'] = makeTranslate(dictionary)
     const settled = job({ id: 'settled' as JobView['id'], status: 'completed', finishedAt: 1_700_000_003_000 })
     const { rerender } = render(<JobListAction {...props([job(), settled])} t={translate} />)
-    expect(screen.getByRole('button', { name: one })).toBeDefined()
+    expect(screen.getByRole('button', { name: one, description: dictionary['section.live'] })).toBeDefined()
     rerender(<JobListAction {...props([job({ status: 'stopping' }), settled])} t={translate} />)
-    expect(screen.getByRole('button', { name: one })).toBeDefined()
+    expect(screen.getByRole('button', { name: one, description: dictionary['section.live'] })).toBeDefined()
     rerender(<JobListAction {...props([job({ status: 'completed' }), settled])} t={translate} />)
-    expect(screen.getByRole('button', { name: two })).toBeDefined()
+    expect(screen.getByRole('button', { name: two, description: '' })).toBeDefined()
   })
 })
 
@@ -444,7 +444,7 @@ describe('JobListAction rows', () => {
     const settled = [job({ id: 'bash-2' as JobView['id'], label: 'settled work', status: 'completed', finishedAt: 1_700_000_012_000 })]
     render(<JobListAction {...props([job(), ...settled])} />)
     openList()
-    expect(screen.getByText(zh['section.live'])).toBeDefined()
+    expect(screen.getByText(zh['section.live'], { selector: 'li' })).toBeDefined()
     const toggle = screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '1') })
     // Folded by default while something runs; the toggle expands it.
     expect(toggle.getAttribute('aria-expanded')).toBe('false')

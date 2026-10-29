@@ -7,6 +7,7 @@ import { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ComponentProps } from 'react'
+import type { OwnerOf } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelDirectoryState } from '../src/client/directory.ts'
 import { ModelSelect } from '../src/client/ModelSelect.tsx'
 import { en, zh } from '../src/client/locales.ts'
@@ -1056,4 +1057,21 @@ it('restores the account model name after login without changing the saved route
   act(() => { directory.update((snapshot) => { snapshot.groups = groups; snapshot.routable = true }) })
   expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent).toBe('DeepSeek FlashHigh')
   expect(directory.getSnapshot().current).toEqual(selected)
+})
+
+
+it('dismisses contributed options with focus on the trigger before opening another overlay', () => {
+  const renderSlot = vi.fn((_name: string, _owner: object) => null)
+  render(<ModelSelect locked={false} available directory={createSnapshotStore(state())}
+    load={vi.fn()} select={vi.fn()} t={t} renderSlot={renderSlot} />)
+  const trigger = screen.getByRole('button', { name: /^选择模型/ })
+  fireEvent.click(trigger)
+  const options = renderSlot.mock.calls.find(call => call[0] === 'conversation.input.model.options')
+  if (options?.[0] !== 'conversation.input.model.options') throw new Error('Missing model options')
+  act(() => {
+    screen.getAllByRole('menuitem')[0]!.focus()
+    ;(options[1] as OwnerOf<'conversation.input.model.options'>).dismiss()
+    expect(document.activeElement).toBe(trigger)
+  })
+  expect(screen.queryByRole('menu')).toBeNull()
 })

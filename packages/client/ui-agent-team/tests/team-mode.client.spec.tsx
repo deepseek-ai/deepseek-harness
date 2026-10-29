@@ -20,7 +20,7 @@ function props(enabled: boolean | undefined, selectTeamMode = vi.fn(async () => 
     useProjection: (key: string) => key === 'modelSelection'
       ? requestedModel === 'loading' ? undefined : { lastUsed: requestedModel ? { provider: 'mock', model: 'mock' } : null, next: { provider: 'mock', model: 'mock' } }
       : enabled === undefined ? undefined : { enabled, tasks: [] },
-    locked: false, reportFailure: vi.fn(), selectTeamMode, requestDisableConfirmation: vi.fn(),
+    locked: false, dismiss: vi.fn(), reportFailure: vi.fn(), selectTeamMode, requestDisableConfirmation: vi.fn(),
     t: makeTranslate(zh),
   } as TeamModeToggleProps
 }
@@ -82,6 +82,8 @@ it('requests confirmation before disabling after a recorded model request', () =
   const input = props(true, undefined, undefined, true)
   render(<TeamModeToggle {...input} />)
   fireEvent.click(screen.getByRole('switch'))
+  expect(input.dismiss).toHaveBeenCalledOnce()
+  expect(input.dismiss).toHaveBeenCalledBefore(vi.mocked(input.requestDisableConfirmation))
   expect(input.requestDisableConfirmation).toHaveBeenCalledOnce()
   expect(input.selectTeamMode).not.toHaveBeenCalled()
   expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true')
