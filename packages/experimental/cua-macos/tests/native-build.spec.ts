@@ -108,6 +108,17 @@ it('reads an application that an Electron archive installation keeps beside app.
   expect(f.spawn).not.toHaveBeenCalled()
 })
 
+it('names the expected directory when an installed package carries no helper application', async () => {
+  const f = await fixture()
+  const installed = join(f.root, 'node_modules/@deepseek-ai/dsh-experimental-cua-macos.asar/package')
+  const directory = join(installed, 'native/bin/darwin-arm64')
+  await expect(prepareNativeExecutable({ ...f.spec, packageRoot: installed })).rejects.toThrow(
+    `Computer use helper application is missing from ${directory}; this installation does not include the signed helper`)
+  await mkdir(directory, { recursive: true })
+  await writeFile(join(directory, 'current.json'), '{')
+  await expect(prepareNativeExecutable({ ...f.spec, packageRoot: installed })).rejects.toThrow(SyntaxError)
+})
+
 it.each(['../outside', '/absolute', '', 'a'.repeat(63), 'A'.repeat(64)])('rejects an invalid installed generation %s', async (bundle) => {
   const f = await fixture()
   await mkdir(f.directory, { recursive: true })

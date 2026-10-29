@@ -3,9 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { signMacOSRuntime } from '../scripts/macos-runtime.ts'
-import { signMacOSRuntimeCode, verifyMacOSRuntimeCode } from '../scripts/verify-macos-signature.mjs'
+import { signMacOSRuntimeCode, verifyMacOSNotarizedApplication, verifyMacOSRuntimeCode } from '../scripts/verify-macos-signature.mjs'
 
-vi.mock('../scripts/verify-macos-signature.mjs', () => ({ signMacOSRuntimeCode: vi.fn(), verifyMacOSRuntimeCode: vi.fn() }))
+vi.mock('../scripts/verify-macos-signature.mjs', () => ({
+  signMacOSRuntimeCode: vi.fn(), verifyMacOSNotarizedApplication: vi.fn(), verifyMacOSRuntimeCode: vi.fn(),
+}))
 const roots: string[] = []
 function root(): string {
   const path = mkdtempSync(join(tmpdir(), 'desktop-signing-'))
@@ -26,28 +28,31 @@ it('signs Mach-O files in their final locations and verifies each signature', as
   expect(verifyMacOSRuntimeCode).toHaveBeenCalledWith(join(path, 'addon.node'), identity)
 })
 
-it('verifies an embedded application bundle as a whole and leaves its files unsigned', async () => {
+const helperBundle = 'node_modules/@deepseek-ai/dsh-experimental-cua-macos/native/bin/darwin-arm64/generation/DSH Computer Use.app'
+function machO(path: string): void {
+  mkdirSync(join(path, '..'), { recursive: true })
+  writeFileSync(path, Buffer.from('cffaedfe00000000', 'hex'))
+}
+
+it('verifies the notarized Computer Use helper as a bundle and signs other bundles per file', async () => {
   const path = root()
-  const bundle = 'node_modules/@deepseek-ai/dsh-experimental-cua-macos/native/bin/darwin-arm64/generation/DSH Computer Use.app'
-  for (const nested of ['Contents/MacOS/dsh-cua-native', 'Contents/Frameworks/Inner.app/Contents/MacOS/inner']) {
-    mkdirSync(join(path, bundle, nested, '..'), { recursive: true })
-    writeFileSync(join(path, bundle, nested), Buffer.from('cffaedfe00000000', 'hex'))
-  }
-  writeFileSync(join(path, bundle, 'Contents/Info.plist'), '<plist/>')
-  writeFileSync(join(path, 'addon.node'), Buffer.from('cffaedfe00000000', 'hex'))
-  await expect(signMacOSRuntime(path, 'com.example.app', identity, 'arm64')).resolves.toBe(1)
-  expect(signMacOSRuntimeCode).toHaveBeenCalledExactlyOnceWith(join(path, 'addon.node'), expect.any(String), identity, undefined)
-  expect(vi.mocked(verifyMacOSRuntimeCode).mock.calls).toEqual([[join(path, bundle), identity], [join(path, 'addon.node'), identity]])
+  machO(join(path, helperBundle, 'Contents/MacOS/dsh-cua-native'))
+  writeFileSync(join(path, helperBundle, 'Contents/Info.plist'), '<plist/>')
+  // LibreOffice ships an unsigned application bundle whose executables are signed in place.
+  const office = join(path, 'node_modules/@deepseek-ai/libreoffice-kit-darwin-arm64/program/LibreOfficeDev.app/Contents/MacOS/soffice')
+  machO(office)
+  machO(join(path, 'addon.node'))
+  await expect(signMacOSRuntime(path, 'com.example.app', identity, 'arm64')).resolves.toBe(2)
+  expect(verifyMacOSNotarizedApplication).toHaveBeenCalledExactlyOnceWith(join(path, helperBundle), identity)
+  expect(vi.mocked(signMacOSRuntimeCode).mock.calls.map(([file]) => file).sort()).toEqual([join(path, 'addon.node'), office].sort())
 })
 
-it('rejects an application bundle without the release signature before signing any file', async () => {
+it('rejects a helper bundle that fails notarized-application verification before signing any file', async () => {
   const path = root()
-  const bundle = join(path, 'Helper.app/Contents/MacOS')
-  mkdirSync(bundle, { recursive: true })
-  writeFileSync(join(bundle, 'helper'), Buffer.from('cffaedfe00000000', 'hex'))
-  writeFileSync(join(path, 'addon.node'), Buffer.from('cffaedfe00000000', 'hex'))
-  vi.mocked(verifyMacOSRuntimeCode).mockImplementationOnce(() => { throw new Error('signature does not match the release identity') })
-  await expect(signMacOSRuntime(path, 'com.example.app', identity, 'arm64')).rejects.toThrow('release identity')
+  machO(join(path, helperBundle, 'Contents/MacOS/dsh-cua-native'))
+  machO(join(path, 'addon.node'))
+  vi.mocked(verifyMacOSNotarizedApplication).mockImplementationOnce(() => { throw new Error('stapler validate exited with 65') })
+  await expect(signMacOSRuntime(path, 'com.example.app', identity, 'arm64')).rejects.toThrow('stapler validate')
   expect(signMacOSRuntimeCode).not.toHaveBeenCalled()
 })
 
