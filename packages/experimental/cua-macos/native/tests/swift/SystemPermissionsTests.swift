@@ -57,7 +57,7 @@ func finderSelectionRejectsAnotherOrRemovedApplication() throws {
     #expect(throws: (any Error).self) { try permissions.revealApplication(root.appendingPathComponent("Other.app").path) }
     #expect(revealed.isEmpty)
     #expect(try permissions.revealApplication(app.path)["revealed"] == .bool(true))
-    #expect(revealed == [app])
+    #expect(revealed.map(\.path) == [app.path])
     try FileManager.default.removeItem(at: app)
     #expect(throws: (any Error).self) { try permissions.revealApplication(app.path) }
     #expect(revealed.count == 1)
