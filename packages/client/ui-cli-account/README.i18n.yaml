@@ -3,50 +3,50 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-cli-account/README.md
 /:
-  en: e49d68d248f36cad
-  zh: 3ec31254dd83e58b
+  en: 2a9fe27e72f4a975
+  zh: 969761d0befd982e
 /deepseek-ai-dsh-client-ui-cli-account:
   en: 9459a591a9b82dd8
   zh: cb4059b1ef791c5c
 /deepseek-ai-dsh-client-ui-cli-account/summary:
-  en: 543480ffecd1db84
-  zh: c6c564bd3830b1e8
+  en: cb14be46b7eb347e
+  zh: 2f4478ad48ea8fd2
 /deepseek-ai-dsh-client-ui-cli-account/table-of-contents:
   en: d152484eb41ac6b4
   zh: 5b6bd00fce5371c3
 /deepseek-ai-dsh-client-ui-cli-account/use-this-package:
-  en: 833ecd065f2d155a
-  zh: 347c28933ce652b6
+  en: 82bc46a60479254c
+  zh: 8b0ea3415ab8a35b
 /deepseek-ai-dsh-client-ui-cli-account/use-this-package/when-to-choose-it:
   en: c63cdee18f15d294
   zh: ce6105e42a08add5
-/deepseek-ai-dsh-client-ui-cli-account/use-this-package/import-it:
-  en: 11de80ae029060b6
-  zh: 1a015a9f08a6c077
-/deepseek-ai-dsh-client-ui-cli-account/use-this-package/connection-mirror:
-  en: 6af5224197752d85
-  zh: ee237ea0c6b5096f
+/deepseek-ai-dsh-client-ui-cli-account/use-this-package/register-an-account:
+  en: 14d247f65f5a3dfa
+  zh: 7300c38f179e5ee1
+/deepseek-ai-dsh-client-ui-cli-account/use-this-package/present-the-section:
+  en: faab698b3dd76448
+  zh: 85d24414e05606f5
+/deepseek-ai-dsh-client-ui-cli-account/use-this-package/following-operations:
+  en: 2c9eb9885c50592e
+  zh: bc7619a5173f161b
 /deepseek-ai-dsh-client-ui-cli-account/use-this-package/shared-dictionary-keys:
-  en: 150d9df6824f2636
-  zh: 9b6d68043b1bb730
-/deepseek-ai-dsh-client-ui-cli-account/use-this-package/components:
-  en: 2ef238529bb61294
-  zh: ede59a7b5e75b44d
+  en: f9a8b0974afb8bf9
+  zh: 334b9d8fc711aec1
 /deepseek-ai-dsh-client-ui-cli-account/understand-the-implementation:
-  en: 49b07dcf9d1d9810
-  zh: d6100e7aba70a06c
+  en: 5ec779496ac5f7dd
+  zh: ec3938ad0a9656d9
 /deepseek-ai-dsh-client-ui-cli-account/further-exploration:
-  en: 3a734faf91117774
-  zh: ec057434b2d19223
+  en: 368d56aaef042324
+  zh: 00314c6285c0beb9
 /deepseek-ai-dsh-client-ui-cli-account/model-experience:
-  en: 525d8f762d62abcd
-  zh: dfdbba035632096a
+  en: 47f94c48dcc93bae
+  zh: 9584dee7c543c6c7
 /deepseek-ai-dsh-client-ui-cli-account/model-experience/kv-cache-effect:
-  en: ca75c51c89c2c9b0
-  zh: 6e1c9a8fdde89577
+  en: 4cd0965a7997970e
+  zh: 81b3b87b2ba4756f
 /deepseek-ai-dsh-client-ui-cli-account/known-limitations-and-deferred-work:
-  en: 3ef957892d693131
-  zh: 81e65fee74a7ef0b
+  en: bb83d0b097834b84
+  zh: c39b0869c99aa9eb
 /deepseek-ai-dsh-client-ui-cli-account/known-limitations-and-deferred-work/dev-note:
-  en: e67f633dc6fe7773
-  zh: e88aeb617ffb74ea
+  en: 00853dccb6e5f32c
+  zh: 8b082da910fc429a

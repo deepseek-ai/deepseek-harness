@@ -81,7 +81,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-settings-session-log/`](ui-settings-session-log/README.md) | Controls API Session-log upload in General settings | — |
 | [`ui-settings-subagent/`](ui-settings-subagent/README.md) | Provides the Subagent settings page on the Plugins page | — |
 | [`ui-settings-web-search/`](ui-settings-web-search/README.md) | Provides the web-search settings page on the Plugins page | — |
-| [`ui-cli-account/`](ui-cli-account/README.md) | Shares the account section, tag, activation prompt, confirmations, and notices that CLI app plugins show on the Plugins page | — |
+| [`ui-cli-account/`](ui-cli-account/README.md) | Shows the account section, tag, activation prompt, confirmations, and notices that CLI app plugins register on the Plugins page | `ctx.cliAccounts` |
 | [`ui-dingtalk/`](ui-dingtalk/README.md) | Shows the DingTalk plugin's account section, tag, activation guidance, and notices on the Plugins page | — |
 | [`ui-plugin-manager/`](ui-plugin-manager/README.md) | Contributes the sidebar Plugins panel: install, enable, disable, retry, and compose installed packages | — |
 | [`ui-entry-customization/`](ui-entry-customization/README.md) | Adds region-local More menus that pin or unpin plugin launchers and start a plugin draft | — |
