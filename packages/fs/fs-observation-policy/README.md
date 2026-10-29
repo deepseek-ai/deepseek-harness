@@ -25,6 +25,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+`fs/delete-intent` requires the same present observation as `fs/edit-intent`: unseen sources fail with `FS_NOT_OBSERVED`, confirmed-absent sources fail with `FS_NOT_FOUND`, and present sources supply their observed version. Patches and move sources reuse `fs/edit-intent`; move destinations reuse `fs/write-intent`.
+
 Load this plugin alongside a `ctx.fs` backend and the `dsh-tool-fs` tools when a deployment wants the model to read a file before it can overwrite or edit it. The plugin needs no configuration and injects no service; it only listens for the `fs/*` events the tools dispatch.
 
 ### Minimal composition
@@ -66,12 +68,12 @@ The plugin is built on two ideas:
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | The three `fs/*` listeners and the observed-state gate |
+| [`src/index.ts`](src/index.ts) | The four `fs/*` listeners and the observed-state gate |
 | [`src/types.ts`](src/types.ts) | The opaque event actor shape from which the owner session is derived |
 
 ### Decision flow
 
-`fs/write-intent` resolves unseen or confirmed absent to `{ kind: 'createIfAbsent' }` and observed present to `{ kind: 'replaceIfVersion', version: vObserved }`. `fs/edit-intent` rejects an unseen target with `FS_NOT_OBSERVED`, a confirmed-absent target with `FS_NOT_FOUND`, and otherwise supplies the observed version as the compare-and-swap basis. `fs/observed` records `{ kind: 'present', version }` or `{ kind: 'absent' }` for the owner and target — a synchronous, side-effect-only `WeakMap.set`, because successful mutations have already committed.
+`fs/write-intent` maps unseen or absent state to guarded creation and present state to guarded replacement. `fs/edit-intent` and `fs/delete-intent` share the present-state check. `fs/observed` synchronously records presence/version or absence for the opaque owner and target. All four listeners and the recorded state are released on disposal.
 
 ### Single-slot, first-wins
 

@@ -49,7 +49,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-sidebar-documentpreview/`](ui-sidebar-documentpreview/README.md) | Displays documents in right Sidebar tabs | `ctx.documentPreviews` |
 | [`ui-sidebar-browser/`](ui-sidebar-browser/README.md) | Browses sandboxed HTTP(S) pages, including loopback services, in right-Sidebar tabs | — |
 | [`resources/`](resources/README.md) | Unified resource model: protocol providers behind the `useResource` session standard hook | `ctx.resources` |
-| [`ui-sidebar-files/`](ui-sidebar-files/README.md) | Right-Sidebar workspace file tree tab type | — |
+| [`ui-sidebar-files/`](ui-sidebar-files/README.md) | The workspace files page and one workspace tree per pane beside docked and floating previews | — |
 | [`ui-brand-official/`](ui-brand-official/README.md) | Fills the generic browser-brand slots with the official name and marks | — |
 | [`ui-workspace/`](ui-workspace/README.md) | Provides workspace selection and creation surfaces | — |
 | [`ui-conversation/`](ui-conversation/README.md) | Presents the active conversation and its input surface | — |
@@ -66,7 +66,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-secret-mask/`](ui-secret-mask/README.md) | Masks recognized credentials in sent user text | — |
 | [`ui-subagent/`](ui-subagent/README.md) | Provides subagent navigation, child transcript states, and inline references | — |
 | [`ui-jobs/`](ui-jobs/README.md) | Lists this session's background jobs with on-demand streaming record panels | — |
-| [`ui-schedule/`](ui-schedule/README.md) | Lists the current Session's active reminders in a read-only header catalog | — |
+| [`ui-schedule/`](ui-schedule/README.md) | Provides the sidebar Automation tasks page and right Sidebar task tab, which create, edit, run, pause, resume, and delete Host scheduled tasks, plus the Session header clock and row mark | — |
 | [`ui-model-selection/`](ui-model-selection/README.md) | Provides model selection in conversation surfaces | — |
 | [`ui-permission-presets/`](ui-permission-presets/README.md) | Configures default permissions and switches the current session's access | — |
 | [`ui-plan/`](ui-plan/README.md) | Presents active plan-mode status and its exit control | — |

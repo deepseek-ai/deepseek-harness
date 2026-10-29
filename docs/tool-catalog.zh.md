@@ -34,11 +34,11 @@
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.workingDirectory`、`ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 bash 工具；部署组合提供 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.workingDirectory`、`ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 pwsh 工具，持久 bash 工具的 Windows 对应物；部署组合提供 pwsh 方言的 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`、`ctx.fs` | `tool/call`、`fs/observed after view presence/absence, edit absence, or successful mutation`、`tool/result` | - | 基于文件系统 seam 的独立查看／创建／唯一字面量替换／按行插入工具；可与任何 shell 或终端接口组合。 |
-| `@deepseek-ai/dsh-tool-fs` | `edit`、`read`、`read_image`、`write` | `ctx.workingDirectory`、`ctx.tools`、`ctx.fs`、`ctx.systemPrompt`、`ctx.attachments (image-tool registration)`、`ctx.llm + an image-capable route (image-tool execution)` | `tool/call`、`fs/write-intent or fs/edit-intent for mutations`、`fs/observed after read presence/absence or successful file operation`、`durable attachment (read_image)`、`tool/result` | - | 先读后写／编辑策略由 `@deepseek-ai/dsh-fs-observation-policy` 添加；它是一个 `fs/*` 事件门禁插件，不会改变 schema。加载这些工具的部署按预期也应加载该插件。没有 `ctx.attachments` 时图片工具不会注册；其 schema 与路由无关，执行时除非确切路由的模型声明图片输入，否则拒绝。 |
+| `@deepseek-ai/dsh-tool-fs` | `apply_patch`、`edit`、`read`、`read_image`、`write` | `ctx.workingDirectory`、`ctx.tools`、`ctx.fs`、`ctx.systemPrompt`、`ctx.attachments (image-tool registration)`、`ctx.llm + an image-capable route (image-tool execution)` | `tool/call`、`fs/write-intent, fs/edit-intent, or fs/delete-intent for mutations`、`fs/observed after read presence/absence or successful file operation`、`durable attachment (read_image)`、`tool/result` | - | 先读后写／编辑策略由 `@deepseek-ai/dsh-fs-observation-policy` 添加；它是一个 `fs/*` 事件门禁插件，不会改变 schema。加载这些工具的部署按预期也应加载该插件。没有 `ctx.attachments` 时图片工具不会注册；其 schema 与路由无关，执行时除非确切路由的模型声明图片输入，否则拒绝。`apply_patch` 仅在 `applyPatch: true` 时注册；目录为了记录其 schema 而开启该开关，而随发行版交付的组合在各自的 `tool-fs` 行上保持关闭。 |
 | `@deepseek-ai/dsh-tool-fs-search` | `glob`、`grep` | `ctx.workingDirectory`、`ctx.tools`、`ctx.subprocess`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn 随包提供的 ripgrep 二进制文件（`@vscode/ripgrep`），并作为普通前台调用运行，绝不作为后台任务；无需在宿主机安装 `rg`，也不经过 shell 层。本目录使用 `sampleOverCapGlobResults: true`；部署必须显式选择该行为。结果超过上限时，会通过可选的 ctx.spillStore 后端保存完整的格式化列表；在共置部署中，如果后端公开本地路径，返回的定位信息可供后续读取／搜索。 |
 | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`、`terminal_list`、`terminal_open`、`terminal_read`、`terminal_send`、`terminal_signal` | `ctx.workingDirectory`、`ctx.tools`、`ctx.terminals`、`ctx.systemPrompt`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | 这 6 个终端工具需要选择启用，用于补充一次性 bash／文件系统工具。`terminal_send(run_in_background: true)` 会注册到 `ctx.jobs`；schema 不包含 TUI、具名按键序列、BEL、调整尺寸、自动启动和跨 agent 共享。 |
 | `@deepseek-ai/dsh-tool-goal` | `create_goal`、`get_goal`、`update_goal` | `ctx.tools`、`ctx.agents`、`ctx.goals`、`ctx.systemPrompt`、`a calling Agent in an authorized open turn` | `tool/call`、`goal/change for mutations`、`tool/result` | - | create、edit、pause 和 resume 要求直接来自人类的根权限；complete 和 blocked 也接受确切的当前 Goal Round。blocked 的默认下限是 3 个获准的 Round。 |
-| `@deepseek-ai/dsh-tool-schedule` | `schedule_create`、`schedule_delete`、`schedule_list`、`schedule_update` | `ctx.tools`、`ctx.schedule` | `tool/call`、Schedule storage domain 创建、更新或删除、`tool/result` | - | preset 或 Agent scope 挂载本包；由 preset 决定哪些 agent 获得这四个管理工具。每次调用都作用于调用方 Agent 的 Session。接受 after_seconds、显式绝对 at、有界固定速率 every_seconds、带显式 IANA 时区的每日与每周本地时间，以及作为五字段表达式的 cron。管理使用宿主 storage domain；到期消息会恢复原 Session。 |
+| `@deepseek-ai/dsh-tool-schedule` | `schedule_create`、`schedule_edit`、`schedule_list`、`schedule_view` | `ctx.tools`、`ctx.schedule`、`ctx.systemPrompt` | `tool/call`、Schedule storage domain 创建、更新或删除、`tool/result` | - | preset 或 Agent scope 挂载本包，并决定哪些 Agent 获得工具。管理工具按 id 跨会话读写 Host 的任务。任务保存 RFC 5545 重复规则，执行位置可选已有会话、首次创建后复用的会话或每次运行新建的会话。委派子 Agent 不能调用这些工具。 |
 | `@deepseek-ai/dsh-tool-lsp` | `lsp` | `ctx.workingDirectory`、`ctx.tools`、`ctx.lsp`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，因此其模型可见 schema 在更换提供方时保持稳定。运行时要求已注册提供方，例如 `@deepseek-ai/dsh-lsp-stdio`；如果没有提供方，查询会返回结构化 `LSP_UNAVAILABLE` 错误，而不会改变 schema。 |
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`、`ctx.workflowEngine`、`ctx.subagents`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents every fresh round)` | `tool/call`、`tool/result`、`workflow and child session events during execution` | - | 固定的前台工作流会在每个 Round 启动一个全新的结构化子级；模型只能选择不可变目标和可选的 Round 上限。 |
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.workingDirectory`、`ctx.tools`、`ctx.agents`、`ctx.skills` | `tool/call`、`tool/result`、`user/message replacement catalogs via agent.inject()` | - | - |
@@ -1049,6 +1049,27 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 ## `@deepseek-ai/dsh-tool-fs`
 
+### `apply_patch`
+
+用一个 Codex 风格补丁新增、更新、删除或移动 UTF-8 文本文件；变更跨越多个文件或分离区域时，优先于多次 edit 调用。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "string",
+      "description": "Codex patch text: start with *** Begin Patch and end with *** End Patch. Use *** Add File: path with + lines; *** Update File: path, optionally followed by *** Move to: path, with @@ or @@ context and space-prefixed context, + added, or - removed lines; *** End of File anchors the last hunk to the file end. Use *** Delete File: path to delete. Paths are relative to the Session working directory. Read existing files before updating, deleting, or moving them."
+    }
+  },
+  "required": [
+    "input"
+  ]
+}
+```
+
+来源： [`packages/fs/tool-fs/src/index.ts`](../packages/fs/tool-fs/src/index.ts)
+
 ### `edit`
 
 通过替换字面量文本来编辑现有 UTF-8 文本文件。
@@ -1160,7 +1181,7 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 来源：[`packages/fs/tool-fs/src/index.ts`](../packages/fs/tool-fs/src/index.ts)
 
-先读后写／编辑策略由 `@deepseek-ai/dsh-fs-observation-policy` 添加；它是一个 `fs/*` 事件门禁插件，不会改变 schema。加载这些工具的部署按预期也应加载该插件。没有 `ctx.attachments` 时图片工具不会注册；其 schema 与路由无关，执行时除非确切路由的模型声明图片输入，否则拒绝。
+先读后写／编辑策略由 `@deepseek-ai/dsh-fs-observation-policy` 添加；它是一个 `fs/*` 事件门禁插件，不会改变 schema。加载这些工具的部署按预期也应加载该插件。没有 `ctx.attachments` 时图片工具不会注册；其 schema 与路由无关，执行时除非确切路由的模型声明图片输入，否则拒绝。`apply_patch` 仅在 `applyPatch: true` 时注册；目录为了记录其 schema 而开启该开关，而随发行版交付的组合在各自的 `tool-fs` 行上保持关闭。
 
 <a id="deepseek-aidsh-tool-fs-search"></a>
 
@@ -1487,134 +1508,48 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
 
 ### `schedule_create`
 
-在当前会话中创建一条提醒，到期时投递 prompt。请恰好提供一个时间参数：after_seconds、at、every_seconds、daily、weekly 或 cron。时区中不存在的本地时间会被跳过；重复出现的本地时间只在较早的时刻触发一次。停机后，重复提醒只投递最近错过的一次。崩溃后可能重复投递。
+创建定时任务。rrule 的每次触发都会将 prompt 作为用户的定时消息投递到目标会话。结果包含任务 id 和下一次触发时间：scheduledAt 为 UTC 时间，scheduledAtLocal 为 rrule 所在时区的时间。停机后只补发最近一次错过的触发。崩溃后可能重复投递。
 
 ```json
 {
   "type": "object",
   "properties": {
-    "prompt": {
-      "type": "string",
-      "description": "Reminder content to present when the target becomes due."
-    },
     "title": {
       "type": "string",
-      "description": "Concise task name in the user's language, at most 120 characters. Name only the core action and subject; keep essential target identifiers such as PR numbers and branch names. Do not include execution frequency (e.g. daily, hourly), scheduled dates/times, time zones, task status, or configuration and execution details (e.g. read-only mode, profile-tag filters), even when embedded in the requested or existing title. Do not append parenthetical notes. Put scheduling information in the timing parameters and execution instructions in prompt."
+      "description": "Task name of at most 120 characters in the user's language: action plus object. Omit timing, status, ids, and bracketed suffixes."
     },
-    "after_seconds": {
-      "type": "number",
-      "description": "Delay in whole seconds."
+    "prompt": {
+      "type": "string",
+      "description": "Instruction delivered at each occurrence."
     },
-    "every_seconds": {
-      "type": "number",
-      "description": "Fixed-rate interval in whole seconds, at least 60, aligned to the creation time; changing it with schedule_update re-aligns it to the save time."
+    "rrule": {
+      "type": "string",
+      "description": "Supported RFC 5545 subset: one DTSTART line, a newline, and one RRULE line. DTSTART ends in Z for UTC or carries TZID with an IANA time zone; a fixed offset such as UTC+5 is Etc/GMT-5, with the sign reversed. DTSTART must name an existing local time. A TZID rule keeps local clock time across daylight-saving changes; generated nonexistent local times are skipped, and repeated ones occur once, at the earlier instant. DTSTART may be in the past; delivery starts with the first occurrence after creation. A one-time delivery is RRULE:FREQ=DAILY;COUNT=1. No SECONDLY; BYSECOND takes one value. COUNT is at most 1000; use UNTIL for longer rules. MINUTELY and HOURLY accept no BY parts, so select clock times with DAILY or WEEKLY plus BYHOUR and BYMINUTE. BYMONTHDAY and ordinal BYDAY require MONTHLY or YEARLY; BYYEARDAY and BYWEEKNO require YEARLY. Ordinal BYDAY cannot combine with BYWEEKNO. Each FREQ period allows at most 10080 candidates before BYSETPOS, which accepts at most 31 values. UNTIL is a UTC instant ending in Z. Example: \"DTSTART;TZID=Asia/Singapore:20260901T080000\\nRRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1\""
     },
-    "daily": {
-      "type": "object",
-      "description": "Every day at a local time.",
-      "additionalProperties": false,
-      "properties": {
-        "time": {
-          "type": "string",
-          "description": "HH:mm:ss with optional 1-3 fractional digits, for example 23:00:00."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        }
-      },
-      "required": [
-        "time",
-        "time_zone"
+    "target": {
+      "type": "string",
+      "description": "this_session delivers to this session; new_once delivers to the same new session every time, opened at the first delivery; new opens a different new session for every delivery. New sessions use this session's working directory and preset. With this_session or new_once, a delivery waits until the previous one finishes, and only the latest occurrence that passed meanwhile is delivered. Use this_session for reminders and for follow-ups to this conversation; use new_once or new for independent work, such as a recurring report, and whenever the user asks for a new conversation.",
+      "enum": [
+        "this_session",
+        "new_once",
+        "new"
       ]
-    },
-    "weekly": {
-      "type": "object",
-      "description": "On the given weekdays at a local time.",
-      "additionalProperties": false,
-      "properties": {
-        "time": {
-          "type": "string",
-          "description": "HH:mm:ss with optional 1-3 fractional digits, for example 09:00:00."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        },
-        "weekdays": {
-          "type": "array",
-          "description": "ISO weekdays, Monday 1 through Sunday 7, without repetitions.",
-          "items": {
-            "type": "integer"
-          }
-        }
-      },
-      "required": [
-        "time",
-        "time_zone",
-        "weekdays"
-      ]
-    },
-    "cron": {
-      "type": "object",
-      "description": "Five-field Vixie cron expression in a time zone.",
-      "additionalProperties": false,
-      "properties": {
-        "expression": {
-          "type": "string",
-          "description": "minute hour day-of-month month day-of-week, for example \"*/15 9-17 * * 1-5\". When both day fields are restricted, a date matches if either one matches."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        }
-      },
-      "required": [
-        "expression",
-        "time_zone"
-      ]
-    },
-    "at": {
-      "oneOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "date": {
-              "type": "string"
-            },
-            "time": {
-              "type": "string"
-            },
-            "time_zone": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "date",
-            "time",
-            "time_zone"
-          ]
-        }
-      ],
-      "description": "Absolute target: an RFC 3339 date-time with offset, or a local date, time, and IANA time_zone."
     }
   },
   "required": [
+    "title",
     "prompt",
-    "title"
+    "rrule",
+    "target"
   ]
 }
 ```
 
-来源：[`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
+源码： [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
 
-### `schedule_delete`
+### `schedule_edit`
 
-删除当前会话中的一条提醒，活动或已结束的均可。删除不会撤回已经入队的提醒消息。
+按 id 更新、暂停、恢复或删除一个定时任务。删除不会撤回已排队的消息。
 
 ```json
 {
@@ -1622,33 +1557,84 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
   "properties": {
     "id": {
       "type": "string",
-      "description": "Exact schedule id."
+      "description": "Task id."
+    },
+    "action": {
+      "type": "string",
+      "description": "update applies the provided fields, at least one; delete removes the task.",
+      "enum": [
+        "update",
+        "delete"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "description": "Task name of at most 120 characters in the user's language: action plus object. Omit timing, status, ids, and bracketed suffixes."
+    },
+    "prompt": {
+      "type": "string",
+      "description": "New instruction delivered at each occurrence."
+    },
+    "rrule": {
+      "type": "string",
+      "description": "New recurrence in the schedule_create rrule format."
+    },
+    "target": {
+      "type": "string",
+      "description": "Omit to retain the destination and its creation settings. Providing target replaces them; new_once reserves a different Session. New targets capture this Session's working directory and preset. Choices are the same as schedule_create.",
+      "enum": [
+        "this_session",
+        "new_once",
+        "new"
+      ]
+    },
+    "active": {
+      "type": "boolean",
+      "description": "false pauses the task; true resumes only if its timing has a future occurrence. Otherwise provide a new rrule."
+    },
+    "expectedUpdatedAt": {
+      "type": "string",
+      "description": "updatedAt from the latest result that returned this task; if the task changed after that result, the result is schedule_conflict and nothing changes."
     }
   },
   "required": [
-    "id"
+    "id",
+    "action"
   ]
 }
 ```
 
-来源：[`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
+源码： [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
 
 ### `schedule_list`
 
-列出当前会话中的活动提醒。
+列出定时任务，包括从其他会话创建的任务。活动任务排在前面，按 scheduledAt 排序。
 
 ```json
 {
   "type": "object",
-  "properties": {}
+  "properties": {
+    "active": {
+      "type": "boolean",
+      "description": "true for active tasks only; false for paused and ended tasks only; omitted for all tasks."
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Page size from 1 to 500; defaults to 100."
+    },
+    "offset": {
+      "type": "integer",
+      "description": "Number of tasks to skip; defaults to 0."
+    }
+  }
 }
 ```
 
-来源：[`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
+源码： [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
 
-### `schedule_update`
+### `schedule_view`
 
-原地修改一条提醒并保留其 id。提供新的 title、prompt，或至多一个时间参数；未提供的字段保持原值。需要相对延迟时请新建一条提醒。
+按 id 查看一个定时任务。
 
 ```json
 {
@@ -1656,112 +1642,7 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
   "properties": {
     "id": {
       "type": "string",
-      "description": "Schedule id returned by schedule_list."
-    },
-    "title": {
-      "type": "string",
-      "description": "New task name; follow the schedule_create title rules."
-    },
-    "prompt": {
-      "type": "string",
-      "description": "New reminder content."
-    },
-    "every_seconds": {
-      "type": "number",
-      "description": "Fixed-rate interval in whole seconds, at least 60, aligned to the creation time; changing it with schedule_update re-aligns it to the save time."
-    },
-    "daily": {
-      "type": "object",
-      "description": "Every day at a local time.",
-      "additionalProperties": false,
-      "properties": {
-        "time": {
-          "type": "string",
-          "description": "HH:mm:ss with optional 1-3 fractional digits, for example 23:00:00."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        }
-      },
-      "required": [
-        "time",
-        "time_zone"
-      ]
-    },
-    "weekly": {
-      "type": "object",
-      "description": "On the given weekdays at a local time.",
-      "additionalProperties": false,
-      "properties": {
-        "time": {
-          "type": "string",
-          "description": "HH:mm:ss with optional 1-3 fractional digits, for example 09:00:00."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        },
-        "weekdays": {
-          "type": "array",
-          "description": "ISO weekdays, Monday 1 through Sunday 7, without repetitions.",
-          "items": {
-            "type": "integer"
-          }
-        }
-      },
-      "required": [
-        "time",
-        "time_zone",
-        "weekdays"
-      ]
-    },
-    "cron": {
-      "type": "object",
-      "description": "Five-field Vixie cron expression in a time zone.",
-      "additionalProperties": false,
-      "properties": {
-        "expression": {
-          "type": "string",
-          "description": "minute hour day-of-month month day-of-week, for example \"*/15 9-17 * * 1-5\". When both day fields are restricted, a date matches if either one matches."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        }
-      },
-      "required": [
-        "expression",
-        "time_zone"
-      ]
-    },
-    "at": {
-      "oneOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "date": {
-              "type": "string"
-            },
-            "time": {
-              "type": "string"
-            },
-            "time_zone": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "date",
-            "time",
-            "time_zone"
-          ]
-        }
-      ],
-      "description": "Absolute target: an RFC 3339 date-time with offset, or a local date, time, and IANA time_zone."
+      "description": "Task id."
     }
   },
   "required": [
@@ -1770,9 +1651,9 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
 }
 ```
 
-Source: [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
+源码： [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
 
-preset 或 Agent scope 挂载本包；由 preset 决定哪些 agent 获得这四个管理工具。每次调用都作用于调用方 Agent 的 Session。接受 after_seconds、显式绝对 at、有界固定速率 every_seconds、带显式 IANA 时区的每日与每周本地时间，以及作为五字段表达式的 cron。管理使用宿主 storage domain；到期消息会恢复原 Session。
+preset 或 Agent scope 挂载本包，并决定哪些 Agent 获得工具。管理工具按 id 跨会话读写 Host 的任务。任务保存 RFC 5545 重复规则，执行位置可选已有会话、首次创建后复用的会话或每次运行新建的会话。委派子 Agent 不能调用这些工具。
 
 <a id="deepseek-aidsh-tool-lsp"></a>
 

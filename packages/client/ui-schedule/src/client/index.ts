@@ -24,8 +24,8 @@
  * `sidebar.session.row.leading` seat marks an idle row whose Session has an
  * active task, and its `sidebar.session.row.hover` seat lists those tasks
  * inside the row's hover card. Both project the same source, so N visible rows
- * issue one query rather than one per row. The header entry keeps its own
- * per-Session source.
+ * issue one query rather than one per row. The header entry projects the same
+ * source onto the open Session's active tasks.
  */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
@@ -37,13 +37,13 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
-import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-api-remote-access/client'
-import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
+import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-connection/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { ScheduleCatalogEntry, ScheduleDeliveryHistoryRequest, ScheduleId, ScheduleUpdateRequest } from '@deepseek-ai/dsh-schedule/client'
-import { createCatalogSource, type CatalogDeleteOutcome, type CatalogInjected } from './catalog-source.ts'
+import type { ScheduleId, ScheduleCatalogEntry, ScheduleDeleteResult } from '@deepseek-ai/dsh-schedule/client'
+import { createCatalogSource, type CatalogDeleteOutcome } from './catalog-source.ts'
 import { createClearEnded } from './clear-ended.ts'
 import { createDeleteToastSource, ScheduleDeleteToast } from './DeleteToast.tsx'
 import { SCHEDULE_TASK_ID, SCHEDULE_TASK_KIND, scheduleTaskDefinition } from './definition.ts'
@@ -54,7 +54,6 @@ import { ScheduleTaskTab, type ScheduleTaskBindingInjected, type ScheduleTaskCat
 import { ScheduleTaskTabTitle } from './ScheduleTaskTabTitle.tsx'
 import { SessionScheduleHover } from './SessionScheduleHover.tsx'
 import { SessionScheduleMark } from './SessionScheduleMark.tsx'
-import { createSessionScheduleSource, type SessionScheduleSourceFactory } from './session-schedule-state.ts'
 import { TaskTabBindings } from './task-tab-bindings.ts'
 import { TaskManagerPage, type TaskManagerInjected } from './TaskManagerPage.tsx'
 import type { TaskDetailInjected } from './TaskDetail.tsx'
@@ -75,11 +74,27 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Required services for catalogs, ambient Session marks, the right Sidebar, Remote queries, original-Session navigation, and access. */
+/** Required services for catalogs, ambient Session marks, the right Sidebar, Remote queries, linked-Session navigation, and access. */
 export const inject = [
   'slots', 'locale', 'remote', 'remote.schedule', 'conversation', 'uiConversation', 'uiWorkspace', 'sessions',
   'workspaces', 'sidebarRightTabs', 'sidebarRight', 'remoteAccess',
 ]
+
+async function settle<T>(call: () => Promise<RemoteResult<T>>): Promise<RemoteResult<T> | undefined> {
+  try { return await call() }
+  catch (_error: unknown) {
+    // A rejected call leaves the outcome unknown, so its caller shows the same localized retry as a Remote failure.
+    return undefined
+  }
+}
+
+function inputCorrection(error: RemoteFailure): 'host.notFuture' | 'host.invalidRule' | undefined {
+  if (error.code !== 'schedule/input-invalid') return undefined
+  const { code } = error.details
+  if (code === 'not_future') return 'host.notFuture'
+  return code === 'invalid_rule' || code === 'frequency_too_high' || code === 'invalid_time_zone' || code === 'time_out_of_range'
+    ? 'host.invalidRule' : undefined
+}
 
 /**
  * Register the Host task page, the Session-header reminder catalog, the
@@ -107,12 +122,12 @@ export function apply(ctx: ClientContext): void {
   // renders the card beneath the closing prose.
   ctx.uiConversation.events.register(scheduleTurnDefinition)
   ctx.remoteAccess.whenAccess('schedule/catalog', function* () {
-    const manager: CatalogInjected<ScheduleCatalogEntry> = createCatalogSource<ScheduleCatalogEntry>({
+    const manager = createCatalogSource<ScheduleCatalogEntry>({
       list: () => ctx.remote.schedule.catalog(),
-      remove: async (id) => {
-        const record = manager.hooks.catalog.getSnapshot().records.find(item => item.id === id)
-        if (record === undefined) return { ok: true, value: { id, deleted: false, code: 'schedule_not_found' } }
-        return ctx.remote.schedule.delete({ sessionId: record.sessionId, id })
+      remove: async (id): Promise<RemoteResult<ScheduleDeleteResult>> => {
+        const result = await ctx.remote.schedule.edit({ id, action: 'delete' })
+        if (!result.ok) return result
+        return { ok: true, value: 'deleted' in result.value ? { id, deleted: true } : { id, deleted: false, code: 'schedule_not_found' } }
       },
       subscribeChanged: listener => ctx.remote.$on('schedule/changed', listener),
       subscribeReset: listener => ctx.on('connection/reset', listener),
@@ -131,25 +146,10 @@ export function apply(ctx: ClientContext): void {
       name: 'shell.overlay', id: 'schedule.delete-toast', locale: MANAGER_NS,
       inject: () => ({ hooks: deleteToast.hooks, dismiss: deleteToast.dismiss }),
     }, ScheduleDeleteToast))
-    /**
-     * Forward one compare-and-update request, which may replace the task name,
-     * the instruction, and/or the timing, and refresh the authoritative catalog
-     * after an accepted or stale outcome.
-     * @param request - complete expected record with the optional content and timing change.
-     * @returns the original Remote mutation result.
-     */
-    const updateTask = async (request: ScheduleUpdateRequest) => {
-      const result = await ctx.remote.schedule.update(request)
-      if (result.ok && ('record' in result.value || result.value.code === 'schedule_conflict'
-        || result.value.code === 'schedule_ended' || result.value.code === 'schedule_not_found')) {
-        // The write is in, so this readback must not join a read that was sent
-        // before it: naming every request seen so far makes the source issue a new
-        // one, the way the post-deletion readback supersedes.
-        await manager.onRetry(manager.hooks.catalog.getSnapshot().readRequest)
-      }
-      return result
-    }
-    const loadHistory = (request: ScheduleDeliveryHistoryRequest) => ctx.remote.schedule.history(request)
+    // The Host answered, so this readback must not join a read that was sent
+    // before it: naming every request seen so far makes the source issue a new
+    // one, the way the post-deletion readback supersedes.
+    const refresh = (): Promise<void> => manager.onRetry(manager.hooks.catalog.getSnapshot().readRequest)
     const openSession = (id: SessionId): void => {
       if (sessionLinkState(id, ctx.sessions.list.getSnapshot(), ctx.workspaces.list.getSnapshot()) === 'available') {
         ctx.uiWorkspace.openSession(id)
@@ -164,15 +164,35 @@ export function apply(ctx: ClientContext): void {
      */
     const clearEnded = createClearEnded({
       removeInactive: () => ctx.remote.schedule.deleteInactive(),
-      refresh: () => manager.onRetry(manager.hooks.catalog.getSnapshot().readRequest),
+      refresh,
     })
     const detail: TaskDetailInjected & ScheduleTaskCatalogInjected = {
       hooks: manager.hooks,
       onDelete: reportedDelete(manager.onDelete),
       onRetry: manager.onRetry,
-      onUpdateTiming: updateTask,
-      loadHistory,
+      loadHistory: request => ctx.remote.schedule.history(request),
       onOpenSession: openSession,
+      hostActions: {
+        edit: async (request) => {
+          const result = await settle(() => ctx.remote.schedule.edit(request))
+          if (result === undefined) return { failed: 'host.saveError' }
+          if (!result.ok) return { failed: inputCorrection(result.error) ?? 'host.saveError' }
+          await refresh()
+          if (!('code' in result.value)) return 'saved'
+          return { failed: result.value.code === 'schedule_conflict' ? 'host.conflict' : 'detail.missing' }
+        },
+        run: async (id) => {
+          const result = await settle(() => ctx.remote.schedule.run({ id }))
+          if (result === undefined || !result.ok) return { failed: 'host.runError' }
+          await refresh()
+          if (!('code' in result.value)) return 'queued'
+          return { failed: result.value.code === 'schedule_execution_pending' ? 'host.executionPending' : 'detail.missing' }
+        },
+        loadNewSessionInterval: async () => {
+          const result = await settle(() => ctx.remote.schedule.deliveryLimits())
+          return result?.ok === true ? result.value.newSessionIntervalSeconds : undefined
+        },
+      },
     }
     // The Sidebar persists a tab's layout record and not its navigation
     // parameters, so this page type keeps the task it last showed per Session and
@@ -199,11 +219,18 @@ export function apply(ctx: ClientContext): void {
       locale: MANAGER_NS,
       inject: (): TaskManagerInjected => ({
         ...detail,
-        // The page has no creation form: a new reminder starts in a Session.
         onNewTask: () => { ctx.uiWorkspace.startSession() },
         onClearEnded: async () => {
           const outcome = await clearEnded()
           deleteToast.reportClear(outcome)
+        },
+        onCreateTask: async (request) => {
+          const result = await settle(() => ctx.remote.schedule.create(request))
+          if (result === undefined) return { failed: 'host.createError' }
+          if (!result.ok) return { failed: inputCorrection(result.error) ?? 'host.createError' }
+          manager.retainCreated(result.value)
+          await refresh()
+          return { created: result.value }
         },
       }),
     }, TaskManagerPage))
@@ -227,12 +254,6 @@ export function apply(ctx: ClientContext): void {
         },
       }),
     }, ScheduleTurnCard))
-    // The Session header keeps one per-Session source: it lists the open
-    // Session's active tasks and starts only while that header is mounted. The
-    // Sidebar row seats read the shared `manager` catalog instead, so every
-    // visible row projects one Host query rather than issuing its own.
-    const createSource: SessionScheduleSourceFactory = sessionId =>
-      createSessionScheduleSource(ctx, sessionId)
     yield ctx.slots.inject(
       'conversation.session.header.utilities',
       () => ctx.slots.register({
@@ -242,18 +263,14 @@ export function apply(ctx: ClientContext): void {
         // leading utilities (order -10), matching the shipped mock.
         order: -5,
         locale: NS,
-        inject: (sessionId) => {
-          const source = createSource(sessionId)
-          return {
-            ...source,
-            // The header's deletions settle through the same app-wide toast as the
-            // Tasks page and the task tab.
-            onDelete: reportedDelete(source.onDelete),
-            openTaskDetail: (id: ScheduleId) => {
-              ctx.sidebarRight.openTab(SCHEDULE_TASK_KIND, { params: { sessionId, id } })
-            },
-          }
-        },
+        inject: sessionId => ({
+          hooks: manager.hooks,
+          onRetry: manager.onRetry,
+          onDelete: detail.onDelete,
+          openTaskDetail: (id: ScheduleId) => {
+            ctx.sidebarRight.openTab(SCHEDULE_TASK_KIND, { params: { sessionId, id } })
+          },
+        }),
       }, ScheduleCatalogAction),
     )
     yield ctx.slots.inject('sidebar.session.row.leading', () => ctx.slots.register({

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用 `dsh-tool-fs` 可让模型带行号读取 UTF-8 文件、读取受支持的图片、创建或原子地替换文件，以及执行有针对性的字面量编辑。结果都有上限，失败会提供稳定错误码与恢复指令。当写入和编辑必须在成功读取后执行时，请添加 `dsh-fs-observation-policy`；省略它时，变更仍是原子的，但不受此条件约束。图片读取需要持久附件存储和支持图片输入的路由模型。glob 或 grep 搜索请选择同级的发现工具包。
+使用 `dsh-tool-fs` 可让模型带行号读取 UTF-8 文件、读取受支持的图片、创建或原子地替换文件，执行有针对性的字面量编辑，以及应用 Codex 风格的多文件补丁。结果都有上限，失败会提供稳定错误码与恢复指令。当写入和编辑必须在成功读取后执行时，请添加 `dsh-fs-observation-policy`；省略它时，变更仍是原子的，但不受此条件约束。图片读取需要持久附件存储和支持图片输入的路由模型。glob 或 grep 搜索请选择同级的发现工具包。
 
 ## 目录
 
@@ -39,7 +39,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-tool-fs'
 ```
 
-策略插件是可选的：省略时，工具直接使用裸提供方（无条件写入、覆盖与编辑，无已观察状态）。加载这些工具的部署也应加载该插件，从而提供写入/编辑前读取行为。`read_image` 只在持久 `ctx.attachments` 服务已挂载时注册；执行时还拒绝确切模型未声明图像输入的路由，因此文本路由的持久历史不会出现图像块。
+策略插件是可选的：省略时，工具直接使用裸提供方（无条件写入、覆盖、编辑与补丁，无已观察状态）。加载这些工具的部署也应加载该插件，从而提供写入/编辑/补丁前读取行为。`read_image` 只在持久 `ctx.attachments` 服务已挂载时注册；执行时还拒绝确切模型未声明图像输入的路由，因此文本路由的持久历史不会出现图像块。
 
 ### 工具
 
@@ -49,12 +49,13 @@ kind: "package-reference"
 | `read_image` | `file_path` | 读取并持久保存 PNG/JPEG/WebP/GIF 源图；无扩展名路径（包括规范化附件对象路径）按文件签名识别格式；规范化可在下一次模型请求前缩小图片，因此模型无需先创建缩略图 |
 | `write` | `file_path`、`content` | 创建或完整替换文件；有策略插件时，覆盖要求先在未变版本上执行 `read`，创建不需要 |
 | `edit` | `file_path`、`old_string`、`new_string`、`replace_all?` | 字面量替换，除非 `replace_all` 为 true 否则要求唯一匹配；有策略插件时，要求先执行 `read` 且文件未变 |
+| `apply_patch` | `input`，以及可用时的沙箱提权字段 | 新增/更新/删除/移动，整份预检后顺序执行并保留已知部分效果 |
 
 字段名使用 snake_case，与 Claude Code 和现有 harness 工具 schema 一致。`write` 和 `edit` 的路径描述要求模型先输出 `file_path`，再输出内容或替换字符串；这用于引导流式展示，不强制 JSON 成员顺序。成功返回紧凑信封——读取窗口、图像引用或 `Created file`/`Updated file` 确认——`write`/`edit` 还会派生可回放的 diff 卡片元数据供 UI 展示。
 
 ### 配置
 
-所有键均为可选。`read`、`readImage`、`write` 和 `edit` 开关默认为 `true`；将开关设为 `false` 可省略对应工具及其指导文本。允许关闭全部四个工具。启用 `readImage` 仍需要附件存储和支持图片输入的模型。关闭 `read` 时仍会校验读取上限。
+所有键均为可选。`read`、`readImage`、`write` 和 `edit` 开关默认为 `true`；将开关设为 `false` 可省略对应工具及其指导文本。`applyPatch` 默认为 `false`，因此默认组合不注册 `apply_patch`；启用 `edit` 的随发行版交付的 `tool-fs` 行（[`dsh-base`](../../bundle/base/cordis.patch.yml) 以及 Web 的 `standard`、`ptc`、`cordis` preset）显式写出 `applyPatch: false`，把这一行改为 `true` 即在 `edit` 旁加入该工具。允许关闭全部五个工具。启用 `readImage` 仍需要附件存储和支持图片输入的模型。关闭 `read` 时仍会校验读取上限。
 
 | 键 | 默认值 | 含义 |
 |---|---|---|
@@ -62,6 +63,7 @@ kind: "package-reference"
 | `readImage` | `true` | 附件存储挂载时注册 `read_image` |
 | `write` | `true` | 注册 `write` 及其指导文本 |
 | `edit` | `true` | 注册 `edit` 及其指导文本 |
+| `applyPatch` | `false` | 注册 `apply_patch` 及其提示 |
 | `readLimit` | `2000` | 一次 `read` 调用返回的默认和最大行数 |
 | `readMaxLineLength` | `2000` | 每行截断前保留的字符数 |
 | `readMaxBytes` | `51200` | 一次 `read` 调用所选行的字节上限；溢出时以「已达上限」footer 结束窗口 |
@@ -79,6 +81,8 @@ kind: "package-reference"
 
 ### 失败与恢复
 
+`apply_patch` 的语法与预检拒绝在磁盘变更前抛错，结果为 `isError: true`。`FsError` 保留文件系统错误码；`PatchToolError extends HarnessError` 携带 `PATCH_SYNTAX` 和 `PATCH_SYMLINK_SOURCE`。进入提交后，即使失败或结果不确定也返回 `isError: false` 的值，确保已知部分效果的 diff 元数据得以保留；提交期间被取消的调用与其他工具一样收到工具注册表的中止结果，已完成的变更仍可通过 Review 查看。`phase`、`cancelled`、有序 `operations` 与 `affectedPaths` 描述提交；每条操作保留索引、种类、展示路径、补丁行号、状态、诊断与已知变更。完整 `before`/`after` 文本供渲染和 PTC 使用；Session 保存渲染文本以及 `meta.diffs` 与 `meta.stopped`。新建与 `write` 一样不保存 diff；删除与移动源仅在提供方返回有界基线时保存删除 diff，并使用 `newText: ''`，因为 `FileDiff.newText` 不可为 null。
+
 失败被规范化为 `Error: <message>`，并为调用方保留结构化错误码。稳定消息包括 `file_path must be a non-empty string`、`limit must be less than or equal to <max>`、`cannot read "<path>": not found`、`cannot read "<path>": not a regular file`，以及图像路由拒绝 `cannot read "<path>" as an image: model "<model>" does not declare image input; switch to an image-capable model to read images`。无论拒绝来自策略还是提供方，`FS_NOT_OBSERVED` 都规范化为 `cannot modify "<path>": file has not been read — read the file, then retry`；`FS_STALE_VERSION` 保留提供方原因并追加 `— re-read the file, then retry`。该次重新读取确认缺失后，`edit` 报告 `FS_NOT_FOUND` 而不会重复陈旧恢复指令，`write` 则使用防护创建。
 
 -----
@@ -93,7 +97,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-工具就是执行器；策略是事件门禁。工具不注入策略服务，也不检查任何缓存——每次变更都通过 `ctx.waterfall` 向单一意图槽位请求防护，每个操作只在成功后发出 `fs/observed`。读取恰好执行一次提供方 `stat`（类型与大小路由加观察到的版本）；变更一次也不执行，因为防护来自意图槽位，提供方在锁内重新检查。
+工具就是执行器；策略是事件门禁。工具不注入策略服务，也不检查任何缓存——每次变更都通过 `ctx.waterfall` 向单一意图槽位请求防护，每个操作只在成功后发出 `fs/observed`。读取恰好执行一次提供方 `stat`（类型与大小路由加观察到的版本）；`write` 与 `edit` 一次也不执行，因为防护来自意图槽位，提供方在锁内重新检查。
 
 ### 源码地图
 
@@ -103,9 +107,15 @@ kind: "package-reference"
 | [`src/read.ts`](src/read.ts) | `read` 执行器：一次 stat、流式决策、窗口构建、观察 |
 | [`src/read-image.ts`](src/read-image.ts) | `read_image` 执行器：路由与媒体类型门禁、有界字节、附件保存 |
 | [`src/write.ts`](src/write.ts) | `write` 执行器：意图 waterfall、原子写入、观察 |
+| [`src/apply-patch.ts`](src/apply-patch.ts)、[`apply-patch-output.ts`](src/apply-patch-output.ts) | `apply_patch` 注册、严格提交值与精简诊断 |
+| [`src/apply-patch-presentation.ts`](src/apply-patch-presentation.ts) | 纯调用预览与已知结果 diff |
 | [`src/edit.ts`](src/edit.ts) | `edit` 执行器：意图 waterfall、字面量编辑、观察 |
+| [`src/patch/index.ts`](src/patch/index.ts)、[`types.ts`](src/patch/types.ts) | 内部 `executePatch` 入口与可序列化的逐操作报告 |
+| [`src/patch/plan.ts`](src/patch/plan.ts) | 解析补丁并按 Session 工作目录解析路径；保留共享规范化目标的有序操作 |
+| [`src/patch/preflight.ts`](src/patch/preflight.ts) | 模拟前序成功操作，在任何写入前收集观察、类型、文本与 hunk 失败 |
+| [`src/patch/execute.ts`](src/patch/execute.ts) | 重新获取防护、顺序提交、记录实际效果并判断不确定失败 |
 | [`src/read-render.ts`](src/read-render.ts) | 不依赖 Cordis 的窗口构建与信封格式化 |
-| [`src/sandbox.ts`](src/sandbox.ts) | `write`/`edit` 共享的升权 API：策略解析与拒绝标记映射 |
+| [`src/sandbox.ts`](src/sandbox.ts) | 各变更工具共享的升权 API：策略解析与拒绝标记映射 |
 | [`src/error.ts`](src/error.ts) | 防护变更失败的稳定模型侧诊断 |
 | [`src/mutation-result.ts`](src/mutation-result.ts) | 成功变更的观察记录与规范化结果路径 |
 
@@ -113,9 +123,15 @@ kind: "package-reference"
 
 四个工具共享同一种流程形态：用调用会话的 cwd 解析路径、运行适用的门禁、恰好执行一次提供方操作，并且只在成功后发出 `fs/observed`。`read` 与 `read_image` 为类型与大小路由付出一次 `stat`；`write` 与 `edit` 不执行 stat，因为防护来自意图槽位，提供方失败以类型化 `FsError` 结果呈现。各工具执行器位于 `src/read.ts`、`src/read-image.ts`、`src/write.ts` 与 `src/edit.ts`。
 
+内部补丁执行器接收原始补丁和已解析的沙箱策略。它建立有序计划，针对模拟状态预检全部操作，再通过 `writeText`、`patchText`、`deleteFile` 或一次 `moveFile` 调用提交。被预检拒绝的操作不产生模拟效果，任何拒绝都会阻止全部写入。沙箱围栏不参与模拟：与 `write`、`edit` 一样由提供方在每次提交时判断，被拒绝的操作使补丁停止并保留之前的操作。语法报告携带解析器失败；预检报告列出被拒绝的操作；提交报告为每个操作保留 `completed`、`failed`、`unknown` 或 `skipped` 状态及已知的 LF 文本变化。未解析的路径保留补丁原始写法；已解析的路径使用提供方显示路径。编程错误使调用拒绝。
+
 ### 观察与并发
 
 `fs/observed` 在操作成功之后通过普通 `ctx.emit` 发出；监听器的约定是同步且只有副作用的记录器，因此异步或可能失败的观察不属于该事件。`read` 允许并发调度，因为它唯一改变状态的操作是同步记录版本；稍后的 `write` 或 `edit` 会在目标锁内重新检查版本，因此记录器竞态会安全地失败，两个变更工具仍保持互斥。
+
+补丁预检读取从不发出 `fs/observed`。对目标的首次预检操作分发意图；同一目标的后续操作使用模拟状态。每次提交重新分发意图以取得当前防护。新增与更新记录存在，删除记录缺失，移动记录目标存在，且仅在源删除成功后记录源缺失；部分移动为 `failed`，只包含目标变化。移动源基线由 `moveFile` 在锁内返回。
+
+变更以 `FS_IO_ERROR` 拒绝后，执行器使用新的 `stat` 比较每个受影响目标的版本。全部未变表示已知失败；任何目标已变或比较失败均为 `unknown`，不记录观察或变化。`FS_ABORTED` 一律为 `unknown`：被取消的远端请求在提供方可能仍在写入时就已拒绝。执行在首个失败或未知提交后停止，或在信号已取消的操作开始前停止。
 
 </details>
 
@@ -240,6 +256,47 @@ Read a file before editing it (the default fs-observation-policy requires it), u
 
 仅追加；新增可见内容位于可复用请求前缀之后，不会使现有 KV Cache 条目失效。
 
+### 应用补丁
+
+#### 模型看到的内容
+
+`apply_patch` schema 要求一个 `input` 字符串（沿用 Codex 的参数名，在该工具上训练过的模型会不经提示地发送这个键），包含 `*** Begin Patch` / `*** End Patch`、Add/Update/Delete 文件头、可选 Move to，以及上下文/新增/删除 hunk 行。路径相对于 Session 工作目录。有围栏后端追加与 write/edit 相同的提权字段。成功行按 A/M/D 分组，完成的移动显示 `M <destination>`，与 Codex rust-v0.158.0 一致。空补丁显示 `Success. No operations in patch.`。停止的补丁只包含适用的 Completed、Failed、Outcome unknown 与 Not executed 小节；结果不确定时以重读建议结束。语法错误保留解析器消息。
+
+##### 系统提示
+
+```markdown
+Prefer apply_patch over separate edit calls for changes across files or separated regions. Read a file before updating, deleting, or moving it (the default fs-observation-policy requires it), unless you just created or edited it in this session. The whole patch is checked first (syntax, hunk matching, missing files) and a rejected patch changes nothing; once applying starts, operations run in order, stop at the first failure, and are not rolled back, so re-read affected files before retrying when needed.
+```
+
+##### 结果示例
+
+```markdown
+Success. Updated the following files:
+A src/new.ts
+M src/a.ts
+D src/obsolete.ts
+
+Patch stopped after 1 of 3 operations.
+Completed:
+M src/a.ts
+Failed:
+- operation 2 (move src/b.ts -> src/c.ts, patch line 6): source removal denied
+  destination src/c.ts was written; source src/b.ts remains
+Not executed:
+- operation 3 (add src/d.ts)
+
+Patch rejected before any change (1 problems):
+- operation 1 (update src/a.ts, patch line 2): cannot modify "src/a.ts": file has not been read — read the file, then retry
+```
+
+#### Token 影响
+
+默认工具集在首轮请求新增一份补丁工具 schema 与三句提示。提交输出随操作数量与诊断增长，不随文件大小增长。
+
+#### KV Cache 影响
+
+可见工具不变时保持稳定；调用和结果文本追加到历史。
+
 ## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -247,6 +304,7 @@ Read a file before editing it (the default fs-observation-policy requires it), u
 
 这些限制说明工具套件何时不合适，或何时需要特别的运维注意。它们是当前包约束，不是通用文件系统对比或任务积压。
 
+- **补丁提交不回滚**——后续失败后，先前成功操作和已发布的移动目标仍保留在磁盘上，`unknown` 结果要求重读受影响文件后再重试。
 - **未交付面向模型的目录列表工具**：`ctx.fs.listDir` 服务于 skill（技能）发现等提供方代码，同级 `dsh-tool-fs-search` 包则提供基于 ripgrep 的 `glob` 与 `grep`，而不是扩展文件系统 seam。
 - **`read` 只处理 UTF-8 文本文件**：图像使用独立的 `read_image` 工具；PDF、音频和视频仍延期处理。目录目标为 `FS_NOT_REGULAR_FILE`。
 - **媒体类型按扩展名声明**：扩展名选择声明类型，附件存储的魔数校验保持权威；扩展名错误但格式正确的图像会得到改名修复提示，而不是被嗅探接受。只有没有扩展名的路径按文件签名识别格式。

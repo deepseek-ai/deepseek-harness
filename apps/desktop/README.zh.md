@@ -53,7 +53,7 @@ Desktop Host 的 Platform API 请求与更新策略请求用相同的 Platform �
 
 桌面麦克风访问仅允许主 `dsh-app://app` 页面发起的音频请求。macOS 使用系统麦克风授权、随包用途说明，以及主应用与 Helper 签名中的 `com.apple.security.device.audio-input` 权限。
 
-按 F12（多媒体功能键键盘上为 Fn+F12）、macOS 的 Command+Option+I 或 Windows 的 Ctrl+Shift+I，可切换当前获得焦点的应用页面的 DevTools，打包版本同样支持。这些原生快捷键通过隐藏的应用菜单项注册。更新遮罩和打包版本的内嵌浏览器禁用 DevTools。
+按 F12（多媒体功能键键盘上为 Fn+F12）、macOS 的 Command+Option+I 或 Windows 的 Ctrl+Shift+I，可切换当前获得焦点的应用页面的 DevTools，打包版本同样支持。应用菜单在隐藏和退出命令之前的独立分组中显示本地化的“开发者工具”命令。Windows 在标题栏的应用弹出菜单中显示开关，通过隐藏的原生应用菜单注册快捷键；macOS 和 Linux 的应用菜单保留隐藏的 F12 快捷键别名。更新遮罩和打包版本的内嵌浏览器禁用 DevTools。
 
 <a id="terminal-command"></a>
 

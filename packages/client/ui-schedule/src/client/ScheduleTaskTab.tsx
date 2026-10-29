@@ -4,16 +4,15 @@
  * The tab's layout record stores nothing durable. It selects its task from the
  * shared Host catalog by the navigation parameters it was opened with and
  * renders the same `TaskDetail` component the Tasks page renders, so both views
- * offer identical fields, timing edits, saved deliveries, confirmed deletion,
- * and the original Session link. A record restored by a reload carries no
- * parameters, so the body falls back to the provider-owned binding that the
- * navigation wrote; a retained edit draft keeps the detail on screen after the
- * catalog row disappears, and a confirmed deletion closes this tab once the
- * refreshed catalog reports the row gone; without a draft, the body reports
- * that the task is gone.
+ * offer identical fields, Host edits and runs, saved deliveries, confirmed
+ * deletion, and the linked Session entry. A record restored by a reload carries
+ * no parameters, so the body falls back to the provider-owned binding that the
+ * navigation wrote; a task that an open edit or a confirmed deletion retained
+ * keeps the detail on screen after the catalog row disappears, and an applied
+ * deletion closes this tab once the catalog refresh after it settles; without a
+ * retained task, the body reports that the task is gone.
  *
- * The parameters name the task's original Session, and every mutation carries
- * that binding, so reading or deleting from here never activates a Session.
+ * The catalog read and deletion name only the task id, so neither activates a Session.
  */
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -131,7 +130,6 @@ export function ScheduleTaskTab(props: ScheduleTaskTabProps): ReactNode {
       task={task}
       authoritative={catalogRecord !== undefined}
       onDeleted={() => { tab.actions.close() }}
-      withinSession={sessionId}
     />
   </div>
 }

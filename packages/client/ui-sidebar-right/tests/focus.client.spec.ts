@@ -174,6 +174,34 @@ describe('sidebar focus targets', () => {
     expect(getPane(h.layout(), floating.paneId).tabs).toHaveLength(1)
   })
 
+  it('closes a focused docked guide after the page it opens is revealed in its pane', () => {
+    const h = harness()
+    const guide = h.controller.active()!.id
+    h.controller.openTab('files')
+    const files = h.controller.active()!.id
+    const target = h.controller.focusedTarget(h.tabElement(guide))!
+    h.controller.openTabFromTarget('files', target)
+    expect(Object.keys(h.layout().tabs)).toEqual([files])
+    expect(h.controller.active()?.id).toBe(files)
+  })
+
+  it.each([false, true])('replaces a focused floating guide in its panel, even while a docked pane shows the page (page docked: %s)', (docked) => {
+    const h = harness()
+    h.controller.openTab('terminal')
+    if (docked) h.controller.openTab('files')
+    const guide = Object.values(h.layout().tabs).find(tab => tab.kind === 'guide')!.id
+    h.controller.float(guide)
+    const panel = findTabPane(h.layout(), guide)
+    const target = h.controller.focusedTarget(h.tabElement(guide))!
+    h.controller.openTabFromTarget('files', target)
+    expect(h.layout().tabs[guide]).toBeUndefined()
+    const files = Object.values(h.layout().tabs).filter(tab => tab.kind === 'files')
+    expect(files).toHaveLength(docked ? 2 : 1)
+    const floating = files.map(tab => findTabPane(h.layout(), tab.id)).find(pane => pane.host === 'float')!
+    expect(floating.id).toBe(panel.id)
+    expect(floating.rect).toEqual(panel.rect)
+  })
+
   it('shares split limits and fullscreen behavior while preserving floating pages', () => {
     const h = harness()
     const target = h.controller.commandTarget(null)!
