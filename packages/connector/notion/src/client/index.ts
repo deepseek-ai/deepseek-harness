@@ -7,7 +7,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-mcp-account/client'
-import { en, NS, zh } from './locales.ts'
+import { de, en, es, fr, ja, NS, pt, ru, zh } from './locales.ts'
 
 /** Services the dictionary and the account registration need. */
 export const inject = ['locale', 'mcpAccounts']
@@ -17,7 +17,7 @@ export const inject = ['locale', 'mcpAccounts']
  * @param ctx - the browser plugin context.
  */
 export function apply(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'notion: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'notion: dictionaries')
   ctx.effect(() => ctx.mcpAccounts.register({
     server: 'notion', packageName: '@deepseek-ai/dsh-notion', locale: NS,
   }), 'notion: account')

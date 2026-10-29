@@ -2,7 +2,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { expect, it, vi } from 'vitest'
 import { apply, inject } from '../src/client/index.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { de, en, es, fr, ja, pt, ru, zh } from '../src/client/locales.ts'
 
 it('registers the Notion account under its dictionary and removes both on disposal', async () => {
   const ctx = new Context()
@@ -14,7 +14,7 @@ it('registers the Notion account under its dictionary and removes both on dispos
   try {
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber
-    expect(locale.register).toHaveBeenCalledWith('notion', { zh, en })
+    expect(locale.register).toHaveBeenCalledWith('notion', { zh, en, ja, es, fr, de, ru, pt })
     expect(mcpAccounts.register).toHaveBeenCalledWith({ server: 'notion', packageName: '@deepseek-ai/dsh-notion', locale: 'notion' })
     await fiber.dispose()
     expect(dictionaryRemoved).toHaveBeenCalledOnce()
