@@ -71,6 +71,15 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
     expect(workflow.jobs.package!.env.PACKAGE_MACOS_ZIP_COMPRESSION_LEVEL).toBe('${{ inputs.compression_level }}')
   })
 
+  it('stages the notarized Computer Use helpers before packing the runtime', () => {
+    const steps = workflow.jobs.package!.steps
+    const staging = steps.findIndex(step => step.name === 'Build and stage notarized Computer Use helpers')
+    expect(staging).toBeGreaterThan(steps.findIndex(step => step.name === 'Install locked dependencies'))
+    expect(staging).toBeLessThan(steps.findIndex(step => step.run?.includes('pnpm run package:desktop:mac:') === true))
+    expect(steps[staging]?.run).toContain('pnpm exec tsx scripts/cua-helper/package.ts --out dist/cua-helper')
+    expect(steps[staging]?.run).toContain('pnpm exec tsx scripts/cua-helper/stage.ts --from dist/cua-helper/extracted')
+  })
+
   it('passes the same target to preparation, packaging and retention', () => {
     const job = workflow.jobs.package!
     expect(job.env.DSH_DESKTOP_TARGET_PLATFORM).toBe('darwin')

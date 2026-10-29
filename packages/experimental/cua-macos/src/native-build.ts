@@ -100,12 +100,15 @@ export async function buildNativeExecutable(spec: NativeBuildSpec): Promise<stri
 
 /**
  * Prepare source builds on activation; installed packages carry their signed application.
+ * A package inside an Electron `app.asar` archive reads its application from `app.asar.unpacked`, where the
+ * Desktop installer keeps the bundle as ordinary files that LaunchServices and process spawning can open.
  * @param spec - Native preparation inputs for this host.
  * @returns Executable inside a ready application without compiling or re-signing an installed package.
  */
 export async function prepareNativeExecutable(spec: NativeBuildSpec): Promise<string> {
   if (await isSourcePackage(spec.packageRoot)) return buildNativeExecutable(spec)
-  const executable = await nativeExecutablePath(join(spec.packageRoot, 'native', 'bin', `darwin-${spec.architecture}`))
+  const packageRoot = spec.packageRoot.replace(/\.asar(?=[\\/])/u, '.asar.unpacked')
+  const executable = await nativeExecutablePath(join(packageRoot, 'native', 'bin', `darwin-${spec.architecture}`))
   spec.signal.throwIfAborted()
   return executable
 }

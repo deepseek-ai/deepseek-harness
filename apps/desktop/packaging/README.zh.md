@@ -125,7 +125,7 @@ runner 的受监督启动和恢复见 [Windows runner 机器准备](../windows-s
 
 ## macOS 自托管打包
 
-[Apple Silicon 工作流](../../../.github/workflows/macos-package.yml)与 [Intel 工作流](../../../.github/workflows/macos-intel-package.yml)在带有 `dsh-mac-package-trial` 标签的 Apple Silicon runner 上分别生成 arm64 和 x64 安装包，两者共用一个并发组。Intel 工作流在安装依赖前检查 Rosetta 能否执行；所选源码必须包含按目标架构校验的 macOS CI 适配脚本。两者均选择 `test` 或 `production`，并复用现有签名、公证和打包运行时检查。成功的 DMG／ZIP 与诊断日志保留 14 天，不发布 release；安装包上传关闭重复 ZIP 压缩。操作人员须验收完整 Actions 运行及目标架构上的安装，才能确认可交付。`compression_level` 下拉选项默认为 `3`，也可选择 `7`；本次运行以该选项覆盖机器预设，只影响 ZIP 和自动升级下载，不影响 DMG。
+[Apple Silicon 工作流](../../../.github/workflows/macos-package.yml)与 [Intel 工作流](../../../.github/workflows/macos-intel-package.yml)在带有 `dsh-mac-package-trial` 标签的 Apple Silicon runner 上分别生成 arm64 和 x64 安装包，两者共用一个并发组。Intel 工作流在安装依赖前检查 Rosetta 能否执行；所选源码必须包含按目标架构校验的 macOS CI 适配脚本。两者均选择 `test` 或 `production`，并复用现有签名、公证和打包运行时检查。打包前，两者都用 `scripts/cua-helper/package.ts` 和 `stage.ts` 构建、公证并放入两种架构的 Computer Use helper，与 npm 发布的步骤相同；`skip_notarization` 不会跳过 helper 的公证。成功的 DMG／ZIP 与诊断日志保留 14 天，不发布 release；安装包上传关闭重复 ZIP 压缩。操作人员须验收完整 Actions 运行及目标架构上的安装，才能确认可交付。`compression_level` 下拉选项默认为 `3`，也可选择 `7`；本次运行以该选项覆盖机器预设，只影响 ZIP 和自动升级下载，不影响 DMG。
 
 三个平台的表单均依次展示源码、环境、升级通道、版本模式、手动版本号、测试 release ID 和压缩等级，默认值一致。macOS 公证选项和 Windows 签名、缓存测量选项位于公共字段之后。
 
@@ -246,7 +246,7 @@ Desktop 在本地打包工作区包，并通过目标捆绑的 Node 和 pnpm 安
 
 [Electron 外壳文件清单](../scripts/electron-builder-config.mjs)从单独收集的 `resources/app.asar/node_modules` 依赖中排除已识别的 JavaScript/CSS/TypeScript source map 和 TypeScript 构建缓存。这些排除规则保留运行时代码、原生模块、WASM、数据文件（包括普通 `.map` 资源）、许可证和 notices；[外壳归档测试](../tests/shell-file-selection.spec.ts)检查保留文件的字节和排除项。
 
-[Office 转换提供方](../../../packages/document/office-to-pdf/README.zh.md)携带目标已声明的原生引擎；kit 未声明匹配原生目标时携带 WASM 引擎。准备阶段在打包前拒绝缺少目标引擎的情况。完整 Office 依赖（CLI、JavaScript 库和选定引擎的可执行文件、数据、许可证及 notices）解包到 `resources/app.asar.unpacked/dsh/node_modules/` 下。Desktop Host 将引擎清单解析到这些物理目录，并向加载的技能提供独立 Node 和解包后 CLI 的绝对路径。Node 位于 `resources/runtime/primary-runtime/dependencies/node/bin/`；CLI 位于解包后的 `@deepseek-ai/libreoffice-kit/lib/cli.js`。macOS 上的原生辅助程序获得 [LibreOffice UNO 桥](https://github.com/LibreOffice/core/blob/master/sysui/desktop/macosx/hardened_runtime.xcent.in)所需的 JIT entitlement。
+[Office 转换提供方](../../../packages/document/office-to-pdf/README.zh.md)携带目标已声明的原生引擎；kit 未声明匹配原生目标时携带 WASM 引擎。准备阶段在打包前拒绝缺少目标引擎的情况。完整 Office 依赖（CLI、JavaScript 库和选定引擎的可执行文件、数据、许可证及 notices）解包到 `resources/app.asar.unpacked/dsh/node_modules/` 下。Desktop Host 将引擎清单解析到这些物理目录，并向加载的技能提供独立 Node 和解包后 CLI 的绝对路径。Node 位于 `resources/runtime/primary-runtime/dependencies/node/bin/`；CLI 位于解包后的 `@deepseek-ai/libreoffice-kit/lib/cli.js`。macOS 上的原生辅助程序获得 [LibreOffice UNO 桥](https://github.com/LibreOffice/core/blob/master/sysui/desktop/macosx/hardened_runtime.xcent.in)所需的 JIT entitlement。`@deepseek-ai/dsh-experimental-cua-macos/native/bin` 下的 Computer Use helper 应用同样整体解包。运行时签名按发布身份校验每个应用包，不重签其中的文件，提供方打开解包后的副本。
 
 打包应用运行编译后的 JavaScript 和预生成的 Typert 元数据，不编译 TypeScript 插件。源码级调试导航和编辑器声明仍可从开发包中获取。[复制规则测试](../tests/runtime-file-policy.spec.ts)覆盖排除项和保留资源；[产物 smoke](../tests/fixtures/runtime-payload-smoke.mjs) 在 Host smoke 和最终清单验证之前，使用 Electron RunAsNode 执行。产物 smoke 解析搜索工具使用的 ripgrep 可执行文件，并验证文本搜索和文件枚举。Windows 签名构建在依赖签名后运行这些检查；其他构建在 `prepare:dsh` 中运行。[Host smoke](../scripts/smoke-runtime.ts) 使用捆绑的 Python 创建 DOCX、XLSX 和 PPTX 输入，通过真实 Office 提供方逐一转换并检查 PDF 输出。每个组装后的应用（包括目录包和未签名构建）都会针对 ASAR 重复产物和 Host 检查。归档完整性检查将归档内完整描述符与准备结果比对，并核对归档和解包目录中的文件内容与清单、归档内文件记录的执行标志，以及解包文件的物理权限。转换失败会在写入发布记录前终止打包；macOS DMG/ZIP 构建在公证前执行这些检查。
 

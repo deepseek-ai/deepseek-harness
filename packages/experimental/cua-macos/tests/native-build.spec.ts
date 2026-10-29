@@ -100,6 +100,14 @@ it('uses an installed application without compiling or re-signing it', async () 
   await expect(prepareNativeExecutable(f.spec)).rejects.toThrow()
 })
 
+it('reads an application that an Electron archive installation keeps beside app.asar', async () => {
+  const f = await fixture()
+  const archived = join(f.root, 'Resources/app.asar/dsh/node_modules/@deepseek-ai/dsh-experimental-cua-macos')
+  const path = await publish(join(f.root, 'Resources/app.asar.unpacked/dsh/node_modules/@deepseek-ai/dsh-experimental-cua-macos/native/bin/darwin-arm64'), f.output)
+  expect(await prepareNativeExecutable({ ...f.spec, packageRoot: archived })).toBe(path)
+  expect(f.spawn).not.toHaveBeenCalled()
+})
+
 it.each(['../outside', '/absolute', '', 'a'.repeat(63), 'A'.repeat(64)])('rejects an invalid installed generation %s', async (bundle) => {
   const f = await fixture()
   await mkdir(f.directory, { recursive: true })

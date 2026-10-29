@@ -75,8 +75,10 @@ export function createElectronBuilderConfig(
   let primaryRuntimeDestination
   let dshDestination
   let windowsCode = []
+  // LaunchServices opens the Computer Use helper as an application, so every file of its bundle stays on disk.
   const unpack = ['**/*.{node,dylib,dll,so,exe}', '**/*.so.*', '**/spawn-helper', '**/@vscode/ripgrep-*/bin/rg',
-    `**/node_modules/@deepseek-ai/libreoffice-kit-${resolvedPlatform}-${resolvedArch}/**/*`]
+    `**/node_modules/@deepseek-ai/libreoffice-kit-${resolvedPlatform}-${resolvedArch}/**/*`,
+    '**/node_modules/@deepseek-ai/dsh-experimental-cua-macos/native/bin/**/*']
   const windowsSigner = packagesWindows && !unsigned
     ? createWindowsTokenSigner({
         certificateFile: env.DSH_DESKTOP_WINDOWS_CER_FILE,

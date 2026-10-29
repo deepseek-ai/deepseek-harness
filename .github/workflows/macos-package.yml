@@ -117,6 +117,14 @@ jobs:
         env:
           PACKAGE_BUILD_VERSION: ${{ inputs.build_version }}
         run: node apps/desktop/scripts/prepare-macos-ci.mjs
+      - name: Build and stage notarized Computer Use helpers
+        # The Desktop runtime packs the workspace provider, so it carries the same helper npm publication stages.
+        run: |
+          mkdir -p dist
+          pnpm exec tsx scripts/cua-helper/package.ts --out dist/cua-helper
+          mkdir dist/cua-helper/extracted
+          tar -xzf dist/cua-helper/cua-helper.tgz -C dist/cua-helper/extracted
+          pnpm exec tsx scripts/cua-helper/stage.ts --from dist/cua-helper/extracted
       - name: Check packaging configuration and toolchain
         env:
           PACKAGE_VERSION: ${{ steps.settings.outputs.version }}

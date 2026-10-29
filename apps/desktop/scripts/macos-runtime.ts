@@ -11,6 +11,8 @@ import { macOSCachePolicy } from './macos-cache-policy.ts'
 import { signMacOSRuntimeCode, verifyMacOSRuntimeCode } from './verify-macos-signature.mjs'
 
 const MACH_O_MAGICS = new Set(['cafebabe', 'cafebabf', 'cefaedfe', 'cffaedfe', 'feedface', 'feedfacf', 'bebafeca', 'bfbafeca'])
+/** The outermost application bundle containing a runtime path; its own signature seals every file inside it. */
+const APPLICATION_BUNDLE = /^((?:[^/]+\/)*?[^/]+\.app)\//u
 
 function magic(path: string): string {
   const descriptor = openSync(path, 'r')
@@ -33,21 +35,31 @@ async function primaryRuntimeFiles(root: string): Promise<string[]> {
 }
 
 /**
- * Sign and verify every materialized Mach-O file, awaiting all signers on failure.
+ * Sign and verify every materialized Mach-O file outside application bundles, awaiting all signers on failure.
+ * A bundle, such as the notarized Computer Use helper, keeps its own seal: it is verified against the release
+ * identity before any file is signed and is never re-signed, because signing a file inside it breaks the seal.
  * @param root - Self-contained production runtime.
  * @param appId - Release application identifier.
  * @param expected - Required signing identity.
  * @param arch - Target runtime architecture, independent of the signing host.
  * @param cacheDirectory - Optional content-addressed cache; requires the keychain-owned signing probe.
  * @param kind - Primary payloads admit validated Python aliases; Desktop application runtimes reject every link.
- * @returns Number of signed native files.
+ * @returns Number of signed native files, excluding files inside verified application bundles.
+ * @throws When a bundle signature does not verify against the release identity, or when any signer fails.
  */
 export async function signMacOSRuntime(
   root: string, appId: string, expected: MacOSSigningEnvironment, arch: 'arm64' | 'x64', cacheDirectory?: string,
   kind: 'desktop' | 'primary' = 'desktop',
 ): Promise<number> {
   const inventory = kind === 'primary' ? await primaryRuntimeFiles(root) : inventoryDesktopRuntime(root).map(file => file.path)
-  const files = inventory.filter(path => MACH_O_MAGICS.has(magic(join(root, path))))
+  const bundles = new Set<string>()
+  const files: string[] = []
+  for (const path of inventory) {
+    const bundle = APPLICATION_BUNDLE.exec(path)?.[1]
+    if (bundle !== undefined) bundles.add(bundle)
+    else if (MACH_O_MAGICS.has(magic(join(root, path)))) files.push(path)
+  }
+  for (const bundle of [...bundles].sort()) verifyMacOSRuntimeCode(join(root, bundle), expected)
   const policy = cacheDirectory === undefined ? undefined : macOSCachePolicy(process.env.DSH_DESKTOP_MACOS_SIGNING_PROBE ?? '')
   let hits = 0
   let misses = 0

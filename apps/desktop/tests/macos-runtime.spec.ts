@@ -26,6 +26,31 @@ it('signs Mach-O files in their final locations and verifies each signature', as
   expect(verifyMacOSRuntimeCode).toHaveBeenCalledWith(join(path, 'addon.node'), identity)
 })
 
+it('verifies an embedded application bundle as a whole and leaves its files unsigned', async () => {
+  const path = root()
+  const bundle = 'node_modules/@deepseek-ai/dsh-experimental-cua-macos/native/bin/darwin-arm64/generation/DSH Computer Use.app'
+  for (const nested of ['Contents/MacOS/dsh-cua-native', 'Contents/Frameworks/Inner.app/Contents/MacOS/inner']) {
+    mkdirSync(join(path, bundle, nested, '..'), { recursive: true })
+    writeFileSync(join(path, bundle, nested), Buffer.from('cffaedfe00000000', 'hex'))
+  }
+  writeFileSync(join(path, bundle, 'Contents/Info.plist'), '<plist/>')
+  writeFileSync(join(path, 'addon.node'), Buffer.from('cffaedfe00000000', 'hex'))
+  await expect(signMacOSRuntime(path, 'com.example.app', identity, 'arm64')).resolves.toBe(1)
+  expect(signMacOSRuntimeCode).toHaveBeenCalledExactlyOnceWith(join(path, 'addon.node'), expect.any(String), identity, undefined)
+  expect(vi.mocked(verifyMacOSRuntimeCode).mock.calls).toEqual([[join(path, bundle), identity], [join(path, 'addon.node'), identity]])
+})
+
+it('rejects an application bundle without the release signature before signing any file', async () => {
+  const path = root()
+  const bundle = join(path, 'Helper.app/Contents/MacOS')
+  mkdirSync(bundle, { recursive: true })
+  writeFileSync(join(bundle, 'helper'), Buffer.from('cffaedfe00000000', 'hex'))
+  writeFileSync(join(path, 'addon.node'), Buffer.from('cffaedfe00000000', 'hex'))
+  vi.mocked(verifyMacOSRuntimeCode).mockImplementationOnce(() => { throw new Error('signature does not match the release identity') })
+  await expect(signMacOSRuntime(path, 'com.example.app', identity, 'arm64')).rejects.toThrow('release identity')
+  expect(signMacOSRuntimeCode).not.toHaveBeenCalled()
+})
+
 // File symlinks in these macOS fixtures require privileges unavailable to ordinary Windows processes.
 it.skipIf(process.platform === 'win32')('signs a shared Python interpreter once and retains both executable aliases', async () => {
   const path = root()
