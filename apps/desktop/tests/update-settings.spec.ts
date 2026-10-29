@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
+import { readDesktopSettings } from '../src/settings.ts'
 import { DesktopUpdateSettings, DesktopUpdateSettingsError } from '../src/update-settings.ts'
 
 async function fixture() {
@@ -47,4 +48,17 @@ it('reports unreadable configuration instead of silently choosing a default', as
   const settings = await fixture()
   await mkdir(settings.path)
   expect(await settings.load()).toMatchObject({ kind: 'error', error: { kind: 'read' } })
+})
+
+it('updates the document initialized by shell settings without losing the popup preference', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'desktop-shared-settings-'))
+  onTestFinished(() => rm(root, { recursive: true, force: true }))
+  expect(readDesktopSettings(root).updates.allowTestAuthPopupWindow).toBe(false)
+  const settings = new DesktopUpdateSettings(root, 'latest')
+  await settings.save('nightly')
+  expect(JSON.parse(await readFile(settings.path, 'utf8'))).toEqual({
+    updates: { allowTestAuthPopupWindow: false, channel: 'nightly' },
+  })
+  expect(readDesktopSettings(root).updates.allowTestAuthPopupWindow).toBe(false)
+  expect(await settings.load()).toEqual({ kind: 'ready', channel: 'nightly' })
 })

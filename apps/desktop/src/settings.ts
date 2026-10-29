@@ -3,7 +3,7 @@
  * Ownership: .agents/notes/implemented/architecture/2026-10-08-desktop-shell-configuration.md.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 /** Resolved shell preferences; absent fields use the defaults without rewriting existing files. */
 export interface DesktopSettings {
@@ -17,19 +17,27 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Resolve the shared document used by shell preferences and update channels.
+ * @param userData - Electron's userData directory, independent of DSH_HOME.
+ * @returns Absolute settings path when userData is absolute; no filesystem changes.
+ */
+export function desktopSettingsPath(userData: string): string {
+  return join(userData, 'desktop', 'settings.json')
+}
+
+/**
  * Read shell settings, creating the default document exclusively when missing.
  * @param userData - Electron's userData directory, independent of DSH_HOME.
  * @returns Validated settings, or defaults when reading, creating or validating fails; changes require a restart.
  */
 export function readDesktopSettings(userData: string): DesktopSettings {
-  const directory = join(userData, 'desktop')
-  const path = join(directory, 'settings.json')
+  const path = desktopSettingsPath(userData)
   const defaults: DesktopSettings = { updates: { allowTestAuthPopupWindow: false } }
   try {
     let raw: string
     try { raw = readFileSync(path, 'utf8') } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-      mkdirSync(directory, { recursive: true, mode: 0o700 })
+      mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
       try { writeFileSync(path, `${JSON.stringify(defaults, null, 2)}\n`, { flag: 'wx', mode: 0o600 }) } catch (error) {
         // An existing document belongs to the user, including one created during initialization.
         if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error

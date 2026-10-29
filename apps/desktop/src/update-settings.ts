@@ -1,7 +1,8 @@
 /** Startup-only file reads and explicit UI writes for shell-owned update channels. */
 import { readFile, mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
+import { desktopSettingsPath } from './settings.ts'
 import type { DesktopUpdateChannel } from './update-channel.ts'
 
 /** A settings operation failed without applying a new runtime channel. */
@@ -43,7 +44,7 @@ export class DesktopUpdateSettings {
    * @param packagedChannel - Default selected by the installer build input.
    */
   constructor(userData: string, private readonly packagedChannel: DesktopUpdateChannel) {
-    this.path = join(userData, 'desktop', 'settings.json')
+    this.path = desktopSettingsPath(userData)
   }
 
   /** @returns The startup channel, or a failure that must suspend ordinary updates. */
