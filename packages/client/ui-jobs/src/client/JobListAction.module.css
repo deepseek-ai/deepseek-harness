@@ -13,9 +13,14 @@
   cursor: pointer;
 }
 
-.trigger:hover,
 .trigger:focus-visible {
   color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .trigger:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .trigger svg {
@@ -99,12 +104,18 @@
   cursor: pointer;
 }
 
-.sectionToggle:hover,
 .sectionToggle:focus-visible,
-.sectionClear:hover,
 .sectionClear:focus-visible {
   background: var(--dsw-alias-fill-l1);
   color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .sectionToggle:hover,
+  .sectionClear:hover {
+    background: var(--dsw-alias-fill-l1);
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .sectionChevron {
@@ -138,8 +149,10 @@
   background: var(--dsw-alias-fill-l2);
 }
 
-.rowLineLive:hover {
-  background: color-mix(in srgb, var(--dsw-alias-label-primary) 9%, transparent);
+@media (hover: hover) {
+  .rowLineLive:hover {
+    background: color-mix(in srgb, var(--dsw-alias-label-primary) 9%, transparent);
+  }
 }
 
 /* The kind badge shares the card fill, so it pops on the menu surface instead. */
@@ -154,8 +167,10 @@
 
 /* The card carries the hover wash; the inner row stays transparent so the
    two washes never stack, keeping keyboard focus its own visible state. */
-.rowLineLive .row:hover {
-  background: transparent;
+@media (hover: hover) {
+  .rowLineLive .row:hover {
+    background: transparent;
+  }
 }
 
 .rowLineLive .row {
@@ -198,16 +213,21 @@
   cursor: pointer;
 }
 
-.stop:hover,
 .stop:focus-visible {
   border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
   color: var(--dsw-alias-state-error-primary);
 }
 
+@media (hover: hover) {
+  .stop:hover {
+    border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+    color: var(--dsw-alias-state-error-primary);
+  }
+}
+
 /* The armed press widens into a labeled danger pill so the confirm step is
    legible without hover; the state-error token is the one StateDot uses. */
 .stopArmed,
-.stopArmed:hover,
 .stopArmed:focus-visible {
   gap: 4px;
   width: auto;
@@ -215,6 +235,17 @@
   border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
   color: var(--dsw-alias-state-error-primary);
+}
+
+@media (hover: hover) {
+  .stopArmed:hover {
+    gap: 4px;
+    width: auto;
+    padding: 0 7px;
+    border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+    background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+    color: var(--dsw-alias-state-error-primary);
+  }
 }
 
 .stopLabel {
@@ -245,9 +276,14 @@
   cursor: pointer;
 }
 
-.row:hover,
 .row:focus-visible {
   background: var(--dsw-alias-fill-l1);
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-fill-l1);
+  }
 }
 
 /* A row with no observable output offers no interaction. */
@@ -255,8 +291,10 @@
   cursor: default;
 }
 
-.rowStatic:hover {
-  background: transparent;
+@media (hover: hover) {
+  .rowStatic:hover {
+    background: transparent;
+  }
 }
 
 .rowSettled {

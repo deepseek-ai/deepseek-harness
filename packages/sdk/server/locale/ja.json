@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SDK サーバー",
+    "description": "標準入出力の JSON-RPC で、別プロセスの SDK クライアントにサービスを提供します。"
+  }
+}

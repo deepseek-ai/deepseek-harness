@@ -356,9 +356,22 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
           return await record.wire.run(async (signal) => {
             const options = { signal: AbortSignal.any([signal, exec.signal]), timeout: config.toolCallTimeoutMs }
             const generation = record.wire.client
+            // The SDK answers an unadvertised capability with the same empty page, but
+            // writes a console.debug line to stdout, which the ACP profile reserves for JSON-RPC.
+            const listable = generation.getServerCapabilities()?.resources !== undefined
             switch (request.method) {
-              case 'resources/list': return await generation.listResources(request.cursor === undefined ? undefined : { cursor: request.cursor }, options) as JsonValue
-              case 'resources/templates/list': return await generation.listResourceTemplates(request.cursor === undefined ? undefined : { cursor: request.cursor }, options) as JsonValue
+              case 'resources/list':
+                return listable
+                  ? await generation.listResources(
+                    request.cursor === undefined ? undefined : { cursor: request.cursor }, options,
+                  ) as JsonValue
+                  : { resources: [] }
+              case 'resources/templates/list':
+                return listable
+                  ? await generation.listResourceTemplates(
+                    request.cursor === undefined ? undefined : { cursor: request.cursor }, options,
+                  ) as JsonValue
+                  : { resourceTemplates: [] }
               case 'resources/read': return await generation.readResource({ uri: request.uri }, options) as JsonValue
               /* v8 ignore next -- exhaustive over the closed resource request union */
               default: return assertNever(request)

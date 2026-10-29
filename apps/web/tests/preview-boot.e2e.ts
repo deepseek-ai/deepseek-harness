@@ -32,7 +32,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import { expect, it } from 'vitest'
-import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
+import { OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import {
   packPreviewFixture, packRepositoryImage, previewFixtures, WRAPPER_CONTRACT,
 } from '@deepseek-ai/dsh-experimental-webworker-packer'
@@ -43,6 +43,7 @@ import {
 import {
   VFS_EXAMPLE_SESSION_IDS,
   VFS_EXAMPLE_REASONING,
+  VFS_EXAMPLE_SPACING_TITLE,
   VFS_EXAMPLE_WRAPPED_COMMAND,
   buildVfsExampleFiles,
 } from '../../../packages/experimental/webworker-runtime/tests/vfs-example-fixture.ts'
@@ -470,6 +471,9 @@ async function bootPreview(site: Site, manifest: ImageManifest, browser: Browser
     const sessions = page.getByRole('tree', { name: 'Sessions' })
     const showcase = sessions.getByRole('treeitem').filter({ hasText: SHOWCASE_TITLE })
     await expect.poll(() => showcase.count(), { timeout: 15_000 }).toBe(1)
+    // The current-generation spacing sample ships beside the showcase and must be listed cold.
+    const spacingSample = sessions.getByRole('treeitem').filter({ hasText: VFS_EXAMPLE_SPACING_TITLE })
+    await expect.poll(() => spacingSample.count(), { timeout: 15_000 }).toBe(1)
     // The packed deployment ships the Schedule rows, and the preview storage
     // seeds the showcase Session with active tasks.
     expect(await showcase.locator('[data-session-schedule-mark]').count()).toBe(1)
@@ -668,7 +672,11 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
       inactive: string[]
       restored: boolean
     }> = []
-    for (const entry of bundles.filter(candidate => candidate.optional)) {
+    // The packed worker composition cannot mount the Liveshare declaration row and its share host in
+    // the same patch batch without racing the declaration service; the ordinary Web scaffold covers
+    // that bundle's enable/disable path (plugin-manager.e2e.ts), so the packed toggle list skips it.
+    for (const entry of bundles.filter(candidate => candidate.optional
+      && candidate.name !== '@deepseek-ai/dsh-experimental-liveshare')) {
       const enable = await remote<{ application: string; error?: unknown }>('pluginManager/setBundleEnabled', { name: entry.name, enabled: true })
       const plugins = await remote<Plugin[]>('pluginManager/listPlugins', {})
       const disable = await remote<{ application: string }>('pluginManager/setBundleEnabled', { name: entry.name, enabled: false })
@@ -686,6 +694,7 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
       })
     }
     return {
+      cua: bundles.filter(entry => entry.name === '@deepseek-ai/dsh-cua-bundle'),
       optional: bundles.filter(entry => entry.optional).map(entry => ({
         name: entry.name, enabled: entry.enabled, availability: entry.availability, error: entry.error ?? null,
         title: typeof entry.meta?.title, icon: typeof entry.meta?.icon, metaError: entry.meta?.error ?? null,
@@ -698,22 +707,15 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
   expect(result.optional.map(entry => entry.name).sort()).toEqual([...OPTIONAL_BUNDLES].sort())
   expect(result.optional.filter(entry => entry.enabled || entry.availability !== 'installation')).toEqual([])
   expect(result.optional.filter(entry => entry.error !== null)).toEqual([])
+  expect(result.cua).toHaveLength(1)
+  expect(result.cua[0]).toMatchObject({ name: '@deepseek-ai/dsh-cua-bundle', optional: false,
+    availability: 'missing', error: { code: 'unsupported-platform' } })
   // Metadata resolves through the Worker's Node internal modules: every optional bundle shows its title and icon.
   expect(result.optional.filter(entry => entry.metaError !== null || entry.title !== 'object' || entry.icon !== 'string')).toEqual([])
   expect(result.inventoryErrors).toEqual([])
   console.info(`preview boot: optional bundle toggles ${JSON.stringify(result.toggles.map(({ name, enable, disable, error }) => ({ name, enable, disable, error })))}`)
-  const cua = result.toggles.find(toggle => toggle.name === '@deepseek-ai/dsh-cua-bundle')!
-  expect(cua).toMatchObject({
-    enable: 'applied', disable: 'applied',
-    error: null,
-    restored: true,
-  })
-  expect(cua.changed).toBeGreaterThan(0)
-  expect(cua.inactive).toEqual([])
-  expect(cua.plugins).toContainEqual(expect.objectContaining({
-    moduleName: '@deepseek-ai/dsh-experimental-cua-macos', enabled: false, fiberPhase: null,
-  }))
-  const supported = result.toggles.filter(toggle => toggle.name !== '@deepseek-ai/dsh-cua-bundle')
+  expect(result.toggles.find(toggle => toggle.name === '@deepseek-ai/dsh-cua-bundle')).toBeUndefined()
+  const supported = result.toggles
   expect(supported.filter(toggle => toggle.enable !== 'applied' || toggle.disable !== 'applied')
     .map(({ name, enable, disable }) => ({ name, enable, disable }))).toEqual([])
   // Each bundle changes Loader rows, every enabled row it changes runs, and switching it off restores the prior rows.
@@ -776,7 +778,7 @@ async function openSessionInspector(page: Page): Promise<void> {
   // The showcase opens with a file tab in the right sidebar; a new tab shows the guide entries.
   await page.getByRole('button', { name: 'New tab', exact: true }).click()
   await page.locator('[data-sidebar-right-guide-entry="session-inspector-log"]').click({ timeout: 30_000 })
-  await page.getByRole('table', { name: 'Raw Log', exact: true }).waitFor({ timeout: 15_000 })
+  await page.getByRole('table', { name: 'Raw log', exact: true }).waitFor({ timeout: 15_000 })
   expect(await setBundle(page, INSPECTOR_BUNDLE, false)).toBe('applied')
 }
 

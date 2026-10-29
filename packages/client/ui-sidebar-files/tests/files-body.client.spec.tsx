@@ -327,3 +327,27 @@ describe('failureLine', () => {
     expect(failureLine(t, failure)).toBe('读取失败：socket closed')
   })
 })
+
+
+it('opens the clicked file menu in its pane without activating the file', async () => {
+  const h = mountBody()
+  await act(() => h.script.watches.ready(ROOT))
+  await act(() => h.script.settle({ ok: true, value: ROOT_LEVEL }))
+  const row = h.view.container.querySelector(`[data-files-path="${ROOT}/README.md"] button`)!
+  fireEvent.contextMenu(row, { clientX: 45, clientY: 56 })
+  expect(h.shared.openMenu).toHaveBeenCalledWith({ kind: 'file', value: { sessionId: SESSION, path: `${ROOT}/README.md`, paneId: 'pane-1' } }, { x: 45, y: 56 })
+  expect(h.tabActions.openResource).not.toHaveBeenCalled()
+})
+
+it('opens menus for a collapsed folder and the root without expanding or activating a file', async () => {
+  const h = mountBody()
+  await act(() => h.script.watches.ready(ROOT))
+  await act(() => h.script.settle({ ok: true, value: ROOT_LEVEL }))
+  const folder = h.view.getByRole('button', { name: 'src' })
+  fireEvent.contextMenu(folder, { clientX: 20, clientY: 30 })
+  expect(h.shared.openMenu).toHaveBeenLastCalledWith({ kind: 'directory', value: { sessionId: SESSION, path: `${ROOT}/src` } }, { x: 20, y: 30 })
+  expect(folder.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.contextMenu(h.view.container.querySelector('[data-path-label]')!, { clientX: 10, clientY: 15 })
+  expect(h.shared.openMenu).toHaveBeenLastCalledWith({ kind: 'directory', value: { sessionId: SESSION, path: ROOT } }, { x: 10, y: 15 })
+  expect(h.tabActions.openResource).not.toHaveBeenCalled()
+})

@@ -101,7 +101,7 @@ declare module '@deepseek-ai/cordis' {
 
 ## Cordis events and session records
 
-Harness Cordis events use `namespace/action` names, including `agent/pre-step`, `agent/request`, `agent/request-error`, `tools/result`, and `session/event`. The generated `cordis-surface` regions on the [subsystem pages](../../../subsystems/core.md) record complete signatures and modes.
+Harness Cordis events use `namespace/action` names, including `agent/pre-step`, `agent/request-error`, `tools/result`, and `session/event`. The generated `cordis-surface` regions on the [subsystem pages](../../../subsystems/core.md) record complete signatures and modes.
 
 `turn/*`, `step/*`, `tool/call`, `tool/result`, and `compaction/*` are durable session-event types, not same-named Cordis events. To observe them, listen to `session/event` and inspect `event.type`.
 

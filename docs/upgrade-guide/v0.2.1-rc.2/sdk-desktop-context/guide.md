@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-The existing `sdk` profile now includes `present`, `ask_user_question`, schedule tools, file-reference guidance and time context. It does not start a Web server. Standard tool calling remains the default; `DSH_TOOLS_MODE=ptc` selects programmatic tool calling in the same profile. `sdk-minimal` is unchanged.
+The existing `sdk` profile now includes `present`, `ask_user_question`, schedule tools, file-reference guidance and time context. It does not start a Web server. Native tool execution remains the default; select PTC through an [executor overlay](../tool-executor-plugins/guide.md). `sdk-minimal` is unchanged.
 
 ## Migration
 

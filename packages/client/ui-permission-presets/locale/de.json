@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Schnittstelle für den Berechtigungsmodus",
+    "description": "Legt die Standardberechtigungen für neue Sitzungen fest und wechselt den Berechtigungsmodus für die aktuelle Sitzung."
+  }
+}

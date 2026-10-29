@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface conversationnelle du sous-agent",
+    "description": "Affichez et accédez aux conversations des agents enfants, avec prise en charge des conversations continues et des @quotes."
+  }
+}

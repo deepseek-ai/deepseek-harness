@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "LiveShare Session Sharing",
+    "description": "Share the current Session with a colleague, who can drive it in a browser, edit files inside the granted workspace when the share allows writes, or branch their own Session from the completed history."
+  }
+}

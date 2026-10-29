@@ -115,7 +115,7 @@ One UI feature = one plugin package (`src/client/` browser half). A multi-domain
 
 ## Styling and localization
 
-[docs/web-styling.md](../../docs/web-styling.md) is authoritative. Shared `--dsw-*` tokens and global sheets live in `ui-theme/src/styles/`; feature components consume semantic aliases through CSS Modules and `clsx`, with no literal colors, component library, or Tailwind. Code comments are English. Design judgment beyond those rules — feedback surfaces, loading states, overlay safety, platform window adaptation — follows [dsh-client-ui-ux](../../.agents/skills/dsh-client-ui-ux/SKILL.md).
+[docs/web-styling.md](../../docs/web-styling.md) is authoritative. Shared `--dsw-*` tokens and global sheets live in `ui-theme/src/styles/`; feature components consume semantic aliases through CSS Modules and `clsx`, with no literal colors, component library, or Tailwind. Code comments are English. Design judgment beyond those rules — feedback surfaces, loading states, overlay safety, platform window adaptation — follows [dsh-client-ui-ux](../../.agents/skills/dsh-client-ui-ux/SKILL.md); responsive layout and telling a mobile or touch client from a desktop one follow [dsh-responsive-ui](../../.agents/skills/dsh-responsive-ui/SKILL.md).
 
 Menus use `Menu` or `MenuSurface`, including custom listboxes, except the explicitly listed schedule containers. Preserve the shared transparency and blur ([rules](../../docs/web-styling.md#component-rules)).
 

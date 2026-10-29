@@ -1,4 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import { AgentModel, modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type ModelSelection } from '@deepseek-ai/dsh-agent'
+import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { ReasoningEffortId, type LlmRuntime } from '@deepseek-ai/dsh-llm'
 import { AcpModelControl } from '../src/model-control.ts'
 
@@ -30,21 +35,34 @@ function llmRuntime(overrides: Partial<LlmRuntime> = {}): LlmRuntime {
   } as unknown as LlmRuntime
 }
 
+async function createControl(runtime: LlmRuntime, initial?: ModelSelection) {
+  const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
+  const session = ctx.sessions.create(SessionId('model-control'))
+  const options = initial ?? {}
+  const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+  const model = new AgentModel(() => projection.stateOf(session), session, options)
+  return { control: new AcpModelControl(runtime, model), session, model }
+}
+
 describe('ACP model configuration control', () => {
   it('represents an absent route and validates value types before mutation', async () => {
-    const control = new AcpModelControl(llmRuntime(), undefined)
+    const { control, session, model } = await createControl(llmRuntime())
 
-    expect(control.snapshot()).toBeUndefined()
+    expect(model.current()).toBeUndefined()
     await expect(control.options()).resolves.toEqual([])
     await expect(control.set('model', false)).rejects.toThrow(/requires a select value/)
     await expect(control.set('model', 'missing')).rejects.toThrow(/no model selection/)
 
-    control.selection.current = { provider: 'mock', model: 'mock' }
-    expect(control.selection.current).toEqual({ provider: 'mock', model: 'mock' })
+    session.append('model/selection', { provider: 'mock', model: 'mock' })
+    expect(model.current()).toEqual({ provider: 'mock', model: 'mock' })
   })
 
   it('synthesizes an unlisted current route and exposes reasoning descriptions', async () => {
-    const control = new AcpModelControl(llmRuntime({ listProviders: () => [] }), {
+    const { control, model: agentModel } = await createControl(llmRuntime({ listProviders: () => [] }), {
       provider: 'private',
       model: 'unlisted',
     })
@@ -64,17 +82,13 @@ describe('ACP model configuration control', () => {
       options: [{ name: 'Low', description: 'Less thought.' }, { name: 'High' }],
     })
 
-    control.pinTurn(3, { provider: 'turn', model: 'pinned' })
-    expect(control.selection.current).toEqual({ provider: 'turn', model: 'pinned' })
-    control.releaseTurn(2)
-    expect(control.selection.current).toEqual({ provider: 'turn', model: 'pinned' })
-    control.releaseTurn(3)
-    expect(control.selection.current).toEqual({ provider: 'private', model: 'unlisted' })
+    expect(agentModel.current()).toEqual({ provider: 'private', model: 'unlisted' })
+
   })
 
   it('keeps the selected route when its provider catalog is temporarily unavailable', async () => {
     const listModels = vi.fn(() => Promise.reject(new Error('catalog unavailable')))
-    const control = new AcpModelControl(llmRuntime({ listModels }), { provider: 'mock', model: 'mock' })
+    const { control } = await createControl(llmRuntime({ listModels }), { provider: 'mock', model: 'mock' })
 
     const options = await control.options()
 
@@ -86,12 +100,15 @@ describe('ACP model configuration control', () => {
   })
 
   it('rejects an unadvertised reasoning effort and accepts a later valid change', async () => {
-    const control = new AcpModelControl(llmRuntime(), { provider: 'mock', model: 'mock' })
+    const { control, session } = await createControl(llmRuntime(), { provider: 'mock', model: 'mock' })
 
     await expect(control.set('reasoning_effort', 'extreme')).rejects.toThrow(/unknown reasoning effort/)
     const options = await control.set('reasoning_effort', 'low')
 
     expect(options.find(option => option.id === 'reasoning_effort')).toMatchObject({ currentValue: 'low' })
+    expect(session.snapshotEvents().map(event => ({ type: event.type, data: event.data }))).toEqual([{
+      type: 'model/selection', data: { provider: 'mock', model: 'mock', reasoningEffort: 'low' },
+    }])
   })
 
   it('exposes and restores a provider-owned reasoning default', async () => {
@@ -115,7 +132,7 @@ describe('ACP model configuration control', () => {
         },
       }),
     })
-    const control = new AcpModelControl(runtime, { provider: 'mock', model: 'mock' })
+    const { control, model } = await createControl(runtime, { provider: 'mock', model: 'mock' })
 
     const initial = await control.options()
     expect(initial.find(option => option.id === 'reasoning_effort')).toMatchObject({
@@ -126,6 +143,6 @@ describe('ACP model configuration control', () => {
     const restored = await control.set('reasoning_effort', '')
 
     expect(restored.find(option => option.id === 'reasoning_effort')).toMatchObject({ currentValue: '' })
-    expect(control.selection.current).toEqual({ provider: 'mock', model: 'mock' })
+    expect(model.current()).toEqual({ provider: 'mock', model: 'mock' })
   })
 })

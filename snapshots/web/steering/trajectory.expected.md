@@ -6,6 +6,7 @@
   - tablist:
     - tab "Chat"
     - tab "Trajectory" [selected]
+  - button "More conversation views"
 - toolbar "Trajectory toolbar":
   - button "Use actual duration": Duration
   - button "Collapse turns": Turns

@@ -89,6 +89,7 @@ describe('approveEscalation', () => {
       displayReason: {
         en: 'Allow this operation with workspace-write permissions: the user asked to write in the workspace',
         zh: '允许本次操作使用 workspace-write 权限：the user asked to write in the workspace',
+        ja: 'workspace-write 権限でこの操作を許可します：the user asked to write in the workspace',
       },
     })
   })

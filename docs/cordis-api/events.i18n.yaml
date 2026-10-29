@@ -9,29 +9,29 @@
   en: 9d809e3de33dd783
   zh: b965aee4a65c6c1a
 /events/ctx-parallel-name-args:
-  en: e583c71acb606915
-  zh: 0560679b20f8d7f0
+  en: 9c0a63f484e33428
+  zh: 09ee4c26931324af
 /events/ctx-emit-name-args:
-  en: ff6f4023b66f8164
-  zh: af16d24d663a7eb7
+  en: b41bd01cf219cbd6
+  zh: 2e9660a05dc07cfc
 /events/ctx-serial-name-args:
-  en: c431c0e3ac72e854
-  zh: c43b7d899ea8161c
+  en: 46708104f4d6a034
+  zh: f1b7fcb92a5b05c0
 /events/ctx-bail-name-args:
-  en: 85b8b2178c3e3c33
-  zh: ad8af3e0743e231c
+  en: 6577e113d5b8ce40
+  zh: b925f8070cf387f7
 /events/ctx-waterfall-name-args:
-  en: 3b32d0511b7da48b
-  zh: e0ac62e59d8e2152
+  en: 105fda32f60c7cea
+  zh: c67e6c6051c9a1af
 /events/ctx-on-name-listener-options:
-  en: 74a1fe55f4a47ec8
-  zh: 87d37038af3bab0e
+  en: ec7c7e8a8b15d460
+  zh: 79eba67c31873b0b
 /events/ctx-once-name-listener-options:
-  en: 64802f0580705984
-  zh: 3f6ce2d7ce1e760d
+  en: 27143e45f63622dd
+  zh: 095f804dfa47ad37
 /events/eventoptions:
-  en: 937453f689836c80
-  zh: ebf0cc0f28127245
+  en: 14ed1031e4a7abee
+  zh: 2380e2f73f8931af
 /events/dispatchmode:
-  en: 1c8548fb249ed794
-  zh: 86b92a28f39b2a12
+  en: 1081bbd7aa27baf8
+  zh: cc4434892b0bb93f

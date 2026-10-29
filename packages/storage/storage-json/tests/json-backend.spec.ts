@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Storage, { storageBackendServiceKey } from '@deepseek-ai/dsh-storage'
 import { runKvBackendContract } from '../../storage/tests/contract.ts'
@@ -83,9 +83,13 @@ describe('json backend specifics', () => {
   it('rolls back memory when a publish fails', async () => {
     const root = await freshRoot()
     const backend = new JsonStorageBackend(root)
-    const unit = await backend.kv.open(descriptor)
-    await unit.putRecord('t', 'k', { v: 'committed' })
-    await unit.setGlobal({ g: 'committed' })
+    onTestFinished(() => backend.close())
+    const original = await backend.kv.open(descriptor)
+    await original.putRecord('t', 'k', { v: 'committed' })
+    await original.putRecord('t', 'kept', { v: 'also committed' })
+    await original.setGlobal({ g: 'committed' })
+    await original.close()
+    const unit = await backend.kv.open({ ...descriptor, version: 2, compatibleVersions: [1] })
     const path = join(root, 'shape.json')
     const backup = join(root, 'shape.committed.json')
     // A directory at the publish target rejects atomic replacement on every host.
@@ -94,16 +98,19 @@ describe('json backend specifics', () => {
     await expect(unit.putRecord('t', 'k', { v: 'rejected' })).rejects.toThrow()
     await expect(unit.putRecord('t', 'k2', { v: 'also rejected' })).rejects.toThrow()
     await expect(unit.deleteRecord('t', 'k')).rejects.toThrow()
+    await expect(unit.deleteRecords('t', ['k', 'kept', 'missing', 'k'])).rejects.toThrow()
     await expect(unit.setGlobal({ g: 'rejected' })).rejects.toThrow()
     await rm(path, { recursive: true })
     await rename(backup, path)
     const snapshot = await unit.loadAll()
-    expect(snapshot.tables['t']).toEqual({ k: { v: 'committed' } })
+    expect(snapshot.tables['t']).toEqual({ k: { v: 'committed' }, kept: { v: 'also committed' } })
     expect(snapshot.global).toEqual({ g: 'committed' })
+    expect(JSON.parse(await readFile(path, 'utf8'))).toMatchObject({ unit: { version: 1 } })
     // The next successful publish must not carry rejected writes to disk.
     await unit.putRecord('t', 'k3', { v: 'later' })
     const text = await readFile(path, 'utf8')
     expect(text).not.toContain('rejected')
+    expect(JSON.parse(text)).toMatchObject({ unit: { version: 2 } })
     await backend.close()
   })
 
@@ -285,6 +292,39 @@ describe('per-record layout', () => {
     await backend.close()
   })
 
+  it('deletes a batch of documents as one staged set', async () => {
+    const root = await freshRoot()
+    const backend = new JsonStorageBackend(root)
+    const unit = await backend.kv.open(descriptor)
+    await unit.putRecord('t', 'k1', { v: 1 })
+    await unit.putRecord('t', 'k2', { v: 2 })
+    await unit.putRecord('t', 'k3', { v: 3 })
+    await unit.deleteRecords('t', ['k1', 'k3', 'missing', 'k1'])
+    expect(await unit.loadAll()).toEqual({ tables: { t: { k2: { v: 2 } } }, global: null })
+    // The staged documents are unlinked rather than left in the tree.
+    expect((await readdir(join(root, 'recs', 't'))).sort()).toEqual(['k2.json'])
+    await backend.close()
+  })
+
+  it('restores a batch when a staged rename fails, and rejects unsafe keys first', async () => {
+    const root = await freshRoot()
+    const backend = new JsonStorageBackend(root)
+    const unit = await backend.kv.open(descriptor)
+    await unit.putRecord('t', 'k1', { v: 1 })
+    await unit.putRecord('t', 'k2', { v: 2 })
+    // A non-empty directory at the second staged path makes its rename fail
+    // after the first document was staged out of the readable set.
+    const blocked = `${recordPath(root, 'k2')}.deleting`
+    await mkdir(blocked)
+    await writeFile(join(blocked, 'occupied'), '', 'utf8')
+    await expect(unit.deleteRecords('t', ['k1', 'k2'])).rejects.toThrow()
+    expect(await unit.loadAll()).toEqual({ tables: { t: { k1: { v: 1 }, k2: { v: 2 } } }, global: null })
+    await rm(blocked, { recursive: true })
+    // An unsafe key rejects before any document is renamed.
+    await expect(unit.deleteRecords('t', ['ok', 'a/b'])).rejects.toThrow(/not path-safe/)
+    await backend.close()
+  })
+
   it('rejects unsafe keys and undeclared tables, and enforces the closed guard', async () => {
     const root = await freshRoot()
     const backend = new JsonStorageBackend(root)
@@ -436,16 +476,33 @@ describe('per-record layout', () => {
   it('reads per-record documents stamped with a declared compat version and stamps writes current', async () => {
     const root = await freshRoot()
     const backend = new JsonStorageBackend(root)
+    onTestFinished(() => backend.close())
     const compat = { ...descriptor, compatibleVersions: [1] }
     await mkdir(join(root, 'recs', 't'), { recursive: true })
-    await writeFile(recordPath(root, 'oldrec'), JSON.stringify({ version: 1, record: { v: 'old' } }), 'utf8')
+    const original = JSON.stringify({ version: 1, record: { v: 'old' } })
+    await writeFile(recordPath(root, 'oldrec'), original, 'utf8')
+    const untouched = JSON.stringify({ version: 1, record: { v: 'keep' } })
+    await writeFile(recordPath(root, 'untouched'), untouched, 'utf8')
     await writeFile(recordPath(root, 'ancient'), JSON.stringify({ version: 0, record: { v: 'no' } }), 'utf8')
+    const globalPath = join(root, 'recs', 'global.json')
+    const global = JSON.stringify({ version: 1, record: 'old global' })
+    await writeFile(globalPath, global, 'utf8')
     const unit = await backend.kv.open(compat)
     // Version 1 is declared compat and served; version 0 is not and discards.
-    expect(await unit.loadAll()).toEqual({ tables: { t: { oldrec: { v: 'old' } } }, global: null })
+    expect(await unit.loadAll()).toEqual({ tables: { t: { oldrec: { v: 'old' }, untouched: { v: 'keep' } } }, global: 'old global' })
+    await unit.deleteRecord('t', 'missing')
+    await expect(unit.putRecord('t', 'oldrec', { toJSON: () => { throw new Error('serialization failed') } }))
+      .rejects.toThrow('serialization failed')
+    expect(await readFile(recordPath(root, 'oldrec'), 'utf8')).toBe(original)
+    await unit.deleteRecords('t', ['oldrec', 'missing', 'oldrec'])
+    await expect(readFile(recordPath(root, 'oldrec'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     await unit.putRecord('t', 'oldrec', { v: 'new' })
     expect(JSON.parse(await readFile(recordPath(root, 'oldrec'), 'utf8')))
       .toEqual({ version: 2, record: { v: 'new' } })
+    expect(await readFile(globalPath, 'utf8')).toBe(global)
+    await unit.setGlobal('new global')
+    expect(JSON.parse(await readFile(globalPath, 'utf8'))).toEqual({ version: 2, record: 'new global' })
+    expect(await readFile(recordPath(root, 'untouched'), 'utf8')).toBe(untouched)
     await backend.close()
   })
 

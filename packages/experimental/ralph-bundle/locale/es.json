@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Bucles de Ralph",
+    "description": "Pida un bucle Ralph con un objetivo, y el agente inicia un agente nuevo sobre él ronda tras ronda hasta que se cumpla el objetivo, se informe de un bloqueo o se alcance el límite de rondas.",
+    "detail": "docs/DETAIL.md"
+  }
+}

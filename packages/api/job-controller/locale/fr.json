@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface d'observation des tâches en arrière-plan",
+    "description": "Fournir en permanence l'état et la sortie des tâches en arrière-plan au client."
+  }
+}

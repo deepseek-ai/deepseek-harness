@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Acesso à sandbox de arquivos",
+    "description": "Limite o escopo de gravação e edição de arquivos de acordo com o modo de permissão atual."
+  }
+}

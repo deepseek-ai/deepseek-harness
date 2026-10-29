@@ -3,7 +3,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { InboxState, InboxTarget } from '@deepseek-ai/dsh-agent/types'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
-import type { AttachmentIdType, FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { UserMessage } from '@deepseek-ai/dsh-llm/types'
@@ -116,8 +116,8 @@ export class Session implements SessionFace {
   private parentAvailable: boolean | undefined
   /**
    * Sticky send marker, private input of the composerPhase derivation: set
-   * synchronously before prompt()'s first await, never reset — the blank →
-   * engaging edge of the phase machine (see ComposerPhase).
+   * when the Host accepts a prompt, never reset — the blank → engaging edge of
+   * the phase machine (see ComposerPhase).
    */
   private promptAttempted = false
   /** A first accepted prompt stays in the engaging phase until its turn is observable. */
@@ -127,8 +127,10 @@ export class Session implements SessionFace {
   private removed = false
   private promptError: PromptError | null = null
   private lastAgentError: string | null = null
-  /** Local submission echoes, insertion-ordered (see SessionSnapshot.pendingSubmissions). */
+  /** Local submission echoes, insertion-ordered, including those the Host has not accepted yet. */
   private pendingSubmissions: readonly PendingSubmission[] = []
+  /** The accepted echoes, published as SessionSnapshot.pendingSubmissions; rebuilt when one is accepted or removed. */
+  private acceptedSubmissions: readonly PendingSubmission[] = []
   /** Per-echo settlement state; `retiring` latches the first observation so a
    *  Inbox projection and its durable event cannot both retire one echo. */
   private readonly submissionSettlements = new Map<SessionRequestId, {
@@ -142,6 +144,9 @@ export class Session implements SessionFace {
     }
     /** Durable admission may precede the Inbox projection acknowledging its claim. */
     admitted?: readonly (ImageAttachmentRef | FileAttachmentRef)[]
+    /** Whether the Host accepted the prompt; the echo is published only from then on. */
+    accepted: boolean
+    readonly onAccept?: (() => void) | undefined
     readonly onRetire?: ((retirement: PendingSubmissionRetirement) => void) | undefined
     retiring: boolean
   }>()
@@ -219,9 +224,10 @@ export class Session implements SessionFace {
   // ---- Operations ----
 
   /**
-   * Register one local submission echo (see the ISession declaration).
-   * Synchronous through markDirty: the echo is in the very next snapshot, so
-   * the conversation can paint it before the caller starts serializing.
+   * Register one local submission echo (see the ISession declaration). The
+   * echo reconciles against Host events from now on, but it enters the
+   * snapshot only once the prompt receipt or an Inbox row carrying its
+   * request id shows that the Host accepted it.
    * @param input - echo content and the optional settlement callback.
    * @returns the minted identity for {@link prompt} plus the pre-prompt abandon path.
    */
@@ -235,16 +241,17 @@ export class Session implements SessionFace {
       text: input.text,
       attachments: input.attachments,
     }]
-    this.submissionSettlements.set(requestId, { placement, onRetire: input.onRetire, retiring: false })
-    // The blank → engaging edge flips here, ahead of prompt(): the composer
-    // docks and the echo renders on the click's own frame.
-    this.promptAttempted = true
-    this.notifier.markDirty()
+    this.submissionSettlements.set(requestId, {
+      placement, accepted: false, onAccept: input.onAccept, onRetire: input.onRetire, retiring: false,
+    })
     return { requestId, abandon: () => { this.retireFailedSubmission(requestId) } }
   }
 
   /**
-   * Send (queue/steer passed through 1:1); failures land in the snapshot's promptError.
+   * Send (queue/steer passed through 1:1); failures land in the snapshot's
+   * promptError. The Host can hold the prompt at its admission stage, so the
+   * call can stay open; the echo appears and the blank → engaging edge flips
+   * only once the Host accepts the prompt.
    * @param content - text, browser-owned temporary image uploads, and staged-file receipts.
    * @param mode - queue appends after the current turn; steer interrupts it.
    * @param signal - optional caller cancellation for the complete admission round-trip.
@@ -259,12 +266,9 @@ export class Session implements SessionFace {
   ): Promise<RemoteResult<{ accepted: true }>> {
     this.promptError = null
     this.lastAgentError = null
-    // Synchronous, before the first await: the blank → engaging edge must be
-    // visible on the session area's very first frame when a caller sends
-    // ahead of navigation (first-send flow).
-    this.promptAttempted = true
-    if (this.blankBit) this.firstPromptPendingTurn = true
-    this.notifier.markDirty()
+    // Before the first await, so a turn observed ahead of the receipt clears it.
+    const firstPrompt = this.blankBit && !this.firstPromptPendingTurn
+    if (firstPrompt) this.firstPromptPendingTurn = true
     let result: RemoteResult<{ accepted: true }>
     if (this.address === undefined) {
       const clientTimeZone = resolvedClientTimeZone()
@@ -300,31 +304,50 @@ export class Session implements SessionFace {
       result = routed.ok ? { ok: true, value: { accepted: true } } : routed
     }
     if (!result.ok) {
+      // Rejection must leave a first prompt blank and eligible for workspace reuse.
+      if (firstPrompt) this.firstPromptPendingTurn = false
       if (requestId !== undefined) this.retireFailedSubmission(requestId)
       this.promptError = { op: 'send', error: result.error }
       this.notifier.markDirty()
       return result
     }
-    // Rejection must leave a first prompt blank and eligible for workspace reuse.
-    if (this.blankBit) {
-      this.blankBit = false
-      this.notifier.markDirty()
-    }
-    this.options.onEngaged?.(this)
+    this.acceptPrompt(requestId)
     return result
   }
 
   /**
-   * Resolve one image referenced by this session into browser-consumable bytes.
-   * @param attachmentId - opaque id found in the folded session log.
-   * @returns the authenticated reference and decoded bytes.
+   * Apply the Host's acceptance of one prompt: publish its echo, move a blank
+   * Session to engaging, and tell the submitter. The prompt receipt and an
+   * Inbox row carrying the prompt's request id both prove acceptance.
+   * Whichever arrives first publishes the echo; a later proof for an echo
+   * still pending changes nothing.
+   * @param requestId - identity from {@link beginSubmission}; absent for a prompt sent without an echo.
+   */
+  private acceptPrompt(requestId: SessionRequestId | undefined): void {
+    const settlement = requestId === undefined ? undefined : this.submissionSettlements.get(requestId)
+    if (settlement?.accepted === true) return
+    if (settlement !== undefined) {
+      settlement.accepted = true
+      this.refreshAcceptedSubmissions()
+    }
+    this.promptAttempted = true
+    this.blankBit = false
+    this.notifier.markDirty()
+    this.options.onEngaged?.(this)
+    settlement?.onAccept?.()
+  }
+
+  /**
+   * Resolve one stored image into browser-consumable bytes using this Session's gateway permission scope.
+   * @param attachment - complete image reference from the folded session log.
+   * @returns the supplied reference after storage verification, and decoded bytes.
    */
   async readAttachment(
-    attachmentId: AttachmentIdType,
+    attachment: ImageAttachmentRef,
   ): Promise<RemoteResult<{ attachment: ImageAttachmentRef; data: Uint8Array }>> {
     const result = await this.remote.session.attachment({
       sessionId: this.sessionId,
-      attachmentId,
+      attachment,
     })
     if (!result.ok) return result
     const binary = atob(result.value.data)
@@ -777,7 +800,10 @@ export class Session implements SessionFace {
         }
       }
       this.observeSubmissionInsertions(target, inserted, start, event.seq)
-      for (const message of inserted) this.observeSubmissionMessage(message, false)
+      // A queued echo waits for the inbox projection the queue dock renders, which can arrive after this
+      // event; retiring it here would empty the dock for a frame. A claim in the same projection notification
+      // still retires it through the durable user message.
+      for (const message of inserted) this.observeSubmissionMessage(message, false, false)
       return
     }
     if (event.type === 'request/context' || event.type === 'turn/end') {
@@ -795,19 +821,24 @@ export class Session implements SessionFace {
       const source = message.source
       if (source.kind !== 'user' || !('rpcId' in source)) continue
       const settlement = this.submissionSettlements.get(source.rpcId)
-      if (settlement === undefined || settlement.placement === 'queued'
-        || settlement.retiring || (settlement.receipt?.seq ?? -1) > seq) continue
+      if (settlement === undefined || settlement.retiring || (settlement.receipt?.seq ?? -1) > seq) continue
+      // Either proof accepts a prompt; an Inbox row can reach the Client before the prompt receipt. Later splices
+      // move the recorded position, so a canceled splice that removes the row retires its echo, queued ones
+      // included; a queued echo otherwise leaves once the queue dock renders its row or its message is admitted.
       settlement.receipt = { target, seq, index: start + index, attachments: attachmentRefsIn(message.content) }
+      this.acceptPrompt(source.rpcId)
     }
   }
 
-  private observeSubmissionMessage(message: UserMessage, admitted: boolean): void {
+  private observeSubmissionMessage(message: UserMessage, admitted: boolean, retireQueued = true): void {
     const source = message.source
     if (source.kind !== 'user' || !('rpcId' in source)) return
     const settlement = this.submissionSettlements.get(source.rpcId)
     if (settlement === undefined || settlement.retiring) return
     if (!admitted) {
-      if (settlement.placement === 'queued') this.scheduleObservedRetirement(source.rpcId, attachmentRefsIn(message.content))
+      if (settlement.placement === 'queued' && retireQueued) {
+        this.scheduleObservedRetirement(source.rpcId, attachmentRefsIn(message.content))
+      }
       return
     }
     settlement.admitted = attachmentRefsIn(message.content)
@@ -861,6 +892,11 @@ export class Session implements SessionFace {
     this.finishSubmission(requestId, { reason: 'failed' })
   }
 
+  private refreshAcceptedSubmissions(): void {
+    this.acceptedSubmissions = this.pendingSubmissions
+      .filter(echo => this.submissionSettlements.get(echo.requestId)?.accepted === true)
+  }
+
   /** Single removal point: drop the echo, publish, then notify the owner. */
   private finishSubmission(requestId: SessionRequestId, retirement: PendingSubmissionRetirement): void {
     const settlement = this.submissionSettlements.get(requestId)
@@ -868,6 +904,7 @@ export class Session implements SessionFace {
     if (settlement === undefined) return
     this.submissionSettlements.delete(requestId)
     this.pendingSubmissions = this.pendingSubmissions.filter(echo => echo.requestId !== requestId)
+    if (settlement.accepted) this.refreshAcceptedSubmissions()
     this.notifier.markDirty()
     settlement.onRetire?.(retirement)
   }
@@ -889,7 +926,7 @@ export class Session implements SessionFace {
     const identity = this.projections.values().subagent
     return {
       sessionId: this.sessionId,
-      pendingSubmissions: this.pendingSubmissions,
+      pendingSubmissions: this.acceptedSubmissions,
       running: this.running,
       subagent: this.address === undefined
         ? null
@@ -908,7 +945,8 @@ export class Session implements SessionFace {
       blank: this.blankBit,
       lastAgentError: this.lastAgentError,
       promptAttempted: this.promptAttempted,
-      awaitingFirstTurn: this.firstPromptPendingTurn,
+      // The flag is set before the receipt; the Session leaves blank only once the Host accepted the prompt.
+      awaitingFirstTurn: this.firstPromptPendingTurn && !this.blankBit,
     }
   }
 

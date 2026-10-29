@@ -4,8 +4,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  width: calc(100% + 4px);
-  margin: 4px -2px;
+  width: 100%;
+  margin: 4px 0;
 }
 
 .triggerRow.railRow {
@@ -18,15 +18,17 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--dsh-sidebar-label-gap);
   width: auto;
   height: 42px;
   margin: 0;
-  padding: 0 10px 0 8px;
+  padding: 0 calc(var(--dsh-sidebar-row-padding) - var(--dsh-sidebar-paint-inset));
   box-sizing: border-box;
   border: none;
   border-radius: var(--dsw-radius-md);
   background: transparent;
+  border-inline: var(--dsh-sidebar-paint-inset) solid transparent;
+  background-clip: padding-box;
   cursor: pointer;
   overflow: hidden;
   color: var(--dsw-alias-label-primary);
@@ -35,8 +37,10 @@
   line-height: 22px;
 }
 
-.trigger:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .trigger:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Rail trigger: the same 36x36 box and 12px rounding as the other rail
@@ -49,6 +53,8 @@
   justify-content: center;
   gap: 0;
   padding: 0;
+  border-inline: 0;
+  background-clip: border-box;
 }
 
 .triggerLabel {
@@ -81,11 +87,20 @@
    content-sized panel would resize under the pointer on every nav click.
    The viewport height leaves 24px of air above and below, widened to the
    frame's published overlay inset on both sides, so the panel sits centered
-   and clear of the strip. */
+   and clear of the strip.
+   The four shell seats are direct children placed by area: the rail's title
+   and the content header share the first row, the rail's cells and the active
+   section the second. Narrow browser windows use a full-viewport panel and
+   rearrange these areas into a horizontal layout. */
 .panel {
   position: relative;
   z-index: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns: 188px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'title header'
+    'nav options';
   width: 800px;
   height: min(800px, calc(100vh - 2 * max(24px, var(--dsh-frame-overlay-top, 24px))));
   max-width: calc(100vw - 48px);
@@ -106,21 +121,24 @@
   outline: none;
 }
 
-/* Nav rail (figma .Setting-nav 501:29958): 188 wide, pad (12,22,12,0),
-   gap 18, no own fill — the panel white shows through. */
+/* Nav rail (figma .Setting-nav 501:29958): the 188px track's cells, pad
+   (12,0), no own fill — the panel white shows through. */
 .nav {
-  flex: none;
+  grid-area: nav;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  width: 188px;
-  padding: 22px 12px 0;
+  padding: 10px 12px 0;
   box-sizing: border-box;
 }
 
-/* Title row (figma 501:29959): 16/500 lh24, 12px side padding. */
+/* Title row (figma 501:29959): 16/500 lh24, at the rail's 24px text inset.
+   Its 54px row aligns with the content header; the nav adds the remaining
+   10px before the first cell. */
 .navTitle {
-  padding: 0 12px;
+  grid-area: title;
+  padding: 22px 12px 8px 24px;
   font-size: 16px;
   line-height: 24px;
   font-weight: 500;
@@ -132,6 +150,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -156,8 +175,10 @@
   text-align: left;
 }
 
-.navCell:hover {
-  background: var(--dsw-specific-sidebar-nav-item-hover);
+@media (hover: hover) {
+  .navCell:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .navCell.active {
@@ -176,17 +197,9 @@
   text-overflow: ellipsis;
 }
 
-/* Content column (figma Content 501:29980): header + options. */
-.content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
 /* Header (figma .Header 501:29981): h54, pad (10,20,14,8), close right. */
 .header {
-  flex: none;
+  grid-area: header;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -207,6 +220,7 @@
 
 /* Compact close control. */
 .close {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -220,16 +234,95 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.close:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .close:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Options area (figma Options 501:29983): pad (24,0,24,24), scrolls. */
 .options {
-  flex: 1;
+  grid-area: options;
+  min-width: 0;
   min-height: 0;
   padding: 0 24px 24px;
   overflow-y: auto;
+}
+
+/* Browsers below 768px use the full-viewport panel and horizontal navigation.
+   Windows custom captions and macOS native titlebars retain the desktop rail;
+   their independent root markers exclude both window-chrome layouts. Linux
+   follows the browser layout. The selected cell receives initial focus and
+   scrolls into view when the panel opens. */
+@media (max-width: 767px) {
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .overlay {
+    position: absolute;
+    height: 100%;
+    background: var(--dsw-alias-bg-layer-2);
+  }
+
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .panel {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'title header'
+      'nav nav'
+      'options options';
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .navTitle {
+    padding: 22px 0 0 16px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .header {
+    height: auto;
+    padding: 20px 16px 0 10px;
+  }
+
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .nav {
+    padding: 0;
+  }
+
+  /* The strip runs edge to edge and pads its own ends, so the first cell lines
+     up with the title and the last one stays clear of the panel edge. */
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .navList {
+    flex-direction: row;
+    gap: 4px;
+    padding: 12px 16px 14px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior: none;
+    scrollbar-width: none;
+  }
+
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .navList::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Cells grow into spare width and hold a 108px floor. The four shipped
+     sections already measure more than a 390px viewport, so the next cell shows
+     past the edge and the strip reads as scrollable. */
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .navCell {
+    flex: 1 0 auto;
+    justify-content: center;
+    min-width: 108px;
+    padding: 0 14px;
+  }
+
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .navLabel {
+    flex: none;
+  }
+
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .options {
+    padding: 0 16px 24px;
+  }
 }
 
 /* Visually-hidden text seat (close button accessible name from slot content). */

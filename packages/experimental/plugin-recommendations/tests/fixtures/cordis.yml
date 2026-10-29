@@ -1,0 +1,29 @@
+- insert:
+    - id: session
+      name: cordis:sessions
+    - id: projection
+      name: cordis:projections
+    - id: llm
+      name: cordis:llm
+    - id: prompt
+      name: cordis:prompt
+    - id: tools
+      name: cordis:tools
+    - id: executor
+      name: cordis:executor
+    - id: skills
+      name: cordis:skills
+    - id: agents
+      name: cordis:agents
+    - id: loop
+      name: cordis:loop
+      config:
+        agents: []
+    - id: access
+      name: cordis:access
+    - id: manager
+      name: cordis:manager
+    - id: action-cards
+      name: cordis:actionCards
+    - id: recommendations
+      name: cordis:recommendations

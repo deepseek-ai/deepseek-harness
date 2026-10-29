@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface de operação da conta",
+    "description": "Fornece recursos de operação de conta para clientes autenticados."
+  }
+}

@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import { createWindowsTokenSigner, scrubWindowsSigningEnvironment } from './windows-sign.mjs'
 import { inspectWindowsRuntimeSignature, type WindowsRuntimeSignature } from './windows-runtime-signature.mjs'
 import { failPackagingRun, recordPackagingEvent } from './packaging-run.mjs'
+import { inspectWindowsTokenIdentity, windowsTokenIdentityFailure } from './windows-token-identity.ts'
 
 const PROBE_SOURCE = 'internal static class SigningProbe { private static int Main() { return 0; } }\n'
 
@@ -18,6 +19,7 @@ interface SigningPreflightOptions {
   compile?: (compiler: string, source: string, output: string, environment: NodeJS.ProcessEnv) => Promise<void>
   sign?: ReturnType<typeof createWindowsTokenSigner>
   inspect?: (path: string) => Promise<WindowsRuntimeSignature>
+  inspectIdentity?: typeof inspectWindowsTokenIdentity
 }
 
 async function compileProbe(compiler: string, source: string, output: string, environment: NodeJS.ProcessEnv): Promise<void> {
@@ -28,7 +30,7 @@ async function compileProbe(compiler: string, source: string, output: string, en
 }
 
 /**
- * Sign one newly compiled, never-executed probe and verify its timestamp and configured certificate.
+ * Match public container keys before signing one never-executed probe and verifying its certificate and timestamp.
  * @param options Supervised evidence directory, file-owned settings and isolated test adapters.
  * @returns Resolves after one signature and verification; failures retain evidence; timestamp attempts never repeat hardware signing.
  */
@@ -71,6 +73,12 @@ export async function preflightWindowsSigning(options: SigningPreflightOptions):
     compilerSha256: createHash('sha256').update(await readFile(compiler)).digest('hex'),
     signToolSha256: createHash('sha256').update(await readFile(environment.DSH_DESKTOP_WINDOWS_SIGNTOOL!)).digest('hex'),
     certificateSha256: createHash('sha256').update(certificate).digest('hex') })
+  const identity = await (options.inspectIdentity ?? inspectWindowsTokenIdentity)({
+    certificate, container: environment.DSH_DESKTOP_WINDOWS_KEY_CONTAINER!.trim(),
+    environment: scrubWindowsSigningEnvironment(environment),
+  })
+  record({ type: 'signing-preflight-public-identity', result: identity, pinSupplied: false })
+  if (identity !== 'matched') throw new Error(windowsTokenIdentityFailure(identity))
   await (options.compile ?? compileProbe)(compiler, source, output, environment)
   const inspect = options.inspect ?? inspectWindowsRuntimeSignature
   if ((await inspect(output)).status !== 'NotSigned') throw new Error('Windows signing preflight requires a new unsigned probe')

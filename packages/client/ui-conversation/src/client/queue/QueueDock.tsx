@@ -229,7 +229,8 @@ export function QueueDock({ useSession, useProjection, updateQueue, notify, load
                       )}
                       <span className={css.preview}>{renderFactorySlot('conversation.user.text', {
                         text: row.content.filter(block => block.type === 'text').map(block => block.text).join(''),
-                        facts: QUEUE_TEXT_FACTS, interactive: false, ellipsis: true,
+                        facts: QUEUE_TEXT_FACTS,
+                        interactive: false, ellipsis: true,
                       })}</span>
                     </>
                   )}
@@ -345,7 +346,9 @@ export function QueueDock({ useSession, useProjection, updateQueue, notify, load
                   </span>
                 )}
                 <span className={css.preview}>{renderFactorySlot('conversation.user.text', {
-                  text: submission.text, facts: QUEUE_TEXT_FACTS, interactive: false, ellipsis: true,
+                  text: submission.text,
+                  facts: QUEUE_TEXT_FACTS,
+                  interactive: false, ellipsis: true,
                 })}</span>
                 <span className={css.status} role="status">{t('queue.sending')}</span>
                 {queueMutable && <div className={css.actions}>

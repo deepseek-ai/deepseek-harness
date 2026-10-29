@@ -1,6 +1,7 @@
 /**
  * Gate for the invariant `FALLBACK_LOCALE` rests on: every shipped dictionary
- * declares the same keys in `zh` and `en`.
+ * declares the same keys in every shipped language; translations also
+ * preserve the English placeholders, command examples, and API field names.
  *
  * The locale runtime resolves a key through the active locale, then through
  * the single fallback locale (`en`), then surfaces the key itself. With
@@ -26,6 +27,8 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
+import { SHIPPED_LOCALE_IDS, localeTokens, hasInvisibleLocaleCharacters, type ShippedLocaleId } from './shipped-locales.ts'
+
 const root = fileURLToPath(new URL('..', import.meta.url))
 
 /** Repo-relative path with `/` separators, so messages and suffix tests match on every OS. */
@@ -33,7 +36,7 @@ function relative(file: string): string {
   return file.slice(root.length).replaceAll('\\', '/')
 }
 
-/** Every `.ts` source file under each workspace package's `src`, excluding declarations. */
+/** Every TypeScript source file under each workspace package's `src`, excluding declarations. */
 function sourceFiles(): string[] {
   const files: string[] = []
   const packagesRoot = resolve(root, 'packages')
@@ -70,7 +73,7 @@ function walk(dir: string, out: string[]): void {
   for (const entry of readEntries(dir)) {
     const full = resolve(dir, entry.name)
     if (entry.isDirectory()) walk(full, out)
-    else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) out.push(full)
+    else if ((/\.tsx?$/u.test(entry.name)) && !entry.name.endsWith('.d.ts')) out.push(full)
   }
 }
 
@@ -82,6 +85,8 @@ interface Dictionary {
   name: string
   /** Declared keys, sorted. */
   keys: string[]
+  /** Literal templates used to compare named placeholders. */
+  templates: Readonly<Record<string, string>>
 }
 
 /**
@@ -98,7 +103,7 @@ function dictionariesIn(file: string): Dictionary[] {
   // before parsing — the silent narrowing this gate exists to prevent. A bare
   // `\b(zh|en)\b` misses `zhSettings`/`accessZh`, because `\b` does not hold
   // between `h` and an uppercase letter.
-  if (!/\b(zh|en)\b|\b(zh|en)[A-Z]|(Zh|En)\b/.test(text)) return []
+  if (!/\b(zh|en|ja|es|fr|de|ru|pt)\b|\b(zh|en|ja|es|fr|de|ru|pt)[A-Z]|(Zh|En|Ja|Es|Fr|De|Ru|Pt)\b/.test(text)) return []
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.ESNext, true)
   const found: Dictionary[] = []
   const rel = relative(file)
@@ -125,7 +130,7 @@ function dictionariesIn(file: string): Dictionary[] {
       const literal = unwrap(decl.initializer)
       if (literal === undefined || !ts.isObjectLiteralExpression(literal)) continue
       if (localeOf(decl.name.text) === undefined) continue
-      found.push({ file: rel, name: decl.name.text, keys: keysOf(literal) })
+      found.push({ file: rel, name: decl.name.text, keys: keysOf(literal), templates: templatesOf(literal) })
     }
   }
 
@@ -150,7 +155,7 @@ function dictionariesIn(file: string): Dictionary[] {
       if (name === 'register' && node.arguments.length >= 3) {
         const [ns, tag, dict] = node.arguments
         if (ns === undefined || tag === undefined || !ts.isStringLiteral(tag)) return
-        if (tag.text !== 'zh' && tag.text !== 'en') return
+        if (!SHIPPED_LOCALE_IDS.some(id => id === tag.text)) return
         const raw = unwrap(dict)
         const literal = raw !== undefined && ts.isIdentifier(raw)
           ? (() => {
@@ -171,10 +176,10 @@ function dictionariesIn(file: string): Dictionary[] {
         // The namespace expression's source text identifies the pair, so the
         // zh and en calls for one namespace meet and calls for different
         // namespaces stay apart.
-        found.push({ file: rel, name: `${tag.text}@register:${ns.getText(source)}`, keys: keysOf(dictionary) })
+        found.push({ file: rel, name: `${tag.text}@register:${ns.getText(source)}`, keys: keysOf(dictionary), templates: templatesOf(dictionary) })
       }
     }
-    if (ts.isArrayLiteralExpression(node) && node.elements.length === 2) {
+    if (ts.isArrayLiteralExpression(node) && node.elements.length >= 2) {
       const site = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1
       for (const element of node.elements) {
         if (!ts.isArrayLiteralExpression(element) || element.elements.length !== 2) continue
@@ -182,14 +187,26 @@ function dictionariesIn(file: string): Dictionary[] {
         const literal = unwrap(dict)
         if (tag === undefined || !ts.isStringLiteral(tag)) continue
         if (literal === undefined || !ts.isObjectLiteralExpression(literal)) continue
-        if (tag.text !== 'zh' && tag.text !== 'en') continue
-        found.push({ file: rel, name: `${tag.text}@inline:${site}`, keys: keysOf(literal) })
+        if (!SHIPPED_LOCALE_IDS.some(id => id === tag.text)) continue
+        found.push({ file: rel, name: `${tag.text}@inline:${site}`, keys: keysOf(literal), templates: templatesOf(literal) })
       }
     }
     ts.forEachChild(node, visit)
   }
   visit(source)
   return found
+}
+
+/** Literal templates; shared spread dictionaries are checked at their own declaration. */
+function templatesOf(literal: ts.ObjectLiteralExpression): Readonly<Record<string, string>> {
+  const templates: Record<string, string> = {}
+  for (const property of literal.properties) {
+    if (!ts.isPropertyAssignment(property) || !ts.isStringLiteralLike(property.initializer)) continue
+    if (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) {
+      templates[property.name.text] = property.initializer.text
+    }
+  }
+  return templates
 }
 
 /** Declared property names of an object literal, sorted. */
@@ -224,9 +241,9 @@ function unwrap(node: ts.Expression | undefined): ts.Expression | undefined {
  * @param name - export name or synthetic inline name.
  * @returns locale plus pair key, or undefined when the name names no locale.
  */
-function localeOf(name: string): { locale: 'zh' | 'en'; pair: string } | undefined {
-  for (const locale of ['zh', 'en'] as const) {
-    const other = locale === 'zh' ? 'Zh' : 'En'
+function localeOf(name: string): { locale: ShippedLocaleId; pair: string } | undefined {
+  for (const locale of SHIPPED_LOCALE_IDS) {
+    const other = locale[0]!.toUpperCase() + locale.slice(1)
     if (name === locale) return { locale, pair: '' }
     // Synthetic names for inline shapes carry their own pair key after the
     // first ':' (the enclosing array's line, or the namespace expression).
@@ -239,8 +256,64 @@ function localeOf(name: string): { locale: 'zh' | 'en'; pair: string } | undefin
   return undefined
 }
 
+/**
+ * Check that each object-form registration supplies every shipped-language dictionary.
+ * @param file - absolute source path.
+ * @returns registration sites missing a shipped language, or using an unresolved local identifier.
+ */
+function registrationProblems(file: string): string[] {
+  const text = readFileSync(file, 'utf8')
+  if (!text.includes('.register(')) return []
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.ESNext, true)
+  const locals = new Map<string, ts.Expression>()
+  const imported = new Set<string>()
+  const collect = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer !== undefined) {
+      locals.set(node.name.text, node.initializer)
+    }
+    if (ts.isImportSpecifier(node)) imported.add(node.name.text)
+    ts.forEachChild(node, collect)
+  }
+  collect(source)
+  const problems: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+      && node.expression.name.text === 'register' && node.arguments.length === 2) {
+      const argument = unwrap(node.arguments[1])
+      const dicts = argument !== undefined && ts.isIdentifier(argument)
+        ? unwrap(locals.get(argument.text)) : argument
+      if (dicts !== undefined && ts.isObjectLiteralExpression(dicts)) {
+        const entries = new Map<string, ts.Expression>()
+        for (const prop of dicts.properties) {
+          if (ts.isShorthandPropertyAssignment(prop)) entries.set(prop.name.text, prop.name)
+          else if (ts.isPropertyAssignment(prop) && (ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name))) {
+            entries.set(prop.name.text, prop.initializer)
+          }
+        }
+        if (entries.has('zh') && entries.has('en')) {
+          const site = `${relative(file)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`
+          for (const language of SHIPPED_LOCALE_IDS) {
+            const dictionary = entries.get(language)
+            if (dictionary === undefined) problems.push(`${site}: registration has no ${language} dictionary`)
+            else if (ts.isIdentifier(dictionary) && !imported.has(dictionary.text) && !locals.has(dictionary.text)) {
+              problems.push(`${site}: ${language} dictionary ${dictionary.text} is not imported or declared`)
+            }
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return problems
+}
+
 describe('shipped locale dictionaries', () => {
-  it('declares the same keys in zh and en, so the single fallback locale always resolves', () => {
+  it('registers every shipped language alongside every object-form bilingual dictionary', () => {
+    expect(sourceFiles().flatMap(registrationProblems)).toEqual([])
+  })
+
+  it('keeps bilingual keys aligned and shipped-language keys and placeholders complete', () => {
     const files = sourceFiles()
     // Guard the discovery itself: an empty or narrowed sweep would pass every
     // assertion below while checking nothing.
@@ -253,12 +326,18 @@ describe('shipped locale dictionaries', () => {
     const perFile = new Map<string, Dictionary[]>()
     for (const file of files) {
       const dicts = dictionariesIn(file)
-      if (dicts.length > 0) perFile.set(relative(file), dicts)
+      if (dicts.length > 0) {
+        expect(hasInvisibleLocaleCharacters(readFileSync(file, 'utf8')), relative(file)).toBe(false)
+        for (const dictionary of dicts) {
+          for (const text of Object.values(dictionary.templates)) expect(hasInvisibleLocaleCharacters(text), relative(file)).toBe(false)
+        }
+        perFile.set(relative(file), dicts)
+      }
     }
 
-    const groups = new Map<string, Map<'zh' | 'en', Dictionary>>()
-    const place = (key: string, locale: 'zh' | 'en', dict: Dictionary): void => {
-      const slot = groups.get(key) ?? new Map<'zh' | 'en', Dictionary>()
+    const groups = new Map<string, Map<ShippedLocaleId, Dictionary>>()
+    const place = (key: string, locale: ShippedLocaleId, dict: Dictionary): void => {
+      const slot = groups.get(key) ?? new Map<ShippedLocaleId, Dictionary>()
       if (slot.has(locale)) {
         throw new Error(`two ${locale} dictionaries claim pair ${key}: ${slot.get(locale)?.file} and ${dict.file}`)
       }
@@ -298,6 +377,26 @@ describe('shipped locale dictionaries', () => {
       const enOnly = en.keys.filter(k => !zh.keys.includes(k))
       if (zhOnly.length > 0) problems.push(`${zh.file} ${zh.name} has keys absent from ${en.name}: ${zhOnly.join(', ')}`)
       if (enOnly.length > 0) problems.push(`${en.file} ${en.name} has keys absent from ${zh.name}: ${enOnly.join(', ')}`)
+      for (const language of SHIPPED_LOCALE_IDS.filter(id => id !== 'en' && id !== 'zh')) {
+        const translatedDictionary = slot.get(language)
+        if (translatedDictionary === undefined) {
+          problems.push(`${key} has no ${language} dictionary`)
+        } else {
+          const missing = en.keys.filter(k => !translatedDictionary.keys.includes(k))
+          const extra = translatedDictionary.keys.filter(k => !en.keys.includes(k))
+          if (missing.length > 0 || extra.length > 0) {
+            problems.push(`${translatedDictionary.file} ${translatedDictionary.name}: missing [${missing.join(', ')}], extra [${extra.join(', ')}]`)
+          }
+          for (const [name, text] of Object.entries(en.templates)) {
+            const translated = translatedDictionary.templates[name]
+            if (translated === undefined) continue
+            const placeholders = (value: string): string => localeTokens(value).join(', ')
+            if (placeholders(text) !== placeholders(translated)) {
+              problems.push(`${translatedDictionary.file} ${translatedDictionary.name}.${name} changes placeholders or literal tokens from ${en.name}`)
+            }
+          }
+        }
+      }
     }
 
     // The shipped dictionary count only grows; a collapse means discovery or

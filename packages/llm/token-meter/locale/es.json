@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Medición de tokens",
+    "description": "Calcule el uso del token del contexto del modelo para determinar el presupuesto para funciones como la compresión."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek Web 検索・取得 API",
+    "description": "DeepSeek Search API で Web ページを検索し、Fetch API で本文を取得します。"
+  }
+}

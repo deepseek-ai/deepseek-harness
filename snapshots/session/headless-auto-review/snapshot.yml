@@ -10,5 +10,3 @@ header:
   toolSchemasSource: text-turn
 workspace:
   final: true
-environment:
-  DSH_TOOLS_MODE: native

@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-Windows x64 目标始终使用托管的 `matrix.runner`——PR CI 为 `windows-2025`——配以标准 setup-python 工具链、pnpm 缓存恢复与 pkg 缓存。来自 #3629 的故障切换选择器、作业私有 Python 准备步骤、自托管依赖安装与后置清理、私有准备脚本及路由测试均被移除。`DSH_CI_FAILOVER_WINDOWS=selfhosted` 再次只重定向 [ci.yml](../../../../.github/workflows/ci.yml) 中的原生 Windows 作业；[故障切换手册](2026-07-26-ci-failover-runbook.zh.md)与 [python/development.zh.md](../../../../python/development.zh.md) 描述仅托管的 runtime 构建。迁移中的 UTF-8 模式导出之所以存在，是因为持久主机使用 GBK 默认代码页；托管镜像提供该通道此前运行的区域设置。
+Windows x64 目标始终使用托管的 `matrix.runner`——PR CI 为 `windows-2025`——配以标准 setup-python 工具链、pnpm 缓存恢复与 pkg 缓存。来自 #3629 的故障切换选择器、作业私有 Python 准备步骤、自托管依赖安装与后置清理、私有准备脚本及路由测试均被移除。`DSH_CI_FAILOVER_WINDOWS=selfhosted` 再次只重定向 [ci-windows.yml](../../../../.github/workflows/ci-windows.yml) 中的原生 Windows 作业；[故障切换手册](2026-07-26-ci-failover-runbook.zh.md)与 [python/development.zh.md](../../../../python/development.zh.md) 描述仅托管的 runtime 构建。迁移中的 UTF-8 模式导出之所以存在，是因为持久主机使用 GBK 默认代码页；托管镜像提供该通道此前运行的区域设置。
 
 ## 已考虑的替代方案
 

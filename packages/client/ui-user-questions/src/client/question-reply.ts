@@ -1,19 +1,17 @@
-/** Late-reply conversation node: the steered `user-question-reply` message projected as question and answer pairs. */
+/** Answered-question Chat data from in-time tool results and late human replies. */
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ConversationLocation, ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-user-questions/types'
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 
 /** One asked question as echoed in the reply payload. */
 export interface QuestionReplyQuestion {
   readonly id: string
   readonly question: string
-  readonly detail?: string
   readonly header?: string
-  readonly options?: readonly { readonly label: string; readonly description?: string }[]
-  readonly multiSelect?: boolean
 }
 
 /** One structured answer as echoed in the reply payload. */
@@ -23,10 +21,10 @@ export interface QuestionReplyAnswer {
   readonly custom?: string
 }
 
-/** Presentation data of one late reply. */
+/** Presentation data of one submitted answer batch. */
 export interface QuestionReplyData {
   readonly callId: string
-  /** A late answer to the pending questions. */
+  /** A submitted answer batch, including individually skipped questions. */
   readonly outcome: 'answered'
   readonly questions: readonly QuestionReplyQuestion[]
   readonly answers: readonly QuestionReplyAnswer[]
@@ -37,7 +35,7 @@ export interface QuestionReplyData {
 
 declare module '@deepseek-ai/dsh-client-ui-chat/client' {
   interface ChatNodeDataMap {
-    /** Late answer to a continued question. */
+    /** One answered question batch, regardless of foreground wait timing. */
     'question-reply': QuestionReplyData
   }
 }
@@ -73,15 +71,7 @@ export function replyPairsOf(text: string): Pick<QuestionReplyData, 'questions' 
     questions.push({
       id: question.id,
       question: question.question,
-      ...(typeof question.detail === 'string' ? { detail: question.detail } : {}),
       ...(typeof question.header === 'string' ? { header: question.header } : {}),
-      ...(Array.isArray(question.options)
-        ? { options: question.options.flatMap((option) => {
-          if (!isRecord(option) || typeof option.label !== 'string') return []
-          return [{ label: option.label, ...(typeof option.description === 'string' ? { description: option.description } : {}) }]
-        }) }
-        : {}),
-      ...(typeof question.multiSelect === 'boolean' ? { multiSelect: question.multiSelect } : {}),
     })
   }
   const answers: QuestionReplyAnswer[] = []
@@ -110,9 +100,8 @@ export function replyAnswerValues(data: QuestionReplyData, id: string): string[]
 }
 
 /**
- * Clipboard text of one late reply: every question with the answer the user
- * gave, in the layout the open bubble shows, without the options nobody chose.
- * The text does not depend on whether the bubble is open.
+ * Clipboard text of one answer batch: every question with the answer the user
+ * gave, without question details or unselected options.
  * @param data - Projected reply to copy.
  * @param t - Bound `question` namespace translator owning the answer labels.
  * @returns One block per question, or the model-facing text when the payload was unreadable.
@@ -140,6 +129,115 @@ function replySource(
     && typeof source.callId === 'string' && source.outcome === 'answered'
     ? { callId: source.callId, outcome: 'answered' }
     : null
+}
+
+/** Reply data retained until a matching tool result records a complete answer batch. */
+interface AnsweredQuestionState {
+  readonly questions: readonly QuestionReplyQuestion[] | null
+  readonly reply: QuestionReplyState | undefined
+}
+
+function jsonRecord(text: string): Record<string, unknown> | null {
+  try {
+    const value: unknown = JSON.parse(text)
+    return isRecord(value) ? value : null
+  } catch (error) {
+    // Malformed tool JSON remains visible through the generic Tool node.
+    void error
+    return null
+  }
+}
+
+function callQuestions(value: unknown): readonly QuestionReplyQuestion[] | null {
+  if (!isRecord(value) || !Array.isArray(value.questions) || value.questions.length === 0) return null
+  const ids = new Set<string>()
+  const questions: QuestionReplyQuestion[] = []
+  for (const question of value.questions) {
+    if (!isRecord(question) || typeof question.id !== 'string' || typeof question.question !== 'string'
+      || ids.has(question.id) || (isRecord(question.intent) && question.intent.kind === 'plan-review')) return null
+    ids.add(question.id)
+    questions.push({
+      id: question.id,
+      question: question.question,
+      ...(typeof question.header === 'string' ? { header: question.header } : {}),
+    })
+  }
+  return questions
+}
+
+function resultReply(
+  questions: readonly QuestionReplyQuestion[],
+  event: SessionEvent<'tool/result' | 'tool/ptc-dispatch'>,
+): QuestionReplyState | undefined {
+  const result = event.type === 'tool/result' ? event.data.message : event.data
+  if (result.isError === true) return undefined
+  const content = result.content
+  if (content.length !== 1 || content[0]?.type !== 'text') return undefined
+  const text = content[0].text
+  const value = jsonRecord(text)
+  if (value === null || value.pending === true || !Array.isArray(value.answers)
+    || value.answers.length !== questions.length) return undefined
+  const ids = new Set(questions.map(question => question.id))
+  const answers: QuestionReplyAnswer[] = []
+  for (const answer of value.answers) {
+    if (!isRecord(answer) || typeof answer.id !== 'string' || !ids.delete(answer.id)
+      || !Array.isArray(answer.selected) || !answer.selected.every(item => typeof item === 'string')
+      || (answer.custom !== undefined && typeof answer.custom !== 'string')) return undefined
+    answers.push({ id: answer.id, selected: answer.selected,
+      ...(answer.custom === undefined ? {} : { custom: answer.custom }) })
+  }
+  return { seq: event.seq, time: event.time, callId: String(event.type === 'tool/result' ? event.data.message.source.callId : event.data.subCallId),
+    outcome: 'answered', questions, answers, text }
+}
+
+/**
+ * In-time ask-user answers paired by native callId or PTC subCallId. Pending, failed, and
+ * malformed results retain their generic Tool presentation; late answers are
+ * owned by questionReplyDefinition. Work is bounded by this call's answer batch.
+ */
+export const answeredQuestionDefinition: ConversationNodeDefinition<AnsweredQuestionState> = {
+  kind: 'answered-user-question',
+  target: 'chat',
+  match: (event) => {
+    if (event.type === 'tool/call' && event.data.name === 'ask_user_question') {
+      return { id: String(event.data.callId), role: 'start' }
+    }
+    if (event.type === 'tool/ptc-dispatch-start' && event.data.name === 'ask_user_question') {
+      return { id: String(event.data.subCallId), role: 'start' }
+    }
+    if (event.type === 'tool/ptc-dispatch' && event.data.name === 'ask_user_question') {
+      return { id: String(event.data.subCallId), role: 'update' }
+    }
+    // Native results omit the tool name; retain update-only matches for history prepends.
+    if (event.type === 'tool/result' && isAppendSurfaceEvent(event)) {
+      return { id: String(event.data.message.source.callId), role: 'update' }
+    }
+    return null
+  },
+  start: (_context, match) => {
+    const event = match.event
+    if (event.type !== 'tool/call' && event.type !== 'tool/ptc-dispatch-start') {
+      throw new Error('answered-user-question requires tool/call or tool/ptc-dispatch-start')
+    }
+    return { questions: callQuestions(event.type === 'tool/call' ? jsonRecord(event.data.arguments) : event.data.arguments), reply: undefined }
+  },
+  update: (context, match) => {
+    if ((match.event.type !== 'tool/result' && match.event.type !== 'tool/ptc-dispatch') || context.state.questions === null) return context.state
+    return { ...context.state, reply: resultReply(context.state.questions, match.event) }
+  },
+  buildViewNode: (context) => {
+    const reply = context.state?.reply
+    if (reply === undefined) {
+      const current = context.current.get('chat')
+      return current == null ? null : { ...current, visibility: 'hidden' }
+    }
+    const { seq, ...data } = reply
+    return {
+      key: context.key, id: context.id, kind: 'question-reply', target: 'chat',
+      anchorSeq: seq, location: context.start?.location ?? { kind: 'unresolved' },
+      groupTree: 'turn', visibility: 'visible', data,
+    }
+  },
 }
 
 /**
@@ -173,13 +271,15 @@ export const questionReplyDefinition: ConversationNodeDefinition<QuestionReplySt
   buildViewNode: (context) => {
     if (context.state === undefined) return null
     const { seq, ...data } = context.state
+    const location: ConversationLocation = context.start?.location ?? { kind: 'unresolved' }
     return {
       key: context.key,
       kind: 'question-reply',
       id: context.id,
       target: 'chat',
       anchorSeq: seq,
-      location: context.start?.location ?? { kind: 'unresolved' },
+      location,
+      groupTree: location.kind === 'step' && location.step.step === 1 ? 'exchange' : 'input',
       visibility: 'visible',
       data,
     }

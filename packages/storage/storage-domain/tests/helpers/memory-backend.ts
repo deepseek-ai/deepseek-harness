@@ -37,9 +37,9 @@ export class MemoryMediaPool {
   /** Unit name → stamped version; tests may pre-stamp to force `version-mismatch`. */
   readonly versions = new Map<string, number>()
   /**
-   * When positive, that many subsequent write primitives (putRecord /
-   * deleteRecord / setGlobal) reject without touching the medium, decrementing
-   * per rejection. Negative path: callers assert their state is
+   * When positive, that many subsequent mutations reject without touching
+   * the medium, decrementing per rejection. A missing-key delete is a no-op
+   * and leaves this counter unchanged. Callers assert their state is
    * untouched after a durability failure.
    */
   failNextWrites = 0
@@ -88,18 +88,29 @@ class MemoryKvUnit implements KvUnit {
       this.medium.tables.set(table, records)
     }
     records.set(key, value)
+    this.pool.versions.set(this.descriptor.name, this.descriptor.version)
   }
 
-  async deleteRecord(table: string, key: string): Promise<void> {
+  deleteRecord(table: string, key: string): Promise<void> {
+    return this.deleteRecords(table, [key])
+  }
+
+  async deleteRecords(table: string, keys: readonly string[]): Promise<void> {
     this.assertOpen()
+    const records = this.medium.tables.get(table)
+    if (records === undefined) return
+    const present = [...new Set(keys)].filter(key => records.has(key))
+    if (present.length === 0) return
     this.pool.consumeInjectedFailure()
-    this.medium.tables.get(table)?.delete(key)
+    for (const key of present) records.delete(key)
+    this.pool.versions.set(this.descriptor.name, this.descriptor.version)
   }
 
   async setGlobal(value: unknown): Promise<void> {
     this.assertOpen()
     this.pool.consumeInjectedFailure()
     this.medium.global = value
+    this.pool.versions.set(this.descriptor.name, this.descriptor.version)
   }
 
   async close(): Promise<void> {
@@ -136,7 +147,7 @@ export class MemoryStorageBackend implements StorageBackend {
         const stamped = this.pool.versions.get(descriptor.name)
         if (stamped === undefined) {
           this.pool.versions.set(descriptor.name, descriptor.version)
-        } else if (stamped !== descriptor.version) {
+        } else if (stamped !== descriptor.version && !descriptor.compatibleVersions?.includes(stamped)) {
           throw new StorageError(
             'version-mismatch',
             `memory unit '${descriptor.name}' is stamped v${stamped}, descriptor wants v${descriptor.version}`,

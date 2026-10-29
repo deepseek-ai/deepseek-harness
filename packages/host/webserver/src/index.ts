@@ -1,21 +1,24 @@
 /**
  * @deepseek-ai/dsh-host-webserver — node:http route registration — node:https
- * when `tls` names a certificate and key — with optional gzip, index injection,
- * and one fallback seat. It knows no harness concepts and serves no files; the
- * composing application owns dist serving. Electron uses file:// plus IPC
+ * when `tls` names a certificate and key — with optional gzip, index injection
+ * for the Peer a page speaks for, and one fallback seat. It serves no files;
+ * the composing application owns dist serving. Electron uses file:// plus IPC
  * instead, and this package never prints the URL.
- * Route handlers retain direct response ownership.
+ * Route handlers retain direct response ownership; a route or the fallback may
+ * instead give a resource, which maps a Fetch `Request` to a `Response` and
+ * also answers in-process reads.
  */
 
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
-import type { IncomingMessage, ServerResponse, Server } from 'node:http'
+import type { IncomingMessage, OutgoingHttpHeaders, ServerResponse, Server } from 'node:http'
 import { createServer as createSecureServer } from 'node:https'
 import { isIP, type AddressInfo } from 'node:net'
 import { resolve } from 'node:path'
 import type { Duplex } from 'node:stream'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
 import compressionMiddleware from 'compression'
 import ipaddr from 'ipaddr.js'
 import Negotiator from 'negotiator'
@@ -30,13 +33,15 @@ declare module '@deepseek-ai/cordis' {
   }
   interface Events {
     /**
-     * Collect the structured index injection table. Emitted on every index
-     * render and every worker boot-payload request; listeners push their
-     * current rows, so a row's data is read fresh at emit time.
+     * Collect the structured index injection table for the page `peer` speaks
+     * for. Emitted on every index render and every worker boot-payload
+     * request; listeners push their current rows, so a row's data is read
+     * fresh at emit time.
      * @param table - Mutable row table; listeners append in activation order.
+     * @param peer - The Peer the rendered page speaks for.
      * @mode emit
      */
-    'webserver/index-inject'(table: IndexInjection[]): void
+    'webserver/index-inject'(table: IndexInjection[], peer: PeerScope): void
   }
 }
 
@@ -50,6 +55,22 @@ export interface WebRoute {
   path: string
   /** Owns the full response lifecycle (may hold the response open, e.g. SSE). */
   handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
+}
+
+/**
+ * Answers one GET or HEAD request with a Fetch response. An HTTP request
+ * arrives without a Peer and carries the client's headers; an in-process
+ * {@link WebServer.readResource} read passes the Peer its caller admitted.
+ */
+export type WebResource = (request: Request, peer?: PeerScope) => Promise<Response>
+
+/** One named route answered by a resource instead of a handler. */
+export interface WebResourceRoute {
+  kind: WebRouteKind
+  /** Absolute pathname, no trailing slash. */
+  path: string
+  /** Answers HTTP GET and HEAD requests and in-process reads. */
+  resource: WebResource
 }
 
 /** One exact-path HTTP upgrade registration. */
@@ -267,13 +288,71 @@ async function readTlsFile(field: 'certFile' | 'keyFile', path: string): Promise
   return content
 }
 
+/** Methods a resource answers; any other method receives 405. */
+const RESOURCE_METHODS = 'GET, HEAD'
+
+/** Fetch response headers as node:http headers; each `set-cookie` value stays a separate line. */
+function nodeHeaders(headers: Headers): OutgoingHttpHeaders {
+  const out: OutgoingHttpHeaders = Object.fromEntries(headers)
+  const cookies = headers.getSetCookie()
+  if (cookies.length > 0) out['set-cookie'] = cookies
+  return out
+}
+
+/**
+ * Write a Fetch response's status, headers, and body to a node:http exchange,
+ * respecting backpressure; the caller ends the response. A HEAD request and a
+ * null body write no body bytes; the abort signal, raised when the client
+ * closes the connection, cancels the body.
+ */
+async function writeResponse(res: ServerResponse, response: Response, head: boolean, signal: AbortSignal): Promise<void> {
+  res.writeHead(response.status, nodeHeaders(response.headers))
+  const body = response.body
+  if (body === null || head) {
+    await body?.cancel()
+    return
+  }
+  // Send the status and headers before the first body chunk arrives. The Web
+  // Worker tunnel has no socket and sends them with the first chunk.
+  if ((res as { socket?: unknown }).socket !== undefined) res.flushHeaders()
+  const reader = body.getReader()
+  const cancel = (): void => {
+    // A rejected cancel means the body already failed; the pending read rejects with the same error.
+    reader.cancel().catch(() => undefined)
+  }
+  if (signal.aborted) cancel()
+  else signal.addEventListener('abort', cancel, { once: true })
+  // One drain/close listener pair per response: the gzip middleware forwards
+  // `on('drain')` to its zlib stream but not `off`, so a listener added per
+  // backpressure wait would stay on that stream. The `off('drain')` below is
+  // likewise a no-op under gzip; the one listener goes with that response's
+  // zlib stream.
+  let resume: (() => void) | undefined
+  const wake = (): void => {
+    const waiting = resume
+    resume = undefined
+    waiting?.()
+  }
+  res.on('drain', wake)
+  res.on('close', wake)
+  try {
+    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+      if (!res.write(chunk.value) && !signal.aborted) await new Promise<void>((resolve) => { resume = resolve })
+    }
+  } finally {
+    signal.removeEventListener('abort', cancel)
+    res.off('drain', wake)
+    res.off('close', wake)
+  }
+}
+
 /**
  * The browser HTTP carrier service. Activation loads any configured TLS
  * material, then listens immediately; a material or listen failure rejects
  * initialization, and the boot process reports the failed fiber. Route
  * registration order does not affect requests because configured named routes
- * must be distinct, and the fallback handler answers anything not yet claimed
- * during startup with 404 until its owner registers.
+ * must be distinct, and a request no named route matches is answered 404
+ * until the fallback owner registers.
  */
 export class WebServer extends Service {
   static Config: z<Config> = z.object({
@@ -296,8 +375,8 @@ export class WebServer extends Service {
     compressionThresholdBytes: z.natural().default(DEFAULT_COMPRESSION_THRESHOLD_BYTES),
   })
 
-  private readonly exact = new Map<string, WebRoute>()
-  private readonly prefixes = new Map<string, WebRoute>()
+  private readonly exact = new Map<string, WebRoute | WebResourceRoute>()
+  private readonly prefixes = new Map<string, WebRoute | WebResourceRoute>()
   private readonly upgrades = new Map<string, WebUpgradeRoute>()
   private readonly upgradedSockets = new Set<Duplex>()
   /**
@@ -309,7 +388,7 @@ export class WebServer extends Service {
    */
   private readonly tlsConnections = new Set<Duplex>()
   private readonly indexTaps: ((html: string) => string)[] = []
-  private fallback: WebRoute['handler'] | undefined
+  private fallback: WebRoute['handler'] | Pick<WebResourceRoute, 'resource'> | undefined
   private server!: Server
   private listenedPort: number | undefined
   private readonly gzip: NodeMiddleware | undefined
@@ -360,10 +439,10 @@ export class WebServer extends Service {
   /**
    * Register a named route. Duplicate (kind, path) throws — route patterns are
    * a composition-level contract, so a collision is a misconfiguration.
-   * @param route - kind, path, and the owning handler.
+   * @param route - kind, path, and the owning handler or resource.
    * @returns the disposer removing the route.
    */
-  register(route: WebRoute): () => void {
+  register(route: WebRoute | WebResourceRoute): () => void {
     const table = route.kind === 'exact' ? this.exact : this.prefixes
     if (table.has(route.path)) {
       throw new Error(`webserver: duplicate ${route.kind} route "${route.path}"`)
@@ -387,19 +466,47 @@ export class WebServer extends Service {
   }
 
   /**
-   * Claim the fallback seat: the handler answering every request no named
-   * route matches (the SPA dist server in the shipped Web composition). One
-   * owner only — a second registration throws, because two fallbacks cannot
-   * compose.
-   * @param handler - owns the full response lifecycle of unmatched requests.
+   * Claim the fallback seat: the handler or resource answering every request
+   * no named route matches (the SPA dist server in the shipped Web
+   * composition). One owner only — a second registration throws, because two
+   * fallbacks cannot compose.
+   * @param fallback - a handler owning the full response lifecycle of
+   * unmatched requests, or `{ resource }` answering them.
    * @returns the disposer releasing the seat.
    */
-  registerFallback(handler: WebRoute['handler']): () => void {
+  registerFallback(fallback: WebRoute['handler'] | Pick<WebResourceRoute, 'resource'>): () => void {
     if (this.fallback !== undefined) {
       throw new Error('webserver: fallback already registered')
     }
-    this.fallback = handler
+    this.fallback = fallback
     return () => { this.fallback = undefined }
+  }
+
+  /**
+   * Read the response an HTTP request for the same URL would receive, as the
+   * resource computes it for `peer`, without an HTTP exchange. The request
+   * path picks the responder by the HTTP match order — exact, longest prefix,
+   * then the fallback — and only a resource answers. This method checks no
+   * cookie, Host, or Origin: the caller admits the reader before reading.
+   * @param request - the read; its URL path selects the responder.
+   * @param peer - the Peer the read speaks for, passed to the resource.
+   * @returns the resource's response, without a body for HEAD as over HTTP;
+   * 405 with `Allow: GET, HEAD` for any other method, checked before matching,
+   * where over HTTP a handler route or an unmatched path answers such a
+   * method itself; 404 when the path matches a handler route, or reaches the
+   * fallback seat while it is unclaimed or holds a handler. A resource that
+   * throws rejects the read, where an HTTP request would receive 400.
+   */
+  async readResource(request: Request, peer: PeerScope): Promise<Response> {
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      return new Response(null, { status: 405, headers: { allow: RESOURCE_METHODS } })
+    }
+    const responder = this.responderFor(new URL(request.url).pathname)
+    if (typeof responder !== 'object' || !('resource' in responder)) return new Response(null, { status: 404 })
+    const response = await responder.resource(request, peer)
+    if (request.method === 'GET') return response
+    await response.body?.cancel()
+    return new Response(null, { status: response.status, statusText: response.statusText, headers: response.headers })
   }
 
   /**
@@ -422,19 +529,16 @@ export class WebServer extends Service {
     const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       /* v8 ignore next -- `?? '/'` arm: node:http always sets url on server
       requests; the field is only optional on the client-side IncomingMessage type */
-      const rawPath = new URL(req.url ?? '/', 'http://x').pathname
-      const route = this.match(rawPath)
-      if (route !== undefined) {
-        await route.handler(req, res)
-        return
-      }
-      const fallback = this.fallback
-      if (fallback === undefined) {
+      const target = new URL(req.url ?? '/', 'http://x')
+      const responder = this.responderFor(target.pathname)
+      if (responder === undefined) {
         res.writeHead(404)
         res.end()
         return
       }
-      await fallback(req, res)
+      if (typeof responder === 'function') await responder(req, res)
+      else if ('resource' in responder) await this.serveResource(req, res, target, responder.resource)
+      else await responder.handler(req, res)
     }
     // Last-resort guard: handle() rejecting would otherwise be an unhandled
     // rejection killing the process on one malformed request (bad %-escape,
@@ -539,16 +643,63 @@ export class WebServer extends Service {
     }, 'webServer.listen')
   }
 
+  /**
+   * The responder for one request path, shared by HTTP requests and
+   * {@link readResource}: the matched named route, otherwise the fallback.
+   */
+  private responderFor(pathname: string): WebRoute | WebResourceRoute | WebRoute['handler'] | Pick<WebResourceRoute, 'resource'> | undefined {
+    return this.match(pathname) ?? this.fallback
+  }
+
   /** Longest-prefix-wins over the prefix table after an exact-table miss. */
-  private match(pathname: string): WebRoute | undefined {
+  private match(pathname: string): WebRoute | WebResourceRoute | undefined {
     const exact = this.exact.get(pathname)
     if (exact !== undefined) return exact
-    let best: WebRoute | undefined
+    let best: WebRoute | WebResourceRoute | undefined
     for (const [prefix, route] of this.prefixes) {
       if (pathname !== prefix && !pathname.startsWith(`${prefix}/`)) continue
       if (best === undefined || prefix.length > best.path.length) best = route
     }
     return best
+  }
+
+  /**
+   * Answer one HTTP exchange from a resource. Only GET and HEAD reach it;
+   * any other method receives 405 and its request body is never read. The
+   * request becomes a Fetch `Request` without a Peer whose URL is the request
+   * target resolved against a placeholder origin, as the match reads it; the
+   * client's authority stays only in the `host` header. The connection
+   * closing before this method ends the response aborts the request signal
+   * and cancels the response body.
+   */
+  private async serveResource(req: IncomingMessage, res: ServerResponse, target: URL, resource: WebResource): Promise<void> {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      res.writeHead(405, { allow: RESOURCE_METHODS })
+      res.end()
+      return
+    }
+    const headers = new Headers()
+    for (const [name, value] of Object.entries(req.headers)) {
+      for (const item of typeof value === 'string' ? [value] : value ?? []) headers.append(name, item)
+    }
+    const abort = new AbortController()
+    // An own flag, not `writableEnded`: the Web Worker tunnel marks an aborted
+    // response ended before it emits `close`.
+    let ended = false
+    const onClose = (): void => {
+      if (!ended) abort.abort()
+    }
+    res.on('close', onClose)
+    try {
+      const response = await resource(new Request(target, { method: req.method, headers, signal: abort.signal }))
+      await writeResponse(res, response, req.method === 'HEAD', abort.signal)
+      if (!abort.signal.aborted) {
+        ended = true
+        res.end()
+      }
+    } finally {
+      res.off('close', onClose)
+    }
   }
 
   /**
@@ -564,25 +715,28 @@ export class WebServer extends Service {
   }
 
   /**
-   * Gather the structured injection table: one `webserver/index-inject` emit,
-   * every subscriber pushes its current rows. Fresh per call, so subscribers
-   * read live state (module graph, theme preference) at emit time.
+   * Gather the structured injection table for one Peer: one
+   * `webserver/index-inject` emit, every subscriber pushes its current rows.
+   * Fresh per call, so subscribers read live state (module graph, theme
+   * preference, the Peer's access) at emit time.
+   * @param peer - the Peer the page speaks for.
    * @returns rows in subscriber activation order.
    */
-  collectIndexInjections(): IndexInjection[] {
+  collectIndexInjections(peer: PeerScope): IndexInjection[] {
     const table: IndexInjection[] = []
-    this.ctx.emit('webserver/index-inject', table)
+    this.ctx.emit('webserver/index-inject', table, peer)
     return table
   }
 
   /**
-   * Render one index.html body: the structured injection table first, then
-   * the raw `tapIndex` transforms over the result.
+   * Render one index.html body for one Peer: the structured injection table
+   * first, then the raw `tapIndex` transforms over the result.
    * @param html - the raw index.html body.
+   * @param peer - the Peer the page speaks for.
    * @returns the transformed body.
    */
-  renderIndex(html: string): string {
-    return this.applyIndexTaps(renderIndexInjections(html, this.collectIndexInjections()))
+  renderIndex(html: string, peer: PeerScope): string {
+    return this.applyIndexTaps(renderIndexInjections(html, this.collectIndexInjections(peer)))
   }
 }
 

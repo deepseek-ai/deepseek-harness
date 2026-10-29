@@ -62,10 +62,15 @@
 
 /* Lit by the affordance the row belongs to, never by a crumb: a crumb's hover
  * offers navigation, not path entry. Editing keeps the outline standing. */
-.crumbBar:has(.crumbEditZone:enabled:hover),
 .crumbBar:has(.crumbEditZone:focus-visible),
 .crumbBar:has(.pathInput) {
   border-color: var(--dsw-alias-border-l2);
+}
+
+@media (hover: hover) {
+  .crumbBar:has(.crumbEditZone:enabled:hover) {
+    border-color: var(--dsw-alias-border-l2);
+  }
 }
 
 /* Deep chains scroll inside the trail (the effect pins the tail into view)
@@ -127,8 +132,10 @@
   outline-offset: -2px;
 }
 
-.crumb:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .crumb:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .crumbChevron {
@@ -159,9 +166,14 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.crumbEditZone:enabled:hover .crumbEditGlyph,
 .crumbEditZone:focus-visible .crumbEditGlyph {
   color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .crumbEditZone:enabled:hover .crumbEditGlyph {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .crumbEditZone:disabled {
@@ -251,14 +263,21 @@
   outline-offset: -2px;
 }
 
-.row:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Selection: pill fill + the open-folder glyph in the info accent. */
-.rowSelected,
-.rowSelected:hover {
+.rowSelected {
   background: var(--dsw-alias-interactive-bg-active, var(--dsw-alias-interactive-bg-hover));
+}
+
+@media (hover: hover) {
+  .rowSelected:hover {
+    background: var(--dsw-alias-interactive-bg-active, var(--dsw-alias-interactive-bg-hover));
+  }
 }
 
 .rowIcon {
@@ -357,8 +376,10 @@
   white-space: nowrap;
 }
 
-.showHiddenToggle:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .showHiddenToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .showHiddenToggle:disabled {

@@ -7,6 +7,7 @@
  * read, behind one documented cast, so the specs exercise the components and
  * not the slot runtime.
  */
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ResourceRegistry } from '../../resources/src/client/resources.ts'
@@ -146,7 +147,7 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
     key === 'sidebar.right.tab.document'
       ? createElement(TextBody, {
         ...owner as object, useTabInfo: opts?.hookContext, sessionId: SESSION, useResource,
-      } as unknown as DocumentPreviewProps)
+      } as DocumentPreviewProps)
       : key === 'sidebar.right.tab.document.action' ? null : createElement('div', {
         'data-slot': key,
         'data-slot-path': (owner as { absolutePath: string }).absolutePath,
@@ -164,6 +165,7 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
     }),
     sessionId: SESSION,
     useResource,
+    useContextMenu: contextMenuHook(),
     useStore: hookOf(instance),
     actions: instance.actions,
     loadPage: face.loadPage,
@@ -174,7 +176,7 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
     useDocumentPreviews: () => definitions,
     renderSlot,
     t,
-  }) as unknown as TextPreviewProps
+  }) as TextPreviewProps
   return {
     instance,
     face,

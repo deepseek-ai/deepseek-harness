@@ -1,5 +1,5 @@
 ---
-description: "Give Agents tools to search and read earlier sessions from the current workspace."
+description: "Give agents tools to search and read earlier sessions from the current workspace."
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Give every Agent five experimental read-only global tools to search earlier sessions. The content index opens on the first search and is shared by all Agents. The bundle ships switched off in Web and Desktop. Select it in Plugins to enable it.
+Give every Agent five experimental read-only global tools to search earlier sessions. The content index opens on the first search and is shared by all Agents. The bundle ships switched off in Web and Desktop and is hidden from the default plugin lists.
 
 ## Table of Contents
 
@@ -25,9 +25,9 @@ Give every Agent five experimental read-only global tools to search earlier sess
 <a id="use-this-package"></a>
 ## Use this package
 
-In Web or Desktop, open Plugins and enable **Session search** in Official. Switch it off to remove its profile layer.
+In **Plugins → Add plugin**, enter `@deepseek-ai/dsh-experimental-session-search`, choose **Install**, then **Enable now**. DSH uses the shipped copy without downloading another one. Alternatively, add the name to `dsh.profile.bundles` in the target [profile](../../boot/app-boot/README.md#profiles)'s `package.json`. HMR applies the selection live when enabled; otherwise restart the application. The enabled bundle appears in Plugins; switching it off removes its profile layer and hides its card again. A separately installed profile dependency remains listed while disabled.
 
-Enabling or disabling the bundle registers or removes its global tools in the running Host, so every Agent sees the change on its next request, in every preset including minimal.
+With HMR enabled, enabling or disabling the bundle registers or removes its global tools in the running Host, so every Agent sees the change on its next request, in every preset including minimal.
 
 This bundle enables Agent search tools. Sidebar search keeps its existing behavior.
 

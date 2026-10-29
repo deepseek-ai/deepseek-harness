@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -46,7 +47,7 @@ it('selects one configured provider per call and exposes only task inputs', asyn
   expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['cwd', 'description', 'prompt', 'runtime'])
   expect(schema?.parameters.properties).toMatchObject({ runtime: { enum: ['codex', 'claude', 'future'] } })
   for (const runtime of ['codex', 'claude', 'future']) {
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       agent: parent, name: 'subagent_oar', signal: test.signal,
       callId: ToolCallId(randomUUID()),
       arguments: { runtime, description: `Use ${runtime}`, prompt: 'independent task' },
@@ -61,10 +62,9 @@ it('selects one configured provider per call and exposes only task inputs', asyn
   expect(calls[0]?.request.prompt).toEqual([{ type: 'text', text: 'independent task' }])
   expect(calls[0]?.request.parent).toBe(parent)
   expect(calls[0]?.request.cwd).toBe(process.cwd())
-  expect(ctx.tools.executionMode({
-    name: 'subagent_oar', arguments: { runtime: 'codex', description: 'task', prompt: 'task' },
-    callId: ToolCallId(randomUUID()), signal: test.signal,
-  })).toEqual({ kind: 'parallel' })
+  expect(ctx.tools.get('subagent_oar')?.isConcurrencySafe?.({
+    runtime: 'codex', description: 'task', prompt: 'task',
+  })).toBe(true)
   await fiber.dispose()
   expect(ctx.tools.schemas().some(tool => tool.name === 'subagent_oar')).toBe(false)
 })
@@ -73,7 +73,7 @@ it('rejects unconfigured runtime names before starting any child', async (test) 
   const { ctx, parent, calls } = await setup()
   test.onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(externalTool, { providers: { codex: 'codex-provider' } })
-  const result = await ctx.tools.execute({
+  const result = await executeToolFixture(ctx, {
     agent: parent, name: 'subagent_oar', signal: test.signal,
     callId: ToolCallId(randomUUID()),
     arguments: { runtime: 'unconfigured', description: 'task', prompt: 'task' },
@@ -86,7 +86,7 @@ it('fails visibly when the selected provider disappears', async (test) => {
   const { ctx, parent, calls } = await setup()
   test.onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(externalTool, { providers: { missing: 'missing-provider' } })
-  const result = await ctx.tools.execute({
+  const result = await executeToolFixture(ctx, {
     agent: parent, name: 'subagent_oar', signal: test.signal,
     callId: ToolCallId(randomUUID()),
     arguments: { runtime: 'missing', description: 'task', prompt: 'task' },
@@ -114,11 +114,11 @@ it('requires a caller and independently scoped one-shot providers', async (test)
   })
   await ctx.plugin(externalTool, { providers: { inherited: 'inherited' } })
   const args = { runtime: 'inherited', description: 'task', prompt: 'task' }
-  const noParent = await ctx.tools.execute({
+  const noParent = await executeToolFixture(ctx, {
     name: 'subagent_oar', arguments: args, callId: ToolCallId(randomUUID()), signal: test.signal,
   })
   expect(noParent.isError).toBe(true)
-  const inherited = await ctx.tools.execute({
+  const inherited = await executeToolFixture(ctx, {
     agent: parent, name: 'subagent_oar', arguments: args, callId: ToolCallId(randomUUID()), signal: test.signal,
   })
   expect(inherited.isError).toBe(true)
@@ -133,7 +133,7 @@ it('passes an explicit child directory and presents the task description', async
   expect(ctx.tools.get('subagent_oar')?.presentCall?.(args)).toEqual({
     card: 'generic', title: 'Inspect child', rawInput: args,
   })
-  const result = await ctx.tools.execute({
+  const result = await executeToolFixture(ctx, {
     agent: parent, name: 'subagent_oar', arguments: args, callId: ToolCallId(randomUUID()), signal: test.signal,
   })
   expect(result.isError).toBe(false)

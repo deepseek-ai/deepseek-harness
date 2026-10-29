@@ -1,0 +1,27 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    { "path": "../../client/ui-renderer" },
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../api/remotes/tsconfig.client.json" },
+    { "path": "../../client/locale/tsconfig.client.json" },
+    { "path": "../../client/ui-conversation/tsconfig.client.json" },
+    { "path": "../../client/ui-chat/tsconfig.client.json" },
+    { "path": "../../client/ui-session" },
+    { "path": "../../client/ui-slots" },
+    { "path": "../../client/ui-primitives" },
+    { "path": "../../client/ui-tool" },
+    { "path": "../../llm/llm" },
+    { "path": "../../core/session" },
+    { "path": "../action-cards" },
+    { "path": "../../typert/protocol" },
+    { "path": "../../util/values" }
+  ]
+}

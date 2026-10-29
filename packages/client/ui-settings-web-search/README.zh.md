@@ -37,7 +37,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-宿主半侧是一个空的 `apply`，只为让本包占一条 Loader 行，客户端模块系统据此送出浏览器半侧。浏览器半侧通过 `ctx.configForms.get` 绑定 `web`、`web-search-deepseek` 和 `web-deepseek-api` 命名空间，在 `WebSearchCardController` 里为每个命名空间维护一个 `ui-primitives` 共享的 `SettingsFormModel`。开关在 `web` 中暂存 `searchProvider` 和 `fetchProvider`；目标值等于组合值时改为暂存重置。密钥是选择表单里唯一的密文控件：写入走 `remote.credentials.set`，引用名取自当前所选 API 设置节的 `apiKeyEnv`（未指定时为 `DEEPSEEK_API_KEY`），是否成功由 `remote.credentials.describe` 回读判定。某个 scope 变化时、开关选中的设置节命名了另一个引用时、以及 Host 对所监视引用发出 `credentials/reference-updated` 时，控制器都会重读凭据，因为在模型页写入的密钥不会改变任何设置节。页面通过 `ctx.configForms.whileServed` 把 `WebSearchCard` 注册进插件页的 `plugins.item` slot。
+宿主半侧是一个空的 `apply`，只为让本包占一条 Loader 行，客户端模块系统据此送出浏览器半侧。浏览器半侧通过 `ctx.configForms.get` 绑定 `web`、`web-search-deepseek` 和 `web-deepseek-api` 命名空间，在 `WebSearchCardController` 里为每个命名空间维护一个 `ui-primitives` 共享的 `SettingsFormModel`。开关在 `web` 中暂存 `searchProvider` 和 `fetchProvider`；目标值等于组合值时改为暂存重置。密钥是选择表单里唯一的密文控件：写入走 `remote.credentials.set`，引用名取自当前所选 API 设置节的 `apiKeyEnv`（未指定时为 `DEEPSEEK_API_KEY`），是否成功由 `remote.credentials.describe` 回读判定。控制器把同步发布的 scope 更新和引用切换合并成下一个微任务中的一次凭据读取；连接重置后的 scope 刷新也会重新同步凭据。引用变化会立即清除旧凭据状态。Host 对所监视引用发出 `credentials/reference-updated` 事件以及写入时，都会独立触发读取，即使此前的读取仍未完成。只有所选引用的最新读取会更新卡片；保存使用自身的回读结果。释放控制器后不再执行排队的读取，也不再发布迟到的响应。页面通过 `ctx.configForms.whileServed` 把 `WebSearchCard` 注册进插件页的 `plugins.item` slot。
 
 </details>
 

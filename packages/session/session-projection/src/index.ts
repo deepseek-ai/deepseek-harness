@@ -57,6 +57,13 @@ export interface ProjectionHandle<S> {
    */
   stateOf(session: Session): S
   /**
+   * Create a reader for one exact Session without reading state or preparing it.
+   * The reader retains this unit after unregistration and owns no disposal.
+   * @param session - Session whose committed events the bound reader folds.
+   * @returns a synchronous callback with the same state and failures as `stateOf(session)`.
+   */
+  readerFor(session: Session): () => S
+  /**
    * Unregister from global drives and snapshots without invalidating this reader.
    * @returns a promise that resolves when this registration is released.
    */
@@ -400,14 +407,16 @@ export class SessionProjectionRegistry extends Service {
     // Observe disposal during the asynchronous registration handoff before exposing a reader.
     await Promise.resolve()
     this.ctx.fiber.assertActive()
-    return {
+    const handle: ProjectionHandle<S> = {
       async dispose() {
         await dispose()
       },
       stateOf: (session) => {
         return this.cellFor(registration, session).state as S
       },
+      readerFor: session => () => handle.stateOf(session),
     }
+    return handle
   }
 
   /**

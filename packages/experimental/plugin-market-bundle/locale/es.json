@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Índices de complementos personalizados",
+    "description": "Añade la pestaña “Descubrir” a “Complementos”, donde puede explorar e instalar complementos de los índices de complementos que agregue.",
+    "detail": "docs/DETAIL.md"
+  }
+}

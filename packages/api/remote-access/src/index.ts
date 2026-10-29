@@ -134,10 +134,10 @@ export class RemoteAccessService extends TypertRemoteService {
   constructor(ctx: Context) {
     super(ctx, 'remoteAccess')
     ctx.effect(() => () => { this.lifetime.abort() }, 'remoteAccess: snapshot generations')
-    // Every index the webServer renders belongs to the owner; snapshotFor documents non-owner pages.
+    // Every index opens with the access snapshot of the Peer it speaks for.
     ctx.inject(['webServer'], (webCtx) => {
-      webCtx.on('webserver/index-inject', (table) => {
-        table.push({ kind: 'global', name: REMOTE_ACCESS_SNAPSHOT_KEY, value: OWNER_BASELINE })
+      webCtx.on('webserver/index-inject', (table, peer) => {
+        table.push({ kind: 'global', name: REMOTE_ACCESS_SNAPSHOT_KEY, value: this.snapshotFor(peer.principal) })
       })
     })
   }
@@ -244,10 +244,9 @@ export class RemoteAccessService extends TypertRemoteService {
   }
 
   /**
-   * The baseline a page opens with before its snapshot stream connects. A
-   * business package rendering a non-owner page assigns this value to
-   * {@link REMOTE_ACCESS_SNAPSHOT_KEY} after every index injection row,
-   * replacing the owner baseline the webServer index carries.
+   * The baseline a page opens with before its snapshot stream connects; every
+   * index the webServer renders carries it under
+   * {@link REMOTE_ACCESS_SNAPSHOT_KEY} for the Peer the page speaks for.
    * @param principal - the page's caller identity.
    * @returns the owner baseline for the owner; otherwise the principal's current grants.
    */

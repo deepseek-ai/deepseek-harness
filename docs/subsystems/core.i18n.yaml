@@ -6,20 +6,17 @@
   en: f6ae07d8902e8edf
   zh: c92fef531c6da331
 /core/the-spine-package-by-package:
-  en: 60926dc99f41024d
-  zh: f40370b034f91463
+  en: c90cb23528ddb6c8
+  zh: 62724b7255b586b6
 /core/creation-and-ownership:
-  en: ab09a38b4e1f0883
-  zh: 81e2d14c4036ab6c
+  en: e516e14228c6bd35
+  zh: dba25d7da1d5a44e
 /core/the-agent-handle:
-  en: c21787347d8e2b14
-  zh: 25bc9cb60ee1520a
+  en: 6ee15fec81bc0686
+  zh: b6f3fcd48823ea75
 /core/initiating-agent:
   en: 6c8c47ac78de2dde
-  zh: acde99c8808ea891
-/core/messages-from-outside-an-agent:
-  en: cf087fd9ff5edb87
-  zh: c3bb56b17cd76c52
+  zh: c9d527a25a85d1d9
 /core/interception-decisions:
   en: 6fccceb0a5f1cad9
   zh: f43c30c2386d8cc8
@@ -33,8 +30,8 @@
   en: 057db6d8bf356c0f
   zh: 1441b39e5142b0bf
 /core/repo-wide-type-patterns/the-map-derived-union-pattern:
-  en: 84c039e929edb897
-  zh: 84241bb993f23ef2
+  en: 87a19311e2a97270
+  zh: 8df92c72793e8275
 /core/repo-wide-type-patterns/branded-ids:
   en: 10f8ac0f97e7c54a
   zh: 75cd2311aabfe464

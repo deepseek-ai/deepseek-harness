@@ -109,7 +109,7 @@ private func acceptConnections(listener: SharedSocket, lifetime: SharedHelperLif
         lifetime = SharedHelperLifetime(startupTimeout: options.startupTimeout)
         try options.prepareDirectory()
         guard let versionLock = try SharedHelperLock(path: options.versionLockPath) else {
-            try FileHandle.standardOutput.write(contentsOf: options.existingReady())
+            try FileHandle.standardOutput.write(contentsOf: options.existingReady(deadline: options.startupDeadline()))
             return nil
         }
         self.versionLock = versionLock

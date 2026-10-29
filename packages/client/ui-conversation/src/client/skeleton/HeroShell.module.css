@@ -166,9 +166,14 @@
   cursor: pointer;
 }
 
-.workspace:not(:disabled):hover,
 .workspace[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .workspace:not(:disabled):hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Locked form (bound guidance state): a static echo — no hover feedback, no

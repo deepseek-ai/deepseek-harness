@@ -3,17 +3,17 @@ import { execFileSync } from 'node:child_process'
 import { appendFile, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { z } from 'zod'
+import { desktopPublishRunnersSchema, desktopPackageWorkflows } from './desktop-publish-targets.ts'
 
 const positiveId = z.string().regex(/^[1-9]\d*$/u)
 const inputsSchema = z.object({ package_run_id: positiveId, package_run_attempt: z.union([positiveId, z.literal('')]).optional() })
 const runSchema = z.object({ id: z.number().int().positive(), run_attempt: z.number().int().positive(),
   head_sha: z.string().regex(/^[a-f0-9]{40}$/u), status: z.literal('completed'), conclusion: z.literal('success'),
-  event: z.literal('workflow_dispatch'), path: z.enum(['.github/workflows/macos-package.yml', '.github/workflows/windows-package.yml']),
+  event: z.literal('workflow_dispatch'), path: z.enum(Object.values(desktopPackageWorkflows)),
   repository: z.object({ full_name: z.string() }) })
 const jobsSchema = z.object({ jobs: z.array(z.object({
   name: z.string(), runner_name: z.string().nullable(), conclusion: z.string().nullable(),
 })) })
-const routesSchema = z.record(z.string(), z.object({ label: z.string().regex(/^dsh-[a-z0-9-]+$/u), target: z.enum(['mac-arm64', 'win-x64']) }))
 
 /**
  * Read GitHub evidence for one explicit attempt, or the latest attempt without falling back after failure.
@@ -37,10 +37,11 @@ export function selectDesktopPackage(repository: string, inputsValue: unknown, r
   const packages = jobs.filter(job => job.name === 'package' && job.conclusion === 'success' && job.runner_name)
   if (packages.length !== 1) throw new Error('desktop publish: expected one successful package job')
   const runnerName = packages[0]!.runner_name!
-  const routes = routesSchema.parse(routesValue)
+  const routes = desktopPublishRunnersSchema.parse(routesValue)
   const route = routes[runnerName]
-  const target = run.path.endsWith('/macos-package.yml') ? 'mac-arm64' : 'win-x64'
-  if (!route || route.target !== target) throw new Error('desktop publish: original machine has no configured publishing route')
+  const target = (Object.keys(desktopPackageWorkflows) as Array<keyof typeof desktopPackageWorkflows>)
+    .find(name => desktopPackageWorkflows[name] === run.path)!
+  if (!route || !route.target.includes(target)) throw new Error('desktop publish: original machine has no configured publishing route')
   if (new Set(Object.values(routes).map(value => value.label)).size !== Object.keys(routes).length) {
     throw new Error('desktop publish: each configured machine needs its own unique runner label')
   }

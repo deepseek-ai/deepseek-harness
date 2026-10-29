@@ -1,0 +1,8 @@
+<div class="_markdown_404681">
+  <p>
+    #text "Opening line carries math:\n$$a+b\nc+d$$"
+  <p>
+    #text "Closing fence alone on its own line:\n$$\\theta\n\\varphi\n$$"
+  <ul>
+    <li>
+      #text "list item keeps column-zero display math outside the item\n$$\\psi\n\\omega$$"

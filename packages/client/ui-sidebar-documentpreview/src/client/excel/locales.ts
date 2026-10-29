@@ -31,3 +31,82 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     sidebarExcel: ExcelPreviewKey
   }
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'title': 'スプレッドシート',
+  'language': 'ja-JP',
+  'loading': 'ドキュメントをレンダリング中...',
+  'invalid': 'このスプレッドシートを開けませんでした。形式、内容、またはパスワード保護を確認してください。',
+  'tooLarge': 'このブックはプレビューのサイズ上限を超えています。',
+  'timeout': 'このブックを開く際にタイムアウトしました。より小さいファイルをお試しください。',
+  'encoding': 'このテキストエンコーディングを読み取れませんでした。ファイルをBOM付きのUTF-8またはUTF-16で保存して再試行してください。',
+  'formulaWarning': 'このブックには数式が含まれています。表示される結果が欠落または不正確な場合があります。',
+  'unsupportedNotice': 'このプレビューはこのブックの{features}をサポートしていません。完全な表示にはシステムアプリケーションで開いてください。',
+  'charts': 'グラフ',
+  'images': '画像',
+  'shapes': '図形',
+  'conditionalFormatting': '条件付き書式',
+  'featureSeparator': '、',
+  'retry': '再試行',
+} satisfies Record<keyof typeof en, string>
+
+/** Spanish dictionary, checked against the English keys. */
+export const es = {
+  title: 'Hoja de cálculo', language: 'en', loading: 'Representando documento...',
+  invalid: 'Esta hoja de cálculo no se pudo abrir. Comprueba su formato, contenidos o protección con contraseña.',
+  tooLarge: 'Este libro excede el límite de tamaño de vista previa.', timeout: 'Se agotó el tiempo de apertura de este libro. Pruebe con un archivo más pequeño.',
+  encoding: 'Esta codificación de texto no se pudo leer. Guarde el archivo como UTF-8 o UTF-16 con una lista de materiales y vuelva a intentarlo.',
+  formulaWarning: 'Este libro contiene fórmulas. Los resultados mostrados pueden faltar o ser inexactos.',
+  unsupportedNotice: 'Esta vista previa no es compatible con {features} en este libro. Ábralo en una aplicación del sistema para disfrutar de la experiencia completa.',
+  charts: 'gráficos', images: 'imágenes', shapes: 'formas', conditionalFormatting: 'formato condicional', featureSeparator: ', ',
+  retry: 'Reintentar',
+} satisfies Record<keyof typeof en, string>
+
+/** French dictionary, checked against the English keys. */
+export const fr = {
+  title: 'Feuille de calcul', language: 'en', loading: 'Rendu du document...',
+  invalid: "Cette feuille de calcul n'a pas pu être ouverte. Vérifiez son format, son contenu ou sa protection par mot de passe.",
+  tooLarge: "Ce classeur dépasse la limite de taille d'aperçu.", timeout: "L'ouverture de ce classeur a expiré. Essayez un fichier plus petit.",
+  encoding: "Cet encodage de texte n'a pas pu être lu. Enregistrez le fichier au format UTF-8 ou UTF-16 avec une nomenclature et réessayez.",
+  formulaWarning: 'Ce classeur contient des formules. Les résultats affichés peuvent être manquants ou inexacts.',
+  unsupportedNotice: 'Cet aperçu ne prend pas en charge {features} dans ce classeur. Ouvrez-le dans une application système pour une expérience complète.',
+  charts: 'graphiques', images: 'photos', shapes: 'formes', conditionalFormatting: 'mise en forme conditionnelle', featureSeparator: ', ',
+  retry: 'Réessayer',
+} satisfies Record<keyof typeof en, string>
+
+/** German dictionary, checked against the English keys. */
+export const de = {
+  title: 'Tabellenkalkulation', language: 'en', loading: 'Dokument wird gerendert...',
+  invalid: 'Diese Tabelle konnte nicht geöffnet werden. Überprüfen Sie Format, Inhalt oder Passwortschutz.',
+  tooLarge: 'Diese Arbeitsmappe überschreitet die Größenbeschränkung für die Vorschau.', timeout: 'Beim Öffnen dieser Arbeitsmappe ist eine Zeitüberschreitung aufgetreten. Versuchen Sie es mit einer kleineren Datei.',
+  encoding: 'Diese Textkodierung konnte nicht gelesen werden. Speichern Sie die Datei als UTF-8 oder UTF-16 mit einer Stückliste und versuchen Sie es erneut.',
+  formulaWarning: 'Diese Arbeitsmappe enthält Formeln. Die angezeigten Ergebnisse fehlen möglicherweise oder sind ungenau.',
+  unsupportedNotice: 'Diese Vorschau unterstützt {features} in dieser Arbeitsmappe nicht. Öffnen Sie es in einer Systemanwendung, um das volle Erlebnis zu genießen.',
+  charts: 'Diagramme', images: 'Bilder', shapes: 'Formen', conditionalFormatting: 'bedingte Formatierung', featureSeparator: ', ',
+  retry: 'Erneut versuchen',
+} satisfies Record<keyof typeof en, string>
+
+/** Russian dictionary, checked against the English keys. */
+export const ru = {
+  title: 'электронная таблица', language: 'en', loading: 'Оформление документа...',
+  invalid: 'Эту таблицу невозможно открыть. Проверьте его формат, содержимое или защиту паролем.',
+  tooLarge: 'Размер этой книги превышает ограничение на размер предварительного просмотра.', timeout: 'Время открытия этой книги истекло. Попробуйте файл меньшего размера.',
+  encoding: 'Эту текстовую кодировку невозможно прочитать. Сохраните файл как UTF-8 или UTF-16 со спецификацией и повторите попытку.',
+  formulaWarning: 'В этой рабочей тетради есть формулы. Отображаемые результаты могут отсутствовать или быть неточными.',
+  unsupportedNotice: 'Эта предварительная версия не поддерживает {features} в этой книге. Откройте его в системном приложении, чтобы получить полную информацию.',
+  charts: 'графики', images: 'изображения', shapes: 'формы', conditionalFormatting: 'условное форматирование', featureSeparator: ', ',
+  retry: 'Повторить',
+} satisfies Record<keyof typeof en, string>
+
+/** Portuguese dictionary, checked against the English keys. */
+export const pt = {
+  title: 'Planilha', language: 'en', loading: 'Renderizando documento...',
+  invalid: 'Não foi possível abrir esta planilha. Verifique seu formato, conteúdo ou proteção por senha.',
+  tooLarge: 'Esta pasta de trabalho excede o limite de tamanho de visualização.', timeout: 'A abertura desta pasta de trabalho expirou. Experimente um arquivo menor.',
+  encoding: 'Esta codificação de texto não pôde ser lida. Salve o arquivo como UTF-8 ou UTF-16 com uma BOM e tente novamente.',
+  formulaWarning: 'Esta pasta de trabalho contém fórmulas. Os resultados exibidos podem estar ausentes ou imprecisos.',
+  unsupportedNotice: 'Esta visualização não oferece suporte a {features} nesta pasta de trabalho. Abra-o em um aplicativo do sistema para ter uma experiência completa.',
+  charts: 'gráficos', images: 'imagens', shapes: 'formas', conditionalFormatting: 'formatação condicional', featureSeparator: ', ',
+  retry: 'Tentar novamente',
+} satisfies Record<keyof typeof en, string>

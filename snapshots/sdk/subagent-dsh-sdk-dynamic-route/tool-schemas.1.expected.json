@@ -108,22 +108,6 @@
       }
     },
     {
-      "name": "exit_plan_mode",
-      "description": "Use only in plan mode. Present your plan for the user's review and, on approval, leave plan mode. The user may approve (carry out the plan from your next step) or keep planning — their feedback comes back in the tool result; revise and present again.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "plan": {
-            "type": "string",
-            "description": "The complete plan, as markdown, starting with a # heading that names it."
-          }
-        },
-        "required": [
-          "plan"
-        ]
-      }
-    },
-    {
       "name": "get_goal",
       "description": "Read the current session goal, including the id and revision that update_goal requires.",
       "parameters": {
@@ -484,25 +468,6 @@
         },
         "required": [
           "url"
-        ]
-      }
-    },
-    {
-      "name": "web_search",
-      "description": "Search the web for current information. Returns an optional summary answer and a list of source URLs.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "queries": {
-            "type": "array",
-            "description": "1–4 search queries; their results are merged.",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "queries"
         ]
       }
     },

@@ -43,9 +43,14 @@
   padding: 6px 8px 8px 14px;
 }
 
-.expandedTopLevel:has(> .topLevelBracket[data-json-root-row]:hover),
 .expandedTopLevel:has(> .topLevelBracket[data-json-root-row][data-json-copy-active]) {
   background: var(--json-tree-hover);
+}
+
+@media (hover: hover) {
+  .expandedTopLevel:has(> .topLevelBracket[data-json-root-row]:hover) {
+    background: var(--json-tree-hover);
+  }
 }
 
 .expandedTopLevelContainer {
@@ -75,7 +80,6 @@
   white-space: pre-wrap;
 }
 
-.row:not(.topLevelBracket):hover:not(:has(.row:hover))::after,
 .row:not(.topLevelBracket)[data-json-copy-active]::after,
 .row:has(> .expander:focus-visible)::after {
   position: absolute;
@@ -87,6 +91,20 @@
   background: var(--json-tree-hover);
   content: '';
   pointer-events: none;
+}
+
+@media (hover: hover) {
+  .row:not(.topLevelBracket):hover:not(:has(.row:hover))::after {
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: var(--json-tree-row-height, 16px);
+    background: var(--json-tree-hover);
+    content: '';
+    pointer-events: none;
+  }
 }
 
 .row > span:not(.expander, .copySlot) {
@@ -182,8 +200,10 @@
   pointer-events: auto;
 }
 
-.stringToggle:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .stringToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .stringToggle:focus-visible {
@@ -254,11 +274,17 @@
   padding-right: 24px;
 }
 
-.row:hover:not(:has(.row:hover)) > .copySlot,
 .row[data-json-copy-active] > .copySlot,
 .copySlot:focus-within {
   opacity: 1;
   pointer-events: auto;
+}
+
+@media (hover: hover) {
+  .row:hover:not(:has(.row:hover)) > .copySlot {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .actionButton {
@@ -277,8 +303,10 @@
   cursor: pointer;
 }
 
-.actionButton:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .actionButton:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .actionButton[aria-pressed='true'] {
@@ -326,8 +354,10 @@
   transform: rotate(90deg) scale(0.75);
 }
 
-.expander:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .expander:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .expander:focus-visible {
@@ -342,4 +372,10 @@
 
 .collapsedContent::after {
   content: '…';
+}
+
+@media (hover: none) {
+  .copySlot { opacity: 1; pointer-events: auto; }
+
+  .row:has(> .copySlot) { padding-right: 24px; }
 }

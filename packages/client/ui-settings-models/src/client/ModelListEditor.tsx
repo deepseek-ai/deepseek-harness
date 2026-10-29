@@ -21,12 +21,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { LlmDiscoveredModel } from '@deepseek-ai/dsh-api-remotes/client'
-import { Button, IconPlusOutlineRegular, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { AnimatedRows, Button, IconPlusOutlineRegular, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
 import type { ModelsOperations } from './operations.ts'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import type { en } from './locales.ts'
 import { ModelRow } from './ModelRow.tsx'
+import { useModelRows } from './useModelRows.ts'
+import type { CapacityField } from './useModelRows.ts'
 import styles from './ModelsSection.module.css'
 
 /**
@@ -109,9 +111,6 @@ export interface ModelListEditorProps {
   onBusyChange: (busy: boolean) => void
 }
 
-/** The two token counts edited as K/M-suffixed text behind a row's disclosure. */
-type CapacityField = 'contextWindow' | 'maxTokens'
-
 /**
  * What an empty capacity field is worth, shown as its placeholder so a row left
  * blank does not read as a model with no capacity at all.
@@ -180,62 +179,15 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   // flight opens checked rather than being removed by a stale selection.
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set())
   const [candidateQuery, setCandidateQuery] = useState('')
-  const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set())
-  // Capacities are edited as text, so a field's keystrokes are held here rather
-  // than re-derived from the parsed count on every change — that would rewrite
-  // `1000` to `1K` mid-word. Unreadable text is kept past blur so the refusal
-  // names a row the user can still see, which is why this is one entry PER
-  // FIELD: a single buffer would be displaced by editing any other field, and
-  // the abandoned one would render its stored NaN as the literal `NaN`.
-  const [editing, setEditing] = useState<ReadonlyMap<string, string>>(new Map())
-
-  /** Buffer key for one capacity field; the row half moves when rows do. */
-  const bufferKey = (index: number, field: CapacityField): string => `${String(index)}:${field}`
+  const rowState = useModelRows(models, onChange, disabled)
 
   const editCapacity = (index: number, field: CapacityField, text: string): void => {
-    setEditing(current => new Map(current).set(bufferKey(index, field), text))
+    rowState.edit(index, field, text)
     patch(index, { [field]: parseCapacity(text) })
   }
 
-  /** What a capacity field shows: the buffer while typing, else the stored count. */
   const capacityText = (model: ModelDraft, index: number, field: CapacityField): string =>
-    editing.get(bufferKey(index, field)) ?? capacitySpelling(numberOf(model, field))
-
-  /**
-   * Drop the removed rows' disclosure and buffer entries and shift the rows
-   * after them down, so per-row state follows its row.
-   */
-  const forgetRows = (removed: ReadonlySet<number>): void => {
-    if (removed.size === 0) return
-    /** The surviving row's new position, or `undefined` for a removed row. */
-    const moved = (at: number): number | undefined =>
-      removed.has(at) ? undefined : at - [...removed].filter(gone => gone < at).length
-    setExpanded((current) => {
-      const next = new Set<number>()
-      for (const at of current) {
-        const to = moved(at)
-        if (to !== undefined) next.add(to)
-      }
-      return next
-    })
-    setEditing((current) => {
-      const next = new Map<string, string>()
-      for (const [key, value] of current) {
-        const to = moved(Number(key.slice(0, key.indexOf(':'))))
-        // Only the row number moves; the field half of the key is untouched.
-        if (to !== undefined) next.set(key.replace(/^\d+/, String(to)), value)
-      }
-      return next
-    })
-  }
-
-  const toggleExpanded = (index: number): void => {
-    setExpanded((current) => {
-      const next = new Set(current)
-      if (!next.delete(index)) next.add(index)
-      return next
-    })
-  }
+    rowState.rows[index]?.editing.get(field) ?? capacitySpelling(numberOf(model, field))
 
   const patch = (index: number, next: Record<string, string | number | undefined>): void => {
     onChange(models.map((model, at) => {
@@ -317,7 +269,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
 
   const adoptPicked = (): void => {
     onChange([...keptRows, ...addedRows])
-    forgetRows(removedRows)
+    rowState.forget(removedRows)
     closePicker()
   }
 
@@ -373,7 +325,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
               type="button"
               className={styles['linkButton']}
               disabled={disabled}
-              onClick={props.onReset}
+              onClick={() => { rowState.reset(); props.onReset?.() }}
             >
               {t('resetModels')}
             </button>
@@ -392,17 +344,19 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         </button>
       </div>
       {models.length === 0 ? <p className={styles['modelEmpty']}>{t('modelsEmpty')}</p> : null}
-      <div className={styles['modelList']}>
-        {models.map((model, index) => (
+      <AnimatedRows className={styles['modelList'] as string} rowKeys={rowState.rows.map(row => String(row.key))} ready resetKey="">
+        {rowState.rows.map(({ model, key, expanded, order }, index) => (
           <ModelRow
-            key={index}
+            key={key}
+            rowKey={key}
+            order={order}
             model={model}
             position={index + 1}
             inputField="input"
             inputFallback={inputDefaults.get(textOf(model, 'id')) ?? props.defaultInput}
             inputLoading={catalogProvider !== undefined && catalog === undefined}
             reasoningLevels={props.reasoningLevels}
-            expanded={expanded.has(index)}
+            expanded={expanded}
             disabled={disabled}
             t={t}
             contextWindow={{
@@ -417,14 +371,14 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
             }}
             onFieldChange={(field, value) => { patch(index, { [field]: value }) }}
             onChange={(next) => { onChange(models.map((row, at) => at === index ? next : row)) }}
-            onToggle={() => { toggleExpanded(index) }}
+            onToggle={() => { rowState.toggle(index) }}
             onRemove={() => {
               onChange(models.filter((_model, at) => at !== index))
-              forgetRows(new Set([index]))
+              rowState.forget(new Set([index]))
             }}
           />
         ))}
-      </div>
+      </AnimatedRows>
       <button
         type="button"
         className={styles['addModelButton']}
