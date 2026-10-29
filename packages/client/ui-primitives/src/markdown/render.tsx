@@ -4,11 +4,11 @@
  * cache frozen blocks as React elements; the rendered DOM is pinned
  * byte-for-byte by `tests/fixtures/markdown-dom` and must not drift.
  *
- * External link and image destinations pass a protocol allowlist; settled
+ * External links reject executable and embedded-document protocols; settled
  * local file links use an explicit owner callback. Images additionally require
  * absolute HTTP(S), raw HTML renders as literal text (no HTML enters the
- * DOM), and KaTeX runs without trusted commands. Fragment-anchor URLs fail
- * the allowlist, so footnote references and back-references render as plain
+ * DOM), and KaTeX runs without trusted commands. Fragment-only URLs are not
+ * absolute, so footnote references and back-references render as plain
  * text rather than in-page links.
  *
  * Merge-extensible node unions fall through the documented default (render
@@ -16,6 +16,7 @@
  * may add node types this renderer has no mapping for.
  */
 
+import type { HTMLAttributes } from 'react'
 import { Fragment, createElement, useCallback, useState } from 'react'
 import type { Key, ReactNode } from 'react'
 import clsx from 'clsx'
@@ -24,7 +25,7 @@ import type {} from 'mdast-util-math'
 import { normalizeUri } from 'micromark-util-sanitize-uri'
 import type { CodeToolbarLabels } from '../CodeToolbar.tsx'
 import { CodeBlock } from './CodeBlock.tsx'
-import { parseFileLink } from './file-link.ts'
+import { isExplicitFilePath, parseFileLink } from './file-link.ts'
 import { renderTexToReact } from './katex.tsx'
 import { LinkIconMedium, classifyLinkPath } from '../LinkIcon.tsx'
 import { useMarkdownDelegate } from './MarkdownDelegate.tsx'
@@ -52,14 +53,16 @@ export interface MarkdownLabels {
 }
 
 function sanitizeUrl(url: string): string {
+  if (isExplicitFilePath(url)) return ''
   try {
     switch (new URL(url).protocol) {
-      case 'http:':
-      case 'https:':
-      case 'mailto:':
-        return url
-      default:
+      case 'javascript:':
+      case 'vbscript:':
+      case 'data:':
+      case 'blob:':
         return ''
+      default:
+        return url
     }
   } catch {
     // Relative and otherwise unparsable destinations are disallowed alongside
@@ -207,7 +210,12 @@ export interface MarkdownFileMentions {
    * @returns The opener with its accessible label and full-path title, or
    * undefined when the token names no known file — it then stays inert code.
    */
-  resolve(value: string): { open: () => void; label: string; title: string } | undefined
+  resolve(value: string): {
+    open: () => void
+    contextMenuProps?: Pick<HTMLAttributes<HTMLElement>, 'onContextMenu' | 'onKeyDown' | 'tabIndex'>
+    label: string
+    title: string
+  } | undefined
 }
 
 /**
@@ -355,6 +363,7 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
               title={mention.title}
               aria-label={mention.label}
               onClick={mention.open}
+              {...mention.contextMenuProps}
             >
               <LinkIconMedium kind={classifyLinkPath(value)} className={css.linkIcon} />
               {value}
@@ -572,7 +581,7 @@ function anchorWrapsOnlyImages(children: Md.PhrasingContent[]): boolean {
   return children.length > 0 && children.every(child => child.type === 'image' || child.type === 'imageReference')
 }
 
-/** Anchor over an already-authored href: allowlisted or unwrapped, with optional owner navigation for HTTP(S). */
+/** Anchor over a safe absolute href, with optional owner navigation for HTTP(S). */
 function renderSafeLink(href: string, children: ReactNode[], key: Key, glyph = true): ReactNode {
   const safeHref = sanitizeUrl(href)
   if (safeHref === '') return <Fragment key={key}>{children}</Fragment>
@@ -584,12 +593,13 @@ function MarkdownAnchor({ href, glyph, children }: {
   readonly glyph: boolean
   readonly children: ReactNode[]
 }): ReactNode {
-  const { openExternalLink } = useMarkdownDelegate()
+  const { openExternalLink, getTriggerProps } = useMarkdownDelegate()
   const external = ['http:', 'https:'].includes(new URL(href).protocol)
   const open = external ? openExternalLink : undefined
   return (
     <a
       href={href}
+      {...external ? getTriggerProps?.({ kind: 'url', url: href }) : {}}
       {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       onClick={open === undefined ? undefined : (event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
@@ -605,8 +615,9 @@ function MarkdownAnchor({ href, glyph, children }: {
 
 /** Local destinations use the scoped file delegate after settlement. */
 function renderAnchor(url: string, children: ReactNode[], key: Key, glyph = true, streaming = false): ReactNode {
-  const file = streaming ? undefined : parseFileLink(url)
+  const file = parseFileLink(url)
   if (file !== undefined) {
+    if (streaming) return <Fragment key={key}>{children}</Fragment>
     return <MarkdownFileLink key={key} file={file} glyph={glyph}>{children}</MarkdownFileLink>
   }
   return renderSafeLink(normalizeUri(url), children, key, glyph)
@@ -617,7 +628,7 @@ function MarkdownFileLink({ file, glyph, children }: {
   readonly glyph: boolean
   readonly children: ReactNode[]
 }): ReactNode {
-  const { openFile, fileImages } = useMarkdownDelegate()
+  const { openFile, fileImages, getTriggerProps } = useMarkdownDelegate()
   const [load] = useState(nextImageLoad)
   if (openFile === undefined) return <>{children}</>
   // Pure-image anchors already contain their preview and keep one navigation target.
@@ -629,6 +640,7 @@ function MarkdownFileLink({ file, glyph, children }: {
       type="button"
       className={clsx(css.fileMention, css.fileLink)}
       title={src === undefined ? file.path : undefined}
+      {...getTriggerProps?.({ kind: 'file', ...file })}
       onClick={() => { openFile(file.path, file.line === undefined ? undefined : { line: file.line }) }}
     >
       {glyph && <LinkIconMedium kind={classifyLinkPath(file.path)} className={css.linkIcon} />}
@@ -685,14 +697,16 @@ function LoadedMarkdownImage({ src, alt, destination, preview }: {
   destination: string
   preview: ReturnType<typeof useMarkdownDelegate>['fileImages']
 }): ReactNode {
+  const { getTriggerProps } = useMarkdownDelegate()
   const [failed, setFailed] = useState(false)
   const [open, setOpen] = useState(false)
   const close = useCallback(() => { setOpen(false) }, [])
   if (failed) return <span className={css.imageAlt}>{preview === undefined ? '' : `${preview.labels.failed} · `}{alt || destination}</span>
+  const file = parseFileLink(destination)
+  const contextMenuProps = getTriggerProps?.({ kind: 'image', url: src, ...(file === undefined ? {} : { path: file.path }) })
   const imageProps = { className: css.image, src, alt, onError: () => { setFailed(true) },
     loading: 'lazy' as const, decoding: 'async' as const, referrerPolicy: 'no-referrer' as const }
-  if (preview === undefined) return <img {...imageProps} />
-  const file = parseFileLink(destination)
+  if (preview === undefined) return <img {...imageProps} {...contextMenuProps} />
   const localFileName = file?.path.split(/[\\/]/u).at(-1)
   const urlFileName = destination.split('/').at(-1)?.split(/[?#]/u)[0]
   const exportName = localFileName || urlFileName || 'image'
@@ -704,9 +718,10 @@ function LoadedMarkdownImage({ src, alt, destination, preview }: {
   />
   return <>
     <button type="button" className={css.imageButton} title={preview.labels.open}
+      {...contextMenuProps}
       aria-label={alt ? `${preview.labels.open}: ${alt}` : preview.labels.open}
       onClick={() => { setOpen(true) }}>{img}</button>
-    {open && <ImageLightbox src={src} alt={alt} labels={preview.labels} onClose={close} />}
+    {open && <ImageLightbox src={src} alt={alt} labels={preview.labels} onClose={close} contextMenuProps={contextMenuProps} />}
   </>
 }
 
@@ -753,7 +768,7 @@ function renderFootnoteReference(
   const seen = context.footnoteCounts.get(id)
   if (seen === undefined) context.footnoteOrder.push(id)
   context.footnoteCounts.set(id, (seen ?? 0) + 1)
-  // The in-page anchor fails the protocol allowlist, so only the numbered
+  // The in-page anchor is not an absolute URL, so only the numbered
   // superscript renders (matching the replaced pipeline's unwrapped link).
   return <sup key={key}>{String(context.footnoteOrder.indexOf(id) + 1)}</sup>
 }

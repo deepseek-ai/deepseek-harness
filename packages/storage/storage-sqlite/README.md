@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-storage-sqlite` is a storage backend that hosts every routed unit in one SQLite database file, storing each record as one JSON document per row, registered as backend `sqlite`. A single record update touches exactly one row, which is what makes this the right medium for high-frequency, point-sized writes. Choose it when a domain's data changes often or the deployment prefers one queryable database; choose the JSON backend when the data should be readable as plain files. The backend is host-side only: it contributes no prompt, tool, or schema, so the model and the agent loop never see it.
+`dsh-storage-sqlite` is a storage backend that hosts every routed unit in one SQLite database file, storing each record as one JSON document per row, registered as backend `sqlite`. A single record update replaces one data row, which is what makes this the right medium for high-frequency, point-sized writes. Choose it when a domain's data changes often or the deployment prefers one queryable database; choose the JSON backend when the data should be readable as plain files. The backend is host-side only: it contributes no prompt, tool, or schema, so the model and the agent loop never see it.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Use this package when a composition keeps frequently updated domain data in one 
 
 ### When to choose it
 
-Choose it when writes are frequent and point-sized — each key maps to exactly one row, so updating one record touches one row instead of rewriting a whole file. Choose the JSON backend when humans inspect or edit the stored data as plain files. The synchronous `node:sqlite` driver blocks the JavaScript thread for the duration of each single-statement call, which is fine at domain-data scale but worth accounting for at high write rates.
+Choose it when writes are frequent and point-sized — each key maps to one data row, so updating a record avoids rewriting the whole unit. The first mutation of an accepted older unit also updates its version metadata in the same transaction. Choose JSON when humans inspect or edit stored data as plain files. The synchronous `node:sqlite` driver blocks the JavaScript thread for each write call, including that initial transaction; account for this at high write rates.
 
 ### Configuration
 
@@ -54,7 +54,9 @@ Two fields: the database path and the journal mode. `:memory:` opens an in-proce
 
 ### Observable behavior
 
-Missing directories and database files are created owner-only (`0o700`/`0o600`); an existing database keeps its modes. A unit whose stored format version differs from its descriptor rejects `version-mismatch`, and a database stamped with a physical layout version other than the current one rejects outright — no migration, pre-release stance. Failures carry stable `StorageError` codes (`version-mismatch`, `malformed-medium`, `unknown-state`, `closed`); single-record writes and committed batches are durable once resolved. A batch that cannot open or roll back its transaction rejects with `unknown-state`, after which every later operation except `close()` rejects, and calls after close reject `closed`.
+Missing directories and database files are created owner-only (`0o700`/`0o600`); an existing database keeps its modes. A unit accepts its descriptor's current version or `compatibleVersions`, otherwise rejects `version-mismatch`. Accepted older units retain their stamp on read; the first mutation commits data and the current stamp in one transaction. Deleting missing keys or an empty batch leaves the stamp unchanged. Untouched record values and other units remain unchanged; the backend does not convert application values. A database stamped with a physical layout version other than the current one rejects outright; domain compatibility does not migrate the database layout. Storage checks use `StorageError` codes; underlying SQLite failures propagate, and writes are durable once resolved.
+
+Every nonempty batch delete uses one transaction, including its version update when needed. A failed transaction preserves data and stamp when SQLite rolls back successfully, including an automatic rollback. A failed `BEGIN` leaves the batch unapplied and permits retry on the same handle. If rollback itself fails, the backend retains a `StorageError` with code `unknown-state` whose cause is an `AggregateError` containing both failures, and rejects further unit reads, writes, and pending or new opens. The transaction outcome is unknown. Close the backend and its domains, then create a new backend to inspect saved state before deciding whether to retry. See [domain versioning](../../../docs/subsystems/storage.md#domain-versioning) for mixed records and downgrade behavior.
 
 -----
 
@@ -64,14 +66,14 @@ Missing directories and database files are created owner-only (`0o700`/`0o600`);
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The backend is a document-per-row layout over one `node:sqlite` connection, designed so a per-key update is a single prepared statement.
+The backend is a document-per-row layout over one `node:sqlite` connection. Per-key writes reuse prepared statements; a version upgrade adds the metadata update and transaction.
 
 ### Design concept
 
-- **Document per row.** Each unit table becomes a physical STRICT table `u_<unit>_<table> (key TEXT PRIMARY KEY, value TEXT)` whose `value` column holds the record's JSON text; the global singleton lives in a shared `unit_globals` table. One key update touches exactly one row — the reason to route a high-churn domain here.
-- **Statement atomicity.** Every single-record write is one prepared statement; a batch delete runs its deletes in one explicit transaction, so the batch commits or rolls back together. A batch that cannot open or roll back its transaction rejects with `unknown-state`, after which every later operation on the unit except `close()` rejects; write ordering stays the caller's responsibility (the domain layer's write chain).
+- **Document per row.** Each unit table becomes a physical STRICT table `u_<unit>_<table> (key TEXT PRIMARY KEY, value TEXT)` whose `value` column holds the record's JSON text; the global singleton lives in a shared `unit_globals` table. A key update replaces one data row; advancing the unit stamp also updates its metadata.
+- **Atomic writes.** Current-version single-record writes use one prepared statement. Batch deletes and the first mutation of an accepted older unit share one transaction helper; the first mutation includes its current version stamp. Successful rollback preserves both data and stamp. Write ordering stays the caller's responsibility (the domain layer's write chain).
 - **Names validated before DDL.** Unit and table names must match `UNIT_NAME_RE` before they reach DDL, so no external input is ever interpolated into SQL identifiers.
-- **Versions fail loud.** The physical layout version lives in `PRAGMA user_version` (fresh databases stamp it last); unit format versions live in the `units` table. Any other stamped value rejects — no migrations.
+- **Separate version checks.** The physical layout version lives in `PRAGMA user_version` (fresh databases stamp it last) and must match exactly. Unit versions live in `units` and also accept the owner's declared `compatibleVersions`; record conversion belongs to the owner.
 
 ### Open sequence
 
@@ -125,9 +127,10 @@ None — the backend never touches live request prefixes.
 
 These limits define when this backend is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
-- **Synchronous driver blocks the event loop** — each write is a synchronous `DatabaseSync` call; the block lasts a single statement, which is acceptable at domain-data scale.
+- **Synchronous driver blocks the event loop** — writes use synchronous `DatabaseSync` calls; batch deletes and an accepted older unit's first mutation hold their transaction on the JavaScript thread.
 - **No busy-wait or retry policy** — a competing connection holding a write lock rejects the operation immediately instead of waiting; the domain layer's write chain serializes writes within one process, and cross-process coordination is out of scope.
 - **Only the current physical layout version opens** — any other stamped `user_version` is rejected rather than migrated (pre-release stance).
+- **Version checks remain unit-wide** — a `per-record` layout request does not add per-record stamps or JSON's absent-document recovery policy to this backend.
 - **Open sequence duplicated with the query provider** — `openDatabase` and `session-query-sqlite` both enforce SQLite file ownership, but each package owns a distinct application identity and schema; no shared medium helper couples them.
 
 <a id="dev-note"></a>

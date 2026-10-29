@@ -42,6 +42,14 @@ import { RuntimeContextProjection } from './runtime-context.ts'
 import { AssistantStreamAttempt } from './assistant-stream.ts'
 import { SystemPromptProjection } from './runtime-context.ts'
 
+/** Projected facts consumed by this driver; registration stays with the factory. */
+interface LoopProjections {
+  /** Current model selection, including pending changes. */
+  readonly modelSelection: () => ModelSelectionProjectionState
+  /** Current queued and claimed input. */
+  readonly inbox: () => InboxState
+}
+
 type Phase =
   | { kind: 'idle'; lastTurn: number }
   | {
@@ -131,16 +139,15 @@ export class ReactLoopAgent implements Agent {
     public readonly id: SessionId,
     public readonly options: AgentOptions,
     public readonly session: Session,
-    readModel: () => ModelSelectionProjectionState,
-    readInbox: () => InboxState,
+    projections: LoopProjections,
     lastTurn: number,
   ) {
     this.requestSurfaceGeneration = session.surface.contentGeneration
     this.dispatch = agentEvents(loopCtx, this)
     this.scope = createScope(loopCtx, this)
     this.ctx = this.scope.ctx
-    this.model = new AgentModel(readModel, session, options)
-    this.inbox = new ReactLoopInbox(readInbox, session, this.dispatch)
+    this.model = new AgentModel(projections.modelSelection, session, options)
+    this.inbox = new ReactLoopInbox(projections.inbox, session, this.dispatch)
     this.phase = { kind: 'idle', lastTurn }
     this.runtimeContext = new RuntimeContextProjection(this.ctx, session)
     this.systemPrompt = new SystemPromptProjection(session)

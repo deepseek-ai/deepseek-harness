@@ -25,7 +25,7 @@ Web GUI 的 goal 界面同时显示持久 goal 状态及当前的进程本地激
 <a id="use-this-package"></a>
 ## 使用本包
 
-与 `ui-conversation` 及 goal 领域包一起挂载本插件；只要会话存在目标，条带就会作为 composer 上下文堆栈的第二张卡片出现（位于 Todo 之后、Queue 之前）。Todo 与 Goal 使用相同的面板 elevation，使其位于 composer 层级之上。已 armed 的 active goal 提供暂停动作；active-but-disarmed 或 paused 的 goal 提供恢复；编辑在 ui-primitives 的 `InlineEditor` 中重写目标文本，多行目标编辑后仍保留换行；清除移除目标，并在投影追上之前抑制条带。
+与 `ui-conversation` 及 goal 领域包一起挂载本插件；只要会话存在目标，条带就会作为 composer 上下文堆栈的第二张卡片出现（位于 Todo 之后、Queue 之前）。Todo 与 Goal 使用相同的面板 elevation，使其位于 composer 层级之上。已 armed 的 active goal 提供暂停动作；active-but-disarmed、paused 或 blocked 的 goal 提供恢复；编辑在 ui-primitives 的 `InlineEditor` 中重写目标文本，多行目标编辑后仍保留换行；清除移除目标，并在投影追上之前抑制条带。
 
 ### 指令输入气泡
 
@@ -79,6 +79,7 @@ Web GUI 的 goal 界面同时显示持久 goal 状态及当前的进程本地激
 这些限制界定了当前 goal 界面。它们是当前包约束，不是 goal 领域对比或任务积压。
 
 - **Host 状态与 preset 无关**——把活跃会话切换到 `minimal` 后，Host 拥有的 goal 仍会保留。`/goal` 与 goal 工具会消失，但该条带仍可编辑、暂停、恢复或清除 goal。
+- **无轮次预算控制**——该条带无法提高 `maxGoalRounds`。恢复已用完全部轮次的 goal（例如因轮次上限而受阻的 goal）会失败，并显示行内错误；需先请 agent 提高该 goal 的轮次上限。
 
 <a id="dev-note"></a>
 ### 开发备注

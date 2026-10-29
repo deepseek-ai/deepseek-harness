@@ -191,8 +191,18 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-experimental-subagent-oar': ['LICENSE-OAR'],
   // CUA publishes its client API and attributed native source for local macOS builds.
   '@deepseek-ai/dsh-cua': ['lib/remote-types.js', 'lib/api.js', 'lib/bridge.js', 'lib/native-client.js', 'lib/protocol.js'],
-  '@deepseek-ai/dsh-experimental-cua-macos': ['native/bin', 'native/Package.swift', 'native/Sources', 'native/tests/swift', 'native/tests/test_swift.py', 'native/LICENSE.cua-driver', 'native/upstream.json', 'native/README.md', 'native/README.zh.md', 'native/protocol.schema.json'],
+  '@deepseek-ai/dsh-experimental-cua-macos': ['native/bin', 'cua-helper.json', 'native/Package.swift', 'native/Info.plist', 'native/DSHComputerUse.icns', 'native/build_app.py', 'native/Sources', 'native/tests/swift', 'native/tests/test_swift.py', 'native/LICENSE.cua-driver', 'native/LICENSE.computer-use-icon', 'native/upstream.json', 'native/README.md', 'native/README.zh.md', 'native/protocol.schema.json'],
   '@deepseek-ai/dsh-webhook-github': ['examples/github-review/cordis.yml', 'examples/github-review/github-ready-review-rule.mjs'],
+  // Liveshare publishes its built Relay gateway entry and the shared runtime
+  // chunk that entry imports, plus the declaration-plane entry and its chunk.
+  // Its `./types` export is a type-only module, so the emitted tree contributes
+  // that one runtime file; the declarations still ship as the whole tree.
+  '@deepseek-ai/dsh-experimental-liveshare': [
+    'lib/owner-gateway/cli.js',
+    'lib/retry-backoff-*.js',
+    'lib/viewer-declarations.js',
+    'lib/viewer-declarations-*.js',
+  ],
   // Owned Worker bundles import this public bootstrap before their business entry.
   '@deepseek-ai/dsh-app-boot': ['lib/worker/profile-resolution-bootstrap.js'],
   // Statically linked client libraries keep their stylesheets next to the emitted
@@ -211,8 +221,8 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // The CPython side ships as source .py files, published as-is rather than built.
   '@deepseek-ai/dsh-experimental-ptc-runtime-python': ['py/**/*.py'],
   '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice': ['runtime/assets.json'],
-  // Node execution modes each launch a separately bundled bootstrap.
-  '@deepseek-ai/dsh-ptc-runtime-node': ['lib/process.js', 'lib/persistent-process.js'],
+  // Node profile configuration and process bootstraps have separate bundles.
+  '@deepseek-ai/dsh-ptc-runtime-node': ['lib/configuration.js', 'lib/process.js', 'lib/persistent-process.js'],
   // The Inspector owns a Worker and a mirrored frontend outside package export paths.
   '@deepseek-ai/dsh-experimental-inspector': ['lib/client.*.js', 'lib/worker.js', 'lib/devtools/**'],
   // Creator's composition guidance travels with the declaration package.

@@ -41,7 +41,7 @@ kind: "package-library"
 
 ### 按需组合包
 
-`ON_DEMAND_BUNDLES` 列出只在请求时安装的官方公开包。`OFFICIAL_ON_DEMAND_CATALOG` 内嵌这些包自己持有的本地化元信息、图标和可选的 `dsh.bundle.platforms` 声明，用于离线发现与安装前的 Host 平台检查；`pnpm gen-official-bundle-catalog` 显式更新生成内容，`verify-official-bundle-catalog` 检查资源完整性与时效；构建使用已提交的目录，不导入提供方代码。目录不包含安装目标：插件管理器根据运行中的版本和安装推导目标，并使用普通的组合包安装器。[产品使用检查](../../../scripts/verify-product-use.ts)针对 Web 组合随附选择和按需选择，不执行提供方。
+`ON_DEMAND_BUNDLES` 列出只在请求时安装的官方公开包。`OFFICIAL_ON_DEMAND_CATALOG` 内嵌这些包自己持有的本地化元信息、图标和可选的 `dsh.bundle.platforms` 声明，用于离线发现与安装前的 Host 平台检查；`pnpm gen-official-bundle-catalog` 显式更新生成内容，`verify-official-bundle-catalog` 检查资源完整性与时效；构建使用已提交的目录，不导入提供方代码。目录不包含安装目标：插件管理器根据运行中的版本和安装推导目标，并使用普通的组合包安装器。[产品使用检查](../../../scripts/verify-product-use.ts)针对 Web 组合随附选择和按需选择，不执行提供方。 目录也保留 `listedByDefault`，使默认隐藏的组合包在用户显式安装或启用前保持隐藏。
 
 -----
 

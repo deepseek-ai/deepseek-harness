@@ -79,6 +79,17 @@ describe('workspace shortcut ownership', () => {
     b.controls.add()
     expect(b.controls.state.getSnapshot().addRequested).toBe(false)
   })
+  it.each([
+    ['session.new', 'KeyN'], ['session.search', 'KeyK'], ['workspace.add', 'KeyO'],
+    ['session.rename', 'KeyG'], ['session.fork', 'KeyF'], ['session.archive', 'KeyA'],
+  ])('allows %s from the drawer and blocks it behind another dialog', async (id, code) => {
+    const b = await bench('web')
+    const gesture = key(code, { alt: code !== 'KeyF', shift: code === 'KeyF' })
+    expect(b.registry.dispatch(gesture, { ...context, modal: 'settings' }, vi.fn()).status).toBe('blocked')
+    expect(b.registry.dispatch(gesture, { ...context, modal: 'sidebar' }, vi.fn()).status).toBe('handled')
+    expect(b.commands.get(id)!.modals).toContain('sidebar')
+  })
+
   it('registers six commands with Desktop and Web defaults and removes registrations with the plugin', async () => {
     const b = await bench()
     expect(b.registry.catalog.getSnapshot().map(row => row.id)).toEqual([

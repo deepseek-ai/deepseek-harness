@@ -1,5 +1,5 @@
 /** Built permission UI talks to the real provider; the isolated helper substitutes only macOS privilege observations. */
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -29,23 +29,20 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const helper = await installNativeFixture(root)
   resources.closeFixture = await startFixtureHost(helper)
   const state = join(root, 'permissions.json'), audit = join(root, 'helper-events.jsonl')
-  const launchApplication = { name: 'Visual Studio Code.app', path: '/Applications/Visual Studio Code.app',
+  const launchApplication = { name: 'DSH Computer Use.app', path: '/Applications/DSH Computer Use.app',
     icon: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC' }
   await writeFile(state, JSON.stringify({ accessibility: false, screenRecording: false, launchApplication }))
   await writeFile(join(root, 'observe-helper'), '')
-  const fixtureBundle = join(root, 'fixture-bundle')
-  await mkdir(fixtureBundle)
-  await writeFile(join(fixtureBundle, 'package.json'), JSON.stringify({ name: 'cua-permission-fixture', version: '1.0.0',
-    dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
-  await writeFile(join(fixtureBundle, 'cordis.patch.yml'), `- id: cua\n  config: ${JSON.stringify({ helperPath: helper })}\n`)
+  const fixturePatch = join(root, 'native-fixture.yml')
+  // Keep the external helper override above bundle order changes when CUA is re-enabled.
+  await writeFile(fixturePatch, JSON.stringify([{ id: 'cua', config: { helperPath: helper } }]))
   const scaffold = await launchWebScaffold({
-    profile: { packages: [{ dir: bundle, enabled: true }, { dir: fixtureBundle, enabled: true }] },
+    profile: { packages: [{ dir: bundle, enabled: true }] },
+    extraOverlayPath: fixturePatch,
   })
   resources.scaffold = scaffold
   expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
     .toMatchObject({ listedByDefault: false, enabled: true, installed: true })
-  await scaffold.ctx.settings.mutate('cua', [{ op: 'set', path: ['allowedApps'],
-    value: [{ id: 'a'.repeat(64), name: 'Fixture', executablePath: '/Applications/Fixture.app' }] }])
   const browser = await chromium.launch()
   resources.browser = browser
   const page = await newEnglishPage(browser), tripwire = watchConsole(page)
@@ -55,7 +52,6 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const agent = scaffold.ctx.agents.list()[0]!
   await scaffold.ctx.agentPresets.select(agent, 'ptc')
   scaffold.ctx.approval.setPolicy(agent, 'never')
-  await scaffold.ctx.settings.mutate('cua', [{ op: 'set', path: ['allowedApps'], value: [] }])
   // Application consent remains independent of the session's tool-approval policy.
   const grant = scaffold.ctx.tools.execute({ agent, signal: new AbortController().signal,
     calls: [{ type: 'tool-call', id: ToolCallId('cua-app-approval'), name: 'run_code',
@@ -93,10 +89,10 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(await panel.getByRole('region', { name: 'Manage applications computer use can access', exact: true }).count()).toBe(1)
   await expect.poll(() => panel.locator('li img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
   expect(await panel.getByText('/fixture/app', { exact: true }).count()).toBe(0)
-  expect(await accessibility.getByText('Visual Studio Code.app', { exact: true }).count()).toBe(1)
+  expect(await accessibility.getByText('DSH Computer Use.app', { exact: true }).count()).toBe(1)
   expect(await accessibility.textContent()).toContain('In System Settings, allow')
   expect(await accessibility.textContent()).toContain('to read interface controls, click, and type.')
-  expect(await panel.getByRole('group', { name: 'Screen Recording', exact: true }).getByText('Visual Studio Code.app', { exact: true }).count()).toBe(1)
+  expect(await panel.getByRole('group', { name: 'Screen Recording', exact: true }).getByText('DSH Computer Use.app', { exact: true }).count()).toBe(1)
   await expect.poll(() => accessibility.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   await compareOrRefreshGolden(expected, await captureStableAria(page, '[data-cua-settings]', scaffold.workspaceCwd), webSnapshotMode())
@@ -147,7 +143,10 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await panel.getByRole('button', { name: 'Allow asking again', exact: true }).click()
   await panel.getByText('Fixture', { exact: true }).waitFor({ state: 'hidden' })
   const saved = await readFile(join(scaffold.harnessHome, 'profiles/scaffold/cordis.patch.yml'), 'utf8')
-  expect(saved).toContain('allowedApps: []')
+  expect(saved).not.toContain('allowedApps:')
+  const files = await readdir(join(scaffold.workspaceCwd, '.dsh-storages'))
+  expect(files.some(file => file.startsWith('cua_permissions_') && file.endsWith('.json'))).toBe(true)
+  expect((await scaffold.ctx.cuaAccess.applications()).allowedApps).toEqual([])
   const events = (await readFile(audit, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { event: string; method: string; params: object })
     .filter(record => record.event === 'call').map(({ method, params }) => ({ method, params }))
   expect(events).toContainEqual({ method: 'requestPermission', params: { permission: 'accessibility' } })
@@ -203,6 +202,8 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
         await expect.poll(() => toggle.isEnabled(), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(true)
         await toggle.click()
         await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
+        const setup = page.getByRole('dialog', { name: 'Set up computer use before use', exact: true })
+        await setup.getByRole('button', { name: 'Later', exact: true }).click()
         await expect.poll(() => panel.getAttribute('aria-busy'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
         expect(await trace.evaluate(value => value.errors)).toEqual([])
       }

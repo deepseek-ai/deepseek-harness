@@ -28,7 +28,7 @@ The [`DeepSeekLlmApiExtensionRegistry`](../packages/llm/deepseek-llm-api-extensi
 | `x-deepseek-harness-session-id` | Model requests carrying a Session id | The exact request `sessionId` string |
 | `x-deepseek-harness-compact` | Model requests whose purpose is `compaction` | The literal string `1` |
 
-Credential failure happens before anonymous-user-id resolution, so an unauthorized request neither sends these headers nor creates the identity file. A direct request without a Session omits `x-deepseek-harness-session-id`. Session-title requests have no additional purpose header; the ordinary Session-id rule still applies when one carries a `sessionId`.
+Credential failure happens before anonymous-user-id resolution, so an unauthorized request neither sends these headers nor creates the identity file. A direct request without a Session omits `x-deepseek-harness-session-id`. Session-title and Auto review requests have no additional purpose header; the ordinary Session-id rule still applies when one carries a `sessionId`.
 
 ## Body-extension transaction
 
@@ -73,7 +73,7 @@ An enabled inventory with no qualifying entries sends `packages: []`; disabling 
 
 ## `dsh_session_log`
 
-[`@deepseek-ai/dsh-session-log-deepseek`](../packages/session/session-log-deepseek/README.md) contributes one contiguous suffix of the canonical Session log. The field is enabled by default. It applies to a request with a live Session and at least one event; a direct request, a stale Session id, or an empty log omits the field, as does a request whose first pending event alone exceeds `maxBytes` or cannot be serialized; a composition disables it with `enabled: false`. The examples below use logical Session format 2 only to illustrate the wire fields; they do not identify the [current writer format](session-format-status.md).
+[`@deepseek-ai/dsh-session-log-deepseek`](../packages/session/session-log-deepseek/README.md) contributes one contiguous suffix of the canonical Session log. The field is enabled by default. It applies to a request with a live Session and at least one event; a direct request, a stale Session id, an empty log, or a request matched by a registered upload exclusion omits the field, as does a request whose first pending event alone exceeds `maxBytes` or cannot be serialized; a composition disables it with `enabled: false`. The examples below use logical Session format 2 only to illustrate the wire fields; they do not identify the [current writer format](session-format-status.md).
 
 ```json
 {

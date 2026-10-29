@@ -18,6 +18,11 @@ describe('computeColumns', () => {
     expect(computeColumns(1920, 0, 0)).toEqual({ sidebar: 56, center: 1864, rightbar: 0 })
   })
 
+  it('aligns an expanded sidebar to the fold midpoint without widening a collapsed rail', () => {
+    expect(computeColumns(951, 280, 864, 56, true)).toEqual({ sidebar: 475.5, center: 475.5, rightbar: 0 })
+    expect(computeColumns(951, 0, 0, 56, true)).toEqual({ sidebar: 56, center: 895, rightbar: 0 })
+  })
+
   it('clamps sidebar preferences and limits the right panel to 70% of the frame', () => {
     expect(computeColumns(3000, 9999, 9999)).toEqual({ sidebar: 420, center: 480, rightbar: 2100 })
     expect(computeColumns(1920, 1, 1)).toEqual({ sidebar: 264, center: 1356, rightbar: 300 })

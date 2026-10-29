@@ -1,0 +1,7 @@
+- menu:
+  - text: "将 #9 合并到 main"
+  - menuitem "压缩合并 把全部提交压缩成一个提交"
+  - menuitem "创建合并提交 保留全部提交，并新增一个合并提交"
+  - menuitem "变基合并 把提交逐个变基到 main"
+  - separator
+  - menuitem "提交已更新，请重新检查后再打开合并菜单" [disabled]

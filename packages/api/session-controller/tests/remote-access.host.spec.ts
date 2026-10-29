@@ -8,6 +8,7 @@
  */
 
 import { Context } from '@deepseek-ai/cordis'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
@@ -266,6 +267,34 @@ describe('Session Controller access', () => {
       { kind: 'user', rpcId: 'guest-1', principal: GUEST },
       { kind: 'user', rpcId: 'owner-1' },
     ])
+  })
+
+  it('keeps gateway permission checks while allowing an image referenced only by another Session', async () => {
+    const { ctx, hidden } = await harness()
+    await ctx.plugin(TypertGatewayService)
+    const bindings = guestPolicy(ctx)
+    const ref = {
+      attachmentId: AttachmentId(`sha256:${'ab'.repeat(32)}`),
+      mediaType: 'image/png' as const, bytes: 2, width: 1, height: 1,
+    }
+    hidden.session.append('user/message', createUserMessage({
+      content: [{ type: 'image', attachment: ref }], source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    const readImage = vi.fn(() => Promise.resolve({ ref, data: Uint8Array.of(1, 2) }))
+    ctx.attachments.readImage = readImage
+    const read = (sessionId: SessionId): Promise<unknown> => guestCall(ctx, 'attachment', {
+      request: { sessionId, attachment: ref },
+    })
+    await expect(read(SHARED)).rejects.toMatchObject({ code: 'remote-access/denied' })
+    expect(readImage).not.toHaveBeenCalled()
+    bindings.push({
+      role: { name: 'test:attachment-reader', resource: 'session', actions: ['session/attachment'] },
+      resource: { kind: 'session', id: SHARED },
+    })
+    await expect(read(SHARED)).resolves.toEqual({ attachment: ref, data: 'AQI=' })
+    expect(readImage).toHaveBeenCalledExactlyOnceWith(ref)
+    await expect(read(PRIVATE)).rejects.toMatchObject({ code: 'remote-access/denied' })
+    expect(readImage).toHaveBeenCalledTimes(1)
   })
 
   it('lets a non-owner read projections only in a Session its Session role names', async () => {

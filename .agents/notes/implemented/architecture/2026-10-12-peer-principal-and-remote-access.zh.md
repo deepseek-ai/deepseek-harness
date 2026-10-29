@@ -241,7 +241,7 @@ export function RemoteScope<This extends object, Args extends unknown[], Result>
 | `llm/listProviders` | `global` | 无资源 | 否 |
 | `commands/list` | session：`args.agentId`（Agent lookup 的 wire 字段） | Agent lookup `resource: 'session'` | 否 |
 | `goals/get` | session：`args.agentId` | Agent lookup `resource: 'session'` | 否 |
-| `session/attachment` | session：`args.request.sessionId` | 默认 resolver | 否 |
+| `session/attachment` | session：`args.request.sessionId` | 默认 resolver | 否：一条 Session 上的授权允许读取整个附件存储 |
 | `skills/list` | session：`args.request.sessionId` | 默认 resolver | 否 |
 | `session/fork` | session：`args.request.sessionId` | 默认 resolver | 否 |
 | `session/prompt` | session：`args.request.sessionId` | 默认 resolver | 否 |
@@ -250,6 +250,8 @@ export function RemoteScope<This extends object, Args extends unknown[], Result>
 | `session/page` | session：Session 地址读 `args.request.address.sessionId`；subagent 地址读 `args.request.address.childSessionId` | 默认 resolver | 否 |
 | `session/follow` | 同上 | 默认 resolver | 否 |
 | `remoteAccess/follow` | `global` | 无资源；remote-access 对任何 principal 放行 | 否 |
+
+对于 `session/attachment`，`sessionId` 指定 Gateway 检查的资源，不限制可读取哪张图片。该检查放行后，图片可以属于其他 Session 或不属于任何 Session，处理函数也不检查请求中的 Session 是否存在。policy 作者必须把此 action 视为整个附件存储的读取权限，具体规则见[图片访问规则](2026-10-23-store-scoped-image-reads.zh.md)。
 
 subagent 地址读取的是子会话转录，因此其资源是子会话。Client 在重连后会重新读取已知会话的 projections，其中包括 subagent 会话的父会话；没有该父会话授权的读者，其 projection 读取被拒。父会话的授权是否覆盖其 subagent 子会话由 policy 决定，即是否为子会话给出 binding；通用层不推导父资源。
 

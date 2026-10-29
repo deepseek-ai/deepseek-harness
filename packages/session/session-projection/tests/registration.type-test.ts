@@ -28,6 +28,11 @@ export async function checkProjectionRegistrationTypes(registry: SessionProjecti
   const host = await registry.register(counter)
   expectTypeOf(host).toEqualTypeOf<ProjectionHandle<number>>()
   expectTypeOf(host.stateOf(session)).toEqualTypeOf<number>()
+  const read = host.readerFor(session)
+  expectTypeOf(read).toEqualTypeOf<() => number>()
+  expectTypeOf(read()).toEqualTypeOf<number>()
+  // @ts-expect-error -- a bound reader cannot be retargeted at read time.
+  read(session)
 
   const nullable = await registry.register({
     key: 'type-test/nullable',
@@ -40,6 +45,7 @@ export async function checkProjectionRegistrationTypes(registry: SessionProjecti
     },
   })
   expectTypeOf(nullable.stateOf(session)).toEqualTypeOf<string | null>()
+  expectTypeOf(nullable.readerFor(session)()).toEqualTypeOf<string | null>()
 
   const visible = {
     ...counter,

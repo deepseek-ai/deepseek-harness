@@ -70,6 +70,8 @@ pnpm run typecheck
 | `tsconfig.base.json` | 共享 compilerOptions 与源码 `paths` 映射。同时是各 vitest 配置让 vite-tsconfig-paths 指向的解析门面：它没有 `include`，因此其 `paths` 适用于任何 importer。 | 否 |
 | `tsconfig.base.client.json` | 浏览器编译设置（`jsx`、DOM lib、`types: []`），由 Client aggregate 和每个 `packages/client/*` 包 extends。 | 否 |
 
+Host 和 Client aggregate 类型检查为 Node 老生代堆设置 8 GiB 上限。这是单个编译进程的上限；并发构建步骤还需要额外内存。`pnpm run build:official --serial` 阻止构建步骤重叠，即使设置了 `DSH_GATE_CONCURRENCY` 也不例外；DSH 发布 workflow 使用此选项。
+
 Host 与 Client 保持两个 aggregate program，是因为两侧在相同键下以不同服务对 cordis `Context` 接口做声明合并；单一 program 同时看到两份合并会报冲突。这种冲突只存在于 `ts.Program` 内部——模块解析永远不会触发它——所以 solution 可以同时引用两个 aggregate，一个 paths 门面也可以横跨两侧。由此推出三条纪律：
 
 - `tsconfig.base.json` 永不添加 `include` 或 `files`：它们会泄漏进每个 extends 它的包项目，并收窄门面的全匹配范围。

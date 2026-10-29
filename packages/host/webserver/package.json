@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-host-webserver",
   "description": "Web route-registration plugin: HTTP and upgrade routes, per-Peer index transform taps, and static dist fallback",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },

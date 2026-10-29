@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-subagent-control",
   "description": "Shared messaging, interruption, and child discovery tools for subagents",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },

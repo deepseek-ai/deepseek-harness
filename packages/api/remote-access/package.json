@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-remote-access",
   "description": "Method-level Remote access control for non-owner Peers and the per-Peer access snapshot",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },

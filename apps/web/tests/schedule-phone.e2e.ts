@@ -7,6 +7,7 @@ import { expect, it } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-schedule'
 import { launchWebScaffold, watchConsole } from './scaffold.ts'
+import { revealNavigationDrawer } from './support.ts'
 
 const PHONE_TASK_SESSION = SessionId('schedule-phone-web-e2e')
 const PHONE_TASK_TITLE = 'Review overdue deployment'
@@ -25,6 +26,7 @@ interface ViewFacts {
 /** Open the Automation tasks page and return its panel. */
 async function openTaskManager(page: Page, url: string): Promise<Locator> {
   await page.goto(url, { waitUntil: 'load' })
+  await revealNavigationDrawer(page, 'zh')
   await page.getByRole('button', { name: '自动化任务', exact: true }).click()
   const panel = page.getByTestId('task-manager-page')
   await panel.getByRole('heading', { name: '自动化任务', exact: true }).waitFor({ timeout: 30_000 })

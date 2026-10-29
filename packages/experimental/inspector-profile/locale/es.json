@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Herramientas de desarrollador",
-    "description": "Inspeccione y depure datos de sesión sin procesar, mensajes de chat agrupados y el backend NodeJS.",
+    "description": "Para solucionar problemas: vea en «Registro de sesión» lo que DSH registró de una sesión, consulte el contexto, los tiempos, la caché y el coste de herramientas por turno y paso en la pestaña «Estadísticas», y depure el backend de DSH en Chrome DevTools.",
     "detail": "docs/DETAIL.md"
   }
 }

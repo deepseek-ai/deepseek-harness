@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { describe, expect, it, vi } from 'vitest'
 import {
   SlotTestRuntime, stubConfigForm, usePinnedBrowserLanguages,
@@ -25,6 +26,8 @@ async function bench(options: { declareConversation?: boolean } = {}) {
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
+  runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
   if (options.declareConversation !== false) {
     await runtime.root.declare({
       'main': { kind: 'keyed', scope: 'root' },

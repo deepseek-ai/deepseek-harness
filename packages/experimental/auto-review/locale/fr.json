@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Examen des autorisations automatiques",
-    "description": "Ajoutez un mode d'autorisation Auto review qui utilise le modèle pour évaluer l'autorisation avant chaque appel d'outil.",
+    "description": "Ajoute le mode d'accès « Auto review » : avant chaque appel d'outil, un modèle vérifie l'appel par rapport à ce que vous avez demandé ; les appels autorisés s'exécutent immédiatement et les appels refusés attendent votre approbation.",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -186,8 +186,8 @@ export abstract class AttachmentStore extends Service {
   abstract saveImage(input: SaveImageAttachment): Promise<ImageAttachmentRef>
 
   /**
-   * Read one image and verify that bytes still match the recorded reference.
-   * @param ref - durable reference from the session log.
+   * Read one image and verify its ID, format, byte length, and dimensions against the supplied reference.
+   * @param ref - supplied image reference; name and originalDimensions are preserved without file verification.
    * @param signal - optional cancellation for backend read and verification work.
    * @returns the verified bytes and normalized attachment reference.
    * @throws the signal reason when aborted, or a storage error when verification fails.
@@ -240,7 +240,7 @@ export abstract class AttachmentStore extends Service {
    * Read and verify one verbatim stored file as bounded chunks. Providers must
    * not collect the complete file in memory. Backends without verbatim file
    * reads keep this default rejection.
-   * @param ref - durable reference from the session log.
+   * @param ref - durable file reference from the session log.
    * @param signal - optional cancellation for backend reads and verification work.
    * @returns exact file bytes in order; integrity failures reject the iteration.
    */

@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+import { Profiler } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -13,7 +16,7 @@ import type {
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import type { DirectoryFlowOwnerProps, WorkspaceBrowserProps } from '../src/client/contract/slots.ts'
+import type { DirectoryFlowOwnerProps, WorkspaceActionRequest, WorkspaceBrowserProps } from '../src/client/contract/slots.ts'
 import { createWorkspaceShortcutControls } from '../src/client/shortcuts.ts'
 import { createWorkspaceViewStore, FLAT_SESSION_ORDER_KEY } from '../src/client/stores.ts'
 import { UNGROUPED_KEY } from '../src/client/tree.ts'
@@ -106,8 +109,14 @@ const renderDirectoryFlowOnly: WorkspaceBrowserProps['renderSlot'] = (name: stri
 
 function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
   const controls = createWorkspaceShortcutControls()
+  const request = createSnapshotStore<WorkspaceActionRequest | null>(null)
   const store = createWorkspaceViewStore().create()
   const props: WorkspaceBrowserProps = {
+    openWorkspaceMenu: vi.fn(),
+    useWorkspaceActionRequest: bindSnapshotSelector(request),
+    settleWorkspaceAction: () => { request.set(null) },
+    openSessionMenu: vi.fn(),
+    useContextMenuTarget: selector => selector(null),
     useShortcuts: select => select([]),
     useWorkspaceShortcuts: bindSnapshotSelector(controls.state),
     requestSearch: controls.search,
@@ -120,7 +129,9 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     useSessions: hook(sessionState([])),
     useSessionStatus: hook(noPendingInteraction),
     useSessionRetainInfo: () => undefined,
-    usePanelInfo, useResource,
+    usePanelInfo,
+    useContextMenu: contextMenuHook(),
+    useResource,
     useWorkspaces: hook(workspaceState([])),
     ...allowAllAccess,
     useStore: bindSnapshotSelector(store),
@@ -142,7 +153,10 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     ...overrides,
   }
   const view = render(<WorkspaceBrowser {...props} />)
-  return { view, props, store, controls }
+  return { view, props, store, controls, openDialog: (workspaceId: WorkspaceId, displayTitle: string, action: 'rename' | 'delete') => {
+    const storedTitle = props.useWorkspaces(state => state.items.find(row => row.workspaceId === workspaceId)?.title ?? displayTitle)
+    act(() => { request.set({ action, workspaceId, displayTitle, storedTitle }) })
+  } }
 }
 
 /** Re-render with (possibly) changed props — WorkspaceBrowser has no side channel. */
@@ -752,7 +766,7 @@ describe('WorkspaceBrowser', () => {
     expect(requestSessionRename).toHaveBeenCalledTimes(2)
   })
 
-  it('renders both Session row lists for every visible row in the grouped tree and the flat list', () => {
+  it('renders row actions inline while Session menus belong to the global overlay', () => {
     const rendered = vi.fn()
     const renderSlot: WorkspaceBrowserProps['renderSlot'] = (name: string, owner: object) => {
       rendered(name, owner)
@@ -766,11 +780,11 @@ describe('WorkspaceBrowser', () => {
     expect(rendered).not.toHaveBeenCalledWith('sidebar.workspaces.session.menu.item', expect.anything())
     fireEvent.click(screen.getByText('alpha'))
     const owner = { sessionId: sid('alpha-s'), displayTitle: 'alpha-s' }
-    expect(rendered).toHaveBeenCalledWith('sidebar.workspaces.session.menu.item', owner)
+    expect(rendered).not.toHaveBeenCalledWith('sidebar.workspaces.session.menu.item', owner)
     expect(rendered).toHaveBeenCalledWith('sidebar.workspaces.session.row.action', owner)
     rendered.mockClear()
     act(() => { b.store.actions.setGroupBy('flat') })
-    expect(rendered).toHaveBeenCalledWith('sidebar.workspaces.session.menu.item', owner)
+    expect(rendered).not.toHaveBeenCalledWith('sidebar.workspaces.session.menu.item', owner)
     expect(rendered).toHaveBeenCalledWith('sidebar.workspaces.session.row.action', owner)
   })
 
@@ -1861,6 +1875,109 @@ describe('WorkspaceBrowser', () => {
     }
   })
 
+  it.each(['clear', 'escape', 'outside'] as const)('animates %s search dismissal without carrying spacing motion through the rail', (dismissal) => {
+    vi.useFakeTimers()
+    try {
+      const b = mount()
+      const add = screen.getByRole('button', { name: '添加工作区' })
+      const header = add.closest('[class*="sectionHeader"]')!
+      // jsdom observes the motion opt-in; the browser suite measures the resulting transitions.
+      const motionEnabled = () => header.className.includes('searchSpacingMotion')
+      expect(motionEnabled()).toBe(false)
+      fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+      expect(motionEnabled()).toBe(true)
+      rerender(b, { wide: false })
+      expect(motionEnabled()).toBe(false)
+      rerender(b, { wide: true })
+      expect(motionEnabled()).toBe(false)
+      const input = screen.getByPlaceholderText<HTMLInputElement>('搜索会话名称')
+      if (dismissal === 'clear') {
+        fireEvent.change(input, { target: { value: 'query' } })
+        fireEvent.click(screen.getByRole('button', { name: '清除搜索' }))
+      } else if (dismissal === 'escape') {
+        fireEvent.change(input, { target: { value: 'query' } })
+        fireEvent.keyDown(input, { key: 'Escape' })
+      } else fireEvent.click(document.body)
+      expect(motionEnabled()).toBe(true)
+      expect(input.value).toBe('')
+      expect(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded')).toBe('false')
+      expect(screen.getByRole('button', { name: '添加工作区' })).toBe(add)
+      expect(add.closest('[class*="sectionHeader"]')).toBe(header)
+      rerender(b, { wide: false })
+      fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+      rerender(b, { wide: true })
+      expect(motionEnabled()).toBe(false)
+      act(() => { vi.advanceTimersByTime(300) })
+      expect(document.activeElement).toBe(screen.getByPlaceholderText('搜索会话名称'))
+      expect(screen.getByRole('button', { name: '添加工作区' })).toBe(add)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves the add button and its open directory flow across rail layout changes', () => {
+    const b = mount({ wide: false })
+    const add = screen.getByRole('button', { name: '添加工作区' })
+    fireEvent.click(add)
+    const flow = screen.getByTestId('directory-flow')
+    for (const wide of [true, false, true]) {
+      rerender(b, { wide })
+      expect(screen.getByRole('button', { name: '添加工作区' })).toBe(add)
+      expect(screen.getByTestId('directory-flow')).toBe(flow)
+    }
+  })
+
+  it.each([false, true])('commits rail search intent before synchronously expanding the shell (prior search: %s)', (usedSearch) => {
+    const layout = createSnapshotStore({ wide: usedSearch })
+    const useLayout = bindSnapshotSelector(layout)
+    const b = mount({ wide: false, expandSidebar: () => { layout.set({ wide: true }) } })
+    const committedSearchStates: boolean[] = []
+    function Shell() {
+      return <WorkspaceBrowser {...b.props} wide={useLayout(state => state.wide)} />
+    }
+    b.view.rerender(<Profiler id="rail-search" onRender={() => {
+      // The shell's external-store update can commit before state queued by a passive effect.
+      if (screen.queryByPlaceholderText('搜索会话名称') === null) return
+      committedSearchStates.push(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded') === 'true')
+    }}><Shell /></Profiler>)
+    if (usedSearch) {
+      fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+      fireEvent.keyDown(screen.getByPlaceholderText('搜索会话名称'), { key: 'Escape' })
+      act(() => { layout.set({ wide: false }) })
+    }
+    committedSearchStates.length = 0
+    fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+    expect(committedSearchStates.length).toBeGreaterThan(0)
+    expect(committedSearchStates.every(Boolean)).toBe(true)
+    expect(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('treats a new shortcut source with no request as idle', () => {
+    const b = mount()
+    fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+    fireEvent.keyDown(screen.getByPlaceholderText('搜索会话名称'), { key: 'Escape' })
+    const controls = createWorkspaceShortcutControls()
+    rerender(b, { useWorkspaceShortcuts: bindSnapshotSelector(controls.state), requestSearch: controls.search })
+    expect(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded')).toBe('false')
+    act(() => { controls.search() })
+    expect(screen.getByRole('button', { name: '搜索会话' }).getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('expands an inert drawer with retained wide content before focusing search', () => {
+    vi.useFakeTimers()
+    try {
+      const expandSidebar = vi.fn(() => { b.view.container.removeAttribute('inert') })
+      const b = mount({ wide: true, expandSidebar })
+      b.view.container.setAttribute('inert', '')
+      act(() => { b.controls.search() })
+      expect(expandSidebar).toHaveBeenCalledOnce()
+      act(() => { vi.advanceTimersByTime(300) })
+      expect(document.activeElement).toBe(screen.getByPlaceholderText('搜索会话名称'))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rail state renders icon controls that request expansion', () => {
     vi.useFakeTimers()
     try {
@@ -1874,6 +1991,7 @@ describe('WorkspaceBrowser', () => {
       // The wide flip mounts the input and focuses it after the slide.
       rerender(b, { wide: true })
       const input = screen.getByPlaceholderText('搜索会话名称')
+      expect(document.activeElement).not.toBe(input)
       act(() => { vi.advanceTimersByTime(300) })
       expect(document.activeElement).toBe(input)
       // Wide search button is decorative (tabIndex -1, no expand call).
@@ -2304,7 +2422,7 @@ describe('WorkspaceBrowser', () => {
 
   it('labels an unrenamed default Workspace in the reader’s language and every other title verbatim', () => {
     const renameWorkspace = vi.fn(async () => {})
-    mount({
+    const browser = mount({
       useWorkspaces: hook(workspaceState([
         workspace('alpha', [], 'default-workspace'),
         workspace('beta', [], 'default-workspace backup'),
@@ -2316,8 +2434,7 @@ describe('WorkspaceBrowser', () => {
     // The dialog edits the text on screen, and the stored title — not that
     // text — decides whether confirming saves. So confirming the untouched
     // prefill pins the localized name and the row stops following the language.
-    fireEvent.click(screen.getByRole('button', { name: '工作区“默认工作区”的操作' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
+    browser.openDialog(wid('alpha'), '默认工作区', 'rename')
     expect(screen.getByLabelText<HTMLInputElement>('工作区名称').value).toBe('默认工作区')
     expect(screen.queryByRole('alert')).toBeNull()
     const confirm = screen.getByRole<HTMLButtonElement>('button', { name: '重命名' })
@@ -2329,12 +2446,11 @@ describe('WorkspaceBrowser', () => {
   it('renames a workspace through the row menu dialog', async () => {
     let resolveRename!: () => void
     const renameWorkspace = vi.fn(() => new Promise<void>((resolve) => { resolveRename = resolve }))
-    mount({
+    const browser = mount({
       useWorkspaces: hook(workspaceState([workspace('alpha', [], 'Alpha'), workspace('beta', [], 'Beta')])),
       renameWorkspace,
     })
-    fireEvent.click(screen.getByRole('button', { name: '工作区“Alpha”的操作' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
+    browser.openDialog(wid('alpha'), 'Alpha', 'rename')
     const input = screen.getByLabelText<HTMLInputElement>('工作区名称')
     expect(input.value).toBe('Alpha')
     // Unchanged and blank names stay blocked.
@@ -2358,18 +2474,21 @@ describe('WorkspaceBrowser', () => {
 
   it('rename via Enter, failure surfaces the error, Cancel closes', async () => {
     const renameWorkspace = vi.fn(async () => { throw new Error('rename conflict') })
-    mount({
+    const browser = mount({
       useWorkspaces: hook(workspaceState([workspace('alpha', [], 'Alpha')])),
       renameWorkspace,
     })
-    fireEvent.click(screen.getByRole('button', { name: '工作区“Alpha”的操作' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
+    browser.openDialog(wid('alpha'), 'Alpha', 'rename')
     const input = screen.getByLabelText<HTMLInputElement>('工作区名称')
     // Enter with a blocked draft (unchanged) does nothing.
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(renameWorkspace).not.toHaveBeenCalled()
     fireEvent.change(input, { target: { value: 'Renamed' } })
     fireEvent.keyDown(input, { key: 'a' })
+    fireEvent.compositionStart(input)
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(renameWorkspace).not.toHaveBeenCalled()
+    fireEvent.compositionEnd(input)
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(renameWorkspace).toHaveBeenCalledWith(wid('alpha'), 'Renamed')
     await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('rename conflict') })
@@ -2382,12 +2501,11 @@ describe('WorkspaceBrowser', () => {
 
   it('reports non-Error rename failures as text', async () => {
     const renameWorkspace = vi.fn(async () => { throw 'denied' })
-    mount({
+    const browser = mount({
       useWorkspaces: hook(workspaceState([workspace('alpha', [], 'Alpha')])),
       renameWorkspace,
     })
-    fireEvent.click(screen.getByRole('button', { name: '工作区“Alpha”的操作' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '重命名' }))
+    browser.openDialog(wid('alpha'), 'Alpha', 'rename')
     fireEvent.change(screen.getByLabelText('工作区名称'), { target: { value: 'Other' } })
     fireEvent.click(screen.getByRole('button', { name: '重命名' }))
     await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('denied') })
@@ -2400,8 +2518,7 @@ describe('WorkspaceBrowser', () => {
       useWorkspaces: hook(workspaceState([workspace('alpha', ['session'], 'Alpha')])),
       deleteWorkspace,
     })
-    fireEvent.click(screen.getByRole('button', { name: '工作区“Alpha”的操作' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '删除工作区' }))
+    browser.openDialog(wid('alpha'), 'Alpha', 'delete')
     const dialog = screen.getByRole('dialog', { name: '删除工作区' })
     expect(dialog.textContent).toContain('将把“Alpha”从工作区列表中移除')
     expect(dialog.textContent).toContain('文件夹与会话记录会保留')
@@ -2431,12 +2548,11 @@ describe('WorkspaceBrowser', () => {
     const deleteWorkspace = vi.fn()
       .mockRejectedValueOnce(new Error('storage unavailable'))
       .mockRejectedValueOnce('denied')
-    mount({
+    const browser = mount({
       useWorkspaces: hook(workspaceState([workspace('alpha', [], 'Alpha')])),
       deleteWorkspace,
     })
-    fireEvent.click(screen.getByRole('button', { name: '工作区“Alpha”的操作' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: '删除工作区' }))
+    browser.openDialog(wid('alpha'), 'Alpha', 'delete')
     fireEvent.click(screen.getByRole('button', { name: '删除工作区' }))
     await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('storage unavailable') })
     expect(screen.getByRole('dialog', { name: '删除工作区' })).toBeTruthy()
@@ -2448,13 +2564,12 @@ describe('WorkspaceBrowser', () => {
 
   it('Cancel, Escape, and Close dismiss deletion without calling the action', () => {
     const deleteWorkspace = vi.fn(async () => {})
-    mount({
+    const browser = mount({
       useWorkspaces: hook(workspaceState([workspace('alpha', [], 'Alpha')])),
       deleteWorkspace,
     })
     const open = () => {
-      fireEvent.click(screen.getByRole('button', { name: '工作区“Alpha”的操作' }))
-      fireEvent.click(screen.getByRole('menuitem', { name: '删除工作区' }))
+      browser.openDialog(wid('alpha'), 'Alpha', 'delete')
     }
     open()
     fireEvent.click(screen.getByRole('button', { name: '取消' }))

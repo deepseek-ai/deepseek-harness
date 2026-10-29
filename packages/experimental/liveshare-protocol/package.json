@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-liveshare-protocol",
   "description": "Liveshare wire frames and the identity contract shared by the owner bundle and the Relay",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",

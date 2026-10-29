@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * Impact-matrix projection tests (row by row): what each
  * phase projects onto the InputBar — enter routing, visuals (command chip /
@@ -67,6 +68,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
       baselinesReady: true, recentWorkspaceId: undefined,
     })),
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useProjection: (() => undefined),
     useConversation: bindSnapshotSelector(createSnapshotStore(conversationSnapshot())),
     useInput: bindSnapshotSelector(shell.state),
@@ -149,14 +151,15 @@ describe('matrix row: plain', () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
-  it('enter falls to the default sink; no claim on the currency; edits free', async () => {
+  it('enter falls to the default sink; no claim on the currency; the draft clears once accepted', async () => {
     const { textarea, shell, sink } = bench()
     act(() => { shell.setDraft('普通消息') })
     expect(shell.snapshot.claim).toBeUndefined()
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('普通消息', [], 'queue', expect.any(AbortSignal))
-    // The detached default send never freezes the composer.
-    expect(shell.snapshot.phase).toBe('plain')
+    expect(sink).toHaveBeenCalledWith('普通消息', [], 'queue', expect.any(AbortSignal), expect.any(Function))
+    // The composer holds the message, read-only, until the Host accepts it.
+    expect(shell.snapshot).toMatchObject({ phase: 'sending', draft: '普通消息' })
+    await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
     expect(shell.snapshot.draft).toBe('')
     expect(shell.snapshot.claim).toBeUndefined()
   })
@@ -360,7 +363,7 @@ describe('matrix row: locked (session disabled)', () => {
     expect(textarea.getAttribute('aria-disabled')).not.toBe('true')
     act(() => { shell.setDraft('排队') })
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    expect(sink).toHaveBeenCalledWith('排队', [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenCalledWith('排队', [], 'queue', expect.any(AbortSignal), expect.any(Function))
   })
 })
 

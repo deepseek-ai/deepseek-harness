@@ -13,7 +13,7 @@ import { en, zh } from '../src/client/locales.ts'
 afterEach(() => { cleanup(); vi.useRealTimers() })
 const value: CuaApplicationState & { system: CuaSystemPermissionState } = { system: { accessibility: false, screenRecording: true,
   helper: { pid: 9, path: '/native/helper' }, parent: { pid: 8, path: '/host/node' } },
-allowedApps: [], blockedApps: [], settingsNamespace: 'cua', persistentAvailable: true }
+allowedApps: [], blockedApps: [], persistentAvailable: true }
 
 function observe(value: CuaApplicationState & { system: CuaSystemPermissionState }) {
   return { system: { value: value.system, busy: false, error: null },
@@ -327,6 +327,20 @@ it('fills application names, system permissions, and icons as their observations
   expect(identity.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
   expect(identity.querySelector('[aria-hidden]')).toBeNull()
   expect(screen.getByRole('region', { name: en.title })).toBe(requirements)
+})
+
+it('shows and revokes an application whose executable path is unavailable', () => {
+  const f = fixture()
+  const app = { id: 'a'.repeat(64) as CuaApplicationId, name: 'Path unavailable fixture' }
+  f.publish({ ...observe({ ...value, allowedApps: [app] }) })
+  render(<PermissionPanel {...f.props} />)
+  const access = screen.getByRole('region', { name: en.applicationsTitle })
+  const row = within(access).getByText(app.name).closest('li')!
+  expect(row.querySelector('[title]')).toBeNull()
+  expect(row.querySelector('img')).toBeNull()
+  expect(row.querySelector('[aria-hidden]')).not.toBeNull()
+  fireEvent.click(within(row).getByRole('button', { name: en.revoke }))
+  expect(f.props.revoke).toHaveBeenCalledWith(app.id)
 })
 
 it.each(['applications', 'icons'] as const)('contains a failed %s query in the application section', (key) => {

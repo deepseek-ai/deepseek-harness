@@ -241,7 +241,7 @@ The table lists the endpoints #3854 viewers use and where their resources come f
 | `llm/listProviders` | `global` | no resource | no |
 | `commands/list` | session: `args.agentId` (the Agent lookup's wire field) | Agent lookup `resource: 'session'` | no |
 | `goals/get` | session: `args.agentId` | Agent lookup `resource: 'session'` | no |
-| `session/attachment` | session: `args.request.sessionId` | default resolver | no |
+| `session/attachment` | session: `args.request.sessionId` | default resolver | no: a grant on one Session permits reads from the whole attachment store |
 | `skills/list` | session: `args.request.sessionId` | default resolver | no |
 | `session/fork` | session: `args.request.sessionId` | default resolver | no |
 | `session/prompt` | session: `args.request.sessionId` | default resolver | no |
@@ -250,6 +250,8 @@ The table lists the endpoints #3854 viewers use and where their resources come f
 | `session/page` | session: `args.request.address.sessionId` for a Session address; `args.request.address.childSessionId` for a subagent address | default resolver | no |
 | `session/follow` | same as above | default resolver | no |
 | `remoteAccess/follow` | `global` | no resource; remote-access allows it for every principal | no |
+
+For `session/attachment`, `sessionId` identifies the resource for the Gateway check; it does not constrain which image may be read. Once that check permits the call, an image may belong to another Session or no Session, and the handler does not check whether the supplied Session exists. Policy authors must treat this action as access to the whole attachment store, as defined by the [image access rule](2026-10-23-store-scoped-image-reads.md).
 
 A subagent address reads the child transcript, so its resource is the child Session. A Client rereads the projections of known Sessions after a reconnect, including the parent of a subagent Session; a reader without a grant on that parent has its projection read refused. Whether a grant on a parent Session covers its subagent children is the policy's decision, that is, whether it gives a binding for the child Session; the generic layer derives no parent resource.
 

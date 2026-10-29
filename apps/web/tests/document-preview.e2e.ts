@@ -714,7 +714,7 @@ else process.exit(1);
     const initialFilesClose = await filesTab.locator('[data-dockkit-tab-close]').count()
     expect(initialFilesClose).toBe(1)
     await filesTab.click({ button: 'right' })
-    expect(await page.locator('[data-dockkit-tab-menu]:visible').count()).toBe(1)
+    await page.locator('[data-context-menu][role="menu"]').waitFor()
     await page.keyboard.press('Escape')
     await addTab.waitFor({ state: 'visible' })
     const initialAdd = await addTab.count()
@@ -1562,6 +1562,62 @@ else process.exit(1);
     expect(tripwire.warnings).toEqual([])
     await compareOrRefreshGolden(EXPECTED, sections.join('\n\n'), MODE)
     await assertFixtureInventory(SNAPSHOT_DIR, ['document.expected.md', 'applications.expected.md', 'applications-no-default.expected.md', 'paging.patch.yml'])
+  })
+
+  it('preserves Markdown reading position beyond the first page after automatic and manual refresh', async () => {
+    onTestFailed(() => saveFailureShot(page, `screenshots/0908-document-preview/refresh-scroll-${process.pid}`))
+    if (await page.getByText('LIGHTHOUSE', { exact: true }).count() === 0) {
+      const settled = scaffold.whenTurnSettled()
+      const input = page.locator('[data-composer-input]').first()
+      await input.fill(PROMPT)
+      await input.press('Enter')
+      await settled
+      await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
+    }
+    const cwd = scaffold.ctx.agents.list()[0]?.session.header.cwd
+    if (cwd === undefined) throw new Error('Session has no workspace cwd')
+    const path = join(cwd, 'refresh-scroll.md')
+    const markdown = '# Before refresh\n\n' + Array.from({ length: PAGE_LINES * 2 }, (_, index) => `Paragraph ${index + 1}\n`).join('\n')
+    await writeFile(path, markdown)
+    const column = page.locator('[data-rightbar-col]')
+    const expand = page.locator('[data-sidebar-right-expand]')
+    if (await expand.isVisible()) await expand.click()
+    const filesTab = column.locator('[data-dockkit-tab]').filter({ has: page.getByText('Files', { exact: true }) })
+    if (await filesTab.count() === 0) await column.locator('[data-sidebar-right-guide-entry="files"]').click()
+    await filesTab.click()
+    await column.locator('[data-files-reload]').click()
+    const preview = column.locator('[data-textpreview-url]')
+    await openPreviewFile(column, filesTab, preview, 'refresh-scroll.md')
+    const body = preview.locator('[data-textpreview-body]')
+    const heading = body.getByRole('heading', { level: 1 })
+    await expect.poll(() => heading.textContent()).toBe('Before refresh')
+    await expect.poll(() => preview.locator('[data-textpreview-more]').isEnabled()).toBe(true)
+    const target = await body.evaluate(node => node.scrollHeight + 100)
+    await scrollForNextPage(body)
+    await expect.poll(() => body.evaluate(node => node.scrollHeight - node.clientHeight)).toBeGreaterThan(target)
+    await body.evaluate((node, top) => new Promise<void>((resolve) => {
+      node.addEventListener('scroll', () => { resolve() }, { once: true })
+      node.scrollTop = top
+    }), target)
+    const original = await body.evaluate(node => node.scrollTop)
+    expect(original).toBe(target)
+    // Content growing above the viewport keeps the pixel offset instead of following the content.
+    await heading.evaluate((node) => { node.style.paddingTop = '300px' })
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    expect(await body.evaluate(node => node.scrollTop)).toBe(original)
+    await heading.evaluate((node) => { node.style.paddingTop = '' })
+
+    await writeFile(path, markdown.replace('Before refresh', 'After  refresh'))
+    await expect.poll(() => heading.textContent()).toBe('After  refresh')
+    await expect.poll(() => body.evaluate((node, top) => Math.abs(node.scrollTop - top), original)).toBeLessThanOrEqual(1)
+
+    const rendered = await heading.elementHandle()
+    await preview.locator('[data-textpreview-tool="reload"]').click()
+    await expect.poll(() => rendered!.evaluate(node => node.isConnected)).toBe(false)
+    await expect.poll(() => heading.textContent()).toBe('After  refresh')
+    await expect.poll(() => body.evaluate((node, top) => Math.abs(node.scrollTop - top), original)).toBeLessThanOrEqual(1)
+    await rendered!.dispose()
+    expect(tripwire.pageErrors).toEqual([])
   })
 })
 

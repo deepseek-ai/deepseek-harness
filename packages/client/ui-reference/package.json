@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-reference",
   "description": "Unified Web @file and @session reference source",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -36,7 +36,8 @@
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-input-trigger",
-        "@deepseek-ai/dsh-client-ui-sidebar-right"
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-context-menu"
       ],
       "platform": "web"
     }
@@ -66,7 +67,8 @@
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*"
   },
   "files": [
     "locale/*.json",

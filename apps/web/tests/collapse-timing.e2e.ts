@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Page, Route } from 'playwright'
+import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { deriveReplayScript } from '@deepseek-ai/dsh-llm-replay'
@@ -146,34 +146,23 @@ describe.skipIf(MODE === 'record')('web e2e: recorded collapse timing', () => {
     const input = page.locator('[data-composer-input]').last()
     await writeComposerDraft(page, input, prompt)
     await expectProcess(1, true)
+    const resolved = await scaffold.ctx.sessionController.resolveAgent(SessionId(SEED_ID))
+    if ('error' in resolved) throw resolved.error
+    // Maintenance keeps the accepted message in the inbox, so its echo stays before the Turn starts.
     const release = Promise.withResolvers<undefined>()
-    const promptBlocked = Promise.withResolvers<undefined>()
-    const holdPrompt = async (route: Route): Promise<void> => {
-      promptBlocked.resolve(undefined)
-      await release.promise
-      await route.continue()
-    }
-    await page.route('**/api/session/prompt', holdPrompt)
+    const maintenance = resolved.agent.runMaintenance(() => release.promise)
     try {
       await page.getByRole('button', { name: 'Send message', exact: true }).click()
-      const blockedTimeout = setTimeout(() => {
-        promptBlocked.reject(new Error('session prompt did not reach the route barrier'))
-      }, UI_WAIT.timeout)
-      try {
-        await promptBlocked.promise
-      } finally {
-        clearTimeout(blockedTimeout)
-      }
       await expect.poll(() => page.locator('[data-submission-echo]').count(), UI_WAIT).toBe(1)
       await expectProcess(1, false)
       expect(await page.locator('[data-turn-process="2"]').count()).toBe(0)
       await capture('input-pending.expected.md')
       const settled = scaffold.whenTurnSettled()
       release.resolve(undefined)
+      await maintenance
       expect(await settled).toBe(SEED_ID)
     } finally {
       release.resolve(undefined)
-      await page.unrouteAll({ behavior: 'wait' })
     }
     await expect.poll(() => page.getByText('DONE', { exact: true }).count(), UI_WAIT).toBe(2)
     await expect.poll(() => page.locator('[data-streaming="true"]').count(), UI_WAIT).toBe(0)

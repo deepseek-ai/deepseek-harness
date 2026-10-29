@@ -2,7 +2,7 @@
 // The command creates a real projected goal in a real Host session. The
 // goldens pin the active and disarmed strips, while the clear gesture proves
 // the acknowledged tombstone leaves neither stale chrome nor a
-// duplicate-mutation error.
+// duplicate-mutation error. A blocked goal stays resumable after an edit.
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
@@ -18,6 +18,7 @@ import { connectFreshWorkspace, expectTooltipOnTop, newEnglishPage, saveFailureS
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/goal-bar', import.meta.url))
 const ACTIVE_EXPECTED = join(SNAPSHOT_DIR, 'active.expected.md')
 const INACTIVE_EXPECTED = join(SNAPSHOT_DIR, 'inactive.expected.md')
+const BLOCKED_EXPECTED = join(SNAPSHOT_DIR, 'blocked.expected.md')
 const OVERLAY = fileURLToPath(new URL('./goal-bar.overlay.yml', import.meta.url))
 const MODE = webSnapshotMode()
 
@@ -108,7 +109,46 @@ describe('web e2e: goal bar clear convergence', () => {
     expect(tripwire.warnings).toEqual([])
   }, 60_000)
 
+  it('resumes a blocked goal after its objective is edited', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-goal-bar-blocked-resume'))
+    // `/goal <objective>` refuses to replace an unfinished goal, so start from none.
+    for (const existing of scaffold.ctx.agents.list()) {
+      const current = scaffold.ctx.goals.get(existing)
+      if (current !== undefined) scaffold.ctx.goals.clear(existing, current)
+    }
+    const input = page.locator('[data-composer-input]')
+    await input.fill('/goal retry after a blocker')
+    await input.press('Enter')
+    const bar = page.locator('[data-goal-bar]')
+    await bar.getByRole('button', { name: 'Pause goal' }).waitFor({ timeout: 10_000 })
+
+    const agents = scaffold.ctx.agents.list()
+    expect(agents).toHaveLength(1)
+    const agent = agents[0]!
+    const active = scaffold.ctx.goals.get(agent)!
+    scaffold.ctx.goals.block(agent, active, { code: 'stalled', message: 'No progress in 3 rounds' })
+    await bar.getByText('Blocked Goal').waitFor({ timeout: 10_000 })
+    expect(await bar.getByRole('button', { name: 'Resume goal' }).count()).toBe(1)
+
+    await bar.getByRole('button', { name: 'Edit goal' }).click()
+    await bar.getByRole('textbox', { name: 'Goal objective' }).fill('retry with the edited plan')
+    await bar.getByRole('button', { name: 'Save goal' }).click()
+    await bar.getByRole('button', { name: 'Edit goal' }).waitFor({ timeout: 10_000 })
+    await bar.getByText('retry with the edited plan').waitFor({ timeout: 10_000 })
+    expect(scaffold.ctx.goals.get(agent)?.phase).toBe('blocked')
+    const blocked = await captureStableAria(page, '[data-goal-bar]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(BLOCKED_EXPECTED, blocked, MODE)
+
+    await bar.getByRole('button', { name: 'Resume goal' }).click()
+    await bar.getByRole('button', { name: 'Pause goal' }).waitFor({ timeout: 10_000 })
+    expect(scaffold.ctx.goals.get(agent)).toMatchObject({
+      phase: 'active', activation: 'armed', objective: 'retry with the edited plan',
+    })
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  }, 60_000)
+
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
-    await assertFixtureInventory(SNAPSHOT_DIR, ['active.expected.md', 'inactive.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['active.expected.md', 'blocked.expected.md', 'inactive.expected.md'])
   })
 })

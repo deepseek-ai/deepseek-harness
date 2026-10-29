@@ -444,6 +444,8 @@ interface TypertGateway {
    * @returns whether an owner stream is open and has not been cancelled.
    */
   hasLiveClient(): boolean
+  /** @returns detached metadata for all unsettled forwarded events in arrival order. */
+  getPendingRemoteEvents(): readonly PendingRemoteEventInfo[]
   /**
    * Register the application-selected forwarded-event source.
    * @param source - stream factory installed by the Remote assembly.
@@ -663,6 +665,12 @@ Resolve strict generated definitions or conservative SRC markers against current
  * @returns whether an owner stream is open and has not been cancelled.
  */
 hasLiveClient(): boolean
+
+/**
+ * Inspect unsettled forwarded events without changing their lifetime.
+ * @returns detached event names and Agent identities.
+ */
+getPendingRemoteEvents(): readonly PendingRemoteEventInfo[]
 
 /**
  * Register the sole application-selected forwarded-event source.

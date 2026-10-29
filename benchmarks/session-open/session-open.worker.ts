@@ -29,7 +29,8 @@ import SessionTitleService from '@deepseek-ai/dsh-session-title'
 import * as SessionTurnOutlinePlugin from '@deepseek-ai/dsh-session-turn-outline'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 // These Host-only adapters have no public Node export and are compiled into the benchmark worker.
-import { SessionHistoryController } from '../../packages/api/session-controller/src/history.ts'
+import { HistoryController } from '../../packages/api/session-controller/src/history/controller.ts'
+import { WebController } from '../../packages/api/session-controller/src/web/controller.ts'
 import { assertBuiltBenchmarkRuntime } from '../support/built-worker.ts'
 import { SYNTHETIC_SESSION_ID } from './session-open.constants.ts'
 
@@ -151,7 +152,7 @@ class SessionBenchmarkHost {
   private constructor(
     private readonly ctx: Context,
     private readonly scenario: SessionOpenBenchmarkScenario,
-    private readonly history: SessionHistoryController | undefined,
+    private readonly history: WebController | undefined,
   ) {}
 
   static async create(root: string, scenario: SessionOpenBenchmarkScenario): Promise<SessionBenchmarkHost> {
@@ -165,10 +166,10 @@ class SessionBenchmarkHost {
     }
     await installProjectionSet(ctx)
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'zstd' })
-    let history: SessionHistoryController | undefined
+    let history: WebController | undefined
     if (scenario === 'first-history') {
       new BenchmarkSessionQuery(ctx)
-      history = new SessionHistoryController(ctx, (observation) => {
+      history = new WebController(ctx, new HistoryController(ctx), (observation) => {
         // First-history ends at snapshot delivery; Agent-resume owns live activation and retention.
         observation[Symbol.dispose]()
       })

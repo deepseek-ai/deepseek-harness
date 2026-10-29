@@ -1,9 +1,26 @@
 [
   {
+    "label": "About DeepSeek Harness",
+    "role": "about"
+  },
+  {
+    "type": "separator"
+  },
+  {
     "label": "Check for Updates…"
   },
   {
     "label": "Manage dsh Command…"
+  },
+  {
+    "type": "separator"
+  },
+  {
+    "role": "toggleDevTools",
+    "label": "Developer tools"
+  },
+  {
+    "type": "separator"
   },
   {
     "role": "hide",
@@ -16,6 +33,9 @@
   {
     "role": "unhide",
     "label": "Show All"
+  },
+  {
+    "type": "separator"
   },
   {
     "role": "quit",

@@ -65,7 +65,9 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-client-ui-claude-code-mods',
       '@deepseek-ai/dsh-experimental-client-ui-cot-translation',
       '@deepseek-ai/dsh-client-ui-creation-recommendations',
+      '@deepseek-ai/dsh-experimental-client-ui-forge',
       '@deepseek-ai/dsh-client-ui-plugin-recommendations',
+      '@deepseek-ai/dsh-experimental-client-ui-stats',
       '@deepseek-ai/dsh-experimental-client-ui-voice-input',
       '@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp',
       '@deepseek-ai/dsh-experimental-computer-use-cua-driver-native',
@@ -74,12 +76,17 @@ describe('release families', () => {
       '@deepseek-ai/dsh-cua-bundle',
       '@deepseek-ai/dsh-experimental-cua-macos',
       '@deepseek-ai/dsh-cua',
+      '@deepseek-ai/dsh-experimental-forge-bundle',
+      '@deepseek-ai/dsh-experimental-forge-github',
+      '@deepseek-ai/dsh-experimental-forge-session',
+      '@deepseek-ai/dsh-experimental-forge',
       '@deepseek-ai/dsh-hook-protocol',
       '@deepseek-ai/dsh-hooks-claude-code',
       '@deepseek-ai/dsh-hooks-codex',
       '@deepseek-ai/dsh-experimental-inspector-profile',
       '@deepseek-ai/dsh-experimental-inspector',
       '@deepseek-ai/dsh-experimental-liveshare-protocol',
+      '@deepseek-ai/dsh-experimental-liveshare',
       '@deepseek-ai/dsh-personalized-recommendations',
       '@deepseek-ai/dsh-experimental-plugin-market-bundle',
       '@deepseek-ai/dsh-plugin-recommendations',
@@ -257,7 +264,7 @@ describe('release families', () => {
     const dsh = member('apps/cli', '@deepseek-ai/dsh')
     const providers = ON_DEMAND_BUNDLES.map(name => member(`packages/subagent/${name}`, name))
     const plan = releaseFamily('dsh').publishOrder([dsh, ...providers])
-    expect(plan.order.map(entry => entry.name)).toEqual([...ON_DEMAND_BUNDLES, dsh.name])
+    expect(plan.order.map(entry => entry.name)).toEqual([...ON_DEMAND_BUNDLES.toSorted(), dsh.name])
     expect(dsh.manifest).toEqual({})
     expect(plan.droppedPeerEdges).toEqual([])
   })
@@ -273,8 +280,8 @@ describe('release families', () => {
       peerDependencies: { '@deepseek-ai/dsh': 'workspace:*' },
     }))
     const plan = releaseFamily('dsh').publishOrder([dsh, ...providers])
-    expect(plan.order.map(entry => entry.name)).toEqual([...ON_DEMAND_BUNDLES, dsh.name])
-    expect(plan.droppedPeerEdges).toEqual(ON_DEMAND_BUNDLES.map(name => ({ consumer: name, peer: dsh.name })))
+    expect(plan.order.map(entry => entry.name)).toEqual([...ON_DEMAND_BUNDLES.toSorted(), dsh.name])
+    expect(plan.droppedPeerEdges).toEqual(ON_DEMAND_BUNDLES.toSorted().map(name => ({ consumer: name, peer: dsh.name })))
   })
 
   it.each(['dependencies', 'optionalDependencies', 'peerDependencies'])(

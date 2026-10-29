@@ -62,10 +62,12 @@ describe('Tool presentation tails', () => {
       content: [], isError: false, subCalls: [],
     }
     const props: GenericToolCardProps = {
+      getFileTriggerProps: () => ({}),
       loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
       useDisclosure, callId: 'c5', toolName: 'todo_write', phase: 'result' as const, block: settled, openFile: vi.fn(), t,
     }
-    const view = render(<GenericToolCard {...props} />)
+    const view = render(<GenericToolCard {...props}
+      getFileTriggerProps={() => ({})} />)
     expect(view.container.querySelector('[data-variant="others"] svg')).not.toBeNull()
     expect(view.container.querySelector('[data-state="ok"]')).not.toBeNull()
   })

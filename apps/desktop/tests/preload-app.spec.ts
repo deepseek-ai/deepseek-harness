@@ -38,6 +38,19 @@ it('exposes onboarding size activation to the application document', async () =>
   expect(electron.ipcRenderer.send.mock.calls).toEqual([[DESKTOP_IPC.onboardingActive, true], [DESKTOP_IPC.onboardingActive, false]])
 })
 
+it('routes original-file requests through the trusted application bridge', async () => {
+  vi.stubGlobal('location', new URL('dsh-app://app/'))
+  await import('../src/preload-app.ts')
+  const api = electron.contextBridge.exposeInMainWorld.mock.calls.find(([name]) => name === 'dshDesktop')?.[1] as DshDesktopProductApi
+  const request = { url: 'https://images.example/original.gif', name: 'image.gif', mode: 'download' as const }
+  await api.fileActions.save(request)
+  await api.fileActions.readClipboardImage('https://images.example/original.gif')
+  expect(electron.ipcRenderer.invoke.mock.calls).toEqual([
+    [DESKTOP_IPC.fileSave, request],
+    [DESKTOP_IPC.clipboardImageRead, 'https://images.example/original.gif'],
+  ])
+})
+
 it('limits product documents to update status and a native confirmation action', async () => {
   vi.stubGlobal('location', new URL('dsh-app://app/index.html'))
   await import('../src/preload-app.ts')

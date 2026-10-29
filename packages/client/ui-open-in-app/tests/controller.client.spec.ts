@@ -65,12 +65,13 @@ describe('OpenInAppController launching', () => {
     const pending = controller.launch('cursor', '/workspace/first')
     expect(controller.operation.getSnapshot()).toEqual({ phase: 'busy', path: '/workspace/first' })
     controller.choose('finder')
-    await controller.launch('finder', '/workspace/second')
+    // The gesture another launch already holds settles as deliberate silence.
+    await expect(controller.launch('finder', '/workspace/second')).resolves.toEqual({ kind: 'skipped' })
     expect(controller.choice.getSnapshot()).toBe('cursor')
     expect(fetcher).toHaveBeenCalledOnce()
     expect(fetcher.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ app: 'cursor', path: '/workspace/first' }))
     finish(jsonResponse({ ok: true }))
-    await pending
+    await expect(pending).resolves.toEqual({ kind: 'opened' })
     expect(controller.operation.getSnapshot()).toEqual({ phase: 'idle', path: '/workspace/first' })
   })
 
@@ -91,7 +92,7 @@ describe('OpenInAppController launching', () => {
   it('posts the launch body and surfaces HTTP failures', async () => {
     const fetcher = vi.fn(async (input: string | URL, init?: RequestInit) => { void input; void init; return jsonResponse({ ok: true }) })
     const controller = new OpenInAppController(fetcher)
-    await controller.launch('cursor', '/w/dir')
+    await expect(controller.launch('cursor', '/w/dir')).resolves.toEqual({ kind: 'opened' })
     expect(fetcher.mock.calls[0]?.[0]).toBe('open-in-app/open')
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
       method: 'POST',
@@ -100,7 +101,11 @@ describe('OpenInAppController launching', () => {
     })
 
     const failing = new OpenInAppController(async () => jsonResponse({}, 404))
-    await expect(failing.launch('cursor', '/w/dir')).rejects.toThrow('open failed: HTTP 404')
+    await expect(failing.launch('cursor', '/w/dir')).resolves.toEqual({ kind: 'failed', failure: 'openError' })
     expect(failing.operation.getSnapshot()).toEqual({ phase: 'error', path: '/w/dir' })
+
+    const offline = new OpenInAppController(async () => { throw new Error('offline') })
+    await expect(offline.launch('cursor', '/w/dir')).resolves.toEqual({ kind: 'failed', failure: 'openError' })
+    expect(offline.operation.getSnapshot()).toEqual({ phase: 'error', path: '/w/dir' })
   })
 })
