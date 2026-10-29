@@ -93,7 +93,8 @@ export function apply(ctx: Context, config: Config): void {
         throw new Error('subagent_oar requires a one-shot provider with independent conversation context')
       }
       const names = ctx.subagentNames
-      const reservation = names.reserve(parent, args.name)
+      const rootSession = ctx.subagents.rootOf(parent).session
+      const reservation = names.reserve(rootSession, parent.id, args.name)
       try {
         const activation = await ctx.subagents.startActivation({
           provider: providerName,
@@ -105,7 +106,7 @@ export function apply(ctx: Context, config: Config): void {
           delivery: 'parent',
         })
         try {
-          names.bind(parent, activation.childId, reservation.name)
+          names.bind(rootSession, activation.childId, reservation.name)
         } catch (cause: unknown) {
           throw new HarnessError(
             `Subagent ${activation.childId} started, but its name ${reservation.name} could not be recorded. `

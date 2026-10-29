@@ -103,7 +103,7 @@ describe('dsh-tool-subagent', () => {
       const child = await accepted.promise
       expect(result.error?.info?.code).toBe('SUBAGENT_NAME_BIND_FAILED')
       expect(text(result)).toContain(child.childId)
-      const retry = ctx.subagentNames.reserve(parent, 'reviewer')
+      const retry = ctx.subagentNames.reserve(parent.session, parent.id, 'reviewer')
       retry.dispose()
       release.resolve(undefined)
       await expect(child.result).resolves.toMatchObject({ stopReason: 'completed' })

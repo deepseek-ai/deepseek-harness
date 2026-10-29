@@ -113,7 +113,7 @@ describe('web e2e: Agent Teams panel', () => {
       version: 2, childId: memberId, childCreatedAt: Date.now(), mode: 'external',
       label: 'Researcher: investigate the construction and verify every bound before reporting the result. '.repeat(8).trim(),
     })
-    scaffold.ctx.subagentNames.bind(agent, memberId, 'lead/researcher')
+    scaffold.ctx.subagentNames.bind(agent.session, memberId, 'lead/researcher')
     await action.getByRole('treeitem', { name: /Researcher/u }).waitFor()
     expect(await page.locator('[data-subagent-panel]').count()).toBe(1)
     expect(await page.getByRole('button', { name: 'Task board', exact: true }).count()).toBe(0)

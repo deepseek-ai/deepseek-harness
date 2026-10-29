@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 最小配置
 
-在提供 `subagents` 和 `sessionProjections` 的组合中添加此配置项：
+在提供 `sessionProjections` 的组合中添加此配置项：
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent-names'
@@ -45,7 +45,7 @@ kind: "package-reference"
 
 ### 启动后绑定
 
-调用 `reserve(parent, requested?)`，通过 `ctx.subagents.startActivation` 启动子 agent，再根据成功回执调用 `bind(parent, childId, reservation.name)`。无论启动和绑定成功还是失败，都要在 `finally` 中调用 `dispose()` 释放预留。
+先解析 `rootSession = ctx.subagents.rootOf(parent).session`，再调用 `reserve(rootSession, parent.id, requested?)`，通过 `ctx.subagents.startActivation` 启动子 agent，再根据成功回执调用 `bind(rootSession, childId, reservation.name)`。无论启动和绑定成功还是失败，都要在 `finally` 中调用 `dispose()` 释放预留。
 
 绑定将完整名称记录到根 Session。若启动成功后绑定失败，调用方必须报告已启动的子 agent id；该子 agent 仍由 subagent 服务管理。绑定前崩溃也可能留下未命名的子 agent，它仍可通过 id 寻址。
 
@@ -57,7 +57,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部细节 — 点击展开</summary>
 
-每个根 Session 保存自己的名称到 id 绑定。投影恢复这些绑定，并排除 fork 继承的记录。查询读取根映射，无需观察祖先 Session 或关联子 agent 目录。调用方拥有临时预留，并在操作后释放它们。
+每个根 Session 保存自己的名称到 id 绑定。所有命名操作都显式接收该根 Session；命名服务不解析在线 Agent 的树成员关系。投影恢复这些绑定，并排除 fork 继承的记录。查询读取根映射，无需观察祖先 Session 或关联子 agent 目录。调用方拥有临时预留，并在操作后释放它们。
 
 映射为每个具名子 agent 保留一条绑定：空间为 O(n)，单次查询或绑定为 O(n)；由于每个事件都会搜索绑定数组，回放 n 条不同绑定的最坏时间复杂度为 O(n²)。
 
@@ -89,7 +89,7 @@ kind: "package-reference"
 
 #### KV Cache 影响
 
-此插件通过 `subagent/message-name` 自动解析消息发送者名称，不添加提示词文本或工具 schema。消费方负责模型可见的名称文本及其缓存影响。
+subagent 消息服务自动从此服务读取发送者名称。此插件不添加提示词文本或工具 schema。消费方负责模型可见的名称文本及其缓存影响。
 
 ## 已知限制与待办工作
 

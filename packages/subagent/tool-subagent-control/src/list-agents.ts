@@ -152,12 +152,12 @@ export function registerListAgents(ctx: Context): () => void {
       const root = ctx.subagents.rootOf(parent)
       const entries = await ctx.subagents.listDescendants(root.id, exec.signal)
       const nameOf = (id: SessionId): string | undefined => {
-        const name = names.nameOf(parent, id)
+        const name = names.nameOf(root.session, id)
         return name === id ? undefined : name
       }
       return [
         { kind: 'root' as const, id: root.id, status: statusOf(ctx.agents, root.id),
-          name: names.nameOf(parent, root.id) },
+          name: names.nameOf(root.session, root.id) },
         ...entries
           .map(entry => project(ctx.agents, entry, nameOf))
           .filter(entry => entry !== undefined),

@@ -4,7 +4,8 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -35,22 +36,44 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0] = []) 
 }
 
 describe('root Session name mappings', () => {
+  it('isolates root mappings and reservations without a subagent runtime', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SubagentNames)
+    const first = ctx.sessions.create(SessionId('first-root'))
+    const second = ctx.sessions.create(SessionId('second-root'))
+    const names = ctx.subagentNames
+    const firstName = names.reserve(first, first.id, 'reviewer')
+    const secondName = names.reserve(second, second.id, 'reviewer')
+    onTestFinished(() => { firstName.dispose(); secondName.dispose() })
+    names.bind(first, SessionId('first-child'), firstName.name)
+    names.bind(second, SessionId('second-child'), secondName.name)
+
+    expect(ctx.get('subagents')).toBeUndefined()
+    expect(names.resolveName(first, 'lead/reviewer')).toBe('first-child')
+    expect(names.resolveName(second, 'lead/reviewer')).toBe('second-child')
+    expect(names.nameOf(first, SessionId('second-child'))).toBe('second-child')
+    expect(names.nameOf(second, second.id)).toBe('lead')
+  })
+
   it('binds an accepted child without changing its id, prompt, or execution', async () => {
     const { ctx, parent, start } = await setup([textResponse('done')])
-    const reservation = ctx.subagentNames.reserve(parent, 'reviewer')
+    const reservation = ctx.subagentNames.reserve(parent.session, parent.id, 'reviewer')
     const activation = await start()
-    expect(ctx.subagentNames.nameOf(parent, activation.childId)).toBe(activation.childId)
-    ctx.subagentNames.bind(parent, activation.childId, reservation.name)
+    expect(ctx.subagentNames.nameOf(parent.session, activation.childId)).toBe(activation.childId)
+    ctx.subagentNames.bind(parent.session, activation.childId, reservation.name)
     reservation.dispose()
     await activation.result
 
-    expect(ctx.subagentNames.nameOf(parent)).toBe('lead')
-    expect(ctx.subagentNames.nameOf(parent, activation.childId)).toBe('lead/reviewer')
-    expect(ctx.subagentNames.resolveName(parent, 'lead')).toBe(parent.id)
-    expect(ctx.subagentNames.resolveName(parent, 'lead/reviewer')).toBe(activation.childId)
-    expect(ctx.subagentNames.resolveName(parent, activation.childId)).toBe(activation.childId)
-    expect(ctx.subagentNames.resolveName(parent, 'unmapped-id')).toBe('unmapped-id')
-    expect(() => ctx.subagentNames.resolveName(parent, 'lead/misspelled')).toThrow('was not found')
+    expect(ctx.subagentNames.nameOf(parent.session, parent.id)).toBe('lead')
+    expect(ctx.subagentNames.nameOf(parent.session, activation.childId)).toBe('lead/reviewer')
+    expect(ctx.subagentNames.resolveName(parent.session, 'lead')).toBe(parent.id)
+    expect(ctx.subagentNames.resolveName(parent.session, 'lead/reviewer')).toBe(activation.childId)
+    expect(ctx.subagentNames.resolveName(parent.session, activation.childId)).toBe(activation.childId)
+    expect(ctx.subagentNames.resolveName(parent.session, 'unmapped-id')).toBe('unmapped-id')
+    expect(() => ctx.subagentNames.resolveName(parent.session, 'lead/misspelled')).toThrow('was not found')
     const stored = await loadStoredSession(ctx.sessionPersistence, activation.childId)
     const message = stored.events.find(event => event.type === 'user/message')
     expect(message?.data.content[0]).toEqual({ type: 'text', text: 'Review the change' })
@@ -60,21 +83,21 @@ describe('root Session name mappings', () => {
 
   it('reserves distinct defaults, rejects overlap, and reuses released unbound names', async () => {
     const { ctx, parent } = await setup()
-    const first = ctx.subagentNames.reserve(parent)
-    const second = ctx.subagentNames.reserve(parent)
+    const first = ctx.subagentNames.reserve(parent.session, parent.id)
+    const second = ctx.subagentNames.reserve(parent.session, parent.id)
     expect([first.name, second.name]).toEqual(['lead/agent-1', 'lead/agent-2'])
-    expect(() => ctx.subagentNames.reserve(parent, 'agent-1')).toThrow('already in use')
+    expect(() => ctx.subagentNames.reserve(parent.session, parent.id, 'agent-1')).toThrow('already in use')
     first.dispose()
     first.dispose()
-    const retry = ctx.subagentNames.reserve(parent)
+    const retry = ctx.subagentNames.reserve(parent.session, parent.id)
     expect(retry.name).toBe('lead/agent-1')
     first.dispose()
-    expect(() => ctx.subagentNames.reserve(parent, 'agent-1')).toThrow('already in use')
-    ctx.subagentNames.bind(parent, SessionId('accepted-child'), retry.name)
+    expect(() => ctx.subagentNames.reserve(parent.session, parent.id, 'agent-1')).toThrow('already in use')
+    ctx.subagentNames.bind(parent.session, SessionId('accepted-child'), retry.name)
     retry.dispose()
-    expect(() => ctx.subagentNames.reserve(parent, 'agent-1')).toThrow('already in use')
+    expect(() => ctx.subagentNames.reserve(parent.session, parent.id, 'agent-1')).toThrow('already in use')
     second.dispose()
-    const available = ctx.subagentNames.reserve(parent)
+    const available = ctx.subagentNames.reserve(parent.session, parent.id)
     expect(available.name).toBe('lead/agent-2')
     available.dispose()
   })
@@ -82,7 +105,7 @@ describe('root Session name mappings', () => {
   it.each(['', 'Reviewer', 'lead/reviewer', 'two words', '1reviewer', 'legacy:child'])(
     'rejects invalid requested segment %j before reserving it', async (name) => {
       const { ctx, parent } = await setup()
-      expect(() => ctx.subagentNames.reserve(parent, name)).toThrow('agent name must')
+      expect(() => ctx.subagentNames.reserve(parent.session, parent.id, name)).toThrow('agent name must')
       expect(ctx.sessionProjections.snapshot(parent.session).values.subagentNames).toEqual([])
     },
   )
@@ -90,25 +113,25 @@ describe('root Session name mappings', () => {
   it('keeps exact bindings idempotent while rejecting name and identity conflicts', async () => {
     const { ctx, parent } = await setup()
     const id = SessionId('accepted-child')
-    expect(() => { ctx.subagentNames.bind(parent, id, 'reviewer') }).toThrow('complete lead/... path')
-    ctx.subagentNames.bind(parent, id, 'lead/reviewer')
+    expect(() => { ctx.subagentNames.bind(parent.session, id, 'reviewer') }).toThrow('complete lead/... path')
+    ctx.subagentNames.bind(parent.session, id, 'lead/reviewer')
     const seq = parent.session.seq
-    ctx.subagentNames.bind(parent, id, 'lead/reviewer')
+    ctx.subagentNames.bind(parent.session, id, 'lead/reviewer')
     expect(parent.session.seq).toBe(seq)
-    expect(() => { ctx.subagentNames.bind(parent, id, 'lead/renamed') }).toThrow('already bound')
-    expect(() => { ctx.subagentNames.bind(parent, SessionId('another-child'), 'lead/reviewer') }).toThrow('already bound')
+    expect(() => { ctx.subagentNames.bind(parent.session, id, 'lead/renamed') }).toThrow('already bound')
+    expect(() => { ctx.subagentNames.bind(parent.session, SessionId('another-child'), 'lead/reviewer') }).toThrow('already bound')
   })
 
   it('records nested aliases only on the root and restores them without ancestor reads', async () => {
     const { ctx, parent, parentHandle, start } = await setup(['hang', 'hang'])
     const creator = await start()
-    ctx.subagentNames.bind(parent, creator.childId, 'lead/reviewer')
+    ctx.subagentNames.bind(parent.session, creator.childId, 'lead/reviewer')
     const creatorAgent = ctx.agents.get(creator.childId)!
-    const reservation = ctx.subagentNames.reserve(creatorAgent, 'facts')
+    const reservation = ctx.subagentNames.reserve(parent.session, creatorAgent.id, 'facts')
     const leaf = await start(creatorAgent)
-    ctx.subagentNames.bind(creatorAgent, leaf.childId, reservation.name)
+    ctx.subagentNames.bind(parent.session, leaf.childId, reservation.name)
     reservation.dispose()
-    expect(ctx.subagentNames.nameOf(creatorAgent)).toBe('lead/reviewer')
+    expect(ctx.subagentNames.nameOf(parent.session, creatorAgent.id)).toBe('lead/reviewer')
     expect(ctx.sessionProjections.snapshot(creatorAgent.session).values.subagentNames).toEqual([])
     expect(ctx.sessionProjections.snapshot(parent.session).values.subagentNames).toEqual([
       { childId: creator.childId, name: 'lead/reviewer' },
@@ -116,10 +139,10 @@ describe('root Session name mappings', () => {
     ])
     await creator.dispose()
     expect(ctx.agents.get(creator.childId)).toBeUndefined()
-    expect(ctx.subagentNames.nameOf(parent, leaf.childId)).toBe('lead/reviewer/facts')
+    expect(ctx.subagentNames.nameOf(parent.session, leaf.childId)).toBe('lead/reviewer/facts')
     await parentHandle.dispose()
     const restored = await ctx.agents.resume({ resumeSessionId: parent.id })
-    expect(ctx.subagentNames.resolveName(restored.agent, 'lead/reviewer/facts')).toBe(leaf.childId)
+    expect(ctx.subagentNames.resolveName(restored.agent.session, 'lead/reviewer/facts')).toBe(leaf.childId)
     expect(ctx.get('sessionQuery')).toBeUndefined()
   })
 
@@ -127,37 +150,37 @@ describe('root Session name mappings', () => {
     const { ctx, parent, start } = await setup(['hang'])
     const creator = await start()
     const creatorAgent = ctx.agents.get(creator.childId)!
-    expect(ctx.subagentNames.nameOf(creatorAgent)).toBe(creator.childId)
-    const reservation = ctx.subagentNames.reserve(creatorAgent, 'facts')
+    expect(ctx.subagentNames.nameOf(parent.session, creatorAgent.id)).toBe(creator.childId)
+    const reservation = ctx.subagentNames.reserve(parent.session, creatorAgent.id, 'facts')
     expect(reservation.name).toBe(`lead/legacy:${creator.childId}/facts`)
     const childId = SessionId('accepted-leaf')
-    ctx.subagentNames.bind(creatorAgent, childId, reservation.name)
+    ctx.subagentNames.bind(parent.session, childId, reservation.name)
     reservation.dispose()
-    ctx.subagentNames.bind(parent, creator.childId, 'lead/reviewer')
-    expect(ctx.subagentNames.nameOf(parent, childId)).toBe(`lead/legacy:${creator.childId}/facts`)
+    ctx.subagentNames.bind(parent.session, creator.childId, 'lead/reviewer')
+    expect(ctx.subagentNames.nameOf(parent.session, childId)).toBe(`lead/legacy:${creator.childId}/facts`)
   })
 
   it('does not stop an accepted child when the alias append fails', async () => {
     const { ctx, parent, start } = await setup(['hang'])
-    const reservation = ctx.subagentNames.reserve(parent, 'reviewer')
+    const reservation = ctx.subagentNames.reserve(parent.session, parent.id, 'reviewer')
     const child = await start()
     const failure = new Error('binding append failed')
     const append = vi.spyOn(parent.session, 'append').mockImplementationOnce(() => { throw failure })
-    expect(() => { ctx.subagentNames.bind(parent, child.childId, reservation.name) }).toThrow(failure)
+    expect(() => { ctx.subagentNames.bind(parent.session, child.childId, reservation.name) }).toThrow(failure)
     append.mockRestore()
     reservation.dispose()
     expect(ctx.agents.get(child.childId)).toBeDefined()
-    expect(ctx.subagentNames.nameOf(parent, child.childId)).toBe(child.childId)
-    const retry = ctx.subagentNames.reserve(parent, 'reviewer')
+    expect(ctx.subagentNames.nameOf(parent.session, child.childId)).toBe(child.childId)
+    const retry = ctx.subagentNames.reserve(parent.session, parent.id, 'reviewer')
     retry.dispose()
     await child.dispose()
   })
 
-  it('resolves message attribution automatically and unregisters it with the naming provider', async () => {
+  it('resolves message attribution automatically across naming service unload and reload', async () => {
     const { ctx, parent, namesFiber, start } = await setup(['hang'])
     const child = await start()
     const sender = ctx.agents.get(child.childId)!
-    ctx.subagentNames.bind(parent, child.childId, 'lead/reviewer')
+    ctx.subagentNames.bind(parent.session, child.childId, 'lead/reviewer')
     const steer = vi.spyOn(parent, 'steer')
     const send = () => ctx.subagents.sendMessage(sender, parent.id, [{ type: 'text', text: 'finding' }], {
       signal: new AbortController().signal,
@@ -168,6 +191,11 @@ describe('root Session name mappings', () => {
       content: [{ type: 'text', text: 'Agent lead/reviewer sent a message: ' }, { type: 'text', text: 'finding' }],
       source: { kind: 'agent-message', senderSessionId: child.childId },
     })
+    const lookupFailure = new Error('name lookup failed')
+    const lookup = vi.spyOn(ctx.subagentNames, 'nameOf').mockImplementationOnce(() => { throw lookupFailure })
+    await expect(send()).rejects.toBe(lookupFailure)
+    expect(steer).toHaveBeenCalledTimes(1)
+    lookup.mockRestore()
     await namesFiber.dispose()
     await send()
     expect(steer.mock.lastCall?.[0].content[0]).toEqual({ type: 'text', text: `Agent ${child.childId} sent a message: ` })
@@ -180,17 +208,17 @@ describe('root Session name mappings', () => {
   it('unregisters its projection and leaves accepted execution with its owner', async () => {
     const { ctx, parent, namesFiber, start } = await setup(['hang'])
     const names = ctx.subagentNames
-    const reservation = names.reserve(parent, 'reviewer')
+    const reservation = names.reserve(parent.session, parent.id, 'reviewer')
     const child = await start()
     await namesFiber.dispose()
     expect(ctx.get('subagentNames')).toBeUndefined()
     expect(ctx.sessionProjections.snapshot(parent.session).values.subagentNames).toBeUndefined()
     expect(ctx.agents.get(child.childId)).toBeDefined()
     // Accepted callers retain their projection handle while completing a binding.
-    names.bind(parent, child.childId, reservation.name)
+    names.bind(parent.session, child.childId, reservation.name)
     reservation.dispose()
     await ctx.plugin(SubagentNames)
-    expect(ctx.subagentNames.nameOf(parent, child.childId)).toBe('lead/reviewer')
+    expect(ctx.subagentNames.nameOf(parent.session, child.childId)).toBe('lead/reviewer')
     await child.dispose()
   })
 })
