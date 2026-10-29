@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-12-im-automation-sessions.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-12-im-automation-sessions.md
+/agent-note-im-integration-through-automation-sessions:
+  en: 3b684aa9c4c34a5f
+  zh: 6e3394b2ad85ac8b
+/agent-note-im-integration-through-automation-sessions/problem:
+  en: 673f364e0086216d
+  zh: 365842270520db39
+/agent-note-im-integration-through-automation-sessions/decision:
+  en: ce10c6caf4599941
+  zh: f23d7948983f7230
+/agent-note-im-integration-through-automation-sessions/durability-and-ownership:
+  en: 68418aadd270de7f
+  zh: 69a3ec843097a1d9
+/agent-note-im-integration-through-automation-sessions/alternatives-considered:
+  en: 24145af906b317b7
+  zh: 74334a60679e8caf
+/agent-note-im-integration-through-automation-sessions/consequences:
+  en: bcf16d490d681bf1
+  zh: b0bf15e9652e2516

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-28-im-shared-session-minimal-plane.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-10-28-im-shared-session-minimal-plane.md
+/agent-note-im-runs-one-shared-session-as-an-experimental-bundle:
+  en: e7224c05a619bf41
+  zh: 06f0976b4b5562cf
+/agent-note-im-runs-one-shared-session-as-an-experimental-bundle/problem:
+  en: 890180cafe099bdf
+  zh: 699b305ff26576fe
+/agent-note-im-runs-one-shared-session-as-an-experimental-bundle/decision:
+  en: d4f64b70144327a6
+  zh: d1b32edc9b501978
+/agent-note-im-runs-one-shared-session-as-an-experimental-bundle/alternatives-considered:
+  en: 851ffc4cff3868ba
+  zh: 2b57cacdfb6a20ab
+/agent-note-im-runs-one-shared-session-as-an-experimental-bundle/consequences:
+  en: 653aed4b3ee65bc3
+  zh: d5137e294e95c040
