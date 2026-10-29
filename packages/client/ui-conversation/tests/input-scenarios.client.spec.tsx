@@ -716,4 +716,28 @@ describe('plugin composer prefill API guards and history', () => {
     act(() => { expect(b.shell.prefill('Next')).toBe(true) })
     expect(b.shell.snapshot.draft).toBe(`${afterChip}Next`)
   })
+
+  it('replaces a whitespace-only draft', async () => {
+    const b = await bench()
+    act(() => { b.shell.setDraft(' \n ') })
+    act(() => { expect(b.shell.prefill('Text')).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('Text')
+  })
+
+  it('reads the native caret before its selection is projected', async () => {
+    const b = await bench()
+    act(() => { b.shell.setDraft('Keep text') })
+    b.textarea.focus()
+    const text = b.textarea.firstChild?.firstChild
+    const selection = document.getSelection()
+    if (text === undefined || text === null || selection === null) throw new Error('missing native draft selection')
+    selection.setBaseAndExtent(text, 0, text, 0)
+    const before = b.shell.draftSnapshot
+    act(() => { expect(b.shell.prefill('Head', { separator: '' })).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('HeadKeep text')
+    act(() => { b.shell.editor.dispatchCommand(UNDO_COMMAND, undefined) })
+    await act(async () => {})
+    expect(b.shell.draftSnapshot).toEqual(before)
+    expect(b.sink).not.toHaveBeenCalled()
+  })
 })
