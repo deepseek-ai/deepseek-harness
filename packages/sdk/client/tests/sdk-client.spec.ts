@@ -20,9 +20,10 @@ import {
   SdkProtocolError,
   TransportClosedError,
   type HarnessNotification,
+  type SdkPromptContentBlock,
 } from '../src/index.ts'
-import { createProcessDeepSeekHarness, finalResponse, normalizeInput } from '../src/api.ts'
-import { createProcessHarnessClient } from '../src/client.ts'
+import { createProcessDeepSeekHarness, finalResponse } from '../src/api.ts'
+import { createProcessHarnessClient, normalizeInput } from '../src/client.ts'
 import type { RuntimeProcessOptions } from '../src/launch.ts'
 
 const fakeRuntime = fileURLToPath(new URL('./fake-runtime.ts', import.meta.url))
@@ -63,11 +64,33 @@ async function tempDir(prefix: string): Promise<string> {
 }
 
 describe('DeepSeekHarness', () => {
+  it('queues literal slash text and images through the low-level prompt method', async () => {
+    const harness = harnessWith()
+    await harness.start()
+    const request = vi.spyOn(harness.client, 'request')
+    const blocks: SdkPromptContentBlock[] = [
+      { type: 'text', text: '/compact' },
+      { type: 'image', data: 'aW1hZ2U=', mimeType: 'image/png' },
+    ]
+    expect(await harness.client.prompt('literal', blocks)).toMatch(/^fake-user-/)
+    expect(request).toHaveBeenCalledWith('session/prompt', { sessionId: 'literal', contentBlocks: blocks })
+  })
+
+  it('returns a command result without waiting for turn or idle notifications', async () => {
+    const harness = harnessWith()
+    await harness.start()
+    const session = harness.session('commands')
+    const result = await session.run('/compact')
+    expect(result).toMatchObject({ finalResponse: '/compact', finishReason: 'completed' })
+    expect(result.events.map(event => event.type)).toEqual(['command/run', 'command/done'])
+    expect(result.notifications.some(notification => notification.method === 'session.status')).toBe(false)
+  })
+
   it('returns a restored handle that can run followups on the same identity', async () => {
     const harness = harnessWith()
     const session = await harness.resumeSession('saved-session')
     expect(session.id).toBe('saved-session')
-    expect((await session.run('continue')).sessionId).toBe('saved-session')
+    expect((await session.run([{ type: 'text', text: 'continue' }])).sessionId).toBe('saved-session')
   })
 
   it('propagates resume failures', async () => {
@@ -123,24 +146,21 @@ describe('DeepSeekHarness', () => {
       { method: 'session.status', params: { sessionId: 'owned', status: 'idle' } },
     ] as HarnessNotification[]
     let closed = false
-    const harness = {
-      start: () => Promise.resolve(),
-      client: {
-        prompt: () => Promise.resolve('accepted-message'),
-        subscribeSessionTree: () => ({
-          next: async () => {
-            const notification = notifications.shift()
-            if (notification === undefined) throw new Error('scripted notification queue exhausted')
-            return notification
-          },
-          tryNext: () => notifications.shift(),
-          close: () => { closed = true },
-          async * [Symbol.asyncIterator]() {},
-        }),
+    const harness = harnessWith()
+    vi.spyOn(harness, 'start').mockResolvedValue()
+    vi.spyOn(harness.client, 'request').mockResolvedValue({ kind: 'prompt', messageId: 'accepted-message' })
+    vi.spyOn(harness.client, 'subscribeSessionTree').mockImplementation(() => ({
+      next: async () => {
+        const notification = notifications.shift()
+        if (notification === undefined) throw new Error('scripted notification queue exhausted')
+        return notification
       },
-    } as unknown as DeepSeekHarness
+      tryNext: () => notifications.shift(),
+      close: () => { closed = true },
+      async * [Symbol.asyncIterator]() {},
+    }))
 
-    const result = await new HarnessSession(harness, 'owned').run('go')
+    const result = await new HarnessSession(harness, 'owned').run([{ type: 'text', text: 'go' }])
 
     expect(result.notifications.map(notification => notification.method))
       .toEqual(['session.event', 'session.status'])
@@ -215,24 +235,21 @@ describe('DeepSeekHarness', () => {
       { method: 'session.event', params: { sessionId: 'owned', event: ptcResult } },
       { method: 'session.status', params: { sessionId: 'owned', status: 'idle' } },
     ] as HarnessNotification[]
-    const harness = {
-      start: () => Promise.resolve(),
-      client: {
-        prompt: () => Promise.resolve('accepted-message'),
-        subscribeSessionTree: () => ({
-          next: async () => {
-            const notification = notifications.shift()
-            if (notification === undefined) throw new Error('scripted notification queue exhausted')
-            return notification
-          },
-          tryNext: () => notifications.shift(),
-          close: () => {},
-          async * [Symbol.asyncIterator]() {},
-        }),
+    const harness = harnessWith()
+    vi.spyOn(harness, 'start').mockResolvedValue()
+    vi.spyOn(harness.client, 'request').mockResolvedValue({ kind: 'prompt', messageId: 'accepted-message' })
+    vi.spyOn(harness.client, 'subscribeSessionTree').mockImplementation(() => ({
+      next: async () => {
+        const notification = notifications.shift()
+        if (notification === undefined) throw new Error('scripted notification queue exhausted')
+        return notification
       },
-    } as unknown as DeepSeekHarness
+      tryNext: () => notifications.shift(),
+      close: () => {},
+      async * [Symbol.asyncIterator]() {},
+    }))
 
-    const result = await new HarnessSession(harness, 'owned').run('go')
+    const result = await new HarnessSession(harness, 'owned').run([{ type: 'text', text: 'go' }])
 
     expect(result.events).toEqual([receipt, nativeResult, ptcStart, ptcResult])
     expect(result.events.find(event => event.type === 'tool/ptc-dispatch')?.data.meta)
@@ -246,7 +263,7 @@ describe('DeepSeekHarness', () => {
 
   it('runs a turn end to end and reuses the runtime across sessions', async () => {
     const harness = harnessWith({ FAKE_TEXT: 'turn answer' })
-    const first = await harness.run('say hi')
+    const first = await harness.run([{ type: 'text', text: 'say hi' }])
     expect(first.finalResponse).toBe('turn answer')
     expect(first.events.map(event => event.type)).toEqual([
       'agent/inbox/spliced', 'turn/start', 'assistant/message', 'turn/end',
@@ -272,7 +289,7 @@ describe('DeepSeekHarness', () => {
   it('keeps events root-scoped while streaming notifications for the session tree', async () => {
     const harness = harnessWith({ FAKE_SUBAGENT: '1' })
     const seen: HarnessNotification[] = []
-    const result = await harness.run('delegate', {
+    const result = await harness.run([{ type: 'text', text: 'delegate' }], {
       sessionId: 'parent-1',
       onNotification: (n) => { seen.push(n) },
     })
@@ -302,8 +319,8 @@ describe('DeepSeekHarness', () => {
       approvalRequests: true,
     })
     cleanups.push(() => harness.close())
-    await harness.run('one')
-    await harness.run('two')
+    await harness.run([{ type: 'text', text: 'one' }])
+    await harness.run([{ type: 'text', text: 'two' }])
     await harness.close()
     const records = (await readFile(recordFile, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as object)
     expect(records).toEqual([{
@@ -344,14 +361,14 @@ describe('DeepSeekHarness', () => {
 
   it('propagates a JSON-RPC error response from initialize and closes the runtime', async () => {
     const harness = harnessWith({ FAKE_INIT_ERROR: '1' })
-    const failure = await harness.run('boom').then(
+    const failure = await harness.run([{ type: 'text', text: 'boom' }]).then(
       () => { throw new Error('run unexpectedly succeeded') },
       (error: unknown) => error,
     )
     expect(failure).toBeInstanceOf(JsonRpcResponseError)
     expect(failure).toMatchObject({ code: 7, message: 'scripted init failure', data: { hint: 'fake' } })
     // The failed handshake reset lets a later start retry instead of wedging.
-    await expect(harness.run('later')).rejects.toThrow()
+    await expect(harness.run([{ type: 'text', text: 'later' }])).rejects.toThrow()
   })
 
   it('preserves both initialize and SDK-owned cleanup failures', async () => {
@@ -404,17 +421,17 @@ describe('DeepSeekHarness', () => {
     // First start: the scripted runtime fails the handshake and is reaped.
     await expect(harness.start()).rejects.toThrow('scripted first-boot failure')
     // Retry spawns a NEW subprocess through a fresh client (close is permanent).
-    const result = await harness.run('again')
+    const result = await harness.run([{ type: 'text', text: 'again' }])
     expect(harness.client).not.toBe(firstClient)
     expect(result.finalResponse).toBe('second boot answer')
     await harness.close()
     // close() is terminal: a handshake failure after it must not respawn.
-    await expect(harness.run('after-close')).rejects.toThrow(TransportClosedError)
+    await expect(harness.run([{ type: 'text', text: 'after-close' }])).rejects.toThrow(TransportClosedError)
   })
 
   it('rejects a malformed initialize result as a protocol error', async () => {
     const harness = harnessWith({ FAKE_MALFORMED: '1' })
-    await expect(harness.run('bad')).rejects.toThrow(SdkProtocolError)
+    await expect(harness.run([{ type: 'text', text: 'bad' }])).rejects.toThrow(SdkProtocolError)
   })
 
   it('supports await using disposal', async () => {
@@ -422,11 +439,11 @@ describe('DeepSeekHarness', () => {
     {
       await using harness = createProcessDeepSeekHarness(fakeLaunch())
       captured = harness
-      const result = await harness.run('scoped')
+      const result = await harness.run([{ type: 'text', text: 'scoped' }])
       expect(result.finalResponse).toBe('hello from fake runtime')
     }
     // After scope exit the runtime is closed: reuse fails loudly.
-    await expect(captured.run('after')).rejects.toThrow(TransportClosedError)
+    await expect(captured.run([{ type: 'text', text: 'after' }])).rejects.toThrow(TransportClosedError)
   })
 
   it('constructs the public dsh-backed client lazily', async () => {
@@ -708,27 +725,27 @@ describe('HarnessClient', () => {
 describe('wire payload validation', () => {
   it('rejects a non-object session.event envelope as a protocol error', async () => {
     const harness = harnessWith({ FAKE_MALFORMED_EVENT: '1' })
-    await expect(harness.run('bad-event')).rejects.toThrow(SdkProtocolError)
+    await expect(harness.run([{ type: 'text', text: 'bad-event' }])).rejects.toThrow(SdkProtocolError)
   })
 
   it('rejects an assistant/message without a content array as a protocol error', async () => {
     const harness = harnessWith({ FAKE_MALFORMED_MESSAGE: '1' })
-    await expect(harness.run('bad-message')).rejects.toThrow(SdkProtocolError)
+    await expect(harness.run([{ type: 'text', text: 'bad-message' }])).rejects.toThrow(SdkProtocolError)
   })
 
   it('rejects an assistant/message without a data member as a protocol error', async () => {
     const harness = harnessWith({ FAKE_MESSAGE_WITHOUT_DATA: '1' })
-    await expect(harness.run('no-data')).rejects.toThrow(SdkProtocolError)
+    await expect(harness.run([{ type: 'text', text: 'no-data' }])).rejects.toThrow(SdkProtocolError)
   })
 
   it.each(['1', 'aborted', 'abort-unknown', 'hook', 'no-data'])('rejects malformed turn/end input %s as a protocol error', async (mode) => {
     const harness = harnessWith({ FAKE_MALFORMED_REASON: mode })
-    await expect(harness.run('bad-reason')).rejects.toThrow(SdkProtocolError)
+    await expect(harness.run([{ type: 'text', text: 'bad-reason' }])).rejects.toThrow(SdkProtocolError)
   })
 
   it('accepts the complete hook cancellation cause', async () => {
     const harness = harnessWith({ FAKE_REASON_KIND: 'aborted', FAKE_ABORT_REASON_KIND: 'hook' })
-    const result = await harness.run('hook-abort')
+    const result = await harness.run([{ type: 'text', text: 'hook-abort' }])
     const end = result.events.findLast(event => event.type === 'turn/end')
     expect(end?.data.reason).toEqual({ kind: 'aborted', reason: { kind: 'hook', reason: 'scripted hook abort' } })
   })
@@ -791,7 +808,7 @@ describe('server-to-client SDK requests', () => {
 describe('SDK cancellation reason projection', () => {
   it.each(['user', 'parent', 'disposed', 'legacy'])('retains the %s cancellation cause', async (kind) => {
     const harness = harnessWith({ FAKE_REASON_KIND: 'aborted', FAKE_ABORT_REASON_KIND: kind })
-    const result = await harness.run('cancelled')
+    const result = await harness.run([{ type: 'text', text: 'cancelled' }])
     expect(result.events.findLast(event => event.type === 'turn/end')?.data.reason)
       .toEqual({ kind: 'aborted', reason: { kind } })
   })

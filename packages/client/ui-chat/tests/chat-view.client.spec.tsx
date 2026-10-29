@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 
 import type { ProcessGroupData } from '../src/client/contract/process-groups.ts'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
@@ -7,6 +8,7 @@ import type { GlobalStandardProps, PropsRenderFactories, PropsRenderSlots } from
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useEffect, useMemo } from 'react'
+import { useMarkdownDelegate, type MarkdownMenuTarget } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   AssistantMessageNode, ChatFlowHookContext, ChatFlowOwnerProps, ChatFlowSlotProps,
   ChatNode, ChatNodeHookContext, ChatNodeOwnerProps, ChatSnapshot, UserBeforeOwnerProps,
@@ -267,7 +269,7 @@ type ImageRenderer = (owner: MessageImagesOwnerProps) => React.ReactNode
 declare const userChainDispatch: PropsRenderSlots<'conversation.chat.user.before'>['renderSlotChain']
 type UserChainRenderer = typeof userChainDispatch<'conversation.chat.user.before'>
 type UserChainState = { readonly renderer: UserChainRenderer | undefined }
-type HarnessStandardProps = ChatViewSlotProps & PropsRenderFactories
+type HarnessStandardProps = ChatViewSlotProps & PropsRenderFactories & Pick<React.ComponentProps<typeof AssistantNodeView>, 'fileMentions'>
 
 function isImageOwner(owner: object): owner is MessageImagesOwnerProps {
   return 'images' in owner && Array.isArray(owner.images)
@@ -492,6 +494,7 @@ function makeHarness(
   const SessionProviderStub: ChatViewSlotProps['SessionProvider'] = ({ children }) => <>{children}</>
   const props: HarnessStandardProps = {
     fileDrag,
+    resolveFilePath: vi.fn((path: string) => path),
     renderFactorySlot,
     usePanelInfo: selector => selector({ activePanelId: null }),
     sessionId: SID,
@@ -505,6 +508,7 @@ function makeHarness(
     useTrajectory: (() => { throw new Error('unused') }),
     useSessions: emptySessions(),
     useSessionRetainInfo: () => undefined,
+    useContextMenu: contextMenuHook(),
     useResource,
     useSessionStatus: bindSnapshotSelector(
       createSnapshotStore<SessionStatusSnapshot>(new Map()),
@@ -706,6 +710,41 @@ function formatRunDuration(ms: number, t: Parameters<typeof durationParts>[1]): 
 
 describe('Chat node rendering', () => {
 
+  it('adapts Markdown targets with the original Session and resolves file paths when each gesture begins', () => {
+    const h = makeHarness()
+    const opened = vi.fn()
+    let directory = '/workspace'
+    h.props.useContextMenu = contextMenuHook(opened)
+    h.props.resolveFilePath = path => `${directory}/${path}`
+    const targets: MarkdownMenuTarget[] = [
+      { kind: 'file', path: 'src/a.ts', line: 24 },
+      { kind: 'file', path: 'src/b.ts' },
+      { kind: 'url', url: 'https://example.com/page' },
+      { kind: 'image', url: 'blob:remote' },
+      { kind: 'image', url: 'blob:local', path: 'image.svg', name: 'Image', mediaType: 'image/svg+xml' },
+    ]
+    function References() {
+      const { getTriggerProps } = useMarkdownDelegate()
+      return <>{targets.map((target, index) => <button key={index} {...getTriggerProps!(target)}>{index}</button>)}</>
+    }
+    const view = render(<ChatView {...h.props} renderSlot={() => <References />} />)
+    directory = '/workspace/moved'
+    for (const [index, target] of targets.entries()) {
+      const button = view.getByRole('button', { name: String(index) })
+      button.getBoundingClientRect = () => new DOMRect(10, 20, 30, 40)
+      fireEvent.contextMenu(button, { clientX: 50, clientY: 60 })
+      const { kind, ...value } = target
+      const expected = { kind, value: {
+        sessionId: SID, ...value, ...'path' in target ? { path: `${directory}/${target.path}` } : {},
+      } }
+      expect(opened).toHaveBeenLastCalledWith(expected, { x: 50, y: 60 })
+      fireEvent.keyDown(button, { key: 'F10', shiftKey: true })
+      expect(opened).toHaveBeenLastCalledWith(expected, { x: 10, y: 60 })
+    }
+    expect(opened).toHaveBeenCalledTimes(10)
+    expect(h.openFile).not.toHaveBeenCalled()
+  })
+
   it('opens Markdown references to unmodified files with line navigation', () => {
     const h = makeHarness({
       nodes: [user(1, 'explain'), assistant(2, '[source](src/index.ts#L24-L30)', 1)],
@@ -729,13 +768,18 @@ describe('Chat node rendering', () => {
       ],
       turnEnds: new Map([[1, 4]]),
     })
-    h.props.fileMentions = owner => ({
+    const opened = vi.fn()
+    let directory = '/workspace'
+    h.props.useContextMenu = contextMenuHook(opened)
+    h.props.resolveFilePath = path => `${directory}/${path}`
+    h.props.fileMentions = (owner, getFileTriggerProps) => ({
       resolve: (value) => {
         if (value !== 'report.html') return undefined
         return {
           open: () => { void h.openFile(`for-seq-${String(owner.seq)}/site/report.html`) },
           label: '打开 site/report.html',
           title: 'site/report.html',
+          contextMenuProps: getFileTriggerProps('site/report.html'),
         }
       },
     })
@@ -746,6 +790,17 @@ describe('Chat node rendering', () => {
     expect(mentions).toHaveLength(1)
     const mention = view.getByRole('button', { name: '打开 site/report.html' })
     expect(mention.getAttribute('title')).toBe('site/report.html')
+    fireEvent.contextMenu(mention, { clientX: 12, clientY: 34 })
+    expect(opened).toHaveBeenLastCalledWith({
+      kind: 'file', value: { sessionId: SID, path: '/workspace/site/report.html' },
+    }, { x: 12, y: 34 })
+    directory = '/workspace/moved'
+    fireEvent.keyDown(mention, { key: 'F10', shiftKey: true })
+    expect(opened).toHaveBeenLastCalledWith({
+      kind: 'file', value: { sessionId: SID, path: '/workspace/moved/site/report.html' },
+    }, { x: 0, y: 0 })
+    expect(opened).toHaveBeenCalledTimes(2)
+    expect(h.openFile).not.toHaveBeenCalled()
     fireEvent.click(mention)
     // The vocabulary was built from the closing message's own owner currency.
     expect(h.openFile).toHaveBeenCalledWith('for-seq-4/site/report.html')
@@ -4698,4 +4753,22 @@ const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () 
 
 it('formats Portuguese elapsed minutes with numeric units', () => {
   expect(formatRunDuration(90_000, key => pt[key])).toBe('1m 30s')
+})
+
+it('does not infer menu targets from links or data attributes inside a plugin flow slot', () => {
+  const h = makeHarness()
+  const custom = vi.fn()
+  const view = render(<ChatView {...h.props} renderSlot={() => <>
+    <a href="https://example.com/plugin">Plugin link</a>
+    <button data-file-path="/plugin/private.txt">Undeclared file</button>
+    <button onContextMenu={(event) => {
+      event.preventDefault()
+      custom()
+    }}>Custom target</button>
+  </>} />)
+  expect(fireEvent.contextMenu(view.getByRole('link', { name: 'Plugin link' }))).toBe(true)
+  expect(fireEvent.contextMenu(view.getByRole('button', { name: 'Undeclared file' }))).toBe(true)
+  fireEvent.contextMenu(view.getByRole('button', { name: 'Custom target' }))
+  expect(custom).toHaveBeenCalledOnce()
+  expect(h.props.resolveFilePath).not.toHaveBeenCalled()
 })

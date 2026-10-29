@@ -5,6 +5,8 @@
  * popupSelect shell's copy.
  */
 
+import { builtinCommandTokens } from '@deepseek-ai/dsh-commands/builtin'
+
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   'section.add': '添加',
@@ -21,12 +23,12 @@ export const zh = {
   'description.compact': '压缩以上对话内容',
   'description.permission': '切换权限预设（沙箱模式与审批策略）',
   'description.export': '将当前会话内容导出为 ZIP',
-  'token.goal': '目标',
-  'token.plan': '计划',
-  'token.feedback': '反馈',
-  'token.compact': '压缩',
-  'token.permission': '权限',
-  'token.export': '导出',
+  'token.goal': builtinCommandTokens.zh.goal,
+  'token.plan': builtinCommandTokens.zh.plan,
+  'token.feedback': builtinCommandTokens.zh.feedback,
+  'token.compact': builtinCommandTokens.zh.compact,
+  'token.permission': builtinCommandTokens.zh.permission,
+  'token.export': builtinCommandTokens.zh.export,
   'search.placeholder': '搜索…',
   'search.aria': '筛选选项',
   'status.loading': '正在加载选项…',
@@ -56,12 +58,12 @@ export const en = {
   'description.compact': 'Compact older conversation history',
   'description.permission': 'Switch the permission preset (sandbox mode + approval policy)',
   'description.export': 'Download this Session log as a ZIP archive',
-  'token.goal': 'goal',
-  'token.plan': 'plan',
-  'token.feedback': 'feedback',
-  'token.compact': 'compact',
-  'token.permission': 'permission',
-  'token.export': 'export',
+  'token.goal': builtinCommandTokens.en.goal,
+  'token.plan': builtinCommandTokens.en.plan,
+  'token.feedback': builtinCommandTokens.en.feedback,
+  'token.compact': builtinCommandTokens.en.compact,
+  'token.permission': builtinCommandTokens.en.permission,
+  'token.export': builtinCommandTokens.en.export,
   'search.placeholder': 'Search…',
   'search.aria': 'Filter options',
   'status.loading': 'Loading options…',

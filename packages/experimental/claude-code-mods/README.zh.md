@@ -119,6 +119,8 @@ Blast Radius 的 DSH 包装使用当前运行的可执行文件提供 Node 计�
 
 [`chain.ts`](src/chain.ts) 让一个事件穿过选中的钩子，最外层在前，引擎行为在底部。每个钩子的 `next` 只向下委托一次：第二次调用返回第一次的运行结果，钩子已启动的下层运行会在其自身答案落定前被等待。抛出、超时或没有结果就结束的钩子会被跳过并按失败类型报告一次，若它已调用 `next` 则下层结果生效，`.catch` 处理器可代为作答。预算时钟只计钩子自身的运行时间：在 `next` 内与除 `$.clock.sleep` 外的每个 `$` 调用内暂停。[`engine.ts`](src/engine.ts) 拥有注册表、按会话的 `$.state`、按会话与模组键控的定时器，以及两个分发方向：引擎事件到达所有选中的钩子，而一个模组发起的 `$` 调用只到达在它之前加载的模组。
 
+桥接服务在其 fiber 开始卸载时取消后台调用，随后依赖它的模组才等待各自的定时器回调结束。服务清理再移除注册并等待其余工作完成。
+
 ### 映射到 harness
 
 [`index.ts`](src/index.ts) 注册监听器。`tool.call` 包裹 `tools/execute`，因此 harness 的权限决定先于链；`{ deny }` 成为带原因的错误结果，`{ result }` 在工具为模组注册或值满足工具输出 schema 时成为成功结果，否则为错误形态的结果。钩子在 `next` 之后改写的结果经 `tools/post-execute` 作为替换内容安装。向 `next` 传入改写参数的钩子会被跳过并报告，因为调用参数已经写入日志。[`host-ops.ts`](src/host-ops.ts) 持有每个 `$` 调用基于 `ctx.get(...)` 服务的引擎行为；目录所有者为必需服务，其他服务按需读取。[`surfaces.ts`](src/surfaces.ts) 为每个会话保留一条横幅：触发 `ui.render`，用 [`elements.ts`](src/elements.ts) 校验并序列化树，把每个 `Button` 的 `onPress` 保存在按绘制分配的动作 id 之后，让横幅订阅该次绘制读取的 `$.state` 槽位，并通过 `claudeCodeMods` Remote（`watchBand`、`pressBand`）把各代推流给 Client。

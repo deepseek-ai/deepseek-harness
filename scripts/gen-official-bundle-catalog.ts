@@ -22,7 +22,7 @@ const OUTPUT = 'packages/util/official-bundles/src/catalog.generated.ts'
  */
 export function generateOfficialBundleCatalog(root: string, names: readonly string[] = ON_DEMAND_BUNDLES): OfficialBundleCatalogEntry[] {
   if (names.length === 0 || new Set(names).size !== names.length) throw new Error('Official on-demand catalog must contain distinct package names')
-  const manifests = new Map<string, { path: string; private: boolean; bundle: boolean; platforms?: DshBundleManifest['platforms']; runtime: string[] }>()
+  const manifests = new Map<string, { path: string; private: boolean; bundle: boolean; platforms?: DshBundleManifest['platforms']; listedByDefault?: boolean; runtime: string[] }>()
   for (const path of globSync(['packages/*/*/package.json', 'apps/*/package.json', 'vendor/*/package.json'], { cwd: root }).map(path => path.replaceAll('\\', '/')).sort()) {
     const manifest = JSON.parse(readFileSync(resolve(root, path), 'utf8')) as {
       name: string
@@ -30,12 +30,15 @@ export function generateOfficialBundleCatalog(root: string, names: readonly stri
       dependencies?: Record<string, string>
       optionalDependencies?: Record<string, string>
       peerDependencies?: Record<string, string>
-      dsh?: { bundle?: { patch?: unknown; platforms?: DshBundleManifest['platforms'] } }
+      dsh?: { bundle?: { patch?: unknown; platforms?: DshBundleManifest['platforms']; listedByDefault?: boolean } }
     }
     if (manifests.has(manifest.name)) throw new Error(`duplicate workspace package ${manifest.name}`)
+    const listedByDefault = manifest.dsh?.bundle?.listedByDefault
+    if (listedByDefault !== undefined && typeof listedByDefault !== 'boolean') throw new Error(`${manifest.name}: dsh.bundle.listedByDefault must be a boolean`)
     const runtime = ['dependencies', 'optionalDependencies', 'peerDependencies'] as const
     manifests.set(manifest.name, { path, private: manifest.private === true, bundle: manifest.dsh?.bundle?.patch !== undefined,
       ...manifest.dsh?.bundle?.platforms === undefined ? {} : { platforms: manifest.dsh.bundle.platforms },
+      ...listedByDefault === undefined ? {} : { listedByDefault },
       runtime: runtime.flatMap(section => Object.keys(manifest[section] ?? {})) })
   }
   const visited = new Set<string>()
@@ -77,7 +80,9 @@ export function generateOfficialBundleCatalog(root: string, names: readonly stri
         }
       }
     }
-    return { packageName, ...entry.platforms === undefined ? {} : { platforms: entry.platforms },
+    return { packageName,
+      ...entry.listedByDefault === undefined ? {} : { listedByDefault: entry.listedByDefault },
+      ...entry.platforms === undefined ? {} : { platforms: entry.platforms },
       meta: { title: meta.title, description: meta.description, icon: meta.icon } }
   })
 }
@@ -95,6 +100,7 @@ export function renderOfficialBundleCatalog(entries: readonly OfficialBundleCata
     + entries.map(entry => '  {\n'
       + `    packageName: ${quote(entry.packageName)},\n`
       + (entry.platforms === undefined ? '' : `    platforms: [${entry.platforms.map(quote).join(', ')}],\n`)
+      + (entry.listedByDefault === undefined ? '' : `    listedByDefault: ${entry.listedByDefault},\n`)
       + '    meta: {\n'
       + `      title: ${localized(entry.meta.title)},\n`
       + `      description: ${localized(entry.meta.description)},\n`

@@ -13,7 +13,7 @@ macOS Computer Use runs as `DSH Computer Use.app`, launched through LaunchServic
 
 ## Migration
 
-1. Restart DSH after upgrading the Computer Use package. In the Computer Use plugin page, grant Accessibility and Screen Recording access to `DSH Computer Use.app` when macOS requests it.
+1. Computer Use now installs on demand. In **Plugins → Add plugin**, install `@deepseek-ai/dsh-cua-bundle` and enable it; profiles that previously selected the shipped copy need this installation. Restart DSH if requested. In the Computer Use plugin page, grant Accessibility and Screen Recording access to `DSH Computer Use.app` when macOS requests it.
 2. Remove an obsolete `helperPath` override or `DSH_CUA_HELPER` value to use automatic preparation. For a custom build, point it to the executable at `DSH Computer Use.app/Contents/MacOS/dsh-cua-native` inside the complete application bundle.
 3. Confirm that the permission page identifies `DSH Computer Use.app` and both permissions are allowed before resuming native application tasks. Target-application consent remains required.
 4. If a terminal or Desktop launcher was granted these permissions only for Computer Use, revoke those obsolete grants in System Settings. Authorizing the helper does not revoke other applications’ existing permissions; programs the model runs still follow their launcher’s system permissions and the DSH sandbox policy.

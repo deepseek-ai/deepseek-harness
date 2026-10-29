@@ -31,6 +31,8 @@ kind: "package-reference"
 
 派发前，模型已给出名称的调用显示为不可展开的一行，使用工具自己的图标与标题。通用行显示为 `工具调用 · <工具名>`。read/write/edit 在 `file_path` 闭合且解码无误后显示可打开的路径；write/edit 从内容到达起在该路径后显示 `NKB`，执行中和成功后仍保留，位于差异统计之前。N 按解码后输入的 UTF-16 长度除以 1024 向上取整，edit 合计新旧文本长度；它不是文件字节数。失败和停止的行省略大小与差异统计。命令行显示流入中的描述。`tool/call` 才启用既有调用展示；参数块结束本身不代表开始执行。
 
+文件和 URL 工具视图 Slot 直接获取 `useContextMenu`，向 `ToolRow` 提供已绑定的 `fileContextMenuProps` 或 `urlContextMenuProps`。文件注册注入在触发时读取原始 Session 工作目录的路径解析器，工作目录缺失时使用工作区根目录。`ToolCallTree` 向普通 `GenericToolCard` fallback 显式提供文件适配函数，包含嵌套调用。无需 Markdown Provider。鼠标和键盘手势保留捕获的路径、行号、URL 与 Session，不会展开工具行或打开文件。
+
 ### 注册业务工具视图
 
 拥有该视图的业务包将其 wire 工具名称注册进 `tool.call.toolview`：
@@ -56,6 +58,8 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、`phase` 判别字
 问题行按 id 配对问题与答案；答案来自工具结果，迟到回答则来自 `userQuestions` 投影。可回答的调用提供按钮以重新打开面板。迟到回复进入 agent Inbox 后，问题行显示已提交的答案；等待准入期间，「查看回答」展开只读的行内记录。带有答案的已结算调用则以只读方式打开面板。没有答案的已关闭调用和无效记录不提供按钮。已取消和已中断的行显示裁决，不虚构答案。若面板提供方不接受按钮操作，点击会展开该行。不受支持或含糊的输入回退为压平的工具文本。
 
 回答面板按钮归问题 renderer 所有。它使用 `DisclosureRow` 组合自己的操作与 transcript；通用 `ToolRow` 不选择或派发问题操作。
+
+文件与 URL 控件通过作用域内的 Markdown 委托声明右键菜单目标。鼠标和键盘手势的文件目标都携带记录的路径与行号。
 
 -----
 

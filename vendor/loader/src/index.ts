@@ -1,5 +1,5 @@
-import { Context, FiberState, Inject, Service, type Fiber } from '@deepseek-ai/cordis'
-import { defineProperty, isNullable, type Dict } from '@deepseek-ai/cosmokit'
+import { Context, FiberState, Inject, Service } from '@deepseek-ai/cordis'
+import { defineProperty, isNullable, type Awaitable, type Dict } from '@deepseek-ai/cosmokit'
 import { ModuleLoader } from './internal.ts'
 import { Entry, type EntryOptions } from './config/entry.ts'
 import { EntryGroup } from './config/group.ts'
@@ -38,7 +38,7 @@ declare module '@deepseek-ai/cordis' {
      * @param next - continue context refresh and Loader's config update.
      * @mode waterfall
      */
-    'loader/patch-context'(entry: Entry, next: () => void): void
+    'loader/patch-context'(entry: Entry, next: () => Awaitable<void>): Awaitable<void>
   }
 
   interface Context {
@@ -101,26 +101,23 @@ export class Loader extends EntryTree {
 
     ctx.reflect.provide('loader', this, this[Service.check])
 
-    ctx.on('internal/config', function (this: Fiber, _config, next) {
+    ctx.on('internal/config', (fiber, next) => {
       const config = next()
-      if (!this.entry || this.parent.fiber?.entry === this.entry) return config
-      // Tree carriers (Group, Include) keep their configs literal: their
-      // entry and patch lists hold other rows' configs, whose `!!js`
-      // expressions belong to those rows' own fibers.
-      const plugin = this.runtime?.callback as Record<PropertyKey, unknown> | undefined
-      if (plugin?.[EntryGroup.key]) return config
-      return interpolate(this.ctx, config)
-    }, { global: true })
+      if (!fiber.entry || fiber.parent.fiber?.entry === fiber.entry) return config
+      // Tree carriers preserve the expressions owned by their child entries.
+      if (fiber.runtime?.callback[EntryGroup.key]) return config
+      return interpolate(fiber.ctx, config)
+    })
 
-    ctx.on('internal/update', function (config, noSave, next) {
-      if (!this.entry || noSave || this.parent.fiber?.entry === this.entry) return next()
-      const unparse = this.runtime?.Config?.['simplify']
-      this.entry.options.config = unparse ? unparse.call(this.runtime!.Config, config) : config
-      this.entry.parent.tree.write()
-      return next()
-    }, { global: true, prepend: true })
+    ctx.on('internal/commit', (fiber, config) => {
+      if (!fiber.entry || fiber.parent.fiber?.entry === fiber.entry) return
+      const schema = fiber.runtime?.Config
+      const unparse = schema?.['simplify']
+      fiber.entry.options.config = unparse ? unparse.call(schema, config) : config
+      fiber.entry.parent.tree.write()
+    })
 
-    ctx.on('internal/update', function (config, _, next) {
+    ctx.on('internal/update', function (config, next) {
       if (!this.entry || this.parent.fiber?.entry === this.entry) return next()
       self.showLog(this.entry, 'reload')
       return next()

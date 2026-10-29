@@ -21,7 +21,7 @@ export interface Context {
   /** The root context of the application (every child context shares it). @experimental */
   root: this
   /** Base URL used to resolve relative plugin/module specifiers, if the runtime sets one. */
-  baseUrl?: string
+  baseUrl?: string | undefined
   /** The event bus. Its methods are also mixed onto `ctx` (`ctx.on`, `ctx.emit`, ...). */
   events: EventsService
   /** The logging service. Call `ctx.logger(name)` for a named logger. */

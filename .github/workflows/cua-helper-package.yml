@@ -1,0 +1,83 @@
+name: Package CUA helper · macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: '同仓库可信源码分支或 dsh-v* tag'
+        type: string
+        default: master
+        required: true
+      preset:
+        description: '机器上的签名配置'
+        type: choice
+        options: [test, production]
+        default: test
+        required: true
+  workflow_call:
+    inputs:
+      source_ref:
+        type: string
+        required: true
+      preset:
+        type: string
+        default: production
+    outputs:
+      artifact:
+        description: '包含两个架构的已签名、公证 helper 归档'
+        value: ${{ jobs.package.outputs.artifact }}
+
+permissions:
+  contents: read
+
+# Desktop uses the same keychain search list and optional system proxy transaction.
+concurrency:
+  group: macos-desktop-package
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: [self-hosted, macOS, ARM64, dsh-mac-package-trial]
+    timeout-minutes: 60
+    outputs:
+      artifact: ${{ steps.artifact.outputs.name }}
+    env:
+      DSH_PACKAGING_PRESET: ${{ inputs.preset }}
+      DSH_TELEMETRY_DISABLED: '1'
+      PACKAGE_SOURCE_REF: ${{ inputs.source_ref }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.source_ref }}
+          persist-credentials: false
+          clean: true
+      - name: Validate source selection
+        run: |
+          node -e 'const cp=require("node:child_process"); const fs=require("node:fs"); const ref=process.env.PACKAGE_SOURCE_REF;
+          if(ref.startsWith("refs/pull/") || /^[a-f0-9]{40}$/i.test(ref)) throw Error("Select a trusted repository branch or release tag");
+          const tag=ref.replace(/^refs\/tags\//, "");
+          if(tag.startsWith("dsh-v") && tag!=="dsh-v"+JSON.parse(fs.readFileSync("package.json","utf8")).version) throw Error("Release tag must match product version");
+          if(!["test","production"].includes(process.env.DSH_PACKAGING_PRESET)) throw Error("Invalid preset");'
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-cua-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build and verify notarized applications
+        run: |
+          mkdir -p dist
+          pnpm exec tsx scripts/cua-helper/package.ts --out dist/cua-helper
+      - name: Name retained artifact
+        id: artifact
+        run: echo "name=cua-helper-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: dist/cua-helper/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

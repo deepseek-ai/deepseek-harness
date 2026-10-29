@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /** Frame interactions with a real store and explicitly driven browser measurements. */
 import type { GlobalStandardProps, RenderOpts } from '@deepseek-ai/dsh-client-ui-slots'
 import { allowAllAccess, bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
@@ -100,7 +101,7 @@ function mountFrame(windowWidth = frameWidth, content?: AppFrameProps['renderSlo
       useFoldedLandscape={bindSnapshotSelector(foldedLandscape)}
       useSessionStatus={useSessionStatus}
       useSessionRetainInfo={() => undefined}
-      useResource={useResource}
+      useContextMenu={contextMenuHook()} useResource={useResource}
       useWorkspaces={sel => sel(workspaceState)}
       {...allowAllAccess}
       t={key => key === 'brand.localBuild' ? 'DSH Local Build' : key}

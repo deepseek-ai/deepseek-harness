@@ -34,15 +34,19 @@
   --dsh-scrollbar-thumb-border: 2px;
 }
 
-/* The Plugins page's centered column: the same 960px cap and
-   clamp(24-48px) inline / 48px bottom inset, so sibling first-level pages
-   share one content frame at every width. */
+/* Matches the Plugins page's 960px column and responsive inline insets. */
 .pageContent {
   max-width: 960px;
   margin: 0 auto;
   /* Inline and bottom insets only: the 28px top inset belongs to the heading
      row, which starts at the window's top edge. */
   padding: 0 clamp(24px, 4vw, 48px) 48px;
+}
+
+@media (max-width: 767px) {
+  .pageContent {
+    padding-inline: 20px;
+  }
 }
 
 /* Page title and creation actions. */

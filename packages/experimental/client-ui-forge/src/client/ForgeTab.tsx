@@ -41,6 +41,8 @@ export interface ForgeTabInjected {
   readonly markReady: (entry: ForgePanelChangeRequest) => Promise<void>
   /** Merge a change request as `request` describes; settles once the outcome is reported. */
   readonly merge: (entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>
+  /** Read the complete checks of an opened change request. */
+  readonly readChecks: NonNullable<ChangeRequestActions['readChecks']>
   /** Check the removed worktree of the Session out again, reporting the outcome. */
   readonly restore: () => void
   /** Open a URL outside the app. */
@@ -155,7 +157,8 @@ function SignIn({ state, copyText, t }: {
  * @returns the tab body.
  */
 export function ForgeTab({
-  useTabInfo, sessionId, usePanel, useHost, useLocale, reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, copyPath,
+  useTabInfo, sessionId, usePanel, useHost, useLocale, reconnect, refresh, remove, markReady, merge, readChecks, restore,
+  openLink, copyText, copyPath,
   reportVisible, createChangeRequest, t,
 }: ForgeTabProps): ReactNode {
   const snapshot = usePanel(current => current)
@@ -186,7 +189,7 @@ export function ForgeTab({
     void refresh().finally(() => { setRefreshing(false) })
   }
   const actions: ChangeRequestActions = {
-    openLink, copyLink: copyText, retry: startRefresh, remove, markReady, merge,
+    openLink, copyLink: copyText, retry: startRefresh, remove, markReady, merge, readChecks,
     viewChanges: (entry) => { viewChanges({ kind: 'change', url: entry.url }) },
   }
   const local = state.local !== null && state.local.files.length > 0 && openChangeRequestOf(state) === undefined ? state.local : null

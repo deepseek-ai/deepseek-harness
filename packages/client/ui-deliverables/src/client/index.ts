@@ -1,3 +1,4 @@
+import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /**
  * Deliverables plugin, browser half: registers the changed-files card and
  * delivery cards into the chat view's turn-tail list, the `changes-review`
@@ -103,13 +104,14 @@ export function apply(ctx: ClientContext): void {
   // The prose side of the same vocabulary: the chat view reaches this face
   // via ctx.get, so its absence — this plugin composed out — is the off state.
   const mentions: ChatFileMentions = {
-    forClosing(owner) {
+    forClosing(owner, _sessionId, getFileTriggerProps) {
       const paths = selectProducedFiles(owner)
       const presented = presentedForClosing(owner)
       if (paths === null && presented.length === 0) return undefined
       return producedFileMentions([...new Set([...paths ?? [], ...presented.map(file => file.path)])], owner.openFile,
         path => t('presented.previewButton', { name: path }),
-        owner.turn.data.get('deliverables')?.produced)
+        owner.turn.data.get('deliverables')?.produced,
+        getFileTriggerProps)
     },
   }
   ctx.provide('chatFileMentions', mentions)

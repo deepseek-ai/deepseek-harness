@@ -54,3 +54,19 @@ describe('ImageLightbox', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
+
+it('leaves Escape to an open context menu before closing the image', () => {
+  const onClose = vi.fn()
+  const view = render(<ImageLightbox src="blob:original" alt="Image" labels={labels} onClose={onClose} />)
+  const menu = document.createElement('div')
+  menu.setAttribute('role', 'menu')
+  menu.tabIndex = 0
+  document.body.append(menu)
+  menu.focus()
+  try {
+    fireEvent.keyDown(view.getByRole('button'), { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+  } finally { menu.remove() }
+  fireEvent.keyDown(view.getByRole('button'), { key: 'Escape' })
+  expect(onClose).toHaveBeenCalledOnce()
+})

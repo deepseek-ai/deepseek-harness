@@ -68,6 +68,8 @@ The existing semantic `DraftSnapshot` retains quote text and clipboard-coordinat
 <a id="shell-and-standard-props"></a>
 ## Shell and standard props
 
+Below 768px, Web view tabs align with the header's 20px left inset. Desktop and wider Web windows retain the additional 8px tab inset.
+
 The shared image slot props keep display choices separate from durable references: `thumbnail` requests a contained attachment-list thumbnail, while `compact` requests a cropped gallery tile. An optional per-image `label` supplies the accessible display name; loading and cache identity still use the original attachment reference. `MessageImagesContentInput` adds optional complete `MessageImageLabels` for the root-scoped `conversation.images.content` Factory. Message, tool, and Factory inputs carry the view's authorized `loadImage` callback explicitly; loading and URL caching remain with the resource owner. [ui-attachment](../ui-attachment/README.md) provides this Factory and owns rendering and the lightbox.
 
 The composer uses a minimum 16px draft font on coarse-pointer devices to avoid focus-triggered browser zoom; larger font preferences still apply.
@@ -181,6 +183,8 @@ The selector must be a pure function of the owner currency. Its non-null return 
 `InputActions.captureInsertion()` captures the draft selection and revision; `insertText(text, span)` inserts one undoable plain-text edit only while that revision is current and the editor permits editing. Asynchronous consumers retain rejected results for user action.
 
 `conversation.input.activity` hosts one control between the model selector and Send. Its `onActiveChange` callback expands that control across the toolbar and hides ordinary accessory controls and the context meter while preserving the editor and submit action. Closing the activity restores those controls with context details closed. The empty hero dock remains collapsed when it has no content. The occupant releases expansion on unmount and owns any activity-specific feedback.
+
+Session title context gestures use the shared [context menu](../ui-context-menu/README.md) with the clicked breadcrumb’s Session. The reusable image gallery receives `getTriggerProps` from its Factory’s injected `useContextMenu` hook.
 
 <a id="model-experience"></a>
 ## Model Experience

@@ -9,32 +9,35 @@
   en: b786affe03adf63c
   zh: aacb5d4af10ca477
 /deepseek-ai-dsh-sdk-client/summary:
-  en: 05b18f61ad4c2f54
-  zh: 19f88d7bcd2cca0f
+  en: 4c382739fc421ff5
+  zh: 5af8ac55e7cbf37a
 /deepseek-ai-dsh-sdk-client/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-sdk-client/use-this-package:
-  en: 6c37c21a2e53376b
-  zh: e707d3e81c1242bd
+  en: e4a67206e52d524e
+  zh: db85694ac394a8ea
 /deepseek-ai-dsh-sdk-client/use-this-package/running-agent-turns-with-deepseekharness:
-  en: 01c58dddd7e62de2
-  zh: 6dbd46e244f3f135
+  en: 1a36c54463e17340
+  zh: ad67f9cbccc56def
+/deepseek-ai-dsh-sdk-client/use-this-package/run-text-and-native-commands:
+  en: 0a0c9f44ccf17841
+  zh: 1f881e22a10dbe49
 /deepseek-ai-dsh-sdk-client/use-this-package/lower-level-control-with-harnessclient:
-  en: 2eb13706964444cb
-  zh: a2640ec27b83113f
+  en: 93f5f28fa70aa1d8
+  zh: 224b850b2f801bf2
 /deepseek-ai-dsh-sdk-client/use-this-package/native-user-questions:
-  en: ea40f378444c8153
-  zh: 96e29c99aa5c15f0
+  en: f5b9d6a7363bd9e5
+  zh: f53b3786d22a729d
 /deepseek-ai-dsh-sdk-client/understand-the-implementation:
   en: 8773f50c51da85f0
   zh: 4649ebc69357deb0
 /deepseek-ai-dsh-sdk-client/understand-the-implementation/design-concept:
-  en: 6632c06d819233cc
-  zh: 207d55d8217ec6b1
+  en: ac3c6eae3f8248fc
+  zh: b929079016396c8e
 /deepseek-ai-dsh-sdk-client/understand-the-implementation/source-map:
-  en: a3c7978a80f5aba3
-  zh: fdc4dfdafd2eccfa
+  en: ee896439a5c07ca3
+  zh: 1b18751fe2db250e
 /deepseek-ai-dsh-sdk-client/understand-the-implementation/owned-activity-flow:
   en: 94a42babac5f1c7d
   zh: df9e42ed02f7d002
@@ -51,8 +54,8 @@
   en: 7abe0be104a791e7
   zh: 445311f78b1069ca
 /deepseek-ai-dsh-sdk-client/known-limitations-and-deferred-work:
-  en: 60100c38c111a0b0
-  zh: 2085486bd36f5e48
+  en: 8a9471513b53821e
+  zh: 898eb17f3c55ad69
 /deepseek-ai-dsh-sdk-client/known-limitations-and-deferred-work/dev-note:
   en: 6177a56f053936a4
   zh: 0f4b20228c2d15da

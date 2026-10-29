@@ -70,6 +70,9 @@
     },
     {
       "path": "../ui-file-drag"
+    },
+    {
+      "path": "../ui-context-menu"
     }
   ]
 }

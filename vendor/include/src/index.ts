@@ -187,14 +187,10 @@ export class Include extends EntryTree {
     this.readonly = !this.type
     this.ctx.baseUrl = new URL('.', pathToFileURL(this.filename)).href
 
-    ctx.on('internal/update', (config, _, next) => {
+    ctx.on('internal/update', (config, next) => {
       if (config.path !== this.config.path) return next()
-      // Veto the fiber restart (children update in place), but persist the new
-      // config ourselves — `Fiber.update` only assigns `this.config` behind
-      // `next()`, and a stale `this.config.patches` would make the next
-      // `refresh()` re-apply the old overlay.
       this.config = config
-      this.root.update(this.applyPatches(this.data!, config.patches)).catch((error) => {
+      return this.root.update(this.applyPatches(this.data!, config.patches)).catch((error) => {
         this.ctx.logger.warn('config update at %C failed', this.filename)
         this.ctx.logger.warn(error)
       })

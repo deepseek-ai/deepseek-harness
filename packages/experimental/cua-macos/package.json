@@ -26,6 +26,7 @@
     "locale/*.json",
     "lib/index.js",
     "native/bin",
+    "cua-helper.json",
     "native/Package.swift",
     "native/Info.plist",
     "native/DSHComputerUse.icns",

@@ -7,7 +7,7 @@
  * scope summary changes; a read keeps the previous changes on screen until it settles.
  */
 
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconCompareSplitOutlineRegular, IconInfoOutlineRegular,
@@ -31,7 +31,7 @@ import type { ReviewSelection } from './review.ts'
 import { parseChangesAddress, type ChangesSource } from './changes-address.ts'
 import type { createChangesStore } from './changes-store.ts'
 import { Counts, DiffFile, type DiffFileAction } from './DiffFile.tsx'
-import { FileTreePane } from './FileTreePane.tsx'
+import { FileTreePane, type FileTreePosition } from './FileTreePane.tsx'
 import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from './ChangedFiles.tsx'
 import { drawnLines, matchesHunks, textLines } from './diff-rows.ts'
 import { ChangeRequestGlyph } from './glyphs.tsx'
@@ -139,6 +139,7 @@ const FAILURE: Partial<Record<string, ForgePanelKey>> = {
   'forgePanel/not-a-checkout': 'checkout.none',
   'forgePanel/no-fork-point': 'diff.noForkPoint',
   'forgePanel/diff-too-large': 'diff.tooLarge',
+  'forgePanel/filter-config-failed': 'diff.filterConfigFailed',
 }
 
 async function readChanges(
@@ -360,7 +361,7 @@ export function ChangesTab({
   const choices = useStore(store => store.byTab[tab.id])
   const [wanted, setWanted] = useState<string | null>(null)
   const [treeState, setTreeState] = useState<ChangedFilesState>({ query: '', collapsed: {}, selected: null })
-  const [treeVisible, setTreeVisible] = useState(true)
+  const [treePosition, setTreePosition] = useState<FileTreePosition>('left')
   const treeId = useId()
   const [chosen, setChosen] = useState<Readonly<Record<string, boolean>>>({})
   // Each navigation applies once; its file, if it names one, opens and scrolls into view.
@@ -424,17 +425,21 @@ export function ChangesTab({
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set())
   const initial = useMemo(() => initiallyOpen(data === null ? [] : data.files), [data])
   const sections = useRef(new Map<string, HTMLElement>())
+  const scrollport = useRef<HTMLDivElement>(null)
+  // A short final file cannot align with the viewport top; retain its jump until the reader scrolls away.
+  const jumpPosition = useRef<{ readonly data: ChangesData; readonly top: number } | null>(null)
   useLayoutEffect(() => {
     if (!tab.visible || wanted === null || data === null) return
     sections.current.get(wanted)?.scrollIntoView({ block: 'start' })
+    if (scrollport.current !== null) jumpPosition.current = { data, top: scrollport.current.scrollTop }
     setWanted(null)
   }, [tab.visible, wanted, data])
   const refresh = (): void => { setAttempt(value => value + 1) }
   const root = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.root : null
-  // A failure with its own message offers no retry; a change request's failure also offers its web page.
+  // Configuration reads may recover after the user fixes Git settings or raises the output limit.
   const message = failed === null ? undefined : FAILURE[failed]
   const changeUrl = source.kind === 'change' ? entry?.snapshot?.url ?? source.url : null
-  const retry = message === undefined
+  const retry = message === undefined || failed === 'forgePanel/filter-config-failed'
 
   /** Apply a change to the unchanged lines of `owner`, unless newer changes replaced it. */
   const update = (owner: ChangesData, change: (value: Expansion) => Expansion): void => {
@@ -496,6 +501,40 @@ export function ChangesTab({
     .filter(path => !data?.files.some(file => file.path === path))
   const orphanRecords = absentPaths.map(path => <OrphanReviews key={path} path={path} actions={recordActions} t={t} />)
 
+  const files = data === null ? [] : data.files
+  const jump = (path: string): void => {
+    setTreeState(value => ({ ...value, selected: path }))
+    setChosen(value => ({ ...value, [path]: true }))
+    setWanted(path)
+  }
+  const navigateFiles = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (!tab.visible || event.defaultPrevented || event.nativeEvent.isComposing
+      || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
+      || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return
+    const viewport = event.currentTarget
+    const origin = event.target
+    const selection = window.getSelection()
+    if (!(origin instanceof HTMLElement) || !viewport.contains(origin)
+      || origin.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [data-forge-comment]') !== null
+      || (selection !== null && !selection.isCollapsed)) return
+    const remembered = jumpPosition.current
+    let index = remembered !== null && remembered.data === data && remembered.top === viewport.scrollTop
+      ? files.findIndex(file => file.path === treeState.selected) : -1
+    if (index < 0) {
+      const top = viewport.getBoundingClientRect().top
+      index = Math.max(0, files.findLastIndex((file) => {
+        const section = sections.current.get(file.path)
+        return section !== undefined && section.getBoundingClientRect().top <= top + 1
+      }))
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    const next = files[index + (event.key === 'ArrowRight' ? 1 : -1)]
+    if (next === undefined) return
+    viewport.focus({ preventScroll: true })
+    jump(next.path)
+  }
+
   let body: ReactNode
   if (data === null) {
     if (state === null && snapshot?.disconnected) {
@@ -526,7 +565,11 @@ export function ChangesTab({
     body = <div className={css.files}>{orphanRecords}<div className={css.centered}>{t('diff.empty')}</div></div>
   } else {
     body = (
-      <div className={css.files} data-forge-changes-scroll="">
+      <div ref={scrollport} className={css.files} data-forge-changes-scroll="" role="region"
+        aria-label={t('diff.allFiles', { count: files.length })} aria-keyshortcuts="ArrowLeft ArrowRight" tabIndex={0}
+        onKeyDown={navigateFiles} onScroll={(event) => {
+          if (jumpPosition.current?.top !== event.currentTarget.scrollTop) jumpPosition.current = null
+        }}>
         {data.files.map((file) => {
           const path = file.path
           return (
@@ -560,7 +603,6 @@ export function ChangesTab({
               badge={badgeOf(file, data, t)}
               tooltip={pathTooltipOf(file, t)}
               actions={fileActions(data, file)}
-              onCopyPath={() => { copyPath(path) }}
               sectionRef={(element) => {
                 if (element === null) sections.current.delete(path)
                 else sections.current.set(path, element)
@@ -573,20 +615,16 @@ export function ChangesTab({
       </div>
     )
   }
-  const files = data === null ? [] : data.files
   const navigator: ChangedFilesProps = {
     files, state: treeState, t,
     filter: (query) => { setTreeState(value => ({ ...value, query })) },
     toggle: (path) => { setTreeState(value => ({ ...value, collapsed: { ...value.collapsed, [path]: value.collapsed[path] !== true } })) },
-    jump: (path) => {
-      setTreeState(value => ({ ...value, selected: path }))
-      setChosen(value => ({ ...value, [path]: true }))
-      setWanted(path)
-    },
+    jump,
   }
   // The toolbar collapses every file while any is expanded, as the files on screen show, and expands every file otherwise.
   const anyExpanded = files.some(file => chosen[file.path] ?? initial.has(file.path))
   const expansionLabel = t(anyExpanded ? 'diff.collapseAll' : 'diff.expandAll')
+  const treeAction = t(treePosition === 'left' ? 'diff.moveFileTreeRight' : treePosition === 'right' ? 'diff.hideFileTree' : 'diff.showFileTreeLeft')
   let additions = 0
   let deletions = 0
   for (const file of files) {
@@ -637,10 +675,10 @@ export function ChangesTab({
             </button>
           </Tooltip>
           <span className={css.treeToggle}>
-            <Tooltip label={t(treeVisible ? 'diff.hideFileTree' : 'diff.showFileTree')} side="bottom">
-              <button type="button" className={css.tool} aria-label={t('diff.fileTree')} aria-expanded={treeVisible}
-                aria-pressed={treeVisible} aria-controls={treeId} disabled={files.length === 0}
-                onClick={() => { setTreeVisible(value => !value) }}>
+            <Tooltip label={treeAction} side="bottom">
+              <button type="button" className={css.tool} aria-label={treeAction} aria-expanded={treePosition !== 'hidden'}
+                aria-controls={treeId} disabled={files.length === 0}
+                onClick={() => { setTreePosition(value => value === 'left' ? 'right' : value === 'right' ? 'hidden' : 'left') }}>
                 <IconWorkspaceTreeOutlineRegular />
               </button>
             </Tooltip>
@@ -659,7 +697,7 @@ export function ChangesTab({
       {reviewForm}
       <div className={css.body}>
         {body}
-        {files.length > 0 && <FileTreePane {...navigator} id={treeId} open={treeVisible} />}
+        {files.length > 0 && <FileTreePane {...navigator} id={treeId} position={treePosition} />}
       </div>
     </div>
   )
