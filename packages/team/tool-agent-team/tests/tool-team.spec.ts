@@ -97,20 +97,28 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0], enabl
   return { ctx, lead, fiber, adapter, queryFiber, namesFiber }
 }
 
-function execute(
+async function execute(
   ctx: Context,
   agent: Agent | undefined,
   name: string,
   args: unknown,
   signal: AbortSignal = SIGNAL,
 ) {
-  return executeToolFixture(ctx, {
-    callId: ToolCallId(`team-call-${++callNumber}`),
-    name,
-    arguments: args,
-    signal,
-    ...agent === undefined ? {} : { agent },
+  const toolSet = agent === undefined ? undefined : await ctx.tools.resolve({
+    agent, modelSelection: { provider: 'mock', model: 'mock' }, signal,
   })
+  try {
+    return await executeToolFixture(ctx, {
+      callId: ToolCallId(`team-call-${++callNumber}`),
+      name,
+      arguments: args,
+      signal,
+      ...toolSet === undefined ? {} : { toolSet },
+      ...agent === undefined ? {} : { agent },
+    })
+  } finally {
+    toolSet?.dispose()
+  }
 }
 
 function text(result: Awaited<ReturnType<typeof execute>>): string {
@@ -134,6 +142,12 @@ async function startWait(ctx: Context, agent: Agent) {
 /** Start a continuable child and record its display name after acceptance. */
 async function spawn(ctx: Context, lead: Agent, description: string | undefined, prompt: string, provider = 'spawn'): Promise<SubagentActivation & { readonly name: string }> {
   const reservation = ctx.subagentNames.reserve(lead.session, lead.id, `child-${randomUUID()}`)
+  // Bind the name before request admission so identity assertions do not depend on scheduling.
+  const named = Promise.withResolvers<undefined>()
+  const stop = ctx.on('agent/request', async ({ agent }, next) => {
+    if (agent.session.header.parentSession === lead.id) await named.promise
+    return next()
+  })
   try {
     const started = await ctx.subagents.startActivation({
       provider,
@@ -145,6 +159,8 @@ async function spawn(ctx: Context, lead: Agent, description: string | undefined,
     ctx.subagentNames.bind(lead.session, started.childId, reservation.name)
     return { ...started, name: reservation.name }
   } finally {
+    named.resolve(undefined)
+    stop()
     reservation.dispose()
   }
 }
@@ -152,7 +168,12 @@ async function spawn(ctx: Context, lead: Agent, description: string | undefined,
 async function assembly(ctx: Context, agent: Agent) {
   const scope = scopeOf(agent.ctx)
   if (scope === undefined) throw new Error('expected Agent scope')
-  return ctx.systemPrompt.assemble({ scope, agent })
+  const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'mock', model: 'mock' }, signal: SIGNAL })
+  try {
+    return await ctx.systemPrompt.assemble({ scope, agent, toolSet })
+  } finally {
+    toolSet.dispose()
+  }
 }
 
 function teamTools(assembled: Awaited<ReturnType<typeof assembly>>): string[] {
@@ -258,7 +279,7 @@ describe('dsh-tool-team', () => {
     expect(leadPrompt).toContain('Task readiness does not start an agent')
     expect(leadPrompt).toContain('Task changes do not end wait_agent calls')
     expect(renderContextSnapshot(leadAssembly)).toContain(teamIdentity('lead'))
-    expect((await ctx.systemPrompt.assemble()).contexts.some(context => context.name === 'team:identity')).toBe(false)
+    expect(renderContextSnapshot(await ctx.systemPrompt.assemble())).not.toContain('Your team lead is')
     expect(leadAssembly.tools.map(schema => schema.name)).not.toContain('spawn_teammate')
     // Messaging, listing, and interruption stay the global subagent controls.
     for (const name of ['send_message', 'list_agents', 'interrupt_agent', 'wait_agent']) {
@@ -302,7 +323,7 @@ describe('dsh-tool-team', () => {
     } else {
       expect(JSON.stringify(childRequest.messages)).not.toContain('Parent task')
     }
-    expect(runtimeContextText(adapter.requests[1]!)).toContain(teamIdentity(childId))
+    expect(runtimeContextText(adapter.requests[1]!)).toContain(teamIdentity(childActivation.name))
   })
 
   it('appends the new Lead id after inherited history in an ordinary fork', async () => {
@@ -427,7 +448,7 @@ describe('dsh-tool-team', () => {
     const childId = childActivation.childId
     await waitNoAgent(ctx, childId)
     expect(renderContextSnapshot(await assembly(ctx, lead))).toContain(teamIdentity('lead'))
-    expect(runtimeContextText(adapter.requests[0]!)).toContain(teamIdentity(childId))
+    expect(runtimeContextText(adapter.requests[0]!)).toContain(teamIdentity(childActivation.name))
   })
 
   it('keeps ordinary inbox waiting when the task plugin unloads', async () => {
@@ -727,7 +748,7 @@ describe('dsh-tool-team', () => {
     })).isError).toBe(true)
   })
 
-  it('removes and reinstalls every scoped registration across plugin HMR without stopping the child', async () => {
+  it('removes and reinstalls every Team registration across plugin HMR without stopping the child', async () => {
     const { ctx, lead, fiber } = await setup(['hang'])
     const childActivation = await spawn(ctx, lead, 'hmr-worker', 'wait')
     const childId = childActivation.childId
@@ -867,10 +888,10 @@ describe('dsh-tool-team', () => {
     expect(await afterCommit.result).toMatchObject({ isError: false, value: { timedOut: true } })
   })
 
-  it('rolls back partial scoped installation after a same-scope collision', async () => {
+  it('rolls back plugin registrations after a global tool collision', async () => {
     const { ctx, lead, fiber } = await setup([])
     await fiber.dispose()
-    lead.ctx.tools.register(defineContentToolFixture({
+    ctx.tools.register(defineContentToolFixture({
       name: 'team_task_create',
       description: 'intentional collision',
       parameters: {},
@@ -956,7 +977,7 @@ describe('dsh-tool-team', () => {
     expect(lead.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
   })
 
-  it('finishes a dispatched task tool after disabling removes its registration', async () => {
+  it('finishes an admitted task mutation after Team is disabled', async () => {
     const { ctx, lead } = await setup([])
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
@@ -975,7 +996,7 @@ describe('dsh-tool-team', () => {
       const built = await assembly(ctx, lead)
       expect(teamTools(built)).toEqual([])
       expect(renderPrompt(built)).not.toContain('A shared task board is available')
-      expect(built.contexts.some(context => context.name === 'team:identity')).toBe(false)
+      expect(renderContextSnapshot(built)).not.toContain('Your team lead is')
     } finally {
       release.resolve(undefined)
       await Promise.allSettled([creating, disabling])
@@ -987,49 +1008,40 @@ describe('dsh-tool-team', () => {
     expect(ctx.agentTeams.listTasks(lead)).toEqual([expect.objectContaining({ subject: 'started' })])
   })
 
-  it('retries failed tool installation without appending another selection', async () => {
-    const { ctx, lead } = await setup([], false)
-    const removeCollision = lead.ctx.tools.register(defineContentToolFixture({
-      name: 'team_task_create',
-      description: 'intentional collision',
-      parameters: {},
-      async execute() { return [{ type: 'text', text: 'collision' }] },
-    }))
-    await expect(ctx.agentTeams.setEnabled(lead, true)).rejects.toBeInstanceOf(AggregateError)
-    expect(ctx.agentTeams.isEnabled(lead)).toBe(true)
-    expect((await assembly(ctx, lead)).contexts.some(context => context.name === 'team:identity')).toBe(false)
-    removeCollision()
-    await ctx.agentTeams.setEnabled(lead, true)
-    expect(teamTools(await assembly(ctx, lead))).toEqual(TEAM_TOOLS)
-    expect(lead.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
+  it('reads Team mode for prompts independently of tool restrictions', async () => {
+    const { ctx, lead } = await setup([])
+    lead.ctx.tools.restrict({ deny: TEAM_TOOLS })
+    const built = await assembly(ctx, lead)
+    expect(teamTools(built)).toEqual([])
+    expect(renderPrompt(built)).toContain('A shared task board is available')
+    expect(renderContextSnapshot(built)).toContain(teamIdentity('lead'))
+    await ctx.agentTeams.setEnabled(lead, false)
+    const disabled = await assembly(ctx, lead)
+    expect(renderPrompt(disabled)).not.toContain('A shared task board is available')
+    expect(renderContextSnapshot(disabled)).not.toContain('Your team lead is')
   })
 
-  it('isolates mode changes from failed tool installation in another tree', async () => {
-    const { ctx, lead } = await setup([])
-    const other = await ctx.agents.create({
-      sessionId: SessionId('colliding-root'), agentOptions: { provider: 'mock', model: 'mock' },
-    })
-    const removeCollision = other.agent.ctx.tools.register(defineContentToolFixture({
-      name: 'team_task_create',
-      description: 'intentional collision',
-      parameters: {},
-      async execute() { return [{ type: 'text', text: 'collision' }] },
-    }))
-    await expect(ctx.agentTeams.setEnabled(other.agent, true)).rejects.toBeInstanceOf(AggregateError)
-
-    const flush = vi.spyOn(ctx.sessions, 'flush')
-    await ctx.agentTeams.setEnabled(lead, false)
-    expect(flush).toHaveBeenCalledWith(lead.session)
-    expect(teamTools(await assembly(ctx, lead))).toEqual([])
+  it('keeps step admission stable while task operations enforce the current mode', async () => {
+    const { ctx, lead } = await setup([], false)
+    const resolve = () => ctx.tools.resolve({ agent: lead, modelSelection: { provider: 'mock', model: 'mock' }, signal: SIGNAL })
+    const disabled = await resolve()
     await ctx.agentTeams.setEnabled(lead, true)
-    expect(teamTools(await assembly(ctx, lead))).toEqual(TEAM_TOOLS)
-    expect(teamTools(await assembly(ctx, other.agent))).toEqual(['team_task_create'])
-
-    removeCollision()
-    await ctx.agentTeams.setEnabled(other.agent, true)
-    expect(teamTools(await assembly(ctx, other.agent))).toEqual(TEAM_TOOLS)
-    expect(other.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toHaveLength(1)
-    await other.dispose()
+    const enabled = await resolve()
+    const input = {
+      agent: lead, name: 'team_task_list', arguments: {}, signal: SIGNAL,
+      callId: ToolCallId('admitted-before-mode-change'),
+    }
+    try {
+      expect((await executeToolFixture(ctx, { ...input, toolSet: disabled })).error?.info?.code).toBe('UNKNOWN_TOOL')
+      expect((await executeToolFixture(ctx, { ...input, toolSet: enabled })).isError).toBe(false)
+      await ctx.agentTeams.setEnabled(lead, false)
+      expect(ctx.tools.schemas(lead, enabled).map(tool => tool.name)).toEqual(expect.arrayContaining(TEAM_TOOLS))
+      expect((await executeToolFixture(ctx, { ...input, toolSet: enabled })).error?.info?.code).toBe('TEAM_DISABLED')
+      expect((await execute(ctx, lead, 'team_task_list', {})).error?.info?.code).toBe('UNKNOWN_TOOL')
+    } finally {
+      disabled.dispose()
+      enabled.dispose()
+    }
   })
 
   it('installs Team scope before a cold-resumed teammate request', async () => {
@@ -1098,17 +1110,17 @@ describe('dsh-tool-team', () => {
   ])('propagates unexpected identity lookup failures: %s', async (failure) => {
     const { ctx, lead } = await setup([])
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw failure })
-    await expect(assembly(ctx, lead)).rejects.toBe(failure)
-    await expect(ctx.agents.create({ sessionId: SessionId('lookup-failure'), agentOptions: { provider: 'mock', model: 'mock' } })).rejects.toBe(failure)
+    await expect(assembly(ctx, lead)).rejects.toMatchObject({ code: 'TOOL_ACTIVATION_FAILED', cause: failure })
+    await expect(ctx.systemPrompt.assemble({ scope: lead, agent: lead })).rejects.toBe(failure)
   })
 
-  it('reports unavailable identity without a creation-parent hint', async () => {
+  it('omits Team guidance when its root is unavailable', async () => {
     const { ctx, lead } = await setup([])
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => {
       throw new SubagentError('Team root is unavailable', 'UNAUTHORIZED')
     })
     const context = renderContextSnapshot(await assembly(ctx, lead))
-    expect(context).toContain('Your Team root agent is unavailable. Continue independent work;')
+    expect(context).not.toContain('Your team lead is')
     expect(context).not.toContain('Your parent agent name')
   })
 
@@ -1119,6 +1131,6 @@ describe('dsh-tool-team', () => {
     expect(text(result)).toContain('unknown tool "team_task_list"')
     expect('default' in toolTeam).toBe(false)
     expect(toolTeam.name).toBe('tool-agent-team')
-    expect(toolTeam.inject).toEqual(['agents', 'agentTeams', 'subagents', 'subagentNames', 'tools', 'systemPrompt'])
+    expect(toolTeam.inject).toEqual(['agentTeams', 'subagents', 'subagentNames', 'tools', 'systemPrompt'])
   })
 })

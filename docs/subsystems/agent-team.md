@@ -75,7 +75,7 @@ interface TeamTaskSnapshot {
 
 ## Web projection
 
-`agentTeam.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. The Web menu calls the same method through `remote.agentTeams.setEnabled`, with the root Session id resolved to its live Agent by the Gateway. Mode writes take effect before awaiting tool synchronization or persistence. Task mutations check the current mode when their queued operation starts; admitted mutations may finish. Mode changes wake current waits after flushing. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
+`agentTeam.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. The Web menu calls the same method through `remote.agentTeams.setEnabled`, with the root Session id resolved to its live Agent by the Gateway. Mode writes take effect before awaiting persistence. Tools resolve availability at step preparation; prompt providers read the selection when evaluated. Task mutations check the current mode when their queued operation starts; admitted mutations may finish. Mode changes do not end inbox waits. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
 
 The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted task or mode record beside the last valid state. Historical roster and mailbox records are not projected. The task panel labels the root as Lead and other owners from catalog labels, Session titles, or ids.
 
@@ -136,15 +136,15 @@ isEnabled(caller: Agent): boolean
 
 /**
  * Save a root Session's Team selection without stopping children or deleting tasks.
- * The selection takes effect before awaiting consumers or persistence. Task mutations
+ * The selection takes effect before awaiting persistence. Tools resolve availability at
+ * step preparation; prompt providers read the selection when evaluated. Task mutations
  * check the current mode when their queued operation starts; admitted operations finish.
- * Current waits end after the selection is flushed.
  * @param agent - exact live root whose tree receives the selection.
  * @param enabled - selected Team mode.
  * @param signal - cancellation checked before changing the selection.
- * @returns fulfillment after the selection flushes and scoped consumers update.
- * @throws when called by a descendant, a consumer fails, or persistence fails. An appended selection remains active;
- * retrying the same selection synchronizes consumers and flushes without a duplicate event.
+ * @returns fulfillment after the selection flushes.
+ * @throws when called by a descendant or persistence fails. An appended selection remains active;
+ * retrying the same selection flushes without a duplicate event.
  */
 @Remote async setEnabled(agent: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>
 
@@ -182,29 +182,6 @@ listTasks(caller: Agent): TeamTaskView[]
  * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED when the task is visible but durability is unknown; read it before retrying.
  */
 async updateTask(caller: Agent, request: UpdateTeamTaskRequest, signal?: AbortSignal): Promise<TeamTaskView>
-```
-
-Types: [Agent](core.md)
-
-Source: [`packages/team/agent-team/src/index.ts`](../../packages/team/agent-team/src/index.ts)
-
-<a id="team-events"></a>
-
-### `team/*` events
-
-<a id="teammode-changed--parallel"></a>
-
-#### `team/mode-changed` — parallel
-
-Synchronize scoped consumers with the root's current Team selection, including retries.
-
-```ts cordis-catalog
-/**
- * Synchronize scoped consumers with the root's current Team selection, including retries.
- * @mode parallel
- * @param root - exact live root whose current selection consumers must read.
- */
-'team/mode-changed'(root: Agent): void
 ```
 
 Types: [Agent](core.md)

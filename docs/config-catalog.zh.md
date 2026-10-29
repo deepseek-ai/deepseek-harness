@@ -3766,7 +3766,7 @@ export type TokenMeterConfig = Record<string, never>
 
 ## `@deepseek-ai/dsh-tool-agent-team`
 
-- `inject`: `agents` · `agentTeams` · `subagents` · `subagentNames` · `tools` · `systemPrompt`
+- `inject`: `agentTeams` · `subagents` · `subagentNames` · `tools` · `systemPrompt`
 - `source`: [`packages/team/tool-agent-team/src/index.ts:19`](../packages/team/tool-agent-team/src/index.ts)
 
 ```ts config-catalog

@@ -24,14 +24,6 @@ export { TeamId, TeamMessageId, TeamTaskId } from './types.ts'
 export { TeamError } from './error.ts'
 
 declare module '@deepseek-ai/cordis' {
-  interface Events {
-    /**
-     * Synchronize scoped consumers with the root's current Team selection, including retries.
-     * @mode parallel
-     * @param root - exact live root whose current selection consumers must read.
-     */
-    'team/mode-changed'(root: Agent): void
-  }
   interface Context {
     agentTeams: TeamService
   }
@@ -95,15 +87,15 @@ export class TeamService extends TypertRemoteService {
 
   /**
    * Save a root Session's Team selection without stopping children or deleting tasks.
-   * The selection takes effect before awaiting consumers or persistence. Task mutations
+   * The selection takes effect before awaiting persistence. Tools resolve availability at
+   * step preparation; prompt providers read the selection when evaluated. Task mutations
    * check the current mode when their queued operation starts; admitted operations finish.
-   * Current waits end after the selection is flushed.
    * @param agent - exact live root whose tree receives the selection.
    * @param enabled - selected Team mode.
    * @param signal - cancellation checked before changing the selection.
-   * @returns fulfillment after the selection flushes and scoped consumers update.
-   * @throws when called by a descendant, a consumer fails, or persistence fails. An appended selection remains active;
-   * retrying the same selection synchronizes consumers and flushes without a duplicate event.
+   * @returns fulfillment after the selection flushes.
+   * @throws when called by a descendant or persistence fails. An appended selection remains active;
+   * retrying the same selection flushes without a duplicate event.
    */
   @Remote
   async setEnabled(agent: Agent, enabled: boolean, signal?: AbortSignal): Promise<void> {
@@ -111,7 +103,6 @@ export class TeamService extends TypertRemoteService {
     if (root !== agent) throw new TeamError('change Team mode from the root Session', 'TEAM_LEAD_REQUIRED')
     signal?.throwIfAborted()
     if (this.isEnabled(root) !== enabled) root.session.append('team/mode', { enabled })
-    await this.ctx.parallel('team/mode-changed', root)
     await this.ctx.sessions.flush(root.session)
   }
 
