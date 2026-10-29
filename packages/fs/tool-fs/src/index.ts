@@ -1,5 +1,5 @@
 /**
- * Model-facing read, read_image, write, and edit tools over `ctx.fs`. This package owns schemas, validation,
+ * Model-facing read, read_image, write, edit, and apply_patch tools over `ctx.fs`. This package owns schemas, validation,
  * read windows, formatting, and observation events, never a concrete provider. An optional
  * event policy supplies mutation guards; without one the tools use unconditional provider calls.
  * @module @deepseek-ai/dsh-tool-fs
@@ -11,6 +11,7 @@ import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { applyReadTool, READ_LIMIT, STREAM_MIN_SIZE } from './read.ts'
 import { applyWriteTool } from './write.ts'
+import { applyApplyPatchTool } from './apply-patch.ts'
 import { applyEditTool } from './edit.ts'
 import { applyReadImageTool } from './read-image.ts'
 import { READ_MAX_BYTES, READ_MAX_LINE_LENGTH } from './read-render.ts'
@@ -32,6 +33,8 @@ export interface Config {
   write?: boolean
   /** Register `edit` and its guidance. Defaults to true. */
   edit?: boolean
+  /** Register `apply_patch` and its guidance beside `edit`. Defaults to false; shipped compositions set it on their `tool-fs` rows. */
+  applyPatch?: boolean
   /** Default and maximum number of lines returned by one `read` call. */
   readLimit?: number
   /** Maximum characters returned for a single line before truncation. */
@@ -47,6 +50,7 @@ export const Config: z<Config> = z.object({
   readImage: z.boolean().default(true),
   write: z.boolean().default(true),
   edit: z.boolean().default(true),
+  applyPatch: z.boolean().default(false),
   readLimit: z.number().default(READ_LIMIT),
   readMaxLineLength: z.number().default(READ_MAX_LINE_LENGTH),
   readMaxBytes: z.number().default(READ_MAX_BYTES),
@@ -87,12 +91,13 @@ export function apply(ctx: Context, config: Config): void {
       applyReadImageTool(imageCtx)
     })
   }
-  // One escalation API shared by both mutating tools: advertisement gating,
+  // One escalation API shared by the mutating tools: advertisement gating,
   // per-call policy resolution, and denial-marker mapping, all keyed off whether
   // the mounted ctx.fs confines (ctx.fs.sandboxMode).
-  if (resolved.write || resolved.edit) {
+  if (resolved.write || resolved.edit || resolved.applyPatch) {
     const sandbox = new FsSandboxController(ctx)
     if (resolved.write) applyWriteTool(ctx, sandbox)
     if (resolved.edit) applyEditTool(ctx, sandbox)
+    if (resolved.applyPatch) applyApplyPatchTool(ctx, sandbox)
   }
 }

@@ -45,6 +45,8 @@ kind: "package-reference"
 
 文件菜单复制不含行号的绝对路径；网址复制保留查询参数与锚点。图片文件在既有文件操作之外，还提供复制图片与下载原图。下载和保存成功后显示共享 Toast，取消选择器时不提示。
 
+文件菜单提供“在侧边栏打开”与“在浮窗中打开”，以 `destination: 'sidebar'` 或 `'float'` 和目标的行号调用 `ctx.sidebarRight.openResourceIn`，从不传菜单所在的分栏。文件已在请求的位置打开时揭示它；在另一位置打开时连同阅读位置移过去，因此菜单可以把预览在停靠列和浮窗之间移动。左键打开文件的行为不变。
+
 -----
 
 <a id="understand-the-implementation"></a>

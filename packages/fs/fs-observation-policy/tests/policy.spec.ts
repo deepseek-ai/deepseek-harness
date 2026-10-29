@@ -237,3 +237,20 @@ describe('disposal releases recorded state (HMR safety)', () => {
     expect(await writeIntent(ctx, target('a.txt'), ownerExec({}))).toBeUndefined()
   })
 })
+
+describe('delete-intent decision', () => {
+  it('rejects unseen and absent sources, returns a present version, and releases its listener on disposal', async () => {
+    const { ctx, fiber } = await setup()
+    const actor = ownerExec({})
+    const t = target('a')
+    const intent = () => ctx.waterfall('fs/delete-intent', t, actor, () => undefined)
+    try {
+      await expect(intent()).rejects.toMatchObject({ code: 'FS_NOT_OBSERVED', message: 'delete requires reading "a" first' })
+      ctx.emit('fs/observed', t, absent, actor)
+      await expect(intent()).rejects.toMatchObject({ code: 'FS_NOT_FOUND', message: 'cannot delete "a": not found' })
+      ctx.emit('fs/observed', t, present('v7'), actor)
+      expect(await intent()).toEqual({ version: 'v7' })
+    } finally { await fiber.dispose() }
+    expect(await intent()).toBeUndefined()
+  })
+})

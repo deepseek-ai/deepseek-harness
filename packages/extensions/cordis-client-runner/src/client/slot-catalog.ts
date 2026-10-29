@@ -273,7 +273,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.assistant-actions\', () => ctx.slots.register(\n      { name: \'conversation.chat.assistant-actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:487',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:493',
   },
   {
     key: 'conversation.chat.commandview',
@@ -325,7 +325,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.commandview\', () => ctx.slots.register(\n      { name: \'conversation.chat.commandview\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:469',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:475',
   },
   {
     key: 'conversation.chat.flow',
@@ -372,7 +372,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.flow\', () => ctx.slots.register(\n      { name: \'conversation.chat.flow\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:425',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:431',
   },
   {
     key: 'conversation.chat.message.images',
@@ -419,7 +419,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.message.images\', () => ctx.slots.register(\n      { name: \'conversation.chat.message.images\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:461',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:467',
   },
   {
     key: 'conversation.chat.node',
@@ -491,17 +491,17 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.node\', () => ctx.slots.register(\n      { name: \'conversation.chat.node\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:437',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:443',
   },
   {
     key: 'conversation.chat.reasoning.body',
     kind: 'single',
     scope: 'session',
-    summary: 'Expanded reasoning body with the unchanged model text.',
-    doc: 'Expanded reasoning body with the unchanged model text. The official entry\nhas priority 100 and calls the reasoning Content Factory; smaller priority\nvalues replace it. Contributions must preserve access to the original text.',
+    summary: 'Expanded reasoning body with raw and display-ready text.',
+    doc: 'Expanded reasoning body with raw and display-ready text. The official entry\nhas priority 100 and calls the reasoning Content Factory; smaller priority\nvalues replace it. Contributions must preserve access to untranslated display text.',
     registerOptions: [],
     ownerProps: [
-      '/** Original model-provided reasoning offered to the expanded Body Slot. */\nexport interface ReasoningBodyOwnerProps {\n  /** Complete or streaming reasoning text. */\n  readonly text: string\n  /** Whether the reasoning tail is still streaming. */\n  readonly running: boolean\n}',
+      '/** Original and display-ready reasoning offered to the expanded Body Slot. */\nexport interface ReasoningBodyOwnerProps {\n  /** Complete or streaming model output. */\n  readonly rawText: string\n  /** Reasoning text prepared for display. */\n  readonly text: string\n  /** Whether the reasoning tail is still streaming. */\n  readonly running: boolean\n}',
     ],
     ownerPropsReferences: [],
     standardProps: [
@@ -535,7 +535,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.reasoning.body\', () => ctx.slots.register(\n      { name: \'conversation.chat.reasoning.body\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:475',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:481',
   },
   {
     key: 'conversation.chat.text-interaction',
@@ -587,7 +587,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.text-interaction\', () => ctx.slots.register(\n      { name: \'conversation.chat.text-interaction\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:422',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:428',
   },
   {
     key: 'conversation.chat.turnTail',
@@ -654,7 +654,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.turnTail\', () => ctx.slots.register(\n      { name: \'conversation.chat.turnTail\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:481',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:487',
   },
   {
     key: 'conversation.chat.user.before',
@@ -704,7 +704,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.user.before\', () => ctx.slots.register(\n      { name: \'conversation.chat.user.before\', select: owner => null },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:451',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:457',
   },
   {
     key: 'conversation.chat.user.images',
@@ -751,7 +751,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.user.images\', () => ctx.slots.register(\n      { name: \'conversation.chat.user.images\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:463',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:469',
   },
   {
     key: 'conversation.composer',
@@ -3778,7 +3778,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'shell.quota-notice\', () => ctx.slots.register(\n      { name: \'shell.quota-notice\', select: owner => null },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:495',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:501',
   },
   {
     key: 'sidebar',
@@ -4490,8 +4490,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'sidebar.right.tab.files.actions',
     kind: 'list',
     scope: 'session',
-    summary: 'Workspace directory actions after the file tree\'s reload control.',
-    doc: 'Workspace directory actions after the file tree\'s reload control.',
+    summary: 'Workspace directory actions after the `files` page\'s reload control.',
+    doc: 'Workspace directory actions after the `files` page\'s reload control.',
     registerOptions: [
       {
         name: 'id',
@@ -4544,7 +4544,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.right.tab.files.actions\', () => ctx.slots.register(\n      { name: \'sidebar.right.tab.files.actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar-files/src/client/index.ts:35',
+    source: 'packages/client/ui-sidebar-files/src/client/index.ts:39',
   },
   {
     key: 'sidebar.right.tab.guide',
@@ -5264,7 +5264,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'useAccess: (action: RemoteEndpoint) => boolean',
       'useTrajectory: UseTrajectory',
     ],
-    keyDomain: 'open: any string the owner dispatches (no compile-time key set), already taken: ask_user_question, bash, cordis_define, cordis_inspect_list, cordis_inspect_query, cordis_inspect_self, cordis_run, cordis_stop, cordis_undefine, create_goal, edit, get_goal, glob, grep, interrupt_agent, job_kill, job_list, job_output, list_agents, list_subagent_models, lsp, present, propose_action, ralph, read, read_image, schedule_create, schedule_delete, schedule_list, schedule_update, send_message, session_event_read, session_event_search, session_event_trace, session_search, session_trace, skill, spawn_teammate, subagent, team_task_create, team_task_get, team_task_list, team_task_update, terminal_close, terminal_list, terminal_open, terminal_read, terminal_signal, todo_write, update_goal, wait_agent, web_fetch, web_search, workflow, write',
+    keyDomain: 'open: any string the owner dispatches (no compile-time key set), already taken: apply_patch, ask_user_question, bash, cordis_define, cordis_inspect_list, cordis_inspect_query, cordis_inspect_self, cordis_run, cordis_stop, cordis_undefine, create_goal, edit, get_goal, glob, grep, interrupt_agent, job_kill, job_list, job_output, list_agents, list_subagent_models, lsp, present, propose_action, ralph, read, read_image, schedule_create, schedule_delete, schedule_edit, schedule_list, schedule_update, schedule_view, send_message, session_event_read, session_event_search, session_event_trace, session_search, session_trace, skill, spawn_teammate, subagent, team_task_create, team_task_get, team_task_list, team_task_update, terminal_close, terminal_list, terminal_open, terminal_read, terminal_signal, todo_write, update_goal, wait_agent, web_fetch, web_search, workflow, write',
     hookContext: '',
     slotInject: '',
     declaredBy: 'an entry in \'conversation.chat.node\' (client-ui-tool), so it exists while that entry is mounted',
@@ -5278,6 +5278,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-tool DetailsRow key \'update_goal\'',
       'client-ui-tool DetailsRow key \'schedule_create\'',
       'client-ui-tool DetailsRow key \'schedule_list\'',
+      'client-ui-tool DetailsRow key \'schedule_view\'',
+      'client-ui-tool DetailsRow key \'schedule_edit\'',
       'client-ui-tool DetailsRow key \'schedule_delete\'',
       'client-ui-tool DetailsRow key \'schedule_update\'',
       'client-ui-tool DetailsRow key \'cordis_inspect_list\'',
@@ -5310,6 +5312,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-tool DetailsRow key \'team_task_update\'',
       'client-ui-tool DetailsRow key \'team_task_list\'',
       'client-ui-tool DetailsRow key \'wait_agent\'',
+      'client-ui-tool FileMutationRow key \'apply_patch\'',
       'client-ui-tool FileMutationRow key \'edit\'',
       'client-ui-tool FileMutationRow key \'write\'',
       'client-ui-tool ReadImageRow key \'read_image\'',

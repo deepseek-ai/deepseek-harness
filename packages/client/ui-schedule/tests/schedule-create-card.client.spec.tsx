@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
-import type { ScheduleCatalogEntry, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
+import type { ScheduleId, ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import { ScheduleCreateCard, type ScheduleCreateCardProps } from '../src/client/ScheduleCreateCard.tsx'
@@ -33,6 +33,15 @@ const weeklyTask = {
 const cronTask = {
   id: 'task-cron', kind: 'cron', title: 'Check the deployment', prompt: PROMPT,
   scheduledAt: '2026-10-01T01:15:00.000Z', expression: '*/15 9-17 * * 1-5', timeZone: 'Asia/Shanghai',
+}
+
+/** A `schedule_create` result as the current tool returns it: the created Host task. */
+const hostTask = { kind: 'rrule',
+  id: 'task-host', title: 'Check the deployment', prompt: PROMPT,
+  rrule: 'DTSTART;TZID=Asia/Shanghai:20261005T090000\nRRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE',
+  scheduledAt: '2026-10-05T01:00:00.000Z', target: { kind: 'session', sessionId: 'session-alpha' },
+  involvedSessionIds: ['session-alpha'], status: 'active', createdAt: '2026-10-01T00:00:00.000Z',
+  updatedAt: '2026-10-01T00:00:00.000Z',
 }
 
 afterEach(cleanup)
@@ -68,11 +77,13 @@ function settled(value: unknown, options: {
   } as ToolBlock
 }
 
-/** One catalog entry the settled read holds for a narrowed fixture. */
-function catalogEntry(fixture: unknown, status: ScheduleCatalogEntry['status'] = 'active'): ScheduleCatalogEntry {
-  const task = narrowScheduleRecord(fixture)
-  if (task === undefined) throw new Error('fixture must narrow to a rule')
-  return { ...task, sessionId: 'session-alpha' as SessionId, status }
+/** The settled catalog row of the created task after an edit renamed it and moved it to a weekly rule. */
+const changedTask: ScheduleCatalogEntry = { kind: 'rrule',
+  id: dailyTask.id as ScheduleId, title: 'Updated deployment check', prompt: PROMPT,
+  rrule: 'DTSTART;TZID=Asia/Shanghai:20261005T090000\nRRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE',
+  scheduledAt: '2026-10-05T01:00:00.000Z', target: { kind: 'session', sessionId: 'session-alpha' as SessionId },
+  involvedSessionIds: ['session-alpha' as SessionId], status: 'active', createdAt: '2026-10-01T00:00:00.000Z',
+  updatedAt: '2026-10-02T00:00:00.000Z',
 }
 
 /** Component props with an injected open action; the framework fills the rest. */
@@ -96,6 +107,9 @@ describe('narrowScheduleRecord', () => {
     ['a title and instruction whose first line is empty', { ...dailyTask, title: '', prompt: '\nCheck the deployment' }],
     ['no target', { ...dailyTask, scheduledAt: undefined }],
     ['an unknown kind', { ...dailyTask, kind: 'cronx' }],
+    ['RRULE text without its kind', { ...hostTask, kind: undefined }],
+    ['an RRULE without its expression', { ...hostTask, rrule: undefined }],
+    ['an empty RRULE expression', { ...hostTask, rrule: '' }],
     ['an after rule without its delay', { ...dailyTask, kind: 'after' }],
     ['an every rule without its interval', { ...dailyTask, kind: 'every' }],
     ['a daily rule without its time', { id: 'x', kind: 'daily', prompt: PROMPT, scheduledAt: dailyTask.scheduledAt, timeZone: 'UTC' }],
@@ -180,6 +194,13 @@ describe('scheduleCreateCardModel', () => {
   it('reads no task from a replayed result that is not a complete rule', () => {
     expect(scheduleCreateCardModel(settled({ code: 'invalid_rule', message: 'no' }), TOOL).task).toBeUndefined()
   })
+
+  it('reads the created Host task with its stored rule', () => {
+    expect(scheduleCreateCardModel(settled(hostTask), TOOL).task).toEqual({ kind: 'rrule',
+      id: hostTask.id, title: hostTask.title, prompt: PROMPT, scheduledAt: hostTask.scheduledAt, rrule: hostTask.rrule,
+    })
+    expect(narrowScheduleRecord(hostTask)).toEqual(scheduleCreateCardModel(settled(hostTask), TOOL).task)
+  })
 })
 
 describe('ScheduleCreateCard', () => {
@@ -222,6 +243,7 @@ describe('ScheduleCreateCard', () => {
     [{ ...dailyTask, kind: 'every', everySeconds: 300, time: undefined, timeZone: undefined }, 'Every 5 minutes'],
     [dailyTask, `Daily at 23:00 (${zoneLabel('Asia/Shanghai', makeTranslate(en))})`],
     [weeklyTask, `Weekly on Mon, Wed at 09:00 (${zoneLabel('Asia/Shanghai', makeTranslate(en))})`],
+    [hostTask, `Weekly on Mon, Wed at 09:00 (${zoneLabel('Asia/Shanghai', makeTranslate(en))})`],
   ])('formats the frequency line of one created task', (task, frequency) => {
     render(<ScheduleCreateCard {...props(settled(task))} />)
     expect(screen.getByText(frequency)).toBeDefined()
@@ -267,9 +289,8 @@ describe('ScheduleCreateCard', () => {
   })
 
   it('shows the current rule and name of a task that changed', () => {
-    const current = catalogEntry({ ...weeklyTask, id: dailyTask.id, title: 'Updated deployment check' })
     const openTaskDetail = vi.fn()
-    render(<ScheduleCreateCard {...props(settled(dailyTask), openTaskDetail)} currentTask={current} />)
+    render(<ScheduleCreateCard {...props(settled(dailyTask), openTaskDetail)} currentTask={changedTask} />)
     expect(screen.getByText('Updated deployment check')).toBeDefined()
     expect(screen.getByText(`Weekly on Mon, Wed at 09:00 (${zoneLabel('Asia/Shanghai', makeTranslate(en))})`))
       .toBeDefined()

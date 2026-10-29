@@ -3,68 +3,86 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/schedule/tool-schedule/README.md
 /:
-  en: 5bcd39034f505033
-  zh: 9bfd85a1ad52bc67
+  en: d77b6ecc8e63e0f2
+  zh: 19ff500139aec118
 /deepseek-ai-dsh-tool-schedule:
   en: eb91320d8594cfca
   zh: 7a900a2029baafa5
 /deepseek-ai-dsh-tool-schedule/summary:
-  en: 3552ccd992a1540e
-  zh: 13241608f0b9fc8a
+  en: c7480ff7361e0c8f
+  zh: 4b6833658ca71cb8
 /deepseek-ai-dsh-tool-schedule/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-tool-schedule/use-this-package:
-  en: a692cac1bda0f1bc
-  zh: 3cc2e4bff8062e4e
+  en: d54bb40aa19d48e9
+  zh: 5ff029a30b4ee2c4
 /deepseek-ai-dsh-tool-schedule/use-this-package/when-to-choose-it:
-  en: a9203babc3d8db01
-  zh: 4b26bfe528f39972
+  en: 398e453a30e458b1
+  zh: 049514128eee6bda
+/deepseek-ai-dsh-tool-schedule/use-this-package/user-authorization:
+  en: bf63fe71777703fe
+  zh: 3935ef0931f9b50f
 /deepseek-ai-dsh-tool-schedule/use-this-package/the-four-tools:
-  en: f8aae686d0531c29
-  zh: 3cccd1ba81aae48d
+  en: 7b192d94290c0e38
+  zh: fdb6963131cb1cab
 /deepseek-ai-dsh-tool-schedule/use-this-package/minimal-configuration:
-  en: eef3a83c0ffb2931
-  zh: 9b527abfde4c3406
+  en: 4da5d0e7bff6f5b3
+  zh: 093699c732eacf72
 /deepseek-ai-dsh-tool-schedule/understand-the-implementation:
-  en: 065702b7a82b8fa1
-  zh: 642037baaa2c0f1d
+  en: b3bbc30caad60d2a
+  zh: a0c2fa3e8e085759
 /deepseek-ai-dsh-tool-schedule/understand-the-implementation/source-map:
-  en: 676c4e0595fcc8dd
-  zh: f02ed861f66e7747
+  en: 9d899dc328be7e20
+  zh: f0c353326e644395
 /deepseek-ai-dsh-tool-schedule/further-exploration:
-  en: 1484566b323c3cff
-  zh: 1b1b9fbf85daf3fa
+  en: d41b7d0d315a7086
+  zh: f69c26b34721ffde
 /deepseek-ai-dsh-tool-schedule/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
+/deepseek-ai-dsh-tool-schedule/model-experience/shared-system-prompt:
+  en: eb7c154ebdf40bd7
+  zh: 40f739f10eb4c89e
+/deepseek-ai-dsh-tool-schedule/model-experience/shared-system-prompt/what-the-model-sees:
+  en: bf567fba90b70e70
+  zh: 9b2e01bd756c9b20
+/deepseek-ai-dsh-tool-schedule/model-experience/shared-system-prompt/what-the-model-sees/task-authorization:
+  en: 286eac8fa217213b
+  zh: 805ac84224bc2140
+/deepseek-ai-dsh-tool-schedule/model-experience/shared-system-prompt/token-effect:
+  en: f943e9c303ec4c7b
+  zh: f44cb084c17b6d2b
+/deepseek-ai-dsh-tool-schedule/model-experience/shared-system-prompt/kv-cache-effect:
+  en: 8ecdb4f045cb35e5
+  zh: 46cd350ee096511d
 /deepseek-ai-dsh-tool-schedule/model-experience/tool-schemas:
   en: 3039bc5e7a796b21
   zh: 6b7a9eaf69c9ea53
 /deepseek-ai-dsh-tool-schedule/model-experience/tool-schemas/what-the-model-sees:
-  en: 0056efd9de0ecd8c
-  zh: 6887c2dd9ed8587f
+  en: c78c5a1ae65173ea
+  zh: 04533f81725efa04
 /deepseek-ai-dsh-tool-schedule/model-experience/tool-schemas/token-effect:
   en: 70fb9094859d0804
   zh: 30726b045484713c
 /deepseek-ai-dsh-tool-schedule/model-experience/tool-schemas/kv-cache-effect:
   en: 332231fb9f1b8146
   zh: eace0b2e789d1c0f
-/deepseek-ai-dsh-tool-schedule/model-experience/reminder-results:
-  en: ffeb087f9476fddf
-  zh: 94569d39555d5192
-/deepseek-ai-dsh-tool-schedule/model-experience/reminder-results/what-the-model-sees:
-  en: 68ce690c2d5c2312
-  zh: d3a9fca950518702
-/deepseek-ai-dsh-tool-schedule/model-experience/reminder-results/token-effect:
-  en: a08931b2c5048399
-  zh: 758ea2131adb23e4
-/deepseek-ai-dsh-tool-schedule/model-experience/reminder-results/kv-cache-effect:
+/deepseek-ai-dsh-tool-schedule/model-experience/task-results:
+  en: c47b2272c94ac202
+  zh: 6a5bcfde187b3007
+/deepseek-ai-dsh-tool-schedule/model-experience/task-results/what-the-model-sees:
+  en: 18459cc1f3009e83
+  zh: 00a9e870dae49f58
+/deepseek-ai-dsh-tool-schedule/model-experience/task-results/token-effect:
+  en: 681160f74fec9bec
+  zh: c4cec94e94c56aa8
+/deepseek-ai-dsh-tool-schedule/model-experience/task-results/kv-cache-effect:
   en: 2fbf2175168e8244
   zh: 9c4c1964ae59e661
 /deepseek-ai-dsh-tool-schedule/known-limitations-and-deferred-work:
-  en: 7623c6ce4dc40597
-  zh: ad91348cb37d0ec6
+  en: a160cb125b7c20a1
+  zh: 708113b410d87d46
 /deepseek-ai-dsh-tool-schedule/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: b2ee0fbaa165910d

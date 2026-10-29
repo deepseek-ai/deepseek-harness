@@ -101,7 +101,7 @@ describe('ChangesTabTitle', () => {
   function title(contentId: string) {
     const info: SidebarRightTabInfo = {
       sidebar: { expanded: true, fullscreen: false },
-      panel: { id: 'pane-1' as PaneId },
+      panel: { id: 'pane-1' as PaneId, isFloating: false },
       tab: {
         id: 'tab-1' as TabId, kind: 'forge-changes', contentId, title: 'Captured', visible: true,
         navigation: { address: contentId, params: undefined, revision: 1 },
