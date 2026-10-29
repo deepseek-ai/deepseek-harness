@@ -89,13 +89,19 @@ export function apply(ctx: unknown, config: Config): void {}
   it.each([false, true])('checks fields spread from an imported object schema (undeclared field: %s)', (invalid) => {
     const { root, write } = fixture(`
 import Schema from '@deepseek-ai/schemastery'
-export interface SharedOptions { limit: number }
+export interface SharedOptions {
+  /** Maximum result count. */
+  limit: number
+}
 export const Shared = Schema.object({ limit: Schema.number(), ${invalid ? 'hidden: Schema.string(),' : ''} })
 `)
     write('packages/test/provider/src/index.ts', `
 import Schema from '@deepseek-ai/schemastery'
 import { Shared as SharedConfig, type SharedOptions } from '@test/runtime/config'
-export interface Config extends SharedOptions { sourceSigning: string }
+export interface Config extends SharedOptions {
+  /** Signature selected for a source build. */
+  sourceSigning: string
+}
 export const Config = Schema.object({ ...SharedConfig.dict, sourceSigning: Schema.string() })
 export function apply(ctx: unknown, config: Config): void {}
 `)
