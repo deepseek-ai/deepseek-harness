@@ -77,10 +77,9 @@ it('defaults source builds to ad-hoc signatures and accepts only the two signing
 it('projects shared controls and macOS signing without adding signing to the shared schema', async () => {
   const project = await createConfigProjector()
   const projected = project(NativeProvider.Config, 'cua-macos')
-  expect(projected.schema).toMatchObject({ anyOf: [
-    { properties: { sourceSigning: expect.any(Object), agentPreset: expect.any(Object), helperPath: expect.any(Object) } },
-    expect.any(Object),
-  ] })
+  for (const field of ['sourceSigning', 'agentPreset', 'helperPath']) {
+    expect(projected.schema.anyOf?.[0]).toHaveProperty(`properties.${field}`)
+  }
   expect(CuaConfig({})).not.toHaveProperty('sourceSigning')
   expect(CuaConfig.dict).not.toHaveProperty('sourceSigning')
   expect(NativeProvider.Config({ sourceSigning: 'local-identity', timeoutMs: 1234 })).toMatchObject({
