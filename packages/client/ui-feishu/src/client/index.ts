@@ -13,14 +13,14 @@ import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import feishuRemote from '@deepseek-ai/dsh-feishu-cli/remote'
 import { FEISHU_PACKAGE, createConnection } from './connection.ts'
-import { en, NS, zh } from './locales.ts'
+import { de, en, es, fr, ja, NS, pt, ru, zh } from './locales.ts'
 import { FeishuConnectionActivation, FeishuConnectionBadge, FeishuConnectionSection, FeishuConnectionToast } from './FeishuConnection.tsx'
 
 /** Services the Remote mount and the slot registrations need. */
 export const inject = ['remote', 'slots', 'locale']
 
 function registerUi(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'feishu: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'feishu: dictionaries')
   const { connection, face } = createConnection(ctx)
   ctx.effect(() => async () => { await connection.dispose() }, 'feishu: connection')
   ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
