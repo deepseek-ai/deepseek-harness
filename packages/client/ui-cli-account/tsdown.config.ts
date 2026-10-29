@@ -1,6 +1,3 @@
-import { staticLinked } from '../tsdown.client.ts'
+import { clientBundle } from '../tsdown.client.ts'
 
-export default staticLinked(
-  import.meta.dirname,
-  ['lib/types/index.js'],
-)
+export default clientBundle(import.meta.dirname, ['lib/types/index.js'])

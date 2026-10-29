@@ -1,4 +1,4 @@
-/** Required performance budgets for compiled Client history folding and tool preparation. */
+/** Required performance budgets for compiled Client history folding and live Assistant updates. */
 
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -10,8 +10,8 @@ import {
   ciTimeBudget,
   PERFORMANCE_BUDGET_HEADROOM,
 } from '../support/calibration.ts'
-import { recordTimings, type BenchmarkCase } from '../support/scaling-report.ts'
-import type { ConversationFoldWorkerReport, PreparingToolWorkerReport } from './conversation-fold.worker.client.ts'
+import { recordPeakMemory, recordTimings, type BenchmarkCase } from '../support/scaling-report.ts'
+import type { ConversationFoldWorkerReport, PreparingToolWorkerReport, StreamingAssistantWorkerReport } from './conversation-fold.worker.client.ts'
 
 /** Replies in the folded window; each carries one reasoning block and one text block. */
 const TURNS = 200
@@ -53,6 +53,20 @@ const PREPARING_CASES = [
   { tool: 'write', characters: 512 * 1024, expectedMs: 300, expectedMb: 30 },
   { tool: 'bash', characters: 128 * 1024, expectedMs: 150, expectedMb: 8 },
 ] as const
+
+const STREAMING_CHARACTERS = 256 * 1024
+const STREAMING_SAMPLES = 5
+/** Reference-machine expectations; shared CI scaling applies only to elapsed time. */
+const STREAMING_WORKLOADS = [
+  { fragments: 4_096, expectedMs: 12 },
+  { fragments: 16_384, expectedMs: 32 },
+] as const
+const STREAMING_CASES = STREAMING_WORKLOADS.flatMap(workload => [
+  { ...workload, blockType: 'text', pattern: 'ordinary' },
+  { ...workload, blockType: 'reasoning', pattern: 'leading-whitespace' },
+] as const)
+/** Incremental heap while the Assembler, live entries, and published Chat state remain reachable. */
+const EXPECTED_STREAMING_RETAINED_MB = 16
 
 const WORKER = join(
   import.meta.dirname,
@@ -124,6 +138,42 @@ describe('preparing tool arguments', () => {
       affects: PREPARING_AFFECTS[workload.tool],
     }, { medianMs: { ms: medianMs, ioShare: IO_SHARE } }, { medianMs: budgetMs })
     expect(medianMs).toBeLessThanOrEqual(budgetMs)
+    expect(retainedMb).toBeLessThanOrEqual(budgetMb)
+  })
+})
+
+describe('live Assistant text publication', () => {
+  it.each(STREAMING_CASES)('publishes $fragments $blockType deltas with $pattern content within bounded CPU and heap costs', async (workload) => {
+    const samples: StreamingAssistantWorkerReport[] = []
+    for (let index = 0; index < STREAMING_SAMPLES; index++) {
+      const run = await runBuiltBenchmarkWorker<StreamingAssistantWorkerReport>({
+        worker: WORKER,
+        args: ['streaming', workload.blockType, workload.pattern, String(STREAMING_CHARACTERS), String(workload.fragments)],
+        exposeGc: true, timeoutMs: WORKER_TIMEOUT_MS,
+      })
+      expect(run.timedOut, run.stderr).toBe(false)
+      expect(run.signal, run.stderr).toBeNull()
+      expect(run.exitCode, run.stderr).toBe(0)
+      const report = requireReport(run)
+      expect(report.characters).toBe(STREAMING_CHARACTERS)
+      expect(report.fragments).toBe(workload.fragments)
+      samples.push(report)
+    }
+    const median = samples.toSorted((a, b) => a.elapsedMs - b.elapsedMs)[Math.floor(STREAMING_SAMPLES / 2)]!
+    const retainedMb = samples.map(sample => sample.retainedMb).toSorted((a, b) => a - b)[Math.floor(STREAMING_SAMPLES / 2)]!
+    const budgetMs = ciTimeBudget(workload.expectedMs)
+    const budgetMb = EXPECTED_STREAMING_RETAINED_MB * PERFORMANCE_BUDGET_HEADROOM
+    const benchmarkCase: BenchmarkCase = {
+      id: `conversation-fold/streaming-${workload.blockType}-${workload.pattern}-${String(workload.fragments)}`,
+      measures: `Client append, final Chat publication, and complete text read for ${String(STREAMING_CHARACTERS / 1024)} KiB in ${String(workload.fragments)} ${workload.blockType} deltas with ${workload.pattern} content.`,
+      affects: 'Local processing of a long active model response; excludes model pacing, network transport, and browser rendering.',
+    }
+    console.log(JSON.stringify({ benchmark: benchmarkCase.id, samples, medianMs: median.elapsedMs, retainedMb, budgetMs, budgetMb }))
+    recordTimings(benchmarkCase, {
+      medianMs: { ms: median.elapsedMs, cpuMs: median.cpuUserMs + median.cpuSystemMs },
+    }, { medianMs: budgetMs })
+    recordPeakMemory(benchmarkCase, { peakRssMb: Math.max(...samples.map(sample => sample.maxRssMb)) })
+    expect(median.elapsedMs).toBeLessThanOrEqual(budgetMs)
     expect(retainedMb).toBeLessThanOrEqual(budgetMb)
   })
 })

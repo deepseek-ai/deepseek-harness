@@ -1094,6 +1094,44 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(tripwire.warnings).toEqual([])
     }, 60_000)
 
+    it('expands the collapsed column when a floating panel\'s dock control returns its tab', async () => {
+      onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-dock-expands'))
+      const column = await resetSidebar(page)
+      const floats = page.locator('[data-sidebar-right-session]:not([hidden]) [data-dockkit-float]')
+      const open = column.locator('[data-sidebar-right-open]')
+      const selected = (): Promise<string[]> =>
+        column.locator('[role="tab"][aria-selected="true"] [data-dockkit-tab-title]').allTextContents()
+      await proseChip(page).click()
+      await expect.poll(async () => await tabTitles(paneAt(column, 0))).toEqual(['Files', SAMPLE_NAME])
+      await floatByDrag(page, paneAt(column, 0).locator('[data-dockkit-tab]').filter({ hasText: SAMPLE_NAME }))
+      await expect.poll(async () => await floats.count()).toBe(1)
+
+      // The docked column still holds Files while collapsed.
+      await column.locator('[data-sidebar-right-toggle]').click()
+      await expect.poll(async () => await open.count()).toBe(0)
+      await floats.first().locator('[data-dockkit-float-dock]').click()
+      await expect.poll(async () => await open.count()).toBe(1)
+      expect(await floats.count()).toBe(0)
+      await expect.poll(async () => await tabTitles(column)).toEqual(['Files', SAMPLE_NAME])
+      await expect.poll(selected).toEqual([SAMPLE_NAME])
+
+      // Closing the column's only other tab collapses it empty; docking fills it with the tab alone.
+      await floatByDrag(page, column.locator('[data-dockkit-tab]').filter({ hasText: SAMPLE_NAME }))
+      await expect.poll(async () => await floats.count()).toBe(1)
+      const files = column.locator('[data-dockkit-tab]').filter({ hasText: 'Files' })
+      await files.hover()
+      await files.locator('[data-dockkit-tab-close]').click()
+      await expect.poll(async () => await open.count()).toBe(0)
+      await floats.first().locator('[data-dockkit-float-dock]').click()
+      await expect.poll(async () => await open.count()).toBe(1)
+      expect(await floats.count()).toBe(0)
+      await expect.poll(async () => await tabTitles(column)).toEqual([SAMPLE_NAME])
+      await expect.poll(selected).toEqual([SAMPLE_NAME])
+
+      expect(tripwire.pageErrors).toEqual([])
+      expect(tripwire.warnings).toEqual([])
+    }, 60_000)
+
     it('drops a pane whose last tab closes, and follows the last-tab rule on the surface', async () => {
       onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-settle'))
       const column = await resetSidebar(page)

@@ -30,9 +30,6 @@
       "path": "../ui-dockkit"
     },
     {
-      "path": "../ui-cli-account"
-    },
-    {
       "path": "../ui-renderer"
     },
     {

@@ -1,43 +1,16 @@
 /** Browser mirror of one CLI plugin's Host account view and the Plugins page's account actions. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteStream } from '@deepseek-ai/dsh-api-gateway/client'
-import type { CliAccountView, CliOperationId } from '@deepseek-ai/dsh-cli-account/types'
+import type { CliOperationId } from '@deepseek-ai/dsh-cli-account/types'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type {
+  AnyCliAccountView, CliAccountNotice, CliAccountPage, CliAccountRegistration, CliAccountSnapshot, CliOperationKindOf,
+} from './types.ts'
 
-type AnyView = CliAccountView<unknown, string, string>
-type KindOf<View extends AnyView> = NonNullable<View['result']>['kind']
-
-/** A transient outcome the page reports outside its own lifetime; `seq` distinguishes repeats. */
-export interface CliAccountNotice<Notice extends string> {
-  readonly seq: number
-  readonly kind: Notice | 'action-failed'
-}
-
-/** The page's whole view: the Host's account view plus this browser's pending action and notice. */
-export interface CliAccountSnapshot<View extends AnyView, Notice extends string> {
-  /** The Host's view; undefined until the stream reports one. */
-  readonly view: View | undefined
-  /** Whether the Host stream is delivering. */
-  readonly linked: boolean
-  /** Whether the Host stream failed for good, as when the plugin's Host component is not running; `retry` reopens it. */
-  readonly stopped: boolean
-  /** Whether an action this page started has not answered. */
-  readonly busy: boolean
-  readonly notice: CliAccountNotice<Notice> | undefined
-}
-
-/** The plugin's Remote operations the mirror uses and the notices its successes report. */
-export interface CliAccountConnectionOptions<View extends AnyView, Notice extends string> {
-  /** Diagnostic name of the Host stream. */
-  readonly name: string
-  /** Open one generation of the plugin's `follow` stream. */
-  readonly follow: (signal: AbortSignal) => AsyncIterable<View>
-  /** Cancel one operation through the plugin's Remote. */
-  readonly cancel: (id: CliOperationId) => Promise<RemoteResult<void>>
-  /** The notice each operation kind reports when an operation this browser started succeeds; unlisted kinds report none. */
-  readonly notices: Readonly<Partial<Record<KindOf<View>, Notice>>>
-}
+/** The registration's Remote operations and notices, with the Host stream's diagnostic name. */
+export type CliAccountConnectionOptions<View extends AnyCliAccountView> =
+  Pick<CliAccountRegistration<View>, 'follow' | 'cancel' | 'notices'> & { readonly name: string }
 
 function openAuthorizationPage(url: string | undefined): void {
   if (url !== undefined && URL.canParse(url) && new URL(url).protocol === 'https:') window.open(url, '_blank', 'noopener,noreferrer')
@@ -49,10 +22,10 @@ async function settle<T>(call: Promise<RemoteResult<T>>): Promise<T> {
   return result.value
 }
 
-/** One Host subscription per plugin page, shared by every surface of that plugin on the Plugins page. */
-export class CliAccountConnection<View extends AnyView, Notice extends string> {
+/** One Host subscription per registered account, shared by every surface of that account on the Plugins page. */
+export class CliAccountConnection<View extends AnyCliAccountView> {
   /** The page's whole view, published after each stream item or page action settles. */
-  readonly state: SnapshotStore<CliAccountSnapshot<View, Notice>> = createSnapshotStore<CliAccountSnapshot<View, Notice>>({
+  readonly state: SnapshotStore<CliAccountSnapshot<View>> = createSnapshotStore<CliAccountSnapshot<View>>({
     view: undefined, linked: false, stopped: false, busy: false, notice: undefined,
   })
 
@@ -66,19 +39,22 @@ export class CliAccountConnection<View extends AnyView, Notice extends string> {
   private stream!: RemoteStream<View>
   private observing!: Promise<void>
 
-  /** The page actions every plugin's face exposes unchanged, bound so slot handlers can call them directly. */
-  readonly actions = {
-    cancel: (): void => { this.cancel() },
-    openAuthorization: (): void => { this.openAuthorization() },
-    retry: (): void => { this.retry() },
-    dismissNotice: (): void => { this.dismissNotice() },
+  /** The page actions, bound so a plugin's buttons can call them directly. */
+  readonly page: CliAccountPage = {
+    start: (call) => { this.start(call) },
+    cancel: () => { this.cancel() },
+    openAuthorization: () => { this.openAuthorization() },
+    retry: () => { this.retry() },
   }
 
+  /** Clear the current notice; bound for the notice's dismissal. */
+  readonly dismissNotice = (): void => { this.patch({ notice: undefined }) }
+
   /**
-   * @param ctx - the plugin's browser context, carrying the Remote client.
-   * @param options - the plugin's Remote operations and success notices.
+   * @param ctx - the browser context carrying the Remote client.
+   * @param options - the plugin's Remote operations and success notices, and the stream's diagnostic name.
    */
-  constructor(private readonly ctx: Context, private readonly options: CliAccountConnectionOptions<View, Notice>) {
+  constructor(private readonly ctx: Context, private readonly options: CliAccountConnectionOptions<View>) {
     this.subscribe()
   }
 
@@ -117,11 +93,6 @@ export class CliAccountConnection<View extends AnyView, Notice extends string> {
     // Clearing `stopped` before the reopen awaits claims it, so a second retry finds nothing to reopen.
     this.patch({ view: undefined, stopped: false })
     void this.reopen()
-  }
-
-  /** Clear the current notice. */
-  dismissNotice(): void {
-    this.patch({ notice: undefined })
   }
 
   /**
@@ -177,8 +148,10 @@ export class CliAccountConnection<View extends AnyView, Notice extends string> {
     const result = view.result
     if (result?.id !== started.id) return
     this.started = undefined
-    const notice = result.outcome === 'succeeded' ? this.options.notices[result.kind as KindOf<View>] : undefined
-    if (notice !== undefined) this.notify(notice)
+    const operation = result.kind as CliOperationKindOf<View>
+    if (result.outcome === 'succeeded' && this.options.notices[operation] !== undefined) {
+      this.notify({ kind: 'succeeded', operation })
+    }
   }
 
   private async run(operation: () => Promise<void>): Promise<void> {
@@ -188,19 +161,22 @@ export class CliAccountConnection<View extends AnyView, Notice extends string> {
       await operation()
     } catch {
       // The Host keeps the diagnostic; the page reports one retryable outcome.
-      this.notify('action-failed')
+      this.notify({ kind: 'action-failed' })
     } finally {
       this.patch({ busy: false })
     }
   }
 
-  private patch(change: Partial<CliAccountSnapshot<View, Notice>>): void {
+  private patch(change: Partial<CliAccountSnapshot<View>>): void {
     this.state.set({ ...this.state.getSnapshot(), ...change })
   }
 
-  private notify(kind: CliAccountNotice<Notice>['kind']): void {
+  private notify(
+    notice: { readonly kind: 'succeeded'; readonly operation: CliOperationKindOf<View> } | { readonly kind: 'action-failed' },
+  ): void {
     if (this.disposed) return
     this.seq += 1
-    this.patch({ notice: { seq: this.seq, kind } })
+    const next: CliAccountNotice<CliOperationKindOf<View>> = { ...notice, seq: this.seq }
+    this.patch({ notice: next })
   }
 }

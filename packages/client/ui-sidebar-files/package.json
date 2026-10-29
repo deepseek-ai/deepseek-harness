@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-sidebar-files",
-  "description": "Workspace file tree tab type for the right Sidebar: lazy directory listing over the workspaceFiles Remote namespace, opening files into the Sidebar",
+  "description": "The workspace files page and one workspace directory tree per pane beside docked and floating file previews, listed lazily over the workspaceFiles Remote namespace",
   "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
