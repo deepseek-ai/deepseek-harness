@@ -29,7 +29,7 @@ The optional `cwd` argument selects the child's initial working directory. Relat
 
 Mount one instance per delegation target, each with a distinct `toolName`. The tool exists exactly while its provider does, so sibling load order and provider reloads never strand it.
 
-The tool requires [subagent-names](../subagent-names/README.md). The optional `name` argument chooses a unique sibling name; omission selects the first unused `agent-N`. The result contains the child Session id and a full path such as `lead/reviewer`. Cordis removes the tool when the naming service unloads and restores it when the service returns.
+The tool requires [subagent-names](../subagent-names/README.md). The optional `name` argument chooses a unique sibling name; omission selects the first unused `agent-N`. Naming guidance asks for a short role such as `reviewer` or `researcher`, leaving the task in `description`; a specialty or numeric suffix distinguishes repeated roles. The result contains the child Session id and a full path such as `lead/reviewer`. Cordis removes the tool when the naming service unloads and restores it when the service returns.
 
 ### Minimal configuration
 

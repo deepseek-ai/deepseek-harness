@@ -2198,7 +2198,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
   "properties": {
     "name": {
       "type": "string",
-      "description": "Optional name unique among your direct children. Omission selects the first unused agent-N, starting at agent-1. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer."
+      "description": "Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer."
     },
     "cwd": {
       "type": "string",
