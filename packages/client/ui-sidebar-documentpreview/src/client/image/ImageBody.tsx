@@ -1,4 +1,5 @@
 /** Complete image bytes rendered in a shared zoom viewport. */
+import type { ContextMenuTriggerProps } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { DraggableImage } from '@deepseek-ai/dsh-client-ui-primitives'
 import { bindImagePan } from './pan.ts'
@@ -62,6 +63,7 @@ export function imageMediaType(path: string): ImageMediaType | undefined {
  * @returns a rounded image fitted or scaled at its intrinsic aspect ratio.
  */
 export function ImageBody(props: ImageBodyProps): ReactNode {
+  const { getTriggerProps } = props.useContextMenu()
   const { content, resourceAddress, t } = props
   const { tab } = props.useTabInfo()
   const preference = props.useStore(state => state.byTab[tab.id] ?? DEFAULT_ZOOM)
@@ -104,6 +106,7 @@ export function ImageBody(props: ImageBodyProps): ReactNode {
   }
   return <LoadedImage
     fileDrag={props.fileDrag}
+    contextMenuProps={getTriggerProps({ kind: 'image', value: { sessionId: props.sessionId, path, url: source.url, mediaType } })}
     resourceAddress={resourceAddress}
     key={source.url}
     url={source.url}
@@ -119,7 +122,10 @@ export function ImageBody(props: ImageBodyProps): ReactNode {
 }
 
 /** SVG stays in the browser's static image mode because its bytes only reach an img Blob URL. */
-function LoadedImage({ url, name, file, resourceAddress, preference, onPreference, labels, signal, scrollportRef, t, fileDrag }: {
+function LoadedImage({
+  url, name, file, resourceAddress, preference, onPreference, labels, signal, scrollportRef, t, fileDrag, contextMenuProps,
+}: {
+  readonly contextMenuProps: ContextMenuTriggerProps
   readonly fileDrag: ImageBodyInjected['fileDrag']
   readonly url: string
   readonly name: string
@@ -155,6 +161,7 @@ function LoadedImage({ url, name, file, resourceAddress, preference, onPreferenc
         style={{ '--document-zoom-width': `${width ?? 0}px` } as CSSProperties} hidden={state !== 'ready'}>
         <DraggableImage
           fileDrag={fileDrag}
+          {...contextMenuProps}
           resourceAddress={resourceAddress}
           ref={attachImage}
           className={css.image}

@@ -35,6 +35,8 @@ The startup provider binds stdin EOF to the launcher's bounded successful shutdo
 
 The SDK uses the base `read`, `write`, and `edit` defaults. To add `str_replace_editor`, use the explicit insertion patch in the [base configuration guide](../base/README.md#use-this-package). The standalone `sdk-minimal` profile owns its separate tool selection.
 
+The model can use [`plugin_manager`](../../boot/plugin-manager/README.md) in native and PTC modes. Every action, including listing, requires full access or approval for that call. The default workspace-write/ask policy needs a client approval responder: enable `approvalRequests` and handle `approval/request` through `harness.client.onRequest()`, or supply an approver in the composition. Without one, the operation is refused as unavailable. For Python package installation/removal, explicitly prepare Node and pnpm with `download_primary_runtime()` before starting the runtime; the packaged launcher then supplies them to plugin management without requiring system pnpm. Without a selected payload, package operations need `pnpm` on `PATH` or an explicit `plugin-manager.pnpmCommand`. See the [interactive approval example](../../../python/sdk/examples/manage_plugins.py). Saved profile changes report `restart-required` with `no-hmr`; the current runtime and its sessions retain their tools until the caller closes and starts the runtime again. Set `tool-plugin-manager.disabled: true` through a profile patch to hide this tool. The standalone `sdk-minimal` profile does not include it.
+
 The Python runtime exposes explicitly downloaded authoring resources and Office sidecars to this profile. `DSH_PRIMARY_RUNTIME` overrides the authoring payload; an empty value disables its query. Office skills can use either resource independently. Profile patches can disable `skill-office` or replace its `assetRoot` independently of `workspace-dependencies`; filesystem skills with the same name take precedence. See the [runtime package](../../../python/sdk-runtime/README.md) for downloads and configuration.
 
 -----
@@ -46,15 +48,15 @@ The Python runtime exposes explicitly downloaded authoring resources and Office 
 
 #### What the model sees
 
-The profile inherits the base system prompt, including the `You are an AI agent powered by DeepSeek Harness.` identity, and adds the same model-interpolated coding persona as the Web and headless profiles. Each Session receives its current directory in required user-role context from [`dsh-working-directory`](../../session/working-directory/README.md). Default file tool schemas include `read`, `write`, and `edit`; they omit `str_replace_editor`. The model also receives `present`, `ask_user_question`, schedule tools, shared file-reference guidance, and time context. Child agents cannot use schedule tools. The [`time-context`](../../context/time-context/README.md) row accepts a fallback time zone. Skills use the configured resources described above.
+The profile inherits the base system prompt, including the `You are an AI agent powered by DeepSeek Harness.` identity, and adds the same model-interpolated coding persona as the Web and headless profiles. Each Session receives its current directory in required user-role context from [`dsh-working-directory`](../../session/working-directory/README.md). Default file tool schemas include `read`, `write`, and `edit`; they omit `str_replace_editor`. The model also receives `present`, `ask_user_question`, `plugin_manager`, schedule tools, shared file-reference guidance, and time context. Child agents cannot use schedule tools. The [`time-context`](../../context/time-context/README.md) row accepts a fallback time zone. Skills use the configured resources described above.
 
 #### Token effect
 
-The profile adds a coding-persona sentence, the mounted tool definitions and guidance, and logged runtime-context and time messages.
+The profile adds a coding-persona sentence, the mounted tool definitions and guidance, and logged runtime-context and time messages. The `plugin_manager` description and parameter schema add input tokens even when an operation cannot be approved; an embedding that does not use plugin management can disable its row.
 
 #### KV Cache effect
 
-The static prefix is stable for a fixed profile, provider, model, and tool roster. Runtime values append to logged user context. Profile changes take effect on the next process because the shipped SDK profile uses startup-only patches.
+Enabling `plugin_manager` changes the tool-schema prefix from earlier SDK versions. The static prefix is stable for a fixed profile, provider, model, and tool roster. Runtime values append to logged user context. Profile changes take effect on the next process because the shipped SDK profile uses startup-only patches.
 
 ## Known Limitations and Deferred Work
 
@@ -66,6 +68,7 @@ The static prefix is stable for a fixed profile, provider, model, and tool roste
 - **Schedules share the runtime lifetime** — delivery needs a running process and its persistent Session storage.
 - **A profile can omit the SDK server** — a custom profile selected by the TypeScript client must retain this bundle or another `dsh-sdk-jsonrpc-server` row; client initialization fails when no peer answers.
 - **User plugins can violate stdout purity** — profile and per-launch patches are trusted application composition. The shipped bundle writes no non-protocol stdout, but it cannot contain an arbitrary inserted plugin.
+- **Plugin changes share a profile** — saved changes affect `<DSH_HOME>/profiles/sdk` and other embeddings using that home on their next launch; use separate `dshHome` directories for independent compositions. The Python launcher uses Node/pnpm from its selected downloaded runtime; without that payload or an external pnpm, package operations fail.
 - **Configuration changes require restart** — the `sdk-app` bundle disables HMR in YAML so one stdio connection never observes a replacement server or Agent dependency.
 
 
@@ -75,6 +78,6 @@ The static prefix is stable for a fixed profile, provider, model, and tool roste
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-None.
+The [SDK/Desktop tool comparison](../../../apps/cli/tests/profiles/sdk/desktop-tools.expected.e2e.ts) runs without API credentials in `test:expected`, included in the required PR consumer job. It covers standard/PTC root sessions with Team disabled; Team parity is deferred to #7172. After building, run `CI=true pnpm run test:expected apps/cli/tests/profiles/sdk/desktop-tools.expected.e2e.ts`. Maintain exact, reasoned differences in the adjacent `tool-parity.ts`; resolved differences invalidate their exceptions. Existing SDK session snapshots and installed-runtime smokes independently check model output and packaging.
 
 </details>

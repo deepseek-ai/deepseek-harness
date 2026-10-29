@@ -1,19 +1,12 @@
-/**
- * The pin action: a `sidebar.workspaces.session.menu.item` row and a
- * `sidebar.workspaces.session.row.action` button over one injected behavior.
- * Pin and archive are mutually exclusive on the Host, so the action reads both
- * sets and does not offer itself on an archived row; what a pin does beyond
- * the Host call (fronting the Session in its saved orders, the failure
- * notice) lives in the injected callbacks, not here.
- */
+/** Session pin hover button over the workspace owner’s shared callbacks. */
 import {
-  IconPinFillRegular, IconPinOutlineRegular, MenuItemButton, Tooltip,
+  IconPinFillRegular, IconPinOutlineRegular, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import clsx from 'clsx'
-import type { PinSessionInjected, SessionMenuItemProps, SessionRowActionProps } from '../contract/slots.ts'
+import type { PinSessionInjected, SessionRowActionProps } from '../contract/slots.ts'
 import css from '../rows/Rows.module.css'
 
-type PinState = Pick<SessionMenuItemProps<PinSessionInjected>, 'sessionId' | 'usePinned' | 'useArchived' | 'useSessionAccess'>
+type PinState = Pick<SessionRowActionProps<PinSessionInjected>, 'sessionId' | 'usePinned' | 'useArchived' | 'useSessionAccess'>
 
 /** The row's pin and archive membership, one Set lookup each, and whether its access allows the toggle. */
 function usePinState({ sessionId, usePinned, useArchived, useSessionAccess }: PinState) {
@@ -23,30 +16,6 @@ function usePinState({ sessionId, usePinned, useArchived, useSessionAccess }: Pi
     archived: useArchived(archived => archived.has(sessionId)),
     allowed: useSessionAccess(sessionId, pinned ? 'workspace/unpinSession' : 'workspace/pinSession'),
   }
-}
-
-/**
- * Menu row (order 100): pin or unpin by the row's current state; absent on archived rows and while
- * the Session's access snapshot excludes that toggle.
- * @param props - owner share, the pin share, the access Hook, and the menu open state.
- * @returns the row, or null for an archived or refused Session.
- */
-export function PinSessionMenuItem(props: SessionMenuItemProps<PinSessionInjected>) {
-  const { sessionId, useMenuOpenState, pinSession, unpinSession, t } = props
-  const [, setMenuOpen] = useMenuOpenState()
-  const { pinned, archived, allowed } = usePinState(props)
-  if (archived || !allowed) return null
-  return (
-    <MenuItemButton
-      icon={pinned ? <IconPinFillRegular /> : <IconPinOutlineRegular />}
-      onSelect={() => {
-        setMenuOpen(false)
-        ;(pinned ? unpinSession : pinSession)(sessionId)
-      }}
-    >
-      {t(pinned ? 'menu.unpinSession' : 'menu.pinSession')}
-    </MenuItemButton>
-  )
 }
 
 /**

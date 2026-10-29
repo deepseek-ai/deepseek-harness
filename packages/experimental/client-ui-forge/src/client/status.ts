@@ -27,16 +27,18 @@ export type CiSummary =
   | { readonly kind: 'passed' }
   /** `count` is the number of failed checks the host listed, which can be zero when the list is truncated. */
   | { readonly kind: 'failed'; readonly count: number }
+  | { readonly kind: 'cancelled'; readonly count: number }
 
-/** Checks grouped by outcome; `other` holds neutral, skipped, and cancelled checks. */
+/** Checks grouped by outcome; `other` holds neutral and skipped checks. */
 export interface CheckCounts {
   readonly failed: number
   readonly running: number
   readonly passed: number
+  readonly cancelled: number
   readonly other: number
 }
 
-const SETTLED: Record<Exclude<ChecksRollup, 'failure'>, Exclude<CiSummary['kind'], 'failed'>> = {
+const SETTLED: Record<Exclude<ChecksRollup, 'failure'>, Exclude<CiSummary['kind'], 'failed' | 'cancelled'>> = {
   none: 'none',
   pending: 'running',
   success: 'passed',
@@ -75,21 +77,29 @@ export function checkCounts(checks: readonly ChangeRequestCheck[]): CheckCounts 
   let failed = 0
   let running = 0
   let passed = 0
+  let cancelled = 0
   for (const check of checks) {
     if (check.state === 'failure') failed++
     else if (check.state === 'pending') running++
     else if (check.state === 'success') passed++
+    else if (check.state === 'cancelled') cancelled++
   }
-  return { failed, running, passed, other: checks.length - failed - running - passed }
+  return { failed, running, passed, cancelled, other: checks.length - failed - running - passed - cancelled }
 }
 
 /**
  * Summarize the checks of a change request from the host's combined outcome.
  * @param snapshot - change request status.
- * @returns the combined outcome with the failed count.
+ * @returns the combined outcome with its failure or cancellation count.
  */
 export function ciSummary(snapshot: ChangeRequestSnapshot): CiSummary {
-  if (snapshot.checksRollup === 'failure') return { kind: 'failed', count: checkCounts(snapshot.checks).failed }
+  if (snapshot.checksRollup === 'failure') {
+    if (snapshot.checksTruncated) return { kind: 'failed', count: 0 }
+    const counts = checkCounts(snapshot.checks)
+    return counts.failed === 0 && counts.cancelled > 0
+      ? { kind: 'cancelled', count: counts.cancelled }
+      : { kind: 'failed', count: counts.failed }
+  }
   return { kind: SETTLED[snapshot.checksRollup] }
 }
 

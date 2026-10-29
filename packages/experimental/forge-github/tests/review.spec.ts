@@ -11,7 +11,7 @@ const single: ForgeReviewRequest = { kind: 'comment', headSha: head, comment }
 const success = { exitCode: 0, stdout: JSON.stringify({ html_url: 'https://github.com/octo/demo/pull/7#discussion_r1' }), stderr: '' }
 function fixture() {
   const gh = vi.fn<GhRunner>().mockResolvedValueOnce({ exitCode: 0, stdout: JSON.stringify({ head: { sha: head }, state: 'open' }), stderr: '' }).mockResolvedValue(success)
-  return { gh, provider: new GitHubProvider(gh, ['github.com']), signal: new AbortController().signal }
+  return { gh, provider: new GitHubProvider(gh, ['github.com'], 8_388_608), signal: new AbortController().signal }
 }
 
 describe('review submission', () => {
@@ -91,7 +91,7 @@ describe('review submission', () => {
   })
   it('rejects a host outside the provider configuration without invoking gh', async () => {
     const { gh, signal } = fixture()
-    expect(await new GitHubProvider(gh, ['enterprise.test']).submitReview(ref, single, signal)).toMatchObject({ ok: false, code: 'failed' })
+    expect(await new GitHubProvider(gh, ['enterprise.test'], 8_388_608).submitReview(ref, single, signal)).toMatchObject({ ok: false, code: 'failed' })
     expect(gh).not.toHaveBeenCalled()
   })
 })

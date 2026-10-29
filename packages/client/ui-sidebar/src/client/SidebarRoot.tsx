@@ -193,7 +193,10 @@ export function SidebarRoot({
   const sidebarFocus = useRef<Element | null>(null)
   useModalLayer(column, drawer && !collapsed, toggleSidebar)
   useLayoutEffect(() => {
-    if (!collapsed || sidebarFocus.current !== document.activeElement) return
+    if (!collapsed) return
+    const controlled = sidebarFocus.current?.getAttribute('aria-controls')?.split(/\s+/) ?? []
+    const ownsMenuFocus = controlled.some(id => document.getElementById(id)?.contains(document.activeElement))
+    if (sidebarFocus.current !== document.activeElement && !ownsMenuFocus) return
     const opener = drawer
       ? column.current?.ownerDocument.querySelector<HTMLElement>('[data-sidebar-opener]')
       : column.current?.querySelector<HTMLElement>('[data-sidebar-toggle]')

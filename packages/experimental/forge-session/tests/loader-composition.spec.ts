@@ -86,10 +86,10 @@ const node = (number) => ({
   reviewDecision: null,
   reviewThreads: { nodes: [] },
   commits: { nodes: [{ commit: { statusCheckRollup: {
-    state: number === 7 ? 'PENDING' : 'SUCCESS',
-    contexts: { pageInfo: { hasNextPage: false }, nodes: [{
-      __typename: 'CheckRun', name: 'test', status: number === 7 ? 'IN_PROGRESS' : 'COMPLETED', conclusion: number === 7 ? null : 'SUCCESS',
-      detailsUrl: null, startedAt: null, completedAt: null, checkSuite: { workflowRun: { workflow: { name: 'ci' } } },
+    id: 'rollup-' + number, state: number === 7 ? 'PENDING' : 'SUCCESS',
+    contexts: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{
+      __typename: 'CheckRun', id: 'check-1', databaseId: 1, name: 'test', status: number === 7 ? 'IN_PROGRESS' : 'COMPLETED', conclusion: number === 7 ? null : 'SUCCESS',
+      detailsUrl: null, startedAt: null, completedAt: null, checkSuite: { app: { id: 'actions' }, workflowRun: { event: 'pull_request', workflow: { id: 'ci', name: 'ci' } } },
     }] },
   } } }] },
 })

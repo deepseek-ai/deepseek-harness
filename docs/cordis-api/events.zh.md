@@ -28,7 +28,7 @@ parallel<K extends keyof Events>(thisArg: NoInfer<ThisType<Events[K]>>, name: K,
 
 **返回值**：一个 Promise，在所有监听器均已完成后兑现。
 
-[源码](../../vendor/cordis/src/events.ts#L44)
+[源码](../../vendor/cordis/src/events.ts#L43)
 
 ### ctx.emit(name, ...args)
 
@@ -48,7 +48,7 @@ emit<K extends keyof Events>(thisArg: NoInfer<ThisType<Events[K]>>, name: K, ...
 - `name`：事件名称。
 - `args`：传递给每个监听器的参数。
 
-[源码](../../vendor/cordis/src/events.ts#L53)
+[源码](../../vendor/cordis/src/events.ts#L52)
 
 ### ctx.serial(name, ...args)
 
@@ -71,7 +71,7 @@ serial<K extends keyof Events>(thisArg: NoInfer<ThisType<Events[K]>>, name: K, .
 
 **返回值**：第一个提前终止值（非 null、非 false 且非 undefined）；如果没有，则不返回此类值。
 
-[源码](../../vendor/cordis/src/events.ts#L63)
+[源码](../../vendor/cordis/src/events.ts#L62)
 
 ### ctx.bail(name, ...args)
 
@@ -94,7 +94,7 @@ bail<K extends keyof Events>(thisArg: NoInfer<ThisType<Events[K]>>, name: K, ...
 
 **返回值**：第一个提前终止值（非 null、非 false 且非 undefined）；如果没有，则不返回此类值。
 
-[源码](../../vendor/cordis/src/events.ts#L73)
+[源码](../../vendor/cordis/src/events.ts#L72)
 
 ### ctx.waterfall(name, ...args)
 
@@ -122,7 +122,7 @@ waterfall<K extends keyof Events>(thisArg: NoInfer<ThisType<Events[K]>>, name: K
 
 **返回值**：最外层监听器的返回值。
 
-[源码](../../vendor/cordis/src/events.ts#L86)
+[源码](../../vendor/cordis/src/events.ts#L85)
 
 ### ctx.on(name, listener, options?)
 
@@ -146,7 +146,7 @@ on<K extends keyof Events>(name: K, listener: Events[K], options?: boolean | Eve
 
 **返回值**：一个用于移除监听器的资源释放函数；如果调用该函数时监听器仍处于注册状态，则返回 `true`。
 
-[源码](../../vendor/cordis/src/events.ts#L97)
+[源码](../../vendor/cordis/src/events.ts#L96)
 
 ### ctx.once(name, listener, options?)
 
@@ -170,7 +170,7 @@ once<K extends keyof Events>(name: K, listener: Events[K], options?: boolean | E
 
 **返回值**：一个用于移除监听器的资源释放函数；如果调用该函数时监听器仍处于注册状态，则返回 `true`。
 
-[源码](../../vendor/cordis/src/events.ts#L106)
+[源码](../../vendor/cordis/src/events.ts#L105)
 
 ## EventOptions
 
@@ -186,7 +186,7 @@ interface EventOptions {
 }
 ```
 
-[源码](../../vendor/cordis/src/events.ts#L112)
+[源码](../../vendor/cordis/src/events.ts#L111)
 
 ## DispatchMode
 
@@ -206,4 +206,4 @@ interface EventOptions {
 type DispatchMode = 'emit' | 'parallel' | 'serial' | 'bail' | 'waterfall'
 ```
 
-[源码](../../vendor/cordis/src/events.ts#L32)
+[源码](../../vendor/cordis/src/events.ts#L31)

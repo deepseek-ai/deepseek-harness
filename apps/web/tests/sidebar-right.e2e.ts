@@ -1128,8 +1128,28 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(await column.locator('[data-dockkit-tab-close]').count()).toBe(0)
       expect(await column.locator('[data-dockkit-tab-quiet]').count()).toBe(1)
       await column.locator('[data-dockkit-tab]').first().click({ button: 'right' })
-      expect(await page.locator('[data-dockkit-tab-menu]').isVisible()).toBe(false)
+      // Wait for prepared content, rather than passing before the opening delay.
+      const emptyMenu = page.locator('[data-context-menu][role="menu"]')
+      await emptyMenu.waitFor({ state: 'attached' })
+      expect(await emptyMenu.evaluate(node => getComputedStyle(node).display)).toBe('none')
+      expect(await emptyMenu.isVisible()).toBe(false)
       expect(await page.getByRole('menu').count()).toBe(0)
+      expect(await column.locator('[data-dockkit-tab]').first().evaluate(node => node.contains(document.activeElement))).toBe(true)
+      const backingSize = await page.locator('[data-menu-backing]').evaluate((node) => {
+        const root = document.documentElement
+        const platform = root.getAttribute('data-platform')
+        root.setAttribute('data-platform', 'darwin')
+        try {
+          const { width, height } = node.getBoundingClientRect()
+          return { width, height }
+        } finally {
+          if (platform === null) root.removeAttribute('data-platform')
+          else root.setAttribute('data-platform', platform)
+        }
+      })
+      expect(backingSize).toEqual({ width: 0, height: 0 })
+      await page.keyboard.press('Escape')
+      await emptyMenu.waitFor({ state: 'detached' })
 
       // Any other tab standing alone closes together with the column. Open the
       // sample file, close the guide (an ordinary close with two tabs), then
@@ -1231,13 +1251,10 @@ describe('web e2e: shipped right Sidebar', () => {
       // is the secondary press.
       expect(await column.locator('[data-dockkit-tab-more]').count()).toBe(0)
       await column.locator('[data-dockkit-tab]').filter({ hasText: 'Start' }).click({ button: 'right' })
-      const menu = page.locator('[data-dockkit-tab-menu]')
+      const menu = page.locator('[data-context-menu][role="menu"]')
       await expect.poll(async () => await menu.count()).toBe(1)
 
-      // The kit's one item; the extension seat is declared and rendered, and
-      // with no registrant it contributes nothing, which is what "declared, not
-      // speculative" looks like from the outside.
-      await expect.poll(async () => await menu.getByRole('menuitem').allInnerTexts()).toEqual(['Close'])
+      await expect.poll(() => menu.ariaSnapshot()).toBe('- menu:\n  - menuitem "Close"\n  - menuitem "Close Other Tabs"')
       // The menu hangs below the strip that clips its overflow. Its pixels are
       // its own: a hit test at its centre lands on it, not on whatever the
       // strip would have shown through a clipped box.

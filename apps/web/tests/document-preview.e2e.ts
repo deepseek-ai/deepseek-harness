@@ -714,7 +714,7 @@ else process.exit(1);
     const initialFilesClose = await filesTab.locator('[data-dockkit-tab-close]').count()
     expect(initialFilesClose).toBe(1)
     await filesTab.click({ button: 'right' })
-    expect(await page.locator('[data-dockkit-tab-menu]:visible').count()).toBe(1)
+    await page.locator('[data-context-menu][role="menu"]').waitFor()
     await page.keyboard.press('Escape')
     await addTab.waitFor({ state: 'visible' })
     const initialAdd = await addTab.count()

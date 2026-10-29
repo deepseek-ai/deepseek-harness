@@ -1,0 +1,66 @@
+{
+  "patches": [
+    {
+      "at": 3,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          {
+            "type": "block-start",
+            "index": 0,
+            "blockType": "tool-call"
+          },
+          {
+            "type": "tool-call-delta",
+            "index": 0,
+            "id": "commands-tool-3",
+            "name": "update_goal",
+            "argumentsDelta": ""
+          },
+          {
+            "type": "tool-call-delta",
+            "index": 0,
+            "id": "commands-tool-3",
+            "argumentsDelta": "{\"goal_id\": \"{{fromRequest:goal-[0-9a-f-]+}}\", \"revision\": 1, \"action\": \"complete\"}"
+          },
+          {
+            "type": "block-end",
+            "index": 0,
+            "block": {
+              "type": "tool-call",
+              "id": "commands-tool-3",
+              "name": "update_goal",
+              "arguments": "{\"goal_id\": \"{{fromRequest:goal-[0-9a-f-]+}}\", \"revision\": 1, \"action\": \"complete\"}"
+            }
+          },
+          {
+            "type": "usage",
+            "usage": {
+              "inputTokens": 10000,
+              "outputTokens": 32,
+              "totalTokens": 10032
+            }
+          },
+          {
+            "type": "finish",
+            "reason": {
+              "kind": "tool-calls"
+            },
+            "replayState": {
+              "response": {
+                "kind": "deepseek-messages",
+                "version": 1,
+                "model": "deepseek-v4-flash"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

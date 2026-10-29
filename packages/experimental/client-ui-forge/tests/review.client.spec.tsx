@@ -293,6 +293,31 @@ describe('inline records', () => {
 })
 
 describe('submission availability', () => {
+  it('explains why requesting changes needs a summary and enables submission when one is entered', () => {
+    const queue = new ReviewQueue('review-test')
+    const view = render(<SubmitReview queue={queue} url="https://github.com/octo/demo/pull/7" headSha={'a'.repeat(40)} busy={false} error={null}
+      submit={vi.fn()} close={vi.fn()} check={vi.fn()} reconcile={vi.fn()} t={t} />)
+    const button = view.getByRole('button', { name: 'Submit review' })
+    const summary = view.getByRole('textbox')
+    const announcement = view.getByRole('status')
+    expect(announcement.textContent).toBe('')
+    fireEvent.click(view.getByRole('radio', { name: 'Request changes' }))
+    expect(button).toHaveProperty('disabled', true)
+    expect(summary).toHaveProperty('required', true)
+    expect(announcement.textContent).toBe(en['review.summaryRequired'])
+    expect(view.getByText(en['review.summaryRequired']).id).toBe(summary.getAttribute('aria-describedby'))
+    fireEvent.change(summary, { target: { value: '  ' } })
+    expect(button).toHaveProperty('disabled', true)
+    fireEvent.change(summary, { target: { value: 'Please fix the missing check.' } })
+    expect(button).toHaveProperty('disabled', false)
+    fireEvent.change(summary, { target: { value: '' } })
+    fireEvent.click(view.getByRole('radio', { name: 'Approve' }))
+    expect(button).toHaveProperty('disabled', false)
+    expect(summary).toHaveProperty('required', false)
+    expect(announcement.textContent).toBe('')
+    expect(view.getByRole('status')).toBe(announcement)
+  })
+
   it.each(['local', 'different-pr', 'different-head', 'empty-comment', 'load', 'save'] as const)('blocks %s and retains the review in the modal', (kind) => {
     if (kind === 'load') localStorage.setItem('review-test', 'invalid')
     const queue = new ReviewQueue('review-test')

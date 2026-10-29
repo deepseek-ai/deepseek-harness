@@ -216,7 +216,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'experimental-client-ui-forge',
     title: 'Forge panel Remote',
     mode: 'service',
-    note: 'Streams one panel state per followed Session: a read-only Git inspection in the Session sandbox, the recognized code host and its sign-in, and the bound change requests with polled status.',
+    note: 'Streams one panel state per followed Session: Git inspection using Session permissions, the recognized code host and its sign-in, and the bound change requests with polled status.',
   },
   {
     key: 'worktrees',

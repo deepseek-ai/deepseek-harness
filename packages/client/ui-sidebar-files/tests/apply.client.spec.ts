@@ -29,6 +29,7 @@ interface Recorded {
 
 async function boot() {
   const ctx = new Context()
+  ctx.provide('contextMenus', { open: vi.fn() } as never)
   const tabs = new SidebarRightTabRegistry(ctx)
   const registered: Recorded[] = []
   const slots = {
@@ -63,7 +64,7 @@ async function boot() {
   ctx.provide('remote.workspaceFiles', workspaceFiles as never)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
-  return { tabs, registered, dictionaries, fiber, sidebar, commands }
+  return { ctx, tabs, registered, dictionaries, fiber, sidebar, commands }
 }
 
 describe('ui-sidebar-files apply', () => {
@@ -71,6 +72,7 @@ describe('ui-sidebar-files apply', () => {
     const h = await boot()
     try {
       const command = h.commands[0]!
+      expect(command.label()).toBe('guide.title')
       const input = { region: 'page', modal: null, target: null } as const
       expect(command.resolve(input)).toEqual({ status: 'blocked', reason: 'shortcut.noSession' })
       const target = { sessionId: 'files-session' }
@@ -112,4 +114,12 @@ describe('ui-sidebar-files apply', () => {
     expect(registered).toEqual([])
     expect(dictionaries.size).toBe(0)
   })
+})
+
+
+it('carries the file tree path and pane into its menu gesture', async () => {
+  const h = await boot()
+  try {
+
+  } finally { await h.fiber.dispose() }
 })

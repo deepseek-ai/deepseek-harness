@@ -3,7 +3,8 @@ import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { PerformanceUsageMode } from '../../chat-settings.ts'
 import type { ChatPresentationPolicy } from '../presentation-policy.ts'
 import { NS } from '../locale.ts'
-import { AssistantNodeView } from './AssistantNodeView.tsx'
+import { AssistantNodeView, type AssistantNodeInjected } from './AssistantNodeView.tsx'
+import { sessionFilePath } from '../file-path.ts'
 import { CommandNodeView, ManualCompactionNodeView } from './CommandNodeView.tsx'
 import {
   CompactionNodeView, ContextMessageNodeView, RetryNodeView, TurnErrorNodeView,
@@ -60,7 +61,11 @@ export function registerChatNodeRenderers(
       'conversation.chat.reasoning.body': { kind: 'single', scope: 'session' },
       'conversation.chat.message.images': { kind: 'single', scope: 'session' },
     },
-    inject: () => ({ hooks: { presentation } }),
+    inject: (sessionId): AssistantNodeInjected => ({
+      hooks: { presentation },
+      resolveFilePath: sessionFilePath(ctx, sessionId),
+      fileMentions: (owner, getFileTriggerProps) => ctx.get('chatFileMentions')?.forClosing(owner, sessionId, getFileTriggerProps),
+    }),
   }, AssistantNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node',

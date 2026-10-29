@@ -6,6 +6,7 @@ import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import { IconBranchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
@@ -166,6 +167,11 @@ function registerUi(ctx: Context): void {
         settled(await ctx.remote.forgePanel.refresh(sessionId), 'toast.refreshFailed')
       },
       remove: (entry) => { remove(sessionId, entry) },
+      readChecks: async (url, headSha, signal) => {
+        const result = await ctx.remote.forgePanel.changeRequestChecks(sessionId, url, headSha, signal)
+        if (!result.ok) throw new Error(result.error.message)
+        return result.value
+      },
       markReady: async (entry) => {
         const result = await ctx.remote.forgePanel.markReady(sessionId, entry.url)
         if (result.ok) notices.report('toast.markedReady', { tone: 'success', params: { name: nameOf(entry) } })
@@ -259,7 +265,12 @@ function registerUi(ctx: Context): void {
       },
     }
   }
-  ctx.effect(() => ctx.sidebarRightTabs.register({ id: TAB_ID, kind: TAB_KIND, title: () => t('tab.title') }), 'forge-panel: sidebar tab')
+  ctx.effect(() => ctx.sidebarRightTabs.register({
+    id: TAB_ID, kind: TAB_KIND, title: () => t('tab.title'),
+    guide: [{
+      id: 'review', order: 15, title: () => t('guide.title'), description: () => t('guide.description'), icon: IconBranchOutlineRegular,
+    }],
+  }), 'forge-panel: sidebar tab')
   ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab', key: TAB_ID, locale: NS, inject: tabFace,
   }, ForgeTab))

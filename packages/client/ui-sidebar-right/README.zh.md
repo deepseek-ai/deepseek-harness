@@ -129,6 +129,8 @@ root 作用域的 `sidebar.right.tab.guide.actions` list 有注册项时，引�
 
 该列里的每个字符串都来自 `sidebarRight` 语言命名空间，包括套件的无障碍名称。tab 的标题在 tab 铸造时固定；类型的显示名跟随当前语言。
 
+标签右键菜单捕获会话与被点击窗格。关闭、关闭其他和关闭右侧沿用现有关闭处理器；批量候选只包含该窗格内的标签，锚定标签移动或移除后操作失效。现有 `sidebar.right.tab.menu.item` 贡献仍在捕获的会话作用域中。[ui-context-menu](../ui-context-menu/README.zh.md) 管理共享菜单。
+
 <a id="model-experience"></a>
 ## 模型体验
 

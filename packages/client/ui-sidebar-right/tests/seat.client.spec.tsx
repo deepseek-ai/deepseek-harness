@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
+import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /** Sidebar presentation and tab subscriptions through the production slot renderer. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent } from '@testing-library/react'
+import { act, fireEvent, waitFor } from '@testing-library/react'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { SlotTestRuntime, type SlotView } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -80,9 +81,11 @@ async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0, o
   const catalog = createSnapshotStore<readonly ShortcutCatalogEntry[]>([])
   runtime.ctx.provide('shortcuts', { register: () => () => {}, catalog } as never)
   runtime.slots.installLocale(locale)
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
   await runtime.declare({
     'sidebar-right.test.opener': { kind: 'single', scope: 'session' },
     'rightbar': { kind: 'single', scope: 'root' },
+    'shell.overlay': { kind: 'list', scope: 'root' },
     'conversation.session.header.corner': { kind: 'single', scope: 'session' },
   })
   await runtime.sessions.add({ id: SESSION })
@@ -907,7 +910,9 @@ describe('slot-owned useTabInfo', () => {
     })
     expect(h.view.container.querySelector('[data-sidebar-right-unavailable]')).not.toBeNull()
     const chip = element(h.view.container, '[data-dockkit-tab]')
+    h.runtime.renderSlot('shell.overlay', {})
     fireEvent.contextMenu(chip)
+    await waitFor(() => { expect(menu).toBeDefined() })
     expect(menu?.tab.id).toBe(chip.getAttribute('data-dockkit-tab'))
     act(() => { menu?.dismiss() })
     expect(document.querySelector('[data-dockkit-tab-menu]')).toBeNull()

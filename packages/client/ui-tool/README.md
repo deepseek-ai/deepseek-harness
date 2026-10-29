@@ -31,6 +31,8 @@ Settled foreground commands with a nonzero exit code, a terminating signal, or a
 
 Before dispatch, a named model call appears as one non-expandable row with its tool-owned icon and title. A generic row shows `Tool call · <tool name>`. Read/write/edit show an openable path once `file_path` closes and decodes without errors; write/edit show `NKB` after that path once content arrives, retaining it during execution and after success, before any diff totals. N rounds the decoded input's UTF-16 length up in units of 1024, summing old and new text for edit; it is not file bytes. Error and stopped rows omit the size and diff totals. Command rows show the streamed description. `tool/call` enables the existing call presentation; completing an argument block alone does not start execution.
 
+File and URL toolview Slots obtain `useContextMenu` directly and supply bound `fileContextMenuProps` or `urlContextMenuProps` to `ToolRow`. File registrations inject a gesture-time path resolver for the originating Session’s working directory, falling back to its workspace root. `ToolCallTree` supplies an explicit file adapter to its plain `GenericToolCard` fallback, including nested calls. No Markdown provider is required. Mouse and keyboard gestures retain the captured path, line, URL, and Session without expanding the row or opening the file.
+
 ### Registering a business tool view
 
 An owning business package registers its wire Tool name into `tool.call.toolview`:
@@ -56,6 +58,8 @@ This package owns the generic fallback and the built-in shell/pwsh, read, read_i
 Question rows pair answers with questions by id, using the tool result or the `userQuestions` projection for late replies. An answerable call has a button to reopen its panel. Once a late reply is in the agent Inbox, the row shows its submitted answers; “View answers” expands its read-only transcript while admission is pending. A settled call with answers opens the panel read-only. Closed calls without answers and invalid records offer no button. Cancelled and interrupted rows show their verdict without inventing answers. If no panel provider accepts the button action, it expands the row. Unsupported or ambiguous input falls back to flattened Tool text.
 
 Answer-panel buttons belong to the question renderer. It composes `DisclosureRow` with its own action and transcript; generic `ToolRow` does not select or dispatch question actions.
+
+File and URL controls declare context-menu targets through the scoped Markdown delegate. File targets carry their recorded path and line for both pointer and keyboard gestures.
 
 -----
 

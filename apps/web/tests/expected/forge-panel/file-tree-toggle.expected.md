@@ -8,7 +8,7 @@
 - button "全部折叠"
 - button "左右对比" [pressed]
 - button "自动换行" [pressed]
-- button "文件树" [expanded] [pressed]
+- button "将文件树移到右侧" [expanded]
 - region "全部 2 个文件":
   - button "收起 panel.ts" [expanded]
   - text: src/panel.ts +2 −2

@@ -90,7 +90,7 @@ it('bounds pointer and keyboard resizing, retains hidden width, and stops cancel
   })
   try {
     const props = { files: [file('a.ts')], state: { query: '', collapsed: {}, selected: null }, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn(), id: 'tree' }
-    const view = render(<FileTreePane {...props} open />)
+    const view = render(<FileTreePane {...props} position="right" />)
     const handle = view.getByRole('separator')
     const capture = vi.fn(), release = vi.fn()
     Object.defineProperties(handle, { setPointerCapture: { value: capture }, releasePointerCapture: { value: release } })
@@ -120,14 +120,26 @@ it('bounds pointer and keyboard resizing, retains hidden width, and stops cancel
       fireEvent.pointerMove(handle, { pointerId: 1, clientX: 300 })
       expect(width()).toBe(350)
     }
-    view.rerender(<FileTreePane {...props} open={false} />)
+    view.rerender(<FileTreePane {...props} position="hidden" />)
     containerWidth = 0
     act(() => { measure([], new NativeObserver(() => {})) })
     expect(width()).toBe(350)
     containerWidth = 1000
-    view.rerender(<FileTreePane {...props} open />)
+    view.rerender(<FileTreePane {...props} position="right" />)
     act(() => { measure([], new NativeObserver(() => {})) })
     expect(width()).toBe(350)
+    view.rerender(<FileTreePane {...props} position="left" />)
+    expect(view.getByRole('separator')).toBe(handle)
+    expect(width()).toBe(350)
+    fireEvent.keyDown(handle, { key: 'ArrowRight' })
+    expect(width()).toBe(370)
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+    expect(width()).toBe(350)
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientX: 350 })
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 400 })
+    expect(width()).toBe(400)
+    fireEvent.pointerUp(handle, { pointerId: 1, clientX: 450 })
+    expect(width()).toBe(450)
     containerWidth = 600
     act(() => { measure([], new NativeObserver(() => {})) })
     expect(width()).toBe(280)
@@ -139,7 +151,7 @@ it('bounds pointer and keyboard resizing, retains hidden width, and stops cancel
 it('can mount into a detached fragment without measuring a nonexistent parent element', () => {
   const observe = vi.spyOn(ResizeObserver.prototype, 'observe')
   const view = render(<FileTreePane files={[]} state={{ query: '', collapsed: {}, selected: null }} t={makeTranslate(en)}
-    filter={vi.fn()} toggle={vi.fn()} jump={vi.fn()} id="detached-tree" open />, { container: document.createDocumentFragment() })
+    filter={vi.fn()} toggle={vi.fn()} jump={vi.fn()} id="detached-tree" position="right" />, { container: document.createDocumentFragment() })
   expect(observe).not.toHaveBeenCalled()
   view.unmount()
 })
