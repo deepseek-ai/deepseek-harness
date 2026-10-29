@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-inspector",
   "description": "Experimental cross-realm CDP hub for Host debugging and Client Runtime inspection",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-alpha.2",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

@@ -15,14 +15,85 @@ import Testing
     }
 }
 
-@Test func refusesApplicationConsentWithoutAnExecutableLocation() throws {
+@Test func readsTheProcessPathWhenTheCatalogHasNoExecutableLocation() throws {
+    let identity = try NativePlatform.identity(getpid())
+    let path = try #require(NativePlatform.executablePath(identity.pid))
+    let observed = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: nil)
+    #expect(observed["persistable"] == .bool(true))
+    #expect(try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: path) == observed)
+}
+
+@Test(arguments: [ENOENT, ESRCH, EIO, ENODEV, EPERM, EACCES, ENAMETOOLONG, EOVERFLOW, ENOMEM, ENOBUFS])
+func liveBundleIdentitySurvivesAnUnavailableExecutablePath(error: Int32) throws {
+    let identity = try NativePlatform.identity(getpid())
+    let expectedPath = try #require(NativePlatform.executablePath(identity.pid))
+    let bundle: (Int32) -> (identifier: String?, url: URL?) = { _ in ("test.dsh.bundle", nil) }
+    let before = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: expectedPath, readBundle: bundle)
+    var queries = 0
+    let after = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: expectedPath,
+        readBundle: bundle, readPath: { _ in queries += 1; return .failure(NativePlatform.executablePathFailure(error)) })
+    try NativePlatform.verify(identity)
+    #expect(after["id"] == before["id"])
+    #expect(after["persistable"] == .bool(true))
+    #expect(after.object?["executablePath"] == nil)
+    #expect(queries == 1)
+}
+
+@Test(arguments: [ENOENT, ESRCH, EIO, ENODEV, EPERM, EACCES, ENAMETOOLONG, EOVERFLOW, ENOMEM, ENOBUFS])
+func missingBundleAndPathReportsThePathFailureWithoutRetry(error: Int32) throws {
+    let identity = try NativePlatform.identity(getpid())
+    var queries = 0
+    do {
+        _ = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: nil,
+            readBundle: { _ in (nil, nil) }, readPath: { _ in queries += 1; return .failure(NativePlatform.executablePathFailure(error)) })
+        Issue.record("An application without either identity was accepted")
+    } catch let failure as NativeFailure {
+        #expect(failure.code == "APP_PATH_UNAVAILABLE")
+        #expect(failure.message.contains("errno \(error)"))
+        #expect(!failure.message.contains("exited"))
+    }
+    try NativePlatform.verify(identity)
+    #expect(queries == 1)
+}
+
+@Test func availablePathsStillRejectADifferentTargetWithAValidBundleIdentifier() throws {
     let identity = try NativePlatform.identity(getpid())
     do {
-        _ = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: nil)
-        Issue.record("Missing executable metadata was accepted")
-    } catch let error as NativeFailure {
-        #expect(error.code == "APP_UNAVAILABLE")
+        _ = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: "/another/executable",
+            readBundle: { _ in ("test.dsh.bundle", nil) })
+        Issue.record("A mismatched target path was accepted")
+    } catch let failure as NativeFailure { #expect(failure.code == "STALE_APP") }
+}
+
+@Test func bundleIdentityCannotAuthorizeAProcessThatExitsDuringInspection() throws {
+    let process = Process(), input = Pipe()
+    process.executableURL = URL(fileURLWithPath: "/bin/cat")
+    process.standardInput = input
+    process.standardOutput = FileHandle.nullDevice
+    try process.run()
+    defer {
+        input.fileHandleForWriting.closeFile()
+        if process.isRunning { process.terminate() }
+        process.waitUntilExit()
     }
+    let identity = try NativePlatform.identity(process.processIdentifier)
+    do {
+        _ = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: nil,
+            readBundle: { _ in ("test.dsh.bundle", nil) }, readPath: { _ in
+                process.terminate()
+                process.waitUntilExit()
+                return .failure(NativePlatform.executablePathFailure(ENOENT))
+            })
+        Issue.record("An exited process was authorized by its bundle identifier")
+    } catch let failure as NativeFailure { #expect(failure.code == "APP_UNAVAILABLE") }
+}
+
+@Test(arguments: [Int32(0), EIO, EPERM, EACCES, ENOMEM])
+func failedProcessInspectionDoesNotReportAnExit(error: Int32) {
+    let failure = NativePlatform.processIdentityFailure(error)
+    #expect(failure.code == "PROCESS_INSPECTION_FAILED")
+    #expect(!failure.message.contains("exited"))
+    #expect(!failure.message.contains("Success"))
 }
 
 @MainActor @Test func applicationIconsUseBoundedNativePNGs() throws {
@@ -33,6 +104,30 @@ import Testing
     #expect(bitmap.pixelsWide == 64)
     #expect(bitmap.pixelsHigh == 64)
     #expect(encoded.utf8.count <= 65536)
+}
+
+@Test func unbundledRunningProcessesReceivePersistentPathConsent() throws {
+    var records: [JSONValue] = []
+    for _ in 0..<2 {
+        let process = Process()
+        let input = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/cat")
+        process.standardInput = input
+        process.standardOutput = FileHandle.nullDevice
+        try process.run()
+        defer {
+            input.fileHandleForWriting.closeFile()
+            if process.isRunning { process.terminate() }
+            process.waitUntilExit()
+        }
+        let identity = try NativePlatform.identity(process.processIdentifier)
+        let executable = try #require(NativePlatform.executablePath(identity.pid))
+        let authorization = try ApplicationAuthorization.describe(identity, name: "Fixture", expectedExecutablePath: executable)
+        #expect(authorization["persistable"] == .bool(true))
+        #expect(authorization["id"].string?.count == 64)
+        records.append(authorization)
+    }
+    #expect(records[0] == records[1])
 }
 
 @Test func resolvesTheCurrentProcessResponsibility() throws {

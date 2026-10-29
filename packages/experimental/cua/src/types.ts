@@ -57,7 +57,10 @@ export type CuaActionResult = z.output<typeof ActionResult>
 export type CuaHoverResult = z.output<typeof HoverResult>
 /** Select screenshot pixels by default or integer thousandths when explicitly requested. */
 export interface CuaCoordinateOptions {
-  /** True uses integers from 0 to 1000; omitted or false uses the latest screenshot's pixels. Applies only to coordinate targets. */
+  /**
+   * True uses integer thousandths from 0 to 999; omitted or false uses the latest screenshot's pixels.
+   * Applies only to coordinate targets.
+   */
   relative?: boolean
 }
 /** Restoration dispatch; foregroundChanged compares the front app and top window before and after the request. */

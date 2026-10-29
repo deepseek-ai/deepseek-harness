@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "puerta de enlace de llamada remota",
+    "description": "Recibir la llamada de interfaz del cliente y distribuirla al servicio correspondiente."
+  }
+}

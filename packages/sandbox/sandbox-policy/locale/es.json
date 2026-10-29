@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Política de permisos de zona de pruebas",
+    "description": "Determine los límites para cada operación según el modo de permiso y el espacio de trabajo de la sesión actual."
+  }
+}

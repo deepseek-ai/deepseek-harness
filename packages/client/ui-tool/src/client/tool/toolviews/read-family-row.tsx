@@ -8,13 +8,15 @@
 
 import type { ReactNode } from 'react'
 import { IconBrowseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ContextMenuBindings } from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import type { ToolFileInjected } from '../file-menu.ts'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
 import { toolRowModel } from '../models/tool-call-model.ts'
 import { ToolRow, type ToolRowProps } from '../components/ToolRow.tsx'
 
 /** Full row props of a read-family toolview: the runtime share plus its locale seat. */
-export type ReadFamilyRowProps = ToolCallViewProps & { t: ToolRowProps['t'] }
+export type ReadFamilyRowProps = ToolCallViewProps & ToolFileInjected & { t: ToolRowProps['t'] }
 
 /** read_image row props: the runtime share, the declared image child slot, and the locale seat. */
 export type ReadImageRowProps = ReadFamilyRowProps & PropsRenderSlots<'tool.call.images'>
@@ -32,15 +34,22 @@ export type ReadFamilyCard = Pick<ToolRowProps, 'read' | 'image' | 'renderSlot' 
  * caller's card material.
  * @param props - the toolview runtime share and locale seat.
  * @param card - the card props this row owns.
+ * @param getTriggerProps - ordinary menu bindings supplied by the toolview Slot.
  * @returns the assembled ToolRow.
  */
 export function readFamilyRow(
-  { toolName, block, cwd, home, openFile, inspect, useDisclosure, t }: ReadFamilyRowProps,
+  { toolName, block, cwd, home, openFile, resolveFilePath, sessionId, inspect, useDisclosure, t }: ReadFamilyRowProps,
   card: ReadFamilyCard,
+  getTriggerProps: ContextMenuBindings['getTriggerProps'],
 ): ReactNode {
   const model = toolRowModel(toolName, block, cwd, home)
+  const path = model.filePath
   return (
     <ToolRow
+      fileContextMenuProps={getTriggerProps(path === undefined ? undefined : () => ({
+        kind: 'file', value: { sessionId, path: resolveFilePath(path),
+          ...(card.filePathLine === undefined ? {} : { line: card.filePathLine }) },
+      }))}
       useDisclosure={useDisclosure}
       t={t}
       variant={model.variant}

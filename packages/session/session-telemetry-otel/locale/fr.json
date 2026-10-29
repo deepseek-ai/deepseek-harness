@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Téléchargement du journal de la session de commentaires",
+    "description": "Conformément à la politique d'autorisation des commentaires, les journaux de session pertinents sont téléchargés via OpenTelemetry."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Persistente Terminal-Tools",
+    "description": "Stellen Sie sechs persistente PTY-Tools mit isoliertem Sitzungsbesitz und Integration von Hintergrundaufgaben bereit."
+  }
+}

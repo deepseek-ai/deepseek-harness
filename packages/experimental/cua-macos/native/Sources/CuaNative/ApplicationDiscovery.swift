@@ -10,13 +10,16 @@ struct InstalledApplication: Sendable, Equatable {
 
     static func read(_ url: URL) -> InstalledApplication? {
         let url = url.resolvingSymlinksInPath()
-        guard url.pathExtension.lowercased() == "app", let bundle = Bundle(url: url),
-              let executable = bundle.executableURL else { return nil }
-        let name = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
-            ?? bundle.object(forInfoDictionaryKey: "CFBundleName") as? String
+        guard url.pathExtension.lowercased() == "app",
+              let info = CFBundleCopyInfoDictionaryInDirectory(url as CFURL) as? [String: Any],
+              let executableName = info["CFBundleExecutable"] as? String, !executableName.isEmpty,
+              let bundle = CFBundleCreate(nil, url as CFURL),
+              let executable = CFBundleCopyAuxiliaryExecutableURL(bundle, executableName as CFString) else { return nil }
+        let name = info["CFBundleDisplayName"] as? String
+            ?? info["CFBundleName"] as? String
             ?? url.deletingPathExtension().lastPathComponent
-        return InstalledApplication(path: url.path, executablePath: executable.resolvingSymlinksInPath().path,
-                                    name: name, bundleID: bundle.bundleIdentifier)
+        return InstalledApplication(path: url.path, executablePath: (executable as URL).resolvingSymlinksInPath().path,
+                                    name: name, bundleID: info["CFBundleIdentifier"] as? String)
     }
     func matches(_ query: String, exact: Bool) -> Bool {
         let values = [name, URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent, bundleID ?? "", path]
@@ -69,16 +72,9 @@ struct InstalledApplication: Sendable, Equatable {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         configuration.addsToRecentItems = false
-        let pid: Int32 = try await withCheckedThrowingContinuation { continuation in
-            NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: app.path), configuration: configuration) { running, error in
-                if let error { continuation.resume(throwing: error) }
-                else if let running { continuation.resume(returning: running.processIdentifier) }
-                else { continuation.resume(throwing: NativeFailure(code: "APP_UNAVAILABLE", message: "Application launch returned no process")) }
-            }
-        }
-        guard let running = NSRunningApplication(processIdentifier: pid) else {
-            throw NativeFailure(code: "APP_UNAVAILABLE", message: "Application exited during launch")
-        }
+        configuration.createsNewApplicationInstance = true
+        let running = try await NSWorkspace.shared.openApplication(
+            at: URL(fileURLWithPath: app.path), configuration: configuration)
         while !running.isFinishedLaunching {
             try cancellation.check()
             guard !running.isTerminated else {
@@ -87,6 +83,10 @@ struct InstalledApplication: Sendable, Equatable {
             try await Task.sleep(for: .milliseconds(25))
         }
         try cancellation.check()
+        let pid = running.processIdentifier
+        guard pid > 0, !running.isTerminated else {
+            throw NativeFailure(code: "APP_UNAVAILABLE", message: "Application exited during launch")
+        }
         return pid
     }
 }

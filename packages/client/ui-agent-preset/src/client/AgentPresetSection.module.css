@@ -61,8 +61,10 @@
 }
 
 
-.card:hover:not(.cardActive) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .card:hover:not(.cardActive) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* The default preset reads as selected exactly like the Appearance cubes:
@@ -81,8 +83,10 @@
   border-color: var(--dsw-alias-state-error-primary);
 }
 
-.cardBroken:hover {
-  border-color: var(--dsw-alias-state-error-primary);
+@media (hover: hover) {
+  .cardBroken:hover {
+    border-color: var(--dsw-alias-state-error-primary);
+  }
 }
 
 .brokenBadge {
@@ -127,9 +131,14 @@
 /* Focusing the card reveals it too: a broken card keeps its place in the tab
    order (`aria-disabled`, not `disabled`), so this is the keyboard path to a
    reason the card face no longer shows. */
-.brokenBadge:hover .brokenTip,
 .cardMain:focus-visible .brokenTip {
   opacity: 1;
+}
+
+@media (hover: hover) {
+  .brokenBadge:hover .brokenTip {
+    opacity: 1;
+  }
 }
 
 .cardMain[aria-disabled='true'] {
@@ -153,6 +162,18 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+@media (hover: none) {
+  .cardBrokenReason {
+    position: static;
+    display: block;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
 }
 
 /* The card body is the control that picks the preset. */
@@ -230,6 +251,12 @@
   overflow-wrap: anywhere;
 }
 
+@media (pointer: coarse) {
+  .cardDesc {
+    -webkit-line-clamp: unset;
+  }
+}
+
 .cardId {
   flex-shrink: 0;
   max-width: 35%;
@@ -267,9 +294,14 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.helpButton:hover,
 .helpButton:focus-visible {
   color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .helpButton:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 /* Icon-only actions: the label rides `data-tip` so the row stays quiet until
@@ -287,9 +319,11 @@
   align-items: center;
 }
 
-.iconButton:hover {
-  background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .iconButton:hover {
+    background: var(--dsw-alias-bg-layer-1);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .iconButton:focus-visible {
@@ -315,9 +349,14 @@
   transition: opacity .12s;
 }
 
-.iconButton:hover::after,
 .iconButton:focus-visible::after {
   opacity: 1;
+}
+
+@media (hover: hover) {
+  .iconButton:hover::after {
+    opacity: 1;
+  }
 }
 
 .dialog {
@@ -370,8 +409,10 @@
   cursor: pointer;
 }
 
-.creatorButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .creatorButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .creatorButton:disabled {

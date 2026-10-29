@@ -60,7 +60,9 @@ describe('headless-agent keyless smoke', () => {
     })
     expect(String(result?.['output'])).toContain('CLI_TOOL_ROUND_TRIP')
     expect(persistedHeader).toMatchObject({ type: 'session' })
-    expect(persistedToolNames).toEqual(expect.arrayContaining(['read', 'write', 'edit', 'web_fetch', 'web_search']))
+    expect(persistedToolNames).toEqual(expect.arrayContaining(['read', 'write', 'edit', 'web_fetch']))
+    // Search has no key in this composition, so the model request does not offer it.
+    expect(persistedToolNames).not.toContain('web_search')
     expect(persistedToolNames).not.toContain('str_replace_editor')
   }, PRODUCTION_PROFILE_TEST_TIMEOUT_MS)
 })

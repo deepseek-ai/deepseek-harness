@@ -1,0 +1,6 @@
+{
+  "dir": "relay->gateway",
+  "note": "the reader left, so the Relay cancels one in-flight request",
+  "frame": { "type": "share-rpc-cancel", "id": 8 },
+  "optional": []
+}

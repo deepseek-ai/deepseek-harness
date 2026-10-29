@@ -1,4 +1,6 @@
 /** A fixed error producer for SDK transport coverage; it does not enable Auto. */
+import { PtcExecutor } from '@deepseek-ai/dsh-tool-executor-ptc'
+
 export const name = 'structured-denial-fixture'
 export const inject = ['tools']
 export function apply(ctx) {
@@ -18,6 +20,6 @@ export function apply(ctx) {
   ctx.on('tools/result', (exec, result) => {
     if (exec.name !== 'bash' || exec.parent !== undefined
       || result.error?.info?.code !== 'AUTO_REVIEW_DENIED' || exec.agent === undefined) return
-    exec.agent.ctx.tools.presentAs('ptc')
+    exec.agent.ctx.tools.setExecutor(new PtcExecutor(exec.agent.ctx))
   })
 }

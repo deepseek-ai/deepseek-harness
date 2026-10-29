@@ -1,0 +1,5 @@
+- insert:
+    - id: sdk-approval-fixture
+      name: ../../../packages/sdk/server/tests/fixtures/approval.mjs
+      config:
+        path: !!js "process.getBuiltinModule('node:path').join(process.cwd(), 'approved.txt')"

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "variables de entorno de comando",
+    "description": "Proporcione DSH variables de entorno de manera uniforme para las herramientas de ejecución de comandos."
+  }
+}

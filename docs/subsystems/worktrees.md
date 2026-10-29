@@ -14,7 +14,7 @@ Leaving through `working_directory({ cd: path })` retains the checkout and branc
 
 ## Request and result
 
-The request selects only the new name and local revision. The result identifies the created checkout and exact commit; it does not change the Session's original project or write permissions.
+The request selects only the new name and local revision. The result identifies the created checkout and exact commit; it does not change the Session's original project or write permissions. An optional callback receives each stage of the creation before it begins. A restoration checks a removed checkout out again at its recorded directory, from its branch or, when the branch is gone, from its base commit.
 
 ```ts type-equiv
 /** A new checkout from a locally available Git commit, branch, or tag. */
@@ -37,6 +37,40 @@ interface CreatedWorktree {
   baseCommit: string
   /** Canonical root of the source checkout. */
   repositoryRoot: string
+}
+```
+
+```ts type-equiv
+/**
+ * Stage of one creation or restoration, reported before it begins: `prepare`
+ * validates the request, allocates the checkout directory, and creates the
+ * branch, which a restoration creates again only when it is gone; `checkout`
+ * writes the files and, for a creation, enters the checkout.
+ */
+type CreateWorktreePhase = 'prepare' | 'checkout'
+```
+
+```ts type-equiv
+/** A removed checkout to check out again at its recorded directory. */
+interface RestoreWorktreeRequest {
+  /** Canonical checkout directory the worktree had. */
+  path: string
+  /** Branch the worktree had checked out. */
+  branch: string
+  /** Commit the branch started from; a branch that no longer exists is created again here. */
+  baseCommit: string
+  /** Canonical root of the source checkout. */
+  repositoryRoot: string
+}
+```
+
+```ts type-equiv
+/** Outcome of one restoration. */
+interface RestoredWorktree {
+  /** Checkout directory, present again. */
+  path: string
+  /** Whether the branch no longer existed and was created again at the base commit, without the commits it had gained. */
+  branchRecreated: boolean
 }
 ```
 
@@ -65,9 +99,26 @@ Creates retained Git worktrees under the mounted filesystem and sandbox provider
  * @param agent - caller whose current directory selects the source repository and file policy.
  * @param request - optional new name and local revision; defaults are generated name and HEAD.
  * @param signal - cancellation of lookup, creation, and working-directory publication.
+ * @param onPhase - receives each stage before it begins; it must not throw.
  * @returns canonical checkout path, branch name, pinned commit, and source repository root.
  */
-async create(agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal): Promise<CreatedWorktree>
+async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>
+
+/**
+ * Check out a removed worktree again at its recorded directory: its branch
+ * when the branch still exists, otherwise a new branch of the same name at
+ * `baseCommit`. Only the missing target's unlocked registration is removed, and an
+ * existing directory fails. Changes that were never committed are not
+ * recovered. Checkout disables configured clean, smudge, and process filters,
+ * as creation does. The calling Session's working directory does not change.
+ * Failures may retain newly allocated Git/filesystem artifacts.
+ * @param agent - caller whose sandbox policy confines the commands.
+ * @param request - recorded directory, branch, base commit, and source repository root.
+ * @param signal - cancellation of the restoration.
+ * @param onPhase - receives each stage before it begins; it must not throw.
+ * @returns the directory and whether the branch was created again.
+ */
+async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>
 ```
 
 Types: [Agent](core.md)

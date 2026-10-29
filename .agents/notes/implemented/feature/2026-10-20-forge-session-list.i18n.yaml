@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-20-forge-session-list.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-20-forge-session-list.md
+/agent-note-forge-state-in-the-session-list:
+  en: b5876f7873857921
+  zh: 56fac53370de206d
+/agent-note-forge-state-in-the-session-list/problem:
+  en: 07ba0c3bf73a2446
+  zh: 2413783a6697133e
+/agent-note-forge-state-in-the-session-list/decision:
+  en: e1d03cf4e1afd5aa
+  zh: b2386cb7c17c58dd
+/agent-note-forge-state-in-the-session-list/alternatives-considered:
+  en: 3b08440ee2bf7809
+  zh: a90e3fcb89cf3f74
+/agent-note-forge-state-in-the-session-list/consequences:
+  en: 25a17eac43beb705
+  zh: c138f693ff07c91d

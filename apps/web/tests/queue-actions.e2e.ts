@@ -124,21 +124,15 @@ describe('web e2e: queue row actions', () => {
       await input.fill(REMOVE)
       await input.press('Enter')
       await received.promise
-      const pending = page.locator('[data-queue-dock] [data-submission-echo]')
-      await pending.getByRole('status').waitFor()
-      expect(await pending.getByRole('status').textContent()).toBe('Sending…')
-      expect(await pending.getByRole('button').count()).toBe(3)
-      expect(await pending.getByRole('button').evaluateAll(buttons =>
-        buttons.every(button => (button as HTMLButtonElement).disabled))).toBe(true)
-      expect(await input.textContent()).toBe('')
-      expect(await input.getAttribute('contenteditable')).toBe('true')
+      // The composer keeps the message, read-only, until the Host accepts it; the queue shows nothing yet.
+      const sendingButton = page.getByRole('button', { name: 'Sending message', exact: true })
+      await sendingButton.waitFor()
+      expect(await sendingButton.getAttribute('aria-busy')).toBe('true')
+      expect(await input.textContent()).toBe(REMOVE)
+      expect(await input.getAttribute('contenteditable')).toBe('false')
+      expect(await page.locator('[data-queue-dock] [data-submission-echo]').count()).toBe(0)
       const sending = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
       await compareOrRefreshGolden(SENDING_EXPECTED, sending, MODE)
-      await page.setViewportSize({ width: 390, height: 1000 })
-      await page.locator('[data-sidebar-collapsed="true"]').waitFor()
-      await expect.poll(() => pending.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
-      await page.setViewportSize({ width: 1680, height: 1000 })
-      await page.locator('[data-sidebar-collapsed="true"]').waitFor({ state: 'detached' })
     } finally {
       release.resolve(undefined)
     }
@@ -148,6 +142,8 @@ describe('web e2e: queue row actions', () => {
     expect(await page.locator('[data-queue-dock]').getByRole('status').count()).toBe(0)
     await input.fill(EDIT)
     await input.press('Enter')
+    // The Host queue row can arrive before the prompt reply that clears the composer.
+    await expect.poll(() => input.textContent(), { timeout: 10_000 }).toBe('')
     const queueHeader = page.getByRole('button', { name: '2 queued messages' })
     await expect.poll(() => queueHeader.getAttribute('aria-expanded'), { timeout: 10_000 })
       .toBe('false')
@@ -365,10 +361,11 @@ describe('web e2e: queue row actions', () => {
     await page.locator('[data-testid="todo-panel"]').waitFor({ timeout: 10_000 })
 
     for (const text of ['Layout queue first', 'Layout queue second']) {
-      // A just-submitted composer is read-only for the prompt round-trip.
       await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor({ timeout: 10_000 })
       await input.fill(text)
       await input.press('Enter')
+      // The composer keeps a sent message, still editable, until the Host accepts it.
+      await expect.poll(() => input.textContent(), { timeout: 10_000 }).toBe('')
     }
     const queueHeader = page.getByRole('button', { name: '2 queued messages' })
     await expect.poll(() => queueHeader.getAttribute('aria-expanded'), { timeout: 10_000 })

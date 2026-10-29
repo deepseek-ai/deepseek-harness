@@ -14,9 +14,9 @@
 /session-persistence/crash-recovery-preserves-an-interrupted-turn:
   en: 534044a0ce482d52
   zh: d2e8a7dfeb066946
-/session-persistence/sessionlocation-refusal-diagnostics-artifact-target:
-  en: 886589f052a916d7
-  zh: 2ca126aa700c933c
+/session-persistence/sessionlocation-per-session-artifact-metadata:
+  en: e310ff426d848262
+  zh: 8a7667349b0549a7
 /session-persistence/sessionheader-metadata-beside-the-log:
   en: 5795ae03d2d163cd
   zh: a46ceeb22cfbb6a1

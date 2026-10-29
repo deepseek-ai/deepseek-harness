@@ -16,5 +16,5 @@ it('selects zh_CN only for a Chinese primary language subtag', () => {
     platformClientHeaders(null, { version: 'v', locale: value, timezoneOffsetSeconds: 0 })['x-client-locale']
   expect(locale('zh')).toBe('zh_CN')
   expect(locale('ZH_hans')).toBe('zh_CN')
-  for (const value of ['en', 'en-US', 'fr-FR', 'English', '', 'zhx']) expect(locale(value)).toBe('en_US')
+  for (const value of ['ja', 'ja-JP', 'en', 'en-US', 'fr-FR', 'English', '', 'zhx']) expect(locale(value)).toBe('en_US')
 })

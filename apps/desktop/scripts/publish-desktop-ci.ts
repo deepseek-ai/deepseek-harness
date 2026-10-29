@@ -18,7 +18,7 @@ import { desktopPublishQualificationError } from './desktop-publish-qualificatio
 
 const routeSchema = z.object({ runId: z.string(), attempt: z.string(), commit: z.string(), runnerName: z.string(),
   sourceRef: z.string(), channel: z.enum(['nightly', 'latest']),
-  target: z.enum(['mac-arm64', 'win-x64']), preset: z.enum(['test', 'production']) })
+  target: z.enum(['mac-arm64', 'mac-x64', 'win-x64']), preset: z.enum(['test', 'production']) })
 
 /**
  * Check retained bytes, original machine, destination and signatures before reading any upload secret.

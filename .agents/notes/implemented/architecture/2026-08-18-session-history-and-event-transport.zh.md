@@ -139,11 +139,11 @@ repair 期间旧 window 保持可读；page 与期间积累的 live entries 拼�
 
 `packages/api/session-controller` 提供 Host `ctx.sessionController` 与生成的 `ctx.remote.session` namespace。
 
-它拥有 Session list、search、create、selectModel、rename、fork、prompt、attachment、updateQueue、cancel、page、follow 与 control。Host generation 的 model catalog 通过独立的 `session/modelCatalog` 公开，因为它不属于特定 Session。
+它拥有 Session list、search、create、selectModel、rename、fork、prompt、attachment、updateQueue、cancel、`events`、已弃用的 `page`、`follow`、`control`，以及 `observeEvent`、`projections`、`observeProjections`、`state`、`observeState` 与 `wait`。Host generation 的 model catalog 通过独立的 `session/modelCatalog` 公开，因为它不属于特定 Session。
 
 包内的 agent、commands、control、history 与 list controller 分开实现，但 Session 身份解析、激活策略、subagent ownership 和 Remote 错误投影只有一个公开 owner。
 
-其他 Host Remote namespace 通过 `ctx.sessionController.inspect()` 或 `resolveAgent()` 复用同一身份规则，不保留第二份 Session resolver。
+其他 Host Remote namespace 通过 `ctx.sessionController.resolveAgent()` 复用同一套允许恢复 Session 的身份规则，不保留第二份 Session resolver。
 
 #### 激活策略
 
@@ -157,7 +157,8 @@ Session Remote 方法传递 `SessionId` 或 `SessionAddress`，不靠参数类�
 | `session.page(address)` | attached Session 或 persistence 日志 | 永不恢复 Agent |
 | `session.follow(address)` | 一份携带 opening page 与 projection 的 live 或 prepared observation | 先发布 snapshot，再在后台把普通冷 Session 提升一次 |
 | `session.control()` | 当前 attached Agent、pending registry 与进程内 registry | baseline 与重连不恢复 Agent |
-| `session.attachment`、fork 源读取 | 已授权的持久 Session 数据 | 读取不恢复 Agent |
+| Fork 源读取 | 已授权的持久 Session 数据 | 读取不恢复 Agent |
+| `session.attachment` | 按[图片访问规则](2026-10-23-store-scoped-image-reads.zh.md)读取附件存储 | 读取不恢复 Agent |
 | `session.updateQueue` | live Agent 或普通持久 Session | 修改 Inbox 前恢复普通冷 Session |
 | `session.cancel` | 仅命中当前 live Agent | 不为已消失状态恢复 Agent |
 | `models`、`selectModel`、`rename`、`prompt` | 命令解析目标 Session | 仅按方法约定显式恢复 |
@@ -173,9 +174,9 @@ Session Remote 方法传递 `SessionId` 或 `SessionAddress`，不靠参数类�
 
 #### Session 日志
 
-`session.page` 返回一段按消息边界裁剪、内部 seq 连续的历史窗口。每个请求必须显式携带 `throughSeq`；该值来自对应 `session.follow` generation 的 opening cursor，并把本次读取固定在同一个日志切点。无 `beforeSeq` 的 tail page 必须精确结束于 `throughSeq`，其中 `-1` 表示空日志；`beforeSeq` 只选择该切点之前的更早页面，不能替代同步 cursor。`maxMessages` 限制 user／assistant 消息数，不丢弃这些消息之间的 chunk、tool 或状态事件。
+`session.events` 返回一段按消息边界裁剪、内部 seq 连续的历史窗口。`throughSeq` 可省略：省略时选取观察到的日志末尾，并把该切点作为页面的 inclusive `cursor` 返回；显式提供时把本次读取固定在该切点。无 `beforeSeq` 的 page 精确结束于所选切点，其中 `-1` 表示空日志；`beforeSeq` 只选择该切点之前的更早页面，不能替代同步 cursor。`maxMessages` 限制 user／assistant 消息数，不丢弃这些消息之间的 chunk、tool 或状态事件。已弃用的 `session.page` 入口返回同一类型。
 
-tail page 同时携带不晚于 `throughSeq` 的 projection baseline；旧页只携带历史 entries。Client 以 projection watermark 合并 page 与后续 live control 更新。
+page 只携带记录、`hasMore` 和 inclusive `cursor`；projection baseline 来自 follow 的开场快照或 control 流，不来自 page。Client 以 projection watermark 合并 page 与后续 live control 更新。
 
 普通 Session 与 direct subagent 使用同一个 `SessionAddress` 协议。direct subagent 地址同时携带父 Session、子 Session 与 mode，Host 冷读时验证持久 ownership 和 descriptor，不能只凭 child id 越权读取。
 

@@ -1,4 +1,5 @@
 /** The external MCP process is replaced by barriers to pin disposal ordering. */
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import ComputerUse from '@deepseek-ai/dsh-computer-use'
@@ -42,6 +43,7 @@ async function context(): Promise<Context> {
   await ctx.plugin(ComputerUse)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   return ctx
 }
 

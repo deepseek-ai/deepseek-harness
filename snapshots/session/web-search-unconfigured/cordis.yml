@@ -1,0 +1,6 @@
+# Live-recording patch: the search key reference names no credential, so the
+# model request withholds web_search while the rest of the tool surface stays.
+- id: web-search-deepseek
+  name: '@deepseek-ai/dsh-web-search-deepseek'
+  config:
+    apiKeyEnv: DSH_SNAPSHOT_UNSET_SEARCH_KEY

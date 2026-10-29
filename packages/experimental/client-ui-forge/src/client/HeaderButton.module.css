@@ -1,0 +1,29 @@
+/* Icon-only header entry: the shared compact Button owns the radius, height,
+   and interaction fills, as for the header's other actions; the status dot
+   sits at the glyph's top-right corner. */
+.trigger {
+  position: relative;
+  flex: none;
+  width: 28px;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The forge tab is visible; the pressed fill outranks the Button's hover fill. */
+.trigger[aria-pressed='true'] {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+@media (hover: hover) {
+  .trigger[aria-pressed='true']:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-active);
+  }
+}
+
+.dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}

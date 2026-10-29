@@ -1,4 +1,4 @@
-# Desktop 本地更新验证
+# Desktop 本地验证
 
 [English](README.md) | 中文
 
@@ -10,10 +10,37 @@
 
 ## 目录
 
+- [故障报告验证](#verification-diagnostics)
+- [更新弹窗主题](#verification-theme)
 - [原生浮层可见性](#verification-overlay)
 - [验证证据](#verification-evidence)
 - [手动演练](#verification-interactive)
 - [待验证事项](#verification-open)
+
+<a id="verification-diagnostics"></a>
+
+## 故障报告验证
+
+产品行为与限制见[故障恢复与诊断](../docs/diagnostics/README.zh.md)。
+
+使用可丢弃的 profile、独立的 Electron `userData` 和实际打包客户端。构造最小本地组合包：`package.json` 的 `dsh.bundle.patch` 指向 `cordis.patch.yml`，需要执行代码时再加入插件模块，然后打成可本地安装的 `.tgz`。这些包会故意使应用出错，不得发布或安装到日常 profile。
+
+分别构造模块导入异常、插件初始化异常、`appReady` 后的异步异常，以及 Host 非零退出。用 patch 禁用 `agent`、`session`、`llm`、`tools` 提供者，检查服务缺失诊断。跨重启场景通过 `pluginManager` 选入该组合包，再重启同一 profile。运行期场景须实际观察客户端就绪；`appReady` 不代表窗口已经显示。
+
+检查原始错误与 cause 或退出码、跨重启的操作 ID 和 Host 运行 ID、报告收集完成标记与遗漏信息、原生弹窗中的文件获取，以及禁用插件恢复后的启动。记录安装包版本和源码提交；生成测试包成功或管理操作返回成功，都不能代替客户端功能验证。测试后恢复协议关联并退出测试进程。
+
+资源验证可构造大型稀疏历史文件、大量无关文件、密集记录，以及损坏行和未完成行。在独立新进程中测量，分开记录数据构造与收集开销，并核对实际读取量、输出大小、耗时和峰值内存。验证 Worker 取消时，可用仅测试加载的模块钩子在写入进入标记后挂起异步文件打开操作；先确认标记，再观察期限到达后的 Worker 退出，并逐字节核对基本报告。该方法不模拟内核系统调用卡死，也不代替打包客户端验证。
+<a id="verification-theme"></a>
+
+## 更新弹窗主题
+
+执行 `pnpm --dir apps/desktop run build` 后，在 macOS 上运行真实 Electron 配色夹具：
+
+```sh
+apps/desktop/.desktop-build/targets/mac-arm64/electron/Electron.app/Contents/MacOS/Electron apps/desktop/tests/fixtures/update-theme.mjs
+```
+
+夹具创建独立 profile，加载生产壳 HTML、sandboxed preload、渲染脚本及打包的 design token，仅替换固定 IPC 状态响应。12 个用例覆盖普通和强更文档的浅色／暗色初始状态、打开时切换及跟随系统。它检查文档背景透明、卡片／文字／按钮／遮罩配色、代码／地址表面、仅暗色显示的 1 CSS px 内描边及普通弹窗关闭图标，并将四张截图和 `result.json` 写入 `.desktop-build/qualification/update-theme-*`。它不启动 Host、不下载更新、不运行安装器，也不验证 Windows 原生渲染。首次关闭提示共用普通文档的 CSS 和主题脚本。
 
 <a id="verification-overlay"></a>
 
@@ -26,7 +53,7 @@ pnpm exec tsc -b apps/desktop/tsconfig.host.json
 apps/desktop/.desktop-build/targets/mac-arm64/electron/Electron.app/Contents/MacOS/Electron apps/desktop/tests/fixtures/update-overlay-visibility.mjs
 ```
 
-夹具使用独立 profile，在 `.desktop-build/qualification/update-overlay-*` 下写入 `result.json`。它对照所属测试目录中的预期输出，检查父窗口隐藏／显示、父窗口隐藏期间文档就绪两种顺序中的原生可见性、父页面不受模糊影响及监听清理。它不使用网络、产品登录或 dsh Host。这项验证覆盖原生窗口恢复，不覆盖完整的首次登录流程。
+夹具使用独立 profile，在 `.desktop-build/qualification/update-overlay-*` 下写入 `result.json`。它检查可见和隐藏的父窗口、不创建原生子窗口、父窗口可见性通知后独立对照窗口仍保留焦点，以及销毁父窗口时的视图和输入清理。它不使用网络、产品登录或 dsh Host。这项验证覆盖窗内承载方式，不覆盖完整的首次登录或安装流程。
 
 <a id="verification-interactive"></a>
 
@@ -49,8 +76,8 @@ Host、客户端与 Desktop 产物构建完成后，在 Windows 仓库根目录�
 | 常规 updater | 同版本／旧版本拒绝、用户授权完整下载、SHA-512 拒绝、传输中断、清单／下载停滞截止时间、显式重试、请求合并、同地址清单替换、就绪状态和独立安装交接通过 |
 | 强更策略 | 扁平化 `40005`、完整发布头、游客请求、无需强更验证、失败保留、间隔／退避、超时和 dispose（资源释放）回归通过 |
 | 常规调度 | 真实协调器配合模拟时钟的回归验证有上限的抖动／退避、手动复用、成功重置、不自动重试下载、不受系统时钟调整影响，以及 dispose。主入口测试验证聚焦／恢复节流、显式检查立即执行和退出清理 |
-| 真实强更窗口 | 服务端纯文本内容、Windows 内嵌 shell frame、不创建额外原生窗口且主窗口保持启用、Esc 阻塞、直接下载、同弹窗任务确认、稍后更新、仅恢复态页面操作、导航／复制反馈和新策略解除通过；定向测试验证关闭时退出且不清除策略 |
-| 真实常规弹窗 | 隔离预加载、380px 卡片、24px 圆角、黑色主按钮、父窗口模糊、Esc 取消后保留就绪，以及任务警告批准后的安装交接记录均通过 |
+| 真实强更窗口 | 服务端纯文本内容、Windows 内嵌 shell frame、不创建额外原生窗口且主窗口保持启用、Esc 阻塞、直接下载、同弹窗任务确认、稍后更新、仅恢复态页面操作、导航／复制反馈和新策略解除通过；定向主入口测试验证关闭时隐藏、不退出也不停止 Host，并保留策略 |
+| 真实常规弹窗 | 隔离预加载、380px 卡片、24px 圆角、随主题变化的主按钮、不模糊父页面的半透明遮罩、Esc 取消后保留就绪，以及任务警告批准后的安装交接记录均通过 |
 | 解锁后的 Windows 交互 | 对真实强更页面执行系统级点击并截图，确认 Esc 阻塞、用户发起下载、就绪、红色策略错误提示，以及弹窗解除后父窗口恢复可用。fixture 提供的原生任务警告弹窗在选择稍后更新后回到就绪态；任务活动为模拟，不是完整 Host 工作负载 |
 | 主入口 | 已知阻塞拒绝插件修改和恢复，但不停止 Host；新成功响应关闭阻塞；打包策略忽略环境覆盖；正常停止后的安装器失败在下次确认前恢复 Host，并保留强更阻塞 |
 | Host 任务保护 | 替换组合环境后的真实控制器识别运行中的 agent、排队的 turn／step、全局和 agent job；API 读取不触发警告。请求准入锁定向新请求返回 503，等待已有请求结束并复查任务；解锁恢复准入 |
@@ -63,7 +90,7 @@ Chromium headless shell revision 1228 已安装在忽略目录 `.desktop-build/p
 
 [构建后 Host 场景](fixtures/host-update-qualification.mjs) 使用真实 profile Loader、standard agent 预设、任务服务和 Node 后台进程。它验证排队的轮次／步骤、运行中的模型请求、等待答复的提问／审批、运行／停止中的全局和 agent job、不会取消任务的准入锁定、准入恢复，以及 Host 释放后的检查拒绝。仅模型响应和人工答复使用替身。两个独立调用使用私有 profile 和会话数据并发通过；全部自有 agent、job 和 Host 完成后才写入成功报告。
 
-[Electron 工作区运行器](../scripts/test-workspace-updates.ts) 在私有目录中执行编译后的主入口，使用真实预加载、工作区和独立 Host 进程。它确认首次启动声明，并通过 Electron 输入事件及嵌入式 Windows frame 的 Chromium 调试器输入操作页面按钮。私有应用复用已准备的目标运行时资源。十个场景通过，覆盖菜单反馈、下载失败与重试、独立安装确认、确认期间真实任务创建、推迟安装、强更阻塞和真实 Host 停止超时。普通与强更失败均恢复替代 Host，并要求重新确认安装；恢复不会清除强更策略。分发使用本地服务器，安装被拦截；这些不是签名已安装应用的验证结果。
+[Electron 工作区运行器](../scripts/test-workspace-updates.ts) 在私有目录中执行编译后的主入口，使用真实预加载、工作区和独立 Host 进程。它确认首次启动声明，并通过 Electron 输入事件及嵌入式 Windows frame 的 Chromium 调试器输入操作页面按钮。私有应用复用已准备的目标运行时资源。已有 Windows 运行记录中十个场景通过，覆盖菜单反馈、下载失败与重试、独立安装确认、确认期间真实任务创建、推迟安装、强更阻塞和真实 Host 停止超时。普通与强更失败均恢复替代 Host，并要求重新确认安装；恢复不会清除强更策略。分发使用本地服务器，安装被拦截；这些不是签名已安装应用的验证结果。macOS 工作区路径尚未完成验证；这些 Windows 结果不覆盖它。
 
 [Windows 验签运行器](../scripts/test-windows-update-signature.mjs) 使用已安装的 electron-builder 元数据生成器和 `NsisUpdater` 验签器，输入为公开发布证书和真实可执行文件。发布者属性匹配时通过；同一有效签名在预期发布者不同时被拒绝，未签名可执行文件也被拒绝。缺少发布者的负对照确认验签被跳过。单元回归覆盖 DN 转义、不完整身份，以及显式或宿主默认 Windows 目标；移除发布者配置会使两条元数据用例失败。此检查不下载、安装或签名产物。
 

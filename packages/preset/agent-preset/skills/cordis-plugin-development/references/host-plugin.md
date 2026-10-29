@@ -30,7 +30,7 @@ A Host-only bundle needs no dependencies, install scripts, or build tool:
 
 Plugin Manager and Settings read `meta.title` and `meta.description` from exported locale JSON and an icon from exported resources without activating plugins. Complete this checklist before installation:
 
-- Write a recognizable title and a description of the capability in `locale/en.json` under `meta.title` and `meta.description`. Add the same fields for the user's language and other supported locales, such as `locale/zh.json`; do not leave template copy unrelated to the delivered plugin.
+- Write a recognizable title and a description of the capability in `locale/en.json` under `meta.title` and `meta.description`. Add the same fields for the user's language and other supported locales, such as `locale/zh.json`; do not leave template copy unrelated to the delivered plugin. Write English titles and other UI labels in sentence case: capitalize only the first word and proper nouns, as in `Git worktrees`.
 - Create an original icon or use artwork whose license permits redistribution, retaining any required attribution.
 - Export `./locale/*.json` and `./icon`; retain existing runtime exports. Keep the patch, locales, icon, and every runtime file in `files`, updating it whenever you add modules or assets. For a packed or published bundle, verify the actual packed file list. Local directory installation links the checkout instead, so check the files directly; `files` does not filter a linked directory.
 - Check that the icon is a valid image of the declared format and satisfies the path and size limits below. An accepted filename alone does not establish that its bytes render.
@@ -38,7 +38,7 @@ Plugin Manager and Settings read `meta.title` and `meta.description` from export
 For example, the locale file contains:
 
 ```json
-{ "meta": { "title": "My Decoration", "description": "Draws a badge under the composer." } }
+{ "meta": { "title": "My decoration", "description": "Draws a badge under the composer." } }
 ```
 
 ```json
@@ -62,6 +62,19 @@ An existing plugin's metadata may remain unchanged when it still describes the r
 - A service class as the default export.
 
 Register every resource inside `apply` with `ctx.effect` or `ctx.on` and return its cleanup. A plugin that declares `Config` validates the row's `config` at activation; query `Config.listConfigs` for an installed plugin's schema before writing its `config`, and follow `$defs` references in the returned document.
+
+## Persist your own configuration
+
+Plugin code never persists configuration by reading, filtering, and rewriting the active profile's `cordis.patch.yml`, and never locates that file by walking up from the package directory. That file is not your bundle's patch: it belongs to the user and holds other plugins' `insert` rows, comments, and `!!js` expressions. To change its own configuration after `apply` returns, a plugin uses the config editor:
+
+```js
+const entry = ctx.fiber.entry
+const editor = ctx.get('configEditor')
+if (entry === undefined || editor === undefined) throw new Error('Configuration cannot be saved in this profile')
+await editor.edit(entry, current => ({ ...current, field: value }))
+```
+
+`change` returns the row's complete config. The editor keeps the rest of the file, validates the candidate, serializes the write with other profile changes, and rejects values that a higher layer overrides. Report a rejection or a missing editor to the user instead of claiming the value was saved. Editing an ordinary field restarts the plugin so `apply` rebuilds its state; a field declared `.volatile()` updates in place and is read with `config.field.get()`. Store secrets, such as a token from an in-app sign-in or binding flow, as `ctx.credentials.modifyRecord()` records, not configuration; declare `credentials` in `inject` or read it with `ctx.get('credentials')`, and see the `@deepseek-ai/dsh-credentials` README for record keys.
 
 ## Install, enable, and observe
 

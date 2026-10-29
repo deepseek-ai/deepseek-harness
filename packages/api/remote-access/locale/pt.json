@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Controle de acesso remoto",
+    "description": "Controle quais métodos as conexões não proprietárias podem acessar e reter instantâneos de permissão para cada conexão."
+  }
+}

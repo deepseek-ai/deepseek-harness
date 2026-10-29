@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Traducción automática de razonamiento",
+    "description": "Traduce las filas “pensar” expandidas al idioma que elija mientras el agente las escribe, y “Ver original” vuelve al texto original.",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -48,6 +48,7 @@
  * - `FAKE_EXIT_BEFORE_INIT`: exit 3 immediately (spawn-then-die probe).
  * - `FAKE_STDERR`: write this line to stderr at boot (diagnostics-tail probe).
  * - `FAKE_STDERR_NO_NEWLINE`: write this to stderr WITHOUT a newline (buffer-flush probe).
+ * - `FAKE_APPROVAL`: send one server approval request after initialization and echo its response as a notification.
  * - `FAKE_RECORD_INIT`: append each `initialize` params JSON to this file (handshake probe).
  */
 
@@ -245,9 +246,19 @@ const reader = createInterface({ input: process.stdin })
 const settledSessions = new Set<string>()
 reader.on('line', (line) => {
   if (line.trim().length === 0) return
-  const frame = JSON.parse(line) as { id?: string | number; method?: string; params?: Record<string, unknown> }
+  const frame = JSON.parse(line) as {
+    id?: string | number
+    method?: string
+    params?: Record<string, unknown>
+    result?: unknown
+    error?: unknown
+  }
+  if (frame.id === 'approval-client-test') {
+    notify('approval/response', { result: frame.result, error: frame.error })
+    return
+  }
   if (frame.method === undefined || frame.id === undefined) return
-  const respond = (result: object): void => { write({ jsonrpc: '2.0', id: frame.id, result }) }
+  const respond = (result: unknown): void => { write({ jsonrpc: '2.0', id: frame.id, result }) }
   switch (frame.method) {
     case 'initialize':
       if (typeof frame.params?.cwd === 'string') originCwd = frame.params.cwd
@@ -282,6 +293,7 @@ reader.on('line', (line) => {
         return
       }
       respond({ serverInfo: { name: 'deepseek-harness-sdk-runtime', version: '0.0.1' } })
+      if (env.FAKE_APPROVAL !== undefined) write({ jsonrpc: '2.0', id: 'approval-client-test', method: 'approval/request', params: { sessionId: 'main', toolName: 'bash' } })
       return
     case 'session/resume':
       if (env.FAKE_RESUME_ERROR !== undefined) {
@@ -305,7 +317,22 @@ reader.on('line', (line) => {
       respond({ cwd })
       return
     }
+    case 'session/query':
     case 'session/prompt': {
+      const blocks = frame.params?.contentBlocks as { type: string; text?: string }[]
+      const text = blocks.filter(block => block.type === 'text').map(block => block.text).join('\n')
+      if (frame.method === 'session/query' && text === '/compact') {
+        const execution = { commandId: 'command-1', result: { kind: 'success', text: '/compact' } }
+        const completed = execution
+        event(sessionIdOf(frame.params), 'command/run', { commandId: completed.commandId })
+        event(sessionIdOf(frame.params), 'command/done', { commandId: completed.commandId, ...completed.result })
+        notify('session.query.completed', { sessionId: frame.params?.sessionId, commandId: completed.commandId,
+          finalResponse: completed.result?.text ?? '', finishReason: completed.result?.kind === 'error' ? 'error' : 'completed' })
+        respond({ kind: 'command', execution })
+        return
+      }
+      const promptResult = (messageId: string): object => frame.method === 'session/query'
+        ? { kind: 'prompt', messageId } : { messageId }
       const sessionId = sessionIdOf(frame.params)
       const messageId = `fake-user-${seq}`
       event(sessionId, 'agent/inbox/spliced', {
@@ -330,7 +357,7 @@ reader.on('line', (line) => {
       }
       if (env.FAKE_EXIT_DURING_PROMPT !== undefined) {
         const partial = env.FAKE_TEXT ?? 'partial before exit'
-        respond({ messageId })
+        respond(promptResult(messageId))
         event(sessionId, 'assistant/message', {
           turn: 0,
           step: 0,
@@ -354,7 +381,7 @@ reader.on('line', (line) => {
       runTurn(sessionId)
       notify('session.status', { sessionId, status: 'idle' })
       settledSessions.add(sessionId)
-      respond({ messageId })
+      respond(promptResult(messageId))
       return
     }
     case 'session/wait':

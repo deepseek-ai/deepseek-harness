@@ -2,7 +2,6 @@
 
 import { Hash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
-import type { IncomingMessage, ServerResponse } from 'node:http'
 import { SourceMap } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -10,7 +9,7 @@ import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { Context, FiberState, type Fiber } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { renderIndexInjections, type WebServer, type WebRoute } from '@deepseek-ai/dsh-host-webserver'
+import { renderIndexInjections, type WebServer, type WebResourceRoute, type WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import * as modulesClient from '../src/client/index.ts'
 import { ClientModuleRegistry, bootInjections, orderByModuleGraph } from '../src/index.ts'
 import type { ClientModuleLoaderTarget, WebBootEntry, WebBootGraph } from '../src/client/index.ts'
@@ -68,7 +67,7 @@ const BOOTSTRAP_URL = comboReference([MODULES_ID], 'boot')
 const APPLICATION_URL = comboReference([UI_RENDERER_ID], 'app')
 
 let root: string | undefined
-const contexts: { ctx: Context; ready?: Promise<WebRoute> }[] = []
+const contexts: { ctx: Context; ready?: Promise<WebResourceRoute> }[] = []
 
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map(async ({ ctx, ready }) => {
@@ -166,7 +165,7 @@ function constructWithRoute(
     entryBaseUrl?: string
     internal?: NonNullable<Context['loader']['internal']>
   } = {},
-): { context: Context; service: ClientModuleRegistry; route: Promise<WebRoute> } {
+): { context: Context; service: ClientModuleRegistry; route: Promise<WebResourceRoute> } {
   const ctx = new Context()
   const owned: typeof contexts[number] = { ctx }
   contexts.push(owned)
@@ -184,11 +183,11 @@ function constructWithRoute(
       }
     },
   })
-  const route = Promise.withResolvers<WebRoute>()
+  const route = Promise.withResolvers<WebResourceRoute>()
   const webServer: Pick<WebServer, 'port' | 'register' | 'tapIndex'> = {
     port: 0,
     register: (candidate) => {
-      if (candidate.path === '/plugins') route.resolve(candidate)
+      if (candidate.path === '/plugins' && 'resource' in candidate) route.resolve(candidate)
       return () => {}
     },
     tapIndex: () => () => {},
@@ -204,28 +203,15 @@ function construct(packageNames: string[]): ClientModuleRegistry {
   return constructWithRoute(packageNames).service
 }
 
-/** Invoke the registered plugin route and capture status, headers, and bytes. */
-async function routeRequest(route: Promise<WebRoute>, url: string, method = 'GET'): Promise<{
+/** Invoke the registered plugin resource and capture status, headers, and bytes. */
+async function routeRequest(route: Promise<WebResourceRoute>, url: string, method = 'GET'): Promise<{
   status: number
-  headers: Record<string, string> | undefined
+  headers: Record<string, string>
   body: Buffer
 }> {
-  let status = 0
-  let headers: Record<string, string> | undefined
-  let body = Buffer.alloc(0)
-  const response = {
-    writeHead(nextStatus: number, nextHeaders?: Record<string, string>) {
-      status = nextStatus
-      headers = nextHeaders
-      return response
-    },
-    end(chunk?: Uint8Array) {
-      body = chunk === undefined ? Buffer.alloc(0) : Buffer.from(chunk)
-      return response
-    },
-  } as unknown as ServerResponse
-  await (await route).handler({ method, url, headers: {} } as IncomingMessage, response)
-  return { status, headers, body }
+  const { resource } = await route
+  const response = await resource(new Request(new URL(url, 'http://localhost/'), { method }))
+  return { status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) }
 }
 
 /** Execute the exact first inline script emitted by the Host boot rows. */
@@ -903,7 +889,7 @@ describe('client bundle activation', () => {
     expect(batch).toMatchObject({ phase: 'application', entries: [packageName] })
     const batchScript = await routeRequest(route, batch.url)
     expect(batchScript.status).toBe(200)
-    expect(batchScript.headers?.['cache-control']).toBe('public, max-age=31536000, immutable')
+    expect(batchScript.headers['cache-control']).toBe('public, max-age=31536000, immutable')
     expect(batchScript.body.toString('utf8')).toContain(`//# sourceMappingURL=${mapReference(batch.url)}`)
     const shellResponse = await service.fetchBundle(new Request(`dsh-app://app/${batch.url}`))
     expect(shellResponse.status).toBe(200)

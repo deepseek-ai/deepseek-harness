@@ -4,7 +4,9 @@
  * auxiliary model request; both providers read this section's credential and API
  * base. `web.searchProvider` and `web.fetchProvider` select them. A Session on the
  * DeepSeek account route authenticates with the account token when the account
- * service allows the endpoint; every other request uses the configured key.
+ * service allows the endpoint; every other request uses the configured key. Both
+ * providers report themselves not ready for a model request whose operation would
+ * have no credential.
  * @module @deepseek-ai/dsh-web-deepseek-api
  */
 import type { Context, Volatile } from '@deepseek-ai/cordis'
@@ -14,7 +16,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-web'
 import { DeepSeekFetchApiProvider } from './fetch.ts'
 import { DEEPSEEK_DEFAULT_COUNT, DEEPSEEK_WEB_API_BASE_URL, DeepSeekSearchApiProvider } from './search.ts'
-import { deepSeekWebAuth } from './transport.ts'
+import { deepSeekWebAuth, deepSeekWebCredentialReady } from './transport.ts'
 
 export { DEEPSEEK_FETCH_API_PROVIDER_ID, DeepSeekFetchApiProvider } from './fetch.ts'
 export type { DeepSeekFetchApiOptions } from './fetch.ts'
@@ -65,19 +67,30 @@ function latestUserQuestion(session: Session | undefined): string | undefined {
 }
 
 /**
- * Register the Search API and Fetch API providers over one live settings section.
+ * Register the Search API and Fetch API providers over one live settings section. Each provider's
+ * `ready()` answers whether an operation for a model request on the given route would have a
+ * credential to send.
  * @param ctx - plugin context owning both registrations.
  * @param config - live settings, read once per operation.
  */
 export function apply(ctx: Context, config: Config): void {
-  const auth = () => deepSeekWebAuth(ctx, { apiKey: config.apiKey.get(), apiKeyEnv: config.apiKeyEnv.get() })
-  ctx.web.registerSearchProvider(new DeepSeekSearchApiProvider(() => ({
+  const keyConfig = () => ({ apiKey: config.apiKey.get(), apiKeyEnv: config.apiKeyEnv.get() })
+  const auth = () => deepSeekWebAuth(ctx, keyConfig())
+  const ready = (llmProvider: string | undefined) =>
+    deepSeekWebCredentialReady(ctx, { ...keyConfig(), baseURL: config.baseURL.get() }, llmProvider)
+  const searchApi = new DeepSeekSearchApiProvider(() => ({
     ...auth(),
     baseURL: config.baseURL.get(),
     count: config.count.get(),
     ...config.sendOriginalQuestion.get() ? {
       originalQuestion: () => latestUserQuestion(ctx.get('agents')?.currentInitiator()?.session),
     } : {},
-  })))
-  ctx.web.registerFetchProvider(new DeepSeekFetchApiProvider(() => ({ ...auth(), baseURL: config.baseURL.get() })))
+  }))
+  const fetchApi = new DeepSeekFetchApiProvider(() => ({ ...auth(), baseURL: config.baseURL.get() }))
+  ctx.web.registerSearchProvider({
+    id: searchApi.id, available: () => searchApi.available(), ready, search: (request, signal) => searchApi.search(request, signal),
+  })
+  ctx.web.registerFetchProvider({
+    id: fetchApi.id, available: () => fetchApi.available(), ready, fetch: (request, signal) => fetchApi.fetch(request, signal),
+  })
 }

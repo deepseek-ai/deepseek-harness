@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OAR-Subagenten",
+    "description": "Delegieren Sie Aufgaben über OAR an installierte Codierungsagenten mit den Konfigurationen Codex und Claude Code."
+  }
+}

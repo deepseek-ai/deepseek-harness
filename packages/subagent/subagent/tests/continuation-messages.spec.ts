@@ -67,3 +67,15 @@ it('includes closing text alongside structured results and diagnostics', () => {
     { type: 'text', text: 'safe diagnostic' },
   ])
 })
+
+it('omits the closing text after the child messaged its parent, keeping structured results and diagnostics', () => {
+  expect(createSettlementMessage(childId, {
+    stopReason: 'completed', output: [{ type: 'text', text: 'final answer, restated' }],
+    structured: { answer: 42 }, diagnostic: 'safe diagnostic',
+  }, true, true).content).toEqual([
+    summary,
+    { type: 'text', text: 'It sent you a message just before finishing, so its closing message is omitted.' },
+    { type: 'text', text: 'Structured result: {"answer":42}' },
+    { type: 'text', text: 'safe diagnostic' },
+  ])
+})

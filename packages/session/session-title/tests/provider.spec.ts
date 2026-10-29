@@ -52,6 +52,26 @@ function appendRoute(session: ReturnType<Context['sessions']['create']>, reason:
 }
 
 describe('SessionTitleService Provider lifecycle', () => {
+  it.each(['fork', 'subagent'] as const)('does not schedule first-prompt generation for an empty %s', async (kind) => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(SessionTitleService, CONFIG)
+    const generate = vi.fn(async () => ({ title: 'Unexpected', messageSeqs: [] }))
+    ctx.sessionTitle.register({ id: SessionTitleProviderId('first'), automatic: 'first-prompt', generate })
+    const source = ctx.sessions.create(SessionId('empty-source'))
+    const child = kind === 'fork' ? ctx.sessions.fork(source) : ctx.sessions.create(SessionId('child'), {
+      meta: { origin: 'subagent', parentSession: source.id },
+    })
+    expect(child.header.parentSession).toBe(kind === 'fork' ? undefined : source.id)
+    appendHumanPrompt(child, 'First own prompt')
+    appendRoute(child)
+    await settle()
+    expect(generate).not.toHaveBeenCalled()
+  })
+
   it('inherits title events across forks, skips first-prompt retitling, and lets all-messages update later', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)

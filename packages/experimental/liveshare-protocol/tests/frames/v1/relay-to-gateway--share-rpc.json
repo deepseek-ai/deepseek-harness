@@ -1,0 +1,20 @@
+{
+  "dir": "relay->gateway",
+  "note": "one viewer request the Relay routed, carrying the identity it asserted",
+  "frame": {
+    "type": "share-rpc",
+    "id": 7,
+    "body": {
+      "op": "call",
+      "path": "/__share/context",
+      "body": {}
+    },
+    "actor": {
+      "providerId": "example",
+      "tenantId": "tenant-a",
+      "subjectId": "user_viewer",
+      "credential": "signed-owner-verified-token"
+    }
+  },
+  "optional": []
+}

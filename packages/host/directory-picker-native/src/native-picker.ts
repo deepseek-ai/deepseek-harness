@@ -29,6 +29,8 @@ const DIALOG_TITLE = 'Select Workspace Directory'
  * arrives as argv, never as executable source, and a cancel prints an empty
  * line instead of failing. A cancelled panel still reports its highlighted or
  * current directory in `URLs`, so only an OK response reads the selection.
+ * Activation is queued for the modal event loop; requesting it before that
+ * loop starts can leave the panel inactive.
  */
 const MAC_PANEL = `
 ObjC.import('AppKit');
@@ -48,13 +50,15 @@ function run(argv) {
   editMenu.addItemWithTitleActionKeyEquivalent('Paste', 'paste:', 'v');
   editMenu.addItemWithTitleActionKeyEquivalent('Select All', 'selectAll:', 'a');
   app.mainMenu = mainMenu;
-  app.activateIgnoringOtherApps(true);
   var panel = $.NSOpenPanel.openPanel;
   panel.canChooseFiles = false;
   panel.canChooseDirectories = true;
   panel.canCreateDirectories = true;
   panel.allowsMultipleSelection = false;
   panel.message = argv[0];
+  $.NSOperationQueue.mainQueue.addOperationWithBlock(function() {
+    app.activateIgnoringOtherApps(true);
+  });
   if (panel.runModal !== $.NSModalResponseOK) return '';
   var urls = panel.URLs;
   if (urls.count < 1) return '';

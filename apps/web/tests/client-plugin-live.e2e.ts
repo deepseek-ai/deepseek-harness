@@ -26,7 +26,7 @@ async function openInventory(page: Page, url: string) {
   return dialog
 }
 
-it('places dynamic Session menu rows by order among the shipped ones and removes them with their fiber', async () => {
+it('keeps ordered legacy Session menu rows before Archive and removes them with their fiber', async () => {
   const scaffold = await launchWebScaffold({ extraInstallAnchors: [join(FIXTURE, 'package.json')] })
   onTestFinished(() => scaffold.close())
   const workspace = await scaffold.ctx.workspaceRegistry.create(scaffold.workspaceCwd)
@@ -46,12 +46,13 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
 
     const trailing = row.locator('[data-session-trailing]')
     const observations: { stage: string; icons: string[]; time: boolean; pinned: boolean; actions: boolean }[] = []
-    const observe = async (stage: string, iconsVisible: boolean, actionsVisible: boolean, target = row): Promise<void> => {
+    const observe = async (stage: string, iconsVisible: boolean, actionsVisible: boolean, target = row,
+      timeVisible = iconsVisible): Promise<void> => {
       const icons = target.locator('[data-session-trailing]')
       const actions = target.getByRole('button', { name: `Session actions for ${SESSION_TITLE}` })
       const time = target.locator('[class*="time"]')
       await expect.poll(() => icons.first().isVisible()).toBe(iconsVisible)
-      await expect.poll(() => time.isVisible()).toBe(iconsVisible)
+      await expect.poll(() => time.isVisible()).toBe(timeVisible)
       await expect.poll(() => actions.isVisible()).toBe(actionsVisible)
       observations.push({
         stage,
@@ -94,14 +95,16 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     await observe('menu-open', false, true)
     const menu = page.getByRole('menu')
     await menu.waitFor()
-    expect(await menu.getByRole('separator').count()).toBe(1)
+    expect(await menu.getByRole('separator').count()).toBe(3)
+    const exportRow = menu.getByRole('menuitem', { name: 'Export session', exact: true })
+    expect(await exportRow.locator('..').getByRole('separator').isVisible()).toBe(true)
     await compareOrRefreshGolden(
       SESSION_ACTION_EXPECTED,
       await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd),
       webSnapshotMode(),
     )
 
-    await menu.getByRole('menuitem', { name: 'Export session' }).press('Enter')
+    await exportRow.press('Enter')
     await expect.poll(() => menu.count()).toBe(0)
     expect(await page.evaluate(() => ({
       action: document.documentElement.dataset.sessionAction,
@@ -113,7 +116,7 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     await page.mouse.move(0, 0)
     await observe('blur', true, false)
     await page.setViewportSize({ width: 390, height: 844 })
-    await page.getByRole('button', { name: 'Open sidebar', exact: true }).first().click()
+    await page.locator('[data-shell-leading]').getByRole('button', { name: 'Open sidebar', exact: true }).click()
     await page.mouse.move(0, 0)
     await observe('narrow', true, false)
     const bounds = await row.evaluate((element) => {
@@ -133,23 +136,23 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     try {
       const touchConsole = watchConsole(touchPage)
       await touchPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-      await touchPage.getByRole('button', { name: 'Open sidebar', exact: true }).first().click()
+      await touchPage.locator('[data-shell-leading]').getByRole('button', { name: 'Open sidebar', exact: true }).click()
       const touchRow = touchPage.getByRole('treeitem').filter({ has: touchPage.getByText(SESSION_TITLE, { exact: true }) })
       const touchTrigger = touchRow.getByRole('button', { name: `Session actions for ${SESSION_TITLE}` })
       await touchTrigger.waitFor()
       expect(await touchPage.evaluate(() => matchMedia('(hover: hover)').matches)).toBe(false)
-      await observe('touch', true, true, touchRow)
+      await observe('touch', true, true, touchRow, false)
       expect(await touchRow.getByRole('button', { name: 'Archive session', exact: true }).isVisible()).toBe(false)
       expect(await touchRow.getByRole('button', { name: 'Pin session', exact: true }).isVisible()).toBe(false)
       await touchTrigger.tap()
       await touchPage.getByRole('menu').waitFor()
-      await observe('touch-menu-open', true, true, touchRow)
+      await observe('touch-menu-open', true, true, touchRow, false)
       await touchPage.keyboard.press('Escape')
-      await observe('touch-menu-closed', true, true, touchRow)
+      await observe('touch-menu-closed', true, true, touchRow, false)
       await touchTrigger.tap()
       await touchPage.getByRole('menuitem', { name: 'Pin session', exact: true }).tap()
-      await touchRow.getByRole('img', { name: 'Pinned', exact: true }).waitFor()
-      await observe('touch-pinned', true, true, touchRow)
+      await touchRow.getByRole('button', { name: 'Unpin session', exact: true }).waitFor()
+      await observe('touch-pinned', true, true, touchRow, false)
       const touchBounds = await touchRow.evaluate((element) => {
         const title = element.querySelector('[class*="title"]')!.getBoundingClientRect()
         const resting = element.querySelector('[class*="rowResting"]')!.getBoundingClientRect()
@@ -173,7 +176,7 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
       expect(await row.evaluate(element => element === document.activeElement)).toBe(true)
       await observe('clicked-archived-row', true, false)
       await scaffold.ctx.workspaceRegistry.unarchiveSession(sessionId)
-      await observe('touch-unarchived', true, true, touchRow)
+      await observe('touch-unarchived', true, true, touchRow, false)
       expect(touchConsole.pageErrors).toEqual([])
     } finally {
       await touchPage.close()
@@ -193,13 +196,13 @@ it('places dynamic Session menu rows by order among the shipped ones and removes
     await row.hover()
     await trigger.click()
     await menu.waitFor()
-    const remainingNames = ['Pin session', 'Rename', 'Fork session', 'Archive session', 'Copy Session ID']
+    const remainingNames = ['Pin session', 'Rename', 'Fork session', 'Copy Session ID', 'Archive session']
     const remainingItems = menu.getByRole('menuitem')
     expect(await remainingItems.count()).toBe(remainingNames.length)
     for (const [index, name] of remainingNames.entries()) {
       expect(await remainingItems.nth(index).and(menu.getByRole('menuitem', { name, exact: true })).count()).toBe(1)
     }
-    expect(await menu.getByRole('separator').count()).toBe(0)
+    expect(await menu.getByRole('separator').count()).toBe(2)
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     await menu.getByRole('menuitem', { name: 'Copy Session ID', exact: true }).click()
     await expect.poll(() => menu.count()).toBe(0)

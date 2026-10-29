@@ -1,3 +1,4 @@
+import { type Dirent } from 'node:fs'
 import { lstat, readdir, realpath, rm } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -6,8 +7,12 @@ import { repositoryConfigHost } from './ts-project.ts'
 
 const knownOrphanEntries = new Set(['node_modules', 'lib', '.typecheck'])
 
+function errorCode(error: unknown): unknown {
+  return error instanceof Error && 'code' in error ? error.code : undefined
+}
+
 function isMissing(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+  return errorCode(error) === 'ENOENT'
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -20,14 +25,46 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-async function childDirectories(path: string): Promise<string[]> {
+async function directoryEntries(path: string): Promise<Dirent[]> {
   try {
-    const entries = await readdir(path, { withFileTypes: true })
-    return entries.filter(entry => entry.isDirectory()).map(entry => join(path, entry.name))
+    return await readdir(path, { withFileTypes: true })
   } catch (error) {
     if (isMissing(error)) return []
     throw error
   }
+}
+
+async function childDirectories(path: string): Promise<string[]> {
+  return (await directoryEntries(path)).filter(entry => entry.isDirectory()).map(entry => join(path, entry.name))
+}
+
+/** Lists symbolic links directly in a node_modules directory and in its `@scope` directories. */
+async function moduleLinks(modulesDirectory: string): Promise<string[]> {
+  const links = (directory: string, entries: Dirent[]): string[] =>
+    entries.filter(entry => entry.isSymbolicLink()).map(entry => join(directory, entry.name))
+  const entries = await directoryEntries(modulesDirectory)
+  const result = links(modulesDirectory, entries)
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith('@')) continue
+    const scope = join(modulesDirectory, entry.name)
+    result.push(...links(scope, await directoryEntries(scope)))
+  }
+  return result
+}
+
+/** Resolves a link's canonical target, or undefined when the target cannot be reached. */
+async function linkTarget(link: string): Promise<string | undefined> {
+  try {
+    return await realpath(link)
+  } catch (error) {
+    if (['ENOENT', 'ENOTDIR', 'ELOOP'].includes(String(errorCode(error)))) return undefined
+    throw error
+  }
+}
+
+function isDescendant(root: string, path: string): boolean {
+  const relativePath = relative(root, path)
+  return relativePath !== '' && relativePath !== '..' && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath)
 }
 
 function repositoryPath(root: string, path: string): string {
@@ -108,6 +145,20 @@ export class RepositoryCleaner {
       }
     }
 
+    // pnpm install keeps links to deleted workspace packages. A link is residue when its
+    // target is unreachable or is removed by this plan; node_modules outside the repository is not scanned.
+    const removedPaths = (await Promise.all([...targets].map(linkTarget))).filter(path => path !== undefined)
+    for (const modulesDirectory of ['node_modules', 'node_modules/.pnpm/node_modules']) {
+      const canonicalModules = await linkTarget(join(this.root, modulesDirectory))
+      if (canonicalModules === undefined || !isDescendant(canonicalRoot, canonicalModules)) continue
+      for (const link of await moduleLinks(join(this.root, modulesDirectory))) {
+        const target = await linkTarget(link)
+        if (target === undefined || removedPaths.some(path => path === target || isDescendant(path, target))) {
+          await this.addIfPresent(targets, link, canonicalRoot)
+        }
+      }
+    }
+
     if (unsafeOrphans.length > 0) {
       throw new Error([
         'clean: refusing to remove package directories without package.json; unknown entries remain:',
@@ -159,8 +210,7 @@ export class RepositoryCleaner {
   }
 
   private assertDescendant(root: string, path: string, displayPath: string): void {
-    const repositoryRelative = relative(root, path)
-    if (repositoryRelative === '' || repositoryRelative === '..' || repositoryRelative.startsWith(`..${sep}`) || isAbsolute(repositoryRelative)) {
+    if (!isDescendant(root, path)) {
       throw new Error(`clean: refusing deletion target outside repository: ${displayPath}`)
     }
   }

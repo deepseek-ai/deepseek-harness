@@ -1,3 +1,4 @@
+import { es, fr, de, ru, pt } from '../src/client/locales.ts'
 // @vitest-environment jsdom
 /** Section, setup-card, and hand-written editor behavior over a scripted wire face. */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -286,7 +287,7 @@ function renderPiAiEditor(
 function authHelpText(): string | null {
   const button = screen.queryByRole('button', { name: en.authHelp })
   if (button === null) return null
-  fireEvent.mouseEnter(button)
+  fireEvent.pointerEnter(button)
   return screen.getByRole('tooltip').textContent
 }
 
@@ -2422,4 +2423,17 @@ it('renders the localized account row as signed in without an edit action', asyn
   const item = screen.getByText(en.deepSeekAccount).closest('li')!
   expect(within(item).getByText(en.accountSignedIn)).toBeTruthy()
   expect(within(item).queryByText(en.edit)).toBeNull()
+})
+
+it.each([es, fr, de, ru, pt])('keeps capacity examples in translated validation messages parseable', (dictionary) => {
+  for (const [key, examples] of [
+    ['modelContextInvalid', ['131072', '256K', '1M']],
+    ['modelMaxTokensInvalid', ['8192', '64K', '1M']],
+  ] as const) {
+    for (const example of examples) {
+      const token = dictionary[key].match(new RegExp(`(?<![0-9])${example}(?![0-9A-Za-z])`, 'u'))?.[0]
+      expect(token, dictionary[key]).toBe(example)
+      expect(parseCapacity(token!)).toBeGreaterThan(0)
+    }
+  }
 })

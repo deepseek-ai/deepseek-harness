@@ -75,14 +75,14 @@ class GoalService extends Service {
     return {
       agentId: agent.id,
       title: request.title,
-      scope: (this.ctx as MarkedContext).fixtureScope ?? 'root',
+      scope: 'fixtureScope' in this.ctx ? (this.ctx as MarkedContext).fixtureScope : 'root',
     }
   }
 
   @RemoteScope('gatewayFixture')
   rename(request: { readonly title: string }): unknown {
     this.calls.push('rename')
-    return { title: request.title, scope: (this.ctx as MarkedContext).fixtureScope ?? 'root' }
+    return { title: request.title, scope: 'fixtureScope' in this.ctx ? (this.ctx as MarkedContext).fixtureScope : 'root' }
   }
 
   @Remote
@@ -153,7 +153,7 @@ class FakeConnectionService extends Service {
 
 function fakeHttpServer(routes: WebRoute[]): Pick<WebServer, 'register' | 'tapIndex' | 'port'> {
   return {
-    register(route) {
+    register(route: WebRoute) {
       if (routes.some(candidate => candidate.kind === route.kind && candidate.path === route.path)) {
         throw new Error(`duplicate route ${route.path}`)
       }

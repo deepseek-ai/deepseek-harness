@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek Carga del registro de sesión",
+    "description": "Cuando está habilitado, los registros de sesión se cargan en DeepSeek con las solicitudes del modelo oficial API."
+  }
+}

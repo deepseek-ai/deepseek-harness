@@ -10,7 +10,7 @@ Web 插件页只管理用户装进 profile 的组合包。像 Agent Teams 这样
 
 ## 决策
 
-启动器在 `OPTIONAL_BUNDLES`（`packages/boot/app-boot/src/profile.ts`，与 profile 模板并列）里点名安装随附、供用户开启的组合包。每一个都必须是 `apps/cli` 声明了 `dsh.bundle.patch` 的运行时依赖，且不被任何随附 profile 模板选中。插件管理器的 `listBundles` 把这类组合包报告为 `optional`：选中前保持关闭、永不可卸载、像其他安装提供的组合包一样从安装目录解析。Web 插件页以可选组合包开启「官方」分组，属于实验包的带实验性标签，排在 profile 自己已安装的组合包之前。
+启动器在 `OPTIONAL_BUNDLES`（`packages/util/official-bundles/src/bundles.ts`，与 profile 模板并列）里点名安装随附、供用户开启的组合包。每一个都必须是 `apps/cli` 声明了 `dsh.bundle.patch` 的运行时依赖，且不被任何随附 profile 模板选中。插件管理器的 `listBundles` 把这类组合包报告为 `optional`：选中前保持关闭、永不可卸载、像其他安装提供的组合包一样从安装目录解析。Web 插件页在「官方」分组展示可供选择的可选组合包，属于实验包的带实验性标签，排在 profile 自己已安装的组合包之前。[持久终端组合包](../../../../packages/experimental/terminal-bundle/README.zh.md)仍可供 Host 使用，但即使已启用也不提供页面开关；已有的 profile 选择保持不变。
 
 默认产品隔离的规则保持不变，只声明一个例外：可选组合包的依赖图在默认产品之外。静态门禁跳过从 `@deepseek-ai/dsh` 到列表中组合包的 `dependencies` 边，仍然拒绝运行时 import、随附组合、preset 或默认模板对它的引用，拒绝列表没有点名的实验依赖，也拒绝不是运行时依赖或不是组合包的列表项。workspace 约束检查接受同样的 `dependencies` 边而不接受其他运行时依赖段；发布时的 packed-install 检查对已安装入口包跳过这些边，并要求列表中的每个组合包都已安装。
 

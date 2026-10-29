@@ -59,17 +59,17 @@ function inherited(session: Session): readonly SessionEvent[] {
 }
 
 describe('SessionStore.fork', () => {
-  it('forks an empty live session as an empty child with lineage metadata', async () => {
+  it('forks an empty live session as an independent empty seeded session', async () => {
     const { ctx, sessions } = await setup()
     const source = ctx.sessions.create(SessionId('empty-parent'), { meta: { cwd: '/workspace' } })
 
     const child = sessions.fork(source, undefined, SessionId('empty-child'))
 
     expect(inherited(child)).toEqual([])
+    expect(child.header).not.toHaveProperty('parentSession')
     expect(child.header).toMatchObject({
       id: SessionId('empty-child'),
       cwd: '/workspace',
-      parentSession: SessionId('empty-parent'),
       isSeeded: true,
     })
     expect(child.inheritedEventCount).toBe(0)
@@ -91,10 +91,10 @@ describe('SessionStore.fork', () => {
     }).toThrow(TypeError)
     expect(firstUserMessage(source.snapshotEvents()).data.content).toEqual([{ type: 'text', text: 'hello' }])
     expect(firstUserMessage(child.snapshotEvents()).data.content).toEqual([{ type: 'text', text: 'hello' }])
+    expect(child.header).not.toHaveProperty('parentSession')
     expect(child.header).toMatchObject({
       id: SessionId('child'),
       cwd: '/workspace',
-      parentSession: SessionId('parent'),
       isSeeded: true,
     })
     expect(child.inheritedEventCount).toBe(source.seq)

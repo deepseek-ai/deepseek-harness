@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Servicio de manifiesto de complemento",
+    "description": "Proporciona una lista de solo lectura de las entradas de complementos actuales, el estado de habilitación de la configuración y el estado de ejecución."
+  }
+}

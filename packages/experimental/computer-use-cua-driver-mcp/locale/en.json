@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Computer Use (Cua Driver MCP)",
+    "title": "Computer use (Cua Driver MCP)",
     "description": "Let the model operate the desktop through a separately installed cua-driver executable."
   }
 }

@@ -74,11 +74,18 @@
   margin-right: -3px;
 }
 
-.markdown a:hover,
 .markdown a:focus {
   outline: none;
   text-decoration: underline dotted var(--dsw-alias-link);
   text-underline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .markdown a:hover {
+    outline: none;
+    text-decoration: underline dotted var(--dsw-alias-link);
+    text-underline-offset: 3px;
+  }
 }
 
 .markdown a:focus-visible,
@@ -195,8 +202,8 @@
   overscroll-behavior-x: contain;
 }
 
-/* Wide tables reveal their horizontal bar on hover (or keyboard focus)
-   instead of keeping it painted. Chromium never repaints state-conditioned
+/* Hover-capable inputs reveal a wide table's bar on hover or keyboard focus.
+   Other inputs keep native horizontal scrolling. Chromium never repaints state-conditioned
    scrollbar STYLES (neither hover-conditioned `::-webkit-scrollbar*` rules
    nor a :hover `scrollbar-color` change reaches the painted bar), so the
    toggle is `overflow-x` itself — a layout change repaints reliably. The
@@ -205,15 +212,21 @@
    Other engines and overlay scrollbars may reserve a different height.
    Wheel and trackpad scrolling need the pointer over the table, which is
    already the hover that re-enables scrolling. */
-.tableScroll:global(.md-table-wide) {
-  overflow-x: hidden;
-  padding-bottom: var(--dsh-scrollbar-width, 5px);
-}
-
-.tableScroll:global(.md-table-wide):hover,
 .tableScroll:global(.md-table-wide):focus-visible {
   overflow-x: scroll;
   padding-bottom: 0;
+}
+
+@media (hover: hover) {
+  .tableScroll:global(.md-table-wide) {
+    overflow-x: hidden;
+    padding-bottom: var(--dsh-scrollbar-width, 5px);
+  }
+
+  .tableScroll:global(.md-table-wide):hover {
+    overflow-x: scroll;
+    padding-bottom: 0;
+  }
 }
 
 /* Chromium keyboard-focuses scrollable containers by default; the ring uses
@@ -321,11 +334,18 @@
   text-align: inherit;
 }
 
-.fileMention:hover,
 .fileMention:focus {
   outline: none;
   text-decoration: underline dotted var(--dsw-alias-link);
   text-underline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .fileMention:hover {
+    outline: none;
+    text-decoration: underline dotted var(--dsw-alias-link);
+    text-underline-offset: 3px;
+  }
 }
 
 .compact {
@@ -374,11 +394,16 @@
   text-decoration: underline dotted;
 }
 
-.compact a:hover,
 .compact a:focus,
-.compact .fileMention:hover,
 .compact .fileMention:focus {
   text-decoration-color: currentColor;
+}
+
+@media (hover: hover) {
+  .compact a:hover,
+  .compact .fileMention:hover {
+    text-decoration-color: currentColor;
+  }
 }
 
 .compact :not(pre) > code {

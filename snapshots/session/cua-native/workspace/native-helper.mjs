@@ -142,7 +142,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       }
       if (!['Fixture', 'test.fixture', '9'].includes(params.selector)) refuse('APP_NOT_FOUND', 'Select the running Fixture application')
       acquired = true
-      return { ...app, authorization: {"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app", "persistable": true} }
+      return { ...app, applicationIcon: `data:image/png;base64,${png}`, authorization: {"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app", "persistable": true} }
     }
     if (!acquired || params.appHandle !== app.appHandle) refuse('APP_NOT_FOUND', 'Acquire an application in this helper first')
     if (method === 'show') return { dispatched: true, verified: false, windowId: params.windowId ?? window.windowId, foregroundChanged: false }

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "音声入力",
+    "description": "ローカルの SenseVoice で録音を文字に起こします。初回利用時には依存関係のインストールが必要です。",
+    "detail": "docs/DETAIL.md"
+  }
+}

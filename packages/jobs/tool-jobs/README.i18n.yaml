@@ -9,8 +9,8 @@
   en: 256894de7b318e7e
   zh: a6f3cb0060fe2c4d
 /deepseek-ai-dsh-tool-jobs/summary:
-  en: b32de88c29a3c2e0
-  zh: 63142a605332b4b7
+  en: ad22af3fba41f06a
+  zh: a098b203c6a70b76
 /deepseek-ai-dsh-tool-jobs/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,17 +18,17 @@
   en: 823e94910a15e2e1
   zh: c23e0b605f32f0bd
 /deepseek-ai-dsh-tool-jobs/use-this-package/the-three-tools:
-  en: e9e9cb2ee5cea462
-  zh: 833beb2bca84bd6a
+  en: 6f20f54e60bcf637
+  zh: 6279c685d9d0bb16
 /deepseek-ai-dsh-tool-jobs/use-this-package/completion-notices:
-  en: f69e3f96353234c3
-  zh: 6caa74174a2d79b1
+  en: 99577924f3d65112
+  zh: 521dac5540f9c1b7
 /deepseek-ai-dsh-tool-jobs/use-this-package/minimal-configuration:
-  en: fc08838f1843b8c7
-  zh: e5d3c11216967aca
+  en: da2fb742af042b52
+  zh: 4afa3918b44b00b9
 /deepseek-ai-dsh-tool-jobs/use-this-package/what-can-go-wrong:
-  en: a09c5c8225dec06c
-  zh: 3e9fcab42613775e
+  en: 177f79c7c446a5e1
+  zh: 3e9c1852f8046763
 /deepseek-ai-dsh-tool-jobs/understand-the-implementation:
   en: 32a36a3fe388e2c1
   zh: f4bd2866fff6fa8d
@@ -36,14 +36,14 @@
   en: e1d89b73fdcc5b24
   zh: 38dd176ae111561f
 /deepseek-ai-dsh-tool-jobs/understand-the-implementation/source-map:
-  en: 6f006ff2d901bc92
-  zh: 779d18ba7bec4202
+  en: e6278ea246410c01
+  zh: d202575c3e53852e
 /deepseek-ai-dsh-tool-jobs/understand-the-implementation/output-capping:
   en: ca18e4bdfb12a1e2
   zh: 6592697c561c6e6d
 /deepseek-ai-dsh-tool-jobs/understand-the-implementation/notice-delivery-lanes:
-  en: 2540b7abbb3c9710
-  zh: 4fb355bceab2f865
+  en: fa233a922bf44051
+  zh: 1fa567b33d2b0513
 /deepseek-ai-dsh-tool-jobs/further-exploration:
   en: 11250fc631d55d99
   zh: 7885ce173bd1cd5f
@@ -81,17 +81,17 @@
   en: 8160e01d6bfc5e0c
   zh: 570dc95be7f13260
 /deepseek-ai-dsh-tool-jobs/model-experience/results-and-notices/what-the-model-sees:
-  en: 960436b3f61c7f96
-  zh: 2c956bb4fee134c2
+  en: fff929f198d39939
+  zh: d3a738483c542819
 /deepseek-ai-dsh-tool-jobs/model-experience/results-and-notices/token-effect:
-  en: 16efd9cb948ca4bf
-  zh: 563cc4c78dc63b4d
+  en: 40aeb5a93409f4a4
+  zh: 6f894bb247ffff14
 /deepseek-ai-dsh-tool-jobs/model-experience/results-and-notices/kv-cache-effect:
   en: 2fbf2175168e8244
   zh: f681f89596f500f5
 /deepseek-ai-dsh-tool-jobs/known-limitations-and-deferred-work:
-  en: 1971e3b84c568c3c
-  zh: 3e357265178a8b00
+  en: eec6635d3d95b2ec
+  zh: f61f11ea8d405509
 /deepseek-ai-dsh-tool-jobs/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

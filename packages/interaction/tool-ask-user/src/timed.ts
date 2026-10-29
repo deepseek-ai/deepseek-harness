@@ -24,10 +24,14 @@ function validateQuestionIds(questions: readonly { readonly id: string }[]): voi
   }
 }
 
+/** Model-facing meaning of a skipped answer item, shared by the blocking and timed descriptions. */
+export const skippedAnswerGuidance = 'An answer item with empty selected and no custom means the user skipped that question: '
+  + 'continue without it, do not ask it again, and do not treat the skip as permission.'
+
 const description = 'Ask brief, direct, self-contained questions about missing information, preferences, or decisions. '
   + 'Use user-facing terms; assume no knowledge of background work or internal names. '
-  + 'Use distinct stable question IDs. A submitted skipped question is an answer item with empty selected and no custom; '
-  + 'pending instead means no answer batch arrived before the timeout and the user can still answer.'
+  + `Use distinct stable question IDs. ${skippedAnswerGuidance} `
+  + 'A pending result instead means no answer batch arrived before the timeout and the user can still answer.'
 
 /**
  * Instruction the pending result carries in its `message` field. It is a field

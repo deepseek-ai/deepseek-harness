@@ -125,6 +125,8 @@ type WebFetchBody =
 
 A provider's `available(): boolean` is a cheap LOCAL check (credential presence, parseable config) and **must not make network calls**. It is an input to execution-time selection, not a health system: `search()`/`fetch()` read it to pick a usable provider, and a selection failure surfaces as the structured `WebError` the caller routes on — which carries the branchable detail (the missing id or ambiguous candidate set) in its code and message.
 
+A search or fetch provider may also implement `ready(llmProvider): Promise<boolean>`, a configuration-only check that must not make network calls: it answers whether an operation made for a model request on that chat route has a credential to send. `searchReady(llmProvider?)` and `fetchReady(llmProvider?)` ask only the provider that `search()` or `fetch()` would select, treat a provider without `ready()` as ready, and answer true when selection fails, because the operation reports that failure as a `WebError`. Readiness is not a selection input; `dsh-tool-web` makes it the activation condition of `web_search` and `web_fetch`, so a model step whose route answers false neither declares nor dispatches the tool.
+
 Selection never depends on registration, config, or HMR order: a capability has an explicit provider id (config `searchProvider`/`fetchProvider`, or the matching env var feeding the same field), or auto-selects when exactly one usable provider is registered; multiple usable providers with no configured id is `WEB_PROVIDER_AMBIGUOUS`, not first-wins. Each operation reads the configured id when it runs, so a saved settings change applies to the next search or fetch without remounting `ctx.web`.
 
 ## Fetch network policy
@@ -195,6 +197,16 @@ registerFetchProvider(provider: WebFetchProvider): () => void
 async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>
 
 /**
+ * Whether the provider `search()` would select can authenticate a search made for a
+ * model request on the `llmProvider` chat route. Asks only that provider's `ready()`;
+ * one without `ready()` counts as ready. Makes no network calls. A selection failure
+ * answers true, because `search()` reports that failure as a structured `WebError`.
+ * @param llmProvider - the provider route id of the model request, when known.
+ * @returns false only when the selected provider reports that it cannot authenticate.
+ */
+async searchReady(llmProvider?: string): Promise<boolean>
+
+/**
  * Retrieve one URL through the selected provider. Resolves the provider at
  * call time with the selection rules above; throws {@link WebError} when the
  * capability cannot run. A non-2xx response is a result, not a throw.
@@ -203,6 +215,16 @@ async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearch
  * @returns the retrieval outcome; non-2xx responses resolve descriptively.
  */
 async fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>
+
+/**
+ * Whether the provider `fetch()` would select can authenticate a fetch made for a
+ * model request on the `llmProvider` chat route. Asks only that provider's `ready()`;
+ * one without `ready()` counts as ready. Makes no network calls. A selection failure
+ * answers true, because `fetch()` reports that failure as a structured `WebError`.
+ * @param llmProvider - the provider route id of the model request, when known.
+ * @returns false only when the selected provider reports that it cannot authenticate.
+ */
+async fetchReady(llmProvider?: string): Promise<boolean>
 ```
 
 Source: [`packages/web/web/src/index.ts`](../../packages/web/web/src/index.ts)

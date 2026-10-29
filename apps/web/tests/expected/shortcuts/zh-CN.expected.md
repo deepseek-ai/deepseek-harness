@@ -72,7 +72,7 @@
   - region "审批区域":
     - heading "审批区域" [level=3]
     - list:
-      - listitem: 允许一次 Enter
+      - listitem: 允许 Enter
       - listitem: 拒绝 Esc
   - contentinfo:
     - button "恢复全部默认" [disabled]

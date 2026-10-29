@@ -1,0 +1,129 @@
+name: Policy
+on:
+  pull_request_target:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review, review_requested, auto_merge_enabled, labeled]
+permissions:
+  contents: read
+concurrency:
+  group: pr-check-on-head-branch-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  master:
+    name: Master Change
+    # Each check runs only while its repository variable is neither empty nor `off`; otherwise the job is skipped.
+    if: ${{ vars.MERGE_POLICY_MASTER_DIFF != '' && vars.MERGE_POLICY_MASTER_DIFF != 'off' && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      base_sha: ${{ steps.check.outputs.base_sha }}
+      since: ${{ steps.check.outputs.since }}
+    steps:
+      # The head checkout is only the Git repository the check fetches into; it needs no files and runs no code.
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: README.md
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - id: check
+        uses: deepseek-harness/deepseek-harness-check@master
+        env:
+          CHECK_MODE: ${{ vars.MERGE_POLICY_MASTER_DIFF }}
+        with:
+          check: master-diff
+          base-branch: ${{ github.event.pull_request.base.ref }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+
+  pre-merge:
+    name: Pre-Merge Check
+    needs: master
+    if: ${{ vars.MERGE_POLICY_PRE_MERGE != '' && vars.MERGE_POLICY_PRE_MERGE != 'off' && needs.master.result == 'success' }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 60
+    # This job installs and compiles the pull request: it reads contents only and receives no secret.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      # Merging is the precondition of the build below, so a failure here warns and skips it in `report` mode and fails
+      # in `block` mode.
+      - id: merge
+        name: Merge the checked base-branch commit
+        env:
+          CHECK_MODE: ${{ vars.MERGE_POLICY_PRE_MERGE }}
+          BASE_SHA: ${{ needs.master.outputs.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SINCE: ${{ needs.master.outputs.since }}
+        run: |
+          stop() {
+            if [ "$CHECK_MODE" = block ]; then
+              echo "::error title=Pre-Merge Check::$1"
+              exit 1
+            fi
+            echo "::warning title=Pre-Merge Check::$1"
+            exit 0
+          }
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ || ! "$SINCE" =~ ^[0-9]+$ ]]; then
+            stop "the master diff check reported no base commit, so nothing was merged or compiled"
+          fi
+          # A shallow fetch starts a background maintenance run that rewrites .git/shallow, and the second shallow fetch
+          # below then fails with "shallow file has changed since we read it".
+          fetch() {
+            git -c maintenance.auto=false -c gc.auto=0 fetch --no-tags --no-write-fetch-head "$@" origin "$HEAD_SHA" "$BASE_SHA"
+          }
+          fetch --shallow-since="$SINCE" ||
+            stop "the base commit $BASE_SHA could not be fetched, so nothing was merged or compiled"
+          # A time window records a merge commit itself as shallow when one of its parents predates the window, which
+          # drops the other, in-window parent too; a depth bound keeps both parents of every commit it covers.
+          if ! git merge-base "$HEAD_SHA" "$BASE_SHA" >/dev/null; then
+            fetch --depth=20 --filter=blob:none ||
+              stop "the base commit $BASE_SHA could not be fetched, so nothing was merged or compiled"
+          fi
+          git -c user.name=pr-check -c user.email=pr-check@users.noreply.github.com merge --no-ff --no-edit -m "Merge $BASE_SHA into $HEAD_SHA" "$BASE_SHA" ||
+            stop "the pull request cannot merge $BASE_SHA; merge master into it and push, then this check runs again"
+          echo "merged=true" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v5.0.0
+        if: steps.merge.outputs.merged == 'true'
+
+      - uses: actions/setup-node@v7.0.0
+        if: steps.merge.outputs.merged == 'true'
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Run the tree's pre-merge check
+        if: steps.merge.outputs.merged == 'true'
+        env:
+          CHECK_MODE: ${{ vars.MERGE_POLICY_PRE_MERGE }}
+        run: |
+          # The check names one file and knows nothing else about how the merged tree builds itself.
+          if [ ! -f scripts/pre-merge-check.ts ]; then
+            if [ "$CHECK_MODE" = block ]; then
+              echo "::error title=Pre-Merge Check::this tree has no scripts/pre-merge-check.ts, so nothing was installed, compiled, or checked"
+              exit 1
+            fi
+            echo "::warning title=Pre-Merge Check::this tree has no scripts/pre-merge-check.ts, so nothing was installed, compiled, or checked"
+            exit 0
+          fi
+          if node scripts/pre-merge-check.ts; then
+            exit 0
+          fi
+          # A check that crashes reports nothing, so the step reports its exit the way the mode asks.
+          if [ "$CHECK_MODE" = block ]; then
+            echo "::error title=Pre-Merge Check::scripts/pre-merge-check.ts exited without reporting, so the merged tree is unchecked"
+            exit 1
+          fi
+          echo "::warning title=Pre-Merge Check::scripts/pre-merge-check.ts exited without reporting, so the merged tree is unchecked"

@@ -4,8 +4,8 @@ import { toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-a
 import { createUserMessage, createSystemMessage, CONTEXT_WINDOW_EXCEEDED_CODE, LlmError, resolveRetryPolicy , createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, LlmResolvedModelInfo, ResolvedRetryPolicy, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
-import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
@@ -205,16 +205,14 @@ function overflowHistorySeed(): readonly SessionEvent[] {
 }
 
 describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', () => {
-  it('uses the model actually routed by agent/request for post-step pressure', async () => {
+  it('uses the recorded model selection for post-step pressure', async () => {
     const { ctx } = await harness(8)
-    ctx.on('agent/request', async (_payload, next) => ({
-      ...await next(), provider: 'mock', model: 'mock',
-    }))
     try {
       const agent = await ctx.agentLoop.create(SessionId('routed-pressure'), {
         provider: 'unconfigured-agent-fallback',
         model: 'unconfigured-agent-fallback',
       })
+      agent.model.select({ provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'do a routed multi-step task' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
 
@@ -380,9 +378,6 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
       await ctx.plugin(AgentLoop, { agents: [] })
       await ctx.plugin(TokenMeter)
       ctx.llm.registerAdapter(['mock'], adapter)
-      ctx.on('agent/request', async (_payload, next) => ({
-        ...await next(), provider: 'mock', model: 'mock',
-      }))
       await ctx.plugin(BasicCompactionEngine, {
         headroomTokens: 0,
         thresholdRatio: 1,
@@ -402,6 +397,7 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
           },
         })
 
+        agent.model.select({ provider: 'mock', model: 'mock' })
         agent.followup(createUserMessage({ content: [{ type: 'text', text: 'continue from history' }], source: { kind: 'user' } }))
         await agent.whenIdle()
 

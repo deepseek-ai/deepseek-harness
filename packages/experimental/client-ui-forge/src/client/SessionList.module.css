@@ -1,0 +1,111 @@
+/* One icon in the Session row's resting seat, sized to the row's 20px line. */
+.icon {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Checks outcome at the glyph's lower right, ringed in the sidebar fill so it parts from the strokes. */
+.dot {
+  position: absolute;
+  right: -2px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  corner-shape: round;
+  box-shadow: 0 0 0 1.5px var(--dsw-specific-sidebar-fill);
+}
+
+.dot[data-checks='failure'] {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.dot[data-checks='pending'] {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.dot[data-checks='success'] {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+/* Hover card section. The card's surface is #2C2C2E in both themes, so these
+ * are the card's literal label colors, as in the ui-workspace rows, and the
+ * state colors are the dark palette's steps. */
+.hover {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hoverItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hoverIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 16px;
+  color: #ADB2B8;
+}
+
+.hoverIcon[data-tone='merged'] {
+  color: var(--dsw-static-violet-400);
+}
+
+.hoverIcon[data-tone='closed'] {
+  color: var(--dsw-static-red-400);
+}
+
+.hoverBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hoverBranch,
+.hoverTitle {
+  overflow: hidden;
+  color: #FFFFFF;
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hoverBranch {
+  font-family: var(--ds-font-family-code);
+}
+
+.hoverNote,
+.hoverMore {
+  color: #ADB2B8;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.hoverSeparator {
+  margin: 0 4px;
+}
+
+.hoverNote [data-checks='failure'] {
+  color: var(--dsw-static-red-400);
+}
+
+/* The state and checks as one phrase for assistive technology, which skips the separator glyph. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -24,25 +24,36 @@
 - list:
   - listitem:
     - button "查看 智能体团队": 智能体团队
-    - text: 实验性 启用团队协作、团队工具、成员列表和共享任务看板。
+    - text: 实验性 让与你对话的智能体把工作分给有名字的队友，在共享任务看板上跟踪进度，并汇总队友的结果向你汇报。
+    - status
     - switch "启用 智能体团队"
   - listitem:
     - button "查看 语音输入": 语音输入
     - text: 实验性 在本机使用 SenseVoice 转写录音，首次使用需安装依赖。
+    - status
     - switch "启用 语音输入"
   - listitem:
+    - button "查看 自定义插件索引": 自定义插件索引
+    - text: 实验性 在插件页添加“发现”标签页，从你添加的插件索引中浏览和安装插件。
+    - status
+    - switch "启用 自定义插件索引"
+  - listitem:
     - button "查看 自动授权审查": 自动授权审查
-    - text: 实验性 提供自动审查权限模式，由模型在每次工具调用前判断是否授权。
+    - text: 实验性 提供“自动审查”访问模式：每次工具调用前，由模型对照你的要求检查，获准的调用立即运行，被拒绝的调用等你审批。
+    - status
     - switch "启用 自动授权审查"
   - listitem:
-    - button "查看 开发者工具": 开发者工具
-    - text: 实验性 查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端
-    - switch "启用 开发者工具"
+    - button "查看 变更请求与工作树": 变更请求与工作树
+    - text: 实验性 跟踪每个会话的变更请求及其检查与评审，新会话也可以在 Git 工作树中开始；GitHub 通过 gh 命令行访问。
+    - status
+    - switch "启用 变更请求与工作树"
 - heading "已安装插件" [level=3]
 - list:
   - listitem:
     - button "查看 @fixture/live-client": "@fixture/live-client"
+    - status
     - switch "启用 @fixture/live-client"
   - listitem:
     - button "查看 dsh-web-scaffold-defaults": dsh-web-scaffold-defaults
+    - status
     - switch "启用 dsh-web-scaffold-defaults" [checked]

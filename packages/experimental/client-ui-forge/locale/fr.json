@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Panneau des demandes de modification",
+    "description": "Affiche les demandes de modification d'une session dans un onglet de la barre latérale et permet à une nouvelle session de démarrer dans un arbre de travail."
+  }
+}

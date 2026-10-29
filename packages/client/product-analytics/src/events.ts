@@ -25,6 +25,10 @@ export interface ProductEventMap {
     thinking_effort?: string
     run_mode: 'plan' | 'goal' | 'default'
     msg_type: 'default' | 'steer' | 'queue'
+    /** Whether the message is the first one of a blank Session. */
+    is_new_session: boolean
+    /** Fixed category of the Session's Agent preset, when known. */
+    agent_preset?: AnalyticsPreset | 'other'
   }
   model_switch: { session_id?: SessionId; switch_from: string; switch_to: string }
   thinking_level_switch: { session_id?: SessionId; switch_from: string; switch_to: string; model_name: string }
@@ -35,7 +39,10 @@ export interface ProductEventMap {
     parent_message_id?: MessageId
     click_position: 'footer' | 'sidebar'
   }
-  sidebar_menu_click: { menu_name: 'plugin' | 'cron' }
+  sidebar_menu_click: { menu_name: SidebarAnalyticsEntry; position?: SidebarAnalyticsPosition }
+  more_menu_item_click: { region: EntryAnalyticsRegion; action: 'browse_plugins' | 'create_plugin' }
+  agent_preset_switch: { switch_from: AnalyticsPreset | 'other'; switch_to: AnalyticsPreset; code_work_view_enabled: boolean }
+  code_work_view_toggle: { is_enabled: boolean }
   plugin_toggle: { plugin_name: string; plugin_type: 'plugin' | 'bundle'; is_enabled: boolean; is_builtin: boolean }
   plugin_add_button_click: Record<string, never>
   plugin_install_click: { input_value: string }
@@ -48,6 +55,18 @@ export interface ProductEventMap {
   }
   confirm_uninstall_plugin: { plugin_name: string }
 }
+
+/** Official navigation entries; third-party identifiers are never analytics dimensions. */
+export type SidebarAnalyticsEntry = 'new_session' | 'plugin' | 'cron' | 'more'
+
+/** Physical navigation placement, independent of the selected destination. */
+export type SidebarAnalyticsPosition = 'sidebar' | 'sidebar_more' | 'titlebar'
+
+/** Entry-customization menu regions. */
+export type EntryAnalyticsRegion = 'sidebar' | 'conversation' | 'rightbar'
+
+/** Built-in presets, independent of localized names and custom preset identifiers. */
+export type AnalyticsPreset = 'creator' | 'ptc' | 'minimal' | 'standard'
 
 /** Public page names independent of internal onboarding state names. */
 export type OnboardingPage = 'onboarding_welcome' | 'onboarding_recharge' | 'onboarding_use_case' | 'onboarding_process'

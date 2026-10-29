@@ -1,10 +1,10 @@
 /**
  * Source-independent JSON type graphs and canonical persistence fingerprints.
- * Numeric references are local to one graph; names and source locations are metadata.
+ * Numeric references are local to one in-memory graph; serialized snapshots reference nodes by digest prefix.
+ * Names and source locations are metadata.
  */
 
 import { createHash } from 'node:crypto'
-import { isDeepStrictEqual } from 'node:util'
 
 /** Recorded reader promise for explicitly attributed source additions. */
 export interface SourceCompatibility {
@@ -72,51 +72,108 @@ export interface PersistenceSchemaInventory {
   readonly types: readonly PersistenceType[]
 }
 
-/** Type metadata with an explicit graph when roots cannot reconstruct it exactly. */
-export interface PersistenceTypeIndex extends Omit<PersistenceType, 'schema'> {
-  readonly schema?: CanonicalSchema
-}
+/** Serialized node: the node fields with every reference replaced by a node key. */
+export type SerializedSchemaNode =
+  | Extract<SchemaNode, { kind: 'primitive' | 'literal' | 'opaque' }>
+  | { readonly kind: 'array'; readonly element: string }
+  | { readonly kind: 'tuple'; readonly elements: readonly (Omit<SchemaTupleElement, 'type'> & { readonly type: string })[] }
+  | {
+    readonly kind: 'object'
+    readonly properties: readonly (Omit<SchemaProperty, 'type'> & { readonly type: string })[]
+    readonly indices: readonly { readonly key: string; readonly value: string }[]
+  }
+  | { readonly kind: 'union'; readonly types: readonly string[] }
 
-/** Compact inventory representation; formatVersion still pins normalization. */
-export interface PersistenceSchemaSnapshot {
-  readonly formatVersion: PersistenceSchemaInventory['formatVersion']
-  readonly roots: readonly PersistenceRoot[]
-  readonly types: readonly PersistenceTypeIndex[]
+/** Length of the digest prefix that names a node in a serialized node table. */
+export const SCHEMA_NODE_KEY_LENGTH = 16
+
+/**
+ * Name a node by the digest prefix of the canonical subgraph it roots.
+ * @param nodes - graph containing the node.
+ * @param index - node to name.
+ * @returns key shared by every bisimilar node in any graph.
+ */
+export function schemaNodeKey(nodes: readonly SchemaNode[], index: number): string {
+  return schemaDigest(canonicalizeSchema(nodes, index)).slice(0, SCHEMA_NODE_KEY_LENGTH)
 }
 
 /**
- * Index every normalized type reachable from the supplied graphs.
- * @param schemas - complete canonical root graphs.
- * @returns canonical subgraphs keyed by their structural digest.
+ * Produce the node-table entry for one node from its canonical subgraph.
+ * @param nodes - graph containing the node; its node may be non-canonical.
+ * @param index - node to serialize.
+ * @returns the node key and canonical serialized node.
  */
-export function reachableSchemaTypes(schemas: readonly CanonicalSchema[]): Map<string, CanonicalSchema> {
-  const types = new Map<string, CanonicalSchema>()
-  for (const schema of schemas) {
-    for (const [index] of schema.nodes.entries()) {
-      const type = canonicalizeSchema(schema.nodes, index)
-      types.set(schemaDigest(type), type)
+export function schemaTableEntry(nodes: readonly SchemaNode[], index: number): readonly [string, SerializedSchemaNode] {
+  const canonical = canonicalizeSchema(nodes, index)
+  const node = serializeSchemaNode(canonical.nodes[0] as SchemaNode, child => schemaNodeKey(canonical.nodes, child))
+  return [schemaDigest(canonical).slice(0, SCHEMA_NODE_KEY_LENGTH), node]
+}
+
+/**
+ * Replace node references with node keys, ordering unordered references by key.
+ * @param node - graph node.
+ * @param key - key of a referenced node index.
+ * @returns the serialized node.
+ */
+export function serializeSchemaNode(node: SchemaNode, key: (index: number) => string): SerializedSchemaNode {
+  switch (node.kind) {
+    case 'array': return { kind: 'array', element: key(node.element) }
+    case 'tuple': return { kind: 'tuple', elements: node.elements.map(element => ({ type: key(element.type), optional: element.optional, rest: element.rest })) }
+    case 'object': return {
+      kind: 'object',
+      properties: node.properties.map(property => ({ name: property.name, type: key(property.type), optional: property.optional,
+        ...(property.compatibility === undefined ? {} : { compatibility: property.compatibility }) })),
+      indices: node.indices.map(index => ({ key: key(index.key), value: key(index.value) }))
+        .sort((left, right) => compare(left.key, right.key) || compare(left.value, right.value)),
+    }
+    case 'union': return { kind: 'union', types: node.types.map(key).sort(compare) }
+    case 'primitive':
+    case 'literal':
+    case 'opaque': return node
+    default: return assertNever(node)
+  }
+}
+
+/**
+ * Serialize an inventory with one node table keyed by subgraph digest prefix.
+ * Roots and types locate their graph through their digest prefix,
+ * so a type change rewrites only the changed node, its ancestors, and their digests.
+ * @param inventory - validated inventory with canonical graphs.
+ * @returns JSON text with one root, type, or node per line.
+ */
+export function encodePersistenceSnapshot(inventory: PersistenceSchemaInventory): string {
+  const table = new Map<string, SerializedSchemaNode>()
+  for (const { schema } of [...inventory.roots, ...inventory.types]) {
+    for (const index of schema.nodes.keys()) {
+      const [key, node] = schemaTableEntry(schema.nodes, index)
+      const existing = table.get(key)
+      if (existing !== undefined && JSON.stringify(existing) !== JSON.stringify(node)) {
+        throw new Error(`persistence schema: node key collision ${key}`)
+      }
+      table.set(key, node)
     }
   }
-  return types
+  return renderPersistenceSnapshot(inventory, table)
 }
 
 /**
- * Omit type graphs exactly reconstructable from roots, retaining all other graphs.
- * @param inventory - expanded inventory, including types erased from roots by normalization.
- * @returns a lossless snapshot preserving root graphs, type order, and declaration metadata.
+ * Render inventory metadata and a node table in the committed text layout.
+ * @param inventory - root and type metadata; their graphs are not read.
+ * @param table - every node reachable from the roots and types.
+ * @returns JSON text with keys sorted and one root, type, or node per line.
  */
-export function persistenceSchemaSnapshot(inventory: PersistenceSchemaInventory): PersistenceSchemaSnapshot {
-  const reachable = reachableSchemaTypes(inventory.roots.map(root => root.schema))
-  return {
-    formatVersion: inventory.formatVersion,
-    roots: inventory.roots,
-    types: inventory.types.map(({ digest, schema, names, sources }) => ({
-      digest,
-      ...(isDeepStrictEqual(schema, reachable.get(digest)) ? {} : { schema }),
-      names,
-      sources,
-    })),
-  }
+export function renderPersistenceSnapshot(inventory: PersistenceSchemaInventory, table: ReadonlyMap<string, SerializedSchemaNode>): string {
+  const lines = (values: readonly string[], open: string, close: string): string =>
+    values.length === 0 ? open + close : `${open}\n${values.map(value => `    ${value}`).join(',\n')}\n  ${close}`
+  const roots = inventory.roots.map(root => JSON.stringify({ key: root.key, kind: root.kind,
+    ...(root.event === undefined ? {} : { event: root.event }),
+    ...(root.surface === undefined ? {} : { surface: root.surface }), digest: root.digest }))
+  const types = inventory.types.map(type => JSON.stringify({ digest: type.digest, names: type.names, sources: type.sources }))
+  const nodes = [...table].sort(([left], [right]) => compare(left, right)).map(([key, node]) => `${JSON.stringify(key)}: ${JSON.stringify(node)}`)
+  return `{\n  "formatVersion": ${String(inventory.formatVersion)},\n`
+    + `  "roots": ${lines(roots, '[', ']')},\n`
+    + `  "types": ${lines(types, '[', ']')},\n`
+    + `  "nodes": ${lines(nodes, '{', '}')}\n}\n`
 }
 
 /**

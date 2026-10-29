@@ -641,7 +641,7 @@ const TIMER_VERBS = new Set(['timeout', 'interval', 'setTimeout', 'setInterval',
  * metadata (`schemas`, and `get` returning a schema view, never the live
  * `ToolDefinition`). Exposing the raw definition would hand package code the
  * tool's `execute` function, letting it call another tool directly and bypass
- * `ToolRuntime.execute` — identity protection, pre-policy, monotonic guards,
+ * `ToolsService.execute` — identity protection, pre-policy, monotonic guards,
  * around dispatch, post-policy, final observation, and result normalization. So `get` returns the same
  * name/description/parameters view as `schemas()`, and nothing invocable.
  */

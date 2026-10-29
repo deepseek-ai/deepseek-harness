@@ -21,8 +21,8 @@
   en: a5a01d14e0bec814
   zh: 409298cfafd91b05
 /deepseek-ai-dsh-tool-fs-search/use-this-package/the-tools:
-  en: 9edb7655f8ed8bc6
-  zh: 21eadd65c1f2f07c
+  en: 1932fbef1abcac77
+  zh: 6d8060990b5f2f08
 /deepseek-ai-dsh-tool-fs-search/use-this-package/configuration:
   en: 3e84e19a22aeb6c8
   zh: 8ac44b21eb697f2f
@@ -42,8 +42,11 @@
   en: 5a30f023dd86c345
   zh: 558b6e80c62648ba
 /deepseek-ai-dsh-tool-fs-search/understand-the-implementation/how-a-search-runs:
-  en: 8443370c1f347d0c
-  zh: 5f5c6fa8cdb97cba
+  en: 7904c9f013272819
+  zh: 656763e9a7e97c1e
+/deepseek-ai-dsh-tool-fs-search/understand-the-implementation/native-mode-benchmark:
+  en: 031654f59e63d07e
+  zh: a3b488fb1880d2f5
 /deepseek-ai-dsh-tool-fs-search/understand-the-implementation/two-budgets-two-artifacts:
   en: b7e8c2191f8227dc
   zh: a064e2e03761bfd5
@@ -108,8 +111,8 @@
   en: f5d5f97a153f7c70
   zh: 14660e568cd51bdc
 /deepseek-ai-dsh-tool-fs-search/known-limitations-and-deferred-work:
-  en: 4fca846226cb8ef2
-  zh: fb797ec586cec7f4
+  en: 6d66672c1cdcff13
+  zh: f5a5f6cbbe8365cf
 /deepseek-ai-dsh-tool-fs-search/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

@@ -1,7 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { headTailCap } from './head-tail-cap.ts'
-import { useCopyFeedback } from './use-copy-feedback.ts'
+import { useClipboardCopy } from './use-clipboard-copy.ts'
 import css from './SearchBlock.module.css'
 
 /**
@@ -184,7 +184,7 @@ export function SearchBlock(props: SearchBlockProps) {
   const rows = toRows(props, collapsed)
   const shown = shownCount(props)
   const empty = rows.length === 0
-  const { copied, onCopy } = useCopyFeedback(copyText(props))
+  const { copied, onCopy } = useClipboardCopy(copyText(props))
 
   const onToggle = useCallback(() => { setExpanded(value => !value) }, [])
 

@@ -12,8 +12,8 @@ The account route's catalog was deployment configuration: a build advertised the
 
 - [`llm-deepseek-account`](../../../../packages/llm/llm-deepseek-account/README.md) loads the listing lazily for each credential, waits for it once up to `modelsTimeoutMs`, refreshes it in the background after `modelsMaxAgeMs`, keeps the last good listing when a load fails or returns no model, and serves the bundled catalog before any listing loads. The cache lives in memory and is keyed by endpoint and token fingerprint, so per-account rollouts stay separate.
 - A listed model is available when its `client_requirements["deepseek-harness"].min_version` is at most the current DeepSeek Harness version in semantic-version order. Without that declaration, only ids the built-in catalog knows are available; the others stay hidden, because a client cannot tell which future version supports them. A request for a refused listed model fails before network I/O with `CLIENT_UPGRADE_REQUIRED` or `MODEL_UNSUPPORTED`.
-- Listed capabilities replace bundled ones field by field; the bundled entry keeps client-side knowledge such as tool-update mode and image budgets; `modelOverrides` applies last and reuses the `models` entry fields and validation. `max_output_tokens` bounds the request default instead of becoming it.
-- The shared transport gains only two provider hooks, `connect` and `admit`; listing, gating, and merging stay in the account package.
+- Listed capabilities replace bundled ones field by field; the bundled entry keeps client-side knowledge the listing does not declare, such as image budgets and a protocol mode the listing omits or sets to `null`; `modelOverrides` applies last and reuses the `models` entry fields and validation. `max_output_tokens` bounds the request default instead of becoming it.
+- The shared transport gains only two provider hooks, `connect` and `admit`. Listing, gating, and merging live in the shared transport, which the [official route](2026-10-22-deepseek-official-model-listing.md) also uses.
 
 ## Alternatives considered
 

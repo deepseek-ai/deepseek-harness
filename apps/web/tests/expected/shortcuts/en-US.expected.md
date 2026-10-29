@@ -72,7 +72,7 @@
   - region "Approval area":
     - heading "Approval area" [level=3]
     - list:
-      - listitem: Allow once Enter
+      - listitem: Allow Enter
       - listitem: Reject Esc
   - contentinfo:
     - button "Restore all defaults" [disabled]

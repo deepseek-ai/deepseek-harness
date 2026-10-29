@@ -78,6 +78,7 @@ describe('web e2e: blank Session reuse under the requested preset', () => {
   }
 
   async function storedSelections(sessionId: SessionId): Promise<unknown[]> {
+    await scaffold.ctx.sessionPersistence.flush()
     const handle = await scaffold.ctx.sessionPersistence.open(sessionId, 'read')
     try {
       const { events } = await handle.read()

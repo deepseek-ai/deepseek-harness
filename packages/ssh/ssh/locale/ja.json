@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH 接続",
+    "description": "OpenSSH 接続とバージョン管理された POSIX リモートヘルパーを共有します。"
+  }
+}

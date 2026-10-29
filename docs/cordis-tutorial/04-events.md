@@ -137,7 +137,7 @@ Walk through the second line: listener 1 runs first, calls `next()`, which invok
 
 The discipline that follows: **a waterfall listener that only observes or annotates must call `next()`**; returning without it is a deliberate short-circuit. Forgetting `next()` in a logging listener silently swallows the default behavior for everyone downstream. It is a standing rule of this repository ([waterfall semantics](../cordis-primer.md#cordis-waterfall-semantics)).
 
-The harness uses waterfalls for decisions that cooperating plugins may wrap or answer: [`agent/request`](../subsystems/core.md#agentrequest--waterfall) lets a plugin replace the model-call config, and [`approval/request`](../subsystems/approval.md#approvalrequest--waterfall) lets a policy answer instead of the user.
+The harness uses waterfalls for decisions that cooperating plugins may wrap or answer: [`agent/pre-step`](../subsystems/core.md#agentpre-step--waterfall) lets a plugin reject a proposed step or replace its input, and [`approval/request`](../subsystems/approval.md#approvalrequest--waterfall) lets a policy answer instead of the user.
 
 Next: [Configuration](05-config.md) — plugin options from `cordis.yml`.
 

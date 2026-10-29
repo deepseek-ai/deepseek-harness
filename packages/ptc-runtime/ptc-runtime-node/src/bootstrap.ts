@@ -1,14 +1,15 @@
 /**
- * Program evaluation, output capture, and host binding proxies over the process channel.
+ * Output capture, result encoding, and host binding proxies over the process channel.
  * @module @deepseek-ai/dsh-ptc-runtime-node/src/bootstrap
  */
 
-import { inspect } from 'node:util'
-import type { DoneMessage, ReplyMessage, ProgramBootData, ProgramToHost } from './protocol.ts'
+import { inspect, types } from 'node:util'
+import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue } from './json-wire.ts'
 
 const CapturedError = Error
+const isNativeError = types.isNativeError
 const capturedObjectCreate = Object.create
 const capturedObjectDefineProperty = Object.defineProperty
 
@@ -18,12 +19,6 @@ function defineBindingErrorField(error: Error, key: string, value: string): void
   attributes.enumerable = true
   attributes.value = value
   capturedObjectDefineProperty(error, key, attributes)
-}
-
-/** Program messages and host replies transported by the private process channel. */
-export interface BootstrapPort {
-  postMessage(message: ProgramToHost): void
-  on(event: 'message', listener: (message: ReplyMessage) => void): void
 }
 
 /**
@@ -38,7 +33,7 @@ export interface PatchableStream {
 
 /**
  * Ordered text capture under the shared outer JSON-byte budget, delivered to
- * a sink as each item lands (the real sink streams text over the port eagerly,
+ * a sink as each item lands (the real sink sends text to the host eagerly,
  * so captured output survives a mid-run termination). It includes the log
  * array syntax and string escaping in its accounting. Once exhausted it emits
  * the fitting prefix and reports the limit once; the host turns that condition
@@ -151,7 +146,7 @@ export function captureStreamWrites(logs: Pick<LogBuffer, 'push'>, stream: Patch
 const INSPECT_OPTIONS = { depth: 4, maxArrayLength: 100, maxStringLength: 10_000 } as const
 
 /**
- * Prepare the program's completion value for the done message. Only lossless
+ * Prepare the program's completion value for the run result. Only lossless
  * JSON crosses, and a value that does not fit the remaining combined outer
  * budget reports `output-limit`; the host revalidates hostile traffic and
  * remains authoritative for native pipe writes the program shim cannot observe.
@@ -159,13 +154,13 @@ const INSPECT_OPTIONS = { depth: 4, maxArrayLength: 100, maxStringLength: 10_000
  * @param value - the program's completion value.
  * @param remainingOutputBytes - exact bytes left after captured logs.
  * @param maxOutputBytes - the configured cap named in an overflow diagnostic.
- * @returns the done-message fragment: `{}` for `undefined`, else a flat wire `{ value }`.
+ * @returns the result fragment: `{}` for `undefined`, else a flat wire `{ value }`.
  */
 export function prepareCompletion(
   value: unknown,
   remainingOutputBytes: number,
   maxOutputBytes: number = remainingOutputBytes,
-): Omit<DoneMessage, 'type'> {
+): ProgramResult {
   if (value === undefined) return {}
   let snapshot: ReturnType<typeof snapshotPtcJsonValue>
   try {
@@ -188,7 +183,7 @@ export function prepareCompletion(
 }
 
 /** Build the fixed overflow fragment without carrying rejected variable bytes. */
-function outputLimit(maxOutputBytes: number): Omit<DoneMessage, 'type'> {
+function outputLimit(maxOutputBytes: number): ProgramResult {
   return { error: { kind: 'output-limit', message: `outer output exceeded ${maxOutputBytes} bytes` } }
 }
 
@@ -198,14 +193,14 @@ function prepareFailure(
   message: string,
   remainingOutputBytes: number,
   maxOutputBytes: number,
-): Omit<DoneMessage, 'type'> {
+): ProgramResult {
   if (jsonStringBytesUpTo(message, remainingOutputBytes) === undefined) return outputLimit(maxOutputBytes)
   return { error: { kind, message } }
 }
 
 /**
- * Prepare a thrown program value without sending an unbounded stack or
- * string across the process channel.
+ * Prepare a thrown program value, including cross-realm errors, without sending
+ * an unbounded stack or string across the process channel.
  * @param error - the value thrown by the program.
  * @param remainingOutputBytes - exact bytes left after captured logs.
  * @param maxOutputBytes - the configured cap named in an overflow diagnostic.
@@ -215,21 +210,15 @@ export function prepareException(
   error: unknown,
   remainingOutputBytes: number,
   maxOutputBytes: number = remainingOutputBytes,
-): Omit<DoneMessage, 'type'> {
+): ProgramResult {
   let message: string
   try {
-    const detail: unknown = error instanceof CapturedError ? error.stack ?? error.message : error
+    const detail: unknown = isNativeError(error) ? error.stack ?? error.message : error
     message = typeof detail === 'string' ? detail : String(detail)
   } catch {
     message = 'program threw an unrenderable value'
   }
   return prepareFailure('exception', message, remainingOutputBytes, maxOutputBytes)
-}
-
-/** One awaited binding call's settlement handles, keyed by call id in the pending map. */
-export interface PendingCall {
-  resolve(value: unknown): void
-  reject(error: Error): void
 }
 
 /** Constructor type for one program-visible binding rejection class. */
@@ -258,166 +247,40 @@ function bindingFailure(errorClass: BindingErrorConstructor | undefined, memberN
 }
 
 /**
- * Build each declared error class once so calls and `instanceof` share constructor identity.
- * @param data - binding namespace declarations from the boot payload.
- * @returns constructors keyed by their owning namespace global.
- */
-export function makeBindingErrorClasses(
-  data: Pick<ProgramBootData, 'namespaces'>,
-): Map<string, BindingErrorConstructor> {
-  const classes = new Map<string, BindingErrorConstructor>()
-  for (const namespace of data.namespaces) {
-    if (namespace.errorClass) classes.set(namespace.global, makeBindingErrorClass(namespace.errorClass))
-  }
-  return classes
-}
-
-/**
- * Route host replies into the pending-call map: each reply settles its call
- * at most once, and a reply for an unknown id (stray, or a duplicate answer
- * to an id already settled) is ignored. Shared wiring between
- * {@link runProgram} and the tests that exercise {@link makeNamespaces}
- * standalone.
- * @param port - the port whose `message` events carry the replies.
- * @param pending - the id-keyed map of unsettled binding calls.
- */
-export function wireReplies(port: BootstrapPort, pending: Map<number, PendingCall>): void {
-  port.on('message', (message: ReplyMessage) => {
-    const entry = pending.get(message.id)
-    if (!entry) return
-    pending.delete(message.id)
-    if (message.ok) {
-      const value = decodePtcJsonWire(message.value)
-      if (value === undefined) entry.reject(new CapturedError('binding resolution must be lossless JSON'))
-      else entry.resolve(value)
-    } else {
-      entry.reject(new CapturedError(message.message))
-    }
-  })
-}
-
-/**
- * Build the binding namespace objects the program sees: one null-prototype global per
- * namespace, each declared name an own enumerable async function that bridges over the port
- * (`__proto__`/`constructor`/`toString` are ordinary keys, never prototype collisions).
- * Lossy arguments reject before posting; clone failures and host failure
- * replies reject only the corresponding call.
- *
- * @param data - the boot payload's namespace declarations (globals + names).
- * @param port - the port binding calls are posted to.
- * @param pending - the id-keyed map each posted call parks its handles in.
- * @param nextId - the shared mutable id counter (program-issued correlation ids).
- * @param errorClasses - Namespace constructors shared with program globals, resolved for each invocation.
- * @returns one namespace object per declaration, in declaration order.
+ * Build null-prototype binding globals with namespace-specific rejection classes.
+ * @param data - Namespace declarations injected into the program.
+ * @param host - Evaluation-scoped remote binding calls.
+ * @param errorClasses - Constructors shared with program globals, resolved per invocation.
+ * @returns One namespace object per declaration; arguments and results must be lossless JSON.
  */
 export function makeNamespaces(
   data: Pick<ProgramBootData, 'namespaces'>,
-  port: BootstrapPort,
-  pending: Map<number, PendingCall>,
-  nextId: { value: number },
-  errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'> = makeBindingErrorClasses(data),
+  host: Pick<HostMethods, 'invoke'>,
+  errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'>,
 ): Record<string, unknown>[] {
   return data.namespaces.map(({ global, names }) => {
     const namespace = Object.create(null) as Record<string, unknown>
     for (const name of names) {
       Object.defineProperty(namespace, name, {
         enumerable: true,
-        value: (args: unknown): Promise<unknown> => {
+        value: async (args: unknown): Promise<unknown> => {
           const errorClass = errorClasses.get(global)
-          let detached: ReturnType<typeof snapshotPtcJsonValue>
           try {
-            detached = snapshotPtcJsonValue(args)
-          } catch {
-            detached = undefined
-          }
-          if (detached === undefined) {
-            return Promise.reject(bindingFailure(errorClass, name, 'binding arguments must be lossless JSON'))
-          }
-          return new Promise((resolve, reject) => {
-            const id = nextId.value
-            pending.set(id, {
-              resolve,
-              reject: (error) => {
-                reject(bindingFailure(errorClass, name, error.message))
-              },
-            })
-            try {
-              port.postMessage({ type: 'call', id, global, name, args: encodePtcJsonWire(detached) })
-              nextId.value += 1
-            } catch (error: unknown) {
-              pending.delete(id)
-              const message = `binding call could not be sent: ${error instanceof CapturedError ? error.message : String(error)}`
-              reject(bindingFailure(errorClass, name, message))
+            let detached: ReturnType<typeof snapshotPtcJsonValue>
+            try { detached = snapshotPtcJsonValue(args) } catch {
+              // Model-defined getters can fail while arguments are detached.
+              detached = undefined
             }
-          })
+            if (detached === undefined) throw new CapturedError('binding arguments must be lossless JSON')
+            const result = decodePtcJsonWire(await host.invoke(global, name, encodePtcJsonWire(detached)))
+            if (result === undefined) throw new CapturedError('binding resolution must be lossless JSON')
+            return result
+          } catch (error: unknown) {
+            throw bindingFailure(errorClass, name, error instanceof CapturedError ? error.message : String(error))
+          }
         },
       })
     }
     return namespace
   })
-}
-
-/**
- * Run one strict async-function body, allowing top-level `await` and `return`, and post exactly
- * one terminal {@link DoneMessage}; a thrown program error becomes its `error` field.
- * @param port - host message port or test double.
- * @param data - the boot payload the host sent.
- * @param streams - stdout/stderr objects captured as program logs.
- * @returns after posting the done message.
- */
-export async function runProgram(
-  port: BootstrapPort,
-  data: ProgramBootData,
-  streams: { stdout: PatchableStream; stderr: PatchableStream },
-): Promise<void> {
-  const logs = new LogBuffer(
-    data.maxOutputBytes,
-    (text) => { port.postMessage({ type: 'log', text }) },
-    () => { port.postMessage({ type: 'output-limit' }) },
-  )
-  captureStreamWrites(logs, streams.stdout)
-  captureStreamWrites(logs, streams.stderr)
-
-  const pending = new Map<number, PendingCall>()
-  wireReplies(port, pending)
-
-  const nextId = { value: 1 }
-  const errorClasses = makeBindingErrorClasses(data)
-  const namespaces = makeNamespaces(data, port, pending, nextId, errorClasses)
-  const errorClassParameters: string[] = []
-  const errorClassValues: BindingErrorConstructor[] = []
-  for (const namespace of data.namespaces) {
-    if (!namespace.errorClass) continue
-    errorClassParameters.push(namespace.errorClass.name)
-    const errorClass = errorClasses.get(namespace.global)
-    /* v8 ignore next -- makeBindingErrorClasses covers every declaration in the same data. */
-    if (!errorClass) throw new CapturedError(`missing binding error class for ${namespace.global}`)
-    errorClassValues.push(errorClass)
-  }
-  const consoleShim = makeConsoleShim(logs)
-
-  let done: DoneMessage
-  try {
-    // The async function constructor, reached through an instance because
-    // `AsyncFunction` is not a global. The program body is strict-mode.
-    /* v8 ignore next -- the arrow exists only to reach the AsyncFunction constructor; it is never invoked. */
-    const AsyncFunction = (async () => {}).constructor as new (...args: string[]) => (...fnArgs: unknown[]) => Promise<unknown>
-    const fn = new AsyncFunction(
-      ...data.namespaces.map(namespace => namespace.global),
-      ...errorClassParameters,
-      'console',
-      `'use strict';\n${data.code}`,
-    )
-    const value = await fn(...namespaces, ...errorClassValues, consoleShim)
-    done = {
-      type: 'done',
-      ...prepareCompletion(value, logs.remainingOutputBytes(), data.maxOutputBytes),
-    }
-  } catch (error: unknown) {
-    done = {
-      type: 'done',
-      ...prepareException(error, logs.remainingOutputBytes(), data.maxOutputBytes),
-    }
-  }
-  port.postMessage(done)
 }

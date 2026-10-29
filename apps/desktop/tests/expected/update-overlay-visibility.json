@@ -1,15 +1,5 @@
 [
-  {
-    "initiallyVisible": true,
-    "loaded": { "parent": true, "overlay": true, "filter": "none" },
-    "restored": { "parent": true, "overlay": true, "filter": "none" },
-    "released": { "filter": "none", "showListenersRestored": true, "keyboardListeners": 0 }
-  },
-  {
-    "initiallyVisible": false,
-    "loaded": { "parent": false, "overlay": false, "filter": "none" },
-    "restored": { "parent": true, "overlay": true, "filter": "none" },
-    "released": { "filter": "none", "showListenersRestored": true, "keyboardListeners": 0 }
-  },
+  { "initiallyVisible": true, "childWindows": 0, "controlKeepsFocus": true, "viewsReleased": true, "input": { "revision": 2, "blocked": false } },
+  { "initiallyVisible": false, "childWindows": 0, "controlKeepsFocus": true, "viewsReleased": true, "input": { "revision": 2, "blocked": false } },
   { "parentDestroyed": true, "overlayDestroyed": true }
 ]

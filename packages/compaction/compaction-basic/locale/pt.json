@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Compressão de contexto",
+    "description": "Use o modelo para resumir o conteúdo histórico quando o contexto atingir um limite."
+  }
+}

@@ -107,8 +107,10 @@
   transition: opacity 120ms ease-out;
 }
 
-.divider:hover::after {
-  opacity: 1;
+@media (hover: hover) {
+  .divider:hover::after {
+    opacity: 1;
+  }
 }
 
 .splitRow > .divider::after {
@@ -261,7 +263,8 @@
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  /* The scroll to a newly active chip glides rather than jumps. */
+  /* The scroll to a newly active chip glides; `jumpTo` in TabPanel.tsx
+     overrides this for the placements that must not animate. */
   scroll-behavior: smooth;
   scrollbar-width: none;
   touch-action: none;
@@ -406,10 +409,15 @@
    Later than the clipped mask, so a clipped chip showing its close fades
    under the close. A floating panel's header chip has no close, so it keeps
    the clipped mask alone. */
-.tab:not(.floatTitle):hover .tabTitle,
 .tab:not(.floatTitle):focus-within .tabTitle,
 .tabActive .tabTitle {
   mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px));
+}
+
+@media (hover: hover) {
+  .tab:not(.floatTitle):hover .tabTitle {
+    mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px));
+  }
 }
 
 /* A 20px icon button inset 4px from the chip's end, holding a 14px glyph in
@@ -438,11 +446,17 @@
 
 /* Shown while the chip is hovered or holds focus, and always on the active
    chip: the tab in view is the one a reader closes next. */
-.tab:hover .tabClose,
 .tab:focus-within .tabClose,
 .tabActive .tabClose {
   opacity: 1;
   pointer-events: auto;
+}
+
+@media (hover: hover) {
+  .tab:hover .tabClose {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 /* The chip's height and corner, so it reads as one more tab in the row. */
@@ -462,18 +476,20 @@
   cursor: pointer;
 }
 
-.addTab:hover {
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+@media (hover: hover) {
+  .addTab:hover {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 
-.tabClose:hover {
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+  .tabClose:hover {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 
-.tab:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+  .tab:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* The active chip is the filled tab, in the tag fill; the rest are bare text. */
@@ -485,17 +501,29 @@
 /* A pane's lone unclosable chip is a label, not a choice: no tab, no
    hover fill — the primary ink on the pane's own ground. Its title never
    yields to a close control, so it keeps the clipped fade alone. */
-.tab.tabQuiet,
-.tab.tabQuiet:hover {
+.tab.tabQuiet {
   color: var(--dsw-alias-label-primary);
   background: transparent;
   cursor: default;
 }
 
+@media (hover: hover) {
+  .tab.tabQuiet:hover {
+    color: var(--dsw-alias-label-primary);
+    background: transparent;
+    cursor: default;
+  }
+}
+
 .tab.tabQuiet .tabTitle,
-.tab.tabQuiet:hover .tabTitle,
 .tab.tabQuiet:focus-within .tabTitle {
   mask-image: none;
+}
+
+@media (hover: hover) {
+  .tab.tabQuiet:hover .tabTitle {
+    mask-image: none;
+  }
 }
 
 .tab.tabQuiet .tabTitle[data-dockkit-tab-clipped] {
@@ -529,13 +557,19 @@
   height: 15px;
 }
 
-.iconButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .iconButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .iconButton:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.iconButton[data-dockkit-split-blocked] {
+  pointer-events: none;
 }
 
 /*
@@ -569,8 +603,10 @@
   cursor: pointer;
 }
 
-.menuItem:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .menuItem:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* No padding of its own: a tab's body reaches the pane's edges and the strip's
@@ -749,6 +785,15 @@
 
 .float {
   position: fixed;
+  /* A resting panel publishes its rectangle in these variables (`floatStyle`).
+     The clamp keeps its position and size inside the viewport and below the
+     caption floor even when the gesture hook read a stale viewport; `dvh`
+     follows `window.innerHeight` as the hook does. A gesture or return writes
+     left, top and the size inline instead. */
+  left: max(0px, min(var(--dsh-dockkit-float-x), 100vw - var(--dsh-dockkit-float-width)));
+  top: max(var(--dsh-dockkit-float-top, 0px), min(var(--dsh-dockkit-float-y), 100dvh - var(--dsh-dockkit-float-height)));
+  width: min(var(--dsh-dockkit-float-width), 100vw);
+  height: min(var(--dsh-dockkit-float-height), 100dvh - var(--dsh-dockkit-float-top, 0px));
   display: flex;
   flex-direction: column;
   /* The body inside is unpadded and reaches the edges, so the frame clips it
@@ -782,8 +827,10 @@
   cursor: inherit;
 }
 
-.tab.floatTitle:hover {
-  background: transparent;
+@media (hover: hover) {
+  .tab.floatTitle:hover {
+    background: transparent;
+  }
 }
 
 /* Mirrored so the filled pane sits at the right, where the docked surface is. */
@@ -828,11 +875,16 @@
   transition: opacity 120ms ease-out;
 }
 
-.float:hover .floatResize::after,
 .floatResize:active::after {
   opacity: 1;
 }
 
-.floatResize:hover::after {
-  border-color: var(--dsw-alias-label-tertiary);
+@media (hover: hover) {
+  .float:hover .floatResize::after {
+    opacity: 1;
+  }
+
+  .floatResize:hover::after {
+    border-color: var(--dsw-alias-label-tertiary);
+  }
 }

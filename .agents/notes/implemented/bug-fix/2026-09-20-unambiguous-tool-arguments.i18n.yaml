@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-20-unambiguous-tool-arguments.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-20-unambiguous-tool-arguments.md
+/agent-note-unambiguous-tool-argument-compatibility:
+  en: dcb2b9835f9ee758
+  zh: 68be9713f74571c4
+/agent-note-unambiguous-tool-argument-compatibility/problem:
+  en: c389c332bdadbbe4
+  zh: 217520278ccf0932
+/agent-note-unambiguous-tool-argument-compatibility/decision:
+  en: 71c04efcfd972b02
+  zh: d1f842920b1b0e3f
+/agent-note-unambiguous-tool-argument-compatibility/alternatives-considered:
+  en: b2a96695819a978f
+  zh: c6f84b244be0dddf
+/agent-note-unambiguous-tool-argument-compatibility/consequences:
+  en: bd24ad737c617c90
+  zh: dbb7fa67c41af828

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Demandes de modification et arbres de travail",
+    "description": "Suivez les demandes de modification de chaque session avec leurs vérifications et revues, et démarrez de nouvelles sessions dans un arbre de travail Git ; utilise la CLI gh pour GitHub."
+  }
+}

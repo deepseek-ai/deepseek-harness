@@ -1,6 +1,6 @@
 - dialog "设置":
+  - text: 设置
   - navigation:
-    - text: 设置
     - button "通用设置"
     - button "模型"
     - button "内置插件"
@@ -25,6 +25,7 @@
         - text: 请填写兼容 Anthropic Messages 协议的 API 地址。
         - region "模型目录":
           - text: 模型目录 正在使用适配器默认模型
+          - button "调整模型顺序 1"
           - textbox "模型 ID 1":
             - /placeholder: 模型 ID
             - text: deepseek-flash
@@ -33,6 +34,7 @@
             - text: DeepSeek-V4.1-Flash
           - button "模型选项 1"
           - button "删除模型 1"
+          - button "调整模型顺序 2"
           - textbox "模型 ID 2":
             - /placeholder: 模型 ID
             - text: deepseek-v4-pro

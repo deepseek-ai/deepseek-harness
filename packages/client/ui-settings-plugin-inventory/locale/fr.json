@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface de liste de plug-ins intégrée",
+    "description": "Vérifiez les plug-ins globaux et les plug-ins utilisés par chaque Agent dans les paramètres."
+  }
+}

@@ -25,7 +25,8 @@ sequenceDiagram
   Note over Agent,Driver: claim pending next-step input plus one queued prompt
   Driver-->>SDK: <code>agent/inbox/spliced</code> pure deletion
   Driver-->>SDK: <code>agent/inbox/claimed</code> { message, turn } per message
-  Driver->>Prompt: <code>system-prompt/assemble</code> waterfall
+  Driver->>Tools: resolve({ agent, modelSelection, signal }) once per proposed step
+  Driver->>Prompt: <code>system-prompt/assemble</code> waterfall with the step tool set
   Driver->>Hooks: <code>agent/pre-step</code> waterfall
   Hooks-->>Driver: authoritative reject or enter(messages)
   alt proposed step rejected, first batch empty, or pre-step failed
@@ -65,6 +66,7 @@ sequenceDiagram
     end
   end
   Driver->>Session: <code>step/end</code>
+  Driver->>Tools: dispose the step tool set
   opt natural stop and next-step inbox empty
     Driver->>Hooks: <code>agent/turn-stopping</code> serial terminal checkpoint
   end

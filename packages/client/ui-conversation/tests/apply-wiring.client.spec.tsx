@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { describe, expect, it, vi } from 'vitest'
 import {
   SlotTestRuntime, stubConfigForm, usePinnedBrowserLanguages,
@@ -25,6 +26,8 @@ async function bench(options: { declareConversation?: boolean } = {}) {
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
+  runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
   if (options.declareConversation !== false) {
     await runtime.root.declare({
       'main': { kind: 'keyed', scope: 'root' },
@@ -44,6 +47,35 @@ function entry(
 }
 
 describe('target-neutral Conversation apply wiring', () => {
+  it('hands every Session header the same in-memory View pins without restoring saved choices', async () => {
+    localStorage.setItem('dsh.slot.manual-order.conversation.view.v1', JSON.stringify({ unpinned: ['trajectory'] }))
+    try {
+      const b = await bench()
+      const header = b.runtime.slots.entries('conversation.session.header')[0]!
+      type PinHooks = {
+        hooks: { entryPins: ObservableSnapshot<readonly string[]>; entryActions: ObservableSnapshot<boolean> }
+        setPinned: (id: string, pinned: boolean) => void
+      }
+      const inject = header.inject as (sessionId: SessionId) => PinHooks
+      const injected = inject(SID)
+      const first = injected.hooks.entryPins
+      expect(first.getSnapshot()).toEqual([])
+      expect(inject('session-2' as SessionId).hooks.entryPins).toBe(first)
+      injected.setPinned('timeline', false)
+      expect(first.getSnapshot()).toEqual(['timeline'])
+      const actions = injected.hooks.entryActions
+      const changed = vi.fn()
+      actions.subscribe(changed)
+      expect(actions.getSnapshot()).toBe(false)
+      b.runtime.slots.register({ name: 'conversation.session.header.views.actions', id: 'probe' }, (() => null) as never)
+      expect(actions.getSnapshot()).toBe(true)
+      await vi.waitFor(() => { expect(changed).toHaveBeenCalled() })
+      await b.runtime.dispose()
+    } finally {
+      localStorage.clear()
+    }
+  })
+
   it('hides only the Trajectory View while developer tools are disabled and restores it when enabled', async () => {
     const b = await bench()
     const header = b.runtime.slots.entries('conversation.session.header')[0]!

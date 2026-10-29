@@ -164,20 +164,22 @@ interface Workload {
   readonly evaluationsPerSample: number
 }
 
-/** Named fixed workloads; adversarial inputs appear at two sizes so their scaling is observable. */
-function workloads(): readonly Workload[] {
+/** Scaling sizes share adjacent rounds; standalone workloads occupy one group. */
+function workloadGroups(): readonly (readonly Workload[])[] {
   return [
-    { id: 'typical-messages', group: 'unmatched', texts: messages(5_000), evaluationsPerSample: 1 },
+    [{ id: 'typical-messages', group: 'unmatched', texts: messages(5_000), evaluationsPerSample: 1 }],
     ...Object.entries({ prose: PROSE, code: CODE, base64: BASE64, markdown: MARKDOWN, log: LOG, json: JSON_LINES, shell: SHELL })
-      .map(([name, unit]): Workload => ({
+      .map(([name, unit]): readonly Workload[] => [{
         id: `${name}-256k`, group: 'unmatched', texts: [fill(unit, 256 * KIB)], evaluationsPerSample: SINGLE_DOCUMENT_EVALUATIONS,
-      })),
-    ...Object.entries(CREDENTIALS).map(([name, credential]): Workload => ({
+      }]),
+    ...Object.entries(CREDENTIALS).map(([name, credential]): readonly Workload[] => [{
       id: `messages-with-${name}`, group: 'matched', texts: credentialMessages(5_000, credential), evaluationsPerSample: 1,
-    })),
-    { id: 'env-keys-1000', group: 'matched', texts: [envFile(1_000)], evaluationsPerSample: 2 * SINGLE_DOCUMENT_EVALUATIONS },
-    { id: 'env-keys-2000', group: 'matched', texts: [envFile(2_000)], evaluationsPerSample: SINGLE_DOCUMENT_EVALUATIONS },
-    ...Object.entries(ADVERSARIAL_UNITS).flatMap(([name, unit]): Workload[] => [
+    }]),
+    [
+      { id: 'env-keys-1000', group: 'matched', texts: [envFile(1_000)], evaluationsPerSample: 2 * SINGLE_DOCUMENT_EVALUATIONS },
+      { id: 'env-keys-2000', group: 'matched', texts: [envFile(2_000)], evaluationsPerSample: SINGLE_DOCUMENT_EVALUATIONS },
+    ],
+    ...Object.entries(ADVERSARIAL_UNITS).map(([name, unit]): readonly Workload[] => [
       {
         id: `adversarial-${name}-64k`, group: 'adversarial', texts: [fill(unit, 64 * KIB)],
         evaluationsPerSample: 2 * SINGLE_DOCUMENT_EVALUATIONS,
@@ -256,25 +258,34 @@ async function evaluatePair(texts: readonly string[], index: number, evaluations
   return { base: await sample(withoutSecret, texts, evaluations), secret }
 }
 
-async function measure(texts: readonly string[], attempts: number, evaluations: number): Promise<SamplePair & {
+/** Alternate scaling sizes within every warm-up and measured round to limit drift between them. */
+async function measure(workloads: readonly Workload[], attempts: number): Promise<readonly (SamplePair & {
+  readonly workload: Workload
   readonly samples: readonly UserTextTimingPair[]
-}> {
-  for (let warm = 0; warm < WARMUP_PAIRS; warm++) await evaluatePair(texts, warm, evaluations)
-  const pairs: SamplePair[] = []
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    pairs.push(await evaluatePair(texts, attempt, evaluations))
+})[]> {
+  const measured = workloads.map(workload => ({ workload, pairs: new Array<SamplePair>() }))
+  for (let round = 0; round < WARMUP_PAIRS + attempts; round++) {
+    for (let position = 0; position < measured.length; position++) {
+      const index = round % 2 === 0 ? position : measured.length - 1 - position
+      const { workload, pairs } = measured[index]!
+      const pair = await evaluatePair(workload.texts, round, workload.evaluationsPerSample)
+      if (round >= WARMUP_PAIRS) pairs.push(pair)
+    }
   }
-  const best = pairs.reduce((min, pair) => ({
-    base: pair.base.ms < min.base.ms ? pair.base : min.base,
-    secret: pair.secret.ms < min.secret.ms ? pair.secret : min.secret,
-  }))
-  return {
-    ...best,
-    samples: pairs.map(pair => ({
-      baseMs: pair.base.ms, baseCpuMs: pair.base.cpuMs,
-      withSecretMs: pair.secret.ms, withSecretCpuMs: pair.secret.cpuMs,
-    })),
-  }
+  return measured.map(({ workload, pairs }) => {
+    const best = pairs.reduce((min, pair) => ({
+      base: pair.base.ms < min.base.ms ? pair.base : min.base,
+      secret: pair.secret.ms < min.secret.ms ? pair.secret : min.secret,
+    }))
+    return {
+      workload,
+      ...best,
+      samples: pairs.map(pair => ({
+        baseMs: pair.base.ms, baseCpuMs: pair.base.cpuMs,
+        withSecretMs: pair.secret.ms, withSecretCpuMs: pair.secret.cpuMs,
+      })),
+    }
+  })
 }
 
 declare const gc: (() => void) | undefined
@@ -366,7 +377,7 @@ async function allocations(): Promise<UserTextAllocationReport> {
   if (gc === undefined) throw new Error('user-text allocation mode needs --expose-gc')
   const collect = gc
   const results: UserTextWorkloadAllocation[] = []
-  for (const { id, texts } of workloads()) {
+  for (const { id, texts } of workloadGroups().flat()) {
     results.push({ id, ruleAllocatedBytes: await allocatedBytes(texts, collect), ...returned(texts) })
   }
   return { workloads: results }
@@ -374,23 +385,24 @@ async function allocations(): Promise<UserTextAllocationReport> {
 
 async function timings(attempts: number): Promise<UserTextTimeReport> {
   const results: UserTextWorkloadTiming[] = []
-  for (const { id, group, texts, evaluationsPerSample } of workloads()) {
-    const { base, secret, samples } = await measure(texts, attempts, evaluationsPerSample)
-    results.push({
-      id,
-      group,
-      documents: texts.length,
-      characters: texts.reduce((sum, text) => sum + text.length, 0),
-      evaluationsPerSample,
-      secrets: secret.secrets,
-      maskedCharacters: secret.maskedCharacters,
-      baseMs: base.ms,
-      baseCpuMs: base.cpuMs,
-      withSecretMs: secret.ms,
-      withSecretCpuMs: secret.cpuMs,
-      ratio: secret.ms / base.ms,
-      samples,
-    })
+  for (const workloads of workloadGroups()) {
+    for (const { workload: { id, group, texts, evaluationsPerSample }, base, secret, samples } of await measure(workloads, attempts)) {
+      results.push({
+        id,
+        group,
+        documents: texts.length,
+        characters: texts.reduce((sum, text) => sum + text.length, 0),
+        evaluationsPerSample,
+        secrets: secret.secrets,
+        maskedCharacters: secret.maskedCharacters,
+        baseMs: base.ms,
+        baseCpuMs: base.cpuMs,
+        withSecretMs: secret.ms,
+        withSecretCpuMs: secret.cpuMs,
+        ratio: secret.ms / base.ms,
+        samples,
+      })
+    }
   }
   return { warmupPairs: WARMUP_PAIRS, attempts, workloads: results }
 }

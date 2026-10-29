@@ -1,12 +1,28 @@
 # Publish the dsh release sequence to npm. This workflow is manual-only
 # (workflow_dispatch) and intentionally does not listen to pull_request or push:
-# publication must always be an explicit, reviewed act from a dsh-v* tag, and it
-# must never appear as a PR check. It repacks the current tree before publishing
+# publication is an explicit, reviewed act; dsh-v* tag validation is enabled by
+# default and may be skipped through the dispatch input. It never appears as a PR check. It repacks the current tree before publishing
 # so the bytes uploaded are exactly what this dispatch produced.
 name: Release publish (dsh)
 
 on:
   workflow_dispatch:
+    inputs:
+      cua_run_id:
+        description: '已有 CUA 打包 run ID：留空重新打包；填写时复用同一源码和版本的已验证产物'
+        type: string
+        required: false
+        default: ''
+      cua_run_attempt:
+        description: 'CUA 打包 attempt：仅与 run ID 一起使用；留空选择最新一次，不回退到更早的成功构建'
+        type: string
+        required: false
+        default: ''
+      skip-tag-check:
+        description: Skip release tag validation for the selected ref; other publication checks still apply.
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -16,9 +32,23 @@ env:
   DSH_TELEMETRY_DISABLED: '1'
 
 jobs:
+  cua-helper:
+    if: (startsWith(github.ref, 'refs/tags/dsh-v') || inputs.skip-tag-check) && inputs.cua_run_id == '' && inputs.cua_run_attempt == ''
+    uses: ./.github/workflows/cua-helper-package.yml
+    with:
+      source_ref: ${{ github.ref }}
+      preset: production
+
   pack:
     name: Pack npm tarballs
+    needs: cua-helper
+    if: >-
+      ${{ !cancelled() && (needs.cua-helper.result == 'success'
+        || (needs.cua-helper.result == 'skipped' && (inputs.cua_run_id != '' || inputs.cua_run_attempt != ''))) }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
     steps:
       # Complete history: the release scripts read tags.
       - uses: actions/checkout@v7.0.1
@@ -55,10 +85,50 @@ jobs:
       - name: Verify release version
         env:
           RELEASE_PUBLISH: 'true'
-        run: pnpm run release:verify --family dsh
+        run: pnpm run release:verify --family dsh ${{ inputs.skip-tag-check && '--skip-tag-check' || '' }}
+
+      - name: Select retained CUA helper
+        if: inputs.cua_run_id != '' || inputs.cua_run_attempt != ''
+        id: retained-cua
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pnpm exec tsx scripts/cua-helper/select-artifact.ts
+
+      - name: Download retained CUA helper
+        if: inputs.cua_run_id != '' || inputs.cua_run_attempt != ''
+        uses: actions/download-artifact@v8.0.1
+        with:
+          artifact-ids: ${{ steps.retained-cua.outputs.artifact-id }}
+          run-id: ${{ inputs.cua_run_id }}
+          github-token: ${{ github.token }}
+          path: dist/cua-helper
 
       - name: Build
-        run: pnpm run build:official
+        run: pnpm run build:official --serial
+
+      - name: Download freshly built CUA helper
+        if: inputs.cua_run_id == '' && inputs.cua_run_attempt == ''
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: ${{ needs.cua-helper.outputs.artifact }}
+          path: dist/cua-helper
+
+      - name: Stage verified native helper applications
+        run: |
+          mkdir dist/cua-helper/extracted
+          tar -xzf dist/cua-helper/cua-helper.tgz -C dist/cua-helper/extracted
+          pnpm exec tsx scripts/cua-helper/stage.ts --from dist/cua-helper/extracted
+
+      - name: Record CUA source and publication retry instructions
+        env:
+          CUA_RUN_ID: ${{ inputs.cua_run_id || github.run_id }}
+          CUA_RUN_ATTEMPT: ${{ steps.retained-cua.outputs.attempt || github.run_attempt }}
+        run: |
+          {
+            printf 'CUA helper: run `%s`, attempt `%s`.\n\n' "$CUA_RUN_ID" "$CUA_RUN_ATTEMPT"
+            printf '%s\n\n' 'npm 部分发布失败时，只重跑 Publish to npm job，复用原 dsh-npm-tarballs；不要重跑全部 job。'
+            printf '若需新建发布运行，填写 `cua_run_id=%s`、`cua_run_attempt=%s`，并使用相同源码 commit 和版本。\n' "$CUA_RUN_ID" "$CUA_RUN_ATTEMPT"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Pack release tarballs
         run: pnpm run release:pack --family dsh --out dist/npm

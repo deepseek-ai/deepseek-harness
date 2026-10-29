@@ -1,8 +1,9 @@
 /** Host Schedule tests use real domain storage and an explicit Session resolver. */
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context, Service } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { CreateSessionOptions } from '@deepseek-ai/dsh-session'
@@ -29,6 +30,7 @@ export function gatedScheduleBackend(
   traps: {
     putRecord?: (table: string, key: string) => Promise<void> | undefined
     deleteRecord?: (table: string, key: string) => Promise<void> | undefined
+    deleteRecords?: (table: string, keys: readonly string[]) => Promise<void> | undefined
   } = {},
 ): StorageBackend {
   const memory = new MemoryStorageBackend(pool)
@@ -48,6 +50,10 @@ export function gatedScheduleBackend(
           deleteRecord: async (table, key) => {
             await traps.deleteRecord?.(table, key)
             await unit.deleteRecord(table, key)
+          },
+          deleteRecords: async (table, keys) => {
+            await traps.deleteRecords?.(table, keys)
+            await unit.deleteRecords(table, keys)
           },
           setGlobal: value => unit.setGlobal(value),
           close: () => unit.close(),
@@ -78,6 +84,7 @@ export async function harness(options: {
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(Storage)
   const pool = options.pool ?? new MemoryMediaPool()
   const backend = options.backend ?? new MemoryStorageBackend(pool)
@@ -135,7 +142,8 @@ export interface HarnessAgent extends Agent {
 export function agentFor(ctx: Context, id = 'original', meta?: CreateSessionOptions['meta']): HarnessAgent {
   const session = ctx.sessions.create(SessionId(id), meta === undefined ? undefined : { meta })
   return {
-    id: session.id, session, ctx: ctx.extend(), options: {}, status: 'idle', inbox: unsupportedInbox(),
+    id: session.id, session, ctx: ctx.extend(), options: {}, status: 'idle', model: unsupportedModel(),
+    inbox: unsupportedInbox(),
     send() {}, followup: vi.fn<(message: UserMessage) => void>(), steer() {}, inject() {}, cancel() {},
     whenIdle: async () => {}, runMaintenance: operation => operation(new AbortController().signal),
   }

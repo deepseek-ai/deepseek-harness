@@ -156,7 +156,9 @@ clientPath(id: string): string | undefined
  * body. Each bundle body is built once on its first `GET`; script
  * construction never reads maps. A package asset is read on every request
  * and answers 304 without a body when `If-None-Match` equals its entity tag;
- * its body holds the file open until the caller consumes or cancels it.
+ * its body holds the file open until the caller consumes or cancels it. A
+ * bundle, map, or chunk body is the held buffer itself, not a copy, so a
+ * caller must not modify its bytes.
  * @param request - shell-carrier request for a `/plugins` resource.
  * @returns the exact response also exposed by the optional Web route.
  */

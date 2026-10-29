@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Plugin-Manifestdienst",
+    "description": "Bietet eine schreibgeschützte Liste der aktuellen Plug-In-Einträge, des Aktivierungsstatus der Konfiguration und des Ausführungsstatus."
+  }
+}

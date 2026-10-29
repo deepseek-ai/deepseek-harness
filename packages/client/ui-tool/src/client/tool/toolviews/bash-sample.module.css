@@ -99,8 +99,10 @@
   transition: color 100ms ease;
 }
 
-.root:hover {
-  color: var(--dsw-alias-label-secondary);
+@media (hover: hover) {
+  .root:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -152,12 +154,14 @@
   transition: opacity 100ms ease;
 }
 
-.root:hover .iconIdle {
-  opacity: 0;
-}
+@media (hover: hover) {
+  .root:hover .iconIdle {
+    opacity: 0;
+  }
 
-.root:hover .chevronHover {
-  opacity: 1;
+  .root:hover .chevronHover {
+    opacity: 1;
+  }
 }
 
 .title {
@@ -223,16 +227,23 @@
   transition: opacity 100ms ease;
 }
 
-.card:hover .inspectButton,
 .inspectButton:focus-visible {
   opacity: 1;
 }
 
+@media (hover: hover) {
+  .card:hover .inspectButton {
+    opacity: 1;
+  }
+}
+
 /* Solid hover fill: the pill floats over terminal output, so a translucent
    hover token would let the text underneath bleed through. */
-.inspectButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .inspectButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover-solid);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 
@@ -243,4 +254,8 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+@media (hover: none) {
+  .inspectButton { opacity: 1; }
 }

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Ejecutor de servidor de complemento dinámico",
+    "description": "Administre definiciones de complementos dinámicos temporales y ejecute sus partes del lado del servidor."
+  }
+}

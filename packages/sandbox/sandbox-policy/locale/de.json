@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sandbox-Berechtigungsrichtlinie",
+    "description": "Bestimmen Sie die Grenzwerte für jeden Vorgang basierend auf dem Berechtigungsmodus und dem Arbeitsbereich der aktuellen Sitzung."
+  }
+}

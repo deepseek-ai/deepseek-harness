@@ -22,10 +22,10 @@ it('advertises configured models with an API key', async () => {
   const ctx = new Context()
   try {
     await ctx.plugin(LlmRuntime)
-    await ctx.plugin(ApiKey, {})
-    expect(await ctx.llm.listModels('deepseek-official')).toEqual(expect.arrayContaining([
-      expect.objectContaining({ provider: 'deepseek-official', id: 'deepseek-flash' }),
-    ]))
+    await ctx.plugin(ApiKey, { models: [{ id: 'configured-model' }] })
+    expect(await ctx.llm.listModels('deepseek-official')).toEqual([
+      expect.objectContaining({ provider: 'deepseek-official', id: 'configured-model' }),
+    ])
   } finally {
     await ctx.fiber.dispose()
     vi.unstubAllEnvs()

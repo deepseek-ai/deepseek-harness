@@ -1,7 +1,10 @@
 import { Context } from '@deepseek-ai/cordis'
-import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
+import type { IndexInjection, WebServer } from '@deepseek-ai/dsh-host-webserver'
 import { expect, it } from 'vitest'
 import { Config, apply } from '../src/index.ts'
+
+/** The Peer an index render speaks for; this listener reads no field of it. */
+const PAGE_PEER = { principal: { kind: 'owner' } } as Parameters<WebServer['renderIndex']>[1]
 
 it('validates positive sequence timing and publishes it through the product page injection', async () => {
   expect(Config({}).stopSequenceMs).toBe(500)
@@ -11,7 +14,7 @@ it('validates positive sequence timing and publishes it through the product page
   try {
     apply(ctx, Config({ stopSequenceMs: 800 }))
     const table: IndexInjection[] = []
-    await ctx.parallel('webserver/index-inject', table)
+    await ctx.parallel('webserver/index-inject', table, PAGE_PEER)
     expect(table).toEqual([{ kind: 'global', name: '__DSH_SHORTCUTS_CONFIG__', value: { stopSequenceMs: 800 } }])
   } finally { await ctx.fiber.dispose() }
 })

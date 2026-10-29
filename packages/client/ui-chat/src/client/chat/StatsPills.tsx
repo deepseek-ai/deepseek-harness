@@ -6,7 +6,7 @@
 
 import { memo, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { InjectFace, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: merges the sessionStats key into SessionProjectionMap for useProjection.
@@ -136,21 +136,27 @@ interface PillContent {
   stat: StatId
   icon: ReactNode
   label: ReactNode
+  /** The full reading as plain text: the accessible name and the tooltip shown while the label is cut off. */
+  text: string
 }
 
 function exactCount(value: number, t: Translate): string {
   return t('message.turnUsage.count', { count: formatExactTokens(value, t) })
 }
 
-function joined(first: string, second: string | null): ReactNode {
-  if (second === null) return first
-  return (
-    <>
-      {first}
-      <span className={css.sep} aria-hidden>·</span>
-      {second}
-    </>
-  )
+/** One or two reading segments, visually joined by a separator glyph. */
+function reading(first: string, second: string | null): Pick<PillContent, 'label' | 'text'> {
+  if (second === null) return { label: first, text: first }
+  return {
+    label: (
+      <>
+        {first}
+        <span className={css.sep} aria-hidden>·</span>
+        {second}
+      </>
+    ),
+    text: `${first} · ${second}`,
+  }
 }
 
 // Every figure rides the durable sessionStats projection, so paging and
@@ -169,14 +175,20 @@ function decodeSpeed(stats: WindowStats, t: Translate): string {
   })
 }
 
+/** The full reading above a pill, only while an ellipsis cuts its label; the delay matches the dock's context meter. */
+const FULL_READING_TOOLTIP = { side: 'top', portal: true, delayMs: 200, onlyWhenClipped: true } as const
+
 /** A static reading: used when the pill has no dialog rows or the mode is Compact. */
-function PlainPill({ stat, icon, label }: PillContent) {
+function PlainPill({ stat, icon, label, text }: PillContent) {
   return (
     <span className={css.anchor} data-composer-stat={stat}>
-      <span className={css.pill}>
-        {icon}
-        <span className={css.label}>{label}</span>
-      </span>
+      {/* No dialog carries a static reading, so a tap also pins the full text. */}
+      <Tooltip label={text} {...FULL_READING_TOOLTIP} openOnClick>
+        <span className={css.pill}>
+          {icon}
+          <span className={css.label}>{label}</span>
+        </span>
+      </Tooltip>
     </span>
   )
 }
@@ -186,8 +198,7 @@ function PlainPill({ stat, icon, label }: PillContent) {
  * state; useStatDialog closes it on Escape or an outside pointerdown or click,
  * so at most one dialog is open across the dock.
  */
-function DialogPill({ stat, icon, label, ariaLabel, title, titleValue, children }: PillContent & {
-  ariaLabel: string
+function DialogPill({ stat, icon, label, text, title, titleValue, children }: PillContent & {
   title: string
   titleValue?: string
   children: ReactNode
@@ -195,17 +206,20 @@ function DialogPill({ stat, icon, label, ariaLabel, title, titleValue, children 
   const { open, setOpen, rootRef, panelRef, pos } = useStatDialog()
   return (
     <span ref={rootRef} className={css.anchor} data-composer-stat={stat}>
-      <button
-        type="button"
-        className={css.pill}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={ariaLabel}
-        onClick={() => { setOpen(!open) }}
-      >
-        {icon}
-        <span className={css.label}>{label}</span>
-      </button>
+      {/* The open dialog already shows every figure; a tooltip would cover it. */}
+      <Tooltip label={text} {...FULL_READING_TOOLTIP} disabled={open}>
+        <button
+          type="button"
+          className={css.pill}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label={text}
+          onClick={() => { setOpen(!open) }}
+        >
+          {icon}
+          <span className={css.label}>{label}</span>
+        </button>
+      </Tooltip>
       {open && createPortal(
         <div
           ref={panelRef}
@@ -239,15 +253,16 @@ export const ActivityPill = memo(function ActivityPill({ useChat, useProjection,
   const stats = useSessionStats(useChat, useProjection)
   const speed = stats.decodeMs > 0 ? decodeSpeed(stats, t) : null
   const icon = <IconGaugeOutlineRegular />
-  if (mode === 'compact') return speed === null ? null : <PlainPill stat="activity" icon={icon} label={speed} />
+  if (mode === 'compact') return speed === null ? null : <PlainPill stat="activity" icon={icon} {...reading(speed, null)} />
   if (stats.steps === 0) return null
   const counts = t('stats.counts', { turns: stats.turns, steps: stats.steps })
-  const content: PillContent = { stat: 'activity', icon, label: joined(counts, speed) }
+  const content: PillContent = { stat: 'activity', icon, ...reading(counts, speed) }
   // A window without one timed figure has no dialog rows to show, so the pill
   // stays a plain reading instead of a button opening an empty dialog.
   if (stats.llmMs <= 0 && stats.toolMs <= 0 && stats.ttftSteps <= 0 && speed === null) return <PlainPill {...content} />
   return (
-    <DialogPill {...content} ariaLabel={speed === null ? counts : `${counts} · ${speed}`} title={t('stats.dialog.title')}>
+    // The counts head the dialog, so a cut-off reading stays complete once the dialog opens.
+    <DialogPill {...content} title={t('stats.dialog.title')} titleValue={counts}>
       <dl className={dialogCss.details} data-session-stats-details>
         {stats.llmMs > 0 && (
           <>
@@ -289,7 +304,7 @@ export const UsagePill = memo(function UsagePill({ useProjection, usePerformance
   const cacheHitText = cacheHit !== null ? t('stats.cacheHit', { percent: cacheHit }) : null
   const icon = <IconDatabaseOutlineRegular />
   if (mode === 'compact') {
-    return cacheHitText === null ? null : <PlainPill stat="usage" icon={icon} label={cacheHitText} />
+    return cacheHitText === null ? null : <PlainPill stat="usage" icon={icon} {...reading(cacheHitText, null)} />
   }
   // Same aggregate as the Turn pill's totalTokens: every prompt-side billing bucket plus output.
   const total = billedInputTokens(usage) + usage.outputTokens
@@ -298,8 +313,7 @@ export const UsagePill = memo(function UsagePill({ useProjection, usePerformance
     <DialogPill
       stat="usage"
       icon={icon}
-      label={joined(totalText, cacheHitText)}
-      ariaLabel={cacheHitText === null ? totalText : `${totalText} · ${cacheHitText}`}
+      {...reading(totalText, cacheHitText)}
       title={t('stats.dialog.usageTitle')}
       titleValue={exactCount(total, t)}
     >

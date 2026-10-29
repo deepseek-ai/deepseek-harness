@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "tmux context",
+    "description": "Save tmux pane and window locations for each step when needed."
+  }
+}

@@ -1,0 +1,17 @@
+- insert:
+    - id: forge
+      name: '@deepseek-ai/dsh-experimental-forge'
+    - id: forge-github
+      name: '@deepseek-ai/dsh-experimental-forge-github'
+    - id: forge-session
+      name: '@deepseek-ai/dsh-experimental-forge-session'
+    - id: optional-forge-panel
+      name: cordis:group
+      group: true
+      isolate:
+        worktrees: true
+      config:
+        - id: forge-worktree
+          name: '@deepseek-ai/dsh-experimental-worktree'
+        - id: forge-panel
+          name: '@deepseek-ai/dsh-experimental-client-ui-forge'

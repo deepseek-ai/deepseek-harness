@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Exportation du journal de session",
+    "description": "Fournit des commandes d’exportation de journaux de session et des fonctions de téléchargement."
+  }
+}

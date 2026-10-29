@@ -53,7 +53,7 @@ describe('plan-mode activation', () => {
     agent.followup(prompt)
     await agent.whenIdle()
     expect(adapter.requests).toHaveLength(1)
-    expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toContain('exit_plan_mode')
+    expect((adapter.requests[0]?.tools ?? []).some(tool => tool.name === 'exit_plan_mode')).toBe(active)
     const text = adapter.requests[0]?.messages.flatMap(message => message.content)
       .filter(block => block.type === 'text').map(block => block.text).join('\n')
     expect(text?.includes('Plan the work before executing it.')).toBe(active)

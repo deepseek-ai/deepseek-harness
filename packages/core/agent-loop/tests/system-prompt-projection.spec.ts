@@ -177,6 +177,23 @@ describe('SystemPromptProjection', () => {
       .toEqual([{ type: 'text', text: 'v1' }, { type: 'text', text: 'v2' }, { type: 'text', text: 'v3' }])
   })
 
+  it('keeps the surviving prompt node at a series start when its text already matches', async () => {
+    const ctx = await sessionStore()
+    const session = ctx.sessions.create(SessionId('system-prompt-series-start-current'))
+    const projection = new SystemPromptProjection(session)
+    const head = commit(session, 1, projection.project('v1', CONTINUING)[0])
+    appendUser(session, 'hello')
+    const appended = commit(session, 2, projection.project('v2', CONTINUING)[0])
+
+    // The effective text is already current: re-baselining node 0 would move the same
+    // text into the request's first message and invalidate the provider prefix.
+    expect(projection.project('v2', NEW_SERIES)).toEqual([])
+    expect(session.surface.nodes[0]).toBe(head.seq)
+    expect(session.surface.nodes).toContain(appended.seq)
+    expect(session.deriveMessages().flatMap(message => message.role === 'system' ? [message.content[0]] : []))
+      .toEqual([{ type: 'text', text: 'v1' }, { type: 'text', text: 'v2' }])
+  })
+
   it('re-baselines node 0 and empties later active nodes at a series start', async () => {
     const ctx = await sessionStore()
     const session = ctx.sessions.create(SessionId('system-prompt-series-start'))

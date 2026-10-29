@@ -1,4 +1,5 @@
 import { SessionFormatError, sessionFormatCount, sessionFormatSafeInteger } from '@deepseek-ai/dsh-session-format'
+import { fourDigitYearEpoch } from '@deepseek-ai/dsh-util-time'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import type {
   SessionFormatEvent,
@@ -926,10 +927,7 @@ function scheduleIdValue(value: SessionFormatJsonValue | undefined, label: strin
 }
 
 function instantValue(value: SessionFormatJsonValue | undefined, label: string): void {
-  if (typeof value !== 'string'
-    || !/^(?!0000)\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{3}Z$/u.test(value)
-    || !Number.isFinite(Date.parse(value))
-    || new Date(Date.parse(value)).toISOString() !== value) {
+  if (typeof value !== 'string' || fourDigitYearEpoch(value).kind !== 'accepted') {
     throw new SessionFormatError(`${label} must be a canonical UTC instant`)
   }
 }

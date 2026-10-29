@@ -48,7 +48,7 @@ export function runPnpmCommand(root: string, args: readonly string[]): void {
  * @param root - Repository root containing the aggregate tsconfig.
  * @param face - Independent compiler face whose package projects are emitted.
  * @param mode - Check package types by default; benchmark emission defers diagnostics to required full builds.
- * @returns Arguments for `process.execPath`, including the heap limit the Host face needs.
+ * @returns Arguments for `process.execPath`, including an 8 GiB old-space heap limit for the Host face.
  * @throws If the aggregate configuration is invalid, has no references, or can emit files.
  */
 export function referencedProjectsCompilerArgs(
@@ -94,7 +94,7 @@ export function referencedProjectsCompilerArgs(
  * @returns Arguments for `process.execPath`, run from the repository root.
  */
 export function aggregateCheckArgs(face: 'host' | 'client'): string[] {
-  return [...hostHeapArgs(face), fileURLToPath(import.meta.resolve('typescript/bin/tsc')), '-p', `tsconfig.${face}.json`]
+  return ['--max-old-space-size=8192', fileURLToPath(import.meta.resolve('typescript/bin/tsc')), '-p', `tsconfig.${face}.json`]
 }
 
 /**
@@ -105,11 +105,11 @@ export function aggregateCheckArgs(face: 'host' | 'client'): string[] {
  * @returns Arguments for `process.execPath`, run from the repository root.
  */
 export function aggregateBuildArgs(face: 'host' | 'client'): string[] {
-  return [...hostHeapArgs(face), fileURLToPath(import.meta.resolve('typescript/bin/tsc')), '-b', `tsconfig.${face}.json`]
+  return ['--max-old-space-size=8192', fileURLToPath(import.meta.resolve('typescript/bin/tsc')), '-b', `tsconfig.${face}.json`]
 }
 
 function hostHeapArgs(face: 'host' | 'client'): string[] {
-  return face === 'host' ? ['--max-old-space-size=4096'] : []
+  return face === 'host' ? ['--max-old-space-size=8192'] : []
 }
 
 /**
@@ -166,10 +166,12 @@ function pnpmStep(id: LibraryStepId, label: string, args: readonly string[], nee
 /**
  * List the package-library build steps in Host, Desktop, then Client dependency order.
  * Source-only Typert generation supplies declarations before any package compilation.
+ * Client compilation waits for Host and Desktop bundling because split compiler faces
+ * rewrite shared lib/types files consumed by those bundles.
  * @param root - Repository root containing the compiler and bundle configurations.
  * @param faces - `host` lists Typert generation, Host compilation, and bundling; `all` adds Desktop and Client.
  * @param mode - Check package types by default; benchmark emission defers diagnostics to required full builds.
- * @returns The ordered steps; each step needs its predecessor.
+ * @returns Steps with explicit compiler and bundle dependencies.
  * @throws If an aggregate configuration is invalid.
  */
 export function libraryBuildSteps(root: string, faces: 'host' | 'all', mode: CompilationMode = 'checked'): LibraryStep[] {

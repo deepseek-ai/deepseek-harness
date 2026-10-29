@@ -53,3 +53,111 @@ export const zh: Record<ShellSettingsLocaleKey, string> = {
 export function formLabels(t: (key: ShellSettingsLocaleKey) => string): SettingsFormLabels {
   return { unavailable: t('unavailable'), readOnly: t('readOnly'), saveFailed: t('saveFailed'), save: t('save'), saving: t('saving') }
 }
+
+/** Japanese copy, checked against the English keys. */
+export const ja = {
+  'title': 'シェル',
+  'description': '各コマンドの実行時間と出力量を制限します。',
+  'timeoutMs': 'コマンドのタイムアウト (ms)',
+  'timeoutMsHint': '1つのコマンドが強制終了されるまでに実行できる時間。',
+  'maxOutputBytes': 'ストリームごとの出力上限 (バイト)',
+  'maxOutputBytesHint': 'この上限を超えた出力は失われず、一時ファイルに書き出されます。',
+  'overridden': '上書き済み',
+  'reset': 'デフォルトに戻す',
+  'readOnly': 'このデプロイでは設定が読み取り専用で保存されます。',
+  'unavailable': 'このプラグインは読み込まれていないため、現在設定できません。',
+  'save': '保存',
+  'saving': '保存中…',
+  'saveFailed': 'デプロイがこれらの値を受け付けませんでした。修正のため残されています。',
+  'invalidNumber': '数値を入力するか、空欄のままにするとデフォルトが使用されます。',
+} satisfies Record<keyof typeof en, string>
+
+/** Spanish dictionary, checked against the English keys. */
+export const es = {
+  title: 'Concha',
+  description: 'Limite cuánto tiempo puede ejecutarse cada comando y cuánto puede generar.',
+  timeoutMs: 'Tiempo de espera del comando (ms)',
+  timeoutMsHint: 'Cuánto tiempo puede ejecutarse un comando antes de finalizar.',
+  maxOutputBytes: 'Límite de salida por flujo (bytes)',
+  maxOutputBytesHint: 'La salida más allá de esto se transfiere a un archivo temporal en lugar de perderse.',
+  overridden: 'Anulado',
+  reset: 'Restablecer los valores predeterminados',
+  readOnly: 'Esta implementación almacena configuraciones de solo lectura.',
+  unavailable: 'Este complemento no está cargado, por lo que no se puede configurar en este momento.',
+  save: 'Guardar',
+  saving: 'Guardando…',
+  saveFailed: 'El despliegue no aceptó estos valores; quedaron para que usted los corrigiera.',
+  invalidNumber: 'Ingrese un número o déjelo en blanco para usar el valor predeterminado.',
+} satisfies Record<keyof typeof en, string>
+
+/** French dictionary, checked against the English keys. */
+export const fr = {
+  title: 'Coquille',
+  description: "Limitez la durée d'exécution de chaque commande et le volume de résultats qu'elle peut générer.",
+  timeoutMs: "Délai d'expiration de la commande (ms)",
+  timeoutMsHint: "Combien de temps une commande peut s'exécuter avant d'être terminée.",
+  maxOutputBytes: 'Limite de sortie par flux (octets)',
+  maxOutputBytesHint: "La sortie au-delà de cela se déverse dans un fichier temporaire plutôt que d'être perdue.",
+  overridden: 'Remplacé',
+  reset: 'Réinitialiser aux valeurs par défaut',
+  readOnly: 'Ce déploiement stocke les paramètres en lecture seule.',
+  unavailable: "Ce plugin n'est pas chargé, il ne peut donc pas être configuré pour le moment.",
+  save: 'Enregistrer',
+  saving: 'Sauvegarde…',
+  saveFailed: "Le déploiement n'a pas accepté ces valeurs ; ils vous ont été laissés à corriger.",
+  invalidNumber: 'Entrez un numéro ou laissez ce champ vide pour utiliser la valeur par défaut.',
+} satisfies Record<keyof typeof en, string>
+
+/** German dictionary, checked against the English keys. */
+export const de = {
+  title: 'Muschel',
+  description: 'Begrenzen Sie, wie lange jeder Befehl ausgeführt werden darf und wie viel er ausgeben darf.',
+  timeoutMs: 'Befehls-Timeout (ms)',
+  timeoutMsHint: 'Wie lange ein Befehl ausgeführt werden darf, bevor er beendet wird.',
+  maxOutputBytes: 'Ausgabeobergrenze pro Stream (Byte)',
+  maxOutputBytesHint: 'Darüber hinausgehende Ausgaben werden in eine temporäre Datei übertragen und gehen nicht verloren.',
+  overridden: 'Überschrieben',
+  reset: 'Auf Standard zurücksetzen',
+  readOnly: 'Diese Bereitstellung speichert Einstellungen schreibgeschützt.',
+  unavailable: 'Dieses Plugin ist nicht geladen und kann daher derzeit nicht konfiguriert werden.',
+  save: 'Speichern',
+  saving: 'Speichern…',
+  saveFailed: 'Die Bereitstellung hat diese Werte nicht akzeptiert. Sie mussten sie korrigieren.',
+  invalidNumber: 'Geben Sie eine Zahl ein oder lassen Sie das Feld leer, um den Standardwert zu verwenden.',
+} satisfies Record<keyof typeof en, string>
+
+/** Russian dictionary, checked against the English keys. */
+export const ru = {
+  title: 'Ракушка',
+  description: 'Ограничьте продолжительность выполнения каждой команды и объем вывода.',
+  timeoutMs: 'Таймаут команды (мс)',
+  timeoutMsHint: 'Как долго может выполняться одна команда до ее завершения.',
+  maxOutputBytes: 'Ограничение вывода на поток (байты)',
+  maxOutputBytesHint: 'Вывод, выходящий за пределы этого, сохраняется во временный файл, а не теряется.',
+  overridden: 'Переопределено',
+  reset: 'Сбросить настройки по умолчанию',
+  readOnly: 'В этом развертывании параметры сохраняются только для чтения.',
+  unavailable: 'Этот плагин не загружен, поэтому его невозможно настроить прямо сейчас.',
+  save: 'Сохранить',
+  saving: 'Сохранение…',
+  saveFailed: 'Развертывание не приняло эти значения; их оставили вам на исправление.',
+  invalidNumber: 'Введите число или оставьте поле пустым, чтобы использовать значение по умолчанию.',
+} satisfies Record<keyof typeof en, string>
+
+/** Portuguese dictionary, checked against the English keys. */
+export const pt = {
+  title: 'Concha',
+  description: 'Limite quanto tempo cada comando pode ser executado e quanto ele pode gerar.',
+  timeoutMs: 'Tempo limite do comando (ms)',
+  timeoutMsHint: 'Quanto tempo um comando pode ser executado antes de ser encerrado.',
+  maxOutputBytes: 'Limite de saída por stream (bytes)',
+  maxOutputBytesHint: 'A saída além disso é transferida para um arquivo temporário em vez de ser perdida.',
+  overridden: 'Substituído',
+  reset: 'Redefinir para o padrão',
+  readOnly: 'Esta implantação armazena configurações somente leitura.',
+  unavailable: 'Este plugin não está carregado, portanto não pode ser configurado agora.',
+  save: 'Salvar',
+  saving: 'Salvando…',
+  saveFailed: 'A implantação não aceitou esses valores; eles foram deixados para você corrigir.',
+  invalidNumber: 'Insira um número ou deixe em branco para usar o padrão.',
+} satisfies Record<keyof typeof en, string>

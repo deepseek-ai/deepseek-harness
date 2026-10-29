@@ -1,0 +1,40 @@
+{
+  "nsisLanguage": "SPANISHINTERNATIONAL",
+  "strings": {
+    "INSTALLER_INSTALL": "Instalar ahora",
+    "INSTALLER_FINISH": "Finalizar",
+    "INSTALLER_NATIVE_PROGRESS": "Preparando la instalación… %d%%",
+    "INSTALLER_PROGRESS_EXTRACT": "Extrayendo archivos… %d%%",
+    "INSTALLER_PROGRESS_COPY": "Instalando archivos… %d%%",
+    "INSTALLER_PROGRESS_REGISTER": "Terminando la instalación… %d%%",
+    "INSTALLER_PROGRESS_CLEAN": "Limpieza de archivos temporales… %d%%",
+    "INSTALLER_CHOOSE_PATH": "Elige ubicación",
+    "INSTALLER_BROWSE": "Examinar",
+    "INSTALLER_LAUNCH": "Lanzar ahora",
+    "INSTALLER_LAUNCH_FAILED": "No se pudo iniciar DeepSeek Harness. Vuelva a intentarlo o desmarque Iniciar ahora y cierre el instalador.",
+    "INSTALLER_UI_ERROR": "El instalador no pudo inicializar su ventana. Ciérralo y vuelve a intentarlo.",
+    "INSTALLER_THEME_ERROR": "Utilice /THEME=auto, /THEME=light o /THEME=dark.",
+    "INSTALLER_FAILED": "La instalación no terminó. Cierre este instalador y vuelva a intentarlo. Si el problema persiste, descargue el instalador nuevamente.",
+    "INSTALLER_RUNNING": "DeepSeek Harness se está ejecutando. Salga de la bandeja del sistema y vuelva a intentarlo.",
+    "INSTALLER_DIRECTORY_FAILED": "No se pudo reemplazar el directorio de instalación.",
+    "INSTALLER_DIRECTORY_HINT": "Verifique el acceso al directorio de instalación y cierre los programas usando sus archivos, luego ejecute el instalador nuevamente. Copie los detalles del error si el problema persiste.",
+    "INSTALLER_DIRECTORY_RESTORE_HINT": "No se pudo restaurar la instalación anterior. Mantenga el directorio de respaldo que se muestra en los detalles del error y comuníquese con el soporte antes de volver a instalar.",
+    "INSTALLER_PATH_INVALID": "Elija una ruta de carpeta local completa. No se admiten raíces de unidades, carpetas del sistema, enlaces ni caracteres especiales.",
+    "INSTALLER_PATH_OWNERSHIP": "Elija una carpeta vacía o la carpeta de instalación registrada de DeepSeek Harness.",
+    "INSTALLER_PATH_WRITABLE": "Esta ubicación no se puede escribir. Elija una carpeta disponible para el usuario actual.",
+    "INSTALLER_DISK_SPACE": "No hay suficiente espacio libre en disco. Elija otra ubicación.",
+    "INSTALLER_PER_USER": "Este instalador solo admite el usuario actual. Primero desinstale la instalación existente para todos los usuarios.",
+    "INSTALLER_EXTRACT_FAILED": "No se pudieron extraer los archivos de la aplicación.",
+    "INSTALLER_EXTRACT_HINT": "Es posible que el software de seguridad haya bloqueado un archivo o que el disco esté lleno. Cierra este instalador y vuelve a intentarlo. Si sigue fallando, envíenos los detalles del error a continuación.",
+    "INSTALLER_EXTRACT_COPY": "Copiar detalles del error",
+    "INSTALLER_EXTRACT_EXPAND": "Mostrar detalles",
+    "INSTALLER_EXTRACT_COLLAPSE": "Ocultar detalles",
+    "INSTALLER_EXTRACT_SAVED": "El informe completo se guardó en %s.",
+    "INSTALLER_EXTRACT_UNSAVED": "No se pudo guardar el informe completo. Utilice Copiar detalles del error para conservarlo.",
+    "INSTALLER_EXTRACT_COPIED": "Los detalles del error se copiaron al portapapeles."
+  },
+  "uninstaller": {
+    "welcome": "Bienvenido",
+    "finished": "ha sido desinstalado"
+  }
+}

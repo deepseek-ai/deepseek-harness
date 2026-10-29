@@ -48,6 +48,17 @@ describe('delete toast source', () => {
     source.report('deleted')
     expect(listener).toHaveBeenCalledTimes(4)
   })
+
+  it('publishes each settled bulk removal with its count or failure', () => {
+    const source = createDeleteToastSource()
+    source.reportClear({ cleared: true, count: 3 })
+    expect(source.hooks.toast.getSnapshot()).toEqual({ kind: 'cleared', count: 3, seq: 1 })
+    // A removal that found nothing keeps its own zero, so the banner can say so.
+    source.reportClear({ cleared: true, count: 0 })
+    expect(source.hooks.toast.getSnapshot()).toEqual({ kind: 'cleared', count: 0, seq: 2 })
+    source.reportClear({ cleared: false })
+    expect(source.hooks.toast.getSnapshot()).toEqual({ kind: 'clearFailed', seq: 3 })
+  })
 })
 
 describe('ScheduleDeleteToast', () => {
@@ -67,5 +78,26 @@ describe('ScheduleDeleteToast', () => {
   it('shows the warning banner for a deletion that could not be confirmed', () => {
     mount({ kind: 'deleteFailed', seq: 2 }, zh)
     expect(screen.getByRole('alert').textContent).toBe(zh['toast.deleteFailed'])
+  })
+
+  it('states how many inactive tasks a bulk removal cleared, singular for one', () => {
+    vi.useFakeTimers()
+    const many = mount({ kind: 'cleared', count: 4, seq: 3 })
+    expect(screen.getByRole('alert').textContent).toBe(en['toast.cleared.other'].replace('{count}', '4'))
+    act(() => { vi.runAllTimers() })
+    expect(many.dismiss).toHaveBeenCalledOnce()
+    cleanup()
+    mount({ kind: 'cleared', count: 1, seq: 4 })
+    expect(screen.getByRole('alert').textContent).toBe(en['toast.cleared.one'].replace('{count}', '1'))
+  })
+
+  it('states that a bulk removal found nothing instead of a zero count', () => {
+    mount({ kind: 'cleared', count: 0, seq: 4 }, zh)
+    expect(screen.getByRole('alert').textContent).toBe(zh['toast.clearedNone'])
+  })
+
+  it('shows the warning banner for a bulk removal that failed', () => {
+    mount({ kind: 'clearFailed', seq: 5 }, zh)
+    expect(screen.getByRole('alert').textContent).toBe(zh['toast.clearFailed'])
   })
 })

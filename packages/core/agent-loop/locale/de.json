@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Agenten-Ausführungsschleife",
+    "description": "Koordinieren Sie Modellanfragen, Toolaufrufe und Folgeschritte, um Agentenaufgaben voranzutreiben."
+  }
+}

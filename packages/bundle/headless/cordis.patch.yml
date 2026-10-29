@@ -11,11 +11,6 @@
     personaPrefix: >-
       You are a coding agent powered by the {{model}} model.
 
-- id: tools
-  config:
-    # Keep the same temporary process-wide PTC mode opt-in as the Web surface.
-    mode: !!js process.env.DSH_TOOLS_MODE
-
 - insert:
     - id: headless-startup
       name: '@deepseek-ai/dsh-headless/startup'

@@ -1,0 +1,89 @@
+<div class="_markdown_404681">
+  <p>
+    #text "Opening line carries math:"
+  <span class="katex-display">
+    <span class="katex">
+      <span class="katex-mathml">
+        <math display="block" xmlns="http://www.w3.org/1998/Math/MathML">
+          <semantics>
+            <mrow>
+              <mi>
+                #text "a"
+              <mo>
+                #text "+"
+              <mi>
+                #text "b"
+              <mi>
+                #text "c"
+              <mo>
+                #text "+"
+              <mi>
+                #text "d"
+            <annotation encoding="application/x-tex">
+              #text "a+b\nc+d"
+      <span aria-hidden="true" class="katex-html">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 0.6667em; vertical-align: -0.0833em;">
+          <span class="mord mathnormal">
+            #text "a"
+          <span class="mspace" style="margin-right: 0.2222em;">
+          <span class="mbin">
+            #text "+"
+          <span class="mspace" style="margin-right: 0.2222em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 0.7778em; vertical-align: -0.0833em;">
+          <span class="mord mathnormal">
+            #text "b"
+          <span class="mord mathnormal">
+            #text "c"
+          <span class="mspace" style="margin-right: 0.2222em;">
+          <span class="mbin">
+            #text "+"
+          <span class="mspace" style="margin-right: 0.2222em;">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 0.6944em;">
+          <span class="mord mathnormal">
+            #text "d"
+  <p>
+    #text "Closing fence alone on its own line:"
+  <span class="katex-display">
+    <span class="katex">
+      <span class="katex-mathml">
+        <math display="block" xmlns="http://www.w3.org/1998/Math/MathML">
+          <semantics>
+            <mrow>
+              <mi>
+                #text "θ"
+              <mi>
+                #text "φ"
+            <annotation encoding="application/x-tex">
+              #text "\\theta\n\\varphi"
+      <span aria-hidden="true" class="katex-html">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 0.8889em; vertical-align: -0.1944em;">
+          <span class="mord mathnormal" style="margin-right: 0.0278em;">
+            #text "θ"
+          <span class="mord mathnormal">
+            #text "φ"
+  <ul>
+    <li>
+      #text "list item keeps column-zero display math outside the item"
+  <span class="katex-display">
+    <span class="katex">
+      <span class="katex-mathml">
+        <math display="block" xmlns="http://www.w3.org/1998/Math/MathML">
+          <semantics>
+            <mrow>
+              <mi>
+                #text "ψ"
+              <mi>
+                #text "ω"
+            <annotation encoding="application/x-tex">
+              #text "\\psi\n\\omega"
+      <span aria-hidden="true" class="katex-html">
+        <span class="katex-base">
+          <span class="katex-strut" style="height: 0.8889em; vertical-align: -0.1944em;">
+          <span class="mord mathnormal" style="margin-right: 0.0359em;">
+            #text "ψ"
+          <span class="mord mathnormal" style="margin-right: 0.0359em;">
+            #text "ω"

@@ -108,6 +108,7 @@ function props(
   records: readonly ScheduleRecord[] | undefined,
   openState: SessionSnapshot['openState'] = 'open',
   dictionary: typeof zh | typeof en = en,
+  allowed = true,
 ): ScheduleCatalogActionProps {
   const snapshot = sessionSnapshot(openState)
   const useSession = <T,>(select: (value: SessionSnapshot) => T): T => select(snapshot)
@@ -120,6 +121,7 @@ function props(
   return {
     sessionId: SESSION,
     useSession,
+    useAccess: vi.fn((_action: string) => allowed),
     useCatalog,
     onDelete: vi.fn(async () => {}),
     onRetry: vi.fn(async () => {}),
@@ -140,6 +142,19 @@ function metadataLines(): Element[] {
 }
 
 describe('ScheduleCatalogAction visibility', () => {
+  it('renders nothing and reads no catalog while the current Peer may not list this Session\'s reminders', () => {
+    const refused = props([record('active', 'after', START + 60_000)], 'open', en, false)
+    let catalogReads = 0
+    const useCatalog: ScheduleCatalogActionProps['useCatalog'] = (select) => {
+      catalogReads++
+      return refused.useCatalog(select)
+    }
+    const view = render(<ScheduleCatalogAction {...refused} useCatalog={useCatalog} />)
+    expect(view.container.innerHTML).toBe('')
+    expect(refused.useAccess).toHaveBeenCalledWith('schedule/list')
+    expect(catalogReads).toBe(0)
+  })
+
   it('hides the entry once a successful read proves there are no active reminders', () => {
     const active = [record('active', 'after', START + 60_000)]
     const view = render(<ScheduleCatalogAction {...props(active, 'cold')} />)

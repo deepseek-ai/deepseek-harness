@@ -68,7 +68,7 @@ async function setup(phase: 'connect' | 'authenticate', pauseControl?: 'forward'
     if (method === 'heartbeat') { heartbeatCalls++; return holdHeartbeat ? heartbeat.promise : null }
     if (method === 'ordinary') { ordinaryEntered.resolve(undefined); return ordinary.promise }
     if (method !== 'hello') throw new Error(`unexpected helper operation: ${method}`)
-    return { protocol: 2, hash: 'a'.repeat(64), platform: 'linux', nodeVersion: 'v24.19.0', kind: 'node-script', executable: '/usr/bin/node', root: '/tmp/remote-helper', workspace: '/workspace' }
+    return { protocol: 3, hash: 'a'.repeat(64), platform: 'linux', nodeVersion: 'v24.19.0', kind: 'node-script', executable: '/usr/bin/node', root: '/tmp/remote-helper', workspace: '/workspace' }
   })
   const rawSocket = new PendingSocket()
   const secureSocket = new PendingSocket()

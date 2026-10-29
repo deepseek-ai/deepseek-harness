@@ -354,16 +354,19 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
       // The pipeline raises `tool.call` for this call from the calling mod, so only earlier mods see it.
       options.callOrigins.set(callId, context.mod)
       try {
-        const result = await registry.execute({
-          callId,
-          name: aliases.toHarness(requireString(tool, '$.tool.call tool')),
-          arguments: args,
+        const batch = await registry.execute({
+          calls: [{
+            type: 'tool-call', id: callId,
+            name: aliases.toHarness(requireString(tool, '$.tool.call tool')),
+            arguments: JSON.stringify(args),
+          }],
           ...agent === undefined ? {} : { agent },
           signal: context.signal,
         })
         // Guidance a tool defers to the next request still reaches the model when a mod made the call.
-        if (agent !== undefined) for (const context of result.additionalContexts ?? []) agent.inject(context)
-        return toolCallResultOf(result)
+        if (agent !== undefined) for (const context of batch.additionalContexts) agent.inject(context)
+        // oxlint-disable-next-line typescript/no-non-null-assertion -- execute returns one result per call
+        return toolCallResultOf(batch.results[0]!.result)
       } finally {
         options.callOrigins.delete(callId)
       }

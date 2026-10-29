@@ -1,0 +1,40 @@
+{
+  "nsisLanguage": "SIMPCHINESE",
+  "strings": {
+    "INSTALLER_INSTALL": "立即安装",
+    "INSTALLER_FINISH": "完成",
+    "INSTALLER_NATIVE_PROGRESS": "正在准备安装… %d%%",
+    "INSTALLER_PROGRESS_EXTRACT": "正在解压文件… %d%%",
+    "INSTALLER_PROGRESS_COPY": "正在安装文件… %d%%",
+    "INSTALLER_PROGRESS_REGISTER": "正在完成安装… %d%%",
+    "INSTALLER_PROGRESS_CLEAN": "正在清理临时文件… %d%%",
+    "INSTALLER_CHOOSE_PATH": "选择安装位置",
+    "INSTALLER_BROWSE": "选择",
+    "INSTALLER_LAUNCH": "立即启动",
+    "INSTALLER_LAUNCH_FAILED": "无法启动 DeepSeek Harness。请重试，或取消勾选立即启动后关闭安装程序。",
+    "INSTALLER_UI_ERROR": "无法初始化安装窗口，请关闭后重试。",
+    "INSTALLER_THEME_ERROR": "主题参数须为 /THEME=auto、/THEME=light 或 /THEME=dark。",
+    "INSTALLER_FAILED": "安装未完成，请关闭安装程序后重试。如仍然失败，请重新下载安装包。",
+    "INSTALLER_RUNNING": "DeepSeek Harness 正在运行，请先在系统托盘中退出应用后重试。",
+    "INSTALLER_DIRECTORY_FAILED": "无法替换安装目录。",
+    "INSTALLER_DIRECTORY_HINT": "请检查安装目录的访问权限，关闭占用其中内容的程序后重新运行安装器。如仍失败，请复制错误详情。",
+    "INSTALLER_DIRECTORY_RESTORE_HINT": "未能恢复原安装目录。请保留错误详情中列出的备份目录，联系支持人员后再安装。",
+    "INSTALLER_PATH_INVALID": "请选择本地磁盘上的完整文件夹路径，不能使用磁盘根目录、系统目录、链接目录或包含特殊字符的路径。",
+    "INSTALLER_PATH_OWNERSHIP": "请选择空文件夹，或 DeepSeek Harness 原来的安装目录。",
+    "INSTALLER_PATH_WRITABLE": "无法写入此位置。请选择当前用户可写入的文件夹；安装程序不会申请管理员权限。",
+    "INSTALLER_DISK_SPACE": "此磁盘的可用空间不足，请选择其他位置。",
+    "INSTALLER_PER_USER": "此安装程序仅支持当前用户。请先卸载已有的所有用户安装版本。",
+    "INSTALLER_EXTRACT_FAILED": "无法解压应用程序文件。",
+    "INSTALLER_EXTRACT_HINT": "可能是安全软件拦截了文件，或磁盘空间不足。请关闭安装程序后重试；如仍然失败，请将下方错误信息发送给我们。",
+    "INSTALLER_EXTRACT_COPY": "复制错误信息",
+    "INSTALLER_EXTRACT_EXPAND": "显示详情",
+    "INSTALLER_EXTRACT_COLLAPSE": "隐藏详情",
+    "INSTALLER_EXTRACT_SAVED": "完整错误报告已保存到 %s",
+    "INSTALLER_EXTRACT_UNSAVED": "无法保存完整错误报告，请使用“复制错误信息”保留。",
+    "INSTALLER_EXTRACT_COPIED": "错误信息已复制到剪贴板。"
+  },
+  "uninstaller": {
+    "welcome": "欢迎",
+    "finished": "已从你"
+  }
+}

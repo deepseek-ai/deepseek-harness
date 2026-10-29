@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Paramètres du sous-agent",
+    "description": "Configurez la profondeur de la délégation, le nombre de simultanéités et les modèles facultatifs."
+  }
+}

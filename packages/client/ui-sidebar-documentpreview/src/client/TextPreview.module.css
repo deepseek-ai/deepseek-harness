@@ -188,8 +188,10 @@
   cursor: pointer;
 }
 
-.retry:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .retry:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* The type's 16px sheet before the chip's text; the chip's title row centres
@@ -235,8 +237,10 @@
   cursor: pointer;
 }
 
-.action:hover {
-  background: var(--dsw-alias-bg-layer-3);
+@media (hover: hover) {
+  .action:hover {
+    background: var(--dsw-alias-bg-layer-3);
+  }
 }
 
 /* The next page, asked for where the loaded text ends. */
@@ -254,9 +258,11 @@
   cursor: pointer;
 }
 
-.more:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-bg-layer-3);
+@media (hover: hover) {
+  .more:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-bg-layer-3);
+  }
 }
 
 .more:disabled {
@@ -288,9 +294,11 @@
   height: 15px;
 }
 
-.tool:hover {
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .tool:hover {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .tool[data-textpreview-tool='auto-refresh'][aria-pressed='true'] {

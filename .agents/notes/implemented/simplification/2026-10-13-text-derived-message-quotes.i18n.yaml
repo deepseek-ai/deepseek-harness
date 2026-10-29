@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-13-text-derived-message-quotes.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-10-13-text-derived-message-quotes.md
+/agent-note-recognize-message-quotes-from-markdown-text:
+  en: a2abd7f693937d51
+  zh: f9e4bb817536dbbe
+/agent-note-recognize-message-quotes-from-markdown-text/problem:
+  en: d71ebbacbd9bd8a3
+  zh: 45c1f7fd1d797f61
+/agent-note-recognize-message-quotes-from-markdown-text/decision:
+  en: 0abb09d5ba396f69
+  zh: dd067b0ca5fd376f
+/agent-note-recognize-message-quotes-from-markdown-text/alternatives-considered:
+  en: 05c6009796927583
+  zh: 9f08229767c07b31
+/agent-note-recognize-message-quotes-from-markdown-text/verification:
+  en: 790598fd0f3f0c67
+  zh: 0399e0e322ffca40
+/agent-note-recognize-message-quotes-from-markdown-text/consequences:
+  en: 21f96c04f6edcc1d
+  zh: 8ea3f42a8e981592

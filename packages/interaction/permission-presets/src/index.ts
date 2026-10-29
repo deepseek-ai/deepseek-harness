@@ -12,6 +12,7 @@
  * @module dsh-permission-presets
  */
 import type {} from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-agent'
 
 import type { Volatile } from '@deepseek-ai/cordis'
 
@@ -191,7 +192,7 @@ export class PermissionPresetService extends TypertRemoteService {
     defaultPreset: z.string().volatile(),
   })
 
-  static inject = ['shell', 'approval', 'sessions', 'sessionProjections']
+  static inject = ['shell', 'approval', 'sessions', 'agents', 'sessionProjections']
 
   private readonly presets: Record<string, PresetSpec>
   private autoAdmit: (() => void) | undefined
@@ -229,9 +230,9 @@ export class PermissionPresetService extends TypertRemoteService {
 
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
-    ctx.on('session/created', (session) => {
-      this.pinInitialPermission(session)
-    })
+    ctx.on('agent/created', ({ agent }) => {
+      this.pinInitialPermission(agent.session)
+    }, { prepend: true })
     const selectionSchema = zod.object({
       currentValue: zod.string().min(1),
     }) as zod.ZodType<PermissionSelection>
@@ -243,8 +244,8 @@ export class PermissionPresetService extends TypertRemoteService {
       apply: applyPermissionEvent,
       wire: { viewSchema: selectionSchema, view: state => ({ currentValue: this.derive(state) }) },
     })
-    for (const session of ctx.sessions.list()) {
-      this.pinInitialPermission(session)
+    for (const agent of ctx.agents.list()) {
+      this.pinInitialPermission(agent.session)
     }
 
     // The /permission command: the one write path a web client uses (the
@@ -417,13 +418,13 @@ export class PermissionPresetService extends TypertRemoteService {
   }
 
   /**
-   * Fill every missing permission fact before a session is published. A
+   * Fill every missing permission fact during Agent creation. A
    * genuinely fresh session uses the current user default; seeded or partially
    * initialized sessions preserve their effective knob values and only gain
    * the missing durable facts. A stored Auto identity requires its live
    * integration and passes its admission check before
-   * publication. Creation while the permission reader is still registering
-   * fails synchronously so the publishing caller can roll back.
+   * creation completes. Creation while the permission reader is still registering
+   * fails so the publishing caller can roll back.
    */
   private pinInitialPermission(session: Session): void {
     const state = this.permissionState(session)

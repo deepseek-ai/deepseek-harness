@@ -1,6 +1,6 @@
 .bubble {
   display: inline-flex;
-  align-items: center;
+  align-items: safe center;
   gap: 8px;
   position: fixed;
   z-index: 100;
@@ -8,7 +8,10 @@
      viewport edge, so anchors near the right edge would wrap early;
      max-content sizes by the label alone, capped at half the viewport. */
   width: max-content;
-  max-width: 50vw;
+  box-sizing: border-box;
+  max-width: min(50vw, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
   padding: 3px 7px;
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-tooltip-bg);
@@ -30,7 +33,8 @@
 .bubble[data-has-shortcut] { padding-inline-end: 5px; }
 .bubble[data-has-shortcut]:not(:has(.label)) { padding: 3px; }
 
-.bubble[data-side='right'] {
+.bubble[data-side='right'],
+.bubble[data-side='left'] {
   transform: translateY(-50%);
 }
 

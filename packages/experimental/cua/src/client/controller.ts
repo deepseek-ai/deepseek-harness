@@ -21,6 +21,7 @@ interface Query<T> {
 /** Independently settled observations; the overall busy flag follows the latest refresh. */
 export type PermissionView = { [K in keyof PermissionData]: Query<PermissionData[K]> } & {
   busy: boolean
+  changing: boolean
   toast: { id: number; kind: 'requested' | 'opened' | 'revoked' | 'retryAllowed' } | { id: number; kind: 'failed'; message: string } | null
 }
 /** Slot actions and the renderer-bound permission projection. */
@@ -34,7 +35,7 @@ export interface PermissionFace {
   dismissToast: () => void
 }
 
-/** Serializes user actions and drops superseded refresh results or results arriving after disposal. */
+/** Serializes actions, pauses reads during management operations, and drops superseded or disposed results. */
 export class PermissionController {
   /** Last observed permissions and the lifetime of the current refresh/action. */
   readonly state = createSnapshotStore<PermissionView>({
@@ -42,11 +43,12 @@ export class PermissionController {
     system: { value: null, busy: false, error: null },
     applications: { value: null, busy: false, error: null },
     icons: { value: null, busy: false, error: null },
-    busy: false, toast: null,
+    busy: false, changing: false, toast: null,
   })
   private tail: Promise<void> = Promise.resolve()
   private reads: Promise<void> = Promise.resolve()
   private closed = false
+  private epoch = 0
   private sequence = 0
   /** @param remote Generated CUA Remote namespace; failed results are handled with query and action failures. */
   constructor(private readonly remote: Context['remote']['cuaAccess']) {}
@@ -65,11 +67,26 @@ export class PermissionController {
       dismissToast: () => { if (!this.closed) this.state.update((state) => { state.toast = null }) },
     }
   }
+  /**
+   * Update query admission from the management operation's synchronous notification.
+   * @param changing Whether a bundle or row operation is pending; settlement refreshes observations.
+   */
+  setChanging(changing: boolean): void {
+    if (this.closed || changing === this.state.getSnapshot().changing) return
+    this.epoch++
+    this.state.update((state) => {
+      state.changing = changing
+      state.busy = true
+      for (const key of ['runtime', 'system', 'applications', 'icons'] as const) state[key].busy = true
+    })
+    if (!changing) this.enqueue()
+  }
   /** Prevent publication after UI withdrawal and join the accepted Remote work. */
   async dispose(): Promise<void> { this.closed = true; await this.tail; await this.reads }
   private enqueue(action?: () => Promise<RemoteResult<unknown>>, kind?: 'requested' | 'opened' | 'revoked' | 'retryAllowed'): void {
-    if (this.closed) return
-    const current = () => !this.closed
+    if (this.closed || this.state.getSnapshot().changing) return
+    const epoch = this.epoch
+    const current = () => !this.closed && epoch === this.epoch
     const sequence = ++this.sequence
     this.state.update((state) => {
       state.busy = true

@@ -54,7 +54,7 @@ it('reports failures by reason, reads again on retry, and settles a retried key 
   expect(state('a', '1.0.0', 'en')).toEqual({ status: 'ready', detail: FOUND })
 })
 
-it('forgets every read on reset, drops answers of forgotten reads, and stops publishing after disposal', async () => {
+it('invalidates reads on reset, drops superseded answers, and stops publishing after disposal', async () => {
   const { controller, manager, state } = setup()
   let answer: (value: Answer<BundleDetail>) => void = () => {}
   manager.readBundleDetail.mockImplementationOnce(() => new Promise((resolve) => { answer = resolve }))
@@ -80,7 +80,7 @@ it('forgets every read on reset, drops answers of forgotten reads, and stops pub
   controller.dispose()
   answer({ ok: true, value: FOUND })
   await flush()
-  expect(state('a', '1.0.0', 'en')).toEqual({ status: 'loading' })
+  expect(state('a', '1.0.0', 'en')).toEqual({ status: 'ready', detail: { status: 'none' } })
 })
 
 it('asks the registry comparison only for bundles read from npm, and reads them and their images from npmmirror first where it won', async () => {
@@ -122,4 +122,23 @@ it('addresses relative images through the Host route and leaves other destinatio
   for (const destination of ['https://example.com/a.png', 'data:image/png;base64,AA', '//cdn.example/a.png', '#top']) {
     expect(controller.image('x', 'README.md', destination, false)).toBeUndefined()
   }
+})
+
+
+it('retains a displayed document during invalidation and replaces it after one fresh read', async () => {
+  const { controller, manager, state } = setup()
+  controller.load('a', '1.0.0', 'en', false)
+  await vi.waitFor(() => { expect(state('a', '1.0.0', 'en')).toEqual({ status: 'ready', detail: FOUND }) })
+  const response = Promise.withResolvers<Answer<BundleDetail>>()
+  onTestFinished(() => { response.resolve({ ok: true, value: FOUND }) })
+  manager.readBundleDetail.mockImplementationOnce(() => response.promise)
+  controller.reset()
+  expect(state('a', '1.0.0', 'en')).toEqual({ status: 'ready', detail: FOUND })
+  controller.load('a', '1.0.0', 'en', false)
+  controller.load('a', '1.0.0', 'en', false)
+  expect(manager.readBundleDetail).toHaveBeenCalledTimes(2)
+  expect(state('a', '1.0.0', 'en')).toEqual({ status: 'ready', detail: FOUND })
+  const replacement = { ...FOUND, markdown: '# Updated' }
+  response.resolve({ ok: true, value: replacement })
+  await vi.waitFor(() => { expect(state('a', '1.0.0', 'en')).toEqual({ status: 'ready', detail: replacement }) })
 })

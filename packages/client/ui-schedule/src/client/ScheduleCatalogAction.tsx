@@ -31,8 +31,17 @@ export type ScheduleCatalogActionProps =
 const SECOND_MS = 1_000
 const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 
-/** Current-Session reminder catalog with durable deletion. */
-export function ScheduleCatalogAction({
+/**
+ * Current-Session reminder catalog with durable deletion, rendered only while
+ * the current Peer may list this Session's reminders.
+ * @param props - the Session seats, the injected catalog and verbs, and localized copy.
+ * @returns the reminder catalog action, or nothing without access.
+ */
+export function ScheduleCatalogAction(props: ScheduleCatalogActionProps) {
+  return props.useAccess('schedule/list') ? <SessionScheduleCatalog {...props} /> : null
+}
+
+function SessionScheduleCatalog({
   useSession, useCatalog, onDelete, onRetry, openTaskDetail, t,
 }: ScheduleCatalogActionProps) {
   const openState = useSession(snapshot => snapshot.openState)

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Conversation-following titles",
-    "description": "Refresh session titles as new human prompts arrive.",
+    "description": "Writes a session's title from all of your messages and updates it when the main task changes, instead of only from the first message.",
     "detail": "docs/DETAIL.md"
   }
 }

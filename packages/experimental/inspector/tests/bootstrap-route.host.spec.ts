@@ -13,6 +13,9 @@ import { apply, Config, inject, name } from '../src/index.ts'
 import { startInspector, type InspectorHandle, type InspectorOptions } from '../src/host/bridge/controller.ts'
 import { INSPECTOR_BOOTSTRAP_PATH } from '../src/shared/web.ts'
 
+/** The Peer an index render speaks for; this listener reads no field of it. */
+const PAGE_PEER = { principal: { kind: 'owner' } } as Parameters<WebServer['renderIndex']>[1]
+
 vi.mock('open', () => ({ default: vi.fn(async () => undefined), apps: { chrome: 'chrome' } }))
 
 vi.mock('../src/host/bridge/controller.ts', async (importOriginal) => {
@@ -76,7 +79,7 @@ describe('experimental Inspector Host bootstrap route', () => {
     )
     const injected = () => {
       const rows: IndexInjection[] = []
-      context!.emit('webserver/index-inject', rows)
+      context!.emit('webserver/index-inject', rows, PAGE_PEER)
       return rows.find(row => row.kind === 'global' && row.name === '__DSH_INSPECTOR__')
     }
     return { fiber, bootstrap, injected, register, registerUpgrade, messages, log }

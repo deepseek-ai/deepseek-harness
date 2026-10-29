@@ -174,7 +174,7 @@ For a seeded Session, the last `session/end-seed` carrying `inherited: true` ide
 | V3 source marker claiming generation 4 | Refuse: advancing the header must not activate a target-generation watermark. |
 | V3 source marker for generation 3 | Require a nonempty Session id and nonnegative safe-integer `throughSeq` before the marker; a foreign id is allowed only before the inherited cut with `parentSession`. |
 | Other source generations, including values above 4 | Retain their event type and payload coordinates unchanged; they remain inactive in V4. |
-| Native V4 marker for generation 4 | Apply the same earlier-coordinate and Session-ownership checks using V4 as current. |
+| Native V4 marker for generation 4 | Require an earlier `throughSeq` and nonempty Session id; a foreign id is allowed only before the validated inherited cut, without requiring `parentSession`. |
 | Native V4 historical marker, including generation 3 | Retain recorded coordinates and identity; it is not a V4 acceptance watermark. |
 
 No delivery payload or event type is rewritten. Higher-version migrations own any future activation checks; this edge checks only promotion to V4. The marker’s envelope sequence follows insertion remapping; source-generation ownership is checked against the original V3 sequence and inherited cut.
@@ -246,7 +246,7 @@ Current common admission does not validate each user/tool/developer content bloc
 | `compaction/prune` | Its span names exact current-surface nodes and excludes the protected head; it does not require a compaction transaction or its owner fields. |
 | Compact checkpoint replacement | Its `compact-checkpoint` source identifies the active compaction. |
 | Native `subagent/catalog` | Validates own version-0/version-1/version-2 payloads after the inherited cut. Each child id must be unique. Native reads neither collect child logs nor compare their physical facts; inherited entries do not establish own membership. |
-| Inherited cut and delivery | Apply the marker, coordinate, and generation-ownership rules stated above. |
+| Inherited cut and delivery | Apply the native V4 marker, coordinate, and generation-ownership rules above. |
 
 These checks are generation-owned in [relationships.ts](src/relationships.ts). Full common message/envelope acceptance and plugin-owned message projections additionally use the installed Session; the exported V4 restorer alone is not a replacement for complete catalog restoration.
 

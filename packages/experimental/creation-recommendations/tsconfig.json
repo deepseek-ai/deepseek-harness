@@ -1,0 +1,29 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../llm/llm" },
+    { "path": "../../core/tools" },
+    { "path": "../../test-support/tool-testkit" },
+    { "path": "../../core/agent" },
+    { "path": "../../core/session" },
+    { "path": "../../session/session-projection" },
+    { "path": "../../boot/plugin-manager" },
+    { "path": "../../api/remote-access/tsconfig.host.json" },
+    { "path": "../../subagent/subagent" },
+    { "path": "../../boot/app-boot" },
+    { "path": "../../skill/skill" },
+    { "path": "../../sandbox/sandbox-policy" },
+    { "path": "../action-cards" }
+  ],
+  "files": [
+    "src/index.ts",
+    "src/types.ts",
+    "src/generated-bundle.ts",
+    "src/skill.ts"
+  ]
+}

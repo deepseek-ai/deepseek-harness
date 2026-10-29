@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Änderungsanfragen und Arbeitsbäume",
+    "description": "Verfolgen Sie die Änderungsanfragen jeder Sitzung mit ihren Prüfungen und Reviews und starten Sie neue Sitzungen in einem Git-Arbeitsbaum; nutzt die gh CLI für GitHub."
+  }
+}

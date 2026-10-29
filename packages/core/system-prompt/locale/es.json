@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Conjunto de palabras del mensaje del sistema",
+    "description": "Resuma el contenido de las palabras del mensaje del sistema proporcionado por cada complemento."
+  }
+}

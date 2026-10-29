@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-09-17-multiline-display-dollar-math.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-17-multiline-display-dollar-math.md
+/agent-note-multi-line-display-dollar-math:
+  en: 8f57c77aa43fbd6c
+  zh: ef5192184e4923d5
+/agent-note-multi-line-display-dollar-math/problem:
+  en: e4b73644a982844c
+  zh: 48f86358242d6ccc
+/agent-note-multi-line-display-dollar-math/decision:
+  en: d6b136b1f62285b7
+  zh: aba323bfdb800162
+/agent-note-multi-line-display-dollar-math/alternatives-considered:
+  en: e0833b5674e648e7
+  zh: b0472020b07099b9
+/agent-note-multi-line-display-dollar-math/consequences:
+  en: 70f16597bd640e93
+  zh: 0e0c9005f331e514
+/agent-note-multi-line-display-dollar-math/testing:
+  en: f17a1453df91ce88
+  zh: 4f15be0139e8b694

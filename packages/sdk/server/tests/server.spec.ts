@@ -7,7 +7,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { randomUUID } from 'node:crypto'
@@ -37,6 +37,12 @@ class FakeTransport implements JsonRpcTransportPeer {
 }
 
 const servers: Server[] = []
+
+function testContext(): Context {
+  const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
+  return ctx
+}
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map(server => new Promise(resolve => server.close(resolve))))
@@ -301,11 +307,8 @@ describe('HarnessSdkJsonRpcServer', () => {
     const create = vi.fn(async (options: { sessionId: SessionId }) =>
       String(options.sessionId) === 'main' ? mainHandle : otherHandle)
     const liveAgents = new Map<string, Agent>([['main', mainAgent], ['other', otherAgent]])
-    const ctx = {
-      on: vi.fn(() => () => undefined),
-      agents: { create, get: (id: SessionId) => liveAgents.get(String(id)) },
-      get: () => undefined,
-    } as unknown as Context
+    const ctx = testContext()
+    ctx.provide('agents', { create, get: (id: SessionId) => liveAgents.get(String(id)) })
     const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
     // This isolated prompt test begins after the handshake boundary.
     ;(server as unknown as { initialized: boolean }).initialized = true
@@ -325,7 +328,7 @@ describe('HarnessSdkJsonRpcServer', () => {
     expect(otherHandle.dispose).toHaveBeenCalledOnce()
   })
 
-  it('admits inline SDK images before the user message enters the session', async () => {
+  it.each(['prompt', 'query', 'image-only', 'whitespace'] as const)('admits SDK images before the %s message enters the session', async (entry) => {
     const followup = vi.fn<Agent['followup']>()
     const agent = ({ id: SessionId('image'), followup } satisfies Pick<Agent, 'id' | 'followup'>) as unknown as Agent
     const handle = { agent, dispose: vi.fn(() => Promise.resolve()) }
@@ -337,27 +340,25 @@ describe('HarnessSdkJsonRpcServer', () => {
       height: 1,
     }
     const saveImages = vi.fn(async () => [ref])
-    const ctx = {
-      on: vi.fn(() => () => undefined),
-      agents: { create: vi.fn(async () => handle), get: () => agent },
-      get: (name: string) => name === 'attachments' ? { saveImages } : undefined,
-    } as unknown as Context
+    const ctx = testContext()
+    ctx.provide('agents', { create: vi.fn(async () => handle), get: () => agent })
+    ctx.provide('attachments', { saveImages })
     const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
     // This isolated prompt test begins after the handshake boundary.
     ;(server as unknown as { initialized: boolean }).initialized = true
 
-    await server.prompt({
-      sessionId: 'image',
-      contentBlocks: [
-        { type: 'text', text: 'inspect' },
-        { type: 'image', data: 'AQ==', mimeType: 'image/png' },
-      ],
-    })
+    const text = entry === 'image-only' ? '' : entry === 'whitespace' ? '  ' : 'inspect'
+    const image = { type: 'image' as const, data: 'AQ==', mimeType: 'image/png' as const, name: 'diagram.png' }
+    const contentBlocks = entry === 'image-only' ? [image] : [{ type: 'text' as const, text }, image]
+    if (entry === 'prompt') {
+      await server.prompt({ sessionId: 'image', contentBlocks })
+    } else {
+      await server.handleRequest('session/query', { sessionId: 'image', contentBlocks })
+    }
 
-    expect(saveImages).toHaveBeenCalledWith([{ data: Uint8Array.of(1), mediaType: 'image/png' }])
+    expect(saveImages).toHaveBeenCalledWith([{ data: Uint8Array.of(1), mediaType: 'image/png', name: 'diagram.png' }])
     expect(followup.mock.calls[0]?.[0].content).toEqual([
-      { type: 'text', text: 'inspect' },
-      { type: 'image', attachment: ref },
+      ...entry === 'image-only' ? [] : [{ type: 'text', text }], { type: 'image', attachment: ref },
     ])
     await server.shutdown()
   })
@@ -366,11 +367,8 @@ describe('HarnessSdkJsonRpcServer', () => {
     const followup = vi.fn<Agent['followup']>()
     const agent = ({ id: SessionId('image'), followup } satisfies Pick<Agent, 'id' | 'followup'>) as unknown as Agent
     const handle = { agent, dispose: vi.fn(() => Promise.resolve()) }
-    const ctx = {
-      on: vi.fn(() => () => undefined),
-      agents: { create: vi.fn(async () => handle), get: () => agent },
-      get: () => undefined,
-    } as unknown as Context
+    const ctx = testContext()
+    ctx.provide('agents', { create: vi.fn(async () => handle), get: () => agent })
     const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
     // This isolated prompt test begins after the handshake boundary.
     ;(server as unknown as { initialized: boolean }).initialized = true
@@ -394,14 +392,12 @@ describe('HarnessSdkJsonRpcServer', () => {
     }>>()
     const saveImages = vi.fn(() => admitted.promise)
     let live = true
-    const ctx = {
-      on: vi.fn(() => () => undefined),
-      agents: {
-        create: vi.fn(async () => handle),
-        get: () => live ? agent : undefined,
-      },
-      get: (name: string) => name === 'attachments' ? { saveImages } : undefined,
-    } as unknown as Context
+    const ctx = testContext()
+    ctx.provide('agents', {
+      create: vi.fn(async () => handle),
+      get: () => live ? agent : undefined,
+    })
+    ctx.provide('attachments', { saveImages })
     const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
     // This isolated prompt test begins after the handshake boundary.
     ;(server as unknown as { initialized: boolean }).initialized = true
@@ -430,14 +426,11 @@ describe('HarnessSdkJsonRpcServer', () => {
     // The registry drops the agent after creation, modelling an agent-loop-only
     // reload that leaves the server's SessionRecord pointing at a detached agent.
     let live = true
-    const ctx = {
-      on: vi.fn(() => () => undefined),
-      agents: {
-        create: vi.fn(async () => handle),
-        get: (id: SessionId) => (live && String(id) === 'zombie' ? agent : undefined),
-      },
-      get: () => undefined,
-    } as unknown as Context
+    const ctx = testContext()
+    ctx.provide('agents', {
+      create: vi.fn(async () => handle),
+      get: (id: SessionId) => (live && String(id) === 'zombie' ? agent : undefined),
+    })
     const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
     // This isolated prompt test begins after the handshake boundary.
     ;(server as unknown as { initialized: boolean }).initialized = true
@@ -479,7 +472,7 @@ describe('HarnessSdkJsonRpcServer', () => {
     await ctx.fiber.dispose()
   })
 
-  it('notifies the host when a child session is created with parent lineage', async () => {
+  it('notifies the host only for subagent sessions with a direct creator', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-subagent-'))
     const ctx = await makeHarness(storageDir)
     try {
@@ -490,16 +483,22 @@ describe('HarnessSdkJsonRpcServer', () => {
         meta: { cwd: storageDir },
       })
       ctx.sessions.create(SessionId('child-session'), {
-        meta: { cwd: storageDir, parentSession: SessionId('main') },
+        meta: { cwd: storageDir, parentSession: SessionId('main'), origin: 'subagent' },
       })
 
-      expect(transport.notifications).toContainEqual({
+      ctx.sessions.create(SessionId('legacy-fork'), {
+        meta: { cwd: storageDir, parentSession: SessionId('main') },
+      })
+      ctx.sessions.fork(SessionId('child-session'), undefined, SessionId('ordinary-fork'))
+      ctx.sessions.create(SessionId('unparented-subagent'), { meta: { origin: 'subagent' } })
+
+      expect(transport.notifications.filter(item => item.method === 'subagent.started')).toEqual([{
         method: 'subagent.started',
         params: {
           parentSessionId: 'main',
           childSessionId: 'child-session',
         },
-      })
+      }])
 
       await server.shutdown()
     } finally {
@@ -1005,7 +1004,7 @@ describe('HarnessSdkJsonRpcServer', () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-existing-llm-'))
     const ctx = await makeHarness(storageDir)
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
-    await ctx.plugin(LlmDeepSeek)
+    await ctx.plugin(LlmDeepSeek, { models: [{ id: 'preinstalled-model' }] })
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
       const inspect = server as unknown as { hasAdapterFor(provider: string): boolean }
@@ -1155,6 +1154,8 @@ describe('HarnessSdkJsonRpcServer', () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-unsupported-reasoning-'))
     const ctx = await makeHarness(storageDir)
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
+    // A loopback endpoint keeps the fallback-mounted official route off the network; no request is sent.
+    vi.stubEnv('DEEPSEEK_BASE_URL', 'http://127.0.0.1:9/anthropic')
     try {
       const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
       await expect(server.handleRequest('initialize', {
@@ -1212,11 +1213,8 @@ describe('HarnessSdkJsonRpcServer', () => {
       .mockReturnValueOnce(sharedCreation)
       .mockRejectedValueOnce(new Error('creation failed'))
       .mockResolvedValueOnce(retryHandle)
-    const ctx = {
-      on: vi.fn(() => () => undefined),
-      agents: { create, get: () => undefined },
-      get: () => undefined,
-    } as unknown as Context
+    const ctx = testContext()
+    ctx.provide('agents', { create, get: () => undefined })
     const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport()) as unknown as {
       getOrCreateSession(sessionId: string): Promise<{ handle: AgentHandle }>
       shutdown(): Promise<Record<string, never>>
@@ -1278,11 +1276,8 @@ describe('HarnessSdkJsonRpcServer', () => {
   it('settles every teardown and aggregates multiple failures', async () => {
     const firstDispose = vi.fn(() => { throw new Error('first teardown failed') })
     const secondDispose = vi.fn(() => Promise.reject(new Error('second teardown failed')))
-    const ctx = {
-      on: vi.fn(() => () => undefined),
-      agents: { create: vi.fn(), get: () => undefined },
-      get: () => undefined,
-    } as unknown as Context
+    const ctx = testContext()
+    ctx.provide('agents', { create: vi.fn(), get: () => undefined })
     const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport()) as unknown as {
       sessions: Map<string, { handle: AgentHandle; lastTurnEnd: undefined; activePrompt: boolean }>
       shutdown(): Promise<Record<string, never>>
@@ -1304,13 +1299,12 @@ describe('HarnessSdkJsonRpcServer', () => {
       return () => {
         disposed.push(id)
         if (id === subscription) throw listenerFailure
+        return true
       }
     })
-    const ctx = {
-      on,
-      agents: { create: vi.fn(), get: () => undefined },
-      get: () => undefined,
-    } as unknown as Context
+    const ctx = testContext()
+    ctx.provide('agents', { create: vi.fn(), get: () => undefined })
+    vi.spyOn(ctx, 'on').mockImplementation(on)
     const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
 
     await expect(server.shutdown()).rejects.toBe(listenerFailure)

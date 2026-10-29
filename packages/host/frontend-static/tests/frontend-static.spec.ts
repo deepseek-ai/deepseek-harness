@@ -37,8 +37,10 @@ async function loadComposition(): Promise<Context> {
   const distIndex = join(dist, 'index.html')
   await writeFile(distIndex, '<head></head><body>shell</body>')
   await writeFile(join(dist, 'app.js'), 'export {}')
+  await writeFile(join(dist, 'preview.html'), '<body>preview</body>')
   await writeFile(join(dist, 'blob.bin'), 'BLOB')
   await writeFile(join(dist, 'manifest.webmanifest'), '{}')
+  await writeFile(join(dist, 'icon-192.png'), 'PNG')
   await mkdir(join(dist, 'empty'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
@@ -133,6 +135,8 @@ describe('real Loader composition', () => {
       type: 'application/manifest+json',
       body: '{}',
     })
+    // The install icons are images; a launcher must not receive them as octet-stream.
+    expect(await request(port, '/icon-192.png')).toMatchObject({ status: 200, type: 'image/png', body: 'PNG' })
     expect(await request(port, '/app.js', { method: 'HEAD' })).toEqual({
       status: 200,
       type: 'text/javascript; charset=utf-8',
@@ -148,7 +152,9 @@ describe('real Loader composition', () => {
     const untap = server.tapIndex(html => html.replace('<head>', '<head><script>window.__T__=1</script>'))
     // A plugin row stands in for the Host's plugin-resource rows: the base the
     // shell inserts must precede it, not merely exist.
-    const offRows = loaded.on('webserver/index-inject', (rows) => {
+    const renderedFor: Connection.PeerScope[] = []
+    const offRows = loaded.on('webserver/index-inject', (rows, peer) => {
+      renderedFor.push(peer)
       rows.push({ kind: 'script-preload', src: 'plugins/boot.js' })
     })
     for (const path of ['/', '/index.html', '/?view=test']) {
@@ -165,6 +171,8 @@ describe('real Loader composition', () => {
       expect(base).toBeLessThan(got.body.indexOf('<link rel="preload" as="script" href="plugins/boot.js">'))
       expect(base).toBeLessThan(got.body.indexOf('<script>window.__T__=1</script>'))
     }
+    // An authenticated browser renders for the owner's shared browser Peer.
+    expect(renderedFor).toEqual([loaded.connection.browserPeer, loaded.connection.browserPeer, loaded.connection.browserPeer])
     offRows()
     expect(await request(port, '/', authenticated({ method: 'HEAD' }))).toEqual({
       status: 200,
@@ -220,5 +228,78 @@ describe('real Loader composition', () => {
     await frontendEntry!.fiber?.dispose()
     expect((await request(port, '/no/such/route')).status).toBe(404)
     expect(() => server.registerFallback(() => {})).not.toThrow()
+  })
+
+  it('answers in-process reads for the given Peer without browser authentication', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const reader = { principal: { kind: 'owner' } } as Connection.PeerScope
+    const read = (path: string, init?: RequestInit) => server.readResource(new Request(`http://reader.invalid${path}`, init), reader)
+    const renderedFor: Connection.PeerScope[] = []
+    loaded.on('webserver/index-inject', (rows, peer) => {
+      renderedFor.push(peer)
+      rows.push({ kind: 'global', name: '__READER__', value: peer === reader })
+    })
+
+    // The index renders for the reader's Peer with no cookie or token, and
+    // keeps the entry-directory base ahead of the injected rows.
+    for (const path of ['/', '/index.html']) {
+      const index = await read(path)
+      expect(index.status).toBe(200)
+      expect(index.headers.get('content-type')).toBe('text/html; charset=utf-8')
+      const html = await index.text()
+      expect(html).toContain('globalThis["__READER__"] = true')
+      expect(html.indexOf('<base href="./">')).toBeLessThan(html.indexOf('__READER__'))
+      expect(html).toContain('shell')
+    }
+    expect(renderedFor).toEqual([reader, reader])
+    const head = await read('/', { method: 'HEAD' })
+    expect({ status: head.status, type: head.headers.get('content-type'), body: await head.text() })
+      .toEqual({ status: 200, type: 'text/html; charset=utf-8', body: '' })
+
+    // Assets, misses, traversal, and methods keep the HTTP semantics.
+    const asset = await read('/app.js')
+    expect({ status: asset.status, type: asset.headers.get('content-type'), body: await asset.text() })
+      .toEqual({ status: 200, type: 'text/javascript; charset=utf-8', body: 'export {}' })
+    expect((await read('/missing.js')).status).toBe(404)
+    expect((await read('/..%2f..%2fetc%2fpasswd')).status).toBe(403)
+    expect((await read('/app.js', { method: 'POST', body: 'x' })).status).toBe(405)
+    await expect(read('/bad%00path')).rejects.toThrow()
+    await rm(join(root!, 'dist', 'index.html'))
+    expect((await read('/')).status).toBe(404)
+  })
+
+  it('lets browsers revalidate every file except the index', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    const base = `http://127.0.0.1:${String(loaded.webServer.port)}`
+    const first = await fetch(`${base}/app.js`)
+    const etag = first.headers.get('etag')
+    if (etag === null) throw new Error('a dist file carried no ETag')
+    expect(etag).toMatch(/^W\/"[A-Za-z0-9_-]+"$/)
+    expect(first.headers.get('cache-control')).toBe('no-cache')
+    expect(await first.text()).toBe('export {}')
+
+    const revalidated = await fetch(`${base}/app.js`, { headers: { 'if-none-match': etag } })
+    expect([revalidated.status, revalidated.headers.get('etag'), revalidated.headers.get('cache-control')]).toEqual([304, etag, 'no-cache'])
+    expect(await revalidated.text()).toBe('')
+    // An in-process read revalidates the same way.
+    const reader = { principal: { kind: 'owner' } } as Connection.PeerScope
+    const read = await loaded.webServer.readResource(new Request(`${base}/app.js`, { headers: { 'if-none-match': etag } }), reader)
+    expect(read.status).toBe(304)
+
+    // New content under the same name changes the ETag, so the stale copy is replaced.
+    await writeFile(join(root!, 'dist', 'app.js'), 'export const rebuilt = true')
+    const rebuilt = await fetch(`${base}/app.js`, { headers: { 'if-none-match': etag } })
+    expect(rebuilt.status).toBe(200)
+    expect(rebuilt.headers.get('etag')).not.toBe(etag)
+    expect(await rebuilt.text()).toBe('export const rebuilt = true')
+
+    // Only the rendered index carries no cache headers; another HTML file revalidates.
+    const html = await fetch(`${base}/preview.html`)
+    expect([html.status, html.headers.get('cache-control')]).toEqual([200, 'no-cache'])
+    expect(html.headers.get('etag')).toMatch(/^W\//)
+    expect(await html.text()).toBe('<body>preview</body>')
+    const index = await loaded.webServer.readResource(new Request(`${base}/`), reader)
+    expect([index.status, index.headers.get('cache-control'), index.headers.get('etag')]).toEqual([200, null, null])
   })
 })

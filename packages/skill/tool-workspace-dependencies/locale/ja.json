@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ワークスペース依存関係",
+    "description": "組み込みの Python、Node.js、pnpm の絶対パスを提供します。"
+  }
+}

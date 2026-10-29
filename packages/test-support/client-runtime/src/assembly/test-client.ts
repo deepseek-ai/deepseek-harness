@@ -18,7 +18,7 @@ import { act } from '@testing-library/react'
 import { createInProcessModules, loadPluginModules } from './modules.ts'
 import { assertPlan, graphFromRoster, type AssemblyPlan } from './roster.ts'
 import { REMOTES_PACKAGE, remoteNamespacesOf, remoteProxiesPlugin } from './remote-proxies.ts'
-import { allowAllAccessPlugin } from '../access.ts'
+import { allowAllAccessPlugin, staticAccessPlugin } from '../access.ts'
 
 /** The remote-access row: it mounts its own generated Remote contribution and publishes the access Hooks. */
 const REMOTE_ACCESS_PACKAGE = '@deepseek-ai/dsh-api-remote-access'
@@ -41,6 +41,8 @@ export interface TestClientOptions {
   readonly awaitConnected?: boolean
   /** Readiness budget in milliseconds before `start` rejects with the mock log summary. Default 5000. */
   readonly connectTimeoutMs?: number
+  /** The fixed access answer for each action on every resource. Default: every action is allowed. */
+  readonly access?: (action: string) => boolean
 }
 
 /**
@@ -78,10 +80,15 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 5_000
 
 /**
  * Browser globals jsdom lacks that roster plugins touch at apply or mount:
- * client-hmr opens an `EventSource`; layout components observe size and font loading.
+ * client-hmr opens an `EventSource`; layout components observe size, media queries, and font loading.
  * Inert stand-ins, installed only where the global is absent.
  */
 const JSDOM_SHIMS: Readonly<Record<string, unknown>> = {
+  matchMedia: (media: string): MediaQueryList => Object.assign(new EventTarget(), {
+    media, matches: false, onchange: null,
+    addListener() {},
+    removeListener() {},
+  }),
   EventSource: class {
     addEventListener(): void {}
     close(): void {}
@@ -245,8 +252,10 @@ export class TestClient {
       release = sharedJsdomShims.acquire()
       const system = createInProcessModules(graphFromRoster(roster.rows), modules)
       ctx.plugin(remoteProxiesPlugin(remoteNamespacesOf(modules.values(), mock), mock) as Plugin)
-      // The dropped remote-access row's Hooks: every action is allowed on every resource.
-      if (generated.includes(REMOTE_ACCESS_PACKAGE)) ctx.plugin(allowAllAccessPlugin)
+      // The dropped remote-access row's Hooks: every action is allowed on every resource unless the spec fixes the answers.
+      if (generated.includes(REMOTE_ACCESS_PACKAGE)) {
+        ctx.plugin(options.access === undefined ? allowAllAccessPlugin : staticAccessPlugin(options.access))
+      }
       await bootClient({ ctx, modules: system, manifest: system.manifest })
       if (mountPoint.element !== undefined) {
         if (ctx.get('uiRenderer') === undefined) {

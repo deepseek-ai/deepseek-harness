@@ -88,3 +88,16 @@
   backdrop-filter: var(--dsw-menu-backdrop-filter);
   box-shadow: var(--dsw-elevation-panel);
 }
+
+.fitContent {
+  width: max-content;
+}
+
+.portal {
+  display: contents;
+}
+
+.bridge {
+  position: fixed;
+  z-index: 100;
+}

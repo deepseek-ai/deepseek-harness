@@ -21,7 +21,7 @@ declare module '@deepseek-ai/dsh-api-session-controller/client' {
 const viewSource: SessionReferenceSource = 'referenceTestView'
 const workSource: SessionReferenceSource = 'referenceTestWork'
 const ID = SessionId('reference-session')
-const EMPTY_HISTORY = ok({ records: [], hasMore: false })
+const EMPTY_HISTORY = ok({ cursor: -1, records: [], hasMore: false })
 const it = createClientTest({ roster: webApp.closure(['@deepseek-ai/dsh-api-gateway']) })
 
 async function bench(mock: RemoteMock, start: () => Promise<TestClient>, listed = true) {

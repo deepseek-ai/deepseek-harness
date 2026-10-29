@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "llm",
+    "description": "Fournit une interface d'appel unifiée pour différents modèles."
+  }
+}

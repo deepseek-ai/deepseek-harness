@@ -37,6 +37,8 @@ export interface SkillCatalogSource {
   readonly form: 'catalog'
   /** Marks a replacement catalog rather than this session's first publication. */
   readonly update?: true
+  /** Some discovery failed; entries contain only skills found in this observation. Absence means complete. */
+  readonly incomplete?: true
   /** Exactly the entries this message published, in catalog order. */
   readonly entries: readonly { readonly name: string; readonly description: string }[]
 }
@@ -224,10 +226,10 @@ export function apply(ctx: Context, config: Config = {}): void {
       ? await ctx.skills.snapshot({ cwd: await ctx.workingDirectory.ensure(agent, signal), signal, scope: agent })
       : { skills: [], complete: true }
     signal.throwIfAborted()
-    if (!snapshot.complete) return decision
     const skills = snapshot.skills.filter(isModelInvocable)
     const entries = catalogSourceEntries(skills, catalogDescriptionMaxLength)
-    const digest = digestCatalogEntries(entries)
+    const incomplete = !snapshot.complete
+    const digest = digestCatalogEntries(entries, incomplete)
     const history = catalogHistory(agent)
     const existing = catalogMessage(decision.messages)
     if (history.visibleDigest === digest) {
@@ -235,15 +237,15 @@ export function apply(ctx: Context, config: Config = {}): void {
         ? decision
         : { ...decision, messages: decision.messages.filter(message => message.id !== existing.message.id) }
     }
-    if (existing !== undefined && digestCatalogEntries(existing.entries) === digest) return decision
-    if (!history.published && skills.length === 0) {
+    if (existing !== undefined && digestCatalogEntries(existing.entries, existing.incomplete) === digest) return decision
+    if (!history.published && skills.length === 0 && !incomplete) {
       return existing === undefined
         ? decision
         : { ...decision, messages: decision.messages.filter(message => message.id !== existing.message.id) }
     }
     const catalog = history.published
-      ? renderCatalogUpdate(entries)
-      : renderCatalogMessage(entries)
+      ? renderCatalogUpdate(entries, incomplete)
+      : renderCatalogMessage(entries, incomplete)
     return {
       ...decision,
       messages: existing === undefined
@@ -253,19 +255,24 @@ export function apply(ctx: Context, config: Config = {}): void {
   })
 }
 
-function renderCatalogMessage(entries: SkillCatalogSource['entries']): UserMessage {
+function renderCatalogMessage(entries: SkillCatalogSource['entries'], incomplete: boolean): UserMessage {
   return createUserMessage({
     content: [{
       type: 'text',
       text: [
         '<system-reminder>',
-        'A skill is a reusable set of task-specific instructions. The following skills are available in this session:',
+        entries.length === 0
+          ? 'No skills could be confirmed in this discovery attempt.'
+          : 'A skill is a reusable set of task-specific instructions. The following skills are available in this session:',
         '',
         '<available_skills>',
         ...renderCatalogEntries(entries),
         '</available_skills>',
         '',
-        "If the user names a skill, or the task clearly matches a skill's description, call the `skill` tool with the exact skill name before taking task actions. Load all applicable skills, then follow their full instructions. This catalog contains summaries only; do not infer or follow a skill's instructions until it has been loaded.",
+        ...incomplete ? [incompleteCatalogNotice(), ''] : [],
+        entries.length === 0
+          ? 'Wait for an updated catalog before calling the `skill` tool. Do not infer skill instructions from an empty catalog.'
+          : "If the user names a skill, or the task clearly matches a skill's description, call the `skill` tool with the exact skill name before taking task actions. Load all applicable skills, then follow their full instructions. This catalog contains summaries only; do not infer or follow a skill's instructions until it has been loaded.",
         'A user may also invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool again for that skill.',
         '</system-reminder>',
       ].join('\n'),
@@ -274,14 +281,17 @@ function renderCatalogMessage(entries: SkillCatalogSource['entries']): UserMessa
       kind: 'skill-catalog',
       form: 'catalog',
       entries,
+      ...incomplete ? { incomplete: true } : {},
     },
   })
 }
 
-function renderCatalogUpdate(entries: SkillCatalogSource['entries']): UserMessage {
+function renderCatalogUpdate(entries: SkillCatalogSource['entries'], incomplete: boolean): UserMessage {
   const availability = entries.length === 0
     ? [
-      'No skills are currently available through the `skill` tool. Do not use names from earlier skill catalogs.',
+      incomplete
+        ? 'No skills could be confirmed in this discovery attempt. Do not use names from earlier skill catalogs.'
+        : 'No skills are currently available through the `skill` tool. Do not use names from earlier skill catalogs.',
       'A user may still invoke a skill directly; its <skill_content> block then appears in this conversation. Follow it, and do not call the `skill` tool for it.',
     ]
     : [
@@ -293,12 +303,15 @@ function renderCatalogUpdate(entries: SkillCatalogSource['entries']): UserMessag
       type: 'text',
       text: [
         '<system-reminder>',
-        'The available skill catalog changed. This complete catalog replaces every earlier available-skills list in this session:',
+        incomplete
+          ? 'Skill discovery is incomplete. This catalog of currently available skills replaces every earlier available-skills list in this session:'
+          : 'The available skill catalog changed. This complete catalog replaces every earlier available-skills list in this session:',
         '',
         '<available_skills>',
         ...renderCatalogEntries(entries),
         '</available_skills>',
         '',
+        ...incomplete ? [incompleteCatalogNotice(), ''] : [],
         ...availability,
         '</system-reminder>',
       ].join('\n'),
@@ -308,8 +321,13 @@ function renderCatalogUpdate(entries: SkillCatalogSource['entries']): UserMessag
       form: 'catalog',
       update: true,
       entries,
+      ...incomplete ? { incomplete: true } : {},
     },
   })
+}
+
+function incompleteCatalogNotice(): string {
+  return 'Some skills could not be checked. Only confirmed skills are listed; a lower-priority definition of the same name may be selected when a preferred source is unavailable. Discovery will be retried on the next request.'
 }
 
 /**
@@ -323,15 +341,15 @@ function renderCatalogEntries(entries: SkillCatalogSource['entries']): string[] 
 }
 
 /**
- * Catalog identity over the durable entry list rather than the rendered prose.
- * The entries are what changes; the surrounding `<system-reminder>` framing is
- * written for the model and must not decide whether a republish is needed.
+ * Catalog identity includes durable entries and completeness so recovery clears
+ * a discovery warning even when the entries are unchanged.
  */
-function digestCatalogEntries(entries: SkillCatalogSource['entries']): string {
+function digestCatalogEntries(entries: SkillCatalogSource['entries'], incomplete = false): string {
   // JSON per entry rather than a separator character: every separator is itself
   // a legal description character, so only quoting makes the boundary exact.
   const canonical = entries.map(entry => JSON.stringify([entry.name, entry.description])).join('\n')
   return createHash('sha256')
+    .update(incomplete ? 'incomplete\n' : '')
     .update(canonical)
     .digest('hex')
 }
@@ -372,7 +390,7 @@ function catalogHistory(agent: Agent): { visibleDigest?: string; published: bool
     if (event.type !== 'user/message' || event.data.source.kind !== 'skill-catalog') continue
     const entries = readCatalogEntries(event.data.source)
     if (entries === undefined) continue
-    const digest = digestCatalogEntries(entries)
+    const digest = digestCatalogEntries(entries, event.data.source.incomplete === true)
     published = true
     if (visible.has(event.seq)) return { visibleDigest: digest, published }
   }
@@ -381,11 +399,11 @@ function catalogHistory(agent: Agent): { visibleDigest?: string; published: bool
 
 function catalogMessage(
   messages: readonly UserMessage[],
-): { message: UserMessage; entries: SkillCatalogSource['entries'] } | undefined {
+): { message: UserMessage; entries: SkillCatalogSource['entries']; incomplete: boolean } | undefined {
   for (const message of messages) {
     if (message.source.kind !== 'skill-catalog') continue
     const entries = readCatalogEntries(message.source)
-    if (entries !== undefined) return { message, entries }
+    if (entries !== undefined) return { message, entries, incomplete: message.source.incomplete === true }
   }
   return undefined
 }

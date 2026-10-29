@@ -5,7 +5,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { PeerScope, RemoteUplinkWindow, TypertResourceReader } from '@deepseek-ai/dsh-typert-protocol'
-import type { RemoteEventHostInfo } from './stream-protocol.ts'
+import type { RemoteEventAgentId, RemoteEventHostInfo } from './stream-protocol.ts'
 
 /** One Remote method request after a carrier has decoded its envelope. */
 export interface InvokeRemoteRequest {
@@ -144,6 +144,12 @@ export type TypertGatewayErrorCode =
   | 'gateway/signature-invalid'
   | 'gateway/uplink-overflow'
 
+/** Public metadata of one unsettled forwarded Remote event. */
+export interface PendingRemoteEventInfo {
+  readonly event: string
+  readonly agentId: RemoteEventAgentId
+}
+
 /** Host dispatcher consumed by Connection adapters. */
 export interface TypertGateway {
   /** Carrier adapter shared by WebSocket and in-process transports. */
@@ -154,6 +160,9 @@ export interface TypertGateway {
    * @returns whether an owner stream is open and has not been cancelled.
    */
   hasLiveClient(): boolean
+
+  /** @returns detached metadata for all unsettled forwarded events in arrival order. */
+  getPendingRemoteEvents(): readonly PendingRemoteEventInfo[]
 
   /**
    * Register the application-selected forwarded-event source.

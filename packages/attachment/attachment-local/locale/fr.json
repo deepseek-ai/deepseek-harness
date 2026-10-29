@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Stockage local des pièces jointes",
+    "description": "Enregistrez les pièces jointes telles que les images dans la session et lisez-les en fonction de l'identifiant du contenu."
+  }
+}

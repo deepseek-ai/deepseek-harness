@@ -9,8 +9,8 @@
   en: 9c6c5fcadd836722
   zh: f5b79ea2c4be6dde
 /deepseek-ai-dsh-host-webserver/summary:
-  en: 0d1ffed238b25446
-  zh: 9f66adce1c593c53
+  en: 1b108512b7e28a95
+  zh: ea6e7832392fe32a
 /deepseek-ai-dsh-host-webserver/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -24,20 +24,20 @@
   en: 90352948bfdc1d99
   zh: 35d148bf3bfcf76f
 /deepseek-ai-dsh-host-webserver/use-this-package/registering-routes:
-  en: 296ffba200f0dc93
-  zh: 5d78d6b5f48634c9
+  en: 55b5f5751c46e0ee
+  zh: 6c609104f0798e01
 /deepseek-ai-dsh-host-webserver/use-this-package/the-fallback-seat:
-  en: e21232b7aecbe7a8
-  zh: 2c4a94cab2aa53ff
+  en: 20e5a88f42ba38aa
+  zh: f20d2f4b3eba267a
 /deepseek-ai-dsh-host-webserver/use-this-package/behavior-under-failure:
-  en: dd2529dd54707e39
-  zh: 2615f469d66ac681
+  en: 1bfff905b600f694
+  zh: 73f3b7704af686dc
 /deepseek-ai-dsh-host-webserver/understand-the-implementation:
   en: 42b15ac6321706aa
   zh: 4ed0861911abaf5d
 /deepseek-ai-dsh-host-webserver/understand-the-implementation/design-concept:
-  en: 728da97b91b797b6
-  zh: 22541daf0223c663
+  en: 88adbd5967b978d3
+  zh: b4fabfd6f5df1b71
 /deepseek-ai-dsh-host-webserver/understand-the-implementation/matching-and-lifecycle:
   en: 8589aba0cbaa1c76
   zh: babf3b27b0cdb35e

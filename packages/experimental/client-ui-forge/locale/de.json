@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Bereich für Änderungsanfragen",
+    "description": "Zeigt die Änderungsanfragen einer Sitzung in einem Tab der Seitenleiste an und lässt eine neue Sitzung in einem Git-Arbeitsbaum beginnen."
+  }
+}

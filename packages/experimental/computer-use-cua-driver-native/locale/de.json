@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Computernutzung (Cua-Treiber)",
+    "description": "Lassen Sie das Modell den Desktop mit der mitgelieferten Cua Driver-Laufzeit bedienen; benötigt Desktop-Berechtigungen für die App, die dsh startet."
+  }
+}

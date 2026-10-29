@@ -132,6 +132,27 @@ it('keeps a centred surface point under the pointer while crossing into overflow
   }
 })
 
+it('does not keep revealed controls visible after a touch enters', async () => {
+  vi.useFakeTimers()
+  const view = render(<ZoomViewport preference={FIT_WIDTH} intrinsicWidth={400}
+    labels={{ controls: 'Zoom controls', menu: 'Choose zoom', out: 'Zoom out', into: 'Zoom in',
+      fitWidth: 'Fit width', value: percent => `${String(percent)}%` }} signal={new AbortController().signal}
+    scrollportRef={() => {}} onPreference={() => {}}>
+    <div className={zoomSurfaceClass} />
+  </ZoomViewport>)
+  const frame = view.container.querySelector('[data-document-zoom-frame]') as HTMLElement
+  const controls = view.container.querySelector('[data-document-zoom-controls]') as HTMLElement
+  frame.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 500, bottom: 400,
+    width: 500, height: 400, toJSON: () => ({}) })
+
+  fireEvent.pointerMove(frame, { pointerType: 'mouse', clientY: 350 })
+  expect(controls.getAttribute('data-document-zoom-visible')).toBe('true')
+  fireEvent.pointerEnter(controls, { pointerType: 'touch' })
+  fireEvent.pointerMove(frame, { pointerType: 'mouse', clientY: 100 })
+  await act(async () => { await vi.advanceTimersByTimeAsync(420) })
+  expect(controls.hasAttribute('data-document-zoom-visible')).toBe(false)
+})
+
 it('reveals from the bottom zone and delays hiding while controls stay active', async () => {
   vi.useFakeTimers()
   const view = render(<ZoomViewport preference={FIT_WIDTH} intrinsicWidth={400}

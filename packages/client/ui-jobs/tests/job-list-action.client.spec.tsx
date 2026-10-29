@@ -5,7 +5,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { JobsSnapshot, JobView, ObservedJob } from '@deepseek-ai/dsh-api-job-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { JobListAction, type JobListActionProps } from '../src/client/JobListAction.tsx'
-import { zh } from '../src/client/locales.ts'
+import { zh, ru } from '../src/client/locales.ts'
 
 afterEach(() => {
   cleanup()
@@ -589,4 +589,13 @@ describe('JobListAction human kill', () => {
     expect(screen.queryByTitle(stopTitle('pnpm run build'))).toBeNull()
     expect(document.querySelector('[data-kill-state]')).toBeNull()
   })
+})
+
+it.each([1, 2, 5, 21])('renders count-independent Russian labels for %i jobs', (count) => {
+  const jobs = Array.from({ length: count }, (_, i) => job({ id: `job-${i}` as JobView['id'] }))
+  const translate: JobListActionProps['t'] = makeTranslate(ru)
+  const view = render(<JobListAction {...props(jobs)} t={translate} />)
+  expect(screen.getByRole('button', { name: `Фоновые задачи выполняются: ${count}` })).toBeDefined()
+  view.rerender(<JobListAction {...props(jobs.map(item => ({ ...item, status: 'completed', finishedAt: 1_700_000_003_000 })))} t={translate} />)
+  expect(screen.getByRole('button', { name: `Фоновые задачи: ${count}` })).toBeDefined()
 })

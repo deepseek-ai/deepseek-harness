@@ -207,7 +207,7 @@ describe('serialized conversation updates', () => {
     ])
   })
 
-  it('sends concatenated system messages and current tools on unsupported routes', async () => {
+  it('keeps system reminders in history and current tools on unsupported routes', async () => {
     const update = addition()
     const { requests } = await send('openai', 'gpt-4.1', {
       system: 'direct',
@@ -217,7 +217,15 @@ describe('serialized conversation updates', () => {
       toolHistory: { tools: [baseline], updates: [{ messageId: update.id, additions: [added] }] },
     })
     expect(requests).toHaveLength(1)
-    expect(requests[0]).toHaveProperty('input.0', { role: 'system', content: 'direct\n\ninitial\n\ncurrent\n\ncurrent' })
+    expect(requests[0]).toHaveProperty('input.0', { role: 'system', content: 'direct\n\ninitial' })
+    expect(requests[0]).toHaveProperty('input', [
+      { role: 'system', content: 'direct\n\ninitial' },
+      expect.objectContaining({ role: 'user' }),
+      { role: 'user', content: [{ type: 'input_text', text: '<system-reminder>\ncurrent\n</system-reminder>' }] },
+      expect.objectContaining({ role: 'user' }),
+      expect.objectContaining({ role: 'assistant' }),
+      { role: 'user', content: [{ type: 'input_text', text: '<system-reminder>\ncurrent\n</system-reminder>' }] },
+    ])
     expect(JSON.stringify(requests[0])).not.toContain('Instruction one.')
     expect(JSON.stringify(requests[0])).not.toContain('additional_tools')
   })

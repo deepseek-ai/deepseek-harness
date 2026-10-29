@@ -521,7 +521,7 @@ export class SessionTitleService extends Service {
     if (registration !== undefined && !registration.closing) {
       const count = this.titleInputOf(session).count
       const shouldSchedule = registration.provider.automatic === 'all-prompts'
-        || (session.header.parentSession === undefined && count === 1 && this.get(session) === undefined)
+        || (!session.header.isSeeded && session.header.origin !== 'subagent' && count === 1 && this.get(session) === undefined)
       if (shouldSchedule) {
         const state = this.stateFor(session)
         const revision = this.supersede(state, 'newer user message superseded title generation')

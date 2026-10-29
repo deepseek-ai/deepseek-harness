@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "árboles de trabajo de git",
+    "description": "Pida trabajar en una rama nueva, y el agente crea un worktree de Git independiente y continúa allí, dejando su checkout actual tal como está.",
+    "detail": "docs/DETAIL.md"
+  }
+}

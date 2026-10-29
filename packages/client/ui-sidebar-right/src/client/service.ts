@@ -220,6 +220,11 @@ export interface ISidebarRight {
    */
   close(tabId: TabId): void
   /**
+   * Hide a tab: close its floating occurrence, or collapse its docked column.
+   * @param tabId - the tab to hide; missing tabs are unchanged.
+   */
+  hide(tabId: TabId): void
+  /**
    * The active tab of the active pane.
    * @returns the record, or `undefined` with no Session on screen.
    */
@@ -303,6 +308,23 @@ export class SidebarRightController implements ISidebarRight {
     this.mounted = sessions.onScreen
     this.openTabs = sessions.openTabs
     this.tabDomain = new TabDomain(this, pin)
+  }
+
+  /**
+   * Read closeable tabs from the clicked pane.
+   * @param sessionId - owning Session.
+   * @param paneId - clicked pane.
+   * @param tabId - anchor tab.
+   * @returns closeable ids in display order, or empty sets after the anchor moves or closes.
+   */
+  menuTabs(sessionId: SessionId, paneId: PaneId, tabId: TabId): { all: readonly TabId[]; right: readonly TabId[]; close: boolean } {
+    const surface = this.adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]
+    const pane = surface?.layout.nodes[paneId]
+    if (surface === undefined || pane?.kind !== 'pane' || !pane.tabs.includes(tabId)) return { all: [], right: [], close: false }
+    const index = pane.tabs.indexOf(tabId)
+    const closeable = (id: TabId) => canCloseTab(surface, id)
+    return { close: closeable(tabId), all: pane.tabs.filter(id => id !== tabId && closeable(id)),
+      right: pane.tabs.slice(index + 1).filter(closeable) }
   }
 
   /**
@@ -455,6 +477,17 @@ export class SidebarRightController implements ISidebarRight {
    */
   close(tabId: TabId): void {
     this.closeIn(this.require().sessionId, tabId)
+  }
+
+  /**
+   * Hide a tab: close its floating occurrence, or collapse its docked column.
+   * @param tabId - the tab to hide; missing tabs are unchanged.
+   */
+  hide(tabId: TabId): void {
+    const layout = this.mountedSurface()?.layout
+    if (layout?.tabs[tabId] === undefined) return
+    if (findTabPane(layout, tabId).host === 'float') this.close(tabId)
+    else if (layout.expanded) this.toggleExpanded()
   }
 
   /**

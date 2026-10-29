@@ -1,4 +1,6 @@
 /** Test-only IPC assertions over real Creator presets and profile management. */
+import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+
 export const inject = ['agents', 'agentPresets', 'tools', 'pluginManager', 'permissionPresets']
 
 export function apply(ctx, config) {
@@ -30,7 +32,7 @@ export function apply(ctx, config) {
     try {
       const first = await make(`${phase}-first`)
       const before = names(first)
-      const manage = args => ctx.tools.execute({ name: 'plugin_manager', arguments: args, agent: first,
+      const manage = args => executeModelToolFixture(ctx, { name: 'plugin_manager', arguments: args, agent: first,
         callId: `${phase}-manage`, signal: new AbortController().signal })
       ctx.permissionPresets.set(first.session, 'workspace-write')
       first.session.append('turn/start', { turn: 1 })
@@ -45,7 +47,7 @@ export function apply(ctx, config) {
       const second = await make(`${phase}-second`)
       const after = names(first)
       const other = names(second)
-      const ping = await ctx.tools.execute({ name: 'mcp__demo__ping', arguments: {}, agent: first,
+      const ping = await executeModelToolFixture(ctx, { name: 'mcp__demo__ping', arguments: {}, agent: first,
         callId: `${phase}-ping`, signal: new AbortController().signal })
       const removed = phase === 'restart'
         ? JSON.parse((await manage({ action: 'remove_bundle', target: '@test/creator-mcp' })).value) : undefined

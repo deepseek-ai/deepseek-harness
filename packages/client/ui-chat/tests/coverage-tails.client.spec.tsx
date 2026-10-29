@@ -16,6 +16,26 @@ const t: AssistantMarkdownProps['t'] = makeTranslate(zh, commonZh)
 afterEach(cleanup)
 
 describe('tails', () => {
+  it('enables quoting on the existing Markdown root without replacing streamed content', () => {
+    const body = (textInteractionSource: boolean, streaming: boolean) => (
+      <AssistantMarkdown renderSlot={() => null} useDisclosure={useDisclosure} useGroupAction={useSearchableHidden}
+        usePresentation={useDetailedPresentation} t={t} loadImage={unusedImageLoader}
+        blocks={[{ kind: 'text', text: 'source words' }]} textInteractionSource={textInteractionSource} streaming={streaming} />
+    )
+    const view = render(body(false, true))
+    const paragraph = view.getByText('source words')
+    const markdown = paragraph.parentElement
+    expect(view.container.querySelector('[data-text-interaction-source]')).toBeNull()
+
+    view.rerender(body(true, false))
+    expect(view.container.querySelector('[data-text-interaction-source]')).toBe(markdown)
+    expect(view.getByText('source words')).toBe(paragraph)
+
+    view.rerender(body(false, false))
+    expect(view.container.querySelector('[data-text-interaction-source]')).toBeNull()
+    expect(view.getByText('source words').parentElement).toBe(markdown)
+  })
+
   it('AssistantMarkdown renders reasoning as a Think row and unknown blocks as JSON fallback', () => {
     const view = render(
       <AssistantMarkdown renderSlot={() => null} useDisclosure={useDisclosure} useGroupAction={useSearchableHidden}

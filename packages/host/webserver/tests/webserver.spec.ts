@@ -21,7 +21,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import HttpServer, { bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig } from '../src/index.ts'
+import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
+import HttpServer, {
+  bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig, type WebResource, type WebRoute,
+} from '../src/index.ts'
 import { materializeTlsFixture, type TlsFixture } from './tls-fixture.ts'
 
 /** One-shot barrier for disposal overlapping a pending PEM read. */
@@ -148,6 +151,24 @@ function webserverFiber(context: Context) {
 function boundPort(port: number | undefined): number {
   if (port === undefined) throw new Error('webserver test: the listener has not bound a port')
   return port
+}
+
+/** Write one raw request (fetch always sends Host) and collect the response text until the server closes. */
+async function rawExchange(listenerPort: number | undefined, text: string): Promise<string> {
+  const socket = connect(boundPort(listenerPort), '127.0.0.1')
+  await once(socket, 'connect')
+  const { promise, resolve, reject } = Promise.withResolvers<string>()
+  let received = ''
+  socket.setEncoding('utf8')
+  socket.on('data', (chunk: string) => { received += chunk })
+  socket.once('close', () => { resolve(received) })
+  socket.once('error', reject)
+  socket.write(text)
+  try {
+    return await promise
+  } finally {
+    socket.destroy()
+  }
 }
 
 /** GET (by default) one path against the running server; returns status plus a body prefix. */
@@ -400,6 +421,45 @@ describe('real Loader composition', () => {
       .headers.get('content-encoding')).toBeNull()
     expect((await request(server.port, '/range', { headers: { 'accept-encoding': 'gzip' } }))
       .headers.get('content-encoding')).toBeNull()
+
+    // A resource response passes through the same gzip decision as a handler's.
+    server.register({
+      kind: 'exact',
+      path: '/resource-text',
+      resource: () => Promise.resolve(new Response(body, { headers: { 'content-type': 'text/plain; charset=utf-8' } })),
+    })
+    const resourceCompressed = await request(server.port, '/resource-text', { headers: { 'accept-encoding': 'gzip' } })
+    expect(resourceCompressed).toMatchObject({ status: 200, body: body.slice(0, 80) })
+    expect(resourceCompressed.headers.get('content-encoding')).toBe('gzip')
+    const resourceHead = await request(server.port, '/resource-text', { method: 'HEAD', headers: { 'accept-encoding': 'gzip' } })
+    expect(resourceHead).toMatchObject({ status: 200, body: '' })
+    expect(resourceHead.headers.get('content-type')).toBe('text/plain; charset=utf-8')
+
+    // Many backpressure waits on one gzip response leave no listeners behind:
+    // the middleware forwards drain listeners to its zlib stream.
+    const warnings: Error[] = []
+    const onWarning = (warning: Error): void => { warnings.push(warning) }
+    process.on('warning', onWarning)
+    try {
+      const chunk = new TextEncoder().encode('compressible chunk '.repeat(64 * 1024 / 16))
+      server.register({
+        kind: 'exact',
+        path: '/resource-large',
+        resource: () => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+          start(controller) {
+            for (let index = 0; index < 64; index += 1) controller.enqueue(chunk)
+            controller.close()
+          },
+        }), { headers: { 'content-type': 'text/plain; charset=utf-8' } })),
+      })
+      const large = await fetch(`http://127.0.0.1:${String(server.port)}/resource-large`, { headers: { 'accept-encoding': 'gzip' } })
+      expect(large.headers.get('content-encoding')).toBe('gzip')
+      expect((await large.arrayBuffer()).byteLength).toBe(64 * chunk.byteLength)
+      await new Promise(resolve => setImmediate(resolve))
+      expect(warnings.filter(warning => warning.name === 'MaxListenersExceededWarning')).toEqual([])
+    } finally {
+      process.off('warning', onWarning)
+    }
   })
 
   // Real-Loader composition resolves workspace packages through tsx at test
@@ -516,11 +576,262 @@ describe('real Loader composition', () => {
     await expect(request(port, '/probe')).rejects.toThrow()
   })
 
-  it('collects injection rows fresh per render and layers taps over the rendered rows', { timeout: 60_000 }, async () => {
+  it('answers resource routes over HTTP with the Fetch response, streamed and cancelled with the client', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const port = boundPort(server.port)
+    const encoder = new TextEncoder()
+
+    // The resource sees the request as a Fetch Request without a Peer; status,
+    // headers (each set-cookie line separately), and body return unchanged.
+    let seen: {
+      url: string
+      method: string
+      probe: string | null
+      host: string | null
+      cookie: string | null
+      peer: PeerScope | undefined
+    } | undefined
+    server.register({
+      kind: 'exact',
+      path: '/resource',
+      resource: (request, peer) => {
+        seen = {
+          url: request.url,
+          method: request.method,
+          probe: request.headers.get('x-probe'),
+          host: request.headers.get('host'),
+          cookie: request.headers.get('cookie'),
+          peer,
+        }
+        const headers = new Headers({ 'content-type': 'text/plain; charset=utf-8', 'x-answer': 'yes' })
+        headers.append('set-cookie', 'a=1; Path=/')
+        headers.append('set-cookie', 'b=2; Path=/')
+        return Promise.resolve(new Response('RESOURCE', { status: 201, headers }))
+      },
+    })
+    const created = await fetch(`http://127.0.0.1:${String(port)}/resource?q=1`, { headers: { 'x-probe': 'probe', cookie: 'a=b' } })
+    expect(created.status).toBe(201)
+    expect(created.headers.get('x-answer')).toBe('yes')
+    expect(created.headers.getSetCookie()).toEqual(['a=1; Path=/', 'b=2; Path=/'])
+    expect(await created.text()).toBe('RESOURCE')
+    // Host and Cookie reach the resource: browser authentication reads them.
+    expect(seen).toEqual({
+      url: 'http://x/resource?q=1',
+      method: 'GET',
+      probe: 'probe',
+      host: `127.0.0.1:${String(port)}`,
+      cookie: 'a=b',
+      peer: undefined,
+    })
+
+    // The status and headers arrive before the first body chunk exists.
+    const firstChunk = Promise.withResolvers<undefined>()
+    server.register({
+      kind: 'exact',
+      path: '/held',
+      resource: () => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+        async start(controller) {
+          await firstChunk.promise
+          controller.enqueue(encoder.encode('late'))
+          controller.close()
+        },
+      }), { status: 202 })),
+    })
+    const held = await fetch(`http://127.0.0.1:${String(port)}/held`)
+    expect(held.status).toBe(202)
+    firstChunk.resolve(undefined)
+    expect(await held.text()).toBe('late')
+
+    // A streamed body reaches the client chunk by chunk: the first chunk is
+    // readable while the second is still withheld.
+    const second = Promise.withResolvers<undefined>()
+    server.register({
+      kind: 'exact',
+      path: '/stream',
+      resource: () => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+        async start(controller) {
+          controller.enqueue(encoder.encode('first;'))
+          await second.promise
+          controller.enqueue(encoder.encode('second'))
+          controller.close()
+        },
+      }))),
+    })
+    const streamed = await fetch(`http://127.0.0.1:${String(port)}/stream`)
+    const reader = streamed.body!.getReader()
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe('first;')
+    second.resolve(undefined)
+    let rest = ''
+    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) rest += new TextDecoder().decode(chunk.value)
+    expect(rest).toBe('second')
+
+    // HEAD writes the status and headers, sends no body, and cancels the body.
+    const headCancelled = Promise.withResolvers<undefined>()
+    server.register({
+      kind: 'exact',
+      path: '/head',
+      resource: () => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+        cancel() { headCancelled.resolve(undefined) },
+      }), { headers: { 'content-type': 'text/plain' } })),
+    })
+    expect(await request(port, '/head', { method: 'HEAD' })).toMatchObject({ status: 200, body: '' })
+    await headCancelled.promise
+
+    // A client leaving mid-body aborts the request signal and cancels the body.
+    const cancelled = Promise.withResolvers<undefined>()
+    let endlessSignal: AbortSignal | undefined
+    server.register({
+      kind: 'exact',
+      path: '/endless',
+      resource: (request) => {
+        endlessSignal = request.signal
+        return Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+          pull(controller) { controller.enqueue(new Uint8Array(64 * 1024)) },
+          cancel() { cancelled.resolve(undefined) },
+        })))
+      },
+    })
+    const leaving = new AbortController()
+    const endless = await fetch(`http://127.0.0.1:${String(port)}/endless`, { signal: leaving.signal })
+    await endless.body!.getReader().read()
+    leaving.abort()
+    await cancelled.promise
+    expect(endlessSignal?.aborted).toBe(true)
+
+    // Only GET and HEAD reach a resource; another method is 405 and its body is never read.
+    let posted = false
+    server.register({ kind: 'exact', path: '/posted', resource: () => { posted = true; return Promise.resolve(new Response('POSTED')) } })
+    const refused = await request(port, '/posted', { method: 'POST', body: 'payload' })
+    expect(refused).toMatchObject({ status: 405, body: '' })
+    expect(refused.headers.get('allow')).toBe('GET, HEAD')
+    expect(posted).toBe(false)
+
+    // The webserver never parses Host, so a missing or unparsable Host still
+    // reaches the resource, which sees the raw header; a resource that throws
+    // is answered 400 like a throwing handler.
+    expect(await rawExchange(port, 'GET /resource?q=2 HTTP/1.0\r\n\r\n')).toMatch(/^HTTP\/1\.1 201/)
+    expect(seen?.url).toBe('http://x/resource?q=2')
+    expect(await rawExchange(port, 'GET /resource?q=3 HTTP/1.1\r\nHost: bad host\r\nConnection: close\r\n\r\n')).toMatch(/^HTTP\/1\.1 201/)
+    expect([seen?.url, seen?.host]).toEqual(['http://x/resource?q=3', 'bad host'])
+    server.register({ kind: 'exact', path: '/throws', resource: () => Promise.reject(new Error('resource failure')) })
+    expect((await request(port, '/throws')).status).toBe(400)
+    expect((await request(port, '/resource')).status).toBe(201)
+  })
+
+  it('cancels a resource body when a socketless carrier aborts mid-response', { timeout: 60_000 }, async () => {
+    // The Web Worker tunnel feeds synthesized exchanges to the request listener.
+    // Its abort marks the response ended before emitting close, and a write after
+    // abort returns false without a later drain.
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const cancelled = Promise.withResolvers<undefined>()
+    const firstChunk = Promise.withResolvers<undefined>()
+    server.register({
+      kind: 'exact',
+      path: '/tunnel',
+      resource: () => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          await firstChunk.promise
+          controller.enqueue(new TextEncoder().encode('chunk'))
+        },
+        cancel() { cancelled.resolve(undefined) },
+      }))),
+    })
+    const listeners = new Map<string, Set<() => void>>()
+    let finished = false
+    const res = {
+      get writableEnded() { return finished },
+      get headersSent() { return false },
+      writeHead: () => res,
+      write: () => !finished,
+      end: () => { finished = true },
+      destroy: () => { finished = true },
+      on: (event: string, listener: () => void) => { listeners.set(event, (listeners.get(event) ?? new Set()).add(listener)); return res },
+      once: (event: string, listener: () => void) => res.on(event, listener),
+      off: (event: string, listener: () => void) => { listeners.get(event)?.delete(listener); return res },
+    }
+    const httpServer = Reflect.get(server, 'server') as { emit(event: 'request', req: object, res: object): boolean }
+    httpServer.emit('request', { url: '/tunnel', method: 'GET', headers: { host: 'tunnel.invalid' } }, res)
+    await vi.waitFor(() => { expect(listeners.get('close')?.size ?? 0).toBeGreaterThan(0) })
+    finished = true
+    for (const listener of [...(listeners.get('close') ?? [])]) listener()
+    firstChunk.resolve(undefined)
+    await cancelled.promise
+  })
+
+  it('reads resources in process by the HTTP match order, for the given Peer', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const port = boundPort(server.port)
+    const peer = { principal: { kind: 'owner' } } as PeerScope
+    const read = (path: string, init?: RequestInit) => server.readResource(new Request(`http://reader.invalid${path}`, init), peer)
+    const readersOf: (PeerScope | undefined)[] = []
+    const resource = (label: string): WebResource => (request, reader) => {
+      readersOf.push(reader)
+      return Promise.resolve(new Response(`${label}:${new URL(request.url).pathname}`))
+    }
+    const handler = (label: string): WebRoute['handler'] => (_req, res) => {
+      res.writeHead(200)
+      res.end(label)
+    }
+    server.register({ kind: 'prefix', path: '/assets', resource: resource('assets') })
+    server.register({ kind: 'prefix', path: '/assets/deep', resource: resource('deep') })
+    server.register({ kind: 'exact', path: '/assets/special', handler: handler('SPECIAL') })
+    server.register({ kind: 'prefix', path: '/api', handler: handler('API') })
+
+    // Exact, then longest prefix: the same responder HTTP picks answers the
+    // read, and the read passes its Peer to the resource.
+    for (const path of ['/assets', '/assets/x', '/assets/deep/leaf']) {
+      const response = await read(path)
+      expect(response.status).toBe(200)
+      expect(await response.text()).toBe((await request(port, path)).body)
+    }
+    expect(readersOf).toEqual([peer, undefined, peer, undefined, peer, undefined])
+    // A HEAD read keeps the status and headers and drops the body, as HTTP does.
+    const headRead = await read('/assets/deep/leaf', { method: 'HEAD' })
+    expect(headRead.status).toBe(200)
+    expect(headRead.headers.get('content-type')).toBe('text/plain;charset=UTF-8')
+    expect(await headRead.text()).toBe('')
+
+    // A path a handler owns is 404 to a read and never falls through to the
+    // fallback or a shorter prefix; HTTP still reaches the handler.
+    expect((await read('/assets/special')).status).toBe(404)
+    expect((await read('/api/session')).status).toBe(404)
+    expect((await request(port, '/assets/special')).body).toBe('SPECIAL')
+
+    // The fallback seat answers a read only while it holds a resource.
+    expect((await read('/elsewhere')).status).toBe(404)
+    const releaseHandler = server.registerFallback(handler('FALLBACK'))
+    expect((await read('/elsewhere')).status).toBe(404)
+    expect((await request(port, '/elsewhere')).body).toBe('FALLBACK')
+    releaseHandler()
+    server.registerFallback({ resource: resource('fallback') })
+    const fallback = await read('/elsewhere')
+    expect(await fallback.text()).toBe('fallback:/elsewhere')
+    expect(readersOf.at(-1)).toBe(peer)
+
+    // Reads are GET or HEAD: another method is 405 before any resource runs.
+    const calls = readersOf.length
+    const posted = await read('/assets/x', { method: 'POST', body: 'x' })
+    expect(posted.status).toBe(405)
+    expect(posted.headers.get('allow')).toBe('GET, HEAD')
+    expect(readersOf).toHaveLength(calls)
+
+    // A throwing resource rejects the read; over HTTP the same failure is 400.
+    server.register({ kind: 'exact', path: '/throws', resource: () => Promise.reject(new Error('resource failure')) })
+    await expect(read('/throws')).rejects.toThrow('resource failure')
+    expect((await request(port, '/throws')).status).toBe(400)
+  })
+
+  it('collects injection rows fresh per render for the rendered Peer and layers taps over the rendered rows', { timeout: 60_000 }, async () => {
     const loaded = await loadComposition()
     const server = loaded.webServer
     let flag = 'dark'
-    loaded.on('webserver/index-inject', (table) => {
+    const peer = { principal: { kind: 'owner' } } as PeerScope
+    const renderedFor: PeerScope[] = []
+    loaded.on('webserver/index-inject', (table, renderingFor) => {
+      renderedFor.push(renderingFor)
       table.push(
         { kind: 'script', placement: 'head', text: 'window.__Q__=1' },
         { kind: 'script-src', placement: 'head', src: '/plugins/a.js?rev="1"&x=<y>' },
@@ -532,7 +843,7 @@ describe('real Loader composition', () => {
       )
     })
 
-    const html = server.renderIndex('<html><head></head><body>shell</body></html>')
+    const html = server.renderIndex('<html><head></head><body>shell</body></html>', peer)
     // Head rows land right after the opening head tag in table order; the body
     // row lands right after the opening body tag.
     const order = [
@@ -552,12 +863,14 @@ describe('real Loader composition', () => {
 
     // Fresh collection per render: the listener reads live state at emit time.
     flag = 'light'
-    expect(server.renderIndex('<head></head><body></body>')).toContain('window.__P__="light"')
+    expect(server.renderIndex('<head></head><body></body>', peer)).toContain('window.__P__="light"')
 
     // Raw taps still run, over the already-rendered rows.
     const untap = server.tapIndex(h => h.replace('window.__Q__=1', 'window.__Q__=2'))
-    expect(server.renderIndex('<head></head><body></body>')).toContain('window.__Q__=2')
+    expect(server.renderIndex('<head></head><body></body>', peer)).toContain('window.__Q__=2')
     untap()
+    // Every collection is dispatched with the Peer the render speaks for.
+    expect(renderedFor).toEqual([peer, peer, peer])
 
     // Tag-less fragments: head rows prepend, body rows append, and the
     // boot-readiness tail lands after the last body row.

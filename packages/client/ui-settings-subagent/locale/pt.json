@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Configurações do subagente",
+    "description": "Configure a profundidade da delegação, o número de simultaneidades e os modelos opcionais."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Serviço de manifesto de plug-in",
+    "description": "Fornece uma listagem somente leitura das entradas atuais do plug-in, do status de ativação da configuração e do status de execução."
+  }
+}

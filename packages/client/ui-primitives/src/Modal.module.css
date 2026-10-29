@@ -98,8 +98,10 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.close:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .close:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Description and body share the 332px content column (24px side pads). */

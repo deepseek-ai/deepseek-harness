@@ -1,12 +1,25 @@
-/** Extend upstream dollar-only math syntax with TeX delimiters while reusing its token vocabulary. */
+/**
+ * Extend upstream dollar-only math syntax with TeX delimiters while reusing its
+ * token vocabulary. The dollar construct is dispatched before upstream's
+ * `mathFlow`, so the shapes it accepts keep the opening line's text as math
+ * instead of fence meta, which the renderer does not read. A `$$` candidate it
+ * declines — a `$$` sequence the line does not end after, or a block left open
+ * — is left to that upstream flow.
+ */
 
 import { factorySpace } from 'micromark-factory-space'
 import type {} from 'micromark-extension-math'
-import { markdownLineEnding } from 'micromark-util-character'
+import { markdownLineEnding, markdownSpace } from 'micromark-util-character'
 import { codes, constants, types } from 'micromark-util-symbol'
 import type { Construct, Extension, Previous, State, Tokenizer } from 'micromark-util-types'
 
 // oxlint-disable typescript/no-this-alias -- micromark binds tokenizer context only on the outer callback.
+
+/** Prefixes whose following character is a `\verb` delimiter, not a fence. */
+const VERB_DELIMITER_PREFIXES = ['\\verb', '\\verb*'] as const
+
+/** Longest prefix above, in code units. */
+const VERB_DELIMITER_TAIL = 6
 
 const previousBackslash: Previous = function (code) {
   if (code !== codes.backslash) return true
@@ -120,10 +133,16 @@ const tokenizeBackslashMathText: Tokenizer = function (effects, ok, nok) {
   }
 }
 
-function createMathFlow(marker: number, openMarker: number, closeMarker: number, multiline: boolean): Construct {
+function createMathFlow(marker: number, openMarker: number, closeMarker: number): Construct {
   const tokenize: Tokenizer = function (effects, ok, nok) {
     const self = this
     let oddBackslashRun = false
+    let inComment = false
+    let commentHasContent = false
+    let crossedLineEnding = false
+    let sawClosingFenceSequence = false
+    let consumedTail = ''
+    let failedClose = false
     const tail = self.events.at(-1)
     const initialSize = tail?.[1].type === types.linePrefix
       ? tail[2].sliceSerialize(tail[1], true).length
@@ -155,7 +174,13 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number,
 
     function content(code: number | null): State | undefined {
       if (code === codes.eof) return nok(code)
-      if (code === marker && (marker !== codes.dollarSign || !oddBackslashRun)) {
+      if (code === marker && marker === codes.dollarSign && !inComment && verbDelimiterAhead()) {
+        // The `$` here delimits a `\verb…` region rather than closing the block,
+        // so it is content, and a `$` right after it closes an empty region and
+        // is content too. A comment holds no commands.
+        return verbatimDelimiter(code)
+      }
+      if (code === marker && closingFenceAllowed()) {
         return effects.attempt(
           { partial: true, tokenize: tokenizeClosingFence },
           closed,
@@ -163,17 +188,83 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number,
         )(code)
       }
       if (markdownLineEnding(code)) {
-        return multiline
-          ? effects.attempt(nonLazyContinuation, afterContinuation, nok)(code)
-          : nok(code)
+        // A close that failed earlier on this candidate ends it at the line
+        // ending, which is what the grammar this flow replaced did: a failed
+        // `$$x$$ trailing` never reaches the next line.
+        if (marker === codes.dollarSign && failedClose) return nok(code)
+        // A trailing backslash escapes the line ending, not the next line's
+        // first character, so the escape run ends here, and a TeX comment ends
+        // with the line. The comment exception covers only a closing fence on a
+        // later line, which is where the multi-line block can hide one; the
+        // same-line form keeps closing as it did before this flow spanned lines.
+        oddBackslashRun = false
+        inComment = false
+        commentHasContent = false
+        consumedTail = ''
+        if (marker === codes.dollarSign) crossedLineEnding = true
+        // A paragraph-interruption check on the dollar flow must not consume the
+        // line ending: that keeps the paragraph open across the line boundary,
+        // and the document layer then counts the next line lazy for every
+        // construct tried afterwards. Declining leaves the interruption decision
+        // to the upstream flow, whose own check short-circuits without consuming
+        // and claims only the fences it accepts. The backslash construct has no
+        // upstream counterpart and keeps consuming here.
+        if (self.interrupt && marker === codes.dollarSign) return nok(code)
+        return effects.attempt(nonLazyContinuation, afterContinuation, nok)(code)
       }
       return valueStart(code)
     }
 
+    /**
+     * Whether the marker under the scanner may close the block. The dollar flow
+     * keeps an escaped `$` and a `%` comment that holds text from closing.
+     */
+    function closingFenceAllowed(): boolean {
+      if (marker !== codes.dollarSign) return true
+      return !oddBackslashRun && !(inComment && commentHasContent && crossedLineEnding)
+    }
+
+    /** Whether the marker under the scanner is a `\verb` region's delimiter. */
+    function verbDelimiterAhead(): boolean {
+      return VERB_DELIMITER_PREFIXES.some(prefix => consumedTail.endsWith(prefix))
+    }
+
+    function verbatimDelimiter(code: number | null): State | undefined {
+      effects.enter('mathFlowValue')
+      oddBackslashRun = false
+      rememberConsumed(code)
+      effects.consume(code)
+      return verbatimDelimiterClose
+    }
+
+    function verbatimDelimiterClose(code: number | null): State | undefined {
+      if (code !== marker) return value(code)
+      rememberConsumed(code)
+      effects.consume(code)
+      return value
+    }
+
+    /** Record one consumed code unit so a fence can be told from a delimiter. */
+    function rememberConsumed(code: number | null): void {
+      /* v8 ignore next 2 -- every call site passes a code unit, never EOF. */
+      if (code === null) return
+      consumedTail = `${consumedTail}${String.fromCharCode(code)}`.slice(-VERB_DELIMITER_TAIL)
+    }
+
     function afterClosingFenceAttempt(code: number | null): State | undefined {
-      return marker === codes.backslash
-        ? effects.check({ partial: true, tokenize: tokenizeOpeningFence }, nok, markerValueStart)(code)
-        : markerValueStart(code)
+      if (marker === codes.backslash) {
+        return effects.check({ partial: true, tokenize: tokenizeOpeningFence }, nok, markerValueStart)(code)
+      }
+      // A full `$$` that the line does not end after closes nothing there. On
+      // the opening line the scan continues, so `$$x$$ trailing` declines at
+      // that line's ending while a later `$$` on the same line still closes; on
+      // any later line it ends the candidate outright, so a following block is
+      // not swallowed. A solitary `$` is content, not a failed fence.
+      if (sawClosingFenceSequence) {
+        if (crossedLineEnding) return nok(code)
+        failedClose = true
+      }
+      return markerValueStart(code)
     }
 
     function afterContinuation(code: number | null): State | undefined {
@@ -188,7 +279,17 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number,
 
     function valueStart(code: number | null): State | undefined {
       effects.enter('mathFlowValue')
+      // An unescaped `%` opens a TeX comment wherever it is the first character
+      // of a value run, such as a line that starts inside the block. The
+      // backslash construct reads neither this state nor the escape run.
       oddBackslashRun = code === codes.backslash
+      if (code === codes.percentSign && marker === codes.dollarSign && !inComment) {
+        inComment = true
+        commentHasContent = false
+      } else if (inComment && !markdownSpace(code)) {
+        commentHasContent = true
+      }
+      rememberConsumed(code)
       effects.consume(code)
       return value
     }
@@ -196,12 +297,15 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number,
     function markerValueStart(code: number | null): State | undefined {
       effects.enter('mathFlowValue')
       oddBackslashRun = false
+      if (inComment) commentHasContent = true
+      rememberConsumed(code)
       effects.consume(code)
       return valueAfterMarker
     }
 
     function valueAfterMarker(code: number | null): State | undefined {
       if (code === marker) {
+        rememberConsumed(code)
         effects.consume(code)
         return value
       }
@@ -213,7 +317,25 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number,
         effects.exit('mathFlowValue')
         return content(code)
       }
-      oddBackslashRun = code === codes.backslash ? !oddBackslashRun : false
+      const escaped = oddBackslashRun
+      const doubleBackslash = code === codes.backslash && escaped
+      oddBackslashRun = code === codes.backslash ? !escaped : false
+      // An unescaped `%` starts a TeX comment that runs to the line ending, so
+      // a `$$` inside it closes nothing. A `%` the fence follows immediately
+      // holds no comment text, which is how writers use it mid-formula
+      // (`95%$$`, and `95 %$$` alike); only a comment holding a non-whitespace
+      // character suppresses the close, and a `%` inside an open comment is
+      // comment text like any other character.
+      if (!escaped && code === codes.percentSign && marker === codes.dollarSign && !inComment) {
+        inComment = true
+        commentHasContent = false
+      } else if (inComment && !markdownSpace(code)) {
+        commentHasContent = true
+      }
+      // `\\verb` is a line break followed by letters, not the command, so the
+      // pair's second backslash never reaches the tail the command match reads.
+      if (doubleBackslash) consumedTail = ''
+      else rememberConsumed(code)
       effects.consume(code)
       return value
     }
@@ -228,6 +350,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number,
       closeOk: State,
       closeNok: State,
     ): State {
+      sawClosingFenceSequence = false
       return factorySpace(closeEffects, sequenceStart, types.linePrefix, constants.tabSize)
 
       function sequenceStart(code: number | null): State | undefined {
@@ -242,6 +365,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number,
         if (code !== closeMarker) return closeNok(code)
         closeEffects.consume(code)
         closeEffects.exit('mathFlowFenceSequence')
+        sawClosingFenceSequence = true
         return factorySpace(closeEffects, after, types.whitespace)
       }
 
@@ -278,7 +402,7 @@ function createMathFlow(marker: number, openMarker: number, closeMarker: number,
 
   return {
     concrete: true,
-    name: marker === codes.dollarSign ? 'sameLineDollarMathFlow' : 'backslashMathFlow',
+    name: marker === codes.dollarSign ? 'dollarMathFlow' : 'backslashMathFlow',
     tokenize,
   }
 }
@@ -319,29 +443,29 @@ const backslashMathFlow = createMathFlow(
   codes.backslash,
   codes.leftSquareBracket,
   codes.rightSquareBracket,
-  true,
 )
 
-const sameLineDollarMathFlow = createMathFlow(
+const dollarMathFlow = createMathFlow(
   codes.dollarSign,
   codes.dollarSign,
   codes.dollarSign,
-  false,
 )
 
 const backslashMath: Extension = {
   flow: {
     [codes.backslash]: backslashMathFlow,
-    [codes.dollarSign]: sameLineDollarMathFlow,
+    [codes.dollarSign]: dollarMathFlow,
   },
   text: { [codes.backslash]: backslashMathText },
 }
 
 /**
- * TeX backslash delimiters and same-line display-dollar blocks as a micromark
- * syntax extension reusing `micromark-extension-math`'s token vocabulary; the
- * caller must also register `math()` on the same parse so the emitted tokens
- * compile to standard math nodes.
+ * TeX backslash delimiters and display-dollar blocks as a micromark syntax
+ * extension reusing `micromark-extension-math`'s token vocabulary; the caller
+ * must also register `math()` on the same parse so the emitted tokens compile
+ * to standard math nodes. Both `$$<math>$$` on one line and a `$$<math>` block
+ * closed by a trailing `$$` parse as one math node, and a closing `$$` may sit
+ * at the end of a content line.
  * @returns The micromark syntax extension.
  */
 export function mathCompatibility(): Extension {

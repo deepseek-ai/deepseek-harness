@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Statischer Frontend-Server",
+    "description": "Stellen Sie die Einstiegsseite und statische Dateien der Webanwendung bereit, lehnen Sie Pfade außerhalb ihres Verzeichnisses ab und geben Sie 404 für fehlende Ressourcen zurück."
+  }
+}

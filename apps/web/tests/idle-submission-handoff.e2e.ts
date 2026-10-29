@@ -1,13 +1,10 @@
 /** Keep idle submissions in Chat across independently delivered Inbox and transcript frames. */
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Page } from 'playwright'
 import { expect, it, onTestFinished } from 'vitest'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
-import { deriveReplayScript, parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import {
   parseRemoteStreamClientMessage, parseRemoteStreamServerMessage,
 } from '@deepseek-ai/dsh-api-gateway/stream-protocol'
@@ -71,7 +68,6 @@ class HistoryDeliveryGate {
 
   turnStartDelivery(): Delivery | undefined { return this.buffered.find(item => item.event?.type === 'turn/start') }
 
-  turnEndDelivery(): Delivery | undefined { return this.buffered.find(item => item.event?.type === 'turn/end') }
 
   releaseThrough(target: Delivery): void {
     let reached = false
@@ -123,8 +119,6 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
   'keeps an idle submission in Chat under CPU throttling (%s)', async (order) => {
     const scaffold = await launchWebScaffold({ replayFixture: FIXTURE, compareReplaySession: false })
     onTestFinished(() => scaffold.close())
-    const releasePrompt = Promise.withResolvers<undefined>()
-    const promptBlocked = Promise.withResolvers<undefined>()
     const gate = new HistoryDeliveryGate()
     try {
       await seedSession(scaffold, await readFile(FIXTURE, 'utf8'), SESSION_ID)
@@ -140,21 +134,15 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
       await page.getByRole('button', { name: 'Send message', exact: true }).waitFor()
       const cdp = await page.context().newCDPSession(page)
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 })
-      await page.route('**/api/session/prompt', async (route) => {
-        promptBlocked.resolve(undefined)
-        await releasePrompt.promise
-        await route.continue()
-      }, { times: 1 })
       const trace: Array<{ phase: string } & Awaited<ReturnType<typeof placement>>> = []
       gate.holding = true
+      const settled = whenTurnSettled(scaffold)
       const input = page.locator('[data-composer-input]').first()
       await input.fill(TEXT)
       await input.press('Enter')
-      await promptBlocked.promise
+      // The prompt receipt is not a stream frame: the accepted echo shows while the gate holds every Host frame.
       await poll(() => placement(page)).toMatchObject({ echo: 1, dock: 0, durable: 0 })
-      trace.push({ phase: 'optimistic', ...await placement(page) })
-      const settled = whenTurnSettled(scaffold)
-      releasePrompt.resolve(undefined)
+      trace.push({ phase: 'accepted', ...await placement(page) })
 
       if (order === 'transcript-first') {
         await poll(() => gate.turnStartDelivery()).toBeDefined()
@@ -198,88 +186,6 @@ it.skipIf(webSnapshotMode() === 'record').each(['inbox-first', 'transcript-first
       await cdp.detach()
       expect(tripwire.pageErrors).toEqual([])
     } finally {
-      releasePrompt.resolve(undefined)
-      gate.releaseAll()
-    }
-  },
-)
-
-it.skipIf(webSnapshotMode() === 'record').each(['ABC', 'ACB', 'BAC', 'BCA', 'CAB', 'CBA'])(
-  'hands off three rapid submissions through all Turns in Host order %s', async (hostOrder) => {
-    const root = await mkdtemp(join(tmpdir(), 'dsh-input-handoff-'))
-    onTestFinished(() => rm(root, { recursive: true, force: true }))
-    const releases = new Map(['A', 'B', 'C'].map(id => [id, Promise.withResolvers<undefined>()]))
-    const blocked = new Set<string>()
-    const gate = new HistoryDeliveryGate()
-    try {
-      const fixture = await readFile(FIXTURE, 'utf8')
-      const recorded = deriveReplayScript(parseSessionLog(fixture))
-      expect(recorded).toHaveLength(1)
-      const override = join(root, 'replay.override.json')
-      await writeFile(override, JSON.stringify([recorded[0], recorded[0], recorded[0]]))
-      const scaffold = await launchWebScaffold({ replayFixture: FIXTURE, replayOverride: override, compareReplaySession: false })
-      onTestFinished(() => scaffold.close())
-      await seedSession(scaffold, fixture, SESSION_ID)
-      const browser = await chromium.launch()
-      onTestFinished(() => browser.close())
-      const page = await newEnglishPage(browser)
-      const tripwire = watchConsole(page)
-      await gate.install(page)
-      await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-      await page.locator('[role="treeitem"]').first().click()
-      await page.locator('[role="treeitem"]').nth(1).click()
-      await page.locator('[data-chat-flow-kind="user"]').first().waitFor()
-      await page.getByRole('button', { name: 'Send message', exact: true }).waitFor()
-      const text = (id: string) => `RAPID_INPUT_${id}`
-      await page.route('**/api/session/prompt', async (route) => {
-        const request = route.request().postData() ?? ''
-        const id = [...releases.keys()].find(id => request.includes(text(id)))
-        if (id === undefined) throw new Error('unexpected prompt in rapid input fixture')
-        blocked.add(id)
-        await releases.get(id)!.promise
-        await route.continue()
-      })
-      gate.holding = true
-      const input = page.locator('[data-composer-input]').first()
-      for (const id of releases.keys()) {
-        await input.fill(text(id))
-        await input.press('Enter')
-        await poll(() => blocked.has(id)).toBe(true)
-        await poll(() => placement(page, text(id))).toMatchObject({ echo: 1, dock: 0, durable: 0 })
-      }
-      const entered: string[] = []
-      for (const id of hostOrder) {
-        const settled = whenTurnSettled(scaffold)
-        releases.get(id)!.resolve(undefined)
-        await poll(() => gate.turnStartDelivery()).toBeDefined()
-        gate.releaseThrough(gate.turnStartDelivery()!)
-        await poll(() => gate.admissionDelivery(text(id))).toBeDefined()
-        gate.releaseThrough(gate.admissionDelivery(text(id))!)
-        entered.push(id)
-        for (const candidate of releases.keys()) {
-          const admitted = entered.includes(candidate)
-          await poll(() => placement(page, text(candidate))).toMatchObject({
-            echo: admitted ? 0 : 1, dock: 0, durable: admitted ? 1 : 0,
-          })
-        }
-        await poll(() => gate.inboxDelivery(true, text(id))).toBeDefined()
-        gate.releaseThrough(gate.inboxDelivery(true, text(id))!)
-        await poll(() => placement(page, text(id))).toMatchObject({ echo: 0, dock: 0, durable: 1 })
-        await poll(() => gate.inboxDelivery(false, text(id))).toBeDefined()
-        gate.releaseThrough(gate.inboxDelivery(false, text(id))!)
-        await poll(() => gate.turnEndDelivery()).toBeDefined()
-        gate.releaseThrough(gate.turnEndDelivery()!)
-        await settled
-      }
-      gate.releaseAll()
-      const actual = await page.locator('[data-chat-flow-kind="user"]').allTextContents()
-      expect(actual.filter(value => value.includes('RAPID_INPUT_')).map(value =>
-        [...releases.keys()].find(id => value.includes(text(id))))).toEqual(hostOrder.split(''))
-      expect(await page.locator('[data-submission-echo]').count()).toBe(0)
-      expect(await page.locator('[data-queue-dock]').count()).toBe(0)
-      expect(tripwire.pageErrors).toEqual([])
-    } finally {
-      for (const release of releases.values()) release.resolve(undefined)
       gate.releaseAll()
     }
   },

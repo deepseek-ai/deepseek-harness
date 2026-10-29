@@ -30,6 +30,57 @@
   object-fit: cover;
 }
 
+.thumbnailFailed {
+  border-color: var(--dsw-alias-state-error-primary, #d54941);
+  cursor: pointer;
+}
+
+.thumbnailFailed img {
+  opacity: 0.4;
+}
+
+.thumbnailRefused {
+  cursor: default;
+}
+
+.failureGlyph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--dsw-alias-state-error-primary, #d54941);
+}
+
+.progressTrack {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  left: 8px;
+  overflow: hidden;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dsw-alias-fill-tertiary, rgba(0, 0, 0, 0.08));
+  pointer-events: none;
+}
+
+.progressBar {
+  display: block;
+  width: 35%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dsw-alias-brand-primary, #4d6bfe);
+  animation: image-upload-progress 1.2s ease-in-out infinite alternate;
+}
+
+.progressBar[style] {
+  animation: none;
+}
+
+@keyframes image-upload-progress {
+  from { transform: translateX(-70%); }
+  to { transform: translateX(220%); }
+}
+
 .remove {
   position: absolute;
   top: 4px;
@@ -50,12 +101,17 @@
   transition: opacity 0.2s ease-in-out;
 }
 
-.imageItem:hover .remove,
 .remove:focus-visible {
   opacity: 1;
 }
 
-@media (pointer: coarse) {
+@media (hover: hover) {
+  .imageItem:hover .remove {
+    opacity: 1;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
   .remove {
     opacity: 1;
   }
@@ -64,5 +120,9 @@
 @media (prefers-reduced-motion: reduce) {
   .remove {
     transition: none;
+  }
+
+  .progressBar {
+    animation: none;
   }
 }

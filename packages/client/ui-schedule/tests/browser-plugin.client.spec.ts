@@ -4,14 +4,16 @@ import { describe, expect, it, vi, type Mock } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { resolveSlotLabel, type HostObservable, type StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
-import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
+import { StaticRemoteAccess, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as applyNode } from '../src/index.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { ScheduleId, ScheduleCatalogEntry, ScheduleUpdateRequest, ScheduleUpdateResult } from '@deepseek-ai/dsh-schedule/client'
+import type {
+  ScheduleId, ScheduleCatalogEntry, ScheduleDeleteInactiveResult, ScheduleUpdateRequest, ScheduleUpdateResult,
+} from '@deepseek-ai/dsh-schedule/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { CatalogInjected } from '../src/client/catalog-source.ts'
@@ -86,9 +88,11 @@ class RemoteStub extends Service {
 async function baseContext(
   remote: RemoteStubInput = { $on: () => () => {} },
   sidebar: SidebarStubs = sidebarStubs(),
+  allows: (action: string) => boolean = () => true,
 ): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
+  new StaticRemoteAccess(ctx, allows)
   new UiConversation(ctx, { binding: () => undefined } as never)
   ctx.provide('connection', { api: { settings: {} }, isLoopback: false } as never)
   ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
@@ -140,8 +144,27 @@ describe('ui-schedule browser half', () => {
   it('declares only the services used by registration', () => {
     expect(inject).toEqual([
       'slots', 'locale', 'remote', 'remote.schedule', 'conversation', 'uiConversation', 'uiWorkspace', 'sessions',
-      'workspaces', 'sidebarRightTabs', 'sidebarRight',
+      'workspaces', 'sidebarRightTabs', 'sidebarRight', 'remoteAccess',
     ])
+  })
+
+  it('contributes its surfaces only while the current Peer may read the task catalog', async () => {
+    for (const allowed of [false, true]) {
+      const sidebar = sidebarStubs()
+      const allows = vi.fn(() => allowed)
+      const ctx = await baseContext(undefined, sidebar, allows)
+      const header = declareHeader(ctx)
+      const fiber = ctx.plugin({ inject: [...inject], apply })
+      await fiber.await()
+      expect(allows).toHaveBeenCalledWith('schedule/catalog')
+      // The Session-header reminder catalog is this plugin's entry point into the page.
+      expect(headerEntryIds(ctx)).toEqual(allowed ? ['schedule-catalog'] : [])
+      // The task tab type is a definition, registered either way.
+      expect(sidebar.register).toHaveBeenCalledOnce()
+      await fiber.dispose()
+      header()
+      await ctx.fiber.dispose()
+    }
   })
 
   it('waits for the header declaration, orders between static context and Jobs, and tears down', async () => {
@@ -471,6 +494,83 @@ describe('ui-schedule browser half', () => {
       expect(ctx.slots.entries('main')).toEqual([])
       expect(ctx.slots.entries('sidebar.panellist')).toEqual([])
       owner()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('clears every ended task from the global page, reads the catalog back, and reports the count', async () => {
+    const record: ScheduleCatalogEntry = {
+      id: 'host-ended' as ScheduleId, sessionId: 'cold-original' as SessionId, status: 'inactive',
+      kind: 'after', title: 'Ended review', prompt: 'Ended review', afterSeconds: 60,
+      scheduledAt: '2099-01-01T00:00:00.000Z',
+    }
+    const catalog = vi.fn()
+      .mockResolvedValueOnce({ ok: true, value: [record] })
+      .mockResolvedValue({ ok: true, value: [] })
+    const deleteInactive = vi.fn().mockResolvedValue({ ok: true, value: { deleted: 1 } })
+    const ctx = await baseContext({ schedule: { catalog, deleteInactive }, $on: () => () => {} })
+    const owner = ctx.slots.register({
+      name: 'root',
+      children: {
+        main: { kind: 'keyed', scope: 'root' },
+        'shell.overlay': { kind: 'list', scope: 'root' },
+      },
+    } as never, Empty)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    try {
+      const face = injectedFace(ctx.slots.entries('main')[0]!, undefined as never) as TaskManagerInjected
+      const toast = injectedFace(ctx.slots.entries('shell.overlay')[0]!) as Omit<DeleteToastSource, 'report' | 'reportClear'>
+      const dispose = face.hooks.catalog.subscribe(vi.fn())
+      try {
+        await vi.waitFor(() => { expect(face.hooks.catalog.getSnapshot().records).toEqual([record]) })
+        const reads = catalog.mock.calls.length
+        await face.onClearEnded()
+        expect(deleteInactive).toHaveBeenCalledOnce()
+        // The acknowledged removal reads the catalog back instead of joining a
+        // read issued before it, so the page's rows follow the removal.
+        expect(catalog.mock.calls.length).toBe(reads + 1)
+        await vi.waitFor(() => { expect(face.hooks.catalog.getSnapshot().records).toEqual([]) })
+        expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'cleared', count: 1, seq: 1 })
+      } finally {
+        dispose()
+      }
+    } finally {
+      await fiber.dispose()
+      owner()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('reports a settled bulk removal after the page registration is gone', async () => {
+    const catalog = vi.fn().mockResolvedValue({ ok: true, value: [] })
+    const removal = Promise.withResolvers<{ ok: true; value: ScheduleDeleteInactiveResult }>()
+    const deleteInactive = vi.fn(() => removal.promise)
+    const ctx = await baseContext({ schedule: { catalog, deleteInactive }, $on: () => () => {} })
+    const owner = ctx.slots.register({
+      name: 'root',
+      children: {
+        main: { kind: 'keyed', scope: 'root' },
+        'shell.overlay': { kind: 'list', scope: 'root' },
+      },
+    } as never, Empty)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    let claimed = false
+    try {
+      const face = injectedFace(ctx.slots.entries('main')[0]!, undefined as never) as TaskManagerInjected
+      const toast = injectedFace(ctx.slots.entries('shell.overlay')[0]!) as Omit<DeleteToastSource, 'report' | 'reportClear'>
+      const clearing = face.onClearEnded()
+      // The page panel can unmount while the Host removal is still in flight;
+      // the notice store belongs to the plugin, so the outcome still publishes.
+      owner()
+      claimed = true
+      removal.resolve({ ok: true, value: { deleted: 2 } })
+      await clearing
+      expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'cleared', count: 2, seq: 1 })
+    } finally {
+      if (!claimed) owner()
+      await fiber.dispose()
       await ctx.fiber.dispose()
     }
   })

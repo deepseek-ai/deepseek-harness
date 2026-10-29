@@ -113,16 +113,16 @@ Repair therefore writes only under write ownership: a live session's write handl
 
 Read-only observation is `open(id, 'read')`: the handle serves validated contiguous prefix slices, never a torn tail, and repeated reads on one handle never observe an older state than a prior read. There is no persistence-side prepared-Session cache: session-query owns its cold-read cache, keying one balanced cold Session per id on the `stat().revision` change token and re-reading only when the token changes. The [handle-based persistence Agent Note](../../.agents/notes/implemented/architecture/2026-08-27-handle-based-session-persistence.md) owns this lifecycle; the archived [Session preparation record](../../.agents/notes/archived/architecture/2026-08-05-session-preparation.md) documents the original publication-boundary `SessionPreparation` decision.
 
-## `SessionLocation` — refusal-diagnostics artifact target
+## `SessionLocation` — per-Session artifact metadata
 
-`SessionLocation` is not a consumer-facing query: log access goes through a session handle's `read`. It survives only as refusal diagnostics, letting a `SessionFormatUnsupportedError` name the raw log a build refused to interpret. JSONL supplies the absolute transcript path inside its project/session directory; a backend without one artifact per session supplies nothing.
+`SessionLocation` is observational metadata for diagnostics and export; log access still goes through a session handle's `read`. Materialized persistence snapshots carry the selected artifact path, and a `SessionFormatUnsupportedError` can name the raw log a build refused to interpret. JSONL supplies the absolute transcript path inside its project/session directory; a backend without one artifact per session supplies nothing.
 
 ```ts type-equiv
 /**
- * A backend-resolved, per-session local artifact location. Carried only by
- * refusal diagnostics ({@link SessionFormatUnsupportedError}) so a user can
- * find the raw log a build refused to interpret; it is not a consumer-facing
- * query — log access goes through a session handle's `read`.
+ * A backend-resolved, per-Session local artifact path used by observational
+ * snapshots and refusal diagnostics. It names a backend target for the Session
+ * and does not authorize reads; log access still goes through a session
+ * handle's `read`. It is not persisted Session content.
  */
 interface SessionLocation {
   /** Backend-specific artifact kind, for example `jsonl`. */
@@ -156,7 +156,11 @@ interface SessionHeader {
   readonly createdAt: number
   /** Absolute working directory the session was created in (if any). */
   readonly cwd?: string
-  /** The session this one was forked from (seed lineage), if any. */
+  /**
+   * Direct creator of a subagent Session. Ordinary forks omit this field;
+   * historical ordinary forks may retain their source id here. Presence alone
+   * does not classify a Session as a subagent; use `origin` for that distinction.
+   */
   readonly parentSession?: SessionId
   /**
    * Whether this Session contains a fork-inherited event prefix. The exact prefix
@@ -319,6 +323,12 @@ interface SessionPersistenceSnapshot {
   readonly eventCount?: number
   /** Physical artifact byte size, when the backend can provide it cheaply (JSONL); otherwise absent. */
   readonly sizeBytes?: number
+  /**
+   * Backend-resolved location of the selected materialized per-Session
+   * artifact, for diagnostics and export. Absent when the backend has no
+   * materialized per-Session file, including an unmaterialized pending Session.
+   */
+  readonly location?: SessionLocation
 }
 ```
 

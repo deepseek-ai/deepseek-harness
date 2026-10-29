@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { resolvePwshPath } from './packages/shell/pwsh-local/src/resolve.ts'
@@ -108,6 +109,14 @@ const windowsRunnerCoverageExclusions = process.platform === 'win32'
       'packages/session/session-persistence-jsonl/src/lease.ts',
       // The macOS provider transport uses Unix sockets; POSIX lanes cover its real socket lifecycle.
       'packages/experimental/cua-macos/src/shared-native.ts',
+      // The GitHub CLI runner's suite stands in for `gh` with POSIX shell
+      // scripts and skips on Windows: the Linux and macOS lanes hold its
+      // per-file 100%, while the provider suite pins its callers everywhere.
+      'packages/experimental/forge-github/src/gh.ts',
+      // The panel's Git failure and environment cases stand in for `git` with
+      // POSIX shell scripts and skip on Windows: the Linux and macOS lanes hold
+      // its per-file 100%, while its real-Git cases run everywhere.
+      'packages/experimental/client-ui-forge/src/git.ts',
     ]
   : []
 
@@ -177,12 +186,23 @@ const claudeCodeTestingAliases = {
   'claude-code': fileURLToPath(new URL('./packages/experimental/claude-code-mods/tests/support/claude-code.ts', import.meta.url)),
 }
 
+// The LiveShare client entry statically imports its generated `./remote` contribution, which exists
+// only in built `lib/` output. On a clean checkout Vite resolves that import while transforming the
+// entry, before `vi.mock` can answer it, so the jsdom assembly suites need a resolvable stand-in.
+const liveshareRemoteBuild = fileURLToPath(new URL('./packages/experimental/liveshare/lib/typert.remote-client.js', import.meta.url))
+const generatedRemoteAliases = existsSync(liveshareRemoteBuild) ? {} : {
+  '@deepseek-ai/dsh-experimental-liveshare/remote': fileURLToPath(new URL('./packages/experimental/liveshare/tests/generated-remote-stub.ts', import.meta.url)),
+}
+const testingAliases = { ...claudeCodeTestingAliases, ...generatedRemoteAliases }
+
 export default defineConfig({
   plugins: [pathsPlugin(), standardDecoratorPlugin()],
-  resolve: { alias: claudeCodeTestingAliases },
+  resolve: { alias: testingAliases },
   test: {
     ...localWorkerBudget,
-    setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts'],
+    setupFiles: [
+      './scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts', './scripts/test-official-listing-guard.ts',
+    ],
     // .tsx: client component specs (jsdom via per-file @vitest-environment pragma).
     include: testIncludes,
     exclude: platformUnsupportedTests,
@@ -191,7 +211,7 @@ export default defineConfig({
     projects: [
       {
         plugins: [pathsPlugin(), standardDecoratorPlugin()],
-        resolve: { alias: claudeCodeTestingAliases },
+        resolve: { alias: testingAliases },
         test: {
           name: 'thread-safe',
           execArgv: vitestExecArgv,
@@ -200,7 +220,9 @@ export default defineConfig({
           // Linux, and Windows. Forked workers avoid that shared thread path.
           pool: 'forks',
           ...laneTestBudget,
-          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts'],
+          setupFiles: [
+            './scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts', './scripts/test-official-listing-guard.ts',
+          ],
           include: testIncludes,
           exclude: [
             ...platformUnsupportedTests,
@@ -211,13 +233,15 @@ export default defineConfig({
       },
       {
         plugins: [pathsPlugin(), standardDecoratorPlugin()],
-        resolve: { alias: claudeCodeTestingAliases },
+        resolve: { alias: testingAliases },
         test: {
           name: 'process-bound',
           execArgv: vitestExecArgv,
           pool: 'forks',
           ...laneTestBudget,
-          setupFiles: ['./scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts'],
+          setupFiles: [
+            './scripts/test-proxy-environment.ts', './scripts/test-dom-environment.ts', './scripts/test-official-listing-guard.ts',
+          ],
           include: processBoundTests,
           exclude: [
             ...platformUnsupportedTests,
@@ -331,6 +355,9 @@ export default defineConfig({
         // The speech entry also imports generated Remote definitions; voice-input.e2e.ts
         // exercises the built entry, while source tests cover mountVoiceInput.
         'packages/experimental/client-ui-voice-input/src/client/index.ts',
+        // Built Web replays cover the generated Remote wiring of the card entries; their mount modules are source-covered.
+        'packages/experimental/client-ui-action-cards/src/client/index.ts',
+        'packages/experimental/client-ui-plugin-recommendations/src/client/index.ts',
         // The permission entry binds generated Remote code; cua-permissions.e2e.ts covers
         // its built entry, while source tests exercise mountCuaPermissions and its UI.
         'packages/experimental/cua/src/client/index.ts',
@@ -340,6 +367,9 @@ export default defineConfig({
         // The access entry imports its generated Remote contribution, which exists only in lib;
         // the Web snapshot exercises the built entry, while source tests cover mountAccess.
         'packages/api/remote-access/src/client/index.ts',
+        // The forge panel entry imports its generated Remote contribution, which exists only in lib;
+        // forge-panel.e2e.ts exercises the built entry, while source tests cover mountForgePanel.
+        'packages/experimental/client-ui-forge/src/client/index.ts',
         // Slash/command/input round: per-file gaps deferred with the same
         // client-lane debt. TODO(gui): cover and remove with the lane above.
         'packages/client/ui-commands/src/index.ts',

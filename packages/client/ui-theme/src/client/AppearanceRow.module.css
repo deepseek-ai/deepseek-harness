@@ -45,8 +45,10 @@
   cursor: pointer;
 }
 
-.themeCube:hover:not(.selected) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .themeCube:hover:not(.selected) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Selected cube: #F5F6F7 fill + #ADB2B8 border (static token — the bluish-400
@@ -54,4 +56,14 @@
 .selected {
   background: var(--dsw-alias-bg-module-platform);
   border-color: var(--dsw-static-neutral-bluish-400);
+}
+
+/* Narrow settings panel: all three cubes share one row instead of wrapping to
+   two. The equal basis and the tighter horizontal padding keep a four-glyph
+   label ("跟随系统") on one line at a 390px viewport. */
+@media (max-width: 767px) {
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .themeCube {
+    flex: 1 1 0;
+    padding: 12px 6px;
+  }
 }

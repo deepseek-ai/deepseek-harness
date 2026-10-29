@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Workspace dependencies",
+    "description": "Provide absolute paths to the bundled Python, Node.js, and pnpm runtimes."
+  }
+}

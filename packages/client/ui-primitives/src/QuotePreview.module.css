@@ -1,0 +1,101 @@
+.quote {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  box-sizing: border-box;
+  max-width: min(80%, 300px);
+  margin: 0;
+  padding: 0;
+  vertical-align: baseline;
+  color: var(--dsw-alias-state-business-primary);
+  font-size: var(--dsh-content-font-size, 14px);
+  line-height: calc(20px + var(--dsh-content-font-delta, 0px));
+}
+
+.popoverText {
+  display: block;
+  padding: 8px 10px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.source {
+  min-width: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marker,
+.remove {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  color: inherit;
+  user-select: none;
+}
+
+.marker {
+  pointer-events: none;
+}
+
+.remove {
+  border: none;
+  border-radius: 50%;
+  corner-shape: round;
+  background: transparent;
+  cursor: pointer;
+}
+
+.quoteMark,
+.closeMark {
+  grid-area: 1 / 1;
+  transition: opacity 120ms ease;
+}
+
+.closeMark {
+  opacity: 0;
+}
+
+.quote[data-removable]:focus-within .quoteMark {
+  opacity: 0;
+}
+
+.quote[data-removable]:focus-within .closeMark {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .quote[data-removable]:hover .quoteMark {
+    opacity: 0;
+  }
+
+  .quote[data-removable]:hover .closeMark {
+    opacity: 1;
+  }
+}
+
+@media (hover: none) {
+  .quote[data-removable] .quoteMark {
+    opacity: 0;
+  }
+
+  .quote[data-removable] .closeMark {
+    opacity: 1;
+  }
+}

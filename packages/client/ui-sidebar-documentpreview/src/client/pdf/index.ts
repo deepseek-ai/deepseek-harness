@@ -9,7 +9,7 @@ import type { BoundActions } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createPdfStore, type PdfStore } from './store.ts'
 import { ZoomViewport, zoomSurfaceClass } from '../zoom/ZoomViewport.tsx'
-import { en, zh } from './locales.ts'
+import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 
 /** PDF metadata and keyed body share this package-local implementation identity. */
 export const PDF_BODY_ID = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/pdf'
@@ -25,7 +25,7 @@ export function pdfBodyDefinition(title: () => string): DocumentPreviewDefinitio
 
 /** @param ctx - context carrying the locale, document registry, and slot registry. */
 export function apply(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register('sidebarPdf', { zh, en }))
+  ctx.effect(() => ctx.locale.register('sidebarPdf', { zh, en, ja, es, fr, de, ru, pt }))
   const t = ctx.locale.bind('sidebarPdf')
   ctx.effect(() => ctx.documentPreviews.register(pdfBodyDefinition(() => t('title'))))
   const presentation = pdfBodyRegistration(ctx)

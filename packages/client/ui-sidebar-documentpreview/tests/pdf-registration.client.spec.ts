@@ -16,7 +16,7 @@ const renderedPdf = vi.hoisted(() => vi.fn(() => null))
 vi.mock('../src/client/pdf/pdf.tsx', () => ({ PdfBody: renderedPdf }))
 import { apply, PDF_BODY_ID } from '../src/client/pdf/index.ts'
 import { LazyPdfBody } from '../src/client/pdf/LazyPdfBody.tsx'
-import { en, zh } from '../src/client/pdf/locales.ts'
+import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/pdf/locales.ts'
 
 afterEach(() => { cleanup(); renderedPdf.mockClear() })
 
@@ -58,7 +58,7 @@ describe('PDF registration', () => {
         { id: PDF_BODY_ID, extensions: ['pdf'], priority: 'builtin', loading: 'bytes-complete', wrap: false },
       ])
       expect(previews.candidates('report.pdf')[0]!.title()).toBe('PDF')
-      expect(dictionaries.get('sidebarPdf')).toEqual({ zh, en })
+      expect(dictionaries.get('sidebarPdf')).toEqual({ zh, en, ja, es, fr, de, ru, pt })
       expect(entries[0]).toMatchObject({ name: 'sidebar.right.tab.document', key: PDF_BODY_ID, locale: 'sidebarPdf' })
       const instance = entries[0]!.store.create()
       const face = entries[0]!.inject('s1' as SessionId, instance.actions)

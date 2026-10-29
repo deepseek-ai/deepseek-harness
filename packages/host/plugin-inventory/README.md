@@ -41,6 +41,8 @@ With a roster composed, `agentPresets` carries one group per preset in roster or
 
 The inventory is a snapshot for display and diagnostics: a client can render the roster, flag failed entries, and detect changes by comparing snapshots. It cannot enable, disable, add, or remove plugins, and it carries no history — a fiber that already failed and was removed is absent. Because the service reads the Loader on every call, the answer always reflects the current composition rather than a cached view.
 
+Failed entries include the current startup diagnostic read from their Cordis fiber. Recovery removes it; inventory reads do not wait for loading entries or retain a separate error cache.
+
 -----
 
 <a id="understand-the-implementation"></a>

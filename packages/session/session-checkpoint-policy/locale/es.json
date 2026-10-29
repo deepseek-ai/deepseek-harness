@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "punto de control de sesión",
+    "description": "Guarde registros de sesión antes de solicitudes de modelo y operaciones de herramientas que puedan tener efectos externos."
+  }
+}

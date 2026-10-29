@@ -29,7 +29,7 @@
     ".leading: border-radius: 10px"
   ],
   "ui-schedule/src/client/TaskManagerPage.module.css": [
-    ".newButton: border-radius: 16px",
+    ".headerAction: border-radius: 16px",
     ".filterTab: border-radius: 14px",
     ".searchField: border-radius: 12px",
     ".row: border-radius: 12px",

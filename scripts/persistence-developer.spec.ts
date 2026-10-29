@@ -9,7 +9,7 @@ import { canonicalizeSchema, schemaDigest } from './persistence-schema-model.ts'
 import { classifyPersistenceChange, parsePersistenceSnapshot } from './persistence-changes.ts'
 
 function toolAdditionSchema() {
-  const inventory = parsePersistenceSnapshot(JSON.parse(readFileSync(new URL('../docs/persistence-schema.json', import.meta.url), 'utf8')) as unknown)
+  const inventory = parsePersistenceSnapshot(readFileSync(new URL('../docs/persistence-schema.json', import.meta.url), 'utf8'))
   const before = inventory.roots.find(root => root.key === 'event:developer/message')!
   const nodes = [...structuredClone(before.schema.nodes)]
   const blockIndex = nodes.findIndex(node => node.kind === 'object' && node.properties.some((property) => {

@@ -14,9 +14,9 @@ Wine 在 Linux 内核与区分大小写的 ext4 之上采用 hoisted 依赖布�
 
 [ci-master.yml](../../../../.github/workflows/ci-master.yml) 中仅 master 触发的 `windows` 作业在 `ubuntu-latest` 上运行 `windows node 24 / wine`。它保留经过校验和验证的 Windows Node、Wine apt 与 pnpm 缓存、仅限工作区快照的 hoisted 安装，以及运行工作区构建与生产网站的[共享 Wine 门禁脚本](../../../../scripts/wine-windows-gates.sh)。Node 分发文件传输采用有界重试；nodejs.org 的大文件传输停滞时，由支持范围请求的传输镜像续传相同字节，但版本和 SHA-256 权威仍属于 nodejs.org，归档通过该校验前绝不会投入使用。根据[仅 master 平台策略](../../../../.github/workflows/ci-master.yml)，Wine 不参与 PR 聚合。[已归档的 Wine 实验](../../archived/process/2026-07-27-wine-windows-gates-experiment.md)保留其实测取舍，而本文负责当前双通道拓扑。
 
-每个拉取请求都会启动三个原生作业：`windows-build`、`windows-coverage` 和 `windows-native-tests`。每个作业都会为 workspace 符号链接启用开发者模式，通过 `pnpm/action-setup` 提供仓库固定版本的 pnpm，在不传输 store 归档的情况下执行不可变安装，并在原生 PowerShell 下运行自己的清单。Windows 故障切换变量（`DSH_CI_FAILOVER_WINDOWS`）默认选择组织自有的 `dsh-windows-2025-16core` 运行器，在 `selfhosted` 下选择公司内部运行器池，在 `blacksmith` 下选择 Blacksmith 运行器（见 [blacksmith 故障切换支路笔记](2026-09-09-blacksmith-failover-leg.zh.md)）。Blacksmith 构建和覆盖率作业请求 16 vCPU；逐文件串行的原生测试请求 2 vCPU。各作业的截止时间为 60 至 120 分钟。
+每个拉取请求都会在独立的 [CI Windows 工作流](../../../../.github/workflows/ci-windows.yml)中启动三个原生作业：`windows-build`、`windows-coverage` 和 `windows-native-tests`。GitHub 只有在一次运行的所有作业结束后才会重新运行失败的作业，因此独立工作流让维护者能在 Windows 作业仍在运行时重新运行失败的 Linux 作业，反之亦然。每个作业都会为 workspace 符号链接启用开发者模式，通过 `pnpm/action-setup` 提供仓库固定版本的 pnpm，在不传输 store 归档的情况下执行不可变安装，并在原生 PowerShell 下运行自己的清单。Windows 故障切换变量（`DSH_CI_FAILOVER_WINDOWS`）默认选择组织自有的 `dsh-windows-2025-16core` 运行器，在 `selfhosted` 下选择公司内部运行器池，在 `blacksmith` 下选择 Blacksmith 运行器（见 [blacksmith 故障切换支路笔记](2026-09-09-blacksmith-failover-leg.zh.md)）。Blacksmith 构建和覆盖率作业请求 16 vCPU；逐文件串行的原生测试请求 2 vCPU。各作业的截止时间为 60 至 120 分钟。
 
-`windows-build` 与 `windows-native-tests` 是 `all checks passed` 的依赖项；其工作区构建和定向原生进程结果具有阻断性。阻断性构建和生产网站检查成功后，`windows-build` 在同一工作区运行 `check:ci:windows-observational-ready`。该步骤使用 `continue-on-error`、关闭 fail-fast，并设置 15 分钟超时；失败时会产生工作流警告，因为静态检查、文档、包与构建产物的阻断性判定由 Linux 负责。必需判定会等待该步骤结束，但不要求其诊断通过。`windows-coverage` 仍在聚合流程的 `needs` 之外，因此逐文件 100% 覆盖率结果会保持红灯并可见，却不会延迟判定。
+`windows-build` 与 `windows-native-tests` 是必需判定 `windows checks passed` 的依赖项；其工作区构建和定向原生进程结果具有阻断性。阻断性构建和生产网站检查成功后，`windows-build` 在同一工作区运行 `check:ci:windows-observational-ready`。该步骤使用 `continue-on-error`、关闭 fail-fast，并设置 15 分钟超时；失败时会产生工作流警告，因为静态检查、文档、包与构建产物的阻断性判定由 Linux 负责。必需判定会等待该步骤结束，但不要求其诊断通过。`windows-coverage` 仍在聚合流程的 `needs` 之外，因此逐文件 100% 覆盖率结果会保持红灯并可见，却不会延迟判定。
 
 `windows-coverage` 与 Linux 覆盖率通道一致，不先构建工作区就运行[job 内分区覆盖率](../../../../scripts/coverage-partitions.ts)：4 个单 worker 插桩分片与一个双 worker 的豁免重型门禁并行运行；工作区导入通过 tsconfig paths 映射解析到 `src`，消费构建产物的套件在未构建的检出上会自跳。两项覆盖率门禁都通过 `DSH_COVERAGE_TEST_TIMEOUT_MS=90000` 提高 Vitest 的单测试、expect.poll 与 hook 预算。观测步骤复用成功的构建，保留独立的 MPA 文档构建，一起启动相互独立的静态门禁，并让 `publint` 使用 CI worker 默认值，在共享自托管运行器上覆盖为 8 个 worker。其 built-bin 冒烟测试只在其他所有观测性门禁结算后启动，包括失败的门禁。ready 聚合要求此前已成功构建工作区；它仅从内部共用清单中移除该构建及其内部依赖边。这可避免有界的真实应用启动测量与 tool-catalog、NodeNext、包及文档进程争抢资源。translation-pairing 合并套件只导入 `scripts/` 源码和子进程，因此放入豁免重型套件门禁；V8 插桩不会为它贡献任何阈值覆盖率，却会放大 Git 进程延迟。Lefthook 并发 fixture 保留原有结果，采用 30 秒单用例预算与 10 秒进程就绪探测；安装器则允许被抢占的 lock 持有者在独占创建后用 5 秒发布记录。directory-picker 组合为防抖配置写入提供显式的 15 秒轮询预算；workspace-context 组合 fixture 使用测试自有、没有无关 1 秒截止时间的信号。LSP 源码与 ACL 沙箱源码仍计入 Windows 分母：基于 stub 的失败路径套件把每个进程内 ACL 沙箱文件都带到 100%，只有 runner 入口保持排除——它只作为 spawn 出的子进程在插桩运行之外执行，其行为由 runner 套件端到端钉住。窄范围且带注释的 V8 ignore 只覆盖不可达分支（另一平台专属分支、生命周期内不可达的防御守卫），其行为测试仍保留在所属平台。
 
@@ -36,7 +36,7 @@ Shiki 会禁用 TextMate 正则的延迟编译，并在用户内容进入保持�
 
 ## 曾考虑的替代方案
 
-**让每项原生 Windows 结果都成为 `all checks passed` 的依赖项。** 这会为聚合流程提供保真度最高的 Windows 判定，但也会让每次合并等待覆盖率和重复的观测性清单。要求构建与定向原生进程套件通过，可以保留快速的原生正确性信号，同时继续自动产生其他结果。
+**让每项原生 Windows 结果都成为 `windows checks passed` 的依赖项。** 这会为聚合流程提供保真度最高的 Windows 判定，但也会让每次合并等待覆盖率和重复的观测性清单。要求构建与定向原生进程套件通过，可以保留快速的原生正确性信号，同时继续自动产生其他结果。
 
 **只在拉取请求上运行 Wine。** Wine 能快速触达阻断性 win32 工具链分支，但即使真实 NT、NTFS、PowerShell、进程或原生插件约定已经损坏，也可能报告绿灯。
 
@@ -50,7 +50,7 @@ Shiki 会禁用 TextMate 正则的延迟编译，并在用户内容进入保持�
 
 ## 后果
 
-Wine 提供合并后的工具链证据。`all checks passed` 变绿时，原生覆盖率仍可能处于待处理或红灯状态。观测诊断在必需的构建作业内完成。诊断失败时，PR 检查仍显示成功；失败步骤、工作流警告和运行摘要会展示该失败。
+Wine 提供合并后的工具链证据。`windows checks passed` 变绿时，原生覆盖率仍可能处于待处理或红灯状态。观测诊断在必需的构建作业内完成。诊断失败时，PR 检查仍显示成功；失败步骤、工作流警告和运行摘要会展示该失败。
 
 每个拉取请求都会获得真实 NT 内核、NTFS、PowerShell、Windows 进程、原生插件和受支持源码覆盖率信号。观测检查复用成功构建的工作区，省去第二次检出、依赖安装和工作区构建。顺序执行会延长构建作业，并可能延迟必需判定；它也让诊断进程与编译分开运行。ready 与 master 聚合共用一份内部诊断清单；master 保留自己的工作区构建和完整检查。
 

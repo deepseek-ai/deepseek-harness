@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Persistente Terminals",
+    "description": "Stellt dem Agenten Terminals bereit, deren Prozesse zwischen Tool-Aufrufen im Hintergrund weiterlaufen, sodass er einen Entwicklungsserver oder eine REPL starten und später zurückkehren kann, um Ausgaben zu lesen oder Eingaben zu tippen.",
+    "detail": "docs/DETAIL.md"
+  }
+}

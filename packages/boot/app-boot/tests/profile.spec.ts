@@ -21,7 +21,6 @@ import {
   loadProfileDirectory,
   PROFILE_COMPATIBILITY_FILENAME,
   PROFILE_PATCH_FILENAME,
-  PROFILE_TEMPLATES,
   readProfileManifest,
   readProfilePatches,
   removeLinkProjections,
@@ -32,6 +31,7 @@ import {
   type Profile,
   type RuntimeResolution,
 } from '../src/index.ts'
+import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'
 import { installRuntimeInterception } from '../src/profile-resolution/resolver.ts'
 
 const tempRoots: string[] = []
@@ -47,7 +47,7 @@ const tmp = (): string => {
 
 /** Stage a fake installed app: package.json with deps and a node_modules holding bundles. */
 function stageInstallation(
-  bundles: Record<string, { patch?: string; deps?: Record<string, string> }>,
+  bundles: Record<string, { patch?: string; deps?: Record<string, string>; platforms?: string[] }>,
   appName = 'dsh-app',
 ): string {
   const root = tmp()
@@ -64,7 +64,7 @@ function stageInstallation(
       type: 'module',
       main: './index.js',
       dependencies: spec.deps ?? {},
-      ...spec.patch === undefined ? {} : { dsh: { bundle: { patch: './cordis.patch.yml' } } },
+      ...spec.patch === undefined ? {} : { dsh: { bundle: { patch: './cordis.patch.yml', ...spec.platforms === undefined ? {} : { platforms: spec.platforms } } } },
     }))
     writeFileSync(join(dir, 'index.js'), `export const packageName = ${JSON.stringify(name)}\n`)
     if (spec.patch !== undefined) writeFileSync(join(dir, 'cordis.patch.yml'), spec.patch)
@@ -75,6 +75,24 @@ function stageInstallation(
   writeFileSync(join(appDir, 'index.js'), `export const packageName = ${JSON.stringify(appName)}\n`)
   return join(appDir, 'package.json')
 }
+
+it('skips an unsupported saved bundle before composing any runtime overrides and retains the selection', () => {
+  const unsupported = process.platform === 'darwin' ? 'win32' : 'darwin'
+  const anchor = stageInstallation({
+    base: { patch: '- insert:\n  - id: ptc-runtime\n    name: runtime\n    config: { executionMode: isolated }\n' },
+    restricted: { platforms: [unsupported], patch: '- id: ptc-runtime\n  config: { executionMode: persistent-in-memory }\n' },
+  })
+  const dir = join(tmp(), 'profile')
+  initProfile(dir, ['base', 'restricted'])
+  const before = readFileSync(join(dir, 'package.json'), 'utf8')
+  const profile = loadProfileDirectory('test', dir, anchor)
+  expect(profile.layers.map(layer => layer.packageName)).toEqual(['base'])
+  expect(profile.skippedBundles).toHaveLength(1)
+  expect(profile.skippedBundles[0]?.packageName).toBe('restricted')
+  expect(profile.skippedBundles[0]?.reason).toContain(`Host is running ${process.platform}`)
+  expect(composeEntries(profile.layers.map(layer => layer.patches))).toMatchObject([{ id: 'ptc-runtime', config: { executionMode: 'isolated' } }])
+  expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
+})
 
 /** Represent one resolved external bundle as a loaded profile layer. */
 function stageProfile(home: string, name: string, bundleAnchor: string): Profile {
@@ -341,16 +359,6 @@ describe('loadProfile', () => {
     const home = tmp()
     expect(() => loadProfile('t', 'custom', anchor, home))
       .toThrow('profile "custom" does not exist')
-    expect(PROFILE_TEMPLATES.web?.bundles).toContain('@deepseek-ai/dsh-base')
-    expect(PROFILE_TEMPLATES.acp).toEqual({
-      bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-acp-app'],
-    })
-    expect(PROFILE_TEMPLATES.sdk).toEqual({
-      bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-sdk-app'],
-    })
-    expect(PROFILE_TEMPLATES['sdk-minimal']).toEqual({
-      bundles: ['@deepseek-ai/dsh-sdk-minimal'],
-    })
     loadProfile('t', 'web', anchor, home)
     expect(readProfileManifest('t', resolveProfileDir('web', home)).dsh?.profile?.bundles)
       .toEqual([...PROFILE_TEMPLATES.web?.bundles ?? []])

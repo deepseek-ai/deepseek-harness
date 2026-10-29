@@ -1,8 +1,8 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-workspace'
@@ -31,6 +31,7 @@ async function liveAgent(ctx: Context, session: Session): Promise<Agent> {
     id: session.id,
     options: {},
     session,
+    model: unsupportedModel(),
     inbox: unsupportedInbox(),
     status: 'idle',
     ctx,
@@ -49,7 +50,7 @@ async function liveAgent(ctx: Context, session: Session): Promise<Agent> {
 /** Propose one model step for the Agent; the innermost decision enters. */
 const proposed = (ctx: Context, agent: Agent) => ctx.waterfall(
   'agent/pre-step',
-  { agent, messages: [], turn: 1, step: 1, signal: new AbortController().signal },
+  { modelSelection: { provider: 'mock', model: 'mock' }, agent, messages: [], turn: 1, step: 1, signal: new AbortController().signal },
   () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
 )
 

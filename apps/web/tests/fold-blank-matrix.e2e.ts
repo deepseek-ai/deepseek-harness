@@ -10,7 +10,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Page, Route } from 'playwright'
+import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -695,31 +695,37 @@ async function run(world: World, scenario: Case): Promise<RunResult> {
       const disposeFailure = scenario.origin === 'error'
         ? scaffold.ctx.on('system-prompt/assemble', async () => { throw new Error('FOLDMX_TURN_FAILED') })
         : () => undefined
-      // A subagent child's composer sends through the subagent continuation route.
-      const promptRoute = scenario.surface === 'side' ? '**/api/subagents/prompt' : '**/api/session/prompt'
-      const promptGate = Promise.withResolvers<undefined>()
-      const promptHeld = Promise.withResolvers<undefined>()
-      const holdPrompt = async (route: Route): Promise<void> => {
-        promptHeld.resolve(undefined)
-        await promptGate.promise
-        await route.continue()
+      // The accepted message waits before its model call, so the fold settles before the Turn streams.
+      const turnGate = Promise.withResolvers<undefined>()
+      let held: Promise<unknown> = Promise.resolve()
+      let disposeHold = (): void => {}
+      if (scenario.surface === 'side') {
+        // A subagent child's composer sends through the continuation route, which resumes the cold child.
+        disposeHold = scaffold.ctx.on('agent/pre-step', async ({ agent }, next) => {
+          if (agent.id === target) await turnGate.promise
+          return await next()
+        })
+      } else {
+        const agent = scaffold.ctx.agents.get(target)
+        if (agent === undefined) throw new Error(`${scenario.id}: the target Agent is not live`)
+        // Maintenance keeps the accepted message in the inbox without starting its Turn.
+        held = agent.runMaintenance(() => turnGate.promise)
       }
-      await page.route(promptRoute, holdPrompt)
       const ended = turnEnded(scaffold, target)
       try {
         await expandSeededSteps(page, root, scenario)
         await placeReader(page, root, scenario.reader)
         await begin()
         await send(world, NEXT_INPUT)
-        await promptHeld.promise
         await page.locator(`${root} [data-submission-echo]`).waitFor()
         afterFold = await folded()
-        promptGate.resolve(undefined)
+        turnGate.resolve(undefined)
+        await held
         await ended
       } finally {
-        promptGate.resolve(undefined)
+        turnGate.resolve(undefined)
+        disposeHold()
         disposeFailure()
-        await page.unroute(promptRoute, holdPrompt)
       }
       break
     }

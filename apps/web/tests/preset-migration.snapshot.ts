@@ -85,11 +85,11 @@ describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration t
       await expect(readFile(childSuccessor)).rejects.toMatchObject({ code: 'ENOENT' })
       const signal = new AbortController().signal
       const address = { kind: 'subagent', parentSessionId: id, childSessionId: childId, mode: 'one-shot' } as const
-      const childPage = await scaffold.ctx.sessionController.page({ address, throughSeq: childRows.length - 1 }, signal)
+      const childPage = await scaffold.ctx.sessionController.events({ address, throughSeq: childRows.length - 1 }, signal)
       expect(childPage.records.map(record => record.event.type)).toEqual(childRows.map(row => row['type']))
-      await expect(scaffold.ctx.sessionController.page({ address: { ...address, childSessionId: brokenId, mode: 'unknown' }, throughSeq: 1 }, signal))
+      await expect(scaffold.ctx.sessionController.events({ address: { ...address, childSessionId: brokenId, mode: 'unknown' }, throughSeq: 1 }, signal))
         .rejects.toThrow()
-      await expect(scaffold.ctx.sessionController.page({ address: { kind: 'session', sessionId: id }, throughSeq: rows.length - 1 }, signal))
+      await expect(scaffold.ctx.sessionController.events({ address: { kind: 'session', sessionId: id }, throughSeq: rows.length - 1 }, signal))
         .resolves.toMatchObject({ hasMore: false })
       const childWriter = await scaffold.ctx.sessionPersistence.open(childId, 'write')
       await childWriter.close()

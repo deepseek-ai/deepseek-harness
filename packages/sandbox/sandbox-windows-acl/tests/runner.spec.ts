@@ -86,11 +86,11 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
       "try{Set-Content -Path (Join-Path $env:TEMP 'child-wrote.txt') -Value ok -ErrorAction Stop;'TEMP-WRITE: OK'}catch{'TEMP-WRITE: DENIED'};",
       `try{Set-Content -Path '${escapeFile}' -Value ok -ErrorAction Stop;'ESCAPE-WRITE: OK (ESCAPE!)'}catch{'ESCAPE-WRITE: DENIED'};`,
       `try{Get-Content '${secretFile}' -ErrorAction Stop | Out-Null;'SECRET-READ: OK'}catch{'SECRET-READ: DENIED'};`,
-      // Authenticated Users is absent from BOTH lists: the WMI namespace
-      // security check fails (0x80041003) — CIM is unavailable under every
-      // confined mode (the documented contract; the C:\-root tree-creation
-      // escape is closed in both as the other side of the trade).
-      "try{Get-CimInstance Win32_OperatingSystem -ErrorAction Stop | Out-Null;'CIM: OK'}catch{'CIM: DENIED'}",
+      // Authenticated Users is absent from BOTH lists: a standard or
+      // UAC-filtered caller's child fails the WMI namespace check
+      // (0x80041003), while a privileged caller's enabled Administrators
+      // group passes it. Label the outcome expected for the child's token.
+      "$elevated=[Environment]::IsPrivilegedProcess;try{Get-CimInstance Win32_OperatingSystem -ErrorAction Stop|Out-Null;$cim=$true}catch{$cim=$false};if($elevated -eq $cim){'CIM: PASS'}else{'CIM: FAIL'}",
     ].join('')
     const result = runRunner([
       '--workspace', writableDir, '--temp', isolatedTemp, '--mode', 'workspace-write',
@@ -102,12 +102,12 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
     expect(result.stdout).toContain('TEMP-WRITE: OK')
     expect(result.stdout).toContain('ESCAPE-WRITE: DENIED')
     expect(result.stdout).toContain('SECRET-READ: OK')
-    expect(result.stdout).toContain('CIM: DENIED')
+    expect(result.stdout).toContain('CIM: PASS')
     expect(existsSync(escapeFile)).toBe(false)
     expect(existsSync(join(writableDir, 'child-wrote.txt'))).toBe(true)
   }, 30_000)
 
-  it('read-only: no write-SID grants — workspace/temp writes denied, reads and $null redirection fine, CIM unavailable', () => {
+  it('read-only: no write-SID grants — workspace/temp writes denied, reads and $null redirection fine, CIM availability follows the caller token', () => {
     const probe = [
       "$ErrorActionPreference='SilentlyContinue';",
       '\'LANGMODE: \' + $ExecutionContext.SessionState.LanguageMode;',
@@ -119,10 +119,9 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
       // PowerShell's $null redirection discards without opening NUL — must keep working.
       'echo hi > $null;\'DOLLAR-NULL: OK\';',
       `try{Get-Content '${secretFile}' -ErrorAction Stop | Out-Null;'SECRET-READ: OK'}catch{'SECRET-READ: DENIED'};`,
-      // BOTH lists drop Authenticated Users: the WMI namespace security
-      // check fails (0x80041003) — the documented CIM boundary of every
-      // confined mode, the price of the zero ambient-write surface.
-      "try{Get-CimInstance Win32_OperatingSystem -ErrorAction Stop | Out-Null;'CIM: OK'}catch{'CIM: DENIED'}",
+      // The same caller-token split holds under read-only: the probe labels
+      // whether CIM availability matches the child's privilege.
+      "$elevated=[Environment]::IsPrivilegedProcess;try{Get-CimInstance Win32_OperatingSystem -ErrorAction Stop|Out-Null;$cim=$true}catch{$cim=$false};if($elevated -eq $cim){'CIM: PASS'}else{'CIM: FAIL'}",
     ].join('')
     const result = runRunner([
       '--workspace', writableDir, '--temp', isolatedTemp, '--mode', 'read-only',
@@ -135,7 +134,7 @@ describe.skipIf(!isWin32 || !pwshAvailable())('windows-acl runner', () => {
     expect(result.stdout).toContain('NUL-WRITE: DENIED')
     expect(result.stdout).toContain('DOLLAR-NULL: OK')
     expect(result.stdout).toContain('SECRET-READ: OK')
-    expect(result.stdout).toContain('CIM: DENIED')
+    expect(result.stdout).toContain('CIM: PASS')
     expect(existsSync(join(writableDir, 'readonly-child-wrote.txt'))).toBe(false)
   }, 30_000)
 

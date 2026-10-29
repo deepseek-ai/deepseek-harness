@@ -1,13 +1,14 @@
 /**
  * Session Controller under non-owner callers: the Session resource kind it
- * registers, the Session readers of `session/page` and `session/follow`,
- * `session/list`, `session/search`, and `session/control` called through a
- * `global` role and filtered per Session through `remoteAccess.allows()`, the caller recorded
- * on prompt sources, and `session/projections` admitted per Session through
- * the Gateway.
+ * registers and its default resolver, which supplies the identities of
+ * `session/page` and `session/follow`, `session/list`, `session/search`, and
+ * `session/control` called through a `global` role and filtered per Session
+ * through `remoteAccess.allows()`, the caller recorded on prompt sources, and
+ * `session/projections` admitted per Session through the Gateway.
  */
 
 import { Context } from '@deepseek-ai/cordis'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
@@ -86,8 +87,8 @@ async function harness(): Promise<{
   await ctx.plugin(TypertRegistry)
   await mountAgentLoopTestDependencies(ctx)
   const loop = await mountAgentLoopTestHarness(ctx)
-  const shared = await loop.create(SHARED)
-  const hidden = await loop.create(PRIVATE)
+  const shared = await loop.create(SHARED, {}, { cwd: '/tmp' })
+  const hidden = await loop.create(PRIVATE, {}, { cwd: '/tmp' })
   const controller = await createSessionTestController(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
   const as = (principal: Principal, method: string): Context => {
     const invocation: RemoteInvocation = {
@@ -107,18 +108,77 @@ function message(text: string) {
 }
 
 describe('Session Controller access', () => {
-  it('owns the Session resource kind and its default sessionId field', async () => {
+  it('owns the Session resource kind and its default resolver', async () => {
     const { ctx } = await harness()
     expect(() => ctx.typert.resources.register('session', { field: 'sessionId' })).toThrow(/already registered/)
   })
 
   it('reads the Session resource of page and follow requests from the addressed Session', async () => {
-    const { controller } = await harness()
+    const { ctx, controller } = await harness()
+    const resource = ctx.typert.resources.get('session')
+    if (resource?.resolve === undefined) throw new Error('Session resource resolver is missing')
     for (const method of ['page', 'follow']) {
-      const reader = remoteMethods(controller).find(marker => marker.method === method)?.resources?.['session']
-      expect(reader?.({ address: { kind: 'session', sessionId: SHARED } })).toBe(SHARED)
-      // A subagent address reads the child transcript; whether the parent's access covers it is the policy's rule.
-      expect(reader?.({ address: { kind: 'subagent', parentSessionId: SHARED, childSessionId: PRIVATE } })).toBe(PRIVATE)
+      const marker = remoteMethods(controller).find(marker => marker.method === method)
+      expect(marker).toBeDefined()
+      expect(marker?.resources?.['session']).toBeUndefined()
+    }
+    const resolve = (request: unknown) => resource.resolve({ args: { request }, parameters: [{ name: 'request', wire: 'request' }] })
+    expect(resolve({ address: { kind: 'session', sessionId: SHARED } })).toBe(SHARED)
+    expect(resolve({ address: { kind: 'subagent', parentSessionId: SHARED, childSessionId: PRIVATE } })).toBe(PRIVATE)
+  })
+
+  it('resolves named Session IDs and first-object requests without treating unrelated strings as identities', async () => {
+    const { ctx } = await harness()
+    const resource = ctx.typert.resources.get('session')
+    if (resource?.resolve === undefined) throw new Error('Session resource resolver is missing')
+    const resolve = (args: Readonly<Record<string, unknown>>, ...names: string[]) => resource.resolve({
+      args, parameters: names.map(name => ({ name, wire: name })),
+    })
+    expect(resolve({ sessionId: SHARED, zzz: 'other' }, 'sessionId', 'zzz')).toBe(SHARED)
+    expect(resolve({ options: { sessionId: SHARED }, yyy: 'other' }, 'options', 'yyy')).toBe(SHARED)
+    expect(resolve({ options: { address: { kind: 'session', sessionId: SHARED } }, xxx: 'other' }, 'options', 'xxx')).toBe(SHARED)
+    expect(resolve({ options: { address: { kind: 'subagent', parentSessionId: SHARED, childSessionId: PRIVATE } } }, 'options')).toBe(PRIVATE)
+    expect(resolve({ ns: SHARED, value: 'other' }, 'ns', 'value')).toBeUndefined()
+    expect(resolve({ ref: SHARED, value: 'other' }, 'ref', 'value')).toBeUndefined()
+    expect(resolve({ zzz: 'other', sessionId: SHARED }, 'zzz', 'sessionId')).toBe(SHARED)
+    expect(resolve({ first: {}, later: { sessionId: SHARED } }, 'first', 'later')).toBeUndefined()
+    expect(resolve({ count: 1, tags: [], empty: null, options: { sessionId: SHARED } }, 'count', 'tags', 'empty', 'options')).toBe(SHARED)
+    expect(resolve({}, 'sessionId')).toBeUndefined()
+    expect(resolve({})).toBeUndefined()
+    expect(resource.resolve({ args: { target: SHARED }, parameters: [{ name: 'sessionId', wire: 'target' }] })).toBe(SHARED)
+  })
+
+  it.each(['page', 'follow'])('authorizes %s by Address and rejects coexisting Session IDs through SRC dispatch', async (method) => {
+    const { ctx, shared, hidden } = await harness()
+    shared.inbox.append('next-turn', message('shared history'))
+    hidden.inbox.append('next-turn', message('private history'))
+    await ctx.plugin(TypertGatewayService)
+    guestPolicy(ctx, {
+      role: { name: 'test:history-reader', resource: 'session', actions: ['session/page', 'session/follow'] },
+      resource: { kind: 'session', id: SHARED },
+    })
+    const abort = new AbortController()
+    const peer: PeerScope = { id: 'history-access-peer' as PeerId, ctx, principal: GUEST, interactions: 'answer', signal: abort.signal, dispose: async () => {} }
+    const invoke = async (request: Record<string, unknown>): Promise<unknown> => {
+      const call = { peer, namespace: 'session', method, args: { request }, signal: abort.signal }
+      if (method === 'page') return ctx.typertGateway.invoke(call)
+      const stream = (await ctx.typertGateway.stream(call))[Symbol.asyncIterator]()
+      try {
+        return (await stream.next()).value
+      } finally {
+        await stream.return?.()
+      }
+    }
+    const request = (sessionId: SessionId) => ({ address: { kind: 'session', sessionId }, throughSeq: 0 })
+    try {
+      await expect(invoke(request(SHARED))).resolves.toBeDefined()
+      await expect(invoke(request(PRIVATE))).rejects.toMatchObject({ code: 'remote-access/denied', details: { reason: 'no-allow' } })
+      for (const target of [SHARED, PRIVATE]) {
+        await expect(invoke({ ...request(target), sessionId: SHARED }))
+          .rejects.toMatchObject({ code: 'remote-access/denied', details: { reason: 'resource-invalid' } })
+      }
+    } finally {
+      abort.abort()
     }
   })
 
@@ -207,6 +267,34 @@ describe('Session Controller access', () => {
       { kind: 'user', rpcId: 'guest-1', principal: GUEST },
       { kind: 'user', rpcId: 'owner-1' },
     ])
+  })
+
+  it('keeps gateway permission checks while allowing an image referenced only by another Session', async () => {
+    const { ctx, hidden } = await harness()
+    await ctx.plugin(TypertGatewayService)
+    const bindings = guestPolicy(ctx)
+    const ref = {
+      attachmentId: AttachmentId(`sha256:${'ab'.repeat(32)}`),
+      mediaType: 'image/png' as const, bytes: 2, width: 1, height: 1,
+    }
+    hidden.session.append('user/message', createUserMessage({
+      content: [{ type: 'image', attachment: ref }], source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    const readImage = vi.fn(() => Promise.resolve({ ref, data: Uint8Array.of(1, 2) }))
+    ctx.attachments.readImage = readImage
+    const read = (sessionId: SessionId): Promise<unknown> => guestCall(ctx, 'attachment', {
+      request: { sessionId, attachment: ref },
+    })
+    await expect(read(SHARED)).rejects.toMatchObject({ code: 'remote-access/denied' })
+    expect(readImage).not.toHaveBeenCalled()
+    bindings.push({
+      role: { name: 'test:attachment-reader', resource: 'session', actions: ['session/attachment'] },
+      resource: { kind: 'session', id: SHARED },
+    })
+    await expect(read(SHARED)).resolves.toEqual({ attachment: ref, data: 'AQI=' })
+    expect(readImage).toHaveBeenCalledExactlyOnceWith(ref)
+    await expect(read(PRIVATE)).rejects.toMatchObject({ code: 'remote-access/denied' })
+    expect(readImage).toHaveBeenCalledTimes(1)
   })
 
   it('lets a non-owner read projections only in a Session its Session role names', async () => {

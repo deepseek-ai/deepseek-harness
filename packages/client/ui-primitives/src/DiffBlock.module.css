@@ -75,6 +75,8 @@
   text-align: left;
 }
 
-.expand:hover {
-  color: var(--dsw-alias-label-secondary);
+@media (hover: hover) {
+  .expand:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
 }

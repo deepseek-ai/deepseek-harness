@@ -13,8 +13,9 @@
 - --dsh-scrollbar-thumb-hover, pointer over the list: rgb(212, 212, 212)
 - list overflows: true
 - reserved band: 5px
-- scrollbar inset from the sidebar edge: 2px
-- row background inset from the sidebar edge: 12px
+- scrollbar inset from the list parent edge: 2px
+- row hitbox inset from the list parent edge: 8px
+- row background inset from the list parent edge: 11px
 - relative time covered by the bar: 0px
 - relative time ends inside the content area: true
 - content area ends before the border box: true
@@ -32,8 +33,9 @@
 - --dsh-scrollbar-thumb-hover, pointer over the list: rgb(101, 103, 107)
 - list overflows: true
 - reserved band: 5px
-- scrollbar inset from the sidebar edge: 2px
-- row background inset from the sidebar edge: 12px
+- scrollbar inset from the list parent edge: 2px
+- row hitbox inset from the list parent edge: 8px
+- row background inset from the list parent edge: 11px
 - relative time covered by the bar: 0px
 - relative time ends inside the content area: true
 - content area ends before the border box: true

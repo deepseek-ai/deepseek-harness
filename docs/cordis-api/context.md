@@ -110,7 +110,7 @@ The root context of the application (every child context shares it). @experiment
 
 ```ts cordis-catalog
 /** Base URL used to resolve relative plugin/module specifiers, if the runtime sets one. */
-baseUrl?: string
+baseUrl?: string | undefined
 ```
 
 Base URL used to resolve relative plugin/module specifiers, if the runtime sets one.

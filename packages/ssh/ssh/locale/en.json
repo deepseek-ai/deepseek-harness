@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH connections",
+    "description": "Share OpenSSH connections and versioned POSIX remote helpers."
+  }
+}

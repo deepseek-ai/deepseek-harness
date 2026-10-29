@@ -3,12 +3,16 @@
  * Events in, effects out; zero React / DOM / cordis. Package-private; the
  * SessionInput shell owns editor state and executes the returned effects.
  *
- * Claimed commands occupy the frozen in-flight slot. Ordinary messages detach
- * at Enter, so the editor can clear immediately and accept another message
- * while earlier admissions remain in flight.
+ * Claimed commands and ordinary messages occupy the one frozen in-flight
+ * slot. A message stays in the read-only editor until the Host accepts it;
+ * only then does the editor clear, and a refusal or failure returns it to
+ * editing unchanged.
  */
 import type { InputSubmitMode, MessageSubmission } from '../contract/composer-submission.ts'
-import type { CommandClaim, InputEffect, InputEvent, InputState, SubmitAttempt } from '../contract/input.ts'
+import type { DraftQuote, Occurrence } from '../contract/draft-editor.ts'
+import type {
+  CommandClaim, DraftAttachmentId, InputEffect, InputEvent, InputState, SubmitAttempt,
+} from '../contract/input.ts'
 
 /** Exhaustiveness backstop for the closed InputEvent union. */
 function unreachable(value: never): never {
@@ -42,8 +46,6 @@ export class SubmitMachine {
     readonly attempt: SubmitAttempt
     readonly controller: AbortController
   } | undefined
-  /** Ordinary sends detached from the editor, retained for settlement validation and cancellation. */
-  private readonly detached = new Map<number, AbortController>()
 
   /** Read-only snapshot of the submit-plane state. */
   get state(): SubmitSnapshot {
@@ -63,6 +65,11 @@ export class SubmitMachine {
     }
   }
 
+  /** The attempt of the message being sent; undefined outside the sending phase. */
+  get sendingAttempt(): SubmitAttempt | undefined {
+    return this.phase === 'sending' ? this.inflight?.attempt : undefined
+  }
+
   /**
    * Feed one event through the machine.
    * @param ev - submit-plane event.
@@ -72,12 +79,11 @@ export class SubmitMachine {
     switch (ev.type) {
       case 'draft-changed': return this.followCommand(ev.command)
       case 'claim': return this.followCommand(ev.claim)
-      case 'enter': return this.onEnter(ev.mode, ev.draft, ev.submission)
+      case 'enter': return this.onEnter(ev)
       case 'adjudicated': return this.onAdjudicated(ev.attempt, ev.outcome)
       case 'adjudication-failed': return this.onAdjudicationFailed(ev.attempt, ev.message)
       case 'submit-settled': return this.onSubmitSettled(ev)
       case 'sink-settled': return this.onSinkSettled(ev)
-      case 'send-committed': return this.onSendCommitted()
       case 'release': return this.onRelease()
       default: return unreachable(ev)
     }
@@ -97,58 +103,54 @@ export class SubmitMachine {
     return []
   }
 
-  /** Mint an attempt and controller without assigning its lifecycle owner. */
-  private mintAttempt(mode: InputSubmitMode, draft: string, submission?: MessageSubmission): {
-    readonly attempt: SubmitAttempt
-    readonly controller: AbortController
-  } {
+  /** Occupy the frozen slot with the draft, references, quotes, and attachments the user sent. */
+  private beginAttempt(
+    mode: InputSubmitMode,
+    draft: string,
+    occurrences: readonly Occurrence[],
+    quotes: readonly DraftQuote[],
+    attachmentIds: readonly DraftAttachmentId[],
+    submission?: MessageSubmission,
+  ): SubmitAttempt {
     const controller = new AbortController()
     this.seq += 1
-    return {
-      attempt: { seq: this.seq, signal: controller.signal, draftSnapshot: draft, mode, ...submission === undefined ? {} : { submission } },
-      controller,
+    const attempt: SubmitAttempt = {
+      seq: this.seq,
+      signal: controller.signal,
+      draftSnapshot: draft,
+      occurrences,
+      quotes,
+      attachmentIds,
+      mode,
+      ...submission === undefined ? {} : { submission },
     }
+    this.inflight = { attempt, controller }
+    return attempt
   }
 
-  /** Mint the frozen command/adjudication attempt. */
-  private beginAttempt(mode: InputSubmitMode, draft: string, submission?: MessageSubmission): SubmitAttempt {
-    const flight = this.mintAttempt(mode, draft, submission)
-    this.inflight = flight
-    return flight.attempt
-  }
-
-  /** Mint an ordinary send that leaves the phase plain. */
-  private beginDetached(mode: InputSubmitMode, draft: string, submission?: MessageSubmission): SubmitAttempt {
-    const flight = this.mintAttempt(mode, draft, submission)
-    this.detached.set(flight.attempt.seq, flight.controller)
+  /** Send the frozen message; the editor stays read-only until the Host accepts it. */
+  private send(attempt: SubmitAttempt): readonly InputEffect[] {
     this.claim = undefined
-    this.phase = 'plain'
-    return flight.attempt
+    this.phase = 'sending'
+    return [{ type: 'default-sink', attempt, draft: attempt.draftSnapshot, mode: attempt.mode }]
   }
 
-  /** Default-send effects capture the sink input before the editor commit. */
-  private detachedEffects(attempt: SubmitAttempt): readonly InputEffect[] {
-    return [
-      { type: 'default-sink', attempt, draft: attempt.draftSnapshot, mode: attempt.mode },
-      { type: 'commit-draft', retainSuffixOf: attempt.draftSnapshot },
-    ]
-  }
-
-  private onEnter(mode: InputSubmitMode, draft: string, submission?: MessageSubmission): readonly InputEffect[] {
-    if (this.phase === 'adjudicating' || this.phase === 'submitting') return []
+  private onEnter(ev: Extract<InputEvent, { type: 'enter' }>): readonly InputEffect[] {
+    if (this.phase === 'adjudicating' || this.phase === 'submitting' || this.phase === 'sending') return []
+    const { mode, draft, occurrences, quotes, attachmentIds, submission } = ev
     if (this.phase === 'claimed' && this.claim !== undefined) {
-      const attempt = this.beginAttempt(mode, draft, submission)
+      const attempt = this.beginAttempt(mode, draft, occurrences, quotes, attachmentIds, submission)
       this.phase = 'submitting'
       return [{ type: 'begin-submit', attempt, claim: this.claim, args: argsAfter(draft, this.claim.token) }]
     }
     const trimmed = draft.trim()
-    if (trimmed === '') return []
+    if (trimmed === '' && attachmentIds.length === 0) return []
+    const attempt = this.beginAttempt(mode, draft, occurrences, quotes, attachmentIds, submission)
     if (trimmed.startsWith('/')) {
-      const attempt = this.beginAttempt(mode, draft, submission)
       this.phase = 'adjudicating'
       return [{ type: 'adjudicate', attempt, draft }]
     }
-    return this.detachedEffects(this.beginDetached(mode, draft, submission))
+    return this.send(attempt)
   }
 
   private onAdjudicated(
@@ -167,11 +169,10 @@ export class SubmitMachine {
         args: argsAfter(attempt.draftSnapshot, outcome.claim.token),
       }]
     }
+    if (outcome === undefined) return this.send(attempt)
     this.inflight = undefined
     this.phase = 'plain'
-    if (outcome !== undefined) return []
-    this.detached.set(attempt.seq, flight.controller)
-    return this.detachedEffects(attempt)
+    return []
   }
 
   private onAdjudicationFailed(attempt: SubmitAttempt, message: string): readonly InputEffect[] {
@@ -201,19 +202,18 @@ export class SubmitMachine {
     return text === undefined ? [] : [{ type: 'notice', level: 'error', text }]
   }
 
-  /** Settle one ordinary send independently of current phase and other detached sends. */
+  /** An accepted message clears the editor; a refused or failed one returns to editing unchanged. */
   private onSinkSettled(ev: Extract<InputEvent, { type: 'sink-settled' }>): readonly InputEffect[] {
-    if (!this.detached.delete(ev.attempt.seq)) return []
+    const flight = this.inflight
+    if (this.phase !== 'sending' || flight === undefined || flight.attempt.seq !== ev.attempt.seq) return []
+    this.inflight = undefined
+    this.phase = 'plain'
+    const effects: InputEffect[] = ev.ok ? [{ type: 'commit-draft', retainSuffixOf: null }] : []
     const text = ev.message ?? ev.outcome?.text
-    if (text === undefined) return []
-    return [{ type: 'notice', level: ev.ok && ev.outcome?.kind !== 'error' ? 'info' : 'error', text }]
-  }
-
-  /** Clear after an accepted attachment-only send; it has no text suffix to retain. */
-  private onSendCommitted(): readonly InputEffect[] {
-    if (this.phase !== 'plain') return []
-    this.claim = undefined
-    return [{ type: 'commit-draft', retainSuffixOf: null }]
+    if (text !== undefined) {
+      effects.push({ type: 'notice', level: ev.ok && ev.outcome?.kind !== 'error' ? 'info' : 'error', text })
+    }
+    return effects
   }
 
   private onRelease(): readonly InputEffect[] {
@@ -221,8 +221,6 @@ export class SubmitMachine {
       this.inflight.controller.abort()
       this.inflight = undefined
     }
-    for (const controller of this.detached.values()) controller.abort()
-    this.detached.clear()
     this.phase = 'plain'
     this.claim = undefined
     return []

@@ -1,0 +1,9 @@
+version: 1
+scenario: search-empty-include
+profile: web
+composition: default
+recording: authored
+header:
+  class: default
+session:
+  source: ../../session/toolcall-unused-args/session.v4.jsonl

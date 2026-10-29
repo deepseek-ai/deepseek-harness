@@ -242,8 +242,11 @@ export default defineConfig({
     // through its own package.json exports from the importer's directory, and
     // CSS still rides Vite's pipeline because the client build preset emits it
     // beside the bundle. Plugin packages never enter this graph; they arrive as
-    // runtime bundles through the client module system. The remaining alias
-    // browserizes the vendored Cordis Loader's only Node import.
+    // runtime bundles through the client module system. The node:module alias
+    // supports Loader initialization; its filesystem resolver's other Node
+    // imports must stay default imports for Vite's browser-external stubs.
+    // Browser boot supplies loader.internal before importing plugin entries,
+    // so the filesystem resolver is never invoked in the browser.
     alias: [
       { find: /^node:module$/, replacement: src('./src/node-module-stub.ts') },
     ],

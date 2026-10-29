@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Utilisation de l'ordinateur",
+    "description": "Prend actuellement en charge macOS ; La prise en charge de Windows est en cours de développement. Charge l'utilisation de l'ordinateur pour les sessions PTC existantes et nouvelles. Passez en mode PTC et accordez les autorisations d’accessibilité et d’enregistrement d’écran pour l’utiliser.",
+    "detail": "docs/DETAIL.md"
+  }
+}

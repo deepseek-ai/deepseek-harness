@@ -23,6 +23,7 @@ import { Duration } from '@deepseek-ai/dsh-util-time'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import {
   deriveBrowserTimeZoneContext,
+  reportedBrowserTimeZone,
   renderBrowserTimeZoneContext,
 } from './request-zone.ts'
 import type { BrowserTimeZoneContext } from './request-zone.ts'
@@ -38,6 +39,10 @@ const timeContextStateSchema = zod.object({
   lastInjectionTime: zod.number().nullable(),
   /** Latest injection time in the open turn, or null before that turn receives one. */
   lastTurnInjectionTime: zod.number().nullable(),
+  /** Latest entered turn; null before any turn/start record. */
+  browserTurn: zod.number().nullable(),
+  /** Distinct reported zones in encounter order; validation remains request-time. */
+  browserTimeZones: zod.array(zod.string()),
 })
 
 /** The agent registry that owns pre-step processing. */
@@ -76,7 +81,7 @@ function formatDuration(elapsedMs: number): string {
   return parts.join(' ')
 }
 
-/** Collect already-entered and proposed user messages belonging to one open turn. */
+/** Preserve the original scan for typed pre-step callers requesting a nonlatest turn. */
 function requestMessages(agent: Agent, turn: number, proposed: readonly UserMessage[]): UserMessage[] {
   const entered: UserMessage[] = []
   for (let seq = agent.session.seq - 1; seq >= 0; seq -= 1) {
@@ -152,18 +157,31 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   const projectionReady = ctx.sessionProjections.register({
     key: 'timeContext',
-    stateVersion: 2,
+    stateVersion: 3,
     stateSchema: timeContextStateSchema,
-    init: () => ({ lastMessageTime: null, lastInjectionTime: null, lastTurnInjectionTime: null }),
+    init: () => ({
+      lastMessageTime: null,
+      lastInjectionTime: null,
+      lastTurnInjectionTime: null,
+      browserTurn: null,
+      browserTimeZones: [],
+    }),
     apply: (state, event) => {
-      if (event.type === 'turn/start' || event.type === 'turn/end') {
+      if (event.type === 'turn/start') {
+        return { ...state, lastTurnInjectionTime: null, browserTurn: event.data.turn, browserTimeZones: [] }
+      }
+      if (event.type === 'turn/end') {
         return state.lastTurnInjectionTime === null ? state : { ...state, lastTurnInjectionTime: null }
       }
       if (event.type === 'user/message') {
         const injected = event.data.source.kind === name
-        const withMessage = state.lastMessageTime === event.time
+        let withMessage = state.lastMessageTime === event.time
           ? state
           : { ...state, lastMessageTime: event.time }
+        const timeZone = reportedBrowserTimeZone(event.data)
+        if (state.browserTurn !== null && timeZone !== undefined && !state.browserTimeZones.includes(timeZone)) {
+          withMessage = { ...withMessage, browserTimeZones: [...state.browserTimeZones, timeZone] }
+        }
         if (!injected) return withMessage
         return {
           ...withMessage,
@@ -194,12 +212,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         && now >= lastInjection
         && now - lastInjection < refreshIntervalMs) return decision
     }
-    /* v8 ignore next 6 -- every later step follows a recorded injection in the same turn */
+    /* v8 ignore next 3 -- every later step follows a recorded injection in the same turn */
     const previous = step === 1
       ? state.lastMessageTime ?? undefined
       : state.lastTurnInjectionTime ?? undefined
-    const messages = requestMessages(agent, turn, decision.messages)
-    const browser = deriveBrowserTimeZoneContext(messages)
+    const browser = state.browserTurn === turn
+      ? deriveBrowserTimeZoneContext(decision.messages, state.browserTimeZones)
+      : deriveBrowserTimeZoneContext(requestMessages(agent, turn, decision.messages))
     const selectedTimeZone = browser.kind === 'resolved' ? browser.timeZone : fallbackTimeZone
     const text = renderText(
       now,

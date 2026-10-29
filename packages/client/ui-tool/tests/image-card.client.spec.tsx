@@ -7,7 +7,7 @@
 // text that stays readable when the attachment slot renders nothing.
 //
 // The image card differs from every other card in one load-bearing way: its bytes
-// are a session-authorized attachment, so the row cannot draw them itself. It
+// are a Gateway-authorized attachment, so the row cannot draw them itself. It
 // renders through the tool-owned `tool.call.images` slot, and an empty slot must
 // still leave the path and image size visible.
 
@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { Context } from '@deepseek-ai/cordis'
-import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { StartedToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
@@ -107,7 +107,7 @@ const stubRenderSlot = (): PropsRenderSlots<'tool.call.images'>['renderSlot'] =>
   )) as unknown as PropsRenderSlots<'tool.call.images'>['renderSlot']
 )
 
-/** Session-authorized loader stand-in; the stub gallery never resolves it. */
+/** Authenticated loader stand-in; the stub gallery never resolves it. */
 const loadImage: MessageImageLoader = vi.fn(() => Promise.reject(new Error('not used')))
 
 describe('imageCardModel', () => {
@@ -280,6 +280,7 @@ describe('ReadImageRow keyed toolview', () => {
     loader: MessageImageLoader = loadImage,
   ): Parameters<typeof ReadImageRow>[0] => ({
     useDisclosure, callId: 'c1', toolName: 'read_image', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(), renderSlot, loadImage: loader,
+    useContextMenu: contextMenuHook(), resolveFilePath: path => path,
     sessionId: SID, useSessions: bindSnapshotSelector(list()),
     t,
   } as Parameters<typeof ReadImageRow>[0])
@@ -397,12 +398,12 @@ describe('ReadImageRow keyed toolview', () => {
       },
     } } as unknown as Context
     readImageToolview.apply(ctx)
-    expect(registered).toEqual([{
+    expect(registered).toMatchObject([{
       name: 'tool.call.toolview',
       key: 'read_image',
       locale: 'conversation',
       children: { 'tool.call.images': { kind: 'single', scope: 'session' } },
     }])
-    expect(readImageToolview.inject).toEqual(['slots'])
+    expect(readImageToolview.inject).toEqual(['slots', 'sessions'])
   })
 })

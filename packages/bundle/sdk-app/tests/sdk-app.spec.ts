@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 
 describe('dsh-sdk-app bundle', () => {
-  it('declares startup-gated JSON-RPC serving without overriding base HMR policy', () => {
+  it('enables plugin management while keeping JSON-RPC dependencies stable until restart', () => {
     const root = fileURLToPath(new URL('..', import.meta.url))
     const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
       dependencies?: Record<string, string>
@@ -21,6 +21,7 @@ describe('dsh-sdk-app bundle', () => {
       { schema: entryListSchema },
     ) as Array<{ id?: string; disabled?: boolean; insert?: Array<{ id?: string; inject?: string[]; name?: string }> }>
     expect(patches.find(patch => patch.id === 'hmr')).toMatchObject({ disabled: true })
+    expect(patches.find(patch => patch.id === 'tool-plugin-manager')).toMatchObject({ disabled: false })
     expect(patches.find(patch => patch.id === 'session-title-llm')).toMatchObject({ disabled: true })
     expect(patches.find(patch => patch.id === 'system-prompt')).toMatchObject({
       config: { personaPrefix: 'You are a coding agent powered by the {{model}} model.' },

@@ -1,0 +1,6 @@
+Pin session
+Rename
+Fork session
+Copy Session ID
+Show in folder
+Archive session

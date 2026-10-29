@@ -140,13 +140,29 @@ export class WebRuntime extends Service {
    * @returns the provider's results, capped to `request.maxResults`.
    */
   async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
+    const result = await this.selectSearchProvider().search(request, signal)
+    return capSources(result, request.maxResults)
+  }
+
+  /**
+   * Whether the provider `search()` would select can authenticate a search made for a
+   * model request on the `llmProvider` chat route. Asks only that provider's `ready()`;
+   * one without `ready()` counts as ready. Makes no network calls. A selection failure
+   * answers true, because `search()` reports that failure as a structured `WebError`.
+   * @param llmProvider - the provider route id of the model request, when known.
+   * @returns false only when the selected provider reports that it cannot authenticate.
+   */
+  async searchReady(llmProvider?: string): Promise<boolean> {
+    return await selectedProviderReady(() => this.selectSearchProvider(), llmProvider)
+  }
+
+  /** Select the search provider with the rules above, throwing the matching {@link WebError}. */
+  private selectSearchProvider(): WebSearchProvider {
     const configuredId = this.config.searchProvider.get() ?? this.searchProviderEnv
-    const provider = resolveProvider({
+    return resolveProvider({
       providers: this.searchProviders,
       ...configuredId !== undefined ? { configuredId } : {},
     })
-    const result = await provider.search(request, signal)
-    return capSources(result, request.maxResults)
   }
 
   /**
@@ -158,18 +174,49 @@ export class WebRuntime extends Service {
    * @returns the retrieval outcome; non-2xx responses resolve descriptively.
    */
   async fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult> {
+    return await this.selectFetchProvider().fetch(request, signal)
+  }
+
+  /**
+   * Whether the provider `fetch()` would select can authenticate a fetch made for a
+   * model request on the `llmProvider` chat route. Asks only that provider's `ready()`;
+   * one without `ready()` counts as ready. Makes no network calls. A selection failure
+   * answers true, because `fetch()` reports that failure as a structured `WebError`.
+   * @param llmProvider - the provider route id of the model request, when known.
+   * @returns false only when the selected provider reports that it cannot authenticate.
+   */
+  async fetchReady(llmProvider?: string): Promise<boolean> {
+    return await selectedProviderReady(() => this.selectFetchProvider(), llmProvider)
+  }
+
+  /** Select the fetch provider with the rules above, throwing the matching {@link WebError}. */
+  private selectFetchProvider(): WebFetchProvider {
     const configuredId = this.config.fetchProvider.get() ?? this.fetchProviderEnv
-    const provider = resolveProvider({
+    return resolveProvider({
       providers: this.fetchProviders,
       ...configuredId !== undefined ? { configuredId } : {},
     })
-    return provider.fetch(request, signal)
   }
 }
 
 interface ResolvableProvider {
   readonly id: string
   available(): boolean
+  ready?(llmProvider: string | undefined): Promise<boolean>
+}
+
+/**
+ * Ask the provider an operation selects whether it can authenticate for one chat route.
+ * @param select - the operation's selection; throws its {@link WebError} when no provider qualifies.
+ * @param llmProvider - the provider route id of the model request, when known.
+ * @returns the provider's answer; true when it has no `ready()` or selection fails, because the
+ *   operation reports that failure itself.
+ */
+async function selectedProviderReady(select: () => ResolvableProvider, llmProvider: string | undefined): Promise<boolean> {
+  let provider: ResolvableProvider
+  try { provider = select() }
+  catch (_selectionFailure) { return true /* The operation surfaces the same failure when called. */ }
+  return await provider.ready?.(llmProvider) ?? true
 }
 
 /** Resolve the selected provider or throw the matching {@link WebError}. */

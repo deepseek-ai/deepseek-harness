@@ -1,9 +1,10 @@
 /**
  * Official popupSelect shell: renders one session's PopupSelectController
  * store into the conversation.input.overlay anchor. Unlike the slash menu
- * (combobox — textarea keeps focus), this shell HOLDS focus while open: the
- * inner search input takes focus, plain typing filters the loaded options
- * locally, Enter and Tab accept the filtered highlight, ↑↓ walk it (wrapping,
+ * (combobox — textarea keeps focus), this shell focuses its search input on
+ * desktop; phones and tablets require explicit search focus. Typing filters
+ * the loaded options locally, Enter and Tab accept the filtered highlight,
+ * ↑↓ walk it (wrapping,
  * scrolled into view), and Escape and Shift+Tab dismiss back to the composer.
  * ←→ keep the search input's native caret. Any pointer interaction outside the
  * box dismisses (the click's own target takes focus). Closed state renders
@@ -14,7 +15,7 @@ import { MenuGroup, MenuSurface, observeStickyMenuGroups } from '@deepseek-ai/ds
 import { Fragment, useEffect, useMemo, useRef } from 'react'
 import { useSyncExternalStore } from 'react'
 import clsx from 'clsx'
-import { IconCheckOutlineRegular, RiskConfirmation, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckOutlineRegular, isMobileDevice, RiskConfirmation, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { filterOptions } from './popup.ts'
 import type { SelectOption } from './contract.ts'
@@ -67,8 +68,7 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
     cardRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [active, rows, state.confirming])
 
-  // Focus ownership: the search input grabs on open, and ANY outside
-  // pointer interaction dismisses —
+  // Any outside pointer interaction dismisses —
   // capture phase so a click landing anywhere else (textarea included)
   // closes the shell before its own handlers run; that click's target then
   // takes focus naturally, so no focusComposer here.
@@ -84,7 +84,9 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
 
   // Focus the search input after it mounts (separate effect so the ref is populated).
   useEffect(() => {
-    if (state.open && state.confirming === null) searchRef.current?.focus()
+    if (!state.open || state.confirming !== null) return
+    if (isMobileDevice()) return
+    searchRef.current?.focus()
   }, [state.open, state.confirming])
 
   if (!state.open) return null

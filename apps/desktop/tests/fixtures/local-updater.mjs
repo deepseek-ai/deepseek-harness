@@ -17,6 +17,7 @@ import { DesktopMandatoryUpdatePolicy, resolveDesktopPolicyConfig } from '../../
 import { DesktopMandatoryUpdateWindow } from '../../lib/types/mandatory-update-window.js'
 import { DesktopUpdatePreparationError } from '../../lib/types/update-error.js'
 import { DesktopUpdateHttpExecutor } from '../../lib/types/update-http-executor.js'
+import { DesktopUpdateOverlays } from '../../lib/types/update-overlay.js'
 import { qualifyUpdateDialogs } from './update-dialogs.mjs'
 
 const root = process.env.DSH_LOCAL_UPDATE_TEST_ROOT
@@ -230,9 +231,9 @@ async function main() {
       protocol.handle('dsh-app', async request => {
         if (new URL(request.url).hostname === 'app') return new Response('<!doctype html><title>Updater qualification</title>', { headers: { 'content-type': 'text/html' } })
         const path = new URL(request.url).pathname.slice(1)
-        assert.ok(['mandatory-update-frame.js', 'mandatory-update.html', 'mandatory-update.js', 'mandatory-update.css', 'update-dialog.css'].includes(path))
+        assert.ok(['design-platform.css', 'shell-theme.js', 'mandatory-update-frame.js', 'mandatory-update.html', 'mandatory-update.js', 'mandatory-update.css', 'update-dialog.css'].includes(path))
         const mime = path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : 'text/html'
-        return new Response(await readFile(new URL(`../../renderer/${path}`, import.meta.url)), { headers: { 'content-type': mime } })
+        return new Response(await readFile(new URL(`${path === 'design-platform.css' ? '../../lib/welcome' : '../../renderer'}/${path}`, import.meta.url)), { headers: { 'content-type': mime } })
       })
       const parent = new BrowserWindow({ show: true, width: 900, height: 650, webPreferences: { preload: fileURLToPath(new URL('../../lib/preload-app.cjs', import.meta.url)), sandbox: true, contextIsolation: true } })
       await parent.loadURL('dsh-app://app/')
@@ -244,6 +245,7 @@ async function main() {
         () => { modal?.sync() }, undefined,
         () => ({ version: '1.0.0', locale: 'zh-CN', timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60 }))
       modal = new DesktopMandatoryUpdateWindow({
+        overlays: new DesktopUpdateOverlays(),
         preload: fileURLToPath(new URL('../../lib/preload-mandatory.cjs', import.meta.url)),
         locale: resolveDesktopLocale('zh-CN'), allowedPageOrigins: config.allowedPageOrigins,
         parent: () => parent, policy: () => policy.state, update: () => f.coordinator.state,
@@ -268,11 +270,12 @@ async function main() {
         await policy.check('launch')
         const window = modal.confirmationWindow
         assert.ok(window)
-        const contents = process.platform === 'win32' ? await mandatoryFrame(parent) : window.webContents
+        const contents = process.platform === 'win32' ? await mandatoryFrame(parent)
+          : parent.contentView.children.at(-1).webContents
         assert.equal(window.isModal(), false)
         assert.equal(parent.isEnabled(), true)
-        window.webContents.on('console-message', event => { console.log('mandatory renderer:', event.message) })
-        window.webContents.on('preload-error', (_event, _path, error) => { console.error('mandatory preload:', error) })
+        contents.on('console-message', event => { console.log('mandatory renderer:', event.message) })
+        contents.on('preload-error', (_event, _path, error) => { console.error('mandatory preload:', error) })
         async function until(expression) {
           try { return await contents.executeJavaScript(`new Promise((resolve, reject) => {
             const observer = new MutationObserver(check);
@@ -325,7 +328,7 @@ async function main() {
         await until("document.getElementById('update').textContent === '继续安装更新' && !document.getElementById('update').disabled")
         assert.equal(f.installations.length, 0)
         let capture
-        try { capture = await window.webContents.capturePage() }
+        try { capture = await contents.capturePage() }
         catch (error) { screenshot = { captured: false, reason: String(error) } }
         if (capture !== undefined) {
           await writeFile(join(root, 'mandatory-update.png'), capture.toPNG())
@@ -348,15 +351,15 @@ async function main() {
             assert.equal(await contents.executeJavaScript("document.getElementById('technical-details-label').click(); document.getElementById('technical-details').open"), true)
           }
           const name = expanded ? 'mandatory-error-expanded.png' : 'mandatory-error-collapsed.png'
-          await writeFile(join(root, name), (await window.webContents.capturePage()).toPNG())
+          await writeFile(join(root, name), (await contents.capturePage()).toPNG())
           dialogScreenshots.push(name)
         }
         assert.equal(policy.state.blocking, true)
         assert.equal(f.installations.length, 0)
         server.policy('clear')
-        const closed = process.platform === 'win32' ? undefined : once(window, 'closed')
+        const closed = process.platform === 'win32' ? undefined : once(contents, 'destroyed')
         await policy.check('manual', true)
-        if (closed) { await closed; assert.equal(window.isDestroyed(), true) }
+        if (closed) { await closed; assert.equal(contents.isDestroyed(), true) }
         else {
           const deadline = Date.now() + 10000
           while (!contents.detached && Date.now() < deadline) await delay(20)

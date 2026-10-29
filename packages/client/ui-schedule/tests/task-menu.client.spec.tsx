@@ -4,9 +4,10 @@
  * handover a portaled list performs once it is placed, the row walk, and the
  * dismissal and focus-return paths the task manager's four menus rely on.
  */
+import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { useState } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { TaskMenu } from '../src/client/TaskMenu.tsx'
 import type { TaskMenuEntry } from '../src/client/TaskMenu.tsx'
 import taskMenuCss from '../src/client/TaskMenu.module.css'
@@ -140,6 +141,48 @@ describe('TaskMenu', () => {
       onClose={() => {}}
     />)
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Filter' }))
+  })
+
+  it.each([
+    { name: 'iPhone', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1', platform: 'iPhone', maxTouchPoints: 5 },
+    { name: 'Android tablet', userAgent: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/119.0.0.0 Safari/537.36', platform: 'Linux armv8l', maxTouchPoints: 5 },
+    { name: 'desktop-mode iPad', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.6 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 5 },
+  ])('leaves header search focus to the user on $name', async ({ userAgent, platform, maxTouchPoints }) => {
+    for (const [name, value] of Object.entries({ userAgent, platform, maxTouchPoints })) {
+      const descriptor = Object.getOwnPropertyDescriptor(navigator, name)
+      Object.defineProperty(navigator, name, { configurable: true, value })
+      onTestFinished(() => {
+        if (descriptor === undefined) Reflect.deleteProperty(navigator, name)
+        else Object.defineProperty(navigator, name, descriptor)
+      })
+    }
+    vi.resetModules()
+    const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+    const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
+    onTestFinished(() => { device.mockRestore() })
+    const menu = (open: boolean) => <TaskMenu
+      open={open}
+      portal
+      anchor={<button type="button">trigger</button>}
+      header={<input aria-label="Filter" data-menu-field="" />}
+      items={ITEMS}
+      onSelect={() => {}}
+      onClose={() => {}}
+    />
+    const { rerender } = render(menu(false))
+    const trigger = screen.getByRole('button', { name: 'trigger' })
+    trigger.focus()
+    rerender(menu(true))
+    const field = screen.getByRole('textbox', { name: 'Filter' })
+    expect(document.activeElement).toBe(trigger)
+    field.focus()
+    expect(document.activeElement).toBe(field)
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Alpha' }))
+    rerender(menu(false))
+    trigger.focus()
+    rerender(menu(true))
+    expect(document.activeElement).toBe(trigger)
   })
 
   it('keeps the keyboard on the row when a placed portal list repositions', () => {

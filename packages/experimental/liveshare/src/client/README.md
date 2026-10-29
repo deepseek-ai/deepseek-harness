@@ -1,0 +1,11 @@
+# Liveshare viewer access
+
+English | [中文](README.zh.md)
+
+The viewer page offers only the writes the calling Peer's access snapshot (`remoteAccess/follow`) includes; the owner's Gateway answers that snapshot through the Liveshare share-viewer policy. Each surface reads its own access Hook. The composer hides Send and Stop while a Session's snapshot excludes `session/prompt` and `session/cancel`. The Turn Tail branch action and the shared Session menu's branch action appear only while it includes `session/fork`. Session and Workspace management entries hide themselves for every endpoint it excludes. File intake follows `fileUploads/upload`, which a share grants on every Session the reader can see; neither the tier nor the fork switch decides it. The Host enforces every call regardless.
+
+The share's own answer (`/__liveshare/context`) states the page's mode and reason. While the snapshot excludes prompting a Session this page presents, created, or switched to, that Session's composer carries a block with the page's reason: an unconfirmed share, a stopped, expired, or withdrawn share, the read-only mode on a branch, or the generic read-only note. The snapshot carries no per-Session refusal code, so a Session's own refusal reason is not stated. `forkLineage` describes a row; it does not authorize prompting or stopping.
+
+The served index carries the reader's opening access snapshot, so the page offers only what this reader may call from its first render. After the snapshot stream fails, every access answer is false and the page offers no write affordance; the Host refuses every call regardless. A Connection that lost its carrier states the page as offline until a generation reconnects.
+
+A durable `user/message` source that carries a `share-viewer` principal renders the reader's Relay-asserted subject above Chat's official user bubble through the `liveshare` dictionary's `inputOrigin.sharedSession` copy. The client registers one entry in Chat's `conversation.chat.user.before` chain seat on both faces; its selector elects only a `user` row whose durable source carries a valid `share-viewer` principal, so owner-authored, malformed, and steering rows keep the official row untouched. The line ellipsizes a long subject instead of widening the bubble.

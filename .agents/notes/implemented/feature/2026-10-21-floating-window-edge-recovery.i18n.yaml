@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for 2026-10-21-floating-window-edge-recovery.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-21-floating-window-edge-recovery.md
+/agent-note-spring-based-edge-recovery-for-floating-dock-panels:
+  en: 73438e22c1bef8d3
+  zh: 5f817eb06259f8ef
+/agent-note-spring-based-edge-recovery-for-floating-dock-panels/problem:
+  en: c3b007f5cce80d8b
+  zh: c08b07f7e71eaa5f
+/agent-note-spring-based-edge-recovery-for-floating-dock-panels/decision:
+  en: f88f165ca80a57b8
+  zh: 98559f2239b03445
+/agent-note-spring-based-edge-recovery-for-floating-dock-panels/decision/legal-region-and-displayed-position:
+  en: 6dea90dc406eacf5
+  zh: 6ecae0fdad78c855
+/agent-note-spring-based-edge-recovery-for-floating-dock-panels/decision/drag-with-resistance:
+  en: 5214241925b52bc3
+  zh: bbd66dc72c03f960
+/agent-note-spring-based-edge-recovery-for-floating-dock-panels/decision/release-and-spring:
+  en: ba2b5a3b4923d585
+  zh: 99544462a464ac50
+/agent-note-spring-based-edge-recovery-for-floating-dock-panels/decision/reduced-motion:
+  en: 7e29bf1c45b5386d
+  zh: c913a2ce6d1722d1
+/agent-note-spring-based-edge-recovery-for-floating-dock-panels/decision/change-scope:
+  en: 6459103379aefe41
+  zh: 501dee08a977b6a0
+/agent-note-spring-based-edge-recovery-for-floating-dock-panels/testing:
+  en: da3b2b6781aa99f3
+  zh: 37e49fa22f72fb84
+/agent-note-spring-based-edge-recovery-for-floating-dock-panels/alternatives-considered:
+  en: 3d901f0f5e270e29
+  zh: c1fb89b567ea3c70
+/agent-note-spring-based-edge-recovery-for-floating-dock-panels/consequences:
+  en: 360bd69c918f23fe
+  zh: 48642fd59ad3279b

@@ -19,6 +19,23 @@
   padding-right: 48px;
 }
 
+@media (max-width: 767px) {
+  /* The wide-row gutter squeezes labels beside steppers in narrow browser panels. */
+  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .row:not(.stacked) .rowText {
+    padding-right: 16px;
+  }
+
+  .stacked {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stacked .rowText {
+    flex: none;
+    padding-right: 0;
+  }
+}
+
 .title {
   font-size: 14px;
   font-weight: 400;
@@ -79,9 +96,18 @@
   opacity: 0;
 }
 
-.stepper:hover .arrows,
+@media (hover: hover) {
+  .stepper:hover .arrows {
+    opacity: 1;
+  }
+}
+
 .stepper:focus-within .arrows {
   opacity: 1;
+}
+
+@media (hover: none) {
+  .arrows { opacity: 1; }
 }
 
 /* Arrow buttons: small chips carrying a translucent wash of the layer-1
@@ -101,8 +127,10 @@
   cursor: pointer;
 }
 
-.arrow:hover:not(:disabled) {
-  background: var(--dsw-alias-bg-layer-1);
+@media (hover: hover) {
+  .arrow:hover:not(:disabled) {
+    background: var(--dsw-alias-bg-layer-1);
+  }
 }
 
 .arrow:disabled {
@@ -125,8 +153,10 @@
   cursor: pointer;
 }
 
-.expander:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .expander:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .expander svg {

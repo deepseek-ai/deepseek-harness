@@ -5,13 +5,13 @@
  *
  * A gesture only previews until it ends, then leaves through one intent, so the
  * embedder's operation sequence stays the single source of truth. Releasing a tab
- * clear of this surface floats it; releasing inside it but on no pane is not a
- * move at all.
+ * clear of this surface floats it; releasing inside it without an effective
+ * drop target changes nothing.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { ReactNode, HTMLAttributes } from 'react'
 import type { DockIntents, DockLabels, TabMenuExtras, TabRenderer } from '../contract/adapter.ts'
-import type { LayoutState, PaneId, SplitId, TabId } from '../contract/types.ts'
+import type { LayoutState, PaneId, SplitId, TabId, TabRecord } from '../contract/types.ts'
 import { clampSizes, FLOAT_DEFAULT_SIZE, MIN_PANE_FRACTION } from '../engine/constraints.ts'
 import { getSplit, topRightPaneId } from '../engine/tree.ts'
 import type { DropTarget, HalvesFit } from '../engine/geometry.ts'
@@ -47,9 +47,9 @@ export interface DockSurfaceProps {
    */
   readonly canAddTab?: (paneId: PaneId) => boolean
   /**
-   * Whether a tab draws its close control and its menu's close item. Called
+   * Whether a tab may close via its close control, menu item, or middle click. Called
    * per rendered chip on every render; omit to keep every tab closable.
-   * `false` removes both routes without moving the chip: the close control
+   * `false` blocks these routes without moving the chip: the close control
    * paints over the title's end rather than beside it, so the chip is the same
    * width either way. The menu still opens and carries the embedder's items.
    */
@@ -63,7 +63,11 @@ export interface DockSurfaceProps {
    * slot, and nothing outside that embedder is expected to supply it.
    */
   readonly renderTabTitle?: TabRenderer
-  /** Extra items for a tab's context menu; omit for the kit's own item only. */
+  /** Whether the embedder popup is preparing or visible; suppresses tab tooltips. */
+  readonly tabMenuOpen?: boolean | undefined
+  /** Override the kit popup; the embedder owns rendering and dismissal. */
+  readonly getTabTriggerProps?: ((tab: TabRecord, paneId: PaneId, handlers?: Pick<HTMLAttributes<HTMLElement>, 'onContextMenu' | 'onKeyDown' | 'tabIndex'>) => Pick<HTMLAttributes<HTMLElement>, 'onContextMenu' | 'onKeyDown' | 'tabIndex'>) | undefined
+  /** Extra rows for the kit popup; ignored when getTabTriggerProps is supplied. */
   readonly renderTabMenuItems?: TabMenuExtras
   /**
    * Surface-wide controls, drawn at the far end of the top-right pane's tab
@@ -110,12 +114,15 @@ const ALWAYS = (): boolean => true
 /**
  * Resolve where a pointer sits inside the docked surface. An edge zone is only
  * offered where the split it would make is allowed: within the pane budget and
- * with room for two halves; otherwise the release is not a move at all.
+ * with room for two halves. Strip slots that preserve the dragged tab's position
+ * offer no caret or placement intent. An undefined target inside the surface
+ * leaves the layout unchanged on release.
  */
 function hitTest(
   root: HTMLElement,
   x: number,
   y: number,
+  tabId: TabId,
   canSplit: boolean,
   fits: ReadonlyMap<PaneId, HalvesFit>,
   dropZones: 'edges' | 'horizontal',
@@ -126,7 +133,10 @@ function hitTest(
     const strip = pane.querySelector<HTMLElement>('[data-dockkit-strip]')
     if (strip !== null && containsPoint(strip.getBoundingClientRect(), x, y)) {
       const tabs = [...strip.querySelectorAll<HTMLElement>('[data-dockkit-tab]')]
-      return { kind: 'strip', paneId, index: insertionIndex(tabs.map(tab => tab.getBoundingClientRect()), x) }
+      const index = insertionIndex(tabs.map(tab => tab.getBoundingClientRect()), x)
+      const sourceIndex = tabs.findIndex(tab => tab.dataset.dockkitTab === tabId)
+      if (sourceIndex >= 0 && (index === sourceIndex || index === sourceIndex + 1)) return undefined
+      return { kind: 'strip', paneId, index }
     }
     const zone = dropZones === 'horizontal'
       ? canSplit && fitOf(fits, paneId).row
@@ -163,7 +173,8 @@ function sameSizes(a: readonly number[], b: readonly number[]): boolean {
 
 /** The split tree and the gestures over it. */
 function Surface({
-  state, canSplit, canAddTab, canCloseTab, intents, labels, renderTab, renderTabTitle, renderTabMenuItems, chrome, onRoom,
+  state, canSplit, canAddTab, canCloseTab, intents, labels, renderTab, renderTabTitle, renderTabMenuItems,
+  getTabTriggerProps, tabMenuOpen, chrome, onRoom,
   draw,
   dropZones = 'edges', minPaneFraction = MIN_PANE_FRACTION, hideSplitWhenBlocked = false,
 }: DockSurfaceProps & { readonly draw: (callbacks: PaneCallbacks, preview: SizePreview | undefined) => ReactNode }): ReactNode {
@@ -229,12 +240,12 @@ function Surface({
             setPreview({
               ...NO_PREVIEW,
               draggingTabId: tabId,
-              dropTarget: hitTest(root, moved.clientX, moved.clientY, canSplit, fits, dropZones),
+              dropTarget: hitTest(root, moved.clientX, moved.clientY, tabId, canSplit, fits, dropZones),
             })
           },
           up: (released) => {
             if (!dragging) return
-            const target = hitTest(root, released.clientX, released.clientY, canSplit, fits, dropZones)
+            const target = hitTest(root, released.clientX, released.clientY, tabId, canSplit, fits, dropZones)
             if (target === undefined) {
               if (containsPoint(root.getBoundingClientRect(), released.clientX, released.clientY)) return
               intents.floatTab(tabId, floatRectAt(released.clientX, released.clientY, FLOAT_DEFAULT_SIZE))
@@ -285,6 +296,7 @@ function Surface({
     renderTab,
     renderTabTitle,
     renderTabMenuItems,
+    getTabTriggerProps, tabMenuOpen,
     chromePaneId: topRightPaneId(state),
     chrome,
   }

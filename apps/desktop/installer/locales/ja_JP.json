@@ -1,0 +1,40 @@
+{
+  "nsisLanguage": "JAPANESE",
+  "strings": {
+    "INSTALLER_INSTALL": "今すぐインストール",
+    "INSTALLER_FINISH": "完了",
+    "INSTALLER_NATIVE_PROGRESS": "インストールを準備しています… %d%%",
+    "INSTALLER_PROGRESS_EXTRACT": "ファイルを展開しています… %d%%",
+    "INSTALLER_PROGRESS_COPY": "ファイルをインストールしています… %d%%",
+    "INSTALLER_PROGRESS_REGISTER": "インストールを完了しています… %d%%",
+    "INSTALLER_PROGRESS_CLEAN": "一時ファイルを削除しています… %d%%",
+    "INSTALLER_CHOOSE_PATH": "インストール先を選択",
+    "INSTALLER_BROWSE": "参照",
+    "INSTALLER_LAUNCH": "今すぐ起動",
+    "INSTALLER_LAUNCH_FAILED": "DeepSeek Harness を起動できませんでした。再試行するか、「今すぐ起動」のチェックを外してインストーラーを閉じてください。",
+    "INSTALLER_UI_ERROR": "インストーラーのウィンドウを初期化できませんでした。閉じてから再試行してください。",
+    "INSTALLER_THEME_ERROR": "/THEME=auto、/THEME=light、/THEME=dark のいずれかを指定してください。",
+    "INSTALLER_FAILED": "インストールが完了しませんでした。インストーラーを閉じて再試行してください。問題が解決しない場合は、インストーラーを再度ダウンロードしてください。",
+    "INSTALLER_RUNNING": "DeepSeek Harness が実行中です。システムトレイから終了して再試行してください。",
+    "INSTALLER_DIRECTORY_FAILED": "インストール先のディレクトリを置き換えられませんでした。",
+    "INSTALLER_DIRECTORY_HINT": "インストール先へのアクセス権限を確認し、そのファイルを使用しているプログラムを閉じてから、インストーラーを再実行してください。問題が続く場合はエラーの詳細をコピーしてください。",
+    "INSTALLER_DIRECTORY_RESTORE_HINT": "以前のインストールを復元できませんでした。エラーの詳細に表示されたバックアップディレクトリを保持し、再インストール前にサポートへお問い合わせください。",
+    "INSTALLER_PATH_INVALID": "ローカルフォルダーの完全なパスを選択してください。ドライブのルート、システムフォルダー、リンク、特殊文字を含むパスは使用できません。",
+    "INSTALLER_PATH_OWNERSHIP": "空のフォルダー、または登録済みの DeepSeek Harness インストール先を選択してください。",
+    "INSTALLER_PATH_WRITABLE": "この場所には書き込めません。現在のユーザーが書き込めるフォルダーを選択してください。インストーラーは管理者権限を要求しません。",
+    "INSTALLER_DISK_SPACE": "ディスクの空き容量が不足しています。別の場所を選択してください。",
+    "INSTALLER_PER_USER": "このインストーラーは現在のユーザーのみを対象としています。先にすべてのユーザー向けの既存のインストールを削除してください。",
+    "INSTALLER_EXTRACT_FAILED": "アプリケーションのファイルを展開できませんでした。",
+    "INSTALLER_EXTRACT_HINT": "セキュリティソフトがファイルをブロックしたか、ディスクの空き容量が不足している可能性があります。インストーラーを閉じて再試行してください。問題が続く場合は、以下のエラーの詳細をお送りください。",
+    "INSTALLER_EXTRACT_COPY": "エラーの詳細をコピー",
+    "INSTALLER_EXTRACT_EXPAND": "詳細を表示",
+    "INSTALLER_EXTRACT_COLLAPSE": "詳細を非表示",
+    "INSTALLER_EXTRACT_SAVED": "完全なレポートを %s に保存しました",
+    "INSTALLER_EXTRACT_UNSAVED": "完全なレポートを保存できませんでした。「エラーの詳細をコピー」で保存してください。",
+    "INSTALLER_EXTRACT_COPIED": "エラーの詳細をクリップボードにコピーしました。"
+  },
+  "uninstaller": {
+    "welcome": "アンインストール ウィザードへようこそ",
+    "finished": "アンインストールされました"
+  }
+}

@@ -8,3 +8,4 @@ Plugin initialization failed
 退出
 重启
 禁用第三方插件、备份 profile patch 并重启
+获取诊断报告

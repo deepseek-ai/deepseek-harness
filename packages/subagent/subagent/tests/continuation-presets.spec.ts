@@ -135,6 +135,7 @@ describe('child preset start validation', () => {
     const beforeEvents = parent.session.snapshotEvents()
     const published: string[] = []
     ctx.on('session/created', () => void published.push('session/created'))
+    ctx.on('session/disposed', () => void published.push('session/disposed'))
     ctx.on('agent/created', () => void published.push('agent/created'))
     ctx.on('subagent/start', () => void published.push('subagent/start'))
     const spec = startSpec(parent, 'reviewing')
@@ -146,7 +147,7 @@ describe('child preset start validation', () => {
     expect(ctx.agents.list().map(agent => agent.id)).toEqual([parent.id])
     expect(ctx.sessions.list()).toHaveLength(beforeSessions)
     expect(parent.session.snapshotEvents()).toEqual(beforeEvents)
-    expect(published).toEqual([])
+    expect(published).toEqual(['session/created', 'session/disposed'])
     expect(adapter.requests).toEqual([])
   })
 })

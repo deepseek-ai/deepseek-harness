@@ -7,6 +7,7 @@ import {
   type LlmResolvedModelInfo,
   type StreamChunk,
 } from '@deepseek-ai/dsh-llm'
+import type {} from '@deepseek-ai/dsh-tools'
 
 const HIGH = ReasoningEffortId('high')
 const OFF = ReasoningEffortId('off')
@@ -67,13 +68,17 @@ class CliMockAdapter extends LlmAdapter {
 }
 
 export const name = 'cli-mock-llm'
-export const inject = ['llm']
+export const inject = ['llm', 'tools']
 
-/** Register the keyless `cli-mock` adapter. */
+/** Register the keyless `cli-mock` adapter and select `off` effort for the step after a tool call. */
 export function apply(ctx: Context): void {
   ctx.llm.registerAdapter(['cli-mock'], new CliMockAdapter())
-  ctx.on('agent/request', async ({ step }, next) => {
-    const config = await next()
-    return step === 2 ? { ...config, reasoningEffort: OFF } : config
+  ctx.on('tools/execute', async (exec, next) => {
+    const result = await next()
+    const current = exec.agent === undefined ? undefined : exec.agent.model.current()
+    if (exec.agent !== undefined && current !== undefined) {
+      exec.agent.model.select({ provider: current.provider, model: current.model, reasoningEffort: OFF })
+    }
+    return result
   })
 }

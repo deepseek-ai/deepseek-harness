@@ -23,6 +23,7 @@ import { AccountQuotaNotice } from '../src/client/AccountQuotaNotice.tsx'
 import type { AccountQuotaNoticeInjected } from '../src/client/AccountQuotaNotice.tsx'
 
 const it = createClientTest({ roster: webApp })
+const withoutAccountAccess = createClientTest({ roster: webApp }, { access: action => action !== 'account/watch' })
 const SELF = '@deepseek-ai/dsh-client-ui-settings-account'
 const view: AccountView = {
   status: 'signed-out', attempt: null,
@@ -75,6 +76,15 @@ it('registers account sign-in in a plain browser without the Desktop-only surfac
     expect(c.ctx.slots.entries('shell.overlay').some(entry => entry.options.id === 'desktop-onboarding')).toBe(false)
     expect(operations(c).hooks.account.getSnapshot().desktopOnboardingVisible).toBe(false)
   }
+}, 60_000)
+
+withoutAccountAccess('opens no account stream and registers no account surface while the current Peer may not watch the account', async ({ start }) => {
+  const c = await start()
+  expect(c.mock.streams.end('account/watch')).toBe(0)
+  expect(c.ctx.slots.entries('settings.launcher')).toHaveLength(0)
+  expect(quotaNoticeEntry(c)).toBeUndefined()
+  expect(c.ctx.slots.entries('settings.models.sign-in')).toHaveLength(0)
+  expect(c.ctx.slots.entries('settings.section').some(entry => entry.options.id === 'account')).toBe(false)
 }, 60_000)
 
 it('claims account balance notices from the frame-wide quota chain and declines generic quota', async ({ start }) => {
@@ -312,7 +322,8 @@ it('coalesces refreshes, publishes independent failures, and rejects stale respo
   await c.unload(SELF)
   pendingAgain.resolve(ok(profile))
   await request
-  expect(actions.hooks.account.getSnapshot().details?.profile).toEqual({ status: 'failed' })
+  // Unloading ends the grant, which clears the account state; the late profile publishes nothing.
+  expect(actions.hooks.account.getSnapshot()).toMatchObject({ view: undefined, details: undefined })
 }, 60_000)
 
 for (const desktop of [false, true]) it(`uses the browser or Desktop login carrier (Desktop: ${desktop}) and exposes operation errors`, async ({ start, mock }) => {

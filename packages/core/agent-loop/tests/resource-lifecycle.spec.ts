@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { setImmediate } from 'node:timers/promises'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -113,7 +114,7 @@ it.each(['loop', 'root'] as const)('unloads %s while a background child is stopp
     await release.promise
     return next()
   })
-  const started = await ctx.tools.execute({
+  const started = await executeToolFixture(ctx, {
     agent: parent, signal: new AbortController().signal,
     callId: ToolCallId('background-start'), name: 'subagent',
     arguments: { description: 'child', prompt: 'wait' },

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Zeitbewusstsein",
+    "description": "Teilt dem Modell bei jedem Schritt die aktuelle Uhrzeit, die Zeitzone des Browsers und die Zeit seit der vorherigen Nachricht mit."
+  }
+}

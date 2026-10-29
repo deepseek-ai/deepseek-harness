@@ -68,12 +68,24 @@
   transform: translateY(0.5px);
 }
 
-.row:is(:hover, [aria-expanded='true']) .diffAdded {
+.row[aria-expanded='true'] .diffAdded {
   color: var(--dsw-alias-state-success-primary);
 }
 
-.row:is(:hover, [aria-expanded='true']) .diffRemoved {
+@media (hover: hover) {
+  .row:hover .diffAdded {
+    color: var(--dsw-alias-state-success-primary);
+  }
+}
+
+.row[aria-expanded='true'] .diffRemoved {
   color: var(--dsw-alias-state-error-primary);
+}
+
+@media (hover: hover) {
+  .row:hover .diffRemoved {
+    color: var(--dsw-alias-state-error-primary);
+  }
 }
 
 /* File-tool path: same type as .summary, with a persistent link affordance.
@@ -144,9 +156,14 @@
   transition: opacity 100ms ease;
 }
 
-.root:hover .inspectButton,
 .inspectButton:focus-visible {
   opacity: 1;
+}
+
+@media (hover: hover) {
+  .root:hover .inspectButton {
+    opacity: 1;
+  }
 }
 
 .detailsBodyWrap {
@@ -161,9 +178,11 @@
 }
 
 /* Solid hover fill (a translucent token would let content bleed through). */
-.inspectButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .inspectButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover-solid);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 /* Expanded-body scroll wrapper for the run_code CodeBlock; the IN/OUT card
@@ -319,4 +338,8 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+@media (hover: none) {
+  .inspectButton { opacity: 1; }
 }

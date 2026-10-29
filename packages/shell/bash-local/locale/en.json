@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Local Bash execution",
+    "description": "Run Bash commands in local subprocesses."
+  }
+}

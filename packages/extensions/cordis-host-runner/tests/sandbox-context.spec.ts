@@ -41,6 +41,12 @@ describe('sandbox context façade — escape surface is closed', () => {
     expect(message).toContain('withheld by design')
   })
 
+  it('withholds executor control through ctx.tools.setExecutor', async () => {
+    const harness = await setup()
+    const message = await runTouching(harness, 'ctx.tools.setExecutor()')
+    expect(message).toContain('is not a function')
+  })
+
   it('the classic ctx.root.tools.register bypass registers nothing and fails loud', async () => {
     const harness = await setup()
     const message = await runTouching(harness, `
@@ -207,7 +213,7 @@ describe('sandbox context façade — inject gate on services', () => {
 describe('sandbox tools façade — get is a read-only schema view', () => {
   it('ctx.tools.get returns a schema, not the live ToolDefinition with execute', async () => {
     // The finding: returning the raw ToolDefinition hands package code the tool's execute
-    // function, letting it bypass ToolRegistry.execute (and its pre/post hooks). get now
+    // function, letting it bypass ToolsService.execute (and its pre/post hooks). get now
     // returns the same name/description/parameters view as schemas(), with no execute.
     const harness = await setup()
     harness.ctx.tools.register(dummyTool('host_tool'))

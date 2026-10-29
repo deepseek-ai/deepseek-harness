@@ -1,0 +1,40 @@
+{
+  "nsisLanguage": "ENGLISH",
+  "strings": {
+    "INSTALLER_INSTALL": "Install now",
+    "INSTALLER_FINISH": "Finish",
+    "INSTALLER_NATIVE_PROGRESS": "Preparing installation… %d%%",
+    "INSTALLER_PROGRESS_EXTRACT": "Extracting files… %d%%",
+    "INSTALLER_PROGRESS_COPY": "Installing files… %d%%",
+    "INSTALLER_PROGRESS_REGISTER": "Finishing installation… %d%%",
+    "INSTALLER_PROGRESS_CLEAN": "Cleaning temporary files… %d%%",
+    "INSTALLER_CHOOSE_PATH": "Choose location",
+    "INSTALLER_BROWSE": "Browse",
+    "INSTALLER_LAUNCH": "Launch now",
+    "INSTALLER_LAUNCH_FAILED": "DeepSeek Harness could not be launched. Retry, or clear Launch now and close the installer.",
+    "INSTALLER_UI_ERROR": "The installer could not initialize its window. Close it and try again.",
+    "INSTALLER_THEME_ERROR": "Use /THEME=auto, /THEME=light or /THEME=dark.",
+    "INSTALLER_FAILED": "Installation did not finish. Close this installer and retry. If the problem persists, download the installer again.",
+    "INSTALLER_RUNNING": "DeepSeek Harness is running. Quit it from the system tray and try again.",
+    "INSTALLER_DIRECTORY_FAILED": "The installation directory could not be replaced.",
+    "INSTALLER_DIRECTORY_HINT": "Check access to the installation directory and close programs using its files, then run the installer again. Copy the error details if the problem persists.",
+    "INSTALLER_DIRECTORY_RESTORE_HINT": "The previous installation could not be restored. Keep the backup directory shown in the error details and contact support before installing again.",
+    "INSTALLER_PATH_INVALID": "Choose a full local folder path. Drive roots, system folders, links and special characters are not supported.",
+    "INSTALLER_PATH_OWNERSHIP": "Choose an empty folder or the registered DeepSeek Harness installation folder.",
+    "INSTALLER_PATH_WRITABLE": "This location is not writable. Choose a folder available to the current user.",
+    "INSTALLER_DISK_SPACE": "There is not enough free disk space. Choose another location.",
+    "INSTALLER_PER_USER": "This installer supports the current user only. Uninstall the existing all-users installation first.",
+    "INSTALLER_EXTRACT_FAILED": "The application files could not be extracted.",
+    "INSTALLER_EXTRACT_HINT": "Security software may have blocked a file, or the disk may be full. Close this installer and try again. If it keeps failing, send us the error details below.",
+    "INSTALLER_EXTRACT_COPY": "Copy error details",
+    "INSTALLER_EXTRACT_EXPAND": "Show details",
+    "INSTALLER_EXTRACT_COLLAPSE": "Hide details",
+    "INSTALLER_EXTRACT_SAVED": "The full report was saved to %s",
+    "INSTALLER_EXTRACT_UNSAVED": "The full report could not be saved. Use Copy error details to keep it.",
+    "INSTALLER_EXTRACT_COPIED": "Error details were copied to the clipboard."
+  },
+  "uninstaller": {
+    "welcome": "Welcome",
+    "finished": "has been uninstalled"
+  }
+}

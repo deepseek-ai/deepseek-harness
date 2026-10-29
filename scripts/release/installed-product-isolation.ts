@@ -4,7 +4,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { hasExperimentalPackageReference } from '../experimental-package-policy.ts'
-import { OPTIONAL_BUNDLES } from '../../packages/boot/app-boot/src/profile.ts'
+import { OPTIONAL_BUNDLES } from '../../packages/util/official-bundles/src/bundles.ts'
 
 interface InstalledManifest {
   name: string

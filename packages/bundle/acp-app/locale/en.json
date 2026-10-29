@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ACP profile",
+    "description": "Provide automation-only ACP communication and process lifecycle management over dsh-base."
+  }
+}

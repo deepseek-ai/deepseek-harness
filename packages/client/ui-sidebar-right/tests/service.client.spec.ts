@@ -624,11 +624,35 @@ describe('SidebarRightController — a tab\'s own actions', () => {
   })
 })
 
+describe('SidebarRightController — hiding tabs', () => {
+  it('collapses a docked tab and closes a floating tab without toggling the dock', () => {
+    const { controller, publish, layout, tabOf } = harness()
+    publish()
+    controller.openResource('dsh-resource://file/session/s-test/a.txt')
+    const docked = tabOf('a.txt')
+    controller.hide(docked)
+    expect(layout().expanded).toBe(false)
+    expect(layout().tabs[docked]).toBeDefined()
+    controller.hide(docked)
+    expect(layout().expanded).toBe(false)
+    controller.openResource('dsh-resource://file/session/s-test/b.txt')
+    const floating = tabOf('b.txt')
+    controller.float(floating)
+    const expanded = layout().expanded
+    controller.hide(floating)
+    expect(layout().tabs[floating]).toBeUndefined()
+    expect(layout().expanded).toBe(expanded)
+    controller.hide(floating)
+    expect(layout().expanded).toBe(expanded)
+  })
+})
+
 describe('SidebarRightController — the readable slice', () => {
   it('answers for the no-session case rather than throwing', () => {
     const { controller } = harness()
     expect(controller.isExpanded()).toBe(false)
     expect(controller.active()).toBeUndefined()
+    controller.hide('missing' as TabId)
   })
 
   it('reports the last committed surface', () => {
@@ -762,4 +786,27 @@ it('releases close handlers without a stale disposer removing a replacement', ()
   h.controller.openTab('guide', { replaceTab: tabId, revealIfOpened: false })
   expect(h.layout().tabs[tabId]).toBeUndefined()
   expect(second).toHaveBeenCalledOnce()
+})
+
+it('limits batch-close candidates to the captured pane and invalidates a moved anchor', () => {
+  const h = harness()
+  h.expand()
+  const unpublish = h.publish()
+  h.controller.openResource('dsh-resource://file/session/s-test/first.txt')
+  const first = h.tabOf('first.txt'), pane = findTabPane(h.layout(), first).id
+  h.controller.openResource('dsh-resource://file/session/s-test/second.txt', { paneId: pane })
+  const second = h.tabOf('second.txt')
+  const other = h.controller.split(pane)!
+  h.controller.openResource('dsh-resource://file/session/s-test/other.txt', { paneId: other })
+  const candidates = h.controller.menuTabs(SESSION, pane, first)
+  expect(candidates).toMatchObject({ close: true, right: [second] })
+  expect(candidates.all).not.toContain(h.tabOf('other.txt'))
+  expect(h.controller.menuTabs(SESSION, other, first)).toEqual({ all: [], right: [], close: false })
+  const cleanup = vi.fn()
+  const unregister = h.controller.registerCloseHandler('text', cleanup)
+  for (const id of candidates.right) h.controller.closeIn(SESSION, id)
+  expect(cleanup).toHaveBeenCalledTimes(1)
+  expect(h.layout().tabs[h.tabOf('other.txt')]).toBeDefined()
+  expect(h.layout().tabs[first]).toBeDefined()
+  unregister(); unpublish(); h.unadopt()
 })

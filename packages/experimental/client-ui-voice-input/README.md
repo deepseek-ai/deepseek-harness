@@ -31,6 +31,8 @@ Use the native **Input device** selector in bundle details to follow the system 
 
 Before downloading or retrying, **Model download source** offers Automatic and the origins advertised by the Host. SenseVoice normally offers Hugging Face and HF-Mirror; a fixed private deployment exposes only its configured origin. Manual selection uses only that source, while Automatic preserves the provider’s comparison and fallback policy. The choice is retained for retries in the current card, without changing deployment configuration or recognition preferences. Source controls are unavailable during preparation and hidden when resources are ready.
 
+`pluginNavigation` is optional: the plugin starts without it, and the setup dialog offers the details button only while the service is present.
+
 -----
 
 <a id="understand-the-implementation"></a>

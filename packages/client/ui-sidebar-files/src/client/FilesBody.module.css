@@ -85,8 +85,10 @@
   cursor: pointer;
 }
 
-.row:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* The folder glyph rides the tertiary ink, as the workspace tree's does (ui-workspace Rows `.slot`). */
@@ -114,8 +116,10 @@
   cursor: default;
 }
 
-.other:hover {
-  background: transparent;
+@media (hover: hover) {
+  .other:hover {
+    background: transparent;
+  }
 }
 
 .note {
@@ -161,9 +165,11 @@
   height: 15px;
 }
 
-.tool:hover {
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .tool:hover {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .tool[aria-pressed='true'] {

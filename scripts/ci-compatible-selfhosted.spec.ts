@@ -25,7 +25,11 @@ interface CompatibilityJob {
 }
 
 const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github/workflows/ci.yml'), 'utf8')) as {
-  jobs: { 'node-compat': CompatibilityJob; 'python-sdk': { 'runs-on': string } }
+  jobs: { 'node-compat': CompatibilityJob }
+}
+// Python keeps its own required verdict in ci-python.yml.
+const pythonWorkflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github/workflows/ci-python.yml'), 'utf8')) as {
+  jobs: { 'python-sdk': { 'runs-on': string } }
 }
 const job = workflow.jobs['node-compat']
 const labels = ['self-hosted', 'linux', 'x64', 'vm-backup']
@@ -86,7 +90,7 @@ describe('Node compatibility self-hosted routing', () => {
     expect(job.env.DSH_GATE_CONCURRENCY).toBe('${{ matrix.gate_concurrency }}')
     expect(job.steps.map(step => step.run)).toContain('pnpm run check:node-compat')
     expect(job.steps.map(step => step.run)).toContain('pnpm exec vitest run packages/boot/app-boot/tests/loader-shape.compat.spec.ts')
-    expect(workflow.jobs['python-sdk']['runs-on']).toBe('ubuntu-latest')
+    expect(pythonWorkflow.jobs['python-sdk']['runs-on']).toBe('ubuntu-latest')
   })
 
   it('isolates version installs and enables hosted package caching only on hosted runners', () => {

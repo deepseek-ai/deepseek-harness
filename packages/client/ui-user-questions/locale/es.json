@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interfaz de preguntas y respuestas del usuario",
+    "description": "Presente las preguntas de la IA, programe solicitudes de revisión en una conversación y recopile las respuestas de los usuarios."
+  }
+}

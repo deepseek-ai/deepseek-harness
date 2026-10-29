@@ -15,6 +15,7 @@ import {
   VFS_EXAMPLE_OLDEST_MESSAGE,
   VFS_EXAMPLE_ROOT,
   VFS_EXAMPLE_REASONING,
+  VFS_EXAMPLE_SPACING_TITLE,
   VFS_EXAMPLE_WRAPPED_COMMAND,
   VFS_EXAMPLE_SCHEDULE_IDS,
   VFS_EXAMPLE_SESSION_IDS,
@@ -61,24 +62,30 @@ function textOf(event: SessionEvent): string {
 }
 
 describe('WebWorker preview VFS example', () => {
-  it('keeps the current showcase and strictly restorable historical child inputs beside their predecessors', () => {
+  it('keeps current Sessions byte-identical and historical child inputs restorable beside their predecessors', () => {
     const expected = buildVfsExampleFiles()
     const currentName = generationLogFilename(SESSION_FORMAT_VERSION, 'none')
     const main = `home/sessions/--dsh-workspace--/${VFS_EXAMPLE_SESSION_IDS.main}/`
-    const committedPath = (path: string): string => path.endsWith(`/${currentName}`) && !path.startsWith(main)
+    // The showcase and the spacing sample ship their current generation; only the children keep a
+    // released v3 predecessor that the packer upgrades at build time.
+    const currentOnly = new Set<string>([VFS_EXAMPLE_SESSION_IDS.main, VFS_EXAMPLE_SESSION_IDS.spacing])
+    const sessionIdOf = (path: string): string => path.split('/').at(-2) ?? ''
+    const committedPath = (path: string): string => path.endsWith(`/${currentName}`) && !currentOnly.has(sessionIdOf(path))
       ? `${path.slice(0, -currentName.length)}session.v3.jsonl`
       : path
-    const predecessors = Object.values(VFS_EXAMPLE_SESSION_IDS)
-      .map(id => `home/sessions/--dsh-workspace--/${id}/session.v2.jsonl`)
+    const predecessors = [
+      VFS_EXAMPLE_SESSION_IDS.main, VFS_EXAMPLE_SESSION_IDS.oneShot, VFS_EXAMPLE_SESSION_IDS.continuable,
+    ].map(id => `home/sessions/--dsh-workspace--/${id}/session.v2.jsonl`)
     predecessors.push(`${main}session.v3.jsonl`)
     expect(filesUnder(VFS_EXAMPLE_ROOT)).toEqual([...expected.keys()].map(committedPath).concat(predecessors).sort())
     for (const [path, content] of expected) {
       const committed = readFileSync(join(VFS_EXAMPLE_ROOT, committedPath(path)), 'utf8')
-      if (path.endsWith(`/${currentName}`) && !path.startsWith(main)) {
+      const current = path.endsWith(`/${currentName}`) && currentOnly.has(sessionIdOf(path))
+      if (path.endsWith(`/${currentName}`) && !current) {
         expect(restoreSession(committed, 3), path).toEqual(restoreSession(content, SESSION_FORMAT_VERSION))
       } else {
         expect(committed, path).toBe(content)
-        if (path.startsWith(main)) restoreSession(committed, SESSION_FORMAT_VERSION)
+        if (current) restoreSession(committed, SESSION_FORMAT_VERSION)
       }
     }
   })
@@ -180,6 +187,28 @@ describe('WebWorker preview VFS example', () => {
     ]))
     expect(events.some(event => event.type === 'todo/write')).toBe(true)
     expect(events.some(event => event.type === 'tool/result' && event.data.message.isError === true)).toBe(true)
+  })
+
+  it('restores the multi-Turn spacing sample with a body and several steps per Turn', () => {
+    const { meta, events } = readSession(VFS_EXAMPLE_SESSION_IDS.spacing)
+    expect(meta).toMatchObject({
+      id: VFS_EXAMPLE_SESSION_IDS.spacing,
+      cwd: '/dsh/workspace',
+      delegationDepth: 0,
+    })
+    expect(events.map(event => event.seq)).toEqual(events.map((_, index) => index))
+    expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    expect(events.some(event => event.type === 'session/title'
+      && event.data.title === VFS_EXAMPLE_SPACING_TITLE)).toBe(true)
+    for (const turn of [1, 2, 3]) {
+      const steps = events.filter(event => event.type === 'step/start' && event.data.turn === turn)
+      expect(steps.length).toBeGreaterThanOrEqual(2)
+      const body = events
+        .filter(event => event.type === 'assistant/message' && event.data.turn === turn)
+        .map(textOf)
+        .join('\n')
+      expect(body).toContain('## Turn')
+    }
   })
 
   it('preserves the 28-turn history prefix and both child catalog identities', () => {

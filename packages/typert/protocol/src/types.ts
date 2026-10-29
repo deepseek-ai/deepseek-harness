@@ -878,25 +878,43 @@ export interface TypertContextRegistry {
   subscribe(listener: TypertRegistryListener): TypertDisposer
 }
 
-/** Default wire field of one resource kind. */
-export interface TypertResourceDeclaration {
-  /** Top-level or first-object wire field holding one identity of the kind. */
-  readonly field: string
+/** Validated wire values and their ordered business parameters for resource extraction. */
+export interface TypertResourceResolveInput {
+  /** Wire field to its validated value, including lookup and Context identities as wire values. */
+  readonly args: Readonly<Record<string, unknown>>
+  /** Declared parameters in call order, so a resolver can match a name or an aliased wire field. */
+  readonly parameters: readonly Pick<InvocationParameterDescriptor, 'name' | 'wire'>[]
 }
 
-/** One registered resource kind with its default wire field. */
-export interface TypertResourceEntry extends TypertResourceDeclaration {
-  /** Registered resource kind. */
+/** Default identity extraction for one resource kind; exactly one of `field` and `resolve` is declared. */
+export type TypertResourceDeclaration =
+  | {
+    readonly field: string
+    readonly resolve?: never
+  }
+  | {
+    readonly field?: never
+    /**
+     * Called once before lookups resolve. It takes no receiver, so it reads only its
+     * input. Returns one identity, or undefined when absent; throws or returns an
+     * array to reject the call.
+     */
+    resolve(this: void, input: TypertResourceResolveInput): string | undefined
+  }
+
+/** One registered resource kind with its default identity extraction. */
+export type TypertResourceEntry = TypertResourceDeclaration & {
+  /** Resource kind contributed by its owning domain. */
   readonly kind: string
 }
 
-/** Runtime registry of resource kinds' default wire fields. */
+/** Runtime registry of resource kinds' default identity extraction. */
 export interface TypertResourceRegistry {
   /**
-   * Register one kind's default wire field for the calling fiber. Only the
+   * Register one kind's default identity extraction for the calling fiber. Only the
    * domain that owns the kind registers it.
    * @param kind - merge-declared resource kind.
-   * @param declaration - the kind's default wire field.
+   * @param declaration - either a default wire field or a resolver, never both.
    * @returns disposer withdrawing the exact registration.
    * @throws Error when the kind is already registered or is `global`, the built-in resource kind.
    */
@@ -907,7 +925,7 @@ export interface TypertResourceRegistry {
    * @returns the live declaration, or `undefined` when unregistered.
    */
   get(kind: string): TypertResourceDeclaration | undefined
-  /** @returns a registration-order snapshot of registered kinds with their fields. */
+  /** @returns a registration-order snapshot of registered kinds with their extraction declarations. */
   entries(): readonly TypertResourceEntry[]
   /**
    * Observe later resource-kind changes.

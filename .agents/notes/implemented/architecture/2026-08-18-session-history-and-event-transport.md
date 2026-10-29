@@ -139,11 +139,11 @@ If a page request is canceled with its physical carrier generation, the journal 
 
 `packages/api/session-controller` provides Host `ctx.sessionController` and the generated `ctx.remote.session` namespace.
 
-It owns Session list, search, create, selectModel, rename, fork, prompt, attachment, updateQueue, cancel, page, follow, and control. The Host-generation model catalog is exposed separately through `session/modelCatalog` because it is not Session-specific.
+It owns Session list, search, create, selectModel, rename, fork, prompt, attachment, updateQueue, cancel, `events`, the deprecated `page`, `follow`, `control`, plus `observeEvent`, `projections`, `observeProjections`, `state`, `observeState`, and `wait`. The Host-generation model catalog is exposed separately through `session/modelCatalog` because it is not Session-specific.
 
 The package separates agent, commands, control, history, and list controllers internally, but Session identity resolution, activation policy, subagent ownership, and Remote error projection have one public owner.
 
-Other Host Remote namespaces reuse the same identity rules through `ctx.sessionController.inspect()` or `resolveAgent()`; they do not retain a second Session resolver.
+Other Host Remote namespaces reuse the same resume-capable identity rules through `ctx.sessionController.resolveAgent()`; they do not retain a second Session resolver.
 
 #### Activation policy
 
@@ -157,7 +157,8 @@ Each method explicitly selects a cold inspection, live-only lookup, or resume-ca
 | `session.page(address)` | attached Session or persistence log | Never resumes an Agent |
 | `session.follow(address)` | one live or prepared observation carrying the opening page and projections | Publishes the snapshot first, then promotes an ordinary cold Session once in the background |
 | `session.control()` | current attached Agents, pending registry, and process-local registries | Baseline and reconnect do not resume an Agent |
-| `session.attachment`, fork source read | authorized durable Session data | A read does not resume an Agent |
+| Fork source read | authorized durable Session data | A read does not resume an Agent |
+| `session.attachment` | attachment store under the [image access rule](2026-10-23-store-scoped-image-reads.md) | A read does not resume an Agent |
 | `session.updateQueue` | live Agent or ordinary persisted Session | Resumes an ordinary cold Session before mutating its Inbox |
 | `session.cancel` | only the current live Agent | Does not resume vanished state |
 | `models`, `selectModel`, `rename`, `prompt` | command resolves the target Session | Resumes only when the method explicitly permits it |
@@ -173,9 +174,9 @@ Reading titles, lists, and projections does not require an Agent. An observation
 
 #### Session journal
 
-`session.page` returns a history window clipped on message boundaries with contiguous internal sequence numbers. Every request must carry an explicit `throughSeq`; this value comes from the corresponding `session.follow` generation's opening cursor and fixes the read at the same log cut. A tail page without `beforeSeq` must end exactly at `throughSeq`, where `-1` denotes an empty log. `beforeSeq` only selects an older page before that cut and cannot replace the synchronization cursor. `maxMessages` limits user/assistant message count without dropping chunks, tools, or state events between those messages.
+`session.events` returns a history window clipped on message boundaries with contiguous internal sequence numbers. `throughSeq` is optional: when omitted, the read selects the observed log end and returns it as the page's inclusive `cursor`; a supplied value fixes the read at that cut. A page without `beforeSeq` ends exactly at the selected cut, where `-1` denotes an empty log. `beforeSeq` only selects an older page before that cut and cannot replace the synchronization cursor. `maxMessages` limits user/assistant message count without dropping chunks, tools, or state events between those messages. The deprecated `session.page` entry returns the same type.
 
-The tail page also carries a projection baseline no later than `throughSeq`; older pages carry only historical entries. The Client merges pages and subsequent live control updates by projection watermark.
+A page carries only its records, `hasMore`, and inclusive `cursor`; a projection baseline comes from a follow opening snapshot or the control stream, never from a page. The Client merges pages and subsequent live control updates by projection watermark.
 
 Ordinary Sessions and direct subagents use one `SessionAddress` protocol. A direct-subagent address carries parent Session, child Session, and mode; a cold Host read verifies durable ownership and descriptor rather than authorizing access from the child id alone.
 

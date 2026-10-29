@@ -1,19 +1,19 @@
 /**
  * Scroll continuity when "On next message" folds a process group the reader opened. The latest Turn has
  * one Step; the reader opened its group and expanded the reasoning inside, so the group body is capped and
- * scrollable, then sends the next message from the floor. A held prompt keeps the new Turn from starting
- * until the fold settles, so only the fold moves the view while the scrollport is sampled on every
- * animation frame.
+ * scrollable, then sends the next message from the floor. Agent maintenance keeps the accepted message in
+ * the inbox, so its echo folds the group before the new Turn starts, and only the fold moves the view while
+ * the scrollport is sampled on every animation frame.
  *
  * - A long answer leaves the folded group above the viewport. The scroll position changes in one direction
  *   only: the fold never scrolls the view away and then snaps it back.
- * - A short answer leaves fold room below the tail. Growth fills that room without scrolling, so the running
- *   status keeps its entrance slide when the new Step's first row appears instead of moving in one frame.
+ * - A short answer leaves fold room below the tail. The new Turn's growth fills that room without scrolling
+ *   through Turn end, the room never grows back, and the running status only moves down.
  */
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Browser, Page, Route } from 'playwright'
+import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -26,7 +26,7 @@ import { newEnglishPage, openSettings } from './support.ts'
 
 declare global {
   interface Window {
-    openFoldTrace?: { readonly frames: TraceFrame[]; readonly slides: number[]; stop(): void }
+    openFoldTrace?: { readonly frames: TraceFrame[]; stop(): void }
   }
 }
 
@@ -43,8 +43,6 @@ interface TraceFrame {
   readonly floor: number
   /** Height of the fold room below the transcript. */
   readonly spacer: number
-  /** The column marks the tail as pinned, which runs the status slide at zero duration. */
-  readonly pinned: boolean
   /** The running status's top relative to the scrollport, when it is mounted. */
   readonly status: number | null
   readonly folding: boolean
@@ -162,17 +160,13 @@ async function openLatestGroup(page: Page): Promise<void> {
   await page.mouse.move(0, 0)
 }
 
-/**
- * Sample the scrollport on every animation frame, and record the duration of every status entrance slide
- * that a flow change starts.
- */
+/** Sample the scrollport on every animation frame. */
 async function startTrace(page: Page): Promise<void> {
   await page.evaluate((selector) => {
     const host = document.querySelector<HTMLElement>(selector)!
     const column = host.querySelector<HTMLElement>('[data-chat-flow]')!
     const spacer = host.querySelector<HTMLElement>('[data-chat-turn-spacer]')!
     const frames: TraceFrame[] = []
-    const slides: number[] = []
     let frame = 0
     const tick = (): void => {
       const status = host.querySelector<HTMLElement>('[data-chat-running]')
@@ -180,32 +174,18 @@ async function startTrace(page: Page): Promise<void> {
         top: host.scrollTop,
         floor: Math.max(0, host.scrollHeight - host.clientHeight),
         spacer: spacer.getBoundingClientRect().height,
-        pinned: column.hasAttribute('data-chat-tail-pinned'),
         status: status === null ? null : status.getBoundingClientRect().top - host.getBoundingClientRect().top,
         folding: column.hasAttribute('data-input-fold') || host.querySelector('[data-chat-motion="collapse"]') !== null,
       })
       frame = requestAnimationFrame(tick)
     }
-    // The slide starts at the style update after the flow change; reading animations there sees its duration.
-    const observer = new MutationObserver(() => {
-      const status = host.querySelector<HTMLElement>('[data-chat-running]')
-      for (const animation of status?.getAnimations() ?? []) {
-        if (animation instanceof CSSAnimation && animation.animationName.includes('running-follows-output')) {
-          slides.push(Number(animation.effect?.getComputedTiming().duration ?? 0))
-        }
-      }
-    })
-    observer.observe(column, { childList: true, subtree: true })
-    window.openFoldTrace = { frames, slides, stop: () => { cancelAnimationFrame(frame); observer.disconnect() } }
+    window.openFoldTrace = { frames, stop: () => { cancelAnimationFrame(frame) } }
     frame = requestAnimationFrame(tick)
   }, ROOT)
 }
 
-async function readTrace(page: Page): Promise<{ frames: TraceFrame[]; slides: number[] }> {
-  return page.evaluate(() => {
-    const trace = window.openFoldTrace!
-    return { frames: [...trace.frames], slides: [...trace.slides] }
-  })
+async function readTrace(page: Page): Promise<{ frames: TraceFrame[] }> {
+  return page.evaluate(() => ({ frames: [...window.openFoldTrace!.frames] }))
 }
 
 /** Per-frame scroll movements larger than subpixel rounding. */
@@ -223,8 +203,8 @@ interface World {
   readonly page: Page
   readonly session: SessionId
   readonly tripwire: ReturnType<typeof watchConsole>
-  /** Releases the held prompt; the new Turn starts after this. */
-  readonly releasePrompt: () => void
+  /** Ends the Agent maintenance that keeps the accepted message in the inbox; the new Turn starts after this. */
+  readonly releaseTurn: () => void
   /** Releases the held model stream; the new Step's output arrives after this. */
   readonly releaseModel: () => void
   readonly ended: Promise<void>
@@ -232,8 +212,8 @@ interface World {
 }
 
 /**
- * Seed and open the case, open the latest group, and send the next message from the floor with the prompt
- * and the model stream held.
+ * Seed and open the case, open the latest group, and send the next message from the floor with the new Turn
+ * and its model stream held.
  */
 async function sendFromOpenedGroup(browser: Browser, id: string, answerParagraphs: number): Promise<World> {
   const replayDir = await mkdtemp(join(tmpdir(), 'dsh-open-fold-'))
@@ -249,17 +229,15 @@ async function sendFromOpenedGroup(browser: Browser, id: string, answerParagraph
     await model.promise
     for await (const chunk of next()) yield chunk
   })
-  const prompt = Promise.withResolvers<undefined>()
-  const holdPrompt = async (route: Route): Promise<void> => {
-    await prompt.promise
-    await route.continue()
-  }
+  const turn = Promise.withResolvers<undefined>()
+  let maintenance: Promise<undefined> = Promise.resolve(undefined)
   const page = await newEnglishPage(browser, 826)
   const close = async (): Promise<void> => {
-    prompt.resolve(undefined)
+    turn.resolve(undefined)
     model.resolve(undefined)
     disposeHold()
     const failures: unknown[] = []
+    await maintenance.catch((error: unknown) => failures.push(error))
     await page.context().close().catch((error: unknown) => failures.push(error))
     await scaffold.close().catch((error: unknown) => failures.push(error))
     await rm(replayDir, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
@@ -280,7 +258,9 @@ async function sendFromOpenedGroup(browser: Browser, id: string, answerParagraph
     await toBottom(page)
     await openLatestGroup(page)
     await toBottom(page)
-    await page.route('**/api/session/prompt', holdPrompt)
+    const resolved = await scaffold.ctx.sessionController.resolveAgent(session)
+    if ('error' in resolved) throw resolved.error
+    maintenance = resolved.agent.runMaintenance(() => turn.promise)
     const ended = new Promise<void>((resolveEnded, reject) => {
       const timer = setTimeout(() => { off(); reject(new Error(`${id}: no turn/end within 60000ms`)) }, 60_000)
       const off = scaffold.ctx.on('session/event', (owner: { id: SessionId }, event: SessionEvent) => {
@@ -299,7 +279,7 @@ async function sendFromOpenedGroup(browser: Browser, id: string, answerParagraph
     await stableScroll(page)
     return {
       scaffold, page, session, tripwire, ended, close,
-      releasePrompt: () => { prompt.resolve(undefined) },
+      releaseTurn: () => { turn.resolve(undefined) },
       releaseModel: () => { model.resolve(undefined) },
     }
   } catch (error) {
@@ -330,7 +310,7 @@ describe.skipIf(MODE === 'record')('web e2e: next-message fold of an opened proc
       expect.soft(reversals, `scroll direction changes; per-frame movements ${JSON.stringify(steps)}`).toBe(0)
       const settled = frames.at(-1)!
       expect.soft(settled.floor - settled.top, 'distance from the floor after the fold').toBeLessThanOrEqual(1)
-      world.releasePrompt()
+      world.releaseTurn()
       world.releaseModel()
       await world.ended
       expect(world.tripwire.pageErrors).toEqual([])
@@ -339,26 +319,28 @@ describe.skipIf(MODE === 'record')('web e2e: next-message fold of an opened proc
     }
   })
 
-  it('keeps the running status slide while fold room below a short answer takes the new Step', async () => {
+  it('keeps the view still while fold room below a short answer takes the new Turn', async () => {
     const world = await sendFromOpenedGroup(browser, 'short', 2)
     try {
-      const folded = (await readTrace(world.page)).frames.at(-1)!
+      const foldedFrames = (await readTrace(world.page)).frames
+      const folded = foldedFrames.at(-1)!
       expect.soft(folded.spacer, 'fold room below the short answer').toBeGreaterThan(0)
-      expect.soft(folded.pinned, 'tail pin while fold room remains').toBe(false)
-      world.releasePrompt()
+      world.releaseTurn()
       // The running Step's group row is the first row after the user message; output stays held until then.
       await world.page.locator(`${ROOT} [data-chat-group-key][data-chat-turn="${String(TURNS + 1)}"]`).waitFor({ timeout: 30_000 })
       await world.page.locator(`${ROOT} [data-chat-running]`).waitFor()
-      await world.page.waitForTimeout(300)
-      const { frames, slides } = await readTrace(world.page)
-      const statusSteps = movements(frames.map(frame => ({ ...frame, top: frame.status ?? Number.NaN })))
-        .filter(step => Number.isFinite(step))
-      // The fold runs status moves at zero duration on its own, so only settled frames show the pin's effect.
-      const pinnedOverRoom = frames.filter(frame => !frame.folding && frame.pinned && frame.spacer > 0)
-      expect.soft(pinnedOverRoom, 'settled frames pinned over fold room').toEqual([])
-      expect.soft(slides.some(duration => duration > 0), `status slide durations ${JSON.stringify(slides)}; status movements ${JSON.stringify(statusSteps)}`).toBe(true)
       world.releaseModel()
       await world.ended
+      await stableScroll(world.page)
+      // Frames from the settled fold through Turn end.
+      const after = (await readTrace(world.page)).frames.slice(foldedFrames.length - 1)
+      const roomed = after.filter(frame => frame.spacer > 0)
+      const regrowth = roomed.some((frame, index) => index > 0 && frame.spacer > roomed[index - 1]!.spacer + 1)
+      const statusSteps = movements(after.map(frame => ({ ...frame, top: frame.status ?? Number.NaN })))
+        .filter(step => Number.isFinite(step))
+      expect.soft(movements(roomed), 'scroll movements while fold room remains').toEqual([])
+      expect.soft(regrowth, `fold room grows back; spacer ${JSON.stringify(roomed.map(frame => Math.round(frame.spacer)))}`).toBe(false)
+      expect.soft(statusSteps.every(step => step > 0), `running status movements ${JSON.stringify(statusSteps)}`).toBe(true)
       expect(world.tripwire.pageErrors).toEqual([])
     } finally {
       await world.close()

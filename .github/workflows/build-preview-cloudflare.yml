@@ -3,7 +3,9 @@ name: Build PR preview
 # Every push to a pull request publishes that pull request's preview to
 # Cloudflare Pages under its own branch alias, behind Cloudflare Access. The
 # upload carries build products only: the workflow never grants the deployment
-# platform access to this repository's sources.
+# platform access to this repository's sources. This lane also owns the
+# aggregate test and script type checks that the required Linux consumers no
+# longer repeat on every pull request.
 
 on:
   pull_request:
@@ -32,7 +34,13 @@ env:
 
 jobs:
   preview:
-    runs-on: ubuntu-24.04
+    # The required outcome is the build, which runs four TypeScript programs
+    # (Host and Client package compilation, then each face's aggregate test and
+    # script check) after the Typert pass. Publishing is best effort: transport,
+    # Access, and comment failures warn instead of failing the check.
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-4vcpu-ubuntu-2404'
+          || 'ubuntu-24.04' }}
     name: cloudflare pages preview
     steps:
       - uses: actions/checkout@v7.0.1
@@ -70,8 +78,11 @@ jobs:
       # apps/web consumes workspace packages as built lib products, and
       # build:preview packs the image through the packer's installed bin
       # (lib/bin.js), so neither half exists before the artifact build runs.
-      - name: Build workspace
-        run: pnpm run build:artifacts
+      # The required Linux consumers emit artifacts only; the complete build
+      # here also runs the aggregate test and script checks, which share the
+      # Typert output and the two package compilations.
+      - name: Build workspace and check aggregate programs
+        run: pnpm run build
 
       - name: Build the preview page and pack the VFS image
         env:
@@ -88,6 +99,8 @@ jobs:
           cp apps/web/dist/preview.html apps/web/dist/index.html
 
       - name: Upload to Cloudflare Pages
+        id: upload
+        continue-on-error: true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -112,6 +125,8 @@ jobs:
       # Accept-Encoding is sent because a browser sends it; the assertion is
       # about what the platform does with a body that is already compressed.
       - name: Verify the protected deployment serves the image
+        id: verify
+        continue-on-error: true
         env:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
@@ -151,6 +166,8 @@ jobs:
       # idempotent: a pull request opened before this workflow existed never
       # sees an `opened` event, and every later push must not restate the URL.
       - name: Comment the preview URL
+        id: comment
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
@@ -168,3 +185,12 @@ jobs:
             "$marker" \
             "[Preview for #$PR](https://pr-$PR.${CF_PROJECT}.pages.dev) (requires Cloudflare Access sign-in)" \
             | gh pr comment "$PR" --body-file -
+
+      # Publishing stays outside the required verdict: a Cloudflare, Access, or
+      # comment failure warns, while a build failure still fails this check.
+      - name: Report preview publication failures
+        if: steps.upload.outcome == 'failure' || steps.verify.outcome == 'failure' || steps.comment.outcome == 'failure'
+        run: |
+          message='preview publication failed; the build passed, see the upload, verify, and comment steps'
+          echo "::warning::$message"
+          echo "$message" >> "$GITHUB_STEP_SUMMARY"

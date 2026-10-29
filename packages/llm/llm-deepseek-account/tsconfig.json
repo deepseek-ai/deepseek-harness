@@ -31,12 +31,6 @@
     },
     {
       "path": "../../../vendor/schemastery"
-    },
-    {
-      "path": "../../util/values"
-    },
-    {
-      "path": "../../util/timeout"
     }
   ]
 }

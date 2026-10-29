@@ -72,6 +72,14 @@ describe('module identity through the loader', () => {
     }))
   })
 
+  it('resolves REPL imports for image loading and refuses unsupported evaluation', () => {
+    const require = loaderRequire()
+    const repl = require('node:repl') as typeof import('node:repl')
+    expect(require('repl')).toBe(repl)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(() => repl.start()).toThrow(expect.objectContaining({ code: 'ERR_FEATURE_UNAVAILABLE_ON_PLATFORM' }))
+  })
+
   it('exposes async and synchronous resolution through the Cordis internal seam', async () => {
     const vfs = new MemoryVfs()
     vfs.seedDirectory('/dsh/node_modules/example')

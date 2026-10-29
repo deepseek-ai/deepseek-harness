@@ -79,17 +79,20 @@ actor AXWorker {
     private let axTimeout: Float
     private let textEventInterval: Double
     private let maxClickHoldMs: Int
+    private let sessionState: @Sendable () -> Bool?
     private var access: AXAccess?
     private var keyboard: KeyboardInput?
     private var pointer: WindowPointerInput?
     private var hovers: [String: AXHover] = [:]
     private var closed = false
 
-    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int) {
+    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int,
+         sessionState: @escaping @Sendable () -> Bool? = NativePlatform.sessionLocked) {
         self.cancellation = cancellation
         self.axTimeout = axTimeout
         self.textEventInterval = textEventInterval
         self.maxClickHoldMs = maxClickHoldMs
+        self.sessionState = sessionState
     }
     private func identifier(_ kind: String) throws -> String {
         guard generation < UInt64.max else { throw NativeFailure(code: "NATIVE_ERROR", message: "Native identity space exhausted") }
@@ -112,7 +115,7 @@ actor AXWorker {
         return (key, mouse)
     }
     private func observeSession() -> Bool? {
-        let state = NativePlatform.sessionLocked()
+        let state = sessionState()
         if state != false { snapshots.removeAll(); observedWindowBounds.removeAll() }
         return state
     }
@@ -426,22 +429,25 @@ actor AXWorker {
         return .object(value)
     }
     func finishLaunch(_ plan: ApplicationLaunch, pid: Int32) throws -> JSONValue {
-        try cancellation.check()
-        guard case .pending(let app, let original)? = targets[plan.handle], app == plan.application, original == plan.authorization,
-              try ApplicationAuthorization.describeInstalled(app) == original else {
+        do {
+            try cancellation.check()
+            guard case .pending(let app, let original)? = targets[plan.handle], app == plan.application, original == plan.authorization,
+                  try ApplicationAuthorization.describeInstalled(app) == original else {
+                throw NativeFailure(code: "STALE_APP", message: "Application selection changed during launch")
+            }
+            let identity = try NativePlatform.identity(pid)
+            let actual = try ApplicationAuthorization.describe(identity, name: app.name, expectedExecutablePath: app.executablePath)
+            if original["persistable"] == .bool(true), actual["id"] != original["id"] {
+                throw NativeFailure(code: "STALE_APP", message: "Launched application does not match the approved application identity")
+            }
+            targets[plan.handle] = .running(identity)
+            var value: [String: JSONValue] = ["appHandle": .string(plan.handle), "pid": .number(Double(pid)), "name": .string(app.name)]
+            if let bundleID = app.bundleID { value["bundleId"] = .string(bundleID) }
+            return .object(value)
+        } catch {
             forget(plan.handle)
-            throw NativeFailure(code: "STALE_APP", message: "Application selection changed during launch")
+            throw error
         }
-        let identity = try NativePlatform.identity(pid)
-        let actual = try ApplicationAuthorization.describe(identity, name: app.name, expectedExecutablePath: app.executablePath)
-        if original["persistable"] == .bool(true), actual["id"] != original["id"] {
-            forget(plan.handle)
-            throw NativeFailure(code: "STALE_APP", message: "Launched application does not match the approved signing identity")
-        }
-        targets[plan.handle] = .running(identity)
-        var value: [String: JSONValue] = ["appHandle": .string(plan.handle), "pid": .number(Double(pid)), "name": .string(app.name)]
-        if let bundleID = app.bundleID { value["bundleId"] = .string(bundleID) }
-        return .object(value)
     }
 
     func foregroundObservation(_ plan: ForegroundPlan) throws -> ForegroundObservation {

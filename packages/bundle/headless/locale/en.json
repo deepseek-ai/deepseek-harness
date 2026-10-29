@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Headless profile",
+    "description": "Run a single task directly with the core Agent/Session runner over dsh-base, without a Host, HTTP, or browser layer."
+  }
+}

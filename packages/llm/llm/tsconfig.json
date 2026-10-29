@@ -33,6 +33,9 @@
       "path": "../../util/values"
     },
     {
+      "path": "../../util/package-manifest"
+    },
+    {
       "path": "../../typert/protocol"
     }
   ]

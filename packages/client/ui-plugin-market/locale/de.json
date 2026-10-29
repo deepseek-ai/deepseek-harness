@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Plugin-Erkennung",
+    "description": "Konfigurierte Plugin-Indizes durchsuchen und deren Pakete installieren."
+  }
+}

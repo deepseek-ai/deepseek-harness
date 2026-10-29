@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
 import { describe, expect, it, onTestFinished } from 'vitest'
-import { ON_DEMAND_BUNDLES } from '../packages/boot/app-boot/src/official-bundle-packages.ts'
+import { ON_DEMAND_BUNDLES } from '../packages/util/official-bundles/src/bundles.ts'
 import { generateOfficialBundleCatalog } from './gen-official-bundle-catalog.ts'
 import {
   createRegistryManifest,
@@ -133,8 +133,7 @@ describe('catalog and local closure', () => {
     // A vendor package keeps its own version line, so a run must not assume one shared version.
     expect(packages.get('@deepseek-ai/cordis')?.manifest.version)
       .not.toBe(packages.get('@deepseek-ai/dsh-brand')?.manifest.version)
-    // Nothing in this closure is built for another platform, on any host.
-    expect(selection.foreignTargets).toEqual([])
+    expect(selection.foreignTargets).toEqual(process.platform === 'darwin' ? [] : ['@deepseek-ai/dsh-experimental-cua-macos'])
   })
 
   it('follows install, optional, and required peer edges but not optional peers', () => {

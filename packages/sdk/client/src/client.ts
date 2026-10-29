@@ -16,12 +16,16 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import {
   JsonRpcLineTransport,
   JsonRpcResponseError,
+  type CommandExecution,
   type InitializeParams,
   type InitializeResult,
   type SessionPromptParams,
+  type SessionQueryParams,
+  type SessionQueryResult,
   type SdkPromptContentBlock,
   type SdkUserQuestionRequest,
 } from '@deepseek-ai/dsh-sdk-protocol'
+import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { disposeRuntimeProcess } from './dispose.ts'
 import { resolveDshLaunch, type RuntimeProcessOptions } from './launch.ts'
 import type { HarnessClientOptions, HarnessNotification, NotificationFilter } from './types.ts'
@@ -199,6 +203,7 @@ export class HarnessClient {
   private closeTask: Promise<void> | undefined
   private readonly userQuestions = new Map<string, AbortController>()
   private userQuestionHandler: HarnessClientOptions['onUserQuestion']
+  private requestHandler: ((method: string, params: Record<string, unknown>) => Promise<unknown>) | undefined
 
   /** @param options - dsh profile, patch, home, process, environment, and timeout options. */
   constructor(options?: HarnessClientOptions)
@@ -268,7 +273,10 @@ export class HarnessClient {
     })
     const transport = new JsonRpcLineTransport(child.stdout, child.stdin)
     transport.onRequest(async (method, params) => {
-      if (method !== 'user-question/ask') throw new SdkProtocolError(`unknown runtime request: ${method}`)
+      if (method !== 'user-question/ask') {
+        if (this.requestHandler !== undefined) return this.requestHandler(method, params)
+        throw new SdkProtocolError(`unknown runtime request: ${method}`)
+      }
       const handler = this.userQuestionHandler
       if (handler === undefined) throw new SdkProtocolError('user-question/ask requires an onUserQuestion callback')
       if (!isUserQuestionRequest(params)) {
@@ -305,6 +313,21 @@ export class HarnessClient {
   }
 
   /**
+   * Install the additional-request handler; native questions retain their onUserQuestion callback.
+   * @param handler - receives wire parameters and returns the JSON-RPC result; rejection sends an error.
+   * @throws when the client has not started or has already closed.
+   */
+  onRequest(handler: (method: string, params: Record<string, unknown>) => Promise<unknown>): void {
+    if (this.closeTask !== undefined) {
+      throw new TransportClosedError('DeepSeek Harness runtime client is closed; create a new client to install a request handler')
+    }
+    if (this.transport === undefined) {
+      throw new TransportClosedError('start the SDK client before installing a request handler')
+    }
+    this.requestHandler = handler
+  }
+
+  /**
    * Start the runtime if needed, then perform the process-wide handshake.
    * @param params - workspace cwd plus the provider/model route.
    * @returns the runtime's wire identity.
@@ -323,7 +346,7 @@ export class HarnessClient {
   }
 
   /**
-   * Queue one prompt and return its durable inbox identity.
+   * Queue one prompt without native command routing and return its durable inbox identity.
    * @param sessionId - target session; an unknown id creates it.
    * @param contentBlocks - the user message, sent verbatim.
    * @returns the queued message id.
@@ -558,12 +581,69 @@ export function createProcessHarnessClient(options: RuntimeProcessOptions): Harn
 }
 
 /**
+ * Send routed input for the package's high-level run API; absent from the package exports.
+ * @param client - client owning the initialized runtime connection.
+ * @param sessionId - target Session; an unknown id creates it.
+ * @param input - text or content blocks, without client-side command interpretation.
+ * @returns the validated prompt receipt or native command execution.
+ */
+export async function queryInput(
+  client: HarnessClient,
+  sessionId: string,
+  input: string | SdkPromptContentBlock[],
+): Promise<SessionQueryResult> {
+  const params: SessionQueryParams = {
+    sessionId: SessionId(sessionId), contentBlocks: normalizeInput(input),
+  }
+  const value = await client.request('session/query', params)
+  if (isRecord(value)) {
+    if (value.kind === 'prompt' && typeof value.messageId === 'string' && value.messageId.length > 0) {
+      return { kind: 'prompt', messageId: value.messageId }
+    }
+    if (value.kind === 'command') {
+      return { kind: 'command', execution: commandExecution(value.execution) }
+    }
+  }
+  throw new SdkProtocolError(`session/query returned an invalid routing result: ${JSON.stringify(value)}`)
+}
+
+/**
+ * Normalize routed input: a string becomes one text block; blocks pass verbatim.
+ * @param input - prompt or command text, or content blocks.
+ * @returns the content blocks to send.
+ */
+export function normalizeInput(input: string | SdkPromptContentBlock[]): SdkPromptContentBlock[] {
+  return typeof input === 'string' ? [{ type: 'text', text: input }] : input
+}
+
+/**
  * Whether `value` is a plain JSON object (the wire-boundary shape probe).
  * @param value - the wire value to probe.
  * @returns `true` iff `value` is a non-null, non-array object.
  */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Decode the native handler result returned by session/query. */
+function commandExecution(value: unknown): CommandExecution {
+  if (isRecord(value) && typeof value.commandId === 'string' && value.commandId.length > 0 && isRecord(value.result)) {
+    const commandId = value.commandId as CommandExecution['commandId']
+    const { kind, text, sourceEventSeq } = value.result
+    if (kind === 'success' && (text === undefined || typeof text === 'string')
+      && (sourceEventSeq === undefined || (typeof sourceEventSeq === 'number'
+        && Number.isSafeInteger(sourceEventSeq) && sourceEventSeq >= 0))) {
+      return { commandId, result: {
+        kind,
+        ...text === undefined ? {} : { text },
+        ...sourceEventSeq === undefined ? {} : { sourceEventSeq: SessionSeq(sourceEventSeq) },
+      } }
+    }
+    if (kind === 'error' && typeof text === 'string' && text.trim().length > 0) {
+      return { commandId, result: { kind, text } }
+    }
+  }
+  throw new SdkProtocolError(`session/query returned an invalid command result: ${JSON.stringify(value)}`)
 }
 
 /** The message of a thrown value (the transport only throws `Error`s; `String` covers the rest). */

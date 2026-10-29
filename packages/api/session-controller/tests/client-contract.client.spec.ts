@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { PromptContentPart as AttachmentPromptContentPart } from '@deepseek-ai/dsh-attachment/types'
-import { SessionSeq, type SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq, type SessionId, type SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import {
   MutableSessionEventSource, type SessionAssistantSettlementEntry,
   type SessionLiveEventEntry, type SessionTransientEventEntry,
@@ -11,6 +11,7 @@ import type { ProjectionsBaseline } from '../src/client/sessions/projection-stor
 import { ProjectionValueStore } from '../src/client/sessions/projection-store.ts'
 import type { PromptContentPart as SessionPromptContentPart, SessionPageRequest } from '../src/types.ts'
 import { ev, plainTurn } from './event-script.client.ts'
+import { history, pageRule } from './remote/session.client.ts'
 
 type RenameSuccess = Extract<Awaited<ReturnType<ISession['rename']>>, { readonly ok: true }>
 
@@ -70,7 +71,21 @@ describe('Client Session contracts', () => {
     expectTypeOf<RenameSuccess['value']['seq']>().toEqualTypeOf<SessionSeq>()
     expectTypeOf<ProjectionValueStore['apply']>().parameter(2).toEqualTypeOf<SessionSeqCursor>()
     expectTypeOf<ProjectionsBaseline['asOfSeq']>().toEqualTypeOf<SessionSeqCursor>()
-    expectTypeOf<SessionPageRequest['throughSeq']>().toEqualTypeOf<number>()
+    expectTypeOf<SessionPageRequest['throughSeq']>().toEqualTypeOf<number | undefined>()
+  })
+
+  it('returns the current page cursor when throughSeq is omitted and preserves explicit cuts', async () => {
+    const address = { kind: 'session', sessionId: 'page-fixture' as SessionId } as const
+    const rule = pageRule(history(plainTurn(SessionSeq(0), 1, 'question', 'answer')))
+    const current = await rule({ address })
+    expect(current).toMatchObject({ ok: true, value: { cursor: 5, hasMore: false } })
+    const cut = await rule({ address, throughSeq: 2 })
+    expect(cut).toMatchObject({ ok: true, value: { cursor: 2, hasMore: false } })
+    if (!cut.ok) throw new Error('expected a successful history page')
+    expect(cut.value.records.map(record => record.event.seq)).toEqual([0, 1, 2])
+    await expect(rule({ address, throughSeq: -1 })).resolves.toEqual({
+      ok: true, value: { cursor: -1, records: [], hasMore: false },
+    })
   })
 
   it('keeps its text and image prompt parts identical to attachment intake', () => {

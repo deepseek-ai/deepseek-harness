@@ -48,9 +48,12 @@ kind: "package-reference"
 
 真实 API 测试要求同时设置 `DEEPSEEK_API_KEY` 和 `DEEPSEEK_SEARCH_API_TEST_BASE_URL`，后者包含 API 路径前缀。
 
+<a id="authentication"></a>
 ### 鉴权
 
 使用 `deepseek-account` 路由的会话向账号服务请求已授权用于解析后端点的令牌，并通过 `x-dsh-auth-token` 发送；2026-10-16 公网 Search 与 Fetch 路由已接受该令牌。其他情况下，非空的字面 `apiKey` 优先于 `apiKeyEnv`；凭据引用通过 `ctx.credentials` 解析，该服务缺省时使用启动环境。API 密钥使用 `Authorization: Bearer`。凭据解析和端点选择使用同一份设置快照。
+
+每个提供者的 `ready()` 回答模型请求将发起的操作是否有凭据，不论模型路由：该请求的路由是 `deepseek-account` 且 `ctx.deepseekAccount` 为 API 基础地址解析出令牌，或者设置了字面 `apiKey`，或 `ctx.credentials.describe` 报告 `apiKeyEnv` 引用已配置（没有该服务时，启动环境必须包含它）。账号令牌或凭据存储读取失败时回答 false。这两个提供者被选中时，[`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 会从它们回答 false 的每个请求中撤下 `web_search` 与 `web_fetch` 及其提示词指引。只检查是否存在：错误的密钥仍算就绪，并使每次调用失败。
 
 ### 结果与失败
 
@@ -91,6 +94,20 @@ Search API 接收 `query`、`count`（配置的结果数，或请求中更小的
 
 工具结果追加在已有会话前缀之后。提供者注册不增加模型上下文。
 
+### 会话工具列表（间接）
+
+#### 模型看到什么
+
+这两个提供者被选中时，其中一个未就绪的会话请求既不包含对应工具（`web_search` 或 `web_fetch`）的 schema，也不包含该工具的提示词指引；该效果由 [`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 负责。
+
+#### Token 影响
+
+撤下时，请求中不再包含该工具的 schema 及其提示词指引。
+
+#### KV Cache 影响
+
+重新提供或移除 Web 工具会按 [`dsh-tool-web`](../tool-web/README.zh.md#search-readiness) 所述改变声明的工具。
+
 ## 已知限制与待办工作
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -98,7 +115,8 @@ Search API 接收 `query`、`count`（配置的结果数，或请求中更小的
 - 共享搜索请求不暴露 `localization`；提供者不请求搜索全文，也不消费 `site_name`、`site_icon`、`rerank_score` 或 `authority`。2026-10-16 实测返回的 `summary` 长度为 1,000–2,300 个字符，超过消费方的默认上限。
 - 2026-10-16 的探测中，不同的 `ori_question` 未改变结果顺序、评分或摘要；由于指南将其列为意图信号，提供者仍会发送。
 - 查询和 URL 约束由远端服务执行。2026-10-16 抓取无法解析的目标域名时返回 HTTP 500，而非文档所述的 404，其失败信息与端点失败附带相同的端点指引。Fetch 既不暴露目标状态，也不暴露最终重定向 URL，因此结果报告 HTTP 200 和请求 URL；提供者丢弃 API 返回的页面标题。
-- 可用性检查无法查询异步凭据存储。已配置的解析器在调用时仍可能因凭据缺失失败。
+- `available()` 无法查询异步凭据存储；`ready()` 可以，因此凭据存储缺少密钥时，模型步骤会撤下这两个工具。直接调用 `ctx.web.search()` 或 `ctx.web.fetch()` 仍可能因凭据缺失失败。
+- 官方路由经网关对话时，操作仍把密钥发往配置的 API 基础地址，除非该地址接受这个密钥，否则调用失败。
 
 <a id="dev-note"></a>
 ### 开发备注

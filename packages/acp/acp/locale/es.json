@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "servidor ACP",
+    "description": "Ejecute agentes a través de JSON-RPC a través de entrada y salida estándar para automatización."
+  }
+}

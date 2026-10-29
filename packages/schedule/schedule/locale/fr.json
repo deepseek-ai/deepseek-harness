@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Planification des tâches",
+    "description": "Stocke les tâches d'automatisation, les exécute chacune dans sa session d'origine lorsqu'elle est due et donne à l'agent les outils pour les gérer."
+  }
+}

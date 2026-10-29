@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Consultas e pesquisas conversacionais",
+    "description": "Consulte registros de sessão e forneça pesquisa de texto completo para SQLite quando ativado na configuração."
+  }
+}

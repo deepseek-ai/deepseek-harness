@@ -17,6 +17,7 @@ function fixture(
     disablePlugins: vi.fn(async () => {}),
     exit: vi.fn(),
     restart: vi.fn(),
+    revealReport: vi.fn(async (_path: string) => {}),
     writeReport: vi.fn(writeReport),
   }
   return { operations, choice, stopped, recovery: new DesktopFatalRecovery(operations) }
@@ -31,14 +32,16 @@ const REPORT_PATH = 'C:\\Users\\someone\\AppData\\Roaming\\DeepSeek Harness\\log
 
 afterEach(() => { vi.restoreAllMocks() })
 
-it.each(['en', 'zh-CN'])('offers only exit and restart for a listener conflict in %s', async (locale) => {
+it.each(['en', 'zh-CN'])('offers exit and restart for a listener conflict without a saved report in %s', async (locale) => {
   const { operations, choice, stopped, recovery } = fixture(locale)
   const pending = recovery.report(new AggregateError([
     new Error('webserver (@deepseek-ai/dsh-host-webserver): Error: listen EADDRINUSE: address already in use 127.0.0.1:19387'),
   ], 'required startup failure'), 'host')
   await shown(operations)
   const options = operations.show.mock.calls[0]![0]
-  expect(options.buttons).toEqual([operations.messages().exitApplication, operations.messages().restartApplication])
+  expect(options.buttons).toEqual([
+    operations.messages().exitApplication, operations.messages().restartApplication,
+  ])
   await expect([options.title, options.message, options.detail, ...options.buttons!].join('\n') + '\n')
     .toMatchFileSnapshot(`expected/fatal-address-in-use-${locale}.txt`)
   choice.resolve({ response: 1, checkboxChecked: false })
@@ -56,7 +59,7 @@ it.each(['win32', 'darwin', 'linux'] as const)('offers the same listener conflic
   expect(operations.show.mock.calls[0]![0].buttons).toEqual([
     operations.messages().exitApplication, operations.messages().restartApplication,
   ])
-  expect(operations.show.mock.calls[0]![0].detail).toBe(operations.messages().startupAddressInUse)
+  expect(operations.show.mock.calls[0]![0].detail).toBe(`${operations.messages().startupAddressInUse}\n${operations.messages().reportUnavailable}`)
   choice.resolve({ response: 0, checkboxChecked: false })
   stopped.resolve(undefined)
   await pending
@@ -188,7 +191,7 @@ it('names the report file in the listener-conflict dialog too', async () => {
   await shown(operations)
   await vi.waitFor(() => { expect(operations.show).toHaveBeenCalledOnce() })
   const options = operations.show.mock.calls[0]![0]
-  expect(options.buttons).toHaveLength(2)
+  expect(options.buttons).toHaveLength(3)
   expect(options.detail).toBe(`${operations.messages().startupAddressInUse}\n${operations.messages().reportWrittenTo.replace('{path}', REPORT_PATH)}`)
   choice.resolve({ response: 0, checkboxChecked: false })
   stopped.resolve(undefined)
@@ -202,7 +205,7 @@ it('shows the dialog without a path when the report write fails or returns nothi
     const pending = recovery.report(new Error('fatal'), 'main')
     await shown(operations)
     await vi.waitFor(() => { expect(operations.show).toHaveBeenCalledOnce() })
-    expect(operations.show.mock.calls[0]![0].detail).toBe(`fatal\n\n${operations.messages().startupReinstallAdvice}`)
+    expect(operations.show.mock.calls[0]![0].detail).toBe(`fatal\n${operations.messages().reportUnavailable}\n\n${operations.messages().startupReinstallAdvice}`)
     choice.resolve({ response: 0, checkboxChecked: false })
     stopped.resolve(undefined)
     await pending
@@ -238,4 +241,111 @@ it('writes the report once for the first fatal failure and not for the recovery-
   expect(operations.show).toHaveBeenCalledTimes(2)
   expect(operations.writeReport).toHaveBeenCalledOnce()
   expect(operations.show.mock.calls[1]![0].detail).toContain(REPORT_PATH)
+})
+
+it('reveals the saved report without stopping the Host or restarting', async () => {
+  const { operations, stopped, recovery } = fixture('en', async () => REPORT_PATH)
+  operations.show.mockResolvedValueOnce({ response: 3, checkboxChecked: false })
+    .mockImplementationOnce(async () => {
+      expect(operations.revealReport).toHaveBeenCalledWith(REPORT_PATH)
+      expect(operations.stop).not.toHaveBeenCalled()
+      expect(operations.restart).not.toHaveBeenCalled()
+      return { response: 0, checkboxChecked: false }
+    })
+  stopped.resolve(undefined)
+  await recovery.report(new Error('fatal'), 'host')
+  expect(operations.writeReport).toHaveBeenCalledOnce()
+  expect(operations.show.mock.calls[1]![0].message).toBe(operations.messages().reportShareHint)
+})
+
+it('keeps the original failure and report path when revealing the file fails', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { operations, stopped, recovery } = fixture('en', async () => REPORT_PATH)
+  operations.revealReport.mockRejectedValueOnce(new Error('file removed'))
+  operations.show.mockResolvedValueOnce({ response: 3, checkboxChecked: false })
+    .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+  stopped.resolve(undefined)
+  await recovery.report(new Error('original startup failure'), 'host')
+  expect(operations.show.mock.calls[1]![0]).toMatchObject({ message: operations.messages().reportRevealFailed })
+  expect(operations.show.mock.calls[1]![0].detail).toContain('original startup failure')
+  expect(operations.show.mock.calls[1]![0].detail).toContain(REPORT_PATH)
+})
+
+it('makes a report that finishes after the initial deadline available without rewriting it', async () => {
+  vi.useFakeTimers()
+  try {
+    const write = Promise.withResolvers<string>()
+    const { operations, choice, stopped, recovery } = fixture('en', () => write.promise)
+    const pending = recovery.report(new Error('fatal'), 'host')
+    await vi.advanceTimersByTimeAsync(CRASH_REPORT_WAIT_MS)
+    expect(operations.show.mock.calls[0]![0].detail).toContain(operations.messages().reportPending)
+    operations.show.mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+    write.resolve(REPORT_PATH)
+    choice.resolve({ response: 3, checkboxChecked: false })
+    stopped.resolve(undefined)
+    await pending
+    expect(operations.revealReport).toHaveBeenCalledWith(REPORT_PATH)
+    expect(operations.writeReport).toHaveBeenCalledOnce()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('does not attempt to reveal an unavailable report', async () => {
+  const { operations, stopped, recovery } = fixture()
+  operations.show.mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+  stopped.resolve(undefined)
+  await recovery.report(new Error('fatal'), 'host')
+  expect(operations.revealReport).not.toHaveBeenCalled()
+  expect(operations.show.mock.calls[0]![0].buttons).not.toContain(operations.messages().getDiagnosticReport)
+  expect(operations.show.mock.calls[0]![0].detail).toContain(operations.messages().reportUnavailable)
+})
+
+it.each(['pending', 'failed'] as const)('keeps the recovery failure visible when fetching a %s report', async (state) => {
+  vi.useFakeTimers()
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const write = Promise.withResolvers<string | undefined>()
+  try {
+    const { operations, stopped, recovery } = fixture('en', () => write.promise)
+    stopped.resolve(undefined)
+    operations.disablePlugins.mockRejectedValueOnce(new Error('profile is read-only'))
+    operations.show.mockResolvedValueOnce({ response: 2, checkboxChecked: false })
+      .mockImplementationOnce(async () => {
+        if (state === 'failed') write.resolve(undefined)
+        return { response: 3, checkboxChecked: false }
+      })
+      .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+    const pending = recovery.report(new Error('original startup failure'), 'host')
+    await vi.runAllTimersAsync()
+    await pending
+    expect(operations.show).toHaveBeenCalledTimes(3)
+    const last = operations.show.mock.calls[2]![0]
+    expect(last.message).toBe(operations.messages().recoveryOperationFailed)
+    expect(last.detail).toContain('profile is read-only')
+    if (state === 'failed') expect(last.buttons).not.toContain(operations.messages().getDiagnosticReport)
+    expect(last.detail).toContain(state === 'pending' ? operations.messages().reportPending : operations.messages().reportUnavailable)
+    expect(operations.revealReport).not.toHaveBeenCalled()
+    expect(operations.writeReport).toHaveBeenCalledOnce()
+  } finally {
+    write.resolve(undefined)
+    vi.useRealTimers()
+  }
+})
+
+it.each([false, true])('keeps the original attachment when revealing after a recovery failure (reveal fails=%s)', async (revealFails) => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { operations, stopped, recovery } = fixture('en', async () => REPORT_PATH)
+  const original = new Error('original startup failure')
+  stopped.resolve(undefined)
+  operations.disablePlugins.mockRejectedValueOnce(new Error('profile is read-only'))
+  if (revealFails) operations.revealReport.mockRejectedValueOnce(new Error('file manager unavailable'))
+  operations.show.mockResolvedValueOnce({ response: 2, checkboxChecked: false })
+    .mockResolvedValueOnce({ response: 3, checkboxChecked: false })
+    .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+  await recovery.report(original, 'host')
+  const last = operations.show.mock.calls[2]![0]
+  expect(last.message).toBe(revealFails ? operations.messages().reportRevealFailed : operations.messages().reportShareHint)
+  expect(last.detail).toContain('profile is read-only')
+  expect(operations.writeReport).toHaveBeenCalledExactlyOnceWith(original, 'host')
+  expect(operations.revealReport).toHaveBeenCalledExactlyOnceWith(REPORT_PATH)
 })

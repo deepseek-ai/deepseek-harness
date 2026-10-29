@@ -1,5 +1,6 @@
 /** Plan projection behavior. */
 
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -24,6 +25,7 @@ async function harness(withPlanMode: boolean): Promise<Bench> {
   await ctx.plugin(SessionStore)
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(UserQuestionService)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
@@ -112,6 +114,17 @@ describe('plan projection unit', () => {
     const bench = await harness(true)
     runPlanCommand(bench.session, ' sketch the refactor first', 0)
     expect(bench.values().plan).toEqual({ active: false, pending: true })
+  })
+
+  it('records that plan mode was entered and keeps the record after leaving', async () => {
+    const bench = await harness(true)
+    expect(bench.ctx.sessionProjections.checkpoint(bench.session).plan?.val).toMatchObject({ entered: false })
+    commitPlanMode(bench.session, false, 0)
+    expect(bench.ctx.sessionProjections.checkpoint(bench.session).plan?.val).toMatchObject({ entered: false })
+    commitPlanMode(bench.session, true, 1)
+    expect(bench.ctx.sessionProjections.checkpoint(bench.session).plan?.val).toMatchObject({ active: true, entered: true })
+    commitPlanMode(bench.session, false, 2)
+    expect(bench.ctx.sessionProjections.checkpoint(bench.session).plan?.val).toMatchObject({ active: false, entered: true })
   })
 
   it('freezes the active state across a request/header into activeAtLastHeader', async () => {

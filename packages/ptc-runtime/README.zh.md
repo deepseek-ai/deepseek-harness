@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-`ptc-runtime/` 分组执行调用宿主异步函数的模型程序。默认 Node 后端按配置的沙盒策略启动新进程。显式启用的 `executionMode: persistent-in-memory` 模式为每个显式状态所有者保留独立且无沙盒的 REPL；进程或所有者结束时内存消失。实验性 Python 后端使用新的 CPython 进程。失败作为结果返回，供调用方诊断或交给模型处理。
+`ptc-runtime/` 分组执行调用宿主异步函数的模型程序。Node 按配置的文件策略求值异步函数体、REPL 语句或 VM Script。异步函数体使用新进程；REPL 模式为每个显式状态所有者保留一个进程；Script 通过 `scriptPersistence` 可选保留状态。进程或所有者结束时内存消失。实验性 Python 后端使用新的 CPython 进程。失败作为结果返回，供调用方诊断或交给模型处理。
 
 ## 目录
 
@@ -27,7 +27,7 @@ kind: "package-group"
 | 包 | 角色 | ctx 键 |
 |---|---|---|
 | [`ptc-runtime/`](ptc-runtime/README.zh.md) | 定义 PTC 运行时做什么：针对宿主提供的绑定运行一个程序，并报告其打印和返回的内容 | `ctx.ptcRuntime` |
-| [`ptc-runtime-node/`](ptc-runtime-node/README.zh.md) | 在按文件策略启动的新进程或显式启用且遵循相同文件策略的内存 REPL 中执行 TypeScript | 注册 `ctx.ptcRuntime` |
+| [`ptc-runtime-node/`](ptc-runtime-node/README.zh.md) | 将 TypeScript 求值为异步函数体、REPL 语句或 VM Script，遵循文件策略并可选保留状态 | 注册 `ctx.ptcRuntime` |
 | [`experimental/ptc-runtime-python/`](../experimental/ptc-runtime-python/README.zh.md) | 实验性 Python 后端：负责 Node 宿主与 CPython 子进程之间的 fd-3 协议，以及 CPython 运行时实现 | — |
 
 -----

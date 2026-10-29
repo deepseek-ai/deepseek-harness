@@ -195,7 +195,12 @@ import Darwin
             let outcome = try await worker.execute(request.method, params: params, catalog: catalog, installed: installed, trace: trace)
             trace?.mark("worker.end")
             switch outcome {
-            case .result(let value): result = value
+            case .result(let value):
+                if request.method == "getApp", var fields = value.object {
+                    let path = installed?.path ?? catalog.applications.first { Double($0.pid) == value["pid"].number }?.path
+                    if let path, let icon = ApplicationCatalog.icon(at: path) { fields["applicationIcon"] = .string(icon) }
+                    result = .object(fields)
+                } else { result = value }
             case .capture(let target):
                 let image = try await capture.capture(target, cancellation: cancellation, trace: trace)
                 result = try await worker.finishCapture(target, image: image, trace: trace)

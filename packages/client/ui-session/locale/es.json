@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Conexión de interfaz de sesión",
+    "description": "Conecte el control y el estado de la sesión a los componentes de la interfaz de React."
+  }
+}

@@ -1,0 +1,77 @@
+- img "变更请求状态：需要处理"
+- text: "Add the pull request panel #7"
+- button "提交评审"
+- button "在浏览器中打开"
+- button "全部 2 个文件"
+- text: +4 −2
+- button "刷新变更"
+- button "全部折叠"
+- button "左右对比" [pressed]
+- button "自动换行" [pressed]
+- button "将文件树移到右侧" [expanded]
+- region "全部 2 个文件":
+  - button "收起 panel.ts" [expanded]
+  - text: src/panel.ts +2 −2
+  - button "panel.ts 的更多操作"
+  - button "选择第 L1 行": "1"
+  - text: export const n1 = 1
+  - button "选择第 R1 行": "1"
+  - text: export const n1 = 1
+  - button "选择第 L2 行": "2"
+  - text: export const n2 = 2
+  - button "选择第 R2 行": "2"
+  - text: export const n2 = 'two'
+  - button "选择第 L3 行": "3"
+  - text: export const n3 = 3
+  - button "选择第 R3 行": "3"
+  - text: export const n3 = 3
+  - button "选择第 L4 行": "4"
+  - text: export const n4 = 4
+  - button "选择第 R4 行": "4"
+  - text: export const n4 = 4
+  - button "选择第 L5 行": "5"
+  - text: export const n5 = 5
+  - button "选择第 R5 行": "5"
+  - text: export const n5 = 5
+  - button "6 行未变更"
+  - button "选择第 L12 行": "12"
+  - text: export const n12 = 12
+  - button "选择第 R12 行": "12"
+  - text: export const n12 = 12
+  - button "选择第 L13 行": "13"
+  - text: export const n13 = 13
+  - button "选择第 R13 行": "13"
+  - text: export const n13 = 13
+  - button "选择第 L14 行": "14"
+  - text: export const n14 = 14
+  - button "选择第 R14 行": "14"
+  - text: export const n14 = 14
+  - button "选择第 L15 行": "15"
+  - text: export const n15 = 15
+  - button "选择第 R15 行": "15"
+  - text: export const n15 = 'fifteen'
+  - button "选择第 L16 行": "16"
+  - text: export const n16 = 16
+  - button "选择第 R16 行": "16"
+  - text: export const n16 = 16
+  - button "选择第 L17 行": "17"
+  - text: export const n17 = 17
+  - button "选择第 R17 行": "17"
+  - text: export const n17 = 17
+  - button "选择第 L18 行": "18"
+  - text: export const n18 = 18
+  - button "选择第 R18 行": "18"
+  - text: export const n18 = 18
+  - button "其余未变更的行"
+  - button "收起 panel.md" [expanded]
+  - text: docs/panel.md 新文件 +2 −0
+  - button "panel.md 的更多操作"
+  - button "选择第 R1 行": "1"
+  - text: "+ # Panel"
+  - button "选择第 R2 行": "2"
+  - text: + Shows the change requests of a Session.
+- separator "调整文件树宽度"
+- navigation "全部 2 个文件":
+  - textbox "筛选文件…": src
+  - button "src" [expanded]
+  - button "src/panel.ts": panel.ts +2 −2

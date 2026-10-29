@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Zona de pruebas de proceso SSH",
+    "description": "Cree comandos de espacio aislado para procesos POSIX remotos a través del asistente SSH compartido."
+  }
+}

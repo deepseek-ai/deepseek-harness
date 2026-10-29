@@ -1,4 +1,5 @@
 /** Optional bundles through the shipped Web Loader, live package manager, and real Agent loop. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -232,7 +233,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
 
   it('loads the actual badge asset only while its bundle is selected', async () => {
     const owner = await agent()
-    const load = (callId: string) => ctx.tools.execute({
+    const load = (callId: string) => executeToolFixture(ctx, {
       callId: ToolCallId(callId), name: 'skill', arguments: { name: 'dsh-badge' },
       agent: owner.agent, signal: new AbortController().signal,
     })

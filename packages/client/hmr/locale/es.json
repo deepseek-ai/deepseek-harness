@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "hmr",
+    "description": "Sincronice los complementos en el navegador y actualice la interfaz relevante después de reconstruir el código."
+  }
+}

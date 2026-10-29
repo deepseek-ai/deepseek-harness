@@ -461,7 +461,7 @@ class ResourceStore {
     return {
       register: (kind, declaration) => this.register(ctx, kind, declaration),
       get: kind => this.declarations.get(kind)?.provider,
-      entries: () => [...this.declarations].map(([kind, entry]) => Object.freeze({ kind, field: entry.provider.field })),
+      entries: () => [...this.declarations].map(([kind, entry]) => Object.freeze({ kind, ...entry.provider })),
       subscribe: listener => this.changes.subscribe(ctx, listener),
     }
   }
@@ -471,9 +471,21 @@ class ResourceStore {
     if (kind === GLOBAL_RESOURCE_KIND) {
       throw new Error(`typert: resource kind "${GLOBAL_RESOURCE_KIND}" is reserved for the built-in global resource`)
     }
-    validateWireName('resource field', declaration.field)
     if (this.declarations.has(kind)) throw new Error(`typert: resource kind "${kind}" is already registered`)
-    const entry: ProviderEntry<TypertResourceDeclaration> = { provider: { field: declaration.field }, owner: {} }
+    // Copy by branch so a prototype method cannot vanish in a spread; an opaque declaration fails here
+    // rather than resolving every call of this kind to the global resource.
+    const resolve = declaration.resolve
+    const field = declaration.field
+    let provider: TypertResourceDeclaration
+    if (resolve !== undefined) {
+      provider = { resolve }
+    } else if (field !== undefined) {
+      validateWireName('resource field', field)
+      provider = { field }
+    } else {
+      throw new Error(`typert: resource kind "${kind}" declares neither a field nor a resolve function`)
+    }
+    const entry: ProviderEntry<TypertResourceDeclaration> = { provider, owner: {} }
     const { declarations, changes } = this
     return ctx.effect(function* () {
       declarations.set(kind, entry)

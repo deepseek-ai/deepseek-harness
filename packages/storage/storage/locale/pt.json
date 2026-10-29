@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "armazenamento",
+    "description": "Gerenciamento unificado do back-end de armazenamento e métodos de acesso a dados usados por plug-ins."
+  }
+}

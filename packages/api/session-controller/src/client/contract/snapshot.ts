@@ -38,10 +38,10 @@ export type PendingSubmissionAttachment =
 export type PendingSubmissionPlacement = 'transcript' | 'queued' | 'steering'
 
 /**
- * One local prompt-submission echo: inserted synchronously when a submission
- * begins, so the conversation can show the message before serialization,
- * transport, and durable admission complete. Client-memory only — reload and
- * reconnect rebuild the conversation from durable events alone.
+ * One local prompt-submission echo: registered when a submission begins and
+ * published once the Host accepts the prompt, so the conversation shows the
+ * message before its durable admission completes. Client-memory only — reload
+ * and reconnect rebuild the conversation from durable events alone.
  */
 export interface PendingSubmission {
   /** The prompt RPC identity; the durable `user/message` source echoes it as `rpcId`. */
@@ -68,7 +68,7 @@ export interface PromptError {
 /** Immutable Session lifecycle and control snapshot. */
 export interface SessionSnapshot {
   readonly sessionId: SessionId
-  /** Local prompt-submission echoes not yet observed as durable events or queue occurrences. */
+  /** Local prompt-submission echoes the Host accepted and that are not yet observed as durable events or queue occurrences. */
   readonly pendingSubmissions: readonly PendingSubmission[]
   readonly running: boolean
   readonly subagent: {

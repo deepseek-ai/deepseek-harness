@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -99,7 +100,7 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
       expect(agent).toBeDefined()
       children.push(agent!)
     })
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ralph-integration'),
       name: 'ralph',
@@ -149,7 +150,7 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
     const childIds: SessionId[] = []
     ctx.on('workflow/agent-start', (_run, child) => { childIds.push(child.childId) })
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ralph-child-failure'),
       name: 'ralph',
@@ -238,7 +239,7 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
       toolCallResponse('round-report', STRUCTURED_OUTPUT_TOOL, report),
     ], config)
 
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ralph-script-enforcement'),
       name: 'ralph',
@@ -266,7 +267,7 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
     })
     ctx.on('workflow/agent-end', (_run, child) => { outcomes.push(child.outcome) })
     const controller = new AbortController()
-    const pending = ctx.tools.execute({
+    const pending = executeToolFixture(ctx, {
       callId: ToolCallId('ralph-real-cancel'),
       name: 'ralph',
       arguments: { objective: 'Keep working until cancelled.', maxRounds: 2 },

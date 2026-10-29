@@ -1,4 +1,4 @@
-/** Delivery gestures share pending state, report failures, and cancel with the plugin. */
+/** Delivery gestures share pending state, report their settled outcome, and cancel with the plugin. */
 import { afterEach, expect, it, vi } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { PresentedOpenController } from '../src/client/present-open.ts'
@@ -14,13 +14,14 @@ it('coalesces concurrent card and mention gestures, then allows another open', a
   vi.stubGlobal('fetch', fetcher)
   const controller = new PresentedOpenController()
   const first = controller.open(id, 2, 1)
-  await controller.open(id, 2, 1)
+  // The coalesced gesture reports deliberate silence, so nothing announces a second handoff.
+  await expect(controller.open(id, 2, 1)).resolves.toEqual({ kind: 'skipped' })
   expect(fetcher).toHaveBeenCalledTimes(1)
   expect(fetcher).toHaveBeenCalledWith(url, { method: 'POST', signal: expect.any(AbortSignal) as AbortSignal })
   expect(controller.state.getSnapshot()[url]).toBe('opening')
   reply.resolve(new Response(null, { status: 204 }))
-  await first
-  expect(controller.state.getSnapshot()[url]).toBe('opened')
+  await expect(first).resolves.toEqual({ kind: 'opened' })
+  expect(controller.state.getSnapshot()[url]).toBeUndefined()
   await controller.open(id, 2, 1)
   expect(fetcher).toHaveBeenCalledTimes(2)
   await controller.dispose()
@@ -30,11 +31,11 @@ it('opens changed files through their own coordinates', async () => {
   const fetcher = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(null, { status: 204 }))
   vi.stubGlobal('fetch', fetcher)
   const controller = new PresentedOpenController()
-  await controller.openChanged(id, 9, 1)
+  await expect(controller.openChanged(id, 9, 1)).resolves.toEqual({ kind: 'opened' })
   expect(fetcher.mock.calls.map(call => call[0])).toEqual(['api/changes.open?sessionId=fork&seq=9&index=1'])
-  expect(controller.state.getSnapshot()['api/changes.open?sessionId=fork&seq=9&index=1']).toBe('opened')
+  expect(controller.state.getSnapshot()['api/changes.open?sessionId=fork&seq=9&index=1']).toBeUndefined()
   fetcher.mockResolvedValueOnce(new Response(null, { status: 422 }))
-  await controller.openChanged(id, 9, 1)
+  await expect(controller.openChanged(id, 9, 1)).resolves.toEqual({ kind: 'failed', failure: 'openError' })
   expect(controller.state.getSnapshot()['api/changes.open?sessionId=fork&seq=9&index=1']).toBe('nativeUnavailable')
   await controller.dispose()
 })
@@ -46,10 +47,10 @@ it.each(['http', 'network'])('publishes retryable %s failures', async (failure) 
   fetcher.mockResolvedValue(new Response(null, { status: 204 }))
   vi.stubGlobal('fetch', fetcher)
   const controller = new PresentedOpenController()
-  await controller.open(id, 2, 1)
+  await expect(controller.open(id, 2, 1)).resolves.toEqual({ kind: 'failed', failure: 'openError' })
   expect(controller.state.getSnapshot()[url]).toBe('error')
   await controller.open(id, 2, 1)
-  expect(controller.state.getSnapshot()[url]).toBe('opened')
+  expect(controller.state.getSnapshot()[url]).toBeUndefined()
   await controller.dispose()
 })
 
@@ -69,10 +70,26 @@ it('awaits cancellation and prevents late state publication or new requests afte
   await aborted.promise
   expect(disposed).toBe(false)
   release.resolve(new Response(null, { status: 204 }))
-  await Promise.all([open, disposal])
+  await expect(open).resolves.toEqual({ kind: 'skipped' })
+  await disposal
   expect(controller.state.getSnapshot()).toBe(state)
-  await controller.open(id, 2, 1)
+  // A disposed controller drops the gesture instead of claiming a handoff.
+  await expect(controller.open(id, 2, 1)).resolves.toEqual({ kind: 'skipped' })
   expect(fetcher).toHaveBeenCalledOnce()
+})
+
+it.each(['open', 'reveal'] as const)('does not report a cancelled %s as a failure', async (action) => {
+  vi.stubGlobal('fetch', vi.fn((_url: string, { signal }: RequestInit) => new Promise<Response>((_resolve, reject) => {
+    signal!.addEventListener('abort', () => { reject(new DOMException('The operation was aborted.', 'AbortError')) }, { once: true })
+  })))
+  const controller = new PresentedOpenController()
+  try {
+    const pending = controller.open(id, 2, 1, action)
+    const state = controller.state.getSnapshot()
+    await controller.dispose()
+    await expect(pending).resolves.toEqual({ kind: 'skipped' })
+    expect(controller.state.getSnapshot()).toBe(state)
+  } finally { await controller.dispose() }
 })
 
 
@@ -87,10 +104,10 @@ it('shares pending state across open and reveal and retries the selected action'
   expect(fetcher).toHaveBeenCalledOnce()
   expect(fetcher.mock.calls[0]?.[0]).toBe(`${url}&action=reveal`)
   reply.resolve(new Response(null, { status: 500 }))
-  await revealing
+  await expect(revealing).resolves.toEqual({ kind: 'failed', failure: 'revealError' })
   expect(controller.state.getSnapshot()[url]).toBe('revealError')
   await controller.open(id, 2, 1, 'reveal')
-  expect(controller.state.getSnapshot()[url]).toBe('revealed')
+  expect(controller.state.getSnapshot()[url]).toBeUndefined()
   await controller.dispose()
 })
 
@@ -180,62 +197,27 @@ it('encodes an explicit application identifier without changing the file coordin
   const fetcher = vi.fn(async () => new Response(null, { status: 204 }))
   vi.stubGlobal('fetch', fetcher)
   const controller = new PresentedOpenController()
-  expect(await controller.open(id, 2, 1, 'open', '/Apps/A&B.app')).toBeNull()
+  expect(await controller.open(id, 2, 1, 'open', '/Apps/A&B.app')).toEqual({ kind: 'opened' })
   expect(fetcher).toHaveBeenCalledWith(`${url}&application=%2FApps%2FA%26B.app`, { method: 'POST', signal: expect.any(AbortSignal) as AbortSignal })
   await controller.dispose()
 })
 
 
-it.each(['open', 'reveal'] as const)('expires successful %s feedback after five seconds and its fade', async (action) => {
-  vi.useFakeTimers()
+it.each(['open', 'reveal'] as const)('clears %s progress after acknowledgement without retaining card success feedback', async (action) => {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })))
   const controller = new PresentedOpenController()
-  await controller.open(id, 2, 1, action)
-  await vi.advanceTimersByTimeAsync(5000)
-  expect(controller.state.getSnapshot()[url]).toBe(action === 'open' ? 'opened' : 'revealed')
-  await vi.advanceTimersByTimeAsync(200)
+  await expect(controller.open(id, 2, 1, action)).resolves.toEqual({ kind: action === 'open' ? 'opened' : 'revealed' })
   expect(controller.state.getSnapshot()[url]).toBeUndefined()
   await controller.dispose()
 })
 
-it('cancels an earlier success expiry when the next action fails', async () => {
-  vi.useFakeTimers()
+it('keeps a later failure visible after an acknowledged open', async () => {
   const fetcher = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }))
     .mockResolvedValueOnce(new Response(null, { status: 500 }))
   vi.stubGlobal('fetch', fetcher)
   const controller = new PresentedOpenController()
   await controller.open(id, 2, 1)
-  await vi.advanceTimersByTimeAsync(4000)
   await controller.open(id, 2, 1)
-  await vi.advanceTimersByTimeAsync(6000)
   expect(controller.state.getSnapshot()[url]).toBe('error')
   await controller.dispose()
-})
-
-it('cancels success expiry when its controller is disposed', async () => {
-  vi.useFakeTimers()
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })))
-  const controller = new PresentedOpenController()
-  await controller.open(id, 2, 1)
-  const state = controller.state.getSnapshot()
-  await controller.dispose()
-  await vi.advanceTimersByTimeAsync(6000)
-  expect(controller.state.getSnapshot()).toBe(state)
-})
-
-
-it('owns the expiry before notifying subscribers that can dispose the controller', async () => {
-  vi.useFakeTimers()
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })))
-  const controller = new PresentedOpenController()
-  let disposal: Promise<void> | undefined
-  const release = controller.state.subscribe(() => {
-    if (controller.state.getSnapshot()[url] === 'opened') disposal = controller.dispose()
-  })
-  await controller.open(id, 2, 1)
-  await disposal
-  const state = controller.state.getSnapshot()
-  await vi.advanceTimersByTimeAsync(6000)
-  expect(controller.state.getSnapshot()).toBe(state)
-  release()
 })

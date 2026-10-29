@@ -9,20 +9,23 @@
   en: bb2af1250bfefe4b
   zh: 893e3ab2e563a8a5
 /deepseek-ai-dsh-tools/summary:
-  en: 8c0a34155997a980
-  zh: ae6031db472b33e3
+  en: ad53df5cc542fc32
+  zh: 1ab915da46e01d20
 /deepseek-ai-dsh-tools/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-tools/use-this-package:
-  en: dec8e6df8cc94bc2
-  zh: e2f1f15ea7afd7b3
+  en: d382227271bf92ae
+  zh: 1f66b181418c91b9
 /deepseek-ai-dsh-tools/use-this-package/register-a-tool:
-  en: 9d2e6caa39c53d62
-  zh: 096a777f828c7565
-/deepseek-ai-dsh-tools/use-this-package/configure-the-presentation-mode:
-  en: 4e27c45ae889369e
-  zh: 7a0cd7a9dc7fe139
+  en: 1808e2a95ee21584
+  zh: 40c40da7d1418407
+/deepseek-ai-dsh-tools/use-this-package/conditional-tools:
+  en: eb80334754c2493a
+  zh: b431635ec1f4664f
+/deepseek-ai-dsh-tools/use-this-package/select-an-executor:
+  en: bdf27b6f339ea866
+  zh: b89205eedea1db0a
 /deepseek-ai-dsh-tools/use-this-package/restrict-tools-per-agent:
   en: c6f98b2283cc2e47
   zh: c2cdce5d13473f15
@@ -36,23 +39,23 @@
   en: ce7e776e9d516bdb
   zh: 59d2751743db7795
 /deepseek-ai-dsh-tools/understand-the-implementation/design-concept:
-  en: 92e8af53e6067bad
+  en: 516a6195a21e742b
   zh: 33c7b99b42c5acac
 /deepseek-ai-dsh-tools/understand-the-implementation/source-map:
-  en: c14e20d6a5c4c408
-  zh: ab9dc0fd38006749
+  en: 2dee0a37e0c1fa38
+  zh: 0963cba32685612e
 /deepseek-ai-dsh-tools/understand-the-implementation/execution-and-cancellation:
   en: dc44a88997777988
   zh: 56454aeace1c8b77
 /deepseek-ai-dsh-tools/understand-the-implementation/ptc-mode:
-  en: 387700aa396f7ca2
-  zh: d440b283027e4fbd
+  en: 83cf9a5077158879
+  zh: 80508a70a3674226
 /deepseek-ai-dsh-tools/understand-the-implementation/extension-points:
   en: c2a14d6f22bc9428
   zh: 89c1414fca465931
 /deepseek-ai-dsh-tools/further-exploration:
-  en: d8e2dfcfef2a2284
-  zh: b33111cbc20dc498
+  en: b112e13c7db15bf3
+  zh: 39e726a15ca40f21
 /deepseek-ai-dsh-tools/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -60,29 +63,14 @@
   en: 483b01d9bb2cb49a
   zh: 1d95095e76fb0996
 /deepseek-ai-dsh-tools/model-experience/normal-tool-schemas/what-the-model-sees:
-  en: beda295a874b30a1
-  zh: 253c4cf007c4db3f
+  en: d6a5c32a421bfe97
+  zh: 542d49df376e70a4
 /deepseek-ai-dsh-tools/model-experience/normal-tool-schemas/token-effect:
   en: d594b71ff5e4cc87
   zh: dcec1ea0dd2a0fa6
 /deepseek-ai-dsh-tools/model-experience/normal-tool-schemas/kv-cache-effect:
   en: 7c5e75964e020b2c
   zh: d50d0402d15232d9
-/deepseek-ai-dsh-tools/model-experience/ptc-mode-schema-and-system-prompt:
-  en: eaefd7303f22977d
-  zh: 9c425f9501128224
-/deepseek-ai-dsh-tools/model-experience/ptc-mode-schema-and-system-prompt/what-the-model-sees:
-  en: 3e170a222d746e98
-  zh: 1ea442fc59874cc5
-/deepseek-ai-dsh-tools/model-experience/ptc-mode-schema-and-system-prompt/what-the-model-sees/typescript-ptc-mode-sdk-instructions-with-bash:
-  en: 3a8df15e4ae32f9e
-  zh: fc4a800ba363e835
-/deepseek-ai-dsh-tools/model-experience/ptc-mode-schema-and-system-prompt/token-effect:
-  en: 12296fcafc14562c
-  zh: f8e9351bb8c6437d
-/deepseek-ai-dsh-tools/model-experience/ptc-mode-schema-and-system-prompt/kv-cache-effect:
-  en: 78906628d634441f
-  zh: 492f133aea50cfe3
 /deepseek-ai-dsh-tools/model-experience/tool-call-history-and-results:
   en: a8503137ad03720c
   zh: 611a2dadf7c0c706
@@ -96,8 +84,8 @@
   en: 2fbf2175168e8244
   zh: ad59a120b54a0996
 /deepseek-ai-dsh-tools/known-limitations-and-deferred-work:
-  en: 4a412f89b8a71b5a
-  zh: 803d995b036d5dbf
+  en: e8c410dee66e1639
+  zh: ae4965fa70234fd1
 /deepseek-ai-dsh-tools/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

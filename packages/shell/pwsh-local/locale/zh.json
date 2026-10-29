@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "本地 PowerShell 执行",
+    "description": "使用本地 PowerShell 实现命令执行服务。"
+  }
+}

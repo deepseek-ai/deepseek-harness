@@ -75,3 +75,16 @@ it('allows repository branch packages for test but rejects them for production',
   f.source.preset = 'production'
   expect(() => resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, f.routes)).toThrow(/Production source/u)
 })
+
+it('matches Intel artifacts to the Intel workflow on a machine serving both architectures', () => {
+  const f = fixture()
+  f.source.target = 'mac-x64'
+  const routes = { mini: { label: 'dsh-mini', target: ['mac-arm64', 'mac-x64'] } }
+  expect(() => resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, routes)).toThrow(/does not match/u)
+  f.run.path = '.github/workflows/macos-intel-package.yml'
+  expect(resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, routes))
+    .toMatchObject({ target: 'mac-x64', runnerLabel: 'dsh-mini' })
+  expect(() => resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, f.routes)).toThrow(/no configured/u)
+  f.source.target = 'mac-arm64'
+  expect(() => resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, routes)).toThrow(/does not match/u)
+})

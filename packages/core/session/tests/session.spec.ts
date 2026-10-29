@@ -1513,9 +1513,9 @@ describe('SessionStore', () => {
 
     await fiber.dispose()
     expect(ctx.sessions.get(SessionId('scoped'))).toBeUndefined()
-    session.append('user/message', createUserMessage({
+    expect(() => session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'late' }], source: { kind: 'user' },
-    }), { surfaceOp: 'append' })
+    }), { surfaceOp: 'append' })).toThrow('cannot append outside a SessionStore')
     expect(observed).toBe(0)
   })
 
@@ -1763,6 +1763,9 @@ describe('SessionStore', () => {
     const detachUnannounced = ctx.sessions.enter(unannounced)
     detachUnannounced()
     expect(heard).toEqual([])
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(warnings).toEqual([])
 
     const announced = ctx.sessions.prepare(SessionId('contained-disposal'))
     const detach = ctx.sessions.enter(announced)

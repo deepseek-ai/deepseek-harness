@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Execução de sandbox do PowerShell",
+    "description": "Execute comandos do PowerShell dentro das permissões atuais do sandbox."
+  }
+}

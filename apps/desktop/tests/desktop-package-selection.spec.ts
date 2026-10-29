@@ -121,3 +121,17 @@ it('resolves an old locally retained package with publishRequested=false without
     await expect(resolveRetainedDesktopPublication(env, api)).rejects.toThrow()
   } finally { await rm(root, { recursive: true, force: true }) }
 })
+
+it('routes both Mac architectures to one machine without authorizing an unlisted target', () => {
+  const f = fixture()
+  const routes = { mini: { label: 'dsh-mini', target: ['mac-arm64', 'mac-x64'] } }
+  for (const path of ['macos-package.yml', 'macos-intel-package.yml']) {
+    f.run.path = `.github/workflows/${path}`
+    expect(selectDesktopPackage('owner/repo', { package_run_id: '42' }, routes, f.api))
+      .toMatchObject({ runnerName: 'mini', runnerLabel: 'dsh-mini' })
+  }
+  expect(() => selectDesktopPackage('owner/repo', { package_run_id: '42' }, f.routes, f.api)).toThrow(/no configured/u)
+  for (const target of [[], ['mac-x64', 'linux-x64']]) {
+    expect(() => selectDesktopPackage('owner/repo', { package_run_id: '42' }, { mini: { label: 'dsh-mini', target } }, f.api)).toThrow()
+  }
+})

@@ -60,7 +60,7 @@ function paged<T>(items: readonly T[], page: Page): { readonly slice: T[]; reado
 
 /**
  * Register the read-only `plugin_market` tool while the `pluginMarket` service is mounted. The service comes from the
- * optional custom plugin markets bundle, so a preset can keep this row without the tool appearing or the row waiting.
+ * optional custom plugin indexes bundle, so a preset can keep this row without the tool appearing or the row waiting.
  * @param ctx - Agent-scoped tool registration context.
  */
 export function apply(ctx: Context): void {
@@ -136,6 +136,6 @@ function registerTool(ctx: Context): void {
         default: return assertNever(args.action)
       }
     },
-    presentCall: args => ({ card: 'generic', title: 'Browse plugin market', kind: 'read', rawInput: args }),
+    presentCall: args => ({ card: 'generic', title: 'Browse plugin indexes', kind: 'read', rawInput: args }),
   }))
 }

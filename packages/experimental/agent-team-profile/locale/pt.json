@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Equipes de agentes",
+    "description": "Permite que o agente com quem você conversa divida um trabalho entre colegas de equipe nomeados, acompanhe-o em um quadro de tarefas compartilhado e informe você com os resultados deles.",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -29,7 +29,7 @@ export function preflightDesktopPublish(repository, inputs, api) {
   for (const { name } of pages.flatMap(page => page.artifacts)) {
     if (!name.endsWith(`-${inputs.package_run_id}-${attempt}`)) continue
     const qualification = name.startsWith('windows-x64-unsigned-') ? 'unsigned'
-      : name.startsWith('macos-arm64-unnotarized-debug-') ? 'unnotarized' : ''
+      : /^macos-(?:arm64|x64)-unnotarized-debug-/u.test(name) ? 'unnotarized' : ''
     const diagnostic = desktopPublishQualificationError(qualification)
     if (diagnostic) throw new Error(diagnostic)
   }

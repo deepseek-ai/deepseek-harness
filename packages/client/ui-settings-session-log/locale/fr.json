@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Paramètres de téléchargement du journal de session",
+    "description": "Définit si les journaux de session sont téléchargés avec les requêtes DeepSeek de modèle officiel API."
+  }
+}

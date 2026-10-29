@@ -68,7 +68,7 @@ it('loads a combo map through the tunnel and embeds it in the blob script', asyn
   })
   await vi.waitFor(() => { expect(sent).toHaveLength(2) })
   expect(sent[1]?.url).toBe(`http://localhost:3000/plugins/${mapUrl}`)
-  const map = '{"version":3,"sections":[]}'
+  const map = '{"version":3,"names":["中文"],"sections":[]}'
   deliver({
     t: 'res',
     id: 2,

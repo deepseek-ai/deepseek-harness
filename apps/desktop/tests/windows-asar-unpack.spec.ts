@@ -125,6 +125,42 @@ async function packageFixture(input: Awaited<ReturnType<typeof fixture>>) {
   }).pack([{ src: mapping.from, destination: join(destination, 'dsh'), files, metadata }])
 }
 
+it('includes the diagnostic worker in the archive selected by the shipping file rules', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'diagnostic-worker-asar-'))
+  roots.push(root)
+  const appDir = join(root, 'app')
+  const resources = join(root, 'resources')
+  const destination = join(resources, 'app')
+  await mkdir(join(appDir, 'lib'), { recursive: true })
+  await mkdir(resources)
+  const worker = join(appDir, 'lib', 'operation-report-worker.js')
+  const excluded = join(appDir, 'lib', 'not-shipped.js')
+  await writeFile(worker, 'export {}')
+  await writeFile(excluded, 'export {}')
+  const config = unsignedWindowsConfig('com.example.diagnostics', join(root, 'dsh'))
+  const filesConfig = config.files.map(entry => typeof entry === 'string' ? entry : { ...entry, filter: [...entry.filter] })
+  const matchers = getFileMatchers({ files: filesConfig }, 'files', destination, {
+    defaultSrc: appDir, globalOutDir: root, customBuildOptions: {}, macroExpander: value => value,
+  })!
+  const matcher = matchers.find(entry => entry.from === appDir)!
+  const filter = matcher.createFilter()
+  const files: string[] = []
+  const metadata = new Map<string, Stats>()
+  for (const file of [worker, excluded]) {
+    const stat = await lstat(file)
+    if (filter(file, stat)) {
+      files.push(file)
+      metadata.set(file, stat)
+    }
+  }
+  await new AsarPackager({ info: { getWorkspaceRoot: async () => root } }, {
+    defaultDestination: destination, resourcePath: resources, options: {}, unpackPattern: () => false,
+  }).pack([{ src: appDir, destination, files, metadata }])
+  const archive = await readAsar(join(resources, 'app.asar'))
+  expect(archive.getFile('lib/operation-report-worker.js').size).toBe(Buffer.byteLength('export {}'))
+  expect(() => archive.getFile('lib/not-shipped.js')).toThrow()
+})
+
 it.each([false, true])('unpacks PE files through builder source patterns (external=%s)', async (external) => {
   const input = await fixture(external)
   const files = await prepareWindowsAsarUnpack(input.context, input.source)

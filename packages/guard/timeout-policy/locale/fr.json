@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Contrôle du délai d'expiration des appels d'outils",
+    "description": "Envoyez un signal d'annulation en fonction de la limite de temps de chaque outil et renvoyez le résultat du délai d'attente."
+  }
+}

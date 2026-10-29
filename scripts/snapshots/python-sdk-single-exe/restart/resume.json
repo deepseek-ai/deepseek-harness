@@ -1,0 +1,26 @@
+{
+  "model": "resumed-smoke-model",
+  "final_response": "RESUMED_PROCESS_OK",
+  "eventTypes": [
+    "agent/inbox/spliced",
+    "turn/start",
+    "agent/inbox/spliced",
+    "step/start",
+    "user/message",
+    "request/header",
+    "request/context",
+    "session-log-deepseek/delivery-accepted",
+    "assistant/message",
+    "step/end",
+    "turn/end"
+  ],
+  "selectionEvents": [
+    {
+      "type": "model/selection",
+      "data": {
+        "provider": "deepseek-official",
+        "model": "resumed-smoke-model"
+      }
+    }
+  ]
+}

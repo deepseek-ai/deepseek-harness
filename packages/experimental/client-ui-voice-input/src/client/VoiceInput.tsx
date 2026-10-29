@@ -31,7 +31,12 @@ export interface VoiceInputActions {
 
 /** Entry-injected Host readiness and microphone operations. */
 export interface VoiceInputInjected extends VoiceInputActions {
-  hooks: { speechReadiness: HostObservable<SpeechReadiness>; microphoneDevice: HostObservable<MicrophoneDevice> }
+  hooks: {
+    speechReadiness: HostObservable<SpeechReadiness>
+    microphoneDevice: HostObservable<MicrophoneDevice>
+    /** Whether the Plugins page navigation service is present; the setup dialog offers the details only while it is. */
+    pluginNavigation: HostObservable<boolean>
+  }
 }
 
 /** Composer-owned expansion and draft actions; preferences stay in plugin settings. */
@@ -58,8 +63,9 @@ async function disposeRecording(capture: Recording): Promise<void> {
 
 /** Render a compact microphone or an expanded capture, transcription, or retry row. */
 export function VoiceInput({ sessionId, inputActions, locked, onActiveChange,
-  createRecording, transcribe, openSettings, useSpeechReadiness, t }: VoiceInputProps) {
+  createRecording, transcribe, openSettings, useSpeechReadiness, usePluginNavigation, t }: VoiceInputProps) {
   const readiness = useSpeechReadiness(value => value), catalog = readiness.catalog
+  const navigable = usePluginNavigation(present => present)
   const provider = catalog?.providers.find(item => item.id === catalog.selection.providerId)
   const usable = readiness.connected && (provider?.preparation.phase === 'ready' || provider?.preparation.phase === 'standby'
     || provider?.preparation.phase === 'waking')
@@ -153,7 +159,8 @@ export function VoiceInput({ sessionId, inputActions, locked, onActiveChange,
     </Tooltip>
     <VoiceSetupDialog open={setupOpen && !usable}
       needsInstallation={readiness.connected && provider?.location === 'host-local' && provider.preparation.phase === 'unprepared'}
-      onDismiss={() => { setSetupOpen(false) }} onOpenDetails={() => { setSetupOpen(false); openSettings() }} t={t} />
+      onDismiss={() => { setSetupOpen(false) }}
+      onOpenDetails={navigable ? () => { setSetupOpen(false); openSettings() } : undefined} t={t} />
   </>
   return <div className={css.captureRow} data-voice-activity={phase}>
     <Button type="button" className={css.roundButton} size="sm" aria-label={t(pending ? 'discard' : 'cancel')}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Claude Code 钩子",
+    "description": "在 Harness 拦截点执行 Claude Code hooks.json 或 settings 中配置的钩子。"
+  }
+}

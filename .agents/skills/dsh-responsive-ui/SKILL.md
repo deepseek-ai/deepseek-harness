@@ -1,6 +1,6 @@
 ---
 name: dsh-responsive-ui
-description: Use when designing, implementing, or reviewing responsive client layouts, text truncation, title wrapping, icon-only controls, mobile hover, tooltips and keyboard behavior, and focus during width changes in DeepSeek Harness.
+description: Use when designing, implementing, or reviewing responsive client layouts, mobile and touch detection, text truncation, title wrapping, icon-only controls, mobile hover, tooltips and keyboard behavior, and focus during width changes in DeepSeek Harness.
 ---
 
 # Responsive client UI
@@ -39,10 +39,10 @@ Use a viewport width of 390 CSS px as the primary acceptance minimum. There must
 
 ## 6. Mobile hover behavior
 
-1. Enable mouse-hover effects only on devices that support hovering. Use `@media (hover: hover)`, not viewport width, to determine this.
-2. Tapping on a phone must not leave behind backgrounds, highlights, or action-button visibility intended only for hover.
-3. Preserve normal selected, enabled, and pressed states, as well as focus indicators for keyboard interaction.
-4. Try to preserve focus when the width changes, unless the focused element disappears from the page as a result.
+1. Enable hover effects under `@media (hover: hover)`, independently of viewport width. This queries the primary pointing device, not the current event; JavaScript hover handlers must ignore touch events on mixed-input devices.
+2. Tapping on a phone must not leave behind backgrounds, highlights, or action-button visibility intended only for hover. Without hover, actions remain visible or reachable through an explicit control. Keyboard users can reach and reveal the same actions.
+3. Preserve normal selected, expanded, enabled, and pressed states, as well as focus indicators. Keep these styles independent of hover capability. Do not clear focus to remove a hover effect; `:focus-visible` can also apply to text fields focused by touch.
+4. Preserve focus during width changes when the control remains visible and interactive. Avoid remounting controls only to change layout. If the focused control is hidden or removed, move focus to a suitable remaining control without opening the mobile keyboard unnecessarily.
 
 ## 7. Mobile tooltips
 
@@ -52,3 +52,8 @@ Use a viewport width of 390 CSS px as the primary acceptance minimum. There must
 ## 8. Mobile keyboard
 
 On mobile, do not raise the input keyboard automatically unless it is explicitly intended.
+
+## 9. Input capabilities and mobile text fields
+
+1. Prefer CSS media features for presentation: `(pointer: coarse)` describes the primary pointer's accuracy, `(hover: none)` describes its inability to hover, and width queries select layout breaks. These queries do not detect a physical keyboard. Never branch layout on a parsed user agent.
+2. Text fields take a 16px floor under `(pointer: coarse)` to avoid iOS Safari's focus zoom. Fine pointers keep the existing compact field sizes. Use the field rules in `packages/client/ui-plugin-manager/src/client/PluginManagerPage.module.css` as the reference.

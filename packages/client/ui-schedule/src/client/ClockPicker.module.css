@@ -31,8 +31,10 @@
   outline: none;
 }
 
-.option:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .option:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .option:focus-visible {

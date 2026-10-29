@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Heredar el backend del agente secundario de contexto",
+    "description": "Cree un agente secundario utilizando un fragmento del historial de la sesión principal."
+  }
+}

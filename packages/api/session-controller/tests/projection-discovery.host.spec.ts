@@ -239,7 +239,7 @@ describe('Session projection discovery', () => {
       kind: 'sequenced', asOfSeq: 0,
       values: { subagentCatalog: [{ id: 'current-child', mode: 'continuable', label: 'worker' }] },
     })
-    expect(observe).toHaveBeenCalledWith(parent.header.id, { signal })
+    expect(observe).toHaveBeenCalledWith(parent.header.id, { signal, projectionMode: 'all' })
     expect(open).toHaveBeenCalledWith(parent.header.id, 'read', { signal })
     expect(fixture.ctx.sessions.get(parent.header.id)).toBeUndefined()
     expect(fixture.ctx.agents.get(parent.header.id)).toBeUndefined()
@@ -310,7 +310,7 @@ describe('Session projection discovery', () => {
       .rejects.toMatchObject({ code: 'session/projections-unavailable' })
   })
 
-  it.each([false, true])('rechecks live history when the stored source disappears after preflight (attached: %s)', async (attached) => {
+  it.each([false, true])('returns the observation not-found result without a second live lookup (attached: %s)', async (attached) => {
     const fixture = await harness()
     const parent = await stored(fixture, SessionId('missing-after-preflight'))
     const snapshot = await fixture.ctx.sessionPersistence.stat(parent.header.id)
@@ -322,9 +322,8 @@ describe('Session projection discovery', () => {
       })
 
     const result = await fixture.controller.projections({ sessionId: parent.header.id }, new AbortController().signal)
-    expect(result).toEqual(attached
-      ? { kind: 'sequenced', ...fixture.ctx.sessionProjections.snapshot(fixture.ctx.sessions.get(parent.header.id)!) }
-      : null)
+    expect(result).toBeNull()
+    expect(fixture.ctx.sessions.get(parent.header.id) !== undefined).toBe(attached)
   })
 
   it('serves the live registry cut instead of a conflicting cached hint', async () => {
@@ -342,7 +341,7 @@ describe('Session projection discovery', () => {
     expect(cached).not.toHaveBeenCalled()
   })
 
-  it.each([true, false])('prefers a Session attached during stat (stored header present: %s)', async (present) => {
+  it.each([true, false])('uses migration preflight before observing a Session attached during stat (stored header present: %s)', async (present) => {
     const fixture = await harness()
     const parent = await stored(fixture, SessionId('stat-race'), {}, 3)
     const snapshot = await fixture.ctx.sessionPersistence.stat(parent.header.id)
@@ -358,7 +357,9 @@ describe('Session projection discovery', () => {
       const live = fixture.ctx.sessions.create(parent.header.id, { meta: parent.header })
       live.append('turn/start', { turn: 1 })
       finish.resolve(present ? snapshot : undefined)
-      await expect(operation).resolves.toEqual({ kind: 'sequenced', ...fixture.ctx.sessionProjections.snapshot(live) })
+      await expect(operation).resolves.toEqual(present
+        ? { kind: 'migration-required', values: {} }
+        : { kind: 'sequenced', ...fixture.ctx.sessionProjections.snapshot(live) })
     } finally {
       finish.resolve(undefined)
       await Promise.allSettled([operation])

@@ -21,7 +21,9 @@
   transition: background-color 120ms ease;
 }
 :global(body[data-ds-dark-theme]) .card { --plan-card-fill: var(--dsw-static-neutral-850); --plan-card-hover: var(--dsw-static-neutral-800); }
-.card:hover { background: var(--plan-card-hover); }
+@media (hover: hover) {
+  .card:hover { background: var(--plan-card-hover); }
+}
 .card:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 3px; }
 .cardIcon { box-sizing: border-box; flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 10px; background: color-mix(in srgb, var(--dsw-static-neutral-00) 50%, transparent); }
 :global(body[data-ds-dark-theme]) .cardIcon { background: color-mix(in srgb, var(--dsw-static-neutral-00) 5%, transparent); }
@@ -30,10 +32,14 @@
 .cardDescription { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 16px; }
 .cardOpen { box-sizing: border-box; display: inline-flex; flex: none; align-items: center; height: 28px; padding: 4px 8px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-button-floating-fill); font-size: 12px; line-height: 18px; }
 .reviewLink { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; cursor: pointer; }
-.reviewLink:hover { color: var(--dsw-alias-label-primary); }
+@media (hover: hover) {
+  .reviewLink:hover { color: var(--dsw-alias-label-primary); }
+}
 .reviewLink:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 3px; }
 .preview { position: relative; height: 100%; overflow: auto; padding: 20px 24px 40px; box-sizing: border-box; }
 .document { color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 1.75; overflow-wrap: anywhere; }
 .message { padding: 24px; color: var(--dsw-alias-label-secondary); font-size: 14px; }
 .titleIcon { flex: none; }
-@media (max-width: 767px) { .preview { padding: 16px 18px 32px; } }
+@media (max-width: 767px) {
+  .preview { padding: 16px 18px 32px; }
+}

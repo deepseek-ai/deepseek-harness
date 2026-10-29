@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Agent Controller",
-    "description": "Admits messages from outside an Agent into its inbox."
-  }
-}

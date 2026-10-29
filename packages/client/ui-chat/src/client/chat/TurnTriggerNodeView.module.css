@@ -5,7 +5,9 @@
   background: var(--dsw-alias-turn-trigger-bg, var(--dsw-alias-markdown-code-block));
   transition: background-color 100ms ease;
 }
-.root:hover { background: var(--dsw-alias-turn-trigger-bg-hover, var(--dsw-alias-interactive-bg-hover)); }
+@media (hover: hover) {
+  .root:hover { background: var(--dsw-alias-turn-trigger-bg-hover, var(--dsw-alias-interactive-bg-hover)); }
+}
 .header {
   display: flex;
   align-items: center;
@@ -20,7 +22,9 @@
   text-align: left;
   cursor: pointer;
 }
-.header:hover { color: var(--dsw-alias-label-secondary); }
+@media (hover: hover) {
+  .header:hover { color: var(--dsw-alias-label-secondary); }
+}
 .icon { display: inline-flex; flex: none; color: inherit; }
 .title { flex: none; font-size: var(--dsh-content-font-size, 14px); }
 .time { flex: none; margin-left: auto; color: inherit; font: var(--dsw-font-xxs-12); }

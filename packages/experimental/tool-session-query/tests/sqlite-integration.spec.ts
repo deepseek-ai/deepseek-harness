@@ -1,3 +1,5 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -47,6 +49,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     await registerTurnBoundary(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
     await ctx.plugin(SqliteSessionQueryEngine, { path: join(root, 'session-query.db') })
     await ctx.plugin(ToolSessionQuery)
@@ -85,7 +88,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     caller.append('step/start', { turn: 1, step: 1 })
 
     let call = 0
-    const execute = (name: string, args: unknown) => ctx.tools.execute({
+    const execute = (name: string, args: unknown) => executeToolFixture(ctx, {
       name,
       arguments: args,
       callId: ToolCallId(`integration-${++call}`),
@@ -120,6 +123,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     await registerTurnBoundary(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
     await ctx.plugin(SqliteSessionQueryEngine, { path: join(root, 'session-query.db') })
     await ctx.plugin(ToolSessionQuery)
@@ -181,7 +185,7 @@ describe('tool-session-query with the real SQLite provider', () => {
       meta: { createdAt: base + 1_000, cwd: '/work' },
     })
     let call = 0
-    const execute = (args: unknown) => ctx.tools.execute({
+    const execute = (args: unknown) => executeToolFixture(ctx, {
       name: 'session_event_search',
       arguments: args,
       callId: ToolCallId(`fractional-integration-${++call}`),

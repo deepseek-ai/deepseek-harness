@@ -10,17 +10,15 @@ macOS privileges authorize an execution host, not a user's choice of target appl
 
 ## Decision
 
-The CUA executor owns application consent for every object-API and native-tool dispatch. It uses the existing User Questions service for human decisions and the provider's existing profile configuration for saved grants. The existing question UI presents the offered labels; the executor rejects custom text or answers that do not select exactly one offered label. Permission-page icons and names are presentation metadata, excluded from saved identities and model results. General tool approval and operating-system privileges remain separate requirements. Arbitrary persistent PTC code and separately authorized shell tools retain their own execution authority.
+The CUA executor owns application consent for every object-API and native-tool dispatch. It uses the existing User Questions service for human decisions and profile-scoped domain storage for saved grants. Its fixed approval presentation reuses the tool-approval card without adopting the session's tool-approval policy. Native icons and names are presentation metadata, excluded from saved identities and model results. General tool approval and operating-system privileges remain separate requirements. Arbitrary persistent PTC code and separately authorized shell tools retain their own execution authority.
 
 System-permission buttons call the native helper on the DSH host and remain available to remote browsers. The [usage documentation](../../../../packages/experimental/cua/README.md#use-this-package) explains where to complete authorization; the page has no persistent remote-access notice.
 
-A saved identity combines the canonical executable path with a verified designated signing requirement, represented by a SHA-256 digest. The path prevents authorization from following a copied application, and the signing requirement distinguishes replacements while allowing matching signed updates. Unverifiable and ad-hoc applications receive session access only, tied to a process instance. Labels do not establish identity.
+Application identity is owned by [bundle-ID consent](2026-10-25-cua-bundle-id-consent.md), which supersedes this note's original path/signature choice. That original choice prevented copied or replaced applications from inheriting access, at the cost of separate grants per installation and no saved grants for unsigned applications. Enforcement and human decision ownership remain as described here.
 
-Cold application selection prepares an executable identity and handle without launching. The same consent decision guards the private launch continuation, and the helper checks the executable again before launch and binds the resulting process afterward. Signed selections retain the normal designated-requirement identity; an unverifiable executable uses a content identity for this pending selection and cannot create a saved grant. Preparing metadata before asking avoids starting an application the user refuses.
+Cold application selection prepares an executable identity and handle without launching. The same consent decision guards the private launch continuation, and the helper checks the executable again before launch and binds the resulting process afterward. Selections with a bundle identifier retain that identity after launch; an application without one uses its canonical executable path before and after launch and can save that grant. Preparing metadata before asking avoids starting an application the user refuses.
 
-Session decisions are kept in memory by Session ID and application identity. Agent disposal and helper replacement release native handles without discarding these decisions; provider disposal or DSH restart clears them. This scope covers follow-up turns without relying on the model to decide when a user intent has ended.
-
-Selections of the same application within one session are serialized, so a pending question does not produce competing decisions. Saved-grant additions and revocations share one mutation queue and read the current grant list inside it. Provider shutdown cancels writes still waiting for HMR admission; admitted writes settle before disposal completes. Refusals prevent another prompt until the user permits asking again; a restored saved grant takes precedence in both dispatch and the permission-page projection.
+Conversation decisions survive provider disposal and DSH restart according to [profile consent storage](2026-10-19-cua-profile-consent-storage.md). That decision owns persistence, migration and cross-process revocation. The executor continues to serialize application selections within a conversation, refuse repeated prompts after denial, and give an explicit long-term grant precedence over conversation refusals.
 
 Revocation invalidates the Agent connections that retain the application's handles, then awaits native cleanup. Reauthorization uses a fresh connection, so old app and window snapshots cannot become valid again. The [native object decision](2026-09-17-experimental-cua-object-api.md) continues to own process identity, coordinate semantics, and separation from the evaluator.
 
@@ -28,9 +26,9 @@ Revocation invalidates the Agent connections that retain the application's handl
 
 **Trust model instructions or hide controls.** Retained objects and direct tool calls can still reach native operations. The executor must enforce the decision at dispatch.
 
-**Persist application names or unsigned paths.** A replacement can reuse both. Durable grants require a verifiable signing identity; session access supports unsigned development applications without that promise.
+**Persist application names or unsigned paths.** A replacement can reuse both. [Bundle-ID consent](2026-10-25-cua-bundle-id-consent.md) owns the identity choices and the decision to share permission between installations.
 
-**Add an approval database or Session control stream.** Profile settings already own user configuration, and User Questions already owns interactive answers. The permission UI observes the provider and its owning settings namespace without another authorization store or event channel.
+**Add an approval database or Session control stream.** User Questions already owns interactive answers. The existing domain service provides durable state without introducing a dedicated database or Session control stream; storage tradeoffs are owned by the profile consent decision.
 
 **Disable permission buttons based on the browser address.** A user may operate the DSH host through screen sharing and complete authorization there. Port forwarding and proxies make the address an unreliable indication of whether the browser and DSH run on the same computer.
 

@@ -174,7 +174,7 @@ describe('GoalBar', () => {
     vi.useFakeTimers()
     try {
       render(<GoalBar goal={makeGoal()} activation="armed" {...makeActions()} t={t} />)
-      fireEvent.mouseEnter(screen.getByRole('button', { name: '暂停目标' }))
+      fireEvent.pointerEnter(screen.getByRole('button', { name: '暂停目标' }))
       act(() => { vi.advanceTimersByTime(500) })
       const tooltip = screen.getByRole('tooltip')
       expect(tooltip.textContent).toBe('暂停目标')
@@ -205,6 +205,14 @@ describe('GoalBar', () => {
     render(<GoalBar goal={goal} {...actions} t={t} />)
     expect(screen.getByText('受阻的目标')).toBeTruthy()
     expect(screen.getByText('受阻的目标').closest('[title]')?.getAttribute('title')).toBe('No progress in 3 rounds')
+  })
+
+  it('blocked goal: offers resume and no pause', () => {
+    const actions = makeActions()
+    render(<GoalBar goal={makeGoal({ phase: 'blocked' })} {...actions} t={t} />)
+    expect(screen.queryByRole('button', { name: '暂停目标' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '恢复目标' }))
+    expect(actions.onResume).toHaveBeenCalledTimes(1)
   })
 
   it('blocked goal without a reason carries no tooltip', () => {

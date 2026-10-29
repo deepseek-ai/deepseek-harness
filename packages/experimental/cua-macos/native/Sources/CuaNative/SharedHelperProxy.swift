@@ -3,14 +3,14 @@ import Foundation
 import CryptoKit
 import Darwin
 
-enum SharedHelperProxy {
-    static func run(configuration: HelperConfiguration) throws {
+@MainActor enum SharedHelperProxy {
+    static func run(configuration: HelperConfiguration) async throws {
         guard let executable = NativePlatform.executablePath(getpid()) else { throw SharedSocket.failure("Resolving helper executable") }
         let digest = SHA256.hash(data: try Data(contentsOf: URL(fileURLWithPath: executable), options: .mappedIfSafe))
             .map { String(format: "%02x", $0) }.joined()
         let options = try SharedHelperOptions(arguments: ["--ensure-shared", "--runtime-key", digest,
             "--runtime-directory", "/tmp/dsh-cua-\(getuid())", "--startup-timeout-ms", String(configuration.timeoutSeconds * 1000)])
-        let channel = try connect(options)
+        let channel = try await connect(options)
         defer { channel.shutdown() }
         let hello = JSONValue.object(["type": .string("hello"), "protocol": .number(1), "runtimeKey": .string(digest), "config": .object([
             "maxRequestBytes": .number(Double(configuration.maxRequestBytes)), "maxResponseBytes": .number(Double(configuration.maxResponseBytes)),
@@ -67,10 +67,10 @@ enum SharedHelperProxy {
         return true
     }
 
-    private static func connect(_ options: SharedHelperOptions) throws -> SharedSocket {
-        let started = DispatchTime.now().uptimeNanoseconds
+    private static func connect(_ options: SharedHelperOptions) async throws -> SharedSocket {
+        let deadline = options.startupDeadline()
         repeat {
-            try SharedHelperLauncher.ensure(options, publishReady: false)
+            try await SharedHelperLauncher.ensure(options, publishReady: false, deadline: deadline)
             let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
             guard descriptor >= 0 else { throw SharedSocket.failure("Creating stdio client socket") }
             let channel = SharedSocket(descriptor: descriptor)
@@ -85,7 +85,7 @@ enum SharedHelperProxy {
             let error = errno
             guard error == ENOENT || error == ECONNREFUSED else { throw SharedSocket.failure("Connecting stdio client") }
             usleep(10_000)
-        } while Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000 < options.startupTimeout
+        } while DispatchTime.now().uptimeNanoseconds < deadline
         throw NativeFailure(code: "NATIVE_STARTUP_TIMEOUT", message: "Shared helper did not accept the stdio client")
     }
 

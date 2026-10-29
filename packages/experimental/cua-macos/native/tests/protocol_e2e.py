@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 import time
 
-from native_test_support import BINARY, stop_group
+from native_test_support import default_binary, stop_group
 
 
 def request(identifier, method, params):
@@ -178,9 +178,10 @@ def main():
     if not __debug__:
         raise RuntimeError("Run this assertion-based regression without Python -O")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--helper", type=Path, default=BINARY, help="Built JSONL helper; defaults to native_test_support.BINARY")
+    parser.add_argument("--helper", type=Path, default=None, help="Built JSONL helper; defaults to the packaged application")
     parser.add_argument("--timeout", type=float, default=30, help="Seconds allowed for each owned helper to drain and exit")
     args = parser.parse_args()
+    args.helper = args.helper or default_binary()
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("--timeout must be positive and finite")
     helper = args.helper.resolve(strict=True)

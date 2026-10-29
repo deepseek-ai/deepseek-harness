@@ -1,0 +1,135 @@
+- banner:
+  - navigation "Session hierarchy": Quote history
+  - button "More actions"
+  - button "Open right sidebar"
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+  - button "More conversation views"
+- text: Durable source phrase selected from an earlier message and preserved as structured quote metadata. {{clock}}
+- button "Copy"
+- text: /quoted-demo @[Quote source](dsh-session:InJpY2gtdGV4dC1xdW90ZXMtb3RoZXIi) sk-{{uuid}}ghijklmnopqrstuvwxyz **literal Markdown** Quote line 1 contains preserved text. Quote line 2 contains preserved text. Quote line 3 contains preserved text. Quote line 4 contains preserved text. Quote line 5 contains preserved text. Quote line 6 contains preserved text. Quote line 7 contains preserved text. Quote line 8 contains preserved text. Quote line 9 contains preserved text. Quote line 10 contains preserved text. Quote line 11 contains preserved text. Quote line 12 contains preserved text. Quote line 13 contains preserved text. Quote line 14 contains preserved text. Quote line 15 contains preserved text. Quote line 16 contains preserved text. Quote line 17 contains preserved text. Quote line 18 contains preserved text. Quote line 19 contains preserved text. Quote line 20 contains preserved text. Quote line 21 contains preserved text. Quote line 22 contains preserved text. Quote line 23 contains preserved text. Quote line 24 contains preserved text. Quote line 25 contains preserved text. Quote line 26 contains preserved text. Quote line 27 contains preserved text. Quote line 28 contains preserved text. Quote line 29 contains preserved text. Quote line 30 contains preserved text. Quote line 31 contains preserved text. Quote line 32 contains preserved text. Quote line 33 contains preserved text. Quote line 34 contains preserved text. Quote line 35 contains preserved text. Quote line 36 contains preserved text. Quote line 37 contains preserved text. Quote line 38 contains preserved text. Quote line 39 contains preserved text. Quote line 40 contains preserved text. Quote line 41 contains preserved text. Quote line 42 contains preserved text. Quote line 43 contains preserved text. Quote line 44 contains preserved text. Quote line 45 contains preserved text. Quote line 46 contains preserved text. Quote line 47 contains preserved text. Quote line 48 contains preserved text. Quote line 49 contains preserved text. Quote line 50 contains preserved text. Quote line 51 contains preserved text. Quote line 52 contains preserved text. Quote line 53 contains preserved text. Quote line 54 contains preserved text. Quote line 55 contains preserved text. Quote line 56 contains preserved text. Quote line 57 contains preserved text. Quote line 58 contains preserved text. Quote line 59 contains preserved text. Quote line 60 contains preserved text. Quote line 61 contains preserved text. Quote line 62 contains preserved text. Quote line 63 contains preserved text. Quote line 64 contains preserved text. Quote line 65 contains preserved text. Quote line 66 contains preserved text. Quote line 67 contains preserved text. Quote line 68 contains preserved text. Quote line 69 contains preserved text. Quote line 70 contains preserved text. Quote line 71 contains preserved text. Quote line 72 contains preserved text. Quote line 73 contains preserved text. Quote line 74 contains preserved text. Quote line 75 contains preserved text. Quote line 76 contains preserved text. Quote line 77 contains preserved text. Quote line 78 contains preserved text. Quote line 79 contains preserved text. Quote line 80 contains preserved text. End of long quote. {{clock}}
+- button "Copy"
+- text: Filler message 3 {{clock}}
+- button "Copy"
+- text: Filler message 4 {{clock}}
+- button "Copy"
+- text: Filler message 5 {{clock}}
+- button "Copy"
+- text: Filler message 6 {{clock}}
+- button "Copy"
+- text: Filler message 7 {{clock}}
+- button "Copy"
+- text: Filler message 8 {{clock}}
+- button "Copy"
+- text: Filler message 9 {{clock}}
+- button "Copy"
+- text: Filler message 10 {{clock}}
+- button "Copy"
+- text: Filler message 11 {{clock}}
+- button "Copy"
+- text: Filler message 12 {{clock}}
+- button "Copy"
+- text: Filler message 13 {{clock}}
+- button "Copy"
+- text: Filler message 14 {{clock}}
+- button "Copy"
+- text: Filler message 15 {{clock}}
+- button "Copy"
+- text: Filler message 16 {{clock}}
+- button "Copy"
+- text: Filler message 17 {{clock}}
+- button "Copy"
+- text: Filler message 18 {{clock}}
+- button "Copy"
+- text: Filler message 19 {{clock}}
+- button "Copy"
+- text: Filler message 20 {{clock}}
+- button "Copy"
+- text: Filler message 21 {{clock}}
+- button "Copy"
+- text: Filler message 22 {{clock}}
+- button "Copy"
+- text: Filler message 23 {{clock}}
+- button "Copy"
+- text: Filler message 24 {{clock}}
+- button "Copy"
+- text: Filler message 25 {{clock}}
+- button "Copy"
+- text: Filler message 26 {{clock}}
+- button "Copy"
+- text: Filler message 27 {{clock}}
+- button "Copy"
+- text: Filler message 28 {{clock}}
+- button "Copy"
+- text: Filler message 29 {{clock}}
+- button "Copy"
+- text: Filler message 30 {{clock}}
+- button "Copy"
+- text: Filler message 31 {{clock}}
+- button "Copy"
+- text: Filler message 32 {{clock}}
+- button "Copy"
+- text: Filler message 33 {{clock}}
+- button "Copy"
+- text: Filler message 34 {{clock}}
+- button "Copy"
+- text: Filler message 35 {{clock}}
+- button "Copy"
+- text: Filler message 36 {{clock}}
+- button "Copy"
+- text: Filler message 37 {{clock}}
+- button "Copy"
+- text: Filler message 38 {{clock}}
+- button "Copy"
+- text: Filler message 39 {{clock}}
+- button "Copy"
+- text: Filler message 40 {{clock}}
+- button "Copy"
+- text: Filler message 41 {{clock}}
+- button "Copy"
+- text: Filler message 42 {{clock}}
+- button "Copy"
+- text: Filler message 43 {{clock}}
+- button "Copy"
+- text: Filler message 44 {{clock}}
+- button "Copy"
+- text: Filler message 45 {{clock}}
+- button "Copy"
+- text: Filler message 46 {{clock}}
+- button "Copy"
+- text: Filler message 47 {{clock}}
+- button "Copy"
+- text: Filler message 48 {{clock}}
+- button "Copy"
+- text: Filler message 49 {{clock}}
+- button "Copy"
+- text: Filler message 50 {{clock}}
+- button "Copy"
+- text: Filler message 51 {{clock}}
+- button "Copy"
+- text: Durable source phrase selected from an earlier message and preserved as structured quote metadata. Use that excerpt. {{clock}}
+- button "Copy"
+- status: Completed
+- button "Completed in {{duration}}" [expanded]
+- button "Analysis completed" [expanded]
+- button "Think Settled reasoning source"
+- paragraph: Quote fixture ready.
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
+- text: {{clock}}
+- textbox "Message or run a task, / commands, @ files or sessions":
+  - paragraph:
+    - button "Remove quote"
+    - text: Settled reasoning source
+- button "Add files or run commands"
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
+- button "Send message"
+- button "1 turns 1 steps"
+
+## Literal quote body
+
+- text: /quoted-demo @Quote source sk-{{uuid}}ghijklmnopqrstuvwxyz **literal Markdown** Quote line 1 contains preserved text. Quote line 2 contains preserved text. Quote line 3 contains preserved text. Quote line 4 contains preserved text. Quote line 5 contains preserved text. Quote line 6 contains preserved text. Quote line 7 contains preserved text. Quote line 8 contains preserved text. Quote line 9 contains preserved text. Quote line 10 contains preserved text. Quote line 11 contains preserved text. Quote line 12 contains preserved text. Quote line 13 contains preserved text. Quote line 14 contains preserved text. Quote line 15 contains preserved text. Quote line 16 contains preserved text. Quote line 17 contains preserved text. Quote line 18 contains preserved text. Quote line 19 contains preserved text. Quote line 20 contains preserved text. Quote line 21 contains preserved text. Quote line 22 contains preserved text. Quote line 23 contains preserved text. Quote line 24 contains preserved text. Quote line 25 contains preserved text. Quote line 26 contains preserved text. Quote line 27 contains preserved text. Quote line 28 contains preserved text. Quote line 29 contains preserved text. Quote line 30 contains preserved text. Quote line 31 contains preserved text. Quote line 32 contains preserved text. Quote line 33 contains preserved text. Quote line 34 contains preserved text. Quote line 35 contains preserved text. Quote line 36 contains preserved text. Quote line 37 contains preserved text. Quote line 38 contains preserved text. Quote line 39 contains preserved text. Quote line 40 contains preserved text. Quote line 41 contains preserved text. Quote line 42 contains preserved text. Quote line 43 contains preserved text. Quote line 44 contains preserved text. Quote line 45 contains preserved text. Quote line 46 contains preserved text. Quote line 47 contains preserved text. Quote line 48 contains preserved text. Quote line 49 contains preserved text. Quote line 50 contains preserved text. Quote line 51 contains preserved text. Quote line 52 contains preserved text. Quote line 53 contains preserved text. Quote line 54 contains preserved text. Quote line 55 contains preserved text. Quote line 56 contains preserved text. Quote line 57 contains preserved text. Quote line 58 contains preserved text. Quote line 59 contains preserved text. Quote line 60 contains preserved text. Quote line 61 contains preserved text. Quote line 62 contains preserved text. Quote line 63 contains preserved text. Quote line 64 contains preserved text. Quote line 65 contains preserved text. Quote line 66 contains preserved text. Quote line 67 contains preserved text. Quote line 68 contains preserved text. Quote line 69 contains preserved text. Quote line 70 contains preserved text. Quote line 71 contains preserved text. Quote line 72 contains preserved text. Quote line 73 contains preserved text. Quote line 74 contains preserved text. Quote line 75 contains preserved text. Quote line 76 contains preserved text. Quote line 77 contains preserved text. Quote line 78 contains preserved text. Quote line 79 contains preserved text. Quote line 80 contains preserved text. End of long quote.

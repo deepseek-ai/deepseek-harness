@@ -1,71 +1,15 @@
-import { describe, expect, it } from 'vitest'
-import { EventEmitter } from 'node:events'
-import { LogBuffer, makeBindingErrorClasses, makeConsoleShim, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException, runProgram, wireReplies } from '../src/bootstrap.ts'
-import type { BootstrapPort, PatchableStream, PendingCall } from '../src/bootstrap.ts'
-import type { ReplyMessage, ProgramToHost } from '../src/protocol.ts'
-import { decodePtcJsonWire, encodePtcJsonWire } from '../src/json-wire.ts'
+import { runInNewContext } from 'node:vm'
+import { describe, expect, it, vi } from 'vitest'
+import { LogBuffer, makeBindingErrorClass, makeConsoleShim, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException } from '../src/bootstrap.ts'
+import type { BindingErrorConstructor, PatchableStream } from '../src/bootstrap.ts'
+import type { HostMethods } from '../src/protocol.ts'
+import { encodePtcJsonWire } from '../src/json-wire.ts'
 
-/**
- * An in-process stand-in for the worker's parentPort: the test plays the
- * HOST side — inspect what the bootstrap posted, feed replies back — so
- * every line of worker-side logic runs under coverage without spawning an
- * isolate (real-worker behavior is pinned by runtime.spec.ts).
- */
-class FakePort implements BootstrapPort {
-  sent: ProgramToHost[] = []
-  private readonly emitter = new EventEmitter()
-  /** Host-scripted responder; return undefined to leave the call pending. */
-  respond: (message: ProgramToHost) => ReplyMessage | undefined = () => undefined
-
-  postMessage(message: ProgramToHost): void {
-    this.sent.push(message)
-    const reply = this.respond(message)
-    if (reply) queueMicrotask(() => this.emitter.emit('message', reply))
-  }
-
-  on(event: 'message', listener: (message: ReplyMessage) => void): void {
-    this.emitter.on(event, listener)
-  }
-
-  deliver(message: ReplyMessage): void {
-    this.emitter.emit('message', message)
-  }
-
-  logs(): string[] {
-    return this.sent.filter(message => message.type === 'log').map(message => message.text)
-  }
-
-  done(): ProgramToHost | undefined {
-    return this.sent.find(message => message.type === 'done')
-  }
-
-  doneValue(): unknown {
-    const done = this.done()
-    return done?.type === 'done' && done.value !== undefined ? decodePtcJsonWire(done.value) : undefined
-  }
+function host(): Pick<HostMethods, 'invoke'> {
+  return { invoke: vi.fn<HostMethods['invoke']>(async () => encodePtcJsonWire(42)) }
 }
-
-function fakeStreams(): { stdout: PatchableStream; stderr: PatchableStream } {
-  return { stdout: { write: () => true }, stderr: { write: () => true } }
-}
-
-/** Capture one promise rejection without Vitest's intentionally `any` matcher channel. */
-async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {
-  try {
-    await promise
-    return undefined
-  } catch (error: unknown) {
-    return error
-  }
-}
-
-const BOOT = { maxOutputBytes: 65_536 }
 const TOOL_ERROR_CLASS = { name: 'ToolCallError', memberNameProperty: 'toolName' } as const
-
-/** One worker declaration for the PTC mode tools namespace. */
-function toolNamespace(names: string[]) {
-  return { global: 'tools', names, errorClass: TOOL_ERROR_CLASS }
-}
+function toolNamespace(names: string[]) { return { global: 'tools', names, errorClass: TOOL_ERROR_CLASS } }
 
 describe('LogBuffer', () => {
   it('streams entries to the sink until the byte budget, then emits one fitting prefix and reports the limit once', () => {
@@ -183,6 +127,15 @@ describe('prepareCompletion', () => {
 })
 
 describe('prepareException', () => {
+  it.each([
+    ['const error = new Error("foreign"); error.stack = "foreign stack"; error', 'foreign stack'],
+    ['const error = new Error("bare"); error.stack = undefined; error', 'bare'],
+    ['const error = new Error("hidden"); Object.defineProperty(error, "stack", { get() { throw 1 } }); error', 'program threw an unrenderable value'],
+  ])('formats a cross-realm error through the shared diagnostic path: %s', (source, message) => {
+    const error: unknown = runInNewContext(source)
+    expect(prepareException(error, 1_000)).toEqual({ error: { kind: 'exception', message } })
+  })
+
   it('passes a fitting diagnostic and rejects one byte over without carrying its text', () => {
     expect(prepareException('boom', 6, 64)).toEqual({ error: { kind: 'exception', message: 'boom' } })
     expect(prepareException('boom', 5, 64)).toEqual({
@@ -204,241 +157,40 @@ describe('prepareException', () => {
 })
 
 describe('makeNamespaces', () => {
-  it('rejects a malformed success reply instead of resolving a lossy binding value', async () => {
-    const port = new FakePort()
-    const pending = new Map<number, PendingCall>()
-    wireReplies(port, pending)
-    const result = new Promise<unknown>((resolve, reject) => { pending.set(1, { resolve, reject }) })
-    port.deliver({ type: 'reply', id: 1, ok: true, value: [undefined] as never })
-    await expect(result).rejects.toThrow('binding resolution must be lossless JSON')
-  })
-
-  it('exposes prototype-colliding names as ordinary own properties', async () => {
-    const port = new FakePort()
-    port.respond = message => message.type === 'call'
-      ? { type: 'reply', id: message.id, ok: true, value: encodePtcJsonWire(`${message.name}-ok`) }
-      : undefined
-    const pending = new Map<number, PendingCall>()
-    wireReplies(port, pending)
-    const [tools] = makeNamespaces({ namespaces: [{ global: 'tools', names: ['__proto__', 'constructor', 'toString'] }] }, port, pending, { value: 1 }) as [Record<string, (args: unknown) => Promise<unknown>>]
+  it('rejects malformed remote results and keeps prototype-colliding function names callable', async () => {
+    const remote = host()
+    remote.invoke = vi.fn(async (_global, name) => name === 'bad' ? [undefined] as never : encodePtcJsonWire(`${name}-ok`))
+    const [tools] = makeNamespaces({ namespaces: [{ global: 'tools', names: ['bad', '__proto__', 'constructor', 'toString'] }] }, remote, new Map<string, BindingErrorConstructor>()) as [Record<string, (args: unknown) => Promise<unknown>>]
     expect(Object.getPrototypeOf(tools)).toBeNull()
-    await expect(tools['__proto__']?.({})).resolves.toBe('__proto__-ok')
-    await expect(tools['constructor']?.({})).resolves.toBe('constructor-ok')
-    await expect(tools['toString']?.({})).resolves.toBe('toString-ok')
+    for (const name of ['__proto__', 'constructor', 'toString']) await expect(tools[name]?.({})).resolves.toBe(`${name}-ok`)
+    await expect(tools.bad?.({})).rejects.toThrow('binding resolution must be lossless JSON')
   })
 
-  it('rejects a postMessage clone failure without leaking the pending entry', async () => {
-    let firstCall = true
-    const throwingPort: BootstrapPort = {
-      // First call throws an Error (the real DataCloneError shape), the
-      // second a bare string — the rejection renders both.
-      postMessage: () => {
-        if (firstCall) { firstCall = false; throw new Error('DataCloneError-ish') }
-        throw 'raw-clone-failure'
-      },
-      on: () => {},
-    }
-    const pending = new Map<number, PendingCall>()
+  it('uses the declared constructor for remote and argument failures', async () => {
+    const remote = host()
     const data = { namespaces: [toolNamespace(['x'])] }
-    const errorClasses = makeBindingErrorClasses(data)
-    const ToolCallError = errorClasses.get('tools')
-    const [tools] = makeNamespaces(
-      data,
-      throwingPort,
-      pending,
-      { value: 1 },
-      errorClasses,
-    ) as [Record<string, (args: unknown) => Promise<unknown>>]
-    const first = await rejectionOf(tools.x?.({ first: true }) ?? Promise.resolve())
-    const second = await rejectionOf(tools.x?.({ second: true }) ?? Promise.resolve())
-    expect(first).toMatchObject({ name: 'ToolCallError', toolName: 'x' })
-    expect(second).toMatchObject({ name: 'ToolCallError', toolName: 'x' })
-    expect(first).toBeInstanceOf(ToolCallError)
-    expect(second).toBeInstanceOf(ToolCallError)
-    expect((first as Error).message).toMatch(/DataCloneError-ish/)
-    expect((second as Error).message).toMatch(/raw-clone-failure/)
-    expect(pending.size).toBe(0)
-  })
-
-  it('rejects lossy arguments before posting or allocating a call id', async () => {
-    let posts = 0
-    const port: BootstrapPort = { postMessage: () => { posts += 1 }, on: () => {} }
-    const pending = new Map<number, PendingCall>()
-    const nextId = { value: 1 }
-    const [tools] = makeNamespaces(
-      { namespaces: [toolNamespace(['x'])] }, port, pending, nextId,
-    ) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const classes = new Map([['tools', makeBindingErrorClass(TOOL_ERROR_CLASS)]])
+    const [tools] = makeNamespaces(data, remote, classes) as [Record<string, (args: unknown) => Promise<unknown>>]
     const decorated = [1]
     Object.defineProperty(decorated, 'extra', { value: true })
-    const throwing = Object.defineProperty({}, 'value', {
-      enumerable: true,
-      get: () => { throw new Error('getter exploded') },
-    })
-
+    const throwing = Object.defineProperty({}, 'value', { enumerable: true, get() { throw new Error('getter failed') } })
     for (const value of [() => 1, new Date(), decorated, throwing]) {
-      const failure = await rejectionOf(tools.x?.(value) ?? Promise.resolve())
-      expect(failure).toMatchObject({
-        name: 'ToolCallError', toolName: 'x', message: 'binding arguments must be lossless JSON',
-      })
+      await expect(tools.x?.(value)).rejects.toMatchObject({ name: 'ToolCallError', toolName: 'x', message: 'binding arguments must be lossless JSON' })
     }
-    expect(posts).toBe(0)
-    expect(pending.size).toBe(0)
-    expect(nextId.value).toBe(1)
-  })
-
-  it('uses ordinary Error for non-tools namespace failures', async () => {
-    const deniedPort = new FakePort()
-    deniedPort.respond = message => message.type === 'call'
-      ? { type: 'reply', id: message.id, ok: false, message: 'helper denied' }
-      : undefined
-    const deniedPending = new Map<number, PendingCall>()
-    wireReplies(deniedPort, deniedPending)
-    const [helpers] = makeNamespaces({ namespaces: [{ global: 'helpers', names: ['x'] }] }, deniedPort, deniedPending, { value: 1 }) as [Record<string, (args: unknown) => Promise<unknown>>]
-    const denied = await rejectionOf(helpers.x?.({}) ?? Promise.resolve())
-    expect(denied).toBeInstanceOf(Error)
-    expect(denied).toMatchObject({ name: 'Error', message: 'helper denied' })
-    expect(denied).not.toHaveProperty('toolName')
-
-    const invalid = await rejectionOf(helpers.x?.(() => 1) ?? Promise.resolve())
-    expect(invalid).toBeInstanceOf(Error)
-    expect((invalid as Error).message).toBe('binding arguments must be lossless JSON')
-
-    const clonePort: BootstrapPort = { postMessage: () => { throw new Error('clone failed') }, on: () => {} }
-    const [cloneHelpers] = makeNamespaces({ namespaces: [{ global: 'helpers', names: ['x'] }] }, clonePort, new Map(), { value: 1 }) as [Record<string, (args: unknown) => Promise<unknown>>]
-    const cloneFailure = await rejectionOf(cloneHelpers.x?.({}) ?? Promise.resolve())
-    expect(cloneFailure).toBeInstanceOf(Error)
-    expect(cloneFailure).not.toHaveProperty('toolName')
-  })
-})
-
-describe('runProgram', () => {
-  it('runs a program end-to-end: bindings, console, return value', async () => {
-    const port = new FakePort()
-    port.respond = (message) => {
-      if (message.type !== 'call') return undefined
-      const args = decodePtcJsonWire(message.args) as { n: number }
-      return { type: 'reply', id: message.id, ok: true, value: encodePtcJsonWire(args.n * 2) }
+    expect(vi.mocked(remote.invoke).mock.calls).toEqual([])
+    for (const failure of [new Error('denied'), 'raw failure']) {
+      remote.invoke = async () => { throw failure }
+      const result = tools.x?.({})
+      await expect(result).rejects.toBeInstanceOf(classes.get('tools'))
+      await expect(result).rejects.toMatchObject({ name: 'ToolCallError', toolName: 'x', message: failure instanceof Error ? failure.message : failure })
     }
-    await runProgram(port, {
-      ...BOOT,
-      code: 'const doubled = await tools.double({ n: 21 }); console.log("got", doubled); return { doubled };',
-      namespaces: [{ global: 'tools', names: ['double'] }],
-    }, fakeStreams())
-    expect(port.logs()).toEqual(['got 42'])
-    expect(port.doneValue()).toEqual({ doubled: 42 })
   })
 
-  it('reports worker-side log capture overflow before completing', async () => {
-    const port = new FakePort()
-    await runProgram(port, {
-      maxOutputBytes: 4,
-      code: 'console.log("12345"); return null',
-      namespaces: [],
-    }, fakeStreams())
-    expect(port.logs()).toEqual([])
-    expect(port.sent).toContainEqual({ type: 'output-limit' })
-    expect(port.done()).toEqual({
-      type: 'done',
-      error: { kind: 'output-limit', message: 'outer output exceeded 4 bytes' },
-    })
-  })
-
-  it('reports a thrown program error on the done message', async () => {
-    const port = new FakePort()
-    await runProgram(port, { ...BOOT, code: 'throw new Error("boom")', namespaces: [] }, fakeStreams())
-    const done = port.done()
-    expect(done?.type).toBe('done')
-    expect(done?.type === 'done' ? done.error?.kind : undefined).toBe('exception')
-    expect(done?.type === 'done' ? done.error?.message : undefined).toContain('boom')
-    expect(done?.type === 'done' ? done.value : undefined).toBeUndefined()
-  })
-
-  it('renders non-Error throws and stack-less Errors on the done message', async () => {
-    const rawPort = new FakePort()
-    await runProgram(rawPort, { ...BOOT, code: 'throw "raw-throw"', namespaces: [] }, fakeStreams())
-    expect(rawPort.done()).toEqual({ type: 'done', error: { kind: 'exception', message: 'raw-throw' } })
-
-    const barePort = new FakePort()
-    await runProgram(barePort, { ...BOOT, code: 'const e = new Error("bare"); e.stack = undefined; throw e', namespaces: [] }, fakeStreams())
-    expect(barePort.done()).toEqual({ type: 'done', error: { kind: 'exception', message: 'bare' } })
-  })
-
-  it('replaces giant thrown strings and Error stacks before posting the done message', async () => {
-    const rawPort = new FakePort()
-    await runProgram(rawPort, {
-      maxOutputBytes: 64,
-      code: 'throw "x".repeat(1_000_000)',
-      namespaces: [],
-    }, fakeStreams())
-    expect(rawPort.done()).toEqual({
-      type: 'done',
-      error: { kind: 'output-limit', message: 'outer output exceeded 64 bytes' },
-    })
-
-    const stackPort = new FakePort()
-    await runProgram(stackPort, {
-      maxOutputBytes: 64,
-      code: 'throw new Error("x".repeat(1_000_000))',
-      namespaces: [],
-    }, fakeStreams())
-    expect(stackPort.done()).toEqual({
-      type: 'done',
-      error: { kind: 'output-limit', message: 'outer output exceeded 64 bytes' },
-    })
-  })
-
-  it('surfaces a host failure reply as a program-side rejection it can catch', async () => {
-    const port = new FakePort()
-    port.respond = message => message.type === 'call' ? { type: 'reply', id: message.id, ok: false, message: 'denied by host' } : undefined
-    await runProgram(port, {
-      ...BOOT,
-      code: 'try { await tools.x({}) } catch (error) { return { caught: error instanceof ToolCallError, name: error.name, toolName: error.toolName, message: error.message } }',
-      namespaces: [toolNamespace(['x'])],
-    }, fakeStreams())
-    expect(port.doneValue()).toEqual({ caught: true, name: 'ToolCallError', toolName: 'x', message: 'denied by host' })
-  })
-
-  it('materializes a consumer-declared rejection class without knowing the namespace', async () => {
-    const port = new FakePort()
-    port.respond = message => message.type === 'call'
-      ? { type: 'reply', id: message.id, ok: false, message: 'helper denied' }
-      : undefined
-    await runProgram(port, {
-      ...BOOT,
-      code: 'try { await helpers.x({}) } catch (error) { return { caught: error instanceof HelperCallError, name: error.name, helperName: error.helperName, message: error.message } }',
-      namespaces: [{
-        global: 'helpers',
-        names: ['x'],
-        errorClass: { name: 'HelperCallError', memberNameProperty: 'helperName' },
-      }],
-    }, fakeStreams())
-    expect(port.doneValue()).toEqual({ caught: true, name: 'HelperCallError', helperName: 'x', message: 'helper denied' })
-  })
-
-  it('ignores replies for unknown pending ids', async () => {
-    const port = new FakePort()
-    port.respond = (message) => {
-      if (message.type !== 'call') return undefined
-      // Deliver a stray reply first; the real one follows.
-      port.deliver({ type: 'reply', id: 9_999, ok: true, value: encodePtcJsonWire('stray') })
-      return { type: 'reply', id: message.id, ok: true, value: encodePtcJsonWire('real') }
-    }
-    await runProgram(port, {
-      ...BOOT,
-      code: 'return await tools.x({})',
-      namespaces: [{ global: 'tools', names: ['x'] }],
-    }, fakeStreams())
-    expect(port.doneValue()).toBe('real')
-  })
-
-  it('captures raw stream writes through the patched process streams', async () => {
-    const port = new FakePort()
-    const streams = fakeStreams()
-    await runProgram(port, { ...BOOT, code: 'return 1', namespaces: [] }, streams)
-    streams.stdout.write('never seen — already restored? no: patch persists in worker')
-    // The patch stays installed for the worker's lifetime; writes during the
-    // program landed in order. Here the program wrote nothing via streams, so
-    // only the post-run write above went through the patched slot.
-    expect(port.logs().at(-1)).toBe('never seen — already restored? no: patch persists in worker')
+  it('uses ordinary Error when the namespace declares no rejection class', async () => {
+    const remote = host()
+    remote.invoke = async () => { throw new Error('helper denied') }
+    const [helpers] = makeNamespaces({ namespaces: [{ global: 'helpers', names: ['x'] }] }, remote, new Map<string, BindingErrorConstructor>()) as [Record<string, (args: unknown) => Promise<unknown>>]
+    await expect(helpers.x?.({})).rejects.toMatchObject({ name: 'Error', message: 'helper denied' })
+    await expect(helpers.x?.(() => 1)).rejects.toThrow('binding arguments must be lossless JSON')
   })
 })

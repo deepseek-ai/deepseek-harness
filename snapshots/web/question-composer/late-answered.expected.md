@@ -5,6 +5,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - navigation "Turn navigation":
   - button "Jump to turn 1"
   - button "Jump to turn 2"
@@ -20,19 +21,18 @@
 - term: Which color do you prefer?
 - definition: Green Answered after the timeout
 - button "Inspect"
-- status: Completed
-- button "Completed in {{duration}}" [expanded]
-- button "Analysis completed" [expanded]
-- group "Reply to earlier pending questions":
-  - button "Reply to earlier pending questions · Open question details": Reply to earlier pending questions Green, Answered after the timeout
+- group "Questions and answers":
+  - term: Pick one Which color do you prefer?
+  - definition: Green, Answered after the timeout
   - text: {{clock}}
   - button "Copy"
+- status: Completed
+- button "Completed in {{duration}}" [disabled]
 - region "Which color do you prefer?":
-  - text: Pick one
-  - heading "Which color do you prefer?" [level=2]
-  - text: Answered
+  - text: Pick one Answered
   - button "Collapse the question card" [expanded]
   - button "Close the panel — reopen it from the tool call"
+  - heading "Which color do you prefer?" [level=2]
   - group:
     - checkbox "Blue" [disabled]: Blue A cool recessive hue that reads as calm and trustworthy in long reading sessions and dense dashboards.
     - checkbox "Green" [checked] [disabled]: Green A restful mid-spectrum hue with the highest perceived brightness, easiest on the eye over long sessions.

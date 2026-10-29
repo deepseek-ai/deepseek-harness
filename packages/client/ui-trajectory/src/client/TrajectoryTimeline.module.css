@@ -89,8 +89,10 @@
   cursor: pointer;
 }
 
-.earlierHistory:hover {
-  opacity: 1;
+@media (hover: hover) {
+  .earlierHistory:hover {
+    opacity: 1;
+  }
 }
 
 .earlierHistory[aria-disabled='true'] {

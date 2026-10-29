@@ -56,7 +56,7 @@ Scrollbars stay inside their container: use the shared scrollbar styles rather t
 
 ## Responsive layouts
 
-Use [dsh-responsive-ui](../dsh-responsive-ui/SKILL.md) for responsive layouts, text truncation, title wrapping, icon-only controls, and focus during width changes.
+Use [dsh-responsive-ui](../dsh-responsive-ui/SKILL.md) for responsive layouts, mobile and touch detection, text truncation, title wrapping, icon-only controls, and focus during width changes.
 
 ## Platform window adaptation
 
@@ -67,6 +67,10 @@ Use [dsh-responsive-ui](../dsh-responsive-ui/SKILL.md) for responsive layouts, t
 
 - Review every changed region for gaps: nothing sits flush against its neighbour without an intentional gap, and adjacent icons and elements keep the region's established spacing.
 - Prefer symmetry for parallel elements; an unexplained one-off gap or offset usually signals a missed shared value.
+- **For complex pages and containers, establish shared horizontal and vertical alignment axes before adjusting local spacing.** Consider hover, selected, and expanded/collapsed states, as well as the overall relationship with adjacent panels and other page elements. Choose from the following references according to layout similarity:
+  - **Sidebar:** align corresponding text starts and leading icons across vertically stacked rows. Align hover and selected row backgrounds with the buttons above the list to maintain visual balance.
+  - **Plugins page:** keep content left-aligned along a shared edge. List-row hover backgrounds may extend beyond that edge while the content stays in place.
+  - **Conversation and right-sidebar headers:** align the first header rows across both panels and match their heights. Apply the same rule to the second rows, and align corresponding underlines and dividers on shared horizontal baselines.
 
 ## Design review escalation
 

@@ -33,6 +33,8 @@ kind: "package-reference"
 
 当浏览器与 Host 运行在同一台机器上、操作系统对话框可以在那里打开时，选择此表面。当浏览器为远程或进程内、没有本地选择器时，选择 [`-browse`](../ui-directory-picker-browse/README.zh.md) 表面。两个表面填充相同的 slot，因此切换只是组合改动，而非代码改动。
 
+访问控制：两个目录选择流程只在当前 Peer 可以调用 `directoryPicker/pick` 时注册。owner 始终有权限。
+
 -----
 
 <a id="understand-the-implementation"></a>

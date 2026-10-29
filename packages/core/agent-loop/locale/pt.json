@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Loop de execução do agente",
+    "description": "Coordene solicitações de modelo, invocações de ferramentas e etapas de acompanhamento para avançar nas tarefas do agente."
+  }
+}

@@ -1,12 +1,12 @@
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionLogOffset, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
@@ -15,8 +15,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ApiSessionAgentController,
   ApiSessionCwdConflict,
-  ApiSessionNotFound,
-  inspectApiSession,
 } from '../src/agent.ts'
 import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
 
@@ -44,7 +42,7 @@ async function harness(): Promise<{ ctx: Context; agents: ApiSessionAgentControl
     saveSelection: () => Promise.resolve(),
   } as never)
   const agents = new ApiSessionAgentController(ctx)
-  await agents.initialize()
+  agents.initialize()
   return { ctx, agents }
 }
 
@@ -82,61 +80,6 @@ describe('ApiSession identity failures', () => {
       .toContain('records no cwd')
     expect(new ApiSessionCwdConflict(SessionId('wrong-cwd'), '/wanted', '/existing').message)
       .toContain('belongs to "/existing"')
-  })
-
-  it('maps absent and cwd-less point observations to not found', async () => {
-    const ctx = new Context()
-    roots.push(ctx)
-    await ctx.plugin(SessionStore)
-    installSessionReadTestServices(ctx)
-    await expect(inspectApiSession(ctx, SessionId('missing')))
-      .rejects.toBeInstanceOf(ApiSessionNotFound)
-
-    const inspect = vi.fn(() => Promise.resolve(undefined))
-    const stat = vi.fn(() => Promise.resolve(undefined))
-    const disposeMissing = providePersistence(ctx, {
-      list: () => Promise.resolve([]),
-      stat,
-      inspect,
-    })
-    await expect(inspectApiSession(ctx, SessionId('missing'))).rejects.toBeInstanceOf(ApiSessionNotFound)
-    // Absence is decided by the stat preflight; the log itself is never opened.
-    expect(stat).toHaveBeenCalledOnce()
-    expect(inspect).not.toHaveBeenCalled()
-    disposeMissing()
-
-    const listed = header('cwd-less-catalog', null)
-    const disposeListed = providePersistence(ctx, {
-      list: () => Promise.resolve([listed]),
-      inspect: () => Promise.resolve({ meta: listed, events: [] }),
-    })
-    await expect(inspectApiSession(ctx, listed.id)).rejects.toBeInstanceOf(ApiSessionNotFound)
-    disposeListed()
-
-    const catalog = header('cwd-less-inspect')
-    const inspected = header('cwd-less-inspect', null)
-    providePersistence(ctx, {
-      list: () => Promise.resolve([catalog]),
-      inspect: () => Promise.resolve({ meta: inspected, events: [] }),
-    })
-    await expect(inspectApiSession(ctx, catalog.id)).rejects.toBeInstanceOf(ApiSessionNotFound)
-  })
-
-  it('forwards an explicit inspection signal', async () => {
-    const ctx = new Context()
-    roots.push(ctx)
-    await ctx.plugin(SessionStore)
-    installSessionReadTestServices(ctx)
-    const meta = header('signalled-inspection')
-    const inspect = vi.fn(() => Promise.resolve({ meta, inheritedEventCount: SessionLogOffset(0), events: [] }))
-    providePersistence(ctx, {
-      list: () => Promise.resolve([meta]),
-      inspect,
-    })
-    const signal = new AbortController().signal
-
-    await expect(inspectApiSession(ctx, meta.id, signal)).resolves.toEqual({ meta, inheritedEventCount: SessionLogOffset(0), events: [] })
-    expect(inspect).toHaveBeenCalledWith(meta.id, signal)
   })
 })
 
@@ -285,40 +228,6 @@ describe('ApiSession Agent lookup and recovery', () => {
     expect(() => agents.presetForObservation(observed)).toThrow(
       'Agent activation requires a projected Session observation',
     )
-  })
-})
-
-describe('ApiSession model selection', () => {
-  it('reads a reasoning-free request and consumes only the exact pending selection', async () => {
-    const { ctx, agents } = await harness()
-    const logged = agent(ctx, header('logged-model'))
-    logged.session.append('request/header', {
-      header: { config: { provider: 'logged-provider', model: 'logged-model' } },
-      reason: 'initial',
-    })
-    expect(agents.selectionFor(logged).current).toEqual({
-      provider: 'logged-provider',
-      model: 'logged-model',
-    })
-
-    const pending = agent(ctx, header('pending-model'))
-    const selection = agents.selectionFor(pending)
-    agents.selectForNextRequest(pending, {
-      provider: 'selected-provider',
-      model: 'selected-model',
-      reasoningEffort: 'high' as never,
-    })
-    expect(selection.current).toMatchObject({
-      provider: 'selected-provider', model: 'selected-model', reasoningEffort: 'high',
-    })
-    expect(agents.consumeSelection(pending, 'other-provider', 'selected-model', 'high')).toBe(false)
-    expect(agents.consumeSelection(pending, 'selected-provider', 'other-model', 'high')).toBe(false)
-    expect(agents.consumeSelection(pending, 'selected-provider', 'selected-model', 'low')).toBe(false)
-    expect(agents.consumeSelection(pending, 'selected-provider', 'selected-model', 'high')).toBe(true)
-    expect(selection.current).toEqual({ provider: 'fixture', model: 'fixture-model' })
-
-    const untouched = agent(ctx, header('uninstalled-model'))
-    expect(agents.consumeSelection(untouched, 'fixture', 'fixture-model', undefined)).toBe(false)
   })
 })
 

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Servicio de árbol de trabajo",
+    "description": "Cree árboles de trabajo Git con nombre y cambie el directorio de trabajo de la sesión actual."
+  }
+}

@@ -12,7 +12,7 @@ import type {
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
-import type { RemoteEndpoint } from '@deepseek-ai/dsh-api-remote-access/client'
+import type { AccessEffect, RemoteEndpoint } from '@deepseek-ai/dsh-api-remote-access/client'
 import { notifySubscribers } from '@deepseek-ai/dsh-client-store'
 import { WeakMapWithValues } from '@deepseek-ai/dsh-util-values'
 import { standardHookPropName } from '@deepseek-ai/dsh-client-ui-slots'
@@ -358,6 +358,24 @@ export class UiSession extends Service {
       throw new Error('ui-session: Session reference is not active in this Controller')
     }
     return this.sourceFor(owner)
+  }
+
+  /**
+   * Keep `callback`'s effects installed while the current Peer may call
+   * `action` on one Session resource, with the semantics of
+   * `ctx.remoteAccess.whenAccess`: `useSessionAccess` answers the same
+   * question during render.
+   * @param sessionId - the Session resource the guarded effects depend on.
+   * @param action - endpoint action the guarded effects depend on.
+   * @param callback - creates one disposer or an iterable of disposers.
+   * @returns idempotent disposer owned by the caller's Cordis fiber.
+   */
+  whenAccess(sessionId: SessionId, action: RemoteEndpoint, callback: () => AccessEffect): () => void {
+    // `ctx.get` traces the service to the caller's Context, which then owns the controller.
+    const access = this.ctx.get('remoteAccess')
+    /* v8 ignore next -- this plugin injects remoteAccess, so the service is active while uiSession is reachable. */
+    if (access === undefined) throw new Error('ui-session: whenAccess requires the remoteAccess service')
+    return access.whenResourceAccess('session', sessionId, action, callback)
   }
 
   /**

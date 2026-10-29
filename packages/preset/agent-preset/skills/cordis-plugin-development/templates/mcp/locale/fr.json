@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Démo connexion MCP",
+    "description": "Connecte un serveur MCP distant pour mettre ses outils à disposition de l'agent."
+  }
+}

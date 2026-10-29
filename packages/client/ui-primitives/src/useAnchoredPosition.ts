@@ -56,7 +56,7 @@ export function useAnchoredPosition(options: AnchoredPositionOptions): CSSProper
       let left = align === 'end' ? rect.right - width : rect.left
       let top = side === 'top' ? rect.top - gap - height : rect.bottom + gap
       if (width > 0) left = Math.min(Math.max(left, margin), window.innerWidth - width - margin)
-      if (height > 0) top = Math.min(Math.max(top, overlayTopMargin(margin)), window.innerHeight - height - margin)
+      if (height > 0) top = Math.min(Math.max(top, overlayTopMargin(margin, rect, gap)), window.innerHeight - height - margin)
       /* v8 ignore stop */
       setPosition({ left, top })
     }

@@ -117,7 +117,7 @@ Client 导出向 `ctx.resources` 注册一个 `ResourceProvider<'file'>`，存�
 
 **提供可导航的工作区文档。** 因源隔离问题不采用；[二进制传输](2026-09-17-workspace-file-binary-transfer.zh.md)返回 multipart 数据，HTML 仍隔离在 Blob iframe 中。
 
-**文件读取采用“日志可达”或工作区包含授权。** 唯一把文件内容送过线路的先例——命令附件——只授权出现在会话日志里的文件，这会排除手输路径；工作区包含则会排除 Session 后端其他位置的可读文件。[工作区文件读取权限](2026-09-09-workspace-file-read-authority.zh.md)改为以后端读取决策为准，只对工作区形态的操作保留包含限制。
+**文件读取采用“日志可达”或工作区包含授权。** 要求 Session 日志引用会排除手输路径；工作区包含则会排除 Session 后端其他位置的可读文件。[工作区文件读取权限](2026-09-09-workspace-file-read-authority.zh.md)以后端读取决策为准，只对工作区形态的操作保留包含限制。图片附件读取另行遵循[存储范围的访问规则](2026-10-23-store-scoped-image-reads.zh.md)。
 
 **为字节窗口整文件读取再切片。** `readBytes` 的临时形态经 `readBytes(target, signal, offset + length)` 从文件开头读到窗口末端再切片。它读不了比该末端更长的文件的窗口——seam 会以过大拒绝这样的文件——因此没有任何窗口能报告 `eof: false`，与该方法存在的理由相悖。被否，改为以窗口为界的 `readByteRange` seam。
 

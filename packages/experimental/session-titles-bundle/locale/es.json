@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Títulos que siguen la conversación",
+    "description": "Escribe el título de una sesión a partir de todos sus mensajes y lo actualiza cuando cambia la tarea principal, en lugar de basarse solo en el primer mensaje.",
+    "detail": "docs/DETAIL.md"
+  }
+}

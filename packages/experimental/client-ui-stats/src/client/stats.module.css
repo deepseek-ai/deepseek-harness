@@ -1,0 +1,965 @@
+/* Statistics table: turn totals, expandable step rows, time bars, tool accordion. */
+
+/* Full-height host: the table owns the viewport scroll and the composer
+   overlays its bottom edge, so the content reserves the published height. */
+.root {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  padding-bottom: calc(var(--dsh-composer-height, 152px) + 8px);
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.scroll {
+  box-sizing: border-box;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  /* No top padding: a sticky header sits at the scrollport top, and padding
+     here would leave a strip where rows scroll above it. */
+  padding: 0 20px 16px;
+}
+
+.scroll > :first-child {
+  margin-top: 12px;
+}
+
+.empty {
+  padding: 24px 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Table shared by the turn rows and their nested step rows. */
+.table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scope | question | did | seven metrics | total time; fixed widths keep the
+   measurement columns visible instead of letting the did cell push them out. */
+.table col:nth-child(1) { width: 13%; }
+.table col:nth-child(2) { width: 15%; }
+.table col:nth-child(3) { width: 13.5%; }
+.table col:nth-child(4) { width: 5.5%; }
+.table col:nth-child(5) { width: 5.5%; }
+.table col:nth-child(6) { width: 6.5%; }
+.table col:nth-child(7) { width: 6%; }
+.table col:nth-child(8) { width: 6%; }
+.table col:nth-child(9) { width: 7.5%; }
+.table col:nth-child(10) { width: 6%; }
+.table col:nth-child(11) { width: 15.5%; }
+
+.thLeft,
+.th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  background-clip: padding-box;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  font-weight: 500;
+  line-height: 1.25;
+  vertical-align: bottom;
+  white-space: normal;
+}
+
+.thLeft {
+  text-align: left;
+}
+
+.th {
+  text-align: left;
+}
+
+/* Turn row: the whole row toggles its steps. */
+.turnRow {
+  cursor: pointer;
+}
+
+.turnCell,
+.turnMetric,
+.turnDid,
+.promptCellTurn {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 6px 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  white-space: nowrap;
+}
+
+.turnCell {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: normal;
+}
+
+.turnMetric {
+  font-weight: 600;
+  text-align: left;
+}
+
+.turnDid {
+  white-space: nowrap;
+}
+
+.stepCount {
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 400;
+}
+
+.toggle {
+  border-bottom: 0.5px dotted var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 400;
+}
+
+/* The row label is a real button so the row toggles from the keyboard too. */
+.rowToggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.rowToggle:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+
+/* Older-history control above the table: the keyboard fallback and load state. */
+.older {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 10px;
+}
+
+.olderStatus {
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.turnClock {
+  color: var(--dsw-alias-label-tertiary);
+  font-weight: 400;
+}
+
+/* Step row: the left inset rule ties it to the turn above. */
+.stepRowClickable {
+  cursor: pointer;
+}
+
+.stepRowError {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
+}
+
+.stepCell {
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 8px 0 22px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  box-shadow: inset 2px 0 0 var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.stepMetric,
+.stepDid,
+.promptCell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  white-space: nowrap;
+}
+
+.stepMetric {
+  text-align: left;
+}
+
+.compactionRow td,
+.eventRow td {
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.compactionTag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 4px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+/* Event/compaction scope: the tag and clock share a narrow first column. They
+   wrap instead of overflowing into the trigger/provider column when the table
+   is squeezed. */
+.rowTagWhen {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.rowTagWhen .compactionTag {
+  max-width: 100%;
+  margin-right: 0;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.rowTagWhen .stepClock {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.eventRow .stepCell,
+.compactionRow .stepCell {
+  height: auto;
+  min-height: 30px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.eventRow .rowTagWhen,
+.compactionRow .rowTagWhen {
+  max-width: 100%;
+}
+
+.stepWhen {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.stepClock {
+  color: var(--dsw-alias-label-primary);
+}
+
+.stepGap {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+/* Scope markers appended to the row label. */
+.stateRunning {
+  margin-left: 6px;
+  color: var(--dsw-alias-state-business-primary);
+  font-weight: 400;
+}
+
+.stateWarn {
+  margin-left: 6px;
+  color: var(--dsw-alias-state-warn-primary);
+  font-weight: 400;
+}
+
+.stateMuted {
+  margin-left: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 400;
+}
+
+.partialHint {
+  color: var(--dsw-alias-state-warn-primary);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 400;
+}
+
+.detailHint {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 400;
+}
+
+/* User question: one clipped line, full text in the title. */
+.promptText {
+  display: inline-block;
+  max-width: 260px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+/* Did column: tool names, hints, and output sizes. */
+.promptClip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.promptClip .promptText {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+}
+
+.triggerPill {
+  flex: none;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 4px;
+  padding: 0 4px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+/* Image-count pill: the trigger pill's material on an interactive button. */
+.imagePill {
+  margin-right: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.promptText + .imagePill {
+  margin-left: 4px;
+}
+
+.imagePill[data-state='failed'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+@media (hover: hover) {
+  .imagePill:hover {
+    background: var(--dsw-alias-bg-layer-2);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.imagePill:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* Prompt image preview inside the shared hover card: a small strip, or one large image. */
+.imagePreview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 284px;
+}
+
+.imageThumb {
+  box-sizing: border-box;
+  width: 76px;
+  height: 76px;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-layer-2);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.imageThumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.imagePreview[data-single='true'] .imageThumb {
+  width: 100%;
+  height: 180px;
+}
+
+.imagePreview[data-single='true'] .imageThumb img {
+  object-fit: contain;
+}
+
+.imageThumb:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .imageThumb:hover {
+    border-color: var(--dsw-alias-state-business-primary);
+  }
+}
+
+.imageThumbStatus {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 76px;
+  min-height: 76px;
+  padding: 4px;
+  border: 0.5px dashed var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  text-align: center;
+}
+
+.imagePreview[data-single='true'] .imageThumbStatus {
+  width: 100%;
+}
+
+.imageThumbStatus[data-state='failed'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.imageThumbStatus .chip {
+  margin-right: 0;
+}
+
+.answerPreview {
+  color: var(--dsw-alias-label-tertiary);
+  font-weight: 400;
+}
+
+.didClip {
+  display: inline-block;
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.toolName {
+  color: var(--stats-tool-color, var(--dsw-alias-label-secondary));
+  font-weight: 500;
+}
+
+.didHint {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.didSep {
+  margin: 0 4px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.didStat {
+  color: var(--dsw-alias-label-primary);
+}
+
+.added {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.removed {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.countBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  margin: 0 3px;
+  padding: 0 5px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 14px;
+  vertical-align: bottom;
+}
+
+.failPill {
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 2px;
+  background: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-bg-base);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 14px;
+  vertical-align: bottom;
+}
+
+/* Turn did column: tool pills over the composition bar. */
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 380px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 19px;
+  padding: 0 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.pillMuted {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--stats-tool-color, var(--dsw-alias-label-secondary));
+}
+
+.mix {
+  display: flex;
+  height: 4px;
+  max-width: 380px;
+  margin-top: 5px;
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+  overflow: hidden;
+}
+
+.mixSegment {
+  display: block;
+  background: var(--stats-tool-color, var(--dsw-alias-label-secondary));
+}
+
+/* Tool tone classes only set the shared custom property. */
+.tone0 {
+  --stats-tool-color: var(--dsw-alias-state-business-primary);
+}
+
+.tone1 {
+  --stats-tool-color: var(--dsw-alias-state-success-primary);
+}
+
+.tone2 {
+  --stats-tool-color: var(--dsw-alias-state-warn-primary);
+}
+
+.tone3 {
+  --stats-tool-color: var(--dsw-alias-state-error-secondary);
+}
+
+.tone4 {
+  --stats-tool-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+}
+
+.tone5 {
+  --stats-tool-color: var(--dsw-alias-state-success-secondary);
+}
+
+.tone6 {
+  --stats-tool-color: var(--dsw-alias-state-warn-label);
+}
+
+.tone7 {
+  --stats-tool-color: var(--dsw-alias-label-caption);
+}
+
+/* Numeric columns: a fixed-width number with the context delta beside it. */
+.num {
+  display: inline-block;
+  min-width: 62px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.numDelta {
+  display: inline-block;
+  min-width: 62px;
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.deltaUp {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.deltaDown {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Time composition: turn bars are tall and outlined, step bars short and bare. */
+.timeWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.barTurn {
+  display: inline-block;
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 40px;
+  height: 14px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.barStep {
+  display: inline-block;
+  flex: 1;
+  min-width: 32px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.barFill {
+  display: flex;
+  height: 100%;
+}
+
+.barSegment {
+  display: block;
+  height: 100%;
+}
+
+.barTtft {
+  background: var(--dsw-alias-state-business-primary);
+  opacity: 0.5;
+}
+
+.barDecode {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.barTool {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.barRest {
+  background: var(--dsw-alias-label-caption);
+}
+
+.timeValue {
+  min-width: 58px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.timeRunning {
+  min-width: 58px;
+  color: var(--dsw-alias-state-business-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+/* Step-list controls of a long turn. */
+.moreCell {
+  padding: 2px 8px 8px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  line-height: 1.9;
+  white-space: normal;
+}
+
+.moreText {
+  margin-right: 10px;
+}
+
+.chip,
+.chipOn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 19px;
+  margin-right: 8px;
+  padding: 0 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.chipOn {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.chip:focus-visible,
+.chipOn:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* Tool detail accordion: one block per call. */
+.detailCell {
+  padding: 6px 8px 12px 22px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  box-shadow: inset 2px 0 0 var(--dsw-alias-border-l1);
+  font: var(--dsw-font-xs-13);
+}
+
+.answerSection {
+  margin-bottom: 10px;
+}
+
+.answerBody {
+  overflow: auto;
+  max-height: 420px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  word-break: break-word;
+}
+
+.detailHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 8px;
+}
+
+.detailTitle {
+  font: var(--dsw-font-xs-strong-13);
+}
+
+.detailActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.block {
+  margin-bottom: 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.blockHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xxs-12);
+}
+
+.blockHint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.blockMeta {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.blockSub {
+  padding: 4px 8px 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.blockEmpty {
+  display: block;
+  padding: 6px 8px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.copy {
+  height: 18px;
+  margin-left: auto;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font: var(--dsw-font-xxxs-11);
+}
+
+@media (hover: hover) {
+  .copy:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.copy:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* Body text: monospaced, indentation preserved, capped height with scoped scroll. */
+.code {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px 8px;
+  max-height: 320px;
+  overflow: auto;
+  /* The code block scrolls on the detail cell's elevated surface: rebind the
+     scrollbar pair so the dark palette draws the l2 thumb, not the l1 one. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  font: 12px/18px var(--ds-font-family-code);
+  tab-size: 2;
+  white-space: pre;
+}
+
+.codeWrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.codeLine,
+.diffAdd,
+.diffDel {
+  display: block;
+  white-space: pre;
+}
+
+.codeWrap .codeLine,
+.codeWrap .diffAdd,
+.codeWrap .diffDel {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diffAdd {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.diffDel {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Footer controls: the passive table summary plus expand/collapse everything. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 20px 0;
+  padding: 8px 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  font: var(--dsw-font-xxs-12);
+}
+
+.summary {
+  margin-right: auto;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  row-gap: 6px;
+  flex-wrap: wrap;
+}
+
+.controlLabel {
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.contextMode {
+  flex: none;
+}
+
+.totalsRow td {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  font-weight: 600;
+}
+
+.totalsLabel {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+.totalsMeta {
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 400;
+}
+
+.button {
+  padding: 4px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+@media (hover: hover) {
+  .button:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.button:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.buttonOff {
+  padding: 4px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: default;
+  font-size: 12px;
+}

@@ -124,6 +124,7 @@ describe('fixture helpers', () => {
   it('rejects an upload until a suite replaces the default stub', async () => {
     const runtime = await SlotTestRuntime.create()
     await expect(runtime.fileUpload.upload('fixture-session' as SessionId)).rejects.toThrow('file upload is not stubbed')
+    await expect(runtime.fileUpload.uploadImage('fixture-session' as SessionId)).rejects.toThrow('image upload is not stubbed')
     await runtime.dispose()
   })
 

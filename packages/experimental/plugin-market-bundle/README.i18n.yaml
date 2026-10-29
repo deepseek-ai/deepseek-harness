@@ -3,20 +3,20 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/plugin-market-bundle/README.md
 /:
-  en: d8af9b6bbb50c868
-  zh: 984ac08f172ac4b6
+  en: 62daa554fb436201
+  zh: 8e898dbaa5c557f8
 /deepseek-ai-dsh-experimental-plugin-market-bundle:
   en: c8315ff66be4cfb9
   zh: d721a9496d8b0a8d
 /deepseek-ai-dsh-experimental-plugin-market-bundle/summary:
-  en: 511ede0c4e7cd9df
-  zh: 207687c55aca6f00
+  en: ea6488db63024175
+  zh: 42fe14b9c9f3a292
 /deepseek-ai-dsh-experimental-plugin-market-bundle/table-of-contents:
   en: 76368b6b1da79c80
   zh: 434cf3c1f5db33cd
 /deepseek-ai-dsh-experimental-plugin-market-bundle/use-this-package:
-  en: 4929999ed97cbcaf
-  zh: a815fca7044326fc
+  en: 383f5158439640a0
+  zh: fc2f9682c0f4b6fc
 /deepseek-ai-dsh-experimental-plugin-market-bundle/understand-the-implementation:
   en: 6cdb2c0f794b001f
   zh: f18ba67b927b09b8
@@ -27,8 +27,8 @@
   en: dc60f12c8d3b0e79
   zh: 6eb3928424a7f783
 /deepseek-ai-dsh-experimental-plugin-market-bundle/known-limitations-and-deferred-work:
-  en: 779241f2dfb59f6d
-  zh: 0cda06e940d61664
+  en: b0a99603b2467fc5
+  zh: 5d0f908e5f3609a5
 /deepseek-ai-dsh-experimental-plugin-market-bundle/known-limitations-and-deferred-work/dev-note:
   en: 0225ba087c5266f3
   zh: 4e706f1b2b984e63

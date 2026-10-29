@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Remote access control",
+    "description": "Control which methods non-owner connections can access and retain permission snapshots for each connection."
+  }
+}

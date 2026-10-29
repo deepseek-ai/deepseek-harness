@@ -34,15 +34,19 @@
   --dsh-scrollbar-thumb-border: 2px;
 }
 
-/* The Plugins page's centered column: the same 960px cap and
-   clamp(24-48px) inline / 48px bottom inset, so sibling first-level pages
-   share one content frame at every width. */
+/* Matches the Plugins page's 960px column and responsive inline insets. */
 .pageContent {
   max-width: 960px;
   margin: 0 auto;
   /* Inline and bottom insets only: the 28px top inset belongs to the heading
      row, which starts at the window's top edge. */
   padding: 0 clamp(24px, 4vw, 48px) 48px;
+}
+
+@media (max-width: 767px) {
+  .pageContent {
+    padding-inline: 20px;
+  }
 }
 
 /* Page title and creation actions. */
@@ -87,8 +91,9 @@
   white-space: nowrap;
 }
 
-/* The Plugins toolbar's Add-plugin step: a 32px capsule with the 13px label. */
-.newButton {
+/* The Plugins toolbar's steps: New and the bulk cleanup share one 32px
+   capsule with a 13px label. */
+.headerAction {
   height: 32px;
   font-size: 13px;
   line-height: 20px;
@@ -133,8 +138,10 @@
   cursor: pointer;
 }
 
-.filterTab:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .filterTab:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .filterTabActive {
@@ -146,11 +153,36 @@
    neutral hairline, the 10px radius, and the mock's `--muted` leading icon. The
    mock brightens the border on hover and takes the brand stroke on focus
    rather than drawing a ring around the control. */
-.searchField {
+.searchTools {
+  --task-search-height: 36px;
   display: flex;
   align-items: center;
-  height: 36px;
-  margin: 0 0 16px;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.catalogActions {
+  flex: none;
+}
+
+.catalogMore {
+  width: var(--task-search-height);
+  height: var(--task-search-height);
+  padding: 0;
+}
+
+.catalogMore[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.searchField {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  height: var(--task-search-height);
+  margin: 0;
   padding: 0 10px;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 12px;
@@ -158,8 +190,10 @@
   transition: border-color 0.15s;
 }
 
-.searchField:hover {
-  border-color: var(--dsw-alias-border-l2);
+@media (hover: hover) {
+  .searchField:hover {
+    border-color: var(--dsw-alias-border-l2);
+  }
 }
 
 .searchField:focus-within {
@@ -247,8 +281,10 @@
   white-space: normal;
 }
 
-.row:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .rowGlyph {
@@ -314,12 +350,22 @@
   color: var(--dsw-alias-label-caption);
 }
 
-.endedRow:hover .rowTitle,
+@media (hover: hover) {
+  .endedRow:hover .rowTitle {
+    color: inherit;
+  }
+}
+
 .endedRow.selectedRow .rowTitle {
   color: inherit;
 }
 
-.endedRow:hover .rowSummary,
+@media (hover: hover) {
+  .endedRow:hover .rowSummary {
+    color: var(--dsw-alias-label-tertiary);
+  }
+}
+
 .endedRow.selectedRow .rowSummary {
   color: var(--dsw-alias-label-tertiary);
 }
@@ -492,8 +538,10 @@
   font-weight: 500;
 }
 
-.editName:hover {
-  box-shadow: 0 1px var(--dsw-alias-border-l3);
+@media (hover: hover) {
+  .editName:hover {
+    box-shadow: 0 1px var(--dsw-alias-border-l3);
+  }
 }
 
 .editName:focus {
@@ -700,8 +748,10 @@
   cursor: pointer;
 }
 
-.retentionInfo:hover {
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .retentionInfo:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .retentionInfo:focus-visible {
@@ -844,8 +894,10 @@
   transition: background 0.15s;
 }
 
-.ruleValue:not(:disabled):hover .ruleValueFace {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .ruleValue:not(:disabled):hover .ruleValueFace {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* The trigger's own ring would box the row label as well; the value face
@@ -937,8 +989,10 @@
   transition: background 0.15s;
 }
 
-.ruleInput:not(:disabled):hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .ruleInput:not(:disabled):hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* An ended task keeps its values readable: tertiary rather than dimmed ink. */
@@ -995,8 +1049,10 @@
   appearance: none;
 }
 
-.ruleIntervalInput:not(:disabled):hover {
-  background: transparent;
+@media (hover: hover) {
+  .ruleIntervalInput:not(:disabled):hover {
+    background: transparent;
+  }
 }
 
 .ruleRows .ruleIntervalInput:focus-visible {
@@ -1012,9 +1068,18 @@
   opacity: 0;
 }
 
-.ruleIntervalStepper:hover .ruleIntervalArrows,
+@media (hover: hover) {
+  .ruleIntervalStepper:hover .ruleIntervalArrows {
+    opacity: 1;
+  }
+}
+
 .ruleIntervalStepper:focus-within .ruleIntervalArrows {
   opacity: 1;
+}
+
+@media (hover: none) {
+  .ruleIntervalArrows { opacity: 1; }
 }
 
 .ruleIntervalArrow {
@@ -1031,8 +1096,10 @@
   cursor: pointer;
 }
 
-.ruleIntervalArrow:hover:not(:disabled) {
-  background: var(--dsw-alias-bg-layer-1);
+@media (hover: hover) {
+  .ruleIntervalArrow:hover:not(:disabled) {
+    background: var(--dsw-alias-bg-layer-1);
+  }
 }
 
 .ruleIntervalArrow:disabled {
@@ -1115,8 +1182,10 @@
   --dsh-scrollbar-track-margin: 12px;
 }
 
-.instruction:hover {
-  border-color: var(--dsw-alias-border-l2);
+@media (hover: hover) {
+  .instruction:hover {
+    border-color: var(--dsw-alias-border-l2);
+  }
 }
 
 .instruction:focus {
@@ -1260,8 +1329,10 @@
   cursor: pointer;
 }
 
-.savedPromptToggle:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .savedPromptToggle:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .savedPromptToggle:focus-visible {
@@ -1424,6 +1495,9 @@
 
 .deleteButton {
   color: var(--dsw-alias-state-error-primary);
+  /* The outlined confirmation button keeps its border in the danger colour so
+     the destructive action reads as a bordered control, not bare text. */
+  --dsh-button-outline-color: var(--dsw-alias-state-error-primary);
 }
 
 .page :focus-visible {
@@ -1473,11 +1547,25 @@
 
   /* The mock narrows the title strip's gap at this width and closes the
      actions' group gap between its icon buttons. */
+
   .detailTabsBar {
     gap: 16px;
   }
 
   .detailActions {
     gap: 0;
+  }
+}
+
+/* Touch devices take a 16px step on this page's text fields: iOS Safari zooms
+   the visual viewport for a focused field under that size and leaves the page
+   pannable after the keyboard closes, so the compact 13-14px steps above read
+   as a page wider than the screen. A fine pointer keeps those steps. */
+@media (pointer: coarse) {
+  .searchField input,
+  .instruction,
+  .ruleInput,
+  .zoneSearch {
+    font-size: 16px;
   }
 }

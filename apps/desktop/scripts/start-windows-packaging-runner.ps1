@@ -16,6 +16,9 @@ if ($drive.DriveType -ne [IO.DriveType]::Fixed) { throw 'ConfigRoot requires a f
 $env:DSH_PACKAGING_CONFIG_DIR=[IO.Path]::GetFullPath($ConfigRoot)
 $env:DSH_TELEMETRY_DISABLED='1'
 $env:POWERSHELL_TELEMETRY_OPTOUT='1'
+. (Join-Path $PSScriptRoot 'windows-runner-network.ps1')
+$network = Read-RunnerNetwork $ConfigRoot
+Set-RunnerNetwork $network
 foreach($tool in @('pwsh','node','git','tar','python')) {
     $resolved=Get-Command $tool -CommandType Application -ErrorAction Stop | Select-Object -First 1
     Write-Output ('Tool: '+$tool+' -> '+$resolved.Source)
@@ -31,6 +34,7 @@ $vswhere=Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/v
 $visualStudio=& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if($LASTEXITCODE -ne 0 -or -not $visualStudio){throw 'Visual C++ tools unavailable'}
 Write-Output 'Visual C++ tools located.'
+Wait-RunnerNetwork $network
 if($CheckOnly){Write-Output 'Runner environment check passed.'; exit 0}
 if(Get-Process -Name Runner.Listener -ErrorAction SilentlyContinue){throw 'A runner listener is already running; inspect before starting another.'}
 Set-Location $RunnerRoot

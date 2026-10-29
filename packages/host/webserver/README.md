@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Browsers reach the web GUI over HTTP through `dsh-host-webserver`: a `node:http` server — `node:https` once `tls` names a certificate and key — where other plugins register named routes, upgrade routes, index startup inputs, and one fallback handler. It knows no harness concepts and serves no files — the `/api` bridge, plugin bundles, the HMR event stream, and the SPA dist belong to the plugins that register them. Route matching is fixed: exact over the whole table, then longest prefix, then the fallback handler. It serves browsers only; Electron loads dist over `file://` and carries fetch over an IPC bridge.
+Browsers reach the web GUI over HTTP through `dsh-host-webserver`: a `node:http` server — `node:https` once `tls` names a certificate and key — where other plugins register named routes, upgrade routes, index startup inputs, and one fallback. It serves no files — the `/api` bridge, plugin bundles, the HMR event stream, and the SPA dist belong to the plugins that register them. Route matching is fixed: exact over the whole table, then longest prefix, then the fallback. It serves browsers only; Electron loads dist over `file://` and carries fetch over an IPC bridge.
 
 ## Table of Contents
 
@@ -58,17 +58,19 @@ Set `compression: 'gzip'` to wrap eligible socket-backed responses without chang
 
 ### Registering routes
 
-`register(route)` adds a named `exact` or `prefix` HTTP route, `registerUpgrade(route)` adds an upgrade route for an exact pathname, and both return a disposer that removes the registration. A duplicate path within either table throws — route patterns are a composition-level contract, so a collision is a misconfiguration. HTTP matching is exact over the whole table, then longest prefix, then the fallback handler; upgrades match exactly and unmatched connections are closed.
+`register(route)` adds a named `exact` or `prefix` HTTP route, `registerUpgrade(route)` adds an upgrade route for an exact pathname, and both return a disposer that removes the registration. A duplicate path within either table throws — route patterns are a composition-level contract, so a collision is a misconfiguration. HTTP matching is exact over the whole table, then longest prefix, then the fallback; upgrades match exactly and unmatched connections are closed.
+
+A named route may give `resource(request, peer?)` instead of `handler`: a function from a Fetch `Request` to a `Response`. Over HTTP only `GET` and `HEAD` reach it — any other method is answered 405 with `Allow: GET, HEAD` and its body is never read — and the request carries no Peer, the client's headers, and a URL that is the request target resolved against a placeholder origin; the client's authority stays only in the `host` header. The response is written back with backpressure and the gzip decision a handler's response gets; `HEAD` sends no body, and a client disconnect aborts `request.signal` and cancels the body. `readResource(request, peer)` returns the response the same URL would receive over HTTP, computed by the resource for `peer` (a `HEAD` read returns no body): it follows the HTTP match order, answers 404 when the path belongs to a handler or reaches a fallback that is unclaimed or a handler, answers 405 for a method other than `GET` or `HEAD`, and checks no cookie, Host, or Origin, so its caller admits the reader first.
 
 ### The fallback seat
 
-`registerFallback(handler)` claims the one handler for every request no named route matches. A second registration throws; while no fallback is registered the server answers 404. In the shipped Web composition the [SPA dist server](../frontend-static/README.md) owns the seat and calls `renderIndex` on every index response it renders.
+`registerFallback(handler)` or `registerFallback({ resource })` claims the one responder for every request no named route matches. A second registration throws; while no fallback is registered the server answers 404. In the shipped Web composition the [SPA dist server](../frontend-static/README.md) owns the seat and calls `renderIndex` on every index response it renders.
 
-Index startup inputs are two layers. `collectIndexInjections()` gathers a fresh injection table — one `webserver/index-inject` emit per call, each subscriber pushing its current rows — and `renderIndex(html)` renders those rows into the index.html body before applying the raw `tapIndex(transform)` transforms in registration order. A `script-preload` row renders an advisory classic-script preload link. Static deployments carry the same rows in their boot payload. `applyIndexTaps(html)` applies only the raw transforms; it is the escape hatch for markup no row expresses.
+Index startup inputs are two layers, computed for the Peer the page speaks for. `collectIndexInjections(peer)` gathers a fresh injection table — one `webserver/index-inject` emit per call, passing `peer` to each subscriber, which pushes its current rows — and `renderIndex(html, peer)` renders those rows into the index.html body before applying the raw `tapIndex(transform)` transforms in registration order. A `script-preload` row renders an advisory classic-script preload link. Static deployments carry the same rows in their boot payload. `applyIndexTaps(html)` applies only the raw transforms; it is the escape hatch for markup no row expresses.
 
 ### Behavior under failure
 
-A listen failure (for example EADDRINUSE) rejects plugin initialization with the bind diagnostic, and unusable TLS material rejects it too, naming the config field and the resolved path but never the file's contents. An HTTP request whose handler throws is answered 400 — or the socket destroyed when headers are already out — and logged as a warning; it never exits the process. An upgrade-handler exception or upgraded-socket transport error logs a warning and destroys its socket.
+A listen failure (for example EADDRINUSE) rejects plugin initialization with the bind diagnostic, and unusable TLS material rejects it too, naming the config field and the resolved path but never the file's contents. An HTTP request whose handler or resource throws is answered 400 — or the socket destroyed when headers are already out — and logged as a warning; it never exits the process. An upgrade-handler exception or upgraded-socket transport error logs a warning and destroys its socket.
 
 -----
 
@@ -80,7 +82,7 @@ A listen failure (for example EADDRINUSE) rejects plugin initialization with the
 
 ### Design concept
 
-The package is a plain route registry with no harness vocabulary: `WebServer` extends Cordis `Service` and holds three route tables plus the fallback slot, the raw index-tap list, and the `webserver/index-inject` event the index renderer gathers rows through. Index rendering composes two layers per response: `renderIndex` renders the fresh injection table, including advisory `script-preload` rows, into the body, then applies the raw taps in registration order; `applyIndexTaps` runs the taps alone. The upgrade handler owns the protocol handshake and connection contents; the webserver only delivers the raw socket and request. `host`, `port`, and `protocol` getters and `getOrigin()` expose composition-time facts other plugins adapt to (for example the directory-picker chooser), and an explicit `tls: null` normalizes to an unset listener, so `protocol` has a single source.
+The package is a plain route registry whose only harness vocabulary is the Peer an index render speaks for: `WebServer` extends Cordis `Service` and holds three route tables plus the fallback slot, the raw index-tap list, and the `webserver/index-inject` event the index renderer gathers rows through. Index rendering composes two layers per response: `renderIndex` renders the fresh injection table, including advisory `script-preload` rows, into the body, then applies the raw taps in registration order; `applyIndexTaps` runs the taps alone. The upgrade handler owns the protocol handshake and connection contents; the webserver only delivers the raw socket and request. `host`, `port`, and `protocol` getters and `getOrigin()` expose composition-time facts other plugins adapt to (for example the directory-picker chooser), and an explicit `tls: null` normalizes to an unset listener, so `protocol` has a single source.
 
 ### Matching and lifecycle
 

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Personalized recommendations",
+    "description": "Shows recommendation cards below the answer for what you want from DSH: when you want a page or small tool you can keep, it proposes a new personalized page, built in the background after you click Create; when you ask how to do something in this app or say a capability is missing, it recommends the built-in plugin that provides it, turned on when you click Enable.",
+    "detail": "docs/DETAIL.md"
+  }
+}

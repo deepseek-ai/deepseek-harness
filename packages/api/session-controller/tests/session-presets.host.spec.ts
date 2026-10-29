@@ -122,20 +122,24 @@ async function harness(options: HarnessOptions = {}) {
     archivedSessionIds: archived,
   } as never)
 
-  /** Run setup on the unpublished Session, then publish it and its Agent, as the Agent factory does. */
+  /** Enter the Session for setup, then announce creation as the Agent factory does. */
   const publish = async (
     session: Session,
     setup: Parameters<AgentFactory['createAgent']>[1]['setup'],
   ): Promise<{ agent: Agent; dispose: () => Promise<void> }> => {
     const agent = stubAgent(session)
     ;(agent as { ctx?: Context }).ctx = ctx
-    await setup?.(ctx, agent)
-    ctx.effect(function* () {
-      yield ctx.sessions.enter(session)
+    const detach = ctx.effect(() => ctx.sessions.enter(session))
+    try {
       ctx.sessions.announce(session)
-    }, 'test: published Session')
-    const unregister = await ctx.agents.register(agent)
-    return { agent, dispose: async () => { await unregister() } }
+      const commit = await setup?.(ctx, agent)
+      commit?.commit()
+      const unregister = await ctx.agents.register(agent)
+      return { agent, dispose: async () => { await unregister(); await detach() } }
+    } catch (error) {
+      await detach()
+      throw error
+    }
   }
   const factory: AgentFactory = {
     async createAgent(_ownerCtx, create) {

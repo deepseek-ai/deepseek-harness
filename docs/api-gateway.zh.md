@@ -14,7 +14,7 @@
 
 `@RemoteScope(key)` 表示先通过 `ctx.typert.contexts` 把 identity 解析为一个作用域 Context，再从该 Context 取得服务并调用方法。它适用于方法本身依赖作用域组合、而不需要显式接收 `Agent` 等对象的情形。
 
-`@Remote` 接受导出名或 `{ name?, mode?, resources? }`；`@RemoteScope(key, option?)` 的第二个参数接受导出名（如下文的 `@RemoteScope('agent', 'current')`）或 `{ name?, resources? }`。`resources` 按资源种类给出读取函数，返回一次调用所访问资源的身份，供访问控制使用；每个读取函数以方法的 wire 参数作为自身参数，类型从被装饰方法推断。多数方法不声明读取函数，因为 Gateway 还会从声明了 `resource` 的 lookup 参数与作用域 Context 以及 `typert.resources` 中的默认字段读取身份；[Typert 子系统](subsystems/typert.zh.md)负责该顺序。
+`@Remote` 接受导出名或 `{ name?, mode?, resources? }`；`@RemoteScope(key, option?)` 的第二个参数接受导出名（如下文的 `@RemoteScope('agent', 'current')`）或 `{ name?, resources? }`。`resources` 按资源种类给出读取函数，返回一次调用所访问资源的身份，供访问控制使用；每个读取函数以方法的 wire 参数作为自身参数，类型从被装饰方法推断。多数方法不声明读取函数，因为 Gateway 还会从声明了 `resource` 的 lookup 参数与作用域 Context 以及 `typert.resources` 中的默认字段或 resolver 读取身份；[Typert 子系统](subsystems/typert.zh.md)负责该顺序。
 
 服务通常继承 `TypertRemoteService`，让 Cordis 服务 key 与默认 Remote namespace 在构造器中显式绑定。已有其他基类的服务可以改为声明 `readonly typertRemote = bindTypertRemote(this, serviceKey)`；两种方式都会留下可检查的公开 binding，不依赖编译器向构造函数注入 symbol。
 

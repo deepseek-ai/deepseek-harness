@@ -1,0 +1,37 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo"
+  },
+  "include": ["src"],
+  "exclude": ["src/client"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/loader" },
+    { "path": "../../util/brand" },
+    { "path": "../../util/values" },
+    { "path": "../../core/session" },
+    { "path": "../../core/agent" },
+    { "path": "../../core/agent-default-model" },
+    { "path": "../../core/scope" },
+    { "path": "../../core/tools" },
+    { "path": "../../fs/fs" },
+    { "path": "../../llm/llm" },
+    { "path": "../../sandbox/sandbox" },
+    { "path": "../../sandbox/sandbox-policy" },
+    { "path": "../../util/http-proxy" },
+    { "path": "../../util/atomic-write" },
+    { "path": "../../api/gateway/tsconfig.host.json" },
+    { "path": "../../api/remote-access/tsconfig.host.json" },
+    { "path": "../../client/connection/tsconfig.host.json" },
+    { "path": "../../typert/protocol" },
+    { "path": "../../workspace/workspace" },
+    { "path": "../../api/session-controller/tsconfig.host.json" },
+    { "path": "../../session/session-projection" },
+    { "path": "../liveshare-protocol/tsconfig.host.json" },
+    { "path": "../../client/modules" },
+    { "path": "../../host/frontend-static" }
+  ]
+}

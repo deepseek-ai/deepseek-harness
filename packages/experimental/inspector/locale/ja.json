@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "NodeJS インスペクター",
+    "description": "Ctrl/Cmd+Shift+. を押すと、開発やデバッグ用の Chrome DevTools を下部パネルに開きます。"
+  }
+}

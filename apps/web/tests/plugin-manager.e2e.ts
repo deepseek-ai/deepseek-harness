@@ -2,13 +2,13 @@
 // managed scaffold profile: installed bundles, their rows, and bundle enablement. Zero
 // model calls: everything is client state, seeded Session state, profile files, and the settings
 // document, so there is no fixture and a stray stream would fail loud on the open llm seam.
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { FiberState } from '@deepseek-ai/cordis'
-import { ON_DEMAND_BUNDLES, OPTIONAL_BUNDLES } from '@deepseek-ai/dsh-app-boot'
+import { readProfileManifest } from '@deepseek-ai/dsh-app-boot'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import { join } from 'node:path'
@@ -17,7 +17,7 @@ import {
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, openSettings, PLUGIN_TOGGLE_SETTLE_MS, saveFailureShot,
+  ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, experimentalBundleDescription, openSettings, PLUGIN_TOGGLE_SETTLE_MS, saveFailureShot,
 } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/plugin-manager', import.meta.url))
@@ -107,8 +107,10 @@ describe('web e2e: plugin manager', () => {
     const headerScaffold = await launchWebScaffold()
     try {
       // Pin the extremes; at intermediate widths, the rendered font and locale
-      // determine whether the two intrinsic items fit beside each other.
-      const PINNED_PLACEMENT: Record<number, 'beside' | 'below'> = { 1680: 'beside', 1024: 'beside', 390: 'below', 430: 'below' }
+      // determine whether the two intrinsic items fit beside each other. Narrow
+      // widths shrink the actions to icons before they wrap; the collapsed-bar case
+      // pins those widths.
+      const PINNED_PLACEMENT: Record<number, 'beside' | 'below'> = { 1680: 'beside', 1024: 'beside' }
       for (const language of ['en', 'zh'] as const) {
         const context = await browser.newContext({
           viewport: { width: 1680, height: 1000 }, locale: language === 'en' ? 'en-US' : ZH_BROWSER_LOCALE,
@@ -121,7 +123,7 @@ describe('web e2e: plugin manager', () => {
           const title = language === 'en' ? 'Plugins' : '插件'
           await probe.getByRole('button', { name: title, exact: true }).click()
           const panel = probe.locator('[data-plugin-panel]')
-          const header = panel.locator(':scope > header')
+          const header = panel.locator('[data-plugin-bar] > header')
           await header.getByRole('heading', { name: title, exact: true }).waitFor()
           await probe.evaluate(() => document.fonts.ready)
           const add = header.getByRole('button', { name: language === 'en' ? 'Add plugin' : '添加插件', exact: true })
@@ -129,13 +131,23 @@ describe('web e2e: plugin manager', () => {
           await add.focus()
           const measure = () => header.evaluate((element) => {
             const heading = element.firstElementChild!
-            const actions = element.lastElementChild!
-            const headingRect = heading.getBoundingClientRect()
+            const actions = element.querySelector('[data-plugin-toolbar]')!
+            const titleRect = heading.querySelector('h1')!.getBoundingClientRect()
+            const introRect = heading.querySelector('h1 + div')!.getBoundingClientRect()
+            const headingRect = {
+              right: Math.max(titleRect.right, introRect.right),
+              bottom: Math.max(titleRect.bottom, introRect.bottom),
+              width: Math.max(titleRect.right, introRect.right) - Math.min(titleRect.left, introRect.left),
+            }
             const actionRect = actions.getBoundingClientRect()
             const headerRect = element.getBoundingClientRect()
             const intrinsicHeading = heading.cloneNode(true) as HTMLElement
+            intrinsicHeading.querySelectorAll('[data-plugin-header-part]').forEach((part) => {
+              part.removeAttribute('data-plugin-header-part')
+              part.removeAttribute('style')
+            })
             Object.assign(intrinsicHeading.style, {
-              position: 'absolute', width: 'max-content', maxWidth: 'none', visibility: 'hidden', pointerEvents: 'none',
+              display: 'block', position: 'absolute', width: 'max-content', maxWidth: 'none', visibility: 'hidden', pointerEvents: 'none',
             })
             element.append(intrinsicHeading)
             let intrinsicHeadingWidth: number
@@ -194,10 +206,12 @@ describe('web e2e: plugin manager', () => {
             if (pinned !== undefined) expect(placement).toBe(pinned)
             facts.push(`${language} ${width}px: actions ${pinned === undefined ? 'beside or below (according to intrinsic fit)' : placement} the heading, single-line; contained; information follows subtitle; focus retained`)
           }
-          await probe.setViewportSize({ width: 390, height: 1000 })
+          // Force less room than even the icon actions need beside the heading.
+          await probe.setViewportSize({ width: 240, height: 1000 })
           const previousWrap = await header.evaluate((element) => {
             const style = element.style
             const previous = { value: style.getPropertyValue('flex-wrap'), priority: style.getPropertyPriority('flex-wrap') }
+            element.parentElement!.removeAttribute('data-natural')
             style.setProperty('flex-wrap', 'nowrap')
             return previous
           })
@@ -210,8 +224,10 @@ describe('web e2e: plugin manager', () => {
             await header.evaluate((element, previous) => {
               if (previous.value === '') element.style.removeProperty('flex-wrap')
               else element.style.setProperty('flex-wrap', previous.value, previous.priority)
+              element.parentElement!.setAttribute('data-natural', '')
             }, previousWrap)
           }
+          await probe.setViewportSize({ width: 390, height: 1000 })
           await expect.poll(async () => validLayout(await measure())).toBe(true)
           const menuTrigger = header.getByRole('button', { name: language === 'en' ? 'Choose how to add a plugin' : '选择添加插件方式' })
           await menuTrigger.click()
@@ -226,11 +242,171 @@ describe('web e2e: plugin manager', () => {
       }
       await compareOrRefreshGolden(
         join(SNAPSHOT_DIR, 'header-responsive.expected.md'),
-        `# Plugin header responsive layout\n\n${facts.join('\n')}\n\nA forced no-wrap layout at 390px fails the same measured layout check in both locales; restoring wrap passes.\nAdd menu dismisses on Escape and returns focus in both locales.`,
+        `# Plugin header responsive layout\n\n${facts.join('\n')}\n\nA forced no-wrap layout at 240px fails the same measured layout check in both locales; restoring wrap and 390px passes.\nAdd menu dismisses on Escape and returns focus in both locales.`,
         MODE,
       )
     } finally {
       await headerScaffold.close()
+    }
+  })
+
+  it('uses icon actions before shrinking tabs and wraps only when both still cannot fit', async () => {
+    const compactScaffold = await launchWebScaffold({
+      profile: { packages: [], bundles: ['@deepseek-ai/dsh-experimental-plugin-market-bundle'] },
+    })
+    const context = await browser.newContext({ viewport: { width: 1280, height: 480 }, locale: 'en-US', reducedMotion: 'reduce' })
+    try {
+      const probe = await context.newPage()
+      await probe.goto(compactScaffold.authenticatedUrl, { waitUntil: 'load' })
+      await probe.getByRole('button', { name: 'Plugins', exact: true }).click()
+      const panel = probe.locator('[data-plugin-panel]')
+      const bar = panel.locator('[data-plugin-bar]')
+      const body = panel.locator('[data-plugin-body]')
+      const refresh = bar.getByRole('button', { name: 'Refresh', exact: true })
+      const add = bar.getByRole('button', { name: 'Add plugin', exact: true })
+      await panel.locator('[data-plugin-package]').first().waitFor()
+      await bar.getByRole('tablist').waitFor()
+      await add.focus()
+      for (const [width, icons, narrowTabs, wraps] of [
+        [1280, false, false, false], [544, true, false, false],
+        [390, true, true, false], [320, true, true, true], [244, true, true, true],
+      ] as const) {
+        await probe.setViewportSize({ width, height: 480 })
+        await body.evaluate((element) => { element.scrollTop = 180 })
+        await probe.waitForFunction(() => document.querySelector('[data-plugin-bar]')?.hasAttribute('data-compact'))
+        await expect.poll(() => bar.evaluate((element) => {
+          const tablist = element.querySelector('[role="tablist"]')!
+          const toolbar = element.querySelector('[data-plugin-toolbar]')!
+          const action = toolbar.querySelector('button')!
+          const tabRect = tablist.getBoundingClientRect(), actions = toolbar.getBoundingClientRect()
+          const actionRect = action.getBoundingClientRect()
+          const wrapped = actions.top >= tabRect.bottom
+          return {
+            icons: getComputedStyle(action.lastElementChild!).display === 'none',
+            narrowTabs: tabRect.width < 240,
+            wraps: wrapped,
+            centered: wrapped || Math.abs(tabRect.top + tabRect.height / 2 - actionRect.top - actionRect.height / 2) < 1,
+          }
+        }), { message: `compact toolbar at ${width}px` }).toEqual({ icons, narrowTabs, wraps, centered: true })
+        expect(await add.evaluate(element => element === document.activeElement)).toBe(true)
+        // The collapsed bar hides the title visually but keeps the page's heading for assistive technology.
+        expect(await bar.getByRole('heading', { name: 'Plugins', level: 1, exact: true }).count()).toBe(1)
+      }
+      // A short list keeps its range even when the available travel cannot fully compact the tabs.
+      await probe.setViewportSize({ width: 1280, height: 480 })
+      await body.evaluate((element) => { element.scrollTop = 0 })
+      await expect.poll(() => bar.evaluate(element => element.hasAttribute('data-compact'))).toBe(false)
+      const range = await body.evaluate(element => element.scrollHeight - element.clientHeight)
+      await probe.setViewportSize({ width: 1280, height: 480 + range - 30 })
+      await expect.poll(() => body.evaluate(element => element.scrollHeight - element.clientHeight)).toBe(30)
+      await probe.mouse.move(800, 400)
+      await probe.mouse.wheel(0, 200)
+      await expect.poll(() => body.evaluate(element => element.scrollTop)).toBe(30)
+      expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBe(30)
+      expect(await bar.evaluate(element => element.hasAttribute('data-compact'))).toBe(false)
+      await probe.setViewportSize({ width: 390, height: 480 })
+      // Locator hover scrolls its target into view, and scrolling this list moves the header controls away from
+      // the pointer; once the resized header stops moving, move the pointer onto each control instead.
+      const pointAt = async (target: Locator): Promise<void> => {
+        await expect.poll(() => target.evaluate(element => new Promise<boolean>((resolve) => {
+          const before = element.getBoundingClientRect()
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            const after = element.getBoundingClientRect()
+            resolve(before.x === after.x && before.y === after.y)
+          }))
+        }))).toBe(true)
+        const bounds = await target.boundingBox()
+        if (bounds === null) throw new Error('Header control is not visible')
+        await probe.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+      }
+      await pointAt(refresh)
+      await probe.getByRole('tooltip', { name: 'Refresh', exact: true }).waitFor()
+      await pointAt(add)
+      await probe.getByRole('tooltip', { name: 'Add plugin', exact: true }).waitFor()
+      await bar.getByRole('button', { name: 'Choose how to add a plugin', exact: true }).click()
+      await probe.getByRole('menu').waitFor()
+      await probe.keyboard.press('Escape')
+      await probe.getByRole('menu').waitFor({ state: 'hidden' })
+      await add.click()
+      await probe.getByRole('dialog').waitFor()
+    } finally {
+      await context.close()
+      await compactScaffold.close()
+    }
+  })
+
+  it('keeps the plugin page title and actions pinned while the cards scroll', async () => {
+    await page.setViewportSize({ width: 1000, height: 480 })
+    const panel = await openPluginsPanel()
+    const body = panel.locator('[data-plugin-body]')
+    try {
+      await panel.locator('[data-plugin-package]').first().waitFor()
+      const headerTop = () => panel.locator('[data-plugin-bar] > header').evaluate(element => element.getBoundingClientRect().top)
+      const bar = panel.locator('[data-plugin-bar]')
+      const barHeight = () => bar.evaluate(element => element.getBoundingClientRect().height)
+      const resting = await headerTop()
+      const restingHeight = await barHeight()
+      const refreshButton = bar.getByRole('button', { name: '刷新', exact: true })
+      const addButton = bar.getByRole('button', { name: '添加插件', exact: true })
+      const restingActions = await Promise.all([refreshButton.boundingBox(), addButton.boundingBox()])
+      expect(resting).toBe(await panel.evaluate(element => element.getBoundingClientRect().top))
+      const restingBarBottom = await bar.evaluate(element => element.getBoundingClientRect().bottom)
+      expect(await body.locator('[data-plugin-group]').first().evaluate(element => element.getBoundingClientRect().top))
+        .toBeCloseTo(restingBarBottom + 32, 1)
+      await body.evaluate((element) => { element.scrollTop = element.scrollHeight })
+      const bottom = await body.evaluate(element => element.scrollTop)
+      expect(bottom).toBeGreaterThan(100)
+      expect(await headerTop()).toBe(resting)
+      // The painted bar compacts while its document-flow height remains unchanged.
+      await page.waitForFunction(() => document.querySelector('[data-plugin-bar]')?.hasAttribute('data-compact') === true)
+      expect(await barHeight()).toBe(restingHeight)
+      expect(await bar.evaluate(element => getComputedStyle(element, '::after').borderBottomWidth)).not.toBe('0px')
+      expect(await bar.evaluate(element => Number.parseFloat(getComputedStyle(element, '::before').height))).toBe(64)
+      expect(await body.evaluate(element => element.getBoundingClientRect().top)).toBe(resting)
+      expect(await Promise.all([refreshButton.boundingBox(), addButton.boundingBox()]))
+        .toEqual(restingActions.map((bounds) => {
+          if (bounds === null) throw new Error('Plugin toolbar action is not visible')
+          return { ...bounds, y: bounds.y - 12 }
+        }))
+      // Reverse keyboard navigation scrolls each focused control into view below the bar, never under it.
+      await panel.locator('[data-plugin-package] [role="switch"]').last().focus()
+      const barBottom = await bar.evaluate(element => element.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(element, '::before').height))
+      const hidden: string[] = []
+      for (let step = 0; step < 30; step++) {
+        await page.keyboard.press('Shift+Tab')
+        const focus = await page.evaluate(() => {
+          const element = document.activeElement
+          const box = element?.getBoundingClientRect()
+          return {
+            inBody: element?.closest('[data-plugin-body]') !== null && element?.closest('[data-plugin-bar]') === null,
+            top: box?.top ?? 0,
+            name: element?.getAttribute('aria-label') ?? element?.textContent ?? '',
+          }
+        })
+        if (!focus.inBody) break
+        if (focus.top < barBottom) hidden.push(`${focus.name} at ${String(focus.top)}`)
+      }
+      expect(hidden).toEqual([])
+      expect(await body.evaluate(element => element.scrollTop)).toBeLessThan(bottom)
+      expect(await headerTop()).toBe(resting)
+      await page.setViewportSize({ width: 1680, height: 480 })
+      await body.evaluate((element) => { element.scrollTop = element.scrollHeight })
+      await page.waitForFunction(() => document.querySelector('[data-plugin-bar]')?.hasAttribute('data-compact') === true)
+      await expect.poll(() => panel.evaluate((element) => {
+        const bounds = element.getBoundingClientRect()
+        const barElement = element.querySelector('[data-plugin-bar]')!
+        const barBounds = barElement.getBoundingClientRect()
+        const bodyBounds = element.querySelector('[data-plugin-body]')!.getBoundingClientRect()
+        const dividerStyle = getComputedStyle(barElement, '::after')
+        return {
+          left: barBounds.left + Number.parseFloat(dividerStyle.left) - bounds.left,
+          right: barBounds.right - Number.parseFloat(dividerStyle.right) - bounds.right,
+          gap: bodyBounds.top - barBounds.top,
+        }
+      })).toEqual({ left: 0, right: 0, gap: 0 })
+    } finally {
+      await body.evaluate((element) => { element.scrollTop = 0 })
+      await page.setViewportSize({ width: 1680, height: 1000 })
     }
   })
 
@@ -263,7 +439,7 @@ describe('web e2e: plugin manager', () => {
         expect(await skeleton.getAttribute('role')).toBe('status')
         expect(await skeleton.getAttribute('aria-label')).toBe('正在读取插件…')
         expect(await panel.getAttribute('aria-busy')).toBe('true')
-        const actions = panel.locator(':scope > header > div:last-child button')
+        const actions = panel.locator('[data-plugin-bar] > header > div:last-child button')
         expect(await actions.count()).toBe(3)
         for (const action of await actions.all()) expect(await action.isDisabled()).toBe(true)
         expect(await panel.getByRole('button', { name: '插件说明' }).isEnabled()).toBe(true)
@@ -278,7 +454,7 @@ describe('web e2e: plugin manager', () => {
             return { x, y, width, height }
           }
           return {
-            pageHeader: rect(element.closest('[data-plugin-panel]')?.querySelector(':scope > header')),
+            pageHeader: rect(element.closest('[data-plugin-panel]')?.querySelector('[data-plugin-bar] > header')),
             groupHeader: rect(element.firstElementChild),
             rows: Array.from(element.querySelectorAll(selector)).slice(0, 4).map((row) => {
               const head = row.firstElementChild
@@ -298,7 +474,7 @@ describe('web e2e: plugin manager', () => {
           width: node.getBoundingClientRect().width,
           height: node.getBoundingClientRect().height,
         })))
-        expect(blankActions).toEqual(Array.from({ length: 4 }, () => ({ children: 0, background: 'rgba(0, 0, 0, 0)', width: 36, height: 20 })))
+        expect(blankActions).toEqual(Array.from({ length: 4 }, () => ({ children: 0, background: 'rgba(0, 0, 0, 0)', width: 58, height: 20 })))
         if (shots !== undefined) {
           for (const colorScheme of ['light', 'dark'] as const) {
             await probe.emulateMedia({ colorScheme })
@@ -488,6 +664,90 @@ describe('web e2e: plugin manager', () => {
     }
   })
 
+  it('keeps touch actions direct before keyboard focus and mouse hover', async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 900 }, locale: ZH_BROWSER_LOCALE,
+    })
+    try {
+      const probe = await context.newPage()
+      const input = await context.newCDPSession(probe)
+      // Native touch input preserves desktop hover capability for mixed-input devices.
+      const tap = async (target: Locator): Promise<void> => {
+        await target.scrollIntoViewIfNeeded()
+        const bounds = await target.boundingBox()
+        if (bounds === null) throw new Error('Touch target is not visible')
+        await input.send('Input.dispatchTouchEvent', {
+          type: 'touchStart', touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }],
+        })
+        await input.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+      }
+      const consoleWatch = watchConsole(probe)
+      onTestFailed(() => saveFailureShot(probe, 'web-e2e-touch-tooltips'))
+      await probe.clock.install()
+      await probe.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await probe.getByRole('button', { name: '插件', exact: true }).click()
+      const panel = probe.locator('[data-plugin-panel]')
+      const refresh = panel.getByRole('button', { name: '刷新', exact: true })
+      const info = panel.getByRole('button', { name: '插件说明', exact: true })
+      await expect.poll(() => refresh.isEnabled()).toBe(true)
+      await probe.setViewportSize({ width: 390, height: 844 })
+      await probe.evaluate(() => document.fonts.ready)
+      const calls = vi.spyOn(scaffold.ctx.pluginManager, 'listBundles')
+      try {
+        await tap(refresh)
+        await expect.poll(() => calls.mock.calls.length).toBe(1)
+        await expect.poll(() => refresh.isEnabled()).toBe(true)
+      } finally {
+        calls.mockRestore()
+      }
+      await probe.clock.pauseAt(await probe.evaluate(() => Date.now() + 1000))
+      await probe.clock.runFor(500)
+      expect(await probe.getByRole('tooltip').count()).toBe(0)
+      const facts = ['Touch refresh: one refresh request; no tooltip']
+
+      await tap(info)
+      const help = probe.getByRole('tooltip')
+      await help.waitFor()
+      const bounds = await help.boundingBox()
+      if (bounds === null) throw new Error('Tapped plugin explanation is not visible')
+      expect(bounds.x).toBeGreaterThanOrEqual(12)
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(390 - 12)
+      expect(bounds.y).toBeGreaterThanOrEqual(12)
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(844 - 12)
+      facts.push('Touch explanation: visible within the 390px viewport', await help.ariaSnapshot())
+      await tap(info)
+      expect(await help.count()).toBe(0)
+      await tap(info)
+      await help.waitFor()
+      await tap(panel.getByRole('heading', { name: '插件', exact: true }))
+      expect(await help.count()).toBe(0)
+      facts.push('Explanation closes on another tap or an outside touch')
+
+      await probe.keyboard.press('Tab')
+      await refresh.focus()
+      await probe.clock.runFor(500)
+      await probe.getByRole('tooltip').filter({ hasText: '刷新' }).waitFor()
+      facts.push('Keyboard focus after touch: refresh tooltip visible')
+      await probe.keyboard.press('Tab')
+      expect(await probe.evaluate(() => matchMedia('(any-hover: hover)').matches)).toBe(true)
+      await refresh.hover()
+      await probe.clock.runFor(500)
+      await probe.getByRole('tooltip').filter({ hasText: '刷新' }).waitFor()
+      facts.push('Mouse hover after touch: refresh tooltip visible')
+      await probe.mouse.move(0, 843)
+      // Tab moved focus to the icon-only Add plugin button, whose focus tooltip stays; the hovered ones leave.
+      expect(await probe.getByRole('tooltip').filter({ hasText: '刷新' }).count()).toBe(0)
+      expect(await probe.getByRole('tooltip').filter({ hasText: '在这里配置官方插件' }).count()).toBe(0)
+      await input.detach()
+      await probe.clock.resume()
+      await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'touch-tooltips.expected.md'),
+        ['# Touch tooltips', '', ...facts].join('\n'), MODE)
+      expect(consoleWatch.pageErrors).toEqual([])
+    } finally {
+      await context.close()
+    }
+  })
+
   it('starts with an unavailable selected bundle and lets the user clear its error', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-missing-bundle'))
     const panel = await openPluginsPanel()
@@ -577,13 +837,33 @@ describe('web e2e: plugin manager', () => {
     expect(await panel.locator('[data-plugin-group="basic"] [data-plugin-item]').count()).toBe(4)
     expect(await panel.locator('[data-plugin-package="@deepseek-ai/dsh-experimental-inspector"]').count()).toBe(0)
     expect(await panel.getByRole('switch', { name: '启用 语音输入', exact: true }).getAttribute('aria-checked')).toBe('false')
-    expect(await panel.getByRole('switch', { name: '启用 开发者工具', exact: true }).getAttribute('aria-checked')).toBe('false')
-    expect(await panel.getByText('查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端', { exact: true }).count()).toBe(1)
+    expect(await panel.getByRole('switch', { name: '启用 自定义插件索引', exact: true }).getAttribute('aria-checked')).toBe('false')
+    expect(await panel.getByRole('switch', { name: '启用 开发者工具', exact: true }).count()).toBe(0)
     expect(await panel.getByText(/Cordis|Chrome DevTools/).count()).toBe(0)
+    // A bundle the installation ships but the profile runs no row of stays out of both lists: the
+    // LiveShare card appears only once its own plugins run (covered by the visibility scenario below).
+    expect(await panel.locator('[data-plugin-group="extensions"] [data-plugin-package="@deepseek-ai/dsh-experimental-liveshare"]').count()).toBe(0)
     await panel.getByRole('button', { name: '更多', exact: true }).click()
     await panel.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
+    expect(await panel.getByText(experimentalBundleDescription('inspector-profile', 'zh'), { exact: true }).count()).toBe(1)
+    const bundles = await scaffold.ctx.pluginManager.listBundles()
+    expect(bundles.some(bundle => bundle.name === '@deepseek-ai/dsh-experimental-terminal-bundle')).toBe(true)
+    expect(await panel.getByRole('switch', { name: '启用 持久终端', exact: true }).count()).toBe(0)
+    // The More list also omits LiveShare until its rows run, so the offered count is one lower than
+    // the eligible installed optional-bundle list.
+    expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package="@deepseek-ai/dsh-experimental-liveshare"]').count()).toBe(0)
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
-      .toBe(OPTIONAL_BUNDLES.length + ON_DEMAND_BUNDLES.length)
+      .toBe(bundles.filter(bundle => bundle.name !== '@deepseek-ai/dsh-experimental-terminal-bundle'
+        && bundle.name !== '@deepseek-ai/dsh-experimental-liveshare'
+        && bundle.official && (bundle.listedByDefault !== false || bundle.enabled || bundle.installed)).length)
+    expect(bundles.find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
+      .toMatchObject({ enabled: false, optional: false, availability: 'missing', listedByDefault: false })
+    expect(await panel.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]').count()).toBe(0)
+    for (const name of ['@deepseek-ai/dsh-experimental-session-search', '@deepseek-ai/dsh-experimental-ralph-bundle']) {
+      expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === name))
+        .toMatchObject({ enabled: false, optional: true, availability: 'installation', listedByDefault: false })
+      expect(await panel.locator(`[data-plugin-package="${name}"]`).count()).toBe(0)
+    }
     const cards = await panel.locator('[data-plugin-group="more"] [data-plugin-package]').all()
     expect(await Promise.all(cards.map(async card => [
       await card.getAttribute('data-plugin-package'),
@@ -591,17 +871,15 @@ describe('web e2e: plugin manager', () => {
     ]))).toEqual([
       ['@deepseek-ai/dsh-experimental-agent-team-profile', 1],
       ['@deepseek-ai/dsh-experimental-voice-input-bundle', 1],
+      ['@deepseek-ai/dsh-experimental-plugin-market-bundle', 1],
       ['@deepseek-ai/dsh-experimental-auto-review', 1],
+      ['@deepseek-ai/dsh-experimental-forge-bundle', 1],
+      ['@deepseek-ai/dsh-personalized-recommendations', 1],
       ['@deepseek-ai/dsh-experimental-inspector-profile', 1],
-      ['@deepseek-ai/dsh-cua-bundle', 1],
       ['@deepseek-ai/dsh-experimental-tool-worktree', 1],
       ['@deepseek-ai/dsh-experimental-cot-translation-bundle', 1],
-      ['@deepseek-ai/dsh-experimental-terminal-bundle', 1],
-      ['@deepseek-ai/dsh-experimental-session-search', 1],
       ['@deepseek-ai/dsh-experimental-session-titles-bundle', 1],
       ['@deepseek-ai/dsh-experimental-badge-skill-bundle', 1],
-      ['@deepseek-ai/dsh-experimental-ralph-bundle', 1],
-      ['@deepseek-ai/dsh-experimental-plugin-market-bundle', 1],
       ['@deepseek-ai/dsh-subagent-codex', 0],
       ['@deepseek-ai/dsh-subagent-claude-code', 0],
     ])
@@ -618,6 +896,36 @@ describe('web e2e: plugin manager', () => {
 
     const snapshot = await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(MANAGER_EXPECTED, snapshot, MODE)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('enables both default-hidden shipped bundles by name without adding a profile dependency', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-bundled-enable'))
+    const profileDir = join(scaffold.harnessHome, 'profiles', 'scaffold')
+    const before = readProfileManifest('dsh', profileDir).dependencies
+    for (const [name, title] of [
+      ['@deepseek-ai/dsh-experimental-session-search', '会话搜索'],
+      ['@deepseek-ai/dsh-experimental-ralph-bundle', 'Ralph 循环'],
+    ] as const) {
+      const panel = await openPluginsPanel()
+      expect(await panel.locator(`[data-plugin-package="${name}"]`).count()).toBe(0)
+      await panel.getByRole('button', { name: '添加插件', exact: true }).click()
+      const dialog = page.getByRole('dialog', { name: '添加插件', exact: true })
+      await dialog.getByRole('textbox', { name: '包名或地址', exact: true }).fill(name)
+      await dialog.getByRole('button', { name: '安装', exact: true }).click()
+      const ready = page.getByRole('dialog', { name: '插件已随 DSH 提供', exact: true })
+      await ready.waitFor()
+      expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(false)
+      expect(await ready.getByText('无需下载，启用即可使用', { exact: true }).count()).toBe(1)
+      await ready.getByRole('button', { name: '立即启用', exact: true }).click()
+      const card = panel.locator(`[data-plugin-package="${name}"]`)
+      await card.waitFor()
+      expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(true)
+      expect(readProfileManifest('dsh', profileDir).dependencies).toEqual(before)
+      await card.getByRole('switch', { name: `启用 ${title}`, exact: true }).click()
+      await card.waitFor({ state: 'hidden' })
+      expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === name)?.enabled).toBe(false)
+    }
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
@@ -799,20 +1107,20 @@ describe('web e2e: plugin manager', () => {
     await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
     const packageName = panel.locator('[data-plugin-name]')
     expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-agent-team-profile')
-    expect(await panel.getByText('启用团队协作、团队工具、成员列表和共享任务看板。').count()).toBe(1)
+    expect(await panel.getByText(experimentalBundleDescription('agent-team-profile', 'zh')).count()).toBe(1)
     const child = panel.locator('[data-plugin-row]', { hasText: 'tool-agent-team' })
     await child.getByText('团队工具', { exact: true }).waitFor()
     expect(await child.getByText('为智能体提供成员协调、消息通信和共享任务管理工具。', { exact: true }).count()).toBe(1)
     try {
       await setLanguage('en')
-      await panel.getByRole('heading', { name: 'Agent Teams', exact: true }).waitFor()
+      await panel.getByRole('heading', { name: 'Agent teams', exact: true }).waitFor()
       expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-agent-team-profile')
-      expect(await panel.getByText('Enable team collaboration, team tools, the member roster, and the shared task board.').count()).toBe(1)
-      await child.getByText('Team Tools', { exact: true }).waitFor()
+      expect(await panel.getByText(experimentalBundleDescription('agent-team-profile', 'en')).count()).toBe(1)
+      await child.getByText('Team tools', { exact: true }).waitFor()
       expect(await child.getByText('Give agents tools to coordinate members, exchange messages, and manage shared tasks.', { exact: true }).count()).toBe(1)
       await panel.getByRole('button', { name: 'Back to plugins' }).click()
-      await panel.getByRole('button', { name: 'View Agent Teams', exact: true }).waitFor()
-      expect(await panel.getByRole('switch', { name: 'Enable Agent Teams', exact: true }).count()).toBe(1)
+      await panel.getByRole('button', { name: 'View Agent teams', exact: true }).waitFor()
+      expect(await panel.getByRole('switch', { name: 'Enable Agent teams', exact: true }).count()).toBe(1)
       // Schedule ships in the delivered composition, so no bundle card carries it in either language.
       expect(await panel.getByRole('button', { name: 'View Automation tasks', exact: true }).count()).toBe(0)
       // The official configuration pages follow the language too, from their own dictionary.
@@ -1135,11 +1443,82 @@ describe('web e2e: plugin manager', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 
+  it('reveals LiveShare only while its plugin rows run, and hides it again when they stop', async () => {
+    // A dedicated scaffold keeps this profile patch away from the shared fixture profile above.
+    const visibilityScaffold = await launchWebScaffold({ profile: { packages: [] } })
+    const context = await browser.newContext({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    try {
+      const probe = await context.newPage()
+      onTestFailed(() => saveFailureShot(probe, 'web-e2e-plugin-manager-liveshare-visibility'))
+      const consoleWatch = watchConsole(probe)
+      await probe.goto(visibilityScaffold.authenticatedUrl, { waitUntil: 'load' })
+      await probe.getByRole('button', { name: '插件', exact: true }).click()
+      const panel = probe.locator('[data-plugin-panel]')
+      await panel.getByRole('heading', { name: '插件', exact: true }).waitFor({ timeout: 20_000 })
+      const liveShare = '@deepseek-ai/dsh-experimental-liveshare'
+      const card = panel.locator(`[data-plugin-package="${liveShare}"]`)
+      // The profile is a managed one (the plugin manager lists its bundles) whose base bundle keeps HMR
+      // on, so writing the patch file recomposes the running loader; each step first waits for that
+      // recomposition and then re-reads the Host bundle list through the page's own Refresh.
+      const patchFile = join(visibilityScaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml')
+      const declarationsRow = (): boolean => [...visibilityScaffold.ctx.loader.entries()]
+        .some(entry => entry.options.id === 'liveshare-viewer-declarations')
+      const refresh = panel.getByRole('button', { name: '刷新', exact: true })
+
+      // Default install: the package ships, but no row it declares runs, so neither list offers it.
+      await expect.poll(() => card.count(), {
+        timeout: 20_000, message: 'the default profile lists a LiveShare card before its rows run',
+      }).toBe(0)
+      await panel.getByRole('button', { name: '更多', exact: true }).click()
+      await probe.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
+      await expect.poll(() => card.count(), {
+        timeout: 20_000, message: 'the default More list offers a LiveShare card before its rows run',
+      }).toBe(0)
+      await panel.getByRole('button', { name: '返回插件', exact: true }).click()
+
+      // Enabling through cordis.patch.yml runs one of the bundle's declared rows while the profile still
+      // selects no such bundle: the card joins the experimental list.
+      await writeFile(patchFile, [
+        '- insert:',
+        '    - id: liveshare-viewer-declarations',
+        "      name: '@deepseek-ai/dsh-experimental-liveshare/viewer-declarations'",
+        '',
+      ].join('\n'))
+      await expect.poll(declarationsRow, {
+        timeout: 30_000, message: 'the profile patch did not compose the LiveShare declarations row',
+      }).toBe(true)
+      await refresh.click()
+      await expect.poll(() => card.count(), {
+        timeout: 30_000, message: 'the patch-enabled bundle did not join the experimental list',
+      }).toBe(1)
+
+      // Removing the row stops it: the card leaves both lists again.
+      await writeFile(patchFile, '[]\n')
+      await expect.poll(declarationsRow, {
+        timeout: 30_000, message: 'the profile patch did not remove the LiveShare declarations row',
+      }).toBe(false)
+      await refresh.click()
+      await expect.poll(() => card.count(), {
+        timeout: 30_000, message: 'the card stayed listed after its rows stopped',
+      }).toBe(0)
+      await panel.getByRole('button', { name: '更多', exact: true }).click()
+      await probe.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
+      await expect.poll(() => card.count(), {
+        timeout: 20_000, message: 'the More list kept the card after its rows stopped',
+      }).toBe(0)
+      expect(consoleWatch.pageErrors).toEqual([])
+    } finally {
+      await context.close()
+      await visibilityScaffold.close()
+    }
+  }, 120_000)
+
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
-      'ime-enter.expected.md', 'header-responsive.expected.md', 'preview.expected.md',
+      'ime-enter.expected.md', 'header-responsive.expected.md', 'header-natural-motion.expected.md', 'preview.expected.md',
+      'touch-tooltips.expected.md',
     ])
   })
 })

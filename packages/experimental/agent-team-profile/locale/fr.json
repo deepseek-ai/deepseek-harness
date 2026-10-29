@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Équipes d'agents",
+    "description": "Permet à l'agent avec lequel vous parlez de répartir un travail entre des coéquipiers nommés, de le suivre sur un tableau de tâches partagé et de vous rendre compte de leurs résultats.",
+    "detail": "docs/DETAIL.md"
+  }
+}

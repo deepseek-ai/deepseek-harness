@@ -114,7 +114,7 @@ describe('web e2e: exact-boundary fork seeds branch closers and continues', () =
 
     const child = scaffold.ctx.sessions.get(childId)
     if (child === undefined) throw new Error('fork did not publish a live child session')
-    expect(child.header.parentSession).toBe(SessionId(SEED_ID))
+    expect(child.header.parentSession).toBeUndefined()
     // inheritedEventCount counts only the copied parent prefix; the closers are child work.
     expect(child.inheritedEventCount).toBe(forkAt + 1)
     expect(child.snapshotEvents()[forkAt]?.type).toBe('tool/call')

@@ -38,9 +38,7 @@ export function BundleDetailSection(props: BundleDetailSectionProps): ReactNode 
   const { name, version, fromNpm, language, details, t, load, retry, image } = props
   const key = bundleDetailKey(name, version, language)
   const state = details[key]
-  // The key names the read completely; a read the controller forgot, after a profile change, starts again.
-  const missing = state === undefined
-  useEffect(() => { if (missing) load(name, version, language, fromNpm) }, [key, missing])
+  useEffect(() => { load(name, version, language, fromNpm) }, [key, details])
   const labels = useDetailDocumentLabels({
     title: t('detailTitle'), loading: t('detailLoading'), retry: t('retry'), copy: t('copy'), copied: t('copied'),
     codeBlock: t('codeBlock.title'), wrap: t('codeBlock.wrap'), unwrap: t('codeBlock.unwrap'), footnotes: t('detailFootnotes'),

@@ -1350,7 +1350,7 @@ it('rejects callback requests whose raw URL is absent or malformed', async () =>
     await f.account.startSignIn(clientMetadata(), f.callbackOrigin, 'web')
     await f.wait('waiting-browser')
     const route = register.mock.calls.find(([route]) => route.path === '/oauth/callback')?.[0]
-    if (route === undefined) throw new Error('missing callback route')
+    if (route === undefined || !('handler' in route)) throw new Error('missing callback route')
     for (const url of [undefined, 'http://[']) {
       const socket = new Socket()
       const req = new IncomingMessage(socket)
@@ -1372,7 +1372,7 @@ it('settles an attempt after its browser callback connection closes during excha
   const response = Promise.withResolvers<ServerResponse>()
   const serverClosed = Promise.withResolvers<undefined>()
   const original = f.ctx.webServer.register.bind(f.ctx.webServer)
-  const register = vi.spyOn(f.ctx.webServer, 'register').mockImplementation(route => original({
+  const register = vi.spyOn(f.ctx.webServer, 'register').mockImplementation(route => 'resource' in route ? original(route) : original({
     ...route, handler: (req, res) => {
       response.resolve(res)
       res.once('error', () => undefined)

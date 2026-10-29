@@ -10,6 +10,7 @@ import type {
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import { MutableSessionEventSource } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { StaticRemoteAccess } from '@deepseek-ai/dsh-client-test-runtime'
 import type { HostObservable, RootStandardSourceContribution } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -728,7 +729,10 @@ describe('ui-session apply', () => {
         }
         return source
       }),
+      whenAccess: vi.fn(() => () => {}),
+      whenResourceAccess: vi.fn((): () => void => stopGuard),
     }
+    const stopGuard = vi.fn()
     ctx.provide('sessions', bench.sessions)
     ctx.provide('slots', slots as never)
     ctx.provide('remoteAccess', remoteAccess)
@@ -758,6 +762,30 @@ describe('ui-session apply', () => {
     const binding = bench.binding(sessionId('s2'))
     const scoped = ctx.uiSession.bindingSource(bench.reference(binding)).getSnapshot()
     expect(scoped.keyedHooks.access?.('session/fork')).toBe(remoteAccess.source('session', sessionId('s2'), 'session/fork'))
+
+    // `whenAccess` follows the same Session resource through the service's resource form.
+    const guarded = vi.fn(() => () => {})
+    expect(ctx.uiSession.whenAccess(sessionId('s1'), 'session/fork', guarded)).toBe(stopGuard)
+    expect(remoteAccess.whenResourceAccess).toHaveBeenCalledWith('session', sessionId('s1'), 'session/fork', guarded)
+  })
+
+  it('hangs Session-guarded effects on the calling plugin, so they leave when it unloads', async () => {
+    const ctx = new Context()
+    const bench = createSessionsBench(ctx)
+    ctx.provide('sessions', bench.sessions)
+    ctx.provide('slots', { provideRoot: vi.fn(), installScope: vi.fn(), bindStoreScope: vi.fn() } as never)
+    new StaticRemoteAccess(ctx)
+    apply(ctx)
+    const dispose = vi.fn()
+    const caller = ctx.plugin({
+      inject: ['uiSession'],
+      apply: (callerCtx: Context) => { callerCtx.uiSession.whenAccess(sessionId('s1'), 'session/fork', () => dispose) },
+    })
+    await caller.await()
+    expect(dispose).not.toHaveBeenCalled()
+    await caller.dispose()
+    expect(dispose).toHaveBeenCalledOnce()
+    await ctx.fiber.dispose()
   })
 
   it('keeps the Host loader half inert', () => {

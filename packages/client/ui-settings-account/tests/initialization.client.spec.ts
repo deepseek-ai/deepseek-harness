@@ -44,6 +44,14 @@ it.each(['accepted', 'refused', 'disconnected', 'pending'] as const)('initialize
         return () => {}
       },
     },
+    remoteAccess: {
+      whenAccess: (_action: string, install: () => (() => void) | Iterable<() => void> | undefined) => {
+        const effect = install()
+        if (typeof effect === 'function') disposers.push(effect)
+        else if (effect !== undefined) for (const dispose of effect) disposers.push(dispose)
+        return () => {}
+      },
+    },
     remote: {
       $on: () => () => {},
       session: { initializeDefaultModel },

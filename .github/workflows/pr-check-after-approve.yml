@@ -1,0 +1,94 @@
+name: Policy
+on:
+  pull_request_target:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: pr-check-after-approve-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  approve:
+    name: Approve Check
+    # Each check runs only while its repository variable is neither empty nor `off`; otherwise the job is skipped.
+    if: ${{ vars.MERGE_POLICY_HEAD_DIFF != '' && vars.MERGE_POLICY_HEAD_DIFF != 'off' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      # The head checkout is only the Git repository the check fetches into; it needs no files and runs no code.
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: README.md
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - uses: deepseek-harness/deepseek-harness-check@master
+        env:
+          CHECK_MODE: ${{ vars.MERGE_POLICY_HEAD_DIFF }}
+        with:
+          check: head-diff
+          base-branch: ${{ github.event.pull_request.base.ref }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+          pr-number: ${{ github.event.pull_request.number }}
+          pr-author: ${{ github.event.pull_request.user.login }}
+
+  review:
+    name: Reviewer Evaluate
+    if: ${{ vars.MERGE_POLICY_REVIEW != '' && vars.MERGE_POLICY_REVIEW != 'off' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+      # The check posts its verdict as a check run of its own.
+      checks: write
+    steps:
+      # The head checkout is only the Git repository the check fetches into; it needs no files and runs no code.
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: README.md
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      # The check app's token makes the review check run its own row instead of joining this workflow's suite.
+      - id: token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.DSH_APPROVAL_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DSH_APPROVAL_APP_PRIVATE_KEY }}
+          owner: deepseek-harness
+          repositories: deepseek-harness
+          permission-checks: write
+
+      - uses: deepseek-harness/deepseek-harness-check@master
+        env:
+          CHECK_MODE: ${{ vars.MERGE_POLICY_REVIEW }}
+          CHECK_TOKEN: ${{ steps.token.outputs.token }}
+        with:
+          check: review
+          base-branch: ${{ github.event.pull_request.base.ref }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+          pr-number: ${{ github.event.pull_request.number }}
+          pr-author: ${{ github.event.pull_request.user.login }}
