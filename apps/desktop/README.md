@@ -308,6 +308,8 @@ In Desktop **Settings → General → Update channel**, **Stable** selects `late
 
 A failed UI save keeps the current channel and update target; invalid startup JSON or channel suspends ordinary updates while the application remains usable. The update indicator exposes a configuration error independently of download progress; open it for the file path and recovery guidance. Fix the file and restart, or select a valid channel in Settings; malformed JSON must be repaired first. A known mandatory-update block remains enforced. Successful switching retires pending checks, downloads and installation eligibility before checking the new feed, including when both feeds advertise the same version. Switching never downgrades or installs automatically. Installation preparation rejects UI switches; once `quitAndInstall()` hands off, file edits cannot cancel that installation.
 
+Updater adapter compatibility and platform version records are documented in [Electron updater compatibility](tests/updates/electron-updater/README.md).
+
 <a id="mandatory-update-policy"></a>
 
 ### Mandatory update policy

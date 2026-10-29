@@ -308,6 +308,8 @@ Electron 主进程在启动时读取一次 `app.getPath('userData')/desktop/sett
 
 UI 保存失败时保留当前渠道和更新目标；启动时 JSON 或渠道无效会暂停普通更新，主应用仍可使用。更新入口独立于下载进度显示配置错误，点击可查看文件路径和恢复方法。修正文件后重启，或在设置中选择有效渠道；JSON 损坏须先修复文件。已知强更阻塞继续生效。切换成功时先收尾检查、下载并撤销安装资格，再检查新渠道；两个渠道版本号相同也遵循该规则。切换不降级，也不自动安装。安装准备期间拒绝 UI 切换；调用 `quitAndInstall()` 交接后，编辑文件不能取消本次安装。
 
+更新适配层兼容性和平台版本记录见 [Electron updater 兼容性](tests/updates/electron-updater/README.zh.md)。
+
 <a id="mandatory-update-policy"></a>
 
 ### 强制更新策略

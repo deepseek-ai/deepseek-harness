@@ -6,10 +6,11 @@ import { app } from 'electron'
 import electronUpdater, { type AppUpdater, type ProgressInfo, type UpdateInfo, type UpdateCheckResult } from 'electron-updater'
 import { gt, valid } from 'semver'
 import type { DesktopUpdateState } from './ipc.ts'
-import { DesktopUpdateHttpExecutor } from './update-http-executor.ts'
+import { DesktopUpdateHttpExecutor } from './updates/electron-updater/http-executor.ts'
 import { DesktopUpdatePreparationError } from './update-error.ts'
 import type { DesktopUpdateChannel } from './update-channel.ts'
-import { discardDesktopUpdate } from './update-discard.ts'
+import { selectUpdateChannel } from './updates/electron-updater/channel.ts'
+import { discardDesktopUpdate } from './updates/electron-updater/discard.ts'
 
 const { autoUpdater } = electronUpdater
 
@@ -77,10 +78,7 @@ export class DesktopUpdateCoordinator {
     }
     this.updater.autoDownload = false
     this.updater.autoInstallOnAppQuit = false
-    this.updater.channel = channel
-    // Selecting a channel can enable downgrade in electron-updater.
-    this.updater.allowDowngrade = false
-    this.updater.allowPrerelease = channel === 'nightly'
+    selectUpdateChannel(this.updater, channel)
     this.updater.on('download-progress', this.onProgress)
     this.updater.on('update-downloaded', this.onDownloaded)
     this.updater.on('error', this.onError)
@@ -133,9 +131,7 @@ export class DesktopUpdateCoordinator {
         throw error
       }
       this.channel = channel
-      this.updater.channel = channel
-      this.updater.allowDowngrade = false
-      this.updater.allowPrerelease = channel === 'nightly'
+      selectUpdateChannel(this.updater, channel)
       this.configurationError = undefined
       this.setState({ phase: 'checking' })
       const result = await this.doCheck()
