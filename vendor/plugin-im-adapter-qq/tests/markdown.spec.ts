@@ -81,6 +81,21 @@ describe('QQ markdown mode', () => {
     ].join('\n\n'))])
   })
 
+  it('embeds an image in the message body when the content mixes it with text', async () => {
+    const bot = await mountQQ({ markdown: true })
+    const { payloads } = await bot.render(group, [h('p', '看图 ', h('img', { src: 'https://example.com/a.png', alt: '示例' }), ' 后面')])
+    // One message, not a text/media/text split: the picture stays where the content put it, with the dimensions QQ
+    // requires (`0px` keeps the source size) and the uploaded resource the platform fetches itself.
+    expect(payloads).toEqual([markdown('看图 ![示例 #0px #0px](qqbot-media://dryrun:image:https://example.com/a.png) 后面')])
+  })
+
+  it('keeps a picture that stands alone in the text mode, with its own media message', async () => {
+    const bot = await mountQQ({ markdown: true })
+    const { payloads } = await bot.render(group, [h('img', { src: 'https://example.com/a.png', alt: '示例' })])
+    // Nothing to interleave, so the cheaper `text` mode wins the tie and the picture keeps its own message.
+    expect(payloads).toEqual([{ msg_type: 7, content: ' ', media: { file_info: 'dryrun:image:https://example.com/a.png' } }])
+  })
+
   it('keeps a fence longer than any backtick run of the code and does not escape its body', () => {
     return mountQQ({ markdown: true }).then(async bot => {
       const { payloads } = await bot.render(group, [

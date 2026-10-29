@@ -11,17 +11,47 @@
  * @module @deepseek-ai/cordis-plugin-im-adapter-qq/modes/markdown
  */
 
-import type { Element } from '@deepseek-ai/satori-element'
+import { type Element, isPhrasingContainer } from '@deepseek-ai/satori-element'
 import { defineMode, ElementRegistry, type Mode, type RenderContext } from '@deepseek-ai/cordis-plugin-im-core'
 import { buttonGroupNodes, buttonNode } from '../keyboard.ts'
 import {
   assemble, BLOCK, block, codeSpan, escapeMarkdown, fenceBlock, flattenRuns, mapRuns, markdownUrl, mediaNode, modeBase,
-  type QqModeSettings, type QqNode, type QqTypes, trimNewlines, verbatim, wrapInline,
+  type InlineImageNode, type QqModeSettings, type QqNode, type QqTypes, trimNewlines, verbatim, wrapInline,
 } from './shared.ts'
 import { linkFallback } from './text.ts'
 
 /** Info string of a fence: what QQ may use to highlight, minus anything that would end the fence line. */
 const infoString = (lang: string) => lang.replace(/[^\w+#.-]/g, '')
+
+/**
+ * `<img>` as a markdown image inside the message body.
+ *
+ * QQ fetches the picture itself and renders it only with both pixel dimensions, so the node keeps the element's size
+ * (absent means `0px`, the source size) and the assembled body carries a placeholder that `serialize` fills with the
+ * uploaded `qqbot-media://` reference. Keeping it here rather than in its own `msg_type: 7` message leaves the answer
+ * one message — and one passive reply — instead of splitting the text around the picture.
+ *
+ * @param el - the `<img>` element.
+ * @param ctx - render context, for the resource and the report.
+ * @returns the block holding the image node.
+ */
+function image(el: Element<'img'>, ctx: RenderContext<QqTypes>): QqNode[] {
+  const attrs = el.attrs as { src: string; alt?: string; width?: number; height?: number }
+  const meta: { name?: string; width?: number; height?: number } = {}
+  if (attrs.alt !== undefined) meta.name = attrs.alt
+  if (attrs.width !== undefined) meta.width = attrs.width
+  if (attrs.height !== undefined) meta.height = attrs.height
+  const node: InlineImageNode = {
+    kind: 'image',
+    ref: ctx.resource('image', attrs.src, meta),
+    alt: attrs.alt ?? '',
+    ...attrs.width === undefined ? {} : { width: attrs.width },
+    ...attrs.height === undefined ? {} : { height: attrs.height },
+  }
+  // Inside a sentence the picture stays in that sentence; standing on its own it takes its own paragraph.
+  const parent = ctx.ancestors[ctx.ancestors.length - 1]
+  return parent !== undefined && isPhrasingContainer(parent.type) ? [node] : [BLOCK, node, BLOCK]
+}
 
 /** `ul`/`ol`: each `<li>` rendered on its own line with its marker; continuation lines indented, code included. */
 function list(el: Element<'ul' | 'ol'>, ctx: RenderContext<QqTypes>): QqNode[] {
@@ -75,7 +105,7 @@ export function createMarkdownMode(settings: QqModeSettings): Mode<QqTypes> {
       return [BLOCK, verbatim(fenceBlock(body, lang ? infoString(lang) : undefined)), BLOCK]
     }, { variants: ['lang'] })
     .register('hr', () => [BLOCK, '***', BLOCK])
-    .register('img', mediaNode, { variants: ['inline'] })
+    .register('img', image, { variants: ['inline'] })
     .register('audio', mediaNode)
     .register('video', mediaNode)
     .register('file', mediaNode)

@@ -13,7 +13,7 @@
  */
 
 import { type Element, isPhrasingContainer } from '@deepseek-ai/satori-element'
-import type { LimitViolation, Mode, Prepared, RenderContext, ResourceKind, ResourceRef } from '@deepseek-ai/cordis-plugin-im-core'
+import type { LimitViolation, Mode, Prepared, RenderContext, ResolvedResource, ResourceKind, ResourceRef } from '@deepseek-ai/cordis-plugin-im-core'
 import { COST_PLAIN } from '@deepseek-ai/cordis-plugin-im-core'
 import type { QqKeyboard, QqKeyboardButton, QqMessageRequest } from '../api.ts'
 import type { QQConfig } from '../config.ts'
@@ -52,13 +52,28 @@ export interface VerbatimNode {
   text: string
 }
 
+/**
+ * One image kept inside the message body instead of its own media message.
+ *
+ * QQ renders an inline markdown image only when both pixel dimensions are given (`#0px` keeps the source size), and it
+ * fetches the source itself: a public URL directly, or the `qqbot-media://` reference of an uploaded resource. The
+ * reference is only known after `prepare`, so `assemble` writes a placeholder that `serialize` replaces.
+ */
+export interface InlineImageNode {
+  kind: 'image'
+  ref: ResourceRef
+  alt: string
+  width?: number
+  height?: number
+}
+
 /** Platform node of both modes: a text fragment (already escaped for markdown) or one of the structured nodes. */
-export type QqNode = string | BlockNode | MediaNode | ButtonNode | VerbatimNode
+export type QqNode = string | BlockNode | MediaNode | ButtonNode | VerbatimNode | InlineImageNode
 
 /** One platform message before resource resolution. */
 export type QqDraft =
   | { msg_type: 0; content: string }
-  | { msg_type: 2; content: string; keyboard?: QqKeyboard }
+  | { msg_type: 2; content: string; keyboard?: QqKeyboard; images?: readonly InlineImageNode[] }
   | { msg_type: 7; tag: MediaNode['tag']; media: ResourceRef }
 
 /** Append-stream patch: text appended to the previous draft's content. */
@@ -76,6 +91,32 @@ export const BLOCK: BlockNode = Object.freeze({ kind: 'block' }) as BlockNode
 export const isBlock = (node: QqNode): node is BlockNode => typeof node === 'object' && node.kind === 'block'
 
 export const isVerbatim = (node: QqNode): node is VerbatimNode => typeof node === 'object' && node.kind === 'verbatim'
+
+export const isImage = (node: QqNode): node is InlineImageNode => typeof node === 'object' && node.kind === 'image'
+
+/** Placeholder of the `index`-th image of one draft; `serialize` replaces it once `prepare` resolved the resource. */
+export function imageToken(index: number): string {
+  return `\u0000img${index}\u0000`
+}
+
+/**
+ * Fold the images of one more draft into a merged message: every placeholder is renumbered onto `into`.
+ *
+ * @param content - already assembled content of the merged draft.
+ * @param images - images that draft carried, indexed by its own placeholders.
+ * @param into - images of the message being built.
+ * @returns the content with its placeholders renumbered.
+ */
+function renumberImages(content: string, images: readonly InlineImageNode[] | undefined, into: InlineImageNode[]): string {
+  if (!images?.length) return content
+  let out = content
+  images.forEach((image, index) => {
+    const token = imageToken(index)
+    if (!out.includes(token)) return
+    out = out.split(token).join(imageToken(into.push(image) - 1))
+  })
+  return out
+}
 
 /** A verbatim node (a fenced code block) around `text`. */
 export function verbatim(text: string): VerbatimNode {
@@ -192,25 +233,30 @@ const collapse = (text: string) => text.replace(/\n{3,}/g, '\n\n')
 const MEDIA_KIND: Record<MediaNode['tag'], ResourceKind> = { img: 'image', audio: 'audio', video: 'video', file: 'file' }
 const MEDIA_LABEL: Record<MediaNode['tag'], string> = { img: '图片', audio: '语音', video: '视频', file: '文件' }
 
-/** Handler of `img audio video file` (both modes): a media node; an inline image is reported `moved`. */
-export function mediaNode(el: Element<'img' | 'audio' | 'video' | 'file'>, ctx: RenderContext<QqTypes>): QqNode {
+/** The media node of one `img audio video file` element, with no report of its own. */
+function mediaOf(el: Element<'img' | 'audio' | 'video' | 'file'>, ctx: RenderContext<QqTypes>): MediaNode {
   const attrs = el.attrs as { src: string; alt?: string; name?: string; duration?: number; width?: number; height?: number }
   const meta: { name?: string; duration?: number; width?: number; height?: number } = {}
   if (attrs.name !== undefined) meta.name = attrs.name
   if (attrs.duration !== undefined) meta.duration = attrs.duration
   if (attrs.width !== undefined) meta.width = attrs.width
   if (attrs.height !== undefined) meta.height = attrs.height
-  const path = ctx.stableId(el)
-  const parent = ctx.ancestors[ctx.ancestors.length - 1]
-  if (parent && isPhrasingContainer(parent.type)) ctx.report.moved.push({ tag: el.type, reason: 'qq-media-split', path })
   const caption = attrs.alt ?? attrs.name
   return {
     kind: 'media',
     tag: el.type,
     ref: ctx.resource(MEDIA_KIND[el.type], attrs.src, meta),
     label: `[${MEDIA_LABEL[el.type]}${caption ? `: ${caption}` : ''}]`,
-    path,
+    path: ctx.stableId(el),
   }
+}
+
+/** Handler of `img audio video file` in both modes: its own `msg_type: 7` message. */
+export function mediaNode(el: Element<'img' | 'audio' | 'video' | 'file'>, ctx: RenderContext<QqTypes>): QqNode {
+  const node = mediaOf(el, ctx)
+  const parent = ctx.ancestors[ctx.ancestors.length - 1]
+  if (parent && isPhrasingContainer(parent.type)) ctx.report.moved.push({ tag: el.type, reason: 'qq-media-split', path: node.path })
+  return node
 }
 
 /** Join the paragraphs of one text run into message content; `undefined` when nothing visible is left. */
@@ -246,8 +292,45 @@ function formatParagraph(raw: string, settings: QqModeSettings): string {
   return text.split('\n').map(line => line.trim() ? line : '\u200B').join('\n')
 }
 
-function textDraft(content: string, settings: QqModeSettings): QqDraft {
-  return settings.markdown ? { msg_type: 2, content } : { msg_type: 0, content }
+function textDraft(content: string, settings: QqModeSettings, images?: readonly InlineImageNode[]): QqDraft {
+  if (!settings.markdown) return { msg_type: 0, content }
+  return images?.length ? { msg_type: 2, content, images } : { msg_type: 2, content }
+}
+
+/** QQ renders an inline image only with both pixel dimensions; `0px` keeps the source size. */
+function imageSize(value: number | undefined): string {
+  return value !== undefined && Number.isFinite(value) && value > 0 ? `${Math.round(value)}px` : '0px'
+}
+
+/**
+ * Replace every image placeholder with the markdown image QQ renders.
+ *
+ * The alt text loses the characters that would end the tag, and the source is the uploaded resource's
+ * `qqbot-media://` reference: `prepare` uploaded it for this chat, so a public URL and a local file take one path.
+ *
+ * @param content - assembled content carrying the placeholders.
+ * @param images - images of this draft, indexed by those placeholders.
+ * @param resolved - uploaded keys of the prepared message.
+ * @returns the content QQ receives.
+ */
+function resolveImages(
+  content: string,
+  images: readonly InlineImageNode[],
+  resolved: ReadonlyMap<ResourceRef, ResolvedResource>,
+): string {
+  let out = content
+  images.forEach((image, index) => {
+    const token = imageToken(index)
+    if (!out.includes(token)) return
+    const key = resolved.get(image.ref)?.key
+    const alt = image.alt.replace(/[[\]#]/g, '')
+    // Without a key the upload did not happen, so the alt text is all that is left to show.
+    const rendered = key === undefined
+      ? alt
+      : `![${alt} #${imageSize(image.width)} #${imageSize(image.height)}](qqbot-media://${key})`
+    out = out.split(token).join(rendered)
+  })
+  return out
 }
 
 /**
@@ -257,17 +340,26 @@ function textDraft(content: string, settings: QqModeSettings): QqDraft {
  * degrade into their text label.
  */
 export function assemble(nodes: QqNode[], ctx: RenderContext<QqTypes>, settings: QqModeSettings): QqDraft[] {
-  type Item = { text: QqNode[] } | { media: MediaNode }
+  type Item = { text: QqNode[]; images: InlineImageNode[] } | { media: MediaNode }
   const items: Item[] = []
   const buttons: ButtonNode[] = []
   let text: QqNode[] = []
+  let images: InlineImageNode[] = []
   const flush = () => {
-    if (text.length) items.push({ text })
+    if (text.length) items.push({ text, images })
     text = []
+    images = []
   }
   for (const node of nodes) {
     if (typeof node === 'string' || isBlock(node) || isVerbatim(node)) text.push(node)
-    else if (node.kind === 'media') {
+    else if (isImage(node)) {
+ // The markdown mode embeds the image in its own body; a mode without that syntax keeps its own media message.
+      if (settings.markdown) text.push(imageToken(images.push(node) - 1))
+      else {
+        flush()
+        items.push({ media: { kind: 'media', tag: 'img', ref: node.ref, label: `[图片${node.alt ? `: ${node.alt}` : ''}]`, path: node.alt } })
+      }
+    } else if (node.kind === 'media') {
       flush()
       items.push({ media: node })
     } else buttons.push(node)
@@ -275,12 +367,12 @@ export function assemble(nodes: QqNode[], ctx: RenderContext<QqTypes>, settings:
   flush()
 
  // Text runs that render to nothing (whitespace between media) do not cost a message.
-  const drafts: ({ content: string } | { media: MediaNode })[] = []
+  const drafts: ({ content: string; images?: readonly InlineImageNode[] } | { media: MediaNode })[] = []
   for (const item of items) {
     if ('media' in item) drafts.push(item)
     else {
       const content = finishText(item.text, settings)
-      if (content !== undefined) drafts.push({ content })
+      if (content !== undefined) drafts.push(item.images.length ? { content, images: item.images } : { content })
     }
   }
 
@@ -289,11 +381,13 @@ export function assemble(nodes: QqNode[], ctx: RenderContext<QqTypes>, settings:
   if (drafts.length > limit && drafts.some(draft => 'content' in draft)) {
  // Merge every text run into the first one: order is lost, text is not.
     const first = drafts.findIndex(draft => 'content' in draft)
-    const merged = drafts.filter((draft): draft is { content: string } => 'content' in draft)
+    const merged = drafts.filter((draft): draft is { content: string; images?: readonly InlineImageNode[] } => 'content' in draft)
     for (let i = drafts.length - 1; i > first; i--) {
       if ('content' in drafts[i]!) drafts.splice(i, 1)
     }
-    drafts[first] = { content: merged.map(draft => draft.content).join(join) }
+    const into: InlineImageNode[] = []
+    const content = merged.map(draft => renumberImages(draft.content, draft.images, into)).join(join)
+    drafts[first] = into.length ? { content, images: into } : { content }
     if (merged.length > 1) ctx.report.moved.push({ tag: 'p', reason: 'qq-parts-limit-merged', path: 'message' })
   }
   while (drafts.length > limit) {
@@ -318,7 +412,7 @@ export function assemble(nodes: QqNode[], ctx: RenderContext<QqTypes>, settings:
 
   const out: QqDraft[] = drafts.map(draft => 'media' in draft
     ? { msg_type: 7, tag: draft.media.tag, media: draft.media.ref }
-    : textDraft(draft.content, settings))
+    : textDraft(draft.content, settings, draft.images))
 
   if (buttons.length) {
     const { keyboard, overflow } = layoutKeyboard(buttons, ctx.report)
@@ -349,8 +443,10 @@ export function serialize(msg: Prepared<QqDraft>): QqMessageRequest {
   switch (draft.msg_type) {
     case 0:
       return { msg_type: 0, content: draft.content }
-    case 2:
-      return { msg_type: 2, markdown: { content: draft.content }, ...draft.keyboard ? { keyboard: draft.keyboard } : {} }
+    case 2: {
+      const content = draft.images?.length ? resolveImages(draft.content, draft.images, msg.resolved) : draft.content
+      return { msg_type: 2, markdown: { content }, ...draft.keyboard ? { keyboard: draft.keyboard } : {} }
+    }
     case 7: {
       const resolved = msg.resolved.get(draft.media)
       if (!resolved) throw new Error(`qq: media ${draft.media.kind} ${draft.media.src} was not uploaded`)

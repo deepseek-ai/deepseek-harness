@@ -27,6 +27,8 @@ export function createTextMode(settings: QqModeSettings): Mode<QqTypes> {
     .register('text', el => el.attrs.content)
     .register('p', (el, ctx) => block(ctx.render(el.children)))
     .register('br', () => '\n')
+    // Declared `inline` on purpose: without it the core renders an inline picture as its text label, which is worse
+    // than the media message this handler publishes in its place.
     .register('img', mediaNode, { variants: ['inline'] })
     .register('audio', mediaNode)
     .register('video', mediaNode)

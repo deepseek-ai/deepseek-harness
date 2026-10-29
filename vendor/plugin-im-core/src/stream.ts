@@ -635,7 +635,7 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     const frame = await this.retry(() => this.host.render(content, this.controller.signal), false)
     if (this.aborted) return
     const sized = this.frameViolation(frame)
-    if (sized && !sized.resendable) return this.limitFail(sized.violation, true)
+    if (sized && !sized.resendable) return this.limitFail(sized.violation, true, frame.result.report)
     if (sized) return this.resend(frame, sized.violation)
     // A sticky size violation (driver: "too large") is retried with the final state, which may be smaller.
     if (this.violation && this.violation.kind !== 'size') return this.resend(frame, this.violation)
@@ -659,7 +659,7 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
       if (this.aborted) return
       if (this.isLimit(error)) {
         const violation = this.limitOf(error)
-        return violation.kind === 'size' ? this.limitFail(violation, true) : this.resend(frame, violation)
+        return violation.kind === 'size' ? this.limitFail(violation, true, frame.result.report) : this.resend(frame, violation)
       }
       throw error
     }
@@ -668,19 +668,16 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     return { handle, report: frame.result.report }
   }
 
-  /** Recall the streamed message and send the final state fresh, or fail when recall is impossible and the prefix is not truthful. */
+  /** Recall the streamed message and send the final state fresh; a platform that cannot recall gets a settled copy. */
   private async resend(frame: StreamFrame<T>, violation: LimitViolation): Promise<SendResult | undefined> {
     const handle = this._handle!
     const recalled = await this.recall(handle)
     if (this.aborted) return
     if (!recalled) {
-      // The old message stays: only acceptable when it is a truthful prefix of the final state (append case).
-      const truthful = violation.kind === 'budget' && frame.prepared.length === 1 && this.prefixOf(frame)
-      if (!truthful) return this.limitFail(violation, false)
-      if (this.applied) {
-        const ctx = this.context(handle.content, this.lastQuote, this.lastReport ?? frame.result.report, 1)
-        await this.driver!.close(handle, this.applied, ctx).catch(() => {})
-      }
+      // The old message stays, so it has to stop generating. A platform that refuses to delete a streamed message (QQ
+      // answers `DELETE` with `40061001`) would otherwise leave a bubble that never finishes: closing publishes the
+      // state the reader already has, and the final state follows as a fresh message below.
+      await this.settle(handle, this.lastReport ?? frame.result.report)
     }
     this.resent = true
     // A fresh message: the idempotency key of the streamed one would dedupe it into the recalled message.
@@ -688,10 +685,28 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     return this.send(frame.content, key === undefined ? undefined : `${key}:resend`)
   }
 
-  /** Recall if possible, then fail with `StreamLimitError`. */
-  private async limitFail(violation: LimitViolation, recall: boolean): Promise<never> {
+  /**
+   * Finish the platform's stream on the state it already shows.
+   *
+   * Used where the streamed message cannot be recalled: the reader keeps the partial content, but the platform stops
+   * the "generating" state instead of freezing on it. Best effort — a rejected close (a spent passive budget, a torn
+   * connection) must not replace the failure that is being reported.
+   *
+   * @param handle - the streamed message.
+   * @param report - render report of the state being kept.
+   */
+  private async settle(handle: MessageHandle, report: RenderReport): Promise<void> {
+    const applied = this.applied
+    const driver = this.driver
+    if (!applied || !driver) return
+    const ctx = this.context(handle.content, this.lastQuote, report, 1, this.controller.signal)
+    await driver.close(handle, applied, ctx).catch(() => {})
+  }
+
+  /** Recall if possible, then fail with `StreamLimitError`; a message that cannot be recalled is settled first. */
+  private async limitFail(violation: LimitViolation, recall: boolean, report: RenderReport): Promise<never> {
     const handle = this._handle
-    if (recall && handle) await this.recall(handle)
+    if (recall && handle && !await this.recall(handle)) await this.settle(handle, report)
     throw new StreamLimitError(violation, handle)
   }
 

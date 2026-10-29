@@ -211,9 +211,10 @@ export class QQBot extends Adapter<QQConfig, QQModes> {
  // Adapter contract implemented here
 
   /**
- * `text` first and `markdown` second — only when the configuration enables markdown at all. Core resolves one mode
- * per message from how much each would degrade it and breaks a tie with this order, so a reply that needs no markdown
- * goes out as plain text (it reads better in QQ) and only content with markdown-only elements selects `markdown`.
+ * `text` first and `markdown` second — only when the configuration enables markdown at all. Core resolves one mode per
+ * message from how much each would degrade it and breaks a tie with this order, so a reply that needs no markdown goes
+ * out as plain text (it reads better in QQ). Content that mixes text with a picture is not a tie: `text` has to lift
+ * the picture into its own message, which the score now charges, so the markdown mode that keeps it inline wins.
  */
   override get modeOrder(): readonly QQModeId[] {
     return this.config.markdown ? ['text', 'markdown'] : ['text']

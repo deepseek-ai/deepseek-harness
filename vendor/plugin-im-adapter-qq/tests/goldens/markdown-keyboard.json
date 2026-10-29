@@ -278,10 +278,9 @@
     "name": "image",
     "payloads": [
       {
-        "msg_type": 7,
-        "content": " ",
-        "media": {
-          "file_info": "file_info:image:https://example.com/media/block.png"
+        "msg_type": 2,
+        "markdown": {
+          "content": "![block image #320px #200px](qqbot-media://file_info:image:https://example.com/media/block.png)"
         }
       }
     ]
@@ -292,20 +291,7 @@
       {
         "msg_type": 2,
         "markdown": {
-          "content": "text before "
-        }
-      },
-      {
-        "msg_type": 7,
-        "content": " ",
-        "media": {
-          "file_info": "file_info:image:https://example.com/media/inline.png"
-        }
-      },
-      {
-        "msg_type": 2,
-        "markdown": {
-          "content": " text after"
+          "content": "text before ![inline image #0px #0px](qqbot-media://file_info:image:https://example.com/media/inline.png) text after"
         }
       }
     ]
@@ -572,7 +558,34 @@
       {
         "msg_type": 2,
         "markdown": {
-          "content": "**Everything at once**\n\n— subtitle text\n\nplain **bold***italic*under~~strike~~secret`inline-code`link-text@Alice@所有人@在线成员@Admins​#general:party:green-text\nafter the break\n\n# Heading one\n\n## Heading two\n\n**Heading three**\n\n**Heading four**\n\n**Heading five**\n\n**Heading six**\n\n- first item\n- ☑ done task\n- parent item\n  - child item\n\n3. third item\n4. fourth item\n\n> quoted line\n>\n> > deeper quote\n\n```ts\nconst answer = 42\n```\n\n***\n\nName: apple\nQty: 3\nsecond paragraph\n\n**▸ More information**\n\nhidden body text\n\n— fine print note\n\nrun  to check\n\n\\[合并转发\\]\n\nraw fallback text\n\n\\[文件: report.pdf\\]"
+          "content": "**Everything at once**\n\n— subtitle text\n\nplain **bold***italic*under~~strike~~secret`inline-code`link-text@Alice@所有人@在线成员@Admins​#general:party:green-text\nafter the break![inline image #0px #0px](qqbot-media://file_info:image:https://example.com/media/inline.png)\n\n# Heading one\n\n## Heading two\n\n**Heading three**\n\n**Heading four**\n\n**Heading five**\n\n**Heading six**\n\n- first item\n- ☑ done task\n- parent item\n  - child item\n\n3. third item\n4. fourth item\n\n> quoted line\n>\n> > deeper quote\n\n```ts\nconst answer = 42\n```\n\n***\n\nName: apple\nQty: 3\nsecond paragraph\n\n**▸ More information**\n\nhidden body text\n\n— fine print note\n\n![block image #0px #0px](qqbot-media://file_info:image:https://example.com/media/block.png)"
+        }
+      },
+      {
+        "msg_type": 7,
+        "content": " ",
+        "media": {
+          "file_info": "file_info:audio:https://example.com/media/voice.opus"
+        }
+      },
+      {
+        "msg_type": 7,
+        "content": " ",
+        "media": {
+          "file_info": "file_info:video:https://example.com/media/clip.mp4"
+        }
+      },
+      {
+        "msg_type": 7,
+        "content": " ",
+        "media": {
+          "file_info": "file_info:file:https://example.com/media/report.pdf"
+        }
+      },
+      {
+        "msg_type": 2,
+        "markdown": {
+          "content": "run  to check\n\n\\[合并转发\\]\n\nraw fallback text"
         },
         "keyboard": {
           "content": {
@@ -666,34 +679,6 @@
               }
             ]
           }
-        }
-      },
-      {
-        "msg_type": 7,
-        "content": " ",
-        "media": {
-          "file_info": "file_info:image:https://example.com/media/inline.png"
-        }
-      },
-      {
-        "msg_type": 7,
-        "content": " ",
-        "media": {
-          "file_info": "file_info:image:https://example.com/media/block.png"
-        }
-      },
-      {
-        "msg_type": 7,
-        "content": " ",
-        "media": {
-          "file_info": "file_info:audio:https://example.com/media/voice.opus"
-        }
-      },
-      {
-        "msg_type": 7,
-        "content": " ",
-        "media": {
-          "file_info": "file_info:video:https://example.com/media/clip.mp4"
         }
       }
     ]

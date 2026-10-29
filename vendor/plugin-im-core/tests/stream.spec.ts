@@ -698,20 +698,19 @@ describe('append strategy and recall-and-resend', () => {
     expect(host.sends.map(s => s.text)).toEqual(['xyz'])
   })
 
-  it('shape violation + recall impossible ⇒ StreamLimitError (the old message would mislead)', async () => {
+  it('shape violation + recall impossible ⇒ settle the stream, then send the final state as a new message', async () => {
     const driver = fakeDriver('append')
     const host = fakeHost(driver)
     host.canRecall = false
     const stream = createMessageStream(host)
     stream.update('abc')
     await flush()
-    const done = closeAll(stream, 'xyz')
-    await expect(done).rejects.toBeInstanceOf(StreamLimitError)
-    const error = await done.then(() => undefined as never, (e: unknown) => e as StreamLimitError)
-    expect(error.violation.kind).toBe('shape')
-    expect(error.handle?.parts[0]!.id).toBe('m1')
-    expect(host.sends).toEqual([])
-    expect(stream.state).toBe('failed')
+    // The final state does not extend what the chat shows and the platform refuses to delete a streamed message. The
+    // partial is closed where it stands, so it stops generating, and the final state follows as a fresh message.
+    const result = await closeAll(stream, 'xyz')
+    expect(driver.calls.map(c => [c.op, c.text])).toEqual([['open', 'abc'], ['close', 'abc']])
+    expect(host.sends.map(s => s.text)).toEqual(['xyz'])
+    expect(result.handle.parts[0]!.id).toBe('s1')
   })
 
   it('budget violation + recall impossible + truthful prefix ⇒ end the stream and send the final as a new message', async () => {

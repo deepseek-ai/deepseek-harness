@@ -485,18 +485,24 @@ describe('through the scheduler', () => {
     expect(stream.state).toBe('closed')
   })
 
-  it('fails a non-prefix final state with StreamLimitError, never a plain Error, when recall is refused', async () => {
-    const { bot } = await mount(call => (call.method === 'DELETE' ? { status: 400, body: { code: 40054007, message: 'no permission' } } : STREAM_ANSWER))
+  it('settles the stream and resends when the final state does not extend it and recall is refused', async () => {
+    // QQ refuses to delete a streamed message, so the partial is closed where it stands instead of staying on
+    // 生成中 forever, and the final state goes out as a fresh message.
+    const { bot, calls } = await mount(call => (call.method === 'DELETE' ? { status: 400, body: { code: 40054007, message: 'no permission' } } : STREAM_ANSWER))
     const stream = bot.stream(direct())
     stream.update('abc')
     await flush()
     const done = stream.close('xyz')
     done.catch(() => {})
     await advance(3000)
-    const error = await done.then(() => undefined, (thrown: unknown) => thrown)
-    expect(error).toBeInstanceOf(StreamLimitError)
-    expect((error as StreamLimitError).violation).toMatchObject({ kind: 'shape' })
-    expect(stream.state).toBe('failed')
+    await done
+    const streamed = calls.filter(call => call.url.endsWith('/stream_messages'))
+    expect(streamed.map(call => call.data)).toMatchObject([
+      { content_raw: 'abc', input_state: INPUT_STATE_OPEN, index: 0 },
+      { content_raw: 'abc', input_state: INPUT_STATE_CLOSE, index: 1 },
+    ])
+    const plain = calls.filter(call => call.url.endsWith('/messages'))
+    expect(plain.map(call => call.data.content)).toEqual(['xyz'])
   })
 
   it('sends a group state exactly once, at close (the core final strategy)', async () => {

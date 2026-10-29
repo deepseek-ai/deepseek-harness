@@ -19,6 +19,8 @@
  *
  * - a `<fallback>` that rendered its candidate *n* (0-based) costs *n* × {@link COST_PLAIN}: the author ranked the
  *   candidates, so a mode that renders an earlier one wins over a mode that needs a later one.
+ * - **moved** elements cost {@link COST_PLAIN} each: a mode that keeps them out of the body breaks the flow the content
+ *   asked for, which is what lets a mode able to keep them win without outranking it in the declared order.
  *
  * `RenderReport.folded` is deliberately not charged: a folded panel keeps its content one click away, and only card
  * mode folds at all, so counting it would penalise the mode for staying inside the platform's element budget.
@@ -79,6 +81,9 @@ export function degradationScore(report: RenderReport, costs: DegradationCosts =
     else score += costs.cost?.[entry.tag] ?? defaultCost(entry.tag)
   }
   if (inline) score += COST_INLINE
+ // An element the mode had to lift out of the message body costs the same as losing it there: the reader gets text,
+ // picture, text as separate bubbles, and on a platform that prices each one (a passive reply) it is not free either.
+  for (const entry of report.moved) score += costs.cost?.[entry.tag] ?? COST_PLAIN
   for (const entry of report.fallbacks) score += entry.candidate * COST_PLAIN
   for (const entry of report.dropped) {
     // `what` is a tag name (`quote`) or a tag and an identity (`button:stop`), so the price lookup reads the first part.
