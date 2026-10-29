@@ -7,7 +7,7 @@
  *
  * Fail-closed: `add` throws on any grant failure and the caller disposes the
  * instance (revoking every path granted so far); `dispose` revokes every
- * revocable grant, leaves the standing workspace edits in place, and reports
+ * revocable grant, leaves the standing directory edits in place, and reports
  * every cleanup failure.
  * @module @deepseek-ai/dsh-sandbox-windows-acl/grant
  */
@@ -58,7 +58,7 @@ export class AclWriteGrant {
    * and the world SID their ambient-delete deny names, and open the binding
    * table (lazily, once per server). Fail-closed: any failure throws — nothing
    * is granted yet.
-   * @param writeSid - the workspace (`S-1-4-x-y`) or temp (`S-1-4-x-y-1`) capability SID string.
+   * @param writeSid - the directory (`S-1-4-x-y`) or temp (`S-1-4-x-y-1`) capability SID string.
    * @param api - optional already-resolved bindings (tests).
    * @returns the ready grant (no ACEs yet).
    */
@@ -99,7 +99,7 @@ export class AclWriteGrant {
    * materialization and dispose the instance to revoke the paths granted so
    * far.
    * @param path - the directory whose DACL and label gain the grant.
-   * @param standing - the edits outlive this grant (the workspace reuse
+   * @param standing - the edits outlive this grant (the directory reuse
    *   cache; dispose() skips revoking it). Default false (revoked on
    *   dispose — the temp-directory lifecycle).
    */

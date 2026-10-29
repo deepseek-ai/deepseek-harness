@@ -101,7 +101,8 @@ export function makeWellKnownSid(api: Win32Bindings, type: number): NativePtr {
  * (child stdio) therefore fails the write pass-2 check at creation
  * (ERROR_ACCESS_DENIED; Node surfaces it as spawn EPERM), breaking every
  * piped-stdio grandchild spawn. The merged ACE names a RESTRICTING SID (the
- * write SID under workspace-write, Everyone under read-only), so each new
+ * private-temp SID, otherwise the first directory SID, or Everyone when
+ * neither is present), so each new
  * object's own DACL passes pass-2 while object creation itself stays gated by
  * the parent container's DACL (files outside the granted trees remain
  * uncreatable). Fails closed: any Win32 failure throws before the spawn.
@@ -191,7 +192,7 @@ export interface RestrictingSidSet {
  * from an earlier workspace-write period (a `/permission` mode downgrade, or
  * a crash-resumed session) stays INERT under read-only: the WRITE_RESTRICTED
  * pass-2 check grants only what the restricting list carries, keeping that
- * workspace grant inert under read-only while the unrevoked ACE keeps the
+ * directory grant inert under read-only while the unrevoked ACE keeps the
  * re-upgrade free (the grant's exact-ACE skip — no re-propagation).
  * Everyone's own ambient grants remain the documented partial boundary.
  * Authenticated Users is absent from BOTH lists: the WMI

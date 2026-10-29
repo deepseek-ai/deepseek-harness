@@ -2,9 +2,9 @@
  * Windows ACL write-restriction sandbox backend for the DeepSeek Harness
  * sandbox seam. Mirrors the mechanism of github.com/huoyaoyuan/
  * windows-acl-restrict-poc @ 10e4dfb (the fixed revision): a WRITE_RESTRICTED
- * token whose restricting SIDs include distinct workspace and temp write
+ * token whose restricting SIDs include distinct directory and temp write
  * SIDs that this sandbox adds to their owning directories' DACLs — the
- * intersection check then allows writes exactly where either capability has
+ * intersection check then allows writes exactly where a permitted capability has
  * a Write ACE, and nowhere else those SIDs are concerned (the check ALSO
  * inherits the ambient write ACEs of the other restricting SIDs — the
  * keep-alive group logon SID + Everyone; Authenticated Users, INTERACTIVE,
@@ -60,7 +60,7 @@ import { directoryWriteSid } from './workspace-sid.ts'
 
 export { tempWriteSid, directoryWriteSid } from './workspace-sid.ts'
 export { ACL_DIAGNOSIS_SKILL, registerAclDiagnosisSkill } from './acl-skill.ts'
-/** Construction options: the workspace/temp allowlists and their distinct SID identities. */
+/** Construction options: the writable-directory and private-temp allowlists and their distinct SID identities. */
 export interface AclSandboxOptions {
   /** Directories the confined child may write into (must exist and be caller-owned). */
   writableDirs: readonly string[]
@@ -74,7 +74,7 @@ export interface AclSandboxOptions {
    * The private temp directory's write SID. Required whenever
    * workspace-write grants a temp directory, absent otherwise. It must be
    * distinct from every directory write SID, so sibling sessions sharing a workspace
-   * cannot use the standing workspace capability in one another's temp tree.
+   * cannot use a standing directory capability in one another's temp tree.
    */
   tempWriteSid?: string
   /**
@@ -88,7 +88,7 @@ export interface AclSandboxOptions {
   /**
    * Whether this instance owns its DACL grants (default true). False means
    * the CALLER has already materialized the ACEs (the sandbox seam's
-   * workspace/temp capability lifecycle): init()/dispose() skip grant/revoke entirely —
+   * directory/temp capability lifecycle): init()/dispose() skip grant/revoke entirely —
    * the caller holds the grants for its own lifetime and revokes them.
    */
   manageDacls?: boolean
@@ -148,13 +148,13 @@ function freeSidBestEffort(
  * One write-restricted sandbox instance: token + write-SID grants + spawn.
  * `init()` is fail-closed — any Win32 failure revokes the revocable (temp)
  * grants and throws; `dispose()` revokes the temp grants, leaves the
- * standing workspace ACEs in place (the cross-instance reuse cache), frees
+ * standing directory ACEs in place (the cross-instance reuse cache), frees
  * every allocation, and reports every cleanup failure. With
  * `manageDacls: false` the caller owns the grants (the sandbox seam's grant
  * reuse): init() applies none and dispose() revokes none.
  */
 export class AclSandbox {
-  /** Absolute writable directories (constructor-validated). */
+  /** Canonical, deduplicated writable directories (constructor-validated). */
   readonly writableDirs: readonly string[]
   /** The independently derived write SIDs, in the same order as writableDirs; empty under read-only. */
   readonly writeSids: readonly string[]
@@ -228,10 +228,8 @@ export class AclSandbox {
         if (parsedSid === null) throw new Win32Error('ConvertStringSidToSidW', api.getLastError(), sid)
         return parsedSid
       }
-      if (this.mode === 'workspace-write') {
-        for (const directory of this.writableDirs) {
-          this.directorySidPtrs.set(directory, parseSid(directoryWriteSid(directory)))
-        }
+      for (const [index, sid] of this.writeSids.entries()) {
+        this.directorySidPtrs.set(this.writableDirs[index] as string, parseSid(sid))
       }
       this.tempWriteSidPtr = this.tempWriteSid === undefined ? undefined : parseSid(this.tempWriteSid)
 
@@ -291,18 +289,18 @@ export class AclSandbox {
       // pipe creation (ERROR_ACCESS_DENIED; Node EPERM) and break every
       // piped-stdio grandchild spawn. Merge a full-access ACE for a
       // restricting SID (the PRIVATE temp SID when present, otherwise the
-      // workspace SID, or Everyone under read-only): new-object creation
+      // first directory SID, or Everyone when neither is present): new-object creation
       // stays gated by the parent object's DACL, while the new object's own
       // DACL passes pass-2. Choosing the temp SID prevents default-DACL
       // objects in one session's temp tree from acquiring the shared
-      // workspace capability.
+      // directory capability.
       setTokenDefaultDaclGrant(api, restrictedToken, this.tempWriteSidPtr ?? this.directorySidPtrs.values().next().value ?? worldSid)
       if (api.closeHandle(currentToken) === 0) throwLastError(api, 'CloseHandle', 'current process token')
       currentTokenOpen = false
       this.api = api
     } catch (error) {
       // Fail-closed cleanup: never leave a revocable (temp) grant or SID
-      // allocation behind a failed init. Standing workspace ACEs are NOT
+      // allocation behind a failed init. Standing directory ACEs are NOT
       // revoked — they are the intended end state (the reuse cache), not an
       // error artifact.
       const cleanupFailures: unknown[] = []
@@ -397,7 +395,7 @@ export class AclSandbox {
 
   /**
    * Revoke the revocable (temp) grants, free the SID, close the token; the
-   * standing workspace ACEs stay (the reuse cache). Reports every cleanup
+   * standing directory ACEs stay (the reuse cache). Reports every cleanup
    * failure.
    */
   dispose(): void {

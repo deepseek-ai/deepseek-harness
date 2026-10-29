@@ -4,7 +4,7 @@
  * WRITE_RESTRICTED token with the per-directory write-SID allowlist, spawns the
  * wrapped argv under it with the CALLER'S stdio inherited (bytes flow
  * straight through), mirrors the child's exit code, and revokes its temp
- * grant on exit (workspace ACEs stay standing as the reuse cache).
+ * grant on exit (directory ACEs stay standing as the reuse cache).
  *
  * Stable argv contract (the seam builds it; a native-exe replacement would
  * keep the same contract):
