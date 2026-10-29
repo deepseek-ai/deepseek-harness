@@ -1,3 +1,4 @@
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 // @vitest-environment jsdom
 import { useState, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -54,6 +55,7 @@ async function bench() {
   const openFile = vi.fn<(path: string) => void>()
   const openSkill = vi.fn<(name: string) => void>()
   await runtime.mount({ inject: ['slots'], apply: (ctx) => {
+    ctx.slots.provideRoot({ props: { useContextMenu: contextMenuHook() } })
     const userText = new UserTextRegistry(ctx)
     for (const rule of [
       sessionReferenceRule, fileReferenceRule, folderReferenceRule, skillReferenceRule,
@@ -75,7 +77,7 @@ async function bench() {
     ctx.slots.register({ name: 'conversation.user.text.node', key: 'text' }, PlainUserText)
     ctx.slots.register({ name: 'conversation.user.text.node', key: 'session' }, SessionReference)
     ctx.slots.register({ name: 'conversation.user.text.node', key: 'file', locale: 'reference',
-      inject: () => ({ openFile }) }, FileReference)
+      inject: () => ({ openFile, resolveFilePath: path => path }) }, FileReference)
     ctx.slots.register({ name: 'conversation.user.text.node', key: 'folder' }, FolderReference)
     ctx.slots.register({ name: 'conversation.user.text.node', key: 'skill', inject: () => ({ openSkill }) }, SkillReference)
     ctx.slots.inject('conversation.chat.user.images', () => ctx.slots.register({ name: 'conversation.chat.user.images' }, function ImageProbe(props) {

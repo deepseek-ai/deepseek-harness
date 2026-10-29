@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode, SyntheticEvent } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
@@ -24,7 +24,7 @@ export interface MenuItem {
   /** Destructive row: error-colored text/icon and danger hover fill. */
   danger?: boolean
   /** Nested card opened to the right on hover/focus. */
-  submenu?: readonly MenuItem[]
+  submenu?: readonly MenuEntry[]
 }
 
 /** Hairline between item groups (not selectable). */
@@ -115,6 +115,25 @@ function isLabel(entry: MenuEntry): entry is MenuLabel {
   return 'type' in entry && entry.type === 'label'
 }
 
+/** Mark icon columns within each separator-delimited data group. */
+function iconColumns(entries: readonly MenuEntry[], contextual: boolean): ReadonlySet<MenuEntry> {
+  const aligned = new Set<MenuEntry>()
+  if (!contextual) return aligned
+  let group: MenuEntry[] = []
+  const finish = (): void => {
+    if (group.some(entry => !isLabel(entry) && !isSeparator(entry) && entry.icon !== undefined)) {
+      for (const entry of group) aligned.add(entry)
+    }
+    group = []
+  }
+  for (const entry of entries) {
+    if (isSeparator(entry)) finish()
+    else group.push(entry)
+  }
+  finish()
+  return aligned
+}
+
 /** Unplaced portal list: hidden but laid out at a fixed origin so offsetWidth/offsetHeight are real. */
 const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 
@@ -125,6 +144,9 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * anchor's first button, and selecting a row does the same — the rows unmount
  * with the list. Only a keyboard on the trigger or inside the list is
  * intercepted; Tab presses elsewhere on the page stay the browser's.
+ * @param props.contextual - cursor positioning, context dismissal, and per-divider icon alignment.
+ * @param props.exiting - retain an inert popup during dismissal or replacement fade.
+ * @param props.returnFocus - original control captured before asynchronous menu preparation.
  * @param props.autoFocus - focus the first item on open; the arrow keys walk the list either way.
  * @param props.open - whether the list is showing (owner-controlled).
  * @param props.anchor - the trigger element (rendered in place).
@@ -155,7 +177,7 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * frame, and scroll/resize; return null to skip placement for that frame.
  * @param props.minWidthFromAnchor - in portal mode, keep the menu at least as wide as its anchor, bounded by viewport margins.
  * @param props.footer - rows pinned below the scrolling items area, separated
- * by a hairline; they stay visible while the items above scroll.
+ * by a hairline; contextual menus reuse an explicit leading separator. These rows stay visible while the items above scroll.
  * @param props.children - component rows rendered after `items` in the same
  * list, each a `role="menuitem"` button such as {@link MenuItemButton}; they
  * share the keyboard walk, the submenu exclusivity, and the post-selection
@@ -170,8 +192,14 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * document.body outside the owner's DOM subtree.
  * @returns anchor wrapper with the conditional list.
  */
-export function Menu({ open, anchor, items = [], children, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, autoFocus = false, selection = 'check', getAnchorRect, minWidthFromAnchor = false, footer, className, listClassName }: {
+export function Menu({ open, anchor, items = [], children, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, autoFocus = false, selection = 'check', getAnchorRect, minWidthFromAnchor = false, footer, className, listClassName, contextual = false, exiting, returnFocus }: {
   open: boolean
+  /** Pointer-positioned popup: cursor clearance, grouped icons, and context gestures. */
+  contextual?: boolean
+  /** Resolve the original control for focus restoration and inert/hidden dismissal. */
+  returnFocus?: (() => HTMLElement | null) | undefined
+  /** Retain a dismissed context popup during its short fade. */
+  exiting?: 'dismiss' | 'replace' | undefined
   autoFocus?: boolean
   anchor: ReactNode
   items?: readonly MenuEntry[]
@@ -195,6 +223,17 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
 }) {
   const rootRef = useRef<HTMLSpanElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const menuId = useId()
+  useLayoutEffect(() => {
+    const trigger = returnFocus?.()
+    if (!open || !contextual || trigger == null) return
+    const previous = trigger.getAttribute('aria-controls')
+    trigger.setAttribute('aria-controls', [previous, menuId].filter(Boolean).join(' '))
+    return () => {
+      if (previous === null) trigger.removeAttribute('aria-controls')
+      else trigger.setAttribute('aria-controls', previous)
+    }
+  }, [open, contextual, returnFocus, menuId])
   /** Index the arrow walk last focused, the resume point when focus left the rows. */
   const walkIndex = useRef<number | null>(null)
   /**
@@ -213,7 +252,7 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
    * @param navigation - whether explicit keyboard traversal should retain its focus indicator.
    */
   const refocusAnchor = (navigation = false): void => {
-    const trigger = triggerRef.current
+    const trigger = returnFocus?.() ?? triggerRef.current
     const target = trigger !== null && document.contains(trigger) && !(trigger as HTMLButtonElement).disabled
       ? trigger : rootRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')
     if (target == null) return
@@ -231,11 +270,13 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   const refocusAfterSelection = (): void => {
     const navigation = selectingWithTab.current
     queueMicrotask(() => {
-      if (openRef.current) return
+      if (openRef.current && exitingRef.current === undefined) return
       const active = document.activeElement
       if (active === null || active === document.body || listRef.current?.contains(active) === true) refocusAnchor(navigation)
     })
   }
+  const exitingRef = useRef(exiting)
+  exitingRef.current = exiting
   const openRef = useRef(open)
   openRef.current = open
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null)
@@ -252,8 +293,9 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   useLayoutEffect(() => {
     if (!open || !portal) { setFixedPos(null); return }
     const place = () => {
-      if (rootRef.current?.closest('[inert], [hidden]') != null) {
-        close.current()
+      const anchorElement = returnFocus?.() ?? rootRef.current
+      if (anchorElement?.closest('[inert], [hidden]') != null) {
+        if (exitingRef.current === undefined) close.current()
         return
       }
       let r: DOMRect | null
@@ -290,7 +332,7 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
       }
 
       if (lw > 0) x = Math.min(Math.max(x, MARGIN), vw - lw - MARGIN)
-      if (lh > 0) y = Math.min(Math.max(y, overlayTopMargin(MARGIN, r, GAP)), vh - lh - MARGIN)
+      if (lh > 0) y = Math.min(Math.max(y, contextual ? MARGIN : overlayTopMargin(MARGIN, r, GAP)), vh - lh - MARGIN)
 
       setFixedPos(current => current?.left === x && current.top === y ? current : { left: x, top: y })
     }
@@ -311,49 +353,49 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }
-  }, [open, portal, align, side, getAnchorRect, minWidthFromAnchor])
+  }, [open, portal, align, side, getAnchorRect, minWidthFromAnchor, contextual, returnFocus])
 
   // Opening remembers where the keyboard was, so closing can hand it back to
   // that control — an anchor wrapping several (a split button) cannot be asked
   // for it by position. Declared before the autoFocus effect so the capture
   // sees the trigger, not the row autoFocus is about to focus.
   useEffect(() => {
-    if (!open) {
-      triggerRef.current = null
-      return
-    }
+    if (!open) return
     const active = document.activeElement
-    triggerRef.current = active instanceof HTMLElement && rootRef.current?.contains(active) === true ? active : null
+    triggerRef.current = active instanceof HTMLElement && (getAnchorRect !== undefined || rootRef.current?.contains(active) === true)
+      ? active : null
   }, [open])
 
   useEffect(() => {
-    if (!open || !autoFocus) return
+    if (!open || exiting !== undefined || (portal && fixedPos === null) || !autoFocus
+      || listRef.current?.contains(document.activeElement)) return
     const first = listRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')
     walkIndex.current = first === undefined || first === null ? null : 0
     if (first != null) focusWithoutRing(first)
-  }, [open, autoFocus])
+  }, [open, autoFocus, items.length, footer?.length, fixedPos, portal, exiting])
 
   useEffect(() => {
-    if (!open) {
+    if (!open || exiting !== undefined) {
       setOpenSubmenuId(null)
       walkIndex.current = null
       return
     }
     const composition = observeComposition(document)
     const onPointerDown = (e: PointerEvent) => {
-      if (!(e.target instanceof Node)) return
+      if (!(e.target instanceof Node) || (contextual && e.button === 2)) return
       // The portaled list is outside the anchor subtree; check both.
       if (rootRef.current?.contains(e.target) === true) return
       if (listRef.current?.contains(e.target) === true) return
       onClose()
     }
     const onKeyDown = (e: KeyboardEvent) => {
-      if (composition.guards(e) || isBehindModal(rootRef.current) || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return
+      if (composition.guards(e) || isBehindModal(triggerRef.current ?? rootRef.current)
+        || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return
       // Where the keyboard is, computed once: the menu owns it when it holds a
       // row or sits on its anchor region.
       const focused = document.activeElement
       const insideList = listRef.current?.contains(focused) === true
-      const anchored = rootRef.current?.contains(focused) === true || insideList
+      const anchored = focused === returnFocus?.() || rootRef.current?.contains(focused) === true || insideList
       if (e.key === 'Escape' && !e.shiftKey) {
         e.preventDefault()
         if (e.repeat) return
@@ -439,7 +481,11 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
       document.removeEventListener('keydown', onEscape, true)
       window.removeEventListener('blur', onWindowBlur)
     }
-  }, [open, onClose, autoFocus])
+  }, [open, onClose, autoFocus, contextual, exiting])
+
+  useLayoutEffect(() => {
+    if (exiting === 'dismiss' && listRef.current?.contains(document.activeElement)) refocusAnchor()
+  }, [exiting])
 
   // A close from selection/Escape/outside click outruns a pending grace close;
   // left armed it would shut a list reopened inside the grace window. Its own
@@ -453,7 +499,9 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   // scroll clip would crop it, so only submenu-free menus get the height cap.
   const scrollable = !items.some(entry => !isSeparator(entry) && !isLabel(entry) && entry.submenu !== undefined && entry.submenu.length > 0)
 
-  const renderEntry = (entry: MenuEntry) => {
+  const itemColumns = iconColumns(items, contextual)
+  const footerColumns = iconColumns(footer ?? [], contextual)
+  const renderEntry = (entry: MenuEntry, columns: ReadonlySet<MenuEntry>) => {
     if (isSeparator(entry)) {
       return <div key={entry.id} className={css.separator} role="separator" />
     }
@@ -462,6 +510,7 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
     }
     const hasSub = entry.submenu !== undefined && entry.submenu.length > 0
     const subOpen = hasSub && openSubmenuId === entry.id
+    const subColumns = iconColumns(entry.submenu ?? [], contextual)
     const selected = entry.id === selectedId || selectedIds?.includes(entry.id) === true
     return (
       <div
@@ -487,7 +536,7 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
             onSelect?.(entry.id)
           }}
         >
-          {entry.icon !== undefined && <span className={css.itemIcon}>{entry.icon}</span>}
+          {(entry.icon !== undefined || columns.has(entry)) && <span aria-hidden="true" className={css.itemIcon}>{entry.icon}</span>}
           <span className={css.itemLabel}>{entry.label}</span>
           {entry.shortcut !== undefined && <span aria-hidden="true" className={css.shortcut}><ShortcutKeys keys={entry.shortcut.keys} className={css.shortcutKeys} /></span>}
           {/* Selection marker is a trailing check (figma .Menu_cell) unless the fill mode carries it. */}
@@ -495,21 +544,23 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
         </button>
         {subOpen && entry.submenu !== undefined && (
           <MenuSurface compact={compact} className={clsx(css.submenu, compact && css.compactList)} role="menu">
-            {entry.submenu.map(sub => (
-              <button
-                key={sub.id}
-                type="button"
-                role="menuitem"
-                className={css.item}
-                disabled={sub.disabled}
-                aria-keyshortcuts={sub.shortcut?.aria}
-                onClick={() => { onSelect?.(sub.id); refocusAfterSelection() }}
-              >
-                {sub.icon !== undefined && <span className={css.itemIcon}>{sub.icon}</span>}
-                <span className={css.itemLabel}>{sub.label}</span>
-                {sub.shortcut !== undefined && <span aria-hidden="true" className={css.shortcut}><ShortcutKeys keys={sub.shortcut.keys} className={css.shortcutKeys} /></span>}
-              </button>
-            ))}
+            {entry.submenu.map(sub => isSeparator(sub)
+              ? <div key={sub.id} className={css.separator} role="separator" />
+              : isLabel(sub) ? <div key={sub.id} className={css.label}>{sub.text}</div> : (
+                <button
+                  key={sub.id}
+                  type="button"
+                  role="menuitem"
+                  className={css.item}
+                  disabled={sub.disabled}
+                  aria-keyshortcuts={sub.shortcut?.aria}
+                  onClick={() => { onSelect?.(sub.id); refocusAfterSelection() }}
+                >
+                  {(sub.icon !== undefined || subColumns.has(sub)) && <span aria-hidden="true" className={css.itemIcon}>{sub.icon}</span>}
+                  <span className={css.itemLabel}>{sub.label}</span>
+                  {sub.shortcut !== undefined && <span aria-hidden="true" className={css.shortcut}><ShortcutKeys keys={sub.shortcut.keys} className={css.shortcutKeys} /></span>}
+                </button>
+              ))}
           </MenuSurface>
         )}
       </div>
@@ -532,11 +583,14 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   // already at the final position (with getAnchorRect returning null the
   // list simply stays hidden).
   const list = open && (
-    <MenuSurface compact={compact}
+    <MenuSurface compact={compact} id={contextual ? menuId : undefined}
       ref={listRef}
       className={clsx(css.list, listClassName, dense && css.denseList, compact && css.compactList, scrollable && css.scrollable, portal && css.portal, side === 'top' && !portal && css.sideTop, align === 'end' && !portal && css.alignEnd)}
       style={portal ? fixedPos ?? MEASURE_STYLE : undefined}
-      role="menu"
+      role={exiting === undefined ? 'menu' : undefined}
+      aria-hidden={exiting === undefined ? undefined : true}
+      data-context-menu={contextual ? '' : undefined}
+      phase={contextual ? exiting ?? 'enter' : undefined}
       // React portals bubble synthetic events through the REACT tree: without
       // this stop, an item click re-fires the anchor row's own onClick
       // (open/toggle) after onSelect. The same bubble is where every row's
@@ -548,16 +602,19 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
         const row = e.target instanceof Element ? e.target.closest('button[role="menuitem"]') : null
         if (row !== null && row.getAttribute('aria-haspopup') !== 'menu') refocusAfterSelection()
       }}
+      onContextMenu={contextual ? (event) => {
+        event.preventDefault(); event.stopPropagation(); onClose()
+      } : undefined}
       onMouseOver={collapseSubmenuFrom}
       onFocus={collapseSubmenuFrom}
     >
       <div className={css.viewport} role="presentation">
-        {items.map(renderEntry)}
+        {items.map(entry => renderEntry(entry, itemColumns))}
         {children}
       </div>
       {footer !== undefined && footer.length > 0 && (
         <div className={css.footer} role="presentation">
-          {footer.map(renderEntry)}
+          {footer.map(entry => renderEntry(entry, footerColumns))}
         </div>
       )}
     </MenuSurface>

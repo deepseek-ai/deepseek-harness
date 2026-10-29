@@ -381,6 +381,28 @@ describe('forge watch', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  // Cordis disposes a provider plugin that injects `forge` before the service,
+  // so only a registration owned outside the service's dependents can still
+  // be serving when the service itself stops.
+  it('discards a fetch that settles after the service is disposed', async () => {
+    const provider = new FakeProvider()
+    const release = held(provider, target => snapshot(target))
+    ctx = new Context()
+    const service = ctx.plugin(ForgeService, config)
+    await service
+    ctx.get('forge')!.register(provider)
+    const { updates } = collect(ctx)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.signals).toHaveLength(1)
+
+    const disposal = service.dispose()
+    release()
+    await disposal
+
+    expect(updates).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('releases a watch when the subscribing fiber is disposed', async () => {
     const provider = new FakeProvider()
     provider.results.set(key, snapshot(ref(1), { checksRollup: 'pending' }))

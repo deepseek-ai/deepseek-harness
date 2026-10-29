@@ -2,7 +2,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { createElement, type ComponentProps, type ReactNode } from 'react'
 import { onTestFinished } from 'vitest'
-import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { UserTextInput, UserTextNodeOwnerProps } from '../src/client/contract/slots.ts'
 import type { UserTextNode } from '../src/client/contract/user-text.ts'
@@ -62,7 +62,7 @@ export function createUserTextFixture(actions: UserTextFixtureActions = {}): (in
       case 'secret': return createElement(SecretText, { ...owner, t } as ComponentProps<typeof SecretText>)
       case 'text': return createElement(PlainUserText, owner as ComponentProps<typeof PlainUserText>)
       case 'session': return createElement(SessionReference, owner as ComponentProps<typeof SessionReference>)
-      case 'file': return createElement(FileReference, { ...owner, openFile, t } as ComponentProps<typeof FileReference>)
+      case 'file': return createElement(FileReference, { ...owner, openFile, t, useContextMenu: contextMenuHook(), resolveFilePath: (path: string) => path } as ComponentProps<typeof FileReference>)
       case 'folder': return createElement(FolderReference, owner as ComponentProps<typeof FolderReference>)
       case 'skill': return createElement(SkillReference, { ...owner, openSkill } as ComponentProps<typeof SkillReference>)
       case 'command': return createElement(GoalCommandReference, owner as ComponentProps<typeof GoalCommandReference>)

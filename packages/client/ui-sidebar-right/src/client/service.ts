@@ -311,6 +311,23 @@ export class SidebarRightController implements ISidebarRight {
   }
 
   /**
+   * Read closeable tabs from the clicked pane.
+   * @param sessionId - owning Session.
+   * @param paneId - clicked pane.
+   * @param tabId - anchor tab.
+   * @returns closeable ids in display order, or empty sets after the anchor moves or closes.
+   */
+  menuTabs(sessionId: SessionId, paneId: PaneId, tabId: TabId): { all: readonly TabId[]; right: readonly TabId[]; close: boolean } {
+    const surface = this.adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]
+    const pane = surface?.layout.nodes[paneId]
+    if (surface === undefined || pane?.kind !== 'pane' || !pane.tabs.includes(tabId)) return { all: [], right: [], close: false }
+    const index = pane.tabs.indexOf(tabId)
+    const closeable = (id: TabId) => canCloseTab(surface, id)
+    return { close: closeable(tabId), all: pane.tabs.filter(id => id !== tabId && closeable(id)),
+      right: pane.tabs.slice(index + 1).filter(closeable) }
+  }
+
+  /**
    * Read the committed tabs of a Session so providers can restore their content.
    * @param sessionId - Session whose layout has been adopted.
    * @returns its open records, or an empty list before adoption.

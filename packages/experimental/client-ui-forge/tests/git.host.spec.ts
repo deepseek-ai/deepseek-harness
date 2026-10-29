@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import LocalSandbox from '@deepseek-ai/dsh-sandbox-local'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { hasBranch, inspectCheckout, listBranches } from '../src/git.ts'
 import type { GitConfig } from '../src/git.ts'
 import { commitAt, git, gitContext, plainSession, repository, sandboxRecord, scratch, script } from './harness.ts'
@@ -54,6 +55,48 @@ async function branched(root: string): Promise<string> {
   return repo
 }
 
+describe('Session permissions for Git inspection', () => {
+  it.each(['read-only', 'workspace-write', 'danger-full-access'] as const)('uses %s for checkout and branch reads without changing the index', async (mode) => {
+    const repo = await repository(await directory())
+    const record = sandboxRecord()
+    const ctx = await context(record, repo)
+    const current = session(repo)
+    setSandboxMode(current, mode)
+    const index = join(repo, '.git', 'index')
+    const before = await readFile(index)
+    const beforeStat = await stat(index)
+
+    await expect(inspectCheckout(ctx, CONFIG, current, repo, live())).resolves.toMatchObject({ checkout: { branch: 'main' } })
+    await expect(listBranches(ctx, CONFIG, current, repo, 50, live())).resolves.toEqual({ current: 'main', branches: ['main'] })
+    await expect(hasBranch(ctx, CONFIG, current, repo, 'main', live())).resolves.toBe(true)
+
+    expect(record.calls).toHaveLength(mode === 'danger-full-access' ? 0 : 10)
+    expect(record.calls.every(call => call.policy.mode === mode)).toBe(true)
+    expect(await readFile(index)).toEqual(before)
+    expect((await stat(index)).mtimeMs).toBe(beforeStat.mtimeMs)
+    await expect(access(join(repo, '.git', 'index.lock'))).rejects.toThrow()
+  })
+
+  it.each(['read-only', 'workspace-write', 'danger-full-access'] as const)('handles an unavailable sandbox under %s without widening access', async (mode) => {
+    const repo = await repository(await directory())
+    const record = sandboxRecord()
+    const failure = new SandboxUnavailableError('read-only')
+    record.failure = failure
+    const ctx = await context(record, repo)
+    const current = session(repo)
+    setSandboxMode(current, mode)
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+
+    if (mode === 'danger-full-access') {
+      await expect(inspectCheckout(ctx, CONFIG, current, repo, live())).resolves.toMatchObject({ checkout: { branch: 'main' } })
+      expect(spawn).toHaveBeenCalledTimes(7)
+    } else {
+      await expect(inspectCheckout(ctx, CONFIG, current, repo, live())).rejects.toBe(failure)
+      expect(spawn).not.toHaveBeenCalled()
+    }
+  })
+})
+
 describe('inspectCheckout', () => {
   it('reads the root, shared Git directory, branch, commit, upstream, and remotes of the checkout with seven read-only commands', async () => {
     const root = await directory()
@@ -88,7 +131,7 @@ describe('inspectCheckout', () => {
       'symbolic-ref --quiet --short HEAD',
     ])
     for (const call of record.calls) {
-      expect(call.policy).toMatchObject({ mode: 'read-only', workspaceRoot: repo })
+      expect(call.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo })
       expect(call.argv.slice(1, 1 + GIT_PREFIX.length)).toEqual(GIT_PREFIX)
     }
   })
@@ -279,7 +322,7 @@ describe('listBranches', () => {
       'symbolic-ref --quiet --short HEAD',
     ])
     for (const call of record.calls) {
-      expect(call.policy).toMatchObject({ mode: 'read-only', workspaceRoot: repo })
+      expect(call.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo })
       expect(call.argv.slice(1, 1 + GIT_PREFIX.length)).toEqual(GIT_PREFIX)
     }
   })
@@ -352,7 +395,7 @@ describe('hasBranch', () => {
       'show-ref --verify --quiet refs/heads/dsh/0a1b2c3d',
     ])
     for (const call of record.calls) {
-      expect(call.policy).toMatchObject({ mode: 'read-only', workspaceRoot: repo })
+      expect(call.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo })
       expect(call.argv.slice(1, 1 + GIT_PREFIX.length)).toEqual(GIT_PREFIX)
     }
   })
@@ -409,13 +452,15 @@ describe.skipIf(!sandboxUsable)('Git inspection under the local sandbox', () => 
     const index = join(repo, '.git', 'index')
     const before = await stat(index)
     const ctx = await context(sandboxRecord(), repo, true)
+    const readOnly = session(repo)
+    setSandboxMode(readOnly, 'read-only')
     const confine = vi.spyOn(ctx.sandbox, 'confine')
 
-    await expect(inspectCheckout(ctx, CONFIG, session(repo), repo, live())).resolves.toEqual({
+    await expect(inspectCheckout(ctx, CONFIG, readOnly, repo, live())).resolves.toEqual({
       checkout: { root: repo, branch: 'main', linked: false, commit: await git(repo, 'rev-parse', '--short', 'HEAD') },
       commonDir: join(repo, '.git'), upstream: null, remotes: [],
     })
-    await expect(listBranches(ctx, CONFIG, session(repo), repo, 50, live())).resolves.toEqual({ current: 'main', branches: ['main'] })
+    await expect(listBranches(ctx, CONFIG, readOnly, repo, 50, live())).resolves.toEqual({ current: 'main', branches: ['main'] })
 
     expect(confine).toHaveBeenCalledTimes(9)
     expect(confine.mock.calls.every(call => call[1].mode === 'read-only')).toBe(true)

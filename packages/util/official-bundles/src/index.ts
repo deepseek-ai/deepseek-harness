@@ -17,6 +17,8 @@ export interface OfficialBundleCatalogEntry {
   readonly packageName: string
   /** Package-owned Host platform declaration, available before installation. */
   readonly platforms?: DshBundleManifest['platforms']
+  /** Package-owned discovery visibility before installation. */
+  readonly listedByDefault?: boolean
   /** Package-owned localized text and a self-contained icon, embedded without provider code. */
   readonly meta: Required<Pick<PluginLocalizedMeta, 'title' | 'description' | 'icon'>>
 }

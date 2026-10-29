@@ -56,6 +56,13 @@ export interface StoredStates {
   delete(key: string): Promise<boolean>
 }
 
+/** One run's storage handle; closing releases its domain for the next run. */
+export interface OpenedStates {
+  readonly table: StoredStates
+  /** Close the domain after the run's accepted writes settle. */
+  close(): Promise<void>
+}
+
 /** One listed Session and the URLs of its visible bindings, undefined when they are not known without loading it. */
 export interface ListedSession {
   readonly id: SessionId
@@ -72,8 +79,8 @@ export interface ChangeRequestStateSources {
   readonly refOf: (url: string) => ChangeRequestRef | undefined
   /** Poll a change request until the returned disposer runs. */
   readonly watch: (ref: ChangeRequestRef, listener: ChangeRequestListener) => () => void
-  /** Open the stored states. */
-  readonly open: () => Promise<StoredStates>
+  /** Open the stored states; the run owns and closes the returned handle. */
+  readonly open: () => Promise<OpenedStates>
   /** Report a failed durable write; the state stays in memory. */
   readonly report: (error: unknown) => void
 }
@@ -157,9 +164,9 @@ class Run {
   constructor(
     private readonly sources: ChangeRequestStateSources,
     private readonly readers: ReadonlySet<Reader>,
-    private readonly table: StoredStates,
+    private readonly storage: OpenedStates,
   ) {
-    for (const [, state] of table.entries()) this.states.set(state.url, state)
+    for (const [, state] of storage.table.entries()) this.states.set(state.url, state)
     // Subscribe before listing; updates received during the read supersede its snapshot.
     this.stopBindings = sources.onBindings((id, urls) => {
       if (this.starting) this.startupBindings.set(id, urls)
@@ -183,7 +190,7 @@ class Run {
     for (const [url] of this.states) {
       if (this.sessionsOf.has(url)) continue
       this.states.delete(url)
-      this.write(() => this.table.delete(storedKey(url)))
+      this.write(() => this.storage.table.delete(storedKey(url)))
     }
   }
 
@@ -202,7 +209,11 @@ class Run {
     this.stopBindings()
     for (const stop of this.polls.values()) stop()
     this.polls.clear()
-    await Promise.all(this.writes)
+    try {
+      await Promise.all(this.writes)
+    } finally {
+      await this.storage.close()
+    }
   }
 
   private bind(id: SessionId, urls: readonly string[]): void {
@@ -244,7 +255,7 @@ class Run {
   private settle(url: string, ids: ReadonlySet<SessionId>, state: ForgeChangeRequestListState): void {
     if (this.stopped || sameState(this.states.get(url), state)) return
     this.states.set(url, state)
-    this.write(() => this.table.put(storedKey(url), state))
+    this.write(() => this.storage.table.put(storedKey(url), state))
     for (const reader of this.readers) if ([...ids].some(reader.allowed)) reader.push(state)
   }
 
@@ -293,7 +304,7 @@ export class ChangeRequestStates {
   }
 
   /**
-   * End every stream, stop polling, and wait for initialization and accepted storage writes.
+   * End every stream, stop polling, and wait for initialization, accepted writes, and storage closure.
    * @returns settles after all owned work stops; subsequent streams end without starting work.
    */
   async dispose(): Promise<void> {
@@ -309,14 +320,16 @@ export class ChangeRequestStates {
     const started = (async () => {
       await preceding
       aborter.signal.throwIfAborted()
-      const table = await this.sources.open()
-      aborter.signal.throwIfAborted()
-      const run = new Run(this.sources, this.readers, table)
+      const storage = await this.sources.open()
+      let run: Run | undefined
       try {
+        aborter.signal.throwIfAborted()
+        run = new Run(this.sources, this.readers, storage)
         await run.start(aborter.signal)
         return run
       } catch (error) {
-        await run.stop()
+        if (run === undefined) await storage.close()
+        else await run.stop()
         throw error
       }
     })()

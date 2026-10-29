@@ -58,6 +58,8 @@ interface ForgeProvider {
     refs: readonly ChangeRequestRef[],
     signal: AbortSignal,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>
+  /** Read all checks for one change request on demand; omission declares that only the polling preview is available. */
+  fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>
   /** Find open change requests whose head is `branch` in `repository`, excluding the default branch and forks. */
   findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>
   /** Report whether the provider can reach `host` with current credentials. */
@@ -769,6 +771,15 @@ async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeAction
 async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
 
 /**
+ * Read complete check details independently of periodic polling.
+ * @param ref - change request served by a registered provider.
+ * @param signal - cancellation of the detail view.
+ * @returns a complete snapshot or the provider's failure; unsupported providers return unavailable.
+ * @throws on cancellation, provider disposal, or expiry of this read's own `fetchTimeoutMs` deadline.
+ */
+async fetchChecks(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>
+
+/**
  * Read the changes of a change request as its host computes them.
  * @param ref - change request served by a registered provider.
  * @param signal - cancellation of the read.
@@ -840,7 +851,7 @@ Source: [`packages/experimental/forge/src/index.ts`](../../packages/experimental
 
 ### `ctx.forgePanel` — `ForgePanelController`
 
-Serves the forge panel. Following a Session inspects the checkout of its current directory read-only in the Session's execution world, recognizes the code host of the upstream remote or `origin`, probes sign-in for that host, and polls the Session's bound change requests through `ctx.forge` until the last follower of that Session leaves. A worktree request makes the panel create a branch and checkout through an optional `ctx.worktrees` and enter it while the Session's first message waits in the inbox, or at the first step proposal of a message no wait took. After a failed or stopped attempt the message keeps waiting for another attempt or for the request to be withdrawn. A message also waits while the worktree the Session works in is gone, until that worktree is checked out again or left for the source checkout. Changes to a Session's checkout run as Agent maintenance, so a message that arrives meanwhile waits for them.
+Serves the forge panel. Following a Session inspects the checkout of its current directory using the Session's permissions and execution world, recognizes the code host of the upstream remote or `origin`, probes sign-in for that host, and polls the Session's bound change requests through `ctx.forge` until the last follower of that Session leaves. A worktree request makes the panel create a branch and checkout through an optional `ctx.worktrees` and enter it while the Session's first message waits in the inbox, or at the first step proposal of a message no wait took. After a failed or stopped attempt the message keeps waiting for another attempt or for the request to be withdrawn. A message also waits while the worktree the Session works in is gone, until that worktree is checked out again or left for the source checkout. Changes to a Session's checkout run as Agent maintenance, so a message that arrives meanwhile waits for them.
 
 ```ts cordis-catalog
 /**
@@ -904,13 +915,14 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 
 /**
  * Read the changes one scope covers in the checkout of the Session's
- * current directory, with Git confined to the Session's read-only sandbox.
+ * current directory, with Git using the Session's sandbox policy.
  * @param session - Session whose checkout is read.
  * @param scope - which changes to read.
  * @param signal - request cancellation.
  * @returns the files, the base of the `branch` scope, and the untracked files left out.
  * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/no-fork-point` for the `branch`
- * scope of a checkout without one; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
+ * scope of a checkout without one; `forgePanel/filter-config-failed` when filter configuration cannot be read
+ * completely, before any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
  */
 @Remote async localDiff(session: Session, scope: ForgeLocalScope, signal: AbortSignal): Promise<ForgeLocalDiff>
 
@@ -926,6 +938,18 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * an error for a path outside the checkout, binary content, or a failed read.
  */
 @Remote async localText(session: Session, scope: ForgeLocalScope, path: string, signal: AbortSignal): Promise<string>
+
+/**
+ * Load complete checks for the change request whose list the user opened.
+ * @param session - Session retaining the visible binding.
+ * @param url - binding URL.
+ * @param headSha - commit displayed by the card; a different head rejects the result.
+ * @param signal - cancellation when the list closes.
+ * @returns the complete snapshot at the displayed head.
+ * @throws `forgePanel/not-bound` for an invisible binding, `forgePanel/stale-head` for a moved head,
+ * or `forgePanel/checks-failed` when the provider cannot complete the read.
+ */
+@Remote async changeRequestChecks(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ChangeRequestSnapshot>
 
 /**
  * Read the changes of a change request of a Session as its code host

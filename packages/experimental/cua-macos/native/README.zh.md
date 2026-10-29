@@ -27,6 +27,14 @@ kind: "package-reference"
 
 `native/.build/prepared/<arch>` 和 `native/bin/darwin-<arch>` 中的各代应用不会自动清理。正式打包时使用全新的 `--output-directory`，或确认没有客户端使用后清理打包输出再构建，避免旧应用进入 tarball。安全签名时间戳可能让相同源码生成不同代应用。
 
+手动工作流 **Package CUA helper · macOS** 的[配置](../../../../.github/workflows/cua-helper-package.yml)在 `dsh-mac-package-trial` 构建两种架构。选择可信的 `source_ref` 和机器 `preset`；凭据沿用[macOS 打包配置](../../../../apps/desktop/packaging/README.zh.md#macos-actions)。打包无需 macOS 桌面登录或 Rosetta。在仓库根目录运行 `pnpm exec tsx scripts/cua-helper/package.ts --out <new-directory>` 可执行相同准备。完整应用签名、公证和贴票后才确定最终内容摘要，再从解包后的 `cua-helper.tgz` 验证架构、签名、票据、Gatekeeper 和文件完整性。打包不启动 helper。在已登录的桌面会话中单独运行 `python3 scripts/cua-helper/smoke.py <helper-executable>` 检查能力、helper 身份和退出清理；Apple Silicon 上执行 x64 版本需要 Rosetta。该检查不申请权限或观察应用。命令失败、超时或启动回复无法解析时，会输出捕获的 stdout 和 stderr；无效编码只在诊断文本中替换，协议解析仍严格校验。打包成功不代表运行验收通过。
+
+工作流保留 `cua-helper.tgz` 和 `cua-helper.json`，后者记录产品版本、源码 commit、Team ID 和两份应用摘要。[Release publish](../../../../.github/workflows/release-publish.yml)在生成 provider 的 npm 包前接入该产物；普通 PR 发布检查不使用签名凭据。准备步骤拒绝源码或版本不匹配、架构不全、旧应用目录、链接、字节变化和执行权限缺失。npm 发布在写入注册表前重新检查实际 provider tarball。重新签名会改变产物字节，重试部分发布的版本时需保留原产物。
+
+在 **Release publish (dsh)** 中，`cua_run_id` 和 `cua_run_attempt` 都留空时重新构建 helper。复用已有产物时，将 `cua_run_id` 填为本仓库 **Package CUA helper · macOS** 或 **Release publish (dsh)** 的运行 ID。`cua_run_attempt` 指定准确的 attempt；留空时选定最新一次。所选 attempt 必须已结束，CUA 打包 job 成功，且产物未过期；后续 npm 发布失败不影响该打包 job 的结果。打包失败、产物缺失或过期时直接失败，不选择更早的 attempt。托管 runner 上的 pack job 按产物 ID 下载，再执行与新构建相同的源码 commit、产品版本、架构及文件完整性校验。此方式不支持跨 commit 或产品版本复用，也不访问 Mac runner。产物保留 14 天。
+
+npm 发布在上传部分包后失败时，只重跑 **Publish to npm** job，复用仍在保留期内的 `dsh-npm-tarballs`（7 天）。该 job 不构建或签名，直接复用原 tarball；已发布且字节相同的包会被跳过。此次重试不要重跑全部 job。若必须新建发布运行，以同一 commit 和版本重新打包，应从 pack job 的摘要复制原 `cua_run_id` 和 `cua_run_attempt`，保持已签名 helper 的字节不变。commit 和版本一致不代表重新签名后字节也相同。原产物不可用或任何重新打包的内容不同时，应停止发布；不能用不同内容替换已有 npm 版本。
+
 启动错误通过当前用户专用、每次启动独立的错误文件和 launcher 的 JSON 错误帧保留错误码与消息。等待启动锁和就绪状态共用一个期限，系统启动应用的耗时计入该预算。就绪记录必须指向本次启动的 PID。新实例启动失败后，launcher 强制终止并等待其退出，再报告失败；清理另有与启动超时等长的期限。连接已有服务失败时不会终止该服务。
 
 应用图标通过 `pnpm --dir packages/experimental/cua-macos run build:icon` 从 [Computer Use 图形](../../cua-bundle/icon.svg)生成。系统授权提示和 DSH 权限页使用这个应用图标。

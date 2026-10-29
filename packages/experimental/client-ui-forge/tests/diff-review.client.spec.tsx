@@ -22,7 +22,7 @@ function mount(overrides: Partial<DiffFileProps> = {}) {
   const review: ReviewActions = { source, addToInput, records, onQuoted: (item) => { records.recordAgent(item) } }
   const props: DiffFileProps = { file, visible: true, expanded: true, onToggle: vi.fn(), large: false, revealed: false, onReveal: vi.fn(),
     text: undefined, open: new Set(), onExpand: vi.fn(), split: true, wrap: true, badge: '', tooltip: 'a.txt', actions: [],
-    onCopyPath: vi.fn(), sectionRef: vi.fn(), review, t, ...overrides }
+    sectionRef: vi.fn(), review, t, ...overrides }
   const view = render(<DiffFile {...props} />)
   const line = (name: string) => view.getByRole('button', { name: `Select line ${name}` })
   const code = (side: 'L' | 'R', no: number): HTMLElement => {

@@ -1,0 +1,5 @@
+- insert:
+    - id: permission-request-capture
+      name: '../manual-compact/capture-requests.mjs'
+      config:
+        path: !!js dshHomePath('permission-requests.jsonl')

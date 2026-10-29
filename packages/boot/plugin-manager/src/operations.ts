@@ -470,6 +470,8 @@ export async function runProfilePnpm(
     if (result.failed && output.length === 0) {
       const diagnostic = result.shortMessage ?? 'pnpm failed'
       await log.write(diagnostic)
+      // The run printed nothing, so this diagnostic is the whole of its captured output; stream it as such.
+      options.onOutput?.(diagnostic, 'stderr')
       truncated = Buffer.byteLength(diagnostic) > options.outputBytes
       output = Buffer.from(diagnostic).subarray(0, options.outputBytes)
     }

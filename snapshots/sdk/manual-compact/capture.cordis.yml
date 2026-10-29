@@ -1,0 +1,5 @@
+- insert:
+    - id: compact-request-capture
+      name: './capture-requests.mjs'
+      config:
+        path: !!js dshHomePath('compact-requests.jsonl')
