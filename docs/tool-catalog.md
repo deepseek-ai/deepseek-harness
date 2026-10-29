@@ -2039,7 +2039,7 @@ The subagent_oar tool selects among configured aliases for external providers. T
 
 ### `list_subagent_models`
 
-Inspect the subagent routes this Session authorizes. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts. Query only to override the child route; delegation without `provider` and `model` inherits the parent route. Omit a field rather than sending an empty string.
+Inspect the subagent routes this Session authorizes. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts. Query when choosing an explicit child route or reasoning effort. Omit `provider`, `model`, and `reasoning_effort` when delegating to use the default child route. Omit optional fields rather than sending empty strings.
 
 ```json
 {

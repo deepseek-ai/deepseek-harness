@@ -88,16 +88,14 @@ function assertNonEmpty(value: string | undefined, field: keyof DelegationModelR
 
 /**
  * Merge model-supplied selection fields over configured child defaults.
- * Provider and model form one route and must be supplied together. Changing
- * that route without an effort clears the configured route-owned effort.
- * @param parentOptions - Current parent values that supply missing child values.
+ * Explicit selection requires both provider and model; an omitted effort then
+ * uses the selected model's default, even when the route is unchanged.
  * @param configured - Tool-instance child defaults.
  * @param request - Model-facing route override.
  * @param enabled - Whether this tool instance permits model-facing selection.
  * @returns Child Agent options, preserving omission when no layer contributes one.
  */
 export function requestedAgentOptions(
-  parentOptions: AgentOptions,
   configured: AgentOptions | undefined,
   request: DelegationModelRequest,
   enabled: boolean,
@@ -109,21 +107,18 @@ export function requestedAgentOptions(
   assertNonEmpty(request.provider, 'provider')
   assertNonEmpty(request.model, 'model')
   assertNonEmpty(request.reasoning_effort, 'reasoning_effort')
-  if ((request.provider === undefined) !== (request.model === undefined)) {
-    throw new Error('child LLM `provider` and `model` must be supplied together')
+  if (request.provider === undefined || request.model === undefined) {
+    throw new Error(request.reasoning_effort === undefined
+      ? 'child LLM `provider` and `model` must be supplied together'
+      : 'child LLM `reasoning_effort` requires both `provider` and `model`; supply both or omit all three fields')
   }
 
-  const baselineProvider = configured?.provider ?? parentOptions.provider
-  const baselineModel = configured?.model ?? parentOptions.model
-  const routeChanged = request.provider !== undefined
-    && (request.provider !== baselineProvider || request.model !== baselineModel)
-  const { reasoningEffort: _configuredReasoningEffort, ...configuredWithoutReasoning } = configured ?? {}
   return {
-    ...routeChanged && request.reasoning_effort === undefined ? configuredWithoutReasoning : configured,
-    ...request.provider === undefined ? {} : { provider: request.provider, model: request.model },
-    ...request.reasoning_effort === undefined
-      ? {}
-      : { reasoningEffort: ReasoningEffortId(request.reasoning_effort) },
+    ...configured,
+    provider: request.provider,
+    model: request.model,
+    // Explicit undefined also clears compatible parent effort during child-option merging.
+    reasoningEffort: request.reasoning_effort === undefined ? undefined : ReasoningEffortId(request.reasoning_effort),
   }
 }
 

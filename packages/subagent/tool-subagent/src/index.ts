@@ -203,8 +203,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const wording = providerWording(subagentProvider.inheritsParentContext)
     const providerRouteDefaults = subagentProvider.agentRouteDefaults
     const selectionDescription = providerRouteDefaults !== undefined
-      ? ' Supply `provider` and `model` together. Omitted values use child defaults, falling back to this backend\'s route defaults. When the effective route changes, an omitted `reasoning_effort` uses the model\'s default.'
-      : ' Supply `provider` and `model` together. Omitted values use child defaults, falling back to compatible parent values. When the effective route changes, an omitted `reasoning_effort` uses the model\'s default.'
+      ? ' Supply `provider` and `model` together. Omit all three selection fields to use child defaults, falling back to this backend\'s route defaults. An explicit route without `reasoning_effort` uses that model\'s default effort, even when the route is unchanged.'
+      : ' Supply `provider` and `model` together. Omit all three selection fields to use child defaults, falling back to compatible parent values. An explicit route without `reasoning_effort` uses that model\'s default effort, even when the route is unchanged.'
     const definition = defineTool({
       name: toolName,
       description: wording.description
@@ -242,15 +242,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         ...modelSelectionEnabled ? {
           provider: {
             type: 'string' as const,
-            description: 'Child LLM provider id; omit together with `model` to inherit the parent route.',
+            description: 'Child LLM provider id; omit together with `model` and `reasoning_effort` to use the default child route.',
           },
           model: {
             type: 'string' as const,
-            description: 'Model id within that provider; omit together with `provider` to inherit the parent route.',
+            description: 'Model id within that provider; requires `provider`.',
           },
           reasoning_effort: {
             type: 'string' as const,
-            description: 'Model-specific reasoning effort id; omit to use the model\'s default.',
+            description: 'Reasoning effort for the selected model; requires `provider` and `model`. Omit to use that model\'s default effort.',
           },
         } : {},
       },
@@ -285,7 +285,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           ? { ...providerRouteDefaults, ...config.agentOptions }
           : config.agentOptions
         const requestedChildAgentOptions = requestedAgentOptions(
-          parentOptions,
           configuredChildAgentOptions,
           modelRequest,
           modelSelectionEnabled,
@@ -306,7 +305,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             parentOptions,
             requestedChildAgentOptions,
             exec.signal,
-            providerRouteDefaults === undefined,
+            providerRouteDefaults === undefined && !hasDelegationModelRequest(modelRequest),
           )
           if (ctx.subagents.getProvider(config.provider) !== subagentProvider) {
             throw new Error(`subagent provider "${config.provider}" changed while resolving the child LLM route; retry the delegation`)
