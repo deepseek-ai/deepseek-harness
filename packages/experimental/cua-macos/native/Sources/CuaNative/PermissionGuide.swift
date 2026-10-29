@@ -53,6 +53,7 @@ enum PermissionGuidePlacement {
     private var returnApplication: NSRunningApplication?
     private var granted: (@MainActor () -> Bool)?
     private var failureLabel: NSTextField?
+    private var instructionLabel: NSTextField?
     private var text: PermissionGuideText?
     private var hasSeenSettings = false
     var isOpen: Bool { panel != nil }
@@ -104,7 +105,9 @@ enum PermissionGuidePlacement {
         instruction.font = .systemFont(ofSize: 14)
         instruction.textColor = .secondaryLabelColor
         instruction.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let heading = NSStackView(views: [arrow, instruction])
+        let headingInset = NSView()
+        headingInset.translatesAutoresizingMaskIntoConstraints = false
+        let heading = NSStackView(views: [headingInset, arrow, instruction])
         heading.orientation = .horizontal
         heading.alignment = .centerY
         heading.spacing = 10
@@ -118,6 +121,7 @@ enum PermissionGuidePlacement {
         let item = PermissionApplicationView(application: application, finderLabel: text.finderLabel) { [weak self] in
             self?.showFailure(text.unavailableMessage)
         }
+        panel.initialFirstResponder = item
         let row = NSStackView(views: [back, item])
         row.orientation = .horizontal
         row.alignment = .centerY
@@ -140,12 +144,14 @@ enum PermissionGuidePlacement {
             heading.widthAnchor.constraint(equalTo: content.widthAnchor),
             row.widthAnchor.constraint(equalTo: content.widthAnchor),
             failure.widthAnchor.constraint(equalTo: content.widthAnchor),
+            headingInset.widthAnchor.constraint(equalToConstant: 42),
             arrow.widthAnchor.constraint(equalToConstant: 28), arrow.heightAnchor.constraint(equalToConstant: 32),
             back.widthAnchor.constraint(equalToConstant: 30), back.heightAnchor.constraint(equalToConstant: 30),
             item.heightAnchor.constraint(equalToConstant: 44),
         ])
         self.panel = panel
         failureLabel = failure
+        instructionLabel = instruction
         update()
         guard self.panel === panel else { return }
         let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
@@ -182,6 +188,7 @@ enum PermissionGuidePlacement {
         owner = nil
         granted = nil
         failureLabel = nil
+        instructionLabel = nil
         text = nil
         window?.close()
         if activatePrevious, let previous, !previous.isTerminated { _ = previous.activate(options: []) }
@@ -209,8 +216,12 @@ enum PermissionGuidePlacement {
             let a = left.frame.intersection(target), b = right.frame.intersection(target)
             return (a.isNull ? 0 : a.width * a.height) < (b.isNull ? 0 : b.width * b.height)
         } ?? primary
-        let height: CGFloat = failureLabel?.isHidden == false ? 160 : 128
-        let width = min(620, max(360, (settings?.width ?? screen.visibleFrame.width) - 48))
+        let width = min(620, max(360, (settings?.width ?? screen.visibleFrame.width) - 48), screen.visibleFrame.width - 24)
+        instructionLabel?.preferredMaxLayoutWidth = width - 122
+        failureLabel?.preferredMaxLayoutWidth = width - 32
+        let headingHeight = max(32, instructionLabel?.fittingSize.height ?? 32)
+        let failureHeight = failureLabel?.isHidden == false ? 10 + (failureLabel?.fittingSize.height ?? 0) : 0
+        let height = max(128, ceil(headingHeight + 10 + 44 + 28 + failureHeight))
         let frame = PermissionGuidePlacement.frame(settings: settings, visible: screen.visibleFrame, size: CGSize(width: width, height: height))
         if panel.frame != frame { panel.setFrame(frame, display: true) }
     }
@@ -279,6 +290,7 @@ enum PermissionGuidePlacement {
 
     required init?(coder: NSCoder) { return nil }
     override var acceptsFirstResponder: Bool { true }
+    override var needsPanelToBecomeKey: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { super.hitTest(point) == nil ? nil : self }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
     override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); updateColors() }
@@ -291,7 +303,9 @@ enum PermissionGuidePlacement {
         }
     }
 
-    override func mouseDown(with event: NSEvent) {
+    override func mouseDown(with event: NSEvent) { window?.makeFirstResponder(self) }
+
+    override func mouseDragged(with event: NSEvent) {
         do {
             let item = NSDraggingItem(pasteboardWriter: try application.validatedURL() as NSURL)
             item.setDraggingFrame(NSRect(x: 10, y: 7, width: 30, height: 30), contents: icon)
