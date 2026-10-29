@@ -9,8 +9,8 @@
   en: e253ed9cec03a396
   zh: 922fde282e2b0fd2
 /deepseek-ai-dsh-tool-executor-ptc/summary:
-  en: 66e159c308afb6c1
-  zh: 29b1a646ae7f918a
+  en: 65f765293c0b2dc9
+  zh: 3cc43768b0a3e510
 /deepseek-ai-dsh-tool-executor-ptc/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,11 +18,11 @@
   en: b6b7ffab35e1a725
   zh: fc5db2524e1507d6
 /deepseek-ai-dsh-tool-executor-ptc/understand-the-implementation:
-  en: 9d4f61c351945d30
-  zh: 1c575526230b0e02
+  en: d6d7788495837ef2
+  zh: 4f7e62d5c2e87022
 /deepseek-ai-dsh-tool-executor-ptc/understand-the-implementation/ptc-mode:
-  en: 48f90d4c78ba69d7
-  zh: 5dcbbf23ebc1b803
+  en: 44091ca237854496
+  zh: 86009e91a723ece0
 /deepseek-ai-dsh-tool-executor-ptc/further-exploration:
   en: ee69078c38c655a9
   zh: fb0873407f23c8c5
@@ -39,8 +39,8 @@
   en: 3a8df15e4ae32f9e
   zh: fc4a800ba363e835
 /deepseek-ai-dsh-tool-executor-ptc/model-experience/ptc-mode-schema-and-system-prompt/token-effect:
-  en: 12296fcafc14562c
-  zh: f8e9351bb8c6437d
+  en: 355a234b872f1235
+  zh: 16dfa2793034ca60
 /deepseek-ai-dsh-tool-executor-ptc/model-experience/ptc-mode-schema-and-system-prompt/kv-cache-effect:
   en: 78906628d634441f
   zh: 492f133aea50cfe3

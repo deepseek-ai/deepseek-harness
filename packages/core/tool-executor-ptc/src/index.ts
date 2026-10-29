@@ -1,4 +1,5 @@
 /** PTC execution plugin for the mounting Agent, preset, or deployment scope. @module */
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { RUN_CODE_NAME, ToolNotFoundError, projectToolSchema } from '@deepseek-ai/dsh-tools'
@@ -8,6 +9,8 @@ import { createRunCodeTool, requirePtcRuntime, type PtcSdkLanguage } from './ptc
 import { renderToolsSdk, type ToolSdkSchema } from './ts-types.ts'
 import { renderToolsSdkPy } from './py-types.ts'
 import { Config } from './config.ts'
+import { PtcCalls } from './ptc-calls.ts'
+import { resetPtcEnvironment } from './reset.ts'
 
 const PTC_ONLY_INSTRUCTION = `\`${RUN_CODE_NAME}\` is the only tool you can call directly — a tool call naming any other tool fails. Reach every tool the SDK declares below from inside the program.`
 
@@ -22,9 +25,11 @@ export class PtcExecutor implements ToolExecutor {
   private readonly pipeline: ToolExecutionPipeline
   private readonly maxParallelSubCalls: number
   private ptcTransport: ToolDefinition | undefined
+  private readonly calls: PtcCalls
 
   constructor(private readonly ctx: Context, config: Partial<Config> = {}, private readonly maxParallel: () => number = () => 10) {
     this.maxParallelSubCalls = Config(config).maxParallelSubCalls
+    this.calls = new PtcCalls(ctx)
     const tools = ctx.tools
     this.sections = [
       { name: 'tools:ptc-only', order: ctx.systemPrompt.getSectionOrder('PTC_ONLY'), text: PTC_ONLY_INSTRUCTION, interpolate: false },
@@ -55,15 +60,25 @@ export class PtcExecutor implements ToolExecutor {
     return executeToolBatch(input, this.pipeline, this.maxParallel)
   }
 
+  /**
+   * Clear one Agent's retained environment without executing program code.
+   * @param agent - Exact owner supplied to program executions.
+   * @returns After process and nested-call cleanup and a queued model-visible state-loss notice.
+   * @throws CodeResetFailedError if cleanup fails; later programs remain blocked until reset succeeds.
+   */
+  reset(agent: Agent): Promise<void> {
+    return resetPtcEnvironment(this.ctx, this.calls, agent)
+  }
+
   /** Keep the reserved transport outside registered capabilities and their restrictions. */
   private requirePtcTransport(): ToolDefinition {
-    this.ptcTransport ??= createRunCodeTool(this.ctx, this.pipeline, this.maxParallelSubCalls)
+    this.ptcTransport ??= createRunCodeTool(this.ctx, this.pipeline, this.maxParallelSubCalls, this.calls)
     return this.ptcTransport
   }
 }
 
 export { Config } from './config.ts'
-export { CodeRunFailedError } from './errors.ts'
+export { CodeRunFailedError, CodeResetFailedError } from './errors.ts'
 export type { PtcDispatchLog } from './runtime-types.ts'
 export type { PtcDispatchStartEventData, PtcDispatchEventData } from './types.ts'
 export { jsonSchemaToTs, renderToolsSdk, type ToolSdkSchema } from './ts-types.ts'

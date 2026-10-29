@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use this executor when models should call tools through `run_code` programs. Mount a compatible PTC runtime and tool registry first. Scoped restrictions determine the generated SDK; only `run_code` is directly callable. Configure concurrency for parallel-safe program subcalls.
+Use this executor when models should call tools through `run_code` programs. Mount a compatible PTC runtime and tool registry first. Scoped restrictions determine the generated SDK. Models call only `run_code` directly. Configure concurrency for parallel-safe program subcalls.
 
 ## Table of Contents
 
@@ -49,19 +49,21 @@ Shared dispatch events and the `ptc-mode` message-source declaration live in `@d
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The executor receives the entire raw call batch and owns parsing, scheduling, cancellation, and optional model-step logging. It reuses the shared invocation pipeline for policy, tool bodies, and result notifications. After abort, it waits for started work and returns ordered error results for skipped calls. Unloading the executor aborts active sandboxed programs and waits for their nested calls to settle. Accepted batches still settle through that executor, potentially with cancellation errors.
+The executor receives the entire raw call batch and owns parsing, scheduling, cancellation, and optional model-step logging. It reuses the shared invocation pipeline for policy, tool bodies, and result notifications. After abort, it waits for started work and returns ordered error results for skipped calls. Unloading the executor aborts active Agent-owned programs and waits for their nested calls to settle. Accepted batches still settle through that executor, potentially with cancellation errors.
 
 ### PTC mode
 
-The PTC executor exposes the reserved `run_code` transport plus a deterministic SDK generated in the loaded runtime's language. Each SDK binding captures a frozen ToolSchema and passes it through the scheduler to its execution context. Before policy, a started call records only pairing ids, name, and normalized arguments; its settle event preserves the rendered result, optional presentation metadata, and structured error. Metadata is projected from that call’s canonical value and frozen; it changes neither the program value nor model content. Description and parameters remain transient and never enter Session events or SDK output. Calls are scheduled through a per-run pool that reuses the native concurrency contract. Under `ptc` alone, a model-direct call naming any other visible tool resolves to `UNKNOWN_TOOL` before policy — the announced surface and the callable surface stay the same. Intermediate binding values are execution-local; only the outer `run_code` result has a hard size cap.
+The PTC executor exposes the reserved `run_code` transport and a deterministic SDK generated in the loaded runtime's language. Each SDK binding captures a frozen ToolSchema and passes it through the scheduler to its execution context. Before policy, a started call records only pairing ids, name, and normalized arguments; its settle event preserves the rendered result, optional presentation metadata, and structured error. Metadata is projected from that call’s canonical value and frozen; it changes neither the program value nor model content. Description and parameters remain transient and never enter Session events or SDK output. Calls are scheduled through a per-run pool that reuses the native concurrency contract. Under `ptc` alone, a model-direct call naming a program-only SDK tool resolves to `UNKNOWN_TOOL` before policy — the announced surface and the callable surface stay the same. Intermediate binding values are execution-local; only the outer `run_code` result has a hard size cap.
 
 New sub-calls use `<parent>:ptc:<n>` ids. Consumers treat these ids as opaque and correlate events by exact equality; restored historical ids retain their original bytes. The [PTC mode decision](../../../.agents/notes/implemented/feature/2026-06-15-ptc.md) owns durable naming and restoration rules.
 
 Successful image-bearing subcall results become deferred user-message context with `source.kind` set to `ptc-mode`. Other additional contexts retain their producing tool's attribution.
 
-When the caller cancels and the runtime reports `abort`, `run_code` waits for cleanup and returns the native tool cancellation result: `AbortError` / `ABORTED`, with `Error: tool call aborted` as its content. The Agent records the specific cancellation cause in `turn/end`, including a hook's reason. Other runtime failures retain `CODE_RUN_FAILED` and their diagnostics, even if the caller also cancels. Cancellation can discard retained runtime state and does not undo completed tool effects.
+When the caller cancels and the runtime reports `abort`, `run_code` waits for cleanup and returns the native tool cancellation result: `AbortError` / `ABORTED`, with `Error: tool call aborted` as its content. Retained runtimes append their cancellation diagnostic, including whether variables were preserved or cleared. The Agent records the specific cancellation cause in `turn/end`, including a hook's reason. Other runtime failures retain `CODE_RUN_FAILED` and their diagnostics, even if the caller also cancels. Cancellation can discard retained runtime state and does not undo completed tool effects.
 
 `run_code` accepts `timeoutMs` when the mounted runtime supports an override; its schema reports the configured default and maximum, and the runtime's usage instructions. The Node default is 120,000 ms with a 600,000 ms cap, including nested tool and approval waits. A wider `sandbox_permissions` mode requires a non-empty `justification` and approval before the program starts. The schema asks the model to write that reason in the current user's language. The grant applies to that complete execution; standing Session policy and nested tools retain their own authority. Programs are never replayed automatically: inspect earlier effects before explicitly retrying a denied program. Retained PTC environments follow the standing file policy. PTC observes committed Session mode changes and immediately cancels affected calls in all Node modes. Later PTC calls wait for their nested-tool cleanup before resolving the latest policy. The runtime owns process invalidation and cleanup; permission setters remain synchronous. One-time escalations omit the state owner and complete in a temporary environment; standing variables remain available to ordinary calls.
+
+Host integrations retain their `PtcExecutor` instance and call `reset(agent)` to clear that Agent's environment; reset is not a model tool or SDK binding. It requires a state-retaining runtime, cancels active calls, invokes `release(agent)`, and waits for process and started nested-tool cleanup without requiring the program to respond. After success, it queues a logged plugin message telling the model that retained variables were cleared; the next program creates a fresh environment. Concurrent resets share cleanup, and new programs wait. Cleanup failure throws `CodeResetFailedError` and blocks programs until an explicit reset retry succeeds. Reset does not undo completed tool effects.
 
 - [`src/index.ts`](src/index.ts) — Validated configuration and scoped registration; tool descriptions and batch execution.
 
@@ -108,7 +110,7 @@ Program-only SDK bindings:
 
 #### Token effect
 
-Fixed per-request cost proportional to the visible definitions. PTC mode trades end-tool schemas for generated SDK text plus one transport schema rather than promising a universal reduction.
+Fixed per-request cost proportional to the visible definitions. PTC mode trades end-tool schemas for generated SDK text plus the program schema rather than promising a universal reduction.
 
 #### KV Cache effect
 
