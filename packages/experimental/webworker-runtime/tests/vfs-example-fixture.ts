@@ -624,8 +624,8 @@ function renderLog(
  * Host Schedule task rows the preview's `DSH_HOME` carries, keyed by durable
  * task id.
  *
- * The schedule domain opens this whole-unit document at Host startup and
- * rejects the complete unit on any malformed row, so the fixture spec decodes
+ * The schedule domain opens these per-record documents at Host startup and
+ * rejects the complete domain on any malformed row, so the fixture spec decodes
  * every stored task through the production schema. Targets sit in 2099:
  * the Session row mark, the header clock entry, and the tasks page render them
  * as scheduled, while the timer clamp (`MAX_TIMER_DELAY_MS`) keeps a preview
@@ -640,36 +640,44 @@ function scheduleTasks(): Readonly<Record<string, unknown>> {
     scheduledAt: '2098-12-31T01:00:00.000Z',
     deliveredAt: '2098-12-31T01:00:01.000Z',
     messageId: 'preview-daily-digest-receipt',
+    targetSessionId: sessionId,
+  }
+  const common = {
+    target: { kind: 'session', sessionId },
+    involvedSessionIds: [sessionId],
+    status: 'active',
+    createdAt: new Date(CREATED_AT).toISOString(),
+    updatedAt: new Date(CREATED_AT).toISOString(),
   }
   return {
     [VFS_EXAMPLE_SCHEDULE_IDS.daily]: {
-      sessionId,
+      ...common,
       record: {
+        kind: 'rrule',
         id: VFS_EXAMPLE_SCHEDULE_IDS.daily,
-        kind: 'daily',
         title: 'Daily preview digest',
         prompt: dailyPrompt,
-        time: '09:00:00.000',
-        timeZone: 'Asia/Shanghai',
+        rrule: 'DTSTART;TZID=Asia/Shanghai:20990101T090000\nRRULE:FREQ=DAILY',
         scheduledAt: '2099-01-01T01:00:00.000Z',
       },
-      status: 'active',
       deliveryHistory: {
         earlierRecordsUnavailable: false,
+        earlierRecordsPruned: false,
         records: [{ ...dailyReceipt, prompt: dailyPrompt }],
       },
       lastDelivery: dailyReceipt,
     },
     [VFS_EXAMPLE_SCHEDULE_IDS.once]: {
-      sessionId,
+      ...common,
       record: {
+        kind: 'rrule',
         id: VFS_EXAMPLE_SCHEDULE_IDS.once,
-        kind: 'at',
         title: 'Preview release window',
         prompt: 'Remind the preview owner that the release window opens.',
+        rrule: 'DTSTART:20990102T000000Z\nRRULE:FREQ=DAILY;COUNT=1',
         scheduledAt: '2099-01-02T00:00:00.000Z',
       },
-      status: 'active',
+      deliveryHistory: { records: [], earlierRecordsUnavailable: false, earlierRecordsPruned: false },
     },
   }
 }
@@ -681,6 +689,7 @@ export function buildVfsExampleFiles(): ReadonlyMap<string, string> {
   const project = projectKey(WORKSPACE)
   const sessionPath = (id: string): string =>
     `home/sessions/${project}/${id}/${generationLogFilename(SESSION_FORMAT_VERSION, 'none')}`
+  const scheduleFile = `home/storages/${scheduleDomain.name}.json`
   const projectionCache = `${JSON.stringify({
     unit: { name: 'session_projcache', version: projectionCacheDomainSpec.version },
     global: null,
@@ -742,10 +751,7 @@ export function buildVfsExampleFiles(): ReadonlyMap<string, string> {
       }),
       continuableLog(),
     )],
-    ['home/storages/schedule.json', `${JSON.stringify({
-      unit: { name: scheduleDomain.name, version: scheduleDomain.version },
-      global: null,
-      tables: { tasks: scheduleTasks() },
-    }, null, 2)}\n`],
+    [scheduleFile, `${JSON.stringify({ unit: { name: scheduleDomain.name, version: scheduleDomain.version },
+      global: null, tables: { tasks: scheduleTasks() } }, null, 2)}\n`],
   ])
 }
