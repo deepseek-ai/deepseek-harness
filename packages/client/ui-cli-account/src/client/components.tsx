@@ -1,21 +1,18 @@
-/** Plugins page components shared by CLI plugins: they render a plugin's display phase with the copy the plugin translates. */
-import { useEffect, type ReactNode } from 'react'
+/**
+ * The account surfaces of one registered CLI plugin: the section, title tag, activation prompt, confirmation, and notice,
+ * with the slot entries that read them from the registration's face.
+ */
+import { useEffect, useState, type ReactNode } from 'react'
 import { Button, IconWarningOutlineRegular, Modal, StateDot, Tag, Toast, type StateDotState, type TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
-import type { CliCommandFailure } from '@deepseek-ai/dsh-cli-account/types'
-import type { CliAccountNotice } from './connection.ts'
+import type { InjectFace, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import css from './CliAccount.module.css'
+import type {
+  CliAccountAction, CliAccountConfirmation, CliAccountDisplay, CliAccountFace, CliAccountFailure, CliAccountKey, CliAccountNotice,
+  CliAccountPhase,
+} from './types.ts'
 
-/** What the page shows about a plugin's account; each plugin maps its own account states onto these phases. */
-export type CliAccountPhase = 'checking' | 'connecting' | 'connected' | 'disconnected' | 'unavailable' | 'stopped'
-
-/** Dictionary keys every CLI plugin translates for the shared components. */
-export type CliAccountKey =
-  | 'section.title' | 'hint' | 'close' | 'action.cancel' | 'action.connect'
-  | 'activation.title' | 'activation.body' | 'activation.later'
-  | 'failure.details' | 'failure.exitCode'
-  | `badge.${Exclude<CliAccountPhase, 'checking'>}`
-  | `status.${Exclude<CliAccountPhase, 'connecting'>}`
+type FaceProps = InjectFace<CliAccountFace> & { t: Translate<CliAccountKey> }
 
 const TONE: Record<CliAccountPhase, StateDotState> = {
   checking: 'ongoing', connecting: 'ongoing', connected: 'done', disconnected: 'idle', unavailable: 'warning', stopped: 'warning',
@@ -25,47 +22,14 @@ const BADGE_TONE: Record<Exclude<CliAccountPhase, 'checking'>, TagTone> = {
   connecting: 'info', connected: 'success', disconnected: 'outline', unavailable: 'warning', stopped: 'warning',
 }
 
-/** One button in the section; the section disables it while an action is pending or the Host stream is down. */
-export interface CliAccountAction {
-  readonly label: string
-  readonly onClick: () => void
-  /** Defaults to an outline button. */
-  readonly variant?: 'primary' | 'ghost'
-}
-
-/** One extra row under the status line, such as the linked app, with an optional button. */
-export interface CliAccountNote {
-  readonly text: string
-  readonly action?: CliAccountAction
-}
-
-/** A failed operation as the section reports it. */
-export interface CliAccountFailure {
-  /** The plugin's recovery guidance. */
-  readonly text: string
-  /** The Host's classified command, shown as a diagnostic after the guidance. */
-  readonly command?: CliCommandFailure | undefined
-  /** The plugin's allowlisted classification fields, appended in order; undefined entries are skipped. */
-  readonly details?: readonly (string | undefined)[]
-}
-
 /** What the section shows about one plugin's account. */
-export interface CliAccountSectionProps {
+export interface CliAccountSectionProps extends CliAccountDisplay {
   readonly t: Translate<CliAccountKey>
   readonly packageName: string
-  readonly phase: CliAccountPhase
-  /** The status label; defaults to the `status.*` copy for the phase, with `connecting` labelled as checking. */
-  readonly status?: string | undefined
   /** Whether an action this page started has not answered. */
   readonly busy: boolean
   /** Whether the Host stream is delivering; buttons stay enabled while stopped so retry can reopen it. */
   readonly linked: boolean
-  readonly actions: readonly CliAccountAction[]
-  readonly detail?: string | undefined
-  readonly notes?: readonly CliAccountNote[]
-  readonly failure?: CliAccountFailure | undefined
-  /** Extra content rendered last, such as confirmation dialogs. */
-  readonly children?: ReactNode
 }
 
 function describe(t: Translate<CliAccountKey>, failure: CliAccountFailure): string | undefined {
@@ -81,15 +45,19 @@ function describe(t: Translate<CliAccountKey>, failure: CliAccountFailure): stri
 
 /**
  * The account section on a plugin's bundle page.
- * @param props - the phase, status, buttons, rows, and failure, with the plugin's translator.
- * @returns the title, status line, detail, rows, failure, hint, and children.
+ * @param props - the plugin's display, the page state, and the plugin's translator.
+ * @returns the title, status line, detail, rows, failure, hint, and the confirmation an action asked for.
  */
 export function CliAccountSection(props: CliAccountSectionProps): ReactNode {
-  const { t, packageName, phase, status, busy, linked, actions, detail, notes = [], failure, children } = props
+  const { t, packageName, phase, status, busy, linked, actions = [], detail, notes = [], failure } = props
+  const [confirming, setConfirming] = useState<{ readonly action: CliAccountAction; readonly confirm: CliAccountConfirmation }>()
   // Reopening a stopped stream is the one action that does not need the Host stream.
   const disabled = busy || (!linked && phase !== 'stopped')
-  const button = (action: CliAccountAction): ReactNode =>
-    <Button key={action.label} variant={action.variant ?? 'outline'} size="sm" disabled={disabled} onClick={action.onClick}>{action.label}</Button>
+  const button = (action: CliAccountAction): ReactNode => {
+    const { confirm } = action
+    const onClick = confirm === undefined ? action.onClick : () => { setConfirming({ action, confirm }) }
+    return <Button key={action.label} variant={action.variant ?? 'outline'} size="sm" disabled={disabled} onClick={onClick}>{action.label}</Button>
+  }
   const diagnostic = failure === undefined ? undefined : describe(t, failure)
   return (
     <div className={css.section} data-cli-account={phase} data-cli-account-package={packageName}>
@@ -108,7 +76,10 @@ export function CliAccountSection(props: CliAccountSectionProps): ReactNode {
       ))}
       {failure === undefined ? null : <p className={css.failure} role="alert">{failure.text}{diagnostic === undefined ? null : <> {diagnostic}</>}</p>}
       <p className={css.hint}>{t('hint')}</p>
-      {children}
+      {confirming === undefined ? null : (
+        <CliAccountConfirm t={t} confirmation={confirming.confirm}
+          onClose={() => { setConfirming(undefined) }} onConfirm={confirming.action.onClick} />
+      )}
     </div>
   )
 }
@@ -166,51 +137,94 @@ export function CliAccountActivation({ t, phase, onDismiss, onConnect }: CliAcco
   )
 }
 
-/** A confirmation's copy and callbacks, with the plugin's translator for the shared buttons. */
+/** The question, its callbacks, and the plugin's translator for the shared buttons. */
 export interface CliAccountConfirmProps {
   readonly t: Translate<CliAccountKey>
-  readonly open: boolean
-  readonly title: string
-  readonly body: string
-  readonly confirm: string
+  readonly confirmation: CliAccountConfirmation
   readonly onClose: () => void
   readonly onConfirm: () => void
 }
 
 /**
- * Confirm an action that changes the account outside DSH, such as signing out of a CLI the terminal shares.
- * @param props - whether it is open, its copy, and the close and confirm callbacks.
+ * Confirm an action that changes the account outside DSH.
+ * @param props - the question and the close and confirm callbacks.
  * @returns a dialog that closes before it confirms.
  */
-export function CliAccountConfirm({ t, open, title, body, confirm, onClose, onConfirm }: CliAccountConfirmProps): ReactNode {
+export function CliAccountConfirm({ t, confirmation, onClose, onConfirm }: CliAccountConfirmProps): ReactNode {
   return (
-    <Modal open={open} title={title} closeLabel={t('close')} onClose={onClose}
+    <Modal open title={confirmation.title} closeLabel={t('close')} onClose={onClose}
       footer={<>
         <Button variant="ghost" onClick={onClose}>{t('action.cancel')}</Button>
-        <Button variant="primary" data-modal-autofocus onClick={() => { onClose(); onConfirm() }}>{confirm}</Button>
+        <Button variant="primary" data-modal-autofocus onClick={() => { onClose(); onConfirm() }}>{confirmation.label}</Button>
       </>}>
-      <p>{body}</p>
+      <p>{confirmation.body}</p>
     </Modal>
   )
 }
 
-/** The latest notice, with the plugin's translator for `notice.*` copy. */
-export interface CliAccountToastProps<Notice extends string> {
-  readonly t: Translate<`notice.${NoInfer<CliAccountNotice<Notice>['kind']>}`>
-  readonly notice: CliAccountNotice<Notice> | undefined
+/** The latest notice, the plugin's success copy, and its dismissal. */
+export interface CliAccountToastProps {
+  readonly t: Translate<CliAccountKey>
+  readonly notice: CliAccountNotice<string> | undefined
+  readonly notices: Readonly<Partial<Record<string, () => string>>>
   readonly onDone: () => void
 }
 
 /**
  * Account outcomes reported outside the Plugins panel's lifetime.
- * @param props - the latest notice, its dismissal, and the plugin's translator.
- * @returns the toast for the notice, or null.
+ * @param props - the latest notice, the plugin's success copy, its dismissal, and the plugin's translator.
+ * @returns the toast for the notice, or null when there is none or its operation has no copy.
  */
-export function CliAccountToast<Notice extends string>({ t, notice, onDone }: CliAccountToastProps<Notice>): ReactNode {
+export function CliAccountToast({ t, notice, notices, onDone }: CliAccountToastProps): ReactNode {
   if (notice === undefined) return null
-  const failed = notice.kind === 'action-failed'
-  return (
-    <Toast key={notice.seq} text={t(`notice.${notice.kind}`)} onDone={onDone}
-      {...failed ? { icon: <IconWarningOutlineRegular /> } : { tone: 'success' as const }} />
-  )
+  if (notice.kind === 'action-failed') {
+    return <Toast key={notice.seq} text={t('notice.action-failed')} icon={<IconWarningOutlineRegular />} onDone={onDone} />
+  }
+  const text = notices[notice.operation]
+  return text === undefined ? null : <Toast key={notice.seq} text={text()} tone="success" onDone={onDone} />
+}
+
+/**
+ * The `plugins.bundle.config` entry.
+ * @param props - the registration's face and the plugin's translator.
+ * @returns the section for the current snapshot.
+ */
+export function CliAccountSectionEntry({ useCliAccount, present, page, packageName, t }: FaceProps): ReactNode {
+  const snapshot = useCliAccount(value => value)
+  return <CliAccountSection {...present(snapshot, page)} t={t} packageName={packageName} busy={snapshot.busy} linked={snapshot.linked} />
+}
+
+/**
+ * The `plugins.detail.badge` entry.
+ * @param props - the open detail page's subject, the registration's face, and the plugin's translator.
+ * @returns the tag for the registration's bundle, or null on any other page.
+ */
+export function CliAccountBadgeEntry(props: FaceProps & PropsRuntime<'plugins.detail.badge'>): ReactNode {
+  const { useCliAccount, present, page, packageName, subject, t } = props
+  const phase = useCliAccount(value => present(value, page).phase)
+  return <CliAccountBadge t={t} subject={subject} packageName={packageName} phase={phase} />
+}
+
+/**
+ * The `plugins.bundle.activation` entry; Connect opens the bundle page and runs the section's first primary action
+ * that asks no confirmation.
+ * @param props - activation callbacks, the registration's face, and the plugin's translator.
+ * @returns the prompt for the current snapshot.
+ */
+export function CliAccountActivationEntry(props: FaceProps & PropsRuntime<'plugins.bundle.activation'>): ReactNode {
+  const { useCliAccount, present, page, onDismiss, onOpenDetails, t } = props
+  const display = present(useCliAccount(value => value), page)
+  const connect = display.actions?.find(action => action.variant === 'primary' && action.confirm === undefined)
+  const onConnect = (): void => { onOpenDetails(); connect?.onClick() }
+  return <CliAccountActivation t={t} phase={display.phase} onDismiss={onDismiss} onConnect={onConnect} />
+}
+
+/**
+ * The `shell.overlay` entry.
+ * @param props - the registration's face and the plugin's translator.
+ * @returns the toast for the latest notice, or null.
+ */
+export function CliAccountToastEntry({ useCliAccount, notices, dismissNotice, t }: FaceProps): ReactNode {
+  const notice = useCliAccount(value => value.notice)
+  return <CliAccountToast t={t} notice={notice} notices={notices} onDone={dismissNotice} />
 }

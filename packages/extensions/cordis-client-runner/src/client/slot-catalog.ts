@@ -2586,7 +2586,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'main\' (client-ui-plugin-manager), so it exists while that entry is mounted',
     occupants: [
-      'client-ui-feishu FeishuConnectionActivation',
+      'client-ui-cli-account CliAccountActivationEntry',
       'experimental-client-ui-voice-input VoiceSetupPrompt key \'@deepseek-ai/dsh-experimental-voice-input-bundle\'',
       'cua PermissionSetup key \'@deepseek-ai/dsh-cua-bundle\'',
     ],
@@ -2631,7 +2631,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'main\' (client-ui-plugin-manager), so it exists while that entry is mounted',
     occupants: [
-      'client-ui-feishu FeishuConnectionSection',
+      'client-ui-cli-account CliAccountSectionEntry',
       'experimental-client-ui-cot-translation TranslationSettings key \'@deepseek-ai/dsh-experimental-cot-translation-bundle\'',
       'experimental-client-ui-voice-input VoicePreparation key \'@deepseek-ai/dsh-experimental-voice-input-bundle\'',
       'cua PermissionPanel key \'@deepseek-ai/dsh-cua-bundle\'',
@@ -2742,7 +2742,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'main\' (client-ui-plugin-manager), so it exists while that entry is mounted',
     occupants: [
-      'client-ui-feishu FeishuConnectionBadge id \'feishu.connection\'',
+      'client-ui-cli-account CliAccountBadgeEntry',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.detail.badge\', () => ctx.slots.register(\n      { name: \'plugins.detail.badge\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
@@ -3720,8 +3720,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'root\' (client-ui-layout), so it exists while that entry is mounted',
     occupants: [
       'client-ui-chat QuotaNoticeHost id \'chat.quota-notice\'',
+      'client-ui-cli-account CliAccountToastEntry',
       'client-ui-context-menu MenuOverlay id \'context-menu\'',
-      'client-ui-feishu FeishuConnectionToast id \'feishu.connection-toast\'',
       'client-ui-file-drag FileDragFeedback id \'file-drag.feedback\'',
       'client-ui-open-in-app OpenInAppToast id \'open-in-app.toast\'',
       'client-ui-plugin-manager PluginRefreshToast id \'plugin-manager.refresh-toast\'',

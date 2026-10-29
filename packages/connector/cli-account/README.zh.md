@@ -106,7 +106,7 @@ const account = new Account({
 ## 延伸阅读
 
 - [Connector 包](../README.zh.md)——这个库和 CLI 应用插件所属的分组。
-- [CLI 插件页组件](../../client/ui-cli-account/README.zh.md)——镜像视图的浏览器一半。
+- [CLI 账号界面](../../client/ui-cli-account/README.zh.md)——镜像这个视图的插件页注册表。
 - [System prompt](../../core/system-prompt/README.zh.md)——排序并渲染运行时上下文的注册表。
 - [Subprocess](../../subprocess/subprocess/README.zh.md)——查找并启动 CLI 的运行时。
 
