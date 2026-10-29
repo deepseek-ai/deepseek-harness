@@ -143,10 +143,7 @@ it('pins Messages Files offload and inline fallback in assembled requests', asyn
     const runtimeContext = (cwd: string): string => 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n'
       + `Current working directory: ${JSON.stringify(cwd)}.\n\n`
       + 'Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\n'
-      + 'Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\n'
-      + 'You are the root agent named "lead".\n\n'
-      + 'Use list_agents({}) to find agents in your tree and their full names.\n'
-      + 'Use send_message({ name: "<full agent path>", message: "..." }) to message another agent.'
+      + 'Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).'
     const messages = requests[0]?.messages as { content?: unknown }[] | undefined
     const offloaded = messages?.find(message => JSON.stringify(message.content).includes('[image omitted'))
     expect(offloaded?.content).toEqual([
