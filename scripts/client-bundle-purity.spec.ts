@@ -109,6 +109,22 @@ describe('client bundle build faces', () => {
   })
 })
 
+async function clientChunkOutput(root: string, config: UserConfig, fileName: string): Promise<string> {
+  let builds: TsdownBundle[] = []
+  try {
+    builds = await build({
+      ...config, cwd: root, config: false, tsconfig: false,
+      write: false, clean: false, exports: false, report: false, logLevel: 'silent',
+    })
+    const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
+    const output = chunks.find(chunk => chunk.fileName === fileName)?.code
+    if (output === undefined) throw new Error(`client output missing: ${fileName}`)
+    return output
+  } finally {
+    for (const bundle of builds) await bundle[Symbol.asyncDispose]()
+  }
+}
+
 describe('statically linked client build modes', () => {
   it.each([
     { label: 'defaults to production', mode: undefined, expectedMode: 'production', frozen: false },
@@ -139,25 +155,14 @@ describe('statically linked client build modes', () => {
     }
     if (config === undefined) throw new Error('static client config missing')
 
-    let builds: TsdownBundle[] = []
-    try {
-      builds = await build({
-        ...config, cwd: root, config: false, tsconfig: false,
-        write: false, clean: false, exports: false, report: false, logLevel: 'silent',
-      })
-      const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
-      const output = chunks.find(chunk => chunk.fileName === 'index.js')?.code
-      if (output === undefined) throw new Error('static client output missing')
-      const emitted = await import(`data:text/javascript,${encodeURIComponent(output)}`) as {
-        mode: string
-        snapshot: { value: number }
-      }
-      expect(emitted.mode).toBe(expectedMode)
-      expect(emitted.snapshot).toEqual({ value: 1 })
-      expect(Object.isFrozen(emitted.snapshot)).toBe(frozen)
-    } finally {
-      for (const bundle of builds) await bundle[Symbol.asyncDispose]()
+    const output = await clientChunkOutput(root, config, 'index.js')
+    const emitted = await import(`data:text/javascript,${encodeURIComponent(output)}`) as {
+      mode: string
+      snapshot: { value: number }
     }
+    expect(emitted.mode).toBe(expectedMode)
+    expect(emitted.snapshot).toEqual({ value: 1 })
+    expect(Object.isFrozen(emitted.snapshot)).toBe(frozen)
   })
 })
 
@@ -200,19 +205,9 @@ describe('client bundle dynamic imports', () => {
     const config = clientConfigs()[0]
     if (config === undefined) throw new Error('client config missing')
 
-    let builds: TsdownBundle[] = []
-    try {
-      builds = await build({
-        ...config, cwd: root, config: false, tsconfig: false,
-        write: false, clean: false, exports: false, report: false, logLevel: 'silent',
-      })
-      const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
-      const output = chunks.find(chunk => chunk.fileName === 'client.js')?.code
-      expect(output).toContain('require.async("./client.terminal.js")')
-      expect(output).not.toContain('Promise.resolve().then(() => require("./client.terminal.js"))')
-    } finally {
-      for (const bundle of builds) await bundle[Symbol.asyncDispose]()
-    }
+    const output = await clientChunkOutput(root, config, 'client.js')
+    expect(output).toContain('require.async("./client.terminal.js")')
+    expect(output).not.toContain('Promise.resolve().then(() => require("./client.terminal.js"))')
   })
 })
 
