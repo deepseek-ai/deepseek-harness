@@ -39,7 +39,8 @@ const PRODUCT_NAMES = {
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'menu.sidebar': '在侧边栏打开',
+  'menu.openInSidebar': '在侧边栏打开',
+  'menu.openInFloat': '在浮窗中打开',
   'menu.finder': '在 Finder 中显示',
   'menu.reveal': '在文件夹显示',
   'menu.defaultApp': '使用默认应用打开',
@@ -72,7 +73,8 @@ export const zh = {
 
 /** English dictionary, key-identical to the Chinese source of truth. */
 export const en: Record<OpenInAppKey, string> = {
-  'menu.sidebar': 'Open in sidebar',
+  'menu.openInSidebar': 'Open in sidebar',
+  'menu.openInFloat': 'Open in floating panel',
   'menu.finder': 'Show in Finder',
   'menu.reveal': 'Show in folder',
   'menu.defaultApp': 'Open in default application',
@@ -108,7 +110,8 @@ export type OpenInAppKey = keyof typeof zh
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
-  'menu.sidebar': 'サイドバーで開く',
+  'menu.openInSidebar': 'サイドバーで開く',
+  'menu.openInFloat': 'フローティングパネルで開く',
   'menu.finder': 'Finder に表示',
   'menu.reveal': 'フォルダーに表示',
   'menu.defaultApp': '既定のアプリで開く',
@@ -141,7 +144,8 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  'menu.sidebar': 'Abrir en la barra lateral',
+  'menu.openInSidebar': 'Abrir en la barra lateral',
+  'menu.openInFloat': 'Abrir en un panel flotante',
   'menu.finder': 'Mostrar en Finder',
   'menu.reveal': 'Mostrar en la carpeta',
   'menu.defaultApp': 'Abrir en la aplicación predeterminada',
@@ -173,7 +177,8 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  'menu.sidebar': 'Ouvrir dans la barre latérale',
+  'menu.openInSidebar': 'Ouvrir dans la barre latérale',
+  'menu.openInFloat': 'Ouvrir dans un panneau flottant',
   'menu.finder': 'Afficher dans le Finder',
   'menu.reveal': 'Afficher dans le dossier',
   'menu.defaultApp': 'Ouvrir dans l’application par défaut',
@@ -205,7 +210,8 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  'menu.sidebar': 'In der Seitenleiste öffnen',
+  'menu.openInSidebar': 'In der Seitenleiste öffnen',
+  'menu.openInFloat': 'In schwebendem Panel öffnen',
   'menu.finder': 'Im Finder anzeigen',
   'menu.reveal': 'Im Ordner anzeigen',
   'menu.defaultApp': 'In der Standardanwendung öffnen',
@@ -237,7 +243,8 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  'menu.sidebar': 'Открыть на боковой панели',
+  'menu.openInSidebar': 'Открыть на боковой панели',
+  'menu.openInFloat': 'Открыть на плавающей панели',
   'menu.finder': 'Показать в Finder',
   'menu.reveal': 'Показать в папке',
   'menu.defaultApp': 'Открыть в приложении по умолчанию',
@@ -269,7 +276,8 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  'menu.sidebar': 'Abrir na barra lateral',
+  'menu.openInSidebar': 'Abrir na barra lateral',
+  'menu.openInFloat': 'Abrir em painel flutuante',
   'menu.finder': 'Mostrar no Finder',
   'menu.reveal': 'Mostrar na pasta',
   'menu.defaultApp': 'Abrir no aplicativo padrão',

@@ -106,7 +106,7 @@ The runtime owns the operation lifecycle and the plugin owns the meaning of each
 ## Further Exploration
 
 - [Connector packages](../README.md) — the group this library and the CLI app plugins belong to.
-- [CLI plugin page pieces](../../client/ui-cli-account/README.md) — the browser half that mirrors the view.
+- [CLI account surfaces](../../client/ui-cli-account/README.md) — the Plugins page registry that mirrors the view.
 - [System prompt](../../core/system-prompt/README.md) — the registry that orders and renders runtime context.
 - [Subprocess](../../subprocess/subprocess/README.md) — the runtime that resolves and spawns the CLI.
 

@@ -2,5 +2,6 @@
 - button "Reload"
 - button "Open in Finder"
 - button "More ways to open"
-- list:
-  - listitem: Empty directory
+- complementary "Workspace files":
+  - list:
+    - listitem: Empty directory

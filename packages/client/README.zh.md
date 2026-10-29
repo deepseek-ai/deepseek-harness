@@ -49,7 +49,7 @@ kind: "package-group"
 | [`ui-sidebar-documentpreview/`](ui-sidebar-documentpreview/README.zh.md) | 在右侧 Sidebar 的 tab 中显示文档 | `ctx.documentPreviews` |
 | [`ui-sidebar-browser/`](ui-sidebar-browser/README.zh.md) | 在右侧 Sidebar tab 中浏览 sandboxed HTTP(S) 页面，包括 loopback 服务 | — |
 | [`resources/`](resources/README.zh.md) | 统一资源模型：`useResource` 会话标准钩子背后的协议提供方 | `ctx.resources` |
-| [`ui-sidebar-files/`](ui-sidebar-files/README.zh.md) | 右侧 Sidebar 的工作区文件树 tab 类型 | — |
+| [`ui-sidebar-files/`](ui-sidebar-files/README.zh.md) | 工作区文件页，以及停靠与浮动文件预览旁每个分栏一棵的工作区目录树 | — |
 | [`ui-brand-official/`](ui-brand-official/README.zh.md) | 用官方名称与标记填充通用浏览器品牌 slot | — |
 | [`ui-workspace/`](ui-workspace/README.zh.md) | 提供工作区选择与创建界面 | — |
 | [`ui-conversation/`](ui-conversation/README.zh.md) | 展示当前对话及其输入界面 | — |
@@ -81,7 +81,7 @@ kind: "package-group"
 | [`ui-settings-session-log/`](ui-settings-session-log/README.zh.md) | 在通用设置中控制随 API 上传会话日志 | — |
 | [`ui-settings-subagent/`](ui-settings-subagent/README.zh.md) | 在插件页提供子智能体设置页 | — |
 | [`ui-settings-web-search/`](ui-settings-web-search/README.zh.md) | 在插件页提供网页搜索设置页 | — |
-| [`ui-cli-account/`](ui-cli-account/README.zh.md) | 提供 CLI 应用插件在插件页共用的账号区块、标签、开启引导、确认和提示 | — |
+| [`ui-cli-account/`](ui-cli-account/README.zh.md) | 显示 CLI 应用插件在插件页注册的账号区块、标签、开启引导、确认和提示 | `ctx.cliAccounts` |
 | [`ui-plugin-manager/`](ui-plugin-manager/README.zh.md) | 贡献侧栏的“插件”面板：安装、启用、停用、重试与组合已安装的包 | — |
 | [`ui-entry-customization/`](ui-entry-customization/README.zh.md) | 添加分区域的“更多”菜单，固定或收起插件入口，并开始创建插件的草稿 | — |
 | [`ui-plugin-market/`](ui-plugin-market/README.zh.md) | 为“插件”页面贡献“发现”标签页：浏览市场索引并安装其中的组合包 | — |

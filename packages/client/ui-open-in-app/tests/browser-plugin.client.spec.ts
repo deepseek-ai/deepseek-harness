@@ -138,7 +138,7 @@ describe('open-in-app browser half', () => {
     const toast = toastSource(ctx)
     try {
       expect(ctx.slots.entries('contextMenu.icon').map(entry => entry.options.key)).toEqual([
-        'open-in-app.reveal', 'open-in-app.copy', 'open-in-app.sidebar', 'open-in-app.application',
+        'open-in-app.reveal', 'open-in-app.copy', 'open-in-app.sidebar', 'open-in-app.float', 'open-in-app.application',
       ])
       expect(ctx.slots.entries('sidebar.workspaces.session.menu.item')).toHaveLength(0)
       await vi.waitFor(() => { expect(menu.source.getSnapshot()[0]).toMatchObject({ label: 'Show in Finder', disabled: false }) })

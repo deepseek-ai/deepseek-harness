@@ -49,13 +49,34 @@ function rowHalf(event: DragEvent<HTMLElement>): 'before' | 'after' {
 }
 
 /**
- * Render consistent model identity, capacity, and input-type controls.
+ * Render model fields with the display name in the expanded area of narrow rows.
  * @param props - drafted fields and their owning editor's actions.
  * @returns one expandable model entry.
  */
 export function ModelRow(props: ModelRowProps): ReactNode {
   const { model, position, t, disabled } = props
   const preview = useRowDragPreview(styles['modelDragPreview'] as string)
+  const modelField = (field: 'id' | 'name') => (
+    <label className={`${styles['modelField']} ${field === 'name' ? styles['modelName'] : ''}`}>
+      {field === 'name'
+        ? <span className={`${styles['modelFieldLabel']} ${styles['modelNameLabel']}`}>{t('modelName')}</span>
+        : null}
+      <input
+        className={styles['input']}
+        type="text"
+        value={typeof model[field] === 'string' ? model[field] : ''}
+        placeholder={t(field === 'id' ? 'modelId' : 'modelName')}
+        aria-label={`${t(field === 'id' ? 'modelId' : 'modelName')} ${String(position)}`}
+        disabled={disabled}
+        onFocus={field === 'name' && !props.expanded ? props.onToggle : undefined}
+        onChange={(event) => {
+          const value = event.target.value
+          props.onFieldChange(field, field === 'name' && value === '' ? undefined : value)
+        }}
+        onBlur={field === 'id' ? event => props.onIdBlur?.(event.target.value) : undefined}
+      />
+    </label>
+  )
   return (
     <div
       className={styles['modelEntry']}
@@ -78,8 +99,8 @@ export function ModelRow(props: ModelRowProps): ReactNode {
         props.order.onDrop(rowHalf(event))
       }}
     >
-      <div className={styles['modelRow']}>
-        <Tooltip label={t('reorderModelHelp')}>
+      <div className={styles['modelRow']} data-expanded={props.expanded || undefined}>
+        <Tooltip label={t('reorderModelHelp')} portal>
           <button
             type="button"
             className={`${styles['iconButton']} ${styles['modelDragHandle']}`}
@@ -105,29 +126,14 @@ export function ModelRow(props: ModelRowProps): ReactNode {
             <IconDragHandleOutlineRegular size={14} />
           </button>
         </Tooltip>
-        {(['id', 'name'] as const).map(field => (
-          <input
-            key={field}
-            className={styles['input']}
-            type="text"
-            value={typeof model[field] === 'string' ? model[field] : ''}
-            placeholder={t(field === 'id' ? 'modelId' : 'modelName')}
-            aria-label={`${t(field === 'id' ? 'modelId' : 'modelName')} ${String(position)}`}
-            disabled={disabled}
-            onChange={(event) => {
-              const value = event.target.value
-              props.onFieldChange(field, field === 'name' && value === '' ? undefined : value)
-            }}
-            onBlur={field === 'id' ? event => props.onIdBlur?.(event.target.value) : undefined}
-          />
-        ))}
+        {modelField('id')}
         <button
           type="button"
           className={styles['iconButton']}
           aria-label={`${t('modelAdvanced')} ${String(position)}`}
           aria-expanded={props.expanded}
           title={t('modelAdvanced')}
-          onClick={props.onToggle}
+          onClick={(event) => { event.currentTarget.focus(); props.onToggle() }}
         >
           {props.expanded ? <IconChevronDownOutlineRegular /> : <IconChevronRightOutlineRegular />}
         </button>
@@ -141,40 +147,41 @@ export function ModelRow(props: ModelRowProps): ReactNode {
         >
           <IconTrashOutlineRegular size={14} />
         </button>
+        {modelField('name')}
+        {props.expanded
+          ? (
+            <div className={styles['modelAdvanced']}>
+              {(['contextWindow', 'maxTokens'] as const).map(field => (
+                <label className={styles['modelField']} key={field}>
+                  <span className={styles['modelFieldLabel']}>{t(field)}</span>
+                  <input
+                    className={styles['input']}
+                    type="text"
+                    inputMode="numeric"
+                    value={props[field].value}
+                    placeholder={props[field].placeholder}
+                    aria-label={`${t(field)} ${String(position)}`}
+                    disabled={disabled}
+                    onChange={(event) => { props[field].onChange(event.target.value) }}
+                    onBlur={props[field].onBlur}
+                  />
+                </label>
+              ))}
+              <ModelInputTypes
+                model={model} field={props.inputField} position={position}
+                fallback={props.inputFallback} disabled={disabled || props.inputLoading === true} t={t} onChange={props.onChange}
+              />
+              {props.reasoningLevels !== undefined && props.reasoningLevels.length > 0
+                ? (
+                  <ModelReasoningEfforts
+                    model={model} levels={props.reasoningLevels} position={position} disabled={disabled} t={t} onChange={props.onChange}
+                  />
+                )
+                : null}
+            </div>
+          )
+          : null}
       </div>
-      {props.expanded
-        ? (
-          <div className={styles['modelAdvanced']}>
-            {(['contextWindow', 'maxTokens'] as const).map(field => (
-              <label className={styles['modelField']} key={field}>
-                <span className={styles['modelFieldLabel']}>{t(field)}</span>
-                <input
-                  className={styles['input']}
-                  type="text"
-                  inputMode="numeric"
-                  value={props[field].value}
-                  placeholder={props[field].placeholder}
-                  aria-label={`${t(field)} ${String(position)}`}
-                  disabled={disabled}
-                  onChange={(event) => { props[field].onChange(event.target.value) }}
-                  onBlur={props[field].onBlur}
-                />
-              </label>
-            ))}
-            <ModelInputTypes
-              model={model} field={props.inputField} position={position}
-              fallback={props.inputFallback} disabled={disabled || props.inputLoading === true} t={t} onChange={props.onChange}
-            />
-            {props.reasoningLevels !== undefined && props.reasoningLevels.length > 0
-              ? (
-                <ModelReasoningEfforts
-                  model={model} levels={props.reasoningLevels} position={position} disabled={disabled} t={t} onChange={props.onChange}
-                />
-              )
-              : null}
-          </div>
-        )
-        : null}
     </div>
   )
 }
