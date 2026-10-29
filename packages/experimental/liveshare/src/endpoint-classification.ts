@@ -209,6 +209,9 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'mcpServers/probe': 'owner-only', // owner MCP server management
   'mcpServers/restart': 'owner-only', // owner MCP server management
   'mcpServers/watch': 'owner-only', // owner MCP server management
+  'mcpServers/startAuthorization': 'owner-only', // owner MCP server management
+  'mcpServers/cancelAuthorization': 'owner-only', // owner MCP server management
+  'mcpServers/signOut': 'owner-only', // owner MCP server management
   'commands/execute': 'owner-only', // owner executes a slash command
   'permissionPresets/catalog': 'owner-only', // owner permission presets
   'userQuestions/answer': 'owner-only', // owner answers a pending question

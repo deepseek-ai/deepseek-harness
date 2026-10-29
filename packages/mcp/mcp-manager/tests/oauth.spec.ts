@@ -1,6 +1,7 @@
 /** OAuth management through the real profile loader, SDK, and durable credential provider. */
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { Client, UnauthorizedError } from '@modelcontextprotocol/client'
 import { McpOAuthCredentials } from '@deepseek-ai/dsh-mcp-client/src/oauth-credentials.ts'
 import { callback, oauthWorld, phase } from '../../mcp-client/tests/oauth-fixture.ts'
@@ -22,7 +23,7 @@ async function managed(layer: 'base' | 'user' = 'base') {
     await phase(() => view().authorization, 'authorized')
     await state('connected')
   }
-  const invoke = () => world.ctx.tools.execute({ callId: ToolCallId('oauth-call'), name: 'mcp__oauth__ping', arguments: {}, signal: new AbortController().signal })
+  const invoke = () => executeToolFixture(world.ctx, { callId: ToolCallId('oauth-call'), name: 'mcp__oauth__ping', arguments: {}, signal: new AbortController().signal })
   const store = new McpOAuthCredentials(world.ctx, world.config.oauth)
   return { ...world, manager, view, state, login, invoke, store }
 }
@@ -352,7 +353,7 @@ it('registers an OAuth server, streams its authorization, and redacts its access
   const waiting = await next(view => view?.authorization?.phase === 'waiting-browser')
   expect(await callback(waiting.authorization!)).toBe(200)
   await next(view => view?.status.state === 'connected')
-  const result = await world.ctx.tools.execute({
+  const result = await executeToolFixture(world.ctx, {
     callId: ToolCallId('oauth-reject'), name: 'mcp__oauth__reject', arguments: {}, signal: new AbortController().signal,
   })
   if (!result.isError) throw new Error('expected the fixture to reject the call')

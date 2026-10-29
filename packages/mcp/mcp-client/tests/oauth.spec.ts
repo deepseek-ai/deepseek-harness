@@ -3,6 +3,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Client, UnauthorizedError } from '@modelcontextprotocol/client'
 import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { apply, connectionStatusOf, probeServer, type Config } from '../src/index.ts'
 import { McpTemplateBinding } from '../src/credentials.ts'
 import { McpOAuthCredentials, oauthRecord } from '../src/oauth-credentials.ts'
@@ -494,12 +495,12 @@ describe('MCP OAuth', () => {
     onTestFinished(() => { spy.mockRestore() })
     expect(await callback(waiting)).toBe(200)
     await entered.promise
-    const call = await world.ctx.tools.execute({ callId: ToolCallId('stale-grant'), name: 'mcp__oauth__ping', arguments: {}, signal: new AbortController().signal })
+    const call = await executeToolFixture(world.ctx, { callId: ToolCallId('stale-grant'), name: 'mcp__oauth__ping', arguments: {}, signal: new AbortController().signal })
     expect(call).toMatchObject({ isError: true })
     release.resolve()
     await reconnected.promise
     expect(states).toEqual(['connected', 'connecting', 'connected'])
-    expect(await world.ctx.tools.execute({ callId: ToolCallId('fresh-grant'), name: 'mcp__oauth__ping', arguments: {}, signal: new AbortController().signal }))
+    expect(await executeToolFixture(world.ctx, { callId: ToolCallId('fresh-grant'), name: 'mcp__oauth__ping', arguments: {}, signal: new AbortController().signal }))
       .toMatchObject({ isError: false })
   })
 
