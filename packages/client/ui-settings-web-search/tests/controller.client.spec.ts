@@ -78,6 +78,94 @@ function serve(b: ReturnType<typeof bench>, selection: SelectionLayers = {}): vo
 }
 
 describe('WebSearchCardController credential', () => {
+  it('reads once per settings publication wave after the eager read', async () => {
+    const b = bench()
+    try {
+      expect(b.credentials.describe).toHaveBeenCalledTimes(1)
+      serve(b)
+      await Promise.resolve()
+      expect(b.credentials.describe).toHaveBeenCalledTimes(2)
+      serve(b)
+      await Promise.resolve()
+      expect(b.credentials.describe).toHaveBeenCalledTimes(3)
+      for (const args of b.credentials.describe.mock.calls) expect(args).toEqual([['DEEPSEEK_API_KEY']])
+    } finally { b.controller.dispose() }
+  })
+
+  it('reads once when a settings publication wave renames the credential reference', async () => {
+    const b = bench()
+    try {
+      serve(b)
+      await vi.waitFor(() => { expect(b.state().apiKeyConfigured).toBe(true) })
+      const count = b.credentials.describe.mock.calls.length
+      b.messages.publish({ value: { apiKeyEnv: 'RENAMED_KEY' } })
+      expect(b.state().apiKeyConfigured).toBe(false)
+      await Promise.resolve()
+      expect(b.credentials.describe).toHaveBeenCalledTimes(count + 1)
+      expect(b.credentials.describe).toHaveBeenLastCalledWith(['RENAMED_KEY'])
+    } finally { b.controller.dispose() }
+  })
+
+  it.each(['before', 'after'])('keeps the credential update when the pending settings read finishes %s it', async (order) => {
+    const b = bench({ configured: false })
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof b.credentials.describe>>>()
+    const updated = Promise.withResolvers<Awaited<ReturnType<typeof b.credentials.describe>>>()
+    try {
+      await Promise.resolve()
+      b.credentials.describe.mockImplementationOnce(() => pending.promise)
+      serve(b)
+      await Promise.resolve()
+      const count = b.credentials.describe.mock.calls.length
+      b.credentials.describe.mockImplementationOnce(() => updated.promise)
+      b.controller.refreshCredential('DEEPSEEK_API_KEY')
+      expect(b.credentials.describe).toHaveBeenCalledTimes(count + 1)
+      if (order === 'before') {
+        pending.resolve({ ok: true, value: { DEEPSEEK_API_KEY: { configured: false, writable: true } } })
+        await Promise.resolve()
+      }
+      updated.resolve({ ok: true, value: { DEEPSEEK_API_KEY: { configured: true, writable: true } } })
+      await vi.waitFor(() => { expect(b.state().apiKeyConfigured).toBe(true) })
+      pending.resolve({ ok: true, value: { DEEPSEEK_API_KEY: { configured: false, writable: true } } })
+      await Promise.resolve()
+      expect(b.state().apiKeyConfigured).toBe(true)
+    } finally {
+      b.controller.dispose()
+      pending.resolve({ ok: true, value: {} })
+      updated.resolve({ ok: true, value: {} })
+      await Promise.all([pending.promise, updated.promise])
+    }
+  })
+
+  it('discards queued reads and late credential answers after disposal', async () => {
+    const b = bench({ configured: false })
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof b.credentials.describe>>>()
+    const publish = vi.fn()
+    const off = b.face.hooks.webSearchCard.subscribe(publish)
+    try {
+      await Promise.resolve()
+      b.credentials.describe.mockImplementationOnce(() => pending.promise)
+      b.controller.refreshCredential('DEEPSEEK_API_KEY')
+      serve(b)
+      b.controller.dispose()
+      const count = b.credentials.describe.mock.calls.length
+      publish.mockClear()
+      pending.resolve({ ok: true, value: { DEEPSEEK_API_KEY: { configured: true, writable: true } } })
+      await Promise.resolve()
+      expect(b.credentials.describe).toHaveBeenCalledTimes(count)
+      expect(publish).not.toHaveBeenCalled()
+      expect(b.state().apiKeyConfigured).toBe(false)
+      b.controller.refreshCredential('DEEPSEEK_API_KEY')
+      serve(b)
+      await Promise.resolve()
+      expect(b.credentials.describe).toHaveBeenCalledTimes(count)
+    } finally {
+      off()
+      b.controller.dispose()
+      pending.resolve({ ok: true, value: {} })
+      await pending.promise
+    }
+  })
+
   it('reads the credential state for the reference the selected section names', async () => {
     const b = bench()
     await vi.waitFor(() => { expect(b.credentials.describe).toHaveBeenCalled() })
@@ -85,6 +173,16 @@ describe('WebSearchCardController credential', () => {
     await vi.waitFor(() => { expect(b.state().apiKeyConfigured).toBe(true) })
     expect(b.state()).toMatchObject({ baseURL: { text: '', overridden: false }, apiKey: { text: '', overridden: false } })
     b.controller.dispose()
+  })
+
+  it('keeps an unknown credential reference writable and unconfigured', async () => {
+    const b = bench()
+    try {
+      await vi.waitFor(() => { expect(b.state().apiKeyConfigured).toBe(true) })
+      b.credentials.describe.mockResolvedValue({ ok: true, value: {} })
+      b.controller.refreshCredential('DEEPSEEK_API_KEY')
+      await vi.waitFor(() => { expect(b.state()).toMatchObject({ apiKeyConfigured: false, apiKeyWritable: true }) })
+    } finally { b.controller.dispose() }
   })
 
   it('writes the staged key through the credentials domain, never a settings section', async () => {
@@ -101,6 +199,32 @@ describe('WebSearchCardController credential', () => {
     for (const host of [b.web, b.messages, b.api]) expect(host.mutate).not.toHaveBeenCalled()
     await vi.waitFor(() => { expect(b.state()).toMatchObject({ dirty: false, apiKeyConfigured: true }) })
     b.controller.dispose()
+  })
+
+  it('accepts its successful key readback while a newer credential read is pending', async () => {
+    const b = bench({ configured: false })
+    const readback = Promise.withResolvers<Awaited<ReturnType<typeof b.credentials.describe>>>()
+    const newer = Promise.withResolvers<Awaited<ReturnType<typeof b.credentials.describe>>>()
+    try {
+      serve(b)
+      await vi.waitFor(() => { expect(b.credentials.describe).toHaveBeenCalledTimes(2) })
+      b.credentials.describe.mockImplementationOnce(() => readback.promise)
+      b.face.edit('apiKey', 'ds-secret')
+      b.face.save()
+      await vi.waitFor(() => { expect(b.credentials.describe).toHaveBeenCalledTimes(3) })
+      b.credentials.describe.mockImplementationOnce(() => newer.promise)
+      b.controller.refreshCredential('DEEPSEEK_API_KEY')
+      expect(b.credentials.describe).toHaveBeenCalledTimes(4)
+      readback.resolve({ ok: true, value: { DEEPSEEK_API_KEY: { configured: true, writable: true } } })
+      await vi.waitFor(() => { expect(b.state()).toMatchObject({ dirty: false, saving: false, failed: false }) })
+      newer.resolve({ ok: true, value: { DEEPSEEK_API_KEY: { configured: true, writable: true } } })
+      await vi.waitFor(() => { expect(b.state().apiKeyConfigured).toBe(true) })
+    } finally {
+      b.controller.dispose()
+      readback.resolve({ ok: true, value: {} })
+      newer.resolve({ ok: true, value: {} })
+      await Promise.all([readback.promise, newer.promise])
+    }
   })
 
   it('keeps the stored key when the draft is left blank', () => {
@@ -168,17 +292,29 @@ describe('WebSearchCardController credential', () => {
     b.controller.dispose()
   })
 
-  it('drops a credential answer for a reference that changed while it was pending', async () => {
-    type Answer = { ok: true; value: Record<string, { configured: boolean; writable: boolean }> }
-    let answer: (value: Answer) => void = () => {}
-    const describe = vi.fn(() => new Promise<Answer>((resolve) => { answer = resolve }))
-    const b = bench({ ctx: ctxWith({ credentials: { describe, set: vi.fn() } }) })
-    serve(b)
-    b.messages.publish({ value: { apiKeyEnv: 'RENAMED_KEY' } })
-    answer({ ok: true, value: { DEEPSEEK_API_KEY: { configured: true, writable: true } } })
-    await Promise.resolve()
-    expect(b.state().apiKeyConfigured).toBe(false)
-    b.controller.dispose()
+  it('clears a changed reference immediately and drops its previous pending answer', async () => {
+    const b = bench()
+    const previous = Promise.withResolvers<Awaited<ReturnType<typeof b.credentials.describe>>>()
+    const renamed = Promise.withResolvers<Awaited<ReturnType<typeof b.credentials.describe>>>()
+    try {
+      serve(b)
+      await vi.waitFor(() => { expect(b.state().apiKeyConfigured).toBe(true) })
+      b.credentials.describe.mockImplementationOnce(() => previous.promise)
+      b.controller.refreshCredential('DEEPSEEK_API_KEY')
+      b.credentials.describe.mockImplementation(() => renamed.promise)
+      b.messages.publish({ value: { apiKeyEnv: 'RENAMED_KEY' } })
+      expect(b.state().apiKeyConfigured).toBe(false)
+      previous.resolve({ ok: true, value: { DEEPSEEK_API_KEY: { configured: true, writable: true } } })
+      await Promise.resolve()
+      expect(b.state().apiKeyConfigured).toBe(false)
+      renamed.resolve({ ok: true, value: { RENAMED_KEY: { configured: true, writable: false } } })
+      await vi.waitFor(() => { expect(b.state()).toMatchObject({ apiKeyConfigured: true, apiKeyWritable: false }) })
+    } finally {
+      b.controller.dispose()
+      previous.resolve({ ok: true, value: {} })
+      renamed.resolve({ ok: true, value: {} })
+      await Promise.all([previous.promise, renamed.promise])
+    }
   })
 })
 

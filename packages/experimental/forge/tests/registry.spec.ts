@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import ForgeService, { changeRequestKey } from '../src/index.ts'
-import { demo, FakeProvider, forgeContext, provide, ref } from './fake-provider.ts'
+import { demo, FakeProvider, forgeContext, provide, ref, snapshot } from './fake-provider.ts'
 
 let ctx: Context | undefined
 
@@ -11,6 +11,19 @@ afterEach(async () => {
 })
 
 describe('forge registry', () => {
+  it('reports an unsupported review provider and forwards a supported review unchanged', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+    const request = { kind: 'review' as const, headSha: 'a'.repeat(40), event: 'comment' as const, body: 'Check the guard', comments: [] }
+    await expect(ctx.forge.submitReview(ref(3), request, signal)).resolves.toMatchObject({ ok: false, code: 'unsupported' })
+    const submitReview = vi.fn(async () => ({ ok: true as const, url: 'https://fake.test/Octo/Demo/change/3#review' }))
+    Object.assign(provider, { submitReview })
+    await expect(ctx.forge.submitReview(ref(3), request, signal)).resolves.toMatchObject({ ok: true })
+    expect(submitReview).toHaveBeenCalledWith(ref(3), request, expect.any(AbortSignal))
+  })
+
   it('rejects a backoff cap shorter than the active poll interval', async () => {
     ctx = new Context()
     await expect(ctx.plugin(ForgeService, { activeIntervalMs: 30_000, maxBackoffMs: 1_000 }))
@@ -61,6 +74,20 @@ describe('forge registry', () => {
     await expect(ctx.forge.diff(ref(1, elsewhere), signal)).rejects.toThrow('forge: no provider is registered for "missing"')
     await expect(ctx.forge.fileText(ref(1, elsewhere), 'a'.repeat(40), 'x', signal)).rejects.toThrow('forge: no provider is registered for "missing"')
     expect(() => ctx!.forge.fileUrl(ref(1, elsewhere), 'a'.repeat(40), 'x')).toThrow('forge: no provider is registered for "missing"')
+  })
+
+  it('reads complete check details when supported without changing polling state', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+    await expect(ctx.forge.fetchChecks(ref(3), signal)).resolves.toMatchObject({ code: 'unavailable' })
+    const result = snapshot(ref(3))
+    const fetchChecks = vi.fn(async () => result)
+    Object.assign(provider, { fetchChecks })
+    await expect(ctx.forge.fetchChecks(ref(3), signal)).resolves.toEqual(result)
+    expect(fetchChecks).toHaveBeenCalledWith(ref(3), expect.any(AbortSignal))
+    expect(provider.fetches).toEqual([])
   })
 
   it('delegates change request reads to the provider of their forge', async () => {

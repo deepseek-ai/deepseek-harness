@@ -1,0 +1,14 @@
+- dialog "提交评审":
+  - heading "提交评审" [level=2]
+  - button "关闭"
+  - text: 待提交评论（1）
+  - textbox "评审总结…": 需要补充边界检查
+  - status: 请求更改时，请填写评审总结
+  - radio "评论"
+  - text: 评论
+  - radio "批准"
+  - text: 批准
+  - radio "请求更改" [checked]
+  - text: 请求更改
+  - button "取消"
+  - button "提交评审"

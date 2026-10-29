@@ -7,7 +7,7 @@ import { changeRequestKey } from './keys.ts'
 import { nextPollDelay } from './schedule.ts'
 import type {
   ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config,
-  ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, MergeRequest,
+  ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
 } from './types.ts'
 
 export { changeRequestKey } from './keys.ts'
@@ -222,6 +222,20 @@ export class ForgeService extends Service {
   }
 
   /**
+   * Read complete check details independently of periodic polling.
+   * @param ref - change request served by a registered provider.
+   * @param signal - cancellation of the detail view.
+   * @returns a complete snapshot or the provider's failure; unsupported providers return unavailable.
+   * @throws on cancellation, provider disposal, or expiry of this read's own `fetchTimeoutMs` deadline.
+   */
+  async fetchChecks(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure> {
+    using timeout = deadline(signal, this.config.fetchTimeoutMs, 'FORGE_FETCH_TIMEOUT')
+    return await this.invoke(this.registration(ref.repository.forge), timeout.signal,
+      (provider, operation) => provider.fetchChecks?.(ref, operation)
+        ?? Promise.resolve({ code: 'unavailable', message: 'This provider does not support complete check reads' } as const))
+  }
+
+  /**
    * Read the changes of a change request as its host computes them.
    * @param ref - change request served by a registered provider.
    * @param signal - cancellation of the read.
@@ -231,6 +245,21 @@ export class ForgeService extends Service {
   async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure> {
     return await this.invoke(this.registration(ref.repository.forge), signal,
       (provider, operation) => provider.diff(ref, operation))
+  }
+
+  /**
+   * Publish one comment or a completed review, then refresh the watched status.
+   * @param ref - change request served by a registered provider.
+   * @param request - explicitly selected commit, comments, and review decision.
+   * @param signal - request cancellation.
+   * @returns a publication URL or a failure, including an unknown write outcome.
+   */
+  async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult> {
+    const result = await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.submitReview?.(ref, request, operation)
+        ?? Promise.resolve({ ok: false, code: 'unsupported', message: 'This provider does not support review submission' } as const))
+    this.refresh(ref)
+    return result
   }
 
   /**

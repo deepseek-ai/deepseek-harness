@@ -83,8 +83,8 @@ it('preserves both header layouts and follows the scroll position without changi
           await page.locator('[data-plugin-bar][data-natural]').waitFor()
           await page.evaluate(() => document.fonts.ready)
           // Without tabs, whether the actions fit beside the title at 470px depends on the platform font,
-          // so that width is pinned only with tabs.
-          for (const width of hasTabs ? [1280, 600, 470, 390] : [1280, 600, 390]) {
+          // so that width is pinned only with tabs. At 320px the tabs and actions wrap onto separate rows.
+          for (const width of hasTabs ? [1280, 600, 470, 390, 320] : [1280, 600, 390]) {
             await page.setViewportSize({ width, height: 480 })
             await scrollTo(page, 0)
             const resting = await reference(page, false)
@@ -95,7 +95,7 @@ it('preserves both header layouts and follows the scroll position without changi
             expect(initial.tabs).toEqual(resting.tabs)
             if (hasTabs && width <= 600) {
               const tabs = initial.tabs!
-              if (width === 390) {
+              if (width === 320) {
                 expect(initial.toolbar.y).toBeGreaterThanOrEqual(tabs.y + tabs.height)
               } else {
                 expect(initial.toolbar.x).toBeGreaterThanOrEqual(tabs.x + tabs.width)

@@ -40,6 +40,9 @@
     },
     {
       "path": "../../packages/util/file-drag"
+    },
+    {
+      "path": "../../packages/client/ui-file-actions"
     }
   ],
   "exclude": [

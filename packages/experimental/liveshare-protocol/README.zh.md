@@ -78,7 +78,7 @@ Relay 兼容性依靠声明版本、能力和明确拒绝，不提供逐发布�
 ## 已知限制与延期工作
 
 - 网关请求必须在不透明请求体之外携带 Relay 已认证主体；没有该主体的帧被拒绝。
-- Owner Host 与 worker 同包发布。Supervisor 为每次逻辑添加生成品牌化 UUID `registrationToken`，移除时使其失效，进程重启只为仍保留的同一注册重播该身份。生命周期、请求及取消事件回传该 token 与分享 ID；逐请求 `TunnelRequestToken` 独立存在。IPC 编解码拒绝缺失身份，两种 token 都不进入 Relay URL 或线协议帧。同包 IPC 不协商版本；Relay 线协议帧保留数字 ID 与协议版本 1。兼容能力包含 `file-upload`、`actor-credential` 与 `direct-connection`。actor 可携带可选的、owner 可验证的 `credential`（协议只校验类型；owner 在采信断言身份前自行验证，缺失时保持今天由 Relay 断言的语义）。分享 spec 可携带 `connection`；缺失读作 `{ mode: 'relay' }`，仍拥有数据面的 Relay 会拒绝 `direct` 注册。：声明它的 Relay 注册可在分享支持与 access-state 帧上携带 `allowsFileUpload`；其它 peer 保留已存值，而缺少该字段的帧读作上传关闭。
+- Owner Host 与 worker 同包发布。Supervisor 为每次逻辑添加生成品牌化 UUID `registrationToken`，移除时使其失效，进程重启只为仍保留的同一注册重播该身份。生命周期、请求及取消事件回传该 token 与分享 ID；逐请求 `TunnelRequestToken` 独立存在。IPC 编解码拒绝缺失身份，两种 token 都不进入 Relay URL 或线协议帧。同包 IPC 不协商版本；Relay 线协议帧保留数字 ID 与协议版本 1。兼容能力包含 `actor-credential` 与 `direct-connection`。actor 还可携带可选的 `displayName`（仅用于展示和归属，授权仍只使用身份三元组），以及可选的、owner 可验证的 `credential`（协议只校验类型；owner 在采信断言身份前自行验证，缺失时保持今天由 Relay 断言的语义）。分享 spec 可携带 `connection`；缺失读作 `{ mode: 'relay' }`，仍拥有数据面的 Relay 会拒绝 `direct` 注册。
 - 声明 `share-access-state` 的 owner 接收已提交、无 id 的 ACL、模式与到期时间快照，快照携带持久单调版本。worker 只转发当前 socket 的快照；Host 在 socket 丢失后清空授权，并在外部执行准入前刷新已认证的请求快照。快照不可用时默认拒绝，不借用持久化 ACL。
 - **历史发布版本支持尚未核实**——`tests/frames/v1` 记录具体帧和拒绝义务，但没有标识已发布的 Owner 版本。网关声明 `LIVESHARE_PROTOCOL_VERSION` 与已实现能力；Relay 拒绝已声明的版本不匹配，仅向已声明消费者发送可选生命周期帧。这些检查保留已录字段和明确拒绝，不提供逐发布版本翻译或无限支持窗口。
 

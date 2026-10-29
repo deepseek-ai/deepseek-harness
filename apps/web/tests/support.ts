@@ -201,6 +201,23 @@ export function probeFreePort(): Promise<number> {
 }
 
 /**
+ * Open collapsed mobile navigation before using a sidebar action.
+ * @param page - browser page with the mounted sidebar.
+ * @param locale - current UI language.
+ */
+export async function revealNavigationDrawer(page: Page, locale: 'en' | 'zh' | 'ja'): Promise<void> {
+  const drawer = await page.evaluate(() => window.innerWidth < 768
+    && !document.documentElement.hasAttribute('data-windows-titlebar'))
+  await page.waitForFunction(expected => Boolean(document.querySelector('[data-sidebar-drawer]')) === expected, drawer)
+  const closed = page.locator('[data-sidebar-drawer][data-sidebar-collapsed]')
+  if (await closed.count() === 0) return
+  await page.locator('[data-shell-leading]').getByRole('button', {
+    name: { en: 'Open sidebar', zh: '打开侧边栏', ja: 'サイドバーを開く' }[locale], exact: true,
+  }).click()
+  await closed.waitFor({ state: 'detached' })
+}
+
+/**
  * Drive the hero's workspace picker through the composed directory dialog
  * until the live composer unlocks. A fresh world has no Workspace, so the boot
  * lands in the Workspace-trigger view state (startup auto-selection has nothing to
@@ -219,6 +236,7 @@ export function probeFreePort(): Promise<number> {
  */
 export async function connectFreshWorkspace(page: Page, root: string, name = 'workspace'): Promise<void> {
   mkdirSync(join(root, name), { recursive: true })
+  await revealNavigationDrawer(page, 'en')
   await page.getByRole('button', { name: 'Add workspace', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Select Workspace Directory' })
   await dialog.waitFor({ timeout: 10_000 })
@@ -245,6 +263,7 @@ export async function connectFreshWorkspace(page: Page, root: string, name = 'wo
  */
 export async function connectFreshWorkspaceZh(page: Page, root: string, name = 'workspace', modelAvailable = true): Promise<void> {
   mkdirSync(join(root, name), { recursive: true })
+  await revealNavigationDrawer(page, 'zh')
   await page.getByRole('button', { name: '添加工作区', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: '选择工作区目录' })
   await dialog.waitFor({ timeout: 10_000 })
@@ -346,6 +365,14 @@ export function conversationContextKey(kind: string, id: string): string {
  */
 export async function openSettings(page: Page, locale: 'en' | 'zh' | 'ja'): Promise<void> {
   const labels = { en: ['Account menu', 'Settings'], zh: ['账号菜单', '设置'], ja: ['アカウントメニュー', '設定'] } as const
-  await page.getByRole('button', { name: labels[locale][0], exact: true }).click()
+  const trigger = page.getByRole('button', {
+    name: labels[locale][0], exact: true, includeHidden: true,
+  })
+  await trigger.waitFor({ state: 'attached' })
+  await revealNavigationDrawer(page, locale)
+  if (!await trigger.isVisible()) {
+    await page.getByRole('button', { name: { en: 'Open sidebar', zh: '打开侧边栏', ja: 'サイドバーを開く' }[locale], exact: true }).click()
+  }
+  await trigger.click()
   await page.getByRole('menuitem', { name: labels[locale][1], exact: true }).click()
 }

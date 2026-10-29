@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-desktop",
   "description": "Electron desktop shell for a bundled dsh runtime and external plugins",
-  "version": "0.2.1-rc.4",
+  "version": "0.2.2-alpha.2",
   "private": true,
   "license": "MIT",
   "author": {
@@ -88,6 +88,7 @@
     "@deepseek-ai/dsh-plugin-manager": "workspace:*",
     "zod": "4.4.3",
     "@deepseek-ai/dsh-util-file-drag": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-file-actions": "workspace:*",
     "tencentcloud-sdk-nodejs-teo": "4.1.330"
   }
 }

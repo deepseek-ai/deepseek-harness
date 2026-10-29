@@ -39,7 +39,7 @@ export interface CuaConfig {
     /** Unbranded digest at the profile configuration boundary; admitted by the Config schema. */
     id: string
   }>
-  /** Absolute native helper override; omission prepares the package-owned executable. */
+  /** Absolute executable inside the signed macOS helper .app; omission prepares the package-owned application. */
   helperPath?: string
   /** Maximum time in milliseconds for native component preparation. */
   buildTimeoutMs: number

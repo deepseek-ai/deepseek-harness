@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownDelegateProvider } from '../src/index.ts'
@@ -10,6 +11,38 @@ afterEach(cleanup)
 describe('Markdown file links', () => {
   it.each([
     ['src/index.ts', 'src/index.ts', undefined],
+    ['src/index.ts:24', 'src/index.ts', { line: 24 }],
+    ['/workspace/src/index.ts:24', '/workspace/src/index.ts', { line: 24 }],
+    ['./README:24', './README', { line: 24 }],
+    ['./Makefile:12', './Makefile', { line: 12 }],
+    ['src/index.ts:24:5', 'src/index.ts', { line: 24 }],
+    ['src/index.ts:24:0', 'src/index.ts', { line: 24 }],
+    ['src/index.ts:0:5', 'src/index.ts', undefined],
+    ['src/index.ts:0', 'src/index.ts', undefined],
+    ['src/index.ts:30-24', 'src/index.ts', undefined],
+    ['src/index.ts:1-0', 'src/index.ts', undefined],
+    ['src/index.ts:9007199254740992', 'src/index.ts', undefined],
+    ['src/index.ts:1-9007199254740992', 'src/index.ts', undefined],
+    ['//server/file:24', '//server/file', { line: 24 }],
+    ['%5C%5Cserver%5Cfile:24', '\\\\server\\file', { line: 24 }],
+    ['%5Cwork%5Cfile:24', '\\work\\file', { line: 24 }],
+    ['../index.ts:24', '../index.ts', { line: 24 }],
+    ['./index.ts:24', './index.ts', { line: 24 }],
+    ['index%2Ets', 'index.ts', undefined],
+    ['file.ts#heading', 'file.ts', undefined],
+    ['file.ts#L0', 'file.ts', undefined],
+    ['file.ts#L3-L2', 'file.ts', undefined],
+    ['file.ts#L9007199254740992', 'file.ts', undefined],
+    ['file.ts#L1-L9007199254740992', 'file.ts', undefined],
+    ['file.ts#L024', 'file.ts', { line: 24 }],
+    ['src/index.ts:024', 'src/index.ts', { line: 24 }],
+    ['../docs/My%20Notes.md:24-30', '../docs/My Notes.md', { line: 24 }],
+    ['C:/work/file.ts:2', 'C:/work/file.ts', { line: 2 }],
+    ['C:%5Cwork%5Cfile.ts:2-3', 'C:\\work\\file.ts', { line: 2 }],
+    ['docs/notes%3A24', 'docs/notes:24', undefined],
+    ['docs/notes%3A24:30', 'docs/notes:24', { line: 30 }],
+    ['docs/notes:24#L3', 'docs/notes:24', { line: 3 }],
+    ['docs/notes:review', 'docs/notes:review', undefined],
     ['/workspace/src/index.ts#L24', '/workspace/src/index.ts', { line: 24 }],
     ['../docs/My%20Notes.md#L24-L30', '../docs/My Notes.md', { line: 24 }],
     ['C:/work/file.ts#L2', 'C:/work/file.ts', { line: 2 }],
@@ -116,11 +149,10 @@ describe('Markdown file links', () => {
   })
 
   it.each([
-    '//example.com/file', '%2F%2Fexample.com/file', '%5C%5Cserver%5Cfile',
-    'javascript:alert', 'data:text/plain,hi', 'file:///etc/passwd', 'vscode:open',
-    '%6Aavascript:alert', '#L2', 'file.ts?raw=1', 'file%ZZ.ts', 'file%00.ts',
-    'file.ts#heading', 'file.ts#L0', 'file.ts#L3-L2',
-    'file.ts#L9007199254740992', 'file.ts#L1-L9007199254740992',
+    'javascript:alert', 'data:text/plain,hi', 'vbscript:msgbox',
+    '%6Aavascript:alert', '#L2', 'file.ts?raw=1', 'file%ZZ.ts', 'file%00.ts', ':24',
+    'data:123', 'blob:123', 'javascript:123', '%6Aavascript:123',
+    'javascript:alert:24', 'index%2Ets:24', 'C:/file.ts?raw=1',
   ])('keeps unsupported destination %s inert', (target) => {
     const openFile = vi.fn()
     const view = render(
@@ -132,6 +164,23 @@ describe('Markdown file links', () => {
     expect(view.container.querySelector('button, a')).toBeNull()
     expect(openFile).not.toHaveBeenCalled()
   })
+
+  it.each([
+    'mailto:10086', 'https:123', 'http:123', 'https://example.com:8080',
+    'index.ts:24', 'example.com:8080', 'localhost:3000', 'Makefile:12', 'tel:10086',
+    'vscode:open', 'file:///etc/passwd:24', 'custom.scheme:value:24', 'C:123',
+  ])(
+    'preserves external destination %s with and without a file opener', (target) => {
+      const openFile = vi.fn()
+      const markdown = <MarkdownText text={`[external](${target})`} />
+      const view = render(<MarkdownDelegateProvider openFile={openFile}>{markdown}</MarkdownDelegateProvider>)
+      expect(view.getByRole('link', { name: 'external' }).getAttribute('href')).toBe(target)
+      expect(view.queryByRole('button')).toBeNull()
+      expect(openFile).not.toHaveBeenCalled()
+      view.rerender(markdown)
+      expect(view.getByRole('link', { name: 'external' }).getAttribute('href')).toBe(target)
+    },
+  )
 
   it('preserves external links and leaves local links inert without an opener', () => {
     const view = render(<MarkdownText text={'[web](https://example.com/a#L1) [mail](mailto:a@example.com) [file](src/a.ts)'} />)
@@ -165,6 +214,33 @@ describe('Markdown file links', () => {
     fireEvent.click(view.getByRole('button', { name: 'source' }))
     expect(second).toHaveBeenCalledOnce()
     expect(first).toHaveBeenCalledOnce()
+  })
+
+  it.each(['C:/file.ts:24', '%5C%5Cserver%5Cfile:24', './file.ts:24:5'])(
+    'leaves file destination %s inert while streaming', (target) => {
+      const view = render(<MarkdownDelegateProvider openFile={vi.fn()}>
+        <MarkdownText text={`[source](${target})`} streaming />
+      </MarkdownDelegateProvider>)
+      expect(view.getByText('source')).toBeTruthy()
+      expect(view.container.querySelector('a, button')).toBeNull()
+    },
+  )
+
+  it.each([
+    'JaVaScRiPt:alert(1)', 'javascript&#58;alert(1)', 'java&#x09;script:alert(1)',
+    'vbscript:msgbox(1)', 'data:text/html,hello', 'blob:https://example.com/id',
+  ])('blocks active-content URL %s in settled and streaming messages', (target) => {
+    const openFile = vi.fn()
+    const openExternalLink = vi.fn()
+    const content = (streaming: boolean) => <MarkdownDelegateProvider openFile={openFile} openExternalLink={openExternalLink}>
+      <MarkdownText text={`[source](${target})`} streaming={streaming} />
+    </MarkdownDelegateProvider>
+    const view = render(content(false))
+    expect(view.container.querySelector('a, button')).toBeNull()
+    view.rerender(content(true))
+    expect(view.container.querySelector('a, button')).toBeNull()
+    expect(openFile).not.toHaveBeenCalled()
+    expect(openExternalLink).not.toHaveBeenCalled()
   })
 
   it('routes file and HTTP(S) links through the same provider', () => {
@@ -207,4 +283,40 @@ describe('Markdown file links', () => {
     expect(view.getByText('source')).toBeTruthy()
     expect(outer).not.toHaveBeenCalled()
   })
+})
+
+it.each(['src/main.ts#L42', 'src/main.ts:42', 'src/main.ts:42:5', 'src/main.ts:42-48'])(
+  'captures %s and other link targets without activating them; linked images take priority', (path) => {
+    const openFile = vi.fn(), openExternalLink = vi.fn(), openContextMenu = vi.fn()
+    const view = render(<MarkdownDelegateProvider {...{ openFile, openExternalLink }}
+      getTriggerProps={contextMenuHook(openContextMenu)().getTriggerProps}>
+      <MarkdownText text={`[file](${path}) [web](https://example.com/a?q=1#part) [![picture](https://example.com/original.gif)](https://example.com/target)`} />
+    </MarkdownDelegateProvider>)
+    fireEvent.contextMenu(view.getByRole('button', { name: 'file' }), { clientX: 2, clientY: 3 })
+    expect(openContextMenu).toHaveBeenLastCalledWith({ kind: 'file', path: 'src/main.ts', line: 42 }, { x: 2, y: 3 })
+    fireEvent.contextMenu(view.getByRole('link', { name: 'web' }))
+    expect(openContextMenu).toHaveBeenLastCalledWith({ kind: 'url', url: 'https://example.com/a?q=1#part' }, expect.any(Object))
+    openContextMenu.mockClear()
+    fireEvent.contextMenu(view.getByRole('img', { name: 'picture' }))
+    expect(openContextMenu).toHaveBeenCalledExactlyOnceWith({ kind: 'image', url: 'https://example.com/original.gif' }, expect.any(Object))
+    expect(openFile).not.toHaveBeenCalled()
+    expect(openExternalLink).not.toHaveBeenCalled()
+  },
+)
+
+it('passes keyboard-positioned produced-file menus and local image identities to their owners', () => {
+  const openMenu = vi.fn(), openContextMenu = vi.fn()
+  const view = render(<MarkdownDelegateProvider getTriggerProps={contextMenuHook(openContextMenu)().getTriggerProps}>
+    <MarkdownText text={'`report.svg` ![local](out/report.svg)'}
+      fileMentions={{ resolve: () => ({
+        title: 'out/report.svg', label: 'Report', open: vi.fn(),
+        contextMenuProps: contextMenuHook((_target, point) => { openMenu(point) })()
+          .getTriggerProps({ kind: 'image', value: { url: 'unused' } }),
+      }) }}
+      pathImages={{ resolve: () => 'blob:local' }} />
+  </MarkdownDelegateProvider>)
+  fireEvent.contextMenu(view.getByRole('button', { name: 'Report' }), { clientX: 5, clientY: 6 })
+  expect(openMenu).toHaveBeenCalledWith({ x: 5, y: 6 })
+  fireEvent.contextMenu(view.getByRole('img'))
+  expect(openContextMenu).toHaveBeenCalledWith({ kind: 'image', url: 'blob:local', path: 'out/report.svg' }, { x: 0, y: 0 })
 })

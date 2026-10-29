@@ -1,5 +1,7 @@
 /* A changed file's name, then its directory in smaller subdued type. */
 .label {
+  /* Keep the hidden accessible path inside the file's own scroll container. */
+  position: relative;
   display: flex;
   min-width: 0;
 }

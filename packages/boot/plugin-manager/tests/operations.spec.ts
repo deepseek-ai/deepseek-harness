@@ -874,10 +874,16 @@ it.each([
 ])('reports launch failures with a complete log: $code', async ({ code, shortMessage, expected }) => {
   const { context } = fixture()
   command.run.mockImplementationOnce(() => result(undefined, '', () => {}, { code, ...shortMessage === undefined ? {} : { shortMessage } }))
-  const outcome = await runProfilePnpm(context, ['root'], { execution: 'service', outputBytes: 4, signal: new AbortController().signal })
+  const messages: string[] = []
+  const outcome = await runProfilePnpm(context, ['root'], {
+    execution: 'service', outputBytes: 4, signal: new AbortController().signal,
+    onOutput: (text) => { messages.push(text) },
+  })
   expect(outcome.exitCode).toBe(expected)
   expect(outcome.truncated).toBe(true)
   expect(readFileSync(outcome.logPath, 'utf8')).toBe(shortMessage ?? 'pnpm failed')
+  // A run that printed nothing still streams the diagnostic its log carries.
+  expect(messages).toEqual([shortMessage ?? 'pnpm failed'])
 })
 
 it('cancels and settles package output when the output consumer fails', async () => {

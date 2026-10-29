@@ -475,6 +475,7 @@ export interface ConversationViewActionsOwnerProps {
 
 /** Business callbacks injected into the strict Session header. */
 export interface ConversationSessionHeaderInjected {
+  /** Open the clicked title's actions. */
   /** Package-owned View roster source bound only for the Conversation header. */
   readonly hooks: {
     readonly conversationViews: ObservableSnapshot<readonly ViewTab[]>

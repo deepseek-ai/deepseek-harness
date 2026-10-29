@@ -8,7 +8,8 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { SidebarRightTabDefinition, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { ChangeRequestSnapshot, ForgeReviewRequest, ForgeReviewResult } from '@deepseek-ai/dsh-experimental-forge/types'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, type RemoteResult, type TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -25,6 +26,7 @@ import type { SessionListInjected } from '../src/client/session-list.ts'
 import { SessionHoverForge } from '../src/client/SessionHoverForge.tsx'
 import { SessionRowForge } from '../src/client/SessionRowForge.tsx'
 import type { NoticeSource } from '../src/client/source.ts'
+import type { ReviewSelection } from '../src/client/review.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from '../src/client/WorktreeProgress.tsx'
 import { WorktreeToggle, type WorktreeToggleInjected } from '../src/client/WorktreeToggle.tsx'
 import type {
@@ -40,6 +42,7 @@ const LOCAL: ForgeLocalDiff = { base: 'origin/main', files: [], omitted: 0 }
 const CHANGE: ForgeChangeRequestDiff = { headSha: 'a'.repeat(40), files: [], localAhead: null, fileUrls: {} }
 
 afterEach(() => {
+  localStorage.clear()
   vi.restoreAllMocks()
   Reflect.deleteProperty(navigator, 'clipboard')
 })
@@ -156,14 +159,18 @@ async function base() {
     localDiff: vi.fn(async (_sessionId: SessionId, _scope: ForgeLocalScope, _signal?: AbortSignal): Read<ForgeLocalDiff> =>
       ({ ok: true, value: LOCAL })),
     localText: vi.fn(async (_sessionId: SessionId, _scope: ForgeLocalScope, _path: string): Read<string> => ({ ok: true, value: 'a\n' })),
+    changeRequestChecks: vi.fn(async (
+      _sessionId: SessionId, _url: string, _headSha: string, _signal: AbortSignal,
+    ): Read<ChangeRequestSnapshot> => ({ ok: true, value: snapshot(7) })),
     changeRequestDiff: vi.fn(async (_sessionId: SessionId, _url: string, _signal?: AbortSignal): Read<ForgeChangeRequestDiff> =>
       ({ ok: true, value: CHANGE })),
     changeRequestText: vi.fn(async (_sessionId: SessionId, _url: string, _commit: string, _path: string): Read<string> => ({ ok: true, value: 'b\n' })),
+    submitReview: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeReviewRequest): Read<ForgeReviewResult> => ({ ok: true, value: { ok: true, url: 'https://github.com/review' } })),
   }
   ctx.provide('remote.forgePanel', forgePanel)
   ctx.provide('locale', new LocaleRuntime(ctx))
   const unregisterTab = vi.fn()
-  const sidebarRightTabs = { register: vi.fn((_type: { id: string; kind: string; title: () => string }) => unregisterTab) }
+  const sidebarRightTabs = { register: vi.fn((_type: SidebarRightTabDefinition) => unregisterTab) }
   ctx.provide('sidebarRightTabs', sidebarRightTabs)
   const sidebarRight = { openTab: vi.fn(), toggleExpanded: vi.fn(), hide: vi.fn(),
     tabsIn: vi.fn(() => [{ id: 'forge-tab' as TabId, kind: TAB_KIND }]) }
@@ -251,6 +258,16 @@ async function fixture() {
 }
 
 describe('mountForgePanel registration', () => {
+  it('routes complete check reads through the bound Session and propagates failures', async () => {
+    const f = await fixture()
+    const signal = new AbortController().signal
+    const url = 'https://github.com/octo/demo/pull/7'
+    expect(await f.tab(S1).readChecks(url, 'a'.repeat(40), signal)).toEqual(snapshot(7))
+    expect(f.forgePanel.changeRequestChecks).toHaveBeenCalledWith(S1, url, 'a'.repeat(40), signal)
+    f.forgePanel.changeRequestChecks.mockResolvedValueOnce(REFUSED.failed)
+    await expect(f.tab(S1).readChecks(url, 'a'.repeat(40), signal)).rejects.toThrow()
+  })
+
   it('declares the browser services it needs', () => {
     expect(inject).toEqual(['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions'])
   })
@@ -260,7 +277,10 @@ describe('mountForgePanel registration', () => {
     expect(f.sidebarRightTabs.register).toHaveBeenCalledTimes(2)
     const type = f.sidebarRightTabs.register.mock.calls[0]?.[0]
     expect(type).toMatchObject({ id: TAB_ID, kind: TAB_KIND })
-    expect([en['tab.title'], zh['tab.title']]).toContain(type?.title())
+    expect([en['tab.title'], zh['tab.title']]).toContain(type?.title('sidebar://forge-panel'))
+    expect(type?.guide).toHaveLength(1)
+    expect([en['guide.title'], zh['guide.title']]).toContain(type?.guide?.[0]?.title())
+    expect([en['guide.description'], zh['guide.description']]).toContain(type?.guide?.[0]?.description?.())
     expect(f.sidebarRightTabs.register.mock.calls[1]?.[0]).toMatchObject({ id: CHANGES_ID, kind: CHANGES_KIND })
     expect(f.entry('sidebar.right.pane.tab', ForgeTab)).toMatchObject({ options: { key: TAB_ID }, locale: NS })
     expect(f.entry('sidebar.right.pane.tab.title', ForgeTabTitle)).toMatchObject({ options: { key: TAB_ID }, locale: NS })
@@ -688,6 +708,77 @@ describe('mountForgePanel worktree card actions', () => {
 })
 
 describe('mountForgePanel changes view', () => {
+  it('inserts numbered frozen quotes in the originating Session without sending a message', async () => {
+    const f = await fixture()
+    try {
+      const selection: ReviewSelection = { source: { kind: 'local', scope: 'branch' }, comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
+      const scope = f.sessions.scope(S1)!
+      let draft = ''
+      const focus = vi.fn(), send = vi.fn()
+      const insertQuote = vi.fn((text: string) => { draft += `\n> ${text}`; return true })
+      const input = { state: { getSnapshot: () => ({ draft }) }, insertQuote, focus }
+      const resolve = vi.fn(() => input)
+      // Only the input methods used by this contribution are supplied by the Session fixture.
+      vi.spyOn(scope, 'get').mockImplementation(name => name === 'conversation' ? { input: { for: resolve }, send } as never : undefined)
+      const view = f.changes(S1)
+      expect(view.addReviewToInput(selection)).toBe(true)
+      expect(view.addReviewToInput(selection)).toBe(true)
+      expect(insertQuote.mock.calls.map(([text]) => text.split('\n')[0])).toEqual(['## User Comment 1', '## User Comment 2'])
+      expect(resolve).toHaveBeenCalledWith(scope)
+      expect(focus).toHaveBeenCalledTimes(2)
+      insertQuote.mockReturnValueOnce(false)
+      expect(view.addReviewToInput(selection)).toBe(false)
+      expect(focus).toHaveBeenCalledTimes(2)
+      expect(send).not.toHaveBeenCalled()
+      const request: ForgeReviewRequest = { kind: 'review', headSha: 'a', event: 'comment', body: 'Summary', comments: [] }
+      expect(await view.submitReview('https://github.com/pr', request)).toMatchObject({ ok: true, value: { ok: true } })
+      expect(f.forgePanel.submitReview).toHaveBeenCalledWith(S1, 'https://github.com/pr', request)
+    } finally { await f.dispose() }
+  })
+  it.each(['no scope', 'no conversation'] as const)('refuses a quote with %s', async (missing) => {
+    const f = await fixture()
+    try {
+      const view = f.changes(S1)
+      if (missing === 'no scope') f.sessions.scope.mockReturnValue(undefined)
+      expect(view.addReviewToInput({ source: { kind: 'local', scope: 'branch' }, comment: { path: 'a', side: 'L', startLine: 1, endLine: 1, body: 'Comment', hunk: '' } })).toBe(false)
+    } finally { await f.dispose() }
+  })
+  it('immediately closes an already-aborted occurrence and reports failed removal', async () => {
+    const f = await fixture()
+    try {
+      const lifetime = new AbortController()
+      lifetime.abort()
+      vi.spyOn(Storage.prototype, 'removeItem').mockImplementationOnce(() => { throw new Error('storage denied') })
+      expect(f.changes(S1).reviewQueue({ id: 'closed' as TabId, signal: lifetime.signal }).getSnapshot().comments).toEqual([])
+      expect(f.notice()).toMatchObject({ key: 'review.saveFailed' })
+    } finally { await f.dispose() }
+  })
+  it.each(['local', 'change'] as const)('retains %s records across Session switches and clears only the closed tab', async (kind) => {
+    const f = await fixture()
+    const lifetime = new AbortController()
+    const tab = { id: 'review-tab' as TabId, signal: lifetime.signal }
+    const selection: ReviewSelection = { source: kind === 'local' ? { kind, scope: 'branch' }
+      : { kind, url: 'https://github.com/octo/demo/pull/7', headSha: 'a'.repeat(40) },
+    comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
+    const queue = f.changes(S1).reviewQueue(tab)
+    queue.recordAgent(selection)
+    if (kind === 'change') queue.add(selection)
+    queue.summarize('Summary', 'comment')
+    const otherTab = { id: 'other-tab' as TabId, signal: new AbortController().signal }
+    const other = f.changes(S1).reviewQueue(otherTab)
+    other.recordAgent(selection)
+    expect(f.changes(S2).reviewQueue({ id: tab.id, signal: new AbortController().signal }).getSnapshot().records).toEqual([])
+    expect(f.changes(S1).reviewQueue(tab)).toBe(queue)
+    expect(queue.getSnapshot().records).toHaveLength(1)
+    lifetime.abort()
+    expect(queue.getSnapshot()).toMatchObject({ comments: [], records: [], body: '', uncertain: null })
+    expect(other.getSnapshot().records).toHaveLength(1)
+    const reopened = f.changes(S1).reviewQueue({ id: tab.id, signal: new AbortController().signal })
+    expect(reopened).not.toBe(queue)
+    expect(reopened.getSnapshot()).toMatchObject({ comments: [], records: [], body: '' })
+    expect(queue.recordAgent(selection)).toBe(false)
+    await f.dispose()
+  })
   it('reads the changes of the Session through the Remote and shares its panel stream', async () => {
     const f = await fixture()
     const view = f.changes(S1)
@@ -716,6 +807,11 @@ describe('mountForgePanel changes view', () => {
     expect(f.notice()).toMatchObject({ key: 'toast.expandStale', tone: 'failure', params: {} })
     f.changes(S1).report('toast.expandFailed', { message: 'gone' })
     expect(f.notice()).toMatchObject({ key: 'toast.expandFailed', tone: 'failure', params: { message: 'gone' } })
+
+    f.changes(S1).report('review.submitted')
+    expect(f.notice()).toMatchObject({ key: 'review.submitted', tone: 'success' })
+    f.changes(S1).report('review.published')
+    expect(f.notice()).toMatchObject({ key: 'review.published', tone: 'success' })
 
     const writeText = vi.fn(async (_text: string) => {})
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })

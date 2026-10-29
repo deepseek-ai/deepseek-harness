@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-22-listed-model-badges.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-22-listed-model-badges.md
+/agent-note-model-selector-badges-come-from-the-model-listing:
+  en: cc4b8fee78e75a98
+  zh: 3cf21a37bea4410c
+/agent-note-model-selector-badges-come-from-the-model-listing/problem:
+  en: ed011e743511ef25
+  zh: 2389e339f1a6dcbf
+/agent-note-model-selector-badges-come-from-the-model-listing/decision:
+  en: 84b99f80d8824117
+  zh: 94cd96f59caf5b43
+/agent-note-model-selector-badges-come-from-the-model-listing/alternatives-considered:
+  en: 079466e0dd56584e
+  zh: 8e33049c422d77cb
+/agent-note-model-selector-badges-come-from-the-model-listing/consequences:
+  en: 3ba39c2a109e49cd
+  zh: 3eb16676854230f9

@@ -22,31 +22,28 @@ kind: "package-reference"
 
 helper 为授权提示和已授权应用列表提供 64 像素 PNG 图标。读取图标不会启动应用或检查窗口，图标不决定可复用授权。
 
-共享 helper 查询 macOS 为它记录的责任进程，在发布就绪状态前保存对应应用的名称和图标。因此，从 Terminal 启动 Desktop 时，即使中间还有另一个 GUI 应用，也能识别到 Terminal。责任应用退出后，权限查询仍保留这些信息，后续复用该 helper 的连接读取同一份记录。系统查询或应用信息不可用时省略该字段，由界面引导用户按系统弹窗选择授权对象。
+helper 通过 LaunchServices 以独立的 `DSH Computer Use.app` 后台运行，辅助功能和屏幕录制权限归属于这个应用。权限页使用系统返回的应用名称和图标；无法查询归属时，以系统授权提示为准。
 
 -----
 
 <a id="use-this-package"></a>
 ## 使用本包
 
-本包是仅限 macOS 的可选依赖。打包前需在 `native/bin` 下准备对应架构的可执行文件，该目录会包含在发布包中。安装版需要准备好的 helper，不会编译 Swift。
+本包是仅限 macOS 的可选依赖。本地开发时运行 `pnpm --dir packages/experimental/cua-macos run build:native`，在 `native/bin` 下生成临时签名应用及 `current.json`。正式打包需要指定 `--identity "Developer ID Application: <name> (<team>)"` 并完成公证，参见[原生构建与服务](native/README.zh.md#build-and-service)。安装版保留分发时的签名。源码准备需要 Apple Command Line Tools 提供的 Swift 和 Python 3。
 
 从仓库运行 Web 时，在插件页开启 [Computer Use](../cua-bundle/README.zh.md)。首次启用会在 macOS 14 及以上准备本机组件，Windows 支持正在开发中。现有 Web profile 保持选中时，后续构建继续检查更新。未开启的 profile 不准备原生组件。也可以显式加载源码覆盖层：
 
 ```sh
-swift build --package-path packages/experimental/cua-macos/native --configuration release
-cua_native_root="$PWD/packages/experimental/cua-macos/native"
-export DSH_CUA_HELPER="$cua_native_root/.build/release/dsh-cua-native"
 pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.yml --dump-config
 ```
 
-配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。负责执行的宿主或辅助进程需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图。`getCapabilities` 查询权限和锁屏状态，不弹出系统授权窗口。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 和 `cua.getState` 列出运行中的应用。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。授权前从磁盘读取应用的 Bundle ID 和可执行路径，在启动前后重新读取并核对；没有 Bundle ID 的应用使用规范化的可执行路径复用授权。选择尚未运行的安装副本时，会请求为该副本创建新实例。helper 等待应用完成启动后才返回其 PID。启动后验证失败会使待启动句柄失效，但进程可能仍在运行；应先查看运行中的应用，再取得新句柄。返回的对象读取初始 AX，不自动激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏或最小化时，先尝试 `app.show()` 或 `window.show()`，再重新观察。它请求取消隐藏和恢复最小化，不主动激活、抬起窗口或切换桌面空间；应用级恢复选择焦点窗口、主窗口或唯一 AX 窗口。结果通过 `windowId` 指明选中的窗口，未选中时为 null；`foregroundChanged` 比较操作前后的前台应用和最上层窗口，无法取得完整观察时为 null，返回后仍可能发生焦点变化。恢复失败或窗口仍不可用时，说明需要前台的步骤，再调用 `app.activate()` 或窗口的 `raise` 动作并重新观察。必须使用前台时，以完成任务为先。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
+配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。`DSH Computer Use.app` 需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图；按系统提示给 helper 授权。`getCapabilities` 查询权限和锁屏状态，不弹出系统授权窗口。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 和 `cua.getState` 列出运行中的应用。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。授权前从磁盘读取应用的 Bundle ID 和可执行路径，在启动前后重新读取并核对；没有 Bundle ID 的应用使用规范化的可执行路径复用授权。选择尚未运行的安装副本时，会请求为该副本创建新实例。helper 等待应用完成启动后才返回其 PID。启动后验证失败会使待启动句柄失效，但进程可能仍在运行；应先查看运行中的应用，再取得新句柄。返回的对象读取初始 AX，不自动激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏或最小化时，先尝试 `app.show()` 或 `window.show()`，再重新观察。它请求取消隐藏和恢复最小化，不主动激活、抬起窗口或切换桌面空间；应用级恢复选择焦点窗口、主窗口或唯一 AX 窗口。结果通过 `windowId` 指明选中的窗口，未选中时为 null；`foregroundChanged` 比较操作前后的前台应用和最上层窗口，无法取得完整观察时为 null，返回后仍可能发生焦点变化。恢复失败或窗口仍不可用时，说明需要前台的步骤，再调用 `app.activate()` 或窗口的 `raise` 动作并重新观察。必须使用前台时，以完成任务为先。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
 | `agentPreset` | `ptc` | 仅为绑定该 preset 的 Agent 注册工具和指引；`false` 表示全局注册。 |
 | `allowedApps` | `[]` | 旧路径和签名许可，只导入 profile 存储一次供撤销，不授予新 Bundle ID 身份访问权限。 |
-| `helperPath` | 包内可执行文件 | 可选的原生可执行文件绝对路径覆盖。 |
+| `helperPath` | 包内可执行文件 | 已签名 helper `.app` 内可执行文件的绝对路径；裸二进制会触发 `NATIVE_APPLICATION_REQUIRED`。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
 | `connectTimeoutMs` | `5000` | 连接或启动共享 helper 的截止时间。 |
@@ -79,7 +76,7 @@ AX 观察默认只展示菜单栏入口。使用 `app.getAXState({ includeMenus:
 
 截图诊断使用带工具请求 ID 的 `[cua-screenshot]` 记录。原生阶段记录经本次 Agent 连接返回，覆盖窗口及 AX 几何检查、系统截图、PNG/Base64 编码和响应写出。Host 调试日志补充发送、响应和清理耗时。每次请求最多保留 8192 字节完整诊断记录，超限会明确标记；截图失败时附在错误中，保留到 Session trace。记录只含阶段、耗时和错误码，不含窗口标题、AX 正文或图片内容。
 
-原生准备复用文件锁，串行检查编译和发布。构建更新包内产物，并从 native/.build/prepared 下按内容摘要区分的副本运行，保留旧源码进程使用的可执行文件。相同构建复用同一文件；保留的副本损坏时拒绝使用。取消或准备失败后，先完成受管进程清理再释放锁。
+原生准备通过文件锁串行构建和签名，将完整应用保存在 `native/.build/prepared` 下的内容摘要目录中，再原子更新 `current.json`。旧连接继续使用原应用，相同构建复用已有文件，损坏的副本拒绝使用。取消或准备失败后，先完成受管进程清理再释放锁。
 
 ### 接入外部执行环境
 
@@ -218,7 +215,8 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
 - 后台输入依赖私有 SkyLight 符号，macOS 升级可能使其不可用，需在目标系统版本验证。
 - 实测 Blender Unicode 输入曾出现分派成功但界面未显示文本，后台 AppKit 的 Command+A 曾未选中全文。输入后必须检查应用状态；工具返回成功只表示已分派。
-- 原生二进制需要本地构建，签名和桌面分发留待后续。[权限页面](../cua/README.zh.md)提供 macOS 申请入口和应用授权撤销；桌面安装包的权限归属留待后续处理。
+- 源码构建使用临时签名，源码变化后可能需要重新授权。正式分发应以固定 Developer ID 签名并完成公证；构建命令支持 `--identity` 指定签名身份，安装版保留分发时的签名。[权限页面](../cua/README.zh.md)提供 helper 授权入口和目标应用许可撤销。
+- 发布打包不自动验证 GUI 启动、helper 身份或退出清理。发布维护者可在发布前，在已登录桌面的 Mac 上执行[分发 smoke](native/README.zh.md#build-and-service)；打包成功不能证明这些运行行为已通过验收。
 - 已保存许可的条目显示一个已批准副本的名称、路径和图标，不枚举共享身份的所有安装副本。删除该副本后图标可能不可用，撤销仍作用于同一身份的所有副本。
 - macOS 无法提供运行中应用的 Bundle ID 时，helper 仅在其报告的 bundle 可执行路径与实际进程路径相同时读取该 bundle，仍无标识则使用路径。只有 Bundle ID 和实际可执行路径均不可用时才拒绝生成授权身份；进程实例验证仍可能独立失败。
 - 持久 PTC 是对外部运行环境的假设，本包不实现它。真实模型任务成功率需要在原生测试和协议测试之外单独评估。

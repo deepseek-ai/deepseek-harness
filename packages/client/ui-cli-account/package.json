@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-cli-account",
   "description": "Shared Plugins page pieces for CLI app plugins: the account connection mirror and components, linked into the Web shell",
-  "version": "0.2.1-rc.4",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },

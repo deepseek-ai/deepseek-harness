@@ -1,0 +1,8 @@
+{
+  "bucket": "replace-with-bucket-1250000000",
+  "origin": "https://download-test.example.com",
+  "credentialsFile": "C:/absolute/path/to/packaging/secrets/cos-test.json",
+  "windows": {
+    "certificateThumbprint": "0000000000000000000000000000000000000000"
+  }
+}

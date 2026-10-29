@@ -38,6 +38,8 @@ The layout itself — the split tree, its operations, the drag gestures, the flo
 
 Normal and fullscreen presentations share the same content tree, so switching does not remount tabs. The normal panel anchors to the right column; fullscreen covers the viewport while retaining the wide-screen columns underneath. Opening below 768px uses fullscreen automatically; leaving fullscreen on a narrow viewport closes the panel, and widening does not reopen a closed panel. A fullscreen opening keeps the underlying columns unchanged until its slide finishes, then prepares the normal track without a column transition. Before a fullscreen panel retreats, closing prepares a full-width conversation and restoring prepares the normal right track; the background does not animate during the retreat.
 
+With a coarse pointer, a disabled split button is hidden, whether blocked by insufficient pane width or the two-pane limit, while retaining its space for stable width measurements. Fine-pointer layouts keep the disabled button visible.
+
 | Mode | The track | The panel |
 |---|---|---|
 | `push` (default) | Panel width: the conversation makes room | In the track; its left edge and the conversation's right edge travel together, on the frame's own curve |
@@ -126,6 +128,8 @@ The guide tab is a muted compass over one entry capsule per `guide` entry the re
 ## Copy
 
 Every string in the column comes from the `sidebarRight` locale namespace, including the kit's accessible names. A tab's title is fixed when the tab is minted; a type's display name follows the current language.
+
+Tab context menus capture the Session and clicked pane. Close, close others, and close right use existing close handlers; batch candidates stay inside that pane and a moved or removed anchor invalidates the operation. Existing `sidebar.right.tab.menu.item` contributions remain under the captured Session scope. [ui-context-menu](../ui-context-menu/README.md) owns the shared popup.
 
 <a id="model-experience"></a>
 ## Model Experience

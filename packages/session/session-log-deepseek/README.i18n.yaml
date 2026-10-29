@@ -12,17 +12,20 @@
   en: 19c182dbd7d8e064
   zh: 51c043d6ea52db0d
 /deepseek-ai-dsh-session-log-deepseek/table-of-contents:
-  en: e2aa29e41bc101c4
-  zh: 2ef629f2a444bc13
+  en: eb945093933ee19b
+  zh: 7a40fe2e98a491c5
 /deepseek-ai-dsh-session-log-deepseek/configuration:
   en: 1b899e63d8039643
   zh: d489461bbb618b5d
 /deepseek-ai-dsh-session-log-deepseek/request-field:
-  en: 65795dc44af4b15e
-  zh: 849c7d57f16f66af
+  en: f11095717a9aec6f
+  zh: fb872499eea955be
+/deepseek-ai-dsh-session-log-deepseek/upload-exclusions:
+  en: 9d303e05a05a8737
+  zh: 8b12d1e7a2d04060
 /deepseek-ai-dsh-session-log-deepseek/acceptance-and-retry:
-  en: 3688592c474b3e95
-  zh: 5e83afeb9aa9e9e3
+  en: 6997969916bb1b42
+  zh: 929fd0485278ff8b
 /deepseek-ai-dsh-session-log-deepseek/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90

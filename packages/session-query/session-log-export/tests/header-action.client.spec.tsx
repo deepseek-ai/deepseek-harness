@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useSyncExternalStore } from 'react'
@@ -25,7 +26,7 @@ const standard: GlobalStandardProps & SessionStandardProps = {
   useSessions: unused, useSessionStatus: unused, useSessionRetainInfo: unused,
   useSessionAccess: () => true, useRemoteAccess: () => true, useWorkspaceAccess: () => true,
   useConversation: unused, useInput: unused, useChat: unused, useTrajectory: unused,
-  usePanelInfo: unused, useResource: unused, useWorkspaces: unused,
+  usePanelInfo: unused, useContextMenu: contextMenuHook(), useResource: unused, useWorkspaces: unused,
   inputActions: { insertQuote: () => false, captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
     addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused },
 }

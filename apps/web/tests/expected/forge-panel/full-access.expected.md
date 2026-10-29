@@ -1,0 +1,4 @@
+- button "本地变更"
+- text: HEAD → origin/main
+- button "查看本会话的变更：1 个文件，新增 1 行，删除 0 行": +1 −0 1 个文件
+- button "创建变更请求"

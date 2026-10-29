@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * TaskDetail behaviors the Tasks page suite leaves unreached: an authoritative
  * refresh under a staged rule draft, a weekly choice seeded from a Sunday
@@ -119,6 +120,7 @@ function mount(
     useSessionRetainInfo: () => undefined,
     useResource: () => { throw new Error('The task manager does not load document resources') },
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     onDelete: vi.fn<TaskManagerPageProps['onDelete']>(async () => 'deleted'),
     onRetry: vi.fn(async () => {}),
     onNewTask: vi.fn(),
