@@ -215,7 +215,8 @@
     "start:web": "node --import tsx/esm apps/cli/src/bin.ts web",
     "dev:web": "tsx scripts/dev-web.ts --poll",
     "dev:bundle-registry": "tsx scripts/dev-bundle-registry.ts",
-    "postinstall": "node scripts/install-lefthook.mjs",
+    "gen:vendor-im": "node --import tsx/esm scripts/gen-vendor-im-types.ts",
+    "postinstall": "node --import tsx/esm scripts/gen-vendor-im-types.ts && node scripts/install-lefthook.mjs",
     "gen-official-bundle-catalog": "tsx scripts/gen-official-bundle-catalog.ts",
     "verify-official-bundle-catalog": "tsx scripts/gen-official-bundle-catalog.ts --check",
     "gen-provider-data": "tsx packages/llm/llm-pi-ai/scripts/gen-provider-data.ts",
@@ -305,6 +306,9 @@
     "@deepseek-ai/dsh-experimental-forge": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-github": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
-    "@deepseek-ai/dsh-action-cards": "workspace:*"
+    "@deepseek-ai/dsh-action-cards": "workspace:*",
+    "ws": "^8.18.3",
+    "@types/ws": "^8.18.1",
+    "protobufjs": "^8.0.0"
   }
 }

@@ -44,6 +44,12 @@ interface Rename {
 
 /** The mapping this codemod applies; `vendor/README.md` carries the same table. */
 const RENAMES: readonly Rename[] = [
+  { directory: 'plugin-im-core', upstream: '@satorijs/core', scoped: '@deepseek-ai/cordis-plugin-im-core' },
+  { directory: 'plugin-im-adapter-lark', upstream: '@satorijs/adapter-lark', scoped: '@deepseek-ai/cordis-plugin-im-adapter-lark' },
+  { directory: 'satori-element', upstream: '@satorijs/element', scoped: '@deepseek-ai/satori-element' },
+  { directory: 'element', upstream: '@cordisjs/element', scoped: '@deepseek-ai/cordis-element' },
+  { directory: 'http', upstream: '@cordisjs/plugin-http', scoped: '@deepseek-ai/cordis-plugin-http' },
+  { directory: 'fetch-file', upstream: '@cordisjs/fetch-file', scoped: '@deepseek-ai/cordis-fetch-file' },
   { directory: 'cordis', upstream: 'cordis', scoped: '@deepseek-ai/cordis' },
   { directory: 'cosmokit', upstream: 'cosmokit', scoped: '@deepseek-ai/cosmokit' },
   { directory: 'schemastery', upstream: 'schemastery', scoped: '@deepseek-ai/schemastery' },
@@ -78,6 +84,10 @@ interface GenericSkip {
 }
 
 const GENERIC_SKIPS: readonly GenericSkip[] = [
+  // Preserve the Cordis plugin metadata key and keyword; dependency keys have exact edits below.
+  { file: 'vendor/element/package.json', upstream: ['cordis'] },
+  { file: 'vendor/http/package.json', upstream: ['cordis'] },
+  { file: 'vendor/plugin-im-core/package.json', upstream: ['cordis'] },
   // `Symbol.for('schemastery')` and the `vendor:` metadata field are upstream identifiers.
   { file: 'vendor/schemastery/src/index.ts', upstream: ['schemastery'] },
   // Narrows a Standard Schema by the same upstream `vendor:` identifier.
@@ -192,7 +202,7 @@ const POSTCONDITIONS: readonly PostCondition[] = [
   { file: 'packages/boot/app-boot/tsdown.config.ts', text: '[\'@deepseek-ai/cordis-plugin-include\']', count: 1 },
   { file: 'tsconfig.base.json', text: '"@deepseek-ai/cordis-plugin-loader": ["./vendor/loader/src"]', count: 1 },
   // The vendored README owns this required entry; reject its deletion or duplication.
-  { file: 'vendor/README.md', text: '17. **`@deepseek-ai` rescope**', count: 1 },
+  { file: 'vendor/README.md', text: '**V17 · `@deepseek-ai` rescope**', count: 1 },
   { file: 'pnpm-workspace.yaml', text: 'cordis@4.0.0-rc.7', count: 0 },
   // The preset ids in this table are product data, not package names.
   { file: 'packages/client/ui-agent-preset/tests/locales.client.spec.ts', text: '[\'cordis\', \'presetCordisName\'', count: 1 },
@@ -205,6 +215,20 @@ const POSTCONDITIONS: readonly PostCondition[] = [
  * quote a neighbouring line the generic pass would rewrite.
  */
 const EXACT_EDITS: readonly ExactEdit[] = [
+  {
+    id: 'http-framework-dependencies',
+    file: 'vendor/http/package.json',
+    find: '"cordis": "workspace:~"',
+    replace: '"@deepseek-ai/cordis": "workspace:~"',
+    expect: 2,
+  },
+  {
+    id: 'im-core-framework-dependencies',
+    file: 'vendor/plugin-im-core/package.json',
+    find: '"cordis": "workspace:~"',
+    replace: '"@deepseek-ai/cordis": "workspace:~"',
+    expect: 2,
+  },
   {
     id: 'loader-diff-schemastery-import',
     file: 'vendor/loader/src/config/diff.ts',
@@ -279,7 +303,7 @@ const EXACT_EDITS: readonly ExactEdit[] = [
     id: 'root-agents-vendored-name-contract',
     file: 'AGENTS.md',
     find: 'vendored packages keep upstream names and are `private: true`. `cordis` is a peerDependency (+ dev) of every harness package.',
-    replace: 'vendor is [rescoped](docs/rescope.md) and `private: true`. Harness packages declare `@deepseek-ai/cordis` in `peerDependencies`/`devDependencies`.',
+    replace: 'vendor is [rescoped](docs/rescope.md) and published as release members. Harness packages declare `@deepseek-ai/cordis` in `peerDependencies`/`devDependencies`.',
     expect: 1,
   },
   {
@@ -667,7 +691,7 @@ function main(): void {
   const mode = args.includes('--apply') ? 'apply' : args.includes('--check') ? 'check' : 'dry'
   const reverse = args.includes('--reverse')
   const all = patterns(reverse)
-  const files = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
+  const files = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
     .split('\0')
     .filter(file => file !== '' && !isRescopeExcluded(file))
 

@@ -132,6 +132,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Supplies parsed task and run options to the headless runner and its sandbox-policy configuration.',
   },
   {
+    key: 'im',
+    pkg: 'experimental-im',
+    title: 'Persistent IM automation',
+    mode: 'service',
+    consumers: ['experimental-im-session-commands'],
+    note: 'Owns durable intake, the hosted sessions of every admitted chat, and explicitly authorized reads and publications.',
+  },
+  {
     key: 'cotTranslation',
     pkg: 'experimental-client-ui-cot-translation',
     title: 'Reasoning translation Remote',

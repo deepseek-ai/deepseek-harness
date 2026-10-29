@@ -174,6 +174,9 @@ importers:
       '@types/spdx-expression-parse':
         specifier: ^4.0.0
         version: 4.0.0
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       '@vitest/coverage-v8':
         specifier: ^4.1.11
         version: 4.1.11(vitest@4.1.11)
@@ -240,6 +243,9 @@ importers:
       pnpm:
         specifier: 11.28.5
         version: 11.28.5
+      protobufjs:
+        specifier: ^8.0.0
+        version: 8.8.1
       publint:
         specifier: ^0.3.24
         version: 0.3.24
@@ -273,6 +279,9 @@ importers:
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@22.20.1)(@vitest/coverage-v8@4.1.11)(happy-dom@20.11.6)(jsdom@29.1.1(@noble/hashes@2.4.0))(vite@8.2.2(@types/node@22.20.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+      ws:
+        specifier: ^8.18.3
+        version: 8.21.3
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -10244,6 +10253,171 @@ importers:
         specifier: workspace:*
         version: link:../../session/working-directory
 
+  packages/experimental/im:
+    dependencies:
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:*
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-util-values':
+        specifier: workspace:*
+        version: link:../../util/values
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-group':
+        specifier: workspace:~
+        version: link:../../../vendor/group
+      '@deepseek-ai/cordis-plugin-http':
+        specifier: workspace:~
+        version: link:../../../vendor/http
+      '@deepseek-ai/cordis-plugin-im-core':
+        specifier: workspace:~
+        version: link:../../../vendor/plugin-im-core
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:~
+        version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:~
+        version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-agent-loop':
+        specifier: workspace:*
+        version: link:../../core/agent-loop
+      '@deepseek-ai/dsh-agent-preset':
+        specifier: workspace:*
+        version: link:../../preset/agent-preset
+      '@deepseek-ai/dsh-agent-preset-registry':
+        specifier: workspace:*
+        version: link:../../preset/agent-preset-registry
+      '@deepseek-ai/dsh-attachment':
+        specifier: workspace:*
+        version: link:../../attachment/attachment
+      '@deepseek-ai/dsh-attachment-local':
+        specifier: workspace:*
+        version: link:../../attachment/attachment-local
+      '@deepseek-ai/dsh-compaction':
+        specifier: workspace:*
+        version: link:../../compaction/compaction
+      '@deepseek-ai/dsh-fs':
+        specifier: workspace:*
+        version: link:../../fs/fs
+      '@deepseek-ai/dsh-fs-local':
+        specifier: workspace:*
+        version: link:../../fs/fs-local
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:*
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../core/session
+      '@deepseek-ai/dsh-session-checkpoint-policy':
+        specifier: workspace:*
+        version: link:../../session/session-checkpoint-policy
+      '@deepseek-ai/dsh-session-persistence':
+        specifier: workspace:*
+        version: link:../../session/session-persistence
+      '@deepseek-ai/dsh-session-persistence-jsonl':
+        specifier: workspace:*
+        version: link:../../session/session-persistence-jsonl
+      '@deepseek-ai/dsh-session-projection':
+        specifier: workspace:*
+        version: link:../../session/session-projection
+      '@deepseek-ai/dsh-storage':
+        specifier: workspace:*
+        version: link:../../storage/storage
+      '@deepseek-ai/dsh-storage-domain':
+        specifier: workspace:*
+        version: link:../../storage/storage-domain
+      '@deepseek-ai/dsh-storage-json':
+        specifier: workspace:*
+        version: link:../../storage/storage-json
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-token-meter':
+        specifier: workspace:*
+        version: link:../../llm/token-meter
+      '@deepseek-ai/dsh-tool-executor-native':
+        specifier: workspace:*
+        version: link:../../core/tool-executor-native
+      '@deepseek-ai/dsh-tool-testkit':
+        specifier: workspace:*
+        version: link:../../test-support/tool-testkit
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:*
+        version: link:../../core/tools
+      '@deepseek-ai/dsh-working-directory':
+        specifier: workspace:*
+        version: link:../../session/working-directory
+      js-yaml:
+        specifier: ^4.1.1
+        version: 4.3.2
+
+  packages/experimental/im-bundle:
+    dependencies:
+      '@deepseek-ai/cordis-plugin-http':
+        specifier: workspace:~
+        version: link:../../../vendor/http
+      '@deepseek-ai/cordis-plugin-im-adapter-lark':
+        specifier: workspace:~
+        version: link:../../../vendor/plugin-im-adapter-lark
+      '@deepseek-ai/cordis-plugin-im-adapter-qq':
+        specifier: workspace:~
+        version: link:../../../vendor/plugin-im-adapter-qq
+      '@deepseek-ai/cordis-plugin-im-core':
+        specifier: workspace:~
+        version: link:../../../vendor/plugin-im-core
+      '@deepseek-ai/dsh-experimental-im':
+        specifier: workspace:*
+        version: link:../im
+      '@deepseek-ai/dsh-experimental-im-session-commands':
+        specifier: workspace:*
+        version: link:../im-session-commands
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:~
+        version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:~
+        version: link:../../../vendor/loader
+
+  packages/experimental/im-session-commands:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-im-core':
+        specifier: workspace:~
+        version: link:../../../vendor/plugin-im-core
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:*
+        version: link:../../core/agent
+      '@deepseek-ai/dsh-commands':
+        specifier: workspace:*
+        version: link:../../interaction/commands
+      '@deepseek-ai/dsh-experimental-im':
+        specifier: workspace:*
+        version: link:../im
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../core/session
+
   packages/experimental/inspector:
     dependencies:
       '@deepseek-ai/dsh-app-boot':
@@ -18325,6 +18499,28 @@ importers:
 
   vendor/cosmokit: {}
 
+  vendor/element:
+    dependencies:
+      '@deepseek-ai/cosmokit':
+        specifier: link:../cosmokit
+        version: link:../cosmokit
+
+  vendor/fetch-file:
+    dependencies:
+      '@deepseek-ai/cosmokit':
+        specifier: link:../cosmokit
+        version: link:../cosmokit
+      file-type:
+        specifier: ^20.4.1
+        version: 20.5.0(supports-color@9.4.0)
+      mime-types:
+        specifier: ^3.0.2
+        version: 3.0.2
+    devDependencies:
+      '@types/mime-types':
+        specifier: ^3.0.1
+        version: 3.0.1
+
   vendor/group:
     dependencies:
       '@deepseek-ai/cordis':
@@ -18367,6 +18563,28 @@ importers:
       esbuild:
         specifier: ^0.28.1
         version: 0.28.2
+
+  vendor/http:
+    dependencies:
+      '@deepseek-ai/cordis-fetch-file':
+        specifier: workspace:~
+        version: link:../fetch-file
+      '@deepseek-ai/cosmokit':
+        specifier: link:../cosmokit
+        version: link:../cosmokit
+      '@deepseek-ai/schemastery':
+        specifier: link:../schemastery
+        version: link:../schemastery
+      undici:
+        specifier: 8.11.2
+        version: 8.11.2
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../cordis
+      '@deepseek-ai/cordis-plugin-logger-console':
+        specifier: workspace:~
+        version: link:../logger-console
 
   vendor/include:
     dependencies:
@@ -18412,6 +18630,97 @@ importers:
       supports-color:
         specifier: ^9.4.0
         version: 9.4.0
+
+  vendor/plugin-im-adapter-lark:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../schemastery
+        version: link:../schemastery
+      protobufjs:
+        specifier: ^8.0.0
+        version: 8.8.1
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../cordis
+      '@deepseek-ai/cordis-plugin-http':
+        specifier: workspace:~
+        version: link:../http
+      '@deepseek-ai/cordis-plugin-im-core':
+        specifier: workspace:~
+        version: link:../plugin-im-core
+      '@deepseek-ai/cosmokit':
+        specifier: link:../cosmokit
+        version: link:../cosmokit
+      '@deepseek-ai/satori-element':
+        specifier: workspace:~
+        version: link:../satori-element
+
+  vendor/plugin-im-adapter-qq:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../schemastery
+        version: link:../schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../cordis
+      '@deepseek-ai/cordis-plugin-http':
+        specifier: workspace:~
+        version: link:../http
+      '@deepseek-ai/cordis-plugin-im-core':
+        specifier: workspace:~
+        version: link:../plugin-im-core
+      '@deepseek-ai/satori-element':
+        specifier: workspace:~
+        version: link:../satori-element
+
+  vendor/plugin-im-core:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../cordis
+      '@deepseek-ai/cosmokit':
+        specifier: link:../cosmokit
+        version: link:../cosmokit
+      '@deepseek-ai/satori-element':
+        specifier: workspace:~
+        version: link:../satori-element
+      '@deepseek-ai/schemastery':
+        specifier: link:../schemastery
+        version: link:../schemastery
+      path-to-regexp:
+        specifier: ^8.3.0
+        version: 8.4.2
+      path-to-regexp-typed:
+        specifier: ^8.0.0
+        version: 8.0.0(path-to-regexp@8.4.2)
+    devDependencies:
+      '@deepseek-ai/cordis-plugin-http':
+        specifier: workspace:~
+        version: link:../http
+
+  vendor/satori-element:
+    dependencies:
+      '@deepseek-ai/cordis-element':
+        specifier: workspace:~
+        version: link:../element
+      '@deepseek-ai/cosmokit':
+        specifier: link:../cosmokit
+        version: link:../cosmokit
+      mdast-util-from-markdown:
+        specifier: ^2.0.3
+        version: 2.0.3(supports-color@9.4.0)
+      mdast-util-gfm:
+        specifier: ^3.1.0
+        version: 3.1.0(supports-color@9.4.0)
+      micromark-extension-gfm:
+        specifier: ^3.0.0
+        version: 3.0.0
+    devDependencies:
+      '@types/mdast':
+        specifier: ^4.0.4
+        version: 4.0.4
 
   vendor/schemastery:
     dependencies:
@@ -18838,6 +19147,9 @@ packages:
   '@bcoe/v8-coverage@1.0.2':
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
+
+  '@borewit/text-codec@0.2.2':
+    resolution: {integrity: sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ==}
 
   '@botiverse/oar@0.67.0':
     resolution: {integrity: sha512-nRkinUzOiWl4QFxfQav4AixHHYp+hTl2hr+9J/qWTf2EO07T3Ld9eslRT3GVCqP1+DwDYvriIJYcEq5YMAytLQ==}
@@ -21225,6 +21537,13 @@ packages:
       '@types/react-dom':
         optional: true
 
+  '@tokenizer/inflate@0.2.7':
+    resolution: {integrity: sha512-MADQgmZT1eKjp06jpI2yozxaU9uVs4GzzgSL+uEq7bVcJ9V1ZXQkeGNql1fsSI0gMy1vhvNTNbUqrx+pZfJVmg==}
+    engines: {node: '>=18'}
+
+  '@tokenizer/token@0.3.0':
+    resolution: {integrity: sha512-OvjF+z51L3ov0OyAU0duzsYuvO01PH7x4t6DJx+guahgTnBHkhJdG7soQeTSFLWN3efnHyibZ4Z8l2EuWwJN3A==}
+
   '@trycua/cua-driver-darwin-arm64@0.28.0':
     resolution: {integrity: sha512-T6xvOlCph5uropetrH6tNTvg5ipN9FUzV1n28gNJ1LYoNT3fsqnQUpCRMavlAui/zYkyMqCMaBUqBcfZLA+SnA==}
     cpu: [arm64]
@@ -23118,6 +23437,10 @@ packages:
     resolution: {integrity: sha512-XXTUwCvisa5oacNGRP9SfNtYBNAMi+RPwBFmblZEF7N7swHYQS6/Zfk7SRwx4D5j3CH211YNRco1DEMNVfZCnQ==}
     engines: {node: '>=16.0.0'}
 
+  file-type@20.5.0:
+    resolution: {integrity: sha512-BfHZtG/l9iMm4Ecianu7P8HRD2tBHLtjXinm4X62XBOYzi7CYA7jyqfJzOvXHqzVrVPYqBo2/GvbARMaaJkKVg==}
+    engines: {node: '>=18'}
+
   filelist@1.0.6:
     resolution: {integrity: sha512-5giy2PkLYY1cP39p17Ech+2xlpTRL9HLspOfEgm0L6CwBXBTgsK5ou0JtzYuepxkaQ/tvhCFIJ5uXo0OrM2DxA==}
 
@@ -24689,6 +25012,11 @@ packages:
     resolution: {integrity: sha512-3O/iVVsJAPsOnpwWIeD+d6z/7PmqApyQePUtCndjatj/9I5LylHvt5qluFaBT3I5h3r1ejfR056c+FCv+NnNXg==}
     engines: {node: 18 || 20 || >=22}
 
+  path-to-regexp-typed@8.0.0:
+    resolution: {integrity: sha512-3XoV7MNLxtKDznqJ5IzJA8Pe1unRLtnfHBnfRBFnPhvsYwXAtXRJmnvm54zi/sOFuRCmXXPg9UTKJY1ib21w0w==}
+    peerDependencies:
+      path-to-regexp: ^8.0.0
+
   path-to-regexp@8.4.2:
     resolution: {integrity: sha512-qRcuIdP69NPm4qbACK+aDogI5CBDMi1jKe0ry5rSQJz8JVLsC7jV8XpiJjGRLLol3N+R5ihGYcrPLTno6pAdBA==}
 
@@ -24840,6 +25168,10 @@ packages:
 
   protobufjs@7.6.5:
     resolution: {integrity: sha512-/FPD0nUc9jH6rfFjji9IBqOz4pcSE3CsT1m7Ep6Mdb0LxSUMj8hgl6GomOvZzpNpAqqGaXA0P3VSrZLFzIhQrw==}
+    engines: {node: '>=12.0.0'}
+
+  protobufjs@8.8.1:
+    resolution: {integrity: sha512-d9e9179bjXSJdpJ3+R9fP8hzXsnKLyxTjHLG1dUzje8a27pPyXCe6PrcRtgx2rjoM3IZzHd2vAs+6J/BsO1k7Q==}
     engines: {node: '>=12.0.0'}
 
   proxy-addr@2.0.8:
@@ -25375,6 +25707,10 @@ packages:
   strnum@2.4.2:
     resolution: {integrity: sha512-rDG3Ah4TV0k1hWvLSzkZtMmLN9+eS+h3knq4MP6A42Y3Yh5qGNnOUs1jJkoSr8FG5dsL28c7KgkIBzSEykqtuw==}
 
+  strtok3@10.6.3:
+    resolution: {integrity: sha512-MD8mENgyXMr2mDaDfzP3RWYDSyYQxIIou7HhCiCJiBekrsoDtUG0id3vYnjDfY9ndOEbazFXe13Qw6u/1AB8ew==}
+    engines: {node: '>=18'}
+
   stylis@4.4.0:
     resolution: {integrity: sha512-5Z9ZpRzfuH6l/UAvCPAPUo3665Nk2wLaZU3x+TLHKVzIz33+sbJqbtrYoC3KD4/uVOr2Zp+L0LySezP9OHV9yA==}
 
@@ -25490,6 +25826,10 @@ packages:
   toidentifier@1.0.1:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
     engines: {node: '>=0.6'}
+
+  token-types@6.1.2:
+    resolution: {integrity: sha512-dRXchy+C0IgK8WPC6xvCHFRIWYUbqqdEIKPaKo/AcTUNzwLTK6AH7RjdLWsEZcAN/TBdtfUw3PYEgPr5VPr6ww==}
+    engines: {node: '>=14.16'}
 
   tough-cookie@4.1.4:
     resolution: {integrity: sha512-Loo5UUvLD9ScZ6jh8beX1T6sO1w2/MpCRpEP7V280GKMVUQ0Jzar2U3UJPsrdbziLEMMhu3Ujnq//rhiFuIeag==}
@@ -25626,6 +25966,10 @@ packages:
     resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
     engines: {node: '>=14.17'}
     hasBin: true
+
+  uint8array-extras@1.6.0:
+    resolution: {integrity: sha512-8iAasVS4wUx0gPLjH8Xtz2PeDzTSiy8QiLGu2DT3X5GU+egFEQhpnbtkehbAwjvDcxIERmCYcysiODFmE3Ud0Q==}
+    engines: {node: '>=18'}
 
   unconfig-core@7.5.0:
     resolution: {integrity: sha512-Su3FauozOGP44ZmKdHy2oE6LPjk51M/TRRjHv2HNCWiDvfvCoxC2lno6jevMA91MYAdCdwP05QnWdWpSbncX/w==}
@@ -26716,6 +27060,8 @@ snapshots:
       '@babel/helper-validator-identifier': 8.0.0-rc.6
 
   '@bcoe/v8-coverage@1.0.2': {}
+
+  '@borewit/text-codec@0.2.2': {}
 
   '@botiverse/oar@0.67.0(patch_hash=65de2ca1966421e30893d8d4fed6a3d88e4247e131e7575fe791246e594538d6)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.31.0(supports-color@9.4.0)(zod@4.4.3))(@smithy/signature-v4@5.7.4)(supports-color@9.4.0)(ws@8.21.3)(zod@4.4.3)':
     dependencies:
@@ -28645,6 +28991,16 @@ snapshots:
     optionalDependencies:
       '@types/react': 18.3.31
       '@types/react-dom': 18.3.7(@types/react@18.3.31)
+
+  '@tokenizer/inflate@0.2.7(supports-color@9.4.0)':
+    dependencies:
+      debug: 4.4.3(supports-color@9.4.0)
+      fflate: 0.8.3
+      token-types: 6.1.2
+    transitivePeerDependencies:
+      - supports-color
+
+  '@tokenizer/token@0.3.0': {}
 
   '@trycua/cua-driver-darwin-arm64@0.28.0':
     optional: true
@@ -30870,6 +31226,15 @@ snapshots:
     dependencies:
       flat-cache: 4.0.1
 
+  file-type@20.5.0(supports-color@9.4.0):
+    dependencies:
+      '@tokenizer/inflate': 0.2.7(supports-color@9.4.0)
+      strtok3: 10.6.3
+      token-types: 6.1.2
+      uint8array-extras: 1.6.0
+    transitivePeerDependencies:
+      - supports-color
+
   filelist@1.0.6:
     dependencies:
       minimatch: 5.1.9
@@ -32623,6 +32988,10 @@ snapshots:
       lru-cache: 11.5.1
       minipass: 7.1.3
 
+  path-to-regexp-typed@8.0.0(path-to-regexp@8.4.2):
+    dependencies:
+      path-to-regexp: 8.4.2
+
   path-to-regexp@8.4.2: {}
 
   pathe@2.0.3: {}
@@ -32768,6 +33137,10 @@ snapshots:
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.1
       '@types/node': 22.20.1
+      long: 5.3.2
+
+  protobufjs@8.8.1:
+    dependencies:
       long: 5.3.2
 
   proxy-addr@2.0.8:
@@ -33410,6 +33783,10 @@ snapshots:
     dependencies:
       anynum: 1.0.1
 
+  strtok3@10.6.3:
+    dependencies:
+      '@tokenizer/token': 0.3.0
+
   stylis@4.4.0: {}
 
   sumchecker@3.0.1(supports-color@9.4.0):
@@ -33563,6 +33940,12 @@ snapshots:
 
   toidentifier@1.0.1: {}
 
+  token-types@6.1.2:
+    dependencies:
+      '@borewit/text-codec': 0.2.2
+      '@tokenizer/token': 0.3.0
+      ieee754: 1.2.1
+
   tough-cookie@4.1.4:
     dependencies:
       psl: 1.15.0
@@ -33672,6 +34055,8 @@ snapshots:
       vscode-languageserver-protocol: 3.18.2
 
   typescript@6.0.3: {}
+
+  uint8array-extras@1.6.0: {}
 
   unconfig-core@7.5.0:
     dependencies:

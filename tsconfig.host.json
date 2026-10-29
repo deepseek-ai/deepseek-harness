@@ -8,6 +8,7 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "snapshots/im/**/*.ts",
     "apps/web/tests/sidebar-drawer.e2e.ts",
     "apps/web/tests/creation-recommendations.e2e.ts",
     "apps/web/tests/plugin-recommendations.e2e.ts",
@@ -239,6 +240,10 @@
     "apps/desktop-host/tests/**/*.ts",
     "benchmarks/**/*.ts",
     "packages/*/*/tests/**/*.ts",
+    // Vendor suites run under vitest, which never type-checks: these type tests
+    // (`@ts-expect-error` on wrong element attributes, capability keys, …) only
+    // mean something inside a compiler program, so the Host aggregate holds them.
+    "vendor/*/tests/**/*.ts",
     "packages/experimental/cua-macos/native/generate-protocol.ts",
     "packages/experimental/claude-code-mods/examples/*/index.ts",
     "packages/experimental/inspector/scripts/**/*.ts",
@@ -267,6 +272,16 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
+    { "path": "./packages/experimental/im-bundle" },
+    { "path": "./packages/experimental/im" },
+    { "path": "./packages/experimental/im-session-commands" },
+    { "path": "./vendor/plugin-im-core" },
+    { "path": "./vendor/plugin-im-adapter-lark" },
+    { "path": "./vendor/plugin-im-adapter-qq" },
+    { "path": "./vendor/satori-element" },
+    { "path": "./vendor/element" },
+    { "path": "./vendor/http" },
+    { "path": "./vendor/fetch-file" },
     { "path": "./packages/experimental/action-cards" },
     { "path": "./packages/experimental/creation-recommendations" },
     { "path": "./packages/experimental/plugin-recommendations" },
