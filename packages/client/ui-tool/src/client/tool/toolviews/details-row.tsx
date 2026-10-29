@@ -82,6 +82,8 @@ export const detailsToolview = {
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'update_goal', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'schedule_create', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'schedule_list', locale: NS }, DetailsRow)
+      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'schedule_view', locale: NS }, DetailsRow)
+      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'schedule_edit', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'schedule_delete', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'schedule_update', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'cordis_inspect_list', locale: NS }, DetailsRow)
