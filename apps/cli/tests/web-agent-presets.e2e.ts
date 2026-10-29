@@ -882,7 +882,7 @@ describe('a user preset declared from the shipped cordis rows', () => {
         // answers with the shared registry's view of the REQUESTING agent,
         // so the copy sees its own preset's tools, not the host's empty set.
         const spills = vi.spyOn(copyCtx.spillStore, 'saveText')
-        onTestFinished(() => spills.mockRestore())
+        onTestFinished(() => { spills.mockRestore() })
         const queried = await executeToolFixture(copyCtx, {
           callId: ToolCallId('copied-preset-inspect-tools'),
           name: 'cordis_inspect_query',
