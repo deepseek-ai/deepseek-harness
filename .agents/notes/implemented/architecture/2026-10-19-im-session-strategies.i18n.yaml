@@ -3,17 +3,17 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-19-im-session-strategies.md
 /agent-note-im-session-strategies:
-  en: 81bc4b58b12cb4e5
-  zh: ae99b87ab8e9e1bb
+  en: c701e8fcc2c77418
+  zh: de6be36e59ef1ace
 /agent-note-im-session-strategies/problem:
   en: 5ce30763ab012b06
   zh: 39c831cb8f64b079
 /agent-note-im-session-strategies/decision:
-  en: 2b6640b941313980
-  zh: c5d879aa428b5641
+  en: 29005c64c8967565
+  zh: 7b07b4e21d65f2e8
 /agent-note-im-session-strategies/alternatives-considered:
-  en: cd56bdede91e85e1
-  zh: ba2a16f8bf5e231c
+  en: ebecd48e91907e6d
+  zh: 06231ece36e4ba33
 /agent-note-im-session-strategies/consequences:
-  en: 41b3d7ded3d54f0e
-  zh: bd81bb6eaf2618ee
+  en: 8264424d4f0c15c9
+  zh: df733d9d987848ea

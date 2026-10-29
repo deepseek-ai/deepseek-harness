@@ -4,19 +4,15 @@ Status: implemented
 
 English | [中文](2026-10-12-im-automation-sessions.zh.md)
 
-IM no longer ships a profile, per-chat conversations, task workers, the one-shot example, or turn renderers: [IM runs one shared session as an experimental bundle](../simplification/2026-10-28-im-shared-session-minimal-plane.md) records that decision; the sections below on those plugins describe the design they followed.
-
-See [IM architecture in v4](2026-10-25-im-architecture-v4.md) for the current host and plugin split across `@deepseek-ai/dsh-experimental-im`, `session-conversations`, `session-commands`, `session-tasks`, and the output renderers.
-
 ## Problem
 
 IM combines delayed input, multiple participants, quoted messages, and platform redelivery. A task can consume several messages without publishing an answer to each one. Treating every message as a GUI prompt and every assistant response as a platform reply couples input scheduling to publication.
 
 ## Decision
 
-IM hosts persistent sessions through the existing agent factory, inbox, presets, and persistence APIs, and lets conversations delegate multi-step work to background task worker sessions. The agent loop and core Session categories are unchanged. The [IM service](../../../../packages/experimental/im/README.md) admits external context and provides [explicit tools](../../../../packages/experimental/im/src/tools.ts) for reading and publishing; the [IM profile](../../../../packages/experimental/im-bundle/README.md) launches the assembled application through `dsh`.
+IM hosts persistent sessions through the existing agent factory, inbox, presets, and persistence APIs, and lets a plugin decide which session an admitted message reaches. The agent loop and core Session categories are unchanged. The [IM service](../../../../packages/experimental/im/README.md) admits external context and provides [explicit tools](../../../../packages/experimental/im/src/tools.ts) for reading and publishing; the [IM bundle](../../../../packages/experimental/im-bundle/README.md) mounts the service and the adapters as Host rows of an existing profile.
 
-Source admission, write grants, delivery mode, model route, working directory, and preset are explicit deployment choices. `dsh-im-session-conversations` derives one session per admitted chat (`conversation:<chatKey>`), answers quick questions directly, and delegates multi-step work to background task workers via `dsh-im-session-tasks`. Each task opens a top-level worker session (`task:<id>`) that inherits the conversation's composition and answers in the chat (and thread) of the triggering message. The conversation inspects and steers tasks with `task_list` and `task_message`, and a worker's `done` or `failed` `task_update` injects a completion notice into the conversation's next turn.
+Source admission, write grants, delivery mode, model route, working directory, and preset are explicit deployment choices: a `sources` rule decides which chats may reach the host and how their messages are stored, and `defaultDispatch` composes the single session every unhandled addressed message reaches. Every chat shares that session's history, so a deployment that needs per-chat history or background workers mounts its own plugin on the `im/message` waterfall.
 
 The transport layer uses the vendored Satori packages (`plugin-im-core`, `satori-element`, `plugin-im-adapter-lark`, and `plugin-im-adapter-qq`). The [vendor manifest](../../../../vendor/README.md) documents exact upstream pins and local modifications. Generated Feishu declarations stay outside Git and are regenerated from hash-checked pinned sources during installation.
 
@@ -34,9 +30,7 @@ The `im` message source is attribution metadata only ([compatibility record](../
 
 **ACP between IM and the harness.** ACP supports persistent programmatic sessions and suits process separation. Independent IM publication still requires a channel or tool route; in-process Cordis composition avoids an additional process without changing automation semantics.
 
-**Operator-configured fixed sessions per chat.** Naming each session and its sources by hand requires a configuration change and restart for every new chat. Deriving one session per admitted chat keeps access control in source rules without per-chat configuration.
-
-**Subagents as the unit of delegated work.** A subagent is owned by its parent's turn activation: its lifetime and result delivery follow the parent turn. Background work in chats outlives the turn that started it and can be steered while running, so a task is an IM-hosted top-level session with its own record and status. Workers can still use subagents internally.
+**Operator-configured fixed sessions per chat.** Naming each session and its sources by hand requires a configuration change and restart for every new chat. One session composed from `sources` and `defaultDispatch` keeps access control in source rules without per-chat configuration.
 
 **Automatic retries for uncertain sends.** A lost response cannot establish whether the platform created the message. Keeping `uncertain` for inspection avoids automatic duplicates while allowing an intentional new tool call to send again.
 

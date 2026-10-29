@@ -14,7 +14,7 @@ The [`@deepseek-ai/dsh-experimental-im-session-commands`](../../../../packages/e
 
 Intake strips leading self-mentions (`@bot`) before parsing `/name` and `rawInput`. `session-commands` acts only when `message.addressed` is `true` (direct chats, or group messages that mention the bot), passing unaddressed group messages and unknown command names to `next()`.
 
-`/stop` calls `ctx.im.sessions.stop` (`agent.cancel({ kind: 'user' })` without `keepInbox`) on running sessions bound to the chat—narrowed to sessions bound to `message.thread.id` when the command arrives inside a thread that a session is confined to—discarding any queued inbox items alongside the cancelled turn. `/clear` and `/new` call `ctx.im.sessions.reset` on the chat's `home` sessions whose `owner` is in `config.resettable` (`['conversation']` by default). `/status` and `/help` are unprivileged; privileged commands (`/stop`, `/clear`, `/new`, and passthrough commands) can be restricted to `config.admins` by setting `allow: 'admins'`.
+`/stop` calls `ctx.im.sessions.stop` (`agent.cancel({ kind: 'user' })` without `keepInbox`) on running sessions bound to the chat—narrowed to sessions bound to `message.thread.id` when the command arrives inside a thread that a session is confined to—discarding any queued inbox items alongside the cancelled turn. `/clear` and `/new` call `ctx.im.sessions.reset` on the chat's `home` sessions whose `owner` is in `config.resettable` (`['dispatcher']` by default). `/status` and `/help` are unprivileged; privileged commands (`/stop`, `/clear`, `/new`, and passthrough commands) can be restricted to `config.admins` by setting `allow: 'admins'`.
 
 ## Alternatives considered
 

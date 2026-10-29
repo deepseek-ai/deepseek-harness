@@ -19,9 +19,8 @@ Each IM storage domain uses its own v4 unit name, leaving pre-v4 unit names unus
 | Message store: events, messages, chats | `im_messages` | `packages/experimental/im/src/state.ts` |
 | Hosted sessions and pending deliveries | `im_sessions` | `packages/experimental/im/src/sessions.ts` |
 | Publication receipts | `im_receipts` | `packages/experimental/im/src/send.ts` |
-| Task registry | `im_tasks` | `dsh-im-session-tasks` (removed; existing `im_tasks` records stay unread) |
 
-Because each v4 domain has a new unit name, each starts at version 1. Existing pre-v4 `im`, `im_conversation`, and `im_dispatch` units remain untouched on the storage medium: nothing in v4 reads, migrates, or deletes them, and the first v4 boot opens empty v4 stores cleanly without manual intervention.
+Because each v4 domain has a new unit name, each starts at version 1. Existing pre-v4 `im`, `im_conversation`, and `im_dispatch` units remain untouched on the storage medium: nothing in v4 reads, migrates, or deletes them, and the first v4 boot opens empty v4 stores cleanly without manual intervention. A deployment that ran the removed task plugin keeps its `im_tasks` records the same way: no v4 domain opens that unit.
 
 ## Alternatives considered
 
@@ -35,8 +34,8 @@ Because each v4 domain has a new unit name, each starts at version 1. Existing p
 
 ## Consequences
 
-An upgraded `$DSH_HOME` retains any pre-v4 `im.json`, `im_conversation.json`, and `im_dispatch.json` files unused alongside the v4 unit files. The v4 IM service starts with fresh message, session, receipt, and task stores.
+An upgraded `$DSH_HOME` retains any pre-v4 `im.json`, `im_conversation.json`, and `im_dispatch.json` files unused alongside the v4 unit files. The v4 IM service starts with fresh message, session, and receipt stores.
 
-Any future compatible schema change within one of these four domains increments that unit's version and declares `compatibleVersions` only when existing records remain valid under the new schema.
+Any future compatible schema change within one of these three domains increments that unit's version and declares `compatibleVersions` only when existing records remain valid under the new schema.
 
 Verification: `packages/experimental/im/tests/store.spec.ts` boots the message store over a medium seeded with a v3-shaped `im` unit at version 1, verifies that v4 writes land in `im_messages` while the v3 unit stays untouched, and verifies that opening `im` at version 2 rejects with `version-mismatch`.

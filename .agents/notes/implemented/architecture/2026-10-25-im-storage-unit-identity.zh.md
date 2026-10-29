@@ -19,9 +19,8 @@ Status: implemented
 | 消息存储：事件、消息、聊天 | `im_messages` | `packages/experimental/im/src/state.ts` |
 | 托管会话与待处理投递 | `im_sessions` | `packages/experimental/im/src/sessions.ts` |
 | 发送回执 | `im_receipts` | `packages/experimental/im/src/send.ts` |
-| 后台任务注册表 | `im_tasks` | `dsh-im-session-tasks`（已移除；已有的 `im_tasks` 记录不再被读取） |
 
-由于每个 v4 存储域均使用全新名称，各自从版本 1 开始。介质上已有的 v3 `im`、`im_conversation` 与 `im_dispatch` unit 保持原样：v4 不读取、不迁移也不删除它们，首次启动 v4 时会自动创建并使用全新的存储单元，无需人工清理步骤。
+由于每个 v4 存储域均使用全新名称，各自从版本 1 开始。介质上已有的 v3 `im`、`im_conversation` 与 `im_dispatch` unit 保持原样：v4 不读取、不迁移也不删除它们，首次启动 v4 时会自动创建并使用全新的存储单元，无需人工清理步骤。运行过已移除的任务插件的部署，其 `im_tasks` 记录同样保持原样：没有任何 v4 存储域会打开该 unit。
 
 ## Alternatives considered
 
@@ -35,8 +34,8 @@ Status: implemented
 
 ## Consequences
 
-升级后的 `$DSH_HOME` 目录会将旧版 `im.json`、`im_conversation.json` 与 `im_dispatch.json` 原样保留在 v4 存储单元旁且不再读取。v4 IM 服务以空的消息、会话、回执与任务存储启动。
+升级后的 `$DSH_HOME` 目录会将旧版 `im.json`、`im_conversation.json` 与 `im_dispatch.json` 原样保留在 v4 存储单元旁且不再读取。v4 IM 服务以空的消息、会话与回执存储启动。
 
-今后若在这四个存储域内部进行兼容的 schema 变更，只需递增对应 unit 的版本号，并在旧记录符合新 schema 时声明 `compatibleVersions`。
+今后若在这三个存储域内部进行兼容的 schema 变更，只需递增对应 unit 的版本号，并在旧记录符合新 schema 时声明 `compatibleVersions`。
 
 验证：`packages/experimental/im/tests/store.spec.ts` 在预置了 v3 `im` unit（版本 1）的存储介质上启动消息存储，验证 v4 写入落在 `im_messages` 中且 v3 介质保持不变，同时验证以版本 2 打开 `im` 会因 `version-mismatch` 被拒绝。

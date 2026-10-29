@@ -3,17 +3,17 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-27-im-dispatch-out-of-v1.md
 /agent-note-rule-driven-im-dispatch-leaves-the-v1-package-set:
-  en: 40fdd3e9503d30d8
-  zh: bf4da91b7e813fb6
+  en: adafb8ddbbb8f339
+  zh: 10a63fd931bc5b1a
 /agent-note-rule-driven-im-dispatch-leaves-the-v1-package-set/problem:
   en: 3b7d39cd4924ad76
   zh: 04ed58ef19fc57c2
 /agent-note-rule-driven-im-dispatch-leaves-the-v1-package-set/decision:
-  en: d49fdd692ef4a51f
-  zh: a5111d727eb95da9
+  en: d869683b9760a7fc
+  zh: 9a8cef79272a9dfe
 /agent-note-rule-driven-im-dispatch-leaves-the-v1-package-set/alternatives-considered:
-  en: 8dc5cc7f5bf8cb85
-  zh: a7ead51e55fe2a8f
+  en: 288528e7edab6442
+  zh: 47f80c327a39cfe5
 /agent-note-rule-driven-im-dispatch-leaves-the-v1-package-set/consequences:
-  en: d36ca55f024feb38
-  zh: 0e005df64e34da9d
+  en: d39bd4db7d30bd86
+  zh: d60b0564fa4596b3

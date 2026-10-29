@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-25-im-architecture-v4.md
 /agent-note-im-architecture-in-v4:
-  en: 41e5276f5757648e
-  zh: f7f3126afdce0d61
+  en: 6d31353cd74e9432
+  zh: f3371b2adcfd5d94
 /agent-note-im-architecture-in-v4/problem:
   en: 024834c385990be7
   zh: 7865b32d373f0484
@@ -12,26 +12,23 @@
   en: 7d8e9449618a1a9e
   zh: 666b9aa64640af5c
 /agent-note-im-architecture-in-v4/decision/the-host:
-  en: bf1c6fecab171023
-  zh: 21dc59e601099758
+  en: 23e9dbcc7062aefd
+  zh: 11e9e3a2cec281da
 /agent-note-im-architecture-in-v4/decision/message-routing-and-the-default-dispatcher:
-  en: fe4ab56c45dc3c28
-  zh: b1067dff7fdec4f3
+  en: 05e188c631db10aa
+  zh: d034e4f4102fe74e
 /agent-note-im-architecture-in-v4/decision/session-strategies:
-  en: db4810cdce907820
-  zh: 9bd3099c27f14577
-/agent-note-im-architecture-in-v4/decision/background-tasks:
-  en: a74cfe714f51b905
-  zh: 62444b6b421b1d7c
+  en: 397eb04ae8dcffe8
+  zh: 5c8469820765a83b
 /agent-note-im-architecture-in-v4/decision/output-renderers:
-  en: 8aecba14f1b7583a
-  zh: 28555adc941248b1
+  en: 7db1986c5b25cb14
+  zh: 623231c42979666a
 /agent-note-im-architecture-in-v4/decision/platform-layer:
   en: cc205abec74c247f
   zh: 62cbb9e36ee97614
 /agent-note-im-architecture-in-v4/alternatives-considered:
-  en: 6a118c43b2b10d2e
-  zh: 07f6dfaaab849ad6
+  en: 58392b3805a29cd4
+  zh: 9715f7c9c5b33e34
 /agent-note-im-architecture-in-v4/consequences:
-  en: d8ae96e7eead2748
-  zh: 106f05d00384568c
+  en: 8c14d0a1c8fc9368
+  zh: f7bae48c08fae040

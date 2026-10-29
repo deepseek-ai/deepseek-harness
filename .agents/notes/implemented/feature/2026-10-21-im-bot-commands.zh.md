@@ -14,7 +14,7 @@ Status: implemented
 
 接收层在解析 `/name` 与 `rawInput` 前会先去除消息开头的机器人自身提及（`@bot`）。`session-commands` 仅在 `message.addressed` 为 `true`（单聊消息，或提及了机器人的群聊消息）时生效，将未提及机器人的群消息与未知命令名通过 `next()` 向后传递。
 
-`/stop` 对绑定到当前聊天的运行中会话调用 `ctx.im.sessions.stop`（内部调用不带 `keepInbox` 的 `agent.cancel({ kind: 'user' })`），在中止当前轮次的同时清空排队的收件箱消息；若命令发送在某个被会话绑定的话题线程内，则仅停止绑定到该线程的会话。`/clear` 与 `/new` 对该聊天中 `owner` 位于 `config.resettable`（默认为 `['conversation']`）的 `home` 会话调用 `ctx.im.sessions.reset`。`/status` 与 `/help` 对所有发送者开放；特权命令（`/stop`、`/clear`、`/new` 与透传命令）可通过设置 `allow: 'admins'` 限制为仅允许 `config.admins` 中的用户执行。
+`/stop` 对绑定到当前聊天的运行中会话调用 `ctx.im.sessions.stop`（内部调用不带 `keepInbox` 的 `agent.cancel({ kind: 'user' })`），在中止当前轮次的同时清空排队的收件箱消息；若命令发送在某个被会话绑定的话题线程内，则仅停止绑定到该线程的会话。`/clear` 与 `/new` 对该聊天中 `owner` 位于 `config.resettable`（默认为 `['dispatcher']`）的 `home` 会话调用 `ctx.im.sessions.reset`。`/status` 与 `/help` 对所有发送者开放；特权命令（`/stop`、`/clear`、`/new` 与透传命令）可通过设置 `allow: 'admins'` 限制为仅允许 `config.admins` 中的用户执行。
 
 ## Alternatives considered
 

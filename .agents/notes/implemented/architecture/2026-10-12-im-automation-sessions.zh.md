@@ -4,19 +4,15 @@ Status: implemented
 
 [English](2026-10-12-im-automation-sessions.md) | 中文
 
-IM 已不再随附专用 profile、按聊天会话、任务 worker、单次命令示例或轮次渲染器：该决策记录在 [IM 以实验性组合包运行一个共享会话](../simplification/2026-10-28-im-shared-session-minimal-plane.zh.md)；下文涉及这些插件的部分描述的是它们当时遵循的设计。
-
-关于当前 `@deepseek-ai/dsh-experimental-im` 与 `session-conversations`、`session-commands`、`session-tasks` 及各输出渲染器之间的宿主与插件拆分，见 [v4 中的 IM 架构](2026-10-25-im-architecture-v4.zh.md)。
-
 ## Problem
 
 IM 同时包含延迟输入、多个参与者、消息引用和平台重投。一项任务可以消费多条消息，而不逐条发布答复。将每条消息作为 GUI 提示词、每条 assistant 回复作为平台答复，会把输入调度与发布耦合。
 
 ## Decision
 
-IM 通过现有 agent 工厂、收件箱、预设和持久化 API 托管持久化会话，并允许会话将多步骤工作委派给后台任务 worker 会话。agent-loop 与核心 Session 类别保持不变。[IM 服务](../../../../packages/experimental/im/README.zh.md) 接纳外部上下文并提供用于读取和发布的[显式工具](../../../../packages/experimental/im/src/tools.ts)；[IM profile](../../../../packages/experimental/im-bundle/README.zh.md) 通过 `dsh` 启动完整应用。
+IM 通过现有 agent 工厂、收件箱、预设和持久化 API 托管持久化会话，并由插件决定被接纳的消息进入哪个会话。agent-loop 与核心 Session 类别保持不变。[IM 服务](../../../../packages/experimental/im/README.zh.md) 接纳外部上下文并提供用于读取和发布的[显式工具](../../../../packages/experimental/im/src/tools.ts)；[IM 组合包](../../../../packages/experimental/im-bundle/README.zh.md) 把服务与各适配器作为 Host 条目插入已有的 profile。
 
-来源接纳、写权限、投递模式、模型路由、工作目录和预设均由部署显式配置。`dsh-im-session-conversations` 为每个已接纳聊天派生一个会话（`conversation:<chatKey>`），简短问题直接回答，多步骤工作通过 `dsh-im-session-tasks` 委派给后台任务 worker。每个任务创建一个顶层 worker 会话（`task:<id>`），默认继承所属会话的组合配置，并在触发消息所在的聊天（及话题线程）中作答。所属会话使用 `task_list` 和 `task_message` 查看并向任务发送补充指令，worker 以 `done` 或 `failed` 调用 `task_update` 时会向所属会话注入完成或失败通知。
+来源接纳、写权限、投递模式、模型路由、工作目录和预设均由部署显式配置：`sources` 规则决定哪些聊天可以进入宿主以及其消息如何入库，`defaultDispatch` 组合出所有未被处理且提及机器人的消息都会进入的那个会话。所有聊天共享该会话的历史，因此需要按聊天隔离历史或后台 worker 的部署，改为在 `im/message` 事件链上挂载自己的插件。
 
 传输层使用内置的 Satori 包（`plugin-im-core`、`satori-element`、`plugin-im-adapter-lark` 与 `plugin-im-adapter-qq`）。[vendor 清单](../../../../vendor/README.md) 记录准确的上游版本与本地修改。生成的飞书类型声明不提交到 Git，在安装阶段从经过哈希校验的固定源码生成。
 
@@ -34,9 +30,7 @@ IM 通过现有 agent 工厂、收件箱、预设和持久化 API 托管持久�
 
 **在 IM 与 harness 之间使用 ACP。** ACP 支持持久化程序会话，适合进程隔离。独立 IM 发布仍然需要渠道或工具路径；进程内 Cordis 组合在保留自动化语义的同时避免增加进程。
 
-**按聊天手工配置固定会话。** 手工命名每个会话及其来源意味着每新增一个聊天都要修改配置并重启。为每个已接纳聊天自动派生会话可将访问控制保留在来源规则中，无需逐个聊天配置。
-
-**以子智能体作为委派工作的单位。** 子智能体归属于父会话当前轮次的激活周期，其生命周期与结果投递跟随父轮次。聊天中的后台任务需要跨越发起它的轮次持续运行并支持中途补充指令，因此后台任务设计为 IM 托管的顶层会话，拥有独立的任务记录和状态。worker 内部仍可使用子智能体。
+**按聊天手工配置固定会话。** 手工命名每个会话及其来源意味着每新增一个聊天都要修改配置并重启。由 `sources` 与 `defaultDispatch` 组合出的单个会话即可把访问控制保留在来源规则中，无需逐个聊天配置。
 
 **自动重试不确定的发送。** 响应丢失时无法判断平台是否已经创建了消息。保留 `uncertain` 状态供检查可避免自动重复发送，同时允许通过新的工具调用主动重发。
 
