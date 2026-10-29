@@ -28,8 +28,8 @@ enum StandaloneApplication {
         let files = FileManager.default
         try files.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let root = root.resolvingSymlinksInPath()
-        let generation = root.appendingPathComponent(runtimeKey)
-        let application = generation.appendingPathComponent(source.lastPathComponent)
+        let generation = root.appendingPathComponent(runtimeKey, isDirectory: true)
+        let application = generation.appendingPathComponent(source.lastPathComponent, isDirectory: true)
         guard !hasApplicationAncestor(application) else {
             throw NativeFailure(code: "NATIVE_APPLICATION_REQUIRED", message: "Computer Use application storage must be outside another .app: \(root.path)")
         }
@@ -50,10 +50,10 @@ enum StandaloneApplication {
             }
             return application
         }
-        let staging = root.appendingPathComponent(".staging-\(UUID().uuidString)")
+        let staging = root.appendingPathComponent(".staging-\(UUID().uuidString)", isDirectory: true)
         try files.createDirectory(at: staging, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         do {
-            let stagedApplication = staging.appendingPathComponent(source.lastPathComponent)
+            let stagedApplication = staging.appendingPathComponent(source.lastPathComponent, isDirectory: true)
             try files.copyItem(at: source, to: stagedApplication)
             try validate(stagedApplication, runtimeKey: runtimeKey)
             try files.moveItem(at: staging, to: generation)

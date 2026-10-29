@@ -111,6 +111,17 @@ func aChangedCachedApplicationIsRejected(file: String) throws {
     }
 }
 
+@Test func aCachedSymlinkCannotRedirectTheHelperIntoAnEnclosingApplication() throws {
+    let f = try ApplicationFixture(); defer { f.close() }
+    let key = try f.key
+    try FileManager.default.createDirectory(at: f.cache, withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(at: f.cache.appendingPathComponent(key),
+                                               withDestinationURL: f.application.deletingLastPathComponent())
+    #expect(throws: (any Error).self) {
+        try StandaloneApplication.install(f.application, runtimeKey: key, root: f.cache, deadline: f.deadline)
+    }
+}
+
 @Test func aCompetingInstallerDoesNotUseAPartialGeneration() throws {
     let f = try ApplicationFixture(); defer { f.close() }
     let key = try f.key
