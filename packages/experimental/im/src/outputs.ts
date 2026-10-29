@@ -243,6 +243,8 @@ export class ImOutputRegistry implements ImOutputs {
 export function targetOf(activity: ImActivity): ImBinding | undefined {
   const { bindings } = activity.session
   const chat = activity.trigger?.chat.key
-  return (chat === undefined ? undefined : bindings.find(binding => binding.chat === chat && binding.writable))
-    ?? bindings.find(binding => binding.home === true && binding.writable)
+  // A trigger's chat decides where the turn renders: falling back to the home binding published one chat's work into
+  // another chat, which that chat's readers never asked for and cannot attribute.
+  if (chat !== undefined) return bindings.find(binding => binding.chat === chat && binding.writable)
+  return bindings.find(binding => binding.home === true && binding.writable)
 }

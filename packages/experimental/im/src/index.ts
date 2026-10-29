@@ -16,14 +16,14 @@ import type {
   ImApi, ImChat, ImChatKey, ImConfig, ImFormatOptions, ImHistory, ImMessage, ImMessageEvent, ImSendOptions,
   ImSendResult, ImSourceConfig, ImStatus,
 } from './api.ts'
-import { splitKey } from './api.ts'
+import { ImMessageKey, splitKey } from './api.ts'
 import { Config } from './config.ts'
 import { ImError } from './error.ts'
 import { ImActivityTracker } from './activity.ts'
 import { ImFormatter } from './format.ts'
 import { ImAgentHost } from './hosting.ts'
 import { ImDispatcher } from './dispatcher.ts'
-import { ImIntake } from './intake.ts'
+import { ImIntake, admit, draftOf } from './intake.ts'
 import { ImMediaStore } from './media.ts'
 import { ImOutputRegistry } from './outputs.ts'
 import { ImSender } from './send.ts'
@@ -208,6 +208,27 @@ export class ImService extends Service implements ImApi {
    */
   chat(key: ImChatKey): ImChat | undefined {
     return this.store.chat(key)
+  }
+
+  /**
+   * One message of one chat: the stored message when this deployment received it, and a platform read otherwise, so a
+   * reference to a message that never reached this deployment still resolves. A platform read is admitted and stored
+   * like any other message, which gives it a sequence number and keeps later reads of it local.
+   * @param chat - chat to read in; its bot serves the platform request.
+   * @param id - platform message id.
+   * @returns the message as the store holds it.
+   */
+  async readMessage(chat: ImChatKey, id: string): Promise<ImMessage> {
+    const bot = this.bot(chat)
+    const known = this.store.get(ImMessageKey(bot.id, id))
+    if (known !== undefined) return known
+    const record = this.chat(chat)
+    if (record === undefined) throw new ImError('access', `Chat ${chat} was never admitted, so message ${id} cannot be read.`)
+    if (bot.getMessage === undefined) throw new ImError('unavailable', `Bot ${bot.id} cannot read one message by id.`)
+    const message = await bot.getMessage(record.ref, id)
+    const source = admit([...this.sources.values()], bot.id, message)
+    if (source === undefined) throw new ImError('access', `Message ${id} of chat ${chat} is admitted by no source.`)
+    return await this.store.put(draftOf(bot, message, source, 'platform'), 'none')
   }
 
   /**

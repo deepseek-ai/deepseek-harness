@@ -116,12 +116,23 @@ class FakeIm {
   readonly sessions = new FakeSessions()
   readonly history = new FakeHistory([message(1), message(2), message(3)])
   readonly media = new FakeMedia()
+  /** Messages the platform holds but this deployment never received, by platform id. */
+  readonly platform = new Map<string, ImMessage>()
   readonly sends: { chat: ImChatKey; content: Fragment; options: ImSendOptions }[] = []
   answer: () => Promise<ImSendResult> = async () => ({ status: 'confirmed' })
 
   send(chat: ImChatKey, content: Fragment, options: ImSendOptions = {}): Promise<ImSendResult> {
     this.sends.push({ chat, content, options })
     return this.answer()
+  }
+
+  /** The store's read: a message it never received comes from the platform stand-in, or stays unreadable. */
+  async readMessage(chat: ImChatKey, id: string): Promise<ImMessage> {
+    const stored = this.history.get(ImMessageKey('fake:bot', id))
+    if (stored !== undefined) return stored
+    const fetched = this.platform.get(id)
+    if (fetched === undefined) throw new ImError('access', `Chat ${chat} holds no message ${id}.`)
+    return fetched
   }
 }
 

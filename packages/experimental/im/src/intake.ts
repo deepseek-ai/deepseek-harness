@@ -8,7 +8,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { toText } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Bot, ChatRef, Element, InboundMessage, SendResult, Session } from '@deepseek-ai/cordis-plugin-im-core'
 import {
-  ImChatKey, ImMessageKey, ImSourceId, type ImChat, type ImCommand, type ImConfig, type ImMessage,
+  ImChatKey, ImMessageKey, ImSourceId, splitKey, type ImChat, type ImCommand, type ImConfig, type ImMessage,
   type ImMessageEvent, type ImOutcome, type ImSourceConfig,
 } from './api.ts'
 import { ImError } from './error.ts'
@@ -136,6 +136,42 @@ export class ImIntake {
     if (this.active) await this.active
   }
 
+  /**
+   * The reply about to be stored, with the text of the message it quotes filled in. An event carries only the quoted
+   * id, and an id is not something a reader can open: without this the model answers a reply about material it cannot
+   * see, and guesses at the subject.
+   * @param bot - the bot that delivered the reply.
+   * @param draft - the reply as admission built it.
+   * @returns the draft, with the quoted text when it could be read.
+   */
+  private async withQuoteText(bot: Bot, draft: ImMessageDraft): Promise<ImMessageDraft> {
+    const quote = draft.quote
+    if (quote === undefined || quote.text !== undefined) return draft
+    const text = await this.quotedText(bot, draft.chat.ref, quote.key)
+    return text === undefined ? draft : { ...draft, quote: { ...quote, text } }
+  }
+
+  /**
+   * The text of one quoted message: the store when this deployment received it, the platform otherwise.
+   * @param bot - the bot of the chat being read.
+   * @param chat - platform reference of the chat the reply arrived in.
+   * @param key - key of the quoted message.
+   * @returns its text, or undefined when neither the store nor the platform can show it.
+   */
+  private async quotedText(bot: Bot, chat: ChatRef, key: ImMessageKey): Promise<string | undefined> {
+    const stored = this.store.get(key)
+    if (stored !== undefined) return stored.text
+    if (bot.getMessage === undefined) return undefined
+    try {
+      return toText((await bot.getMessage(chat, splitKey(key).id)).content)
+    } catch (error: unknown) {
+      // The reply is still a deliverable message: a quote the platform will not hand back stays an id.
+      this.ctx.logger.warn('IM quoted message %s could not be read: %s', key,
+        error instanceof Error ? error.message : String(error))
+      return undefined
+    }
+  }
+
   /** Dedupe, admit and store one inbound message; runs in the intake chain. */
   private async accept(bot: Bot, message: InboundMessage, key: string, digest: string): Promise<void> {
     const known = this.store.event(key)
@@ -155,7 +191,7 @@ export class ImIntake {
       await this.store.remember(key, { digest, receivedAt })
       return
     }
-    const draft = draftOf(bot, message, source, 'platform')
+    const draft = await this.withQuoteText(bot, draftOf(bot, message, source, 'platform'))
     if (source.store === 'addressed' && !draft.addressed) {
       await this.store.remember(key, { digest, receivedAt })
       return

@@ -247,18 +247,30 @@ export class ImStore implements ImHistory {
     })
   }
 
-  after(chat: ImChatKey, seq: number, limit: number): ImMessage[] {
+  after(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[] {
     const messages = this.chatMessages.get(chat)
     if (!messages || limit <= 0) return []
     const start = firstIndexAfter(messages, seq)
-    return messages.slice(start, start + limit)
+    if (keep === undefined) return messages.slice(start, start + limit)
+    const out: ImMessage[] = []
+    for (let index = start; index < messages.length && out.length < limit; index += 1) {
+      const message = messages[index]
+      if (message !== undefined && keep(message)) out.push(message)
+    }
+    return out
   }
 
-  before(chat: ImChatKey, seq: number, limit: number): ImMessage[] {
+  before(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[] {
     const messages = this.chatMessages.get(chat)
     if (!messages || limit <= 0) return []
     const end = firstIndexAfter(messages, seq - 1)
-    return messages.slice(Math.max(0, end - limit), end)
+    if (keep === undefined) return messages.slice(Math.max(0, end - limit), end)
+    const out: ImMessage[] = []
+    for (let index = end - 1; index >= 0 && out.length < limit; index -= 1) {
+      const message = messages[index]
+      if (message !== undefined && keep(message)) out.unshift(message)
+    }
+    return out
   }
 
   get(key: ImMessageKey): ImMessage | undefined {

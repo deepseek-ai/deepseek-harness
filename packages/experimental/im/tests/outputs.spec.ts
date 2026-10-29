@@ -205,7 +205,7 @@ describe('ImOutputRegistry lifecycle', () => {
     expect(probe.calls).toEqual(['begin:1', 'end:running'])
   })
 
-  it('renders into the chat of the trigger when the session may write there, else into its home chat', async () => {
+  it('renders into the chat of the trigger when the session may write there, and nowhere otherwise', async () => {
     const harness = booted()
     const probe = new Probe()
     harness.registry.register(probe)
@@ -231,9 +231,16 @@ describe('ImOutputRegistry lifecycle', () => {
       chat: other.key, content: 'there', options: { session: hosted.sessionId, quote: elsewhere.key, thread: 'topic-9' },
     })
 
-    // A read-only chat falls back to the home chat, where the foreign trigger is not quoted.
+    // A trigger chat the session cannot write to renders nothing: another chat's turn is not published into the home
+    // chat, whose readers never asked for it and cannot attribute it.
     const readOnly = { ...inbound(), key: ImMessageKey(BOT.id, 'm-quiet'), chat: quiet }
     harness.ctx.emit('im/activity', activity(hosted, { turn: 2, trigger: readOnly }), 'start')
+    await flush()
+    expect(probe.ios).toHaveLength(1)
+    expect(harness.sender.sends).toHaveLength(1)
+
+    // A turn without a trigger renders into the home binding.
+    harness.ctx.emit('im/activity', activity(hosted, { turn: 3 }), 'start')
     await flush()
     expect(probe.ios[1]?.chat).toBe(home.key)
     await probe.ios[1]!.send('home')

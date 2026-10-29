@@ -424,10 +424,14 @@ export interface ImSendResult {
 
 /** Read side of the message store, addressed by the per-chat sequence number (`ctx.im.history`). */
 export interface ImHistory {
-  /** Up to `limit` messages with seq > `seq`, oldest first. */
-  after(chat: ImChatKey, seq: number, limit: number): ImMessage[]
-  /** Up to `limit` messages with seq < `seq`, oldest first. */
-  before(chat: ImChatKey, seq: number, limit: number): ImMessage[]
+  /**
+   * Up to `limit` messages with seq > `seq`, oldest first, keeping only the messages `keep` accepts. A reader of one
+   * conversation passes the test that names it (that thread, or the main timeline), so the limit counts messages of
+   * that conversation instead of whatever the chat happened to put in between.
+   */
+  after(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[]
+  /** The same walk backwards: up to `limit` messages with seq < `seq`, oldest first. */
+  before(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[]
   get(key: ImMessageKey): ImMessage | undefined
   latest(chat: ImChatKey): ImMessage | undefined
 }
@@ -464,6 +468,12 @@ export interface ImApi {
   /** Bot owning the chat; throws `ImError('unavailable')` when the bot is not mounted. */
   bot(chat: ImChatKey): Bot
   chat(key: ImChatKey): ImChat | undefined
+  /**
+   * One message of one chat: the stored message when this deployment received it, and a platform read otherwise, so a
+   * reference to a message that never reached this deployment still resolves. A platform read is stored like any
+   * other message, which gives it a sequence number and keeps a later read of it local.
+   */
+  readMessage(chat: ImChatKey, id: string): Promise<ImMessage>
   /** Read-only diagnostics. */
   status(): ImStatus
 }

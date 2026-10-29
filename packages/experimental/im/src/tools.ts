@@ -24,7 +24,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import {
-  ImChatKey, ImMessageKey, splitKey, type ImApi, type ImConfig, type ImHistory, type ImMessage, type ImSendResult,
+  ImChatKey, splitKey, type ImApi, type ImConfig, type ImHistory, type ImMessage, type ImSendResult,
   type ImSessionRecord, type ImSessions,
 } from './api.ts'
 import { ImError } from './error.ts'
@@ -41,7 +41,7 @@ export const IM_TOOLS = ['im_read', 'im_history', 'im_send', 'im_reply', 'im_sen
 export type ImToolName = typeof IM_TOOLS[number]
 
 /** What the tools need from the service. */
-export interface ImToolHost extends Pick<ImApi, 'send'> {
+export interface ImToolHost extends Pick<ImApi, 'send' | 'readMessage'> {
   /** The two session lookups of the caller guard and the grant chain. */
   readonly sessions: Pick<ImSessions, 'of' | 'get'>
   readonly history: ImHistory
@@ -104,10 +104,10 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     parameters: imReadParameters,
     output: { schema: imReadOutput, render },
     isConcurrencySafe: () => true,
-    execute: (args, exec) => run(() => {
+    execute: (args, exec) => run(async () => {
       const { record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
-      return Promise.resolve({ message: viewOf(messageOf(im, chat, args.message)) })
+      return { message: viewOf(await messageOf(im, chat, args.message)) }
     }),
   }))
 
@@ -189,7 +189,7 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
     execute: (args, exec) => run(async () => {
       const { record } = caller(im, exec)
       const chat = chatOf(im, record, args.chat)
-      const quoted = messageOf(im, chat, args.message)
+      const quoted = await messageOf(im, chat, args.message)
       return sendValue(await im.send(chat, h.markdown(args.text), {
         operationId: operationId(record.sessionId, exec.callId),
         session: record.sessionId,
@@ -220,7 +220,7 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
         }
         const data = await scoped.fs.readBytes(target, exec.signal, config.send.maxMediaBytes)
         const name = basename(target.displayPath)
-        const quote = args.quote === undefined ? undefined : messageOf(im, chat, args.quote).key
+        const quote = args.quote === undefined ? undefined : (await messageOf(im, chat, args.quote)).key
         return sendValue(await im.send(chat, mediaContent(name, data), {
           operationId: operationId(record.sessionId, exec.callId),
           session: record.sessionId,
@@ -270,21 +270,22 @@ function chatOf(im: ImToolHost, record: ImSessionRecord, value: string | undefin
   return binding.chat
 }
 
-/** One stored message by seq (`#12`, `12`) or key (`bot|id`, bare id) within a chat. */
-function messageOf(im: ImToolHost, chat: ImChatKey, value: string): ImMessage {
+/**
+ * One message by seq (`#12`, `12`) or key (`bot|id`, bare id) within a chat. A seq is always local, because a
+ * sequence number only exists for what the store received; a key is read from the platform when this deployment
+ * never stored it, since the message exists in the chat whether or not it reached us.
+ */
+async function messageOf(im: ImToolHost, chat: ImChatKey, value: string): Promise<ImMessage> {
   const trimmed = value.trim()
   const seq = SEQ.exec(trimmed)
-  const message = seq === null
-    ? im.history.get(messageKeyOf(chat, trimmed))
-    : im.history.after(chat, Number(seq[1]) - 1, 1).find(candidate => candidate.seq === Number(seq[1]))
-  if (message === undefined) throw new ImError('access', `Chat ${chat} holds no message ${value}.`)
-  return message
+  if (seq !== null) {
+    const message = im.history.after(chat, Number(seq[1]) - 1, 1).find(candidate => candidate.seq === Number(seq[1]))
+    if (message === undefined) throw new ImError('access', `Chat ${chat} holds no message ${value}.`)
+    return message
+  }
+  return await im.readMessage(chat, trimmed.includes('|') ? trimmed.slice(trimmed.lastIndexOf('|') + 1) : trimmed)
 }
 
-/** A message key of one chat: a full `bot|id` key as given, else the chat's bot with the bare id. */
-function messageKeyOf(chat: ImChatKey, value: string): ImMessageKey {
-  return value.includes('|') ? value as ImMessageKey : ImMessageKey(splitKey(chat).bot, value)
-}
 
 /** One message as the tools show it (media labels stay usable with `im_read_image`). */
 interface MessageView {
