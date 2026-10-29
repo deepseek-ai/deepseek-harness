@@ -1,4 +1,4 @@
-/** File export naming, browser transfer token type, and native byte-or-resource requests. */
+/** File export naming, browser transfer tokens, and native file/application requests. */
 import mime from 'mime'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { Context } from '@deepseek-ai/cordis'
@@ -65,7 +65,7 @@ export interface DesktopFileDrag {
   /** Whether this carrier can drag provider-authorized macOS application directories. */
   readonly applications?: boolean
   /**
-   * @param source - bytes or a verifiable resource.
+   * @param source - bytes, a Session resource, or a provider-issued application reference.
    * @param requestId - cancellation identity.
    * @returns a handle, or undefined if the resource needs a byte copy.
    */

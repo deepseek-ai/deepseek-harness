@@ -161,12 +161,10 @@ export function installDesktopFileDrag(
       authorize(event)
       window.webContents.startDrag({ file, icon })
       files.take(handle)
-      icons.delete(handle)
       borrowed.delete(handle)
       applications.delete(handle)
       return true
     } catch (_error) {
-      icons.delete(handle)
       borrowed.delete(handle)
       applications.delete(handle)
       void files.release(handle).catch((error: unknown) => { console.error(error) })

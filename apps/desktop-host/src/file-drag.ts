@@ -1,4 +1,4 @@
-/** Resolve desktop-only file references through the active Host filesystem and Session. */
+/** Resolve desktop-only file and application references through their Host owners. */
 import { createHash } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -9,19 +9,12 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { parseFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { resolveApplicationDrag, type ApplicationDragReference, type DesktopDragResource } from '@deepseek-ai/dsh-util-file-drag'
 
-/** Private Host-to-main answer; never exposed to renderer JavaScript. */
-export interface LocalDragResource {
-  readonly path: string
-  readonly sha256: string
-  readonly size: number
-}
-
 /**
- * Authorize an unmodified local file through the composed filesystem's actual read operations.
+ * Authorize a local file through filesystem reads, or an application through its issuing provider.
  * @param ctx - booted Desktop Host.
- * @param address - Session-scoped resource reference.
+ * @param address - Session-scoped file address or application reference.
  * @param cancellation - caller cancellation, combined with the read deadline.
- * @returns verified Host-local path and content identity, or null for nonlocal resources.
+ * @returns authorized application or verified local file, or null for nonlocal file resources.
  */
 export async function localDragResource(ctx: Context, address: string, cancellation?: AbortSignal): Promise<DesktopDragResource | null> {
   const signal = cancellation === undefined ? AbortSignal.timeout(10_000) : AbortSignal.any([cancellation, AbortSignal.timeout(10_000)])
