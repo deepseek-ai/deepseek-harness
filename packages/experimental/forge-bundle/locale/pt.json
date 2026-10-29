@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Solicitações de alteração e árvores de trabalho",
+    "description": "Acompanhe as solicitações de alteração de cada sessão com suas verificações e revisões e inicie novas sessões em uma árvore de trabalho Git; usa a CLI gh para o GitHub."
+  }
+}

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import type { StartedToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
 import { en as common } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
@@ -22,10 +22,13 @@ import { toolRowModel } from '../src/client/tool/models/tool-call-model.ts'
 
 afterEach(cleanup)
 
-type Props = Parameters<typeof TodoRow>[0] & Parameters<typeof ReadImageRow>[0] & Parameters<typeof AskQuestionRow>[0]
+type Props = Parameters<typeof GenericToolCard>[0] & Parameters<typeof TodoRow>[0]
+  & Parameters<typeof ReadImageRow>[0] & Parameters<typeof AskQuestionRow>[0]
 
 function preparation(name: string, args = new PartialArguments()): Extract<Props, { phase: 'preparing' }> {
   return {
+    getFileTriggerProps: () => ({}),
+    useContextMenu: contextMenuHook(), resolveFilePath: path => path,
     phase: 'preparing', callId: 'call', toolName: name,
     block: { phase: 'preparing', args, callId: 'call', name, turn: 1, step: 1, time: 1, subCalls: [] },
     cwd: '/workspace', t: makeTranslate(en, common), useDisclosure, openFile: vi.fn(), loadImage: vi.fn(),

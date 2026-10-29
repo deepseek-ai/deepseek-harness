@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "GitHub 变更请求",
+    "description": "通过宿主上的 GitHub CLI 为 forge 注册表读取 GitHub 变更请求。"
+  }
+}

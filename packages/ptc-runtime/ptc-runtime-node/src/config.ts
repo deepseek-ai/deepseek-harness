@@ -7,8 +7,10 @@ import type { LaunchConfig } from './launch.ts'
 export interface Config {
   /** Worker invocation in the subprocess world; omitted selects the local carrier. */
   launch?: LaunchConfig
-  /** per-call starts fresh processes; persistent-in-memory retains a REPL per owner under the same file policy. */
-  executionMode?: 'per-call' | 'persistent-in-memory'
+  /** per-call uses fresh async function bodies; vm-script uses VM contexts; persistent-in-memory retains a REPL per owner. */
+  executionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
+  /** Retain a Script process and context per stateOwner; only supported with executionMode: vm-script. */
+  scriptPersistence?: boolean
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */
@@ -29,7 +31,8 @@ export interface Config {
 export type ResolvedConfig = Required<Config>
 /** Loader defaults for the Node PTC provider. */
 export const NodeConfig: z<Config> = z.object({
-  executionMode: z.union([z.const('per-call'), z.const('persistent-in-memory')]).default('per-call'),
+  executionMode: z.union([z.const('per-call'), z.const('persistent-in-memory'), z.const('vm-script')]).default('per-call'),
+  scriptPersistence: z.boolean().default(false),
   timeoutMs: z.number().default(120_000),
   maxTimeoutMs: z.number().default(600_000),
   maxOutputBytes: z.number().default(67_108_864),
@@ -48,6 +51,7 @@ export const NodeConfig: z<Config> = z.object({
  * @param config - Loader-defaulted fields with the selected executable.
  */
 export function validateConfig(config: ResolvedConfig): void {
+  if (config.scriptPersistence && config.executionMode !== 'vm-script') throw new Error('ptc-runtime-node: scriptPersistence requires executionMode: vm-script')
   for (const [key, value] of Object.entries(config)) {
     if (typeof value === 'number' && (!Number.isFinite(value) || value <= 0)) throw new Error(`ptc-runtime-node: ${key} must be positive and finite`)
   }

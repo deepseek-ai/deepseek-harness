@@ -176,6 +176,30 @@ it('keeps body ancestors through pane moves, floating, raising and docking', () 
   expect(body.closest('[data-dockkit-host]')).toBe(host)
 })
 
+it('does not re-render a docked or floating body while a float gesture redraws the layout', () => {
+  const controller = seededController()
+  controller.setExpanded(true)
+  const tab = controller.openContent({ kind: 'file', contentId: 'file:a', title: 'A' })
+  controller.openContent({ kind: 'file', contentId: 'file:b', title: 'B' })
+  controller.floatTab(tab, { x: 100, y: 80, width: 300, height: 200 })
+  const h = mounted(controller, { keepMounted: () => true })
+  const renderTab = vi.fn(h.callbacks.renderTab)
+  h.redraw({ callbacks: { ...h.callbacks, renderTab } })
+  const rendered = renderTab.mock.calls.length
+  expect(rendered).toBeGreaterThan(0)
+  const floating = controller.getSnapshot().state.floats[0]!
+  fireEvent.pointerDown(h.node(`[data-dockkit-float="${floating}"] [data-dockkit-float-grip]`),
+    { pointerId: 3, button: 0, clientX: 150, clientY: 90 })
+  for (const x of [170, 190, 210]) fireEvent.pointerMove(window, { pointerId: 3, clientX: x, clientY: 90 })
+  expect(h.node(`[data-dockkit-float="${floating}"]`).style.left).toBe('160px')
+  expect(renderTab).toHaveBeenCalledTimes(rendered)
+  fireEvent.pointerUp(window, { pointerId: 3, clientX: 210, clientY: 90 })
+  // A new renderer is how an embedder refreshes its bodies.
+  const next = vi.fn(h.callbacks.renderTab)
+  h.redraw({ callbacks: { ...h.callbacks, renderTab: next } })
+  expect(next).toHaveBeenCalledTimes(rendered)
+})
+
 it('unmounts unretained bodies and restores focus to their replacement strip', () => {
   const controller = seededController()
   controller.setExpanded(true)

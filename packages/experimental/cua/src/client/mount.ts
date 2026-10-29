@@ -63,9 +63,6 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
     }
     ctx.effect(() => () => controller.dispose())
     ctx.on('connection/reset', face.refresh)
-    ctx.effect(() => ctx.remote.$on('settings/document-updated', (namespace) => {
-      if (namespace === controller.state.getSnapshot().applications.value?.settingsNamespace) face.refresh()
-    }))
     ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
       name: 'plugins.bundle.config', key: '@deepseek-ai/dsh-cua-bundle', locale: NS, inject: () => settings,
     }, PermissionPanel))

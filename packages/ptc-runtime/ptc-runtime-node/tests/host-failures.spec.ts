@@ -200,7 +200,7 @@ describe('Node runtime host failures', () => {
       return h.handle
     })
     expect((await h.start(request, NO_INITIAL_FRAME)).error).toEqual({
-      kind: 'worker-exit', message: 'Node process exited before completing (7)',
+      kind: 'worker-exit', message: 'Node process exited (7, signal null)',
     })
   })
 
@@ -213,13 +213,28 @@ describe('Node runtime host failures', () => {
       })
       return h.handle
     })
-    expect((await h.start(request, NO_INITIAL_FRAME)).error).toEqual({ kind: 'worker-exit', message: 'runner connection broken' })
+    expect((await h.start(request, NO_INITIAL_FRAME)).error).toEqual({ kind: 'worker-exit', message: 'runner connection broken; control channel failed: control transport closed' })
   })
 
-  it('reports control loss after readiness as a substrate failure', async () => {
-    const h = await setup()
+  it.each<Config>([{}, { executionMode: 'persistent-in-memory' },
+    { executionMode: 'vm-script' }, { executionMode: 'vm-script', scriptPersistence: true },
+  ])('reports control loss and awaits process cleanup in %j', async (config) => {
+    const h = await setup(config)
+    const cleaning = Promise.withResolvers<undefined>()
+    const cleaned = Promise.withResolvers<boolean>()
+    h.waitForExit.mockImplementation(() => { cleaning.resolve(undefined); return cleaned.promise })
     h.onBoot(() => { h.control.emit('error', new Error('control transport closed')) })
-    expect((await h.start()).error).toEqual({ kind: 'worker-exit', message: 'control transport closed' })
+    const pending = h.start({ ...request, program: '1', stateOwner: {} })
+    const settled = vi.fn()
+    void pending.then(settled)
+    try {
+      await cleaning.promise
+      expect(h.control.destroyed).toBe(true)
+      expect(settled).not.toHaveBeenCalled()
+      cleaned.resolve(true)
+      expect((await pending).error).toEqual({ kind: 'worker-exit', message: 'Node process exited (0, signal null); control channel failed: control transport closed'
+        + (h.runtime.retainsState ? '; retained variables were cleared' : '') })
+    } finally { cleaned.resolve(true); await pending }
   })
 
   it('fails at once when a bootstrap from another release sends a length-prefixed frame', async () => {
@@ -372,7 +387,7 @@ describe('Node runtime host failures', () => {
       const pending = h.start()
       await cleaning.promise
       await vi.advanceTimersByTimeAsync(5)
-      expect((await pending).error).toEqual(failure ?? { kind: 'worker-exit', message: 'Node process output did not close cleanly' })
+      expect((await pending).error).toEqual({ kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
       expect(h.stdout.destroyed).toBe(true)
       expect(h.stderr.destroyed).toBe(true)
     } finally { vi.useRealTimers() }
@@ -422,7 +437,7 @@ describe('Node runtime host failures', () => {
       h.stderr.write('native fatal detail')
       h.direct.resolve({ exitCode: 9, signal: null })
     })
-    expect((await h.start()).error).toEqual({ kind: 'worker-exit', message: 'Node process exited before completing (9): native fatal detail' })
+    expect((await h.start()).error).toEqual({ kind: 'worker-exit', message: 'Node process exited (9, signal null): native fatal detail' })
   })
 
   it.each([true, false])('attributes a failed confined spawn only with runner evidence (%s)', async (runnerFailed) => {

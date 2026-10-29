@@ -27,7 +27,7 @@
       "path": "../ui-tool"
     },
     {
-      "path": "../ui-trajectory"
+      "path": "../ui-trajectory/tsconfig.client.json"
     },
     {
       "path": "../ui-slots"
@@ -43,6 +43,9 @@
     },
     {
       "path": "../../util/file-drag"
+    },
+    {
+      "path": "../ui-context-menu"
     }
   ]
 }

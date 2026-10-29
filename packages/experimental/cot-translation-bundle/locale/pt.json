@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Tradução automática de raciocínio",
-    "description": "Tradução automática de raciocínio expandido; o texto fonte é enviado ao serviço selecionado.",
+    "description": "Traduz as linhas “Pense” expandidas para o idioma que você escolher enquanto o agente as escreve, e “Ver original” volta ao texto original.",
     "detail": "docs/DETAIL.md"
   }
 }

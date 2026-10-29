@@ -170,6 +170,13 @@
   min-height: 0;
 }
 
+@media (pointer: coarse) {
+  /* Retain the footprint so hiding the control cannot change its room measurement. */
+  .panelBody :global([data-dockkit-split-control]:has(> [data-dockkit-split-blocked])) {
+    visibility: hidden;
+  }
+}
+
 .unavailable {
   margin: 0;
   padding: 12px;
@@ -189,4 +196,97 @@
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+/*
+ * An open that reveals an existing tab makes the pane holding it glow once
+ * (`flash.ts`), a softer, tighter version of the files navigator card's glow
+ * (ui-sidebar-files FilesBody `.push`): brand-colored in light mode, white in
+ * dark mode. Only a reveal of a tab already on screen glows; a reveal that
+ * switches tabs or expands the column is visible on its own. The
+ * marker alternates between two values with their own keyframes, so a
+ * repeated reveal restarts the glow; the marker goes when the animation ends.
+ * Reduced motion holds the glow steady for the same duration instead of
+ * fading it.
+ *
+ * A floating panel glows outward and keeps its own shadow beneath the glow.
+ * A docked pane fills the column, whose `overflow: clip` would cut an outward
+ * glow, so it glows inward on a pseudo-element at 7: above a CodeBlock's
+ * sticky banner (6) and below the kit's drop hints (10) and tab menu (70).
+ * The pane's cell is its stacking context, so the layer never covers another
+ * pane, a panel, or a portaled menu, and it takes no pointer events.
+ */
+.panel :global([data-dockkit-pane][data-sidebar-right-flash]),
+.panel :global([data-dockkit-float][data-sidebar-right-flash]) {
+  --sidebar-right-flash-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+  --sidebar-right-flash-ring: color-mix(in srgb, var(--sidebar-right-flash-color) 48%, transparent);
+  --sidebar-right-flash-near: color-mix(in srgb, var(--sidebar-right-flash-color) 16%, transparent);
+  --sidebar-right-flash-far: color-mix(in srgb, var(--sidebar-right-flash-color) 10%, transparent);
+}
+
+:global(body[data-ds-dark-theme]) .panel :global([data-dockkit-pane][data-sidebar-right-flash]),
+:global(body[data-ds-dark-theme]) .panel :global([data-dockkit-float][data-sidebar-right-flash]) {
+  --sidebar-right-flash-color: var(--dsw-static-neutral-00);
+}
+
+.panel :global([data-dockkit-pane][data-sidebar-right-flash]) {
+  position: relative;
+}
+
+.panel :global([data-dockkit-pane][data-sidebar-right-flash])::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+  --sidebar-right-flash-from:
+    inset 0 0 0 1px var(--sidebar-right-flash-ring),
+    inset 0 2px 4px 0 var(--sidebar-right-flash-near),
+    inset 0 0 10px 0 var(--sidebar-right-flash-far);
+  --sidebar-right-flash-to:
+    inset 0 0 0 1px transparent, inset 0 2px 4px 0 transparent, inset 0 0 10px 0 transparent;
+}
+
+.panel :global([data-dockkit-float][data-sidebar-right-flash]) {
+  --sidebar-right-flash-from:
+    var(--dsw-elevation-prominent),
+    0 0 0 1px var(--sidebar-right-flash-ring),
+    0 2px 4px 0 var(--sidebar-right-flash-near),
+    0 0 10px 0 var(--sidebar-right-flash-far);
+  --sidebar-right-flash-to:
+    var(--dsw-elevation-prominent),
+    0 0 0 1px transparent, 0 2px 4px 0 transparent, 0 0 10px 0 transparent;
+}
+
+.panel :global([data-dockkit-pane][data-sidebar-right-flash])::after,
+.panel :global([data-dockkit-float][data-sidebar-right-flash]) {
+  animation-duration: calc(var(--ds-transition-duration-slow) * 2);
+  animation-timing-function: var(--ds-ease-in-out);
+}
+
+.panel :global([data-dockkit-pane][data-sidebar-right-flash='odd'])::after,
+.panel :global([data-dockkit-float][data-sidebar-right-flash='odd']) {
+  animation-name: flashOdd;
+}
+
+.panel :global([data-dockkit-pane][data-sidebar-right-flash='even'])::after,
+.panel :global([data-dockkit-float][data-sidebar-right-flash='even']) {
+  animation-name: flashEven;
+}
+
+@keyframes flashOdd {
+  from { box-shadow: var(--sidebar-right-flash-from); }
+  to { box-shadow: var(--sidebar-right-flash-to); }
+}
+
+@keyframes flashEven {
+  from { box-shadow: var(--sidebar-right-flash-from); }
+  to { box-shadow: var(--sidebar-right-flash-to); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel :global([data-dockkit-pane][data-sidebar-right-flash])::after,
+  .panel :global([data-dockkit-float][data-sidebar-right-flash]) {
+    animation-timing-function: step-end;
+  }
 }

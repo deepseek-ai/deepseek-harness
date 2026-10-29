@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
+import { createElement } from 'react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { isMobileDevice } from '@deepseek-ai/dsh-client-ui-primitives'
 /**
  * Browser-half lifecycle over the real SlotRegistry: the dictionary,
  * header-slot, and document-preview path registrations with fiber teardown
@@ -11,7 +15,7 @@ import type { ShortcutCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { Context } from '@deepseek-ai/cordis'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { LayoutController, type MainPanelId } from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -22,9 +26,23 @@ import { apply as nodeApply } from '../src/index.ts'
 import { OpenInAppAction } from '../src/client/OpenInAppAction.tsx'
 import { OpenPathAction } from '../src/client/OpenPathAction.tsx'
 import { OpenPathEmptyAction } from '../src/client/OpenPathEmptyAction.tsx'
+import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
+import type { OpenTargetReporter } from '../src/client/OpenTargetButton.tsx'
+import { FileRouteAction } from '../src/client/FileRouteAction.tsx'
+import { ContextMenuApplicationIcon } from '../src/client/context-menus.tsx'
+import type { OpenInAppOutcome } from '../src/client/outcome.ts'
+import { OpenInAppToast, type OpenInAppToastProps, type OpenInAppToastSource } from '../src/client/open-toast.tsx'
 import { en, NS, zh } from '../src/client/locales.ts'
 
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async original => ({
+  ...await original<typeof import('@deepseek-ai/dsh-client-ui-primitives')>(),
+  isMobileDevice: vi.fn(() => false),
+}))
+
+beforeEach(() => { vi.mocked(isMobileDevice).mockReturnValue(false) })
+
 afterEach(() => {
+  cleanup()
   vi.unstubAllGlobals()
   vi.clearAllMocks()
 })
@@ -45,12 +63,15 @@ async function bench() {
   ctx.slots.register({
     name: 'root',
     children: {
+      'sidebar.workspaces.session.menu.item': { kind: 'list', scope: 'root' },
       'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
       'sidebar.right.tab.files.actions': { kind: 'list', scope: 'session' },
       'sidebar.right.tab.document.actions': { kind: 'list', scope: 'session' },
       'sidebar.right.tab.document.unpreviewable': { kind: 'list', scope: 'session' },
       'deliverables.file.actions': { kind: 'list', scope: 'session' },
       'deliverables.review.file.actions': { kind: 'list', scope: 'session' },
+      'shell.overlay': { kind: 'list', scope: 'root' },
+      'contextMenu.icon': { kind: 'keyed', scope: 'root', inline: true },
     },
   } as never, () => null)
   const list = createSnapshotStore<SessionListState>({ ids: [], byId: {}, phase: 'ready', projectionsBySession: {} })
@@ -60,29 +81,91 @@ async function bench() {
     getSnapshot: () => layoutStore.getSnapshot().panelInfo,
     subscribe: listener => layoutStore.subscribe(listener),
   })
+  const notify = vi.fn()
+  const menus = new MenuRegistry(notify)
+  ctx.effect(() => () => { menus.dispose() })
+  ctx.provide('contextMenus', { register: menus.register.bind(menus), resolve: menus.resolve.bind(menus), open: vi.fn(), notify } as never)
   ctx.provide('layout', layout)
   ctx.provide('sessions', { list })
   ctx.provide('shortcuts', { register: (command: ShortcutCommand) => { commands.set(command.id, command); return () => { commands.delete(command.id) } }, catalog: createSnapshotStore([]) })
   ctx.provide('locale', new LocaleRuntime(ctx))
   ctx.provide('remote', remote as never)
+  ctx.provide('fileActions', {} as never)
+  ctx.provide('sidebarRight', {} as never)
+  ctx.provide('sidebarRightTabs', {} as never)
+  ctx.provide('remote.workspaceFiles', {} as never)
   ctx.provide('remote.session', remote.session as never)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
-  return { ctx, fiber, list, commands, layout }
+  return { ctx, fiber, list, commands, layout, notify }
 }
 
 function headerEntryIds(ctx: Context): (string | undefined)[] {
   return ctx.slots.entries('conversation.session.header.utilities').map(entry => entry.options.id)
 }
 
+/** The one announcement store the frame-wide overlay entry exposes. */
+function toastSource(ctx: Context): Omit<OpenInAppToastSource, 'report'> {
+  const overlay = ctx.slots.entries('shell.overlay')[0]
+  if (overlay === undefined) throw new Error('expected the open-in-app overlay entry')
+  expect(overlay.component).toBe(OpenInAppToast)
+  expect(overlay.options).toMatchObject({ id: 'open-in-app.toast' })
+  expect(overlay.locale).toBe(NS)
+  return (overlay.inject as () => Omit<OpenInAppToastSource, 'report'>)()
+}
+
 describe('open-in-app browser half', () => {
-  it('refuses absent workspaces and reports failed keyboard launches', async () => {
+  it('renders captured application images and the default glyph without an image URL', () => {
+    const view = render(createElement(ContextMenuApplicationIcon, { icon: { key: 'open-in-app.application', src: '/captured.png' } }))
+    expect(view.container.querySelector('img')?.getAttribute('src')).toBe('/captured.png')
+    view.rerender(createElement(ContextMenuApplicationIcon, { icon: { key: 'open-in-app.application' } }))
+    expect(view.container.querySelector('img')).toBeNull()
+    expect(view.container.querySelector('svg')).not.toBeNull()
+  })
+  it.each([
+    [false, true], [true, true], [false, false], [true, false],
+  ])('shares native feedback after Session menu dismissal (mobile=%s, success=%s)', async (mobile, success) => {
+    vi.mocked(isMobileDevice).mockReturnValue(mobile)
+    const fetcher = vi.fn(async (input: string | URL) => String(input) === 'open-in-app/apps'
+      ? new Response(JSON.stringify({ apps: ['finder'] })) : new Response('', { status: success ? 200 : 502 }))
+    vi.stubGlobal('fetch', fetcher)
+    const { ctx, fiber, list, notify } = await bench()
+    const id = 'captured' as SessionId
+    list.set({ ...list.getSnapshot(), ids: [id], byId: {
+      [id]: { id, displayTitle: 'Captured', cwd: '/captured', running: false, blank: false, updatedAt: 0, retainedBy: {} },
+    } })
+    const menu = ctx.contextMenus.resolve({ kind: 'session', value: { sessionId: id, displayTitle: 'Captured' } })
+    const toast = toastSource(ctx)
+    try {
+      expect(ctx.slots.entries('contextMenu.icon').map(entry => entry.options.key)).toEqual([
+        'open-in-app.reveal', 'open-in-app.copy', 'open-in-app.sidebar', 'open-in-app.float', 'open-in-app.application',
+      ])
+      expect(ctx.slots.entries('sidebar.workspaces.session.menu.item')).toHaveLength(0)
+      await vi.waitFor(() => { expect(menu.source.getSnapshot()[0]).toMatchObject({ label: 'Show in Finder', disabled: false }) })
+      menu.select('open-in-app.reveal/reveal')
+      menu.dispose()
+      const face: Partial<OpenInAppActionInjected> = ctx.slots.entries('conversation.session.header.utilities')[0]!.inject!()
+      await vi.waitFor(() => { expect(face.hooks?.openInAppLaunch.getSnapshot().phase).toBe(success ? 'idle' : 'error') })
+      expect(toast.hooks.toast.getSnapshot()).toEqual(success
+        ? mobile ? { kind: 'opened', seq: 1 } : null
+        : { kind: 'failed', failure: 'revealError', seq: 1 })
+      expect(notify).not.toHaveBeenCalled()
+      expect(fetcher).toHaveBeenCalledWith('open-in-app/open', expect.objectContaining({
+        body: JSON.stringify({ app: 'finder', path: '/captured' }),
+      }))
+    } finally { menu.dispose(); await fiber.dispose() }
+    expect(ctx.slots.entries('contextMenu.icon')).toEqual([])
+    const removed = ctx.contextMenus.resolve({ kind: 'session', value: { sessionId: id, displayTitle: 'Captured' } })
+    expect(removed.source.getSnapshot()).toEqual([])
+    removed.dispose()
+  })
+  it('refuses absent workspaces and reports failed keyboard launches to the app-wide toast', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL) => String(input) === 'open-in-app/apps'
       ? new Response(JSON.stringify({ apps: ['finder'] })) : new Response('failed', { status: 500 })))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { fiber, list, commands } = await bench()
+    const { ctx, fiber, list, commands } = await bench()
     try {
       const command = commands.get('workspace.openLocal')!
+      expect(command.label()).toBe(en['open.tooltip'])
       const context = { region: 'page', modal: null, target: null } as const
       expect(command.resolve(context).status).toBe('blocked')
       const id = 'main' as SessionId
@@ -93,9 +176,14 @@ describe('open-in-app browser half', () => {
       await vi.waitFor(() => { expect(command.resolve(context).status).toBe('handled') })
       const result = command.resolve(context)
       if (result.status !== 'handled') throw new Error('Expected an available workspace')
+      const toast = toastSource(ctx)
+      expect(toast.hooks.toast.getSnapshot()).toBeNull()
       result.run()
-      await vi.waitFor(() => { expect(warn).toHaveBeenCalledWith('workspace open rejected:', expect.any(Error)) })
-    } finally { await fiber.dispose(); warn.mockRestore() }
+      // The keyboard path has no control of its own: its failure reaches the same overlay store.
+      await vi.waitFor(() => {
+        expect(toast.hooks.toast.getSnapshot()).toEqual({ kind: 'failed', failure: 'openError', seq: 1 })
+      })
+    } finally { await fiber.dispose() }
   })
   it('captures the main directory and remembered app before dispatch and shares pointer launch occupancy', async () => {
     let finish!: (response: Response) => void
@@ -121,7 +209,8 @@ describe('open-in-app browser half', () => {
     if (resolution.status !== 'handled') throw new Error('available workspace was blocked')
     resolution.run()
     expect(command.resolve(context).status).toBe('blocked')
-    await face.launch('finder', '/second')
+    // A gesture another launch already holds reports deliberate silence, not a second success.
+    await expect(face.launch('finder', '/second')).resolves.toEqual({ kind: 'skipped' })
     const calls = fetcher.mock.calls.filter(call => call[0] === 'open-in-app/open')
     expect(calls).toHaveLength(1)
     expect(calls[0]?.[1]?.body).toBe(JSON.stringify({ app: 'cursor', path: '/first' }))
@@ -131,8 +220,54 @@ describe('open-in-app browser half', () => {
     expect(commands.size).toBe(0)
   })
 
+  it.each([
+    ['mobile', true, 'open', { kind: 'opened' }, 'path.opened'],
+    ['mobile', true, 'reveal', { kind: 'revealed' }, 'path.revealed'],
+    ['mobile', true, 'open', { kind: 'failed', failure: 'openError' }, 'path.openError'],
+    ['mobile', true, 'reveal', { kind: 'failed', failure: 'revealError' }, 'path.revealError'],
+    ['desktop', false, 'open', { kind: 'failed', failure: 'openError' }, 'path.openError'],
+    ['desktop', false, 'reveal', { kind: 'failed', failure: 'revealError' }, 'path.revealError'],
+  ] as const)('keeps %s feedback after the initiating card unmounts (mobile=%s, %s, %j)', async (_device, mobile, action, outcome, message) => {
+    vi.mocked(isMobileDevice).mockReturnValue(mobile)
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL) => String(input) === 'open-in-app/apps'
+      ? Response.json({ apps: [] })
+      : Response.json([{ id: 'editor', name: 'Editor', default: true, icon: null }])))
+    const { ctx, fiber } = await bench()
+    const pending = Promise.withResolvers<OpenInAppOutcome>()
+    try {
+      const entry = ctx.slots.entries('deliverables.file.actions')[0]!
+      const report = entry.inject!().report as OpenTargetReporter['report']
+      const toast = toastSource(ctx)
+      render(createElement(OpenInAppToast, {
+        useToast: bindSnapshotSelector(toast.hooks.toast), dismiss: toast.dismiss, t: makeTranslate(en),
+      } as OpenInAppToastProps))
+      const onAction = vi.fn(() => pending.promise)
+      const control = render(createElement(FileRouteAction, {
+        report, actionUrl: 'api/present.open?sessionId=s&seq=2&index=0',
+        available: true, pending: false, onAction, t: makeTranslate(en),
+      }))
+      await screen.findByRole('button', { name: 'Open in Editor' })
+      if (action === 'reveal') {
+        fireEvent.click(screen.getByRole('button', { name: en['path.more'] }))
+        fireEvent.click(screen.getByRole('menuitem', { name: en['path.reveal'] }))
+      } else fireEvent.click(screen.getByRole('button', { name: 'Open in Editor' }))
+      expect(onAction).toHaveBeenCalledWith(action, undefined)
+      control.unmount()
+      expect(screen.queryByRole('button')).toBeNull()
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(ctx.slots.entries('shell.overlay')).toHaveLength(1)
+      await act(async () => { pending.resolve(outcome) })
+      expect(screen.getByRole('alert').textContent).toBe(en[message])
+      expect(toast.hooks.toast.getSnapshot()).toEqual({ ...outcome, seq: 1 })
+    } finally {
+      await act(async () => { pending.resolve({ kind: 'skipped' }) })
+      cleanup()
+      await fiber.dispose()
+    }
+  })
+
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['sessions', 'slots', 'locale', 'remote', 'remote.session', 'shortcuts', 'layout'])
+    expect(inject).toEqual(['contextMenus', 'sidebarRight', 'sidebarRightTabs', 'sessions', 'slots', 'locale', 'remote', 'remote.session', 'remote.workspaceFiles', 'shortcuts', 'layout'])
   })
 
   it('does not open a retained workspace while a global panel hides the Session header', async () => {
@@ -164,6 +299,7 @@ describe('open-in-app browser half', () => {
       resolution.run()
       await vi.waitFor(() => { expect(face.hooks.openInAppLaunch.getSnapshot().phase).toBe('idle') })
       expect(fetcher.mock.calls.filter(([input]) => input === 'open-in-app/open')).toHaveLength(1)
+      expect(toastSource(ctx).hooks.toast.getSnapshot()).toBeNull()
     } finally { await fiber.dispose() }
   })
 
@@ -187,12 +323,24 @@ describe('open-in-app browser half', () => {
     await expect(face.applications('/w/clip.mp4', signal)).resolves.toEqual([])
     expect(remote.session.workspacePathApplications).toHaveBeenCalledWith({ path: '/w/clip.mp4' }, signal)
     expect(face.hooks.openInAppDesktop.getSnapshot()).toBe(true)
-    expect(await face.openPath('/w/clip.mp4', 'reveal')).toBeNull()
+    expect(await face.openPath('/w/clip.mp4', 'reveal')).toEqual({ kind: 'revealed' })
     expect(remote.session.openWorkspacePath).toHaveBeenLastCalledWith({ path: '/w/clip.mp4', action: 'reveal' })
     await fiber.dispose()
     expect(ctx.slots.entries('sidebar.right.tab.document.actions').map(entry => entry.options.id)).not.toContain('open-in-app')
     expect(ctx.slots.entries('sidebar.right.tab.document.unpreviewable').map(entry => entry.options.id)).not.toContain('open-in-app')
     expect(ctx.slots.entries('deliverables.file.actions')).toHaveLength(0)
+  })
+
+  it('injects the announcement seat into the delivery entries and releases every entry with the fiber', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ apps: [] }), { status: 200 })))
+    const { ctx, fiber } = await bench()
+    const entry = ctx.slots.entries('deliverables.review.file.actions')[0]
+    const face = (entry?.inject as () => OpenTargetReporter & Record<string, unknown>)()
+    face.report({ kind: 'failed', failure: 'revealError' })
+    expect(toastSource(ctx).hooks.toast.getSnapshot()).toEqual({ kind: 'failed', failure: 'revealError', seq: 1 })
+    await fiber.dispose()
+    expect(ctx.slots.entries('deliverables.review.file.actions')).toHaveLength(0)
+    expect(ctx.slots.entries('shell.overlay')).toHaveLength(0)
   })
 
   it('adapts the Session directory, shares the controller with the file tree, and removes both on teardown', async () => {
@@ -236,7 +384,7 @@ describe('open-in-app browser half', () => {
     const entry = ctx.slots.entries('conversation.session.header.utilities')[0]
     const injected: Partial<OpenInAppActionInjected> | undefined = entry?.inject?.()
     if (injected?.hooks === undefined || injected.iconUrl === undefined
-      || injected.choose === undefined || injected.launch === undefined) {
+      || injected.choose === undefined || injected.launch === undefined || injected.report === undefined) {
       throw new Error('expected the injected open-in-app actions')
     }
     const { hooks } = injected
@@ -249,7 +397,11 @@ describe('open-in-app browser half', () => {
     injected.choose('cursor')
     expect(hooks.openInAppChoice.getSnapshot()).toBe('cursor')
 
-    await injected.launch('cursor', '/w/dir')
+    const toast = toastSource(ctx)
+    injected.report({ kind: 'revealed' })
+    expect(toast.hooks.toast.getSnapshot()).toBeNull()
+
+    await expect(injected.launch('cursor', '/w/dir')).resolves.toEqual({ kind: 'opened' })
     const openCall = fetcher.mock.calls.find(call => call[0] === 'open-in-app/open')
     expect(openCall?.[1]).toMatchObject({
       method: 'POST',
@@ -259,7 +411,7 @@ describe('open-in-app browser half', () => {
     await fiber.dispose()
   })
 
-  it('publishes an empty availability list when the host read fails, and launches reject on HTTP errors', async () => {
+  it('publishes an empty availability list when the host read fails, and launches return named failures on HTTP errors', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: string | URL) => {
       if (String(input) === 'open-in-app/apps') throw new Error('down')
       return new Response('', { status: 502 })
@@ -272,7 +424,7 @@ describe('open-in-app browser half', () => {
     await vi.waitFor(() => {
       expect(hooks.openInAppApps.getSnapshot()).toEqual([])
     })
-    await expect(injected.launch('finder', '/w/dir')).rejects.toThrow('open failed: HTTP 502')
+    await expect(injected.launch('finder', '/w/dir')).resolves.toEqual({ kind: 'failed', failure: 'openError' })
     await fiber.dispose()
   })
 

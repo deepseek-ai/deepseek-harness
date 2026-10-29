@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/forge-session/README.md
+/:
+  en: 04fd3e698332ce87
+  zh: 283b365b1f909e0b
+/deepseek-ai-dsh-experimental-forge-session:
+  en: b8c7e5c40e3c21a4
+  zh: 2360132d865b9d08
+/deepseek-ai-dsh-experimental-forge-session/summary:
+  en: 6c46b2a70c2f4760
+  zh: 9425687e258412b4
+/deepseek-ai-dsh-experimental-forge-session/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 2f8a621b991260a1
+/deepseek-ai-dsh-experimental-forge-session/use-this-package:
+  en: d9de38d0cc22c1bd
+  zh: 6116653176a9fea7
+/deepseek-ai-dsh-experimental-forge-session/understand-the-implementation:
+  en: 46d6625f613e9c69
+  zh: 688ad6eb25570bc3
+/deepseek-ai-dsh-experimental-forge-session/further-exploration:
+  en: afd5ea387dc53920
+  zh: 1f2d48bdd1abeef7
+/deepseek-ai-dsh-experimental-forge-session/model-experience:
+  en: c2866463fc210ca0
+  zh: 0e66693bfd75264b
+/deepseek-ai-dsh-experimental-forge-session/model-experience/kv-cache-effect:
+  en: 1bdaeb7d102c23d8
+  zh: 37a3f0bd58f68363
+/deepseek-ai-dsh-experimental-forge-session/known-limitations-and-deferred-work:
+  en: 87c7672b6dc886a0
+  zh: 864ef4403a3e7fea
+/deepseek-ai-dsh-experimental-forge-session/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

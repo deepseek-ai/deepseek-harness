@@ -11,10 +11,11 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
-  /* Legacy fallback, then a row-relative cap that grants long names more
-     room without letting this trailing control consume the composer. */
-  max-width: 220px;
-  max-width: min(360px, 45cqw);
+  /* Preferred width: the composer measures this expanded seat against the
+     space the other controls leave, so the cap must not shrink with the row.
+     A row-relative cap would let the measured demand fall with the available
+     width, and the expanded text would then always fit. */
+  max-width: 360px;
   height: 28px;
   padding: 0 4px 0 8px;
   border: none;
@@ -249,6 +250,10 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+.modelOption {
+  max-width: 100%;
+}
+
 @media (hover: hover) {
   .option:not(.modelOption):hover:not(:disabled) {
     background: var(--dsw-alias-interactive-bg-hover);
@@ -281,6 +286,25 @@
   font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.badgedName {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 4px;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+.badgedNameText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  flex: none;
 }
 
 .check {

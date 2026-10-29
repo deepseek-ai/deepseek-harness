@@ -1070,6 +1070,39 @@ describe('grep results', () => {
     expect(text(result)).toBe('Found 1 of 2 matches\n\na.ts\nLine 1: one\n\n(The complete result could not be saved; narrow pattern, path, or include to see more.)')
   })
 
+  it('treats an empty include as omitted without passing a glob filter', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.handler = () => runResult(matchLine('notes.md', 1, 'alpha'))
+    const omitted = await call(ctx, 'grep', { pattern: 'alpha', path: '.' })
+    const empty = await call(ctx, 'grep', { pattern: 'alpha', path: '.', include: '' })
+    expect(empty.isError).toBe(false)
+    expect(text(empty)).toBe('Found 1 match\n\nnotes.md\nLine 1: alpha')
+    expect(empty.content).toEqual(omitted.content)
+    expect(subprocess.spawns.map(spec => spec.argv)).toEqual([
+      [rgPath, '--no-config', '--json', '--regexp=alpha', '--', '.'],
+      [rgPath, '--no-config', '--json', '--regexp=alpha', '--', '.'],
+    ])
+  })
+
+  it.each([
+    [{ include: '' }, 'pattern'],
+    [{ pattern: '', include: '' }, 'pattern must be a non-empty string'],
+    [{ pattern: 1, include: '' }, 'pattern'],
+    [{ pattern: 'x', path: '', include: '' }, 'path must be a non-empty string'],
+    [{ pattern: 'x', path: '  ', include: '' }, 'path must be a non-empty string'],
+    [{ pattern: 'x', path: 1, include: '' }, 'path'],
+    [{ pattern: 'x', include: null }, 'include'],
+    [{ pattern: 'x', include: false }, 'include'],
+    [{ pattern: 'x', include: 1 }, 'include'],
+    [{ pattern: 'x', include: [] }, 'include'],
+  ])('rejects malformed grep arguments %j before spawning', async (args, message) => {
+    const { ctx, subprocess } = await setup()
+    const result = await call(ctx, 'grep', args)
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain(message)
+    expect(subprocess.spawns).toHaveLength(0)
+  })
+
   it('validates arguments (empty pattern, blank path, bad include)', async () => {
     const { ctx } = await setup()
     expect(text(await call(ctx, 'grep', { pattern: '' }))).toContain('pattern must be a non-empty string')
@@ -1128,6 +1161,8 @@ describe('presentation', () => {
 
   it('grep titles carry the pattern, target, and include filter', () => {
     expect(presentGrepCall({ pattern: 'todo' })).toMatchObject({ card: 'generic', title: 'Grep todo', kind: 'search' })
+    expect(presentGrepCall({ pattern: 'todo', include: '' })).toEqual(presentGrepCall({ pattern: 'todo' }))
+    expect(presentGrepCall({ pattern: 'todo', path: 'src', include: '' }).title).toBe('Grep todo in src')
     expect(presentGrepCall({ pattern: 'todo', path: 'src', include: '*.ts' }).title).toBe('Grep todo in src (*.ts)')
   })
 

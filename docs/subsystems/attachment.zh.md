@@ -58,7 +58,7 @@ interface ImageAttachmentLimits {
 
 本地后端每条消息最多准入 20 张图片，源图编码数据总量不超过 200 MiB。单张源图不得超过 50 MiB、64,000,000 像素和单边 65,535 像素。这些源文件限制先于独立的规范化阶段执行；该阶段默认把长边限制为 2048 像素，把编码数据限制为 4 MiB。
 
-引用记录固有尺寸和编码长度，使客户端无需先解码即可排布历史记录；每次权威读取仍会根据对象重新校验摘要、媒体签名、尺寸和元数据。
+引用记录固有尺寸和编码长度，使客户端无需先解码即可排布历史记录。读取会把存储对象与传入引用中的 ID、格式、字节数、宽度和高度比对。可选的显示名称和规范化前尺寸作为调用方提交的显示信息原样返回，不根据存储字节校验。
 
 ## 提交与经校验读取的数据
 
@@ -173,7 +173,7 @@ interface RequestImageAttachment {
 }
 ```
 
-`saveImage()` 准备并原子提交提供方无关的规范化附件，然后直接返回 `ImageAttachmentRef`。`saveImages()` 在发布批次前为每个成员各准备一次经过验证的附件，因此校验拒绝不会留下部分对象，发布也不会重复解码或选择质量。`admitPromptContent()` 在上传凭证解析后接收完整且有序的 Host prompt，把 base64 图片上传替换为持久引用，让持久文件引用和已存储的图片原样通过，并把每张图片计入单条消息的图片数量与总字节上限，已存储的图片按其上传的字节数计入。`admitEncodedImages()` 支持其他 wire 入口，把张数、聚合字节和有序批量准入交给 `saveImages()`。`admitEncodedFile()` 让编码协议适配器使用服务拥有的规范 base64 准入，`isAttachmentError()` 让这些适配器无需导入实现辅助函数即可识别稳定的附件错误。`readImage()` 校验来自已授权会话路径的规范化附件。`imageHostPath()` 只公开提供方所持对象的宿主位置，不判断当前工具执行环境能否读取它。`readImageRequest()` 按确切的路由目标尺寸和编码字节目标派生并缓存确定性请求版本。该版本包含编码字节和元数据，不包含执行环境路径。新条目在发布前完整解码，缓存命中只做有界元数据探测。调用方需要有序批次时，对单数方法使用 `Promise.all`。本地实现按需编码首选候选、合并相同请求身份的并发任务、允许每个等待方单独取消、没有等待方时停止共享任务，并通过实例级限流器限制全部变换，默认同时执行两项。该服务不规定保留策略：恢复和 fork 后的会话可能共享对象，因此基于引用的垃圾回收会延期实现，不与单个会话的删除绑定。
+`saveImage()` 准备并原子提交提供方无关的规范化附件，然后直接返回 `ImageAttachmentRef`。`saveImages()` 在发布批次前为每个成员各准备一次经过验证的附件，因此校验拒绝不会留下部分对象，发布也不会重复解码或选择质量。`admitPromptContent()` 在上传凭证解析后接收完整且有序的 Host prompt，把 base64 图片上传替换为持久引用，让持久文件引用和已存储的图片原样通过，并把每张图片计入单条消息的图片数量与总字节上限，已存储的图片按其上传的字节数计入。`admitEncodedImages()` 支持其他 wire 入口，把张数、聚合字节和有序批量准入交给 `saveImages()`。`admitEncodedFile()` 让编码协议适配器使用服务拥有的规范 base64 准入，`isAttachmentError()` 让这些适配器无需导入实现辅助函数即可识别稳定的附件错误。`readImage()` 把规范化对象与传入的完整引用比对，无需查询 Session 历史，随后返回该引用与字节。访问规则由调用 API 负责；Session Controller 使用存储范围的[图片访问规则](../../.agents/notes/implemented/architecture/2026-10-23-store-scoped-image-reads.zh.md)。`imageHostPath()` 只公开提供方所持对象的宿主位置，不判断当前工具执行环境能否读取它。`readImageRequest()` 按确切的路由目标尺寸和编码字节目标派生并缓存确定性请求版本。该版本包含编码字节和元数据，不包含执行环境路径。新条目在发布前完整解码，缓存命中只做有界元数据探测。调用方需要有序批次时，对单数方法使用 `Promise.all`。本地实现按需编码首选候选、合并相同请求身份的并发任务、允许每个等待方单独取消、没有等待方时停止共享任务，并通过实例级限流器限制全部变换，默认同时执行两项。该服务不规定保留策略：恢复和 fork 后的会话可能共享对象，因此基于引用的垃圾回收会延期实现，不与单个会话的删除绑定。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -243,8 +243,8 @@ isAttachmentError(error: unknown): error is AttachmentError
 abstract saveImage(input: SaveImageAttachment): Promise<ImageAttachmentRef>
 
 /**
- * Read one image and verify that bytes still match the recorded reference.
- * @param ref - durable reference from the session log.
+ * Read one image and verify its ID, format, byte length, and dimensions against the supplied reference.
+ * @param ref - supplied image reference; name and originalDimensions are preserved without file verification.
  * @param signal - optional cancellation for backend read and verification work.
  * @returns the verified bytes and normalized attachment reference.
  * @throws the signal reason when aborted, or a storage error when verification fails.
@@ -282,7 +282,7 @@ saveFileStream(input: SaveFileStreamAttachment): Promise<FileAttachmentRef>
  * Read and verify one verbatim stored file as bounded chunks. Providers must
  * not collect the complete file in memory. Backends without verbatim file
  * reads keep this default rejection.
- * @param ref - durable reference from the session log.
+ * @param ref - durable file reference from the session log.
  * @param signal - optional cancellation for backend reads and verification work.
  * @returns exact file bytes in order; integrity failures reject the iteration.
  */

@@ -45,7 +45,7 @@ Commands declaring attachment input receive images and generic files in selectio
 
 ### Reuse images across the session
 
-Saved normalized images stay in conversation history and are projected into deterministic, route-sized request versions in later turns; after a restart, a resumed session shows and reuses the same images. When the current execution filesystem maps the stored host object, the request descriptor also carries a read-only process path that the model can inspect. When history or a request version is read back, the stored bytes are checked against what was recorded, so a missing, corrupted, or swapped image surfaces as an error rather than wrong bytes.
+Saved normalized images stay in conversation history and are projected into deterministic, route-sized request versions in later turns; after a restart, a resumed session shows and reuses the same images. When the current execution filesystem maps the stored host object, the request descriptor also carries a read-only process path that the model can inspect. History image reads and request projections verify the stored object against the full image reference, including its digest, format, byte length, and dimensions. Missing, corrupted, or swapped images fail explicitly.
 
 ### What can go wrong
 
@@ -65,7 +65,7 @@ This section explains the design decisions behind the seam and the service opera
 
 - **Normalize and persist before event.** Every source is prepared and verified before the batch publishes in order, so the session log never references a partial or failed normalization.
 - **Immutable and retention-neutral.** Objects are immutable once published; resumed and forked sessions may share them, so reference-aware garbage collection is deferred rather than tied to any one session's deletion.
-- **Verify on read.** Reads check bytes and metadata against the logged reference before returning them, and request projections fully decode cached bytes, so a missing, corrupted, or swapped object fails closed.
+- **Verify on read.** Reads verify the immutable object against the supplied reference without consulting a Session. Optional display names and pre-normalization dimensions pass through as caller-supplied display information; the stored bytes do not verify these fields.
 - **Role-neutral image blocks.** The `ImageBlock` content block in `dsh-llm` carries an `ImageAttachmentRef`; provider adapters resolve it into deterministic request versions at an explicit route-chosen target size and byte target, while execution filesystems may map the immutable host object to a model-readable process path.
 - **Error routing by code.** `AttachmentError` re-implements the `HarnessError` shape instead of extending it because the base lives in `dsh-llm`, which depends on this package; consumers use `isAttachmentError` and route on `code`, never on the prototype chain.
 - **Files are verbatim, images are normalized.** `saveFile` commits an existing byte array, `saveFileStream` commits bounded chunks with backpressure and cancellation, `readFileStream` verifies and returns bounded chunks, and `fileHostPath` locates the stored object for read-on-demand projection; neither file write path applies admission limits. The image path keeps its separate normalization, limits, and request-version pipeline. The `FileBlock` content block in `dsh-llm` carries a `FileAttachmentRef`, and request assembly projects it to deterministic handle text for every route.

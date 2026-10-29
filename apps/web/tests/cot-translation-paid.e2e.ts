@@ -196,7 +196,7 @@ it.skipIf(MODE === 'record')('reuses saved native Account Flash translations acr
   await panel.getByText(`v${bundleVersion}`, { exact: true }).waitFor()
   await panel.getByText(bundleVersion, { exact: true }).waitFor()
   // The bundle's detail document is shown between its components and its source.
-  await panel.locator('[data-detail-document]').getByRole('heading', { name: '使用方法', exact: true }).waitFor()
+  await panel.locator('[data-detail-document]').getByRole('img', { name: '展开的思考行从英文翻译成中文，并显示“查看原文”按钮', exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'paid-choices.expected.md'),
     await captureStableAria(settings, '[data-plugin-panel]', scaffold.workspaceCwd, {
       replacements: [[BUNDLE, '{{bundle}}'], [bundleVersion, '{{version}}']],

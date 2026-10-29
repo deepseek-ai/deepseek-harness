@@ -195,9 +195,9 @@ The Client narrows `meta` locally at runtime. Renaming `presentationMeta` to mor
 
 ## Host Design
 
-After obtaining source events, `SessionHistoryController.page()` performs only pagination and the existing projection-baseline calculation. Attached Sessions use the projection registry snapshot; detached Sessions use its restore path over the inspected log. History does not mount a preset to change the registered projection set.
+After obtaining source events, `HistoryController.history()` performs only pagination and requests projections only for a subagent address that needs descriptor validation. Attached Sessions use the projection registry snapshot; detached Sessions use its restore path over the inspected log. History does not mount a preset to change the registered projection set.
 
-`SessionHistoryController.follow()` retains listener-first setup, opening cursors, gap-free replay, live buffering, cancellation, and teardown. It maintains no additional state for tool events.
+`WebController.follow()` retains listener-first setup, opening cursors, gap-free replay, live buffering, cancellation, and teardown. It maintains no additional state for tool events.
 
 The controller has no `presenterScopeFor()`, `viewFor()`, `backscanArgs()`, `parseToolCall()`, or `jsonView()` path. Page state contains no presenter scope or argument resolver; follow state contains no `openCalls`, `fallbackEvents`, or presentation argument resolver. Each page/follow event is wrapped only as `{event}` while addressing, ownership, cursor, sequence, and projection logic remains intact.
 

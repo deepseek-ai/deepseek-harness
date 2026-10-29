@@ -195,9 +195,9 @@ Client 对 `meta` 做局部运行时收窄。是否把 `presentationMeta` 改名
 
 ## Host 端设计
 
-`SessionHistoryController.page()` 在取得 source events 后只执行分页与现有 projection baseline 计算。attached Session 使用 projection registry snapshot；detached Session 使用该 registry 对 inspected log 的 restore 路径。history 不通过挂载 preset 改变已注册的 projection 集合。
+`HistoryController.history()` 在取得 source events 后只执行分页，并且只有需要校验 descriptor 的 subagent 地址才请求投影。attached Session 使用 projection registry snapshot；detached Session 使用该 registry 对 inspected log 的 restore 路径。history 不通过挂载 preset 改变已注册的 projection 集合。
 
-`SessionHistoryController.follow()` 保留 listener-first、opening cursor、gap-free replay、live buffering、取消和 teardown；它不为工具事件维护额外状态。
+`WebController.follow()` 保留 listener-first、opening cursor、gap-free replay、live buffering、取消和 teardown；它不为工具事件维护额外状态。
 
 Controller 不存在 `presenterScopeFor()`、`viewFor()`、`backscanArgs()`、`parseToolCall()` 或 `jsonView()` 路径。page state 不含 presenter scope 或参数 resolver；follow state 不含 `openCalls`、`fallbackEvents` 或 presentation 参数 resolver。每个 page/follow event 只包装成 `{event}`，地址、ownership、cursor、seq 与 projection 逻辑保持完整。
 

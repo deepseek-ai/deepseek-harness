@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Modal } from '../src/Modal.tsx'
-import { closeTopModal, isBehindModal } from '../src/useModalLayer.ts'
+import { closeTopModal, isBehindModal, useModalLayer } from '../src/useModalLayer.ts'
 import { Menu } from '../src/Menu.tsx'
 
 afterEach(cleanup)
@@ -24,6 +24,47 @@ function Nested({ withSearch = true }: { withSearch?: boolean }) {
   </>
 }
 const escape = (init = {}) => fireEvent.keyDown(document.activeElement ?? document, { key: 'Escape', code: 'Escape', ...init })
+
+it('restores the opener after a closing dialog updates its retained controls', () => {
+  function RetainedDialog({ open }: { open: boolean }) {
+    const dialog = useRef<HTMLDivElement>(null)
+    useModalLayer(dialog, open, () => {})
+    return <div ref={dialog} role="dialog" aria-modal={open || undefined}>
+      <button data-modal-autofocus>{open ? 'Close' : 'Open'}</button>
+    </div>
+  }
+  const view = render(<><button>Opener</button><RetainedDialog open={false} /></>)
+  const opener = screen.getByRole('button', { name: 'Opener' })
+  opener.focus()
+  view.rerender(<><button>Opener</button><RetainedDialog open /></>)
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+  view.rerender(<><button>Opener</button><RetainedDialog open={false} /></>)
+  expect(document.activeElement).toBe(opener)
+})
+
+it('preserves the owner return focus when a dialog unmounts', () => {
+  function Details() {
+    const [open, setOpen] = useState(false)
+    const more = useRef<HTMLButtonElement>(null)
+    return <>
+      <section aria-label="Details" tabIndex={-1}>
+        <button ref={more} onClick={() => { setOpen(true) }}>More</button>
+      </section>
+      <Modal open={open} title="Confirm" closeLabel="Cancel" onClose={() => {
+        setOpen(false)
+        more.current?.focus()
+      }} />
+    </>
+  }
+  render(<Details />)
+  screen.getByRole('region', { name: 'Details' }).focus()
+  const more = screen.getByRole('button', { name: 'More' })
+  fireEvent.click(more)
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(document.activeElement).toBe(more)
+})
+
 it('closes only the top modal through application commands and restores each opener', () => {
   render(<Nested />)
   const settings = screen.getByRole('button', { name: 'Settings' }); settings.focus(); fireEvent.click(settings)

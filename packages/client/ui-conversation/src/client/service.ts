@@ -213,17 +213,22 @@ export class ConversationController extends Service implements IConversation {
   }
 
   /**
-   * Submit ordered draft attachments with text through one host admission. A local
-   * submission echo enters the session snapshot synchronously; serialization
-   * and the prompt round-trip start after the browser can paint it. On the
-   * echo's observed retirement seeds admitted image previews into the durable
-   * cache and removes every attachment from the draft registry. On failure,
-   * every attachment remains registered so the composer can restore it.
+   * Submit ordered draft attachments with text through one host admission. A
+   * local submission echo is registered first and enters the session snapshot
+   * once the Host accepts the prompt; serialization and the prompt round-trip
+   * start after the browser can paint the composer's sending state. The
+   * outcome is success as soon as the Host accepts the prompt, which an Inbox
+   * row carrying the request id can show before the receipt. The echo's
+   * observed retirement seeds admitted image previews into the durable cache
+   * and removes every attachment from the draft registry; an accepted prompt
+   * whose echo retires unobserved also releases them. Until the Host accepts
+   * the prompt, every attachment remains registered for the composer.
    * @param session - target session.
    * @param text - serialized prompt text.
    * @param attachmentIds - ordered draft-local attachment ids.
    * @param mode - queue or steer delivery selected by composer policy.
    * @param signal - optional cancellation for the complete Host admission.
+   * @param accept - called inside the Session's acceptance, before the echo renders, so the composer settles with it.
    * @returns the Host admission outcome; local attachment preparation failures reject.
    */
   async sendSession(
@@ -232,6 +237,7 @@ export class ConversationController extends Service implements IConversation {
     attachmentIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal?: AbortSignal,
+    accept?: () => void,
   ): Promise<SubmitOutcome> {
     const attachments = this.resolveDraftAttachments(attachmentIds)
     if (attachments.length !== attachmentIds.length) {
@@ -271,17 +277,22 @@ export class ConversationController extends Service implements IConversation {
           : { type: 'file' as const, receiptId }
       }),
     )
-    let finishRetirement: ((retirement: PendingSubmissionRetirement) => void) | undefined
-    const retirement = attachments.length === 0
-      ? undefined
-      : new Promise<PendingSubmissionRetirement>((resolve) => { finishRetirement = resolve })
+    // The composer owns the attachments until the Host accepts the prompt.
+    const ownership = { accepted: false, retiredUnobserved: false }
+    const acceptance = Promise.withResolvers<undefined>()
     const submission = session.beginSubmission({
       mode,
       text,
       attachments: pendingAttachments,
+      onAccept: () => {
+        ownership.accepted = true
+        accept?.()
+        acceptance.resolve(undefined)
+      },
       onRetire: (settlement) => {
-        this.settleSubmittedAttachments(session.sessionId, attachments, settlement)
-        finishRetirement?.(settlement)
+        if (settlement.reason === 'observed') this.settleSubmittedAttachments(session.sessionId, attachments, settlement)
+        else if (ownership.accepted) this.releaseDraftAttachments(attachments)
+        else ownership.retiredUnobserved = true
       },
     })
     let content: Parameters<SessionFace['prompt']>[0]
@@ -293,9 +304,13 @@ export class ConversationController extends Service implements IConversation {
       submission.abandon()
       throw error
     }
-    const result = await session.prompt(content, mode, signal, submission.requestId)
-    if (!result.ok) return { kind: 'error' }
-    if (retirement !== undefined && (await retirement).reason !== 'observed') return { kind: 'error' }
+    // An Inbox row can show the acceptance before the receipt; a receipt that fails afterwards changes
+    // nothing here because the Host already holds the message.
+    const result = await Promise.race([session.prompt(content, mode, signal, submission.requestId), acceptance.promise])
+    if (result !== undefined && !result.ok) return { kind: 'error' }
+    ownership.accepted = true
+    // An accepted prompt whose echo already retired unobserved, as when its queue entry was removed.
+    if (ownership.retiredUnobserved) this.releaseDraftAttachments(attachments)
     return { kind: 'success' }
   }
 
@@ -568,19 +583,17 @@ export class ConversationController extends Service implements IConversation {
   }
 
   /**
-   * Settle one submission's draft attachments when its echo retires. Observed:
-   * each image leaves the registry, handing its preview URL to the durable
-   * image cache (seeded under the admitted reference so the transcript node
-   * renders immediately while the cache reads canonical bytes) or revoking it
-   * when the cache already holds that reference. Failed: nothing changes;
-   * the ids stay registered for the composer's rail restore.
+   * Settle one submission's draft attachments when its echo is observed: each
+   * file is released, and each image leaves the registry, handing its preview
+   * URL to the durable image cache (seeded under the admitted reference so the
+   * transcript node renders immediately while the cache reads canonical
+   * bytes) or revoking it when the cache already holds that reference.
    */
   private settleSubmittedAttachments(
     sessionId: SessionId,
     attachments: readonly ComposerAttachment[],
-    retirement: PendingSubmissionRetirement,
+    retirement: Extract<PendingSubmissionRetirement, { readonly reason: 'observed' }>,
   ): void {
-    if (retirement.reason !== 'observed') return
     const uiConversation = this.ctx.get('uiConversation')
     let observedIndex = 0
     for (const attachment of attachments) {

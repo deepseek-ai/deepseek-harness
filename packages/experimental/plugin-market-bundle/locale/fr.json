@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Index de plugins personnalisés",
-    "description": "Ajoute un onglet Découvrir à Plugins pour parcourir et installer des bundles depuis les index de plugins que vous ajoutez.",
+    "description": "Ajoute à « Plugins » un onglet « Découvrez » où vous parcourez et installez des plugins provenant des index de plugins que vous ajoutez.",
     "detail": "docs/DETAIL.md"
   }
 }

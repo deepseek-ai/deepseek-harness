@@ -10,13 +10,15 @@ Status: implemented
 
 ## Decision
 
-`scripts/verify-npm-install-layout.ts` 用 `assertResolutionWorkBudget` 判定规模增长，它以 `dshPackagesPerVersion * checkedDshEdges` 为工作量单位，与 `MAX_RESOLUTION_WORK_UNITS = 875_000` 比较。两个计数都来自 `assertDualDshInstallLayout` 返回的汇总，因此预算作用于 npm 实际产出的图，而不是对图的预测。超过预算的图会带着自己的计数、预算值，以及「测量新的解析开销并调高该常量」的指示失败。
+`scripts/verify-npm-install-layout.ts` 用 `assertResolutionWorkBudget` 判定规模增长，它以 `dshPackagesPerVersion * checkedDshEdges` 为工作量单位，与 `MAX_RESOLUTION_WORK_UNITS = 1_134_400` 比较。两个计数都来自 `assertDualDshInstallLayout` 返回的汇总，因此预算作用于 npm 实际产出的图，而不是对图的预测。超过预算的图会带着自己的计数、预算值，以及「测量新的解析开销并调高该常量」的指示失败。
 
-npm 子进程仍保留墙钟上限 `NPM_HANG_GUARD_MS`，由 `4 * MAX_RESOLUTION_WORK_UNITS * SECONDS_PER_WORK_UNIT` 推导（910 秒）。它是挂起保护，不是增长判据：比实测主机慢四倍以内的 runner 无法决定该门禁的结果，而由预算推导可避免两个数值彼此漂移。
+npm 子进程仍保留墙钟上限 `NPM_HANG_GUARD_MS`，由 `4 * MAX_RESOLUTION_WORK_UNITS * SECONDS_PER_WORK_UNIT` 推导（约 1,180 秒）。它是挂起保护，不是增长判据：比实测主机慢四倍以内的 runner 无法决定该门禁的结果，而由预算推导可避免两个数值彼此漂移。
 
 这恢复了[发布依赖门面](2026-08-26-published-dependency-faces.zh.md)中「`verify-npm-install-layout` 不限制 resolver 耗时」的决定；300 秒期限与该决定相矛盾。
 
 ## What the resolution costs
+
+2026-10-26 在空闲 Apple M5 Pro 上使用 Node 24.17.0 与 npm 11.13.0，通过 `buildDualDshRegistry`、`resolveNpmPackageLock` 和 `assertDualDshInstallLayout`，对独立的新建临时消费者目录依次测量：#5960 的依赖图（每个发布 315 个包、2782 条内部边、876,330 个工作量单位）用 75.27 秒解析；#5961 的依赖图（320 个包、2836 条边、907,520 个工作量单位）用 71.03 秒解析，第二次验证耗时 97.73 秒。所有布局校验均通过，共享一个 Cordis 安装，未请求包归档。这些测量用于校准依赖图的准入规模，不代表运行时性能提升。当前预算为其 907,520 个工作量单位的 1.25 倍；挂起保护仍采用此前较慢的单位工作量耗时作为保守校准。
 
 2026-09-28 在空闲的 M 系列主机上，针对 `origin/master`（每个发布 277 个 DSH 包、2524 条内部边），用 `--timing` 和 `--cpu-prof` 运行 lane 自身的 npm 调用测得：
 
@@ -47,4 +49,4 @@ npm 子进程仍保留墙钟上限 `NPM_HANG_GUARD_MS`，由 `4 * MAX_RESOLUTION
 
 ## Consequences
 
-lane 的失败判定如今取决于依赖图，因此新增少量 DSH 包的 pull request 在任何 runner 上都能通过，而「包数乘边数」增长超过约四分之一的图——即包数与内部边数同步增长约 12%——会带着实测计数确定性地失败。预算是棘轮：调高它是一次刻意修改，必须附带新的解析实测，该常量注释里记录了推导所用的计数。预算内的图仍会花掉完整的解析时间，因为这次改动移动的是判定位置而不是工作本身；这里没有任何东西能减少 npm 摆放双发布所需的 153 s。真正挂起的 npm 现在会消耗该 lane 最多 910 秒才失败，而旧期限把它限制在 300 秒。若图的增长改变了形状却没有改变「包数乘边数」，它仍留在预算内，只有在挂起保护到期时才被发现。
+lane 的失败判定如今取决于依赖图，因此新增少量 DSH 包的 pull request 在任何 runner 上都能通过，而「包数乘边数」增长超过约四分之一的图——即包数与内部边数同步增长约 12%——会带着实测计数确定性地失败。预算是棘轮：调高它是一次刻意修改，必须附带新的解析实测，该常量注释里记录了推导所用的计数。预算内的图仍会花掉完整的解析时间，因为这次改动移动的是判定位置而不是工作本身；这里没有任何东西能减少 npm 摆放双发布所需的 153 s。真正挂起的 npm 现在会消耗该 lane 最多约 1,180 秒才失败，而旧期限把它限制在 300 秒。若图的增长改变了形状却没有改变「包数乘边数」，它仍留在预算内，只有在挂起保护到期时才被发现。

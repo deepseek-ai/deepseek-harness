@@ -58,7 +58,7 @@ interface ImageAttachmentLimits {
 
 The local backend admits at most 20 images and 200 MiB of encoded source data per message. One source may use up to 50 MiB, 64,000,000 pixels, and 65,535 pixels on either side. These source limits precede the independent normalization stage, which limits the long edge to 2048 pixels and encoded data to 4 MiB by default.
 
-The reference records intrinsic dimensions and encoded length so clients can lay out history without decoding first, while every authoritative read still re-checks digest, media signature, dimensions, and metadata against the object.
+The reference records intrinsic dimensions and encoded length so clients can lay out history without decoding first. Reads verify the stored object against the supplied reference's ID, format, byte length, width, and height. Optional display names and pre-normalization dimensions are returned unchanged as caller-supplied display information, without verification against stored bytes.
 
 ## Commit and verified-read payloads
 
@@ -173,7 +173,7 @@ interface RequestImageAttachment {
 }
 ```
 
-`saveImage()` prepares and atomically commits a provider-independent normalized attachment before returning its `ImageAttachmentRef`. `saveImages()` prepares every validated attachment once before publishing the batch, so validation rejection leaves no partial objects and publication does not repeat decoding or quality selection. `admitPromptContent()` accepts the complete ordered Host prompt after upload receipt resolution, replaces base64 image uploads with durable references, passes durable file references and already stored images unchanged, and counts every image toward the per-message image count and aggregate byte limits, a stored image by the bytes of its upload. `admitEncodedImages()` supports other wire entries and delegates count, aggregate-byte, and ordered batch admission to `saveImages()`. `admitEncodedFile()` gives encoded protocol adapters the same service-owned canonical-base64 admission, and `isAttachmentError()` lets those adapters recognize stable attachment failures without importing implementation helpers. `readImage()` verifies a normalized attachment from an authorized session path. `imageHostPath()` exposes only the provider-owned host object location; it does not decide whether the current tool execution world can read it. `readImageRequest()` derives and caches one deterministic request version at an exact route-chosen target size and encoded-byte target. That version contains encoded bytes and metadata but no execution-world path. New entries are fully decoded before publication, while cache hits use a bounded metadata probe. Callers use `Promise.all` over the singular method when they need an ordered batch. The local implementation lazily encodes preferred candidates, singleflights equal request identities, lets each waiter cancel independently, stops shared work when no waiter remains, and bounds all transforms with its instance-level limiter, which defaults to two simultaneous transformations. The service is retention-neutral: resumed and forked sessions may share objects, so reference-aware garbage collection is deferred rather than tied to one session's deletion.
+`saveImage()` prepares and atomically commits a provider-independent normalized attachment before returning its `ImageAttachmentRef`. `saveImages()` prepares every validated attachment once before publishing the batch, so validation rejection leaves no partial objects and publication does not repeat decoding or quality selection. `admitPromptContent()` accepts the complete ordered Host prompt after upload receipt resolution, replaces base64 image uploads with durable references, passes durable file references and already stored images unchanged, and counts every image toward the per-message image count and aggregate byte limits, a stored image by the bytes of its upload. `admitEncodedImages()` supports other wire entries and delegates count, aggregate-byte, and ordered batch admission to `saveImages()`. `admitEncodedFile()` gives encoded protocol adapters the same service-owned canonical-base64 admission, and `isAttachmentError()` lets those adapters recognize stable attachment failures without importing implementation helpers. `readImage()` verifies a normalized object against the supplied complete reference without consulting Session history, then returns that reference with the bytes. Access policy belongs to the calling API; Session Controller uses the store-level [image access rule](../../.agents/notes/implemented/architecture/2026-10-23-store-scoped-image-reads.md). `imageHostPath()` exposes only the provider-owned host object location; it does not decide whether the current tool execution world can read it. `readImageRequest()` derives and caches one deterministic request version at an exact route-chosen target size and encoded-byte target. That version contains encoded bytes and metadata but no execution-world path. New entries are fully decoded before publication, while cache hits use a bounded metadata probe. Callers use `Promise.all` over the singular method when they need an ordered batch. The local implementation lazily encodes preferred candidates, singleflights equal request identities, lets each waiter cancel independently, stops shared work when no waiter remains, and bounds all transforms with its instance-level limiter, which defaults to two simultaneous transformations. The service is retention-neutral: resumed and forked sessions may share objects, so reference-aware garbage collection is deferred rather than tied to one session's deletion.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -243,8 +243,8 @@ isAttachmentError(error: unknown): error is AttachmentError
 abstract saveImage(input: SaveImageAttachment): Promise<ImageAttachmentRef>
 
 /**
- * Read one image and verify that bytes still match the recorded reference.
- * @param ref - durable reference from the session log.
+ * Read one image and verify its ID, format, byte length, and dimensions against the supplied reference.
+ * @param ref - supplied image reference; name and originalDimensions are preserved without file verification.
  * @param signal - optional cancellation for backend read and verification work.
  * @returns the verified bytes and normalized attachment reference.
  * @throws the signal reason when aborted, or a storage error when verification fails.
@@ -282,7 +282,7 @@ saveFileStream(input: SaveFileStreamAttachment): Promise<FileAttachmentRef>
  * Read and verify one verbatim stored file as bounded chunks. Providers must
  * not collect the complete file in memory. Backends without verbatim file
  * reads keep this default rejection.
- * @param ref - durable reference from the session log.
+ * @param ref - durable file reference from the session log.
  * @param signal - optional cancellation for backend reads and verification work.
  * @returns exact file bytes in order; integrity failures reject the iteration.
  */

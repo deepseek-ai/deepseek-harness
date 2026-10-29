@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Titres de suivi de conversation",
-    "description": "Actualisez les titres des sessions à mesure que de nouvelles invites humaines arrivent.",
+    "description": "Rédige le titre d'une session à partir de tous vos messages et le met à jour lorsque la tâche principale change, au lieu de se baser uniquement sur le premier message.",
     "detail": "docs/DETAIL.md"
   }
 }

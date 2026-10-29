@@ -1,14 +1,15 @@
 /**
- * Program evaluation, output capture, and host binding proxies over the process channel.
+ * Output capture, result encoding, and host binding proxies over the process channel.
  * @module @deepseek-ai/dsh-ptc-runtime-node/src/bootstrap
  */
 
-import { inspect } from 'node:util'
+import { inspect, types } from 'node:util'
 import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue } from './json-wire.ts'
 
 const CapturedError = Error
+const isNativeError = types.isNativeError
 const capturedObjectCreate = Object.create
 const capturedObjectDefineProperty = Object.defineProperty
 
@@ -198,8 +199,8 @@ function prepareFailure(
 }
 
 /**
- * Prepare a thrown program value without sending an unbounded stack or
- * string across the process channel.
+ * Prepare a thrown program value, including cross-realm errors, without sending
+ * an unbounded stack or string across the process channel.
  * @param error - the value thrown by the program.
  * @param remainingOutputBytes - exact bytes left after captured logs.
  * @param maxOutputBytes - the configured cap named in an overflow diagnostic.
@@ -212,7 +213,7 @@ export function prepareException(
 ): ProgramResult {
   let message: string
   try {
-    const detail: unknown = error instanceof CapturedError ? error.stack ?? error.message : error
+    const detail: unknown = isNativeError(error) ? error.stack ?? error.message : error
     message = typeof detail === 'string' ? detail : String(detail)
   } catch {
     message = 'program threw an unrenderable value'
@@ -246,21 +247,6 @@ function bindingFailure(errorClass: BindingErrorConstructor | undefined, memberN
 }
 
 /**
- * Build each declared error class once so calls and `instanceof` share constructor identity.
- * @param data - binding namespace declarations from the boot payload.
- * @returns constructors keyed by their owning namespace global.
- */
-export function makeBindingErrorClasses(
-  data: Pick<ProgramBootData, 'namespaces'>,
-): Map<string, BindingErrorConstructor> {
-  const classes = new Map<string, BindingErrorConstructor>()
-  for (const namespace of data.namespaces) {
-    if (namespace.errorClass) classes.set(namespace.global, makeBindingErrorClass(namespace.errorClass))
-  }
-  return classes
-}
-
-/**
  * Build null-prototype binding globals with namespace-specific rejection classes.
  * @param data - Namespace declarations injected into the program.
  * @param host - Evaluation-scoped remote binding calls.
@@ -270,7 +256,7 @@ export function makeBindingErrorClasses(
 export function makeNamespaces(
   data: Pick<ProgramBootData, 'namespaces'>,
   host: Pick<HostMethods, 'invoke'>,
-  errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'> = makeBindingErrorClasses(data),
+  errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'>,
 ): Record<string, unknown>[] {
   return data.namespaces.map(({ global, names }) => {
     const namespace = Object.create(null) as Record<string, unknown>
@@ -297,56 +283,4 @@ export function makeNamespaces(
     }
     return namespace
   })
-}
-
-/**
- * Run one strict async-function body with captured output and host binding proxies.
- * @param host - Evaluation-scoped host methods.
- * @param data - the boot payload the host sent.
- * @param streams - stdout/stderr objects captured as program logs.
- * @returns Completion or a bounded program failure.
- */
-export async function runProgram(
-  host: Omit<HostMethods, 'ready'>,
-  data: ProgramBootData,
-  streams: { stdout: PatchableStream; stderr: PatchableStream },
-): Promise<ProgramResult> {
-  const logs = new LogBuffer(
-    data.maxOutputBytes,
-    (text) => { host.log(text) },
-    () => { host.outputLimit() },
-  )
-  captureStreamWrites(logs, streams.stdout)
-  captureStreamWrites(logs, streams.stderr)
-
-  const errorClasses = makeBindingErrorClasses(data)
-  const namespaces = makeNamespaces(data, host, errorClasses)
-  const errorClassParameters: string[] = []
-  const errorClassValues: BindingErrorConstructor[] = []
-  for (const namespace of data.namespaces) {
-    if (!namespace.errorClass) continue
-    errorClassParameters.push(namespace.errorClass.name)
-    const errorClass = errorClasses.get(namespace.global)
-    /* v8 ignore next -- makeBindingErrorClasses covers every declaration in the same data. */
-    if (!errorClass) throw new CapturedError(`missing binding error class for ${namespace.global}`)
-    errorClassValues.push(errorClass)
-  }
-  const consoleShim = makeConsoleShim(logs)
-
-  try {
-    // The async function constructor, reached through an instance because
-    // `AsyncFunction` is not a global. The program body is strict-mode.
-    /* v8 ignore next -- the arrow exists only to reach the AsyncFunction constructor; it is never invoked. */
-    const AsyncFunction = (async () => {}).constructor as new (...args: string[]) => (...fnArgs: unknown[]) => Promise<unknown>
-    const fn = new AsyncFunction(
-      ...data.namespaces.map(namespace => namespace.global),
-      ...errorClassParameters,
-      'console',
-      `'use strict';\n${data.code}`,
-    )
-    const value = await fn(...namespaces, ...errorClassValues, consoleShim)
-    return prepareCompletion(value, logs.remainingOutputBytes(), data.maxOutputBytes)
-  } catch (error: unknown) {
-    return prepareException(error, logs.remainingOutputBytes(), data.maxOutputBytes)
-  }
 }

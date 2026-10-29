@@ -63,6 +63,21 @@ const state = todoProjectionHandle.stateOf(session)
 const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 ```
 
+<a id="bind-several-states-to-one-session"></a>
+### 将多个状态绑定到一个 Session
+
+对已等待注册完成的句柄调用 `handle.readerFor(session)`，即可得到 `() => S` 回调。调用它时无需 Session 参数即可读取当前状态。组合多个状态的所有者将这些回调放入一个类型化对象，交给运行时。新增状态只增加属性，不增加构造参数；普通插件仍通过领域服务的方法读取。
+
+```text
+const projections = {
+  todo: todoProjectionHandle.readerFor(session),
+  goal: goalProjectionHandle.readerFor(session),
+}
+const todo = projections.todo()
+```
+
+每个读取函数保存确切的 Session，并将读取委托给原句柄的 `stateOf(session)`，保留就绪要求、null 和 undefined 值、状态引用及同步失败。创建读取函数不读取状态、不准备 Session、不执行存储 I/O，也不创建状态缓存。读取函数不拥有注册或释放职责。原句柄仍负责释放；注销或版本替换后，读取函数仍读取原有单元。同一句柄可为多个 Session 独立创建读取函数。注册和 Session 准备仍由原所有者完成；客户端快照保持独立。
+
 持有投影状态的领域将 `sessionProjections` 声明为 Cordis 服务依赖，并在内部保留句柄。消费方注入该领域服务并使用其方法，例如 `ctx.agents.turnBoundaryOf(session)`，无需导入定义或保留投影读取句柄。可选贡献方可以在 `ctx.inject(['sessionProjections'], …)` 下注册。载体使用 `ctx.get('sessionProjections')`，注册表缺席时省略自己的块或帧。
 
 <a id="deprecated-plugin-compatibility"></a>

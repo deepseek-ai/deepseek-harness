@@ -3,11 +3,11 @@
 import type {} from '@deepseek-ai/dsh-agent/types'
 import type { NativeFileApplication } from '@deepseek-ai/dsh-native-command/types'
 import type {
-  AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
+  ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
 } from '@deepseek-ai/dsh-attachment'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
-import type { TextBlock } from '@deepseek-ai/dsh-llm'
+import type { LlmModelBadge, TextBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionMap, SessionProjectionSummaryExcluded, SessionProjectionSummaryValues } from '@deepseek-ai/dsh-session-projection/types'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
@@ -110,6 +110,8 @@ export interface ModelCatalogModel {
   readonly name: string
   readonly description?: string
   readonly reasoning?: ModelReasoning
+  /** Provider-authored label shown beside the name; display data only. */
+  readonly badge?: LlmModelBadge
 }
 
 /** One provider and its successfully loaded model catalog. */
@@ -175,6 +177,10 @@ export const SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS = 240
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
+    /** A wait observation ended before a stopping state; the caller should reread. */
+    'session/observation-ended': Record<string, never>
+    /** No state arrived before the deadline; a timeout after a state returns its value instead. */
+    'session/wait-timeout': Record<string, never>
     'session/provider-credentials-unavailable': Record<string, never>
     'session/provider-models-unavailable': { readonly provider: string }
     'session/model-unavailable': { readonly provider: string; readonly model: string }
@@ -329,12 +335,14 @@ export interface SessionPromptValue {
 
 /** Durable image read request. */
 export interface SessionAttachmentRequest {
+  /** Gateway permission scope only; neither Session existence nor its image references are checked. */
   readonly sessionId: SessionId
-  readonly attachmentId: AttachmentIdType
+  readonly attachment: ImageAttachmentRef
 }
 
 /** Durable image read response value. */
 export interface SessionAttachmentValue {
+  /** Supplied reference after ID, format, byte length, and dimensions verification; display fields are preserved. */
   readonly attachment: ImageAttachmentRef
   readonly data: string
 }
@@ -459,8 +467,11 @@ export interface SessionWireEvent {
 /** One message-aligned backwards-history request. */
 export interface SessionPageRequest {
   readonly address: SessionAddress
-  /** Inclusive log cut obtained from the corresponding follow opening frame. */
-  readonly throughSeq: number
+  /**
+   * Inclusive log cut; omission selects the observed log end. A follow opening
+   * reports the cut it covered so a caller can pin the same point.
+   */
+  readonly throughSeq?: number
   readonly beforeSeq?: number
   readonly maxMessages?: number
   /** Stop at a Turn start after both minima, unless maxMessages or history exhaustion wins. */
@@ -475,6 +486,8 @@ export interface SessionPageRequest {
 /** One live event request for a durable Session address. */
 export interface SessionFollowRequest extends Pick<SessionPageRequest, 'maxMessages' | 'turnWindow'> {
   readonly address: SessionAddress
+  /** Request background activation; omission leaves the read passive. */
+  readonly activate?: boolean
   /** Include process-local assistant presentation frames for the Web client. */
   readonly assistantStream?: true
 }
@@ -568,6 +581,84 @@ export interface SessionProjectionUpdate {
 export type SessionControlFrame =
   | { readonly type: 'baseline'; readonly value: SessionControlBaseline }
   | ({ readonly type: 'projection' } & SessionProjectionUpdate)
+
+/** One pending live-Agent inbox item, preserving placement and content order. */
+export interface SessionQueuedItem {
+  readonly id: MessageId
+  readonly placement: 'queued' | 'steering' | 'context'
+  readonly rpcId?: SessionRequestId
+  readonly content: readonly JsonValue[]
+}
+
+/** State-owned classification of pending forwarded Remote events. */
+export type SessionPendingInput = 'approval' | 'question' | 'other'
+
+/** Passive Session state; a missing live Agent has no readable queue. */
+export interface SessionState {
+  readonly cursor: number
+  readonly active: boolean
+  readonly running: boolean
+  readonly queue: readonly SessionQueuedItem[] | null
+  /**
+   * Pending Remote requests sampled when this state was read. A pending change alone does not
+   * trigger `observeState`; `wait` refreshes on its own interval.
+   */
+  readonly pendingInput: readonly SessionPendingInput[]
+}
+
+/** Session identity for a passive state read or subscription. */
+export interface SessionStateRequest {
+  readonly sessionId: SessionId
+}
+
+/** Wait bounds and assistant output window; timeout omission uses the fixed 30-second default. */
+export interface SessionWaitRequest extends SessionStateRequest {
+  readonly timeoutMs?: number
+  /** Exclusive output cursor; omission includes all available assistant records. */
+  readonly afterSeq?: number
+  /** Positive assistant-record limit; omission uses the history message budget. */
+  readonly maxMessages?: number
+}
+
+/** Assistant messages after afterSeq through the stopping state's cursor, newest first. */
+export interface SessionWaitOutput {
+  readonly records: readonly SessionHistoryRecord[]
+  /** More eligible assistant messages exist in the selected interval. */
+  readonly truncated: boolean
+}
+
+/** A stopping condition, the last complete passive state and its bounded assistant output. */
+export interface SessionWaitValue {
+  readonly reason: 'idle' | 'input-required' | 'timeout'
+  readonly state: SessionState
+  readonly output: SessionWaitOutput
+}
+
+/**
+ * One `session.events` page (or its deprecated `page` alias) with its inclusive cut:
+ * the supplied `throughSeq`, otherwise the log end it was read at.
+ */
+export interface SessionEventsPage extends SessionPage {
+  readonly cursor: number
+}
+
+/** Address for a passive event subscription. */
+export interface SessionObserveEventRequest {
+  readonly address: SessionAddress
+}
+
+/** Readiness confirms subscription only; event continuity starts with the first delivered event. */
+export type SessionEventFrame =
+  | { readonly type: 'ready' }
+  | SessionEventEntry
+
+/** One sparse per-key replacement; different keys can share a seq. */
+export type SessionProjectionChange = { readonly type: 'projection' } & Omit<SessionProjectionUpdate, 'sessionId'>
+
+/** Subscription readiness without a baseline, followed by per-key changes. */
+export type SessionProjectionFrame =
+  | { readonly type: 'ready' }
+  | SessionProjectionChange
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
