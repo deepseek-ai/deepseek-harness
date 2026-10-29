@@ -51,8 +51,8 @@
   en: 615ca9834bf6544f
   zh: 2d70b548f99000d1
 /deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/source-map:
-  en: 64912b8a3a336419
-  zh: 33a245969b4194f6
+  en: 01520c709ee2202c
+  zh: de919d3f2ff61046
 /deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/registration-and-directory:
   en: 0c6df3e8b6a75372
   zh: 476666a6f209542c
@@ -60,8 +60,8 @@
   en: 477d277e9ac35c8f
   zh: 96870ca333fb6510
 /deepseek-ai-dsh-llm-pi-ai/understand-the-implementation/replay-and-vocabulary:
-  en: e64173763fdbcfae
-  zh: 73ed2c2af54b62f6
+  en: 507ceb2856849646
+  zh: 4f54925b52a1c190
 /deepseek-ai-dsh-llm-pi-ai/further-exploration:
   en: a2a2ccdeae59d408
   zh: c47ee091aa90ad91
@@ -72,14 +72,14 @@
   en: e7348db3f7115960
   zh: 5fd5fb09d7d09982
 /deepseek-ai-dsh-llm-pi-ai/model-experience/provider-request-through-pi-ai/what-the-model-sees:
-  en: a1c686712365d7ae
-  zh: f28c4e2373013a2a
+  en: 5a721ff77ea17329
+  zh: a6939df9086ffbe4
 /deepseek-ai-dsh-llm-pi-ai/model-experience/provider-request-through-pi-ai/token-effect:
   en: 820221e8ae37aa61
   zh: 7e6ff4db10067fc0
 /deepseek-ai-dsh-llm-pi-ai/model-experience/provider-request-through-pi-ai/kv-cache-effect:
-  en: 7a2595060340d7d5
-  zh: e4ba753dcdaa89fc
+  en: f12ebd22715827ea
+  zh: 8f006b1be832bcc7
 /deepseek-ai-dsh-llm-pi-ai/model-experience/provider-response:
   en: 802d7ff60a1d03ff
   zh: c41c56e28f3e8680
