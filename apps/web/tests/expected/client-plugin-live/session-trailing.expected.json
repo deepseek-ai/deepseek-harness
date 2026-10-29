@@ -86,7 +86,7 @@
       "Fixture badge",
       "Fixture section"
     ],
-    "time": true,
+    "time": false,
     "pinned": false,
     "actions": true
   },
@@ -96,7 +96,7 @@
       "Fixture badge",
       "Fixture section"
     ],
-    "time": true,
+    "time": false,
     "pinned": false,
     "actions": true
   },
@@ -106,7 +106,7 @@
       "Fixture badge",
       "Fixture section"
     ],
-    "time": true,
+    "time": false,
     "pinned": false,
     "actions": true
   },
@@ -116,8 +116,8 @@
       "Fixture badge",
       "Fixture section"
     ],
-    "time": true,
-    "pinned": true,
+    "time": false,
+    "pinned": false,
     "actions": true
   },
   {
@@ -136,7 +136,7 @@
       "Fixture badge",
       "Fixture section"
     ],
-    "time": true,
+    "time": false,
     "pinned": false,
     "actions": true
   }

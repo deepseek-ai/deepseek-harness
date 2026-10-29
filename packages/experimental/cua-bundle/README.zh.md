@@ -24,7 +24,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-本流程面向从源码运行 macOS Web 或未打包 Desktop 的开发者。在「插件 → 添加插件」中输入 `@deepseek-ai/dsh-cua-bundle`，点击「安装」，再点击「立即启用」。DSH 会启用随应用提供的副本，无需重新下载。已启用的组合包保留在插件页，可打开 Computer Use 管理权限或将其关闭。关闭后卡片再次隐藏，除非该 profile 单独安装了它。权限页通过可选系统查询显示 macOS 报告的责任应用，指引用户申请权限并在系统设置中开启对应开关。若 macOS 显示其他应用名称，以系统提示为准。Web 版在仓库根目录运行以下命令：
+在 macOS Desktop 的“插件 → 添加插件”中输入 `@deepseek-ai/dsh-cua-bundle`，点击“安装”，再点击“立即启用”。DSH 将与当前运行时版本匹配的官方插件安装到 profile。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 链接工作区组合包，启用时准备临时签名的 helper。打开 Computer Use 详情，按需设置 PTC，并为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。已安装的组合包关闭后仍可管理。源码 Web 在仓库根目录运行以下命令：
 
 ```sh
 pnpm run build
@@ -37,7 +37,7 @@ pnpm dsh web
 
 关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。
 
-Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的可选依赖，共享 CUA 和 Client 包仍随安装提供。其他 Host 默认不在插件列表和模型推荐中展示此组合包，并在保存设置前拒绝启用。profile 显式安装的依赖和已保存的选择仍保留管理入口。已选中的组合包会在启动时跳过并报告原因，仍可取消选择；已保存的用户设置保留。其他操作系统上的浏览器可以连接受支持的 Mac Host。
+Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的可选依赖，组合包和共享库均按需安装。其他 Host 默认不在插件列表和模型推荐中展示此组合包，并在保存设置前拒绝启用。profile 显式安装的依赖和已保存的选择仍保留管理入口。已选中的组合包会在启动时跳过并报告原因，仍可取消选择；已保存的用户设置保留。其他操作系统上的浏览器可以连接受支持的 Mac Host。
 
 准备失败时，已保存的选择保留，CUA 操作不可用。刷新或重新打开插件页查看组件诊断，修复后重启 DSH。
 
@@ -85,7 +85,7 @@ CUA 生效和卸载会改变 PTC SDK 与系统指引，后续请求使用更新�
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 源码 Web 与 Desktop 共用 macOS 权限控件。桌面安装包的 helper 分发、签名和权限归属留待后续处理。
+- 首次安装需要能访问提供匹配 DSH 版本的注册表。系统权限需用户在 macOS 中确认，安装插件不会自动授予权限。
 - PTC 执行方式由 profile 共享，需单独配置。未启用 HMR 的 Host 在重启时应用已保存的变更。
 
 <a id="dev-note"></a>

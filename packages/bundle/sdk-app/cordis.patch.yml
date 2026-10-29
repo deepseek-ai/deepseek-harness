@@ -23,6 +23,9 @@
 - id: hmr
   disabled: true
 
+- id: tool-plugin-manager
+  disabled: false
+
 # The packaged carrier supplies a default; DSH_PRIMARY_RUNTIME overrides it,
 # including an empty-string opt-out. Each row can be patched independently.
 - insert:

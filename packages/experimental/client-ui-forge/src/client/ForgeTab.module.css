@@ -388,16 +388,18 @@
 /* Expanded facts, one row each: an icon under the glyph, the label, the value,
    and a chevron on a row that opens something. */
 .rows {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  /* Edge tracks include each row's padding; labels retain their Chinese width and grow for longer translations. */
+  grid-template-columns: 24px minmax(32px, max-content) minmax(0, 1fr) 22px;
+  gap: 2px 10px;
   padding: 4px 6px 6px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .row {
   display: grid;
-  grid-template-columns: 16px 32px minmax(0, 1fr) 12px;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
   column-gap: 10px;
   box-sizing: border-box;
@@ -449,6 +451,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .rowValue[data-tone='error'] {
@@ -469,7 +472,9 @@
 
 /* The checks menu anchors to the whole row. */
 .checksAnchor {
-  display: block;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
 }
 
 .checksList {

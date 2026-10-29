@@ -248,6 +248,10 @@
   overflow: auto;
 }
 
+.files:focus {
+  outline: none;
+}
+
 /* The actions of a failed read, side by side. */
 .actions {
   display: flex;
@@ -321,13 +325,6 @@
   display: flex;
   flex: 0 1 auto;
   min-width: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
 }
 
 .fileSpacer {
@@ -631,7 +628,6 @@
 .localView:focus-visible,
 .localToggle:focus-visible,
 .fileToggle:focus-visible,
-.filePath:focus-visible,
 .localFile:focus-visible,
 .select:focus-visible,
 .gap:focus-visible {

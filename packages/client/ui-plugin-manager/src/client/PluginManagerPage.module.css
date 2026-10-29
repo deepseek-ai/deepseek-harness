@@ -25,6 +25,12 @@
   color: var(--dsw-alias-label-primary);
 }
 
+@media (max-width: 767px) {
+  .page {
+    --plugin-page-inset: 20px;
+  }
+}
+
 .page > * {
   flex: none;
   width: 100%;

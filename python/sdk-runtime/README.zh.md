@@ -25,7 +25,7 @@ primary_runtime = download_primary_runtime()
 
 `DSH_RESOURCE_CACHE` 指定绝对缓存根目录，默认为 `~/.cache/deepseek-harness/resources`。资源身份包含发布版本锁定的输入。下载会校验归档哈希和包身份、保留执行权限，并原子发布完整目录。下载失败后可重试。`DSH_RESOURCE_DOWNLOAD_TIMEOUT_MS` 限制每个归档的下载耗时，包含响应内容；默认值为 `300000`，接受 `1` 到 `2147483647` 的整数。下载遵循 Harness 代理环境策略。已安装的 wheel 文件不会被修改。不同发布版本使用独立缓存目录；不再使用的版本需手动删除。下载使用锁定的上游 URL，不提供 registry 或镜像覆盖。
 
-后续启动时，打包 bootstrap 将已下载资源提供给 SDK profile。`DSH_PRIMARY_RUNTIME` 覆盖缓存中的创作环境；空值禁用其查询。`DSH_OFFICE_SIDECAR` 可选择包含独立 Node 的绝对 sidecar 目录。用户可自行提供 Python 环境和文档库，无需下载创作环境。选择任一种资源即可使用 Office skills；仅有创作环境时，skills 中的 Kit CLI 被禁用。外部创作载荷保留 `primary-runtime/` 及同级 `office-skills/` 布局。SDK 原位读取资源，不复制到 `DSH_HOME`。`sdk-minimal` profile 不挂载这些提供方。
+后续启动时，打包 bootstrap 将已下载资源提供给 SDK profile。`DSH_PRIMARY_RUNTIME` 覆盖缓存中的创作环境；空值禁用其查询和包管理器选择。`DSH_OFFICE_SIDECAR` 可选择包含独立 Node 的绝对 sidecar 目录。用户可自行提供 Python 环境和文档库，无需下载创作环境。选择任一种资源即可使用 Office skills；仅有创作环境时，skills 中的 Kit CLI 被禁用。外部创作载荷保留 `primary-runtime/` 及同级 `office-skills/` 布局。SDK 原位读取资源，不复制到 `DSH_HOME`。`sdk-minimal` profile 不挂载这些提供方。
 
 选择 skills 与交付资源相互独立：项目、自定义目录和用户文件系统 skills 优先于同名随包 skills。SDK patch 可以仅禁用 Office 提供方，同时保留 Python 查询：
 
@@ -58,7 +58,7 @@ Office 操作技能通过 profile 的 shell 命令调用配置的 Node 和 Kit C
 
 Python 与打包的 bootstrap 共享资源布局：`<cache>/<identity>/office/`、`node/bin/node[.exe]` 与 `node_modules/@deepseek-ai/libreoffice-kit/lib/cli.js`。自动发现 Office 缓存要求 `complete` 标记匹配清单 identity；显式 `DSH_OFFICE_SIDECAR` 要求 Node 与 CLI 文件存在。Python bootstrap 从显式下载或选择的 sidecar 解析 Office kit，让原生辅助程序与 URL Worker 使用真实文件系统路径。仓库构建与显式 Python 下载共用资源准备实现。kit 负责文档操作；Office smoke 从已加载技能获取 CLI 路径，并在空 PATH 下执行 capabilities 和 DOCX 转换。
 
-外部 profile 管理使用 `dsh plugin --profile <name> ...`。该命令要求 `PATH` 中存在 `pnpm`；普通 SDK／profile 运行不需要它。
+外部 profile 管理使用 `dsh plugin --profile <name> ...`。显式调用 `download_primary_runtime()` 准备资源后，打包启动器会将所选载荷的独立 Node 和 pnpm 提供给该命令及 SDK `plugin_manager` 工具。独立 Node 目录仅加入包操作子进程（包括构建脚本）的环境；普通工具保留原有 `PATH`。`DSH_PRIMARY_RUNTIME` 覆盖缓存选择，空值禁用它。所选载荷格式错误或不完整时启动失败，不会静默改用系统 pnpm。没有选中包含 Node/pnpm 的载荷时，包操作使用 `PATH` 中的 pnpm 或显式 `plugin-manager.pnpmCommand`。不会隐式触发下载。普通 SDK／profile 运行及列举/切换现有插件不需要 pnpm。每个面向模型的管理操作仍要求完整权限或客户端审批应答方；保存的变更影响后续启动使用的共享 SDK profile。
 
 ## 构建与分发
 

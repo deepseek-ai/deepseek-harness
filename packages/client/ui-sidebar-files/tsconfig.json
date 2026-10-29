@@ -46,6 +46,9 @@
     },
     {
       "path": "../shortcuts/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-context-menu"
     }
   ]
 }

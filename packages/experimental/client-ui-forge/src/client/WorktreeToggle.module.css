@@ -9,7 +9,8 @@
 }
 
 .toggle,
-.base {
+.base,
+.current {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -45,7 +46,18 @@
   padding-right: 4px;
 }
 
+.current {
+  box-sizing: content-box;
+  max-width: 200px;
+  font-family: inherit;
+}
+
+.current svg {
+  flex: none;
+}
+
 .base:focus-visible,
+.current:focus-visible,
 .toggle:has(.checkbox:focus-visible) {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
@@ -104,4 +116,17 @@
   flex: none;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .root {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0;
+  }
+
+  .base,
+  .current {
+    max-width: 120px;
+  }
 }

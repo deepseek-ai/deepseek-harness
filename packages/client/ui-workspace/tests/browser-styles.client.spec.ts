@@ -34,6 +34,13 @@ const declarations = (selector: string): Map<string, string> | undefined => decl
 const rowDeclarations = (selector: string): Map<string, string> | undefined => declarationsFrom(rowsCss, selector)
 
 describe('WorkspaceBrowser.module.css list', () => {
+  it('hides touch timestamps without hiding pending-interaction labels', () => {
+    const touch = /@media \(hover: none\) \{([\s\S]*?)\n\}/.exec(rowsCss)?.[1]
+    expect(touch).toContain('.sessionRow .timestamp')
+    expect(touch).not.toMatch(/\.sessionRow(?:\.selected)? \.time[\s,{]/)
+    expect(rowDeclarations('.sessionRow .pinnedAction')?.get('order')).toBe('-1')
+  })
+
   const root = declarations('.root')
   const listArea = declarations('.listArea')
   const list = declarations('.list')

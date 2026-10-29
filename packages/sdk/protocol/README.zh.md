@@ -41,16 +41,18 @@ kind: "package-library"
 |---|---|---|
 | client→server | `initialize` | `InitializeParams` → `InitializeResult` |
 | client→server | `session/prompt` | `SessionPromptParams` → `SessionPromptResult`（持久入队回执） |
+| client→server | `session/query` | `SessionQueryParams` → `SessionQueryResult` |
 | client→server | `session/resume` | `SessionResumeParams` → `{}` |
 | client→server | `session/wait` | `SessionWaitParams` → `{}` |
 | 客户端→服务端 | `session/working-directory/get` | `SessionWorkingDirectoryParams` → `SessionWorkingDirectoryResult` |
 | 客户端→服务端 | `session/working-directory/set` | `SessionWorkingDirectorySetParams` → `SessionWorkingDirectoryResult` |
 | client→server | `shutdown` | 无参数 → `{}` |
 | server→client | `approval/request` | `ApprovalRequestParams` → `ApprovalRequestResult` |
-| server→client | `user-question/ask` | `SdkUserQuestionRequest` → `SdkUserQuestionAnswer` |
+| server→client | `user-question/ask` | `SdkUserQuestionRequest` → `SdkUserQuestionResult` |
 | server→client | `user-question.cancelled` | `SdkUserQuestionCancelled` |
 | server→client | `session.event` | `SessionEventNotification`（运行时内每个会话，不过滤） |
 | server→client | `session.status` | `SessionStatusNotification`（整个 agent（智能体）的 `running`/`idle` 转换） |
+| server→client | `session.query.completed` | `{ sessionId, commandId, finalResponse, finishReason }` |
 | server→client | `subagent.started` | `SubagentStartedNotification` |
 | server→client | `subagent.finished` | `SubagentFinishedNotification`（仅进程内运行） |
 
@@ -58,12 +60,18 @@ kind: "package-library"
 
 `session/wait` 接受已有 SDK 会话的 `{ sessionId }`，在根 Agent 持续空闲且活跃的受管理后代工作结束后返回 `{}`。带有停放输入的空闲后代保持驻留，不阻塞这次等待。未知 id，以及没有后续终止事件记录的 Agent 运行时错误，都会使请求失败。等待期间提交的通知在同一传输上先于响应到达；原始 `session.status` 转换仍表示整个 Agent 的状态。
 
+`session/query` 接受 `{ sessionId, contentBlocks }`，其中 `contentBlocks` 使用 `SdkPromptContentBlock[]`。两个 SDK 都将字符串规范化为文本块，并通过同一入口发送内容块数组。普通输入保留内容块顺序排队，返回 `{ kind: "prompt", messageId }`；受支持命令结束后返回 `{ kind: "command", execution }`。已识别命令要求一个完整文本块，其他块只能是编码图片；其他组合会在执行或入队前被拒绝。图片经过原生附件接纳与处理器校验。空数组和只包含空白文本的数组会被拒绝；允许仅图片输入。Prompt 回执不是模型结果，命令完成也不要求 inbox 回执或 idle 通知。识别规则及受支持命令由 [SDK 服务端](../server/README.zh.md)定义。
+
+`session/prompt` 将内容块排入队列，不经过原生 slash command 路由；运行时 skill（技能）识别仍然适用。
+
+命令生命周期通知先于 `session/query` 的 handler 响应到达。命令查询以同一 `commandId` 的 `session.query.completed` 通知结束高层观察，等待命令启动的模型活动；目标创建和恢复还等待目标终止及收尾活动。状态命令无需模型 turn，其完成通知可以先于响应到达。SDK 内部消费该回执并返回 `RunResult`，转发器必须保持顺序。关闭会取消尚未结束的观察。
+
 `session/resume` 接受非空的持久化 `{ sessionId }`，恢复该会话后返回 `{}`。它要求先完成初始化并使用原持久化存储，不发送新输入；会话缺失、不可读、不兼容或被占用时，请求失败且不创建替代会话。历史事件保留在存储日志中，通知只报告新提交的事件。
 
 <a id="native-user-questions"></a>
 ### 原生用户问答
 
-提供回答能力的宿主设置 `initialize.capabilities.userQuestions: true`。运行时发送带有 `{ requestId, sessionId, questions }` 的 `user-question/ask`；问题保留原始 id、选项、detail 与展示意图。宿主返回 `{ answers: [{ id, selected, custom? }] }`，每个问题 id 必须恰好出现一次。无效答案批次返回 `BAD_ANSWER`，宿主或传输失败返回 `PROVIDER_ERROR`。SDK 不生成替代答案。
+提供回答能力的宿主设置 `initialize.capabilities.userQuestions: true`。运行时发送带有 `{ requestId, sessionId, questions }` 的 `user-question/ask`；问题保留原始 id、选项、detail 与展示意图。宿主返回 `{ answers: [{ id, selected, custom? }] }`，每个问题 id 必须恰好出现一次；用户关闭问题时可返回只含 `{ cancelled: true }` 的对象。关闭映射为原生 `ASK_CANCELLED`，不表示运行时取消、回答方失败或批准。无效答案批次返回 `BAD_ANSWER`，宿主或传输失败返回 `PROVIDER_ERROR`。SDK 不生成替代答案。
 
 `user-question.cancelled` 标识已停止等待的请求。宿主取消自己的工作并丢弃问题；运行时放弃对应的待决 RPC，忽略晚到响应。未声明该能力时，仍由现有进程内回答方处理；缺少回答方则报告 `NO_PROVIDER`。此流程不要求 GUI。
 

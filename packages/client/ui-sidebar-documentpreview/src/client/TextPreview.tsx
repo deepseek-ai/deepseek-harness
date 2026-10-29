@@ -56,9 +56,10 @@ export type TextPreviewProps =
 export function TextPreview({
   useTabInfo, useResource, useStore, actions, loadPage, reloadPages,
   loadAll, reloadAll, prepareRenderer, useDocumentPreviews, renderSlot, t,
-  addResource, setResources,
+  addResource, setResources, useContextMenu, sessionId,
 }: TextPreviewProps): ReactNode {
-  const { tab } = useTabInfo()
+  const { tab, panel } = useTabInfo()
+  const { getTriggerProps } = useContextMenu()
   const { navigation, signal } = tab
   const meta = useResource<'file'>(tab.contentId)
   const canRead = meta.status !== 'none'
@@ -202,7 +203,8 @@ export function TextPreview({
     return (
       <div className={css.preview} data-textpreview-state="unsupported" data-textpreview-url={tab.contentId}>
         <div className={css.header}>
-          <PathLabel path={displayPath} className={css.path} data-textpreview-path />
+          <PathLabel path={displayPath} className={css.path} data-textpreview-path
+            {...getTriggerProps({ kind: 'file', value: { sessionId, path: displayPath, paneId: panel.id, ...(line === undefined ? {} : { line }) } })} />
           {fileOwner !== undefined && renderSlot('sidebar.right.tab.document.actions', fileOwner)}
         </div>
         <div className={css.body} data-textpreview-body>
@@ -264,7 +266,8 @@ export function TextPreview({
           </p>
         )}
       <div className={css.header}>
-        <PathLabel path={displayPath} className={css.path} data-textpreview-path />
+        <PathLabel path={displayPath} className={css.path} data-textpreview-path
+          {...getTriggerProps({ kind: 'file', value: { sessionId, path: displayPath, paneId: panel.id, ...(line === undefined ? {} : { line }) } })} />
         {candidates.length > 1
           && (
             <Menu

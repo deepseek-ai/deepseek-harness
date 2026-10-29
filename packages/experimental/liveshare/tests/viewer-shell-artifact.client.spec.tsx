@@ -85,13 +85,23 @@ describe('Assembled liveshare viewer page', () => {
     // management entries, and no New Session affordance (the endpoints its access snapshot excludes).
     expect(screen.queryByRole('button', { name: /^New session in / })).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Workspace actions for / })).toBeNull()
+    const workspace = inputFixture.context().get('workspaces')?.list.getSnapshot().items[0]
+    if (workspace === undefined) throw new Error('shared Workspace is not listed')
+    const menus = inputFixture.context().get('contextMenus')
+    if (menus === undefined) throw new Error('context menus are not mounted')
+    const workspaceMenu = menus.resolve({ kind: 'workspace', value: {
+      workspaceId: workspace.workspaceId, path: workspace.path, displayTitle: workspace.title,
+    } })
+    await workspaceMenu.ready
+    expect(workspaceMenu.source.getSnapshot()).toEqual([])
+    workspaceMenu.dispose()
     // A Session row keeps its menu for Copy Session ID, and every write verb in it hides itself.
     const rowMenu = screen.getAllByRole('button', { name: /^Session actions for / })[0]
     if (rowMenu === undefined) throw new Error('no Session row menu')
     await act(async () => { fireEvent.click(rowMenu) })
-    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Copy Session ID'])
+    expect((await screen.findAllByRole('menuitem')).map(item => item.textContent)).toEqual(['Copy Session ID'])
     await act(async () => { fireEvent.keyDown(document, { key: 'Escape' }) })
+    await waitFor(() => { expect(screen.queryByRole('menu')).toBeNull() })
     expect(document.body.textContent).not.toContain('Fork session')
     expect(document.body.textContent).not.toContain('Archive session')
     // Global settings belong to the owner's DSH, so the viewer page boots no settings surface at
