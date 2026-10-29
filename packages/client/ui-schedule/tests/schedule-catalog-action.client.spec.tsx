@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
+import type { ScheduleRecord, ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
 import { ScheduleId } from '@deepseek-ai/dsh-schedule'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
@@ -27,6 +27,9 @@ import { en as managerEn, zh as managerZh } from '../src/client/task-manager-loc
 
 const SESSION = 'schedule-session' as SessionId
 const START = Date.parse('2026-08-25T12:00:00.000Z')
+const CREATED = '2026-08-24T12:00:00.000Z'
+
+type Entry = ScheduleCatalogEntry
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -40,6 +43,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+/** One Session-bound rule record, which the frequency formatter reads for a rule that predates Host tasks. */
 function record(
   id: string,
   kind: ScheduleRecord['kind'],
@@ -77,7 +81,25 @@ function record(
       timeZone: options.timeZone ?? 'Asia/Shanghai',
     }
   }
-  return { ...common, kind }
+  return { ...common, kind: 'at' }
+}
+
+/**
+ * One Host task that the Session catalog lists.
+ * @param id - task identity, also the default name and instruction.
+ * @param scheduledAt - next run in epoch milliseconds.
+ * @param options - stored instruction, name, and rule; the rule defaults to one run at `scheduledAt`.
+ * @returns the active catalog entry delivered to this Session.
+ */
+function entry(id: string, scheduledAt: number, options: { prompt?: string; title?: string; rrule?: string } = {}): Entry {
+  const prompt = options.prompt ?? id
+  const instant = new Date(scheduledAt).toISOString()
+  return { kind: 'rrule',
+    id: ScheduleId(id), title: options.title ?? prompt, prompt, scheduledAt: instant,
+    rrule: options.rrule ?? `DTSTART;TZID=UTC:${instant.replace(/[-:]|\.\d{3}Z$/g, '')}\nRRULE:FREQ=DAILY;COUNT=1`,
+    target: { kind: 'session', sessionId: SESSION }, involvedSessionIds: [SESSION], status: 'active',
+    createdAt: CREATED, updatedAt: CREATED,
+  }
 }
 
 /**
@@ -105,7 +127,7 @@ function sessionSnapshot(openState: SessionSnapshot['openState']): SessionSnapsh
 }
 
 function props(
-  records: readonly ScheduleRecord[] | undefined,
+  records: readonly Entry[] | undefined,
   openState: SessionSnapshot['openState'] = 'open',
   dictionary: typeof zh | typeof en = en,
   allowed = true,
@@ -113,11 +135,11 @@ function props(
   const snapshot = sessionSnapshot(openState)
   const useSession = <T,>(select: (value: SessionSnapshot) => T): T => select(snapshot)
   // A settled read reports ordinal 1; a read that has not settled yet reports 0.
-  const state: CatalogSnapshot = {
+  const state: CatalogSnapshot<Entry> = {
     records: records ?? [], status: records === undefined ? 'loading' : 'ready', deleting: [],
     settled: records !== undefined, readRequest: records === undefined ? 0 : 1, readSettled: records === undefined ? 0 : 1,
   }
-  const useCatalog = <T,>(select: (value: CatalogSnapshot) => T): T => select(state)
+  const useCatalog = <T,>(select: (value: CatalogSnapshot<Entry>) => T): T => select(state)
   return {
     sessionId: SESSION,
     useSession,
@@ -143,7 +165,7 @@ function metadataLines(): Element[] {
 
 describe('ScheduleCatalogAction visibility', () => {
   it('renders nothing and reads no catalog while the current Peer may not list this Session\'s reminders', () => {
-    const refused = props([record('active', 'after', START + 60_000)], 'open', en, false)
+    const refused = props([entry('active', START + 60_000)], 'open', en, false)
     let catalogReads = 0
     const useCatalog: ScheduleCatalogActionProps['useCatalog'] = (select) => {
       catalogReads++
@@ -156,20 +178,20 @@ describe('ScheduleCatalogAction visibility', () => {
   })
 
   it('hides the entry once a successful read proves there are no active reminders', () => {
-    const active = [record('active', 'after', START + 60_000)]
+    const active = [entry('active', START + 60_000)]
     const view = render(<ScheduleCatalogAction {...props(active, 'cold')} />)
     expect(view.container.innerHTML).toBe('')
 
     view.rerender(<ScheduleCatalogAction {...props(active)} />)
-    expect(screen.getByRole('button', { name: '1 reminder' })).toBeDefined()
+    expect(screen.getByRole('button', { name: '1 automation task' })).toBeDefined()
     view.rerender(<ScheduleCatalogAction {...props([])} />)
     expect(view.container.innerHTML).toBe('')
   })
 
   it('hides the entry and its open list when the last record disappears', () => {
-    const active = [record('active', 'after', START + 60_000), record('next', 'after', START + 120_000)]
+    const active = [entry('active', START + 60_000), entry('next', START + 120_000)]
     const view = render(<ScheduleCatalogAction {...props(active)} />)
-    fireEvent.click(screen.getByRole('button', { name: '2 reminders' }))
+    fireEvent.click(screen.getByRole('button', { name: '2 automation tasks' }))
     expect(screen.getByRole('list', { name: en['list.aria'] })).toBeDefined()
     view.rerender(<ScheduleCatalogAction {...props([])} />)
     expect(view.container.innerHTML).toBe('')
@@ -182,11 +204,11 @@ describe('ScheduleCatalogAction visibility', () => {
 
     // A refresh retains the known reminders, so the entry keeps its count and
     // its loading row stays visible.
-    const known = record('known', 'after', START + 60_000)
+    const known = entry('known', START + 60_000)
     const p = props([known])
     const view = render(<ScheduleCatalogAction {...p} useCatalog={
       select => select({ records: [known], status: 'loading', deleting: [], settled: true, readRequest: 0, readSettled: 0 })} />)
-    fireEvent.click(screen.getByRole('button', { name: '1 reminder' }))
+    fireEvent.click(screen.getByRole('button', { name: '1 automation task' }))
     expect(screen.getByRole('status').textContent).toBe(en['list.loading'])
 
     // A failed read with nothing known keeps the entry, and the open popover
@@ -202,41 +224,41 @@ describe('ScheduleCatalogAction visibility', () => {
     // A `schedule/changed` refresh republishes `loading` while retaining the
     // rows, so the entry must keep naming the count it still lists instead of
     // falling back to the generic label for the length of the read.
-    const only = record('only', 'after', START + 60_000)
-    const state: CatalogSnapshot = { records: [only], status: 'ready', deleting: [], settled: true, readRequest: 0, readSettled: 0 }
+    const only = entry('only', START + 60_000)
+    const state: CatalogSnapshot<Entry> = { records: [only], status: 'ready', deleting: [], settled: true, readRequest: 0, readSettled: 0 }
     const p = props(undefined)
     const view = render(<ScheduleCatalogAction {...p} useCatalog={select => select(state)} />)
-    expect(screen.getByRole('button', { name: '1 reminder' })).toBeDefined()
+    expect(screen.getByRole('button', { name: '1 automation task' })).toBeDefined()
 
     view.rerender(<ScheduleCatalogAction {...p} useCatalog={
       select => select({ ...state, status: 'loading' })} />)
-    const trigger = screen.getByRole('button', { name: '1 reminder' })
+    const trigger = screen.getByRole('button', { name: '1 automation task' })
     expect(screen.queryByRole('button', { name: en['trigger.label'] })).toBeNull()
     fireEvent.click(trigger)
     expect(screen.getByRole('status').textContent).toBe(en['list.loading'])
     expect(within(screen.getByRole('list', { name: en['list.aria'] })).getAllByRole('listitem')).toHaveLength(1)
 
     // Two known records keep their plural count through the same refresh.
-    const second = record('second', 'after', START + 120_000)
+    const second = entry('second', START + 120_000)
     view.rerender(<ScheduleCatalogAction {...p} useCatalog={
       select => select({ records: [only, second], status: 'loading', deleting: [], settled: true, readRequest: 0, readSettled: 0 })} />)
-    expect(screen.getByRole('button', { name: '2 reminders' })).toBeDefined()
+    expect(screen.getByRole('button', { name: '2 automation tasks' })).toBeDefined()
   })
 
   it('deletes only the selected reminder and marks the pending row', () => {
-    const row = record('selected', 'at', START + 60_000)
-    const other = record('other', 'at', START + 120_000)
+    const row = entry('selected', START + 60_000)
+    const other = entry('other', START + 120_000)
     const p = props([row, other])
     const view = render(<ScheduleCatalogAction {...p} />)
-    fireEvent.click(screen.getByRole('button', { name: '2 reminders' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Delete reminder: selected' }))
+    fireEvent.click(screen.getByRole('button', { name: '2 automation tasks' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete automation task: selected' }))
     expect(p.onDelete).toHaveBeenCalledWith(row.id)
     // A failed deletion keeps the row; the app-wide toast, not this popover, announces it.
     view.rerender(<ScheduleCatalogAction {...p} useCatalog={select => select({ records: [row], status: 'ready', deleting: [], settled: true, readRequest: 0, readSettled: 0 })} />)
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.getByText('selected')).toBeDefined()
     view.rerender(<ScheduleCatalogAction {...p} useCatalog={select => select({ records: [row], status: 'ready', deleting: [row.id], settled: true, readRequest: 0, readSettled: 0 })} />)
-    const pending = screen.getByRole('button', { name: 'Delete reminder: selected' })
+    const pending = screen.getByRole('button', { name: 'Delete automation task: selected' })
     expect(pending.hasAttribute('disabled')).toBe(true)
     // The icon-only delete button keeps its action copy as the tooltip.
     expect(pending.getAttribute('title')).toBe(en['delete.pending'])
@@ -247,9 +269,9 @@ describe('ScheduleCatalogAction visibility', () => {
 
 describe('ScheduleCatalogAction positioning', () => {
   it('portals the catalog to the body and left-aligns it when space is available', () => {
-    const active = [record('active', 'after', START + 60_000), record('next', 'after', START + 120_000)]
+    const active = [entry('active', START + 60_000), entry('next', START + 120_000)]
     const view = render(<ScheduleCatalogAction {...props(active)} />)
-    const trigger = screen.getByRole('button', { name: '2 reminders' })
+    const trigger = screen.getByRole('button', { name: '2 automation tasks' })
     vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
       x: 240,
       y: 20,
@@ -274,12 +296,26 @@ describe('ScheduleCatalogAction positioning', () => {
 })
 
 describe('ScheduleCatalogAction task reveal', () => {
+  it('keeps only this Session’s active tasks from the shared catalog', () => {
+    const only = entry('only', START + 60_000)
+    const otherSession = 'other-session' as SessionId
+    const p = props([only,
+      { ...entry('other', START + 60_000), target: { kind: 'session', sessionId: otherSession }, involvedSessionIds: [otherSession] },
+      { ...entry('paused', START + 60_000), status: 'paused' },
+      { ...entry('ended', START + 60_000), status: 'ended' },
+    ])
+    render(<ScheduleCatalogAction {...p} />)
+    fireEvent.click(screen.getByRole('button', { name: '1 automation task' }))
+    expect(p.openTaskDetail).toHaveBeenCalledExactlyOnceWith(only.id)
+    expect(screen.queryByRole('list')).toBeNull()
+  })
+
   it('opens the sole reminder detail directly without rendering the list', () => {
-    const only = record('only', 'after', START + 60_000)
+    const only = entry('only', START + 60_000)
     const p = props([only])
     render(<ScheduleCatalogAction {...p} />)
 
-    const trigger = screen.getByRole('button', { name: '1 reminder' })
+    const trigger = screen.getByRole('button', { name: '1 automation task' })
     // A sole reminder has no list to choose from, so the trigger keeps only the clock glyph
     // and states no disclosure: the press opens the detail instead of expanding a list.
     expect(trigger.getAttribute('data-schedule-reminder-entry')).toBe('')
@@ -298,10 +334,10 @@ describe('ScheduleCatalogAction task reveal', () => {
     const empty = render(<ScheduleCatalogAction {...props([])} />)
     expect(empty.container.innerHTML).toBe('')
 
-    const many = [record('first', 'after', START + 60_000), record('second', 'after', START + 120_000)]
+    const many = [entry('first', START + 60_000), entry('second', START + 120_000)]
     empty.rerender(<ScheduleCatalogAction {...props(many)} />)
     // Icon-only: one clock glyph, no count chip, and no chevron.
-    const trigger = screen.getByRole('button', { name: '2 reminders' })
+    const trigger = screen.getByRole('button', { name: '2 automation tasks' })
     expect(trigger.querySelectorAll('svg')).toHaveLength(1)
     expect(trigger.textContent).toBe('')
     fireEvent.click(trigger)
@@ -309,14 +345,14 @@ describe('ScheduleCatalogAction task reveal', () => {
   })
 
   it('keeps the known count while a read is unresolved and names the entry with it', () => {
-    const known = record('known', 'after', START + 60_000)
+    const known = entry('known', START + 60_000)
     const p = props([known])
     render(<ScheduleCatalogAction {...p} useCatalog={
       select => select({ records: [known], status: 'loading', deleting: [], settled: true, readRequest: 0, readSettled: 0 })} />)
 
     // The retained record supplies the count, so the icon-only entry names it
     // instead of falling back to the catalog label.
-    const trigger = screen.getByRole('button', { name: '1 reminder' })
+    const trigger = screen.getByRole('button', { name: '1 automation task' })
     expect(trigger.textContent).toBe('')
     fireEvent.click(trigger)
     expect(screen.getByRole('status').textContent).toBe(en['list.loading'])
@@ -324,14 +360,14 @@ describe('ScheduleCatalogAction task reveal', () => {
   })
 
   it('opens one row task from its prompt button and closes the list', () => {
-    const first = record('first', 'at', START + 60_000, { prompt: 'First reminder' })
-    const second = record('second', 'at', START + 120_000, { prompt: 'Second reminder' })
+    const first = entry('first', START + 60_000, { prompt: 'First reminder' })
+    const second = entry('second', START + 120_000, { prompt: 'Second reminder' })
     const p = props([first, second])
     render(<ScheduleCatalogAction {...p} />)
-    fireEvent.click(screen.getByRole('button', { name: '2 reminders' }))
+    fireEvent.click(screen.getByRole('button', { name: '2 automation tasks' }))
 
     const list = screen.getByRole('list', { name: en['list.aria'] })
-    fireEvent.click(within(list).getByRole('button', { name: 'Open reminder details: Second reminder' }))
+    fireEvent.click(within(list).getByRole('button', { name: 'Open automation task details: Second reminder' }))
 
     expect(p.openTaskDetail).toHaveBeenCalledExactlyOnceWith(second.id)
     expect(screen.queryByRole('list')).toBeNull()
@@ -342,9 +378,11 @@ describe('ScheduleCatalogAction rows', () => {
   it('shows the stored title, a frequency line above its own next-run line, and deletion with overdue records first', () => {
     const rawPrompt = '<img src=x onerror=alert(1)> Keep the complete long reminder prompt visible without truncation.'
     const storedTitle = '<img src=x onerror=alert(1)> Review the rollout'
-    const overdue = record('hidden-id', 'after', START - 60_000, { prompt: rawPrompt, title: storedTitle })
-    const every = record('every-id', 'every', START + 300_000, { prompt: 'Check metrics', everySeconds: 300 })
-    const at = record('at-id', 'at', START + 3_600_000, { prompt: 'Join meeting' })
+    const overdue = entry('hidden-id', START - 60_000, { prompt: rawPrompt, title: storedTitle })
+    const every = entry('every-id', START + 300_000, {
+      prompt: 'Check metrics', rrule: 'DTSTART;TZID=UTC:20260825T120500\nRRULE:FREQ=MINUTELY;INTERVAL=5',
+    })
+    const at = entry('at-id', START + 3_600_000, { prompt: 'Join meeting' })
     render(<ScheduleCatalogAction {...props([at, every, overdue])} />)
     fireEvent.click(screen.getByRole('button'))
 
@@ -498,24 +536,28 @@ describe('ScheduleCatalogAction rows', () => {
       .toBe(`每 15 分钟（${zoneLabel('Asia/Shanghai', makeTranslate(managerZh))}）`)
   })
 
-  it('keeps the raw expression of a cron rule this parser cannot read', () => {
+  it('labels a rule this parser cannot describe as Custom', () => {
     const item = record('cron-raw', 'cron', START + 3_600_000, {
       expression: '0 9 * * MON', timeZone: 'Asia/Shanghai',
     })
     const t = makeTranslate(en)
     const named = makeTranslate(managerEn)
-    expect(formatScheduleFrequency(item, t)).toBe(`Cron 0 9 * * MON (${zoneLabel('Asia/Shanghai', named)})`)
+    expect(formatScheduleFrequency(item, t)).toBe(`Custom (${zoneLabel('Asia/Shanghai', named)})`)
     expect(formatScheduleFrequency(item, t, { system: 'Asia/Shanghai', label: zone => zoneLabel(zone, named) }))
-      .toBe('Cron 0 9 * * MON')
+      .toBe('Custom')
     expect(formatScheduleFrequency(item, t, { system: 'UTC', label: zone => zoneLabel(zone, named) }))
-      .toBe(`Cron 0 9 * * MON (${zoneLabel('Asia/Shanghai', named)})`)
+      .toBe(`Custom (${zoneLabel('Asia/Shanghai', named)})`)
   })
 
   it('shows daily recurrence in the Session catalog rather than a one-shot label', () => {
-    const item = record('daily-clock', 'daily', START + 3_600_000)
-    const other = record('daily-other', 'daily', START + 7_200_000, { time: '08:30:00.000', timeZone: 'UTC' })
+    const item = entry('daily-clock', START + 10_800_000, {
+      rrule: 'DTSTART;TZID=Asia/Shanghai:20260825T230000\nRRULE:FREQ=DAILY;INTERVAL=1;BYHOUR=23;BYMINUTE=0',
+    })
+    const other = entry('daily-other', START + 9_000_000, {
+      rrule: 'DTSTART;TZID=UTC:20260825T143000\nRRULE:FREQ=DAILY;INTERVAL=1;BYHOUR=14;BYMINUTE=30',
+    })
     render(<ScheduleCatalogAction {...props([item, other])} />)
-    fireEvent.click(screen.getByRole('button', { name: '2 reminders' }))
+    fireEvent.click(screen.getByRole('button', { name: '2 automation tasks' }))
     const list = screen.getByRole('list', { name: en['list.aria'] })
     expect(within(list).getByText(`Daily at 23:00 (${zoneLabel('Asia/Shanghai', makeTranslate(managerEn))})`, { exact: true })).toBeDefined()
     expect(within(list).queryByText(en['frequency.once'], { exact: true })).toBeNull()
@@ -523,12 +565,12 @@ describe('ScheduleCatalogAction rows', () => {
 
   it('renders the time until the next run in the injected locale and updates when it changes', () => {
     document.documentElement.lang = 'de-DE'
-    const item = record('localized', 'at', START + 3_600_000)
-    const other = record('localized-other', 'at', START + 7_200_000)
+    const item = entry('localized', START + 3_600_000)
+    const other = entry('localized-other', START + 7_200_000)
     const expected = formatScheduleRelative(item.scheduledAt, START, makeTranslate(en))
     expect(expected).toBe('in 1 hour')
     const view = render(<ScheduleCatalogAction {...props([item, other])} />)
-    fireEvent.click(screen.getByRole('button', { name: '2 reminders' }))
+    fireEvent.click(screen.getByRole('button', { name: '2 automation tasks' }))
     expect(screen.getAllByRole('listitem')[0]!.textContent).toContain(expected)
     view.rerender(<ScheduleCatalogAction {...props([item, other], 'open', zh)} />)
     expect(screen.getAllByRole('listitem')[0]!.textContent).toContain('1小时后')
@@ -545,12 +587,12 @@ describe('ScheduleCatalogAction rows', () => {
   })
 
   it('keeps equal targets stable and updates overdue status as the browser clock advances', () => {
-    const first = record('first', 'at', START + 500)
-    const second = record('second', 'at', START + 500)
+    const first = entry('first', START + 500)
+    const second = entry('second', START + 500)
     expect(orderScheduleRecords([first, second], START).map(item => item.id)).toEqual(['first', 'second'])
     expect(orderScheduleRecords([
-      record('future', 'at', START + 1_000),
-      record('overdue', 'at', START - 1_000),
+      entry('future', START + 1_000),
+      entry('overdue', START - 1_000),
     ], START).map(item => item.id)).toEqual(['overdue', 'future'])
 
     render(<ScheduleCatalogAction {...props([first, second])} />)
@@ -562,11 +604,11 @@ describe('ScheduleCatalogAction rows', () => {
 })
 
 describe('ScheduleCatalogAction dismissal', () => {
-  const active = [record('active', 'after', START + 60_000), record('next', 'after', START + 120_000)]
+  const active = [entry('active', START + 60_000), entry('next', START + 120_000)]
 
   it('closes on Escape inside the catalog and restores trigger focus', () => {
     render(<ScheduleCatalogAction {...props(active)} />)
-    const trigger = screen.getByRole('button', { name: '2 reminders' })
+    const trigger = screen.getByRole('button', { name: '2 automation tasks' })
     fireEvent.click(trigger)
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
     fireEvent.keyDown(screen.getByRole('list', { name: en['list.aria'] }), { key: 'Escape' })
@@ -576,7 +618,7 @@ describe('ScheduleCatalogAction dismissal', () => {
 
   it('leaves the catalog open when Escape belongs to a sibling control', () => {
     render(<><ScheduleCatalogAction {...props(active)} /><button type="button">Sibling</button></>)
-    const trigger = screen.getByRole('button', { name: '2 reminders' })
+    const trigger = screen.getByRole('button', { name: '2 automation tasks' })
     const sibling = screen.getByRole('button', { name: 'Sibling' })
     fireEvent.click(trigger)
     sibling.focus()
@@ -608,7 +650,7 @@ describe('ScheduleCatalogAction dismissal', () => {
         <button type="button">After</button>
       </>,
     )
-    const trigger = screen.getByRole('button', { name: '2 reminders' })
+    const trigger = screen.getByRole('button', { name: '2 automation tasks' })
     const before = screen.getByRole('button', { name: 'Before' })
     const after = screen.getByRole('button', { name: 'After' })
 

@@ -214,6 +214,7 @@ describe('client bundle purity gate', () => {
     expect(resolveId('@deepseek-ai/dsh-session/surface')).toBeNull()
     expect(resolveId('@deepseek-ai/dsh-brand')).toBeNull()
     expect(resolveId('@deepseek-ai/dsh-deque')).toBeNull()
+    expect(resolveId('@deepseek-ai/dsh-util-time')).toBeNull()
     expect(resolveId('@deepseek-ai/dsh-util-values')).toBeNull()
     expect(resolveId('@deepseek-ai/dsh-token-meter/client')).toBeNull()
     expect(() => resolveId('@deepseek-ai/dsh-token-meter')).toThrow(/purity/)
@@ -225,6 +226,27 @@ describe('client bundle purity gate', () => {
     expect(resolveId('@deepseek-ai/dsh-plugin-manager/registry')).toBeNull()
     expect(() => resolveId('@deepseek-ai/dsh-plugin-manager')).toThrow(/purity/)
     expect(() => resolveId('@deepseek-ai/dsh-plugin-manager/registry/internal')).toThrow(/purity/)
+  })
+
+  it('omits unused RRULE code from a Cron-only browser import', async () => {
+    const builds = await build({
+      config: false, platform: 'browser', format: ['esm'], entry: ['cron-only'],
+      write: false, clean: false, exports: false, report: false, logLevel: 'silent',
+      plugins: [{
+        name: 'cron-only',
+        resolveId: id => id === 'cron-only' ? id : null,
+        load: id => id === 'cron-only'
+          ? `export { Cron } from ${JSON.stringify(join(packageDir('util/time'), 'src/index.ts'))}` : null,
+      }],
+    })
+    try {
+      const modules = builds.flatMap(bundle => bundle.chunks).flatMap(chunk => chunk.type === 'chunk' ? chunk.moduleIds : [])
+        .map(id => id.replaceAll('\\', '/'))
+      expect(modules.some(id => id.endsWith('/time/src/cron.ts'))).toBe(true)
+      expect(modules.some(id => id.includes('/rrule'))).toBe(false)
+    } finally {
+      for (const bundle of builds) await bundle[Symbol.asyncDispose]()
+    }
   })
 
   it('admits only the pure spill notice entry, not its Host policy', () => {

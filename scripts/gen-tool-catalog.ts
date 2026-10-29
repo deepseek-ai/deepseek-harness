@@ -62,7 +62,7 @@ import TerminalSessionService from '@deepseek-ai/dsh-terminal'
 import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
 import * as ToolGoal from '@deepseek-ai/dsh-tool-goal'
 import * as ToolSchedule from '@deepseek-ai/dsh-tool-schedule'
-import type ScheduleService from '@deepseek-ai/dsh-schedule'
+import ScheduleService from '@deepseek-ai/dsh-schedule'
 import Lsp from '@deepseek-ai/dsh-lsp'
 import * as ToolLsp from '@deepseek-ai/dsh-tool-lsp'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
@@ -461,20 +461,21 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-schedule',
     dir: 'tool-schedule',
     source: 'packages/schedule/tool-schedule/src/index.ts',
-    requires: ['ctx.tools', 'ctx.schedule'],
+    requires: ['ctx.tools', 'ctx.schedule', 'ctx.systemPrompt'],
     writes: ['tool/call', 'Schedule storage domain create, update, or delete', 'tool/result'],
     async mount(ctx) {
-      // Schema harvest never executes a tool, so the Host service is a
-      // declaration-only stub.
-      ctx.provide('schedule', {} as ScheduleService)
+      // Schema harvest never executes a tool, so the Host service is a stub that answers only the read of the
+      // default delivery limits, which the target description names when above the minimum.
+      ctx.provide('schedule', {
+        deliveryLimits: () => ({ newSessionIntervalSeconds: ScheduleService.Config({}).newSessionIntervalSeconds }),
+      } as ScheduleService)
       await ctx.plugin(ToolSchedule)
     },
     note:
-      'A preset or Agent scope mounts this package; the preset decides which agents receive the four '
-      + 'management tools. Each call acts on the calling Agent\'s Session. '
-      + 'Accepts after_seconds, explicit absolute at, bounded fixed-rate every_seconds, daily and weekly '
-      + 'local times in an explicit IANA zone, and cron as a five-field expression. '
-      + 'Management uses the Host storage domain; due messages resume the original Session.',
+      'A preset or Agent scope mounts this package and decides which agents receive its tools. '
+      + 'Management reads and writes Host tasks by id across Sessions. '
+      + 'Tasks store an RFC 5545 recurrence and an existing, first-created-and-reused, or per-run-new Session target. '
+      + 'Delegated subagents cannot call these tools.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-lsp',

@@ -30,6 +30,7 @@ function Harness({ cell = CELL, getDefault = () => false, setDefault = () => {} 
     stringWrapping={{ label: 'Wrap lines', getDefault, setDefault }}
     collapsedTurns={new Set()} onToggleTurn={() => {}}
     collapsedAssistants={new Set()} onToggleAssistant={() => {}}
+    collapsedTools={new Set()} onToggleTool={() => {}}
   />
 }
 

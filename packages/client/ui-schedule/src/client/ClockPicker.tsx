@@ -8,7 +8,6 @@ import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode, RefObject } from 'react'
 import clsx from 'clsx'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { secondPrecision } from './task-timing.ts'
 import { PickerPopover } from './PickerPopover.tsx'
 import type { TaskManagerKey } from './task-manager-locales.ts'
 import css from './ClockPicker.module.css'
@@ -28,20 +27,21 @@ const COLUMNS = [
   { label: 'timing.second', options: padded(60) },
 ] as const satisfies readonly { readonly label: TaskManagerKey; readonly options: readonly string[] }[]
 
-/** A whole-second clock, the only text a pick composes onto. */
-const CLOCK_SECONDS = /^\d{2}:\d{2}:\d{2}$/
+/** Leading hour and minute of a clock, with its optional whole seconds. */
+const CLOCK = /^(\d{2}):(\d{2})(?::(\d{2}))?/
 
 /**
  * The `HH:MM:SS` clock a pick composes onto.
  *
- * A value that states no clock at all starts from midnight, so the first pick
- * still submits one complete clock rather than leaving a row empty.
+ * A clock without seconds gains `:00`, and fractional seconds drop. A value
+ * that states no clock at all starts from midnight, so the first pick still
+ * submits one complete clock rather than leaving a row empty.
  * @param value - staged clock text.
  * @returns its whole-second clock, or midnight when it states none.
  */
 function clockBase(value: string): string {
-  const seconds = secondPrecision(value)
-  return CLOCK_SECONDS.test(seconds) ? seconds : '00:00:00'
+  const match = CLOCK.exec(value)
+  return match === null ? '00:00:00' : `${match[1]}:${match[2]}:${match[3] ?? '00'}`
 }
 
 /** One column's position in display order. */
@@ -83,9 +83,9 @@ export interface ClockPickerProps {
   /** Dismiss the panel. */
   readonly onClose: () => void
   /**
-   * Whether the panel offers the seconds column (default true). A cron rule has
-   * no seconds field, so its form hides the column; a pick then keeps the staged
-   * clock's own seconds.
+   * Whether the panel offers the seconds column (default true). A daily rule
+   * names only its hour and minute, so its form hides the column; a pick then
+   * keeps the staged clock's own seconds.
    */
   readonly seconds?: boolean
   /** Row copy. */
