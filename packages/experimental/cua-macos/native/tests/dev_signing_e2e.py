@@ -9,6 +9,8 @@ from pathlib import Path
 import plistlib
 import subprocess
 import tempfile
+from types import SimpleNamespace
+from unittest.mock import patch
 
 NATIVE = Path(__file__).resolve().parents[1]
 
@@ -32,12 +34,17 @@ def main():
         root = Path(temporary)
         directory = root / "signing"
         try:
-            identity = signing.setup(directory)
+            local_signing = SimpleNamespace(setup=lambda: signing.setup(directory))
+            with patch.object(builder, "load_dev_signing", return_value=local_signing):
+                sha1, keychain = builder.signing_identity("dev", None, "local-identity")
+                assert builder.signing_identity("dev", None, "local-identity") == (sha1, keychain)
+            with patch.object(builder, "load_dev_signing", side_effect=AssertionError("ad-hoc accessed keychain")):
+                assert builder.signing_identity("dev", None, "ad-hoc") == ("-", None)
             requirements = []
             for status in (0, 1):
                 (root / "main.c").write_text(f"int main(void) {{ return {status}; }}\n")
                 subprocess.run(["/usr/bin/xcrun", "clang", "-o", str(root / "helper"), str(root / "main.c")], check=True)
-                executable = builder.publish(root / "helper", root / "output", identity.sha1, NATIVE / "Info.plist", "dev", identity.keychain)
+                executable = builder.publish(root / "helper", root / f"checkout-{status}", sha1, NATIVE / "Info.plist", "dev", keychain)
                 application = executable.parents[2]
                 subprocess.run(["/usr/bin/codesign", "--verify", "--strict", str(application)], check=True)
                 info = plistlib.loads((application / "Contents/Info.plist").read_bytes())
@@ -48,7 +55,7 @@ def main():
             assert first_requirement == second_requirement, requirements
             assert "certificate leaf" in first_requirement and "cdhash" not in first_requirement, first_requirement
             subprocess.run(["/usr/bin/codesign", "--verify", f"-R={first_requirement}", str(second)], check=True)
-            selected = json.loads((root / "output/current.json").read_text())["bundle"]
+            selected = json.loads((root / "checkout-1/current.json").read_text())["bundle"]
             assert second.parent.name == selected
             print(f"PASS: changed development builds share {first_requirement}")
         finally:

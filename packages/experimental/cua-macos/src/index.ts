@@ -12,7 +12,7 @@ export { GUIDANCE } from './guidance.ts'
 export const name = 'experimental-cua-macos'
 /** Services required by the shared CUA executor and the native launcher. */
 export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'agents']
-/** Native preparation, operation bounds, and profile-local application grants. */
+/** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
 export type Config = CuaConfig
 /** Validate the shared configuration before preparing the macOS helper. */
 export const Config: typeof CuaConfig = CuaConfig
@@ -35,7 +35,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const controller = new AbortController()
   const prepared = prepareNativeExecutable({
     packageRoot: resolve(fileURLToPath(new URL('..', import.meta.url))),
-    architecture, subprocess: ctx.subprocess,
+    architecture, sourceSigning: config.sourceSigning, subprocess: ctx.subprocess,
     timeoutMs: config.buildTimeoutMs, graceMs: config.graceMs, signal: controller.signal,
   })
   ctx.effect(() => async () => {

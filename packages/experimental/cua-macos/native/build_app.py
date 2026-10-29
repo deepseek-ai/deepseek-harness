@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import platform
 import plistlib
+import re
 import shutil
 import subprocess
 import sys
@@ -46,9 +47,11 @@ def application_info(plist, variant):
 def retained(output, key):
     """Return a published generation after checking that its bytes still match its name."""
     application = output / key / "DSH Computer Use.app"
-    if application.exists() and bundle_digest(application) != key:
+    if not application.exists():
+        return None
+    if bundle_digest(application) != key:
         raise ValueError(f"Retained helper application does not match its content digest: {application}")
-    return application if application.exists() else None
+    return application
 
 
 def select(output, temporary, key):
@@ -71,12 +74,14 @@ def publish(binary, output, identity, plist, variant="release", keychain=None):
         executable.parent.mkdir(parents=True)
         shutil.copy2(binary, executable)
         (staged / "Contents/Info.plist").write_bytes(application_info(plist, variant))
+        shutil.copystat(plist, staged / "Contents/Info.plist")
         resources = staged / "Contents/Resources"
         resources.mkdir()
         for filename in ["DSHComputerUse.icns", "LICENSE.computer-use-icon", "LICENSE.cua-driver"]:
             shutil.copy2(plist.with_name(filename), resources / filename)
         index = None
-        if variant == "dev":
+        # Names can resolve to a renewed certificate; only fingerprints identify a stable signing key.
+        if variant == "dev" and (identity == "-" or re.fullmatch(r"[0-9a-fA-F]{40}", identity)):
             source = hashlib.sha256(f"{bundle_digest(staged)}\0{identity}".encode()).hexdigest()
             index = output / "sources" / source
             if index.is_file():
@@ -117,16 +122,11 @@ def load_dev_signing():
     return module
 
 
-def signing_identity(variant, identity):
-    """Resolve the codesign identity and keychain; development builds prefer the local identity."""
-    if identity is not None or variant == "release":
+def signing_identity(variant, identity, signing):
+    """Resolve signing without accessing the keychain unless local-identity is explicitly selected."""
+    if identity is not None or variant == "release" or signing == "ad-hoc":
         return identity or "-", None
-    signing = load_dev_signing()
-    local = signing.load()
-    if local is None:
-        print(f"Computer Use development build is ad-hoc signed; macOS asks for permissions again after each change. "
-              f"Run {signing.SETUP_COMMAND} once to keep them across rebuilds and checkouts.", file=sys.stderr)
-        return "-", None
+    local = load_dev_signing().setup()
     return local.sha1, local.keychain
 
 
@@ -137,13 +137,15 @@ def main():
     parser.add_argument("--scratch-path", type=Path)
     parser.add_argument("--output-directory", type=Path)
     parser.add_argument("--variant", choices=["release", "dev"], default="release",
-                        help="dev uses a separate bundle identifier and the local development signing identity")
-    parser.add_argument("--identity", help="codesign identity; release defaults to '-', an ad-hoc build")
+                        help="dev uses a separate bundle identifier")
+    parser.add_argument("--signing", choices=["ad-hoc", "local-identity"], default="ad-hoc",
+                        help="dev signing mode; local-identity creates or reuses a per-user identity")
+    parser.add_argument("--identity", help="explicit codesign identity, overriding --signing")
     args = parser.parse_args()
     architecture = "x64" if args.arch == "x86_64" else "arm64"
     scratch = args.scratch_path or root / ".build" / f"runtime-{architecture}"
     output = args.output_directory or root / "bin" / f"darwin-{architecture}"
-    identity, keychain = signing_identity(args.variant, args.identity)
+    identity, keychain = signing_identity(args.variant, args.identity, args.signing)
     subprocess.run(["/usr/bin/xcrun", "swift", "build", "--package-path", str(root),
                     "--scratch-path", str(scratch), "--configuration", "release",
                     "--product", "dsh-cua-native", "--arch", args.arch], check=True)
@@ -152,4 +154,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except RuntimeError as error:
+        print(error, file=sys.stderr)
+        sys.exit(1)

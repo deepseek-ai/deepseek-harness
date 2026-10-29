@@ -41,7 +41,7 @@ async function fixture(diagnostics = true) {
       return outcome
     })(), terminate, waitForExit,
   }))
-  const spec = { packageRoot, architecture: 'arm64' as const, subprocess: { spawn }, signal: controller.signal, timeoutMs: 60_000, graceMs: 100 }
+  const spec = { packageRoot, architecture: 'arm64' as const, sourceSigning: 'ad-hoc' as const, subprocess: { spawn }, signal: controller.signal, timeoutMs: 60_000, graceMs: 100 }
   const directory = join(packageRoot, 'native/.build/prepared/arm64')
   return { root, spec, directory, spawn, output, controller, terminate, waitForExit,
     setOutput: (value: Buffer) => { output = value },
@@ -77,7 +77,7 @@ it('builds the development variant and returns its executable only after the man
   expect(f.spawn.mock.calls[0]![0].argv).toEqual([
     '/usr/bin/xcrun', 'python3', join(f.spec.packageRoot, 'native/build_app.py'),
     '--scratch-path', join(f.spec.packageRoot, 'native/.build/runtime-arm64'),
-    '--output-directory', f.directory, '--arch', 'arm64', '--variant', 'dev',
+    '--output-directory', f.directory, '--arch', 'arm64', '--variant', 'dev', '--signing', 'ad-hoc',
   ])
   expect(f.terminate).toHaveBeenCalledTimes(1)
   expect(f.waitForExit).toHaveBeenCalledTimes(1)
@@ -86,15 +86,16 @@ it('builds the development variant and returns its executable only after the man
 it('checks source builds on activation and maps Intel architecture to the compiler target', async () => {
   const f = await fixture()
   await writeFile(join(f.root, 'package.json'), '{"name":"@deepseek-ai/dsh-root"}')
-  const path = await prepareNativeExecutable({ ...f.spec, architecture: 'x64' })
+  const path = await prepareNativeExecutable({ ...f.spec, architecture: 'x64', sourceSigning: 'local-identity' })
   expect(f.spawn.mock.calls[0]![0].argv).toContain('x86_64')
+  expect(f.spawn.mock.calls[0]![0].argv.slice(-2)).toEqual(['--signing', 'local-identity'])
   expect(path).toContain(join('native', '.build', 'prepared', 'x64'))
 })
 
-it('uses an installed application without compiling or re-signing it', async () => {
+it('ignores local-identity for an installed application without compiling or re-signing it', async () => {
   const f = await fixture()
   const path = await publish(join(f.spec.packageRoot, 'native/bin/darwin-arm64'), f.output)
-  expect(await prepareNativeExecutable(f.spec)).toBe(path)
+  expect(await prepareNativeExecutable({ ...f.spec, sourceSigning: 'local-identity' })).toBe(path)
   expect(f.spawn).not.toHaveBeenCalled()
   f.controller.abort()
   await expect(prepareNativeExecutable(f.spec)).rejects.toThrow()

@@ -25,7 +25,13 @@ kind: "package-reference"
 
 运行 `pnpm --dir packages/experimental/cua-macos run build:native`，在 `native/bin/darwin-<arch>` 下生成带签名的 `DSH Computer Use.app`，`current.json` 选择完整的内容摘要目录。默认使用临时签名；正式打包可传入 `--identity` 指定 Developer ID，并由发布流程完成公证。Host 运行应用内的 `--ensure-shared` 入口，经 LaunchServices 后台启动服务。最后一条连接完成清理后，服务退出。
 
-源码检出以 `--variant dev` 构建：应用的 Bundle ID 为 `com.deepseek.harness.computer-use.dev`，名称为 `DSH Computer Use Dev`，系统权限条目与正式 helper 分开。临时签名的指定要求就是代码哈希，每次构建内容变化后，macOS 都会重新要求授权。每个 macOS 用户运行一次 `pnpm --dir packages/experimental/cua-macos run dev-signing:setup`，在 `~/Library/Application Support/DeepSeek Harness/computer-use-dev-signing` 下的专用钥匙串中创建 `DSH Computer Use Dev (local)` 证书，并把该钥匙串加入用户钥匙串搜索列表。此后所有检出的开发构建都用这张证书签名，指定要求只包含 Bundle ID 和证书，一次授权即可覆盖重新编译的构建和其他 worktree。每次构建都用存放在钥匙串旁边的密码解锁钥匙串，初始化和构建都不会弹出密码窗口。同一用户的任何进程都能读取该密码，并签出获得开发版授权的代码；正式 helper 的授权不受影响。证书签名包含签名时间，因此开发构建在 `sources/` 中记录每个未签名应用与签名身份对应的目录，再次构建时直接选中该目录，不重新签名。`dev-signing:remove` 删除钥匙串、它在搜索列表中的条目和密码；系统设置中已有的授权需要在系统设置中移除。`--identity` 可以覆盖本机身份，例如改用 Apple Development 证书。
+源码检出以 `--variant dev` 构建：应用声明的 Bundle ID 为 `com.deepseek.harness.computer-use.dev`，名称为 `DSH Computer Use Dev`，应用包文件名仍为 `DSH Computer Use.app`。默认的 `--signing ad-hoc` 不访问开发钥匙串。临时签名的指定要求包含代码哈希，因此二进制变化时可能需要重新授权，干净重建也可能产生这种变化。
+
+在 provider 配置中选择 `sourceSigning: local-identity`，或给 `build_app.py` 传入 `--variant dev --signing local-identity`，即可创建或复用 `DSH Computer Use Dev (local)` 证书。初始化会把证书存入 `~/Library/Application Support/DeepSeek Harness/computer-use-dev-signing` 下的专用钥匙串，并将该钥匙串加入用户搜索列表。文件锁让不同 worktree 的初始化和移除串行执行。每次构建都用旁边仅所有者可读的密码文件解锁钥匙串。同一用户的任何进程都能读取该密码并用开发身份签名。指定要求包含 Bundle ID 和证书，不包含代码哈希；重新编译和切换 worktree 后实际能否保留权限，仍需在 macOS 上手动授权验证。
+
+`pnpm --dir packages/experimental/cua-macos run dev-signing:setup` 可以提前准备身份，但不会改变默认签名方式。移除时先选择 `sourceSigning: ad-hoc`，再运行 `pnpm --dir packages/experimental/cua-macos run dev-signing:remove`。移除命令删除钥匙串、搜索列表条目和密码，保留空锁文件以协调后续初始化。系统设置中的授权需单独删除。证书缺失或身份记录损坏会报错，并提示先移除再初始化；更换身份需要重新授权。`--identity` 覆盖 `--signing`；正式版忽略 `--signing`，沿用原有签名行为。
+
+证书签名包含签名时间。开发构建在 `sources/` 中记录每个未签名应用与证书指纹对应的目录，内容不变时复用该目录。临时签名使用独立记录。显式传入证书名称时会重新签名，因为续期可能改变名称对应的证书。
 
 `native/.build/prepared/<arch>` 和 `native/bin/darwin-<arch>` 中的各代应用不会自动清理。正式打包时使用全新的 `--output-directory`，或确认没有客户端使用后清理打包输出再构建，避免旧应用进入 tarball。安全签名时间戳可能让相同源码生成不同代应用。
 
@@ -117,13 +123,13 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 <a id="verification"></a>
 ## 验证
 
-桌面检查要求给 `DSH Computer Use.app` 授权；临时签名的源码构建变化后可能需要重新授权。`--helper` 指向该应用内的可执行文件。裸二进制仅用于旧版本对比，不支持作为当前 helper 的覆盖路径。
+桌面检查要求给所选 helper 授权：正式版声明名称 `DSH Computer Use`，开发版声明名称 `DSH Computer Use Dev`。以系统提示为准，临时签名重建后可能需要重新授权。`--helper` 指向该应用内的可执行文件。裸二进制仅用于旧版本对比，不支持作为当前 helper 的覆盖路径。
 
 运行 `python3 packages/experimental/cua-macos/native/tests/startup_e2e.py`，通过 LaunchServices 检查启动即退出、原始错误传递、过期就绪记录拒绝，以及卡住的新实例退出。检查使用自建应用，不申请系统权限。发布单元测试模拟签名；`build:native` 调用真实的 `codesign --verify --strict`，`launcher_identity_e2e.py` 验证 LaunchServices 授权归属。
 
 使用 `python3 packages/experimental/cua-macos/native/tests/test_swift.py` 通过选定 Apple 工具链的 Swift Testing 框架和运行时路径执行离线单元检查；使用 `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` 检查 JSONL 接纳、有序回复和 EOF 退出，不执行桌面操作。应用与协议端到端检查接受 `--helper` 以选择单独构建的对比二进制。 `python3 packages/experimental/cua-macos/native/tests/test_build_app.py` 验证应用发布、开发版构建、已签名目录复用、签名失败和损坏副本拒绝。`python3 packages/experimental/cua-macos/native/tests/test_dev_signing.py` 用模拟的 `security` 命令验证身份初始化、解锁和移除。`python3 packages/experimental/cua-macos/native/tests/dev_signing_e2e.py` 创建临时身份，签出两个不同的构建并检查二者的指定要求相同，随后移除身份并核对钥匙串搜索列表已恢复。
 
-运行 `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper`，通过测试自建的 AppKit fixture 核实并发启动、共享服务 PID、独立句柄、同一应用交接、请求级截图期限、连接清理和信号退出。需要已经给 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。`--without-desktop` 将检查限定为协议与进程生命期。
+运行 `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper`，通过测试自建的 AppKit fixture 核实并发启动、共享服务 PID、独立句柄、同一应用交接、请求级截图期限、连接清理和信号退出。需要已经给所选的正式版或开发版 helper 授予辅助功能和屏幕录制权限。`--without-desktop` 将检查限定为协议与进程生命期。
 
 在已解锁的 macOS GUI 会话中运行 `python3 packages/experimental/cua-macos/native/tests/application_consent_e2e.py --helper /absolute/helper`，需要可用的 Apple Swift 编译器。它创建并清理自己的 AppKit 应用和独立 GUI 进程，检查元数据替换、冷启动与直接启动、共用 Bundle ID、独立程序重启后的持久路径身份，以及删除运行中可执行文件后的选择行为。默认身份检查不需要辅助功能或屏幕录制权限。添加 `--desktop` 可读取完整测试应用的控件，通过状态文件验证 AX 按钮点击，截取窗口，并记录删除可执行文件后的观察结果；此模式要求已有两项系统权限。
 

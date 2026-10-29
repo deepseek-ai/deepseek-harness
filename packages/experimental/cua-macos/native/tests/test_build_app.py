@@ -8,7 +8,7 @@ import plistlib
 import secrets
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 spec = importlib.util.spec_from_file_location("build_app", Path(__file__).resolve().parents[1] / "build_app.py")
 builder = importlib.util.module_from_spec(spec)
@@ -150,6 +150,19 @@ class DevelopmentPublicationTests(PublicationCases, unittest.TestCase):
         self.assertEqual(json.loads((self.output / "current.json").read_text())["bundle"], first.parents[3].name)
         self.assertNotEqual(second, first)
 
+    def test_named_identities_are_resigned_in_case_the_certificate_was_renewed(self):
+        first = self.publish("Apple Development: Example")
+        self.assertNotEqual(self.publish("Apple Development: Example"), first)
+        self.assertEqual(len(self.signings()), 2)
+
+    def test_switching_between_ad_hoc_and_local_identity_selects_the_matching_generation(self):
+        ad_hoc = self.publish("-")
+        local = self.publish()
+        self.assertNotEqual(local, ad_hoc)
+        self.assertEqual(self.publish("-"), ad_hoc)
+        self.assertEqual(self.publish(), local)
+        self.assertEqual(len(self.signings()), 2)
+
     def test_another_identity_signs_the_same_content_again(self):
         first = self.publish()
         other = self.publish("FEDCBA9876543210FEDCBA9876543210FEDCBA98")
@@ -158,27 +171,42 @@ class DevelopmentPublicationTests(PublicationCases, unittest.TestCase):
 
 
 class SigningIdentityTests(unittest.TestCase):
-    def resolve(self, variant, identity, local):
-        signing = type("Signing", (), {"SETUP_COMMAND": "setup-command", "load": staticmethod(lambda: local)})
-        errors = io.StringIO()
-        with patch.object(builder, "load_dev_signing", return_value=signing), contextlib.redirect_stderr(errors):
-            return builder.signing_identity(variant, identity), errors.getvalue()
+    def test_default_and_release_builds_never_load_a_local_identity(self):
+        with patch.object(builder, "load_dev_signing") as load:
+            for variant, mode in (("dev", "ad-hoc"), ("release", "ad-hoc"), ("release", "local-identity")):
+                self.assertEqual(builder.signing_identity(variant, None, mode), ("-", None))
+            load.assert_not_called()
 
-    def test_release_builds_stay_ad_hoc_unless_an_identity_is_named(self):
-        self.assertEqual(self.resolve("release", None, None), (("-", None), ""))
-        self.assertEqual(self.resolve("release", "Developer ID Application: Example", None)[0], ("Developer ID Application: Example", None))
-
-    def test_development_builds_use_the_configured_local_identity(self):
+    def test_local_identity_builds_create_or_reuse_the_identity(self):
         local = type("Identity", (), {"sha1": "ABC", "keychain": Path("/keychains/dev.keychain-db")})
-        self.assertEqual(self.resolve("dev", None, local), (("ABC", Path("/keychains/dev.keychain-db")), ""))
+        signing = Mock()
+        signing.setup.return_value = local
+        with patch.object(builder, "load_dev_signing", return_value=signing):
+            self.assertEqual(builder.signing_identity("dev", None, "local-identity"), ("ABC", local.keychain))
+        signing.setup.assert_called_once_with()
 
-    def test_an_explicit_identity_overrides_the_local_development_identity(self):
-        self.assertEqual(self.resolve("dev", "Apple Development: Example", None), (("Apple Development: Example", None), ""))
+    def test_an_explicit_identity_overrides_either_signing_mode(self):
+        with patch.object(builder, "load_dev_signing") as load:
+            for mode in ("ad-hoc", "local-identity"):
+                self.assertEqual(builder.signing_identity("dev", "Apple Development: Example", mode),
+                                 ("Apple Development: Example", None))
+            load.assert_not_called()
 
-    def test_unconfigured_development_builds_are_ad_hoc_and_name_the_setup_command(self):
-        (identity, errors) = self.resolve("dev", None, None)
-        self.assertEqual(identity, ("-", None))
-        self.assertIn("setup-command", errors)
+    def test_local_identity_failure_does_not_fall_back_to_ad_hoc(self):
+        signing = Mock()
+        signing.setup.side_effect = RuntimeError("identity unavailable")
+        with patch.object(builder, "load_dev_signing", return_value=signing):
+            with self.assertRaisesRegex(RuntimeError, "identity unavailable"):
+                builder.signing_identity("dev", None, "local-identity")
+
+    def test_command_line_defaults_to_ad_hoc_and_passes_the_selected_mode(self):
+        for flags, mode in (([], "ad-hoc"), (["--signing", "local-identity"], "local-identity")):
+            with patch.object(builder.sys, "argv", ["build_app.py", "--variant", "dev", *flags]), \
+                 patch.object(builder, "signing_identity", return_value=("-", None)) as identity, \
+                 patch.object(builder.subprocess, "run"), patch.object(builder, "publish", return_value="helper"), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                builder.main()
+            identity.assert_called_once_with("dev", None, mode)
 
 
 if __name__ == "__main__":

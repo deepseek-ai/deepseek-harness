@@ -13,7 +13,7 @@ description: "源码构建的 Computer Use helper 使用独立的开发版 Bundl
 
 ## 迁移
 
-1. 每个 macOS 用户运行一次 `pnpm --dir packages/experimental/cua-macos run dev-signing:setup`，之后的构建和其他 worktree 都能沿用授权。未运行时，每次构建内容变化都使用临时签名并重新要求授权。
+1. 源码构建默认使用临时签名，二进制变化后可能需要重新授权。如需固定身份，在 profile 的 `cordis.patch.yml` 中为 `id: cua` 设置 `config.sourceSigning: local-identity`，首次构建会自动创建或复用本机身份。各 worktree 需使用相同配置。
 2. 从源码检出启动 DSH 并调用 Computer Use，在系统设置中给 `DSH Computer Use Dev` 授予辅助功能和屏幕录制权限。
 3. 确认 `getCapabilities` 报告两项权限均为 `true`。只有在没有已安装的 DSH 使用旧的 `DSH Computer Use` 条目时才移除它。
-4. 撤销初始化时运行 `pnpm --dir packages/experimental/cua-macos run dev-signing:remove`，并在系统设置中移除 `DSH Computer Use Dev` 条目。
+4. 撤销固定签名时，先切回 `sourceSigning: ad-hoc`，再运行 `pnpm --dir packages/experimental/cua-macos run dev-signing:remove`，并在系统设置中删除开发版授权。

@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 import { access, mkdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
+import type { CuaConfig } from '@deepseek-ai/dsh-cua'
 import type { SubprocessOutcome, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { z } from 'zod'
 
@@ -27,6 +28,8 @@ export function nativeHostArchitecture(platform: string, architecture: string): 
 export interface NativeBuildSpec {
   packageRoot: string
   architecture: NativeArchitecture
+  /** Signature of a source-checkout build; installed packages ignore it. */
+  sourceSigning: CuaConfig['sourceSigning']
   subprocess: Pick<SubprocessRuntime, 'spawn'>
   signal: AbortSignal
   timeoutMs: number
@@ -65,7 +68,7 @@ export async function isSourcePackage(packageRoot: string): Promise<boolean> {
 
 /**
  * Build and sign an immutable development helper application with the selected Apple developer tools.
- * The development variant has its own bundle identifier and uses the local development signing identity when configured.
+ * The development variant has its own bundle identifier and the signature selected by `spec.sourceSigning`.
  * @param spec - Checkout, target, managed process provider and cancellation/deadline limits.
  * @returns Executable inside the prepared application, after complete compiler cleanup.
  * @throws When preparation, cancellation, resource cleanup or receipt validation fails.
@@ -80,7 +83,7 @@ export async function buildNativeExecutable(spec: NativeBuildSpec): Promise<stri
     const handle = spec.subprocess.spawn({
       argv: ['/usr/bin/xcrun', 'python3', join(nativeRoot, 'build_app.py'),
         '--scratch-path', join(nativeRoot, '.build', `runtime-${spec.architecture}`),
-        '--output-directory', directory, '--arch', spec.architecture === 'x64' ? 'x86_64' : 'arm64', '--variant', 'dev'],
+        '--output-directory', directory, '--arch', spec.architecture === 'x64' ? 'x86_64' : 'arm64', '--variant', 'dev', '--signing', spec.sourceSigning],
       cwd: spec.packageRoot, signal, graceMs: spec.graceMs,
       stdio: { stdin: 'ignore', stdout: { maxBytes: 65_536 }, stderr: { maxBytes: 65_536 } },
     })

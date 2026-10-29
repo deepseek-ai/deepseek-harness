@@ -13,7 +13,7 @@ Source checkouts previously built `DSH Computer Use.app` with the release bundle
 
 ## Migration
 
-1. Run `pnpm --dir packages/experimental/cua-macos run dev-signing:setup` once per macOS user so later builds and other worktrees keep the grant. Without it, every changed build is ad-hoc signed and asks again.
+1. Source builds default to ad-hoc signing; changed binaries can require new grants. For a fixed identity, set `config.sourceSigning: local-identity` on `id: cua` in the profile’s `cordis.patch.yml`. The first build creates or reuses the identity automatically. Use the same configuration in each worktree.
 2. Start DSH from the source checkout, call Computer Use, and grant Accessibility and Screen Recording to `DSH Computer Use Dev` in System Settings.
 3. Confirm that `getCapabilities` reports both permissions as `true`. Remove an old `DSH Computer Use` entry only when no installed DSH uses it.
-4. To undo setup, run `pnpm --dir packages/experimental/cua-macos run dev-signing:remove` and remove the `DSH Computer Use Dev` entries in System Settings.
+4. To remove fixed signing, first select `sourceSigning: ad-hoc`, then run `pnpm --dir packages/experimental/cua-macos run dev-signing:remove` and remove the development grants in System Settings.

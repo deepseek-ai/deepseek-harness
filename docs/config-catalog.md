@@ -1116,7 +1116,7 @@ export interface Config {
 - `source`: [`packages/experimental/cua-macos/src/index.ts:16`](../packages/experimental/cua-macos/src/index.ts)
 
 ```ts config-catalog
-/** Native preparation, operation bounds, and profile-local application grants. */
+/** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
 export type Config = CuaConfig
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-cua-macos -->

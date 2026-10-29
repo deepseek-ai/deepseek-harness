@@ -2,6 +2,8 @@
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -25,6 +27,8 @@ class FakeSecurity:
             self.keychains = list(args[4:])
         if args[0] == "delete-keychain":
             Path(args[1]).unlink()
+        if args[0] == "find-identity":
+            return "ABC123 NEW456"
         return ""
 
 
@@ -103,6 +107,77 @@ class DevelopmentSigningTests(unittest.TestCase):
         self.assertFalse(self.directory.exists())
         signing.remove(self.directory)
         self.assertEqual(security.keychains, [self.login])
+
+    def test_missing_certificate_requires_explicit_removal_instead_of_changing_identity(self):
+        self.configure()
+        (self.directory / "identity.json").write_text(json.dumps({"sha1": "MISSING", "password": "secret"}))
+        with self.assertRaisesRegex(RuntimeError, "certificate is missing; run .*remove, then .*setup"):
+            signing.setup(self.directory)
+        self.assertTrue(self.keychain.is_file())
+
+    def test_invalid_identity_record_reports_recovery_without_its_contents(self):
+        self.configure()
+        (self.directory / "identity.json").write_text("secret invalid json")
+        with self.assertRaisesRegex(RuntimeError, "record is invalid; run .*remove") as error:
+            signing.setup(self.directory)
+        self.assertNotIn("secret", str(error.exception))
+
+    def test_private_command_failures_never_echo_arguments_or_output(self):
+        for tool, action in ((signing.SECURITY, "unlock-keychain"), (signing.OPENSSL, "pkcs12")):
+            command = [tool, action, "-p", "secret-password"]
+            for failure in (subprocess.TimeoutExpired(command, 60, stderr="secret-password"),
+                            subprocess.CalledProcessError(1, command, stderr="secret-password"),
+                            OSError(2, "secret-password")):
+                with self.subTest(tool=tool, failure=type(failure).__name__), \
+                     patch.object(signing.subprocess, "run", side_effect=failure):
+                    with self.assertRaises(RuntimeError) as error:
+                        signing.private_command(command)
+                    self.assertNotIn("secret-password", str(error.exception))
+                    self.assertTrue(error.exception.__suppress_context__)
+
+    def test_setup_and_remove_hold_the_same_cross_process_lock(self):
+        self.configure()
+        probe = """import fcntl, os, sys
+with open(sys.argv[1], 'w') as lock:
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.exit(0)
+    sys.exit(1)
+"""
+        setup_locked, remove_locked = signing.setup_locked, signing.remove_locked
+        def check_lock(operation):
+            def run(directory):
+                result = subprocess.run([sys.executable, "-c", probe, str(directory.with_suffix(".lock"))],
+                                        capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                return operation(directory)
+            return run
+        with patch.object(signing, "setup_locked", side_effect=check_lock(setup_locked)), \
+             patch.object(signing, "remove_locked", side_effect=check_lock(remove_locked)):
+            signing.setup(self.directory)
+            signing.remove(self.directory)
+        with signing.identity_lock(self.directory):
+            pass
+
+    def test_build_cli_reports_signing_timeout_without_traceback_or_password(self):
+        script = """import runpy, sys, subprocess
+from unittest.mock import patch
+from pathlib import Path
+test_home = Path(sys.argv[2])
+Path.home = lambda: test_home
+sys.argv = [sys.argv[1], '--variant', 'dev', '--signing', 'local-identity']
+with patch('subprocess.run', side_effect=subprocess.TimeoutExpired(['security', 'unlock-keychain', '-p', 'secret-password'], 60)):
+    runpy.run_path(sys.argv[0], run_name='__main__')
+"""
+        # Fail at the first security command, before setup can modify any keychain.
+        result = subprocess.run([sys.executable, "-c", script, str(Path(signing.__file__).with_name("build_app.py")), str(self.root / "home")],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(len(result.stderr.splitlines()), 1)
+        self.assertIn("timed out", result.stderr)
+        self.assertNotIn("secret-password", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
 
 
 if __name__ == "__main__":
