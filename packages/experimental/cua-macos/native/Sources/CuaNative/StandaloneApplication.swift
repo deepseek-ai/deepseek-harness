@@ -44,7 +44,10 @@ enum StandaloneApplication {
         }
         defer { withExtendedLifetime(lock) {} }
         if files.fileExists(atPath: generation.path) {
-            try validate(application, runtimeKey: runtimeKey)
+            do { try validate(application, runtimeKey: runtimeKey) }
+            catch {
+                throw NativeFailure(code: "NATIVE_APPLICATION_INVALID", message: "Computer Use cached application is invalid: \(error.localizedDescription); remove \(generation.path) and retry")
+            }
             return application
         }
         let staging = root.appendingPathComponent(".staging-\(UUID().uuidString)")
@@ -66,6 +69,9 @@ enum StandaloneApplication {
     }
 
     private static func validate(_ application: URL, runtimeKey: String) throws {
+        guard !hasApplicationAncestor(application.resolvingSymlinksInPath()) else {
+            throw NativeFailure(code: "NATIVE_APPLICATION_REQUIRED", message: "Computer Use application resolves inside another .app: \(application.path)")
+        }
         let executable = application.appendingPathComponent("Contents/MacOS/dsh-cua-native")
         let bytes = try Data(contentsOf: executable, options: .mappedIfSafe)
         let digest = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
@@ -74,7 +80,7 @@ enum StandaloneApplication {
         guard digest == runtimeKey,
               SecStaticCodeCreateWithPath(application as CFURL, [], &code) == errSecSuccess,
               let code, SecStaticCodeCheckValidity(code, flags, nil) == errSecSuccess else {
-            throw NativeFailure(code: "NATIVE_APPLICATION_INVALID", message: "Computer Use application failed signature or executable verification at \(application.path); remove this cached generation and retry")
+            throw NativeFailure(code: "NATIVE_APPLICATION_INVALID", message: "Computer Use application failed signature or executable verification at \(application.path)")
         }
     }
 }

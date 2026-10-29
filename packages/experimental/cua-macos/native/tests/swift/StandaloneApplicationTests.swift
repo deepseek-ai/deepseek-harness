@@ -115,26 +115,11 @@ func aChangedCachedApplicationIsRejected(file: String) throws {
     let f = try ApplicationFixture(); defer { f.close() }
     let key = try f.key
     try FileManager.default.createDirectory(at: f.cache, withIntermediateDirectories: true)
-    let lock = try #require(SharedHelperLock(path: f.cache.appendingPathComponent("\(key).lock").path))
+    let lock = try #require(try SharedHelperLock(path: f.cache.appendingPathComponent("\(key).lock").path))
     defer { withExtendedLifetime(lock) {} }
     #expect(throws: (any Error).self) {
         try StandaloneApplication.install(f.application, runtimeKey: key, root: f.cache,
                                           deadline: DispatchTime.now().uptimeNanoseconds)
     }
     #expect(!FileManager.default.fileExists(atPath: f.cache.appendingPathComponent(key).path))
-}
-
-@MainActor @Test func permissionRequestsReachSettingsWhenTheSystemDoesNotGrantAccess() throws {
-    var requests = 0, settings = 0
-    try SystemPermissions.requestConsent(granted: false, request: { requests += 1; return false }, openSettings: { settings += 1 })
-    #expect(requests == 1 && settings == 1)
-    try SystemPermissions.requestConsent(granted: true, request: { requests += 1; return false }, openSettings: { settings += 1 })
-    #expect(requests == 1 && settings == 1)
-    try SystemPermissions.requestConsent(granted: false, request: { requests += 1; return true }, openSettings: { settings += 1 })
-    #expect(requests == 2 && settings == 1)
-    #expect(throws: (any Error).self) {
-        try SystemPermissions.requestConsent(granted: false, request: { false }, openSettings: {
-            throw NativeFailure(code: "SETTINGS_UNAVAILABLE", message: "Settings unavailable")
-        })
-    }
 }

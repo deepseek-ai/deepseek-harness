@@ -24,21 +24,15 @@ import Foundation
     func request(_ permission: String) throws -> JSONValue {
         switch permission {
         case "accessibility":
-            try Self.requestConsent(granted: AXIsProcessTrusted(), request: {
+            if !AXIsProcessTrusted() {
                 let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-                return AXIsProcessTrustedWithOptions(options)
-            }, openSettings: { _ = try openSettings(permission) })
+                _ = AXIsProcessTrustedWithOptions(options)
+            }
         case "screenRecording":
-            try Self.requestConsent(granted: CGPreflightScreenCaptureAccess(), request: CGRequestScreenCaptureAccess,
-                                    openSettings: { _ = try openSettings(permission) })
+            if !CGPreflightScreenCaptureAccess() { _ = CGRequestScreenCaptureAccess() }
         default: throw RequestParameters.invalid("permission must be accessibility or screenRecording")
         }
         return status()
-    }
-
-    // macOS may suppress a repeated consent prompt; the existing request action still reaches its settings pane.
-    static func requestConsent(granted: Bool, request: () -> Bool, openSettings: () throws -> Void) throws {
-        if !granted && !request() { try openSettings() }
     }
 
     func openSettings(_ permission: String) throws -> JSONValue {
