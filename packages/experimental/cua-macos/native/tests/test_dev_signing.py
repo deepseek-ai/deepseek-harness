@@ -100,6 +100,48 @@ class DevelopmentSigningTests(unittest.TestCase):
         self.assertEqual(oct(self.directory.stat().st_mode & 0o777), "0o700")
         self.assertEqual(security.keychains, [self.login, str(self.keychain)])
 
+    def test_setup_preserves_the_record_when_the_keychain_is_missing(self):
+        security = self.configure()
+        record = self.directory / "identity.json"
+        before = record.read_bytes()
+        self.keychain.unlink()
+        with patch.object(signing, "create_certificate") as create:
+            with self.assertRaisesRegex(RuntimeError, "keychain is missing: .*; run .*remove, then .*setup"):
+                signing.setup(self.directory)
+        create.assert_not_called()
+        self.assertEqual(record.read_bytes(), before)
+        self.assertFalse(self.keychain.exists())
+        self.assertEqual(security.commands, [])
+
+    def test_build_cli_stops_without_replacing_a_recorded_identity_missing_its_keychain(self):
+        home = self.root / "home"
+        directory = home / "Library/Application Support/DeepSeek Harness/computer-use-dev-signing"
+        directory.mkdir(parents=True)
+        record = directory / "identity.json"
+        before = json.dumps({"sha1": "ABC123", "password": "secret-password"}).encode()
+        record.write_bytes(before)
+        output = self.root / "applications"
+        script = """import runpy, sys
+from pathlib import Path
+from unittest.mock import patch
+test_home = Path(sys.argv[2])
+Path.home = lambda: test_home
+sys.argv = [sys.argv[1], '--variant', 'dev', '--signing', 'local-identity', '--output-directory', sys.argv[3]]
+with patch('subprocess.run', side_effect=AssertionError('unexpected native build or signing command')):
+    runpy.run_path(sys.argv[0], run_name='__main__')
+"""
+        result = subprocess.run([sys.executable, "-c", script, str(Path(signing.__file__).with_name("build_app.py")), str(home), str(output)],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(len(result.stderr.splitlines()), 1)
+        self.assertIn("keychain is missing", result.stderr)
+        self.assertIn(f"run {signing.REMOVE_COMMAND}, then {signing.SETUP_COMMAND}", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertNotIn("secret-password", result.stderr)
+        self.assertEqual(record.read_bytes(), before)
+        self.assertFalse(signing.keychain_path(directory).exists())
+        self.assertFalse(output.exists())
+
     def test_remove_restores_the_other_search_list_entries_and_deletes_the_password(self):
         security = self.configure()
         signing.remove(self.directory)

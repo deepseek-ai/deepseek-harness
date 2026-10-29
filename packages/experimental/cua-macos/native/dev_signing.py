@@ -112,7 +112,7 @@ def load(directory=DEFAULT_DIRECTORY):
         raise RuntimeError(f"Computer Use development signing record is invalid; run {REMOVE_COMMAND}, then {SETUP_COMMAND}")
     keychain = keychain_path(directory)
     if not keychain.is_file():
-        raise RuntimeError(f"Computer Use development signing keychain is missing: {keychain}; run {SETUP_COMMAND}")
+        raise RuntimeError(f"Computer Use development signing keychain is missing: {keychain}; run {REMOVE_COMMAND}, then {SETUP_COMMAND}")
     if not listed(keychain, user_keychains()):
         raise RuntimeError(f"Computer Use development signing keychain is not on the user keychain search list; run {SETUP_COMMAND}")
     # A locked keychain makes codesign show a password dialog, so unlock it explicitly every time.
@@ -154,17 +154,18 @@ def create_certificate(directory, password):
 
 
 def setup(directory=DEFAULT_DIRECTORY):
-    """Create the identity once and keep its keychain on the user search list."""
+    """Create an identity only without a record; preserve recorded identities when their keychain is missing."""
     with identity_lock(directory):
         return setup_locked(directory)
 
 
 def setup_locked(directory):
     keychain = keychain_path(directory)
-    if record_path(directory).exists() and keychain.is_file():
-        keychains = user_keychains()
-        if not listed(keychain, keychains):
-            security("list-keychains", "-d", "user", "-s", *keychains, str(keychain))
+    if record_path(directory).exists():
+        if keychain.is_file():
+            keychains = user_keychains()
+            if not listed(keychain, keychains):
+                security("list-keychains", "-d", "user", "-s", *keychains, str(keychain))
         return load(directory)
     remove_locked(directory)
     directory.mkdir(mode=0o700, parents=True)

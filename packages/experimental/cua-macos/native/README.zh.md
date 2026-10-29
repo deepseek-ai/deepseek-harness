@@ -29,7 +29,7 @@ kind: "package-reference"
 
 在 provider 配置中选择 `sourceSigning: local-identity`，或给 `build_app.py` 传入 `--variant dev --signing local-identity`，即可创建或复用 `DSH Computer Use Dev (local)` 证书。初始化会把证书存入 `~/Library/Application Support/DeepSeek Harness/computer-use-dev-signing` 下的专用钥匙串，并将该钥匙串加入用户搜索列表。文件锁让不同 worktree 的初始化和移除串行执行。每次构建都用旁边仅所有者可读的密码文件解锁钥匙串。同一用户的任何进程都能读取该密码并用开发身份签名。指定要求包含 Bundle ID 和证书，不包含代码哈希；重新编译和切换 worktree 后实际能否保留权限，仍需在 macOS 上手动授权验证。
 
-`pnpm --dir packages/experimental/cua-macos run dev-signing:setup` 可以提前准备身份，但不会改变默认签名方式。移除时先选择 `sourceSigning: ad-hoc`，再运行 `pnpm --dir packages/experimental/cua-macos run dev-signing:remove`。移除命令删除钥匙串、搜索列表条目和密码，保留空锁文件以协调后续初始化。系统设置中的授权需单独删除。证书缺失或身份记录损坏会报错，并提示先移除再初始化；更换身份需要重新授权。`--identity` 覆盖 `--signing`；正式版忽略 `--signing`，沿用原有签名行为。
+`pnpm --dir packages/experimental/cua-macos run dev-signing:setup` 可以提前准备身份，但不会改变默认签名方式。移除时先选择 `sourceSigning: ad-hoc`，再运行 `pnpm --dir packages/experimental/cua-macos run dev-signing:remove`。移除命令删除钥匙串、搜索列表条目和密码，保留空锁文件以协调后续初始化。系统设置中的授权需单独删除。已有身份记录但钥匙串或证书缺失时，构建保留记录并报错；记录损坏也会报错。恢复时按提示先移除再初始化，更换身份需要重新授权。`--identity` 覆盖 `--signing`；正式版忽略 `--signing`，沿用原有签名行为。
 
 证书签名包含签名时间。开发构建在 `sources/` 中记录每个未签名应用与证书指纹对应的目录，内容不变时复用该目录。临时签名使用独立记录。显式传入证书名称时会重新签名，因为续期可能改变名称对应的证书。
 
