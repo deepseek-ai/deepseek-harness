@@ -23,12 +23,11 @@ export interface Config extends CuaConfig {
   sourceSigning: 'ad-hoc' | 'local-identity'
 }
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
-export const Config = Schema.intersect([
-  CuaConfig,
-  Schema.object({
-    sourceSigning: Schema.union([Schema.const('ad-hoc'), Schema.const('local-identity')]).default('ad-hoc'),
-  }),
-]) satisfies Schema<Record<string, unknown>, Config>
+export const Config = Schema.object({
+  // Schemastery erases object field types on dict; the shared Config declares their output types.
+  ...CuaConfig.dict as { [Key in keyof CuaConfig]: Schema<unknown, CuaConfig[Key]> },
+  sourceSigning: Schema.union([Schema.const('ad-hoc'), Schema.const('local-identity')]).default('ad-hoc'),
+}) satisfies Schema<Record<string, unknown>, Config>
 
 const description = 'Inspect macOS permissions, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.'
 

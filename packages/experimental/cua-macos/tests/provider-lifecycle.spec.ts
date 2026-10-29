@@ -17,6 +17,8 @@ import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
+import { CuaConfig } from '@deepseek-ai/dsh-cua'
+import { createConfigProjector } from '@deepseek-ai/dsh-app-boot/src/config-schema/projector.ts'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import UserQuestions from '@deepseek-ai/dsh-user-questions'
@@ -70,6 +72,20 @@ it('defaults source builds to ad-hoc signatures and accepts only the two signing
   expect(NativeProvider.Config({}).sourceSigning).toBe('ad-hoc')
   expect(NativeProvider.Config({ sourceSigning: 'local-identity' }).sourceSigning).toBe('local-identity')
   expect(() => NativeProvider.Config({ sourceSigning: 'developer-id' } as never)).toThrow()
+})
+
+it('projects shared controls and macOS signing without adding signing to the shared schema', async () => {
+  const project = await createConfigProjector()
+  const projected = project(NativeProvider.Config, 'cua-macos')
+  expect(projected.schema).toMatchObject({ anyOf: [
+    { properties: { sourceSigning: expect.any(Object), agentPreset: expect.any(Object), helperPath: expect.any(Object) } },
+    expect.any(Object),
+  ] })
+  expect(CuaConfig({})).not.toHaveProperty('sourceSigning')
+  expect(CuaConfig.dict).not.toHaveProperty('sourceSigning')
+  expect(NativeProvider.Config({ sourceSigning: 'local-identity', timeoutMs: 1234 })).toMatchObject({
+    agentPreset: 'ptc', sourceSigning: 'local-identity', timeoutMs: 1234,
+  })
 })
 
 it('defaults the explicit click hold limit to five seconds and accepts a configured zero or larger limit', () => {
