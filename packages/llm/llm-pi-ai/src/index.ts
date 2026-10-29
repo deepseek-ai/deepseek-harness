@@ -253,7 +253,7 @@ export function apply(ctx: Context, config: Config): void {
       )
     },
     onThinkingOmitted: ({ provider, model, count }) => {
-      if (count > 0) ctx.logger.debug(`llm-pi-ai: omitted stale thinking from ${count} assistant message(s) for route "${provider}/${model}"`)
+      ctx.logger.debug(`llm-pi-ai: omitted stale thinking from ${count} assistant message(s) for route "${provider}/${model}"`)
     },
   })
   // Independent of the route set: signing in is what makes a route worth

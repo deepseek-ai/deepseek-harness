@@ -21,11 +21,14 @@ const tool = { name: 'lookup', description: 'Look up a value.', parameters: { ty
 
 /** One Anthropic response: signed and redacted thinking, then a tool call or a reply. */
 function frames(signature: string, toolUse: boolean): ReturnType<typeof anthropicFrame>[] {
-  const blocks = [
+  return response(signature, [
     { type: 'thinking', thinking: `thinking ${signature}`, signature },
     { type: 'redacted_thinking', data: `redacted-${signature}` },
     toolUse ? { type: 'tool_use', id: `toolu_${signature}`, name: 'lookup', input: { key: 1 } } : { type: 'text', text: 'done' },
-  ]
+  ], toolUse)
+}
+
+function response(signature: string, blocks: Record<string, unknown>[], toolUse = false): ReturnType<typeof anthropicFrame>[] {
   return [
     anthropicFrame({ type: 'message_start', message: {
       id: `msg_${signature}`, type: 'message', role: 'assistant', model: 'model', content: [],
@@ -40,14 +43,15 @@ function frames(signature: string, toolUse: boolean): ReturnType<typeof anthropi
   ]
 }
 
-async function setup(api: 'anthropic-messages' | 'openai-completions', script: Parameters<typeof mockServer>[0], adaptive = true) {
+async function setup(api: 'anthropic-messages' | 'openai-completions', script: Parameters<typeof mockServer>[0], adaptive = true, manual = false) {
   vi.stubEnv('PREFIX_BINDING_KEY', 'test-key')
   const server = await mockServer(script)
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(LlmPiAi, { providers: {
-    route: { api, baseURL: server.url, apiKeyEnv: 'PREFIX_BINDING_KEY', cacheRetention: 'none', models: [{ id: 'model' }],
+    route: { api, baseURL: server.url, apiKeyEnv: 'PREFIX_BINDING_KEY', cacheRetention: 'none', models: [{ id: 'model', ...manual ? { reasoningEfforts: { high: 'high' } } : {} }],
+      ...manual ? { reasoning: 'high' as const } : {},
       ...api === 'anthropic-messages' ? { compat: { forceAdaptiveThinking: adaptive } } : {} },
   } })
   const run = async (messages: Message[]) => {
@@ -137,17 +141,59 @@ describe('Anthropic thinking prefix binding', () => {
     expect(wire(server.requests[1])).toContain('toolu_first')
   })
 
-  it('keeps stale thinking only on the open tool round of a manual-thinking model', async () => {
+  it('keeps stale thinking only on the open tool round of a manual-thinking request', async () => {
     const { server, run } = await setup('anthropic-messages', [
       { events: frames('first', true) },
       { events: frames('second', true) },
       { events: frames('third', false) },
-    ], false)
+      { events: frames('fourth', false) },
+    ], false, true)
     const first = await run([user('Look up the value.')])
     const second = await run([user('Look up the value.'), first, result(callId(first), 'value')])
     await run([user('<compacted-summary>'), first, result(callId(first), 'value'), second, result(callId(second), 'value')])
     expect(wire(server.requests[2])).not.toContain('"signature":"first"')
     expect(wire(server.requests[2])).toContain('"signature":"second"')
+    expect(server.requests[2]).toMatchObject({ thinking: { type: 'enabled' } })
+
+    // Once a user message closes the round, the formerly kept thinking is stale too.
+    const compacted = [user('<compacted-summary>'), first, result(callId(first), 'value'), second, result(callId(second), 'value')]
+    await run([...compacted, user('Continue.')])
+    expect(wire(server.requests[3])).not.toContain('"signature":"second"')
+  })
+
+  it('sends an empty manual-thinking history unchanged', async () => {
+    const { server, run } = await setup('anthropic-messages', [{ events: frames('first', false) }], false, true)
+    await run([])
+    expect(server.requests[0]).toMatchObject({ messages: [] })
+  })
+
+  it('omits stale manual thinking from a final assistant message without tool results', async () => {
+    const { server, run } = await setup('anthropic-messages', [{ events: frames('first', false) }, { events: frames('second', false) }], false, true)
+    const first = await run([user('Answer.')])
+    await run([user('<compacted-summary>'), first])
+    expect(wire(server.requests[1])).not.toContain('"signature":"first"')
+  })
+
+  it('omits stale thinking of the open tool round when the request disables thinking', async () => {
+    const { server, run } = await setup('anthropic-messages', [{ events: frames('first', true) }, { events: frames('second', false) }], false)
+    const first = await run([user('Look up the value.')])
+    await run([user('<compacted-summary>'), first, result(callId(first), 'value')])
+    expect(wire(server.requests[1])).not.toContain('"signature":"first"')
+  })
+
+  it('drops a thinking-only message and keeps unsigned thinking', async () => {
+    const { server, run } = await setup('anthropic-messages', [
+      { events: response('only', [{ type: 'thinking', thinking: 'thinking only', signature: 'only' }]) },
+      { events: response('unsigned', [{ type: 'thinking', thinking: 'unsigned thinking', signature: '' }, { type: 'text', text: 'reply' }]) },
+      { events: frames('third', false) },
+    ])
+    const only = await run([user('Think.')])
+    const unsigned = await run([user('Think.'), only, user('Answer.')])
+    await run([user('<compacted-summary>'), only, user('Answer.'), unsigned, user('Again.')])
+    const messages = (server.requests[2] as { messages: { role: string }[] }).messages
+    expect(messages.map(message => message.role)).toEqual(['user', 'user', 'assistant', 'user'])
+    expect(wire(server.requests[2])).not.toContain('thinking only')
+    expect(wire(server.requests[2])).toContain('unsigned thinking')
   })
 
   it('omits stale thinking without an omission observer', async () => {

@@ -11,6 +11,7 @@
 import { LlmError } from '@deepseek-ai/dsh-llm'
 import type { AssistantMessage as HarnessAssistantMessage, ModelMessageSource, ReplayEnvelope } from '@deepseek-ai/dsh-llm'
 import type { Api, AssistantMessage, ToolCall, Usage as PiUsage } from '@earendil-works/pi-ai'
+import type { PrefixDigests } from './prefix-binding.ts'
 
 /** Per-block half of the pi-ai replay envelope, one entry per content block. */
 export type PiAiReplayBlock =
@@ -66,9 +67,6 @@ function emptyPiUsage(): PiUsage {
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   }
 }
-
-/** Recorded request-prefix digests of reconstructed assistant messages, owned by one context conversion. */
-export type PrefixDigests = Map<AssistantMessage, string>
 
 /**
  * Project a successful pi-ai response into the minimal durable replay state.
