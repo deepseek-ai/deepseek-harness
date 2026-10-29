@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { TeamModeToggle, type TeamModeToggleProps } from '../src/client/TeamModeToggle.tsx'
-import { zh } from '../src/client/locales.ts'
+import { de, en, es, fr, ja, pt, ru, zh } from '../src/client/locales.ts'
 
 afterEach(() => {
   cleanup()
@@ -53,19 +53,21 @@ it.each(['returned', 'error', 'string'])('reports rejected mode writes through t
   expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false')
 })
 
-it.each([false, true])('opens an accessible explanation without changing Team mode (locked: %s)', (locked) => {
+it.each(Object.entries({ zh, en, ja, es, fr, de, ru, pt }).flatMap(([locale, dictionary]) =>
+  [false, true].map(locked => ({ locale, dictionary, locked })),
+))('opens the $locale explanation without changing Team mode (locked: $locked)', ({ dictionary, locked }) => {
   vi.stubGlobal('ResizeObserver', class {
     observe() {}
     unobserve() {}
     disconnect() {}
   })
   const input = props(false)
-  render(<TeamModeToggle {...input} locked={locked} />)
-  const info = screen.getByRole('button', { name: zh['mode.infoLabel'] })
+  render(<TeamModeToggle {...input} locked={locked} t={makeTranslate(dictionary)} />)
+  const info = screen.getByRole('button', { name: dictionary['mode.infoLabel'] })
   expect(info.hasAttribute('disabled')).toBe(false)
   fireEvent.click(info)
   const tooltip = screen.getByRole('tooltip', { hidden: true })
-  expect(tooltip.textContent).toBe(zh['mode.description'])
+  expect(tooltip.textContent).toBe(dictionary['mode.description'])
   expect(info.getAttribute('aria-describedby')).toBe(tooltip.id)
   expect(document.body.contains(tooltip)).toBe(true)
   expect(input.selectTeamMode).not.toHaveBeenCalled()
