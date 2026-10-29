@@ -4264,14 +4264,6 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'payload', description: '.signal - the current turn\'s explicit abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
-    name: 'agent/wait-notified',
-    mode: 'emit',
-    signature: '\'agent/wait-notified\'(this: Scoped<Agent>, payload: { agent: Agent }): void',
-    summary: 'End current input waits without adding inbox content or starting the agent.',
-    description: 'End current input waits without adding inbox content or starting the agent. This process-local signal is not retained for later waits.',
-    parameters: [{ name: 'payload', description: '.agent - the exact agent whose current waits should end. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
-  },
-  {
     name: 'api-session/activity',
     mode: 'emit',
     signature: '\'api-session/activity\'(sessionId: SessionId, updatedAt: number): void',

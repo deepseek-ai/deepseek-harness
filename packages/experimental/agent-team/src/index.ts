@@ -2,10 +2,9 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-session-persistence'
-import { SubagentError } from '@deepseek-ai/dsh-subagent'
+import type {} from '@deepseek-ai/dsh-subagent'
 import { TeamError } from './error.ts'
 import { TeamJournal } from './journal.ts'
 import { teamProjectionDefinition } from './projection.ts'
@@ -69,20 +68,7 @@ export class TeamService extends Service {
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
     const teamProjectionHandle = await ctx.sessionProjections.register(teamProjectionDefinition)
-    this.journal = new TeamJournal(ctx, teamProjectionHandle, (root) => {
-      for (const agent of ctx.agents.list()) {
-        let agentRoot: Agent
-        try {
-          agentRoot = ctx.subagents.rootOf(agent)
-        } catch (error: unknown) {
-          if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') continue
-          throw error
-        }
-        if (agentRoot === root) {
-          emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
-        }
-      }
-    })
+    this.journal = new TeamJournal(ctx, teamProjectionHandle)
     this.tasks = new TeamTaskBoard(ctx, this.journal, this.maxTasks)
   }
 

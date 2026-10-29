@@ -17,12 +17,10 @@ export class TeamJournal {
   /**
    * @param ctx - Team service context with the injected Session service.
    * @param teamProjectionHandle - Team state registration owned by the Team service.
-   * @param onCommit - synchronous notification after the Team event flush succeeds.
    */
   constructor(
     private readonly ctx: Context,
     private readonly teamProjectionHandle: ProjectionHandle<TeamProjectionState>,
-    private readonly onCommit: (root: Agent) => void,
   ) {}
 
   /**
@@ -56,7 +54,7 @@ export class TeamJournal {
   }
 
   /**
-   * Commit a task before notifying current waits in its tree.
+   * Append and flush one task revision.
    * @param root - live tree root whose Session stores the task.
    * @param task - complete committed task revision.
    * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED after append when flush fails or has no listener; read the task before retrying.
@@ -73,6 +71,5 @@ export class TeamJournal {
         { cause: error },
       )
     }
-    this.onCommit(root)
   }
 }

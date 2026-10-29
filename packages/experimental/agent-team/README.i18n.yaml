@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/agent-team/README.md
 /:
-  en: d26e678a9efd33b0
-  zh: b20b1c565005d152
+  en: d13ab6d936f3017e
+  zh: c210c25fd9b6cc92
 /deepseek-ai-dsh-experimental-agent-team:
   en: b28084855adcdabd
   zh: 59e3d49c3d63baf9
 /deepseek-ai-dsh-experimental-agent-team/summary:
-  en: ef6ddcbb3c5c6d7b
-  zh: 81caab2bd6c12a7e
+  en: ab936d59a3993ad5
+  zh: 22bb510326adc136
 /deepseek-ai-dsh-experimental-agent-team/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -27,14 +27,14 @@
   en: 501812f9e9174d1d
   zh: 55303d71b67cc0be
 /deepseek-ai-dsh-experimental-agent-team/use-this-package/messages-between-teammates:
-  en: 07dce4ca3b85c8e4
-  zh: 6c872836fa785aa9
+  en: 5ebaa8681a92ee97
+  zh: a9be3e8e5f9bbaf1
 /deepseek-ai-dsh-experimental-agent-team/use-this-package/shared-task-board:
   en: dfecbb3adbc360da
   zh: 4855fd99f03675f4
 /deepseek-ai-dsh-experimental-agent-team/use-this-package/waiting-and-interruption:
-  en: 2a8172e07ec20808
-  zh: 8aa93e8556517b92
+  en: cdca16d846db4a71
+  zh: e67f1eb26707ac5f
 /deepseek-ai-dsh-experimental-agent-team/use-this-package/what-success-and-failure-look-like:
   en: 36814f2b06dc2359
   zh: c46af795bc89942f
@@ -42,11 +42,11 @@
   en: 6a18034f1ccc247a
   zh: e08b0eb0ccb41ea8
 /deepseek-ai-dsh-experimental-agent-team/understand-the-implementation/design-philosophy:
-  en: 8b9ed8b31facd102
-  zh: fe6678ab9e2b2c0f
+  en: 864117c368113c14
+  zh: 6f8b66333e517ca2
 /deepseek-ai-dsh-experimental-agent-team/understand-the-implementation/source-map:
   en: fdb608bd196db6c3
-  zh: e699bbb116af6b4c
+  zh: 242977c941da5f77
 /deepseek-ai-dsh-experimental-agent-team/understand-the-implementation/team-identity-and-membership:
   en: 6edb88f9d3fde16a
   zh: 7918022f3e09ef46
@@ -54,17 +54,14 @@
   en: fb370a3606dfe1bf
   zh: 67e3de3c5ebe0758
 /deepseek-ai-dsh-experimental-agent-team/understand-the-implementation/messages-and-historical-mailbox:
-  en: 813078d6f281ebc0
-  zh: 106887aaf0760e95
+  en: 762313234714981a
+  zh: 39d69ad1d7542fd2
 /deepseek-ai-dsh-experimental-agent-team/understand-the-implementation/shared-task-board:
   en: a3eaccd15b02cc8f
   zh: c2829d437a1dfe57
-/deepseek-ai-dsh-experimental-agent-team/understand-the-implementation/task-board-wait-signals:
-  en: adc035cc569df172
-  zh: c7fa7aec7e9ed2bf
 /deepseek-ai-dsh-experimental-agent-team/understand-the-implementation/durability-model:
-  en: f85bb7e9dd357ae6
-  zh: 63638f8ebcf18a3d
+  en: bf23d19c30bee66e
+  zh: 617dec77817158d3
 /deepseek-ai-dsh-experimental-agent-team/understand-the-implementation/disposal:
   en: a8baf51f2fcd6d49
   zh: 357c8db36823fe0e
@@ -81,17 +78,17 @@
   en: 8b29cb821f80db40
   zh: 43e402736a553ce5
 /deepseek-ai-dsh-experimental-agent-team/model-experience/task-views-and-errors/what-the-model-sees:
-  en: 42e3a8e77cd1f549
-  zh: 52460903771fa74b
+  en: 3d9d67aa37a19de5
+  zh: f4e4a8764cbe022f
 /deepseek-ai-dsh-experimental-agent-team/model-experience/task-views-and-errors/token-effect:
-  en: f8857619242bb16e
-  zh: aca99dc785e83d56
+  en: 9e87d5f5aec04775
+  zh: 2c3f4b2e3f199252
 /deepseek-ai-dsh-experimental-agent-team/model-experience/task-views-and-errors/kv-cache-effect:
-  en: 28354a0f44ef61aa
-  zh: e3007733c50e5514
+  en: 2b6842dc044d70ce
+  zh: 9f120fb4eb656f5f
 /deepseek-ai-dsh-experimental-agent-team/known-limitations-and-deferred-work:
   en: 208fdd33e8a1be9a
-  zh: bc67492ad17d218f
+  zh: 0e4f6c25f7a7854d
 /deepseek-ai-dsh-experimental-agent-team/known-limitations-and-deferred-work/dev-note:
   en: 498e4cf9fe5741a7
   zh: 9d2bab630e655c99

@@ -694,7 +694,7 @@ function verifyTeamTreeMessage(logs: readonly SessionLog[]): void {
   }])
 }
 
-/** Task commits wake an active wait after persistence without leaving inbox input or a retained signal. */
+/** Task commits leave inbox waits pending until timeout without inserting input. */
 function verifyTeamTaskInbox(logs: readonly SessionLog[]): void {
   expect(logs).toHaveLength(2)
   const root = parseSessionLog(logs[0]!.content)
@@ -723,7 +723,7 @@ function verifyTeamTaskInbox(logs: readonly SessionLog[]): void {
   expect(results.find(result => result.toolCallId === 'wait-past-change')?.content)
     .toEqual([{ type: 'text', text: '{"timedOut":true}' }])
   expect(results.find(result => result.toolCallId === 'wait-current-change')?.content)
-    .toEqual([{ type: 'text', text: '{"timedOut":false}' }])
+    .toEqual([{ type: 'text', text: '{"timedOut":true}' }])
 }
 
 /** Preserve successful native, program, direct-child, and workflow execution in one flow. */
