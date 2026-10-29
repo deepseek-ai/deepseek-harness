@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Automatisation de messagerie",
+    "description": "Connecte des discussions Feishu/Lark ou QQ à une session d'agent partagée qui lit, répond et envoie des fichiers dans ces discussions."
+  }
+}

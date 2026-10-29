@@ -1,0 +1,286 @@
+/**
+ * Platform-neutral media admission: media references of stored messages, stable ids `#<seq>.<n>`, and bounded download
+ * through the core resource fetcher (`bot` resources and platform URLs) into attachments.
+ *
+ * Identifiers are per chat and stable for the lifetime of the stored message: `#<seq>.<n>` names the *n*-th media
+ * element of the message stored with that `seq`, so a model that saw `[图片 #12.1]` can ask for it later with
+ * `im_read_image { id: '12.1' }` even after the record was paged out of the transcript.
+ */
+import type { Context } from '@deepseek-ai/cordis'
+import { createResourceFetcher, type Element, type PrepareContext } from '@deepseek-ai/cordis-plugin-im-core'
+import { AttachmentId, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
+import type { ImageBlock } from '@deepseek-ai/dsh-llm'
+import { z } from 'zod'
+import type { ImChatKey, ImConfig, ImMessage, ImMessageKey } from './api.ts'
+import { ImError } from './error.ts'
+
+/** Kind of a downloadable media element: images are admitted to the model, the other kinds are labelled only. */
+export type ImMediaKind = 'image' | 'file' | 'audio' | 'video'
+
+/** One media element (`img` / `file` / `audio` / `video`) of a stored message, in content order. */
+export interface ImMediaRef {
+  message: ImMessageKey
+  chat: ImChatKey
+  seq: number
+  /** 1-based index within the message. */
+  index: number
+  kind: ImMediaKind
+  src: string
+  name?: string
+  mime?: string
+}
+
+/** Outcome of downloading one reference. */
+export interface ImMediaItem {
+  ref: ImMediaRef
+  /** Present when admitted (images become image blocks). */
+  image?: ImageBlock
+  mime?: string
+  bytes?: number
+  /** Why the item was not admitted (`too-large`, `limit`, `disabled`, platform error text …). */
+  skipped?: string
+}
+
+/** Media tag → admission kind. Only these tags carry downloadable bytes. */
+const MEDIA_KINDS: Readonly<Partial<Record<Element['type'], ImMediaKind>>> = {
+  img: 'image', file: 'file', audio: 'audio', video: 'video',
+}
+
+/** Model-facing noun of each kind. */
+const KIND_LABELS: Readonly<Record<ImMediaKind, string>> = {
+  image: '图片', file: '文件', audio: '语音', video: '视频',
+}
+
+/** Attribute bag of any element (`TypedElement` attrs are a union of per-tag shapes). */
+function attrsOf(node: Element): Record<string, unknown> {
+  return node.attrs
+}
+
+/** Display name a media element carries: `alt` for images, `name` for the other kinds. */
+function displayName(kind: ImMediaKind, attrs: Record<string, unknown>): string | undefined {
+  const value = kind === 'image' ? attrs.alt : attrs.name
+  return typeof value === 'string' && value.trim() ? value : undefined
+}
+
+/** Media types the attachment service stores for images ({@link ImageMediaType}). */
+const IMAGE_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const satisfies
+  readonly ImageMediaType[]
+
+/**
+ * Stored JSON form of one durable image reference, read back from a tool result: the values `ctx.attachments` wrote,
+ * validated so a corrupted record cannot claim an image the provider would fail to fetch.
+ */
+export const imageAttachmentSchema = z.object({
+  attachmentId: z.string().transform(AttachmentId),
+  mediaType: z.enum(IMAGE_MEDIA_TYPES),
+  bytes: z.number().int().nonnegative(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  name: z.exactOptional(z.string()),
+  originalDimensions: z.exactOptional(z.object({ width: z.number(), height: z.number() })),
+})
+
+/**
+ * Media references of a message in content order.
+ * @param message - the stored message to walk.
+ * @returns one reference per media element, numbered 1-based in the order the labels appear in the text.
+ */
+export function mediaRefs(message: ImMessage): ImMediaRef[] {
+  const refs: ImMediaRef[] = []
+  const visit = (node: Element) => {
+    const kind = mediaKindOf(node)
+    if (kind) refs.push(mediaRefAt(message, node, kind, refs.length + 1))
+    for (const child of node.children) visit(child)
+  }
+  for (const child of message.content.children) visit(child)
+  return refs
+}
+
+/**
+ * Admission kind of a media element (`img` / `file` / `audio` / `video`), undefined for everything else.
+ * @param node - any element of a message content tree.
+ * @returns its media kind, or undefined when the element carries no downloadable bytes.
+ */
+export function mediaKindOf(node: Element): ImMediaKind | undefined {
+  return MEDIA_KINDS[node.type]
+}
+
+/**
+ * Reference of one media element numbered `index` (1-based) within its message. The formatter walks the content
+ * itself and numbers as it goes, so the label it shows and the reference `im_read_image` resolves always agree.
+ * @param message - the message the element belongs to.
+ * @param node - the media element.
+ * @param kind - its admission kind ({@link mediaKindOf}).
+ * @param index - its 1-based position among the message's media elements.
+ * @returns the reference (source, display name and chat identity included).
+ */
+export function mediaRefAt(message: ImMessage, node: Element, kind: ImMediaKind, index: number): ImMediaRef {
+  const attrs = attrsOf(node)
+  const name = displayName(kind, attrs)
+  return {
+    message: message.key,
+    chat: message.chat.key,
+    seq: message.seq,
+    index,
+    kind,
+    src: typeof attrs.src === 'string' ? attrs.src : '',
+    ...name ? { name } : {},
+  }
+}
+
+/** Collapse a display name into one bounded line, so a label never breaks the message text. */
+function cleanName(name: string | undefined): string | undefined {
+  const collapsed = name?.replace(/\s+/g, ' ').trim()
+  if (!collapsed) return undefined
+  const chars = Array.from(collapsed)
+  return chars.length > 40 ? `${chars.slice(0, 39).join('')}…` : collapsed
+}
+
+/**
+ * Stable model-facing label: `[图片 #12.1]`, `[文件 #12.2 report.pdf]` …
+ * @param ref - the media reference to label.
+ * @returns the label the transcript shows and the model later quotes back to read the element.
+ */
+export function mediaLabel(ref: ImMediaRef): string {
+  const id = `#${ref.seq}.${ref.index}`
+  const name = cleanName(ref.name)
+  return `[${KIND_LABELS[ref.kind]} ${id}${name ? ` ${name}` : ''}]`
+}
+
+/** `#12.1`, `12.1` or a bare `12` (first media element of the message). */
+const MEDIA_ID = /^#?(\d+)(?:\.(\d+))?$/
+
+/**
+ * Parse `#12.1` / `12.1` back into seq and index.
+ * @param id - the model-supplied media id; a bare `12` names the first media element of message 12.
+ * @returns the resolved seq and 1-based index, or undefined when the text is not a media id.
+ */
+export function parseMediaId(id: string): { seq: number; index: number } | undefined {
+  const match = MEDIA_ID.exec(id.trim())
+  if (!match) return undefined
+  const index = match[2] === undefined ? 1 : Number(match[2])
+  return index >= 1 ? { seq: Number(match[1]), index } : undefined
+}
+
+const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+const JPEG = [0xff, 0xd8, 0xff]
+
+function matchesBytes(data: Uint8Array, offset: number, signature: readonly number[]): boolean {
+  return signature.every((byte, index) => data[offset + index] === byte)
+}
+
+function matchesAscii(data: Uint8Array, offset: number, text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    if (data[offset + index] !== text.charCodeAt(index)) return false
+  }
+  return true
+}
+
+/**
+ * Identify a raster format the attachment service accepts from its bytes (never from a name or header).
+ * @param data - complete downloaded resource bytes.
+ * @returns the detected media type, or undefined for any other content.
+ */
+export function sniffImageMediaType(data: Uint8Array): ImageMediaType | undefined {
+  if (matchesBytes(data, 0, PNG)) return 'image/png'
+  if (matchesBytes(data, 0, JPEG)) return 'image/jpeg'
+  if (matchesAscii(data, 0, 'GIF87a') || matchesAscii(data, 0, 'GIF89a')) return 'image/gif'
+  if (matchesAscii(data, 0, 'RIFF') && matchesAscii(data, 8, 'WEBP')) return 'image/webp'
+  return undefined
+}
+
+/** Reason carried by a cancelled caller signal (never invented: the caller's own alarm wins). */
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new Error('The media admission was aborted')
+}
+
+/**
+ * Downloads the media of stored messages, bounded by `config.media`: fetches a src, bounds its bytes, sniffs the raster
+ * format and keeps the bytes as a durable attachment so a later `im_read_image` resolves the same element.
+ */
+export class ImMediaStore {
+  /** `createResourceFetcher` closure, built on first use (it reads `ctx.http` per call). */
+  private fetcher: PrepareContext['fetch'] | undefined
+
+  constructor(readonly ctx: Context, readonly config: ImConfig) {}
+
+  /**
+   * Download the references (bounded by `config.media.maxItems` / `maxBytes`; disabled ⇒ all skipped).
+   * Never throws for a reference that cannot be admitted: the item reports why in `skipped`.
+   * @param refs - references in the order their labels appear in the transcript.
+   * @param signal - cancellation of the caller (delivery/turn end).
+   * @returns one outcome per reference, in the same order.
+   */
+  async admit(refs: readonly ImMediaRef[], signal?: AbortSignal): Promise<ImMediaItem[]> {
+    const limits = this.config.media
+    if (!limits.download) return refs.map(ref => ({ ref, skipped: 'disabled' }))
+    const items: ImMediaItem[] = []
+    let admitted = 0
+    for (const ref of refs) {
+      if (signal?.aborted) throw abortReason(signal)
+      if (ref.kind !== 'image') {
+        items.push({ ref, skipped: 'unsupported' })
+      } else if (admitted >= limits.maxItems) {
+        items.push({ ref, skipped: 'limit' })
+      } else {
+        admitted += 1
+        items.push(await this.admitOne(ref, signal))
+      }
+    }
+    return items
+  }
+
+  /**
+   * Resolve one stable id within a chat (`im_read_image`).
+   * @param chat - the chat the id was shown in.
+   * @param id - `#12.1`, `12.1` or `12` (the first media element of message 12).
+   * @param signal - cancellation of the calling turn.
+   * @returns the admission outcome of exactly that media element.
+   */
+  async read(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaItem> {
+    const parsed = parseMediaId(id)
+    if (!parsed) throw new ImError('access', `"${id}" is not a media id such as 12.1.`)
+    const message = this.messageAt(chat, parsed.seq)
+    if (!message) throw new ImError('access', `Chat ${chat} has no stored message #${parsed.seq}.`)
+    const ref = mediaRefs(message).find(ref => ref.index === parsed.index)
+    if (!ref) throw new ImError('access', `Message #${parsed.seq} has no media element #${parsed.index}.`)
+    if (ref.kind !== 'image') return { ref, skipped: 'unsupported' }
+    if (!this.config.media.download) return { ref, skipped: 'disabled' }
+    return this.admitOne(ref, signal)
+  }
+
+  /** Stored message with exactly this per-chat seq. */
+  private messageAt(chat: ImChatKey, seq: number): ImMessage | undefined {
+    const history = this.ctx.get('im')?.history
+    if (!history) throw new ImError('unavailable', 'The im service is not available for media reads.')
+    const [message] = history.after(chat, seq - 1, 1)
+    return message?.seq === seq ? message : undefined
+  }
+
+  /** One image reference: fetch → size bound → raster sniff → durable attachment. */
+  private async admitOne(ref: ImMediaRef, signal: AbortSignal | undefined): Promise<ImMediaItem> {
+    try {
+      const fetched = await this.fetch(ref.src, signal)
+      const bytes = fetched.data.byteLength
+      if (bytes > this.config.media.maxBytes) return { ref, bytes, skipped: 'too-large' }
+      const mediaType = sniffImageMediaType(fetched.data)
+      if (!mediaType) return { ref, ...fetched.mime ? { mime: fetched.mime } : {}, bytes, skipped: 'unsupported' }
+      const attachments = this.ctx.get('attachments')
+      if (!attachments) return { ref, mime: mediaType, bytes, skipped: 'unavailable' }
+      const [attachment] = await attachments.saveImages([
+        { data: fetched.data, mediaType, ...ref.name ? { name: ref.name } : {} },
+      ])
+      if (!attachment) return { ref, mime: mediaType, bytes, skipped: 'persistence' }
+      return { ref, image: { type: 'image', attachment }, mime: mediaType, bytes }
+    } catch (error) {
+      if (signal?.aborted) throw error
+      return { ref, skipped: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** Bytes of a src: `satori:` internal resources, http(s), and inline `data:`/`base64:` forms. */
+  private fetch(src: string, signal: AbortSignal | undefined): Promise<{ data: Uint8Array; mime?: string }> {
+    this.fetcher ??= createResourceFetcher(this.ctx)
+    return this.fetcher(src, signal ?? new AbortController().signal)
+  }
+}

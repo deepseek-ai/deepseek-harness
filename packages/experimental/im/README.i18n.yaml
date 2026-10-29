@@ -1,0 +1,121 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/im/README.md
+/:
+  en: 338a667598fe5a2b
+  zh: f2687ba9a33fdcf4
+/deepseek-ai-dsh-experimental-im:
+  en: 77fccabd0d2f1743
+  zh: 8bef2e3f0a1ff055
+/deepseek-ai-dsh-experimental-im/summary:
+  en: 588338188c4854e2
+  zh: fe94c15f3a4b0502
+/deepseek-ai-dsh-experimental-im/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 4ebceb2533647b32
+/deepseek-ai-dsh-experimental-im/use-this-package:
+  en: 39b5b35f6cfd58ba
+  zh: a633b5b2b63e4bed
+/deepseek-ai-dsh-experimental-im/use-this-package/responsibilities-across-packages:
+  en: fd427dd69636e1fc
+  zh: 11098466c1f831bc
+/deepseek-ai-dsh-experimental-im/use-this-package/sources-and-admission:
+  en: 45063af7f574e8dc
+  zh: f95a448aa0f5d5cb
+/deepseek-ai-dsh-experimental-im/use-this-package/durability-and-the-message-store:
+  en: 304704ea6b34c5aa
+  zh: b2e1170f913cbb5c
+/deepseek-ai-dsh-experimental-im/use-this-package/hosted-sessions:
+  en: 1c1bc31fb04e13d6
+  zh: d383b6c3a99bc192
+/deepseek-ai-dsh-experimental-im/use-this-package/outbound-publication-formatting-and-history:
+  en: 2ff438bb9893edc6
+  zh: 08e960674c058296
+/deepseek-ai-dsh-experimental-im/use-this-package/activity-tracking-and-output-renderers:
+  en: a7981ccab1bf2a0a
+  zh: 0d85705ae4608049
+/deepseek-ai-dsh-experimental-im/use-this-package/the-im-tools:
+  en: 252f42ef6c64995c
+  zh: ef9af6a2434f3f78
+/deepseek-ai-dsh-experimental-im/use-this-package/the-default-dispatcher:
+  en: aed1a2469780ce2b
+  zh: cb9cf8d1be30ed52
+/deepseek-ai-dsh-experimental-im/use-this-package/the-plugin-layer:
+  en: 811120f70d57377a
+  zh: 905f168a1f983ec9
+/deepseek-ai-dsh-experimental-im/understand-the-implementation:
+  en: 8705a752f437c37a
+  zh: df95416686ecb51a
+/deepseek-ai-dsh-experimental-im/further-exploration:
+  en: 3c669a6acca968f8
+  zh: 8b3bc596d31ecce4
+/deepseek-ai-dsh-experimental-im/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-experimental-im/model-experience/incoming-chat-message:
+  en: f88e4e5562e4ae92
+  zh: 3e887521c8c0f017
+/deepseek-ai-dsh-experimental-im/model-experience/incoming-chat-message/what-the-model-sees:
+  en: b99864b141a3c9a4
+  zh: 773b55ab095f6f01
+/deepseek-ai-dsh-experimental-im/model-experience/incoming-chat-message/what-the-model-sees/delivered-envelope:
+  en: 79770f2a0953b7d0
+  zh: 83f2ecd941ef7fe1
+/deepseek-ai-dsh-experimental-im/model-experience/incoming-chat-message/token-effect:
+  en: bb2ce0b5e4dfd54a
+  zh: 18fe34b98b4c6c20
+/deepseek-ai-dsh-experimental-im/model-experience/incoming-chat-message/kv-cache-effect:
+  en: 363c23cac45e5c9c
+  zh: a5e1dcc698294891
+/deepseek-ai-dsh-experimental-im/model-experience/im-tools-guidance-in-the-system-prompt:
+  en: edc3d8b35b98e6d2
+  zh: 534bfb9655dcf7d6
+/deepseek-ai-dsh-experimental-im/model-experience/im-tools-guidance-in-the-system-prompt/what-the-model-sees:
+  en: cc5c2da9789da3c0
+  zh: dcc07110fd0c00ac
+/deepseek-ai-dsh-experimental-im/model-experience/im-tools-guidance-in-the-system-prompt/what-the-model-sees/sentences-of-the-section-with-the-chat-lists-substituted:
+  en: f2bcf01036d70bab
+  zh: cd4f020abd39eb63
+/deepseek-ai-dsh-experimental-im/model-experience/im-tools-guidance-in-the-system-prompt/token-effect:
+  en: 2042ffcb81ec868f
+  zh: 55fc0f0c7f0c8ff2
+/deepseek-ai-dsh-experimental-im/model-experience/im-tools-guidance-in-the-system-prompt/kv-cache-effect:
+  en: 764dbeb35924c1dc
+  zh: 821ab4dd4f98acae
+/deepseek-ai-dsh-experimental-im/model-experience/dispatcher-guidance-in-the-system-prompt:
+  en: 07809639ea13874b
+  zh: b5783dcdb08c8b81
+/deepseek-ai-dsh-experimental-im/model-experience/dispatcher-guidance-in-the-system-prompt/what-the-model-sees:
+  en: a7e7575555d4bc36
+  zh: a5843bee1953a44d
+/deepseek-ai-dsh-experimental-im/model-experience/dispatcher-guidance-in-the-system-prompt/what-the-model-sees/default-text:
+  en: 98dbd8e339909dae
+  zh: 29e05a9b0ed9eb3c
+/deepseek-ai-dsh-experimental-im/model-experience/dispatcher-guidance-in-the-system-prompt/token-effect:
+  en: 46ce23537fcd5213
+  zh: c80a24e11c0f265b
+/deepseek-ai-dsh-experimental-im/model-experience/dispatcher-guidance-in-the-system-prompt/kv-cache-effect:
+  en: 8b303c4802878f16
+  zh: d34211801e5d3391
+/deepseek-ai-dsh-experimental-im/model-experience/im-tool-results:
+  en: e1a4178e3aee673d
+  zh: 78dcc68758dce191
+/deepseek-ai-dsh-experimental-im/model-experience/im-tool-results/what-the-model-sees:
+  en: 34d6a3b49bc39e45
+  zh: 39599a0bbea12c2f
+/deepseek-ai-dsh-experimental-im/model-experience/im-tool-results/what-the-model-sees/publication-result:
+  en: e89c1a9c68ee60a9
+  zh: 7854d264c8ea26a7
+/deepseek-ai-dsh-experimental-im/model-experience/im-tool-results/token-effect:
+  en: b977c289107fa8f4
+  zh: 4c28d81c6c1c079b
+/deepseek-ai-dsh-experimental-im/model-experience/im-tool-results/kv-cache-effect:
+  en: a8c75f24b6bcd644
+  zh: 91fb6a0b6d4768de
+/deepseek-ai-dsh-experimental-im/known-limitations-and-deferred-work:
+  en: 0f4d79ce87ae901e
+  zh: 1ed16f18bc09aa8c
+/deepseek-ai-dsh-experimental-im/known-limitations-and-deferred-work/dev-note:
+  en: 6ece3d0fd4b89fe2
+  zh: bbd15293b0912619

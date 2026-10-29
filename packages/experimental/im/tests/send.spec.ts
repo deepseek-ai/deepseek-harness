@@ -1,0 +1,576 @@
+/**
+ * Outbound sender: the grants check, durable receipts (confirmed / failed / uncertain / partial, never an automatic
+ * resend), own-message attribution, quote/thread targets, streams and the receipt bounds.
+ */
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import {
+  Bot, createRenderReport, h, normalize, PartialSendError, PlatformError, type Fragment, type MessageHandle,
+  type MessageStream, type SendOptions, type SendResult, type Target,
+} from '@deepseek-ai/cordis-plugin-im-core'
+import { createTextMode, mountFakeAdapter, type FakeAdapter } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
+import { SessionId } from '@deepseek-ai/dsh-session'
+import Storage from '@deepseek-ai/dsh-storage'
+import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
+import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
+import {
+  ImChatKey, ImMessageKey, ImSourceId, splitKey, type ImBinding, type ImConfig, type ImSessionRecord,
+} from '../src/api.ts'
+import { Config } from '../src/config.ts'
+import { ImError } from '../src/error.ts'
+import { grantChain, ImSender, operationId, type StoredReceipt } from '../src/send.ts'
+import { ImStore, type ImMessageDraft } from '../src/store.ts'
+
+const contexts: Context[] = []
+
+afterEach(async () => {
+  for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
+})
+
+const CHAT = ImChatKey('fake:bot', 'chat')
+const STUB_CHAT = ImChatKey('stub:bot', 'chat')
+const COMPOSITION = { agentPreset: 'im', cwd: process.cwd(), provider: 'mock', model: 'mock' }
+
+/** The two session lookups of `ImSenderDeps.sessions` (the grants check). */
+class FakeSessions {
+  private readonly records = new Map<string, ImSessionRecord>()
+
+  add(session: string, bindings: ImBinding[], parent?: string): ImSessionRecord {
+    const record: ImSessionRecord = {
+      key: session, owner: 'test', composition: COMPOSITION, bindings, sessionId: SessionId(session), generation: 0,
+      createdAt: 0, lastActiveAt: 0, ...parent === undefined ? {} : { parent: SessionId(parent) },
+    }
+    this.records.set(session, record)
+    return record
+  }
+
+  of(sessionId: SessionId): ImSessionRecord | undefined {
+    return this.records.get(sessionId)
+  }
+
+  get(keyOrId: string): ImSessionRecord | undefined {
+    return this.records.get(keyOrId)
+  }
+}
+
+/**
+ * A platform that answers however one scenario needs (timeouts, partial sends, empty handles). It is a real
+ * {@link Bot}, so the send funnel's registry lookup finds it; every publication answer is scripted by the test.
+ */
+class StubBot extends Bot {
+  readonly sends: { target: Target; content: Fragment; options: SendOptions }[] = []
+  answer: (call: { target: Target; content: Fragment; options: SendOptions }) => Promise<SendResult> = async call =>
+    stubResult(call.target, call.content, ['stub-1'])
+
+  constructor(ctx: Context) {
+    super(ctx, undefined, { id: 'stub:bot', platform: 'stub' })
+  }
+
+  override send(target: Target, content: Fragment, options: SendOptions): Promise<SendResult> {
+    this.sends.push({ target, content, options })
+    return this.answer({ target, content, options })
+  }
+
+  override stream(): MessageStream {
+    throw new Error('the stub bot does not stream')
+  }
+}
+
+/** One `SendResult` of the stub bot. */
+function stubResult(target: Target, content: Fragment, parts: readonly string[]): SendResult {
+  return { handle: handleOf('stub:bot', target, content, parts), report: createRenderReport() }
+}
+
+/** A handle the core could have produced for one logical message. */
+function handleOf(bot: string, target: Target, content: Fragment, parts: readonly string[]): MessageHandle {
+  return {
+    bot, target, mode: 'text', parts: parts.map(id => ({ id, kind: 'text', time: 1 })), createdAt: 1, edits: 0,
+    content: normalize(content),
+  }
+}
+
+interface Harness {
+  ctx: Context
+  bot: FakeAdapter
+  stub: StubBot
+  store: ImStore
+  sender: ImSender
+  sessions: FakeSessions
+  pool: MemoryMediaPool
+}
+
+/** A FakeAdapter plus a stub bot, a real store over an in-memory domain and a sender over both. */
+async function boot(options: { config?: Partial<ImConfig>; pool?: MemoryMediaPool } = {}): Promise<Harness> {
+  const pool = options.pool ?? new MemoryMediaPool()
+  const { ctx, bot } = await mountFakeAdapter({ modes: { text: createTextMode() }, selfId: 'bot-user' })
+  contexts.push(ctx)
+  await ctx.plugin(Storage)
+  ctx.storage.backend.register('memory', new MemoryStorageBackend(pool))
+  const facility = new DomainFacility(ctx, { backend: 'memory', routes: {} })
+  ctx.storage.mount('domain', facility)
+  ctx.provide('storageDomain', facility)
+  const stub = new StubBot(ctx)
+  ctx.bots.push(stub)
+  const config = Config({
+    sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }], retryIntervalMs: 60_000, ...options.config,
+  })
+  const store = new ImStore(ctx, config)
+  await store.start()
+  await store.touchChat({ key: CHAT, bot: 'fake:bot', ref: { id: 'chat', type: 'group' }, source: ImSourceId('team') })
+  await store.touchChat({
+    key: STUB_CHAT, bot: 'stub:bot', ref: { id: 'chat', type: 'group' }, source: ImSourceId('team'),
+  })
+  const sessions = new FakeSessions()
+  const sender = new ImSender(ctx, config, { store, sessions })
+  await sender.start()
+  return { ctx, bot, stub, store, sender, sessions, pool }
+}
+
+/** The receipts table as it sits on the (shared) medium — every boot of one pool sees it. */
+function receiptsOf(pool: MemoryMediaPool): Map<string, StoredReceipt> {
+  const table = pool.media.get('im_receipts')?.tables.get('receipts')
+  if (table === undefined) throw new Error('no receipts were persisted')
+  return table as Map<string, StoredReceipt>
+}
+
+/** Rewrite one stored receipt the way a crash or a hand-edited state leaves it. */
+function tamper(pool: MemoryMediaPool, id: string, edit: (receipt: StoredReceipt) => StoredReceipt): void {
+  const table = receiptsOf(pool)
+  const receipt = table.get(id)
+  if (receipt === undefined) throw new Error(`no receipt ${id}`)
+  table.set(id, edit(receipt))
+}
+
+/** An own message draft, as the intake listener stores one after a publication. */
+function ownDraft(key: ImMessageKey, chat: ImChatKey = CHAT): ImMessageDraft {
+  return {
+    key,
+    chat: {
+      key: chat, bot: splitKey(chat).bot, ref: { id: splitKey(chat).id, type: 'group' }, source: ImSourceId('team'),
+    },
+    sender: { id: 'bot-user', isBot: true, self: true },
+    content: normalize(h.text('hello')),
+    text: 'hello',
+    mentions: { self: false, all: false, users: [] },
+    addressed: false,
+    time: 10,
+    via: 'self',
+  }
+}
+
+/** An inbound draft that carries the referrer its adapter decoded (QQ passive key / Lark thread placement). */
+function inboundDraft(key: ImMessageKey, referrer: unknown, chat: ImChatKey = CHAT): ImMessageDraft {
+  return { ...ownDraft(key, chat), sender: { id: 'user-1', self: false }, addressed: true, via: 'platform', referrer }
+}
+
+describe('ImSender.send', () => {
+  it('sends without an operation id and records no receipt', async () => {
+    const { bot, sender, pool } = await boot()
+    const result = await sender.send(CHAT, h.text('hello'))
+    expect(result.status).toBe('confirmed')
+    expect(result.handle?.parts[0]?.id).toBeTruthy()
+    expect(bot.operations.filter(operation => operation.op === 'send')).toHaveLength(1)
+    expect(pool.media.get('im_receipts')?.tables.get('receipts')?.size ?? 0).toBe(0)
+    // No receipt ⇒ nothing deduplicates the call: the same content goes out again.
+    await sender.send(CHAT, h.text('hello'))
+    expect(bot.operations.filter(operation => operation.op === 'send')).toHaveLength(2)
+  })
+
+  it('records a receipt, attributes the own message and replays it without sending again', async () => {
+    const { bot, sender, store, sessions, pool } = await boot()
+    const session = sessions.add('im-session', [{ chat: CHAT, writable: true, home: true }])
+    const first = await sender.send(CHAT, h.text('hello'), { operationId: 'op-1', session: session.sessionId })
+    expect(first.status).toBe('confirmed')
+    expect(first.message).toBeUndefined()
+    const partId = bot.operations[0]?.part?.id ?? ''
+    expect(sender.sessionOf(ImMessageKey('fake:bot', partId))).toBe(session.sessionId)
+    expect(sender.sessionOf(ImMessageKey('fake:bot', 'unknown'))).toBeUndefined()
+    expect(receiptsOf(pool).get('op-1')).toMatchObject({
+      chat: CHAT, session: session.sessionId, status: 'confirmed', message: ImMessageKey('fake:bot', partId),
+    })
+
+    // The intake listener stores the own message; a replay then names it.
+    await store.put(ownDraft(ImMessageKey('fake:bot', partId)), 'none')
+    const replay = await sender.send(CHAT, h.text('hello'), { operationId: 'op-1', session: session.sessionId })
+    expect(replay.status).toBe('confirmed')
+    expect(replay.message?.key).toBe(ImMessageKey('fake:bot', partId))
+    expect(replay.handle).toBeUndefined()
+    expect(bot.operations.filter(operation => operation.op === 'send')).toHaveLength(1)
+  })
+
+  it('refuses a reused operation id with different content', async () => {
+    const { sender } = await boot()
+    await sender.send(CHAT, h.text('hello'), { operationId: 'op-1' })
+    await expect(sender.send(CHAT, h.text('other'), { operationId: 'op-1' }))
+      .rejects.toThrow(/already used for a different publication/)
+  })
+
+  it('reads a crash-pending receipt as uncertain and never resends it', async () => {
+    const first = await boot()
+    await first.sender.send(CHAT, h.text('hello'), { operationId: 'op-pending' })
+    await first.sender.send(CHAT, h.text('again'), { operationId: 'op-bare' })
+    await first.sender.dispose()
+    tamper(first.pool, 'op-pending', receipt => ({ ...receipt, status: 'pending' }))
+    tamper(first.pool, 'op-bare', receipt => ({ ...receipt, status: 'pending' }))
+
+    const second = await boot({ pool: first.pool })
+    const pendingMessage = receiptsOf(first.pool).get('op-pending')?.message as ImMessageKey
+    await second.store.put(ownDraft(pendingMessage), 'none')
+    const replay = await second.sender.send(CHAT, h.text('hello'), { operationId: 'op-pending' })
+    expect(replay.status).toBe('uncertain')
+    expect(replay.error).toMatch(/no durable receipt/)
+    expect(replay.message?.key).toBe(pendingMessage)
+    // A pending operation whose message is not in this process's store still reads as uncertain.
+    const bare = await second.sender.send(CHAT, h.text('again'), { operationId: 'op-bare' })
+    expect(bare.status).toBe('uncertain')
+    expect(bare.message).toBeUndefined()
+    expect(second.bot.operations.filter(operation => operation.op === 'send')).toHaveLength(0)
+  })
+
+  it('applies the quote envelope and the thread wish', async () => {
+    const { bot, sender } = await boot()
+    await sender.send(CHAT, h.text('hello'), { quote: ImMessageKey('fake:bot', 'm9') })
+    expect(bot.operations[0]?.payload).toMatchObject({ quote: 'm9' })
+    expect(bot.operations[0]?.target?.thread).toBeUndefined()
+    await sender.send(CHAT, h.text('hello'), { thread: 't1' })
+    expect(bot.operations[1]?.target?.thread).toBe('t1')
+  })
+
+  it('marks a platform refusal as failed and replays that verdict', async () => {
+    const { bot, sender } = await boot()
+    bot.failNext('send', new PlatformError('permission', 'the bot may not post here', { published: 'no' }))
+    const result = await sender.send(CHAT, h.text('hello'), { operationId: 'op-failed' })
+    expect(result.status).toBe('failed')
+    expect(result.error).toMatch(/refused the publication: the bot may not post here/)
+    expect(bot.operations.filter(operation => operation.op === 'send')).toHaveLength(1)
+    const replay = await sender.send(CHAT, h.text('hello'), { operationId: 'op-failed' })
+    expect(replay.status).toBe('failed')
+    expect(replay.error).toBe(result.error)
+    expect(bot.operations.filter(operation => operation.op === 'send')).toHaveLength(1)
+  })
+
+  it('marks a transport failure as uncertain', async () => {
+    const { bot, sender } = await boot()
+    bot.failNext('send', new Error('connection reset'), { times: 3 })
+    const result = await sender.send(CHAT, h.text('hello'))
+    expect(result.status).toBe('uncertain')
+    expect(result.error).toMatch(/connection reset/)
+    expect(bot.operations.filter(operation => operation.op === 'send' && operation.error === undefined))
+      .toHaveLength(0)
+  })
+
+  it('marks a partial publication as partial', async () => {
+    const { sender, stub, sessions } = await boot()
+    const session = sessions.add('im-session', [{ chat: STUB_CHAT, writable: true, home: true }])
+    stub.answer = async ({ target, content }) => {
+      throw new PartialSendError(
+        handleOf('stub:bot', target, content, ['part-0']), new Error('second part failed'), createRenderReport(),
+      )
+    }
+    const result = await sender.send(STUB_CHAT, h.text('hello'), { session: session.sessionId })
+    expect(result.status).toBe('partial')
+    expect(result.handle?.parts.map(part => part.id)).toEqual(['part-0'])
+    expect(result.report).toBeDefined()
+    expect(result.error).toBe('second part failed')
+    expect(sender.sessionOf(ImMessageKey('stub:bot', 'part-0'))).toBe(session.sessionId)
+  })
+
+  it('marks a partial publication without a render report as partial', async () => {
+    const { sender, stub } = await boot()
+    stub.answer = async ({ target, content }) => {
+      throw new PartialSendError(handleOf('stub:bot', target, content, ['part-1']), new Error('mid part failed'))
+    }
+    const result = await sender.send(STUB_CHAT, h.text('hello'))
+    expect(result.status).toBe('partial')
+    expect(result.report).toBeUndefined()
+    expect(result.error).toBe('mid part failed')
+  })
+
+  it('marks a publication whose platform answer carried no message id as confirmed without a message', async () => {
+    const { sender, stub } = await boot()
+    stub.answer = async ({ target, content }) => stubResult(target, content, [])
+    const result = await sender.send(STUB_CHAT, h.text('hello'), { operationId: 'op-empty' })
+    expect(result.status).toBe('confirmed')
+    expect(result.message).toBeUndefined()
+  })
+
+  it('names the stored own message of a live publication', async () => {
+    const { sender, stub, store } = await boot()
+    stub.answer = async ({ target, content }) => stubResult(target, content, ['known-1'])
+    await store.put(ownDraft(ImMessageKey('stub:bot', 'known-1'), STUB_CHAT), 'none')
+    const result = await sender.send(STUB_CHAT, h.text('hello'))
+    expect(result.message?.key).toBe(ImMessageKey('stub:bot', 'known-1'))
+  })
+
+  it('reports a rejection that is not an Error as its text', async () => {
+    const { sender, stub } = await boot()
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- the non-Error rejection is the scenario.
+    stub.answer = () => Promise.reject('platform vanished')
+    const result = await sender.send(STUB_CHAT, h.text('hello'))
+    expect(result.status).toBe('uncertain')
+    expect(result.error).toBe('platform vanished')
+  })
+
+  it('reports an outcome that could not be saved as uncertain', async () => {
+    const { ctx, sender, stub, pool } = await boot()
+    const logged = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    stub.answer = async ({ target, content }) => {
+      pool.failNextWrites = 1
+      return stubResult(target, content, ['part-0'])
+    }
+    const result = await sender.send(STUB_CHAT, h.text('hello'), { operationId: 'op-unsaved' })
+    expect(result.status).toBe('uncertain')
+    expect(result.error).toMatch(/no durable receipt/)
+    expect(receiptsOf(pool).get('op-unsaved')?.status).toBe('pending')
+    expect(logged).toHaveBeenCalled()
+    logged.mockRestore()
+  })
+
+  it('serializes two publications of one operation id', async () => {
+    const { bot, sender } = await boot()
+    const [first, second] = await Promise.all([
+      sender.send(CHAT, h.text('hello'), { operationId: 'op-race' }),
+      sender.send(CHAT, h.text('hello'), { operationId: 'op-race' }),
+    ])
+    expect(first.status).toBe('confirmed')
+    expect(second.status).toBe('confirmed')
+    expect(bot.operations.filter(operation => operation.op === 'send')).toHaveLength(1)
+  })
+
+  it('marks a strict render rejection as failed', async () => {
+    const { bot, sender } = await boot()
+    const result = await sender.send(CHAT, h('p', h('b', 'bold')), { strict: true, operationId: 'op-strict' })
+    expect(result.status).toBe('failed')
+    expect(result.report?.degraded.length).toBeGreaterThan(0)
+    expect(bot.operations.filter(operation => operation.op === 'send')).toHaveLength(0)
+  })
+
+  it('marks a timed-out publication as uncertain', async () => {
+    const { sender, stub } = await boot({ config: { send: { maxBytes: 30000, maxMediaBytes: 1024, operationTimeoutMs: 10 } } })
+    stub.answer = ({ options }) => new Promise((_resolve, reject) => {
+      // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- the exact abort reason is the rejection.
+      options.signal?.addEventListener('abort', () => { reject(options.signal?.reason) }, { once: true })
+    })
+    const result = await sender.send(STUB_CHAT, h.text('hello'), { signal: new AbortController().signal })
+    expect(result.status).toBe('uncertain')
+    expect(result.error).toMatch(/did not finish in time/)
+  })
+
+  it('marks a cancelled publication as failed before dispatch', async () => {
+    const { sender, stub } = await boot()
+    const result = await sender.send(STUB_CHAT, h.text('hello'), { signal: AbortSignal.abort(new Error('gone')) })
+    expect(result.status).toBe('failed')
+    expect(result.error).toMatch(/cancelled before dispatch/)
+    expect(stub.sends).toHaveLength(0)
+  })
+
+  it('refuses a chat that was never admitted', async () => {
+    const { sender } = await boot()
+    await expect(sender.send(ImChatKey('fake:bot', 'elsewhere'), h.text('hello')))
+      .rejects.toThrow(ImError)
+  })
+
+  it('refuses a chat whose bot is not mounted', async () => {
+    const { sender, store } = await boot()
+    const chat = ImChatKey('qq:404', 'chat')
+    await store.touchChat({ key: chat, bot: 'qq:404', ref: { id: 'chat', type: 'group' }, source: ImSourceId('team') })
+    await expect(sender.send(chat, h.text('hello'))).rejects.toThrow(/No bot qq:404 is mounted/)
+  })
+})
+
+describe('ImSender grants', () => {
+  it('accepts a writable binding of a hosted ancestor', async () => {
+    const { sender, sessions } = await boot()
+    const parent = sessions.add('parent', [{ chat: CHAT, writable: true, home: true }])
+    const child = sessions.add('child', [], parent.sessionId)
+    const result = await sender.send(CHAT, h.text('hello'), { session: child.sessionId })
+    expect(result.status).toBe('confirmed')
+  })
+
+  it('refuses a read-only binding and a session the host does not serve', async () => {
+    const { sender, sessions } = await boot()
+    const readOnly = sessions.add('read-only', [{ chat: CHAT, writable: false, home: true }])
+    await expect(sender.send(CHAT, h.text('hello'), { session: readOnly.sessionId }))
+      .rejects.toThrow(/not writable for session read-only/)
+    await expect(sender.send(CHAT, h.text('hello'), { session: SessionId('stranger') }))
+      .rejects.toThrow(/not writable for session stranger/)
+  })
+
+  it('bounds a grants chain whose parent points back into it', () => {
+    const sessions = new FakeSessions()
+    const cycle = sessions.add('cycle', [], 'cycle')
+    expect(grantChain(sessions, cycle.sessionId).map(record => record.key))
+      .toEqual(['cycle'])
+    const lone = sessions.add('lone', [])
+    expect(grantChain(sessions, lone.sessionId).map(record => record.key)).toEqual(['lone'])
+  })
+})
+
+describe('ImSender receipts', () => {
+  it('evicts the oldest settled receipts to stay within maxRecords', async () => {
+    const { bot, sender, sessions, pool } = await boot({ config: { maxRecords: 2 } })
+    const session = sessions.add('im-session', [{ chat: CHAT, writable: true, home: true }])
+    const clock = vi.spyOn(Date, 'now')
+    try {
+      clock.mockReturnValue(1000)
+      await sender.send(CHAT, h.text('one'), { operationId: 'op-a', session: session.sessionId })
+      clock.mockReturnValue(2000)
+      bot.failNext('send', new PlatformError('permission', 'nope', { published: 'no' }))
+      await sender.send(CHAT, h.text('two'), { operationId: 'op-b' })
+      const attributed = receiptsOf(pool).get('op-a')?.message
+      expect(attributed).toBeTruthy()
+      expect(sender.sessionOf(attributed as ImMessageKey)).toBe(session.sessionId)
+      expect(receiptsOf(pool).get('op-b')?.message).toBeUndefined()
+
+      clock.mockReturnValue(3000)
+      await sender.send(CHAT, h.text('three'), { operationId: 'op-c' })
+      expect([...receiptsOf(pool).keys()].sort()).toEqual(['op-b', 'op-c'])
+      // The evicted receipt took its own-message attribution with it.
+      expect(sender.sessionOf(attributed as ImMessageKey)).toBeUndefined()
+
+      clock.mockReturnValue(4000)
+      await sender.send(CHAT, h.text('four'), { operationId: 'op-d' })
+      expect([...receiptsOf(pool).keys()].sort()).toEqual(['op-c', 'op-d'])
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it('fails with capacity when every receipt is still pending', async () => {
+    const { sender, pool } = await boot({ config: { maxRecords: 1 } })
+    const stream = await sender.stream(CHAT, { operationId: 'op-open' })
+    await expect(sender.send(CHAT, h.text('hello'), { operationId: 'op-next' }))
+      .rejects.toThrow(/receipts are full of unresolved operations/)
+    await stream.close(h.text('final'))
+    await vi.waitFor(() => { expect(receiptsOf(pool).get('op-open')?.status).toBe('confirmed') })
+  })
+
+  it('refuses a publication after the sender was disposed', async () => {
+    const { sender } = await boot()
+    await sender.dispose()
+    await expect(sender.send(CHAT, h.text('hello'), { operationId: 'op-late' }))
+      .rejects.toThrow(/receipt store is not open/)
+  })
+})
+
+describe('ImSender.stream', () => {
+  it('applies the quote to every published state', async () => {
+    const { bot, sender, sessions } = await boot()
+    const session = sessions.add('im-session', [{ chat: CHAT, writable: true, home: true }])
+    const stream = await sender.stream(CHAT, {
+      quote: ImMessageKey('fake:bot', 'm9'), operationId: 'op-quoted', session: session.sessionId,
+    })
+    expect(stream.strategy).toBe('final')
+    expect(stream.state).toBe('idle')
+    stream.update(h.text('partial'))
+    const result = await stream.close(h.text('final'))
+    expect(result.handle.parts).toHaveLength(1)
+    expect(stream.handle).toBe(result.handle)
+    expect(stream.state).toBe('closed')
+    expect(await stream.done).toBe(result)
+    expect(bot.operations.at(-1)?.payload).toMatchObject({ quote: 'm9', text: 'final' })
+  })
+
+  it('closes a quoted stream without a final state and aborts another one', async () => {
+    const { sender } = await boot()
+    const quote = ImMessageKey('fake:bot', 'm9')
+    const closed = await sender.stream(CHAT, { quote })
+    closed.update(h.text('last'))
+    expect((await closed.close()).handle.parts).toHaveLength(1)
+    const aborted = await sender.stream(CHAT, { quote })
+    aborted.update(h.text('some'))
+    await aborted.abort({ reason: 'changed my mind' })
+    await expect(aborted.done).rejects.toThrow(/aborted/)
+  })
+
+  it('closes a stream without a quote or a final state', async () => {
+    const { sender } = await boot()
+    const stream = await sender.stream(CHAT)
+    stream.update(h.text('last'))
+    const result = await stream.close()
+    expect(result.handle.parts).toHaveLength(1)
+  })
+
+  it('records the outcome of a streamed publication and refuses a replayed operation id', async () => {
+    const { sender, pool } = await boot()
+    const stream = await sender.stream(CHAT, { operationId: 'op-stream' })
+    expect(receiptsOf(pool).get('op-stream')?.status).toBe('pending')
+    await stream.close(h.text('final'))
+    await vi.waitFor(() => { expect(receiptsOf(pool).get('op-stream')?.status).toBe('confirmed') })
+    await expect(sender.stream(CHAT, { operationId: 'op-stream' }))
+      .rejects.toThrow(/already opened a stream/)
+  })
+
+  it('records an aborted stream as uncertain', async () => {
+    const { sender, pool } = await boot()
+    const stream = await sender.stream(CHAT, { operationId: 'op-aborted' })
+    await stream.abort({ reason: 'changed my mind' })
+    await expect(stream.done).rejects.toThrow(/aborted/)
+    await vi.waitFor(() => { expect(receiptsOf(pool).get('op-aborted')?.status).toBe('uncertain') })
+  })
+
+  it('keeps a stream receipt pending when its outcome cannot be saved', async () => {
+    const { ctx, sender, pool } = await boot()
+    const logged = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    ctx.on('send', () => { pool.failNextWrites = 1 })
+    const stream = await sender.stream(CHAT, { operationId: 'op-unsaved-stream' })
+    await stream.close(h.text('final'))
+    await vi.waitFor(() => { expect(logged).toHaveBeenCalled() })
+    expect(receiptsOf(pool).get('op-unsaved-stream')?.status).toBe('pending')
+    logged.mockRestore()
+  })
+})
+
+describe('ImSender referrers', () => {
+  const REFERRER = { msg_id: 'ROBOT.1.abc', event_id: 'evt-1', receivedAt: 1000, chatType: 'group', chatId: 'chat' }
+
+  it('carries the referrer of a quoted inbound message onto the target', async () => {
+    const { bot, sender, store } = await boot()
+    const quoted = await store.put(inboundDraft(ImMessageKey('fake:bot', 'm9'), REFERRER), 'none')
+    const result = await sender.send(CHAT, h.text('hello'), { quote: quoted.key })
+    expect(result.status).toBe('confirmed')
+    expect(bot.operations[0]?.target?.referrer).toEqual(REFERRER)
+    // The quote envelope is still applied to the content.
+    expect(bot.operations[0]?.payload).toMatchObject({ quote: 'm9' })
+  })
+
+  it('leaves the target without a referrer for an unknown quote, another chat, or a message without one', async () => {
+    const { bot, sender, store } = await boot()
+    await sender.send(CHAT, h.text('unquoted'))
+    expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
+
+    await sender.send(CHAT, h.text('unknown'), { quote: ImMessageKey('fake:bot', 'nope') })
+    expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
+
+    // A message stored under another chat keeps its referrer to itself (the adapter would answer the wrong route).
+    const foreign = await store.put(inboundDraft(ImMessageKey('stub:bot', 'm7'), REFERRER, STUB_CHAT), 'none')
+    await sender.send(CHAT, h.text('foreign'), { quote: foreign.key })
+    expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
+
+    // A stored message that arrived without a referrer contributes none.
+    const plain = await store.put(ownDraft(ImMessageKey('fake:bot', 'm8')), 'none')
+    await sender.send(CHAT, h.text('plain'), { quote: plain.key })
+    expect(bot.operations.at(-1)?.target).not.toHaveProperty('referrer')
+  })
+
+  it('carries the referrer into a quoted stream', async () => {
+    const { bot, sender, store } = await boot()
+    const quoted = await store.put(inboundDraft(ImMessageKey('fake:bot', 'm9'), REFERRER), 'none')
+    const stream = await sender.stream(CHAT, { quote: quoted.key })
+    stream.update(h.text('partial'))
+    const result = await stream.close(h.text('final'))
+    expect(result.handle.target.referrer).toEqual(REFERRER)
+    expect(bot.operations.at(-1)?.target?.referrer).toEqual(REFERRER)
+    expect(result.handle.parts).toHaveLength(1)
+  })
+})
+
+describe('operationId', () => {
+  it('derives a stable key from the session and the tool call', () => {
+    const session = SessionId('s-1')
+    expect(operationId(session, 'call-1')).toMatch(/^[0-9a-f]{64}$/)
+    expect(operationId(session, 'call-1')).toBe(operationId(session, 'call-1'))
+    expect(operationId(session, 'call-2')).not.toBe(operationId(session, 'call-1'))
+    expect(operationId(SessionId('s-2'), 'call-1')).not.toBe(operationId(session, 'call-1'))
+  })
+})

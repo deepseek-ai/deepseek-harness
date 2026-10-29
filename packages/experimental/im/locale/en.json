@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "IM automation",
+    "description": "Connect Feishu/Lark or QQ chats to one shared agent session that reads, replies and sends files in those chats."
+  }
+}
