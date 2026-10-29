@@ -78,12 +78,24 @@ async function boot() {
     sidebar, browserTab, notify, failure, writeText, report }
 }
 
-it('routes file actions through the captured pane, line, native association and original bytes', async () => {
+it('routes file actions through an explicit host, the line, native association and original bytes', async () => {
   const h = await boot()
-  const file = { kind: 'file', value: { sessionId, path: 'file.svg', paneId: 'pane' as never, line: 24 } } as const
+  // A menu raised inside a floating panel names that panel; the open names a host instead, never a pane.
+  const file = { kind: 'file', value: { sessionId, path: 'file.svg', paneId: 'float7' as never, line: 24 } } as const
+  const items = (await h.resolve(file)).source.getSnapshot().filter(item => item.id.startsWith('open-in-app.file/'))
+  expect(items.map(item => [item.id, item.label, item.icon?.key])).toEqual([
+    ['open-in-app.file/sidebar', 'menu.openInSidebar', 'open-in-app.sidebar'],
+    ['open-in-app.file/float', 'menu.openInFloat', 'open-in-app.float'],
+    ['open-in-app.file/reveal', 'menu.reveal', 'open-in-app.reveal'],
+    ['open-in-app.file/open', 'open.title', 'open-in-app.application'],
+    ['open-in-app.file/copyPath', 'menu.copyPath', 'open-in-app.copy'],
+  ])
   await h.choose(file, 'open-in-app.file/sidebar')
-  expect(h.sidebar.openResourceIn).toHaveBeenCalledWith(sessionId, expect.stringContaining('file.svg'),
-    { paneId: 'pane', params: { line: 24 } })
+  expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(sessionId, expect.stringContaining('file.svg'),
+    { destination: 'sidebar', params: { line: 24 } })
+  await h.choose(file, 'open-in-app.file/float')
+  expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(sessionId, expect.stringContaining('file.svg'),
+    { destination: 'float', params: { line: 24 } })
   const opened = await h.choose(file, 'open-in-app.file/open')
   expect(opened?.icon).toEqual({ key: 'open-in-app.application', src: 'data:image/png;base64,a' })
   expect(h.remote.session.openWorkspacePath).toHaveBeenCalledWith({ path: '/workspace/file.svg', application: 'preview' })
@@ -107,7 +119,11 @@ it('routes file actions through the captured pane, line, native association and 
   expect(menu.source.getSnapshot().filter(item => item.id.startsWith('file-actions.')).map(item => item.id))
     .toEqual(['file-actions.file/saveAs'])
   menu.select('open-in-app.file/sidebar')
-  expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(SessionId('absent'), expect.any(String), {})
+  expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(SessionId('absent'), expect.any(String), { destination: 'sidebar' })
+  h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: true, value: [] })
+  const floating = await h.resolve(simple)
+  floating.select('open-in-app.file/float')
+  expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(SessionId('absent'), expect.any(String), { destination: 'float' })
 })
 
 it('keeps copy-path available on failed metadata and reports native action failures', async () => {
@@ -136,6 +152,7 @@ it('keeps copy-path available on failed metadata and reports native action failu
 it('opens links in the registered browser, externally, and on the clipboard', async () => {
   const h = await boot()
   const target = { kind: 'url', value: { sessionId, url: 'https://example.com/page' } } as const
+  expect((await h.resolve(target)).source.getSnapshot().find(item => item.id === 'open-in-app.url/sidebar')?.label).toBe('menu.openInSidebar')
   await h.choose(target, 'open-in-app.url/sidebar')
   expect(h.sidebar.openTabIn).toHaveBeenCalledWith(sessionId, 'browser', { params: { url: target.value.url } })
   const external = vi.spyOn(window, 'open').mockReturnValue(null)

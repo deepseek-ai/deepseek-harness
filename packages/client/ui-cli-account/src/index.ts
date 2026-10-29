@@ -1,11 +1,9 @@
 /**
- * Shared Plugins page pieces of CLI app plugins: the connection mirror and the account components. The Web shell links
- * this library statically and shares one copy through its module table; plugins import it like any platform module.
+ * CLI account surfaces plugin, Node half. Pure UI plugin: the empty apply
+ * exists so the plugin appears in the host cordis.yml / Loader; the browser
+ * half ships via exports["./client"], discovered through the package.json
+ * dsh.client declaration.
  */
-export {
-  CliAccountActivation, CliAccountBadge, CliAccountConfirm, CliAccountSection, CliAccountToast,
-  type CliAccountAction, type CliAccountActivationProps, type CliAccountBadgeProps, type CliAccountBadgeSubject,
-  type CliAccountConfirmProps, type CliAccountFailure,
-  type CliAccountKey, type CliAccountNote, type CliAccountPhase, type CliAccountSectionProps, type CliAccountToastProps,
-} from './components.tsx'
-export { CliAccountConnection, type CliAccountConnectionOptions, type CliAccountNotice, type CliAccountSnapshot } from './connection.ts'
+
+/** Host plugin body — no host-side behavior for this surface plugin. */
+export function apply(): void {}

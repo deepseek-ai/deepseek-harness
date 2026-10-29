@@ -5,10 +5,9 @@ import type { RemoteStreamOptions } from '@deepseek-ai/dsh-api-gateway/client'
 import type { CliAccountView, CliOperationId } from '@deepseek-ai/dsh-cli-account/types'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { expect, it, onTestFinished, vi } from 'vitest'
-import { CliAccountConnection } from '../src/index.ts'
+import { CliAccountConnection } from '../src/client/connection.ts'
 
 type View = CliAccountView<{ readonly state: 'out' | 'in' }, 'check' | 'connect' | 'leave', 'authorizing' | 'leaving'>
-type Notice = 'connected' | 'left'
 
 const OP = 'op-1' as CliOperationId
 const OUT: View = { account: { state: 'out' } }
@@ -55,8 +54,8 @@ function fixture() {
     },
   })
   const windowOpen = vi.spyOn(window, 'open').mockReturnValue(null)
-  const connection = new CliAccountConnection<View, Notice>(ctx, {
-    name: 'Fixture connection', follow, cancel, notices: { connect: 'connected', leave: 'left' },
+  const connection = new CliAccountConnection<View>(ctx, {
+    name: 'Fixture connection', follow, cancel, notices: { connect: () => 'Connected', leave: () => 'Left' },
   })
   onTestFinished(async () => { await connection.dispose(); windowOpen.mockRestore(); await ctx.fiber.dispose() })
   return {
@@ -98,18 +97,18 @@ it('mirrors the Host view through the plugin stream', async () => {
 it('opens each new link of an operation this browser started once and reports mapped successes', async () => {
   const b = fixture()
   await b.publish(OUT)
-  b.connection.start(b.start)
+  b.connection.page.start(b.start)
   await settle(b)
   await b.publish({ ...OUT, operation: operation('connect', 'authorizing', { url: 'https://example.com/a', cancellable: true }) })
   await b.publish({ ...OUT, operation: operation('connect', 'authorizing', { url: 'https://example.com/a', cancellable: true }) })
   expect(b.open.mock.calls).toEqual([['https://example.com/a', '_blank', 'noopener,noreferrer']])
-  b.connection.actions.openAuthorization()
+  b.connection.page.openAuthorization()
   expect(b.open).toHaveBeenCalledTimes(2)
   await b.publish({ account: { state: 'in' }, result: { id: OP, kind: 'connect', outcome: 'succeeded' } })
-  expect(b.snapshot().notice).toEqual({ seq: 1, kind: 'connected' })
+  expect(b.snapshot().notice).toEqual({ seq: 1, kind: 'succeeded', operation: 'connect' })
   await b.publish({ account: { state: 'in' }, result: { id: OP, kind: 'connect', outcome: 'succeeded' } })
   expect(b.snapshot().notice?.seq).toBe(1)
-  b.connection.actions.dismissNotice()
+  b.connection.dismissNotice()
   expect(b.snapshot().notice).toBeUndefined()
 })
 
@@ -134,9 +133,9 @@ it('opens a link reported before the start answered, never a foreign operation, 
   answer.resolve({ ok: true, value: OP })
   await vi.waitFor(() => { expect(b.open).toHaveBeenCalledWith('https://example.com/device', '_blank', 'noopener,noreferrer') })
   await b.publish({ ...OUT, operation: operation('connect', 'authorizing', { url: 'http://example.com/device' }) })
-  b.connection.actions.openAuthorization()
+  b.connection.page.openAuthorization()
   await b.publish({ ...OUT, operation: operation('connect', 'authorizing', { url: 'not a url' }) })
-  b.connection.actions.openAuthorization()
+  b.connection.page.openAuthorization()
   expect(b.open).toHaveBeenCalledOnce()
 })
 
@@ -162,7 +161,7 @@ it('keeps following its operation when another operation\'s result arrives after
   await b.publish({ ...OUT, operation: operation('connect', 'authorizing', { url: 'https://example.com/device' }) })
   await b.publish({ account: { state: 'in' }, result: { id: OP, kind: 'connect', outcome: 'succeeded' } })
   expect(b.open).toHaveBeenCalledOnce()
-  expect(b.snapshot().notice).toEqual({ seq: 1, kind: 'connected' })
+  expect(b.snapshot().notice).toEqual({ seq: 1, kind: 'succeeded', operation: 'connect' })
 })
 
 it('follows no operation after a rejected start', async () => {
@@ -181,13 +180,13 @@ it('follows no operation after a rejected start', async () => {
 
 it('cancels only an operation the Host marks cancellable', async () => {
   const b = fixture()
-  b.connection.actions.cancel()
+  b.connection.page.cancel()
   await b.publish({ ...OUT, operation: operation('leave', 'leaving') })
-  b.connection.actions.cancel()
-  b.connection.actions.openAuthorization()
+  b.connection.page.cancel()
+  b.connection.page.openAuthorization()
   expect(b.cancel).not.toHaveBeenCalled()
   await b.publish({ ...OUT, operation: operation('connect', 'authorizing', { cancellable: true }) })
-  b.connection.actions.cancel()
+  b.connection.page.cancel()
   await settle(b)
   expect(b.cancel).toHaveBeenCalledWith(OP)
   expect(b.open).not.toHaveBeenCalled()
@@ -245,19 +244,19 @@ it('ignores a Host view the stream yields after disposal', async () => {
 
 it('reopens a stopped Host stream on retry and ignores retry while the stream runs', async () => {
   const b = fixture()
-  b.connection.actions.retry()
+  b.connection.page.retry()
   await b.publish(OUT)
   expect(b.streams).toHaveLength(1)
   b.fail(new Error('gone'))
   await vi.waitFor(() => { expect(b.snapshot().stopped).toBe(true) })
-  b.connection.actions.retry()
+  b.connection.page.retry()
   await vi.waitFor(() => { expect(b.streams).toHaveLength(2) })
   expect(b.snapshot()).toMatchObject({ view: undefined, stopped: false })
   await b.publish(OUT)
   expect(b.snapshot()).toMatchObject({ view: OUT, linked: true })
 
   await b.connection.dispose()
-  b.connection.actions.retry()
+  b.connection.page.retry()
   expect(b.streams).toHaveLength(2)
 })
 
@@ -266,7 +265,7 @@ it('opens no stream for a retry that disposal overtakes', async () => {
   await b.publish(OUT)
   b.fail(new Error('gone'))
   await vi.waitFor(() => { expect(b.snapshot().stopped).toBe(true) })
-  b.connection.actions.retry()
+  b.connection.page.retry()
   await b.connection.dispose()
   await drain()
   expect(b.streams).toHaveLength(1)
@@ -277,8 +276,8 @@ it('reopens one stream for repeated retries and closes that stream on disposal',
   await b.publish(OUT)
   b.fail(new Error('gone'))
   await vi.waitFor(() => { expect(b.snapshot().stopped).toBe(true) })
-  b.connection.actions.retry()
-  b.connection.actions.retry()
+  b.connection.page.retry()
+  b.connection.page.retry()
   await drain()
   expect(b.streams).toHaveLength(2)
   await b.connection.dispose()

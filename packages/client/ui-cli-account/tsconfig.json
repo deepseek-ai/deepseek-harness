@@ -15,13 +15,25 @@
       "path": "../../api/gateway/tsconfig.client.json"
     },
     {
+      "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
       "path": "../../connector/cli-account"
     },
     {
       "path": "../store"
     },
     {
+      "path": "../ui-layout"
+    },
+    {
+      "path": "../ui-plugin-manager/tsconfig.client.json"
+    },
+    {
       "path": "../ui-primitives"
+    },
+    {
+      "path": "../ui-renderer"
     },
     {
       "path": "../ui-slots"

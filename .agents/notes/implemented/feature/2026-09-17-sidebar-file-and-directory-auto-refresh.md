@@ -60,10 +60,11 @@ Notifications invoke existing reload/list operations; a failed reload does not r
 | Package-private `ResourceGroup` | [resource-group.ts](../../../../packages/client/ui-sidebar-documentpreview/src/client/document/resource-group.ts) | Observes members through existing `resources.source(address)`; `add` joins a resource, `set` reconciles full membership, and `close` releases all members without changing the generic Resource service |
 | `DocumentBodyOwner`, `HtmlBody`, `createReadHtmlRelative` | [Renderer inputs](../../../../packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts), [HTML body](../../../../packages/client/ui-sidebar-documentpreview/src/client/html/HtmlBody.tsx), [Related-file reader](../../../../packages/client/ui-sidebar-documentpreview/src/client/html/read-relative.ts) | Renderers declare read members through `addResource` and publish the current dependency list through `setResources`; HTML adds CSS/JS resources from Host-reported paths after each read returns and releases unreferenced members after parsing |
 | Document renderers | [DocumentContent](../../../../packages/client/ui-sidebar-documentpreview/src/client/document/contract.ts) and renderer directories in the same package | Do not watch directly; keep consuming text, bytes, or renderer revisions; `failed()` ends renderer loading without recording a successful version. Check cancellation of previous work, release of old objects, and retention of existing view preferences during refresh |
-| `filesFace`, `FilesInjected` | [Files face](../../../../packages/client/ui-sidebar-files/src/client/face.ts) | Remain the existing business entry point, directly owning each Tab's root node; bind directory reads and change streams and forward expand, collapse, refresh, and automatic-refresh operations without a new `FilesController` |
+| `filesFace`, `FilesInjected` | [Files face](../../../../packages/client/ui-sidebar-files/src/client/face.ts) | Remain the existing business entry point, directly owning each pane's root node while a navigator draws the pane's tree ([per-pane state](../architecture/2026-10-20-workspace-tree-state-per-pane.md)); bind directory reads and change streams and forward expand, collapse, refresh, and automatic-refresh operations without a new `FilesController` |
 | Package-private `DirectoryNode` | [directory-node.ts](../../../../packages/client/ui-sidebar-files/src/client/directory-node.ts) | Represents one open directory, owning its stream, read state, and open children; handles local refresh, expansion, recursive closure, and propagation of automatic-refresh state; `setExpanded` updates pending restoration from the latest expansion preferences |
-| `createFilesStore`, `FilesTabState`, `LevelState` | [Files store](../../../../packages/client/ui-sidebar-files/src/client/store.ts) | Retain expansion, scrolling, and displayed directory data; distinguish initial loading from refresh over existing content to avoid unmounting subtrees on every background read; hold no watcher or AbortController |
-| `FilesBody`, `Level`, `Entry` | [FilesBody.tsx](../../../../packages/client/ui-sidebar-files/src/client/FilesBody.tsx) | Delegate expansion, collapse, refresh, and panel unmount to injected callbacks; render node results without scanning the entire tree into a watch set, using existing framework hooks and store reads |
+| `createFilesStore`, `FilesPaneState`, `FilesTreeState`, `LevelState` | [Files store](../../../../packages/client/ui-sidebar-files/src/client/store.ts) | Retain expansion and displayed directory data; distinguish initial loading from refresh over existing content to avoid unmounting subtrees on every background read; hold no watcher or AbortController |
+| `FileNavigator` | [FileNavigator.tsx](../../../../packages/client/ui-sidebar-files/src/client/FileNavigator.tsx), [workspace-tree.ts](../../../../packages/client/ui-sidebar-files/src/client/workspace-tree.ts) | Read per-pane state through framework hooks; convert listed levels into entries and directory states; pass expansion, collapse, and drawing lifetimes to the injected Files face, which owns listing, refresh, and watches |
+| `FileTree` | [FileTree.tsx](../../../../packages/client/ui-sidebar-files/src/client/FileTree.tsx) | Draw entries, directory states, and expansion from props; report row actions through `onToggle` and `onOpen`. The root-scoped `sidebar.files.tree` Factory reads localized copy and its local `accessory` Component through framework seats, without owning listings or watches |
 | Files registration | [Files client/index.ts](../../../../packages/client/ui-sidebar-files/src/client/index.ts) | Add a directory-change callback to the existing `filesFace`; keep async effects in injection, without importing another feature plugin's runtime exports |
 
 ## Watch requests and notifications
@@ -176,13 +177,14 @@ Pause and play use existing icons; manual reload retains its circular arrow. No 
 
 ```text
 Files.open
-  → FilesBody → Session.cwd + Tab
-  → filesFace.start → DirectoryNode.open
+  → FileNavigator → Session.cwd + pane
+  → filesFace.hold → DirectoryNode.open
   → changes(sessionId, path)
   → Host.watch(depth: 0) → ready
   → DirectoryNode → list(sessionId, path)
-  → createFilesStore.levels[path]
-  → Level / Entry
+  → createFilesStore.byPane[paneId].tree.levels[path]
+  → FileNavigator → workspace-tree.ts: workspaceEntries / workspaceDirectories
+  → renderFactorySlot('sidebar.files.tree', input) → Level / Entry
 
 Entry.expand
   → filesFace.toggle
@@ -204,7 +206,7 @@ The directory panel obtains invalidations and listings through injected Remote c
 
 ## Directory-node tree and lifecycle
 
-The Files runtime is itself an on-demand directory tree. It does not first construct the whole Workspace tree or separately derive a flat watcher set. Existing `filesFace` owns each Tab's root; `DirectoryNode` owns reads, observation, and release recursively, without another controller class.
+The Files runtime is itself an on-demand directory tree. It does not first construct the whole Workspace tree or separately derive a flat watcher set. Existing `filesFace` owns each pane's root; `DirectoryNode` owns reads, observation, and release recursively, without another controller class.
 
 | Node responsibility | Behavior |
 |---|---|
@@ -239,14 +241,14 @@ The parent's watch still detects deletion, renaming, or replacement of a collaps
 | First open | Subscribe to the file Resource and read contents | Open the root node, which subscribes and lists |
 | Expand child | No effect | The parent opens the child; the child subscribes and reads direct entries, progressively restoring still-present descendants from preferences |
 | Collapse child | Open file previews keep their watches | Release that directory and its hidden descendants; expansion preferences and displayed cache may remain |
-| Switch Tab or unmount panel | The Tab pin retains file metadata; an unmounted body does not reread, and refreshes on return according to pending Resource changes and toggle state | Retain expanded nodes and watchers for the Tab lifetime; do not introduce another panel-visibility lifetime |
+| Switch Tab or hide the tree | The Tab pin retains file metadata; an unmounted body does not reread, and refreshes on return according to pending Resource changes and toggle state | Switching between a pane's file tabs keeps expanded nodes and watchers, because the next tab draws the tree in the same commit; hiding the tree or showing a tab without it closes them while the store keeps expansion and displayed levels, which the next drawing lists again in place |
 | Manual refresh | Reuse the current preview reload without rebuilding the Resource system | Recursively refresh open children from the root, without entering collapsed directories or rebuilding all watchers |
-| Last holder closes | Resource abort ends the file stream; the Host awaits watcher closure | Tab closure ends every directory stream, cancels reads, and forgets Tab state |
+| Last holder closes | Resource abort ends the file stream; the Host awaits watcher closure | Once no navigator is mounted in a pane and no open tab last drew one there, every directory stream ends, reads are cancelled, and the pane's state is forgotten |
 | Connection recovers | Stat again after the new stream's ready frame, discovering changes even without event replay | List every still-watched directory after its new stream's ready frame |
 
-Files watches follow Tab lifetimes. Collapse closes the corresponding subtree; Tab closure releases the root and its entire active tree. Temporarily hiding the panel does not rebuild nodes, keeping implementation within the existing entry point and directory objects. The store retains expansion preferences; nodes use them for progressive restoration only when reopened, without a second global expansion set.
+Files watches follow each pane's drawn tree. Collapse closes the corresponding subtree; the end of the pane's last drawing releases the root and its entire active tree, and the pane's state is forgotten once no open tab last drew the tree there. The store retains expansion preferences and displayed levels; nodes use them for progressive restoration only when reopened, without a second global expansion set.
 
-`ResourceRegistry` continues sharing identical complete file Resource addresses. Parent-child ownership prevents duplicate active branches inside one Tab. This version adds no global watcher deduplication across Sessions, windows, or path aliases. Ordinary file rows do not each subscribe to file watches; only files opened as preview Resources acquire independent file observation.
+`ResourceRegistry` continues sharing identical complete file Resource addresses. Parent-child ownership prevents duplicate active branches inside one pane. This version adds no global watcher deduplication across Sessions, windows, or path aliases. Ordinary file rows do not each subscribe to file watches; only files opened as preview Resources acquire independent file observation.
 
 ## User flows
 
@@ -281,8 +283,8 @@ Observation, reads, and presentation need a few explicit ordering rules, not dis
 - Events mean that a target may have changed, not exact replay of a user operation. Duplicate Chokidar events and consecutive writes may coalesce; files deduplicate versions, and directories coalesce pending refreshes.
 - Each directory has at most one active list. Further invalidation during that request or its completion marks a pending reread, which runs afterwards rather than building an arbitrary queue of refresh jobs.
 - File refresh reuses read generations and renderer revisions. Consecutive notifications must not let old requests overwrite new content or endlessly reload an already handled version.
-- Background directory refresh retains the displayed listing without a display-unused `refreshing` flag. Only a directory without displayable entries enters `loading`, avoiding subtree flicker and repeated watcher reconstruction.
-- After collapse, deletion, or Tab closure, late cancelled reads cannot recreate state or restore watchers. Cancellation closes the Host watcher even while the generator is suspended at a yielded frame; stream and plugin teardown await closure.
+- Background directory refresh retains the displayed listing and marks it `refreshing`; the display ignores the mark, while locating a file waits on it for the directory to be listed again. Only a directory without displayable entries enters `loading`, avoiding subtree flicker and repeated watcher reconstruction.
+- After collapse, deletion, the end of a drawing, or the pane's state being forgotten, late cancelled reads cannot recreate state or restore watchers. Cancellation closes the Host watcher even while the generator is suspended at a yielded frame; stream and plugin teardown await closure.
 - Temporary file disappearance while its parent remains does not end observation. Ordinary file changes and watcher failures remain distinct; same-path file watches cover atomic saves and delete/recreate.
 - Existing file reads are not transaction snapshots: writes can occur between stat and content reading. Later notifications trigger refresh; automatic refresh does not promise an atomic snapshot for every read.
 
