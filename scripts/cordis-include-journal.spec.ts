@@ -177,3 +177,28 @@ it('rejects a cross-tree move onto an id the destination already holds', async (
   await app.include.flush()
   expect(await app.read()).toEqual([{ id: 'g', name: 'cordis:group', group: true, config: [row('x', 1)] }])
 })
+
+it('transfers the members of a group moved into the Include', async () => {
+  const app = await fixture([{ id: 'g', name: 'cordis:group', group: true, config: [] }])
+  const apply = vi.fn()
+  app.ctx.loader.builtins.counted = apply
+  const outer = await app.ctx.loader.create({ name: 'cordis:group', group: true, config: [] })
+  await app.ctx.loader.await()
+  const inner = await app.ctx.loader.create({ name: 'cordis:counted', config: { value: 1 } }, outer)
+  await app.ctx.loader.await()
+  const [group, member] = [app.ctx.loader.store[outer]!, app.ctx.loader.store[inner]!]
+  await app.ctx.loader.update(outer, {}, `${app.id}:g`)
+  await app.include.flush()
+  await app.ctx.loader.await()
+  expect(app.include.store[outer] === group && app.include.store[inner] === member).toBe(true)
+  expect(outer in app.ctx.loader.store || inner in app.ctx.loader.store).toBe(false)
+  expect(group.subgroup!.tree === app.include).toBe(true)
+  expect(apply).toHaveBeenCalledOnce()
+  expect(await app.read()).toEqual([{ id: 'g', name: 'cordis:group', group: true, config: [
+    { id: outer, name: 'cordis:group', group: true, config: [{ id: inner, name: 'cordis:counted', config: { value: 1 } }] },
+  ] }])
+  app.ctx.loader.remove(`${app.id}:${outer}`)
+  await app.include.flush()
+  await app.ctx.loader.await()
+  expect(member.fiber?.state).not.toBe(FiberState.ACTIVE)
+})

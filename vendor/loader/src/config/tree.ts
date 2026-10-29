@@ -27,6 +27,19 @@ export interface EntryChange {
   legacy?: EntryOptions
 }
 
+/** The entry and the same-tree members of its group, recursively. */
+function members(entry: Entry): Entry[] {
+  const { tree } = entry.parent
+  const result = [entry]
+  const group = entry.subgroup
+  if (group?.tree !== tree) return result
+  for (const options of group.data) {
+    const member = tree.store[options.id]
+    if (member?.parent === group) result.push(...members(member))
+  }
+  return result
+}
+
 /** Mutable tree of loader entries. Persistence is supplied by subclasses. */
 export abstract class EntryTree {
   static readonly sep = ':'
@@ -134,29 +147,34 @@ export abstract class EntryTree {
     const legacy = { ...entry.options }
     if (parent !== undefined) {
       const target = this.resolveGroup(parent)
-      if (target.tree !== source.tree && target.tree.store[legacy.id]) {
-        throw new Error(`entry ${legacy.id} already exists in the target tree`)
+      const moved = target.tree === source.tree ? [] : members(entry)
+      for (const member of moved) {
+        const { id } = member.options
+        if (target.tree.store[id]) throw new Error(`entry ${id} already exists in the target tree`)
       }
       source.unlink(entry.options)
       target.data.splice(position ?? Infinity, 0, entry.options)
       entry.parent = target
-      // Each tree indexes its own entries, so a cross-tree move transfers the registration.
-      if (target.tree !== source.tree) {
-        delete source.tree.store[legacy.id]
-        target.tree.store[legacy.id] = entry
+      // The target tree owns the moved entries from now on, so that it adopts
+      // them instead of creating new ones when it reconciles its source.
+      for (const member of moved) {
+        delete source.tree.store[member.options.id]
+        target.tree.store[member.options.id] = member
+        if (member.subgroup?.tree === source.tree) member.subgroup.tree = target.tree
       }
     }
     // `Entry.update` assigns the new options before its first `await`, so the
     // change is fully visible to `commit()` once the call returns.
     const task = entry.update(options, false, true)
     if (entry.parent.tree !== source.tree) {
+      // a move across trees removes the entry from the source tree and
+      // creates it in the target tree
       source.tree.commit({ id: legacy.id, group: source, legacy })
-      // The destination tree has no previous row, so it receives a creation.
       entry.parent.tree.commit({ id: legacy.id, group: entry.parent, options: entry.options })
-      return task
+    } else {
+      const from = entry.parent === source ? undefined : source
+      entry.parent.tree.commit({ id: legacy.id, group: entry.parent, from, options: entry.options, legacy })
     }
-    const from = entry.parent === source ? undefined : source
-    entry.parent.tree.commit({ id: legacy.id, group: entry.parent, from, options: entry.options, legacy })
     return task
   }
 
