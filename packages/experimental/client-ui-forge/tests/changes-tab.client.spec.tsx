@@ -217,7 +217,7 @@ function mount(options: MountOptions = {}) {
   const props: ChangesTabProps = {
     useTabInfo: () => ({
       sidebar: { expanded: true, fullscreen: false },
-      panel: { id: 'pane-1' as PaneId },
+      panel: { id: 'pane-1' as PaneId, isFloating: false },
       tab: {
         id: TAB, kind: CHANGES_KIND, contentId, title: 'Changes', visible: useVisible(value => value),
         navigation: useNavigation(value => value), signal: aborter.signal, actions: tabActions,

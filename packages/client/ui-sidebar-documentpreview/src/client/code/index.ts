@@ -19,6 +19,7 @@ export function apply(ctx: Context): void {
     title: () => t('title'),
     loading: 'text-pages',
     wrap: true,
+    sourceLines: true,
   }))
   ctx.effect(() => ctx.slots.inject('sidebar.right.tab.document', () => ctx.slots.register(
     { name: 'sidebar.right.tab.document', key: ID, locale: NS }, CodeBody,

@@ -1,4 +1,4 @@
-import { IconFolderOpenOutlineRegular, IconCopyOutlineRegular, IconPanelLeftOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconFolderOpenOutlineRegular, IconCopyOutlineRegular, IconPanelLeftOutlineRegular, IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ContextMenuApplicationIcon, registerContextMenus } from './context-menus.tsx'
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /**
@@ -65,7 +65,7 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('contextMenu.icon', function* () {
     for (const [key, Icon] of Object.entries({
       'open-in-app.reveal': IconFolderOpenOutlineRegular, 'open-in-app.copy': IconCopyOutlineRegular,
-      'open-in-app.sidebar': IconPanelLeftOutlineRegular,
+      'open-in-app.sidebar': IconPanelLeftOutlineRegular, 'open-in-app.float': IconRightUpOutlineRegular,
     })) yield ctx.slots.register({ name: 'contextMenu.icon', key }, Icon)
     yield ctx.slots.register({ name: 'contextMenu.icon', key: 'open-in-app.application' }, ContextMenuApplicationIcon)
   })
