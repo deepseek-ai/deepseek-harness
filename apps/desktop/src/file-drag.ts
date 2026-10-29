@@ -92,7 +92,7 @@ export function installDesktopFileDrag(
     if (source.kind === 'application') {
       const resource = await cancellable(resolveResource(`application:${source.reference}`, signal), signal)
       authorize(event)
-      if (resource === null || !('kind' in resource) || resource.kind !== 'application'
+      if (resource === null || !('kind' in resource)
         || !isAbsolute(resource.path) || extname(resource.path) !== '.app') throw new Error('Application drag unavailable')
       const version = await stat(resource.path)
       if (!version.isDirectory()) throw new Error('Application bundle unavailable')
@@ -152,7 +152,7 @@ export function installDesktopFileDrag(
       const application = applications.get(handle)
       if (application !== undefined) {
         const resource = await cancellable(resolveResource(`application:${application.reference}`, lifetime.signal), lifetime.signal)
-        if (resource === null || !('kind' in resource) || resource.kind !== 'application' || resource.path !== application.path
+        if (resource === null || !('kind' in resource) || resource.path !== application.path
           || files.take(handle, false) !== file) throw new Error('Application changed before dragging')
         const current = statSync(application.path)
         if (!current.isDirectory() || current.dev !== application.version.dev || current.ino !== application.version.ino
