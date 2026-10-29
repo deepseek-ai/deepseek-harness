@@ -26,7 +26,7 @@ Callers can export files with the same safe filename in Web and Desktop. MIME da
 
 `DesktopFileDrag.prepare(source, requestId)` accepts complete bytes or a Session resource reference, returning an opaque handle. `cancel(requestId)` stops unfinished preparation before a handle is available. Resource borrowing requires Host authorization and main-process content/name checks; callers fall back to byte preparation when borrowing is unavailable. [The plugin](../../client/ui-file-drag/README.md) owns browser preparation and [Desktop](../../../apps/desktop/README.md) owns native delivery.
 
-`DesktopFileDrag.applications` advertises native application dragging. An `application` source carries a provider-issued `ApplicationDragReference`; the desktop Host resolves it through the serial `desktop/application-drag` event. A listener returns the current authorized bundle path only for references it owns. No listener means expiration. The carrier validates the application directory before borrowing and starting the drag. This path never falls back to exporting image bytes.
+`DesktopFileDrag.applications` advertises native application dragging. An `application` source carries a provider-issued `ApplicationDragReference`; the desktop Host resolves it through the serial `desktop/application-drag` event. A listener returns the current authorized bundle path only for references it owns. No listener means expiration. The carrier validates the application directory before borrowing and starting the drag. This path never falls back to exporting image bytes. `resolveApplicationDrag(ctx, reference, signal)` dispatches that lookup and rejects expired references or cancellation.
 
 ## Known Limitations and Deferred Work
 

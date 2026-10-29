@@ -107,6 +107,10 @@ interface TlsConfig {
 
 处理过程中抛出异常的请求（畸形的 % 转义撞上 `decodeURIComponent`、客户端在请求体中途断开）会记录为警告并应答 400（响应头已发出时则销毁 socket），绝不导致进程退出。dispose（资源释放）把 `close()` 与 `closeAllConnections()` 配对使用，因为处理器可能像 SSE（Server-Sent Events）那样保持响应打开，而这类连接永远不会自行结束；没有强制关闭，拆卸就会挂起。TLS socket 只有完成握手后才计入连接，因此服务器会把原始 TLS socket 与升级后的 socket 一并跟踪，并在 dispose 时销毁两者。该包从不打印输出：URL 行归 shell 所有。逐包运维细节（含开发模式的 bundle 监视流水线）留在 [README](../../packages/host/webserver/README.zh.md) 中。
 
+## 桌面应用文件
+
+`ApplicationDragReference` 是提供方为本地应用包签发的不透明标识。Desktop Host 通过 `desktop/application-drag` 解析，提供方确认引用仍对应当前应用后，桌面载体才准备原生拖动。渲染页面不提供文件系统路径。[文件拖动定义](../../packages/util/file-drag/README.zh.md)负责请求类型，[Desktop](../../apps/desktop/README.zh.md)负责目录验证和原生交付。
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -319,6 +323,29 @@ Admit or wrap an authenticated shared API request, including body transfer. Exis
 ```
 
 Source: [`packages/client/connection/src/index.ts`](../../packages/client/connection/src/index.ts)
+
+<a id="desktop-events"></a>
+
+### `desktop/*` events
+
+<a id="desktopapplication-drag--serial"></a>
+
+#### `desktop/application-drag` — serial
+
+Resolve a provider-issued application reference for the local desktop carrier.
+
+```ts cordis-catalog
+/**
+ * Resolve a provider-issued application reference for the local desktop carrier.
+ * @mode serial
+ * @param reference Opaque application identity issued by the owning provider.
+ * @param signal Preparation cancellation.
+ * @returns Authorized application path, or undefined when this listener does not own the reference.
+ */
+'desktop/application-drag'(reference: ApplicationDragReference, signal: AbortSignal): Promise<string | undefined>
+```
+
+Source: [`packages/util/file-drag/src/index.ts`](../../packages/util/file-drag/src/index.ts)
 
 <a id="webserver-events"></a>
 

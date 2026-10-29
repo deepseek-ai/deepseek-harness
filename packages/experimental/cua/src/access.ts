@@ -1,7 +1,7 @@
 /** Browser controls for the provider's application decisions and native permission work. */
 import type { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
-import type { ApplicationDragReference } from '@deepseek-ai/dsh-util-file-drag'
+import type { ApplicationDragReference } from '@deepseek-ai/dsh-util-file-drag/types'
 import type {} from '@deepseek-ai/dsh-config-editor'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import { resolvePersistentExecution } from '@deepseek-ai/dsh-ptc-runtime-node/configuration'

@@ -1,6 +1,6 @@
 /** Client-safe Computer Use permission observations and saved application decisions. */
 import type { CuaApplicationGrant } from './application-types.ts'
-import type { ApplicationDragReference } from '@deepseek-ai/dsh-util-file-drag'
+import type { ApplicationDragReference } from '@deepseek-ai/dsh-util-file-drag/types'
 export type { CuaApplicationGrant, CuaApplicationId } from './application-types.ts'
 
 /** macOS privileges used by the native provider. */

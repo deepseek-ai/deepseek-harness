@@ -26,6 +26,7 @@ export class FileTransfers {
   }
 
   /**
+   * Borrow a provider-authorized application for native dragging.
    * @param reference Provider-authorized application.
    * @param signal Preparation cancellation.
    * @returns Native drag operation; no byte-copy fallback exists for applications.

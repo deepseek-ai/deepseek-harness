@@ -1,7 +1,7 @@
 /** File export naming, browser transfer token type, and native byte-or-resource requests. */
 import mime from 'mime'
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type {} from '@deepseek-ai/cordis'
+import type { Context } from '@deepseek-ai/cordis'
 
 /** Browser transfer token type; original bytes stay with the application owner. */
 export const FILE_DRAG_TOKEN_TYPE = 'application/x-dsh-file'
@@ -30,6 +30,21 @@ declare module '@deepseek-ai/cordis' {
      */
     'desktop/application-drag'(reference: ApplicationDragReference, signal: AbortSignal): Promise<string | undefined>
   }
+}
+
+/**
+ * Resolve a live application reference through its owning Host plugin.
+ * @param ctx Host event context.
+ * @param reference Provider-issued application identity.
+ * @param signal Preparation cancellation.
+ * @returns Authorized bundle path; rejects expired references and cancelled preparations.
+ */
+export async function resolveApplicationDrag(ctx: Context, reference: ApplicationDragReference, signal: AbortSignal): Promise<string> {
+  signal.throwIfAborted()
+  const path = await ctx.serial('desktop/application-drag', reference, signal)
+  signal.throwIfAborted()
+  if (path === undefined) throw new Error('Application drag reference expired')
+  return path
 }
 
 /** Caller-supplied export naming, shared by Web and Desktop. */

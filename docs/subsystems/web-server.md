@@ -107,6 +107,10 @@ No composition can bind every interface at once: the unspecified address is reje
 
 A request whose handling throws (a malformed %-escape hitting `decodeURIComponent`, a client dropping mid-body) is logged as a warning and answered 400 — or the socket destroyed when headers are already out — never a process exit. Disposal pairs `close()` with `closeAllConnections()` because a handler may hold its response open (SSE) and such connections never end on their own; without the force-close, teardown would hang. A TLS socket counts as a connection only after its handshake, so the server tracks raw TLS sockets beside upgraded ones and destroys both at disposal. The package never prints: the URL line belongs to the shell. Per-package operational detail, including the dev-mode bundle watch pipeline, stays in the [README](../../packages/host/webserver/README.md).
 
+## Desktop application files
+
+`ApplicationDragReference` is an opaque provider-issued identity for a local application bundle. The Desktop Host resolves it through `desktop/application-drag`; the provider verifies that the reference still names the current application before the shell prepares a native drag. The renderer supplies no filesystem path. [File drag definitions](../../packages/util/file-drag/README.md) own the request types, and [Desktop](../../apps/desktop/README.md) owns directory validation and native delivery.
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -319,6 +323,29 @@ Admit or wrap an authenticated shared API request, including body transfer. Exis
 ```
 
 Source: [`packages/client/connection/src/index.ts`](../../packages/client/connection/src/index.ts)
+
+<a id="desktop-events"></a>
+
+### `desktop/*` events
+
+<a id="desktopapplication-drag--serial"></a>
+
+#### `desktop/application-drag` — serial
+
+Resolve a provider-issued application reference for the local desktop carrier.
+
+```ts cordis-catalog
+/**
+ * Resolve a provider-issued application reference for the local desktop carrier.
+ * @mode serial
+ * @param reference Opaque application identity issued by the owning provider.
+ * @param signal Preparation cancellation.
+ * @returns Authorized application path, or undefined when this listener does not own the reference.
+ */
+'desktop/application-drag'(reference: ApplicationDragReference, signal: AbortSignal): Promise<string | undefined>
+```
+
+Source: [`packages/util/file-drag/src/index.ts`](../../packages/util/file-drag/src/index.ts)
 
 <a id="webserver-events"></a>
 

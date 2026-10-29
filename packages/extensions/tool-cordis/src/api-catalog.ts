@@ -991,9 +991,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote async requestPermission(permission: CuaSystemPermission): Promise<CuaSystemPermissionState>',
-        description: 'Request a system privilege explicitly selected by the user.',
+        description: 'Request a system privilege and open its settings pane.',
         parameters: [{ name: 'permission', description: 'macOS privilege to request.' }],
         returns: 'Preflight state after requesting; a false value never implies consent.',
+      },
+      {
+        signature: '@Remote async revealApplication(reference: ApplicationDragReference): Promise<void>',
+        description: 'Select the displayed permission application in Finder.',
+        parameters: [{ name: 'reference', description: 'Application identity from the current permission observation.' }],
+        returns: 'Completion after dispatch to Finder; rejects stale or unavailable applications.',
       },
       {
         signature: '@Remote async openSettings(permission: CuaSystemPermission): Promise<void>',
@@ -4919,6 +4925,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'desktop/application-drag',
+    mode: 'serial',
+    signature: '\'desktop/application-drag\'(reference: ApplicationDragReference, signal: AbortSignal): Promise<string | undefined>',
+    summary: 'Resolve a provider-issued application reference for the local desktop carrier.',
+    description: 'Resolve a provider-issued application reference for the local desktop carrier.',
+    parameters: [{ name: 'reference', description: 'Opaque application identity issued by the owning provider.' }, { name: 'signal', description: 'Preparation cancellation.' }],
+  },
+  {
     name: 'domain/changed',
     mode: 'emit',
     signature: '\'domain/changed\'(change: DomainChanged): void',
@@ -5509,6 +5523,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ApiSessionAgentResult',
     declaration: 'export type ApiSessionAgentResult = {\n    readonly agent: Agent;\n} | {\n    readonly error: ApiSessionAgentError;\n};',
+  },
+  {
+    name: 'ApplicationDragReference',
+    declaration: 'export type ApplicationDragReference = Branded<\'ApplicationDragReference\'>;',
   },
   {
     name: 'ApprovalOutcome',
@@ -6108,7 +6126,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaSystemPermissionState',
-    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n}',
+    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n        bundleId?: string | undefined;\n        dragReference?: ApplicationDragReference | undefined;\n    } | undefined;\n    guidancePolling: {\n        intervalMs: number;\n        timeoutMs: number;\n    };\n}',
   },
   {
     name: 'DailyInput',

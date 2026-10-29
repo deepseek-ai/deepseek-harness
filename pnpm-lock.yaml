@@ -881,6 +881,9 @@ importers:
       '@deepseek-ai/dsh-tool-workspace-dependencies':
         specifier: workspace:*
         version: link:../../packages/skill/tool-workspace-dependencies
+      '@deepseek-ai/dsh-util-file-drag':
+        specifier: workspace:*
+        version: link:../../packages/util/file-drag
       '@deepseek-ai/dsh-workspace':
         specifier: workspace:*
         version: link:../../packages/workspace/workspace
@@ -921,9 +924,6 @@ importers:
       '@deepseek-ai/dsh-tool-executor-native':
         specifier: workspace:*
         version: link:../../packages/core/tool-executor-native
-      '@deepseek-ai/dsh-util-file-drag':
-        specifier: workspace:*
-        version: link:../../packages/util/file-drag
       '@deepseek-ai/dsh-util-workspace-path':
         specifier: workspace:*
         version: link:../../packages/util/workspace-path

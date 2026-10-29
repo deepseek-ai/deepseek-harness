@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../../vendor/cordis"
+    },
+    {
       "path": "../brand"
     }
   ]

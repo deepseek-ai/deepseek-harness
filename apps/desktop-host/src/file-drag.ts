@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-session-persistence'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { parseFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
-import type { ApplicationDragReference, DesktopDragResource } from '@deepseek-ai/dsh-util-file-drag'
+import { resolveApplicationDrag, type ApplicationDragReference, type DesktopDragResource } from '@deepseek-ai/dsh-util-file-drag'
 
 /** Private Host-to-main answer; never exposed to renderer JavaScript. */
 export interface LocalDragResource {
@@ -28,9 +28,7 @@ export async function localDragResource(ctx: Context, address: string, cancellat
   signal.throwIfAborted()
   if (address.startsWith('application:')) {
     const reference = address.slice('application:'.length) as ApplicationDragReference
-    const path = await ctx.serial('desktop/application-drag', reference, signal)
-    signal.throwIfAborted()
-    if (path === undefined) throw new Error('Application drag reference expired')
+    const path = await resolveApplicationDrag(ctx, reference, signal)
     return { kind: 'application', path }
   }
   const resource = parseFileAddress(address)
