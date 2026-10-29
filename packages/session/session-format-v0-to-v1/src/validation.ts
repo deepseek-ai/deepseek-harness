@@ -181,6 +181,9 @@ export function assertReleasedSurfaceMetadata(
   if (start >= seq || end >= seq) throw new SessionFormatError(`${type} ${seq} has an invalid surface replacement`)
 }
 
+/** `subagent/descriptor` versions that format v0 logs contain. */
+const RELEASED_DESCRIPTOR_VERSIONS: readonly SessionFormatJsonValue[] = [1, 2, 3]
+
 /**
  * Validate one exact known payload after legacy normalization.
  * @param event - known event to validate.
@@ -195,7 +198,7 @@ export function assertReleasedEventPayload(event: SessionFormatEvent, version: 0
     )
   }
   const data = releasedV0Record(event.data, `${event.type} ${event.seq} data`)
-  if (event.type === 'subagent/descriptor' && data['version'] !== 3) {
+  if (event.type === 'subagent/descriptor' && !RELEASED_DESCRIPTOR_VERSIONS.some(released => released === data['version'])) {
     const descriptorVersion = sessionFormatCount(data['version'], `${event.type} ${event.seq} version`)
     if (version === 0) {
       throw new SessionFormatUnsupportedMigrationError(
