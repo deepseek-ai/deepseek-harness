@@ -154,7 +154,7 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
   list_agents: Record<string, JsonValue>;
-  /** Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation. */
+  /** Inspect the subagent routes this Session authorizes. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts. Query only to override the child route; delegation without `provider` and `model` inherits the parent route. Omit a field rather than sending an empty string. */
   list_subagent_models: {
     /** Registered LLM provider id. */
     provider?: string;
@@ -266,11 +266,11 @@ interface ToolArgsMap {
     description: string;
     /** The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs. */
     prompt: string;
-    /** Child LLM provider id. */
+    /** Child LLM provider id; omit together with `model` to inherit the parent route. */
     provider?: string;
-    /** Model id within that provider. */
+    /** Model id within that provider; omit together with `provider` to inherit the parent route. */
     model?: string;
-    /** Model-specific reasoning effort id. */
+    /** Model-specific reasoning effort id; omit to use the model's default. */
     reasoning_effort?: string;
   } & Record<string, JsonValue>;
   /** Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. */

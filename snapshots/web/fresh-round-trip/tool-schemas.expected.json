@@ -328,7 +328,7 @@
     },
     {
       "name": "list_subagent_models",
-      "description": "Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation.",
+      "description": "Inspect the subagent routes this Session authorizes. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts. Query only to override the child route; delegation without `provider` and `model` inherits the parent route. Omit a field rather than sending an empty string.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -661,15 +661,15 @@
           },
           "provider": {
             "type": "string",
-            "description": "Child LLM provider id."
+            "description": "Child LLM provider id; omit together with `model` to inherit the parent route."
           },
           "model": {
             "type": "string",
-            "description": "Model id within that provider."
+            "description": "Model id within that provider; omit together with `provider` to inherit the parent route."
           },
           "reasoning_effort": {
             "type": "string",
-            "description": "Model-specific reasoning effort id."
+            "description": "Model-specific reasoning effort id; omit to use the model's default."
           }
         },
         "required": [

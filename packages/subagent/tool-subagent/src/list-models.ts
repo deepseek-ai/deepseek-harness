@@ -109,9 +109,10 @@ export function registerListSubagentModels(
   ctx.tools.register(defineTool({
     name: 'list_subagent_models',
     description:
-      'Inspect subagent models without changing the current Agent. No arguments: providers; '
-      + '`provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. '
-      + 'Inspect options here before selecting a child provider and model; use returned ids for delegation.',
+      'Inspect the subagent routes this Session authorizes. No arguments: authorized providers. '
+      + '`provider`: that provider\'s authorized models. `provider` + `model`: that model and its reasoning efforts. '
+      + 'Query only to override the child route; delegation without `provider` and `model` inherits the parent route. '
+      + 'Omit a field rather than sending an empty string.',
     parameters: {
       provider: {
         type: 'string',

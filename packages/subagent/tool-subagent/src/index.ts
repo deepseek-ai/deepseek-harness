@@ -242,15 +242,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         ...modelSelectionEnabled ? {
           provider: {
             type: 'string' as const,
-            description: 'Child LLM provider id.',
+            description: 'Child LLM provider id; omit together with `model` to inherit the parent route.',
           },
           model: {
             type: 'string' as const,
-            description: 'Model id within that provider.',
+            description: 'Model id within that provider; omit together with `provider` to inherit the parent route.',
           },
           reasoning_effort: {
             type: 'string' as const,
-            description: 'Model-specific reasoning effort id.',
+            description: 'Model-specific reasoning effort id; omit to use the model\'s default.',
           },
         } : {},
       },
