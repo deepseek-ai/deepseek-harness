@@ -171,7 +171,6 @@ describe('web e2e: notice Turn after a long Detailed Turn', () => {
         form: 'notice',
         summary: 'Background subagent finished.',
         stopReason: 'completed',
-        description: 'Review the long diagnostic',
         senderSessionId: SessionId('notice-wake-child'),
       }
       const notice = createUserMessage({

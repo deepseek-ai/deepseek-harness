@@ -70,7 +70,6 @@ interface SubagentHost {
 /** Inputs shared by fresh and resumed Activation materialization. */
 interface MaterializeBase {
   provider: string
-  label: string | undefined
   root: Agent
   ancestors: readonly SessionId[]
   signal: AbortSignal
@@ -354,7 +353,6 @@ export class SubagentManager {
           kind: 'local',
           childId,
           provider: spec.provider,
-          label: descriptor.label,
           ...ancestry,
           create: {
             parent,
@@ -412,7 +410,6 @@ export class SubagentManager {
         activation = await this.materialize({
           kind: 'external',
           provider,
-          label: spec.label,
           ...ancestry,
           signal,
           delivery,
@@ -795,7 +792,6 @@ export class SubagentManager {
       childId,
       runId: SubagentRunId(randomUUID()),
       provider,
-      label: inputs.label,
       ...resource,
       root,
       ancestors: inputs.ancestors,
@@ -1035,7 +1031,6 @@ export class SubagentManager {
       if (parent === undefined || this.rootOf(parent) !== activation.root) return
       const message = createSettlementMessage(
         activation.childId, terminal, activation.kind === 'local', activation.kind === 'local' && activation.omitClosingText,
-        activation.label,
       )
       if (this.closingTeardownFor(parent) !== undefined) {
         parent.inject(message)
@@ -1144,7 +1139,6 @@ export class SubagentManager {
           kind: 'local',
           childId,
           provider: descriptor.provider,
-          label: descriptor.label,
           root,
           ancestors,
           agentOptions: {

@@ -294,7 +294,7 @@ describe('external subagent activations', () => {
       const notice = fixture.parent.inbox.nextTurn[0]!
       expect(notice.source).toMatchObject({
         kind: 'subagent-settled', senderSessionId: activation.childId,
-        stopReason: 'error', description: 'External work',
+        stopReason: 'error',
       })
       const text = notice.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
       expect(text).toContain('Reviewed three files.')
@@ -330,7 +330,7 @@ describe('external subagent activations', () => {
       const notice = fixture.parent.inbox.nextTurn[0]!
       expect(notice.source).toMatchObject({
         kind: 'subagent-settled', senderSessionId: activation.childId,
-        stopReason: 'completed', description: 'External work',
+        stopReason: 'completed',
       })
       const text = notice.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
       expect(text).toContain('finished')

@@ -47,8 +47,6 @@ interface ActivationBase {
   readonly runId: SubagentRunId
   /** Provider recorded at creation, retained across cold resumes. */
   readonly provider: string
-  /** Original task label captured at creation or restored from the child's descriptor. */
-  readonly label: string | undefined
   /** Exact live subagent tree root owning this instance and its shared capacity. */
   readonly root: Agent
   /** Verified creation ancestors, from subagent tree root to direct creator. */

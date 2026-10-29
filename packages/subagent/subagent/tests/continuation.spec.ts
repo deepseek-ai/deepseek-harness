@@ -2252,8 +2252,8 @@ describe('continuable review regressions', () => {
     await parent.whenIdle()
     const notices = settlementNotices(parent)
     expect(notices).toMatchObject([
-      { description: 'child task', stopReason: 'completed' },
-      { description: 'child task', stopReason: 'completed' },
+      { stopReason: 'completed' },
+      { stopReason: 'completed' },
     ])
     expect(notices[0]!.text).toContain('first answer')
     expect(notices[1]!.text).toContain('second answer')
@@ -2800,7 +2800,6 @@ function settlementNotices(agent: Agent) {
       sender: message.source.senderSessionId,
       summary: message.source.summary,
       stopReason: message.source.stopReason,
-      description: message.source.description,
       text: message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n'),
     }]
   })

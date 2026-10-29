@@ -80,19 +80,16 @@ describe('Turn trigger notices', () => {
     ['refusal', 'Subagent declined the task', '子智能体拒绝执行'],
     ['backend-specific', 'Subagent run ended unexpectedly', '子智能体异常结束'],
   ])('presents only the recorded %s outcome in both locales', (stopReason, english, chinese) => {
-    const description = '编码 Agent 产品调研'
-    const source = { kind: 'subagent-settled', stopReason, description, senderSessionId: 'child-1' }
+    const source = { kind: 'subagent-settled', stopReason, senderSessionId: 'child-1' }
     const node = trigger(source)
     const view = render(<TurnTriggerNodeView node={node} t={makeTranslate(en)} />)
     expect(view.getByRole('button').textContent).toContain(english)
-    expect(view.getByRole('button').textContent).not.toContain(description)
     expect(view.getByRole('button').textContent).not.toContain(' · ')
     const reference = render(<IconUsersOutlineRegular size={14} />)
     expect(view.getByRole('button').querySelector('svg')?.outerHTML)
       .toBe(reference.container.querySelector('svg')?.outerHTML)
     view.rerender(<TurnTriggerNodeView node={node} t={makeTranslate(zh)} />)
     expect(view.getByRole('button').textContent).toContain(chinese)
-    expect(view.getByRole('button').textContent).not.toContain(description)
     expect(view.getByRole('button').textContent).not.toContain(' · ')
     fireEvent.click(view.getByRole('button'))
     expect(view.container.querySelector('[data-context-text]')?.textContent)

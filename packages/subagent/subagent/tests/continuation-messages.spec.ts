@@ -12,22 +12,17 @@ describe('settlement attribution', () => {
   it.each(['completed', 'aborted', 'max-tokens', 'refusal', 'error'] as const)(
     'records the exact %s stop reason without changing model content', (stopReason) => {
       const terminal = { stopReason, output: [{ type: 'text' as const, text: '  answer\n' }] }
-      const unlabelled = createSettlementMessage(childId, terminal)
-      const labelled = createSettlementMessage(childId, terminal, true, false, 'Review 原始任务')
-      expect(labelled.source).toMatchObject({
+      const message = createSettlementMessage(childId, terminal)
+      expect(message.source).toMatchObject({
         kind: 'subagent-settled', form: 'notice',
-        senderSessionId: childId, stopReason, description: 'Review 原始任务',
+        senderSessionId: childId, stopReason,
       })
-      expect(labelled.content).toEqual(unlabelled.content)
-      expect(unlabelled.source).toHaveProperty('stopReason', stopReason)
-      expect(unlabelled.source).not.toHaveProperty('description')
+      expect(message.content.slice(1)).toEqual([
+        { type: 'text', text: 'Its closing message:' },
+        ...terminal.output,
+      ])
     },
   )
-
-  it('retains a known empty label rather than treating it as unknown', () => {
-    expect(createSettlementMessage(childId, { stopReason: 'completed', output: [] }, false, true, '').source)
-      .toHaveProperty('description', '')
-  })
 
   it('preserves historical notices without inferring missing attribution from English', () => {
     const source = { kind: 'subagent-settled' as const, form: 'notice' as const,
@@ -36,7 +31,6 @@ describe('settlement attribution', () => {
     const message = createUserMessage({ source, content })
     expect(message.source).toEqual(source)
     expect(message.source).not.toHaveProperty('stopReason')
-    expect(message.source).not.toHaveProperty('description')
     expect(message.content).toEqual(content)
   })
 })

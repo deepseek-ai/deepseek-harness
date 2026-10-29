@@ -39,9 +39,3 @@
   - time: {{clock}}
 - paragraph: This notification triggered this response.
 - text: Background subagent finished.
-
-- button "Subagent run completed {{clock}}" [expanded]:
-  - text: Subagent run completed
-  - time: {{clock}}
-- paragraph: This notification triggered this response.
-- text: Background subagent notice-result-child finished and will do no further work unless you send it more.It left no closing message.

@@ -16,7 +16,6 @@ import { connectFreshWorkspace, connectFreshWorkspaceZh } from './support.ts'
 
 const DIR = fileURLToPath(new URL('./expected/subagent-result-notice/', import.meta.url))
 const MODE = webSnapshotMode()
-const DESCRIPTION = '编码 Agent 产品调研'
 const OUTPUT = '## Research result\nThe original child reply stays available.'
 const OUTCOMES = [
   { reason: 'completed', en: 'Subagent run completed', zh: '子智能体已完成任务' },
@@ -66,7 +65,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagent result notices', () => {
         title: outcome[locale],
         message: createSettlementMessage(childId, {
           stopReason: outcome.reason, output: [{ type: 'text', text: OUTPUT }],
-        }, true, false, DESCRIPTION),
+        }),
       }))
       notices.push({
         title: OUTCOMES[0][locale],
@@ -78,11 +77,6 @@ describe.skipIf(MODE === 'record')('web e2e: subagent result notices', () => {
           source: { kind: 'subagent-settled', form: 'notice', senderSessionId: childId, summary: 'Background subagent finished.' },
           content: [{ type: 'text', text: 'Background subagent finished.' }],
         }),
-      })
-      const longDescription = 'ReviewVeryLongUnbrokenTaskDescription'.repeat(8)
-      notices.push({
-        title: OUTCOMES[0][locale],
-        message: createSettlementMessage(childId, { stopReason: 'completed', output: [] }, true, false, longDescription),
       })
       for (const [index, notice] of notices.entries()) appendTurn(index + 2, notice.message)
       await scaffold.ctx.sessions.flush(session)

@@ -39,9 +39,3 @@
   - time: {{clock}}
 - paragraph: 这条通知触发了本轮回复。
 - text: Background subagent finished.
-
-- button "子智能体已完成任务 {{clock}}" [expanded]:
-  - text: 子智能体已完成任务
-  - time: {{clock}}
-- paragraph: 这条通知触发了本轮回复。
-- text: Background subagent notice-result-child finished and will do no further work unless you send it more.It left no closing message.
