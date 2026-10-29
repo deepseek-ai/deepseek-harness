@@ -1,5 +1,5 @@
 ---
-description: "在开启 Team 的 Session 中通过持久化共享任务板和内存等待信号协调 subagent。"
+description: "在开启 Team 的 Session 中通过持久化共享任务板协调 subagent。"
 kind: "package-reference"
 ---
 
@@ -75,7 +75,7 @@ kind: "package-reference"
 
 ### 等待与中断
 
-标准 `wait_agent` 工具等待当前调用者的下一步收件箱，无需 Team 模式即可使用；参见 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md#wait_agent)。Team 模式还会在任务板提交完成刷盘后结束正在进行的等待。等待结束后重新读取任务板。不在等待期间发生的变更不会保留，也不能使后续等待立即返回。
+标准 `wait_agent` 工具等待当前调用者的下一步收件箱，无需 Team 模式即可使用；参见 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md#wait_agent)。任务变化和 Team 模式切换不会结束等待、添加收件箱输入或启动空闲 Agent。需要 Agent 处理更新时使用 `send_message`。
 
 祖先通过标准 `interrupt_agent` 工具停止后代的当前轮次。中断保留尚未认领的排队消息，也不改变任务归属。
 
@@ -102,7 +102,7 @@ kind: "package-reference"
 - **显式权限。** 每个服务方法都接收确切的 live 调用方 `Agent`；任务 owner 或 Lead 可以变更任务，只有 Lead 可以 reassign。
 - **超出上限时明确失败。** `maxTasks` 是经过校验的部署值，耗尽时报告类型化错误，而不是复用 id。
 
-[任务板等待决策](../../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.zh.md)负责说明任务板等待信号及其与普通 subagent 控制工具的职责划分。
+[仅等待收件箱的决策](../../../.agents/notes/implemented/simplification/2026-10-29-inbox-only-agent-wait.zh.md)区分任务提交与 Agent 输入等待。
 
 ### 源码地图
 
@@ -124,21 +124,17 @@ subagent 服务通过 `subagents.rootOf()` 解析当前在线调用者的根。�
 
 ### 消息与历史 mailbox
 
-成员通信、Steer 投递、冷恢复和发送方包装属于 subagent 运行时。任务板变更使用内存等待信号。历史 `team/message/queued`、`team/message/delivered` 记录和 `team-message` 来源仍可解码，但绝不再投递或确认。
+成员通信、Steer 投递、冷恢复和发送方包装属于 subagent 运行时。历史 `team/message/queued`、`team/message/delivered` 记录和 `team-message` 来源仍可解码，但绝不再投递或确认。
 
 ### 共享任务板
 
 任务是完整的版本化快照。修改必须携带 `expectedRevision`；过期更新报告 `TEAM_TASK_STALE_REVISION`。数字形式的 `task-<n>` id 保持在安全整数范围内。删除的任务保留为重放墓碑，但不占用 `maxTasks`，也不出现在 `listTasks()` 中。规范化的工作区相对 `writeScopes` 会警告进行中工作的重叠，而不阻止认领或授权写入。
 
-### 任务板等待信号
-
-成功追加并刷盘后，Team 调用一次 `subagents.notifyTreeWaits(root)`。当前等待将捕获的树根与信号中的确切存活根实例匹配；Team 不枚举 Agent。监听器失败会被记录并隔离，不会拒绝已提交的操作。信号仅结束正在进行的等待，不增加收件箱条目或未读状态，绝不启动空闲轮次，也不恢复冷成员。两次等待之间的变更不会向下一次等待重放。
-
 ### 持久性模型
 
 Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `agentTeam` 投影注册完成后才发布服务就绪状态。日志持有返回的 handle，通过 `stateOf(session)` 读取任务状态；调用者使用 Team 服务，不另行注册 reader。
 
-任务修改在向当前在线根 Session 追加 `team/task` 前响应取消，随后刷盘并发出等待信号。取消不能撤回已追加的记录。刷盘失败或没有监听器参与时，以 `TEAM_TASK_PERSISTENCE_UNCONFIRMED` 报告任务 id 和修订号：任务已可见，但持久性未知，且不发出等待信号。重试前先读取该任务。任务记录仅保留在日志中；信号不是消息，也不是持久化事件。等待工具通过普通工具流水线记录结果。不重写已提交任务或历史载荷代次。
+任务修改在向当前在线根 Session 追加 `team/task` 前响应取消，随后等待刷盘完成。取消不能撤回已追加的记录。刷盘失败或没有监听器参与时，以 `TEAM_TASK_PERSISTENCE_UNCONFIRMED` 报告任务 id 和修订号：任务已可见，但持久性未知。重试前先读取该任务。任务记录仅保留在日志中。不重写已提交任务或历史载荷代次。
 
 投影忽略历史名册与邮箱记录，不校验或保留其载荷。投影仅保存任务板、模式选择和恢复元数据。不兼容的投影检查点从未改写的 Session 日志重建；参见[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.3/team-projection/guide.zh.md)。
 
@@ -176,11 +172,11 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 
 #### 模型看到什么
 
-模型通过任务工具结果读取任务视图。面向模型的视图以 `ownerName` 标识所有者，host 视图保留 `ownerId`；过期更新报告当前修订。任务板信号结束正在进行的 `wait_agent` 调用，不提供任务内容。模型在行动前重新读取当前任务。
+模型通过任务工具结果读取任务视图。面向模型的视图以 `ownerName` 标识所有者，host 视图保留 `ownerId`；过期更新报告当前修订。任务更新不会结束 `wait_agent`；需要成员处理更新时，发送明确消息。
 
 #### Token 影响
 
-每个任务结果增加一个紧凑任务视图。等待信号不增加消息文本。
+每个任务结果增加一个紧凑任务视图。任务更新不增加收件箱文本。
 
 #### KV Cache 影响
 

@@ -54,7 +54,7 @@ kind: "package-reference"
 <a id="wait_agent"></a>
 ### wait_agent
 
-等待当前调用者的下一步收件箱。已有待处理输入时立即返回；之后到达的输入，包括消息、完成通知和用户引导，会结束等待。排队的下一轮消息、其他收件箱和 Agent 状态变化不会结束等待。树级内存信号也会结束捕获的树根与信号指向同一存活 Agent 实例的当前等待；信号不会保留到后续等待。非托管的委派 Agent 仍可等待自己的收件箱。工具既不消费输入，也不启动 Agent。`timeout_ms` 默认为 30000，必须是 10000 至 3600000 的整数。结果仅含 `timedOut`；取消、调用者释放或插件卸载会拒绝等待。
+等待当前调用者的下一步收件箱。已有待处理输入时立即返回；之后到达的输入，包括消息、完成通知和用户引导，会结束等待。排队的下一轮消息、其他收件箱和 Agent 状态变化不会结束等待。任务变化不会结束等待。工具既不消费输入，也不启动 Agent。`timeout_ms` 默认为 30000，必须是 10000 至 3600000 的整数。结果仅含 `timedOut`；取消、调用者释放或插件卸载会拒绝等待。
 
 ### list_agents
 
@@ -72,7 +72,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-命名由 `ctx.subagentNames` 同步解析；通信、中断和目录遍历委派给 `ctx.subagents`；驻留、冷恢复和授权属于该服务。等待工具在入口处解析一次树归属，在启动定时器并检查待处理下一步输入前订阅当前调用者的收件箱和树级等待信号，并在每次结束时移除监听器和定时器。非预期的树根查询失败会在订阅前拒绝等待。
+命名由 `ctx.subagentNames` 同步解析；通信、中断和目录遍历委派给 `ctx.subagents`；驻留、冷恢复和授权属于该服务。等待工具在启动定时器并检查待处理下一步输入前订阅当前调用者的收件箱，并在每次结束时移除监听器和定时器。
 
 ### 投递与信号所有权
 
@@ -112,7 +112,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control) 定义按路径或 id 寻址的通信与中断、整树发现，以及带 `timeout_ms` 的收件箱等待。`wait_agent` 在输入可用或收到等待信号时返回 `{ "timedOut": false }`，超时时返回 `{ "timedOut": true }`。它不返回消息正文或其他成员活动诊断。
+生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control) 定义按路径或 id 寻址的通信与中断、整树发现，以及带 `timeout_ms` 的收件箱等待。`wait_agent` 在输入可用时返回 `{ "timedOut": false }`，超时时返回 `{ "timedOut": true }`。它不返回消息正文或其他成员活动诊断。
 
 #### Token 影响
 

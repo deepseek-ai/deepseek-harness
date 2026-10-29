@@ -1,5 +1,5 @@
 ---
-description: "Coordinate subagents through a durable shared task board and in-memory wait signals in Team-enabled Sessions."
+description: "Coordinate subagents through a durable shared task board in Team-enabled Sessions."
 kind: "package-reference"
 ---
 
@@ -75,7 +75,7 @@ File hints produce warnings when two in-progress tasks plan to touch overlapping
 
 ### Waiting and interruption
 
-The standard `wait_agent` tool waits for the exact caller’s next-step inbox and works without Team mode; see [subagent controls](../../subagent/tool-subagent-control/README.md#wait_agent). Team mode also ends an active wait when a task-board commit finishes flushing. Re-read the board after waiting. A change outside an active wait is not retained and cannot make a later wait return immediately.
+The standard `wait_agent` tool waits for the exact caller’s next-step inbox and works without Team mode; see [subagent controls](../../subagent/tool-subagent-control/README.md#wait_agent). Task changes and Team mode changes do not end waits, add inbox input, or start idle Agents. Use `send_message` when an Agent needs to act on an update.
 
 An ancestor stops a descendant’s current turn with the standard `interrupt_agent` tool. Interruption keeps unclaimed queued messages and leaves task ownership unchanged.
 
@@ -102,7 +102,7 @@ The service is built on four commitments:
 - **Explicit authority.** Every service method takes the exact live calling `Agent`; a task owner or the Lead mutates a task, and only the Lead reassigns one.
 - **Bounds that fail loud.** `maxTasks` is a validated deployment value, and exhaustion reports a typed error instead of reusing an id.
 
-The [task-board wait decision](../../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.md) owns task-board wait signals and the separation from ordinary subagent controls.
+The [inbox-only wait decision](../../../.agents/notes/implemented/simplification/2026-10-29-inbox-only-agent-wait.md) separates task commits from Agent input waiting.
 
 ### Source map
 
@@ -124,21 +124,17 @@ Reassignment resolves the root or a continuable descendant through the same disc
 
 ### Messages and historical mailbox
 
-Peer messaging, Steer delivery, cold resume, and sender framing belong to the subagent runtime. Task-board changes use in-memory wait signals. Historical `team/message/queued` and `team/message/delivered` records and `team-message` sources remain decodable but are never delivered or acknowledged.
+Peer messaging, Steer delivery, cold resume, and sender framing belong to the subagent runtime. Historical `team/message/queued` and `team/message/delivered` records and `team-message` sources remain decodable but are never delivered or acknowledged.
 
 ### Shared task board
 
 Tasks are complete versioned snapshots. Mutations require `expectedRevision`; stale updates report `TEAM_TASK_STALE_REVISION`. Numeric `task-<n>` ids stay within the safe-integer range. Deleted tasks remain replay tombstones but do not consume `maxTasks` or appear in `listTasks()`. Normalized workspace-relative `writeScopes` warn about overlapping in-progress work without blocking claims or authorizing writes.
 
-### Task-board wait signals
-
-After a successful append and flush, Team calls `subagents.notifyTreeWaits(root)` once. Current waits match their captured root to the signal’s exact live root instance; Team does not enumerate Agents. Listener failures are logged and contained without rejecting the committed operation. The signal ends only an active wait. It adds no inbox entry or unread state, never starts an idle turn, and never restores a cold member. Changes between waits are not replayed to the next wait.
-
 ### Durability model
 
 Team requires `sessionPersistence` before activation. `Service.init` awaits registration of the `agentTeam` projection before publishing service readiness. The journal retains the returned handle and reads task state through `stateOf(session)`; callers use the Team service rather than registering another reader.
 
-Task mutations honor cancellation before appending `team/task` to the exact live root Session, then flush before emitting wait signals. Cancellation cannot retract an appended record. A failed flush or one with no participating listener raises `TEAM_TASK_PERSISTENCE_UNCONFIRMED` with the task id and revision: the task is already visible, but durability is unknown, and no wait signal is emitted. Read that task before retrying. Task records remain log-only; signals are not messages or persisted events. The wait tool records its result through the normal tool pipeline. No committed task or historical payload generation is rewritten.
+Task mutations honor cancellation before appending `team/task` to the exact live root Session, then await the flush. Cancellation cannot retract an appended record. A failed flush or one with no participating listener raises `TEAM_TASK_PERSISTENCE_UNCONFIRMED` with the task id and revision: the task is already visible, but durability is unknown. Read that task before retrying. Task records remain log-only. No committed task or historical payload generation is rewritten.
 
 The projection ignores historical roster and mailbox records without validating or retaining their payloads. It stores only the task board, saved mode, and recovery metadata. Incompatible projection checkpoints rebuild from the unchanged Session log; see the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.3/team-projection/guide.md).
 
@@ -176,7 +172,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-The model reads task views through task-tool results. Model-facing views identify owners by `ownerName`; host views retain `ownerId`; stale updates report the current revision. A task-board signal ends an active `wait_agent` call without supplying task contents. The model re-reads current tasks before acting.
+The model reads task views through task-tool results. Model-facing views identify owners by `ownerName`; host views retain `ownerId`; stale updates report the current revision. Task updates do not end `wait_agent`; send an explicit message when a member needs to act on an update.
 
 #### Token effect
 

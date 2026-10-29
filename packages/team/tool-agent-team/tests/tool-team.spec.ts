@@ -256,7 +256,7 @@ describe('dsh-tool-team', () => {
     const leadPrompt = renderPrompt(leadAssembly)
     expect(leadPrompt).toContain('A shared task board is available to every agent in your subagent tree')
     expect(leadPrompt).toContain('Task readiness does not start an agent')
-    expect(leadPrompt).toContain('Task changes end current wait_agent calls')
+    expect(leadPrompt).toContain('Task changes do not end wait_agent calls')
     expect(renderContextSnapshot(leadAssembly)).toContain(teamIdentity('lead'))
     expect((await ctx.systemPrompt.assemble()).contexts.some(context => context.name === 'team:identity')).toBe(false)
     expect(leadAssembly.tools.map(schema => schema.name)).not.toContain('spawn_teammate')
@@ -476,10 +476,15 @@ describe('dsh-tool-team', () => {
 
     lead.inbox.clear()
     const { result: wait } = await startWait(ctx, lead)
+    let returned = false
+    void wait.then(() => { returned = true })
     const completed = await execute(ctx, child, 'team_task_update', {
       task_id: task.id, expected_revision: 2, action: 'complete',
     })
     expect(completed.isError).toBe(false)
+    expect(returned).toBe(false)
+    expect(lead.inbox.nextStep).toHaveLength(0)
+    lead.inject(createUserMessage({ content: [{ type: 'text', text: 'task is ready' }], source: { kind: 'user' } }))
     expect(JSON.parse(text(await wait))).toEqual({ timedOut: false })
 
     await childActivation.dispose()
@@ -547,8 +552,13 @@ describe('dsh-tool-team', () => {
     const child = ctx.agents.get(childId)!
     child.inbox.clear()
     const { result: wait } = await startWait(ctx, child)
-    const wake = await execute(ctx, lead, 'team_task_create', { subject: 'wake', description: 'notify waiting child' })
-    expect(wake.isError).toBe(false)
+    let returned = false
+    void wait.then(() => { returned = true })
+    const created = await execute(ctx, lead, 'team_task_create', { subject: 'queued work', description: 'await explicit assignment' })
+    expect(created.isError).toBe(false)
+    expect(returned).toBe(false)
+    expect(child.inbox.nextStep).toHaveLength(0)
+    child.inject(createUserMessage({ content: [{ type: 'text', text: 'read the task board' }], source: { kind: 'user' } }))
     expect(JSON.parse(text(await wait))).toEqual({ timedOut: false })
 
     await childActivation.dispose()
@@ -769,7 +779,7 @@ describe('dsh-tool-team', () => {
     }
   })
 
-  it('ends every current wait in the committing tree without waking an unrelated tree', async () => {
+  it('leaves all current waits pending when tasks change', async () => {
     const { ctx, lead, adapter } = await setup([])
     const child = await ctx.agents.create({
       sessionId: SessionId('waiting-child'), agentOptions: { provider: 'mock', model: 'mock' },
@@ -784,12 +794,9 @@ describe('dsh-tool-team', () => {
     const second = await startWait(ctx, lead)
     const descendant = await startWait(ctx, child.agent)
     const separate = await startWait(ctx, unrelated.agent)
-    const committed = await execute(ctx, lead, 'team_task_create', { subject: 'committed', description: 'wake current waits' })
+    const committed = await execute(ctx, lead, 'team_task_create', { subject: 'committed', description: 'persist shared work' })
     expect(committed.isError).toBe(false)
-    for (const result of await Promise.all([first.result, second.result, descendant.result])) {
-      expect(result).toMatchObject({ isError: false, value: { timedOut: false } })
-    }
-    expect(vi.getTimerCount()).toBe(1)
+    expect(vi.getTimerCount()).toBe(4)
     for (const agent of [lead, child.agent, unrelated.agent]) {
       expect(agent.inbox.nextStep).toHaveLength(0)
       expect(agent.inbox.nextTurn).toHaveLength(0)
@@ -798,13 +805,33 @@ describe('dsh-tool-team', () => {
     expect(adapter.requests).toHaveLength(0)
     const later = await startWait(ctx, lead)
     await vi.advanceTimersByTimeAsync(10_000)
-    for (const result of await Promise.all([separate.result, later.result])) {
+    for (const result of await Promise.all([first.result, second.result, descendant.result, separate.result, later.result])) {
       expect(result).toMatchObject({ isError: false, value: { timedOut: true } })
     }
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('keeps waiting until a task flush succeeds and ignores a failed flush', async () => {
+  it('keeps waiting across Team mode changes until its own inbox receives input', async () => {
+    const { ctx, lead, adapter } = await setup([])
+    vi.useFakeTimers()
+    const waiting = await startWait(ctx, lead)
+    let returned = false
+    void waiting.result.then(() => { returned = true })
+    for (const enabled of [false, true]) {
+      await ctx.agentTeams.setEnabled(lead, enabled)
+      expect(lead.inbox.nextStep).toHaveLength(0)
+      expect(lead.inbox.nextTurn).toHaveLength(0)
+      expect(lead.status).toBe('idle')
+      expect(returned).toBe(false)
+    }
+    expect(adapter.requests).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(9_999)
+    expect(returned).toBe(false)
+    lead.inject(createUserMessage({ content: [{ type: 'text', text: 'read the task board' }], source: { kind: 'user' } }))
+    expect(await waiting.result).toMatchObject({ isError: false, value: { timedOut: false } })
+  })
+
+  it('keeps waiting across successful and failed task flushes', async () => {
     const { ctx, lead } = await setup([])
     vi.useFakeTimers()
     const flush = ctx.sessions.flush.bind(ctx.sessions)
@@ -827,7 +854,8 @@ describe('dsh-tool-team', () => {
       release.resolve(undefined)
       expect((await creating).isError).toBe(false)
     }
-    expect(await waiting.result).toMatchObject({ isError: false, value: { timedOut: false } })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await waiting.result).toMatchObject({ isError: false, value: { timedOut: true } })
     const afterCommit = await startWait(ctx, lead)
     vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(new Error('storage unavailable'))
     const failed = await execute(ctx, lead, 'team_task_create', { subject: 'failed', description: 'flush fails' })

@@ -14,7 +14,7 @@ Project only tasks, saved mode, and their recovery metadata. Ignore `team/member
 
 Checkpoint version 7 invalidates prior state, including failures caused by retired records. The registry rebuilds from the unchanged Session log. Historical event declarations, format migrations, message sources, and attachment export remain supported; no Session format bump or log conversion is needed.
 
-This partially supersedes the projection and mailbox-validation decisions in [Agent Teams](../feature/2026-08-05-agent-teams.md). The [subagent identity](../architecture/2026-10-15-agent-teams-as-subagents.md) and [task-board wait](../architecture/2026-10-19-team-task-board-inbox.md) decisions remain active, as do task durability and shared-checkout semantics.
+This partially supersedes the projection and mailbox-validation decisions in [Agent Teams](../feature/2026-08-05-agent-teams.md). The [subagent identity](../architecture/2026-10-15-agent-teams-as-subagents.md) and [inbox-only wait](2026-10-29-inbox-only-agent-wait.md) decisions remain active, as do task durability and shared-checkout semantics.
 
 ## Alternatives considered
 

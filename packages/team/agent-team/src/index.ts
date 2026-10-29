@@ -79,7 +79,7 @@ export class TeamService extends TypertRemoteService {
   protected async [Service.init](): Promise<void> {
     const ctx = this.ctx
     this.projection = await ctx.sessionProjections.register(teamProjectionDefinition)
-    this.journal = new TeamJournal(ctx, this.projection, (root) => { ctx.subagents.notifyTreeWaits(root) })
+    this.journal = new TeamJournal(ctx, this.projection)
     this.tasks = new TeamTaskBoard(ctx, this.journal, this.maxTasks)
   }
 
@@ -113,7 +113,6 @@ export class TeamService extends TypertRemoteService {
     if (this.isEnabled(root) !== enabled) root.session.append('team/mode', { enabled })
     await this.ctx.parallel('team/mode-changed', root)
     await this.ctx.sessions.flush(root.session)
-    this.ctx.subagents.notifyTreeWaits(root)
   }
 
   /**

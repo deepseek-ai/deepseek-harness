@@ -494,13 +494,6 @@ startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
 rootOf(caller: Agent): Agent
 
 /**
- * End current input waits in a tree without adding inbox content or starting Agents.
- * Listener failures are logged and contained; signals are not retained for later waits.
- * @param root - exact tree root captured by the operation requesting notification.
- */
-notifyTreeWaits(root: Agent): void
-
-/**
  * Join progressing subagent tree work for its root. Idle members with parked input
  * stay resident without delaying host completion. Ordinary members return false.
  * @param root - exact live subagent tree root whose member work is awaited.
@@ -703,26 +696,6 @@ A provider established a published child. For in-process providers, `ctx.agents.
 ```
 
 Types: [Scoped](scope.zh.md)
-
-Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
-
-<a id="subagenttree-wait-notified--emit"></a>
-
-#### `subagent/tree-wait-notified` — emit
-
-End current input waits in one subagent tree without retaining the signal. Broadcast to all scopes; consumers match the exact live root instance.
-
-```ts cordis-catalog
-/**
- * End current input waits in one subagent tree without retaining the signal.
- * Broadcast to all scopes; consumers match the exact live root instance.
- * @param root - the root whose current tree waits should end.
- * @mode emit
- */
-'subagent/tree-wait-notified'(root: Agent): void
-```
-
-Types: [Agent](core.zh.md)
 
 Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
 <!-- END GENERATED cordis-surface -->
