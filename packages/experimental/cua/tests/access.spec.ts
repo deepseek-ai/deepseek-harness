@@ -1,5 +1,5 @@
 /** Application decisions are checked at dispatch and revocation cancels owned work. */
-import { guideText } from './fixtures/permission-guide.ts'
+import { guideText } from './fixtures/permission-guide.client.ts'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'

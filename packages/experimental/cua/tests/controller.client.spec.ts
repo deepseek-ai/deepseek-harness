@@ -1,5 +1,5 @@
 /** Permission refreshes preserve observations and join user actions before withdrawal. */
-import { guideText } from './fixtures/permission-guide.ts'
+import { guideText } from './fixtures/permission-guide.client.ts'
 import { setImmediate } from 'node:timers/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-cua/remote'
