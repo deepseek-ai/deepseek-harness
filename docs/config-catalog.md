@@ -1113,11 +1113,18 @@ export interface Config {
 
 - `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
 - `refs`: [`CuaConfig`](../packages/experimental/cua/src/index.ts)
-- `source`: [`packages/experimental/cua-macos/src/index.ts:16`](../packages/experimental/cua-macos/src/index.ts)
+- `source`: [`packages/experimental/cua-macos/src/index.ts:17`](../packages/experimental/cua-macos/src/index.ts)
 
 ```ts config-catalog
 /** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
-export type Config = CuaConfig
+export interface Config extends CuaConfig {
+  /**
+   * Signature of a helper compiled from a DSH source checkout. `ad-hoc` binds macOS grants to the code hash, so changed or
+   * clean builds ask again. `local-identity` creates or reuses a per-user self-signed identity shared by
+   * builds that select it. Installed packages and `helperPath` keep their own signature.
+   */
+  sourceSigning: 'ad-hoc' | 'local-identity'
+}
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-cua-macos -->
 

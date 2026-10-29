@@ -2,6 +2,7 @@
 import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
+import Schema from '@deepseek-ai/schemastery'
 import { CuaConfig, installCua } from '@deepseek-ai/dsh-cua'
 import { nativeHostArchitecture, prepareNativeExecutable } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
@@ -13,9 +14,21 @@ export const name = 'experimental-cua-macos'
 /** Services required by the shared CUA executor and the native launcher. */
 export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'agents']
 /** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
-export type Config = CuaConfig
-/** Validate the shared configuration before preparing the macOS helper. */
-export const Config: typeof CuaConfig = CuaConfig
+export interface Config extends CuaConfig {
+  /**
+   * Signature of a helper compiled from a DSH source checkout. `ad-hoc` binds macOS grants to the code hash, so changed or
+   * clean builds ask again. `local-identity` creates or reuses a per-user self-signed identity shared by
+   * builds that select it. Installed packages and `helperPath` keep their own signature.
+   */
+  sourceSigning: 'ad-hoc' | 'local-identity'
+}
+/** Validate shared operation bounds and macOS source signing before preparing the helper. */
+export const Config = Schema.intersect([
+  CuaConfig,
+  Schema.object({
+    sourceSigning: Schema.union([Schema.const('ad-hoc'), Schema.const('local-identity')]).default('ad-hoc'),
+  }),
+]) satisfies Schema<Record<string, unknown>, Config>
 
 const description = 'Inspect macOS permissions, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.'
 

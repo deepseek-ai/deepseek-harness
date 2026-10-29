@@ -41,12 +41,6 @@ export interface CuaConfig {
   }>
   /** Absolute executable inside the signed macOS helper .app; omission prepares the package-owned application. */
   helperPath?: string
-  /**
-   * Signature of a helper compiled from a DSH source checkout. `ad-hoc` binds macOS grants to the code hash, so changed or
-   * clean builds ask again. `local-identity` creates or reuses a per-user self-signed identity shared by
-   * builds that select it. Installed packages and `helperPath` keep their own signature.
-   */
-  sourceSigning: 'ad-hoc' | 'local-identity'
   /** Maximum time in milliseconds for native component preparation. */
   buildTimeoutMs: number
   /** Deadline for one native operation, including capture and AX traversal. */
@@ -91,7 +85,6 @@ export const CuaConfig = Schema.object({
     name: Schema.string().required(), executablePath: Schema.string().min(1),
   })).default([]),
   helperPath: Schema.string(),
-  sourceSigning: Schema.union([Schema.const('ad-hoc'), Schema.const('local-identity')]).default('ad-hoc'),
   buildTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(300_000),
   timeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(30_000),
   connectTimeoutMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(5000),

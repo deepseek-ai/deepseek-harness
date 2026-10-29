@@ -3,9 +3,9 @@ import { constants } from 'node:fs'
 import { access, mkdir, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
-import type { CuaConfig } from '@deepseek-ai/dsh-cua'
 import type { SubprocessOutcome, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { z } from 'zod'
+import type { Config } from './index.ts'
 
 const NativeApplication = z.object({ bundle: z.string().regex(/^[a-f0-9]{64}$/) }).strict()
 
@@ -29,7 +29,7 @@ export interface NativeBuildSpec {
   packageRoot: string
   architecture: NativeArchitecture
   /** Signature of a source-checkout build; installed packages ignore it. */
-  sourceSigning: CuaConfig['sourceSigning']
+  sourceSigning: Config['sourceSigning']
   subprocess: Pick<SubprocessRuntime, 'spawn'>
   signal: AbortSignal
   timeoutMs: number
