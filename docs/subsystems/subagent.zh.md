@@ -422,39 +422,40 @@ Root-Session aliases shared by named creation, discovery, and control tools.
 ```ts cordis-catalog
 /**
  * Reserve a complete name without starting an agent or writing a Session event.
- * @param parent - exact live caller whose name prefixes the child name.
+ * @param rootSession - root Session selected by the caller through the subagent service.
+ * @param parentId - parent identity whose name prefixes the child name.
  * @param requested - optional sibling segment; omission selects the first free agent-N.
  * @returns a reservation the caller must dispose after startup and binding.
  */
-reserve(parent: Agent, requested?: string): SubagentNameReservation
+reserve(rootSession: Session, parentId: SessionId, requested?: string): SubagentNameReservation
 
 /**
  * Record an accepted child's full name in the caller's root Session.
  * Binding failure does not cancel or dispose the child; callers report its id.
- * @param parent - exact live caller whose root owns the alias.
+ * @param rootSession - root Session selected by the caller through the subagent service.
  * @param childId - identity returned by the subagent service.
  * @param name - complete name returned by reserve.
  */
-bind(parent: Agent, childId: SessionId, name: string): void
+bind(rootSession: Session, childId: SessionId, name: string): void
 
 /**
- * Read a bound name from the live root's projection without loading ancestors.
- * @param caller - exact live caller selecting the tree.
- * @param targetId - requested identity; omission selects the caller.
+ * Read a bound name from the root projection without loading ancestors.
+ * @param rootSession - root Session selected by the caller through the subagent service.
+ * @param targetId - identity whose name is requested.
  * @returns lead for the root, a bound full name, or the unchanged id.
  */
-nameOf(caller: Agent, targetId: SessionId = caller.id): string
+nameOf(rootSession: Session, targetId: SessionId): string
 
 /**
  * Resolve an alias or pass through an id for the subagent service to authorize.
- * @param caller - exact live caller selecting the root mapping.
+ * @param rootSession - root Session selected by the caller through the subagent service.
  * @param name - lead, a bound full name, or a raw Session id.
  * @returns the target identity; an unknown lead/... name throws.
  */
-resolveName(caller: Agent, name: string): SessionId
+resolveName(rootSession: Session, name: string): SessionId
 ```
 
-Types: [Agent](core.zh.md) · [SessionId](core.zh.md)
+Types: [Session](session.zh.md) · [SessionId](core.zh.md)
 
 Source: [`packages/subagent/subagent-names/src/index.ts`](../../packages/subagent/subagent-names/src/index.ts)
 
@@ -515,6 +516,8 @@ async waitForTreeWork(root: Agent): Promise<boolean>
  * A cold target resumes under its runtime subagent tree root without restoring
  * its creation ancestors. Sender identity is rechecked before inbox acceptance; cancellation
  * stops only pre-acceptance work and never retracts an accepted message.
+ * Display attribution uses the sender's bound name when the naming service is mounted,
+ * otherwise its Session id. Name lookup failures reject before inbox acceptance.
  * @param sender - exact live root or resident continuable Agent originating the message.
  * @param targetId - another root or continuable member's durable Session id.
  * @param content - model-authored content to deliver.
@@ -645,27 +648,6 @@ A published child settled. Scope-filtered dispatch uses the same subagent tree-r
 ```
 
 Types: [Scoped](scope.zh.md)
-
-Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
-
-<a id="subagentmessage-name--bail"></a>
-
-#### `subagent/message-name` — bail
-
-Resolve visible message attribution from the authenticated sender. The naming provider returns its current name; without a provider the Session id is used. Lookup failures reject the send before inbox acceptance.
-
-```ts cordis-catalog
-/**
- * Resolve visible message attribution from the authenticated sender.
- * The naming provider returns its current name; without a provider the Session id is used.
- * Lookup failures reject the send before inbox acceptance.
- * @param sender - exact live Agent whose message is being delivered.
- * @mode bail
- */
-'subagent/message-name'(this: Scoped<SubagentRuntime>, sender: Agent): string | undefined
-```
-
-Types: [Agent](core.zh.md) · [Scoped](scope.zh.md)
 
 Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
 

@@ -177,12 +177,12 @@ describe('dsh-tool-subagent-control', () => {
 
   it('continues a named child by path with named message text and durable Session id attribution', async () => {
     const { ctx, parent } = await setup([textResponse('first result'), textResponse('continued result')])
-    const reservation = ctx.subagentNames.reserve(parent, 'reviewer')
+    const reservation = ctx.subagentNames.reserve(parent.session, parent.id, 'reviewer')
     const child = await ctx.subagents.startActivation({
       provider: 'spawn', label: 'review', delivery: 'parent', parent,
       prompt: [{ type: 'text', text: 'review' }], signal: testToolSignal,
     })
-    ctx.subagentNames.bind(parent, child.childId, reservation.name)
+    ctx.subagentNames.bind(parent.session, child.childId, reservation.name)
     reservation.dispose()
     await child.result
     const result = await callTool(ctx, 'send_message', { name: reservation.name, message: 'check once more' }, parent)
@@ -332,7 +332,7 @@ describe('dsh-tool-subagent-control', () => {
       meta: { origin: 'subagent', parentSession: parent.id },
       setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, parent) },
     })
-    ctx.subagentNames.bind(parent, handle.agent.id, 'lead/reviewer')
+    ctx.subagentNames.bind(parent.session, handle.agent.id, 'lead/reviewer')
     const followup = vi.spyOn(parent, 'steer')
     const result = await callTool(ctx, 'send_message', { name: 'lead', message: 'Review complete.' }, handle.agent)
     expect(result.isError).toBe(false)

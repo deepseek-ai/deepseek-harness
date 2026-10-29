@@ -11,7 +11,7 @@ description: "基于 base 的配置通过模型工具中的名字寻址子代理
 
 子代理工具需要 `@deepseek-ai/dsh-subagent-names`，基于 base 的配置默认挂载该插件。`subagent` 和 `subagent_fork` 接受可选的同级 `name`，返回 `subagentId`，以及 `lead/reviewer` 这样的完整 `name`。省略时分配首个未使用的 `agent-N`。`send_message` 和 `interrupt_agent` 使用 `name` 参数，接受发现到的路径或现有成员的 Session id。`list_agents` 在 ID 字段之外附加名字和父路径。实验性 Team 工具提供 `ownerName`；OAR 工具也返回名字。
 
-subagent 服务、provider 请求、Session catalog 和 SDK 句柄保留现有 ID 接口。运行时消息和完成通知仍通过 Session id 标识代理。命名插件在启动成功后将名字到 ID 的绑定记录在根 Session 中。子代理可能在名字绑定前开始第一步。委派、控制以及实验性 Team 和 OAR 工具都需要命名服务；卸载该服务会移除这些工具定义。
+subagent 服务、provider 请求、Session catalog 和 SDK 句柄保留现有 ID 接口。消息服务根据实际发送者解析显示名称：根代理使用 `lead`，已命名子代理使用绑定路径，没有可用名称时使用 Session id。持久化消息来源和完成通知保留 Session id。命名插件在启动成功后将名字到 ID 的绑定记录在根 Session 中。子代理可能在名字绑定前开始第一步。委派、控制以及实验性 Team 和 OAR 工具都需要命名服务；卸载该服务会移除这些工具定义。
 
 ## 迁移
 

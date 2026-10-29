@@ -34,9 +34,7 @@ Teammate creation and cold resume belong to the subagent runtime ([subagent team
 
 ## Mailbox and task transactions
 
-The historical Lead-log mailbox remains a readable format: queued and delivered records keep their stable identity and sender, and Team payload validation still applies to them. Team never delivers or acknowledges them; messages between members use the target Agent inbox through the subagent operation ([subagents](../architecture/2026-10-15-agent-teams-as-subagents.md)).
-
-Unknown mailbox content stays as decoded JSON during event projection and checkpoint admission. Validation inspects its type without rebuilding its fields, because generic object parsing can omit a valid own `__proto__` key. Locally declared content variants undergo structural validation; opaque plugin fields do not gain Team semantics. Cache invalidation is necessary because parser correction alone cannot recover keys omitted from cached state. The [Team documentation](../../../../packages/team/agent-team/README.md) owns the restore behavior.
+The historical Lead-log mailbox remains readable in original Session logs. The [task-only projection decision](../simplification/2026-10-29-team-task-only-projection.md) supersedes mailbox projection, checkpoint retention, and Team payload validation. Historical queued messages are never delivered or acknowledged.
 
 Member messages use the subagent `send_message` operation, which steers running, idle, and cold targets and returns inbox acceptance.
 

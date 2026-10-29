@@ -273,7 +273,7 @@ describe('web e2e: agent teamwork panel', () => {
       version: 2, childId: memberId, childCreatedAt: Date.now(), mode: 'external',
       label: RESEARCHER_DESCRIPTION,
     })
-    scaffold.ctx.subagentNames.bind(agent, memberId, 'lead/researcher')
+    scaffold.ctx.subagentNames.bind(agent.session, memberId, 'lead/researcher')
     const countAction = page.locator('[data-subagent-action]')
     await countAction.waitFor()
     await page.mouse.move(2, 2)

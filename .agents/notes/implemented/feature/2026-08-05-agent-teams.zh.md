@@ -34,9 +34,7 @@ Lead 必须等待所需工作后才能给出最终答案。进程 teardown 仍�
 
 ## Mailbox and task transactions
 
-历史 Lead-log mailbox 仍是可读格式：queued 与 delivered 记录保留稳定身份与发送者，Team payload 校验仍适用于它们。Team 从不投递或确认这些记录；member 之间的消息通过 subagent 操作进入目标 Agent inbox（[subagent](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)）。
-
-事件投影和 checkpoint 准入期间，未知 mailbox 内容保持为已解码 JSON。校验只检查其 type，不重建字段，因为通用对象解析可能省略有效的自有 `__proto__` 键。本地声明的内容变体接受结构校验；不透明的插件字段不获得 Team 语义。缓存失效是必要的，因为只修正解析器无法恢复缓存状态中省略的键。[Team 文档](../../../../packages/team/agent-team/README.zh.md)拥有恢复行为的说明。
+历史 Lead-log mailbox 仍可从原始 Session 日志读取。[仅投影任务的决策](../simplification/2026-10-29-team-task-only-projection.zh.md)取代邮箱投影、检查点保留和 Team 载荷校验。历史排队消息绝不再投递或确认。
 
 member 消息使用 subagent 的 `send_message` 操作，它对 running、idle 和 cold target 使用 Steer，并返回 inbox 接收结果。
 

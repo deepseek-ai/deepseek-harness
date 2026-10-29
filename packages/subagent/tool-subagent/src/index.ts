@@ -222,7 +222,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         parameters: {
           name: {
             type: 'string',
-            description: 'Optional name unique among your direct children. Omission selects the first unused agent-N, starting at agent-1. Use one segment starting with a lower-case letter, followed by lower-case letters, digits, underscores, or hyphens. Names remain taken after agents finish. The result returns the full path, such as lead/reviewer.',
+            description: 'Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer.',
           },
           cwd: {
             type: 'string',
@@ -337,11 +337,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             signal: exec.signal,
             delivery: 'parent' as const,
           }
-          const reservation = names.reserve(parent, args.name)
+          const rootSession = runtimeCtx.subagents.rootOf(parent).session
+          const reservation = names.reserve(rootSession, parent.id, args.name)
           try {
             const started = await runtimeCtx.subagents.startActivation(spec)
             try {
-              names.bind(parent, started.childId, reservation.name)
+              names.bind(rootSession, started.childId, reservation.name)
             } catch (cause: unknown) {
               throw new HarnessError(
                 `Subagent ${started.childId} started, but its name ${reservation.name} could not be recorded. `

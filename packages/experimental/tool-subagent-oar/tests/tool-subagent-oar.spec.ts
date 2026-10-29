@@ -211,7 +211,7 @@ it('reports the accepted child id without stopping it when name binding fails', 
   expect(result.error?.message).toContain('Check this child before retrying.')
   expect(dispose).not.toHaveBeenCalled()
   expect(childRequest?.signal.aborted).toBe(false)
-  const reservation = ctx.subagentNames.reserve(parent, 'inspector')
+  const reservation = ctx.subagentNames.reserve(parent.session, parent.id, 'inspector')
   expect(reservation.name).toBe('lead/inspector')
   reservation.dispose()
   childResult.resolve({ output: [{ type: 'text', text: 'child finished' }], stopReason: 'completed' })

@@ -111,7 +111,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口、配置校验和任务服务注册 |
 | [`src/task-board.ts`](src/task-board.ts) | 任务 CAS 命令、DAG 校验与派生视图 |
 | [`src/journal.ts`](src/journal.ts) | 串行化的 Lead 日志事务与提交通知 |
-| [`src/projection.ts`](src/projection.ts) | 严格回放历史成员、任务和邮箱记录，发布 `agentTeam` 客户端视图 |
+| [`src/projection.ts`](src/projection.ts) | 回放保存的模式与任务记录，发布 `agentTeam` 客户端视图 |
 | [`src/task-view.ts`](src/task-view.ts) | 任务板与客户端视图共用的纯任务就绪性和写入重叠推导 |
 
 ### Team 身份与成员关系
@@ -120,7 +120,7 @@ subagent 服务通过 `subagents.rootOf()` 解析当前在线调用者的根。�
 
 ### 任务受让者
 
-重新分配通过与 `list_agents` 相同的发现机制解析根或可继续执行后代。历史 `team/member` 记录仅供解码，不能授权分配。
+重新分配通过与 `list_agents` 相同的发现机制解析根或可继续执行后代。历史 `team/member` 记录保留在 Session 日志中，不能授权分配。
 
 ### 消息与历史 mailbox
 
@@ -140,7 +140,7 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 
 任务修改在向当前在线根 Session 追加 `team/task` 前响应取消，随后刷盘并发出等待信号。取消不能撤回已追加的记录。刷盘失败或没有监听器参与时，以 `TEAM_TASK_PERSISTENCE_UNCONFIRMED` 报告任务 id 和修订号：任务已可见，但持久性未知，且不发出等待信号。重试前先读取该任务。任务记录仅保留在日志中；信号不是消息，也不是持久化事件。等待工具通过普通工具流水线记录结果。不重写已提交任务或历史载荷代次。
 
-邮箱投影和检查点接纳保留本地声明校验器之外的已解码 JSON 字段，包括自身的 `__proto__` 键。历史载荷代次保持不变；投影缓存版本变化时从 Session 日志重建。
+投影忽略历史名册与邮箱记录，不校验或保留其载荷。投影仅保存任务板、模式选择和恢复元数据。不兼容的投影检查点从未改写的 Session 日志重建；参见[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.3/team-projection/guide.zh.md)。
 
 ### Dispose
 
@@ -148,7 +148,7 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 
 ### 浏览器投影
 
-`agentTeam` 投影发布未删除任务视图，并在最后有效状态旁报告失败。历史成员字段保留在持久化投影状态中以供解码，不发送到浏览器，也不授予运行时权限。投影失败后，任务读取和修改均报错，不再追加任务事件。模式选择仍可保存并生效，包括关闭 Team；投影错误持续可见。无效模式载荷保留最后有效选择，并发布投影错误。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection)定义线上的类型。
+`agentTeam` 投影发布未删除任务视图，并在最后有效状态旁报告失败。历史名册与邮箱记录不会导致任务板投影失败。投影失败后，任务读取和修改均报错，不再追加任务事件。模式选择仍可保存并生效，包括关闭 Team；投影错误持续可见。无效模式载荷保留最后有效选择，并发布投影错误。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection)定义线上的类型。
 
 [Web UI](../../client/ui-agent-team/README.zh.md)仅展示任务。普通 subagent 导航负责成员列表；任务所有者标签复用 Session 和目录数据，缺失时使用 id。
 

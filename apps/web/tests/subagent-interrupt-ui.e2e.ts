@@ -155,7 +155,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       signal: new AbortController().signal,
       prompt: [{ type: 'text', text: INITIAL }], parent,
     })
-    scaffold.ctx.subagentNames.bind(parent, started.childId, 'lead/interrupt-worker')
+    scaffold.ctx.subagentNames.bind(parent.session, started.childId, 'lead/interrupt-worker')
     childId = started.childId
     await waitFor(() => existsSync(readyFile), 'the held child turn to open')
 

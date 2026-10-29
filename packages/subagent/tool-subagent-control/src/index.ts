@@ -64,7 +64,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       const sender = exec.agent
       if (!sender) throw new Error('send_message requires a calling agent (exec.agent was undefined)')
       const message: ContentBlock[] = [{ type: 'text', text: args.message }]
-      const target = ctx.subagentNames.resolveName(sender, args.name)
+      const target = ctx.subagentNames.resolveName(ctx.subagents.rootOf(sender).session, args.name)
       const messageId = await ctx.subagents.sendMessage(sender, target, message, { signal: exec.signal })
       return { messageId }
     },
@@ -80,8 +80,8 @@ export function apply(ctx: Context, config: Config = {}): void {
       try {
         const root = ctx.subagents.rootOf(agent)
         if (root === agent) return 'You are the root agent named "lead".'
-        const name = ctx.subagentNames.nameOf(agent)
-        const parent = ctx.subagentNames.nameOf(agent, agent.session.header.parentSession)
+        const name = ctx.subagentNames.nameOf(root.session, agent.id)
+        const parent = ctx.subagentNames.nameOf(root.session, agent.session.header.parentSession ?? agent.id)
         const self = name === agent.id ? `Your agent address is ${JSON.stringify(name)}.`
           : `Your name is ${JSON.stringify(name)}.`
         return `${self} Your parent agent is ${JSON.stringify(parent)}. Your root agent is "lead".`
@@ -134,7 +134,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     execute(args, exec) {
       const caller = exec.agent
       if (!caller) throw new Error('interrupt_agent requires a calling agent (exec.agent was undefined)')
-      const target = ctx.subagentNames.resolveName(caller, args.name)
+      const target = ctx.subagentNames.resolveName(ctx.subagents.rootOf(caller).session, args.name)
       exec.signal.throwIfAborted()
       ctx.subagents.interrupt(target, { kind: 'ancestor', agent: caller })
       return Promise.resolve({ accepted: true })

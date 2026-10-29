@@ -9,6 +9,7 @@
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, resolve } from 'node:path'
 import type {} from '@deepseek-ai/dsh-working-directory'
+import type {} from '@deepseek-ai/dsh-subagent-names'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -63,8 +64,6 @@ interface SubagentHost {
   identityOf(session: Session): SubagentIdentityProjection | undefined
   /** Publish lifecycle events through the owning service's scoped dispatcher. */
   readonly emitLifecycle: LifecycleEmitter
-  /** Resolve display attribution from the live sender through the naming provider. */
-  senderNameOf(sender: Agent): string
 }
 
 /** Inputs shared by fresh and resumed Activation materialization. */
@@ -487,7 +486,9 @@ export class SubagentManager {
     const root = this.rootOf(sender)
     if (sender.id === targetId) throw new SubagentError('send_message requires another agent in the subagent tree', 'UNAUTHORIZED')
     this.assertAdmitting(sender)
-    const message = createAgentMessage(sender, content, this.host.senderNameOf(sender))
+    const names = this.ctx.get('subagentNames')
+    const senderName = names === undefined ? sender.id : names.nameOf(root.session, sender.id)
+    const message = createAgentMessage(sender, content, senderName)
     const activation = this.resident.get(sender.id)
     return this.deliverToMember(root, targetId, [...message.content], {
       signal: options.signal, delivery: 'steer', source: message.source,

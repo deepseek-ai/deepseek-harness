@@ -77,7 +77,7 @@ interface TeamTaskSnapshot {
 
 `agentTeam.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. The Web menu calls the same method through `remote.agentTeams.setEnabled`, with the root Session id resolved to its live Agent by the Gateway. Mode writes take effect before awaiting tool synchronization or persistence. Task mutations check the current mode when their queued operation starts; admitted mutations may finish. Mode changes wake current waits after flushing. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
 
-The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted Team record beside the last valid state. Historical member fields remain in persisted projection state but are omitted from the browser view. The task panel labels the root as Lead and other owners from catalog labels, Session titles, or ids.
+The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted task or mode record beside the last valid state. Historical roster and mailbox records are not projected. The task panel labels the root as Lead and other owners from catalog labels, Session titles, or ids.
 
 ```ts type-equiv
 /** Runtime-enriched task view returned to tools and hosts. */
@@ -110,7 +110,7 @@ interface TeamProjection {
 
 ## Replay
 
-The `agentTeam` projection replays historical roster, task, and mailbox records selected by `TeamId`. Subagent discovery owns current tree membership and ignores inherited catalog authority. Session event `seq` and `time` own ordering and timing. Committed durable generations are preserved. The [package README](../../packages/team/agent-team/README.md) defines task operations, wait signals, and limits.
+The `agentTeam` projection replays task records selected by `TeamId` and the Session’s own mode selections. Subagent discovery owns current tree membership and ignores inherited catalog authority. Session event `seq` and `time` own ordering and timing. Committed durable generations are preserved. The [package README](../../packages/team/agent-team/README.md) defines task operations, wait signals, and limits.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

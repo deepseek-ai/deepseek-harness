@@ -133,12 +133,12 @@ describe('list_agents', () => {
 
   it('annotates the original child rows with names while retaining Session ids and labels', async () => {
     const { ctx, parent } = await setup([textResponse('named result'), textResponse('unnamed result')])
-    const reservation = ctx.subagentNames.reserve(parent, 'reviewer')
+    const reservation = ctx.subagentNames.reserve(parent.session, parent.id, 'reviewer')
     const child = await ctx.subagents.startActivation({
       delivery: 'parent', provider: 'spawn', label: 'review implementation',
       prompt: [{ type: 'text', text: 'review' }], parent, signal: testToolSignal,
     })
-    ctx.subagentNames.bind(parent, child.childId, reservation.name)
+    ctx.subagentNames.bind(parent.session, child.childId, reservation.name)
     reservation.dispose()
     await child.result
     const unnamed = await ctx.subagents.startActivation({
@@ -150,8 +150,8 @@ describe('list_agents', () => {
     parent.session.append('subagent/catalog', {
       version: 0, childId: missing, childCreatedAt: 1, mode: 'continuable', label: 'missing child',
     })
-    const missingName = ctx.subagentNames.reserve(parent, 'missing')
-    ctx.subagentNames.bind(parent, missing, missingName.name)
+    const missingName = ctx.subagentNames.reserve(parent.session, parent.id, 'missing')
+    ctx.subagentNames.bind(parent.session, missing, missingName.name)
     missingName.dispose()
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError, text(result)).toBe(false)

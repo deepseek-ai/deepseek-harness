@@ -130,14 +130,6 @@ declare module '@deepseek-ai/cordis' {
 
   interface Events {
     /**
-     * Resolve visible message attribution from the authenticated sender.
-     * The naming provider returns its current name; without a provider the Session id is used.
-     * Lookup failures reject the send before inbox acceptance.
-     * @param sender - exact live Agent whose message is being delivered.
-     * @mode bail
-     */
-    'subagent/message-name'(this: Scoped<SubagentRuntime>, sender: Agent): string | undefined
-    /**
      * End current input waits in one subagent tree without retaining the signal.
      * Broadcast to all scopes; consumers match the exact live root instance.
      * @param root - the root whose current tree waits should end.
@@ -231,7 +223,6 @@ export class SubagentRuntime extends TypertRemoteService {
       const manager = new SubagentManager(childCtx, {
         identityOf: session => identityProjection.stateOf(session).identity,
         emitLifecycle: this.emitLifecycle,
-        senderNameOf: sender => this.ctx.bail(scopeTarget(this, sender), 'subagent/message-name', sender) ?? sender.id,
       }, () => this.config.maxActiveSubagents.get())
       this.manager = manager
       childCtx.effect(() => () => {
@@ -336,6 +327,8 @@ export class SubagentRuntime extends TypertRemoteService {
    * A cold target resumes under its runtime subagent tree root without restoring
    * its creation ancestors. Sender identity is rechecked before inbox acceptance; cancellation
    * stops only pre-acceptance work and never retracts an accepted message.
+   * Display attribution uses the sender's bound name when the naming service is mounted,
+   * otherwise its Session id. Name lookup failures reject before inbox acceptance.
    * @param sender - exact live root or resident continuable Agent originating the message.
    * @param targetId - another root or continuable member's durable Session id.
    * @param content - model-authored content to deliver.

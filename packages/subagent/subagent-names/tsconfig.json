@@ -15,9 +15,6 @@
       "path": "../../../vendor/cordis"
     },
     {
-      "path": "../../core/agent"
-    },
-    {
       "path": "../../llm/llm"
     },
     {
@@ -25,9 +22,6 @@
     },
     {
       "path": "../../session/session-projection"
-    },
-    {
-      "path": "../subagent"
     }
   ]
 }
