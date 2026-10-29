@@ -2,7 +2,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { expect, it, vi } from 'vitest'
 import { apply, inject } from '../src/client/index.ts'
-import { en, zh } from '../src/client/locales.ts'
+import { de, en, es, fr, ja, pt, ru, zh } from '../src/client/locales.ts'
 
 it('registers the Tencent Docs account under its dictionary and removes both on disposal', async () => {
   const ctx = new Context()
@@ -14,7 +14,7 @@ it('registers the Tencent Docs account under its dictionary and removes both on 
   try {
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber
-    expect(locale.register).toHaveBeenCalledWith('tencent-docs', { zh, en })
+    expect(locale.register).toHaveBeenCalledWith('tencent-docs', { zh, en, ja, es, fr, de, ru, pt })
     expect(mcpAccounts.register).toHaveBeenCalledWith({ server: 'tencent-docs', packageName: '@deepseek-ai/dsh-tencent-docs', locale: 'tencent-docs' })
     await fiber.dispose()
     expect(dictionaryRemoved).toHaveBeenCalledOnce()
