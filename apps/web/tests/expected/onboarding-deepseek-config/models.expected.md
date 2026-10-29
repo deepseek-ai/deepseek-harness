@@ -30,11 +30,11 @@
           - textbox "模型 ID 1":
             - /placeholder: 模型 ID
             - text: private-preview
+          - button "模型选项 1" [expanded]
+          - button "删除模型 1"
           - textbox "显示名称 1":
             - /placeholder: 显示名称
             - text: Private Preview
-          - button "模型选项 1" [expanded]
-          - button "删除模型 1"
           - text: 上下文窗口
           - textbox "上下文窗口 1":
             - /placeholder: 1M

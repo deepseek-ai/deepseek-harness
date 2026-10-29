@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /** Tab information refuses readers whose committed record and navigation binding disagree. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { keyedObservableHook } from '@deepseek-ai/dsh-client-ui-renderer/src/client/bindings.tsx'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import { findTabPane, type TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { UseSidebarRightTabInfo } from '../src/client/contract/slots.ts'
 import { createSidebarRightStore } from '../src/client/stores.ts'
 import { TabDomain, type TabOccurrence } from '../src/client/tab-domain.ts'
@@ -44,11 +44,11 @@ function harness() {
       signal: occurrence.signal, actions: occurrence.tabActions, useStore, useTabNavigation,
     })
   }
-  const open = (beforeCommit?: (tabId: TabId) => void): TabId => {
+  const open = (beforeCommit?: (tabId: TabId) => void, address = ADDRESS): TabId => {
     let opened: TabId | undefined
-    instance.actions.openContent(SESSION, { kind: 'text', contentId: ADDRESS, title: 'a' }, (tabId) => {
+    instance.actions.openContent(SESSION, { kind: 'text', contentId: address, title: 'a' }, (tabId) => {
       opened = tabId
-      domain.navigate(SESSION, tabId, { address: ADDRESS, params: undefined })
+      domain.navigate(SESSION, tabId, { address, params: undefined })
       beforeCommit?.(tabId)
     })
     if (opened === undefined) throw new Error('expected the tab to open')
@@ -118,5 +118,55 @@ describe('tabInfoFactory committed-record relation', () => {
     expect(h.layout()).toBe(committed)
     expect(h.layout()?.tabs[tabId]).toBeDefined()
     expectUncommitted(useTabInfo, tabId)
+  })
+
+  it('keeps the tab identity while its panel follows docking and floating', () => {
+    const h = harness()
+    const tabId = h.open()
+    const view = renderHook(h.bind(tabId))
+    const docked = findTabPane(h.layout()!, tabId).id
+    expect(view.result.current.tab.id).toBe(tabId)
+    expect(view.result.current.panel).toEqual({ id: docked, isFloating: false })
+
+    act(() => { h.instance.actions.floatTab(SESSION, tabId) })
+    const floating = findTabPane(h.layout()!, tabId)
+    expect(floating.host).toBe('float')
+    expect(floating.id).not.toBe(docked)
+    expect(view.result.current.tab.id).toBe(tabId)
+    expect(view.result.current.panel).toEqual({ id: floating.id, isFloating: true })
+
+    act(() => { h.instance.actions.unfloatPane(SESSION, floating.id) })
+    expect(findTabPane(h.layout()!, tabId).host).toBe('dock')
+    expect(view.result.current.tab.id).toBe(tabId)
+    expect(view.result.current.panel).toEqual({ id: docked, isFloating: false })
+  })
+
+  it('keeps floating panel ids and host changes independent across tabs', () => {
+    const h = harness()
+    const firstId = h.open()
+    const secondId = h.open(undefined, 'dsh-resource://file/session/s-info/b.txt')
+    const first = renderHook(h.bind(firstId))
+    const second = renderHook(h.bind(secondId))
+    const docked = first.result.current.panel.id
+    expect(second.result.current.panel).toEqual({ id: docked, isFloating: false })
+
+    act(() => { h.instance.actions.floatTab(SESSION, firstId) })
+    const firstPane = findTabPane(h.layout()!, firstId).id
+    expect(first.result.current.panel).toEqual({ id: firstPane, isFloating: true })
+    expect(second.result.current.panel).toEqual({ id: docked, isFloating: false })
+
+    act(() => { h.instance.actions.floatTab(SESSION, secondId) })
+    const secondPane = findTabPane(h.layout()!, secondId).id
+    expect(new Set([docked, firstPane, secondPane]).size).toBe(3)
+    expect(first.result.current.panel).toEqual({ id: firstPane, isFloating: true })
+    expect(second.result.current.panel).toEqual({ id: secondPane, isFloating: true })
+    expect(first.result.current.tab.id).toBe(firstId)
+    expect(second.result.current.tab.id).toBe(secondId)
+
+    act(() => { h.instance.actions.unfloatPane(SESSION, firstPane) })
+    expect(first.result.current.panel).toEqual({ id: docked, isFloating: false })
+    expect(second.result.current.panel).toEqual({ id: secondPane, isFloating: true })
+    expect(first.result.current.tab.id).toBe(firstId)
+    expect(second.result.current.tab.id).toBe(secondId)
   })
 })
