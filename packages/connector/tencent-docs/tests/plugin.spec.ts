@@ -5,6 +5,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { McpManagedServerStatus } from '@deepseek-ai/dsh-mcp-manager'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import { createScope } from '@deepseek-ai/dsh-scope'
@@ -27,7 +28,7 @@ async function fixture(servers: Record<string, unknown> = {}) {
   }
   const mount = (config: Partial<TencentDocs.Config> = {}) => world.ctx.plugin(TencentDocs, { url: world.origin + '/mcp', ...config })
   const prompt = async () => renderPrompt(await world.ctx.systemPrompt.assemble())
-  const ping = () => world.ctx.tools.execute({
+  const ping = () => executeToolFixture(world.ctx, {
     callId: ToolCallId('tencent-docs-ping'), name: 'mcp__tencent-docs__ping', arguments: {}, signal: new AbortController().signal,
   })
   const grant = async () => (await world.ctx.credentials.describeRecord(parseCredentialKey('mcp-client/tencent-docs'))).configured
@@ -86,7 +87,7 @@ it('keeps Tencent Docs tools hidden from an agent until it loads them, unless lo
   await b.authorize()
   expect(b.ctx.tools.get('mcp__tencent-docs__ping', agent)).toBeUndefined()
   expect(b.ctx.tools.get('mcp__tencent-docs__load_tools', agent)).toBeDefined()
-  expect(await b.ctx.tools.execute({
+  expect(await executeToolFixture(b.ctx, {
     callId: ToolCallId('tencent-docs-load'), name: 'mcp__tencent-docs__load_tools', arguments: { tools: ['ping'] },
     signal: new AbortController().signal, agent,
   })).toMatchObject({ isError: false, value: 'Loaded: mcp__tencent-docs__ping.' })
