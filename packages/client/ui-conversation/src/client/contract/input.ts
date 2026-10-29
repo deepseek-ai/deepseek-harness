@@ -11,7 +11,7 @@ import type { SessionBinding } from '@deepseek-ai/dsh-api-session-controller/cli
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { ArbitrateKey, ArbitrateOutcome, Occurrence, ReferenceInsert, TokenSpan } from './draft-editor.ts'
+import type { ArbitrateKey, ArbitrateOutcome, DraftQuote, Occurrence, ReferenceInsert, TokenSpan } from './draft-editor.ts'
 import type { InputSubmitMode, MessageSubmission } from './composer-submission.ts'
 
 /** Attachment payload passed to a claimed command submission. */
@@ -299,7 +299,13 @@ export interface InputState {
   readonly attachmentIds: readonly DraftAttachmentId[]
   /** Monotonic editor revision (span CAS compares against this). */
   readonly draftRev: number
-  readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
+  /**
+   * Submit plane: `adjudicating` while a `/` line is checked against the
+   * commands, `submitting` while a claimed command runs, and `sending` while
+   * an ordinary message waits for the Host to accept it. The editor and the
+   * attachments are read-only in all three.
+   */
+  readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting' | 'sending'
   /** Present exactly while claimed/submitting (claim snapshot during flight; submit closure withheld). */
   readonly claim?: { readonly name: string; readonly token: string; readonly hint?: string; readonly attachments?: boolean }
   /** Reference occurrence view of the editor's chips, sorted by offset. */
@@ -311,16 +317,22 @@ export interface InputState {
 /**
  * One in-flight submission attempt: the ONLY id concept in the submit plane.
  * Created on enter; carried by adjudicated/submit-settled/sink-settled
- * events; stale attempts are dropped (anti-backwash). Command attempts hold
- * the single frozen in-flight slot; default-sink attempts run detached and
- * concurrently. release/session teardown aborts them all, keeping every
- * promise bounded.
+ * events; stale attempts are dropped (anti-backwash). Command and message
+ * attempts hold the single frozen in-flight slot, so the draft they carry is
+ * the one the user sent. release/session teardown aborts the attempt, keeping
+ * every promise bounded.
  */
 export interface SubmitAttempt {
   readonly seq: number
   readonly signal: AbortSignal
-  /** Clipboard-projection draft captured before an optimistic default-send commit. */
+  /** Clipboard-projection draft captured when the user sent. */
   readonly draftSnapshot: string
+  /** Reference chips of the sent draft, captured with it. */
+  readonly occurrences: readonly Occurrence[]
+  /** Quotes of the sent draft, captured with it. */
+  readonly quotes: readonly DraftQuote[]
+  /** Attachments of the sent draft, captured with it, in order. */
+  readonly attachmentIds: readonly DraftAttachmentId[]
   /** Default-message delivery intent retained while slash adjudication is pending. */
   readonly mode: InputSubmitMode
   /** Original message occurrence, retained across command arbitration. */
@@ -337,8 +349,16 @@ export type InputEvent =
   | { readonly type: 'draft-changed'; readonly command: CommandClaim | undefined }
   /** The editor inserted a command chip: enter claimed. */
   | { readonly type: 'claim'; readonly claim: CommandClaim }
-  /** Enter submission with the current clipboard projection. */
-  | { readonly type: 'enter'; readonly mode: InputSubmitMode; readonly draft: string; readonly submission?: MessageSubmission }
+  /** Enter submission with the current clipboard projection, its reference chips, its quotes, and its attachments. */
+  | {
+    readonly type: 'enter'
+    readonly mode: InputSubmitMode
+    readonly draft: string
+    readonly occurrences: readonly Occurrence[]
+    readonly quotes: readonly DraftQuote[]
+    readonly attachmentIds: readonly DraftAttachmentId[]
+    readonly submission?: MessageSubmission
+  }
   | { readonly type: 'adjudicated'; readonly attempt: SubmitAttempt; readonly outcome: PickOutcome }
   | { readonly type: 'adjudication-failed'; readonly attempt: SubmitAttempt; readonly message: string }
   /** Settlement carries the leading command chip's claim, which the claim follows after a failure. */
@@ -350,10 +370,8 @@ export type InputEvent =
     readonly outcome?: SubmitOutcome
     readonly message?: string
   }
-  /** Settlement of one optimistic default send, independent of the frozen command slot. */
+  /** Settlement of the message being sent: the Host accepted it, or refused it or failed. */
   | { readonly type: 'sink-settled'; readonly attempt: SubmitAttempt; readonly ok: boolean; readonly outcome?: SubmitOutcome; readonly message?: string }
-  /** Commit an attachment-only send whose empty draft did not need an attempt. */
-  | { readonly type: 'send-committed' }
   | { readonly type: 'release' }
 
 /**
@@ -363,7 +381,7 @@ export type InputEvent =
 export type InputEffect =
   | { readonly type: 'adjudicate'; readonly attempt: SubmitAttempt; readonly draft: string }
   | { readonly type: 'begin-submit'; readonly attempt: SubmitAttempt; readonly claim: CommandClaim; readonly args: string }
-  /** Detached default send; the shell captures its editor projection before the following commit effect. */
+  /** Send the attempt's frozen draft, references, and attachments as one ordinary message. */
   | {
     readonly type: 'default-sink'
     readonly attempt: SubmitAttempt
@@ -375,7 +393,7 @@ export type InputEffect =
    * Clear the committed draft in the editor and cut undo history. A string
    * snapshot keeps a pure suffix typed during the Host round-trip (content
    * appended after the sent snapshot survives; interleaved edits cannot be
-   * separated and clear whole); null clears unconditionally (attachment-only
-   * sends have no draft to retain).
+   * separated and clear whole); null clears unconditionally (an accepted
+   * message froze the editor, so nothing was typed after it).
    */
   | { readonly type: 'commit-draft'; readonly retainSuffixOf: string | null }

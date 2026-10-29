@@ -95,24 +95,37 @@ it.each([false, true])('keeps workspace and archived search actions reachable wi
   expect(await shortcut.count()).toBe(1)
   expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(hasTouch)
   expect(await shortcut.isVisible()).toBe(!hasTouch)
-  for (const key of ['ArrowDown', 'Tab']) {
+  if (hasTouch) {
+    await page.keyboard.press('Escape')
+    await page.setViewportSize({ width: 390, height: 900 })
+    await page.locator('[data-sidebar-drawer]').waitFor()
+    await page.locator('[data-shell-leading]').getByRole('button', { name: 'Open sidebar', exact: true }).tap()
+    await activate(actions)
+    await archive.waitFor()
+  }
+  for (const key of ['ArrowDown', 'Home']) {
     await page.keyboard.press(key)
     expect(await page.locator('html').getAttribute('data-input-modality')).toBe('keyboard')
     expect(await page.getByRole('menu').evaluate(menu => menu.contains(document.activeElement))).toBe(true)
     expect(await shortcut.isVisible()).toBe(true)
     if (hasTouch) {
-      await page.setViewportSize({ width: 390, height: 900 })
       await expect.poll(() => shortcut.evaluate((element) => {
         const bounds = element.getBoundingClientRect()
         return bounds.left >= 0 && bounds.right <= window.innerWidth
       })).toBe(true)
-      await page.setViewportSize({ width: 1280, height: 900 })
     }
     await page.keyboard.press('Escape')
     if (!hasTouch) await row.hover()
     await activate(actions)
     await archive.waitFor()
     expect(await shortcut.isVisible()).toBe(!hasTouch)
+  }
+  if (hasTouch) {
+    await page.keyboard.press('Escape')
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.locator('[data-sidebar-drawer]').waitFor({ state: 'detached' })
+    await activate(actions)
+    await archive.waitFor()
   }
   await activate(archive)
   await row.waitFor({ state: 'detached' })
@@ -224,19 +237,23 @@ it.each([false, true])('keeps actions and focus usable with touch=%s across layo
   await page.getByRole('tooltip').waitFor({ state: 'detached' })
   const blockedSplit = panel.locator('[data-dockkit-split-button]').last()
   expect(await blockedSplit.isDisabled()).toBe(true)
-  const hit = await blockedSplit.evaluate((button) => {
-    const bounds = button.getBoundingClientRect()
-    const x = bounds.x + bounds.width / 2
-    const y = bounds.y + bounds.height / 2
-    const target = document.elementFromPoint(x, y)
-    return { x, y, wrapperReceivesInput: target === button.parentElement, cursor: target && getComputedStyle(target).cursor }
-  })
-  expect(hit.wrapperReceivesInput).toBe(true)
-  expect(['auto', 'default']).toContain(hit.cursor)
-  // Coordinate input exercises CSS hit testing over the disabled button itself.
-  if (hasTouch) await page.touchscreen.tap(hit.x, hit.y)
-  else await page.mouse.click(hit.x, hit.y)
-  await page.getByRole('tooltip').filter({ hasText: 'Two panes is the limit' }).waitFor()
+  if (hasTouch) {
+    expect(await blockedSplit.isVisible()).toBe(false)
+    expect(await page.getByRole('tooltip').count()).toBe(0)
+  } else {
+    const hit = await blockedSplit.evaluate((button) => {
+      const bounds = button.getBoundingClientRect()
+      const x = bounds.x + bounds.width / 2
+      const y = bounds.y + bounds.height / 2
+      const target = document.elementFromPoint(x, y)
+      return { x, y, wrapperReceivesInput: target === button.parentElement, cursor: target && getComputedStyle(target).cursor }
+    })
+    expect(hit.wrapperReceivesInput).toBe(true)
+    expect(['auto', 'default']).toContain(hit.cursor)
+    // Coordinate input exercises CSS hit testing over the disabled button itself.
+    await page.mouse.click(hit.x, hit.y)
+    await page.getByRole('tooltip').filter({ hasText: 'Two panes is the limit' }).waitFor()
+  }
   expect(await panel.locator('[data-dockkit-pane]').count()).toBe(2)
   expect(consoleWatch.pageErrors).toEqual([])
 })

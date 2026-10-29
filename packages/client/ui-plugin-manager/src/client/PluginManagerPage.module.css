@@ -25,6 +25,12 @@
   color: var(--dsw-alias-label-primary);
 }
 
+@media (max-width: 767px) {
+  .page {
+    --plugin-page-inset: 20px;
+  }
+}
+
 .page > * {
   flex: none;
   width: 100%;
@@ -1575,6 +1581,11 @@ label.registryOption {
 
 .row:last-child {
   border-bottom: 0;
+}
+
+.detail[data-plugin-detail='@deepseek-ai/dsh-cua-bundle'] .facts div,
+.detail[data-plugin-detail='@deepseek-ai/dsh-cua-bundle'] .row {
+  border-bottom-color: var(--dsw-alias-border-l3);
 }
 
 .rowLine {

@@ -2,15 +2,16 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { cpSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import extractZip from 'extract-zip'
 import { x as extractTar } from 'tar'
 import { copyPrimaryRuntime, parsePrimaryRuntime, workspaceDependencyPaths, type PrimaryRuntimeManifest } from '@deepseek-ai/dsh-tool-workspace-dependencies'
+import { acceptsNpmPlatform } from '../npm-platform.ts'
 import lock from './lock.json' with { type: 'json' }
 import { prunePrimaryRuntimePythonTests } from './prune-python-tests.ts'
 
@@ -125,7 +126,7 @@ export function primaryRuntimePayloadDigest(
   // Identity preserves key order within the selected target, wheel records and distribution map, plus wheel-entry order.
   // Bump format when extraction or assembly changes payload bytes without changing locked inputs.
   return createHash('sha256').update(JSON.stringify({
-    format: 7, target, pythonVersion, pythonRelease, nodeVersion: pnpmVersion === undefined ? undefined : nodeVersion,
+    format: 8, target, pythonVersion, pythonRelease, nodeVersion: pnpmVersion === undefined ? undefined : nodeVersion,
     artifact: runtimeLock.targets[target], wheels, pythonPackages, pnpm: pnpmVersion,
   })).digest('hex')
 }
@@ -146,6 +147,29 @@ export async function unpackPrimaryRuntimeWheel(archive: string, destination: st
       }
     },
   })
+}
+
+/**
+ * Remove packages bundled directly under pnpm's dist/node_modules whose npm `os`/`cpu` fields exclude the target.
+ * The pnpm tarball carries every platform's optional native packages, such as `@reflink/reflink-darwin-x64`.
+ * Nested node_modules and the `libc` field are not inspected; pnpm 11 bundles neither nested native packages nor Linux variants.
+ * @param pnpm - Unpacked pnpm package directory.
+ * @param platform - Target Node.js platform.
+ * @param arch - Target Node.js architecture.
+ * @throws When a bundled package manifest is missing or has invalid `os`/`cpu` fields.
+ */
+export function prunePnpmForeignNativePackages(pnpm: string, platform: NodeJS.Platform, arch: NodeJS.Architecture): void {
+  const modules = join(pnpm, 'dist', 'node_modules')
+  const directories = (parent: string): string[] => readdirSync(parent, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && entry.name !== '.bin').map(entry => join(parent, entry.name))
+  for (const directory of directories(modules).flatMap(entry => basename(entry).startsWith('@') ? directories(entry) : [entry])) {
+    const { os, cpu } = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')) as { os?: unknown; cpu?: unknown }
+    let admitted: boolean
+    try { admitted = acceptsNpmPlatform(os, platform) && acceptsNpmPlatform(cpu, arch) } catch (error) {
+      throw new Error(`primary runtime: ${directory}/package.json: ${(error as Error).message}`, { cause: error })
+    }
+    if (!admitted) rmSync(directory, { recursive: true })
+  }
 }
 
 /**
@@ -195,6 +219,8 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
     const output = join(staging, 'payload')
     const dependencies = join(output, 'dependencies')
     mkdirSync(dependencies, { recursive: true })
+    const platform = target === 'win-x64' ? 'win32' : target.startsWith('linux-') ? 'linux' : 'darwin'
+    const arch = target.endsWith('-arm64') ? 'arm64' : 'x64'
     let pnpmVersion: string | undefined
     if (!options.pythonOnly) {
       const node = join(dependencies, 'node')
@@ -209,12 +235,13 @@ export async function preparePrimaryRuntime(options: PreparePrimaryRuntimeOption
         pnpmVersion = (JSON.parse(readFileSync(pnpmManifest, 'utf8')) as { version: string }).version
         await cp(dirname(pnpmManifest), join(dependencies, 'pnpm'), { recursive: true, dereference: true })
       }
+      prunePnpmForeignNativePackages(join(dependencies, 'pnpm'), platform, arch)
     }
     await extractTar({ file: await pythonArchive(target, paths.downloads), cwd: dependencies })
     const manifest: PrimaryRuntimeManifest = {
       desktopVersion: options.version,
-      platform: target === 'win-x64' ? 'win32' : target.startsWith('linux-') ? 'linux' : 'darwin',
-      arch: target.endsWith('-arm64') ? 'arm64' : 'x64',
+      platform,
+      arch,
       payloadDigest: primaryRuntimePayloadDigest(target, lock, pnpmVersion),
       python: lock.pythonVersion,
       ...(pnpmVersion === undefined ? {} : { node: lock.nodeVersion, pnpm: pnpmVersion }),

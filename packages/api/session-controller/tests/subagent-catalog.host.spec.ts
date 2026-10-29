@@ -105,7 +105,7 @@ describe('SessionController subagent catalog', () => {
       kind: 'sequenced', values: { subagentCatalog: [{ id: CHILD, mode: 'continuable', label: 'worker' }] },
     })
     expect(stat).toHaveBeenCalledWith(PARENT, { signal })
-    expect(observe).toHaveBeenCalledWith(PARENT, { signal })
+    expect(observe).toHaveBeenCalledWith(PARENT, { signal, projectionMode: 'all' })
     expect(open).toHaveBeenCalledWith(PARENT, 'read', { signal })
     expect(resume).not.toHaveBeenCalled()
     expect(ctx.sessions.get(PARENT)).toBeUndefined()

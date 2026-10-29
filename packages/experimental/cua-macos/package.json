@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-cua-macos",
   "description": "macOS native provider for shared Computer Use application and window objects",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -26,11 +26,16 @@
     "locale/*.json",
     "lib/index.js",
     "native/bin",
+    "cua-helper.json",
     "native/Package.swift",
+    "native/Info.plist",
+    "native/DSHComputerUse.icns",
+    "native/build_app.py",
     "native/Sources",
     "native/tests/swift",
     "native/tests/test_swift.py",
     "native/LICENSE.cua-driver",
+    "native/LICENSE.computer-use-icon",
     "native/upstream.json",
     "native/README.md",
     "native/README.zh.md",
@@ -85,10 +90,14 @@
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-config-editor": "workspace:*",
     "@deepseek-ai/dsh-hmr": "workspace:*",
-    "@deepseek-ai/cordis-plugin-timer": "workspace:~"
+    "@deepseek-ai/cordis-plugin-timer": "workspace:~",
+    "@deepseek-ai/dsh-storage": "workspace:*",
+    "@deepseek-ai/dsh-storage-json": "workspace:*",
+    "@deepseek-ai/dsh-storage-domain": "workspace:*"
   },
   "scripts": {
-    "build:native": "swift build --package-path native --configuration release"
+    "build:native": "xcrun python3 native/build_app.py",
+    "build:icon": "node native/generate_icon.mjs"
   },
   "os": [
     "darwin"

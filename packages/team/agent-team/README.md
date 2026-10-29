@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-agent-team` adds a durable shared task board to an existing subagent tree. Members use standard subagent tools to discover and contact one another. Team adds compare-and-set task ownership and signals all resident Agents in the tree after each task commit is flushed. Mount `dsh-tool-agent-team` for task tools. Members share one checkout.
+`dsh-agent-team` adds a durable shared task board to an existing subagent tree. Members use standard subagent tools to discover and contact one another. Team adds compare-and-set task ownership. Mount `dsh-tool-agent-team` for task tools. Members share one checkout.
 
 ## Table of Contents
 
@@ -63,7 +63,7 @@ Every root agent and its descendants form one Team. Task assignment accepts the 
 
 ### Messages between teammates
 
-Members use standard `list_agents` to discover the tree and `send_message` to contact another member by full agent path. The subagent runtime owns routing, sender attribution, and cold restoration. Task-board signals address all resident Agents in the same tree and never restore a cold member.
+Members use standard `list_agents` to discover the tree and `send_message` to contact another member by full agent path. The subagent runtime owns routing, sender attribution, and cold restoration.
 
 ### Shared task board
 
@@ -176,11 +176,11 @@ The model reads task views through task-tool results. Model-facing views identif
 
 #### Token effect
 
-Each task result adds a compact task view. Wait signals add no message text.
+Each task result adds a compact task view. Task updates add no inbox messages.
 
 #### KV Cache effect
 
-Task records stay outside model history. Task and wait results append after the reusable request prefix.
+Task records stay outside model history. Task results append after the reusable request prefix.
 
 ## Known Limitations and Deferred Work
 

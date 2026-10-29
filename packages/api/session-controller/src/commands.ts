@@ -7,12 +7,12 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, ModelSelection as AgentModelSelection } from '@deepseek-ai/dsh-agent'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import type {
-  AttachmentAdmissionPart, ImageAttachmentRef,
+  AttachmentAdmissionPart,
 } from '@deepseek-ai/dsh-attachment'
 import type { FileUploadReceiptId, StagedAttachment } from '@deepseek-ai/dsh-client-file-upload/types'
 import type {} from '@deepseek-ai/dsh-client-file-upload'
 import {
-  ReasoningEffortId, assistantStreamChunks, createUserMessage, freezeMessage,
+  ReasoningEffortId, createUserMessage, freezeMessage,
 } from '@deepseek-ai/dsh-llm'
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import { buildForkSeed } from '@deepseek-ai/dsh-session/fork'
@@ -26,7 +26,6 @@ import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import {
   ApiSessionAgentController,
   ApiSessionCwdConflict,
-  ApiSessionNotFound,
   ApiSessionPresetConflict,
   ApiSessionSubagentOwnership,
   apiSessionSubagentOwnershipError,
@@ -359,38 +358,13 @@ export class SessionCommandController {
   }
 
   /**
-   * Read one durable image after proving the Session log references it.
-   * @param request - Session and attachment identities used for authorization.
+   * Read one durable image using the supplied reference without consulting Session history.
+   * @param request - image reference and gateway permission scope; Session existence is not checked.
    * @returns the durable attachment reference and base64-encoded bytes.
    */
   async attachment(request: SessionAttachmentRequest): Promise<SessionAttachmentValue> {
-    let ref: ImageAttachmentRef | undefined
     try {
-      using observation = await this.ctx.sessionQuery.observeSession(request.sessionId, { projectionMode: 'none' })
-      if (observation.source === 'prepared' && observation.header.cwd === undefined) {
-        throw new ApiSessionNotFound(`session "${request.sessionId}" not found`)
-      }
-      ref = referencedImage(observation.events, String(request.attachmentId))
-    } catch (error) {
-      if (error instanceof ApiSessionNotFound
-        || (error instanceof SessionQueryError && error.code === 'SESSION_QUERY_SESSION_NOT_FOUND')) {
-        throw new RemoteError('session/not-found', error.message, { sessionId: request.sessionId })
-      }
-      throw new RemoteError(
-        'gateway/internal',
-        `attachment authorization unavailable for session "${request.sessionId}": ${String(error)}`,
-        {},
-      )
-    }
-    if (ref === undefined) {
-      throw new RemoteError(
-        'session/attachment-invalid',
-        'Image is not referenced by this session.',
-        { reason: 'ATTACHMENT_NOT_REFERENCED' },
-      )
-    }
-    try {
-      const stored = await this.ctx.attachments.readImage(ref)
+      const stored = await this.ctx.attachments.readImage(request.attachment)
       return {
         attachment: stored.ref,
         data: Buffer.from(stored.data).toString('base64'),
@@ -577,81 +551,4 @@ function hasPromptRequest(agent: Agent, requestId: SessionRequestId): boolean {
     const source = event.data.source
     return source.kind === 'user' && 'rpcId' in source && source.rpcId === requestId
   })
-}
-function imageBlockIn(
-  content: unknown,
-  match: (ref: ImageAttachmentRef) => boolean,
-): ImageAttachmentRef | undefined {
-  if (!Array.isArray(content)) return undefined
-  for (const value of content) {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) continue
-    const block = value as { readonly type?: unknown; readonly attachment?: unknown }
-    if (block.type === 'image' && typeof block.attachment === 'object' && block.attachment !== null) {
-      const ref = block.attachment as ImageAttachmentRef
-      if (match(ref)) return ref
-    }
-  }
-  return undefined
-}
-
-/** Read only first-party declared content fields; unknown event payloads stay opaque. */
-function imageInEvent(
-  event: SessionEvent,
-  match: (ref: ImageAttachmentRef) => boolean,
-): ImageAttachmentRef | undefined {
-  const data = event.data as {
-    readonly content?: unknown
-    readonly message?: { readonly content?: unknown }
-    readonly inserted?: unknown
-    readonly summary?: unknown
-    readonly rawOutput?: unknown
-  }
-  // First-party event payloads can be present without their producer plugin mounted.
-  const type: string = event.type
-  switch (type) {
-    case 'user/message':
-    case 'tool/ptc-dispatch':
-      return imageBlockIn(data.content, match)
-    case 'system/message':
-    case 'developer/message':
-    case 'tool/result':
-    case 'team/message/queued':
-      return imageBlockIn(data.message?.content, match)
-    case 'agent/inbox/spliced': {
-      const messages = data.inserted
-      if (!Array.isArray(messages)) return undefined
-      for (const message of messages as readonly unknown[]) {
-        if (typeof message !== 'object' || message === null || Array.isArray(message)) continue
-        const found = imageBlockIn((message as { readonly content?: unknown }).content, match)
-        if (found !== undefined) return found
-      }
-      return undefined
-    }
-    case 'compaction/summary':
-      return imageBlockIn(data.summary, match) ?? imageBlockIn(data.rawOutput, match)
-    case 'assistant/message': {
-      const found = imageBlockIn(data.message?.content, match)
-      if (found !== undefined) return found
-      break
-    }
-    case 'assistant/attempt': break
-    default: return undefined
-  }
-  const assistant = event as SessionEvent<'assistant/message' | 'assistant/attempt'>
-  for (const chunk of assistantStreamChunks(assistant.data.stream, 'block-end')) {
-    const found = imageBlockIn([chunk.block], match)
-    if (found !== undefined) return found
-  }
-  return undefined
-}
-
-function referencedImage(
-  events: readonly SessionEvent[],
-  attachmentId: string,
-): ImageAttachmentRef | undefined {
-  for (const event of events) {
-    const found = imageInEvent(event, ref => String(ref.attachmentId) === attachmentId)
-    if (found !== undefined) return found
-  }
-  return undefined
 }

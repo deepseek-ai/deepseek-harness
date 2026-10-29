@@ -67,7 +67,7 @@ describe('reference submission', () => {
     restored.setDraft(mirror.mock.calls.at(-1)?.[0] as string)
     restored.submit()
     await vi.waitFor(() => {
-      expect(sink).toHaveBeenCalledWith(spacedMention, [], 'queue', expect.any(AbortSignal))
+      expect(sink).toHaveBeenCalledWith(spacedMention, [], 'queue', expect.any(AbortSignal), expect.any(Function))
     })
   })
 
@@ -99,14 +99,12 @@ describe('reference submission', () => {
     })
 
     shell.submit('queue')
-    // Optimistic commit: the composer clears at enter and stays unlocked
-    // while the detached flight runs.
-    expect(shell.snapshot.phase).toBe('plain')
-    expect(shell.snapshot.draft).toBe('')
+    // The composer keeps the sent draft, read-only, until the Host answers.
+    expect(shell.snapshot).toMatchObject({ phase: 'sending', draft: `${mention} ` })
     await vi.waitFor(() => {
-      expect(shell.snapshot.draft).toBe(`${mention} `)
+      expect(shell.snapshot.phase).toBe('plain')
     })
-    expect(sink).toHaveBeenNthCalledWith(1, mention, [], 'queue', expect.any(AbortSignal))
+    expect(sink).toHaveBeenNthCalledWith(1, mention, [], 'queue', expect.any(AbortSignal), expect.any(Function))
     expect(shell.snapshot).toMatchObject({
       draft: `${mention} `,
       occurrences: [{ source: 'reference', ref: mention, label: 'Research', offset: 0, length: mention.length }],
@@ -117,10 +115,11 @@ describe('reference submission', () => {
     })
 
     shell.submit('queue')
-    expect(shell.snapshot.draft).toBe('')
+    expect(shell.snapshot).toMatchObject({ phase: 'sending', draft: `${mention} ` })
     await vi.waitFor(() => {
-      expect(sink).toHaveBeenNthCalledWith(2, mention, [], 'queue', expect.any(AbortSignal))
+      expect(shell.snapshot.draft).toBe('')
     })
+    expect(sink).toHaveBeenNthCalledWith(2, mention, [], 'queue', expect.any(AbortSignal), expect.any(Function))
     expect(shell.snapshot.occurrences).toEqual([])
     expect(serializeReference).toHaveBeenCalledTimes(2)
   })
@@ -140,10 +139,11 @@ describe('reference submission', () => {
     })
     chip(shell)
     shell.submit()
-    // The serializer rejection restores the optimistic commit with its chip.
+    // The serializer rejection settles the send as failed; the draft never left.
     await vi.waitFor(() => {
-      expect(shell.snapshot.draft).toBe(`${mention} `)
+      expect(shell.snapshot.phase).toBe('plain')
     })
+    expect(shell.snapshot.draft).toBe(`${mention} `)
     expect(sink).not.toHaveBeenCalled()
     expect(shell.snapshot.occurrences).toHaveLength(1)
     expect(shell.notices.getSnapshot()).toMatchObject({
@@ -168,9 +168,8 @@ describe('reference submission', () => {
     shell.dispose()
     expect(signal?.aborted).toBe(true)
     expect(shell.snapshot.phase).toBe('plain')
-    // The optimistic commit stands: disposal drops the settlement, so the
-    // sent draft is not restored into the dying composer.
-    expect(shell.snapshot.draft).toBe('')
+    // The Host never accepted the message, so the composer still holds it.
+    expect(shell.snapshot.draft).toBe('send this')
   })
 
   it('retains a rejected default message without duplicating its prompt error notice', async () => {
@@ -188,23 +187,24 @@ describe('reference submission', () => {
     expect(shell.notices.getSnapshot()).toBeNull()
   })
 
-  it('restores concurrent failed messages in submission order', async () => {
+  it('sends one message at a time and ignores Enter while the Host decides', async () => {
     const settlements: Array<(outcome: SubmitOutcome) => void> = []
+    const sink = vi.fn(() => new Promise<SubmitOutcome>((resolve) => { settlements.push(resolve) }))
     const shell = new SessionInputShell({
       actx: {} as Context,
-      defaultSink: () => new Promise<SubmitOutcome>((resolve) => { settlements.push(resolve) }),
+      defaultSink: sink,
       commandAttachments,
     })
     shell.setDraft('first')
     shell.submit()
-    shell.setDraft('second')
     shell.submit()
-    expect(shell.snapshot.draft).toBe('')
+    expect(sink).toHaveBeenCalledTimes(1)
+    expect(shell.snapshot).toMatchObject({ phase: 'sending', draft: 'first' })
+    expect(shell.requestDraftInitialization({ prompt: 'replacement', clearPreviousDraft: true })).toBe('blocked')
 
     settlements[0]?.({ kind: 'error' })
-    await vi.waitFor(() => { expect(shell.snapshot.draft).toBe('first') })
-    settlements[1]?.({ kind: 'error' })
-    await vi.waitFor(() => { expect(shell.snapshot.draft).toBe('first\n\nsecond') })
+    await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
+    expect(shell.snapshot.draft).toBe('first')
   })
 })
 
@@ -356,7 +356,7 @@ it.each(['handled', 'claim', 'message'] as const)('counts only a message after a
   } finally { shell.dispose() }
 })
 
-it('retains occurrence time and Session facts across arbitration and independent failed sends', async () => {
+it('retains occurrence time and Session facts across arbitration and failed sends', async () => {
   const pending = Promise.withResolvers<PickOutcome>()
   const submitted = vi.fn()
   const firstSend = Promise.withResolvers<SubmitOutcome>()
@@ -387,13 +387,14 @@ it('retains occurrence time and Session facts across arbitration and independent
     pending.resolve(undefined)
     await vi.waitFor(() => { expect(submitted).toHaveBeenCalledOnce() })
     expect(submitted).toHaveBeenLastCalledWith({ timestamp: 100, source: 'click', mode: 'steer', state: { running: true, runMode: 'plan', newSession: false } })
+    firstSend.resolve({ kind: 'error', text: 'first rejected' })
+    await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
     shell.setDraft('second')
     shell.actions.submit()
     expect(submitted).toHaveBeenLastCalledWith({ timestamp: 200, mode: 'queue', state: { running: false, runMode: 'default', newSession: false } })
     await vi.waitFor(() => { expect(sink).toHaveBeenCalledTimes(2) })
     secondSend.resolve({ kind: 'error', text: 'second rejected' })
-    firstSend.resolve({ kind: 'error', text: 'first rejected' })
-    await Promise.all([firstSend.promise, secondSend.promise])
+    await vi.waitFor(() => { expect(shell.snapshot.phase).toBe('plain') })
     expect(submitted).toHaveBeenCalledTimes(2)
   } finally {
     firstSend.resolve({ kind: 'success' })

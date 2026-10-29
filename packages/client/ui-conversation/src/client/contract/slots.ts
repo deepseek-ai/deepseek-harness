@@ -126,7 +126,7 @@ export type MessageImageLoader = ((attachment: ImageAttachmentRef) => Promise<st
 export interface MessageImagesOwnerProps {
   /** Durable references or submission-echo previews in source order. */
   images: readonly MessageImageSource[]
-  /** Session-authorized image URL loader for the durable arm. */
+  /** Gateway-authorized image URL loader for the durable arm. */
   loadImage: MessageImageLoader
   /** Horizontal placement inside the owning record. */
   align: 'start' | 'end'
@@ -475,6 +475,7 @@ export interface ConversationViewActionsOwnerProps {
 
 /** Business callbacks injected into the strict Session header. */
 export interface ConversationSessionHeaderInjected {
+  /** Open the clicked title's actions. */
   /** Package-owned View roster source bound only for the Conversation header. */
   readonly hooks: {
     readonly conversationViews: ObservableSnapshot<readonly ViewTab[]>

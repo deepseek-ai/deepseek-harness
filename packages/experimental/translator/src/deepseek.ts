@@ -72,8 +72,8 @@ function nativeOwner(ctx: Context, provider: PaidTranslationProvider): NativeOwn
   const entry = [...loader.entries()].find(row => row.options.id === directory.settingsNs && row.options.name === OWNER_PACKAGES[provider])
   if (entry?.fiber?.state !== FiberState.ACTIVE) return undefined
   return provider === 'deepseek-account'
-    ? { llm, fiber: entry.fiber, provider, config: entry.fiber.effectiveConfig as AccountNativeConfig }
-    : { llm, fiber: entry.fiber, provider, config: entry.fiber.effectiveConfig as OfficialNativeConfig }
+    ? { llm, fiber: entry.fiber.ctx.fiber, provider, config: entry.fiber.effectiveConfig as AccountNativeConfig }
+    : { llm, fiber: entry.fiber.ctx.fiber, provider, config: entry.fiber.effectiveConfig as OfficialNativeConfig }
 }
 
 function unchanged(ctx: Context, provider: PaidTranslationProvider, previous: EligibleOwner): NativeOwner | undefined {

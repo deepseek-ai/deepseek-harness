@@ -17,6 +17,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { allowAllAccessPlugin, SlotTestRuntime, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
+import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
 
 usePinnedBrowserLanguages('zh-CN')
@@ -74,6 +75,7 @@ async function bench(access: ClientAccessState, options: { ungroupedSession?: Se
     { 'sidebar.workspaces': { kind: 'single', scope: 'root' } } as never,
     SidebarFrame as never,
   )
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
   await runtime.mount({ inject: [...inject], apply })
   return runtime
 }
@@ -90,7 +92,12 @@ describe('Workspace header actions under the page access snapshot', () => {
       runtime.renderRoot()
       const header = await screen.findByRole('treeitem')
       expect(screen.queryByRole('button', { name: '在“Project”中新建会话' })).toBeNull()
-      expect(screen.queryByRole('button', { name: '工作区“Project”的操作' })).toBeNull()
+      expect(screen.getByRole('button', { name: '工作区“Project”的操作' })).toBeTruthy()
+      const target = { kind: 'workspace' as const, value: { workspaceId: WORKSPACE, path: '/projects/project', displayTitle: 'Project' } }
+      const deniedMenu = runtime.ctx.contextMenus.resolve(target)
+      await deniedMenu.ready
+      expect(deniedMenu.source.getSnapshot()).toEqual([])
+      deniedMenu.dispose()
       expect(header.getAttribute('draggable')).toBe('false')
 
       // The Workspace's own grant moves its actions; the global answer is never consulted for them.
@@ -106,6 +113,14 @@ describe('Workspace header actions under the page access snapshot', () => {
       expect(screen.getByRole('button', { name: '在“Project”中新建会话' })).toBeTruthy()
       expect(screen.getByRole('button', { name: '工作区“Project”的操作' })).toBeTruthy()
       expect(screen.getByRole('treeitem').getAttribute('draggable')).toBe('true')
+
+      const grantedMenu = runtime.ctx.contextMenus.resolve(target)
+      await grantedMenu.ready
+      expect(grantedMenu.source.getSnapshot().map(item => item.id)).toEqual(['workspace.rename/rename'])
+      act(() => { access.replace({ type: 'baseline', owner: false, grants: [] }) })
+      grantedMenu.select('workspace.rename/rename')
+      expect(screen.queryByRole('dialog')).toBeNull()
+      grantedMenu.dispose()
 
       // The owner's snapshot answers every action.
       act(() => { access.replace({ type: 'baseline', owner: true }) })

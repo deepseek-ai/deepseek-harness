@@ -76,7 +76,7 @@ export function leakedServices(ctx: Context, mount: Fiber): string[] {
        clearing it, so an own symbol always resolves; the guard exists only
        because the store's index signature is optional. */
     if (impl === undefined) continue
-    if (!withinFiber(impl.fiber, mount)) continue
+    if (!withinFiber(impl.ctx.fiber, mount)) continue
     if (rootIsolate[impl.name] === key) leaked.push(impl.name)
   }
   return leaked.sort((left, right) => left.localeCompare(right))
@@ -106,7 +106,7 @@ export function serviceForMount<K extends string & keyof Context>(
     /* v8 ignore next -- cordis deletes a store slot on disposal rather than clearing it */
     if (impl === undefined) continue
     if (impl.name !== name) continue
-    if (withinFiber(impl.fiber, mount.fiber)) return impl.value as Context[K]
+    if (withinFiber(impl.ctx.fiber, mount.fiber)) return impl.value as Context[K]
   }
   return undefined
 }

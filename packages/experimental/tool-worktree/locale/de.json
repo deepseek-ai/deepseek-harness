@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Git-Arbeitsbäume",
-    "description": "Lassen Sie den Agenten einen neuen Git-Zweig und Arbeitsbaum erstellen und fahren Sie dann dort fort.",
+    "description": "Bitten Sie um Arbeit auf einem neuen Branch, und der Agent erstellt einen separaten Git-Worktree und arbeitet dort weiter, während Ihr aktueller Checkout unverändert bleibt.",
     "detail": "docs/DETAIL.md"
   }
 }

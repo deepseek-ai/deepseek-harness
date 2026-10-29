@@ -86,7 +86,7 @@ function Applications({ title, apps, icons, onAction, label, disabled }: {
     <h4>{title}</h4>
     <ul className={css.apps}>{apps.map(app => <li key={app.id}>
       <div className={css.application} title={app.executablePath}>
-        {icons?.[app.executablePath] !== undefined ? <img src={icons[app.executablePath]} alt="" width={32} height={32} draggable={false} />
+        {app.executablePath !== undefined && icons?.[app.executablePath] !== undefined ? <img src={icons[app.executablePath]} alt="" width={32} height={32} draggable={false} />
           : <span className={css.iconPlaceholder} aria-hidden />}
         <strong>{app.name}</strong>
       </div>

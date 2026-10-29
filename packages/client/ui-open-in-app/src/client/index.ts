@@ -1,3 +1,6 @@
+import { IconFolderOpenOutlineRegular, IconCopyOutlineRegular, IconPanelLeftOutlineRegular, IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { ContextMenuApplicationIcon, registerContextMenus } from './context-menus.tsx'
+import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /**
  * Shared native opening controls for workspace directories, document previews,
  * delivery cards, and changed-file review. Directory choices persist in the browser;
@@ -20,12 +23,15 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/remote'
 import { OPEN_IN_APP_ICON_PREFIX_ROUTE } from '@deepseek-ai/dsh-host-open-in-app/shared'
 import { OpenInAppController } from './controller.ts'
+import { registerSessionReveal } from './session-reveal.tsx'
 import { OpenInAppAction, type OpenInAppActionInjected, type OpenInAppActionProps } from './OpenInAppAction.tsx'
 import { OpenInAppPathController } from './open-path.ts'
 import { OpenPathAction, type OpenPathInjected } from './OpenPathAction.tsx'
 import { FileRouteAction } from './FileRouteAction.tsx'
 import { OpenPathEmptyAction } from './OpenPathEmptyAction.tsx'
+import type { OpenTargetReporter } from './OpenTargetButton.tsx'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type OpenInAppKey } from './locales.ts'
+import { createOpenInAppToastSource, OpenInAppToast } from './open-toast.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -35,12 +41,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 export type { OpenInAppActionInjected, OpenInAppActionProps } from './OpenInAppAction.tsx'
-export type { OpenInAppPathAction, OpenInAppPathFailure, OpenInAppPathRemote } from './open-path.ts'
+export type { OpenInAppPathAction, OpenInAppPathRemote } from './open-path.ts'
+export type { OpenInAppOutcome, OpenInAppPathFailure } from './outcome.ts'
 export type { OpenPathActionProps, OpenPathInjected } from './OpenPathAction.tsx'
 export type { OpenPathEmptyActionProps } from './OpenPathEmptyAction.tsx'
 
 /** Required services: sessions, layout selection, the slot registry, copy, Remote calls, and shortcuts. */
-export const inject = ['sessions', 'slots', 'locale', 'remote', 'remote.session', 'shortcuts', 'layout']
+export const inject = ['contextMenus', 'sidebarRight', 'sidebarRightTabs', 'sessions', 'slots', 'locale', 'remote', 'remote.session', 'remote.workspaceFiles', 'shortcuts', 'layout']
 
 /**
  * Client plugin body: register dictionaries, workspace directory controls, and
@@ -53,6 +60,21 @@ export function apply(ctx: ClientContext): void {
   const paths = new OpenInAppPathController(ctx.remote)
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'open-in-app: dictionaries')
   const t = ctx.locale.bind(NS)
+  // Keep operation feedback visible after its initiating panel closes.
+  const announcement = createOpenInAppToastSource()
+  ctx.slots.inject('contextMenu.icon', function* () {
+    for (const [key, Icon] of Object.entries({
+      'open-in-app.reveal': IconFolderOpenOutlineRegular, 'open-in-app.copy': IconCopyOutlineRegular,
+      'open-in-app.sidebar': IconPanelLeftOutlineRegular, 'open-in-app.float': IconRightUpOutlineRegular,
+    })) yield ctx.slots.register({ name: 'contextMenu.icon', key }, Icon)
+    yield ctx.slots.register({ name: 'contextMenu.icon', key: 'open-in-app.application' }, ContextMenuApplicationIcon)
+  })
+  registerContextMenus(ctx, paths, t, controller, announcement.report)
+  registerSessionReveal(ctx, controller, t, announcement.report)
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay', id: 'open-in-app.toast', locale: NS,
+    inject: () => ({ hooks: announcement.hooks, dismiss: announcement.dismiss }),
+  }, OpenInAppToast))
   const target = () => {
     if (ctx.layout.panelInfo.getSnapshot().activePanelId !== null) return undefined
     const session = Object.values(ctx.sessions.list.getSnapshot().byId)
@@ -75,9 +97,7 @@ export function apply(ctx: ClientContext): void {
       const selected = target()
       if (selected === undefined) return { status: 'blocked', reason: t('shortcut.unavailable') }
       return { status: 'handled', run: () => {
-        void controller.launch(selected.appId, selected.path).catch((error: unknown) => {
-          console.warn('workspace open rejected:', error)
-        })
+        void controller.launch(selected.appId, selected.path).then(announcement.report)
       } }
     },
   }), 'open-in-app: workspace command')
@@ -89,6 +109,7 @@ export function apply(ctx: ClientContext): void {
       shortcuts: ctx.shortcuts.catalog,
     },
     launch: (appId, path) => controller.launch(appId, path),
+    report: announcement.report,
     choose: (appId) => { controller.choose(appId) },
     iconUrl: appId => `${OPEN_IN_APP_ICON_PREFIX_ROUTE}/${appId}`,
   })
@@ -113,6 +134,7 @@ export function apply(ctx: ClientContext): void {
     loadDesktop: () => paths.load(),
     openPath: (path, action, application) => paths.openPath(path, action, application),
     applications,
+    report: announcement.report,
   })
   ctx.slots.inject('sidebar.right.tab.document.actions', () => ctx.slots.register({
     name: 'sidebar.right.tab.document.actions',
@@ -126,10 +148,11 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: pathInjected,
   }, OpenPathEmptyAction))
+  const routeInjected = (): OpenTargetReporter => ({ report: announcement.report })
   ctx.slots.inject('deliverables.file.actions', () => ctx.slots.register({
-    name: 'deliverables.file.actions', id: 'open-in-app', locale: NS,
+    name: 'deliverables.file.actions', id: 'open-in-app', locale: NS, inject: routeInjected,
   }, FileRouteAction))
   ctx.slots.inject('deliverables.review.file.actions', () => ctx.slots.register({
-    name: 'deliverables.review.file.actions', id: 'open-in-app', locale: NS,
+    name: 'deliverables.review.file.actions', id: 'open-in-app', locale: NS, inject: routeInjected,
   }, FileRouteAction))
 }

@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-entry-customization",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "description": "Customize plugin entries in the left sidebar, conversation views, and right sidebar, and quickly create new plugins.",
   "publishConfig": { "access": "public" },
   "repository": {

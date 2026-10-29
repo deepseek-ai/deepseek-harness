@@ -1,5 +1,5 @@
 // Shared plumbing for the web smoke tests (dist location, free port, failure shots).
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
@@ -11,6 +11,17 @@ import { expect, vi, type MockInstance } from 'vitest'
 export const DIST_INDEX = fileURLToPath(new URL('../dist/index.html', import.meta.url))
 
 export const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url))
+
+/**
+ * Read the `meta.description` an experimental bundle's plugin page shows for one locale.
+ * @param bundle - Package directory under `packages/experimental`.
+ * @param locale - Locale resource name, such as `en` or `zh`.
+ * @returns The description text from `locale/<locale>.json`.
+ */
+export function experimentalBundleDescription(bundle: string, locale: string): string {
+  const resource = JSON.parse(readFileSync(join(REPO_ROOT, 'packages/experimental', bundle, 'locale', `${locale}.json`), 'utf8')) as { meta: { description: string } }
+  return resource.meta.description
+}
 
 const installationRequire = createRequire(join(REPO_ROOT, 'apps/cli/package.json'))
 
@@ -190,6 +201,23 @@ export function probeFreePort(): Promise<number> {
 }
 
 /**
+ * Open collapsed mobile navigation before using a sidebar action.
+ * @param page - browser page with the mounted sidebar.
+ * @param locale - current UI language.
+ */
+export async function revealNavigationDrawer(page: Page, locale: 'en' | 'zh' | 'ja'): Promise<void> {
+  const drawer = await page.evaluate(() => window.innerWidth < 768
+    && !document.documentElement.hasAttribute('data-windows-titlebar'))
+  await page.waitForFunction(expected => Boolean(document.querySelector('[data-sidebar-drawer]')) === expected, drawer)
+  const closed = page.locator('[data-sidebar-drawer][data-sidebar-collapsed]')
+  if (await closed.count() === 0) return
+  await page.locator('[data-shell-leading]').getByRole('button', {
+    name: { en: 'Open sidebar', zh: '打开侧边栏', ja: 'サイドバーを開く' }[locale], exact: true,
+  }).click()
+  await closed.waitFor({ state: 'detached' })
+}
+
+/**
  * Drive the hero's workspace picker through the composed directory dialog
  * until the live composer unlocks. A fresh world has no Workspace, so the boot
  * lands in the Workspace-trigger view state (startup auto-selection has nothing to
@@ -208,6 +236,7 @@ export function probeFreePort(): Promise<number> {
  */
 export async function connectFreshWorkspace(page: Page, root: string, name = 'workspace'): Promise<void> {
   mkdirSync(join(root, name), { recursive: true })
+  await revealNavigationDrawer(page, 'en')
   await page.getByRole('button', { name: 'Add workspace', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Select Workspace Directory' })
   await dialog.waitFor({ timeout: 10_000 })
@@ -234,6 +263,7 @@ export async function connectFreshWorkspace(page: Page, root: string, name = 'wo
  */
 export async function connectFreshWorkspaceZh(page: Page, root: string, name = 'workspace', modelAvailable = true): Promise<void> {
   mkdirSync(join(root, name), { recursive: true })
+  await revealNavigationDrawer(page, 'zh')
   await page.getByRole('button', { name: '添加工作区', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: '选择工作区目录' })
   await dialog.waitFor({ timeout: 10_000 })
@@ -335,6 +365,14 @@ export function conversationContextKey(kind: string, id: string): string {
  */
 export async function openSettings(page: Page, locale: 'en' | 'zh' | 'ja'): Promise<void> {
   const labels = { en: ['Account menu', 'Settings'], zh: ['账号菜单', '设置'], ja: ['アカウントメニュー', '設定'] } as const
-  await page.getByRole('button', { name: labels[locale][0], exact: true }).click()
+  const trigger = page.getByRole('button', {
+    name: labels[locale][0], exact: true, includeHidden: true,
+  })
+  await trigger.waitFor({ state: 'attached' })
+  await revealNavigationDrawer(page, locale)
+  if (!await trigger.isVisible()) {
+    await page.getByRole('button', { name: { en: 'Open sidebar', zh: '打开侧边栏', ja: 'サイドバーを開く' }[locale], exact: true }).click()
+  }
+  await trigger.click()
   await page.getByRole('menuitem', { name: labels[locale][1], exact: true }).click()
 }

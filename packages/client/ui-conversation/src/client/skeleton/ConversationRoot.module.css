@@ -224,6 +224,12 @@
   padding-left: 8px;
 }
 
+@media (max-width: 767px) {
+  :global(html:not([data-platform])) .tabs {
+    padding-left: 0;
+  }
+}
+
 .viewTabs {
   display: flex;
   flex-wrap: wrap;

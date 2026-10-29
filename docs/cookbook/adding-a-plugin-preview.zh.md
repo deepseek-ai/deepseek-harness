@@ -2,11 +2,11 @@
 
 [English](adding-a-plugin-preview.md) | 中文
 
-功能配图是位于组合包详细介绍文档顶部的可选插图；详细介绍文档是该组合包在**插件**中的页面最先显示的长描述。为官方组合包绘制配图时遵循本指引。详细介绍文档本身通过 [`meta.detail`](adding-a-package.zh.md#plugin-display-metadata) 声明。
+功能配图是组合包详细介绍文档中的可选插图；详细介绍文档是该组合包在**插件**中的页面显示在描述下方的文档。为官方组合包绘制配图时遵循本指引。详细介绍文档本身通过 [`meta.detail`](adding-a-package.zh.md#plugin-display-metadata) 声明。
 
 ## 1. 判断是否需要配图
 
-展示一个具体结果或容易辨认的能力。文字说明足够时省略配图：配图不是必需的。必要操作说明仍放在文档文字或图外的配置中。
+展示一个具体结果或容易辨认的能力。文字说明足够时省略配图：配图不是必需的。必要操作说明仍放在组合包描述或图外的配置中。
 
 ## 2. 绘制一张固定尺寸 SVG
 
@@ -21,15 +21,15 @@
 
 SVG 必须自包含：不使用字体、远程资源、脚本、事件处理器、动画、样式表、`text` 或 `foreignObject`。`image` 元素可以通过 base64 data URL 嵌入未改动的官方 PNG/JPEG/WebP 品牌素材。小插件图标仍仅使用几何图形。页面通过 `<img>` 渲染 SVG。每个文件都应控制大小；Host 会拒绝超过 plugin-manager 的 `detailImageMaxBytes`（默认 5 MiB）的图片。
 
-## 3. 放在详细介绍文档顶部
+## 3. 用它作为详细介绍文档
 
-将这对文件保存为组合包中的 `docs/preview.svg` 和 `docs/preview.zh.svg`，与 `docs/DETAIL.md` 和 `docs/DETAIL.zh.md` 放在一起，并把图片作为每份文档的第一行：
+将这对文件保存为组合包中的 `docs/preview.svg` 和 `docs/preview.zh.svg`，与 `docs/DETAIL.md` 和 `docs/DETAIL.zh.md` 放在一起，并把图片作为每份文档唯一的一行：
 
 ```markdown
 ![Example feature preview](preview.svg)
 ```
 
-中文文档引用 `preview.zh.svg`，并使用中文替代文字。可参考[徽章技能](../../packages/experimental/badge-skill-bundle/docs/DETAIL.md)和[语音输入](../../packages/experimental/voice-input-bundle/docs/DETAIL.md)文档。语音图中的转写文字是说明性示例，不是录音结果。
+中文文档引用 `preview.zh.svg`，并使用中文替代文字。可参考[徽章技能](../../packages/experimental/badge-skill-bundle/docs/DETAIL.md)和[语音输入](../../packages/experimental/voice-input-bundle/docs/DETAIL.md)文档。语音图中的转写文字是说明性示例，不是录音结果。组合包做什么、怎么用，按行为层面写在 `meta.description` 中，页面将其显示在配图上方。
 
 ## 4. 页面行为
 

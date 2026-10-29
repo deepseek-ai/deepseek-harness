@@ -9,7 +9,7 @@ import { IconGlobeOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { webCardModel, webFetchHref } from '../src/client/tool/models/web-card-model.ts'
 import { GenericToolCard } from '../src/client/tool/toolviews/GenericToolCard.tsx'
 import { WebRow, webToolview } from '../src/client/tool/toolviews/web-row.tsx'
-import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
@@ -166,7 +166,7 @@ describe('chat row web body', () => {
 
   it('the WebRow collapses to the summary row, expanding to the full search card', () => {
     const globe = render(<IconGlobeOutlineRegular />).container.querySelector('svg')!.outerHTML
-    const view = render(<WebRow {...rowProps(settledSearch(), 'web_search')} />)
+    const view = render(<WebRow {...rowProps(settledSearch(), 'web_search')} useContextMenu={contextMenuHook()} />)
     // Collapsed: the summary row alone, no card in the DOM.
     expect(view.getByText('网页搜索')).toBeTruthy()
     expect(view.container.querySelector('svg')?.outerHTML).toBe(globe)
@@ -181,7 +181,7 @@ describe('chat row web body', () => {
   })
 
   it('the WebRow expands to the fetch card, titled Fetch', () => {
-    const view = render(<WebRow {...rowProps(settledFetch(), 'web_fetch')} />)
+    const view = render(<WebRow {...rowProps(settledFetch(), 'web_fetch')} useContextMenu={contextMenuHook()} />)
     expect(view.getByText('网页获取')).toBeTruthy()
     expect(view.container.querySelector('[data-web]')).toBeNull()
     toggleRow(view)
@@ -192,7 +192,7 @@ describe('chat row web body', () => {
   })
 
   it('the collapsed WebRow summary opens the fetch URL in a new tab without expanding', () => {
-    const view = render(<WebRow {...rowProps(settledFetch(), 'web_fetch')} />)
+    const view = render(<WebRow {...rowProps(settledFetch(), 'web_fetch')} useContextMenu={contextMenuHook()} />)
     const link = view.getByRole('link', { name: 'https://example.com/page' })
     expect(link.getAttribute('href')).toBe('https://example.com/page')
     expect(link.getAttribute('target')).toBe('_blank')
@@ -205,12 +205,12 @@ describe('chat row web body', () => {
   })
 
   it('a failed web fetch keeps its plain error summary', () => {
-    const view = render(<WebRow {...rowProps(settledFetch({ isError: true }), 'web_fetch')} />)
+    const view = render(<WebRow {...rowProps(settledFetch({ isError: true }), 'web_fetch')} useContextMenu={contextMenuHook()} />)
     expect(view.queryByRole('link')).toBeNull()
   })
 
   it('a running web call is the summary row alone, with nothing to expand', () => {
-    const view = render(<WebRow {...rowProps(runningSearch(), 'web_search')} />)
+    const view = render(<WebRow {...rowProps(runningSearch(), 'web_search')} useContextMenu={contextMenuHook()} />)
     expect(view.getByText('网页搜索')).toBeTruthy()
     expect(view.queryByText('Titled')).toBeNull()
     // No card material and no expandable body: clicking the row reveals nothing.
@@ -221,7 +221,7 @@ describe('chat row web body', () => {
   it('a failed web call keeps the summary row without the card', () => {
     const view = render(<WebRow {...rowProps(settledSearch({
       isError: true,
-    }), 'web_search')} />)
+    }), 'web_search')} useContextMenu={contextMenuHook()} />)
     expect(view.getByText('网页搜索')).toBeTruthy()
     expect(view.container.querySelector('[data-web]')).toBeNull()
     // The row reflects the error state so the summary line still reads as failed.
@@ -232,7 +232,8 @@ describe('chat row web body', () => {
   it('the GenericToolCard fallback does not promote an unknown tool from metadata alone', () => {
     const view = render(<GenericToolCard {...ownerProps(settledSearch({
       call: { name: 'fx-web', argsRaw: SEARCH_ARGS },
-    }), 'fx-web')} t={t} />)
+    }), 'fx-web')} t={t}
+    getFileTriggerProps={() => ({})} />)
     toggleRow(view)
     expect(view.container.querySelector('[data-web]')).toBeNull()
     expect(view.getByText('search text')).toBeTruthy()
@@ -242,7 +243,8 @@ describe('chat row web body', () => {
     const view = render(<GenericToolCard {...ownerProps(settledSearch({
       call: { name: 'echo', argsRaw: '{}' },
       meta: undefined,
-    }), 'echo')} t={t} />)
+    }), 'echo')} t={t}
+    getFileTriggerProps={() => ({})} />)
     expect(view.container.querySelector('[data-web]')).toBeNull()
   })
 })

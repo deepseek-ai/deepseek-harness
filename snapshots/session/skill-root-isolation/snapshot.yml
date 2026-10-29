@@ -1,0 +1,10 @@
+version: 1
+scenario: skill-root-isolation
+profile: headless
+composition: default
+recording: authored
+header:
+  class: skill
+platform: posix
+workspace:
+  setup: skill-root-isolation

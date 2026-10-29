@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Ralph-Loops",
-    "description": "Führen Sie explizit angeforderte wiederholte Arbeiten mit neuen Agenten durch.",
+    "description": "Bitten Sie um eine Ralph-Schleife mit einem Ziel, und der Agent startet Runde um Runde einen neuen Agenten darauf, bis das Ziel erreicht ist, ein Hindernis gemeldet wird oder das Rundenlimit erreicht ist.",
     "detail": "docs/DETAIL.md"
   }
 }

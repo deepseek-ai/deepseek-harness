@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-agent-team` 为现有 subagent（子智能体）树添加持久化共享任务板。成员使用标准 subagent 工具发现和联系彼此。Team 提供比较并交换的任务归属更新，并在任务提交刷盘后向树中所有驻留 Agent 发出信号。挂载 `dsh-tool-agent-team` 可提供任务工具。成员共享同一检出目录。
+`dsh-agent-team` 为现有 subagent（子智能体）树添加持久化共享任务板。成员使用标准 subagent 工具发现和联系彼此。Team 提供比较并交换的任务归属更新。挂载 `dsh-tool-agent-team` 可提供任务工具。成员共享同一检出目录。
 
 ## 目录
 
@@ -63,7 +63,7 @@ kind: "package-reference"
 
 ### teammate 之间的消息
 
-成员通过标准 `list_agents` 发现整棵树，并通过 `send_message` 按完整 agent 路径联系另一成员。subagent 运行时负责路由、发送方归属和冷恢复。任务板信号面向同树所有驻留 Agent，绝不恢复冷成员。
+成员通过标准 `list_agents` 发现整棵树，并通过 `send_message` 按完整 agent 路径联系另一成员。subagent 运行时负责路由、发送方归属和冷恢复。
 
 ### 共享任务板
 
@@ -180,7 +180,7 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 
 #### KV Cache 影响
 
-任务记录保持在模型历史之外。任务和等待结果追加在可复用请求前缀之后。
+任务记录保持在模型历史之外。任务结果追加在可复用请求前缀之后。
 
 ## 已知限制与延期工作
 
@@ -192,7 +192,7 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 - **全量视图广播** — 每次任务变更向已连接浏览器发送完整的未删除任务板。
 - **单进程** — 成员可观察共享文件系统编辑；此包不提供 worktree、远程成员、合并或文件系统锁。
 - **write scope 仅作提示**——Bash、formatter、代码生成器与直接外部写入可以绕过文件版本检查；Lead 必须协调 owner 并检查最终 diff。
-- **通知仅到达本地在线成员** — 不恢复冷成员，空闲成员在被明确恢复前仍保持空闲。
+- **任务更新不会恢复成员** — 需要成员继续工作时发送明确消息。
 
 - **通信限定在一棵树内**——成员不能向无关 Team 发消息；只有祖先能中断后代。
 - **成员关系需要在线 Team 根**——中间创建者完成或释放后，成员保留 Team 身份；根缺失时不再属于活动 Team。

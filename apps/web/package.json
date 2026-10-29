@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web-frontend",
   "description": "Web application entry: vite build over the @deepseek-ai/dsh-client-web shell library; dist/ served by apps/cli's dsh web",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -72,7 +72,8 @@
     "@deepseek-ai/dsh-experimental-voice-input-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-cot-translation-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-worktree": "workspace:*",
-    "@deepseek-ai/dsh-experimental-plugin-market-bundle": "workspace:*"
+    "@deepseek-ai/dsh-experimental-plugin-market-bundle": "workspace:*",
+    "@deepseek-ai/dsh-experimental-forge-bundle": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/dsh-message-quotes": "workspace:*"

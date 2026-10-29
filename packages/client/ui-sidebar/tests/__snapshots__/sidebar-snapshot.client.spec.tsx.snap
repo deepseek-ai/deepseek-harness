@@ -16,6 +16,7 @@ exports[`sidebar shell snapshots > renders Windows caption controls in expanded 
       <button
         aria-label="Open sidebar"
         class="iconButton toggle"
+        data-sidebar-toggle="true"
         type="button"
       >
         <svg
@@ -158,6 +159,7 @@ exports[`sidebar shell snapshots > renders Windows caption controls in expanded 
       <button
         aria-label="Collapse sidebar"
         class="iconButton toggle"
+        data-sidebar-toggle="true"
         type="button"
       >
         <svg
@@ -244,6 +246,7 @@ exports[`sidebar shell snapshots > renders the collapsed rail after the crossfad
       <button
         aria-label="Open sidebar"
         class="iconButton toggle"
+        data-sidebar-toggle="true"
         type="button"
       >
         <span
@@ -404,6 +407,7 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
       <button
         aria-label="Collapse sidebar"
         class="iconButton toggle"
+        data-sidebar-toggle="true"
         type="button"
       >
         <svg
@@ -547,6 +551,7 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
       <button
         aria-label="收起侧边栏"
         class="iconButton toggle"
+        data-sidebar-toggle="true"
         type="button"
       >
         <svg

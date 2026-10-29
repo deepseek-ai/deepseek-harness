@@ -730,6 +730,7 @@ describe('Gateway forwarded events for non-owner Peers', () => {
     await expect(ownerEvents.next()).resolves.toMatchObject({ value: { type: 'ready', host: { home: '/fixture' } } })
     expect(ctx.typertGateway.hasLiveClient()).toBe(true)
 
+    expect(ctx.typertGateway.getPendingRemoteEvents()).toEqual([])
     const agentCtx = ctx.extend({})
     const subject = {}
     const settled = vi.fn()
@@ -745,6 +746,10 @@ describe('Gateway forwarded events for non-owner Peers', () => {
     push({ event: 'fixture/shelf', args: ['s2'], resources })
     push({ event: 'fixture/shelf', args: ['s1'], resources })
     await expect(ownerEvents.next()).resolves.toMatchObject({ value: { type: 'waterfall', event: 'fixture/ask' } })
+    const pending = ctx.typertGateway.getPendingRemoteEvents()
+    expect(pending).toEqual([{ event: 'fixture/ask', agentId: 'agent-1' }])
+    expect(pending).not.toBe(ctx.typertGateway.getPendingRemoteEvents())
+    expect(pending[0]).not.toBe(ctx.typertGateway.getPendingRemoteEvents()[0])
     await expect(ownerEvents.next()).resolves.toMatchObject({ value: { type: 'emit', event: 'fixture/notice' } })
     await expect(ownerEvents.next()).resolves.toMatchObject({ value: { type: 'emit', event: 'fixture/shelf', args: ['s2'] } })
     await expect(ownerEvents.next()).resolves.toMatchObject({ value: { type: 'emit', event: 'fixture/shelf', args: ['s1'] } })
