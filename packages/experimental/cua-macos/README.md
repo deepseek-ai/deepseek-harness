@@ -22,7 +22,7 @@ Inspect macOS permissions, select running applications and windows, read accessi
 
 The helper supplies bounded 64-pixel PNG application icons for permission prompts and saved-application lists. Icon reads do not launch an application or inspect its windows; icons do not determine reusable consent.
 
-The helper runs through LaunchServices as the independent background application `DSH Computer Use.app`. Accessibility and Screen Recording permissions belong to this application. The permission page uses its system-reported name and icon; when attribution is unavailable, the system prompt identifies the application.
+The helper runs through LaunchServices as the independent background application `DSH Computer Use.app`. Accessibility and Screen Recording permissions belong to this application. The permission page uses its system-reported name and icon; when attribution is unavailable, the system prompt identifies the application. When the helper is nested inside another `.app`, its launcher copies the complete signed bundle to `~/Library/Application Support/DeepSeek Harness/Computer Use/<runtime-key>/` before starting it. Each immutable generation is verified against the executable hash and application signature; earlier generations remain available for running installations. This keeps both macOS permission services attributed to the helper. A failed verification stops startup; remove the named cached generation before retrying.
 
 -----
 
