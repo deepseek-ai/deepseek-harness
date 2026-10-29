@@ -48,7 +48,7 @@ function mount(description: string | undefined = en.description, shortcut?: Guid
     ...standard,
     useShortcuts: <T,>(selector: (entries: readonly ShortcutCatalogEntry[]) => T): T => selector(shortcuts),
     entryId: 'new', kind: 'terminal', title: en.new, description, t: makeTranslate(en),
-    useTabInfo: () => ({ sidebar: { expanded: true, fullscreen: false }, panel: { id: 'pane-guide' as PaneId },
+    useTabInfo: () => ({ sidebar: { expanded: true, fullscreen: false }, panel: { id: 'pane-guide' as PaneId, isFloating: false },
       tab: { id: 'tab-guide' as TabId, kind: 'guide', contentId: 'sidebar://guide', title: 'Start',
         visible: true, signal: new AbortController().signal,
         navigation: { address: 'sidebar://guide', params: undefined, revision: 0 },

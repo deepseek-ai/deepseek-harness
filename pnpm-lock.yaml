@@ -6210,6 +6210,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-settings':
         specifier: workspace:*
         version: link:../ui-settings
+      '@deepseek-ai/dsh-client-ui-sidebar-files':
+        specifier: workspace:*
+        version: link:../ui-sidebar-files
       '@deepseek-ai/dsh-client-ui-sidebar-right':
         specifier: workspace:*
         version: link:../ui-sidebar-right

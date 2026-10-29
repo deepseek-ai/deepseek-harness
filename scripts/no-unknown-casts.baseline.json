@@ -643,7 +643,7 @@
     "1bbd18e22567ce0529d02b770533f9bda84ff379b161dda8b9548053a18a0e97": 1
   },
   "packages/client/ui-sidebar-files/tests/mount.client.tsx": {
-    "2caa9ae382deea09b4ac64586c1ab49bd935b1e689218e3d485bd7b918e22066": 2,
+    "2caa9ae382deea09b4ac64586c1ab49bd935b1e689218e3d485bd7b918e22066": 1,
     "684eae6dc3d4dbe526c5a5b11ebd84e35e335bebd519cf09c0f3a24ba9280fc1": 1
   },
   "packages/client/ui-sidebar-files/tests/watch.client.spec.ts": {

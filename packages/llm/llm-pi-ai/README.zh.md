@@ -140,6 +140,13 @@ Config 更新严格验证发生变化的 provider。初始加载将已存储的�
 
 初始提示词文本和可用工具分别使用 pi-ai 的 `Context.systemPrompt` 与 `Context.tools`；后续系统消息和工具更新保留在 `Context.messages` 中。pi-ai 负责规范化这些字段，并应用所选协议的序列化规则。
 
+<a id="request-headers"></a>
+### 请求头
+
+插件可通过同步的 `llm-pi-ai/request-headers` waterfall 贡献模型不可见的传输元数据。每次推理调用提供不可变的路由元数据（`PiAiRequestHeaderContext`）和从 profile 标头复制出的独立 `Headers`；配置名称仅大小写不同时，以最后一个条目为准。端点来自已准备的模型，因此并发调用与配置变更不会交换请求头状态。监听器修改该副本、调用 `next()`，并在返回时释放对它的引用；所属插件卸载时，`ctx.on()` 会移除注册。Harness 的应用标识在所有贡献器之后写入，pi-ai 接收独立的标头记录。
+
+该事件覆盖有无 Session id 的推理调用及辅助调用，不用于模型发现。贡献器异常或无效 HTTP 标头会在推理发送前以 `REQUEST_HEADERS` 使调用失败，不发送部分准备好的请求。失败信息包含 provider 和贡献器的顶层错误消息，该消息必须排除凭据与标头值。原生标头校验可能在 `TypeError` 中回显值，因此 TypeError 详情与非 Error 抛出值改用安全的排查提示；嵌套 cause 仍附在抛出的错误上，但不会复制到公开失败信息中。贡献不会改变消息、工具 schema 或 Session 日志。直接使用 `PiAiAdapter` 的调用方可提供等效的 `prepareHeaders` 回调。
+
 ### 源码地图
 
 | 文件 | 职责 |

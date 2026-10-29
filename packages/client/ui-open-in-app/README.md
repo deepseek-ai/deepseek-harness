@@ -45,6 +45,8 @@ Context menus contribute file preview, native application opening, original-file
 
 File menus copy absolute paths without line numbers; URL copying preserves query and fragment. Image files also expose image copy and original download, alongside the existing file actions. Successful downloads and saves show the shared Toast; picker cancellation is silent.
 
+A file menu offers “Open in sidebar” and “Open in floating panel”, which call `ctx.sidebarRight.openResourceIn` with `destination: 'sidebar'` or `'float'` and the target's line, never the pane the menu was raised in. A file already open in the requested place is revealed; one open in the other place moves there with its reading position, so the menu can move a preview between the docked column and a floating panel. Left-click opens files as before.
+
 -----
 
 <a id="understand-the-implementation"></a>
