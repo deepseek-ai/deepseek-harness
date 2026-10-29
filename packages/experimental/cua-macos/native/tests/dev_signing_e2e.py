@@ -46,6 +46,7 @@ def main():
                 subprocess.run(["/usr/bin/xcrun", "clang", "-o", str(root / "helper"), str(root / "main.c")], check=True)
                 executable = builder.publish(root / "helper", root / f"checkout-{status}", sha1, NATIVE / "Info.plist", "dev", keychain)
                 application = executable.parents[2]
+                assert application.name == "DSH Computer Use Dev.app", application
                 subprocess.run(["/usr/bin/codesign", "--verify", "--strict", str(application)], check=True)
                 info = plistlib.loads((application / "Contents/Info.plist").read_bytes())
                 assert info["CFBundleIdentifier"] == "com.deepseek.harness.computer-use.dev", info

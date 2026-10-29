@@ -25,7 +25,7 @@ kind: "package-reference"
 
 运行 `pnpm --dir packages/experimental/cua-macos run build:native`，在 `native/bin/darwin-<arch>` 下生成带签名的 `DSH Computer Use.app`，`current.json` 选择完整的内容摘要目录。默认使用临时签名；正式打包可传入 `--identity` 指定 Developer ID，并由发布流程完成公证。Host 运行应用内的 `--ensure-shared` 入口，经 LaunchServices 后台启动服务。最后一条连接完成清理后，服务退出。
 
-源码检出以 `--variant dev` 构建：应用声明的 Bundle ID 为 `com.deepseek.harness.computer-use.dev`，名称为 `DSH Computer Use Dev`，应用包文件名仍为 `DSH Computer Use.app`。默认的 `--signing ad-hoc` 不访问开发钥匙串。临时签名的指定要求包含代码哈希，因此二进制变化时可能需要重新授权，干净重建也可能产生这种变化。
+源码检出以 `--variant dev` 构建：应用声明的 Bundle ID 为 `com.deepseek.harness.computer-use.dev`，名称为 `DSH Computer Use Dev`，应用包文件名为 `DSH Computer Use Dev.app`。默认的 `--signing ad-hoc` 不访问开发钥匙串。临时签名的指定要求包含代码哈希，因此二进制变化时可能需要重新授权，干净重建也可能产生这种变化。
 
 在 provider 配置中选择 `sourceSigning: local-identity`，或给 `build_app.py` 传入 `--variant dev --signing local-identity`，即可创建或复用 `DSH Computer Use Dev (local)` 证书。初始化会把证书存入 `~/Library/Application Support/DeepSeek Harness/computer-use-dev-signing` 下的专用钥匙串，并将该钥匙串加入用户搜索列表。文件锁让不同 worktree 的初始化和移除串行执行。每次构建都用旁边仅所有者可读的密码文件解锁钥匙串。同一用户的任何进程都能读取该密码并用开发身份签名。指定要求包含 Bundle ID 和证书，不包含代码哈希；重新编译和切换 worktree 后实际能否保留权限，仍需在 macOS 上手动授权验证。
 
@@ -99,7 +99,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 `typeText` 和 `pressKey` 面向所选进程当前获得焦点的控件，不指定窗口。组合键先向 PID 发送修饰键变化，再发送主键，并逆序释放修饰键，不使用全局 HID 队列。后台鼠标操作可能改变键盘焦点。KP_0 和 KP_Enter 等数字键盘名称保留物理键码。文本逐个 Unicode 字符输入，不使用剪贴板。LF、CR 和 CRLF 发送一次 Return，制表符发送 Tab。应用保留缩进和焦点导航等正常编辑行为。每次按下和抬起后等待配置的文本事件间隔，分派完成不证明应用已消费全部事件。取消可能中断部分文本或手势，无法撤销已接收事件。很长的文本可能超过 Host 操作期限。继续输入前应核实应用状态。
 
-`DSH Computer Use.app` 需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
+所选 helper 应用需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
 
 仅供 Host 使用的权限操作为 `permissionStatus {}`、`requestPermission {permission}` 和 `openPermissionSettings {permission}`，其中 permission 为 `accessibility` 或 `screenRecording`。这些操作不出现在模型工具及 `getCapabilities.methods` 中。权限状态包含观察到的 helper 和父进程路径，这些路径不能确定 TCC 归属的应用。系统授权提示负责指出应用并询问用户决定。helper 使用可选的 libSystem 内部接口 `responsibility_get_pid_responsible_for_pid` 查询责任进程，在报告就绪前记录对应应用的名称和图标。接口通过动态加载解析，函数签名与 [Chromium](https://chromium.googlesource.com/chromium/src/+/refs/tags/134.0.6998.28/base/process/process_info_mac.mm) 使用的一致。符号、进程或应用信息不可用时，归属保持未知，不根据最近的 GUI 祖先推断。权限检查独立于这些信息。
 

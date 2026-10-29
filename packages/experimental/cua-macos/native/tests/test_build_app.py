@@ -95,6 +95,7 @@ class ReleasePublicationTests(PublicationCases, unittest.TestCase):
 
     def test_release_publication_keeps_info_plist_bytes_and_records_no_sources(self):
         first = self.publish()
+        self.assertEqual(first.parents[2].name, "DSH Computer Use.app")
         self.assertEqual((first.parents[1] / "Info.plist").read_text(), "application identity")
         self.assertEqual(sorted(path.name for path in self.output.iterdir()), sorted([first.parents[3].name, "current.json"]))
 
@@ -129,10 +130,22 @@ class DevelopmentPublicationTests(PublicationCases, unittest.TestCase):
         self.assertEqual(list(self.output.glob(".prepare-*")), [])
 
     def test_development_bundle_has_its_own_identifier_and_display_name(self):
-        info = plistlib.loads((self.publish().parents[1] / "Info.plist").read_bytes())
+        executable = self.publish()
+        self.assertEqual(executable.parents[2].name, "DSH Computer Use Dev.app")
+        info = plistlib.loads((executable.parents[1] / "Info.plist").read_bytes())
         self.assertEqual(info["CFBundleIdentifier"], "com.example.helper.dev")
         self.assertEqual((info["CFBundleName"], info["CFBundleDisplayName"]), ("DSH Computer Use Dev", "DSH Computer Use Dev"))
         self.assertEqual(info["CFBundleExecutable"], "dsh-cua-native")
+
+    def test_old_bundle_filename_is_republished_without_deleting_the_running_generation(self):
+        first = self.publish()
+        legacy = first.parents[2].with_name("DSH Computer Use.app")
+        first.parents[2].rename(legacy)
+        second = self.publish()
+        self.assertEqual(second.parents[2].name, "DSH Computer Use Dev.app")
+        self.assertTrue(second.is_file())
+        self.assertTrue((legacy / "Contents/MacOS/dsh-cua-native").is_file())
+        self.assertEqual(len(self.signings()), 2)
 
     def test_development_signing_uses_the_local_keychain_without_a_timestamp_server(self):
         self.publish()

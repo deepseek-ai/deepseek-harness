@@ -39,12 +39,14 @@ export interface NativeBuildSpec {
 /**
  * Resolve the immutable application selected by a packaged or source-build receipt.
  * @param directory - Architecture-specific directory containing current.json and application generations.
+ * @param variant - Development or release application filename selected by the build or installation.
  * @returns Executable inside the selected application bundle.
  * @throws When the receipt is invalid or the application executable is missing.
  */
-export async function nativeExecutablePath(directory: string): Promise<string> {
+export async function nativeExecutablePath(directory: string, variant: 'release' | 'dev'): Promise<string> {
   const receipt = NativeApplication.parse(JSON.parse(await readFile(join(directory, 'current.json'), 'utf8')))
-  const executable = join(directory, receipt.bundle, 'DSH Computer Use.app', 'Contents', 'MacOS', 'dsh-cua-native')
+  const application = variant === 'dev' ? 'DSH Computer Use Dev.app' : 'DSH Computer Use.app'
+  const executable = join(directory, receipt.bundle, application, 'Contents', 'MacOS', 'dsh-cua-native')
   await access(executable, constants.X_OK)
   return executable
 }
@@ -98,7 +100,7 @@ export async function buildNativeExecutable(spec: NativeBuildSpec): Promise<stri
       const diagnostics = `${handle.collected.stdout?.readFrom(0).text ?? ''}${handle.collected.stderr?.readFrom(0).text ?? ''}`
       throw new Error(`Computer use native preparation failed (${String(outcome.exitCode)}, ${String(outcome.signal)}): ${diagnostics}`)
     }
-    return nativeExecutablePath(directory)
+    return nativeExecutablePath(directory, 'dev')
   }, { waitMs: spec.timeoutMs, signal })
 }
 
@@ -109,7 +111,7 @@ export async function buildNativeExecutable(spec: NativeBuildSpec): Promise<stri
  */
 export async function prepareNativeExecutable(spec: NativeBuildSpec): Promise<string> {
   if (await isSourcePackage(spec.packageRoot)) return buildNativeExecutable(spec)
-  const executable = await nativeExecutablePath(join(spec.packageRoot, 'native', 'bin', `darwin-${spec.architecture}`))
+  const executable = await nativeExecutablePath(join(spec.packageRoot, 'native', 'bin', `darwin-${spec.architecture}`), 'release')
   spec.signal.throwIfAborted()
   return executable
 }

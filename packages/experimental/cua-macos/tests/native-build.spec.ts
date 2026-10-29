@@ -7,9 +7,9 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { buildNativeExecutable, isSourcePackage, nativeExecutablePath, nativeHostArchitecture, prepareNativeExecutable } from '../src/native-build.ts'
 
-async function publish(directory: string, bytes: Buffer): Promise<string> {
+async function publish(directory: string, bytes: Buffer, variant: 'release' | 'dev'): Promise<string> {
   const bundle = createHash('sha256').update(bytes).digest('hex')
-  const executable = join(directory, bundle, 'DSH Computer Use.app', 'Contents/MacOS/dsh-cua-native')
+  const executable = join(directory, bundle, variant === 'dev' ? 'DSH Computer Use Dev.app' : 'DSH Computer Use.app', 'Contents/MacOS/dsh-cua-native')
   await mkdir(dirname(executable), { recursive: true })
   await writeFile(executable, bytes, { mode: 0o755 })
   await writeFile(join(directory, 'current.json'), JSON.stringify({ bundle }))
@@ -36,7 +36,7 @@ async function fixture(diagnostics = true) {
     done: (async () => {
       await beforeExit()
       if (outcome.exitCode === 0 && !request.signal?.aborted) {
-        await publish(request.argv[request.argv.indexOf('--output-directory') + 1]!, output)
+        await publish(request.argv[request.argv.indexOf('--output-directory') + 1]!, output, 'dev')
       }
       return outcome
     })(), terminate, waitForExit,
@@ -73,7 +73,7 @@ it('builds the development variant and returns its executable only after the man
   const f = await fixture()
   const path = await buildNativeExecutable(f.spec)
   expect(await readFile(path)).toEqual(f.output)
-  expect(path).toContain(join('DSH Computer Use.app', 'Contents', 'MacOS'))
+  expect(path).toContain(join('DSH Computer Use Dev.app', 'Contents', 'MacOS'))
   expect(f.spawn.mock.calls[0]![0].argv).toEqual([
     '/usr/bin/xcrun', 'python3', join(f.spec.packageRoot, 'native/build_app.py'),
     '--scratch-path', join(f.spec.packageRoot, 'native/.build/runtime-arm64'),
@@ -94,7 +94,7 @@ it('checks source builds on activation and maps Intel architecture to the compil
 
 it('ignores local-identity for an installed application without compiling or re-signing it', async () => {
   const f = await fixture()
-  const path = await publish(join(f.spec.packageRoot, 'native/bin/darwin-arm64'), f.output)
+  const path = await publish(join(f.spec.packageRoot, 'native/bin/darwin-arm64'), f.output, 'release')
   expect(await prepareNativeExecutable({ ...f.spec, sourceSigning: 'local-identity' })).toBe(path)
   expect(f.spawn).not.toHaveBeenCalled()
   f.controller.abort()
@@ -105,14 +105,20 @@ it.each(['../outside', '/absolute', '', 'a'.repeat(63), 'A'.repeat(64)])('reject
   const f = await fixture()
   await mkdir(f.directory, { recursive: true })
   await writeFile(join(f.directory, 'current.json'), JSON.stringify({ bundle }))
-  await expect(nativeExecutablePath(f.directory)).rejects.toThrow()
+  await expect(nativeExecutablePath(f.directory, 'dev')).rejects.toThrow()
 })
 
 it('refuses a missing executable selected by an otherwise valid receipt', async () => {
   const f = await fixture()
-  const path = await publish(f.directory, f.output)
+  const path = await publish(f.directory, f.output, 'dev')
   await rm(path)
-  await expect(nativeExecutablePath(f.directory)).rejects.toMatchObject({ code: 'ENOENT' })
+  await expect(nativeExecutablePath(f.directory, 'dev')).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it('refuses a release-named application selected by a development receipt', async () => {
+  const f = await fixture()
+  await publish(f.directory, f.output, 'release')
+  await expect(nativeExecutablePath(f.directory, 'dev')).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
 it('preserves the previous generation when preparation fails and reports diagnostics', async () => {
@@ -120,7 +126,7 @@ it('preserves the previous generation when preparation fails and reports diagnos
   const path = await buildNativeExecutable(f.spec)
   f.setOutcome({ exitCode: 1, signal: null })
   await expect(buildNativeExecutable(f.spec)).rejects.toThrow('compiler diagnostic')
-  expect(await nativeExecutablePath(f.directory)).toBe(path)
+  expect(await nativeExecutablePath(f.directory, 'dev')).toBe(path)
   f.setOutcome({ exitCode: null, signal: 'SIGTERM' })
   await expect(buildNativeExecutable(f.spec)).rejects.toThrow('SIGTERM')
 })

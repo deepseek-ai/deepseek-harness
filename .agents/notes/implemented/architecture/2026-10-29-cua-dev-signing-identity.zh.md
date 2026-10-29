@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-Host 以开发版构建源码检出，Bundle ID 为 `com.deepseek.harness.computer-use.dev`，名称为 `DSH Computer Use Dev`。正式版及其打包流程不变。按[共享 helper 决策](2026-10-09-cua-shared-native-helper.zh.md)的要求，授权仍归经 LaunchServices 启动的 helper 应用。
+Host 以开发版构建源码检出，Bundle ID 为 `com.deepseek.harness.computer-use.dev`，名称为 `DSH Computer Use Dev`，应用包文件名为 `DSH Computer Use Dev.app`。macOS 隐私列表和 helper 返回的启动应用名称使用应用包文件名，因此文件名也需包含 Dev。正式版及其打包流程不变。按[共享 helper 决策](2026-10-09-cua-shared-native-helper.zh.md)的要求，授权仍归经 LaunchServices 启动的 helper 应用。
 
 `sourceSigning` 默认为 `ad-hoc`，不读取已有身份或修改钥匙串。显式选择 `local-identity` 后，构建自动初始化或复用本机身份。初始化在专用钥匙串中创建自签名代码签名证书，把随机钥匙串密码保存在旁边仅所有者可读的文件中，通过密钥分区列表允许 `codesign` 使用私钥，并把该钥匙串加入用户钥匙串搜索列表。`codesign` 只从这个列表查找签名身份。固定身份构建每次签名前都用保存的密码解锁钥匙串，避免密码或密钥访问窗口。跨进程文件锁串行化不同 worktree 的初始化和移除，防止并发创建不同证书。签名得到的指定要求只包含 Bundle ID 和证书，同一台机器上签出的所有构建都相同，与代码哈希和路径无关。
 

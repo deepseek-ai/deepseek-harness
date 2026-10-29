@@ -44,9 +44,9 @@ def application_info(plist, variant):
     return plistlib.dumps(info)
 
 
-def retained(output, key):
+def retained(output, key, name):
     """Return a published generation after checking that its bytes still match its name."""
-    application = output / key / "DSH Computer Use.app"
+    application = output / key / name
     if not application.exists():
         return None
     if bundle_digest(application) != key:
@@ -54,11 +54,11 @@ def retained(output, key):
     return application
 
 
-def select(output, temporary, key):
+def select(output, temporary, key, name):
     receipt = Path(temporary) / "current.json"
     receipt.write_text(json.dumps({"bundle": key}) + "\n")
     os.replace(receipt, output / "current.json")
-    return output / key / "DSH Computer Use.app/Contents/MacOS/dsh-cua-native"
+    return output / key / name / "Contents/MacOS/dsh-cua-native"
 
 
 def publish(binary, output, identity, plist, variant="release", keychain=None):
@@ -69,7 +69,8 @@ def publish(binary, output, identity, plist, variant="release", keychain=None):
     """
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".prepare-", dir=output) as temporary:
-        staged = Path(temporary) / "DSH Computer Use.app"
+        name = f"{DEV_DISPLAY_NAME}.app" if variant == "dev" else "DSH Computer Use.app"
+        staged = Path(temporary) / name
         executable = staged / "Contents/MacOS/dsh-cua-native"
         executable.parent.mkdir(parents=True)
         shutil.copy2(binary, executable)
@@ -86,8 +87,8 @@ def publish(binary, output, identity, plist, variant="release", keychain=None):
             index = output / "sources" / source
             if index.is_file():
                 key = index.read_text().strip()
-                if retained(output, key) is not None:
-                    return select(output, temporary, key)
+                if retained(output, key, name) is not None:
+                    return select(output, temporary, key, name)
         command = ["/usr/bin/codesign", "--force", "--sign", identity, "--options", "runtime",
                    "--timestamp=none" if identity == "-" or variant == "dev" else "--timestamp"]
         if keychain is not None:
@@ -97,7 +98,7 @@ def publish(binary, output, identity, plist, variant="release", keychain=None):
         key = bundle_digest(staged)
         generation = output / key
         application = generation / staged.name
-        if retained(output, key) is None:
+        if retained(output, key, name) is None:
             generation.mkdir(exist_ok=True)
             try:
                 staged.rename(application)
@@ -110,7 +111,7 @@ def publish(binary, output, identity, plist, variant="release", keychain=None):
             entry = Path(temporary) / "source"
             entry.write_text(key + "\n")
             os.replace(entry, index)
-        return select(output, temporary, key)
+        return select(output, temporary, key, name)
 
 
 def load_dev_signing():

@@ -9,7 +9,7 @@ description: "源码构建的 Computer Use helper 使用独立的开发版 Bundl
 
 ## 变更
 
-此前源码检出构建的 `DSH Computer Use.app` 使用正式版 Bundle ID `com.deepseek.harness.computer-use` 和临时签名。现在构建的是 `DSH Computer Use Dev`，Bundle ID 为 `com.deepseek.harness.computer-use.dev`。旧条目上的辅助功能和屏幕录制授权不适用于它。桌面端和 npm 安装版不变。
+此前源码检出构建的 `DSH Computer Use.app` 使用正式版 Bundle ID `com.deepseek.harness.computer-use` 和临时签名。现在构建的是 `DSH Computer Use Dev.app`，Bundle ID 为 `com.deepseek.harness.computer-use.dev`。旧条目上的辅助功能和屏幕录制授权不适用于它。桌面端和 npm 安装版不变。
 
 ## 迁移
 

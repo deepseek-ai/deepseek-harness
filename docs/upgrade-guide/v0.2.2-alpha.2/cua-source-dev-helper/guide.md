@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-Source checkouts previously built `DSH Computer Use.app` with the release bundle identifier `com.deepseek.harness.computer-use` and an ad-hoc signature. They now build `DSH Computer Use Dev` with bundle identifier `com.deepseek.harness.computer-use.dev`. Accessibility and Screen Recording grants for the old entry do not apply to it. Desktop and npm installations are unchanged.
+Source checkouts previously built `DSH Computer Use.app` with the release bundle identifier `com.deepseek.harness.computer-use` and an ad-hoc signature. They now build `DSH Computer Use Dev.app` with bundle identifier `com.deepseek.harness.computer-use.dev`. Accessibility and Screen Recording grants for the old entry do not apply to it. Desktop and npm installations are unchanged.
 
 ## Migration
 
