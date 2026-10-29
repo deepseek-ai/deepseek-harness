@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Solicitudes de cambio y árboles de trabajo",
+    "description": "Siga las solicitudes de cambio de cada sesión con sus comprobaciones y revisiones, e inicie nuevas sesiones en un árbol de trabajo de Git; usa la CLI gh para GitHub."
+  }
+}

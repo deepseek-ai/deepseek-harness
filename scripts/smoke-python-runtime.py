@@ -21,6 +21,7 @@ import tempfile
 import threading
 import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Literal
@@ -47,6 +48,7 @@ MCP_TEXT = "MCP client smoke ok"
 PROFILE_PLUGIN_PROMPT = "Verify the Python-installed dsh profile plugin."
 PROFILE_PLUGIN_TEXT = "profile plugin smoke ok"
 PROFILE_PLUGIN_MARKER = "PYTHON_INSTALLED_DSH_PROFILE_PLUGIN"
+PLUGIN_INSTALL_PROMPT = "Install SDK bundle: "
 AUTHORING_PROMPT = "Query the packaged Python environment for Office authoring."
 IS_WINDOWS = sys.platform == "win32"
 MINIMAL_SHELL_TOOL = "pwsh" if IS_WINDOWS else "bash"
@@ -91,6 +93,7 @@ LEGACY_CUSTOM_DISABLED_ROWS = (
     "tool-fs",
     "tool-fs-search",
     "tool-goal",
+    "tool-plugin-manager",
     "tool-schedule",
     "tool-skill",
     "tool-str-replace-editor",
@@ -378,6 +381,32 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         result = tool_results[-1]
         call_id, tool_name = latest_tool_call(messages, result.get("tool_use_id"))
         tool_text = message_text(result.get("content"))
+        if call_id == "python-plugin-managed-install" and tool_name == "plugin_manager":
+            if result.get("is_error"):
+                if "rejected" not in tool_text.lower():
+                    raise AssertionError(f"unexpected plugin approval failure: {tool_text}")
+                return text_chunks("plugin installation rejected")
+            outcome = json.loads(tool_text)
+            if (not outcome.get("changed") or outcome.get("application") != "restart-required"
+                    or outcome.get("restartReason") != "no-hmr"
+                    or outcome.get("packageResult", {}).get("exitCode") != 0):
+                raise AssertionError(f"approved package installation failed: {outcome}")
+            if PROFILE_PLUGIN_MARKER in json.dumps(messages):
+                raise AssertionError("installed plugin became active before the SDK runtime restarted")
+            return text_chunks("plugin installation saved")
+        if call_id == "python-plugin-install" and tool_name == "plugin_manager":
+            outcome = json.loads(tool_text)
+            if outcome.get("changed") or outcome.get("application") != "failed":
+                raise AssertionError(f"package operation unexpectedly succeeded without pnpm: {outcome}")
+            package = outcome.get("packageResult", {})
+            error = outcome.get("error", {})
+            diagnostic = error.get("diagnostic", "")
+            # cmd.exe reports 1 for a missing command; POSIX spawn reports 127.
+            if (package.get("exitCode") != (1 if IS_WINDOWS else 127)
+                    or error.get("code") != "operation-error" or "pnpm" not in diagnostic
+                    or diagnostic not in package.get("output", "")):
+                raise AssertionError(f"missing pnpm diagnostic was not preserved: {outcome}")
+            return text_chunks(EXPECTED_TEXT)
         if tool_name == "load_workspace_dependencies":
             if result.get("is_error") or "python" not in json.loads(tool_text):
                 raise AssertionError(f"packaged Python query failed: {tool_text}")
@@ -447,11 +476,24 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         PROFILE_PLUGIN_PROMPT,
         AUTHORING_PROMPT,
         DYNAMIC_TOOLS_PROMPT,
+        "check missing plugin package manager",
     }
     prompt = next(
         (candidate for candidate in user_prompts if candidate in scenario_prompts),
         message_text(latest.get("content")),
     )
+    if prompt.startswith(PLUGIN_INSTALL_PROMPT):
+        assert_advertised_tool(body, "plugin_manager")
+        target, _ = json.JSONDecoder().raw_decode(prompt.removeprefix(PLUGIN_INSTALL_PROMPT))
+        assert isinstance(target, str), target
+        return tool_call_chunks("python-plugin-managed-install", "plugin_manager", {
+            "action": "install_bundle", "target": target,
+        })
+    if prompt == "check missing plugin package manager":
+        assert_advertised_tool(body, "plugin_manager")
+        return tool_call_chunks("python-plugin-install", "plugin_manager", {
+            "action": "install_bundle", "target": "@deepseek-ai/dsh-subagent-codex",
+        })
     if prompt == SNAPSHOT_DIRECT_CHILD_PROMPT:
         return text_chunks("DIRECT_CHILD_OK")
     if prompt == AUTHORING_PROMPT:
@@ -476,6 +518,7 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         return text_chunks(RESUME_TEXT)
     if prompt == DYNAMIC_TOOLS_PROMPT:
         assert_advertised_tool(body, "read")
+        assert_advertised_tool(body, "plugin_manager")
         if "snapshot_ping" in advertised_tool_names(body):
             raise AssertionError("dynamic tool was registered before its enabling read")
         return tool_call_chunks("python-dynamic-read", "read", {"file_path": "dynamic-tool-task.txt"})
@@ -809,7 +852,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--scenario",
-        choices=("all", "sdk-default", "sdk-custom", "sdk-minimal", "sdk-minimal-in-history", "sdk-dynamic-tools", "sdk-fs-search", "sdk-spawn-node", "sdk-mcp", "sdk-snapshot", "sdk-recovery", "sdk-restart", "sdk-profile-plugin", "sdk-office", "sdk-authoring", "sdk-live", "runner", "direct"),
+        choices=("all", "sdk-default", "sdk-custom", "sdk-minimal", "sdk-minimal-in-history", "sdk-dynamic-tools", "sdk-fs-search", "sdk-spawn-node", "sdk-mcp", "sdk-snapshot", "sdk-recovery", "sdk-restart", "sdk-profile-plugin", "sdk-plugin-manager", "sdk-office", "sdk-authoring", "sdk-live", "runner", "direct"),
         default="all",
     )
     parser.add_argument("--exe", type=Path)
@@ -828,7 +871,7 @@ def main() -> None:
         parser.error("--scenario sdk-profile-plugin requires --installed-wheel")
     if args.installed_wheel:
         args.exe = assert_installed_wheel_environment()
-    if args.scenario in {"all", "sdk-custom", "sdk-minimal", "sdk-minimal-in-history", "sdk-dynamic-tools", "sdk-fs-search", "sdk-spawn-node", "sdk-snapshot", "sdk-recovery", "sdk-restart", "sdk-office", "sdk-authoring", "runner", "direct"} and args.exe is None:
+    if args.scenario in {"all", "sdk-custom", "sdk-minimal", "sdk-minimal-in-history", "sdk-dynamic-tools", "sdk-fs-search", "sdk-spawn-node", "sdk-snapshot", "sdk-recovery", "sdk-restart", "sdk-office", "sdk-authoring", "sdk-plugin-manager", "runner", "direct"} and args.exe is None:
         parser.error("--exe is required for custom, minimal, dynamic-tools, fs-search, spawn-node, snapshot, recovery, restart, office, runner, and direct scenarios")
     if args.update_snapshots and args.scenario not in {"all", "sdk-minimal", "sdk-minimal-in-history", "sdk-dynamic-tools", "sdk-snapshot", "sdk-recovery", "sdk-restart", "sdk-authoring"}:
         parser.error("--update-snapshots requires --scenario sdk-minimal, sdk-minimal-in-history, sdk-dynamic-tools, sdk-snapshot, sdk-recovery, sdk-restart, sdk-authoring, or all")
@@ -855,6 +898,12 @@ def main() -> None:
         return
 
     with MockModel() as model:
+        if args.scenario == "sdk-plugin-manager":
+            assert args.exe is not None
+            with tempfile.TemporaryDirectory(prefix="dsh-sdk-plugin-cache-") as cache:
+                subprocess.run([str(args.exe.resolve())], check=True, capture_output=True, text=True,
+                               env={**os.environ, "DSH_RESOURCE_CACHE": cache, "DSH_RUNTIME_DOWNLOAD": "primary"})
+                smoke_sdk_plugin_manager(model.url, args.exe.resolve(), Path(cache))
         if args.scenario in {"all", "sdk-authoring"}:
             assert args.exe is not None
             smoke_sdk_authoring(model.url, args.exe.resolve(), args.update_snapshots)
@@ -980,7 +1029,78 @@ def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshot
                     update_snapshots, AUTHORING_SNAPSHOT_DIRECTORY,
                     ("model-visible.json",),
                 )
+    smoke_sdk_plugin_manager(base_url, executable, cache)
     print("smoke-python-runtime: bundled Python, default skills, replacement and disabled skills passed")
+
+
+def smoke_sdk_plugin_manager(base_url: str, executable: Path, cache: Path) -> None:
+    """Approve a real local installation with bundled pnpm, then load it after restart."""
+    from deepseek_harness import ApprovalRequestParams, DeepSeekHarness
+
+    with tempfile.TemporaryDirectory(prefix="dsh-sdk-plugin-manager-") as temporary:
+        root = Path(temporary).resolve()
+        plugin = root / "plugin"
+        plugin.mkdir()
+        (plugin / "package.json").write_text(json.dumps({
+            "name": "dsh-sdk-managed-fixture", "version": "1.0.0", "type": "module",
+            "exports": "./index.js", "dsh": {"bundle": {"patch": "./cordis.patch.yml"}},
+        }))
+        (plugin / "index.js").write_text(
+            "export const name = 'sdk-managed-fixture'\n"
+            "export const inject = ['systemPrompt']\n"
+            "export function apply(ctx) { ctx.effect(() => ctx.systemPrompt.section({\n"
+            f"  name: 'sdk:managed-fixture', order: 10, text: '{PROFILE_PLUGIN_MARKER}'\n"
+            "})) }\n"
+        )
+        (plugin / "cordis.patch.yml").write_text(json.dumps([{
+            "insert": [{"id": "sdk-managed-fixture", "name": "dsh-sdk-managed-fixture"}],
+        }]))
+        home = root / "home"
+        environment = {"PATH": "", "DSH_RESOURCE_CACHE": str(cache),
+                       "DSH_PERMISSION_MODE": "workspace-write", "DSH_TELEMETRY_DISABLED": "1"}
+        config = dict(provider="deepseek-official", model="smoke-model", cwd=str(root),
+                      dsh_bin=str(executable), dsh_home=str(home), env=environment,
+                      api_key="sk-keyless-smoke", base_url=base_url, request_timeout_seconds=60)
+        with ThreadPoolExecutor(max_workers=2) as worker:
+            harness = DeepSeekHarness(**config, approval_requests=True)
+            try:
+                harness.start()
+                manifest_path = home / "profiles/sdk/package.json"
+                before = manifest_path.read_bytes()
+                for decision, expected in (("rejected", "plugin installation rejected"),
+                                           ("allowed-once", "plugin installation saved")):
+                    run = worker.submit(harness.run, PLUGIN_INSTALL_PROMPT + json.dumps(str(plugin)) + "\n",
+                                        session_id=decision)
+                    request = worker.submit(harness.client.next_request).result(timeout=60)
+                    assert request.method == "approval/request", request
+                    approval = ApprovalRequestParams.model_validate(request.payload)
+                    assert approval.toolName == "plugin_manager", approval
+                    assert approval.sessionId == decision, approval
+                    harness.client.respond(request.id, {"outcome": decision})
+                    result = run.result(timeout=60)
+                    assert result.final_response == expected, result.final_response
+                    if decision == "rejected":
+                        assert manifest_path.read_bytes() == before
+                manifest = json.loads(manifest_path.read_text())
+                assert "dsh-sdk-managed-fixture" in manifest["dependencies"], manifest
+                assert "dsh-sdk-managed-fixture" in manifest["dsh"]["profile"]["bundles"], manifest
+            finally:
+                harness.close()
+        with DeepSeekHarness(**config) as restarted:
+            result = restarted.run(PROFILE_PLUGIN_PROMPT, session_id="installed-after-restart")
+            assert result.final_response == PROFILE_PLUGIN_TEXT, result.final_response
+        example = Path(__file__).resolve().parent.parent / "python/sdk/examples/manage_plugins.py"
+        example_home = root / "example-home"
+        example_environment = {**os.environ, **environment, "DEEPSEEK_BASE_URL": base_url,
+                               "DEEPSEEK_API_KEY": "sk-keyless-smoke"}
+        example_args = [sys.executable, str(example), "--dsh-home", str(example_home),
+                        "--workspace", str(root), "--dsh-bin", str(executable)]
+        for decision, expected in (("n", "plugin installation rejected"), ("y", "plugin installation saved")):
+            run = subprocess.run([*example_args, PLUGIN_INSTALL_PROMPT + json.dumps(str(plugin)) + "\n"],
+                                 input=decision + "\n", env=example_environment, text=True, capture_output=True, timeout=120)
+            assert run.returncode == 0, run.stderr
+            assert expected in run.stdout, run.stdout
+        assert "dsh-sdk-managed-fixture" in json.loads((example_home / "profiles/sdk/package.json").read_text())["dependencies"]
 
 
 def smoke_sdk_office(executable: Path) -> None:
@@ -1281,6 +1401,17 @@ def smoke_sdk_default(base_url: str) -> None:
             f"turn_end={safe_turn_end(next((event.get('data', event) for event in reversed(result.events) if event.get('type') == 'turn/end'), {}))!r}"
         )
         assert_zstd_session_log(sessions)
+        # The installed runtime starts with an empty PATH; no checkout or global pnpm can satisfy the tool.
+        before = (dsh_home / "profiles/sdk/package.json").read_bytes()
+        with DeepSeekHarness(
+            provider="deepseek-official", model="smoke-model", cwd=str(root), dsh_home=str(dsh_home),
+            env={"DSH_PERMISSION_MODE": "danger-full-access", "DSH_TELEMETRY_DISABLED": "1", "PATH": "",
+                 "DSH_PRIMARY_RUNTIME": "", "DSH_RESOURCE_CACHE": str(root / "empty-resource-cache")},
+            api_key="sk-keyless-smoke", base_url=base_url, request_timeout_seconds=60,
+        ) as harness:
+            package_result = harness.run("check missing plugin package manager", session_id="missing-pnpm")
+        assert package_result.final_response == EXPECTED_TEXT, package_result.final_response
+        assert (dsh_home / "profiles/sdk/package.json").read_bytes() == before
 
 
 def smoke_sdk_custom(base_url: str, executable: Path) -> None:

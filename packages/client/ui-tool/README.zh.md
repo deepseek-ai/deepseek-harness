@@ -31,6 +31,8 @@ kind: "package-reference"
 
 派发前，模型已给出名称的调用显示为不可展开的一行，使用工具自己的图标与标题。通用行显示为 `工具调用 · <工具名>`。read/write/edit 在 `file_path` 闭合且解码无误后显示可打开的路径；write/edit 从内容到达起在该路径后显示 `NKB`，执行中和成功后仍保留，位于差异统计之前。N 按解码后输入的 UTF-16 长度除以 1024 向上取整，edit 合计新旧文本长度；它不是文件字节数。失败和停止的行省略大小与差异统计。命令行显示流入中的描述。`tool/call` 才启用既有调用展示；参数块结束本身不代表开始执行。
 
+文件和 URL 工具视图 Slot 直接获取 `useContextMenu`，向 `ToolRow` 提供已绑定的 `fileContextMenuProps` 或 `urlContextMenuProps`。文件注册注入在触发时读取原始 Session 工作目录的路径解析器，工作目录缺失时使用工作区根目录。`ToolCallTree` 向普通 `GenericToolCard` fallback 显式提供文件适配函数，包含嵌套调用。无需 Markdown Provider。鼠标和键盘手势保留捕获的路径、行号、URL 与 Session，不会展开工具行或打开文件。
+
 ### 注册业务工具视图
 
 拥有该视图的业务包将其 wire 工具名称注册进 `tool.call.toolview`：
@@ -57,6 +59,8 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、`phase` 判别字
 
 回答面板按钮归问题 renderer 所有。它使用 `DisclosureRow` 组合自己的操作与 transcript；通用 `ToolRow` 不选择或派发问题操作。
 
+文件与 URL 控件通过作用域内的 Markdown 委托声明右键菜单目标。鼠标和键盘手势的文件目标都携带记录的路径与行号。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -80,6 +84,8 @@ Tool Definition 拥有[懒计算参数视图](../../util/values/README.zh.md)。
 
 
 每张卡片都直接在调用树中查看；选中调用后不会再显示第二个全高视图。行 renderer 为 terminal、read、diff、search 和 web 卡片各复用同一个纯 card model，image 卡片的图库经由工具自有 `tool.call.images` slot 渲染，其下显示完整的记录路径以及每张附件图片的像素尺寸（缩小时附原图尺寸）和字节数。这些 model 校验原始调用参数、结果内容、失败状态、持久 metadata、PTC dispatch 的 `parentCallId` 与会话路径信息。不受支持或格式错误的输入使用压平的工具结果文本。文件路径摘要经属主的 `openFile` 打开文件，chat 视图把它路由到右侧 Sidebar 的文本预览；`inspect` 打开轨迹视图；该视图不可用时不提供此回调，卡片随之隐藏 Inspect。terminal、diff、read、search 与 web 卡片的上限与 fallback 规则仍由 [ui-primitives README](../ui-primitives/README.zh.md) 负责；image 卡片的 fallback 规则由本包内的 card model 自行承载。
+
+搜索卡片将值恰好为空字符串的 `include` 视为省略；类型错误、仅含空白的值、否定过滤器和逗号分隔列表仍使用通用显示。
 
 Chat diff 卡片在折叠前保留九行，足以容纳文件标题、一对删除与新增行及两侧各三行上下文。工具行显示原语提供的精确或粗粒度替换统计；展开卡片包含差异正文，不显示底部统计。悬停工具标题行时，新增数量显示绿色、删除数量显示红色；卡片展开期间保留这两种颜色。
 

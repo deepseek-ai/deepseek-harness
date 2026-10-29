@@ -264,7 +264,7 @@ export class SettingsForms extends Service {
    * @throws If this instance already has a registered policy.
    */
   configure(presentation: { auto?: boolean }, owner: Fiber = this.ctx.fiber): () => void {
-    const fiber = owner
+    const fiber = owner.ctx.fiber
     if (this.presentations.has(fiber)) throw new Error('Settings presentation is already configured for this plugin instance')
     const policy = { ...presentation }
     this.presentations.set(fiber, policy)
@@ -309,7 +309,7 @@ export class SettingsForms extends Service {
       if (form === undefined) return []
       active.add(entry.id)
       const raw = JSON.stringify([entry.fiber.uid, schema.toJSON(), entry.options.config ?? {}])
-      const autoGenerate = this.presentations.get(entry.fiber)?.auto ?? true
+      const autoGenerate = this.presentations.get(entry.fiber.ctx.fiber)?.auto ?? true
       const previous = this.revisions.get(entry.id)
       const revision = previous === undefined ? 0 : previous.revision + Number(previous.raw !== raw)
       this.revisions.set(entry.id, { raw, revision, ns: entry.options.id as SettingsNamespace, autoGenerate })

@@ -329,6 +329,20 @@ it('fills application names, system permissions, and icons as their observations
   expect(screen.getByRole('region', { name: en.title })).toBe(requirements)
 })
 
+it('shows and revokes an application whose executable path is unavailable', () => {
+  const f = fixture()
+  const app = { id: 'a'.repeat(64) as CuaApplicationId, name: 'Path unavailable fixture' }
+  f.publish({ ...observe({ ...value, allowedApps: [app] }) })
+  render(<PermissionPanel {...f.props} />)
+  const access = screen.getByRole('region', { name: en.applicationsTitle })
+  const row = within(access).getByText(app.name).closest('li')!
+  expect(row.querySelector('[title]')).toBeNull()
+  expect(row.querySelector('img')).toBeNull()
+  expect(row.querySelector('[aria-hidden]')).not.toBeNull()
+  fireEvent.click(within(row).getByRole('button', { name: en.revoke }))
+  expect(f.props.revoke).toHaveBeenCalledWith(app.id)
+})
+
 it.each(['applications', 'icons'] as const)('contains a failed %s query in the application section', (key) => {
   const f = fixture()
   f.publish({ ...observe(value), [key]: { value: null, busy: false, error: 'offline' } })

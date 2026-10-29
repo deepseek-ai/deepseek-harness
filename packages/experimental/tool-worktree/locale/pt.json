@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Árvores de trabalho Git",
-    "description": "Deixe o agente criar uma nova ramificação e árvore de trabalho do Git e continue lá.",
+    "description": "Peça para trabalhar em um novo branch, e o agente cria um worktree do Git separado e continua lá, deixando seu checkout atual como está.",
     "detail": "docs/DETAIL.md"
   }
 }

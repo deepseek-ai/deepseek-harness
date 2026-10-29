@@ -20,7 +20,6 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import * as tool from '../src/index.ts'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -150,22 +149,22 @@ describe('list_subagent_models', () => {
 
   it('keeps discovery registration and disposal local to each tool scope', async () => {
     const ctx = await setup({ provider: 'mock' })
-    const first = createScope(ctx, { preset: 'first' })
-    const second = createScope(ctx, { preset: 'second' })
+    const first = await ctx.agents.create({ sessionId: SessionId('first-discovery-owner') })
+    const second = await ctx.agents.create({ sessionId: SessionId('second-discovery-owner') })
     const config = { provider: 'mock', modelDiscovery: true }
-    const firstOwner = await first.ctx.plugin(tool, config)
-    const secondOwner = await second.ctx.plugin(tool, config)
-    const firstDefinition = ctx.tools.get('list_subagent_models', scopeOf(first.ctx))
-    const secondDefinition = ctx.tools.get('list_subagent_models', scopeOf(second.ctx))
+    const firstOwner = await first.agent.ctx.plugin(tool, config)
+    const secondOwner = await second.agent.ctx.plugin(tool, config)
+    const firstDefinition = ctx.tools.get('list_subagent_models', first.agent)
+    const secondDefinition = ctx.tools.get('list_subagent_models', second.agent)
     expect(firstDefinition).toBeDefined()
     expect(secondDefinition).toBeDefined()
     expect(firstDefinition).not.toBe(secondDefinition)
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
     await firstOwner.dispose()
-    expect(ctx.tools.get('list_subagent_models', scopeOf(first.ctx))).toBeUndefined()
-    expect(ctx.tools.get('list_subagent_models', scopeOf(second.ctx))).toBe(secondDefinition)
+    expect(ctx.tools.get('list_subagent_models', first.agent)).toBeUndefined()
+    expect(ctx.tools.get('list_subagent_models', second.agent)).toBe(secondDefinition)
     await secondOwner.dispose()
-    expect(ctx.tools.get('list_subagent_models', scopeOf(second.ctx))).toBeUndefined()
+    expect(ctx.tools.get('list_subagent_models', second.agent)).toBeUndefined()
   })
 
   it('requires a calling Agent and an effective parent route', async () => {

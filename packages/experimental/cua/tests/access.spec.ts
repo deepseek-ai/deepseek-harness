@@ -33,7 +33,8 @@ const unusedConnector = () => { throw new Error('Mocked native client does not c
 
 const nativeConfig = { helperPath: '/fixture', cwd: '/', timeoutMs: 1000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 100,
   maxRequestBytes: 4096, maxResponseBytes: 4096, graceMs: 100, textEventIntervalMs: 1, maxClickHoldMs: 5000 }
-const identity = ApplicationAuthorizationResult.parse({ id: 'a'.repeat(64), name: 'Test application', executablePath: '/Applications/Fixture.app/Contents/MacOS/Fixture', persistable: true })
+const executablePath = '/Applications/Fixture.app/Contents/MacOS/Fixture'
+const identity = ApplicationAuthorizationResult.parse({ id: 'a'.repeat(64), name: 'Test application', executablePath, persistable: true })
 const handle = 'fixture-app' as CuaAppHandle
 const signal = new AbortController().signal
 
@@ -69,7 +70,7 @@ it('requires another user decision after the permission page permits asking agai
   await expect(f.access.run(f.client, handle, signal, async () => null)).rejects.toThrow('APP_ACCESS_REQUIRED')
 })
 
-it('persists a signed identity and revokes it before further dispatch', async () => {
+it('persists a reusable identity and revokes it before further dispatch', async () => {
   const f = await setup('Always allow')
   await f.access.select(f.agent, f.client, handle, identity, signal)
   expect(f.grants()).toEqual([{ id: identity.id, name: identity.name, executablePath: identity.executablePath }])
@@ -356,8 +357,8 @@ it('reads application decisions without native work and retrieves icons separate
   control.request.mockReturnValueOnce(pending.promise)
   const icons = f.ctx.cuaAccess.applicationIcons()
   expect((await f.ctx.cuaAccess.applications()).allowedApps).toEqual(f.grants())
-  pending.resolve({ [identity.executablePath]: 'data:image/png;base64,aWNvbg==' })
-  expect(await icons).toEqual({ [identity.executablePath]: 'data:image/png;base64,aWNvbg==' })
+  pending.resolve({ [executablePath]: 'data:image/png;base64,aWNvbg==' })
+  expect(await icons).toEqual({ [executablePath]: 'data:image/png;base64,aWNvbg==' })
   expect(f.grants()[0]).not.toHaveProperty('icon')
 })
 
@@ -374,6 +375,17 @@ it('skips native icon work for an empty application list and propagates icon fai
   await expect(f.ctx.cuaAccess.applicationIcons()).rejects.toThrow('icons unavailable')
   expect((await f.ctx.cuaAccess.applications()).allowedApps).toHaveLength(1)
   expect((await f.ctx.cuaAccess.systemStatus()).accessibility).toBe(false)
+})
+
+it('keeps pathless grants manageable without requesting their icons', async () => {
+  const grant = { id: identity.id, name: identity.name }
+  const f = await setup('Always allow', { initial: [grant] })
+  expect((await f.ctx.cuaAccess.applications()).allowedApps).toEqual([grant])
+  expect(await f.ctx.cuaAccess.applicationIcons()).toEqual({})
+  expect(native.instances).toHaveLength(1)
+  expect(native.instances[0]!.request).not.toHaveBeenCalled()
+  await f.ctx.cuaAccess.revoke(identity.id)
+  expect((await f.ctx.cuaAccess.applications()).allowedApps).toEqual([])
 })
 
 it('preserves captured launch metadata separately from the current helper parent', async () => {
@@ -403,16 +415,20 @@ it('omits session-only grants from the permission page and retains their access 
   await expect(f.access.run(f.client, handle, signal, async () => 'still allowed')).resolves.toBe('still allowed')
 })
 
-it('configures persistent PTC through the existing profile editor only on explicit request', async () => {
+it.each(['function-body', 'repl', 'script'] as const)('enables retention for effective %s semantics with one profile edit', async (programFormat) => {
   const f = await setup()
   expect(f.ctx.cuaAccess.ptcConfiguration()).toEqual({ persistent: false, writable: false })
   await expect(f.ctx.cuaAccess.enablePersistentPtc()).rejects.toThrow('no editable profile entry')
   const entry = { options: { id: 'ptc-runtime' } }
-  const runtime = { programFormat: 'function-body' }
+  const runtime = { programFormat, retainsState: false }
   const edit = vi.fn(async (received: object, change: (current: Record<string, unknown>) => Record<string, unknown>) => {
     expect(received).toBe(entry)
-    expect(change({ timeoutMs: 4200 })).toEqual({ timeoutMs: 4200, executionMode: 'persistent-in-memory' })
-    runtime.programFormat = 'repl'
+    // Effective mode can come from a lower profile; a stale local flag must be replaced.
+    expect(change({ timeoutMs: 4200, scriptPersistence: true })).toEqual({
+      timeoutMs: 4200, executionMode: programFormat === 'script' ? 'vm-script' : 'persistent-in-memory',
+      scriptPersistence: programFormat === 'script',
+    })
+    runtime.retainsState = true
   })
   f.ctx.provide('ptcRuntime', runtime)
   f.ctx.provide('configEditor', { entries: () => [entry], edit })

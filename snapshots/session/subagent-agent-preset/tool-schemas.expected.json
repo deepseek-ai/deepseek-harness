@@ -341,7 +341,7 @@
           },
           "agent_preset": {
             "type": "string",
-            "description": "Agent preset for this child. Omit to inherit the parent agent's current preset. Available presets: reviewer: File review.",
+            "description": "Agent preset for this child. Omit to inherit the parent agent's current preset.",
             "enum": [
               "reviewer"
             ]

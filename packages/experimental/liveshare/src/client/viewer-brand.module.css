@@ -1,0 +1,61 @@
+/* The viewer's brand content: LiveShare, its owner, and the owner's DSH version inside the
+   sidebar's own brand row. Everything is 24px tall and ellipsized so a narrow or long-named
+   share never widens the row or covers the Session header. */
+
+.brand {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  min-width: 0;
+  max-width: 100%;
+  height: 24px;
+  color: var(--dsw-alias-label-primary);
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .brand:hover .wordmark {
+    text-decoration: underline;
+  }
+}
+
+.top {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wordmark {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 12px;
+  letter-spacing: 0.01em;
+}
+
+.owner {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 3px;
+  color: var(--dsw-alias-label-primary-inverted);
+  background: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 12px;
+  white-space: nowrap;
+}

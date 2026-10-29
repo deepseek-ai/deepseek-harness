@@ -13,6 +13,8 @@ Keep recoverable session facts in Projection and expose them through their ownin
 
 2. Do not expose projection definitions or handles as production read APIs. Keep the ready handle private; consumers use the owning service's domain methods. A handle is a process-local reader, recreated during activation. Require `sessionProjections` when the service depends on it; optional registration is only for optional contributions. Do not hide a missing required dependency with another recovery path.
 
+   A runtime that needs several projected states receives one typed object of callbacks created with `handle.readerFor(session)`. Add properties instead of a constructor parameter or feature-specific reader for each state. Each callback has type `() => S`; single-purpose collaborators receive it directly. These host-state readers are separate from wire snapshots and live Cordis Context; they own no registration, disposal, cache or I/O. Registration, Session preparation and handle lifetimes stay with their owners. Rule 9 defines synchronous API compatibility.
+
 3. State recovery through `init` and `apply` is synchronous and deterministic. Do not perform I/O or trigger Cordis hooks, models, or tools. Runtime hooks own those effects. Replay must not repeat them. Return the same state reference for unrelated events. Keep views synchronous and preserve their references when visible values do not change.
 
 4. Persist JSON state that its schema accepts. Follow the README's state-version and checkpoint-watermark rules. Restoring a checkpoint and replaying its suffix must match full replay. Change the version when state fields or recovery semantics change.

@@ -301,6 +301,13 @@
           "prompt": {
             "type": "string",
             "description": "The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs."
+          },
+          "agent_preset": {
+            "type": "string",
+            "description": "Agent preset for this child. Omit to inherit the parent agent's current preset.",
+            "enum": [
+              "reviewer"
+            ]
           }
         },
         "required": [
@@ -366,7 +373,7 @@
           },
           "agent_preset": {
             "type": "string",
-            "description": "Agent preset for this child. Omit to inherit the parent agent's current preset. Available presets: reviewer: File review.",
+            "description": "Agent preset for this child. Omit to inherit the parent agent's current preset.",
             "enum": [
               "reviewer"
             ]

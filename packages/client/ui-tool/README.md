@@ -31,6 +31,8 @@ Settled foreground commands with a nonzero exit code, a terminating signal, or a
 
 Before dispatch, a named model call appears as one non-expandable row with its tool-owned icon and title. A generic row shows `Tool call · <tool name>`. Read/write/edit show an openable path once `file_path` closes and decodes without errors; write/edit show `NKB` after that path once content arrives, retaining it during execution and after success, before any diff totals. N rounds the decoded input's UTF-16 length up in units of 1024, summing old and new text for edit; it is not file bytes. Error and stopped rows omit the size and diff totals. Command rows show the streamed description. `tool/call` enables the existing call presentation; completing an argument block alone does not start execution.
 
+File and URL toolview Slots obtain `useContextMenu` directly and supply bound `fileContextMenuProps` or `urlContextMenuProps` to `ToolRow`. File registrations inject a gesture-time path resolver for the originating Session’s working directory, falling back to its workspace root. `ToolCallTree` supplies an explicit file adapter to its plain `GenericToolCard` fallback, including nested calls. No Markdown provider is required. Mouse and keyboard gestures retain the captured path, line, URL, and Session without expanding the row or opening the file.
+
 ### Registering a business tool view
 
 An owning business package registers its wire Tool name into `tool.call.toolview`:
@@ -57,6 +59,8 @@ Question rows pair answers with questions by id, using the tool result or the `u
 
 Answer-panel buttons belong to the question renderer. It composes `DisclosureRow` with its own action and transcript; generic `ToolRow` does not select or dispatch question actions.
 
+File and URL controls declare context-menu targets through the scoped Markdown delegate. File targets carry their recorded path and line for both pointer and keyboard gestures.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -80,6 +84,8 @@ Tool Definitions own the [lazy argument view](../../util/values/README.md). Rows
 
 
 Every card is read in place in the call tree; there is no second, full-height presentation of a selected call. Row renderers share one pure card model for each terminal, read, diff, search, and web card, and the image card's gallery renders through the tool-owned `tool.call.images` slot, followed by the full recorded path and each attached image's pixel size (with the original size when downscaled) and byte count. These models validate raw call arguments, result content, failure state, persisted metadata, PTC dispatch `parentCallId`, and Session path facts. Unsupported or malformed inputs use flattened Tool result text. A file-path summary opens the file through the owner's `openFile`, which the chat view routes to the right Sidebar's text preview; `inspect` opens the trajectory view and is absent when that View is unavailable; cards then omit Inspect. Card-specific limits and fallback rules for the terminal, diff, read, search, and web cards remain in [the ui-primitives README](../ui-primitives/README.md); the image card's model in this package carries its own fallback rules.
+
+Search cards treat an exact empty `include` as omitted; invalid types, whitespace-only values, negated filters, and comma-separated lists remain generic.
 
 Chat diff cards keep nine rows before folding, enough for a file header, one removed/added pair, and three context lines on either side. The tool row shows the primitive's exact or coarse-replacement counts; the expanded card contains the diff body without a totals footer. Hovering the tool header colors its added count green and removed count red; both retain those colors while the card is expanded.
 

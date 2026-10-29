@@ -75,10 +75,12 @@ export function desktopTargetBuildPaths(target, environment = process.env) {
  */
 export function desktopTargetPlatform(target) {
   assertSupportedTarget(target)
-  return {
-    platform: /** @type {'darwin' | 'win32'} */ (target === 'win-x64' ? 'win32' : 'darwin'),
-    arch: /** @type {'arm64' | 'x64'} */ (target === 'mac-arm64' ? 'arm64' : 'x64'),
-  }
+  const targets = /** @type {const} */ ({
+    'mac-arm64': { platform: 'darwin', arch: 'arm64' },
+    'mac-x64': { platform: 'darwin', arch: 'x64' },
+    'win-x64': { platform: 'win32', arch: 'x64' },
+  })
+  return targets[target]
 }
 
 /**

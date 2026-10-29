@@ -31,11 +31,21 @@ kind: "package-reference"
 
 会话标题栏、文件树标题栏和文档标题栏共用同一个高 24px、圆角 9px 的分体按钮。这些标题栏都只显示图标，悬停提示显示默认应用名称或文件定位动作。它们都显示默认动作的图标，在菜单的默认应用后标注“（默认）”，仅在自己的操作执行期间禁用，并通过短暂提示报告失败。文件树打开按钮以 `absolutePath` 传入的显示目录为目标，并与会话头部共享应用选择和启动状态。目录适配器使用已有的跨平台应用列表，将最后一次成功选择保存在 `dsh.open-in-app.choice` 中；原选择不可用时回退到第一个可用应用。
 
-**在本地打开**快捷键捕获主会话的目录，并使用与头部按钮相同的已记住应用。按钮 tooltip 和 `aria-keyshortcuts` 显示当前有效绑定；Web 遵循[快捷键服务的平台默认值](../shortcuts/README.zh.md)。只有选中会话界面、且头部按钮有可打开的目录和已安装应用时，命令才执行。启动尚未结束时也会阻止命令。鼠标与键盘操作共享 controller 的启动状态，重复操作不会启动两次，也不会在启动期间更改已记住的选择。
+在 iOS、Android 手机和平板上（包括已安装的 PWA），原生打开获得确认后显示「已在其它设备打开」，文件定位则显示「已在其它设备显示文件位置」。电脑端成功时不提示，包括窄窗口浏览器与已安装的桌面 PWA。Host 拒绝请求或无法连通时，所有客户端都会收到失败 toast。成功表示 Host 已接受原生操作，不代表目标应用已完成文件加载。反馈复用现有移动设备判定，不依据窗口宽度或安装模式。
+
+**在本地打开**快捷键捕获主会话的目录，并使用与头部按钮相同的已记住应用。按钮 tooltip 和 `aria-keyshortcuts` 显示当前有效绑定；Web 遵循[快捷键服务的平台默认值](../shortcuts/README.zh.md)。只有选中会话界面、且头部按钮有可打开的目录和已安装应用时，命令才执行。启动尚未结束时也会阻止命令；其结果遵循与点击操作相同的反馈规则。鼠标与键盘操作共享 controller 的启动状态，重复操作不会启动两次，也不会在启动期间更改已记住的选择。
 
 文件菜单列出已发现的关联应用，不单列“用默认应用打开”。“显示文件位置”固定在菜单底部，通过分隔线与滚动的应用列表分开。查询成功且只有一个可用操作时显示单按钮，不再显示下拉箭头。文件关联首次加载时使用灰色骨架图标。Host 识别出默认应用时，菜单将该项标注为“（默认）”，主按钮打开该应用；否则第一个关联应用占据该位置，只有在一个关联应用都没有时主按钮才执行文件定位。目录菜单不包含定位项。选择文件应用不修改系统默认应用。无法预览文件时，空态使用同一菜单，按钮增大到 40px 高并显示图标和动作文字；根据默认动作显示“打开”或“显示文件位置”。
 
 使用同一查询函数和文件的已挂载控件共用查询与结果，打开任一菜单会刷新所有相关控件。最后一个控件释放后取消查询并清除状态。已取消的查询不会覆盖其他文件的结果。查询失败时菜单显示提示，并以文件定位作为默认动作。文件关联查询的平台支持范围见 [native-command](../../util/native-command/README.zh.md)；查询结果为空时，包括平台尚无查询适配器的情况，控件统一使用定位动作，不按操作系统分支处理。
+
+工作区右键菜单通过与会话标题相同的目录应用列表打开被点击的文件夹。文件树目录提供本机显示位置和复制文件夹路径，不提供文件预览或保存。
+
+右键菜单通过 [ui-context-menu](../ui-context-menu/README.zh.md) 贡献文件预览、原生应用打开、原文件定位以及链接导航与复制。会话定位沿用已安装文件管理器目录，以顺序 500 注册为结构化 Session 贡献，位于复制 Session ID 与归档之间。右键原生操作在菜单关闭后，通过本功能的浮层 toast 沿用移动端与电脑端反馈规则。原生文件操作先通过授权元数据解析会话路径，再查询关联应用。文件不存在时禁用路径操作；图片定位要求实际 Host 文件，并始终针对该原文件。[ui-file-actions](../ui-file-actions/README.zh.md) 负责复制、下载、另存为及其完成提示，包括通过提示中的操作定位保存目标。
+
+文件菜单复制不含行号的绝对路径；网址复制保留查询参数与锚点。图片文件在既有文件操作之外，还提供复制图片与下载原图。下载和保存成功后显示共享 Toast，取消选择器时不提示。
+
+文件菜单提供“在侧边栏打开”与“在浮窗中打开”，以 `destination: 'sidebar'` 或 `'float'` 和目标的行号调用 `ctx.sidebarRight.openResourceIn`，从不传菜单所在的分栏。文件已在请求的位置打开时揭示它；在另一位置打开时连同阅读位置移过去，因此菜单可以把预览在停靠列和浮窗之间移动。左键打开文件的行为不变。
 
 -----
 
@@ -45,9 +55,9 @@ kind: "package-reference"
 <details>
 <summary>实现内幕——点击展开</summary>
 
-两个目录插槽均通过显式的 `absolutePath` 使用 `OpenInAppAction`。`conversation.session.header.utilities` 的注册函数读取会话 cwd，`sidebar.right.tab.files.actions` 则接收所属组件传入的显示目录。插件以一个 effect 注册 `open-in-app` 词典。一个页面生命周期的 controller（[`src/client/controller.ts`](src/client/controller.ts)）拥有每页一次的可用性读取、持久化选择的 snapshot store 与启动 POST；组件经 inject 的 `hooks` 隔间接收共享源，因此所有会话头部共享同一份事实。文档相对的路由形式与 wire 载荷类型来自主机包的浏览器安全子路径 `@deepseek-ai/dsh-host-open-in-app/shared`。controller 守卫执行中的启动，并发布所捕获的目录与状态；头部控件从该源派生延迟出现的等待态和短暂错误态。
+两个目录插槽均通过显式的 `absolutePath` 使用 `OpenInAppAction`。`conversation.session.header.utilities` 的注册函数读取会话 cwd，`sidebar.right.tab.files.actions` 则接收所属组件传入的显示目录。插件以一个 effect 注册 `open-in-app` 词典。一个页面生命周期的 controller（[`src/client/controller.ts`](src/client/controller.ts)）拥有每页一次的可用性读取、持久化选择的 snapshot store 与启动 POST；组件经 inject 的 `hooks` 隔间接收共享源，因此所有会话头部共享同一份事实。文档相对的路由形式与 wire 载荷类型来自主机包的浏览器安全子路径 `@deepseek-ai/dsh-host-open-in-app/shared`。controller 守卫执行中的启动，并发布所捕获的目录与等待状态。适配器将原生操作和传输失败解析为具名结果；被忽略或取消的请求返回跳过结果，不作播报。
 
-目录和文件适配器把应用信息与操作交给 [`OpenTargetButton`](src/client/OpenTargetButton.tsx)，由它统一管理菜单顺序、默认标记、图标、尺寸和操作反馈。文件标题栏和空态共用 `FileOpenTarget`，`OpenPathInjected.applications` 通过 [`open-path.ts`](src/client/open-path.ts) 查询 `session.workspacePathApplications`。打开操作使用 `session.openWorkspacePath`，Host 在启动前重新验证指定的关联应用。`FileRouteAction` 通过 `deliverables.file.actions` 和 `deliverables.review.file.actions` 为交付卡片和变更对比页提供同一控件，其认证路由保留会话文件校验。目录适配器继续使用已有的应用列表路由，文件查询失败或不可用时无需增加平台专用的界面实现。
+目录和文件适配器把应用信息与操作交给 [`OpenTargetButton`](src/client/OpenTargetButton.tsx)，由它统一管理菜单顺序、默认标记、图标和尺寸。注入的回调将结果交给本功能在 `shell.overlay` 中持有的唯一 toast，因此切换会话或关闭发起操作的预览不会丢失结果。文件标题栏和空态共用 `FileOpenTarget`，`OpenPathInjected.applications` 通过 [`open-path.ts`](src/client/open-path.ts) 查询 `session.workspacePathApplications`。打开操作使用 `session.openWorkspacePath`，Host 在启动前重新验证指定的关联应用。`FileRouteAction` 通过 `deliverables.file.actions` 和 `deliverables.review.file.actions` 为交付卡片和变更对比页提供同一控件，其认证路由保留会话文件校验。目录适配器继续使用已有的应用列表路由，文件查询失败或不可用时无需增加平台专用的界面实现。
 
 </details>
 

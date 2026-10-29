@@ -657,7 +657,7 @@ it('rejects an unsupported native host before starting preparation', async () =>
 })
 
 
-async function permissionProfile(allowedApps: Array<{ id: string; name: string; executablePath: string }> = []) {
+async function permissionProfile(allowedApps: Array<{ id: string; name: string; executablePath?: string }> = []) {
   const f = await setup()
   await f.provider.dispose()
   const home = await mkdtemp(join(tmpdir(), 'cua-grant-profile-')), dir = join(home, 'profile')
@@ -709,12 +709,12 @@ it('stores revocation without entering the HMR configuration queue', async () =>
   await blocked
 })
 
-it('stores signed application consent separately from configuration', async () => {
+it.each([true, false])('stores persistable application consent separately from configuration (path present: %s)', async (hasPath) => {
   const f = await permissionProfile(), { profile } = f
   expect(f.ctx.settings.describe().find(row => row.ns === 'cua')).toBeUndefined()
   await f.ctx.plugin(UserQuestions)
   f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] }))
-  const authorization = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true }
+  const authorization = { id: 'a'.repeat(64), name: 'Fixture', ...(hasPath ? { executablePath: '/fixture/app' } : {}), persistable: true }
   native.request.mockResolvedValue({ appHandle: 'signed-app', pid: 17, name: 'Fixture', authorization })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
   expect(await readFile(profile.patchPath, 'utf8')).not.toContain(authorization.id)
@@ -740,10 +740,10 @@ it('rejects an application handle before any helper or consent has been acquired
   expect(native.request).not.toHaveBeenCalled()
 })
 
-it('uses configured signed application grants without requesting a human answer', async () => {
+it.each([true, false])('uses configured grants without requesting a human answer (path present: %s)', async (hasPath) => {
   const f = await setup()
   await f.provider.dispose()
-  const grant = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app' }
+  const grant = { id: 'a'.repeat(64), name: 'Fixture', ...(hasPath ? { executablePath: '/fixture/app' } : {}) }
   await f.ctx.plugin(NativeProvider, { ...config, allowedApps: [grant] })
   native.request.mockResolvedValueOnce({ appHandle: 'saved-app', pid: 17, name: 'Fixture', authorization: { ...grant, persistable: true } })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)

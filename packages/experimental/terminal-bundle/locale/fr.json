@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Terminaux persistants",
-    "description": "Maintenez les processus shell en vie lors des appels d’outils.",
+    "description": "Fournit à l'agent des terminaux dont les processus continuent de s'exécuter en arrière-plan d'un appel d'outil à l'autre, afin qu'il puisse lancer un serveur de développement ou un REPL et revenir plus tard lire la sortie ou saisir des entrées.",
     "detail": "docs/DETAIL.md"
   }
 }

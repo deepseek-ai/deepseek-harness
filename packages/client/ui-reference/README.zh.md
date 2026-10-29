@@ -39,6 +39,8 @@ Web 用户需要从同一个 `@` 补全菜单提及文件、文件夹或会话�
 
 点击输入框中的文件引用，可在右侧栏预览文件当前的内容。带引号路径中的空格会保留，路径按输入框所属 Session 解析。文件夹和 Session 引用保留原有的编辑行为。
 
+可交互文件标签从自身 Session Slot 获取 `useContextMenu`，通过文件引用注册接收路径解析能力。手势发生时按当前工作区根目录解析路径，Session 工作目录不会改变引用含义。只读展示标签不安装菜单处理器，也无需 Markdown Provider。
+
 -----
 
 <a id="understand-the-implementation"></a>

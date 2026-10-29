@@ -59,7 +59,7 @@
   justify-content: flex-end;
   gap: 4px;
   height: 36px;
-  padding-left: 4px;
+  padding-left: var(--dsh-sidebar-row-padding);
   margin-bottom: 4px;
   box-sizing: border-box;
   border-radius: var(--dsw-radius-md);
@@ -72,7 +72,20 @@
   margin-right: -4px;
 }
 
+.root:not(.rail) .sectionHeader.searchSpacingMotion {
+  transition:
+    margin-right 180ms var(--ds-ease-in-out),
+    padding-inline 180ms var(--ds-ease-in-out),
+    gap 180ms var(--ds-ease-in-out);
+}
+
+.root:not(.rail) .sectionHeader:not(:has(.searchExpanded)) {
+  padding-right: 1px;
+}
+
 .sectionLabel {
+  position: relative;
+  left: -1px;
   flex: none;
   max-width: 45%;
   min-width: 0;
@@ -167,10 +180,20 @@
     background-color 180ms var(--ds-ease-in-out);
 }
 
+.root:not(.rail) .sectionHeader:has(.searchExpanded) {
+  margin-right: 0;
+  padding-inline: calc(var(--dsh-sidebar-paint-inset) + 1px);
+  gap: 0;
+}
+
+.sectionHeader:has(.searchExpanded) .sectionLabelHidden {
+  margin-right: 0;
+}
+
 .searchExpanded {
-  width: calc(100% + 4px);
-  height: 30px;
-  margin-inline: -2px;
+  width: 100%;
+  height: 32px;
+  margin-inline: 0;
   padding: 0 4px 0 0;
   border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: var(--dsw-radius-md);
@@ -195,7 +218,7 @@
 
 .searchExpanded .searchButton {
   width: 28px;
-  height: 30px;
+  height: 32px;
 }
 
 @media (hover: hover) {
@@ -402,10 +425,10 @@
   /* Top alignment lines the 16px dot up with the equally tall title bar;
      the paddings center the 35px content in the 48px row. */
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--dsh-sidebar-label-gap);
   box-sizing: border-box;
   min-height: 48px;
-  padding: 6px 8px 7px;
+  padding: 6px var(--dsh-sidebar-row-padding) 7px;
 }
 
 .skeletonDot {
@@ -509,7 +532,7 @@
   height: 28px;
   border: none;
   border-radius: var(--dsw-radius-sm);
-  padding: 0 12px 0 calc(28px + var(--dsh-workspace-indent, 0px));
+  padding: 0 var(--dsh-sidebar-row-padding) 0 calc(var(--dsh-sidebar-row-padding) + 16px + var(--dsh-sidebar-label-gap) + var(--dsh-workspace-indent, 0px));
   background: transparent;
   cursor: pointer;
   text-align: left;
@@ -611,6 +634,13 @@
   overflow-wrap: anywhere;
 }
 
+@media (pointer: coarse) {
+  .searchInput,
+  .renameInput {
+    font-size: 16px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wide {
     animation: none;
@@ -621,6 +651,7 @@
     animation: none;
   }
 
+  .root:not(.rail) .sectionHeader.searchSpacingMotion,
   .search,
   .sectionLabel,
   .searchSlot,

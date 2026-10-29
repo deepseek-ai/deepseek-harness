@@ -1,0 +1,30 @@
+name: Policy
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: pr-check-on-base-branch-${{ github.ref_name }}
+jobs:
+  recheck:
+    name: Recheck
+    # Re-runs the head-branch checks, so it follows their variables.
+    if: ${{ vars.MERGE_POLICY_MASTER_DIFF != '' && vars.MERGE_POLICY_MASTER_DIFF != 'off' || vars.MERGE_POLICY_PRE_MERGE != '' && vars.MERGE_POLICY_PRE_MERGE != 'off' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - uses: deepseek-harness/deepseek-harness-check@master
+        with:
+          check: recheck
+          base-branch: ${{ github.ref_name }}
+          recheck-label-token: ${{ secrets.DSH_RECHECK_LABEL_TOKEN }}

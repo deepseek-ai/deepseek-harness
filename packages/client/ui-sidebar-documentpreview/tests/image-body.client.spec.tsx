@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /** Image Blob ownership, media types, pane-contained rendering, and failure states. */
 import { useSyncExternalStore } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -44,6 +45,7 @@ function props(path = 'asset.png', data: Uint8Array<ArrayBuffer> = new Uint8Arra
   }
   return {
     fileDrag,
+    useContextMenu: contextMenuHook(vi.fn()),
     resourceAddress: `dsh-resource://file/session/image/${path}`,
     content: { kind: 'bytes', data },
     wrap: false,
@@ -154,3 +156,14 @@ describe('ImageBody', () => {
 })
 
 const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () => {} })), reportFailure: vi.fn() }
+
+
+it('opens the original image menu from the preview', async () => {
+  const p = props('asset.svg')
+  const openMenu = vi.fn()
+  p.useContextMenu = contextMenuHook(openMenu)
+  render(<ImageBody {...p} />)
+  const image = await screen.findByRole('img', { hidden: true })
+  fireEvent.contextMenu(image, { clientX: 35, clientY: 46 })
+  expect(openMenu).toHaveBeenLastCalledWith({ kind: 'image', value: { sessionId: 'image', path: 'asset.svg', url: 'blob:https://preview.invalid/1', mediaType: 'image/svg+xml' } }, { x: 35, y: 46 })
+})

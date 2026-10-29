@@ -106,7 +106,13 @@
     - tab "Result" [selected]
     - tab "Schema"
     - tab "Timing"
-  - tabpanel "Result": "AutoReviewDeniedError: AUTO_REVIEW_DENIED Error: Auto review rejected tool \"bash\"; its body was not executed"
+  - tabpanel "Result":
+    - region "Raw result":
+      - heading "Raw result" [level=3]
+      - paragraph: Raw results are only available for live tool calls
+    - region "Rendered result":
+      - heading "Rendered result" [level=3]
+      - text: "AutoReviewDeniedError: AUTO_REVIEW_DENIED Error: Auto review rejected tool \"bash\"; its body was not executed"
 - textbox "Message or run a task, / commands, @ files or sessions"
 - button "Add files or run commands"
 - 'button "Access mode, current: Auto review"': Auto review

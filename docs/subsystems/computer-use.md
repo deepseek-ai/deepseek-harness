@@ -12,7 +12,7 @@ The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit sys
 
 | Permission type | Meaning |
 |---|---|
-| `CuaApplicationId`, `CuaApplicationGrant` | An executable/signature identity and its displayed saved decision. |
+| `CuaApplicationId`, `CuaApplicationGrant` | A platform-provided application identity and its displayed saved decision. |
 | `CuaSystemPermission` | Accessibility or Screen Recording, selected by the human. |
 | `CuaPermissionProcess`, `CuaSystemPermissionState` | Native privilege checks, observed helper/parent processes, and the application identified by macOS process responsibility at helper startup. Application metadata is absent if the optional system query or application lookup is unavailable. |
 | `CuaApplicationState` | Saved grants, refused applications, and whether persistence is available. Session-only grants remain internal to the provider. System observations and application icons are queried separately so the page can display each result as it arrives. |
@@ -98,7 +98,7 @@ Browser controls for provider-owned native permission and application decisions.
 
 /**
  * Load presentation icons separately from application decisions.
- * @returns Optional native PNG icons keyed by executable path for saved and blocked applications.
+ * @returns Optional native PNG icons keyed by executable path; applications without paths are skipped.
  */
 @Remote async applicationIcons(): Promise<Record<string, string>>
 

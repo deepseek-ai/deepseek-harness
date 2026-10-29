@@ -613,15 +613,17 @@ describe('prompt and cancel errors', () => {
     ])
   })
 
-  it('publishes the first-prompt lifecycle synchronously before the Remote settles', async ({ mock, start }) => {
+  it('publishes the first-prompt lifecycle once the Host accepts the prompt', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
     session.handleBlank(true)
     expect(session.getSnapshot()).toMatchObject({
       blank: true, promptAttempted: false, awaitingFirstTurn: false,
     })
     const inFlight = session.prompt([{ type: 'text', text: '要发的' }], 'queue')
+    // An unrelated update rebuilds the snapshot while the Host has not answered yet.
+    session.handleAgentError('unrelated live failure')
     expect(session.getSnapshot()).toMatchObject({
-      blank: true, promptAttempted: true, awaitingFirstTurn: true,
+      blank: true, promptAttempted: false, awaitingFirstTurn: false, lastAgentError: 'unrelated live failure',
     })
     const result = await inFlight
     expect(result.ok).toBe(true)
@@ -642,9 +644,22 @@ describe('prompt and cancel errors', () => {
     const session = await sessionBench(mock, start, SID)
     session.handleBlank(false)
     const inFlight = session.prompt([{ type: 'text', text: '继续' }], 'queue')
-    expect(session.getSnapshot()).toMatchObject({ blank: false, promptAttempted: true, awaitingFirstTurn: false })
+    expect(session.getSnapshot()).toMatchObject({ blank: false, promptAttempted: false, awaitingFirstTurn: false })
     expect((await inFlight).ok).toBe(true)
-    expect(session.getSnapshot()).toMatchObject({ blank: false, awaitingFirstTurn: false })
+    expect(session.getSnapshot()).toMatchObject({ blank: false, promptAttempted: true, awaitingFirstTurn: false })
+  })
+
+  it('does not await a first turn that started before the Host receipt arrived', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    session.handleBlank(true)
+    const receipt = Promise.withResolvers<{ ok: true; value: { accepted: true } }>()
+    mock.remote.session.prompt.mockImplementationOnce(() => receipt.promise)
+    const inFlight = session.prompt([{ type: 'text', text: '很快' }], 'queue')
+    session.handleRunning(true)
+    session.handleRunning(false)
+    receipt.resolve({ ok: true, value: { accepted: true } })
+    expect((await inFlight).ok).toBe(true)
+    expect(session.getSnapshot()).toMatchObject({ blank: false, promptAttempted: true, awaitingFirstTurn: false })
   })
 
   it('keeps an accepted first prompt converted when a later prompt is rejected', async ({ mock, start }) => {
@@ -662,7 +677,7 @@ describe('prompt and cancel errors', () => {
     })
   })
 
-  it('keeps the attempted-first-prompt state when the Host rejects the prompt', async ({ mock, start }) => {
+  it('keeps a first prompt the Host rejects blank and unattempted', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
     session.handleBlank(true)
     mock.remote.session.prompt.mockResolvedValue(err(new RemoteError('session/agent-busy', 'busy', { reason: 'x' })))
@@ -670,7 +685,7 @@ describe('prompt and cancel errors', () => {
     expect(result.ok).toBe(false)
     expect(session.getSnapshot().promptError).toMatchObject({ op: 'send', error: { code: 'session/agent-busy' } })
     expect(session.getSnapshot()).toMatchObject({
-      blank: true, promptAttempted: true, awaitingFirstTurn: true,
+      blank: true, promptAttempted: false, awaitingFirstTurn: false,
     })
   })
 

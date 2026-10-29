@@ -55,7 +55,7 @@ it('replays highlighted Python stubs, PowerShell and CSV reads with their docume
     await expandTurnProcesses(page)
     await page.locator('[data-sidebar-right-expand]').click()
     await page.locator('[data-sidebar-right-guide-entry="files"]').click()
-    const filesTab = page.locator('[data-dockkit-tab]').filter({ has: page.getByText('Files', { exact: true }) })
+    const toggle = page.locator('[data-files-navigator-toggle]:visible')
     const preview = page.locator('[data-textpreview-url]')
     const snapshots: string[] = []
     for (const file of FILES) {
@@ -66,8 +66,10 @@ it('replays highlighted Python stubs, PowerShell and CSV reads with their docume
       await expect.poll(() => read.locator('[data-read] span[style*="color:"]').count()).toBeGreaterThan(0)
       expect(await read.getByText(file.lang, { exact: true }).count()).toBe(1)
       snapshots.push(`## Read ${file.name}\n\n${await captureStableAria(page, readSelector, scaffold.workspaceCwd)}`)
-      await filesTab.click()
-      await page.locator('[data-files-entry="file"]').getByRole('button', { name: file.name, exact: true }).click()
+      // The first file replaces the files page; later ones open from the pane's navigator.
+      // The files page always shows its tree and draws no toggle.
+      if (await toggle.count() > 0 && await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+      await page.locator('[data-files-navigator]:visible [data-files-entry="file"]').getByRole('button', { name: file.name, exact: true }).click()
       const viewer = preview.locator('[data-document-viewer-menu]')
       if (file.name === 'table.csv') {
         await expect.poll(() => viewer.innerText()).toBe('Spreadsheet')

@@ -37,6 +37,11 @@ it('does not advertise a missing callback and reports an unexpected question ins
   await expect(f.client.request('test/question', {})).resolves.toMatchObject({ error: { message: expect.stringContaining('onUserQuestion') as string } })
 })
 
+it('forwards a user dismissal as a result distinct from callback failure', async () => {
+  const f = await client(async () => ({ cancelled: true }))
+  await expect(f.client.request('test/question', {})).resolves.toEqual({ answer: { cancelled: true }, error: null })
+})
+
 it.each([
   { params: { method: 'unexpected/request' }, message: 'unknown runtime request' },
   { params: { questions: [{ question: 'Missing identity' }] }, message: 'requires requestId, sessionId, and questions' },
