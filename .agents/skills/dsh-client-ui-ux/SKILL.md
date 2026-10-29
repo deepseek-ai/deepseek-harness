@@ -39,13 +39,13 @@ These effort levels change only the additional design-review procedure. Existing
 
 ## Select the rule owners
 
-For layout changes, read the alignment and spacing references; for icon selection, drawing or review, read the icon reference. Other tasks use the relevant sections below. Do not load all references by default. Existing responsive and official-artwork skills retain their scopes; numeric scales stay with their implementation owners.
+For layout changes, read the alignment and spacing references. Read the icon reference when selecting, drawing or reviewing artwork, or when adding, changing or reviewing icon buttons, icon-only actions or informational icons, including reuse without artwork changes. Other tasks use the relevant sections below. Do not load all references by default. Existing responsive and official-artwork skills retain their scopes; numeric scales stay with their implementation owners.
 
 | Decision needed before implementation | Section or reference |
 |---|---|
 | Shared axes, text starts, centering, tree indentation, complete icon boxes | [Alignment](references/alignment.md) |
 | Semantic groups, inner/outer gaps, repeated rhythm, section separation | [Spacing and grouping](references/spacing.md) |
-| Interface icon selection, drawing, supplied-artwork normalization, style, optical weight, icon/label color | [Icons](references/icons.md) |
+| Interface icon selection and artwork; icon buttons and icon-only actions, tooltips, informational hover content, accessible labels and focus | [Icons](references/icons.md) |
 | Color, typography and existing treatments | [Visual foundation](#visual-foundation); [Web styling](../../../docs/web-styling.md) owns tokens/materials |
 | Component geometry, nested contours and state fills | [Geometry decisions](#component-geometry); [radius standard](../../../docs/ui-radius.md) owns values and exceptions |
 | Feedback lifetime, loading, overlays, scrolling and platform clearance | [Interaction and feedback](#interaction-and-feedback); [error handling](../dsh-error-handling/SKILL.md) owns failure guarantees |
