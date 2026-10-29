@@ -4,7 +4,6 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -15,30 +14,13 @@ import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-a
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 import TeamService, { TeamId, TeamMessageId, TeamTaskId } from '../src/index.ts'
 import { teamProjectionDefinition } from '../src/projection.ts'
-import type { TeamMemberSnapshot, TeamMessageSnapshot, TeamTaskSnapshot } from '../src/index.ts'
+import type { TeamMemberSnapshot } from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 
 const SIGNAL = new AbortController().signal
 const PERSISTENCE_TEST_TIMEOUT_MS = 15_000
 const roots: string[] = []
 const contexts = new Set<Context>()
-
-/** Detached durable Team read through the same projection definition as the service. */
-function durable(agent: Agent): {
-  members: readonly TeamMemberSnapshot[]
-  tasks: readonly TeamTaskSnapshot[]
-  pendingMessages: readonly TeamMessageSnapshot[]
-} {
-  let projected = teamProjectionDefinition.init(agent.session.header, agent.session.inheritedEventCount)
-  for (const event of agent.session.snapshotEvents()) projected = teamProjectionDefinition.apply(projected, event)
-  if (projected.failure !== undefined) throw new Error(projected.failure)
-  const state = projected
-  return {
-    members: state.members,
-    tasks: state.tasks,
-    pendingMessages: state.messages.filter(message => !state.delivered.includes(message.id)),
-  }
-}
 
 async function disposeContext(ctx: Context): Promise<void> {
   try {
@@ -170,7 +152,7 @@ for (const backend of backends) {
       await second.dispose()
     })
 
-    it('keeps historical roster records and queued mail readable without delivering them after restart', {
+    it('restores tasks after historical roster and mailbox records without recovering teammates or mail', {
       timeout: PERSISTENCE_TEST_TIMEOUT_MS,
     }, async () => {
       const storageRoot = mkdtempSync(join(tmpdir(), `dsh-team-mail-${backend.name.toLowerCase()}-`))
@@ -192,9 +174,11 @@ for (const backend of backends) {
         id: TeamMessageId('legacy-pending'), senderId: rootId, senderName: 'lead', targetId: childId,
         content: [{ type: 'text' as const, text: 'historical pending context' }],
       }
-      firstLead.session.append('team/member', { version: 2, teamId: TeamId(rootId), member: historical })
       firstLead.session.append('team/member', { version: 2, teamId: TeamId(rootId), member: { ...historical, phase: 'active' } })
+      firstLead.session.append('team/message/delivered', { version: 2, teamId: TeamId(rootId), messageId: message.id, targetId: childId })
       firstLead.session.append('team/message/queued', { version: 2, teamId: TeamId(rootId), message })
+      await first.ctx.agentTeams.setEnabled(firstLead, true)
+      const task = await first.ctx.agentTeams.createTask(firstLead, { subject: 'saved board', description: 'survives retired records' })
       await first.ctx.sessions.flush(firstLead.session)
       await first.dispose()
 
@@ -203,12 +187,18 @@ for (const backend of backends) {
         resumeSessionId: rootId,
         agentOptions: { provider: 'mock', model: 'mock' },
       })
-      expect(durable(rootHandle.agent)).toMatchObject({
-        members: [{ ...historical, phase: 'active' }],
-        pendingMessages: [message],
-      })
+      expect(second.ctx.agentTeams.listTasks(rootHandle.agent)).toEqual([task])
+      const history = rootHandle.agent.session.snapshotEvents()
+      expect(history.filter(event => event.type === 'team/member')).toHaveLength(1)
+      expect(history.find(event => event.type === 'team/message/queued')).toMatchObject({ data: { message } })
+      const checkpoint = second.ctx.sessionProjections.checkpoint(rootHandle.agent.session)
+      const state = teamProjectionDefinition.stateSchema.parse(checkpoint['agentTeam']!.val)
+      expect(Object.keys(state).sort()).toEqual(['enabled', 'id', 'inheritedEventCount', 'nextTaskNumber', 'tasks'])
+      await expect(second.ctx.agentTeams.updateTask(rootHandle.agent, {
+        taskId: task.id, expectedRevision: 1, action: 'claim',
+      })).resolves.toMatchObject({ revision: 2, status: 'in_progress' })
       const projections = second.ctx.sessionProjections.snapshot(rootHandle.agent.session).values
-      expect(projections.agentTeam).toEqual({ enabled: false, tasks: [] })
+      expect(projections.agentTeam).toMatchObject({ enabled: true, tasks: [{ id: task.id, revision: 2 }] })
       expect(second.ctx.agents.get(childId)).toBeUndefined()
       expect(second.adapter.requests).toEqual([])
 

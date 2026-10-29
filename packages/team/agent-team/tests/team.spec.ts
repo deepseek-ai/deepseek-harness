@@ -275,7 +275,7 @@ describe('Tree-owned task boards', () => {
       agentOptions: { provider: 'mock', model: 'mock' },
     })
 
-    expect(durable(handle.agent)).toMatchObject({ members: [], tasks: [] })
+    expect(durable(handle.agent)).toMatchObject({ tasks: [] })
     expect(ctx.agentTeams.isEnabled(handle.agent)).toBe(false)
     await ctx.agentTeams.setEnabled(handle.agent, true)
     const task = await ctx.agentTeams.createTask(handle.agent, { subject: 'fork task', description: 'independent' })

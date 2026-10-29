@@ -111,7 +111,7 @@ The [task-board wait decision](../../../.agents/notes/implemented/architecture/2
 | [`src/index.ts`](src/index.ts) | Plugin entry, configuration validation, and task service registration |
 | [`src/task-board.ts`](src/task-board.ts) | Task CAS commands, DAG validation, and derived views |
 | [`src/journal.ts`](src/journal.ts) | Serialized Lead-log transactions and commit notification |
-| [`src/projection.ts`](src/projection.ts) | Strict replay of historical roster, tasks, and mailbox records, publishing the `agentTeam` client view |
+| [`src/projection.ts`](src/projection.ts) | Replay of saved mode and task records, publishing the `agentTeam` client view |
 | [`src/task-view.ts`](src/task-view.ts) | Pure task readiness and write-overlap derivation shared by the task board and client view |
 
 ### Team identity and membership
@@ -120,7 +120,7 @@ The subagent service resolves the exact live caller’s root through `subagents.
 
 ### Task assignees
 
-Reassignment resolves the root or a continuable descendant through the same discovery used by `list_agents`. Historical `team/member` records remain decode-only and cannot authorize assignment.
+Reassignment resolves the root or a continuable descendant through the same discovery used by `list_agents`. Historical `team/member` records remain in the Session log and cannot authorize assignment.
 
 ### Messages and historical mailbox
 
@@ -140,7 +140,7 @@ Team requires `sessionPersistence` before activation. `Service.init` awaits regi
 
 Task mutations honor cancellation before appending `team/task` to the exact live root Session, then flush before emitting wait signals. Cancellation cannot retract an appended record. A failed flush or one with no participating listener raises `TEAM_TASK_PERSISTENCE_UNCONFIRMED` with the task id and revision: the task is already visible, but durability is unknown, and no wait signal is emitted. Read that task before retrying. Task records remain log-only; signals are not messages or persisted events. The wait tool records its result through the normal tool pipeline. No committed task or historical payload generation is rewritten.
 
-Mailbox projection and checkpoint admission preserve decoded JSON fields outside locally declared validators, including an own `__proto__` key. Historical payload generations remain unchanged; projection caches rebuild from the Session log when their cache version changes.
+The projection ignores historical roster and mailbox records without validating or retaining their payloads. It stores only the task board, saved mode, and recovery metadata. Incompatible projection checkpoints rebuild from the unchanged Session log; see the [upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.3/team-projection/guide.md).
 
 ### Disposal
 
@@ -148,7 +148,7 @@ Unloading the service unregisters the projection. The retained handle remains re
 
 ### Browser projection
 
-The `agentTeam` projection publishes non-deleted task views and any failure beside the last valid state. Historical member fields remain in persisted projection state for decoding compatibility, are omitted from the browser view, and grant no runtime authority. A failed projection rejects task reads and mutations without appending task events. Mode selections can still be saved and applied, including disabling Team; the projection failure remains visible. Invalid mode payloads retain the last valid selection and publish a projection failure. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
+The `agentTeam` projection publishes non-deleted task views and any failure beside the last valid state. Historical roster and mailbox records cannot cause a task-board projection failure. A failed projection rejects task reads and mutations without appending task events. Mode selections can still be saved and applied, including disabling Team; the projection failure remains visible. Invalid mode payloads retain the last valid selection and publish a projection failure. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
 
 The [Web UI](../../client/ui-agent-team/README.md) displays tasks only. Ordinary subagent navigation owns the member list; task owner labels reuse Session and catalog data with an id fallback.
 
