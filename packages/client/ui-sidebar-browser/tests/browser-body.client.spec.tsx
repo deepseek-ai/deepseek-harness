@@ -51,7 +51,7 @@ function mountBrowser(navigation?: { readonly url?: string },
     & Omit<BrowserInjected, 'keyedHooks'> = {
       sessionId: SESSION,
       useTabInfo: () => ({
-        sidebar: { expanded: true, fullscreen: false }, panel: { id: 'pane' as PaneId },
+        sidebar: { expanded: true, fullscreen: false }, panel: { id: 'pane' as PaneId, isFloating: false },
         tab: {
           id: TAB, kind: 'browser', title: 'Browser', contentId: 'sidebar://browser/1', visible: true,
           navigation: { address: 'sidebar://browser/1', params: navigation, revision: 0 },

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Provider-local ordering preserves row instances and unfinished model edits. */
 import { useState } from 'react'
-import { cleanup, createEvent, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, createEvent, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DeepSeekModelsEditor } from '../src/client/DeepSeekModelsEditor.tsx'
 import type { DeepSeekModelDraft } from '../src/client/DeepSeekModelsEditor.tsx'
@@ -62,6 +62,21 @@ function leave(target: HTMLElement, relatedTarget: Node | null = null) {
 }
 
 describe.each(['deepseek', 'pi-ai'] as const)('%s model ordering', (family) => {
+  it('keeps name editing expanded after blur and restores disclosure focus on collapse', () => {
+    render(<Editor family={family} initial={[{ id: 'first', name: 'First' }]} changed={vi.fn()} />)
+    const name = screen.getByLabelText<HTMLInputElement>(`${en.modelName} 1`)
+    const toggle = screen.getByRole('button', { name: `${en.modelAdvanced} 1` })
+    act(() => { name.focus() })
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    act(() => { handle(1).focus() })
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    act(() => { name.focus() })
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(toggle)
+    expect(screen.getByLabelText(`${en.modelName} 1`)).toBe(name)
+  })
+
   it('moves a complete model and its expanded capacity draft to the drop position', () => {
     const first = { id: 'first', name: 'First', contextWindow: 4096, input: ['image'], hidden: { preserved: true } }
     const second = { id: 'second', maxTokens: 1024 }

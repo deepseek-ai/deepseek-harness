@@ -1,4 +1,5 @@
 - text: {{cwd}}/other/example.txt
 - button "Line wrap" [pressed]
 - button "Read the file again"
+- button "Show file tree"
 - text: other file

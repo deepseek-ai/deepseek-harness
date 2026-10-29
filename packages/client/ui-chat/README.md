@@ -58,6 +58,8 @@ Chat omits system-prompt, ordinary Context injection, and `permission` command r
 
 When an Assistant attempt retires without a visible message, Chat hides its already-published Node instead of removing its key. A retry in the same Step reuses that key when visible content returns. This also applies when the loaded window lacks the Step start.
 
+Text and reasoning contribute to Assistant visibility only when they contain a non-whitespace character. Streaming appends reuse each block's visibility; block replacement and finalized messages recalculate it while preserving the original text.
+
 <a id="command-and-failure-rows"></a>
 ## Command and failure rows
 

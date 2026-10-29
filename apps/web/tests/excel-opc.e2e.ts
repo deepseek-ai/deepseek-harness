@@ -54,7 +54,7 @@ describe.skipIf(mode === 'record')('web e2e: independent-writer Excel previews',
     await column.locator('[data-sidebar-right-guide-entry="files"]').click()
     await column.locator('[data-files-state="tree"]').waitFor()
     await column.locator('[data-files-reload]').click()
-    const files = column.locator('[data-dockkit-tab]').filter({ has: page.getByText('Files', { exact: true }) })
+    const toggle = column.locator('[data-files-navigator-toggle]:visible')
     const preview = column.locator('[data-textpreview-url]')
     const excel = preview.locator('[data-excel-preview]')
     const sheets = excel.locator('.luckysheet-sheets-item-name')
@@ -62,8 +62,10 @@ describe.skipIf(mode === 'record')('web e2e: independent-writer Excel previews',
     const rows = ['# Independent-writer Excel previews', '']
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(page.url()).origin })
     for (const name of [...excelOpcCases, ...excelOpeningCases, ...excelXmlCases]) {
-      await files.click()
-      await column.locator('[data-files-entry="file"]').getByRole('button', { name: `${name}.xlsx`, exact: true }).click()
+      // The first file replaces the files page; later ones open from the pane's navigator.
+      // The files page always shows its tree and draws no toggle.
+      if (await toggle.count() > 0 && await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click()
+      await column.locator('[data-files-navigator]:visible [data-files-entry="file"]').getByRole('button', { name: `${name}.xlsx`, exact: true }).click()
       await expect.poll(async () => (await preview.getAttribute('data-textpreview-url'))?.endsWith(`/${name}.xlsx`)).toBe(true)
       await sheets.getByText('数据', { exact: true }).waitFor()
       await excel.locator('.fortune-sheet-overlay').click({ position: { x: 70, y: 30 } })
