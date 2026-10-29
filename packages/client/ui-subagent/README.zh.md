@@ -43,7 +43,7 @@ kind: "package-reference"
 
 ### 续接对话
 
-可继续 child 保留普通输入和独立 Stop 操作，不受创建者在线状态影响。提示词经由 `subagents/prompt` 路由，由运行时校验创建地址和在线 Team 根；失败使用普通提示词错误反馈。Stop 经由 `subagents/interruptByParent` 路由。
+可继续 child 保留普通输入和独立 Stop 操作，不受创建者在线状态影响。提示词经由 `subagents/prompt` 路由，由运行时校验创建地址和在线 Team 根；失败使用普通提示词错误反馈。Stop 经由 `subagents/interruptByUser` 路由。
 
 ### `@` 引用 source
 

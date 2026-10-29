@@ -681,7 +681,7 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     await expect.poll(() => page.locator('.xterm-rows:visible').innerText()).toContain('RECONNECT_READY')
     const transport = await controlTransport(page)
     await page.reload({ waitUntil: 'load' })
-    await expect.poll(() => page.locator('.xterm-rows:visible').innerText()).toContain('RECONNECT_READY')
+    await page.locator('.xterm-rows:visible').filter({ hasText: 'RECONNECT_READY' }).waitFor({ timeout: 30_000 })
     await transport.disconnect()
     const reconnect = page.getByRole('button', { name: 'Reconnect', exact: true })
     await reconnect.waitFor()

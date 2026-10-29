@@ -291,7 +291,7 @@ describe('GoalService creation and replay', () => {
     await fiber.dispose()
     expect(ctx.get('goals')).toBeUndefined()
     expect(ctx.sessionProjections.checkpoint(stub.session).goal?.val).toBeUndefined()
-    expect(first.get(stub.agent)).toMatchObject({ id: goal.id })
+    expect(() => first.get(stub.agent)).toThrow('cannot get required service "agents" in inactive context')
 
     await ctx.plugin(GoalService)
     expect(ctx.goals).not.toBe(first)

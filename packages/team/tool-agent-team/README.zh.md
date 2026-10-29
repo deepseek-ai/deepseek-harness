@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-仅当根 Session 开启 Team 模式时安装 Team 工具和提示词。模式变更只更新该根及其驻留后代，不受其他树的工具安装失败影响。普通 subagent 控制工具始终可用。
+仅当根 Session 开启 Team 模式时，各模型步骤才可使用 Team 工具。提示词提供方在求值时读取同一选择。普通 subagent 控制工具始终可用。
 
 模型需要共享任务板时，将此包与 `@deepseek-ai/dsh-agent-team` 和 `@deepseek-ai/dsh-subagent-names` 一起挂载。根和后代接收相同的任务 schema 和任务策略。
 
@@ -92,11 +92,11 @@ kind: "package-reference"
 
 ### 策略与工具
 
-每个 Agent 作用域均注册一个 `team:policy` 段落、必需的 `team:identity` 上下文和四个任务 schema，包括 fork 子级。树权限从 `ctx.subagents.rootOf(agent)` 派生；`ctx.subagentNames` 提供已绑定的显示名称或原始 Session id。根不可用时，上下文说明共享任务、subagent 发现与通信不可用，不从 Session 创建来源推断父代理。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
+插件注册一次动态 `team:policy` 段落、必需的 `team:identity` 上下文和四个条件任务工具。各提供方读取调用方根 Session 的选择；提示词可见性独立于工具限制。树权限从 `ctx.subagents.rootOf(agent)` 派生；`ctx.subagentNames` 提供已绑定的显示名称或原始 Session id。根不可用时禁用 Team 工具和提示词。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
 
 ### 按作用域注册与拆除
 
-安装覆盖当前在线 Agent，并订阅 `agent/created`、`subagent/start` 与 `team/mode-changed`。子代理启动会在 activation 建立树成员关系后、首次模型请求前安装工具。Agent 释放和插件 HMR 按逆序撤销注册；安装失败不会留下部分作用域。
+工具的 `when` 条件在步骤准备时求值，包括新建、分叉和恢复的 Agent 的首个步骤。策略文本在提示词组装时求值；身份还会在请求准入时刷新。已经准备好的步骤保留其工具选择，但任务操作在开始前检查当前模式。插件释放时由各注册所属的 effect 移除全部注册。
 
 </details>
 
@@ -132,7 +132,7 @@ A shared task board is available to every agent in your subagent tree. Task owne
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
-Task changes end current wait_agent calls in your subagent tree. Changes outside a wait are not retained as notifications, and no task-board messages are added to an inbox. After wait_agent returns, read the latest tasks before acting. Task changes do not start idle agents; use send_message when an agent needs to continue working.
+Task changes do not end wait_agent calls, add inbox messages, or start idle agents. Use send_message when an agent needs to act on a task update.
 ```
 
 #### Token 影响
@@ -147,7 +147,7 @@ Task changes end current wait_agent calls in your subagent tree. Changes outside
 
 #### 模型看到什么
 
-必需的 `team:identity` 上下文对根和队友使用以下文本。根不可用时，上下文明确报告该事实并允许独立工作。可选上下文抑制不能移除该身份；普通运行时上下文机制会在压缩后恢复它。身份使用当前 agent 的完整名称（根为 `lead`）；名称绑定前使用其 Session id。
+Team 已开启且根可用时，必需的 `team:identity` 上下文对根和队友使用以下文本，否则不贡献文本。可选上下文抑制不能移除已启用的身份；普通运行时上下文机制会在压缩后恢复它。身份使用当前 agent 的完整名称（根为 `lead`）；名称绑定前使用其 Session id。
 
 ##### Agent 身份
 

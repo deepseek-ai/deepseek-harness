@@ -33,6 +33,8 @@ kind: "package-reference"
 
 `subagent` 与 `subagent_fork` 的创建行逐步显示 `description` 的首行，执行中、创建完成后和展开时均保留。准备阶段结束后，缺少描述的调用回退到 `prompt` 的首个非空行；参数不可用时仅显示工具标题。两个工具与 `list_subagent_models` 均使用现有的 Users 图标；`subagent_fork` 使用独立标题“派生子智能体”。两个创建工具的创建回执（包括带名称的格式）均显示已启动状态、记录的 ID 与名称，以及完整任务指令。同步返回的 agent 回复仍放在结果正文中；失败时保留错误摘要。
 
+文件和 URL 工具视图 Slot 直接获取 `useContextMenu`，向 `ToolRow` 提供已绑定的 `fileContextMenuProps` 或 `urlContextMenuProps`。文件注册注入在触发时读取原始 Session 工作目录的路径解析器，工作目录缺失时使用工作区根目录。`ToolCallTree` 向普通 `GenericToolCard` fallback 显式提供文件适配函数，包含嵌套调用。无需 Markdown Provider。鼠标和键盘手势保留捕获的路径、行号、URL 与 Session，不会展开工具行或打开文件。
+
 ### 注册业务工具视图
 
 拥有该视图的业务包将其 wire 工具名称注册进 `tool.call.toolview`：
@@ -45,7 +47,7 @@ ctx.slots.inject('tool.call.toolview', () =>
   }, BusinessToolRow))
 ```
 
-owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、`phase` 判别字段及对应阶段的 `block`、可选 `cwd` 与 `home`、会话授权的 `loadImage` loader（供结果携带持久图像的视图使用），以及普通的 `openFile`/`inspect` 回调。PTC dispatch 块保留事件的 `parentCallId`；根会话调用没有该字段，因此后代调用都走同一条按 key 分发路径：已注册视图的调用（如 `read_image`）也会在嵌套处渲染对应卡片，未注册的后代调用则保持通用压平形式。路径摘要先相对会话 cwd 缩短，再把剩余的 POSIX Host home 写成 `~`；`filePath` 与 Host 打开优先使用操作发生时记录的绝对结果路径，显示标签仍保留原始参数。成功的旧根调用结果继续回退到原参数；运行中的相对路径等待结果。注册项会收到常规的会话 slot 运行时共享数据，但不会收到 React 节点或运行时服务。
+owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、`phase` 判别字段及对应阶段的 `block`、可选 `cwd` 与 `home`、经 Gateway 授权的 `loadImage` loader（供结果携带持久图像的视图使用），以及普通的 `openFile`/`inspect` 回调。PTC dispatch 块保留事件的 `parentCallId`；根会话调用没有该字段，因此后代调用都走同一条按 key 分发路径：已注册视图的调用（如 `read_image`）也会在嵌套处渲染对应卡片，未注册的后代调用则保持通用压平形式。路径摘要先相对会话 cwd 缩短，再把剩余的 POSIX Host home 写成 `~`；`filePath` 与 Host 打开优先使用操作发生时记录的绝对结果路径，显示标签仍保留原始参数。成功的旧根调用结果继续回退到原参数；运行中的相对路径等待结果。注册项会收到常规的会话 slot 运行时共享数据，但不会收到 React 节点或运行时服务。
 
 ### 内置视图
 
@@ -58,6 +60,8 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、`phase` 判别字
 问题行按 id 配对问题与答案；答案来自工具结果，迟到回答则来自 `userQuestions` 投影。可回答的调用提供按钮以重新打开面板。迟到回复进入 agent Inbox 后，问题行显示已提交的答案；等待准入期间，「查看回答」展开只读的行内记录。带有答案的已结算调用则以只读方式打开面板。没有答案的已关闭调用和无效记录不提供按钮。已取消和已中断的行显示裁决，不虚构答案。若面板提供方不接受按钮操作，点击会展开该行。不受支持或含糊的输入回退为压平的工具文本。
 
 回答面板按钮归问题 renderer 所有。它使用 `DisclosureRow` 组合自己的操作与 transcript；通用 `ToolRow` 不选择或派发问题操作。
+
+文件与 URL 控件通过作用域内的 Markdown 委托声明右键菜单目标。鼠标和键盘手势的文件目标都携带记录的路径与行号。
 
 -----
 
@@ -82,6 +86,8 @@ Tool Definition 拥有[懒计算参数视图](../../util/values/README.zh.md)。
 
 
 每张卡片都直接在调用树中查看；选中调用后不会再显示第二个全高视图。行 renderer 为 terminal、read、diff、search 和 web 卡片各复用同一个纯 card model，image 卡片的图库经由工具自有 `tool.call.images` slot 渲染，其下显示完整的记录路径以及每张附件图片的像素尺寸（缩小时附原图尺寸）和字节数。这些 model 校验原始调用参数、结果内容、失败状态、持久 metadata、PTC dispatch 的 `parentCallId` 与会话路径信息。不受支持或格式错误的输入使用压平的工具结果文本。文件路径摘要经属主的 `openFile` 打开文件，chat 视图把它路由到右侧 Sidebar 的文本预览；`inspect` 打开轨迹视图；该视图不可用时不提供此回调，卡片随之隐藏 Inspect。terminal、diff、read、search 与 web 卡片的上限与 fallback 规则仍由 [ui-primitives README](../ui-primitives/README.zh.md) 负责；image 卡片的 fallback 规则由本包内的 card model 自行承载。
+
+搜索卡片将值恰好为空字符串的 `include` 视为省略；类型错误、仅含空白的值、否定过滤器和逗号分隔列表仍使用通用显示。
 
 Chat diff 卡片在折叠前保留九行，足以容纳文件标题、一对删除与新增行及两侧各三行上下文。工具行显示原语提供的精确或粗粒度替换统计；展开卡片包含差异正文，不显示底部统计。悬停工具标题行时，新增数量显示绿色、删除数量显示红色；卡片展开期间保留这两种颜色。
 

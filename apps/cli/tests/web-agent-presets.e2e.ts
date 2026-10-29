@@ -302,7 +302,7 @@ describe('the shipped Web composition', () => {
       expect(toolNames(ctx, handle.agent).filter(name => name !== 'glob' && name !== 'grep')).toEqual([
         'ask_user_question', 'bash', 'create_goal', 'edit', 'exit_plan_mode',
         'get_goal', 'interrupt_agent', 'job_kill', 'job_list', 'job_output', 'list_agents', 'list_subagent_models', 'plugin_manager', 'present', 'read', 'read_image',
-        'schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update',
+        'schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view',
         'send_message', 'skill',
         'subagent', 'subagent_fork', 'todo_write', 'update_goal', 'wait_agent', 'web_fetch', 'web_search',
         'workflow', 'working_directory', 'write',
@@ -353,6 +353,49 @@ describe('the shipped Web composition', () => {
       await enabled.dispose()
       await disabled.dispose()
     }
+  })
+
+  it.each(['standard', 'ptc'] as const)('retains delegation tools after repeated preset round trips ending in %s', async (target) => {
+    const adapter = new MinimalCompactionAdapter()
+    const unregister = ctx.llm.registerAdapter(['preset-round-trip'], adapter)
+    onTestFinished(unregister)
+    const direct = await ctx.agents.create({
+      sessionId: SessionId(`preset-direct-${target}-${randomUUID()}`),
+      agentOptions: { provider: 'preset-round-trip', model: 'preset-round-trip' },
+      setup: agentCtx => ctx.agentPresets.mount(agentCtx, target).then(() => undefined),
+    })
+    onTestFinished(() => direct.dispose())
+    const handle = await ctx.agents.create({
+      sessionId: SessionId(`preset-round-trip-${target}-${randomUUID()}`),
+      agentOptions: { provider: 'preset-round-trip', model: 'preset-round-trip' },
+      setup: agentCtx => ctx.agentPresets.mount(agentCtx, target).then(() => undefined),
+    })
+    onTestFinished(() => handle.dispose())
+    const { agent } = handle
+    const other = target === 'standard' ? 'ptc' : 'standard'
+    for (const preset of [other, target, other, target]) {
+      await ctx.agentPresets.select(agent, preset)
+      expect(toolNames(ctx, agent)).toEqual(expect.arrayContaining(['subagent', 'subagent_fork']))
+    }
+    expect(ctx.tools.schemas(agent)).toEqual(ctx.tools.schemas(direct.agent))
+    const assembly = await ctx.systemPrompt.assemble({ scope: agent })
+    if (target === 'ptc') {
+      const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
+      expect(sdk).toContain('subagent:')
+      expect(sdk).toContain('subagent_fork:')
+    }
+    direct.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply with Ready.' }], source: { kind: 'user' } }))
+    await direct.agent.whenIdle()
+    const directRequest = adapter.requests.find(request => request.purpose === undefined)
+    expect(directRequest).toBeDefined()
+    adapter.requests.length = 0
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply with Ready.' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    const request = adapter.requests.find(request => request.purpose === undefined)
+    expect(request).toBeDefined()
+    expect(request?.tools).toEqual(directRequest?.tools)
+    const header = agent.session.snapshotEvents().find(event => event.type === 'request/header')
+    expect(header?.data.header.tools).toEqual(request?.tools)
   })
 
   it('composes the exact RL prompt and persistent shell from `minimal`', async () => {
@@ -683,6 +726,41 @@ describe('the shipped Web composition', () => {
   })
 })
 
+describe('preset-selected delegation through the Web Loader', () => {
+  it('exposes configured delegation tools when each preset switch resolves', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-delegation-switch-'))
+    try {
+      const configured = await bootWeb(root, loadOverlayPatches('delegation-switch',
+        join(REPO_ROOT, 'apps/cli/tests/profiles/subagent-preset-switch.overlay.yml')))
+      try {
+        const adapter = new MinimalCompactionAdapter()
+        configured.llm.registerAdapter(['preset-switch'], adapter)
+        const { agent } = await configured.agents.create({
+          sessionId: SessionId(`configured-switch-${randomUUID()}`),
+          agentOptions: { provider: 'preset-switch', model: 'preset-switch' },
+          setup: owner => configured.agentPresets.mount(owner, 'delegate-a').then(() => undefined),
+        })
+        const views: Array<{ preset: string; names: string[] }> = []
+        for (const preset of ['delegate-b', 'delegate-a', 'delegate-b', 'delegate-a', 'ptc', 'standard', 'delegate-a']) {
+          await configured.agentPresets.select(agent, preset)
+          views.push({ preset, names: toolNames(configured, agent) })
+        }
+        agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply with Ready.' }], source: { kind: 'user' } }))
+        await agent.whenIdle()
+        for (const { preset, names } of views) {
+          expect(names, `tools after selecting ${preset}`).toEqual(expect.arrayContaining(['subagent', 'subagent_fork']))
+        }
+        const request = adapter.requests.find(request => request.purpose === undefined)
+        expect(request?.tools?.map(tool => tool.name)).toEqual(expect.arrayContaining(['subagent', 'subagent_fork']))
+        expect(request?.tools?.find(tool => tool.name === 'subagent'))
+          .toHaveProperty('parameters.properties.agent_preset.enum', ['standard', 'ptc', 'minimal'])
+        const header = agent.session.snapshotEvents().find(event => event.type === 'request/header')
+        expect(header?.data.header.tools).toEqual(request?.tools)
+      } finally { await configured.fiber.dispose() }
+    } finally { await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
+  })
+})
+
 describe.each(['web', 'desktop'] as const)('%s native subagent bundles', (surface) => {
   const products = ['codex', 'claude-code'] as const
   type Product = typeof products[number]
@@ -926,7 +1004,7 @@ describe('a forked session', () => {
 })
 
 describe('a delegated child', () => {
-  it.each([false, true])('inherits preset tools with seeded=%s and refuses child reminders', async (seeded) => {
+  it.each([false, true])('inherits preset tools with seeded=%s and refuses child scheduled tasks', async (seeded) => {
     const parent = await ctx.agents.create({
       sessionId: SessionId(`preset-child-parent-${seeded}`),
       meta: { agentPreset: 'standard' },
@@ -948,10 +1026,12 @@ describe('a delegated child', () => {
       expect(toolNames(ctx, child.agent)).toContain('bash')
       expect(ctx.tools.schemas(child.agent)).toEqual(ctx.tools.schemas(parent.agent))
       const calls = [
-        ['schedule_create', { prompt: 'Check', after_seconds: 60, title: 'Check' }],
+        ['schedule_create', {
+          title: 'Check', prompt: 'Check', rrule: 'DTSTART:20990101T010000Z\nRRULE:FREQ=DAILY;COUNT=1', target: 'this_session',
+        }],
         ['schedule_list', {}],
-        ['schedule_delete', { id: 'task-1' }],
-        ['schedule_update', { id: 'task-1', title: 'Check' }],
+        ['schedule_view', { id: 'task-1' }],
+        ['schedule_edit', { id: 'task-1', action: 'update', title: 'Check' }],
       ] as const
       for (const [name, args] of calls) {
         expect(toolNames(ctx, child.agent)).toContain(name)
@@ -959,7 +1039,7 @@ describe('a delegated child', () => {
           callId: ToolCallId(`child-${name}`), signal: new AbortController().signal,
           name, arguments: args, agent: child.agent,
         })
-        expect(result.value).toEqual({ code: 'subagent_session', message: 'A delegated subagent cannot use reminders.' })
+        expect(result.value).toEqual({ code: 'subagent_session', message: 'A delegated subagent cannot use scheduled tasks.' })
       }
       expect(child.agent.session.header.agentPreset).toBe('standard')
     } finally {

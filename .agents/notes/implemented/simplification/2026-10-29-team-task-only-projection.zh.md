@@ -14,7 +14,7 @@ Status: implemented
 
 检查点版本 7 使旧状态失效，包括退役记录导致的失败。注册表从未改写的 Session 日志重建状态。历史事件声明、格式迁移、消息来源和附件导出仍受支持；无需提升 Session 格式版本或转换日志。
 
-本决策部分取代 [Agent Teams](../feature/2026-08-05-agent-teams.zh.md) 的投影与邮箱校验决策。[子代理身份](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)和[任务板等待](../architecture/2026-10-19-team-task-board-inbox.zh.md)决策仍有效，任务持久性与共享检出语义也保持有效。
+本决策部分取代 [Agent Teams](../feature/2026-08-05-agent-teams.zh.md) 的投影与邮箱校验决策。[子代理身份](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)和[仅等待收件箱](2026-10-29-inbox-only-agent-wait.zh.md)决策仍有效，任务持久性与共享检出语义也保持有效。
 
 ## Alternatives considered
 

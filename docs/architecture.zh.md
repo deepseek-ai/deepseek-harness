@@ -133,7 +133,7 @@ Session 消费方只了解当前逻辑格式。仅 header 的 `stat` 与 `list` 
 
 **模型可见即已记录。** 每个模型请求都必须能从日志重建。新增模型可见输入需要会话事件。修改现有消息内容的插件注册[纯消息投影](subsystems/session.zh.md#plugin-owned-message-projections)，独立读取器显式传入相同的处理器。 工具变更不依赖能力；[Session 工具历史](../packages/core/session/README.zh.md)提供提供方声明。
 
-**投影 seam。** `dsh-session-projection` 提供 `ctx.sessionProjections`：已注册单元增量折叠已提交事件，载体通过 `snapshot()` 批量取得裁剪后的客户端视图。领域服务在激活时等待注册完成，在内部保留句柄，并向其他插件提供业务方法。释放注册会移除全局参与关系；已有句柄仍可继续折叠 Session 事件。`AgentRegistry` 持有轮次和步骤状态，并提供 `turnBoundaryOf(session)`（[注册生命周期](../packages/session/session-projection/README.zh.md)）。 `AgentLoop` 持有 `modelSelection`，并与 inbox 一起构建每个 Agent 的 `model` 实例。
+**投影 seam。** `dsh-session-projection` 提供 `ctx.sessionProjections`：已注册单元折叠已提交事件，载体通过 `snapshot()` 读取选定的客户端视图。领域服务等待注册完成，在内部保留句柄，并提供业务方法（[注册生命周期](../packages/session/session-projection/README.zh.md)）。`AgentRegistry` 通过 `turnBoundaryOf(session)` 提供轮次和步骤状态。`AgentLoop` 持有 `modelSelection` 和 inbox 状态（[Loop 生命周期](../packages/core/agent-loop/README.zh.md)）。
 
 [工作目录](subsystems/working-directory.zh.md) 提供用户上下文和执行路径，不改变原始项目标识、沙箱写入根目录或已有进程目录。
 
@@ -143,7 +143,7 @@ Session 消费方只了解当前逻辑格式。仅 header 的 `stat` 与 `list` 
 
 seam 正是替换一个提供方就能改变整个产品的原因。文件系统与进程提供方共享同一个执行世界，因此把它们指向远程沙箱，也就把 Bash、PTY 和 LSP 一并搬了过去，无需提供方专用 fork。[subagent 提供方](subsystems/subagent.zh.md)在同一个接口之后同样千差万别，从新建一个子 agent，到把一个轮次委派给另一个产品。
 
-[实验性 Agent Teams](subsystems/agent-team.zh.md)提供可选的任务策略、身份、任务板和等待信号。普通 subagent 控制工具负责通信、发现、中断和收件箱等待。
+[实验性 Agent Teams](subsystems/agent-team.zh.md)提供可选的任务策略、身份、任务板。普通 subagent 控制工具负责通信、发现、中断和收件箱等待。
 
 ## 新行为的归属位置
 

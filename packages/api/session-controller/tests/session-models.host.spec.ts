@@ -329,40 +329,6 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
-  it('authorizes attachment bytes only when the session event stream references the id', async () => {
-    const { ctx, agent, sessionId } = await harness()
-    const ref = {
-      attachmentId: 'att-authorized', mediaType: 'image/png' as const, bytes: 2, width: 1, height: 1,
-    }
-    const readImage = vi.fn(() => Promise.resolve({ ref, data: Uint8Array.of(1, 2) }))
-    ctx.provide('attachments', { readImage } as never)
-    const remote = await createSessionTestRemote(ctx, {
-      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
-      cwd: '/tmp',
-    })
-    agent.session.append('agent/inbox/spliced', {
-      target: 'next-turn',
-      start: 0,
-      inserted: [{
-        id: 'queued-image', role: 'user', source: { kind: 'user' },
-        content: [{ type: 'image', attachment: ref }],
-      }],
-    } as never)
-
-    const allowed = await remote.attachment(request({
-      sessionId, attachmentId: 'att-authorized' as never,
-    }))
-    expect(allowed).toMatchObject({ ok: true, value: { attachment: ref, data: 'AQI=' } })
-    const denied = await remote.attachment(request({
-      sessionId, attachmentId: 'att-other' as never,
-    }))
-    expect(denied).toMatchObject({
-      ok: false,
-      error: { code: 'session/attachment-invalid', details: { reason: 'ATTACHMENT_NOT_REFERENCED' } },
-    })
-    expect(readImage).toHaveBeenCalledOnce()
-    await ctx.fiber.dispose()
-  })
   it('checks configured key references even for empty catalogs and skips profiles without keys', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
@@ -466,6 +432,7 @@ describe('Web session model selection', () => {
     const { ctx } = await harness()
     ctx.llm.registerAdapter(['plain'], new CatalogAdapter('Plain', [
       { provider: 'plain', id: 'plain-model', name: 'Plain Model' },
+      { provider: 'plain', id: 'badged-model', name: 'Badged Model', badge: { text: { en: 'New', zh: '新' }, tone: 'info' } },
     ]))
     ctx.llm.registerAdapter(['described-reasoning'], new CatalogAdapter('Described Reasoning', [
       { provider: 'described-reasoning', id: 'reasoning-model', name: 'Reasoning Model' },
@@ -485,7 +452,10 @@ describe('Web session model selection', () => {
 
     const catalog = await buildModelCatalog(ctx)
     expect(catalog.groups).toEqual(expect.arrayContaining([
-      { id: 'plain', name: 'Plain', models: [{ id: 'plain-model', name: 'Plain Model' }] },
+      { id: 'plain', name: 'Plain', models: [
+        { id: 'plain-model', name: 'Plain Model' },
+        { id: 'badged-model', name: 'Badged Model', badge: { text: { en: 'New', zh: '新' }, tone: 'info' } },
+      ] },
       {
         id: 'described-reasoning',
         name: 'Described Reasoning',

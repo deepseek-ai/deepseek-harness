@@ -1,5 +1,5 @@
-/* Sidebar column (figma 133:7629): vertical stack, padding 12/6, sidebar
-   fill + 1px right border painted by the layout column. Collapse is a
+/* Sidebar column: vertical stack, padding 8/6, sidebar
+   fill and desktop divider painted by the layout column. Collapse is a
    slide + crossfade, not a morph: the content holds its frozen expanded
    layout (inline width set by the component) and fades in place (.fading)
    while the sliding column (AppFrame grid tracks) clips it; the rail layout
@@ -7,7 +7,10 @@
    mid-slide. */
 
 .root {
-  --dsh-sidebar-inline-padding: 12px;
+  --dsh-sidebar-inline-padding: 8px;
+  --dsh-sidebar-row-padding: 12px;
+  --dsh-sidebar-label-gap: 6px;
+  --dsh-sidebar-paint-inset: 3px;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -20,6 +23,10 @@
      scrollbar uses the l2 pair. .quietBars hides it without changing layout. */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+:global([data-animating]:not([data-dragging])) .root {
+  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
 /* macOS desktop: the AppFrame column owns the translucent sidebar tint; an
@@ -55,7 +62,7 @@
 }
 
 :global([data-windows-titlebar]) .root:not(.collapsed) .brand {
-  padding-left: 4px;
+  padding-left: 8px;
 }
 
 :global([data-windows-titlebar]) .brandIdentity {
@@ -75,8 +82,7 @@
 }
 
 :global([data-windows-titlebar]) .root:not(.collapsed) .newSession {
-  margin-top: 8px;
-  margin-left: 0;
+  margin-top: 6px;
 }
 
 :global([data-windows-titlebar]) .collapsed .panelList,
@@ -192,6 +198,10 @@
   padding: 0 12px 2px;
 }
 
+:global(html[data-platform='darwin']:not([data-fullscreen])) .root:not(.collapsed) > .topStrip > .toggle {
+  transform: translateX(4px);
+}
+
 /* Window fullscreen hides the traffic lights (html[data-fullscreen], desktop
    preload): the toggle takes their spot at the strip's left edge. */
 :global([data-fullscreen]) .topStrip {
@@ -205,7 +215,8 @@
   margin-top: -12px;
 }
 
-/* Logo row (figma pad (4,8,4,8)): expanded keeps the panel toggle at the
+/* Logo row: 8px vertical and leading padding, with no trailing padding or
+   bottom margin. Expanded keeps the panel toggle at the
    right edge; the rail gives every control the same base left anchor before
    the shared entry translation is applied. macOS hiddenInset titlebar: the row
    is marked `data-window-drag` in markup (SidebarRoot), so ui-web base.css's
@@ -224,8 +235,8 @@
   justify-content: flex-end;
   gap: 8px;
   height: 60px;
-  padding: 8px 0 8px 4px;
-  margin-bottom: 4px;
+  padding: 8px 0 8px 8px;
+  margin-bottom: 0;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -268,7 +279,7 @@
 .brandIdentity {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   height: 24px;
   min-width: 0;
 }
@@ -341,7 +352,7 @@
 
 @media (hover: hover) {
   .iconButton:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
+    background-color: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
@@ -416,7 +427,7 @@
   gap: 0;
   height: 38px;
   padding: 8px 12px;
-  margin: 0 2px 12px;
+  margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px) 10px;
   box-sizing: border-box;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: var(--dsw-radius-md);
@@ -438,22 +449,22 @@
 /* macOS: the themed elevated fill reads as a foreign slab on the vibrancy
    sidebar; a white wash sits in the glass like native macOS sidebar
    controls. Dark keeps the same white ink at lower alpha. */
-:global([data-platform='darwin']) .newSession {
+:global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession {
   background: rgb(255 255 255 / 0.55);
 }
 
 @media (hover: hover) {
-  :global([data-platform='darwin']) .newSession:hover {
+  :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession:hover {
     background: rgb(255 255 255 / 0.3);
   }
 }
 
-:global([data-platform='darwin']) :global([data-ds-dark-theme]) .newSession {
+:global([data-platform='darwin']) :global([data-ds-dark-theme]) :where(.root:not([role='dialog'])) .newSession {
   background: rgb(255 255 255 / 0.15);
 }
 
 @media (hover: hover) {
-  :global([data-platform='darwin']) :global([data-ds-dark-theme]) .newSession:hover {
+  :global([data-platform='darwin']) :global([data-ds-dark-theme]) :where(.root:not([role='dialog'])) .newSession:hover {
     background: rgb(255 255 255 / 0.2);
   }
 }
@@ -471,7 +482,7 @@
 
 @media (hover: hover) {
   .collapsed .newSession:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
+    background-color: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
@@ -527,19 +538,21 @@
   margin-bottom: 8px;
 }
 
-/* Panel entries share the New Session bar's 12px radius and 2px inset, the
-   session rows' hover/selected surface, and the primary ink. */
+/* Panel entries use a 3px paint inset, the New Session bar's 12px radius,
+   the session rows' hover/selected fill, and the primary ink. */
 .panelRow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 2px;
+  gap: var(--dsh-sidebar-label-gap);
+  margin: 0;
   min-height: 36px;
-  padding: 7px 8px;
+  padding: 7px calc(var(--dsh-sidebar-row-padding) - var(--dsh-sidebar-paint-inset));
   box-sizing: border-box;
   border: none;
+  border-inline: var(--dsh-sidebar-paint-inset) solid transparent;
   border-radius: var(--dsw-radius-md);
   background: transparent;
+  background-clip: padding-box;
   color: var(--dsw-alias-label-primary);
   font: inherit;
   line-height: 22px;
@@ -549,12 +562,12 @@
 
 @media (hover: hover) {
   .panelRow:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
+    background-color: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
 .panelRow.panelActive {
-  background: var(--dsw-alias-interactive-bg-hover);
+  background-color: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -570,7 +583,7 @@
 }
 
 .panelRow[aria-expanded='true'] {
-  background: var(--dsw-alias-interactive-bg-hover);
+  background-color: var(--dsw-alias-interactive-bg-hover);
 }
 
 .moreMenu {
@@ -602,6 +615,8 @@
   height: 36px;
   justify-content: center;
   margin: 0;
+  border-inline: 0;
+  background-clip: border-box;
   padding: 0;
   color: var(--dsw-alias-label-primary);
 }
@@ -657,6 +672,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :global([data-animating]:not([data-dragging])) .root,
   .wide,
   .fading > *,
   .railIn .iconButton,

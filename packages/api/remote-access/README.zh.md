@@ -39,6 +39,8 @@ role `{ name, resource, actions }` 是普通值，表示限定一种资源种类
 
 Gateway 依次从 `@Remote` 与 `@RemoteScope` 的 `resources` 读取函数、lookup 与 Host Context adapter 的 `resource` 声明、`typert.resources` 中的默认字段或 resolver 声明解析资源，解析顺序由 [API Gateway](../gateway/README.zh.md) 负责；本包不读取任何参数字段。不指明任何资源的调用只访问 `global` 资源，因此只有 `global` 级 role 能放行；把某个 action 放进 `global` 级 role，等于允许该 principal 在调用未指明的任何资源上调用它。资源非法的调用由 Gateway 以 `resource-invalid` 拒绝，不询问 `decide()`。
 
+policy 作者必须把 `session/attachment` 视为整个附件存储的读取权限：在任意一条 Session 资源上授予该 action，就允许调用方使用这个 `sessionId` 读取其他 Session 引用或未被任何 Session 引用的图片。Gateway 仍检查该 Session 资源，但处理函数既不检查 Session 是否存在，也不检查图片关联。需要让不同读者使用不同图片存储时，须使用独立 Host 实例及各自的 `DSH_HOME` 目录；见[图片访问规则](../../../.agents/notes/implemented/architecture/2026-10-23-store-scoped-image-reads.zh.md)。
+
 `bindings()`、condition 或 `explain()` 抛错时，本次判定以 `policy-failed` 拒绝；计算快照时，`bindings()` 抛错即该 principal 没有 grant，condition 抛错即该 action 不放行。有问题的规则因此不会破坏共享的 `$events` 事件源、快照流或页面渲染。每次 `invalidate()` 以及每次 policy 注册或撤回之后，服务日志对每个 policy 只报告第一次失败；此后该 policy 的失败不再记录，直到下一次上述变化。
 
 转发事件按其转发条目的读取函数指明的资源（条目未声明时为 `global`）判定 action `event:<name>`，对非 owner 整条送达或整条不送，从不裁剪 payload。事件携带其声明的每个资源，因此读取函数返回 `undefined` 时该事件的资源非法，Gateway 不询问 `decide()`，不送达任何非 owner。一个事件至多指明一个资源，因此集合类变化走 follow 类流（`session/follow`、`session/control`、`workspace/follow`），由这些方法内联经 `allows()` 逐项判定。

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Panel de solicitudes de cambio",
+    "description": "Muestra las solicitudes de cambio de una sesión en una pestaña de la barra lateral y permite que una nueva sesión comience en un árbol de trabajo."
+  }
+}

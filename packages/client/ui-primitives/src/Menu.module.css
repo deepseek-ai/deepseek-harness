@@ -34,6 +34,11 @@
   max-width: 360px;
 }
 
+/* Legacy slots can render no rows; keep empty context popups out of layout. */
+.list[data-context-menu]:not(:has([role='menuitem'])) {
+  display: none;
+}
+
 /* Portal mode: fixed in the viewport, coordinates supplied inline from the
  * anchor rect (side/align resolved in JS, the in-place offset rules above
  * don't apply). Portaled lists must layer above modal overlays (z 1000) —
@@ -87,6 +92,12 @@
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
+.list[data-context-menu] .footer:has(> .separator:first-child) {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
 .itemWrap {
   position: relative;
 }
@@ -110,7 +121,7 @@
 }
 
 @media (hover: hover) {
-  .item:hover:not(:disabled) {
+  .item:hover:not(:disabled):not([aria-disabled='true']) {
     background: var(--dsw-alias-interactive-bg-hover);
   }
 }
@@ -153,7 +164,7 @@
 }
 
 .compactList .separator {
-  margin: 2px;
+  margin: 2px 6px;
 }
 
 .compactList .label {
@@ -162,7 +173,8 @@
   line-height: 15px;
 }
 
-.item:disabled {
+.item:disabled,
+.item[aria-disabled='true'] {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -240,7 +252,7 @@
 }
 
 @media (hover: hover) {
-  .danger:hover:not(:disabled) {
+  .danger:hover:not(:disabled):not([aria-disabled='true']) {
     background: var(--dsw-alias-interactive-bg-hover-danger);
   }
 }
@@ -258,11 +270,11 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* Separator cell (figma 122:9481): py 4 / px 2 around the hairline. l2, not
- * l1, for the same reason as .footer: l1 is near-invisible on this surface. */
+/* Separator endpoints align with the row content. The l2 stroke stays visible
+ * on the menu surface. */
 .separator {
   height: 0.5px;
-  margin: 3px 2px;
+  margin: 3px 8px;
   background: var(--dsw-alias-border-l2);
 }
 
@@ -272,6 +284,11 @@
 .separator + .itemWrap > .separator:first-child,
 .itemWrap:first-child > .separator:first-child {
   display: none;
+}
+
+/* A legacy outlet following structured rows is not the beginning of the menu. */
+.list[data-context-menu] .viewport > .itemWrap ~ [data-slot] .itemWrap:first-child > .separator:first-child {
+  display: block;
 }
 
 /* The submenu aligns with the parent's bottom edge. Its hit bridge covers
@@ -293,3 +310,7 @@
   left: -10px;
   width: 10px;
 }
+
+.list[data-menu-phase='dismiss'],
+.list[data-menu-phase='replace'] { pointer-events: none; }
+.list[data-context-menu].scrollable { max-height: calc(100vh - 24px); }

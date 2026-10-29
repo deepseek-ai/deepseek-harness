@@ -418,6 +418,27 @@
   cursor: default;
 }
 
+/* Sending: the message waits for the Host to accept it. The circle keeps its
+   full fill rather than the disabled fade, and an arc turns where the arrow was. */
+.primary[data-sending]:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+
+.sendingSpinner {
+  animation: input-sending 800ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sendingSpinner {
+    animation-duration: 2400ms;
+  }
+}
+
+@keyframes input-sending {
+  to { transform: rotate(360deg); }
+}
+
 .retry {
   margin-left: 8px;
   padding: 1px 8px;

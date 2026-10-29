@@ -27,20 +27,20 @@ id: 2026-10-27-subagent-settlement-attribution
 baseline: false
 changes:
   - root: "event:agent/inbox/spliced"
-    previous: "2026-10-22-action-card-status"
-    after: "5f92518a550044ad3ff53f03999a6ed8ae4764e0f015566b455c2f12a0e41dd5"
+    previous: "2026-10-13-liveshare-share-viewer-principal"
+    after: "ddce54a3873dc57113b0cd38ad9b23b3c259186139e8847e5e5f415d86f52482"
     decision: same-version
   - root: "event:developer/message"
-    previous: "2026-10-22-action-card-status"
-    after: "e70de3d63264af6361a5a4aa05e5e3b135beb18c2d10570591351a49c7e4459a"
+    previous: "2026-10-13-liveshare-share-viewer-principal"
+    after: "70ea8e7943c5e2d76905bcc2e694e8c3d5b138aaae3609f3e261b8d369a6e35a"
     decision: same-version
   - root: "event:session/title-llm-request"
-    previous: "2026-10-22-action-card-status"
-    after: "081bd58df6366694fc756ec83b60f50d74e480961d8b704d2cce1d78ebe61767"
+    previous: "2026-10-13-liveshare-share-viewer-principal"
+    after: "d95c624eddecdacf1ee74356196c09d2f3fcd625714be5e852a6b643fa12a7ca"
     decision: same-version
   - root: "event:user/message"
-    previous: "2026-10-22-action-card-status"
-    after: "d38ac42ecf965f34848ccb4f04e21e79455e1478685b916a152392e74ca5b62b"
+    previous: "2026-10-13-liveshare-share-viewer-principal"
+    after: "dcb07e04496586d2664d72dab0e94312917da56927b2a0dc3ee53d6a33e32450"
     decision: same-version
 ```
 

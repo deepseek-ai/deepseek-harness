@@ -1,4 +1,4 @@
-/** Scoped model-facing task-board tools for the opt-in Agent Teams runtime. */
+/** Conditionally available task-board tools and guidance for Agent Teams. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -13,7 +13,7 @@ import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 /** Cordis plugin name. */
 export const name = 'tool-agent-team'
 /** Services required by the Team tool plugin. */
-export const inject = ['agents', 'agentTeams', 'subagents', 'subagentNames', 'tools', 'systemPrompt']
+export const inject = ['agentTeams', 'subagents', 'subagentNames', 'tools', 'systemPrompt']
 
 /** The Team tool plugin takes no configuration. */
 export type Config = Record<never, never>
@@ -29,7 +29,7 @@ const TEAM_POLICY = `A shared task board is available to every agent in your sub
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
-Task changes end current wait_agent calls in your subagent tree. Changes outside a wait are not retained as notifications, and no task-board messages are added to an inbox. After wait_agent returns, read the latest tasks before acting. Task changes do not start idle agents; use send_message when an agent needs to continue working.`
+Task changes do not end wait_agent calls, add inbox messages, or start idle agents. Use send_message when an agent needs to act on a task update.`
 
 /** One shared task, matching the public `TeamTaskView`. */
 const TASK_VIEW_SCHEMA = {
@@ -104,166 +104,9 @@ function callingAgent(agent: Agent | undefined, toolName: string): Agent {
   return agent
 }
 
-/** Register the complete Team tool set in one exact Agent scope. */
-function install(agent: Agent, ctx: Context): () => void {
-  const scoped = agent.ctx
-  const disposers: Array<() => unknown> = []
-  const register = (disposer: () => unknown): void => { disposers.push(disposer) }
-  try {
-    register(scoped.systemPrompt.section({
-      name: 'team:policy',
-      order: scoped.systemPrompt.getSectionOrder('TEAM_POLICY'),
-      text: TEAM_POLICY,
-    }))
-    register(scoped.systemPrompt.context({
-      name: 'team:identity',
-      order: scoped.systemPrompt.getContextOrder('TEAM_IDENTITY'),
-      required: true,
-      interpolate: false,
-      text: () => {
-        try {
-          return `Your name is ${JSON.stringify(ctx.subagentNames.nameOf(ctx.subagents.rootOf(agent).session, agent.id))}. Your team lead is "lead".
-Use list_agents({}) to find your teammates and their full names.
-Use send_message({ name: "<full agent path>", message: "..." }) to message a teammate.`
-        } catch (error: unknown) {
-          if (!(error instanceof SubagentError) || error.code !== 'UNAUTHORIZED') throw error
-          return 'Your Team root agent is unavailable. Continue independent work; shared tasks, subagent discovery, and messaging require an active root.'
-        }
-      },
-    }))
-    register(scoped.tools.register(defineTool({
-      name: 'team_task_create',
-      description: 'Create one unowned pending task on the shared Team task board.',
-      parameters: {
-        subject: { type: 'string', required: true, description: 'Concise task title.' },
-        description: { type: 'string', required: true, description: 'Complete task details and acceptance criteria.' },
-        blocked_by: { type: 'array', items: { type: 'string' }, description: 'Task ids that must complete first.' },
-        write_scopes: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Advisory workspace-relative file or directory prefixes this task expects to modify.',
-        },
-      },
-      output: jsonOutput(TASK_VIEW_SCHEMA),
-      async execute(args, exec) {
-        const caller = callingAgent(exec.agent, 'team_task_create')
-        const task = await ctx.agentTeams.createTask(caller, {
-          subject: args.subject,
-          description: args.description,
-          ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
-          ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
-        }, exec.signal)
-        return namedTask(task, new Map())
-      },
-    })))
-
-    register(scoped.tools.register(defineTool({
-      name: 'team_task_list',
-      description: 'List shared tasks, including readiness, owner, revision, blockers, and write-scope warnings.',
-      parameters: {
-        status: {
-          type: 'string',
-          enum: ['pending', 'in_progress', 'completed'],
-          description: 'Optional exact status filter.',
-        },
-        owner: { type: 'string', description: 'Optional exact ownerName filter; use unowned for tasks without an owner.' },
-        ready: { type: 'boolean', description: 'Optional readiness filter.' },
-        cursor: { type: 'integer', description: 'Zero-based result offset. Defaults to 0.' },
-        limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
-      },
-      output: jsonOutput(TASK_LIST_VALUE_SCHEMA),
-      execute(args, exec) {
-        const cursor = args.cursor ?? 0
-        const limit = args.limit ?? 50
-        if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error('cursor must be a non-negative safe integer')
-        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('limit must be an integer from 1 through 100')
-        const caller = callingAgent(exec.agent, 'team_task_list')
-        let filtered = ctx.agentTeams.listTasks(caller).filter(task =>
-          (args.status === undefined || task.status === args.status)
-          && (args.owner !== 'unowned' || task.ownerId === undefined)
-          && (args.ready === undefined || task.ready === args.ready))
-        const filterOwner = args.owner !== undefined && args.owner !== 'unowned'
-        const candidates = filterOwner ? filtered : filtered.slice(cursor, cursor + limit)
-        const names = taskOwnerNames(ctx, caller, candidates.map(task => task.ownerId))
-        if (filterOwner) filtered = filtered.filter(task => namedTask(task, names).ownerName === args.owner)
-        return Promise.resolve({
-          tasks: filtered.slice(cursor, cursor + limit).map(task => namedTask(task, names)),
-          ...(cursor + limit < filtered.length ? { nextCursor: cursor + limit } : {}),
-        })
-      },
-    })))
-
-    register(scoped.tools.register(defineTool({
-      name: 'team_task_get',
-      description: 'Read the complete latest value of one shared task before changing or executing it.',
-      parameters: {
-        task_id: { type: 'string', required: true, description: 'Shared task id.' },
-      },
-      output: jsonOutput(TASK_VIEW_SCHEMA),
-      execute(args, exec) {
-        const caller = callingAgent(exec.agent, 'team_task_get')
-        const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))
-        const names = taskOwnerNames(ctx, caller, [task.ownerId])
-        return Promise.resolve(namedTask(task, names))
-      },
-    })))
-
-    register(scoped.tools.register(defineTool({
-      name: 'team_task_update',
-      description: 'Compare-and-set a shared task action using the latest revision from team_task_get or team_task_list.',
-      parameters: {
-        task_id: { type: 'string', required: true, description: 'Shared task id.' },
-        expected_revision: { type: 'integer', required: true, description: 'Current task revision used as the CAS precondition.' },
-        action: {
-          type: 'string',
-          required: true,
-          enum: ['claim', 'release', 'edit', 'set_dependencies', 'complete', 'reopen', 'reassign', 'delete'],
-          description: 'Task transition to apply.',
-        },
-        subject: { type: 'string', description: 'Replacement title for edit.' },
-        description: { type: 'string', description: 'Replacement details for edit.' },
-        blocked_by: { type: 'array', items: { type: 'string' }, description: 'Complete blocker list for set_dependencies.' },
-        write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement advisory write scopes for edit.' },
-        owner: { type: 'string', description: 'Agent name or Session id of the root or any continuable descendant for root-only reassign; omit to unassign.' },
-      },
-      output: jsonOutput(TASK_VIEW_SCHEMA),
-      async execute(args, exec) {
-        const caller = callingAgent(exec.agent, 'team_task_update')
-        const taskId = TeamTaskId(args.task_id)
-        const current = ctx.agentTeams.getTask(caller, taskId)
-        const owner = args.owner === undefined ? undefined
-          : ctx.subagentNames.resolveName(ctx.subagents.rootOf(caller).session, args.owner)
-        const keepsOwner = !['claim', 'release', 'reopen', 'reassign'].includes(args.action)
-        // Names are immutable; the service still checks the revision and authority after these reads.
-        const names = taskOwnerNames(ctx, caller, [
-          caller.id, owner, keepsOwner ? current.ownerId : undefined,
-        ])
-        const task = await ctx.agentTeams.updateTask(caller, {
-          taskId,
-          expectedRevision: args.expected_revision,
-          action: args.action,
-          ...args.subject === undefined ? {} : { subject: args.subject },
-          ...args.description === undefined ? {} : { description: args.description },
-          ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
-          ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
-          ...owner === undefined ? {} : { owner },
-        }, exec.signal)
-        return namedTask(task, names)
-      },
-    })))
-  } catch (error: unknown) {
-    for (const dispose of disposers.reverse()) void dispose()
-    throw error
-  }
-  return () => {
-    for (const dispose of disposers.reverse()) void dispose()
-  }
-}
-
 /**
- * Install Team tools in every live or subsequently published Team member scope.
- * Mode changes reconcile only the selected root and its live descendants.
- * @param ctx - context carrying the Agent registry, Team and subagent services, tools, and system prompt.
+ * Register Team tools and guidance selected by each caller's root Session mode.
+ * @param ctx - context carrying Team, subagent, tool, and system prompt services.
  * @param config - the empty plugin configuration; removed keys fail at load.
  */
 export function apply(ctx: Context, config: Config = {}): void {
@@ -272,40 +115,151 @@ export function apply(ctx: Context, config: Config = {}): void {
       throw new Error(`tool-agent-team: ${key} is no longer supported; create teammates with a subagent tool`)
     }
   }
-  const installed = new Map<Agent, () => void>()
-  const maybeInstall = (agent: Agent, root?: Agent): void => {
-    let enabled: boolean
+  const enabled = (agent: Agent | undefined): boolean => {
+    if (agent === undefined) return false
     try {
-      if (root !== undefined && ctx.subagents.rootOf(agent) !== root) return
-      enabled = ctx.agentTeams.isEnabled(agent)
+      return ctx.agentTeams.isEnabled(agent)
     } catch (error: unknown) {
       if (!(error instanceof SubagentError) || error.code !== 'UNAUTHORIZED') throw error
-      if (root !== undefined) return
       // An independently resumed child has no active root to supply Team mode.
-      enabled = false
-    }
-    if (enabled) {
-      if (!installed.has(agent)) installed.set(agent, install(agent, ctx))
-    } else {
-      installed.get(agent)?.()
-      installed.delete(agent)
+      return false
     }
   }
-  for (const agent of ctx.agents.list()) maybeInstall(agent)
-  ctx.on('agent/created', ({ agent }) => { maybeInstall(agent) })
-  ctx.on('subagent/start', ({ id }) => {
-    const agent = ctx.agents.get(id)
-    if (agent !== undefined) maybeInstall(agent)
+  ctx.systemPrompt.section({
+    name: 'team:policy',
+    order: ctx.systemPrompt.getSectionOrder('TEAM_POLICY'),
+    text: ({ agent }) => enabled(agent) ? TEAM_POLICY : '',
   })
-  ctx.on('team/mode-changed', (root) => {
-    for (const agent of ctx.agents.list()) maybeInstall(agent, root)
+  ctx.systemPrompt.context({
+    name: 'team:identity',
+    order: ctx.systemPrompt.getContextOrder('TEAM_IDENTITY'),
+    required: true,
+    interpolate: false,
+    text: ({ agent }) => {
+      if (agent === undefined || !enabled(agent)) return ''
+      return `Your name is ${JSON.stringify(ctx.subagentNames.nameOf(ctx.subagents.rootOf(agent).session, agent.id))}. Your team lead is "lead".
+Use list_agents({}) to find your teammates and their full names.
+Use send_message({ name: "<full agent path>", message: "..." }) to message a teammate.`
+    },
   })
-  ctx.on('agent/disposed', ({ agent }) => {
-    installed.get(agent)?.()
-    installed.delete(agent)
-  })
-  ctx.effect(() => () => {
-    for (const dispose of installed.values()) dispose()
-    installed.clear()
-  }, 'tool-team.scopedTools()')
+  ctx.tools.register(defineTool({
+    name: 'team_task_create',
+    description: 'Create one unowned pending task on the shared Team task board.',
+    parameters: {
+      subject: { type: 'string', required: true, description: 'Concise task title.' },
+      description: { type: 'string', required: true, description: 'Complete task details and acceptance criteria.' },
+      blocked_by: { type: 'array', items: { type: 'string' }, description: 'Task ids that must complete first.' },
+      write_scopes: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Advisory workspace-relative file or directory prefixes this task expects to modify.',
+      },
+    },
+    output: jsonOutput(TASK_VIEW_SCHEMA),
+    async execute(args, exec) {
+      const caller = callingAgent(exec.agent, 'team_task_create')
+      const task = await ctx.agentTeams.createTask(caller, {
+        subject: args.subject,
+        description: args.description,
+        ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
+        ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
+      }, exec.signal)
+      return namedTask(task, new Map())
+    },
+  }), { when: ({ agent }) => enabled(agent) })
+
+  ctx.tools.register(defineTool({
+    name: 'team_task_list',
+    description: 'List shared tasks, including readiness, owner, revision, blockers, and write-scope warnings.',
+    parameters: {
+      status: {
+        type: 'string',
+        enum: ['pending', 'in_progress', 'completed'],
+        description: 'Optional exact status filter.',
+      },
+      owner: { type: 'string', description: 'Optional exact ownerName filter; use unowned for tasks without an owner.' },
+      ready: { type: 'boolean', description: 'Optional readiness filter.' },
+      cursor: { type: 'integer', description: 'Zero-based result offset. Defaults to 0.' },
+      limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
+    },
+    output: jsonOutput(TASK_LIST_VALUE_SCHEMA),
+    execute(args, exec) {
+      const cursor = args.cursor ?? 0
+      const limit = args.limit ?? 50
+      if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error('cursor must be a non-negative safe integer')
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('limit must be an integer from 1 through 100')
+      const caller = callingAgent(exec.agent, 'team_task_list')
+      let filtered = ctx.agentTeams.listTasks(caller).filter(task =>
+        (args.status === undefined || task.status === args.status)
+        && (args.owner !== 'unowned' || task.ownerId === undefined)
+        && (args.ready === undefined || task.ready === args.ready))
+      const filterOwner = args.owner !== undefined && args.owner !== 'unowned'
+      const candidates = filterOwner ? filtered : filtered.slice(cursor, cursor + limit)
+      const names = taskOwnerNames(ctx, caller, candidates.map(task => task.ownerId))
+      if (filterOwner) filtered = filtered.filter(task => namedTask(task, names).ownerName === args.owner)
+      return Promise.resolve({
+        tasks: filtered.slice(cursor, cursor + limit).map(task => namedTask(task, names)),
+        ...(cursor + limit < filtered.length ? { nextCursor: cursor + limit } : {}),
+      })
+    },
+  }), { when: ({ agent }) => enabled(agent) })
+
+  ctx.tools.register(defineTool({
+    name: 'team_task_get',
+    description: 'Read the complete latest value of one shared task before changing or executing it.',
+    parameters: {
+      task_id: { type: 'string', required: true, description: 'Shared task id.' },
+    },
+    output: jsonOutput(TASK_VIEW_SCHEMA),
+    execute(args, exec) {
+      const caller = callingAgent(exec.agent, 'team_task_get')
+      const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))
+      const names = taskOwnerNames(ctx, caller, [task.ownerId])
+      return Promise.resolve(namedTask(task, names))
+    },
+  }), { when: ({ agent }) => enabled(agent) })
+
+  ctx.tools.register(defineTool({
+    name: 'team_task_update',
+    description: 'Compare-and-set a shared task action using the latest revision from team_task_get or team_task_list.',
+    parameters: {
+      task_id: { type: 'string', required: true, description: 'Shared task id.' },
+      expected_revision: { type: 'integer', required: true, description: 'Current task revision used as the CAS precondition.' },
+      action: {
+        type: 'string',
+        required: true,
+        enum: ['claim', 'release', 'edit', 'set_dependencies', 'complete', 'reopen', 'reassign', 'delete'],
+        description: 'Task transition to apply.',
+      },
+      subject: { type: 'string', description: 'Replacement title for edit.' },
+      description: { type: 'string', description: 'Replacement details for edit.' },
+      blocked_by: { type: 'array', items: { type: 'string' }, description: 'Complete blocker list for set_dependencies.' },
+      write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement advisory write scopes for edit.' },
+      owner: { type: 'string', description: 'Agent name or Session id of the root or any continuable descendant for root-only reassign; omit to unassign.' },
+    },
+    output: jsonOutput(TASK_VIEW_SCHEMA),
+    async execute(args, exec) {
+      const caller = callingAgent(exec.agent, 'team_task_update')
+      const taskId = TeamTaskId(args.task_id)
+      const current = ctx.agentTeams.getTask(caller, taskId)
+      const owner = args.owner === undefined ? undefined
+        : ctx.subagentNames.resolveName(ctx.subagents.rootOf(caller).session, args.owner)
+      const keepsOwner = !['claim', 'release', 'reopen', 'reassign'].includes(args.action)
+      // Names are immutable; the service still checks the revision and authority after these reads.
+      const names = taskOwnerNames(ctx, caller, [
+        caller.id, owner, keepsOwner ? current.ownerId : undefined,
+      ])
+      const task = await ctx.agentTeams.updateTask(caller, {
+        taskId,
+        expectedRevision: args.expected_revision,
+        action: args.action,
+        ...args.subject === undefined ? {} : { subject: args.subject },
+        ...args.description === undefined ? {} : { description: args.description },
+        ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
+        ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
+        ...owner === undefined ? {} : { owner },
+      }, exec.signal)
+      return namedTask(task, names)
+    },
+  }), { when: ({ agent }) => enabled(agent) })
 }

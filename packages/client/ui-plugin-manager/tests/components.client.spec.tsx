@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ConfigPageForm } from '../src/client/slot-contract.ts'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -70,7 +71,7 @@ const MIRROR_OPTION = `${en.registryNpmmirror} registry.npmmirror.com`
 
 const IDLE_INSTALL: InstallState = {
   open: false, spec: '', registries: null, registry: { kind: 'offered', registry: null }, registryOpen: false, registryError: false, attempts: null,
-  phase: 'idle', inputError: null, subject: null, runs: [], detailsOpen: false,
+  phase: 'idle', inputError: null, subject: null, runs: [], detailsOpen: false, logPath: null,
   installed: null, installedVersion: null, restartRequired: false, failure: null, approvedBuilds: [], enabling: false,
 }
 
@@ -159,6 +160,7 @@ function renderTab(
     useSessionRetainInfo: unusedStandardHook,
     useResource: unusedStandardHook,
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
   }
   const navigation = createNavigationStore().create()
   const props: PluginManagerPageProps = {
@@ -803,6 +805,60 @@ describe('PluginManagerPage', () => {
     expect(b.actions.uninstall).not.toHaveBeenCalled()
   })
 
+  it('keeps a shipped bundle out of both lists until one of its declared rows runs', () => {
+    const hidden = '@deepseek-ai/dsh-experimental-liveshare'
+    const shown = '@deepseek-ai/dsh-experimental-agent-team-profile'
+    const offer = (rows: readonly PackageRow[]): PackageView => pkg({
+      name: hidden, official: true, installed: false, optional: true, removable: false, enabled: false, listedByDefault: false, rows,
+    })
+    const other = pkg({ name: shown, installed: false, optional: true, removable: false, enabled: false })
+    const b = renderTab({ packages: [offer([]), other] })
+    // The default installation carries the package but composes none of its rows: neither the main
+    // list nor the More list offers a card for it.
+    expect(document.querySelector(`[data-plugin-package="${hidden}"]`)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+    expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
+    expect(document.querySelector(`[data-plugin-package="${hidden}"]`)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.backToList }))
+
+    // A row inserted through cordis.patch.yml runs while the profile selects no such bundle: the card
+    // is listed as experimental exactly like a bundle the profile selected.
+    b.set({
+      packages: [
+        offer([row({ rowId: 'liveshare-viewer-declarations', moduleName: `${hidden}/viewer-declarations` })]),
+        other,
+      ],
+    })
+    const extensions = document.querySelector('[data-plugin-group="extensions"]') as HTMLElement
+    expect(within(extensions).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package')))
+      .toEqual([shown, hidden])
+
+    // Disabling that row takes the card away again, as removing it would.
+    b.set({
+      packages: [
+        offer([row({
+          rowId: 'liveshare-viewer-declarations', moduleName: `${hidden}/viewer-declarations`,
+          enabled: false, phase: null,
+        })]),
+        other,
+      ],
+    })
+    expect(document.querySelector(`[data-plugin-package="${hidden}"]`)).toBeNull()
+  })
+
+  it('does not open a default-hidden bundle by id while its card is hidden', () => {
+    const hidden = '@deepseek-ai/dsh-experimental-liveshare'
+    const b = renderTab({
+      packages: [pkg({
+        name: hidden, official: true, installed: false, optional: true, removable: false, enabled: false,
+        listedByDefault: false,
+      })],
+    })
+    expect(document.querySelector(`[data-plugin-package="${hidden}"]`)).toBeNull()
+    act(() => { b.navigation.actions.setView({ kind: 'package', name: hidden }) })
+    expect(document.querySelector(`[data-plugin-detail="${hidden}"]`)).toBeNull()
+  })
+
   it.each([false, true])('shows an empty list for hidden bundles with errors and installed=%s', (installed) => {
     renderTab({
       packages: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-experimental-terminal-bundle'].map(name => pkg({
@@ -835,6 +891,27 @@ describe('PluginManagerPage', () => {
     expect(within(detail).queryByRole('button', { name: en.uninstallLabel.replace('{name}', title) })).toBeNull()
     fireEvent.click(within(detail).getByRole('switch', { name: en.enableToggle.replace('{name}', title) }))
     expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-experimental-voice-input-bundle', true)
+  })
+
+  it('keeps the persisted selection while marking a failed component as a problem', () => {
+    renderTab({ packages: [pkg({ name: 'cua', enabled: true, rows: [row({ phase: 'failed', diagnostic: 'native preparation unavailable' })] })] })
+    expect(document.querySelector('[data-plugin-package="cua"]')?.getAttribute('data-plugin-status')).toBe('problem')
+    expect(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'cua') }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'cua') }))
+    expect(screen.getByText(`${en.reasonLabel}: native preparation unavailable`)).toBeTruthy()
+  })
+
+  it('shows Computer Use permission guidance on the experimental plugins page', () => {
+    const description = 'Review application access before use.'
+    const { actions } = renderTab({ packages: [pkg({
+      name: '@deepseek-ai/dsh-cua-bundle', enabled: false, optional: true, installed: false,
+      meta: { title: 'Computer Use', description },
+    })] })
+    fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+    expect(screen.getByText(en.statusBeta)).toBeTruthy()
+    expect(screen.getByText(description)).toBeTruthy()
+    fireEvent.click(screen.getByRole('switch', { name: en.enableToggle.replace('{name}', 'Computer Use') }))
+    expect(actions.setEnabled).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-cua-bundle', true)
   })
 
   it.each([
@@ -1587,7 +1664,7 @@ describe('PluginManagerPage', () => {
     fireEvent.click(toggle('row-2'))
     expect(actions.setRowEnabled).toHaveBeenCalledTimes(1)
     expect(toggle('include:row-5')).toHaveProperty('disabled', true)
-    expect(within(detail).getByText(en.rowPhaseFailed)).toBeTruthy()
+    expect(within(detail.querySelector<HTMLElement>('[data-plugin-row="include:row-3"]')!).getByText(en.rowPhaseFailed)).toBeTruthy()
     expect(within(detail).getByText(en.rowPhaseLoading)).toBeTruthy()
     expect(within(detail).getByText(en.rowPhaseUnloading)).toBeTruthy()
     expect(document.querySelector('[data-plugin-row="include:row-3"]')?.getAttribute('data-state')).toBe('failed')
@@ -1781,9 +1858,9 @@ describe('PluginManagerPage', () => {
     expect(screen.queryByText('line 8')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: en.terminalExpandAria.replace('{n}', '3') }))
     expect(screen.getByText('line 8')).toBeTruthy()
-    // Before the first chunk there is no location to name.
+    // Before the first chunk there is no location to name, and a running install claims no output yet.
     set({ install: { ...IDLE_INSTALL, open: true, spec: 'dsh-x', phase: 'running', subject, detailsOpen: true } })
-    expect(screen.getByText(en.terminalNoOutput)).toBeTruthy()
+    expect(screen.queryByText(en.installDetailsNoOutput)).toBeNull()
     // Cancel and the back control each ask the Host to stop the run; the close control asks too, and closes once the Host confirms.
     fireEvent.click(screen.getByRole('button', { name: en.installCancel }))
     fireEvent.click(screen.getByRole('button', { name: en.installCancelAndEdit }))
@@ -1983,6 +2060,35 @@ describe('PluginManagerPage', () => {
     // A tarball spec reads by its kind too.
     set({ install: { ...IDLE_INSTALL, open: true, spec: '/p/x.tgz', phase: 'failed', subject: { spec: '/p/x.tgz', status: 'accepted', kind: 'tarball', bundle: null, registry: null }, failure: null } })
     expect(screen.getByText(en.installSubjectTarball)).toBeTruthy()
+  })
+
+  it('names an enable-stage failure and points the details at the complete Host log', () => {
+    const subject = { spec: 'dsh-x', status: 'accepted', kind: 'registry', name: 'dsh-x', bundle: true, registry: null } as const
+    const logPath = '/home/u/.dsh/profiles/web/plugin-manager/runs/install.log'
+    const enabling: InstallState = {
+      ...IDLE_INSTALL, open: true, spec: 'dsh-x', phase: 'failed', subject, detailsOpen: true, logPath,
+      failure: { reason: 'activation refused', stage: 'enable', enabled: true },
+    }
+    const { set } = renderTab({ install: enabling })
+    // The enabled bundle could not be applied, so the screen separates the finished install from the failure.
+    expect(screen.getByText(en.installFailedEnabling)).toBeTruthy()
+    // No terminal chunk reached the dialog; the details say what the dialog received, not what the run printed.
+    expect(screen.getByText(en.installDetailsNoOutput)).toBeTruthy()
+    // They still point at the Host's complete log for the run that settled the dialog.
+    expect(screen.getByText(en.installLogPath.replace('{path}', logPath))).toBeTruthy()
+    // A failure of the install itself names no finished install.
+    set({ install: { ...enabling, failure: { reason: 'activation refused', stage: 'install', enabled: true } } })
+    expect(screen.queryByText(en.installFailedEnabling)).toBeNull()
+    // An install that never asked to enable the bundle cannot have failed enabling it.
+    set({ install: { ...enabling, failure: { reason: 'activation refused', stage: 'enable', enabled: false } } })
+    expect(screen.queryByText(en.installFailedEnabling)).toBeNull()
+    // Without a reason the sentence is the only line: it names the step instead of the install command it finished.
+    set({ install: { ...enabling, failure: { reason: '', stage: 'enable', enabled: true } } })
+    expect(screen.getAllByText(en.installFailedEnabling)).toHaveLength(1)
+    expect(screen.queryByText(en.installFailureGeneric)).toBeNull()
+    // Without a settled run's log the details offer no path.
+    set({ install: { ...enabling, logPath: null } })
+    expect(screen.queryByText(en.installLogPath.replace('{path}', logPath))).toBeNull()
   })
 
   it.each(['network', 'timeout'] as const)('shows GitHub recovery only after a %s failure and returns to package input', (kind) => {
@@ -2569,7 +2675,6 @@ it('supplies the accepted entry values and atomic mutation action to a custom pl
   expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['count'], value: 3 }], 7)
 })
 
-
 describe('on-demand Official bundles', () => {
   const name = '@deepseek-ai/dsh-subagent-codex'
   const title = 'Codex subagent'
@@ -2676,6 +2781,28 @@ describe('on-demand Official bundles', () => {
     expect(detail.querySelector('[data-plugin-rows]')).toBeNull()
   })
 })
+
+it('uses the same activation guidance from a package detail switch', () => {
+  const name = 'dsh-better-sidebar'
+  const { set, actions } = renderTab({ packages: [pkg({ enabled: false })] }, { bundles: new Set([name]) }, {
+    [`plugins.bundle.activation:${name}`]: (_view, owner) => <button onClick={(owner as PluginActivationOwnerProps).onDismiss}>Finish setup</button>,
+    [`plugins.bundle.config:${name}`]: () => <div>Bundle setup</div>,
+  })
+  fireEvent.click(screen.getByRole('button', { name: `View ${name}` }))
+  expect(screen.getByText('Bundle setup')).toBeTruthy()
+  fireEvent.click(screen.getByRole('switch'))
+  expect(actions.setEnabled).toHaveBeenCalledWith(name, true)
+  set({ packages: [pkg()], busy: [name] })
+  expect(screen.queryByText('Finish setup')).toBeNull()
+  set({ busy: [] })
+  fireEvent.click(screen.getByText('Finish setup'))
+  expect(screen.queryByText('Finish setup')).toBeNull()
+  expect(screen.getByText('Bundle setup')).toBeTruthy()
+  fireEvent.click(screen.getByRole('switch'))
+  set({ packages: [pkg({ enabled: false })] })
+  expect(screen.queryByText('Finish setup')).toBeNull()
+})
+
 
 it('keeps bundle configuration mounted while its operation is pending', () => {
   const name = 'dsh-better-sidebar'

@@ -4,11 +4,10 @@
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { expect, it } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-schedule'
 import { launchWebScaffold, watchConsole } from './scaffold.ts'
+import { revealNavigationDrawer } from './support.ts'
 
-const PHONE_TASK_SESSION = SessionId('schedule-phone-web-e2e')
 const PHONE_TASK_TITLE = 'Review overdue deployment'
 const PHONE_PAGE_WIDTH = 390
 
@@ -25,6 +24,7 @@ interface ViewFacts {
 /** Open the Automation tasks page and return its panel. */
 async function openTaskManager(page: Page, url: string): Promise<Locator> {
   await page.goto(url, { waitUntil: 'load' })
+  await revealNavigationDrawer(page, 'zh')
   await page.getByRole('button', { name: '自动化任务', exact: true }).click()
   const panel = page.getByTestId('task-manager-page')
   await panel.getByRole('heading', { name: '自动化任务', exact: true }).waitFor({ timeout: 30_000 })
@@ -46,7 +46,7 @@ async function viewFacts(page: Page): Promise<ViewFacts> {
       width: window.innerWidth,
       documentWidth: document.documentElement.scrollWidth,
       smallestField: steps.length === 0 ? -1 : Math.min(...steps),
-      name: step('[class*="_editName"]'),
+      name: step('[class*="_editorField"] input'),
       search: step('[class*="_searchField"] input'),
       instruction: step('[class*="_instruction"]'),
     }
@@ -57,8 +57,9 @@ it('keeps the automation page on screen with its text fields at the touch step',
   const scaffold = await launchWebScaffold()
   const url = scaffold.authenticatedUrl
   try {
-    await scaffold.ctx.schedule.create(PHONE_TASK_SESSION, {
-      prompt: 'Check the deployment log', title: PHONE_TASK_TITLE, at: '2099-08-25T12:08:00.000Z',
+    await scaffold.ctx.schedule.create({
+      prompt: 'Check the deployment log', title: PHONE_TASK_TITLE,
+      timing: { kind: 'at', at: '2099-08-25T12:08:00.000Z' }, target: { kind: 'new_once' },
     })
     const browser: Browser = await chromium.launch()
     try {
@@ -78,15 +79,15 @@ it('keeps the automation page on screen with its text fields at the touch step',
         search: '16px',
         instruction: 'absent',
       })
-      // The detail keeps the floor too, and the name control keeps the 20px step
-      // the floor must not flatten.
+      // The editor keeps the touch floor for its name and instruction fields.
       await phonePanel.getByRole('button', { name: PHONE_TASK_TITLE, exact: true }).click()
       await phonePanel.locator('[class*="_detailScroll"]').waitFor({ timeout: 10_000 })
+      await phonePanel.getByRole('button', { name: '编辑', exact: true }).click()
       await expect.poll(() => viewFacts(phonePage)).toEqual({
         width: PHONE_PAGE_WIDTH,
         documentWidth: PHONE_PAGE_WIDTH,
         smallestField: 16,
-        name: '20px',
+        name: '16px',
         search: '16px',
         instruction: '16px',
       })
@@ -107,11 +108,12 @@ it('keeps the automation page on screen with its text fields at the touch step',
       })
       await desktopPanel.getByRole('button', { name: PHONE_TASK_TITLE, exact: true }).click()
       await desktopPanel.locator('[class*="_detailScroll"]').waitFor({ timeout: 10_000 })
+      await desktopPanel.getByRole('button', { name: '编辑', exact: true }).click()
       await expect.poll(() => viewFacts(desktopPage)).toEqual({
         width: 1024,
         documentWidth: 1024,
         smallestField: 14,
-        name: '20px',
+        name: '14px',
         search: '14px',
         instruction: '14px',
       })

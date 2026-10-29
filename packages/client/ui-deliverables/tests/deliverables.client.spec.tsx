@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * ui-deliverables browser half: the derivation contract of produced paths,
  * recorded changes, and deliveries over engine-published Turn data, the
@@ -43,7 +44,10 @@ function openProps(controller = new PresentedOpenController(), summaries = new C
   controller.host.set({ name: 'desktop', available: true, fileManager: 'finder' })
   const diffs = new ChangesDiffStore()
   const sessions: SessionListState = { ids: [], byId: {}, phase: 'ready', projectionsBySession: {} }
+  const openMenu = vi.fn()
   return {
+    openMenu,
+    useContextMenu: contextMenuHook(openMenu),
     SessionProvider: ({ children }: { children?: import('react').ReactNode }) => <>{children}</>,
     renderSlot: renderFileActions,
     useChangesDiff: <T,>(select: (state: ReturnType<typeof diffs.state.getSnapshot>) => T): T => select(diffs.state.getSnapshot()),
@@ -571,7 +575,7 @@ describe('ChangedFiles card', () => {
     controller = new PresentedOpenController(), locale = en, matched = { changes, presented: [] as never[] }, summaries = servedStore(),
   ) {
     const props = openProps(controller, summaries)
-    props.openChanged.mockResolvedValue(null)
+    props.openChanged.mockResolvedValue({ kind: 'opened' })
     const openFile = vi.fn<(path: string) => void>()
     const view = render(<Deliverables {...props} matched={matched} openFile={openFile} sessionId={SessionId('child-session')} t={makeTranslate(locale)} />)
     return { props, openFile, view }
@@ -838,6 +842,7 @@ describe('producedFileMentions resolver', () => {
 describe('plugin registration', () => {
   it('registers the tail entry and fiber disposal removes it', async () => {
     const ctx = new Context()
+    ctx.provide('contextMenus', { register: () => () => {}, open: vi.fn() } as never)
     await ctx.plugin(SlotRegistry).await()
     new UiConversation(ctx, { binding: () => undefined } as never)
     // The owning view's child declaration, stood up by a bench root entry.
@@ -906,10 +911,16 @@ describe('plugin registration', () => {
     const preview = vi.fn<(path: string) => void>()
     for (const produced of [[], [{ path: 'out/report.docx' }]]) {
       const delivered = tailOwner({ produced, presented: [{ path: 'out/report.docx', seq: 2, index: 0 }] }, 3, preview)
-      const mentions = service?.forClosing(delivered, SessionId('child-session'))
+      const { getTriggerProps } = contextMenuHook((target, point) => { ctx.contextMenus.open(target, point) })()
+      const mentions = service?.forClosing(delivered, SessionId('child-session'), path =>
+        getTriggerProps({ kind: 'file', value: { sessionId: SessionId('child-session'), path } }))
       for (const text of ['report.docx', 'out/report.docx']) {
         const mention = mentions?.resolve(text)
         expect(mention?.label).toBe('Open out/report.docx in sidebar')
+        const trigger = render(<button {...mention?.contextMenuProps}>Mention</button>)
+        fireEvent.contextMenu(trigger.getByRole('button'), { clientX: 41, clientY: 52 })
+        trigger.unmount()
+        expect(vi.spyOn(ctx.contextMenus, 'open')).toHaveBeenLastCalledWith({ kind: 'file', value: { sessionId: 'child-session', path: 'out/report.docx' } }, { x: 41, y: 52 })
         mention?.open()
       }
     }
@@ -927,9 +938,9 @@ describe('plugin registration', () => {
     // The replaced connection may reach a Host that no longer serves the summaries read so far.
     expect(face.hooks.changesSummary.getSnapshot()).toEqual({})
     await face.openPresented(SessionId('child-session'), 2, 0)
-    expect(face.hooks.presentedOpen.getSnapshot()['api/present.open?sessionId=child-session&seq=2&index=0']).toBe('opened')
+    expect(face.hooks.presentedOpen.getSnapshot()['api/present.open?sessionId=child-session&seq=2&index=0']).toBeUndefined()
     await face.openChanged(SessionId('child-session'), 5, 0)
-    expect(face.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=0']).toBe('opened')
+    expect(face.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=0']).toBeUndefined()
     face.openChangesReview({ sessionId: SessionId('child-session'), seq: 5, turn: 3 }, 1)
     expect(openResource).toHaveBeenCalledWith('dsh-resource://changes-review/session/child-session/5/3', { params: { index: 1 } })
     expect((registered as { title(address: string): string }).title('dsh-resource://changes-review/session/child-session/5/3')).toBe('Review · turn 3')
@@ -950,7 +961,7 @@ describe('plugin registration', () => {
     await tabFace.reloadPresentedHost()
     fetcher.mockResolvedValueOnce(new Response(null, { status: 204 }))
     await tabFace.openChanged(SessionId('child-session'), 5, 1)
-    expect(tabFace.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=1']).toBe('opened')
+    expect(tabFace.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=1']).toBeUndefined()
     ctx.emit('connection/reset')
     expect(tabFace.hooks.changesDiff.getSnapshot()).toEqual({})
     // A turn that produced nothing yields no vocabulary at all.
@@ -1012,8 +1023,10 @@ describe('presented files', () => {
     const owner = tailOwner(deliverablesOf(value), 3, preview)
     const matched = selectDeliverables(owner)!
     const props = openProps()
-    props.openPresented.mockResolvedValue(null)
+    props.openPresented.mockResolvedValue({ kind: 'opened' })
     const view = render(<Deliverables {...props} matched={matched} openFile={owner.openFile} sessionId={SessionId('child-session')} t={makeTranslate(en)} />)
+    fireEvent.contextMenu(view.getByRole('button', { name: 'Preview report-0.docx in sidebar' }), { clientX: 18, clientY: 29 })
+    expect(props.openMenu).toHaveBeenCalledWith({ kind: 'file', value: { sessionId: 'child-session', path: 'report-0.docx' } }, { x: 18, y: 29 })
     expect(view.container.querySelectorAll('[data-presented-file]')).toHaveLength(4)
     const expand = view.getByRole('button', { name: 'Show all 8 delivered files' })
     expect(expand.getAttribute('aria-expanded')).toBe('false')
@@ -1091,7 +1104,7 @@ it('lets one delivered file span the complete row without an expansion control',
 })
 
 
-it.each(['opening', 'opened', 'error'] as const)('shows the %s state and permits retries after failure', (phase) => {
+it.each(['opening', 'error'] as const)('shows the %s state and permits retries after failure', (phase) => {
   const controller = new PresentedOpenController()
   controller.state.set({ 'api/present.open?sessionId=session&seq=2&index=0': phase })
   const props = openProps(controller)

@@ -2,7 +2,8 @@
  * Guarantee tests for the tool-schema catalog generator (`scripts/gen-tool-catalog.ts`).
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import ScheduleService from '@deepseek-ai/dsh-schedule'
 import {
   assertManifestComplete,
   assertToolsHarvested,
@@ -32,8 +33,8 @@ describe('gen-tool-catalog collectToolCatalog', () => {
       'interrupt_agent', 'job_kill', 'job_list', 'job_output',
       'list_agents', 'list_mcp_resource_templates', 'list_mcp_resources',
       'list_subagent_models', 'load_workspace_dependencies', 'lsp', 'plugin_manager', 'plugin_market', 'present', 'propose_action', 'pwsh', 'pwsh', 'ralph',
-      'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_delete',
-      'schedule_list', 'schedule_update', 'send_message', 'session_event_read', 'session_event_search',
+      'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_edit',
+      'schedule_list', 'schedule_view', 'send_message', 'session_event_read', 'session_event_search',
       'session_event_trace', 'session_search', 'session_trace', 'skill',
       'stagehand_act', 'stagehand_extract', 'stagehand_navigate', 'stagehand_observe', 'stagehand_screenshot', 'stagehand_tabs',
       'str_replace_editor', 'subagent', 'subagent_oar', 'team_task_create',
@@ -78,6 +79,21 @@ describe('gen-tool-catalog collectToolCatalog', () => {
       send_message: 'packages/subagent/tool-subagent-control/src/index.ts',
       wait_agent: 'packages/subagent/tool-subagent-control/src/wait-agent.ts',
     })
+  })
+
+  it('lists Schedule prompt dependencies and reads delivery limits from Schedule Config', async () => {
+    const config = vi.spyOn(ScheduleService, 'Config').mockReturnValue({ newSessionIntervalSeconds: 900 })
+    try {
+      const catalog = await collectToolCatalog()
+      const schedule = catalog.find(entry => entry.pkg === '@deepseek-ai/dsh-tool-schedule')
+      expect(schedule?.requires).toEqual(['ctx.tools', 'ctx.schedule', 'ctx.systemPrompt'])
+      expect(config).toHaveBeenCalledWith({})
+      expect(schedule?.schemas.find(schema => schema.name === 'schedule_create')?.parameters).toMatchObject({
+        properties: { target: { description: expect.stringContaining('at most once every 15 minutes') as string } },
+      })
+    } finally {
+      config.mockRestore()
+    }
   })
 
   it('harvests search tools without depending on the generator process PATH', async () => {

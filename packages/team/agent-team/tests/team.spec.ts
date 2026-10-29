@@ -729,8 +729,8 @@ describe('Team shared task DAG', () => {
   })
 })
 
-describe('Task-board wait notifications', () => {
-  it('publishes one tree signal per change without enumerating Agents, writing inboxes, or starting idle Agents', async () => {
+describe('Task-board persistence', () => {
+  it('commits tasks without writing inboxes or starting idle agents', async () => {
     const { ctx, lead, adapter } = await setup([])
     const alpha = await resident(ctx, lead, 'notify-alpha')
     const beta = (await ctx.agents.create({
@@ -744,16 +744,10 @@ describe('Task-board wait notifications', () => {
       meta: { origin: 'subagent', parentSession: lead.id },
       agentOptions: { provider: 'mock', model: 'mock' },
     })).agent
-    const notified: Agent[] = []
-    ctx.on('subagent/tree-wait-notified', (root) => { notified.push(root) })
-    const list = vi.spyOn(ctx.agents, 'list')
     const first = await ctx.agentTeams.createTask(lead, { subject: 'one', description: 'first change' })
     await ctx.agentTeams.updateTask(beta, {
       taskId: first.id, expectedRevision: first.revision, action: 'claim',
     })
-    await ctx.agentTeams.setEnabled(lead, false)
-    expect(notified).toEqual([lead, lead, lead])
-    expect(list).not.toHaveBeenCalled()
     for (const agent of [lead, alpha, beta, unrelated, unbound]) {
       expect(agent.inbox.nextStep).toHaveLength(0)
       expect(agent.inbox.nextTurn).toHaveLength(0)
@@ -763,10 +757,8 @@ describe('Task-board wait notifications', () => {
     expect(adapter.requests).toHaveLength(0)
   })
 
-  it('publishes notifications only after persistence succeeds', async () => {
+  it('resolves task commits only after persistence succeeds', async () => {
     const { ctx, lead } = await setup([])
-    const notified: Agent[] = []
-    ctx.on('subagent/tree-wait-notified', (root) => { notified.push(root) })
     const flush = ctx.sessions.flush.bind(ctx.sessions)
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
@@ -775,16 +767,19 @@ describe('Task-board wait notifications', () => {
       await release.promise
       return await flush(session)
     })
-    const creating = ctx.agentTeams.createTask(lead, { subject: 'one', description: 'wait for flush' })
+    let committed = false
+    const creating = ctx.agentTeams.createTask(lead, { subject: 'one', description: 'wait for flush' }).then((task) => {
+      committed = true
+      return task
+    })
     try {
       await entered.promise
-      expect(notified).toEqual([])
+      expect(committed).toBe(false)
     } finally {
       release.resolve(undefined)
       await creating
     }
-    expect(notified).toEqual([lead])
-    notified.length = 0
+    expect(committed).toBe(true)
     vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(new Error('storage unavailable'))
     await expect(ctx.agentTeams.createTask(lead, { subject: 'two', description: 'failed flush' })).rejects.toMatchObject({
       code: 'TEAM_TASK_PERSISTENCE_UNCONFIRMED',
@@ -793,49 +788,23 @@ describe('Task-board wait notifications', () => {
     })
     expect(ctx.agentTeams.getTask(lead, TeamTaskId('task-2'))).toMatchObject({ subject: 'two', revision: 1 })
     expect(ctx.agentTeams.listTasks(lead)).toHaveLength(2)
-    expect(notified).toEqual([])
     await expect(ctx.agentTeams.updateTask(lead, {
       taskId: TeamTaskId('task-1'), expectedRevision: 99, action: 'claim',
     })).rejects.toMatchObject({ code: 'TEAM_TASK_STALE_REVISION' })
-    expect(notified).toEqual([])
   })
 
-  it('reports unconfirmed task revisions without notifications when no flush listener participates', async () => {
+  it('reports unconfirmed task revisions when no flush listener participates', async () => {
     const { ctx, lead } = await setup([])
-    const notified: Agent[] = []
-    ctx.on('subagent/tree-wait-notified', (root) => { notified.push(root) })
     vi.spyOn(ctx.sessions, 'flush').mockResolvedValue(false)
 
     await expect(ctx.agentTeams.createTask(lead, { subject: 'unconfirmed', description: 'read before retrying' }))
       .rejects.toMatchObject({ code: 'TEAM_TASK_PERSISTENCE_UNCONFIRMED' })
     const taskId = TeamTaskId('task-1')
     expect(ctx.agentTeams.getTask(lead, taskId)).toMatchObject({ subject: 'unconfirmed', revision: 1 })
-    expect(notified).toEqual([])
 
     await expect(ctx.agentTeams.updateTask(lead, { taskId, expectedRevision: 1, action: 'claim' }))
       .rejects.toMatchObject({ code: 'TEAM_TASK_PERSISTENCE_UNCONFIRMED' })
     expect(ctx.agentTeams.getTask(lead, taskId)).toMatchObject({ revision: 2, ownerId: lead.id })
-    expect(notified).toEqual([])
   })
 
-  it('contains listener failures and continues notifying other tree subscribers', async () => {
-    const { ctx, lead } = await setup([])
-    const warnings: string[] = []
-    ctx.logger.warn = ((message: unknown) => { warnings.push(String(message)) }) as typeof ctx.logger.warn
-    ctx.on('subagent/tree-wait-notified', () => { throw new Error('sync listener') })
-    ctx.on('subagent/tree-wait-notified', () => Promise.reject(new Error('async listener')) as never)
-    const notified: Agent[] = []
-    ctx.on('subagent/tree-wait-notified', (root) => { notified.push(root) })
-    const task = await ctx.agentTeams.createTask(lead, { subject: 'committed', description: 'listener failure' })
-    expect(task).toMatchObject({ id: 'task-1', revision: 1 })
-    expect(notified).toEqual([lead])
-    expect(warnings).toEqual([
-      'subagent: subagent/tree-wait-notified listener threw: Error: sync listener',
-      'subagent: subagent/tree-wait-notified listener rejected: Error: async listener',
-    ])
-    await using stored = await ctx.sessionPersistence.open(lead.id, 'read')
-    const events = (await stored.read()).events.filter(event => event.type === 'team/task')
-    expect(events).toHaveLength(1)
-    expect(events[0]!.data).toMatchObject({ task: { id: task.id, revision: 1, subject: 'committed' } })
-  })
 })

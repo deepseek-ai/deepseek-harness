@@ -226,6 +226,68 @@ describe('Menu', () => {
     expect(document.activeElement).toBe(trigger)
   })
 
+  it('explains an unavailable component row on hover and focus without activating it', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    try {
+      const onSelect = vi.fn()
+      const reason = 'Available at 15:51:37.'
+      const menu = (explanation: string | undefined) => (
+        <Menu open anchor={<button type="button">trigger</button>} onClose={() => {}}>
+          <MenuItemButton disabled={explanation !== undefined} disabledReason={explanation} onSelect={onSelect}>Run now</MenuItemButton>
+        </Menu>
+      )
+      const { rerender } = render(menu(reason))
+      const row = screen.getByRole('menuitem', { name: 'Run now', description: reason })
+      expect(row.hasAttribute('disabled')).toBe(false)
+      expect(row.getAttribute('aria-disabled')).toBe('true')
+      fireEvent.click(row)
+      expect(onSelect).not.toHaveBeenCalled()
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' })
+      act(() => { vi.advanceTimersByTime(499) })
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(screen.getByRole('tooltip').textContent).toBe(reason)
+      fireEvent.pointerLeave(row, { pointerType: 'mouse' })
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      // The arrow walk reaches the row, and keyboard focus shows the reason at once.
+      const trigger = screen.getByRole('button', { name: 'trigger' })
+      fireEvent.keyDown(document.body, { key: 'Tab' })
+      trigger.focus()
+      fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+      expect(document.activeElement).toBe(row)
+      expect(screen.getByRole('tooltip').textContent).toBe(reason)
+      // A reason that goes away keeps the focused row mounted and makes it an ordinary row.
+      rerender(menu(undefined))
+      expect(document.activeElement).toBe(row)
+      expect(row.hasAttribute('aria-disabled')).toBe(false)
+      expect(row.hasAttribute('aria-describedby')).toBe(false)
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      fireEvent.click(row)
+      expect(onSelect).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('closes an explained unavailable row on Tab and returns focus to the trigger', () => {
+    const onClose = vi.fn()
+    const onSelect = vi.fn()
+    render(<Menu open anchor={<button type="button">trigger</button>} onClose={onClose}>
+      <MenuItemButton disabled disabledReason="Wait for the next run interval" onSelect={onSelect}>Run now</MenuItemButton>
+    </Menu>)
+    const trigger = screen.getByRole('button', { name: 'trigger' })
+    trigger.focus()
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+    const row = screen.getByRole('menuitem', { name: 'Run now' })
+    expect(document.activeElement).toBe(row)
+    fireEvent.keyDown(row, { key: 'Tab' })
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(trigger)
+  })
+
   it('disabled item does not select; Escape and outside pointerdown close', () => {
     const onSelect = vi.fn()
     const onClose = vi.fn()

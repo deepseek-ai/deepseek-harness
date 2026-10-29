@@ -214,7 +214,7 @@ describe('Session tail-page seeding', () => {
 
   it('treats a blockless response as no reset: pushed values survive', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
-    mock.stream(FOLLOW, followScript(ok({ records: entries(plainTurn(SessionSeq(0), 0, 'a', 'b')) as never[], hasMore: false })))
+    mock.stream(FOLLOW, followScript(ok({ cursor: 5, records: entries(plainTurn(SessionSeq(0), 0, 'a', 'b')) as never[], hasMore: false })))
     await session.open()
     session.projections.apply('test/marks', { marks: ['pushed'] }, SessionSeq(9))
     await session.resync()

@@ -60,11 +60,15 @@ kind: "package-reference"
 
 `dropZones="horizontal"` 提供左右两个半区提示；预算或宽度不允许再拆时，正文整格接收移动。提示是一张内缩 8px 的虚线卡片，显示该落区的图形和 `labels.dropZone[zone]`；预览层覆盖全部 tab 正文，指针所在的卡片取强调色，另一张保持安静的轮廓。`minPaneFraction` 控制预览的最小比例，`planResizeSplit` 接受相同最小值以约束提交；Sidebar使用0.2并在自己的store限制两格。通用引擎仍保留原有树与其它分割方向。 `hideSplitWhenBlocked` 在分栏被阻止时（窗格预算已满或格太窄）直接隐藏分栏控件而不是渲染禁用态，默认值为 false。
 
+分栏控件的包裹元素通过 `data-dockkit-split-control` 提供宿主样式入口，不依赖具体元素标签。
+
 tab 的 `kind` 是不透明字符串。种子 tab 是工厂（`DockControllerOptions`），因此新格里放什么由嵌入方决定，与本包无关。内容身份是二元组（`kind`、`contentId`）：`findContentTab(state, contentId, kind?)` 在任意位置找到展示它的 tab，`findPaneContentTab(state, paneId, contentId, kind?)` 在一个格内找；`planOpenContent` 会聚焦该 tab 而非再开一个，除非被告知 `revealIfOpened: false`；显式的 `index` 把新 tab 放到 tab 条的某个位置而非末尾。
 
 Sidebar 使用的 `DockLayout` 在选中项变化、跨格移动与浮动期间，把每个 tab 保留在稳定的 DOM 容器中。它接受一个停靠格或左右两个格，由 CSS Grid 计算宽度。`keepMounted(tab)` 保留已访问正文，`active` 控制 Session 可见性，不改变内容的父子关系。
 
-`DockSurface` 是独立递归渲染器的停靠区。它周围的 chrome——轨道、折叠形态、任何历史控件——属于嵌入方，由嵌入方读取 `state.expanded` 后自行决定；套件不自带撤销/重做控件。嵌入方确实想放到面上的整面控件通过 `chrome` prop 传入，套件把它放在右上格 tab 条的最末端（每个横向分裂的最后一个子节点、每个纵向分裂的第一个子节点），因此停靠面不需要自己的标题行。`FloatLayer` 拥有自己的手势并以视口坐标定位浮窗，因此可以挂在任何位置，包括 portal 里。 两种浮窗渲染器都让标题栏与 Windows 顶栏至少间隔 20px（原生全屏时距视口顶部 20px），新建和恢复的浮窗均适用。拖动和调整大小从实际显示位置开始。
+`DockSurface` 是独立递归渲染器的停靠区。它周围的 chrome——轨道、折叠形态、任何历史控件——属于嵌入方，由嵌入方读取 `state.expanded` 后自行决定；套件不自带撤销/重做控件。嵌入方确实想放到面上的整面控件通过 `chrome` prop 传入，套件把它放在右上格 tab 条的最末端（每个横向分裂的最后一个子节点、每个纵向分裂的第一个子节点），因此停靠面不需要自己的标题行。`FloatLayer` 拥有自己的手势并以视口坐标定位浮窗，因此可以挂在任何位置，包括 portal 里。 静止时两种浮窗渲染器都让标题栏与 Windows 顶栏至少间隔 20px（原生全屏时距视口顶部 20px），新建和恢复的浮窗均适用。拖动和调整大小从实际显示位置开始。
+
+浮窗始终留在视口内。每个浮窗绘制在其存储矩形投影到视口后的位置，因此窗口缩小时浮窗被推入且不记录操作，窗口变大时浮窗朝存储位置回移；大于视口的浮窗按视口尺寸绘制。移动时浮窗在视口内一比一跟随指针，越过任一边界（包括顶部）后受到阻力，最多越过边界 120px；松手时记录一次带最近合法矩形的 `moveFloat`，若该矩形就是按下时的合法矩形则只提升浮窗，再让浮窗从绘制位置以弹簧回到该矩形，携带绘制速度、不超出这 120px，并略微向内过冲。回弹过程中按下标题栏或缩放角都会从绘制位置接住浮窗；从那里缩放时保留原点，松手后再以弹簧收回视口。调整大小时右下角保持在视口内。静止时样式表会再次把每个浮窗的位置和尺寸钳制在视口内，因此即使视口读数过期，浮窗仍在视口内。在 `prefers-reduced-motion: reduce` 下，移动在边界处钳制且不播放动画。
 
 <a id="interaction-rules-worth-keeping"></a>
 ## 值得保留的交互规则

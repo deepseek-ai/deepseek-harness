@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { startMockLlmServer, type MockLlmServer } from '@deepseek-ai/dsh-llm-mock-server'
+import { parseSessionHeader } from '@deepseek-ai/dsh-llm-replay'
 import type {} from '@deepseek-ai/dsh-plugin-manager'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subagent'
@@ -193,6 +194,7 @@ it.skipIf(MODE === 'record')('renders recorded official notice titles after reop
     await seedSession(scaffold, fixture, 'official-subagent-recorded-ui')
     browser = await chromium.launch()
     const page = await newEnglishPage(browser)
+    await page.clock.setFixedTime(parseSessionHeader(fixture).createdAt)
     const tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     const workspace = page.locator('[role="treeitem"]').first()

@@ -129,7 +129,7 @@ Session consumers know only the current logical format. Header-only `stat` and `
 
 **Model-visible means logged.** Every model request must be reconstructable from the log. New model-visible inputs require session events. Plugins changing existing message content register [pure message projections](subsystems/session.md#plugin-owned-message-projections); detached readers supply the same definitions explicitly. Tool changes are capability-independent; [Session tool history](../packages/core/session/README.md) supplies provider declarations.
 
-**Projection seam.** `dsh-session-projection` owns `ctx.sessionProjections`: registered units fold committed events incrementally, and carriers batch cropped client views with `snapshot()`. Domain services await registration during activation, retain private handles, and expose business methods for other plugins. Releasing registration removes global participation; retained handles continue folding Session events. `AgentRegistry` owns turn and step state and exposes `turnBoundaryOf(session)` ([registration lifecycle](../packages/session/session-projection/README.md)). `AgentLoop` owns `modelSelection` and constructs each Agent’s `model` instance alongside its inbox.
+**Projection seam.** `dsh-session-projection` owns `ctx.sessionProjections`: registered units fold committed events; carriers read selected client views through `snapshot()`. Domain services await registration, retain private handles, and expose business methods ([registration lifecycle](../packages/session/session-projection/README.md)). `AgentRegistry` exposes turn and step state through `turnBoundaryOf(session)`. `AgentLoop` owns `modelSelection` and inbox state ([loop lifecycle](../packages/core/agent-loop/README.md)).
 
 [Working directories](subsystems/working-directory.md) supply user context and execution paths without changing original project identity, sandbox write roots, or existing process directories.
 
@@ -139,7 +139,7 @@ A **seam** is a swappable capability with three roles: a **Service Definition** 
 
 Seams are why one provider swap changes the whole product. Filesystem and subprocess providers share one execution world, so pointing them at a remote sandbox moves Bash, PTY, and LSP with them, with no provider forks. [Subagent providers](subsystems/subagent.md) vary just as widely behind one interface, from a fresh child agent to a delegated turn in another product.
 
-[Experimental Agent Teams](subsystems/agent-team.md) adds opt-in task policy, identity, a task board, and wait signals. Ordinary subagent controls own messaging, discovery, interruption, and inbox waiting.
+[Experimental Agent Teams](subsystems/agent-team.md) adds opt-in task policy, identity, a task board. Ordinary subagent controls own messaging, discovery, interruption, and inbox waiting.
 
 ## Where new behavior goes
 

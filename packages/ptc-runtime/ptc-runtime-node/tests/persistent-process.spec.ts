@@ -1,7 +1,9 @@
 import { Duplex, PassThrough } from 'node:stream'
+import { setImmediate } from 'node:timers/promises'
 import { expect, it, onTestFinished } from 'vitest'
 import { createProcessRpc } from '../src/rpc.ts'
-import { runPersistentMain, type PersistentProcess } from '../src/persistent-process.ts'
+import { runPersistentMain } from '../src/persistent-process.ts'
+import type { ProgramProcess } from '../src/process.ts'
 import { decodePtcJsonWire, encodePtcJsonWire } from '../src/json-wire.ts'
 import type { ProgramBootData, HostMethods, ProgramMethods } from '../src/protocol.ts'
 
@@ -12,7 +14,7 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}) {
   const host = Duplex.from({ readable: second, writable: first })
   child.on('error', () => {})
   host.on('error', () => {})
-  const state: PersistentProcess = { env: { FIXTURE_SECRET: 'test', PATH: '/native' }, stdout: { write: () => true }, stderr: { write: () => true }, chdir }
+  const state: ProgramProcess = { env: { FIXTURE_SECRET: 'test', PATH: '/native' }, stdout: { write: () => true }, stderr: { write: () => true }, chdir }
   const nativeEnvironment = state.env
   const ready = Promise.withResolvers<true>()
   const seen: Record<string, unknown>[] = []
@@ -31,7 +33,7 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}) {
   onTestFinished(close)
   await ready.promise
   const run = (code: string, namespaces: ProgramBootData['namespaces'] = [], maxOutputBytes = 1024) => {
-    return peer.run('/', { code, namespaces, maxOutputBytes }).then((result) => {
+    return peer.run('/', { code, namespaces, maxOutputBytes, retainsState: true }).then((result) => {
       seen.push({ type: 'done', ...result })
       return result
     })
@@ -56,7 +58,9 @@ it('keeps an injected process local to the REPL while it runs and after it close
 })
 
 it('keeps an environment while capturing each evaluation and binding replies separately', async () => {
-  const h = await setup()
+  // REPL diagnostics include Node-version-dependent frames and checkout paths.
+  const diagnosticBudget = 65_536
+  const h = await setup(diagnosticBudget)
   const declarations = [{ global: 'tools', names: ['echo'], errorClass: { name: 'ToolCallError', memberNameProperty: 'toolName' } }]
   expect(await h.run('let count = 1; const saved = tools.echo;', declarations)).toEqual({})
   const result = await h.run('count++; process.stdout.write("raw"); console.log("value", count); await saved({})', declarations)
@@ -64,10 +68,12 @@ it('keeps an environment while capturing each evaluation and binding replies sep
   expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['raw', 'value 2'])
   expect(h.state.env).toEqual({})
   expect(h.nativeEnvironment).toEqual({ PATH: '/native' })
-  const failed = await h.run('throw new Error("failed")')
+  const failed = await h.run('throw new Error("failed")', [], diagnosticBudget)
   expect(failed).toMatchObject({ error: { kind: 'exception' } })
   expect((failed.error as { message: string }).message).toContain('failed')
-  expect(await h.run('const =')).toMatchObject({ error: { kind: 'exception' } })
+  const syntax = await h.run('const =', [], diagnosticBudget)
+  expect(syntax).toMatchObject({ error: { kind: 'exception' } })
+  expect(syntax.error?.message).toContain('SyntaxError')
   expect(decodePtcJsonWire((await h.run('count')).value)).toBe(2)
 })
 
@@ -142,4 +148,12 @@ it('shuts down an idle REPL without creating an evaluation', async () => {
   const h = await setup()
   await h.close()
   expect(h.seen).toEqual([])
+})
+
+it('ignores a REPL asynchronous diagnostic after its evaluation has completed', async () => {
+  const h = await setup()
+  await h.run('setImmediate(() => { throw new Error("completed callback") }); 1')
+  await setImmediate()
+  expect(decodePtcJsonWire((await h.run('2')).value)).toBe(2)
+  expect(h.seen.filter(message => message.type === 'done')).toHaveLength(2)
 })

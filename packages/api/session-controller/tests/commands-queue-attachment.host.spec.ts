@@ -6,19 +6,19 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, Inbox } from '@deepseek-ai/dsh-agent'
 import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { createAssistantMessage, createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, {
-  SESSION_FORMAT_VERSION, Session, SessionId, SessionLogOffset, SessionSeq,
+  Session, SessionId, SessionLogOffset,
 } from '@deepseek-ai/dsh-session'
-import type { SessionEvent, SessionHeader, UserMessage } from '@deepseek-ai/dsh-session'
+import type { UserMessage } from '@deepseek-ai/dsh-session'
 import { snapshotSubagentDescriptor, SUBAGENT_DESCRIPTOR_VERSION } from '@deepseek-ai/dsh-subagent'
 import { subagentIdentityProjectionDefinition } from '@deepseek-ai/dsh-subagent/src/projection.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiSessionAgentController } from '../src/agent.ts'
 import { SessionCommandController } from '../src/commands.ts'
 import { unsupportedModel, createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
+import { installSessionReadTestServices } from './test-remote.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -324,277 +324,68 @@ describe('Session queue commands', () => {
   })
 })
 
-function imageRef(id: string): ImageAttachmentRef {
-  return {
-    attachmentId: AttachmentId(id),
-    mediaType: 'image/png',
-    bytes: 1,
-    width: 1,
-    height: 1,
-  }
-}
-
-function event(type: string, seq: SessionSeq, data: unknown): SessionEvent {
-  const surface = ['user/message', 'system/message', 'developer/message', 'tool/result'].includes(type)
-  return { type, seq, time: seq + 1, data, ...surface ? { surfaceOp: 'append' } : {} } as SessionEvent
-}
-
-async function persistedController(
-  events: SessionEvent[],
-  readImage: (ref: ImageAttachmentRef) => Promise<{ ref: ImageAttachmentRef; data: Uint8Array }>,
-  workspace: Pick<SessionHeader, 'cwd'> = { cwd: '/workspace' },
-): Promise<{ ctx: Context; controller: SessionCommandController; sessionId: SessionId }> {
-  const ctx = new Context()
-  await ctx.plugin(SessionStore)
-  const sessionId = SessionId('cold-attachment')
-  const meta: SessionHeader = {
-    version: SESSION_FORMAT_VERSION,
-    id: sessionId,
-    createdAt: 1,
-    ...workspace,
-    isSeeded: false,
-  }
-  ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
-    list: () => Promise.resolve([meta]),
-    inspect: () => Promise.resolve({
-      meta,
-      inheritedEventCount: SessionLogOffset(0),
-      events,
-    }),
-  }) as never)
-  installSessionReadTestServices(ctx)
-  ctx.provide('attachments', { readImage } as never)
-  const agents = { resolveAgent: vi.fn() } as unknown as ApiSessionAgentController
-  return { ctx, controller: new SessionCommandController(ctx, agents, '/workspace'), sessionId }
-}
-
-describe('Session attachment authorization', () => {
-  it.each([
-    ['system/message', 'message'], ['developer/message', 'message'], ['tool/result', 'message'],
-    ['team/message/queued', 'message'], ['tool/ptc-dispatch', 'content'],
-    ['compaction/summary', 'summary'], ['compaction/summary', 'rawOutput'],
-  ] as const)('reads the declared %s %s content without rewriting it', async (type, field) => {
-    const ref = imageRef(`${type}-${field}`)
-    const content = [{ type: 'image', attachment: ref }]
-    const message = type === 'team/message/queued' ? { content }
-      : type === 'tool/result' ? {
-        id: 'declared-message', role: 'tool', source: { kind: 'tool', callId: 'declared-call' },
-        toolCallId: 'declared-call', isError: false, content,
-      } : {
-        id: 'declared-message', role: type === 'developer/message' ? 'developer' : 'system',
-        source: { kind: 'system-prompt' }, content,
-      }
-    const data = field === 'message' ? { message } : { [field]: content }
-    const events = [event(type, SessionSeq(0), data)]
-    const saved = JSON.stringify(events)
-    const readImage = vi.fn((image: ImageAttachmentRef) => Promise.resolve({ ref: image, data: Uint8Array.of(1) }))
-    const fixture = await persistedController(events, readImage)
+describe('Session attachment reads', () => {
+  it.each(['commands-session', 'other-session', 'missing-session'])('reads a supplied reference without looking up history for %s', async (id) => {
+    const { ctx, controller, agent, resolveAgent } = await commandHarness()
+    const ref: ImageAttachmentRef = {
+      attachmentId: AttachmentId(`sha256:${'ab'.repeat(32)}`),
+      mediaType: 'image/png', bytes: 2, width: 1, height: 1,
+    }
+    agent.session.append('user/message', createUserMessage({
+      content: [{ type: 'image', attachment: ref }], source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    const readImage = vi.fn(() => Promise.resolve({ ref, data: Uint8Array.of(1, 2) }))
+    ctx.provide('attachments', { readImage } as never)
+    const failHistory = (): never => { throw new Error('image reads must not access Session history') }
+    const get = vi.spyOn(ctx.sessions, 'get').mockImplementation(failHistory)
+    const snapshot = vi.spyOn(agent.session, 'snapshotEvents').mockImplementation(failHistory)
+    const observe = vi.spyOn(ctx.sessionQuery, 'observeSession').mockImplementation(failHistory)
     try {
-      await expect(fixture.controller.attachment({ sessionId: fixture.sessionId, attachmentId: ref.attachmentId }))
-        .resolves.toEqual({ attachment: ref, data: 'AQ==' })
+      await expect(controller.attachment({ sessionId: SessionId(id), attachment: ref }))
+        .resolves.toEqual({ attachment: ref, data: 'AQI=' })
       expect(readImage).toHaveBeenCalledExactlyOnceWith(ref)
-      expect(JSON.stringify(events)).toBe(saved)
+      expect(get).not.toHaveBeenCalled()
+      expect(snapshot).not.toHaveBeenCalled()
+      expect(observe).not.toHaveBeenCalled()
+      expect(resolveAgent).not.toHaveBeenCalled()
     } finally {
-      await fixture.ctx.fiber.dispose()
+      get.mockRestore()
+      snapshot.mockRestore()
+      observe.mockRestore()
+      await ctx.fiber.dispose()
     }
   })
 
-  it('does not authorize an attachment through malformed inbox entries', async () => {
-    const ref = imageRef('not-referenced')
-    for (const value of [undefined, null, {}, [null, 1, []]]) {
-      const readImage = vi.fn((image: ImageAttachmentRef) => Promise.resolve({ ref: image, data: Uint8Array.of(1) }))
-      const fixture = await persistedController([event('agent/inbox/spliced', SessionSeq(0), { inserted: value })], readImage)
-      try {
-        await expect(fixture.controller.attachment({ sessionId: fixture.sessionId, attachmentId: ref.attachmentId }))
-          .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'ATTACHMENT_NOT_REFERENCED' } })
-        expect(readImage).not.toHaveBeenCalled()
-      } finally {
-        await fixture.ctx.fiber.dispose()
-      }
-    }
-  })
-
-  it('ignores unrelated fields of a known message event and its content blocks', async () => {
-    const ref = imageRef('not-a-content-occurrence')
-    const content = [{ type: 'image', attachment: ref }]
-    const stored = event('user/message', SessionSeq(0), {
-      id: 'metadata', role: 'user', source: { kind: 'user' },
-      content: [{ type: 'text', text: 'no image', content }, { type: 'plugin:vendor', data: { content }, content }],
-      message: { content }, inserted: [{ content }],
-    })
-    const readImage = vi.fn((image: ImageAttachmentRef) => Promise.resolve({ ref: image, data: Uint8Array.of(1) }))
-    const fixture = await persistedController([stored], readImage)
-    try {
-      await expect(fixture.controller.attachment({ sessionId: fixture.sessionId, attachmentId: ref.attachmentId }))
-        .rejects.toMatchObject({ code: 'session/attachment-invalid' })
-      expect(readImage).not.toHaveBeenCalled()
-    } finally {
-      await fixture.ctx.fiber.dispose()
-    }
-  })
-
-  it.each(['external/image-record', 'session/title-llm-request'])('denies attachment access from %s without an attachment carrier', async (type) => {
-    const ref = imageRef('opaque-event-image')
-    const content = [{ type: 'image', attachment: ref }]
-    const opaque = { ...event(type, SessionSeq(0), {
-      content, message: { content }, inserted: [{ content }], messages: [{ content }],
-      stream: [{ type: 'chunk', time: 1, chunk: { type: 'block-end', index: 0, block: content[0] } }],
-    }), ignorable: true as const }
-    const readImage = vi.fn((image: ImageAttachmentRef) => Promise.resolve({ ref: image, data: Uint8Array.of(1) }))
-    const fixture = await persistedController([opaque], readImage)
-    try {
-      await expect(fixture.controller.attachment({ sessionId: fixture.sessionId, attachmentId: ref.attachmentId }))
-        .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason: 'ATTACHMENT_NOT_REFERENCED' } })
-      expect(readImage).not.toHaveBeenCalled()
-    } finally {
-      await fixture.ctx.fiber.dispose()
-    }
-  })
-
-  it('finds references in direct, message, inserted, and streamed content', async () => {
-    const direct = imageRef('direct')
-    const message = imageRef('message')
-    const inserted = imageRef('inserted')
-    const streamed = imageRef('streamed')
-    const events: SessionEvent[] = [
-      { ...event('user/message', SessionSeq(0), {
-        id: 'direct', role: 'user', source: { kind: 'user' },
-        content: [null, [], { type: 'text', text: 'none' }, { type: 'image', attachment: direct }],
-      }), ignorable: true as const },
-      {
-        type: 'assistant/message', seq: SessionSeq(1), time: 2, surfaceOp: 'append',
-        data: {
-          turn: 1,
-          step: 1,
-          stream: [],
-          message: createAssistantMessage({
-            content: [{ type: 'image', attachment: message }],
-            source: { provider: 'fixture', model: 'fixture' },
-          }),
-        },
-      },
-      event('agent/inbox/spliced', SessionSeq(2), {
-        target: 'next-turn',
-        start: 0,
-        inserted: [null, 1, [], { content: [] }, createUserMessage({
-          content: [{ type: 'image', attachment: inserted }],
-          source: { kind: 'user' },
-        })],
-      }),
-      event('assistant/attempt', SessionSeq(3), {
-        turn: 1,
-        step: 1,
-        stream: [
-          {
-            type: 'chunk',
-            time: 3,
-            chunk: { type: 'block-start', index: 0, blockType: 'text' },
-          },
-          {
-            type: 'chunk',
-            time: 3,
-            chunk: { type: 'block-end', index: 0, block: { type: 'text', text: '' } },
-          },
-        ],
-      }),
-      event('assistant/attempt', SessionSeq(4), {
-        turn: 1,
-        step: 1,
-        stream: [{
-          type: 'chunk',
-          time: 4,
-          chunk: { type: 'block-end', index: 0, block: { type: 'image', attachment: streamed } },
-        }],
-      }),
-    ]
-    const readImage = vi.fn((ref: ImageAttachmentRef) => Promise.resolve({ ref, data: Uint8Array.of(1) }))
-    const { ctx, controller, sessionId } = await persistedController(events, readImage)
-
-    for (const ref of [direct, message, inserted, streamed]) {
-      await expect(controller.attachment({ sessionId, attachmentId: ref.attachmentId }))
-        .resolves.toEqual({ attachment: ref, data: 'AQ==' })
-    }
-    expect(readImage).toHaveBeenCalledTimes(4)
-    await ctx.fiber.dispose()
-  })
-
-  it('maps missing persistence identities and attachment backend failures', async () => {
-    const noPersistence = new Context()
-    await noPersistence.plugin(SessionStore)
-    installSessionReadTestServices(noPersistence)
-    const noPersistenceController = new SessionCommandController(
-      noPersistence,
-      { resolveAgent: vi.fn() } as unknown as ApiSessionAgentController,
-      '/workspace',
-    )
-    await expectFailure(noPersistenceController.attachment({
-      sessionId: SessionId('missing'), attachmentId: AttachmentId('att'),
-    }), 'session/not-found')
-
-    const missing = new Context()
-    await missing.plugin(SessionStore)
-    missing.provide('sessionPersistence', testSessionPersistence(missing, {
-      list: () => Promise.resolve([]),
-      inspect: vi.fn(),
-    }) as never)
-    installSessionReadTestServices(missing)
-    const missingController = new SessionCommandController(
-      missing,
-      { resolveAgent: vi.fn() } as unknown as ApiSessionAgentController,
-      '/workspace',
-    )
-    await expectFailure(missingController.attachment({
-      sessionId: SessionId('missing'), attachmentId: 'att' as never,
-    }), 'session/not-found')
-
-    for (const thrown of [
-      new AttachmentError('stored image is unavailable', 'ATTACHMENT_NOT_FOUND'),
-      new Error('backend offline'),
-    ]) {
-      const ref = imageRef(`failure-${thrown.name}`)
-      const fixture = await persistedController(
-        [event('user/message', SessionSeq(0), { id: 'failure', role: 'user', source: { kind: 'user' }, content: [{ type: 'image', attachment: ref }] })],
-        () => Promise.reject(thrown),
-      )
-      await expectFailure(fixture.controller.attachment({
-        sessionId: fixture.sessionId,
-        attachmentId: ref.attachmentId,
-      }), thrown instanceof AttachmentError ? 'session/attachment-invalid' : 'gateway/internal')
-      await fixture.ctx.fiber.dispose()
-    }
-  })
-
-  it('rejects a cold Session without cwd before reading its referenced image', async () => {
-    const ref = imageRef('missing-cwd')
-    const readImage = vi.fn(async () => ({ ref, data: new Uint8Array([1]) }))
-    const fixture = await persistedController(
-      [event('user/message', SessionSeq(0), { id: 'image', role: 'user', source: { kind: 'user' }, content: [{ type: 'image', attachment: ref }] })],
-      readImage,
-      {},
-    )
-    try {
-      await expect(fixture.controller.attachment({ sessionId: fixture.sessionId, attachmentId: ref.attachmentId }))
-        .rejects.toMatchObject({ code: 'session/not-found', details: { sessionId: fixture.sessionId } })
-      expect(readImage).not.toHaveBeenCalled()
-    } finally {
-      await fixture.ctx.fiber.dispose()
-    }
-  })
-
-  it('maps a cold observation failure to an internal authorization error', async () => {
+  it.each([
+    'INVALID_ATTACHMENT_REF', 'ATTACHMENT_NOT_FOUND', 'ATTACHMENT_CORRUPT', 'ATTACHMENT_READ_FAILED',
+  ] as const)('returns %s as an explicit attachment failure', async (reason) => {
     const ctx = new Context()
-    await ctx.plugin(SessionStore)
-    installSessionReadTestServices(ctx)
-    vi.spyOn(ctx.sessionQuery, 'observeSession').mockRejectedValue(new Error('storage offline'))
-    const controller = new SessionCommandController(
-      ctx,
-      { resolveAgent: vi.fn() } as unknown as ApiSessionAgentController,
-      '/workspace',
-    )
+    const readImage = vi.fn(() => Promise.reject(new AttachmentError('Stored image is unavailable.', reason)))
+    ctx.provide('attachments', { readImage } as never)
+    const controller = new SessionCommandController(ctx, new ApiSessionAgentController(ctx), '/workspace')
+    try {
+      await expect(controller.attachment({
+        sessionId: SessionId('unopened'),
+        attachment: { attachmentId: AttachmentId('requested'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
+      }))
+        .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason } })
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
 
-    await expectFailure(controller.attachment({
-      sessionId: SessionId('unreadable'), attachmentId: AttachmentId('att'),
-    }), 'gateway/internal')
-    await ctx.fiber.dispose()
+  it('contains unexpected backend failures without exposing internal details', async () => {
+    const ctx = new Context()
+    ctx.provide('attachments', { readImage: () => Promise.reject(new Error('/private/storage failed')) } as never)
+    const controller = new SessionCommandController(ctx, new ApiSessionAgentController(ctx), '/workspace')
+    try {
+      await expect(controller.attachment({
+        sessionId: SessionId('unopened'),
+        attachment: { attachmentId: AttachmentId('requested'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
+      }))
+        .rejects.toMatchObject({ code: 'gateway/internal', message: 'Unable to read image attachment.', details: {} })
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 })

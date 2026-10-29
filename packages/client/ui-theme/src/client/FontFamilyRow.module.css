@@ -1,7 +1,18 @@
-/* Font-family rows reuse the font-size row cell (FontSizeRow.module.css);
- * the fields share one basis so the three rows align, and shrink with the row. */
+/* Font-family fields; shared row text and separators live in FontSizeRow.module.css. */
 
 .field {
   flex: 0 1 240px;
   min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .field {
+    flex-basis: auto;
+  }
+}
+
+@media (pointer: coarse) {
+  .field input {
+    font-size: 16px;
+  }
 }

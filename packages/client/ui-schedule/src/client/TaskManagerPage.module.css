@@ -34,15 +34,19 @@
   --dsh-scrollbar-thumb-border: 2px;
 }
 
-/* The Plugins page's centered column: the same 960px cap and
-   clamp(24-48px) inline / 48px bottom inset, so sibling first-level pages
-   share one content frame at every width. */
+/* Matches the Plugins page's 960px column and responsive inline insets. */
 .pageContent {
   max-width: 960px;
   margin: 0 auto;
   /* Inline and bottom insets only: the 28px top inset belongs to the heading
      row, which starts at the window's top edge. */
   padding: 0 clamp(24px, 4vw, 48px) 48px;
+}
+
+@media (max-width: 767px) {
+  .pageContent {
+    padding-inline: 20px;
+  }
 }
 
 /* Page title and creation actions. */
@@ -96,6 +100,46 @@
   padding: 0 12px;
   border-radius: 16px;
 }
+
+/* The existing Plugins page's adjacent creation menu. */
+.createGroup { display: inline-flex; align-items: stretch; }
+.createPrimary { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.createMore {
+  height: 32px;
+  width: 32px;
+  padding: 0;
+  border-radius: 0 var(--dsw-radius-lg) var(--dsw-radius-lg) 0;
+  border-left: 0.5px solid color-mix(in srgb, var(--dsw-alias-label-primary-foreground) 30%, transparent);
+}
+.manualDialog { width: 520px; max-width: calc(100vw - 48px); }
+.createMenu [role='menuitem'] { gap: 10px; padding: 6px 12px; }
+.targetMenu { width: 320px; max-width: calc(100vw - 48px); }
+.targetMenu [role='menuitem'] { height: 72px; box-sizing: border-box; gap: 10px; padding: 6px 12px; }
+.targetMenuItem { display: flex; flex-direction: column; gap: 2px; white-space: normal; }
+.targetMenuDescription {
+  display: -webkit-box;
+  max-height: 36px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.workspaceMenu { width: 320px; max-width: calc(100vw - 48px); }
+.workspaceMenu [role='menuitem'] { gap: 10px; padding: 6px 12px; }
+.workspaceMenuItem { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.workspaceMenuItem > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.workspaceMenuPath { line-height: 18px; }
+.taskEditor { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 20px; }
+.editorField { display: grid; gap: 8px; font-size: 14px; min-width: 0; }
+.editorField > h3 { margin: 0; font: inherit; }
+.hostRuleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 12px 0; font-size: 13px; }
+.hostRuleRow > :last-child { text-align: right; overflow-wrap: anywhere; }
+.hostSessionFooter { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 24px; font-size: 13px; }
+.hostSessionFooter button { min-width: 0; max-width: 75%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; }
+.hostSessionEmpty { color: var(--dsw-alias-label-tertiary); }
 
 /* The mock's `.list-tools`: the one row of filter tabs, 8px between chips and
    20px between the groups, with the list 14px below. */
@@ -155,10 +199,6 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 16px;
-}
-
-.catalogActions {
-  flex: none;
 }
 
 .catalogMore {
@@ -507,7 +547,7 @@
   margin-right: calc(6px - var(--detail-gutter));
 }
 
-/* The mock's `.detail-heading`: the name control is the first content of the
+/* The mock's `.detail-heading`: the task name is the first content of the
    scrolling rule view, directly above the next-run line and with no separator
    of its own between them. */
 .detailHeader {
@@ -517,35 +557,8 @@
   margin-bottom: 4px;
 }
 
-/* The mock's `.edit-name`: the stored task name as one borderless line that
-   underlines only on hover and focus. The detail pane's primary text at 500 weight. */
-.editName {
-  flex: 1;
-  width: 100%;
-  min-width: 0;
-  min-height: 32px;
-  padding: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 500;
-}
-
-@media (hover: hover) {
-  .editName:hover {
-    box-shadow: 0 1px var(--dsw-alias-border-l3);
-  }
-}
-
-.editName:focus {
-  box-shadow: 0 1px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-}
-
-/* An ended task's stored name as plain text on the control's step, padded to
-   the control's 32px height so the header keeps one figure. */
+/* The mock's `.edit-name` as plain text: the stored task name in the detail
+   pane's primary text at 500 weight, padded to a 32px line. */
 .readonlyName {
   flex: 1;
   min-width: 0;
@@ -706,7 +719,6 @@
   margin: 24px var(--detail-gutter) 0;
 }
 
-.recordsPanel:not([hidden]),
 .deliveryHistory {
   display: flex;
   flex: 1;
@@ -770,21 +782,9 @@
   margin-top: 6px;
 }
 
-/* The mock puts the border on the rows group, not on the card that carries the
-   `运行时间` heading. */
+/* The read-only rule rows sit 28px below the task instruction. */
 .ruleCard {
   margin-top: 28px;
-}
-
-/* The mock's `.automation-detail .form-section h3`: the `运行时间` heading is
-   13px tertiary ink, regular weight, and the mock's 20px leading. The 6px
-   lead-in nudges it off the card's rounded edge, as the hint below. */
-.ruleCard h3 {
-  margin: 0 0 8px 10px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 400;
 }
 
 .ruleRows {
@@ -793,12 +793,6 @@
   padding: 0 12px;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 16px;
-}
-
-/* Escape-key guard around a dropdown: the wrapper takes no box of its own, so
-   the menu keeps its flex position while the guard sees the portaled list. */
-.menuGuard {
-  display: contents;
 }
 
 /* The searchable zone inventory is intentionally shorter than a general menu:
@@ -829,10 +823,7 @@
   min-height: 48px;
 }
 
-/* The Escape guard is `display: contents`, so a menu row is the last DOM child
-   only through that wrapper; both selectors reach the rendered last row. */
-.ruleRows > :last-child,
-.ruleRows > :last-child > .ruleRowMenu {
+.ruleRows > :last-child {
   border-bottom: 0;
 }
 
@@ -912,7 +903,7 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* An ended task keeps its values readable: tertiary rather than dimmed ink. */
+/* A disabled value stays readable: tertiary rather than dimmed ink. */
 .ruleValue:disabled {
   color: var(--dsw-alias-label-tertiary);
   cursor: default;
@@ -953,23 +944,6 @@
   padding: 6px 0;
 }
 
-/* The monthly date grid reads as a calendar month: seven fixed columns on the
-   weekday pills' 4px gap, right-aligned under the row like the weekday pills. */
-.ruleMonthDays {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(36px, max-content));
-  justify-content: flex-end;
-  gap: 4px;
-  padding: 6px 0;
-}
-
-/* Stretched pills would keep their day number on the left edge, so each
-   centers its number in its cell. */
-.ruleMonthDays > * {
-  justify-self: stretch;
-  justify-content: center;
-}
-
 .ruleInput {
   flex: 0 1 58%;
   min-width: 0;
@@ -991,24 +965,14 @@
   }
 }
 
-/* An ended task keeps its values readable: tertiary rather than dimmed ink. */
+/* A disabled value stays readable: tertiary rather than dimmed ink. */
 .ruleInput:disabled {
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* The elapsed-interval row keeps the quantity and its unit on one right-aligned
-   line, and the quantity sits in the settings font-size stepper pill
-   (ui-theme FontSizeRow.module.css `.stepper`): a 36px 18px-radius module-fill
-   pill whose right-edge arrow column shows on hover or focus, with the unit
-   word outside the pill. */
-.ruleInterval {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
+/* The repeat interval and the month day sit in the settings font-size stepper
+   pill (ui-theme FontSizeRow.module.css `.stepper`): a 36px 18px-radius
+   module-fill pill whose right-edge arrow column shows on hover or focus. */
 .ruleIntervalStepper {
   position: relative;
   display: inline-flex;
@@ -1103,12 +1067,6 @@
   cursor: default;
 }
 
-.ruleIntervalUnit {
-  flex: none;
-  color: var(--dsw-alias-label-primary);
-  font-size: 14px;
-}
-
 /* The Date and Time rows open their picker from a read-only value button, which
    keeps the input's own hover fill, focus ring, and disabled tone. */
 .pickerTrigger {
@@ -1127,20 +1085,6 @@
 .pickerIcon {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
-}
-
-/* The 6px lead-in matches the card heading above, off the rounded edge. */
-.ruleHint {
-  margin: 8px 0 0 10px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-/* The cron hint doubles as the row's rejection line, so its unreadable-expression
-   state takes the save failure's error color in place of a second message. */
-.ruleHintError {
-  color: var(--dsw-alias-state-error-primary);
 }
 
 /* The mock's `.automation-detail .instruction`: the editable instruction box on
@@ -1188,8 +1132,8 @@
   border-color: var(--dsw-alias-state-business-primary);
 }
 
-/* An ended task's stored instruction reads as plain text: no box and no edit
-   affordance, on the field's own 14px/24px step. */
+/* The stored instruction reads as plain text: no box and no edit affordance,
+   on the instruction field's own 14px/24px step. */
 .readonlyPrompt {
   margin: 0;
   font-size: 14px;
@@ -1279,12 +1223,6 @@
   font-weight: 500;
 }
 
-.confirmTitle {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 /* Instruction text sits in the row's text column at the mock's 13px/22px and
    shows two lines until its toggle expands it. */
 .savedPrompt {
@@ -1348,28 +1286,8 @@
   flex-shrink: 0;
 }
 
-/* The original-Session control is a seat inside the strip's action cluster, so
-   it keeps the strip's own figure and never scrolls with the detail body. */
-.detailContext {
-  display: flex;
-  flex: none;
-  align-items: center;
-  min-width: 0;
-  max-width: 200px;
-}
-
-/* A disabled entry passes the pointer to this wrapper, whose tooltip names the
-   compact icon; the wrapper keeps the disabled cursor. */
-.detailContext:has(> button:disabled) {
-  cursor: not-allowed;
-}
-
-.detailContext > button:disabled {
-  pointer-events: none;
-}
-
-/* The staged-edit bar: it appears under the detail tab strip only while the
-   Run time draft differs from the stored task. */
+/* The edit bar closes the detail under its scrolling view while a task is in
+   edit mode. */
 .saveFooter {
   display: flex;
   flex-shrink: 0;
@@ -1396,9 +1314,7 @@
   font-size: 12px;
 }
 
-/* One staged save's localized failure: it can name the task name, the
-   instruction, or a timing row, so it leads the bar that submits all three and
-   keeps that bar's gutter. */
+/* The localized reason an edit, a run, or a manual create did not take effect. */
 .saveFailure {
   flex-shrink: 0;
   margin: 0;
@@ -1409,28 +1325,7 @@
   line-height: 1.6;
 }
 
-.linkedSession {
-  display: flex;
-  flex: 0 1 auto;
-  max-width: 100%;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  height: 28px;
-  padding: 0 8px;
-  border: 0;
-  /* The strip's icon buttons are 28px `sm` capsules (14px), so this pill keeps
-     the same corner. */
-  border-radius: 14px;
-  text-align: left;
-}
-
-.linkedSession:focus-visible {
-  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 1px;
-}
-
-/* The notice keeps its own line under the strip and above the staged save bar. */
+/* The linked-Session notice keeps its own line under the rule card. */
 .detailNotice {
   flex-shrink: 0;
   margin: 0;
@@ -1439,34 +1334,6 @@
   font-size: 12px;
   overflow-wrap: anywhere;
   background: var(--dsw-alias-bg-base);
-}
-
-.linkedSessionLabel {
-  flex-shrink: 0;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
-}
-
-.linkedSessionTarget {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  min-width: 0;
-  overflow: hidden;
-}
-
-/* The strip shows the control's label; the Session's own name stays in the DOM as
-   the control's accessible description, while the visible button carries the
-   hover title. */
-.linkedSessionName {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  font-size: 12px;
 }
 
 .confirmDialog {
@@ -1496,15 +1363,21 @@
   --dsh-button-outline-color: var(--dsw-alias-state-error-primary);
 }
 
+.confirmPrompt {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .page :focus-visible {
   outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
 }
 
 /* Text fields match :focus-visible on pointer focus too, so the page ring
-   would flash on every click into them; their own underline and border cues
-   already mark focus, so they opt out of the ring. */
-.page .editName:focus-visible,
+   would flash on every click into them; their own border cues already mark
+   focus, so they opt out of the ring. */
+.page .editorField input:focus-visible,
 .page .instruction:focus-visible {
   outline: none;
 }
@@ -1559,6 +1432,7 @@
    as a page wider than the screen. A fine pointer keeps those steps. */
 @media (pointer: coarse) {
   .searchField input,
+  .editorField input,
   .instruction,
   .ruleInput,
   .zoneSearch {

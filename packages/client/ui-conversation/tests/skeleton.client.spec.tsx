@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GlobalStandardProps, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createContext, useContext, type ReactNode } from 'react'
@@ -235,7 +236,7 @@ function mount(
           useTrajectory={useTrajectory}
           useSessions={props.useSessions}
           usePanelInfo={props.usePanelInfo}
-          useResource={useResource}
+          useContextMenu={contextMenuHook()} useResource={useResource}
           useSessionStatus={useSessionStatus}
           useSessionRetainInfo={() => undefined}
           useWorkspaces={props.useWorkspaces}
@@ -265,7 +266,7 @@ function mount(
           useTrajectory={useTrajectory}
           useSessions={props.useSessions}
           usePanelInfo={props.usePanelInfo}
-          useResource={useResource}
+          useContextMenu={contextMenuHook()} useResource={useResource}
           useSessionStatus={useSessionStatus}
           useSessionRetainInfo={() => undefined}
           useWorkspaces={props.useWorkspaces}
@@ -289,7 +290,7 @@ function mount(
         <InputBar
           sessionId={SID}
           SessionProvider={({ children }) => children}
-          useResource={useResource}
+          useContextMenu={contextMenuHook()} useResource={useResource}
           useSession={useSession}
           useConversation={useConversation}
           useSessions={props.useSessions}
@@ -353,6 +354,7 @@ function mount(
       useTrajectory,
       useSessions: bindSnapshotSelector(sessions),
       usePanelInfo: selector => selector({ activePanelId: null }),
+      useContextMenu: contextMenuHook(),
       useResource,
       useSessionStatus,
       useSessionRetainInfo: () => undefined,
@@ -386,6 +388,7 @@ function mount(
     useSessions: bindSnapshotSelector(sessions),
     useSessionStatus,
     useSessionRetainInfo: () => undefined,
+    useContextMenu: contextMenuHook(),
     useResource,
     useWorkspaces: bindSnapshotSelector(workspaces),
     ...allowAllAccess,
@@ -497,7 +500,7 @@ describe('ConversationRoot resident composer', () => {
     act(() => { b.wiring.setDraft('ordinary revised') })
     expect(b.store.store.getSnapshot().draft).toEqual({ text: 'ordinary revised', references: [] })
     fireEvent.keyDown(box, { key: 'Enter' })
-    expect(b.sink).toHaveBeenCalledWith('ordinary revised', [], 'queue', expect.any(AbortSignal))
+    expect(b.sink).toHaveBeenCalledWith('ordinary revised', [], 'queue', expect.any(AbortSignal), expect.any(Function))
     // The current crumb is plain text (a drag surface on darwin), not a button.
     expect(b.view.queryByRole('button', { name: 'Child' })).toBeNull()
     expect(b.view.getByText('Child').tagName).toBe('SPAN')
@@ -777,7 +780,7 @@ describe('ConversationRoot resident composer', () => {
     act(() => { b.actionsOwner().onOpen('inspector') })
     expect(external()).toEqual(['Chat', 'Trajectory', 'Timeline'])
     expect(b.actionsOwner().entries.find(entry => entry.id === 'inspector')?.active).toBe(true)
-    expect(b.view.getByRole('button', { name: '更多会话视图 · Inspector' })).toBeTruthy()
+    expect(b.view.getByRole('button', { name: zh['session.moreViews'] })).toBeTruthy()
     const reads = readWidth.mock.calls.length
     width = 1000
     fireEvent(window, new Event('resize'))
@@ -804,7 +807,7 @@ describe('ConversationRoot resident composer', () => {
     width = 300
     act(() => { fireResize(row) })
     expect(external()).toEqual(['chat', 'trajectory'])
-    fireEvent.click(b.view.getByRole('button', { name: '更多会话视图 · notes' }))
+    fireEvent.click(b.view.getByRole('button', { name: zh['session.moreViews'] }))
     expect(b.actionsOwner().entries.map(entry => entry.id)).toEqual(['timeline', 'inspector', 'notes'])
     expect(b.actionsOwner().entries.find(entry => entry.id === 'notes')?.active).toBe(true)
     width = 1000

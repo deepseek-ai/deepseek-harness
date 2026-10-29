@@ -1,4 +1,4 @@
-- text: Delegate a self-contained task to the official Claude Code subagent through its generated tools SDK in one run_code program. Ask it to reply with OFFICIAL_SUBAGENT_OK exactly, print its child ID, and wait for its completion notice before replying DONE. 10/5 {{clock}}
+- text: Delegate a self-contained task to the official Claude Code subagent through its generated tools SDK in one run_code program. Ask it to reply with OFFICIAL_SUBAGENT_OK exactly, print its child ID, and wait for its completion notice before replying DONE. {{clock}}
 - button "Copy"
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
@@ -10,10 +10,10 @@
 - button "Good response"
 - button "Bad response"
 - button "Branch into a new conversation"
-- text: 10/5 {{clock}}
-- button "Subagent run completed 10/5 {{clock}}":
+- text: {{clock}}
+- button "Subagent run completed {{clock}}":
   - text: Subagent run completed
-  - time: 10/5 {{clock}}
+  - time: {{clock}}
 - status: Completed
 - button "Completed in {{duration}}" [disabled]
 - paragraph: DONE
@@ -21,4 +21,4 @@
 - button "Good response"
 - button "Bad response"
 - button "Branch into a new conversation"
-- text: 10/5 {{clock}}
+- text: {{clock}}

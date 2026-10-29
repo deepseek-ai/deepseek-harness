@@ -6,5 +6,5 @@ recording: authored
 header:
   class: sdk-team-session-mode
   pin: true
-  systemPromptSource: text-turn
-  toolSchemasSource: text-turn
+  changes: 2
+  promptChanges: 2

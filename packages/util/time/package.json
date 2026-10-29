@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-util-time",
-  "description": "Time vocabulary shared by the boundaries that accept a caller's zone, a wall-clock selector, or an elapsed time: canonicalClientTimeZone (IANA zone validation and canonicalization), strict RFC 3339 instant, local-calendar, and zone resolution, and a millisecond Duration span",
-  "version": "0.2.1-rc.3",
+  "description": "Strict instant and IANA zone parsing, millisecond spans, and bounded Cron/RRULE recurrence arithmetic",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -11,6 +11,7 @@
     "directory": "packages/util/time"
   },
   "type": "module",
+  "sideEffects": false,
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
@@ -27,7 +28,8 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@js-temporal/polyfill": "0.5.1"
+    "@js-temporal/polyfill": "0.5.1",
+    "rrule": "2.8.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

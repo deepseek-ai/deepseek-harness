@@ -8,14 +8,15 @@ import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, beforeEach, expect, it, vi, type MockInstance } from 'vitest'
 import ScheduleService from '../src/index.ts'
-import { scheduleDomain } from '../src/storage.ts'
-import { ScheduleId } from '../src/domain.ts'
+import { scheduleDomain, type ScheduleTask } from '../src/storage.ts'
+import { createAfterScheduleRecord, ScheduleId } from '../src/domain.ts'
 import { ScheduleRuntime } from '../src/runtime.ts'
-import { agentFor, harness } from './harness.ts'
+import { agentFor, boundTask, harness, taskTable, storedUnit } from './harness.ts'
 
 const roots: string[] = []
 const contexts: Context[] = []
-beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-16T00:00:00Z')) })
+const NOW = '2026-09-16T00:00:00.000Z'
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date(NOW)) })
 afterEach(async () => {
   const errors: unknown[] = []
   for (const ctx of contexts.splice(0)) {
@@ -28,6 +29,7 @@ afterEach(async () => {
   }
   if (errors.length > 0) throw new AggregateError(errors, 'Schedule recovery cleanup failed')
 })
+/** Create a root whose earlier Host store, one whole-unit file, holds the given tasks or bytes. */
 async function rootWith(tasks: Record<string, unknown>, bytes?: string) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-recovery-'))
   roots.push(root)
@@ -39,6 +41,10 @@ async function rootWith(tasks: Record<string, unknown>, bytes?: string) {
 }
 function encoded(tasks: Record<string, unknown>, version = 1) {
   return `${JSON.stringify({ unit: { name: 'schedule', version }, global: null, tables: { tasks } }, null, 2)}\n`
+}
+/** Read the authoritative whole-unit task table. */
+async function savedTasks(root: string): Promise<Record<string, unknown>> {
+  return storedUnit(await readFile(join(root, 'schedule.json'), 'utf8')).tables.tasks
 }
 const oldTask = {
   sessionId: 'original',
@@ -60,9 +66,9 @@ const repairedTask = {
 
 it.each([
   ['{broken json', 'malformed-medium'],
-  [encoded({ 'a-good': oldTask, 'z-broken': repairedTask }, 2), 'version-mismatch'],
+  [encoded({ 'a-good': oldTask, 'z-broken': repairedTask }, 3), 'version-mismatch'],
   [encoded({ 'a-good': oldTask, 'z-broken': { invalid: true } }), 'invalid-record'],
-])('rejects the complete task domain on invalid stored data and recovers after repair', async (broken, code) => {
+])('rejects startup on an invalid store without writes and reads it after repair %#', async (broken, code) => {
   const { root, path } = await rootWith({}, broken)
   let observed: {
     ctx: Context
@@ -84,6 +90,7 @@ it.each([
   if (observed === undefined) throw new Error('Schedule dependencies did not initialize')
   const { ctx, facility, agent } = observed
   expect(ctx.get('schedule')).toBeUndefined()
+  expect(facility.get(scheduleDomain.name)).toBeUndefined()
   expect(facility.get('schedule')).toBeUndefined()
   expect(ctx.tools.get('schedule_create', agent)).toBeUndefined()
   await vi.advanceTimersByTimeAsync(0)
@@ -91,16 +98,41 @@ it.each([
   expect(changed).not.toHaveBeenCalled()
   expect(vi.getTimerCount()).toBe(0)
   expect(await readFile(path, 'utf8')).toBe(broken)
-
   const repaired = encoded({ 'a-good': oldTask, 'z-broken': repairedTask })
   await writeFile(path, repaired)
-  const restored = await facility.open(scheduleDomain)
-  expect(restored.table('tasks').get(ScheduleId('a-good'))).toEqual({ ...oldTask, status: 'active' })
-  expect(restored.table('tasks').get(ScheduleId('z-broken'))).toEqual(repairedTask)
-  await restored.close()
   await ctx.plugin(ScheduleService)
+  expect(taskTable(ctx).get(ScheduleId('a-good'))).toMatchObject({ status: 'active', record: oldTask.record })
+  // A delivered one-shot rule ends; its receipt now names the Session that accepted it.
+  expect(taskTable(ctx).get(ScheduleId('z-broken'))).toMatchObject({
+    status: 'ended', lastDelivery: { ...repairedTask.lastDelivery, targetSessionId: 'original' },
+  })
   expect(await ctx.schedule.catalog()).toHaveLength(2)
   expect(await readFile(path, 'utf8')).toBe(repaired)
+})
+
+it.each([
+  ['{broken json', 'malformed-medium'],
+  [3, 'version-mismatch'],
+  [{ status: 'inactive' }, 'invalid-record'],
+] as const)('rejects startup on an invalid task file without rewriting it and starts after repair %#', async (
+  broken,
+  code,
+) => {
+  const { root } = await rootWith({})
+  const rule = createAfterScheduleRecord(ScheduleId('kept'), 'Keep me', 60, Date.now(), 'Keep me')
+  const valid: ScheduleTask = boundTask(SessionId('original'), rule)
+  const file = join(root, 'schedule.json')
+  const bytes = typeof broken === 'string' ? broken
+    : typeof broken === 'number' ? encoded({ kept: valid }, broken) : encoded({ kept: { ...valid, record: undefined, ...broken } })
+  await writeFile(file, bytes)
+  await expect(harness({ backend: new JsonStorageBackend(root), onContext: ctx => contexts.push(ctx) }))
+    .rejects.toMatchObject({ code })
+  expect(vi.getTimerCount()).toBe(0)
+  expect(await readFile(file, 'utf8')).toBe(bytes)
+
+  await writeFile(file, encoded({ kept: valid }))
+  const repaired = await harness({ backend: new JsonStorageBackend(root), onContext: ctx => contexts.push(ctx) })
+  expect((await repaired.service.list({ active: true })).items).toMatchObject([rule])
 })
 
 it.each([
@@ -117,15 +149,15 @@ it.each([
   { records: [{ ...repairedTask.lastDelivery, messageId: 'different' }], earlierRecordsUnavailable: false },
   { records: [{ ...repairedTask.lastDelivery, scheduledAt: '2026-09-15T19:00:00.000Z' }], earlierRecordsUnavailable: false },
   { records: [{ ...repairedTask.lastDelivery, deliveredAt: '2026-09-15T19:00:00.000Z' }], earlierRecordsUnavailable: false },
-])('rejects malformed or inconsistent saved history without rewriting task files %#', async (deliveryHistory) => {
+])('rejects malformed or inconsistent earlier history without rewriting the earlier file %#', async (deliveryHistory) => {
   const bytes = encoded({ 'z-broken': { ...repairedTask, deliveryHistory } })
   const { root, path } = await rootWith({}, bytes)
   await expect(harness({ backend: new JsonStorageBackend(root), onContext: ctx => contexts.push(ctx) }))
-    .rejects.toMatchObject({ code: 'invalid-record' })
+    .rejects.toMatchObject({ code: 'invalid-record', detail: { table: 'tasks', key: 'z-broken' } })
   expect(await readFile(path, 'utf8')).toBe(bytes)
 })
 
-it.each([true, false])('reads legacy history with receipt=%s without rewriting stored files', async (hasReceipt) => {
+it.each([true, false])('reads earlier history with receipt=%s without rewriting the earlier file', async (hasReceipt) => {
   const legacy = hasReceipt ? repairedTask : { ...oldTask, status: 'inactive' }
   const taskId = ScheduleId(legacy.record.id)
   const bytes = encoded({ [taskId]: legacy })
@@ -133,10 +165,12 @@ it.each([true, false])('reads legacy history with receipt=%s without rewriting s
   const test = await harness({ backend: new JsonStorageBackend(root), onContext: ctx => contexts.push(ctx) })
   const changed = vi.fn()
   test.ctx.on('schedule/changed', changed)
-  expect(await test.service.history({ sessionId: SessionId(legacy.sessionId), id: taskId, limit: 100 })).toEqual({
-    id: taskId, records: hasReceipt ? [repairedTask.lastDelivery] : [], earlierRecordsUnavailable: true,
+  expect(await test.service.history({ id: taskId, limit: 100 })).toEqual({
+    id: taskId, records: hasReceipt ? [{ ...repairedTask.lastDelivery, targetSessionId: 'original' }] : [], earlierRecordsUnavailable: true,
     earlierRecordsPruned: false, retention: { days: 30, records: 200 },
   })
+  // Only a delivered one-shot rule ends; an inactive rule without a delivery pauses.
+  expect(taskTable(test.ctx).get(taskId)?.status).toBe('ended')
   expect(changed).not.toHaveBeenCalled()
   expect(test.resolve).not.toHaveBeenCalled()
   expect(await readFile(path, 'utf8')).toBe(bytes)
@@ -159,29 +193,25 @@ it.each(['create', 'delete'] as const)('returns the durable %s result when an an
     cleanupHadStarted = stop.mock.calls.length !== 0
   })
   const mutation = operation === 'create'
-    ? test.service.create(SessionId('original'), {
-      prompt: 'Accepted before unload', after_seconds: 60, title: 'Accepted before unload',
-    })
-    : test.service.delete({ sessionId: SessionId('original'), id: ScheduleId('a-good') })
+    ? test.service.create({ prompt: 'Accepted before unload', title: 'Accepted before unload', timing: { kind: 'after', after_seconds: 60 }, target: { kind: 'session', sessionId: SessionId('original') } }, SessionId('original'))
+    : test.service.edit({ action: 'delete', id: ScheduleId('a-good') })
   const outcome = await mutation.then(value => ({ value }), (error: unknown) => ({ error }))
   await unloading
   expect(cleanupHadStarted).toBe(false)
-  const stored = JSON.parse(await readFile(path, 'utf8')) as {
-    tables: { tasks: Record<string, unknown> }
-  }
+  const stored = await savedTasks(root)
   if (operation === 'create') {
-    const created = Object.values(stored.tables.tasks)
-    expect(created).toHaveLength(1)
-    expect(created[0]).toMatchObject({
-      sessionId: 'original', status: 'active', record: { prompt: 'Accepted before unload', kind: 'after' },
-    })
     expect(outcome).not.toHaveProperty('error')
-    if (!('value' in outcome)) throw new Error('Accepted creation did not return its record')
-    expect(created[0]).toEqual({ sessionId: 'original', record: outcome.value, status: 'active',
-      deliveryHistory: { records: [], earlierRecordsUnavailable: false } })
+    if (!('value' in outcome) || !('kind' in outcome.value)) throw new Error('Accepted creation did not return its record')
+    expect(outcome.value).toMatchObject({ prompt: 'Accepted before unload', kind: 'after' })
+    expect(Object.keys(stored)).toEqual([outcome.value.id])
+    expect(stored[outcome.value.id]).toMatchObject({ record: { id: outcome.value.id, kind: 'after', title: outcome.value.title, prompt: outcome.value.prompt },
+      target: { kind: 'session', sessionId: 'original' }, status: 'active' })
+
   } else {
-    expect(stored.tables.tasks).toEqual({})
+    expect(stored).toEqual({})
     expect(outcome).toEqual({ value: { id: 'a-good', deleted: true } })
+    // Deleting the imported copy leaves the earlier store unchanged.
+    expect(storedUnit(await readFile(path, 'utf8')).tables.tasks).toEqual({})
   }
   expect(admission).toHaveBeenCalledTimes(1)
   expect(admission.mock.results[0]).toMatchObject({ type: 'throw' })
@@ -214,21 +244,19 @@ it('logs startup dispatch admission failure without rejecting initialized storag
   })
   expect(test.ctx.logger.warn).toHaveBeenCalledExactlyOnceWith('schedule: dispatch stopped: Error: startup dispatch failed')
   expect(await test.service.catalog()).toEqual([])
-  expect(facility?.get('schedule')).toBeDefined()
+  expect(facility?.get(scheduleDomain.name)).toBeDefined()
   expect(vi.getTimerCount()).toBe(0)
-  await test.service.create(SessionId('original'), {
-    prompt: 'Explicit later wake', after_seconds: 60, title: 'Explicit later wake',
-  })
+  await test.service.create({ prompt: 'Explicit later wake', title: 'Explicit later wake', timing: { kind: 'after', after_seconds: 60 }, target: { kind: 'session', sessionId: SessionId('original') } }, SessionId('original'))
   await vi.advanceTimersByTimeAsync(0)
   expect(admission).toHaveBeenCalledTimes(2)
   expect(vi.getTimerCount()).toBe(1)
   await test.ctx.fiber.dispose()
-  expect(facility?.get('schedule')).toBeUndefined()
+  expect(facility?.get(scheduleDomain.name)).toBeUndefined()
   expect(vi.getTimerCount()).toBe(0)
 })
 
 it('does not start dispatch when storage opens after its owner begins unloading', async () => {
-  const { root } = await rootWith({ 'a-good': oldTask })
+  const { root, path } = await rootWith({ 'a-good': oldTask })
   const acquired = Promise.withResolvers<{
     ctx: Context
     facility: DomainFacility
@@ -267,19 +295,22 @@ it('does not start dispatch when storage opens after its owner begins unloading'
     await settled
     expect(ctx.get('storageDomain') === facility).toBe(true)
     expect(launches()).toBe(0)
-    expect(startupFailure).toContain('cannot create effect on inactive context')
+    expect(startupFailure).toBe('')
+    expect(facility.get(scheduleDomain.name)).toBeUndefined()
     expect(facility.get('schedule')).toBeUndefined()
     expect(vi.getTimerCount()).toBe(0)
+    // The import finished before activation failed; the next startup reads the copied task.
     const reopened = await facility.open(scheduleDomain)
-    expect(reopened.table('tasks').get(ScheduleId('a-good'))).toEqual({ ...oldTask, status: 'active' })
+    expect(reopened.table('tasks').get(ScheduleId('a-good'))).toMatchObject({ status: 'active', record: oldTask.record })
     await reopened.close()
+    expect(await readFile(path, 'utf8')).toBe(encoded({ 'a-good': oldTask }))
   } finally {
     release.resolve(undefined)
     await settled
   }
 })
 
-it('retains a hand-authored v1 daily alias, pinned target, and receipt without rewriting bytes', async () => {
+it('reads a hand-authored earlier daily alias, pinned target, and receipt without rewriting bytes', async () => {
   const daily = {
     sessionId: 'daily-session', status: 'active',
     record: {
@@ -294,13 +325,16 @@ it('retains a hand-authored v1 daily alias, pinned target, and receipt without r
   const { root, path } = await rootWith({}, bytes)
   const test = await harness({ backend: new JsonStorageBackend(root), onContext: ctx => contexts.push(ctx) })
   const expected = [{
-    ...daily.record, sessionId: daily.sessionId, status: daily.status, lastDelivery: daily.lastDelivery,
+    ...daily.record, target: { kind: 'session', sessionId: daily.sessionId }, status: daily.status, lastDelivery: { ...daily.lastDelivery, targetSessionId: daily.sessionId },
   }]
-  expect(await test.service.catalog()).toEqual(expected)
+  expect(await test.service.catalog()).toMatchObject(expected)
   expect(test.resolve).not.toHaveBeenCalled()
   expect(await readFile(path, 'utf8')).toBe(bytes)
+  const file = path
+  const imported = await readFile(file, 'utf8')
   await test.ctx.fiber.dispose()
   const reopened = await harness({ backend: new JsonStorageBackend(root), onContext: ctx => contexts.push(ctx) })
-  expect(await reopened.service.catalog()).toEqual(expected)
+  expect(await reopened.service.catalog()).toMatchObject(expected)
   expect(await readFile(path, 'utf8')).toBe(bytes)
+  expect(await readFile(file, 'utf8')).toBe(imported)
 })

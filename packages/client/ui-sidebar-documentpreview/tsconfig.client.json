@@ -45,6 +45,9 @@
       "path": "../ui-session"
     },
     {
+      "path": "../ui-sidebar-files"
+    },
+    {
       "path": "../ui-sidebar-right"
     },
     {
@@ -70,6 +73,9 @@
     },
     {
       "path": "../ui-file-drag"
+    },
+    {
+      "path": "../ui-context-menu"
     }
   ]
 }

@@ -722,7 +722,12 @@ describe('web e2e: agent teamwork panel', () => {
       expect(narrowScroll.arrowsBeforeTrack).toBe(true)
       const scroller = panel.getByRole('tree').locator('..')
       await scroller.hover({ position: { x: 20, y: 20 } })
-      await page.mouse.wheel(0, 180)
+      await Promise.all([
+        scroller.evaluate(element => new Promise<void>((resolve) => {
+          element.addEventListener('scrollend', () => { resolve() }, { once: true })
+        })),
+        page.mouse.wheel(0, 180),
+      ])
       await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
       await scroller.evaluate((element) => { element.scrollTo({ top: 0 }) })
       await expect.poll(() => scroller.evaluate(element => element.scrollTop)).toBe(0)

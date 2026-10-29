@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Entwicklertools",
-    "description": "Untersuchen und debuggen Sie rohe Sitzungsdaten, gruppierte Chat-Nachrichten und das NodeJS-Backend.",
+    "description": "Zur Fehlersuche: Sehen Sie in „Sitzungsprotokoll“, was DSH für eine Sitzung aufgezeichnet hat, prüfen Sie im Tab „Statistik“ Kontext, Dauer, Cache und Werkzeugkosten pro Runde und Schritt und debuggen Sie das DSH-Backend in Chrome DevTools.",
     "detail": "docs/DETAIL.md"
   }
 }

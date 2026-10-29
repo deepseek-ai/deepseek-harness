@@ -73,7 +73,7 @@ The existing `skill` tool loads `official-plugins` when the user asks how to do 
 
 #### Token effect
 
-While enabled, requests carry only the 495-character catalog entry, within the skill catalog's 500-character limit; the shared card tool is declared only after a card skill loads. A skill load appends about 20.9K characters: a 2.9K-character policy plus the catalog, about 17.7K characters for 14 eligible plugins with titles and descriptions in the eight shipped languages, growing with their number. A recommendation needs one skill load and one `propose_action` call before the final answer; the accepted call's result is 169 characters, about 42 tokens at four characters per token. A changed card appends one short status notice to the next request.
+While enabled, requests carry only the 495-character catalog entry, within the skill catalog's 500-character limit; the shared card tool is declared only after a card skill loads. A skill load appends about 26K characters: a 2.9K-character policy plus the catalog, about 22.9K characters for 14 eligible plugins with titles and descriptions in the eight shipped languages, growing with their number. A recommendation needs one skill load and one `propose_action` call before the final answer; the accepted call's result is 169 characters, about 42 tokens at four characters per token. A changed card appends one short status notice to the next request.
 
 #### KV Cache effect
 

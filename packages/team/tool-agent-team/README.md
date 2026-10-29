@@ -25,7 +25,7 @@ This package lets every agent in a subagent tree create, claim, and complete sha
 <a id="use-this-package"></a>
 ## Use this package
 
-Team tools and guidance are installed only while the root Session enables Team mode. Mode changes update only that root and its resident descendants; failed tool installation in another tree cannot block them. Ordinary subagent controls remain available.
+Team tools are available to each model step only while the root Session enables Team mode. Prompt providers read the same selection when evaluated. Ordinary subagent controls remain available.
 
 Mount this package with `@deepseek-ai/dsh-agent-team` and `@deepseek-ai/dsh-subagent-names` when models need the shared board. The root and descendants receive identical task schemas and task policy.
 
@@ -92,11 +92,11 @@ The [subagent teammates Agent Note](../../../.agents/notes/implemented/architect
 
 ### Policy and tools
 
-One `team:policy` section, required `team:identity` context, and four task schemas are registered on each Agent scope, including fork children. Tree authority comes from `ctx.subagents.rootOf(agent)`; `ctx.subagentNames` supplies bound display names or original Session ids. If the root is unavailable, the context reports that shared tasks, subagent discovery, and messaging are unavailable; it does not infer a parent from Session lineage. Communication and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md); the subagent runtime delivers final results.
+One plugin registration provides a dynamic `team:policy` section, required `team:identity` context, and four conditional task tools. Each provider reads the caller’s root Session selection; prompt visibility is independent of tool restrictions. Tree authority comes from `ctx.subagents.rootOf(agent)`; `ctx.subagentNames` supplies bound display names or original Session ids. An unavailable root disables Team tools and guidance. Communication and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md); the subagent runtime delivers final results.
 
 ### Scoped registration and teardown
 
-Installation covers current live Agents and subscribes to `agent/created`, `subagent/start`, and `team/mode-changed`. Subagent startup installs tools after its activation establishes tree membership and before its first model request. Agent disposal and plugin HMR unwind registrations in reverse order; a failed install cannot leave a partial scope.
+Tool `when` conditions resolve at step preparation, including the first step of new, forked, and resumed Agents. Policy text is evaluated during prompt assembly; identity is also refreshed at request admission. An already prepared step retains its tool selection, but task operations check the current mode before starting. Plugin disposal removes all registrations through their owning effects.
 
 </details>
 
@@ -132,7 +132,7 @@ A shared task board is available to every agent in your subagent tree. Task owne
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
-Task changes end current wait_agent calls in your subagent tree. Changes outside a wait are not retained as notifications, and no task-board messages are added to an inbox. After wait_agent returns, read the latest tasks before acting. Task changes do not start idle agents; use send_message when an agent needs to continue working.
+Task changes do not end wait_agent calls, add inbox messages, or start idle agents. Use send_message when an agent needs to act on a task update.
 ```
 
 #### Token effect
@@ -147,7 +147,7 @@ The text is identical for the Lead and every descendant and does not change whil
 
 #### What the model sees
 
-Required `team:identity` context uses the following text for the root and its teammates. If the root is unavailable, the context reports that fact and permits independent work. Optional-context suppression cannot remove this identity; the ordinary runtime-context mechanism restores it after compaction. The identity uses the current agent’s full name (`lead` for the root), or its Session id until a name is bound.
+While Team is enabled and its root is available, required `team:identity` context uses the following text for the root and its teammates. Otherwise it contributes no text. Optional-context suppression cannot remove an enabled identity; the ordinary runtime-context mechanism restores it after compaction. The identity uses the current agent’s full name (`lead` for the root), or its Session id until a name is bound.
 
 ##### Agent identity
 

@@ -22,6 +22,7 @@
  * `canAddTab` allows), the pane's split control, and the embedder's chrome keep
  * their width and their place at the strip's end.
  */
+import type { KeyboardEvent } from 'react'
 import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import clsx from 'clsx'
@@ -29,6 +30,7 @@ import { IconCloseFillRegular, IconPlusOutlineRegular, Tooltip } from '@deepseek
 import type { DockZone, LayoutState, PaneId, PaneNode, TabId } from '../contract/types.ts'
 import { getTab } from '../engine/tree.ts'
 import type { PaneCallbacks, SplitBlock } from './render.ts'
+import { TabBody } from './TabBody.tsx'
 import { TabMenu } from './TabMenu.tsx'
 import { TabTitle } from './TabTitle.tsx'
 import css from './dockkit.module.css'
@@ -302,6 +304,13 @@ export function TabStrip({ state, pane, callbacks, offsets }: TabStripProps): Re
           // A pane's lone unclosable chip is a label, not a choice: there is
           // no other tab to select against and nothing to do to it.
           const quiet = !closable && pane.tabs.length === 1
+          const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+            if (event.target !== event.currentTarget) return
+            if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.nativeEvent.isComposing) return
+            const next = chipToFocus(event.key, pane.tabs, tabId)
+            if (next !== undefined) { event.preventDefault(); focusChip(next); return }
+            if (selects(event.key)) { event.preventDefault(); activate(tabId) }
+          }
           return (
             <Fragment key={tabId}>
               {(index > 0 || stripIndex === index) && (
@@ -349,30 +358,18 @@ export function TabStrip({ state, pane, callbacks, offsets }: TabStripProps): Re
                   event.stopPropagation()
                   activate(tabId)
                 }}
-                onKeyDown={(event) => {
-                  // Keys on the chip's nested close control are that control's.
-                  if (event.target !== event.currentTarget) return
-                  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.nativeEvent.isComposing) return
-                  const next = chipToFocus(event.key, pane.tabs, tabId)
-                  if (next !== undefined) {
-                    event.preventDefault()
-                    focusChip(next)
-                    return
-                  }
-                  if (selects(event.key)) {
-                    event.preventDefault()
-                    activate(tabId)
-                  }
-                }}
-                onContextMenu={(event) => {
-                  event.preventDefault()
-                  const anchor = event.currentTarget
-                  setMenu(current => current?.tabId === tabId ? undefined : { tabId, anchor })
+                {...callbacks.getTabTriggerProps?.(tab, pane.id, { onKeyDown, tabIndex: selected ? 0 : -1 }) ?? {
+                  onKeyDown,
+                  onContextMenu: (event) => {
+                    event.preventDefault(); event.stopPropagation()
+                    const anchor = event.currentTarget
+                    setMenu(current => current?.tabId === tabId ? undefined : { tabId, anchor })
+                  },
                 }}
               >
                 <TabTitle>{callbacks.renderTabTitle?.(tab) ?? tab.title}</TabTitle>
                 {closable && (
-                  <Tooltip disabled={menu !== undefined} label={callbacks.labels.closeTab} shortcutKeys={callbacks.labels.closeTabKeys} side="bottom" delayMs={500}>
+                  <Tooltip disabled={menu !== undefined || callbacks.tabMenuOpen === true} label={callbacks.labels.closeTab} shortcutKeys={callbacks.labels.closeTabKeys} side="bottom" delayMs={500}>
                     <button
                       type="button"
                       className={css.tabClose}
@@ -426,6 +423,7 @@ export function TabStrip({ state, pane, callbacks, offsets }: TabStripProps): Re
       {!(callbacks.hideSplitWhenBlocked && block !== undefined) && (
         <Tooltip label={block === undefined ? callbacks.labels.splitPane : splitBlockedTitle(callbacks.labels, block)} shortcutKeys={callbacks.labels.splitPaneKeys} side="bottom" delayMs={500} openOnClick={block !== undefined}>
           <span
+            data-dockkit-split-control
             tabIndex={block === undefined ? undefined : 0}
             aria-label={block === undefined ? undefined : splitBlockedTitle(callbacks.labels, block)}
             onClick={(event) => { if (block !== undefined) event.stopPropagation() }}
@@ -498,7 +496,7 @@ export function TabPanel({ state, pane, callbacks }: TabPanelProps): ReactNode {
       <div className={css.paneBody}>
         {active === undefined
           ? <p className={css.empty}>{callbacks.labels.emptyPane}</p>
-          : callbacks.renderTab(active)}
+          : <TabBody tab={active} renderTab={callbacks.renderTab} />}
         <PaneDropHints pane={pane} callbacks={callbacks} />
       </div>
     </section>

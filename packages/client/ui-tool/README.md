@@ -33,6 +33,8 @@ Before dispatch, a named model call appears as one non-expandable row with its t
 
 `subagent` and `subagent_fork` creation rows stream the first line of `description`, retaining it during execution, after creation, and when expanded. After preparation, calls without a description fall back to the first nonempty `prompt` line; missing arguments leave only the tool title. Both tools and `list_subagent_models` use the existing Users icon; `subagent_fork` uses the distinct title “Fork subagent”. Creation receipts, including the named form, show the started state, recorded ID and name, and complete task instructions for both creation tools. Synchronous agent responses remain in the result body; errors retain their failure summary.
 
+File and URL toolview Slots obtain `useContextMenu` directly and supply bound `fileContextMenuProps` or `urlContextMenuProps` to `ToolRow`. File registrations inject a gesture-time path resolver for the originating Session’s working directory, falling back to its workspace root. `ToolCallTree` supplies an explicit file adapter to its plain `GenericToolCard` fallback, including nested calls. No Markdown provider is required. Mouse and keyboard gestures retain the captured path, line, URL, and Session without expanding the row or opening the file.
+
 ### Registering a business tool view
 
 An owning business package registers its wire Tool name into `tool.call.toolview`:
@@ -45,7 +47,7 @@ ctx.slots.inject('tool.call.toolview', () =>
   }, BusinessToolRow))
 ```
 
-The owner payload is `ToolCallOwnerProps`: `callId`, `toolName`, the `phase` discriminant and its stage-specific `block`, optional `cwd` and `home`, the session-authorized `loadImage` loader (for a view whose result carries durable images), and plain `openFile`/`inspect` callbacks. A PTC dispatch block retains its event's `parentCallId`; a root Session call has no such field, so descendants route through the same keyed dispatch — a registered view such as `read_image` renders its card there, and unregistered descendants keep the generic flattened form. Path summaries relativize to the Session cwd first, then replace a leftover POSIX Host home with `~`; `filePath` and Host open prefer the operation-time absolute result path while displayed labels keep the authored argument. Successful older root results retain their argument fallback; pending relative paths wait for a result. The registration receives the normal Session slot runtime share but no React node or Runtime service.
+The owner payload is `ToolCallOwnerProps`: `callId`, `toolName`, the `phase` discriminant and its stage-specific `block`, optional `cwd` and `home`, the Gateway-authorized `loadImage` loader (for a view whose result carries durable images), and plain `openFile`/`inspect` callbacks. A PTC dispatch block retains its event's `parentCallId`; a root Session call has no such field, so descendants route through the same keyed dispatch — a registered view such as `read_image` renders its card there, and unregistered descendants keep the generic flattened form. Path summaries relativize to the Session cwd first, then replace a leftover POSIX Host home with `~`; `filePath` and Host open prefer the operation-time absolute result path while displayed labels keep the authored argument. Successful older root results retain their argument fallback; pending relative paths wait for a result. The registration receives the normal Session slot runtime share but no React node or Runtime service.
 
 ### Built-in views
 
@@ -58,6 +60,8 @@ This package owns the generic fallback and the built-in shell/pwsh, read, read_i
 Question rows pair answers with questions by id, using the tool result or the `userQuestions` projection for late replies. An answerable call has a button to reopen its panel. Once a late reply is in the agent Inbox, the row shows its submitted answers; “View answers” expands its read-only transcript while admission is pending. A settled call with answers opens the panel read-only. Closed calls without answers and invalid records offer no button. Cancelled and interrupted rows show their verdict without inventing answers. If no panel provider accepts the button action, it expands the row. Unsupported or ambiguous input falls back to flattened Tool text.
 
 Answer-panel buttons belong to the question renderer. It composes `DisclosureRow` with its own action and transcript; generic `ToolRow` does not select or dispatch question actions.
+
+File and URL controls declare context-menu targets through the scoped Markdown delegate. File targets carry their recorded path and line for both pointer and keyboard gestures.
 
 -----
 
@@ -82,6 +86,8 @@ Tool Definitions own the [lazy argument view](../../util/values/README.md). Rows
 
 
 Every card is read in place in the call tree; there is no second, full-height presentation of a selected call. Row renderers share one pure card model for each terminal, read, diff, search, and web card, and the image card's gallery renders through the tool-owned `tool.call.images` slot, followed by the full recorded path and each attached image's pixel size (with the original size when downscaled) and byte count. These models validate raw call arguments, result content, failure state, persisted metadata, PTC dispatch `parentCallId`, and Session path facts. Unsupported or malformed inputs use flattened Tool result text. A file-path summary opens the file through the owner's `openFile`, which the chat view routes to the right Sidebar's text preview; `inspect` opens the trajectory view and is absent when that View is unavailable; cards then omit Inspect. Card-specific limits and fallback rules for the terminal, diff, read, search, and web cards remain in [the ui-primitives README](../ui-primitives/README.md); the image card's model in this package carries its own fallback rules.
+
+Search cards treat an exact empty `include` as omitted; invalid types, whitespace-only values, negated filters, and comma-separated lists remain generic.
 
 Chat diff cards keep nine rows before folding, enough for a file header, one removed/added pair, and three context lines on either side. The tool row shows the primitive's exact or coarse-replacement counts; the expanded card contains the diff body without a totals footer. Hovering the tool header colors its added count green and removed count red; both retain those colors while the card is expanded.
 

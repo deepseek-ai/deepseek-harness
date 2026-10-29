@@ -19,6 +19,13 @@ interface ProjectionHandle<S> {
    */
   stateOf(session: Session): S
   /**
+   * Create a reader for one exact Session without reading state or preparing it.
+   * The reader retains this unit after unregistration and owns no disposal.
+   * @param session - Session whose committed events the bound reader folds.
+   * @returns a synchronous callback with the same state and failures as `stateOf(session)`.
+   */
+  readerFor(session: Session): () => S
+  /**
    * Unregister from global drives and snapshots without invalidating this reader.
    * @returns a promise that resolves when this registration is released.
    */
@@ -27,6 +34,8 @@ interface ProjectionHandle<S> {
 ```
 
 [兼容规则](../../packages/session/session-projection/README.zh.md#deprecated-plugin-compatibility)规定旧释放操作、按键读取及其每个键一次的弃用警告。
+
+`ProjectionHandle.readerFor(session)` 为一个确切的 Session 返回 `() => S` 回调。调用它会读取原有单元，保留借用状态、就绪要求和同步失败。所有者可将多个读取函数组合成一个类型化对象；领域服务将它们保留在内部。参见[绑定多个状态](../../packages/session/session-projection/README.zh.md#bind-several-states-to-one-session)。
 
 ## 投影单元
 

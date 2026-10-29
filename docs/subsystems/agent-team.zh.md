@@ -75,7 +75,7 @@ interface TeamTaskSnapshot {
 
 ## Web 投影
 
-`agentTeam.enabled` 提供根 Session 保存的选择。新 Session 默认为 false；`team/mode` 记录显式选择。历史任务在显式选择前视为开启。仅根可调用 `setEnabled`；后代共享该模式。Web 菜单通过 `remote.agentTeams.setEnabled` 调用同一方法，Gateway 将根 Session id 解析为其存活 Agent。模式写入先立即生效，再等待工具同步和刷盘。任务修改在排队操作开始时检查当前模式；已获准的修改可继续完成。模式变更在刷盘后唤醒当前等待。刷盘失败时已追加的选择仍然生效；重试相同选择会再次刷盘，不重复追加事件。
+`agentTeam.enabled` 提供根 Session 保存的选择。新 Session 默认为 false；`team/mode` 记录显式选择。历史任务在显式选择前视为开启。仅根可调用 `setEnabled`；后代共享该模式。Web 菜单通过 `remote.agentTeams.setEnabled` 调用同一方法，Gateway 将根 Session id 解析为其存活 Agent。模式写入先立即生效，再等待刷盘。工具在步骤准备时确定可用性；提示词提供方在求值时读取选择。任务修改在排队操作开始时检查当前模式；已获准的修改可继续完成。模式变更不会结束收件箱等待。刷盘失败时已追加的选择仍然生效；重试相同选择会再次刷盘，不重复追加事件。
 
 根 Session 通过 `SessionProjectionMap.agentTeam` 发布未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久化任务或模式记录。历史名册与邮箱记录不参与投影。任务面板将根标记为主代理，其他负责人依次使用目录标签、Session 标题或 id。
 
@@ -110,7 +110,7 @@ interface TeamProjection {
 
 ## 回放
 
-`agentTeam` 投影按 `TeamId` 重放任务记录，并重放 Session 自身的模式选择。subagent 发现负责当前树成员关系，不将继承目录作为权限来源。Session 事件的 `seq` 和 `time` 负责排序和时间。已提交的持久化代次保持不变。[包 README](../../packages/team/agent-team/README.zh.md)定义任务操作、等待信号和限制。
+`agentTeam` 投影按 `TeamId` 重放任务记录，并重放 Session 自身的模式选择。subagent 发现负责当前树成员关系，不将继承目录作为权限来源。Session 事件的 `seq` 和 `time` 负责排序和时间。已提交的持久化代次保持不变。[包 README](../../packages/team/agent-team/README.zh.md)定义任务操作和限制。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -136,15 +136,15 @@ isEnabled(caller: Agent): boolean
 
 /**
  * Save a root Session's Team selection without stopping children or deleting tasks.
- * The selection takes effect before awaiting consumers or persistence. Task mutations
+ * The selection takes effect before awaiting persistence. Tools resolve availability at
+ * step preparation; prompt providers read the selection when evaluated. Task mutations
  * check the current mode when their queued operation starts; admitted operations finish.
- * Current waits end after the selection is flushed.
  * @param agent - exact live root whose tree receives the selection.
  * @param enabled - selected Team mode.
  * @param signal - cancellation checked before changing the selection.
- * @returns fulfillment after the selection flushes and scoped consumers update.
- * @throws when called by a descendant, a consumer fails, or persistence fails. An appended selection remains active;
- * retrying the same selection synchronizes consumers and flushes without a duplicate event.
+ * @returns fulfillment after the selection flushes.
+ * @throws when called by a descendant or persistence fails. An appended selection remains active;
+ * retrying the same selection flushes without a duplicate event.
  */
 @Remote async setEnabled(agent: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>
 
@@ -182,29 +182,6 @@ listTasks(caller: Agent): TeamTaskView[]
  * @throws TEAM_TASK_PERSISTENCE_UNCONFIRMED when the task is visible but durability is unknown; read it before retrying.
  */
 async updateTask(caller: Agent, request: UpdateTeamTaskRequest, signal?: AbortSignal): Promise<TeamTaskView>
-```
-
-Types: [Agent](core.zh.md)
-
-Source: [`packages/team/agent-team/src/index.ts`](../../packages/team/agent-team/src/index.ts)
-
-<a id="team-events"></a>
-
-### `team/*` events
-
-<a id="teammode-changed--parallel"></a>
-
-#### `team/mode-changed` — parallel
-
-Synchronize scoped consumers with the root's current Team selection, including retries.
-
-```ts cordis-catalog
-/**
- * Synchronize scoped consumers with the root's current Team selection, including retries.
- * @mode parallel
- * @param root - exact live root whose current selection consumers must read.
- */
-'team/mode-changed'(root: Agent): void
 ```
 
 Types: [Agent](core.zh.md)

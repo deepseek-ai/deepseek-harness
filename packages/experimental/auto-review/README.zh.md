@@ -110,7 +110,7 @@ Reviewer 使用最新 `request/header.config` 的 provider 与模型，并沿用
 
 #### KV Cache 影响
 
-每次评审的消息都以上一次评审的全部消息（包括其待审调用）开头，因此按 prompt 前缀、按消息结尾或在末尾标记处回溯缓存的路由都能复用策略与先前历史。Compaction、cwd 变化、较早条目离开 surface，以及重启后的第一次评审会让复用中断一次。Auto 不向主 agent 增加专门 runtime context 或模式切换提示词。
+每次评审的消息都以上一次评审的全部消息（包括其待审调用）开头，因此按 prompt 前缀、按消息结尾或在末尾标记处回溯缓存的路由都能复用策略与先前历史。Compaction、cwd 变化、较早条目离开 surface，以及重启后的第一次评审会让复用中断一次。Auto 不向主 agent 增加专门 runtime context 或模式切换提示词。每个评审请求都携带被评审 Session 的 `sessionId` 和 `purpose: 'auto-review'`，作为模型不可见的传输元数据。按 Session 划分 prompt 缓存或请求路由的路由（例如 OpenAI 的 `prompt_cache_key`，以及 OpenCode 要求的 `x-opencode-session` header）会以该 Session 的键发送评审；[DeepSeek session-log 上传](../../session/session-log-deepseek/README.zh.md#request-field)在启用且没有已注册排除条件匹配时贡献权威 Session 日志。
 
 ### 工具拒绝
 
@@ -136,7 +136,6 @@ Reviewer 使用最新 `request/header.config` 的 provider 与模型，并沿用
 - 模型分类可能出错。不提供确定性工具豁免、持久 grant、可配置策略或重试层。
 - 进程内 Auto child 独立审查自身调用。进程外 child 在父委派调用获准后保留原生权限系统。
 - reviewer 在带行级豁免的情况下，通过已废弃的同步 `snapshotEvents()` 读取 Session 动作历史。此前的调用、PTC start 与直接父级的初始 prompt 目前都没有投影或分页读取方，因此迁移按[同步读取决策](../../../.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.zh.md)继续延期。
-- 评审请求不携带 `sessionId`，因此 OpenAI 路由不会收到 `prompt_cache_key`。传入它还会让评审请求附带 DeepSeek session-log 上传与 session header，需要先做请求用途决策。
 
 <a id="dev-note"></a>
 ### 开发备注

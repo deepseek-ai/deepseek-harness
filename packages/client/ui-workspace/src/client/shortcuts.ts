@@ -48,7 +48,7 @@ export function createWorkspaceShortcutControls(): WorkspaceShortcutControls {
 
 /**
  * Register navigation commands against the existing workspace owner.
- * Rename requires a nonblank main Conversation with no modal obscuring it.
+ * Rename requires a nonblank main Conversation with no modal other than the navigation drawer obscuring it.
  * @param ctx - plugin context with the shortcut, locale, and model services.
  * @param navigation - session creation and forking from the pointer controls' navigation service.
  * @param controls - browser-owned opening requests.
@@ -75,7 +75,7 @@ export function installWorkspaceShortcuts(
         'desktop:macos': { code, modifiers }, 'desktop:windows': { code, modifiers }, 'desktop:linux': { code, modifiers },
         'web:macos': { code, modifiers: webModifiers }, 'web:windows': { code, modifiers: webModifiers },
       },
-      regions: ['page', 'editable'], modals: [], resolve,
+      regions: ['page', 'editable'], modals: ['sidebar'], resolve,
     }), `ui-workspace: ${id}`)
   }
   register('session.new', () => t('session.new'), ['new session', 'new chat'], 'KeyN', ['primary'], ['primary', 'alt'],
@@ -89,7 +89,7 @@ export function installWorkspaceShortcuts(
     })
   register('session.rename', () => t('rename.session.title'), ['rename session'], 'KeyG', ['primary', 'alt'], ['primary', 'alt'], (context) => {
     const target = current()
-    return target === undefined || target.blank || context.modal !== null || ctx.layout.panelInfo.getSnapshot().activePanelId !== null
+    return target === undefined || target.blank || (context.modal !== null && context.modal !== 'sidebar') || ctx.layout.panelInfo.getSnapshot().activePanelId !== null
       ? { status: 'blocked', reason: t('shortcut.noSession') }
       : { status: 'handled', run: () => { controls.rename(target.id, target.title?.trim() ?? '') } }
   })

@@ -1,0 +1,17 @@
+# Opt-in Liveshare owner bundle: mount the same-origin share APIs and their
+# browser Session-header action. Shipped profiles do not include this layer.
+- insert:
+    # The declaration surface loads first and needs nothing: the share host below waits for a Relay
+    # connection, so a surface it provided would appear after the plugins that offer endpoints did.
+    - id: liveshare-viewer-declarations
+      name: '@deepseek-ai/dsh-experimental-liveshare/viewer-declarations'
+    - id: liveshare-share-host
+      name: '@deepseek-ai/dsh-experimental-liveshare'
+      config:
+        ownerIdentityProvider: !!js process.env.LIVESHARE_OWNER_PROVIDER_ID
+        ownerIdentityTenant: !!js process.env.LIVESHARE_OWNER_TENANT_ID
+        ownerIdentitySubject: !!js process.env.LIVESHARE_OWNER_SUBJECT_ID
+        ownerIdentityDisplayName: !!js process.env.LIVESHARE_OWNER_DISPLAY_NAME
+        allowedSubjectIds: !!js (process.env.LIVESHARE_ALLOWED_SUBJECTS ?? '').split(',').map((value) => value.trim()).filter((value) => value !== '')
+        ownerStateFile: !!js process.env.LIVESHARE_OWNER_STATE_FILE
+        ownerCredentialFile: !!js process.env.LIVESHARE_OWNER_CREDENTIAL_FILE

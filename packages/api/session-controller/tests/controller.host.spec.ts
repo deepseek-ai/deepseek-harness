@@ -3,7 +3,8 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { LlmAttemptId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -20,6 +21,75 @@ const defaults = {
 describe('SessionController facade', () => {
   it('does not require the Tools service', () => {
     expect(SessionController.inject).not.toContain('tools')
+  })
+
+  it('keeps assistant stream observation live while list initialization awaits', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await mountAgentLoopTestDependencies(ctx)
+    await mountAgentLoopTestHarness(ctx)
+    const gateway: Partial<TypertGatewayService> = { getPendingRemoteEvents: () => [] }
+    ctx.provide('typertGateway', gateway as TypertGatewayService)
+    const session = ctx.sessions.create(SessionId('assistant-interleave'), { meta: { cwd: '/workspace' } })
+    const partial: Partial<Agent> = { id: session.id, session, status: 'running', ctx }
+    const agent = partial as Agent
+    const entered = Promise.withResolvers<undefined>()
+    const gate = Promise.withResolvers<undefined>()
+    const original = ctx.sessionProjections.register.bind(ctx.sessionProjections)
+    let first = true
+    vi.spyOn(ctx.sessionProjections, 'register').mockImplementation(async (...args: Parameters<typeof original>) => {
+      if (first) {
+        first = false
+        entered.resolve(undefined)
+        await gate.promise
+      }
+      return original(...args)
+    })
+    const mounting = createSessionTestController(ctx, defaults)
+    await entered.promise
+    // An Agent start racing the list read must not be lost before the controller publishes.
+    ctx.emit('agent/assistant-stream', {
+      agent,
+      frame: { type: 'start', attemptId: LlmAttemptId('boot-attempt'), revision: 1, turn: 1, step: 1 },
+    })
+    gate.resolve(undefined)
+    const controller = await mounting
+    const frames = controller.follow({
+      address: { kind: 'session', sessionId: session.id }, assistantStream: true,
+    }, new AbortController().signal)[Symbol.asyncIterator]()
+    await expect(frames.next()).resolves.toMatchObject({
+      value: { type: 'snapshot', assistantStream: { revision: 1 } },
+    })
+    await frames.return?.(undefined)
+  })
+
+  it('serves passive reads, subscriptions and waits through its plain controllers', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await mountAgentLoopTestDependencies(ctx)
+    await mountAgentLoopTestHarness(ctx)
+    const gateway: Partial<TypertGatewayService> = { getPendingRemoteEvents: () => [] }
+    ctx.provide('typertGateway', gateway as TypertGatewayService)
+    const controller = await createSessionTestController(ctx, defaults)
+    const sessionId = SessionId('passive-facade')
+    ctx.sessions.create(sessionId, { meta: { cwd: '/workspace' } })
+    const address = { kind: 'session' as const, sessionId }
+    const signal = new AbortController().signal
+
+    await expect(controller.events({ address }, signal)).resolves.toMatchObject({ records: [], hasMore: false })
+    const historyFrames = controller.observeEvent({ address }, signal)[Symbol.asyncIterator]()
+    await expect(historyFrames.next()).resolves.toMatchObject({ value: { type: 'ready' } })
+    await historyFrames.return?.(undefined)
+    const projectionFrames = controller.observeProjections({ sessionId }, signal)[Symbol.asyncIterator]()
+    await expect(projectionFrames.next()).resolves.toMatchObject({ value: { type: 'ready' } })
+    await projectionFrames.return?.(undefined)
+    await expect(controller.state({ sessionId }, signal))
+      .resolves.toMatchObject({ active: false, running: false, queue: null })
+    const stateFrames = controller.observeState({ sessionId }, signal)[Symbol.asyncIterator]()
+    await expect(stateFrames.next()).resolves.toMatchObject({ value: { active: false } })
+    await stateFrames.return?.(undefined)
+    await expect(controller.wait({ sessionId, afterSeq: -1, maxMessages: 10, timeoutMs: 50 }, signal))
+      .resolves.toMatchObject({ reason: 'idle' })
   })
 
   it('owns Host service methods and publishes Agent lifecycle projections', async () => {
@@ -164,6 +234,7 @@ describe('SessionController facade', () => {
       const abort = new AbortController()
       const iterator = controller.follow({
         address: { kind: 'session', sessionId },
+        activate: true,
       }, abort.signal)[Symbol.asyncIterator]()
 
       await expect(iterator.next()).resolves.toMatchObject({ value: { type: 'snapshot' } })
@@ -216,6 +287,7 @@ describe('SessionController facade', () => {
     })
     const iterator = controller.follow({
       address: { kind: 'session', sessionId },
+      activate: true,
     }, new AbortController().signal)[Symbol.asyncIterator]()
 
     await expect(iterator.next()).resolves.toMatchObject({ value: { type: 'snapshot' } })
