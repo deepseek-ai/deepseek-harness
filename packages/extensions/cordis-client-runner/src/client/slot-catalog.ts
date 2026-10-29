@@ -80,6 +80,95 @@ export const CLIENT_NOTES: readonly string[] = [
 // detection is told to skip the data rather than the file.
 export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
   {
+    key: 'contextMenu.content',
+    kind: 'keyed',
+    scope: 'root',
+    summary: 'Optional React rows for existing extension positions; data contributions need no renderer.',
+    doc: 'Optional React rows for existing extension positions; data contributions need no renderer.',
+    registerOptions: [
+      {
+        name: 'key',
+        requirement: 'required',
+        type: 'string',
+        doc: 'Your cell key: the entry renders where the owner dispatches this exact key. Registering an already-occupied key replaces that occupant.',
+      },
+    ],
+    ownerProps: [
+      '/** Captured target; changing selection never changes an open menu\'s target. */\nexport type ContextMenuTarget = {\n  [K in keyof ContextMenuTargetMap]: { readonly kind: K; readonly value: ContextMenuTargetMap[K] }\n}[keyof ContextMenuTargetMap]',
+    ],
+    ownerPropsReferences: [
+      'ContextMenuTargetMap',
+    ],
+    standardProps: [
+      'useRemoteAccess: (action: RemoteEndpoint) => boolean',
+      'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
+      'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
+      'usePanelInfo: UsePanelInfo',
+      'useSessions: UseSessions',
+      'useSessionStatus: UseSessionStatus',
+      'useSessionRetainInfo: UseSessionRetainInfo',
+      'useSessionAccess: (sessionId: SessionId, action: RemoteEndpoint) => boolean',
+      'useWorkspaceAccess: (workspaceId: WorkspaceId, action: RemoteEndpoint) => boolean',
+    ],
+    keyDomain: 'open: any string the owner dispatches (no compile-time key set), already taken: session, tab',
+    hookContext: '',
+    slotInject: '',
+    declaredBy: 'an entry in \'shell.overlay\' (client-ui-context-menu), so it exists while that entry is mounted',
+    occupants: [
+      'client-ui-sidebar-right TabMenuContent key \'tab\'',
+      'client-ui-workspace SessionMenu key \'session\'',
+    ],
+    replaceRisk: 'shadows-shipped-ui',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'contextMenu.content\', () => ctx.slots.register(\n      { name: \'contextMenu.content\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    source: 'packages/client/ui-context-menu/src/client/index.ts:34',
+  },
+  {
+    key: 'contextMenu.icon',
+    kind: 'keyed',
+    scope: 'root',
+    summary: 'Business-owned glyph or image selected by the action\'s icon key.',
+    doc: 'Business-owned glyph or image selected by the action\'s icon key.',
+    registerOptions: [
+      {
+        name: 'key',
+        requirement: 'required',
+        type: 'string',
+        doc: 'Your cell key: the entry renders where the owner dispatches this exact key. Registering an already-occupied key replaces that occupant.',
+      },
+    ],
+    ownerProps: [
+      '/** Keyed icon renderer and optional image URL captured with the action. */\nexport interface ContextMenuIcon {\n  readonly key: string\n  readonly src?: string\n}',
+    ],
+    ownerPropsReferences: [],
+    standardProps: [
+      'useRemoteAccess: (action: RemoteEndpoint) => boolean',
+      'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
+      'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
+      'usePanelInfo: UsePanelInfo',
+      'useSessions: UseSessions',
+      'useSessionStatus: UseSessionStatus',
+      'useSessionRetainInfo: UseSessionRetainInfo',
+      'useSessionAccess: (sessionId: SessionId, action: RemoteEndpoint) => boolean',
+      'useWorkspaceAccess: (workspaceId: WorkspaceId, action: RemoteEndpoint) => boolean',
+    ],
+    keyDomain: 'open: any string the owner dispatches (no compile-time key set), already taken: open-in-app.application, sidebar.close',
+    hookContext: '',
+    slotInject: '',
+    declaredBy: 'an entry in \'shell.overlay\' (client-ui-context-menu), so it exists while that entry is mounted',
+    occupants: [
+      'client-ui-file-actions Icon',
+      'client-ui-open-in-app Icon',
+      'client-ui-open-in-app ContextMenuApplicationIcon key \'open-in-app.application\'',
+      'client-ui-sidebar-right IconCloseOutlineRegular key \'sidebar.close\'',
+      'client-ui-workspace Icon',
+    ],
+    replaceRisk: 'shadows-shipped-ui',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'contextMenu.icon\', () => ctx.slots.register(\n      { name: \'contextMenu.icon\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    source: 'packages/client/ui-context-menu/src/client/index.ts:32',
+  },
+  {
     key: 'conversation.approval.detail',
     kind: 'single',
     scope: 'session',
@@ -93,6 +182,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -156,6 +246,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -182,7 +273,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.assistant-actions\', () => ctx.slots.register(\n      { name: \'conversation.chat.assistant-actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:482',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:487',
   },
   {
     key: 'conversation.chat.commandview',
@@ -209,6 +300,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -233,7 +325,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.commandview\', () => ctx.slots.register(\n      { name: \'conversation.chat.commandview\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:464',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:469',
   },
   {
     key: 'conversation.chat.flow',
@@ -243,7 +335,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     doc: 'Ordered Chat rows and local echoes with viewport-bound visibility hooks.',
     registerOptions: [],
     ownerProps: [
-      '/** Ordered rows and reconciled local echoes rendered inside one Chat viewport. */\nexport interface ChatFlowOwnerProps extends Pick<ChatNodeOwnerProps,\n  \'cwd\' | \'openFile\' | \'inspectCall\' | \'forkAt\' | \'loadImage\' | \'fileMentions\'> {\n  readonly entries: readonly RenderEntry[]\n  readonly pendingInputs: readonly (PendingSubmission | InboxState[\'next-step\'][number])[]\n  readonly lastInputTurn: number | undefined\n  readonly deferCollapse: boolean\n}',
+      '/** Ordered rows and reconciled local echoes rendered inside one Chat viewport. */\nexport interface ChatFlowOwnerProps extends Pick<ChatNodeOwnerProps,\n  \'cwd\' | \'openFile\' | \'inspectCall\' | \'forkAt\' | \'loadImage\'> {\n  readonly entries: readonly RenderEntry[]\n  readonly pendingInputs: readonly (PendingSubmission | InboxState[\'next-step\'][number])[]\n  readonly lastInputTurn: number | undefined\n  readonly deferCollapse: boolean\n}',
     ],
     ownerPropsReferences: [
       'ChatNodeOwnerProps',
@@ -253,6 +345,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -279,7 +372,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.flow\', () => ctx.slots.register(\n      { name: \'conversation.chat.flow\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:420',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:425',
   },
   {
     key: 'conversation.chat.message.images',
@@ -299,6 +392,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -325,7 +419,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.message.images\', () => ctx.slots.register(\n      { name: \'conversation.chat.message.images\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:456',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:461',
   },
   {
     key: 'conversation.chat.node',
@@ -342,18 +436,17 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/** Stable owner currency delivered to a keyed Chat renderer. */\nexport interface ChatNodeOwnerProps {\n  /** Renderer-owned Node portion selected by the grouping Definition. */\n  groupPart?: string\n  cwd?: string | undefined\n  openFile: (path: string, options?: OpenFileOptions) => void\n  inspectCall: ((callId: ToolCallId) => void) | undefined\n  forkAt: (seq: number) => void\n  /** Session-authorized image loader supplied by the Chat view. */\n  loadImage: MessageImageLoader\n  fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined\n  /** Turn-process state when this Node belongs to a projected Turn. */\n  turnProcess?: TurnProcessOwnerProps | undefined\n}',
+      '/** Stable owner currency delivered to a keyed Chat renderer. */\nexport interface ChatNodeOwnerProps {\n  /** Renderer-owned Node portion selected by the grouping Definition. */\n  groupPart?: string\n  cwd?: string | undefined\n  openFile: (path: string, options?: OpenFileOptions) => void\n  inspectCall: ((callId: ToolCallId) => void) | undefined\n  forkAt: (seq: number) => void\n  /** Session-authorized image loader supplied by the Chat view. */\n  loadImage: MessageImageLoader\n  /** Turn-process state when this Node belongs to a projected Turn. */\n  turnProcess?: TurnProcessOwnerProps | undefined\n}',
     ],
     ownerPropsReferences: [
-      'MarkdownFileMentions',
       'MessageImageLoader',
       'OpenFileOptions',
       'TurnProcessOwnerProps',
-      'TurnTailOwnerProps',
     ],
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -398,7 +491,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.node\', () => ctx.slots.register(\n      { name: \'conversation.chat.node\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:432',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:437',
   },
   {
     key: 'conversation.chat.reasoning.body',
@@ -414,6 +507,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -441,7 +535,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.reasoning.body\', () => ctx.slots.register(\n      { name: \'conversation.chat.reasoning.body\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:470',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:475',
   },
   {
     key: 'conversation.chat.text-interaction',
@@ -466,6 +560,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -492,7 +587,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.text-interaction\', () => ctx.slots.register(\n      { name: \'conversation.chat.text-interaction\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:417',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:422',
   },
   {
     key: 'conversation.chat.turnTail',
@@ -529,6 +624,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -558,7 +654,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.turnTail\', () => ctx.slots.register(\n      { name: \'conversation.chat.turnTail\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:476',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:481',
   },
   {
     key: 'conversation.chat.user.before',
@@ -581,6 +677,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -607,7 +704,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.user.before\', () => ctx.slots.register(\n      { name: \'conversation.chat.user.before\', select: owner => null },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:446',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:451',
   },
   {
     key: 'conversation.chat.user.images',
@@ -627,6 +724,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -653,7 +751,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.user.images\', () => ctx.slots.register(\n      { name: \'conversation.chat.user.images\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:458',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:463',
   },
   {
     key: 'conversation.composer',
@@ -680,6 +778,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -727,6 +826,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -784,6 +884,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -825,6 +926,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -865,6 +967,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -896,6 +999,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -936,6 +1040,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -984,6 +1089,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1028,6 +1134,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1061,6 +1168,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1079,7 +1187,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.hero.workspace.directoryFlow\', () => ctx.slots.register(\n      { name: \'conversation.hero.workspace.directoryFlow\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:125',
+    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:137',
   },
   {
     key: 'conversation.input.activity',
@@ -1097,6 +1205,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1143,6 +1252,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1205,6 +1315,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1268,6 +1379,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1308,6 +1420,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1354,6 +1467,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1411,6 +1525,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1455,6 +1570,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1498,6 +1614,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1557,6 +1674,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1616,6 +1734,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1656,6 +1775,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1696,6 +1816,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1757,6 +1878,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1802,6 +1924,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1846,6 +1969,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1907,6 +2031,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -1974,6 +2099,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2011,6 +2137,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2060,6 +2187,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2130,6 +2258,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2196,6 +2325,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2259,6 +2389,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2306,6 +2437,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2339,6 +2471,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2398,6 +2531,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2438,6 +2572,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2481,6 +2616,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2537,6 +2673,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2589,6 +2726,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2641,6 +2779,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2693,6 +2832,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2738,6 +2878,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2790,6 +2931,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2823,6 +2965,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2859,6 +3002,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2901,6 +3045,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2953,6 +3098,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -2986,6 +3132,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3038,6 +3185,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3082,6 +3230,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3115,6 +3264,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3167,6 +3317,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3207,6 +3358,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3236,6 +3388,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3288,6 +3441,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3341,6 +3495,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3393,6 +3548,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3430,6 +3586,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3461,6 +3618,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3492,6 +3650,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3542,6 +3701,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3556,6 +3716,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'root\' (client-ui-layout), so it exists while that entry is mounted',
     occupants: [
       'client-ui-chat QuotaNoticeHost id \'chat.quota-notice\'',
+      'client-ui-context-menu MenuOverlay id \'context-menu\'',
       'client-ui-file-drag FileDragFeedback id \'file-drag.feedback\'',
       'client-ui-open-in-app OpenInAppToast id \'open-in-app.toast\'',
       'client-ui-plugin-manager PluginRefreshToast id \'plugin-manager.refresh-toast\'',
@@ -3599,6 +3760,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3616,7 +3778,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'shell.quota-notice\', () => ctx.slots.register(\n      { name: \'shell.quota-notice\', select: owner => null },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:490',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:495',
   },
   {
     key: 'sidebar',
@@ -3632,6 +3794,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3665,6 +3828,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3699,6 +3863,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3731,6 +3896,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3792,6 +3958,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3844,6 +4011,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3899,6 +4067,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3937,6 +4106,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -3996,6 +4166,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4055,6 +4226,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4113,6 +4285,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4172,6 +4345,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4223,6 +4397,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4282,6 +4457,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4341,6 +4517,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4367,7 +4544,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.right.tab.files.actions\', () => ctx.slots.register(\n      { name: \'sidebar.right.tab.files.actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar-files/src/client/index.ts:34',
+    source: 'packages/client/ui-sidebar-files/src/client/index.ts:35',
   },
   {
     key: 'sidebar.right.tab.guide',
@@ -4388,6 +4565,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4449,6 +4627,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4489,6 +4668,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4552,6 +4732,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4572,7 +4753,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     keyDomain: '',
     hookContext: '',
     slotInject: '',
-    declaredBy: 'an entry in \'rightbar.session\' (client-ui-sidebar-right), so it exists while that entry is mounted',
+    declaredBy: 'an entry in \'contextMenu.content\' (client-ui-sidebar-right), so it exists while that entry is mounted',
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.right.tab.menu.item\', () => ctx.slots.register(\n      { name: \'sidebar.right.tab.menu.item\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
@@ -4613,6 +4794,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4631,7 +4813,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.session.row.hover\', () => ctx.slots.register(\n      { name: \'sidebar.session.row.hover\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:151',
+    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:163',
   },
   {
     key: 'sidebar.session.row.leading',
@@ -4668,6 +4850,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4686,7 +4869,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.session.row.leading\', () => ctx.slots.register(\n      { name: \'sidebar.session.row.leading\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:137',
+    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:149',
   },
   {
     key: 'sidebar.session.row.trailing',
@@ -4723,6 +4906,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4740,7 +4924,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.session.row.trailing\', () => ctx.slots.register(\n      { name: \'sidebar.session.row.trailing\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:146',
+    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:158',
   },
   {
     key: 'sidebar.settings',
@@ -4756,6 +4940,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4787,6 +4972,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4820,6 +5006,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4853,6 +5040,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4871,14 +5059,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.workspaces.directoryFlow\', () => ctx.slots.register(\n      { name: \'sidebar.workspaces.directoryFlow\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:127',
+    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:139',
   },
   {
     key: 'sidebar.workspaces.session.menu.item',
     kind: 'list',
     scope: 'root',
-    summary: 'The rows of one Session\'s "..." menu, in ascending `order`.',
-    doc: 'The rows of one Session\'s "..." menu, in ascending `order`. ui-workspace\nregisters the shipped rows here — `pin` (100), `rename` (200), `fork`\n(300), `archive` (400), and `session-id` (450) — so a plugin row is placed\nby its own `order` among them. Use a package-namespaced `id`; reusing a shipped id at\nanother `priority` shadows that row. Each entry renders one\n`role="menuitem"` `<button>` (the shipped rows use ui-primitives\'\n`MenuItemButton`, which adds the host styling and `separatorBefore`),\ndecides its own visibility from its own state, and dismisses the menu\nthrough the injected `useMenuOpenState` hook after acting; the list\'s\nkeyboard walk and focus return read the DOM, so any such button joins\nthem. Labels come from the contributing package\'s locale namespace.',
+    summary: 'Legacy external Session menu rows, in ascending `order`, rendered together before the built-in Archive action.',
+    doc: 'Legacy external Session menu rows, in ascending `order`, rendered\ntogether before the built-in Archive action. Built-in actions use\nctx.contextMenus; Slot priority cannot replace them. Each entry renders a\n`role="menuitem"` button, owns its visibility and localized label,\nand dismisses through `useMenuOpenState`. The shared menu supplies\nkeyboard navigation and focus return.',
     registerOptions: [
       {
         name: 'id',
@@ -4908,6 +5096,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4919,18 +5108,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     keyDomain: '',
     hookContext: 'MenuOpenState',
     slotInject: '{ hooks: { menuOpenState: SlotHookFactory<\'sidebar.workspaces.session.menu.item\', UseMenuOpenState> shortcuts: HostObservable<readonly ShortcutCatalogEntry[]> } }',
-    declaredBy: 'an entry in \'sidebar.workspaces\' (client-ui-workspace), so it exists while that entry is mounted',
-    occupants: [
-      'client-ui-workspace PinSessionMenuItem id \'pin\'',
-      'client-ui-workspace RenameSessionMenuItem id \'rename\'',
-      'client-ui-workspace ForkSessionMenuItem id \'fork\'',
-      'client-ui-workspace ArchiveSessionMenuItem id \'archive\'',
-      'client-ui-workspace SessionIdMenuItem id \'session-id\'',
-      'experimental-liveshare ViewerForkMenuItem id \'fork\'',
-    ],
+    declaredBy: 'an entry in \'contextMenu.content\' (client-ui-workspace), so it exists while that entry is mounted',
+    occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    const copyLabel = \'Copy session title\' // Localize in the contributing package.\n    ctx.slots.inject(\'sidebar.workspaces.session.menu.item\', () => ctx.slots.register(\n      { name: \'sidebar.workspaces.session.menu.item\', id: \'copy-session-title\', order: 500 },\n      ({ displayTitle, useMenuOpenState }) => {\n        const [, setMenuOpen] = useMenuOpenState()\n        return React.createElement(\n          \'button\',\n          {\n            type: \'button\', role: \'menuitem\',\n            onClick: () => { setMenuOpen(false); void navigator.clipboard.writeText(displayTitle) },\n          },\n          copyLabel,\n        )\n      },\n    ))\n  },\n}',
-    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:186',
+    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:193',
   },
   {
     key: 'sidebar.workspaces.session.row.action',
@@ -4967,6 +5149,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -4985,7 +5168,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.workspaces.session.row.action\', () => ctx.slots.register(\n      { name: \'sidebar.workspaces.session.row.action\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:205',
+    source: 'packages/client/ui-workspace/src/client/contract/slots.ts:212',
   },
   {
     key: 'tool.call.images',
@@ -5004,6 +5187,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -5030,14 +5214,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'tool.call.images\', () => ctx.slots.register(\n      { name: \'tool.call.images\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-tool/src/client/contract/slots.ts:44',
+    source: 'packages/client/ui-tool/src/client/contract/slots.ts:41',
   },
   {
     key: 'tool.call.toolview',
     kind: 'keyed',
     scope: 'session',
-    summary: 'Keyed Tool call view dispatched by wire Tool name.',
-    doc: 'Keyed Tool call view dispatched by wire Tool name. Any name is allowed,\nincluding tools registered by your package. Register with\n`key: \'<tool name>\'`; a typo never renders.\n\nRegistering an occupied key replaces its view; unclaimed keys use the\ngeneric row. The owner supplies the call identity and running\nor settled node through explicit phase props. Every stage supplies\n`name` and a lazy `args` view; preparing arguments may be incomplete.',
+    summary: 'Keyed Tool view dispatched by wire name, including custom tools.',
+    doc: 'Keyed Tool view dispatched by wire name, including custom tools.\nRegister with `key: \'<tool name>\'`; a typo never renders.\nOccupied keys replace the view; unclaimed keys use the generic row. Owner\nphase data includes `name` and lazy `args`; preparing arguments may be incomplete.',
     registerOptions: [
       {
         name: 'key',
@@ -5062,6 +5246,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -5142,7 +5327,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'tool.call.toolview\', () => ctx.slots.register(\n      { name: \'tool.call.toolview\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-tool/src/client/contract/slots.ts:26',
+    source: 'packages/client/ui-tool/src/client/contract/slots.ts:23',
   },
   {
     key: 'tool.view.cordis',
@@ -5169,6 +5354,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',
@@ -5218,6 +5404,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
       'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
       'useSessions: UseSessions',

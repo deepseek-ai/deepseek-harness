@@ -15,7 +15,7 @@ import type { ReviewActions } from '../src/client/ReviewComposer.tsx'
 import { ReviewQueue } from '../src/client/review-queue.ts'
 import { createChangesStore } from '../src/client/changes-store.ts'
 import { ChangesTab, type ChangesTabInjected, type ChangesTabProps } from '../src/client/ChangesTab.tsx'
-import { en } from '../src/client/locales.ts'
+import { en, zh } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
 import css from '../src/client/ChangesTab.module.css'
 import type { ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelState } from '../src/types.ts'
@@ -110,6 +110,7 @@ const REFUSED = {
   noForkPoint: { ok: false, error: new RemoteError('forgePanel/no-fork-point', 'no fork point', {}) },
   notCheckout: { ok: false, error: new RemoteError('forgePanel/not-a-checkout', 'not a checkout', {}) },
   tooLarge: { ok: false, error: new RemoteError('forgePanel/diff-too-large', 'too large', {}) },
+  filterConfig: { ok: false, error: new RemoteError('forgePanel/filter-config-failed', 'filter configuration unavailable', {}) },
   gone: { ok: false, error: new RemoteError('forgePanel/diff-failed', 'gone', {}) },
   hostRefused: { ok: false, error: new RemoteError('forgePanel/diff-failed', 'diff too large', {}) },
   failed: { ok: false, error: new RemoteError('gateway/bad-request', 'failed', {}) },
@@ -146,6 +147,7 @@ async function settle(): Promise<void> {
 type Faces = { -readonly [K in Exclude<keyof ChangesTabInjected, 'keyedHooks'>]: ReturnType<typeof vi.fn<ChangesTabInjected[K]>> }
 
 interface MountOptions {
+  readonly translate?: typeof t
   readonly source?: ChangesSource
   readonly state?: ForgePanelState | null
   readonly disconnected?: boolean
@@ -226,7 +228,7 @@ function mount(options: MountOptions = {}) {
     actions: store.actions,
     usePanel,
     ...faces,
-    t,
+    t: options.translate ?? t,
   }
   const view = render(<ChangesTab {...props} />)
   /** The section of one file. */
@@ -243,6 +245,116 @@ function mount(options: MountOptions = {}) {
 function rowTexts(section: HTMLElement): string[] {
   return [...section.querySelectorAll(`.${css.text}`)].map(element => element.textContent ?? '')
 }
+
+/** Section geometry with a short final page whose scroll position is clamped by the viewport. */
+function fileViewport(m: ReturnType<typeof mount>) {
+  const nodes = [...m.view.container.querySelectorAll<HTMLElement>('[data-forge-diff-file]')]
+  const viewport = m.view.getByRole('region', { name: `All ${nodes.length} files` })
+  vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 600, 300))
+  nodes.forEach((node, index) => {
+    vi.spyOn(node, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, index * 200 - viewport.scrollTop, 600, 200))
+  })
+  scrolled.mockImplementation(function (this: HTMLElement) {
+    viewport.scrollTop = Math.min(nodes.indexOf(this) * 200, nodes.length * 200 - 300)
+  })
+  return { viewport, nodes }
+}
+
+describe('ChangesTab keyboard file navigation', () => {
+  it.each([{ kind: 'local' }, { kind: 'change', url: URL7 }] as const)('moves between $kind files, expands the destination and keeps focus in the diff', async (source) => {
+    const m = mount({ source })
+    await settle()
+    const { viewport, nodes } = fileViewport(m)
+    const destination = nodes[2]!
+    fireEvent.click(within(destination).getByRole('button', { name: /^Collapse / }))
+    viewport.scrollTop = 250
+    fireEvent.scroll(viewport)
+    expect(fireEvent.keyDown(viewport, { key: 'ArrowRight' })).toBe(false)
+    expect(scrolled.mock.contexts.at(-1)).toBe(destination)
+    expect(destination.hasAttribute('data-expanded')).toBe(true)
+    expect(document.activeElement).toBe(viewport)
+    const tree = within(m.view.getByRole('navigation'))
+    expect(tree.getByRole('button', { name: destination.dataset.forgeDiffFile! }).getAttribute('aria-current')).toBe('true')
+    fireEvent.scroll(viewport)
+    fireEvent.keyDown(viewport, { key: 'ArrowLeft' })
+    expect(scrolled.mock.contexts.at(-1)).toBe(nodes[1])
+    expect(m.faces.localDiff.mock.calls.length + m.faces.changeRequestDiff.mock.calls.length).toBe(1)
+  })
+
+  it('stops at the ends, remembers a clamped last file, and follows manual scrolling', async () => {
+    const m = mount()
+    await settle()
+    const { viewport, nodes } = fileViewport(m)
+    fireEvent.keyDown(viewport, { key: 'ArrowLeft' })
+    expect(scrolled).not.toHaveBeenCalled()
+    for (let index = 1; index < nodes.length; index += 1) {
+      fireEvent.keyDown(viewport, { key: 'ArrowRight' })
+      fireEvent.scroll(viewport)
+      expect(scrolled.mock.contexts.at(-1)).toBe(nodes[index])
+    }
+    const count = scrolled.mock.calls.length
+    fireEvent.keyDown(viewport, { key: 'ArrowRight' })
+    expect(scrolled).toHaveBeenCalledTimes(count)
+    fireEvent.keyDown(viewport, { key: 'ArrowLeft' })
+    expect(scrolled.mock.contexts.at(-1)).toBe(nodes.at(-2))
+    viewport.scrollTop = 225
+    fireEvent.scroll(viewport)
+    fireEvent.keyDown(viewport, { key: 'ArrowRight' })
+    expect(scrolled.mock.contexts.at(-1)).toBe(nodes[2])
+  })
+
+  it('leaves vertical arrows, modifiers, composition and handled keys to their owners', async () => {
+    const m = mount()
+    await settle()
+    const { viewport } = fileViewport(m)
+    for (const input of [
+      { key: 'ArrowDown' }, { key: 'ArrowUp' }, { key: 'ArrowRight', shiftKey: true },
+      { key: 'ArrowRight', ctrlKey: true }, { key: 'ArrowRight', metaKey: true },
+      { key: 'ArrowRight', altKey: true }, { key: 'ArrowRight', isComposing: true },
+    ]) expect(fireEvent.keyDown(viewport, input)).toBe(true)
+    const handled = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })
+    handled.preventDefault()
+    fireEvent(viewport, handled)
+    act(() => { m.visibility.set(false) })
+    fireEvent.keyDown(viewport, { key: 'ArrowRight' })
+    expect(scrolled).not.toHaveBeenCalled()
+  })
+
+  it('preserves comment editing, native selections, tree controls and portalled menus', async () => {
+    const m = mount()
+    await settle()
+    const { viewport } = fileViewport(m)
+    const section = within(m.section('src/app.ts'))
+    fireEvent.click(section.getByRole('button', { name: 'Select line R4' }))
+    fireEvent.click(section.getByRole('button', { name: 'Add comment' }))
+    const input = section.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'Keep editing' } })
+    fireEvent.keyDown(input, { key: 'ArrowRight' })
+    fireEvent.keyDown(section.getByRole('button', { name: 'Add to input' }), { key: 'ArrowLeft' })
+    expect(input).toHaveProperty('value', 'Keep editing')
+    expect(scrolled).not.toHaveBeenCalled()
+    fireEvent.keyDown(m.view.getByRole('separator'), { key: 'ArrowRight' })
+    fireEvent.keyDown(within(m.view.getByRole('navigation')).getByRole('textbox'), { key: 'ArrowLeft' })
+    fireEvent.click(section.getByRole('button', { name: 'More actions for app.ts' }))
+    const menuItem = m.view.getByRole('menuitem', { name: 'Copy path' })
+    fireEvent.keyDown(menuItem, { key: 'ArrowRight' })
+    fireEvent.keyDown(menuItem, { key: 'Escape' })
+    fireEvent.keyDown(m.section('src/app.ts').querySelector('svg')!, { key: 'ArrowRight' })
+    expect(scrolled).not.toHaveBeenCalled()
+    const selection = window.getSelection()!
+    const range = document.createRange()
+    range.selectNodeContents(m.section('src/new.ts').querySelector('[data-review-code][data-new-line="1"]')!)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    try {
+      expect(selection.toString()).toBe('export const added = 1')
+      fireEvent.keyDown(viewport, { key: 'ArrowRight' })
+      expect(scrolled).not.toHaveBeenCalled()
+    } finally {
+      selection.removeAllRanges()
+    }
+  })
+})
 
 describe('ChangesTab local reads', () => {
   it('waits for the panel state, then reads the branch scope and draws its files', async () => {
@@ -325,6 +437,20 @@ describe('ChangesTab local reads', () => {
     expect(m.view.getByRole('status').textContent).toBe(message)
     expect(m.view.queryByRole('button', { name: en.retry })).toBeNull()
     expect(m.view.getByRole('button', { name: 'All 0 files' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it.each([['en', en], ['zh', zh]] as const)('explains a filter configuration failure in %s and retries the comparison', async (_locale, dictionary) => {
+    const m = mount({
+      translate: makeTranslate(dictionary),
+      setup: (faces) => { faces.localDiff.mockResolvedValueOnce(REFUSED.filterConfig) },
+    })
+    await settle()
+    expect(m.view.getByRole('status').textContent).toBe(`${dictionary['diff.filterConfigFailed']}${dictionary.retry}`)
+    expect(m.view.queryByText(dictionary['diff.tooLarge'])).toBeNull()
+    fireEvent.click(m.view.getByRole('button', { name: dictionary.retry }))
+    await settle()
+    expect(m.paths()).toHaveLength(6)
+    expect(m.view.queryByText(dictionary['diff.filterConfigFailed'])).toBeNull()
   })
 
   it('offers a retry after any other failure', async () => {
@@ -677,16 +803,16 @@ describe('ChangesTab actions', () => {
     return m.view.getAllByRole('menuitem').map(item => item.textContent ?? '')
   }
 
-  it.each(['local', 'change'] as const)('copies the full relative path from a %s diff header without folding the file', async (kind) => {
+  it.each(['local', 'change'] as const)('keeps the clipboard unchanged when a %s diff file label is clicked', async (kind) => {
     const m = mount({ source: kind === 'local' ? { kind } : { kind, url: URL7 } })
     await settle()
-    fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: `${en['diff.copyPath']}: src/app.ts` }))
-    expect(m.faces.copyPath).toHaveBeenCalledWith('src/app.ts')
+    fireEvent.click(m.section('src/app.ts').querySelector('[data-forge-file-label]')!)
+    expect(m.faces.copyPath).not.toHaveBeenCalled()
     expect(m.section('src/app.ts').hasAttribute('data-expanded')).toBe(true)
     expect(m.tabActions.openResource).not.toHaveBeenCalled()
     fireEvent.click(within(m.section('docs/gone.txt')).getByRole('button', { name: 'Collapse gone.txt' }))
-    fireEvent.click(within(m.section('docs/gone.txt')).getByRole('button', { name: `${en['diff.copyPath']}: docs/gone.txt` }))
-    expect(m.faces.copyPath).toHaveBeenLastCalledWith('docs/gone.txt')
+    fireEvent.click(m.section('docs/gone.txt').querySelector('[data-forge-file-label]')!)
+    expect(m.faces.copyPath).not.toHaveBeenCalled()
     expect(m.section('docs/gone.txt').hasAttribute('data-expanded')).toBe(false)
   })
 
@@ -695,9 +821,11 @@ describe('ChangesTab actions', () => {
       ...LOCAL, files: [file('src/index.ts'), file('tests/index.ts')],
     })) } })
     await settle()
-    fireEvent.click(m.view.getByRole('button', { name: 'Copy path: src/index.ts' }))
+    menu(m, 'src/index.ts')
+    fireEvent.click(m.view.getByRole('menuitem', { name: en['diff.copyPath'] }))
     expect(m.faces.copyPath).toHaveBeenLastCalledWith('src/index.ts')
-    fireEvent.click(m.view.getByRole('button', { name: 'Copy path: tests/index.ts' }))
+    menu(m, 'tests/index.ts')
+    fireEvent.click(m.view.getByRole('menuitem', { name: en['diff.copyPath'] }))
     expect(m.faces.copyPath).toHaveBeenLastCalledWith('tests/index.ts')
   })
 
@@ -939,9 +1067,20 @@ describe('line review actions', () => {
     fireEvent.change(tree.getByRole('textbox'), { target: { value: 'app.ts' } })
     fireEvent.click(tree.getByRole('button', { name: 'src/app.ts' }))
     expect(tree.getByRole('button', { name: 'src/app.ts' }).getAttribute('aria-current')).toBe('true')
-    fireEvent.click(m.view.getByRole('button', { name: en['diff.fileTree'] }))
-    expect(m.view.getByRole('button', { name: en['diff.fileTree'] }).getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(m.view.getByRole('button', { name: en['diff.fileTree'] }))
+    const toggle = m.view.getByRole('button', { name: en['diff.moveFileTreeRight'] })
+    toggle.focus()
+    fireEvent.click(toggle)
+    expect(m.view.getByRole('button', { name: en['diff.hideFileTree'] })).toBe(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(document.activeElement).toBe(toggle)
+    expect(tree.getByRole('button', { name: 'src/app.ts' }).getAttribute('aria-current')).toBe('true')
+    fireEvent.click(toggle)
+    expect(m.view.getByRole('button', { name: en['diff.showFileTreeLeft'] })).toBe(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(toggle)
+    fireEvent.click(toggle)
+    expect(m.view.getByRole('button', { name: en['diff.moveFileTreeRight'] })).toBe(toggle)
+    expect(document.activeElement).toBe(toggle)
     expect(tree.getByRole('textbox')).toHaveProperty('value', 'app.ts')
     fireEvent.change(tree.getByRole('textbox'), { target: { value: '' } })
     fireEvent.click(tree.getByRole('button', { name: 'src' }))

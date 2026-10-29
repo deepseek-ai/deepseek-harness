@@ -615,12 +615,14 @@ describe('model-relative reference budgets', () => {
   it('removes its pre-step listener when the resolver fiber is disposed', async () => {
     const { ctx, agent, source, resolve, resolverFiber } = await setup()
     const resolver = ctx.sessionReferenceResolver
+    resolve.mockClear()
     await resolverFiber.dispose()
     ctx.systemPrompt.variable('provider', () => 'disposed')
     ctx.systemPrompt.variable('model', () => 'disposed')
     await ctx.systemPrompt.assemble({ agent, scope: agent })
-    await resolver.prepare(agent, [], [{ sessionId: source.id }], { provider: 'seed', model: 'seed' })
-    expect(resolve).toHaveBeenLastCalledWith('seed', 'seed', undefined)
+    expect(resolve).not.toHaveBeenCalled()
+    await expect(resolver.prepare(agent, [], [{ sessionId: source.id }], { provider: 'seed', model: 'seed' }))
+      .rejects.toThrow('cannot get required service "sessionQuery" in inactive context')
     const message = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: formatSessionReferenceMention({ sessionId: source.id }) }] })
     const seed = { kind: 'enter' as const, messages: [message] }
     await expect(agentEvents(ctx, agent).waterfall('agent/pre-step', { modelSelection: { provider: 'seed', model: 'seed' }, messages: [message], turn: 1, step: 1, signal: new AbortController().signal },

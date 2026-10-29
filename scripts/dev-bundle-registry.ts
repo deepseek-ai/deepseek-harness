@@ -123,6 +123,9 @@ async function main(): Promise<void> {
     // 2. Current official artifacts, so the run never serves an earlier build.
     await runStep(root, ['run', 'build:official'], abort.signal, 'build:official')
     verifyBuiltBundles({ entries, packages })
+    if (selection.members.some(member => member.name === '@deepseek-ai/dsh-experimental-cua-macos')) {
+      await runStep(root, ['--dir', 'packages/experimental/cua-macos', 'run', 'build:native'], abort.signal, 'CUA native build')
+    }
 
     // 3. One immutable, run-owned directory; a later run never overwrites these bytes.
     const buildId = runId()

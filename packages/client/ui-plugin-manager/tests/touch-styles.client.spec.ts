@@ -59,6 +59,11 @@ function ruleBody(selector: string): string {
 }
 
 describe('plugin page touch rules', () => {
+  it('uses the compact page inset below 768px', () => {
+    const narrow = /@media \(max-width: 767px\) \{([\s\S]*?)\n\}/.exec(rules)?.[1]
+    expect(narrow).toContain('--plugin-page-inset: 20px')
+  })
+
   it('fences every hover affordance behind a hover-capable pointer', () => {
     // Unguarded, the browser keeps `:hover` on the tapped element until the next tap
     // elsewhere: a card or menu row stays painted as if the pointer were still on it.

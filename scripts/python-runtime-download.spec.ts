@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile, copyFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
 
 async function fixture() {
@@ -23,7 +23,26 @@ async function fixture() {
   await file(join(root, 'node/node_modules/@deepseek-ai/dsh-sandbox-windows-acl/package.json'), '{"type":"module","exports":{"./runner":"./runner.mjs"}}')
   await file(join(root, 'node/node_modules/@deepseek-ai/dsh-sandbox-windows-acl/runner.mjs'), '')
   await file(join(root, 'node/node_modules/@deepseek-ai/dsh/package.json'), '{"type":"module"}')
-  await file(join(root, 'node/node_modules/@deepseek-ai/dsh/lib/bin.js'), 'export async function runCli() { if (process.argv[2]) { console.log(JSON.stringify({ argv: process.argv.slice(2) })); return } console.log(JSON.stringify({ primary: process.env.DSH_BUNDLED_PRIMARY_RUNTIME, office: process.env.DSH_BUNDLED_OFFICE_CLI })) }')
+  await file(join(root, 'node/node_modules/@deepseek-ai/dsh/lib/bin.js'), `
+    export async function runCli(options = {}) {
+      const result = process.argv[2] ? { argv: process.argv.slice(2) }
+        : { primary: process.env.DSH_BUNDLED_PRIMARY_RUNTIME, office: process.env.DSH_BUNDLED_OFFICE_CLI };
+      if (options.packageManager) Object.assign(result, { packageManager: options.packageManager, hostPath: process.env.PATH });
+      console.log(JSON.stringify(result));
+    }
+  `)
+  await file(join(root, 'node/node_modules/@deepseek-ai/dsh-tool-workspace-dependencies/package.json'), '{"type":"module","exports":"./index.mjs"}')
+  await file(join(root, 'node/node_modules/@deepseek-ai/dsh-tool-workspace-dependencies/index.mjs'), `
+    import { readFile } from 'node:fs/promises';
+    import { join } from 'node:path';
+    export async function resolvePrimaryRuntime(root) {
+      const manifest = JSON.parse(await readFile(join(root, 'runtime.json'), 'utf8'));
+      return {
+        node: manifest.node ? join(root, 'dependencies/node/bin', process.platform === 'win32' ? 'node.exe' : 'node') : undefined,
+        pnpm: manifest.pnpm ? join(root, 'dependencies/pnpm/bin/pnpm.mjs') : undefined,
+      };
+    }
+  `)
   await file(join(root, 'node/primary-runtime.mjs'), `
     import { mkdir, writeFile } from 'node:fs/promises';
     import { join } from 'node:path';
@@ -56,7 +75,7 @@ async function fixture() {
   function run(resource?: string, extra: NodeJS.ProcessEnv = {}, args: string[] = []) {
     const child = spawn(process.execPath, [bootstrap, ...args], {
       env: { ...process.env, DSH_RESOURCE_CACHE: cache, DSH_RUNTIME_DOWNLOAD: resource, DSH_BUNDLED_PRIMARY_RUNTIME: undefined,
-        DSH_OFFICE_SIDECAR: undefined, DSH_BUNDLED_OFFICE_CLI: undefined, ...extra },
+        DSH_PRIMARY_RUNTIME: undefined, DSH_OFFICE_SIDECAR: undefined, DSH_BUNDLED_OFFICE_CLI: undefined, ...extra },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     let stdout = '', stderr = ''
@@ -72,8 +91,46 @@ async function fixture() {
     })
     return { child, ready, done }
   }
-  return { root, cache, run }
+  return { root, cache, run, file }
 }
+
+it('supplies downloaded Node and pnpm to profile and CLI package operations without changing the host PATH', async () => {
+  const { root, cache, run, file } = await fixture()
+  try {
+    await run('primary').done
+    const primary = join(cache, 'a'.repeat(64), 'primary', 'primary-runtime')
+    await file(join(primary, 'runtime.json'), JSON.stringify({ node: '24.9.0', pnpm: '11.0.0' }))
+    const node = join(primary, 'dependencies/node/bin', process.platform === 'win32' ? 'node.exe' : 'node')
+    for (const args of [[], ['plugin', '--profile', 'sdk', 'add', 'local-bundle']]) {
+      const result = await run(undefined, { PATH: '' }, args).done
+      expect(result.code, result.stderr).toBe(0)
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        packageManager: { command: node, args: [join(primary, 'dependencies/pnpm/bin/pnpm.mjs')],
+          env: { PATH: `${dirname(node)}${delimiter}` } }, hostPath: '',
+      })
+    }
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('uses an explicit primary runtime instead of the cache and honors its empty disable value', async () => {
+  const { root, run, file } = await fixture()
+  try {
+    await run('primary').done
+    const primary = join(root, 'replacement')
+    await file(join(primary, 'runtime.json'), JSON.stringify({ node: '24.9.0', pnpm: '11.0.0' }))
+    const replaced = await run(undefined, { DSH_PRIMARY_RUNTIME: primary }).done
+    expect(replaced.code, replaced.stderr).toBe(0)
+    expect(JSON.parse(replaced.stdout)).toMatchObject({ packageManager: {
+      command: join(primary, 'dependencies/node/bin', process.platform === 'win32' ? 'node.exe' : 'node'),
+    } })
+    const disabled = await run(undefined, { DSH_PRIMARY_RUNTIME: '' }).done
+    expect(disabled.code, disabled.stderr).toBe(0)
+    expect(JSON.parse(disabled.stdout)).not.toHaveProperty('packageManager')
+    const missing = await run(undefined, { DSH_PRIMARY_RUNTIME: join(root, 'missing') }).done
+    expect(missing.code).toBe(1)
+    expect(missing.stderr).toContain('ENOENT')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
 
 it('starts without downloading, independently downloads either resource, and reuses completed caches', async () => {
   const { root, cache, run } = await fixture()

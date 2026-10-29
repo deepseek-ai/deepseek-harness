@@ -285,7 +285,7 @@ body {
   --dsw-specific-bubble: var(--dsw-static-deepseek-50);
   --dsw-specific-input-major: var(--dsw-static-neutral-bluish-00);
   --dsw-specific-login-input: var(--dsw-static-neutral-bluish-50);
-  --dsw-menu-surface-fill: rgba(248, 249, 250, 0.58);
+  --dsw-menu-surface-fill: rgba(252, 253, 254, 0.7);
   --dsw-alias-menu-group-header-fill: rgba(248, 249, 250, 0.94);
   --dsw-specific-menu: var(--dsw-menu-surface-fill);
   --dsw-specific-selector: var(--dsw-static-neutral-bluish-60);
@@ -409,7 +409,7 @@ body[data-ds-dark-theme] {
   --dsw-specific-bubble: var(--dsw-static-neutral-bluish-850);
   --dsw-specific-input-major: var(--dsw-static-neutral-bluish-850);
   --dsw-specific-login-input: var(--dsw-static-neutral-bluish-900);
-  --dsw-menu-surface-fill: rgba(67, 69, 74, 0.45);
+  --dsw-menu-surface-fill: rgba(48, 49, 54, 0.64);
   --dsw-alias-menu-group-header-fill: rgba(48, 49, 54, 0.94);
   --dsw-specific-menu: var(--dsw-menu-surface-fill);
   --dsw-specific-selector: var(--dsw-static-neutral-bluish-800);

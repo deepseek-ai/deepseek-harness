@@ -48,9 +48,11 @@ const INSPECTED = { status: 'accepted' as const, kind: 'registry' as const, name
 const APPLIED: ChangeResult = { changed: true, application: 'applied', stage: 'enable', target: 'dsh-better-sidebar' }
 
 /** A change the Host could not apply, with the refusal it names. */
-function failed(error?: ManagementError, packageResult?: ChangeResult['packageResult']): ChangeResult {
+function failed(
+  error?: ManagementError, packageResult?: ChangeResult['packageResult'], facts: Pick<ChangeResult, 'stage' | 'enabled'> = { stage: 'install' },
+): ChangeResult {
   return {
-    changed: false, application: 'failed', stage: 'enable', target: 'dsh-better-sidebar',
+    changed: false, application: 'failed', target: 'dsh-better-sidebar', ...facts,
     ...error === undefined ? {} : { error }, ...packageResult === undefined ? {} : { packageResult },
   }
 }
@@ -655,13 +657,14 @@ describe('PluginManagerController', () => {
     gate.resolve(ok({ ...APPLIED, bundle: 'dsh-new', version: '1.0.0' }))
     await vi.waitFor(() => { expect(state().install.phase).toBe('done') })
     expect(state().install).toMatchObject({ installed: 'dsh-new', installedVersion: '1.0.0', restartRequired: false, detailsOpen: true })
-    // The finished install settled its run; a trailing last chunk still lands
-    // on it, while a chunk for a run the dialog never saw is dropped.
+    // The answer and the log travel over separate transports: the settled dialog keeps a trailing chunk of a
+    // known run, and a run whose first chunk arrived after the answer settles with the outcome, not as running.
     controller.appendLog({ requestId, jobId: 'j1', argv, cwd: '/p', stream: 'stdout', text: '', exitCode: 0 })
-    controller.appendLog({ requestId, jobId: 'j3', argv, cwd: '/p', stream: 'stdout', text: 'stray' })
+    controller.appendLog({ requestId, jobId: 'j3', argv, cwd: '/p', stream: 'stdout', text: 'late diagnostic' })
     expect(state().install.runs).toEqual([
       { jobId: 'j1', command: 'pnpm add dsh-new', cwd: '/p', output: 'Progress\nDone\n', exitCode: 0 },
       { jobId: 'j2', command: 'pnpm remove lib', cwd: '/p', output: '- lib\n', exitCode: 0 },
+      { jobId: 'j3', command: 'pnpm add dsh-new', cwd: '/p', output: 'late diagnostic', exitCode: null },
     ])
     await vi.waitFor(() => { expect(plugins.listBundles).toHaveBeenCalledTimes(2) })
     // Cancelling from the finished screen does nothing, nor does the Host's late progress; a new spec after it starts over.
@@ -815,7 +818,7 @@ describe('PluginManagerController', () => {
     face.editInstallSpec('dsh-x')
     face.runInstall()
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
-    expect(state().install.failure).toEqual({ reason: 'ERR', code: 'operation-error', kind: 'network' })
+    expect(state().install.failure).toEqual({ reason: 'ERR', code: 'operation-error', kind: 'network', stage: 'install' })
     face.cancelInstall()
     expect(state().install).toMatchObject({ open: true, phase: 'idle', spec: 'dsh-x', failure: null, subject: null })
   })
@@ -1227,7 +1230,7 @@ describe('PluginManagerController', () => {
       pendingBuilds: ['native'],
     }))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
-    expect(state().install.failure).toEqual({ reason: 'ERR_PNPM_IGNORED_BUILDS', code: 'operation-error', kind: 'build-blocked', pendingBuilds: ['native'] })
+    expect(state().install.failure).toEqual({ reason: 'ERR_PNPM_IGNORED_BUILDS', code: 'operation-error', kind: 'build-blocked', pendingBuilds: ['native'], stage: 'install' })
     // The retry keeps the subject the check produced and carries the approved names under a new request id.
     face.approveBuildsAndRetry()
     const second = await started()
@@ -1301,7 +1304,7 @@ describe('PluginManagerController', () => {
     answer(ok(failed({ code: 'operation-error', diagnostic: 'ERR_PNPM' }, { exitCode: 1, output: 'ERR_PNPM', truncated: false, logPath: '/l', kind: 'network' })))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
     expect(state().install.runs).toEqual([])
-    expect(state().install.failure).toEqual({ reason: 'ERR_PNPM', code: 'operation-error', kind: 'network' })
+    expect(state().install.failure).toEqual({ reason: 'ERR_PNPM', code: 'operation-error', kind: 'network', stage: 'install' })
     expect(state().install.subject).toEqual({ spec: 'x', ...INSPECTED })
     // A lost answer cannot establish whether the Host stopped the process.
     await installing()
@@ -1329,21 +1332,78 @@ describe('PluginManagerController', () => {
       { jobId: 'j', command: 'pnpm add x', cwd: '/p', output: 'partial', exitCode: 0 },
       { jobId: 'k', command: 'pnpm add x', cwd: '/p', output: 'open', exitCode: null },
     ])
-    expect(state().install.failure).toEqual({ reason: '', code: 'not-bundle' })
+    expect(state().install.failure).toEqual({ reason: '', code: 'not-bundle', stage: 'install' })
     // An incompatibility keeps the packages it names.
     await installing()
     answer(ok(failed({ code: 'incompatible-version', incompatible: [INCOMPATIBLE] })))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
-    expect(state().install.failure).toEqual({ reason: '', code: 'incompatible-version', incompatible: [INCOMPATIBLE] })
+    expect(state().install.failure).toEqual({ reason: '', code: 'incompatible-version', incompatible: [INCOMPATIBLE], stage: 'install' })
     // A failure the Host does not explain has neither code nor words.
     await installing()
     answer(ok(failed()))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
-    expect(state().install.failure).toEqual({ reason: '' })
+    expect(state().install.failure).toEqual({ reason: '', stage: 'install' })
     expect(plugins.installBundle).toHaveBeenCalledTimes(6)
     // Editing the spec after a failure starts over too.
     face.editInstallSpec('y')
     expect(state().install).toMatchObject({ phase: 'idle', spec: 'y', runs: [], failure: null })
+  })
+
+  it('keeps the run whose first chunk arrives after the failed answer', async () => {
+    const { face, state, controller } = bench({
+      installBundle: vi.fn().mockResolvedValueOnce(ok(failed(
+        { code: 'operation-error', diagnostic: 'offline' },
+        { exitCode: 1, output: 'fatal: unable to access', truncated: false, logPath: '/l', kind: 'network' },
+      ))),
+    })
+    face.openInstall()
+    face.editInstallSpec('https://github.com/a/b.git')
+    face.runInstall()
+    await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
+    const requestId = state().install.requestId as PluginInstallRequestId
+    expect(state().install.runs).toEqual([])
+    // The check's only chunk can arrive after the answer; the settled dialog still shows it and its log.
+    const argv = ['git', '-c', 'credential.helper=', 'ls-remote', '--', 'https://github.com/a/b.git', 'HEAD']
+    controller.appendLog({ requestId, jobId: 'g1', argv, cwd: '/p', stream: 'stderr', text: 'fatal: unable to access', exitCode: 1 })
+    expect(state().install.runs).toEqual([
+      { jobId: 'g1', command: argv.join(' '), cwd: '/p', output: 'fatal: unable to access', exitCode: 1 },
+    ])
+    // A chunk of another installation still is not this dialog's.
+    controller.appendLog({ requestId: 'other' as PluginInstallRequestId, jobId: 'g2', argv, cwd: '/p', stream: 'stderr', text: 'stray', exitCode: 1 })
+    expect(state().install.runs).toHaveLength(1)
+  })
+
+  it('keeps the step a failed install reached and the complete Host log it settled with', async () => {
+    const retry = deferred<ReturnType<typeof ok<ChangeResult>>>()
+    const failedLog = '/var/log/dsh/plugin-manager/install-failed.log'
+    const doneLog = '/var/log/dsh/plugin-manager/install-done.log'
+    const { face, state, plugins, started } = bench({
+      installBundle: vi.fn()
+        .mockResolvedValueOnce(ok(failed(
+          { code: 'operation-error', diagnostic: 'activation refused' },
+          { exitCode: 0, output: 'installed', truncated: false, logPath: failedLog },
+          { stage: 'enable', enabled: true },
+        )))
+        .mockReturnValueOnce(retry.promise),
+    })
+    face.openInstall()
+    face.editInstallSpec('dsh-x')
+    face.runInstall()
+    await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
+    // The Host laid the failure at activation, and the details keep the run's complete log.
+    expect(state().install.failure).toEqual({ reason: 'activation refused', code: 'operation-error', stage: 'enable', enabled: true })
+    expect(state().install.logPath).toBe(failedLog)
+    // Retrying forgets the settled run's log until the next answer names its own.
+    face.runInstall()
+    await started()
+    expect(state().install.logPath).toBeNull()
+    retry.resolve(ok({
+      ...APPLIED, bundle: 'dsh-x',
+      packageResult: { exitCode: 0, output: '', truncated: false, logPath: doneLog },
+    }))
+    await vi.waitFor(() => { expect(state().install.phase).toBe('done') })
+    expect(state().install.logPath).toBe(doneLog)
+    expect(plugins.installBundle).toHaveBeenCalledTimes(2)
   })
 
   it('drops every late settlement after disposal', async () => {
@@ -1918,6 +1978,23 @@ const CATALOG: BundleInfo = {
   enabled: false, removable: false, updatable: false, rows: [], overrides: [],
   installTarget: { spec: '@deepseek-ai/dsh-subagent-codex@2.0.0', version: '2.0.0' },
 }
+
+it.each(['registry', 'source'] as const)('installs a typed default-hidden Official name using its %s target', async (mode) => {
+  const name = '@deepseek-ai/dsh-cua-bundle'
+  const spec = mode === 'source' ? 'link:/workspace/cua-bundle' : `${name}@2.0.0`
+  const entry = { ...CATALOG, name, listedByDefault: false, installTarget: { spec, version: '2.0.0' } }
+  const { controller, plugins, face, state } = bench({ listBundles: vi.fn().mockResolvedValue(ok([entry])) })
+  await controller.load()
+  face.openInstall()
+  face.editInstallSpec(name)
+  face.runInstall()
+  await vi.waitFor(() => { expect(plugins.installBundle).toHaveBeenCalledOnce() })
+  expect(plugins.inspect).not.toHaveBeenCalled()
+  expect(state().install.subject?.selection).toBeUndefined()
+  expect(plugins.installBundle).toHaveBeenCalledWith(spec, {
+    enabled: false, ...mode === 'registry' ? { saveExact: true } : {}, requestId: state().install.requestId, registry: null,
+  })
+})
 
 it('installs an absent Official entry directly at the host target and enables it through the normal installer', async () => {
   const { controller, plugins, face, state } = bench({ listBundles: vi.fn().mockResolvedValue(ok([CATALOG])) })

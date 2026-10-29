@@ -37,7 +37,7 @@ describe('changes addresses', () => {
 
   it('name the local view and a change request view by its number when the URL ends in one', () => {
     const t = makeTranslate(zh)
-    expect(changesTitle({ kind: 'local' }, t)).toBe('变更')
+    expect(changesTitle({ kind: 'local' }, t)).toBe('本地变更')
     expect(changesTitle({ kind: 'change', url: URL }, t)).toBe('#7 的变更')
     expect(changesTitle({ kind: 'change', url: 'https://example.com/review' }, t)).toBe('变更')
   })

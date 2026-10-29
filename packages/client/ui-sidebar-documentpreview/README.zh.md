@@ -127,6 +127,8 @@ Office Remote 通过 Connection 的 multipart 二进制传输返回原生 `Uint8
 
 `ctx.sidebarRight.openResource(address, { params: { line } })` 通过 `file` 参数携带 1 起算的源码行号。在 `text-pages` 模式下，owner 顺序加载到该行或 EOF。纯文本与代码渲染器提供源码行锚点；Markdown 不提供。所选渲染器没有锚点时，导航保持待处理；用户切换到纯文本或代码后执行。代码导航直接滚动内部源码视口。落定的行显示一条高亮带，停留 0.6 秒后在 1.4 秒内渐隐；切换换行或调整预览尺寸会提前移除它；重新挂载的 tab 恢复滚动位置时不显示高亮带。字节模式渲染器不消费源码行导航。每个完成的导航 revision 只响应一次。不带 `revealIfOpened: false` 打开同一文件时聚焦已有 tab，并送达新 revision。
 
+文档路径标签提供文件[右键菜单](../ui-context-menu/README.zh.md)，保留选中行号与当前窗格。
+
 <a id="model-experience"></a>
 ## 模型体验
 

@@ -32,7 +32,8 @@
         "@deepseek-ai/dsh-api-workspace-controller",
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-conversation"
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-api-session-controller"
       ],
       "platform": "web"
     }
@@ -80,7 +81,9 @@
     "clsx": "^2.0.0",
     "@deepseek-ai/dsh-ptc-runtime": "workspace:*",
     "@deepseek-ai/dsh-token-meter": "workspace:*",
-    "@deepseek-ai/dsh-user-questions": "workspace:*"
+    "@deepseek-ai/dsh-user-questions": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*",
+    "@deepseek-ai/dsh-api-session-controller": "workspace:*"
   },
   "files": [
     "locale/*.json",

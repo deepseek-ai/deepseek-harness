@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /** Cleanup errors remain reachable after the terminal tab has disappeared. */
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, within } from '@testing-library/react'
@@ -14,7 +15,9 @@ type CleanupProps = Parameters<typeof TerminalCleanup>[0]
 const unusedHook = (): never => { throw new Error('Terminal cleanup does not consume global hooks') }
 const standard: Omit<CleanupProps, 'useCloseFailures' | 'retryClose' | 't'> = {
   useSessions: unusedHook, useSessionStatus: unusedHook, useSessionRetainInfo: unusedHook, usePanelInfo: unusedHook,
-  useWorkspaces: unusedHook, useResource: unusedHook,
+  useWorkspaces: unusedHook,
+  useContextMenu: contextMenuHook(),
+  useResource: unusedHook,
   ...allowAllAccess,
 }
 

@@ -106,6 +106,10 @@ Schemas may return `Volatile<T>` references, whose values are read through `.get
 
 ## Configuration access
 
-`fiber.rawConfig` reads or retains the raw input for a later activation. Assigning it does not validate, update the running instance or trigger a restart. Registry wrappers route raw writes, updates and restarts through the same canonical fiber. `fiber.resolveConfig(candidate)` evaluates the fiber's config hooks and schema without publishing the result; any services used by those hooks must already be available. `fiber.effectiveConfig` returns the lifecycle-published object without re-parsing, preserving the identity of volatile references. It is undefined before the first resolution and stays readable after unload, so consumers that require a running instance also check the fiber state.
+`fiber.rawConfig` reads or retains the raw input for a later activation. Assigning it does not validate, update the running instance or trigger a restart. Registry wrappers route raw writes, updates and restarts through the same canonical fiber. `fiber.resolveConfig(candidate)` evaluates the fiber's config hooks and schema without publishing the result; any services used by those hooks must already be available. `fiber.effectiveConfig` returns the object passed to activation or the latest successful update that retained the instance, without re-parsing. Rejected or superseded updates do not replace it. Volatile updates preserve its references. It is undefined before activation and stays readable after unload, so consumers that require a running instance also check the fiber state.
 
-Use `fiber.update()` for an ordinary config change. Loader retains raw input separately when committing only volatile values into the running object.
+Use `fiber.update()` for an ordinary config change and await its result for completion. The `internal/config(fiber, next)` waterfall resolves candidates, `internal/commit` requests persistence unless `noSave` is set, and `internal/update(config, next)` either retains the instance or awaits the restart returned by `next()`. Loader retains raw input separately when committing only volatile values into the running object.
+
+## Lifecycle completion
+
+Service providers retain their implementations until dependent fibers finish unloading. Errors from superseded activations are logged without failing the replacement state. A disposed instance cannot access its released injections. A failed fiber requires an explicit `update()` to recover, including after its dependencies change.

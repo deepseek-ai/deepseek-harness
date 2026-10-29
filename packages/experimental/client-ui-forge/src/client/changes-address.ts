@@ -79,13 +79,14 @@ export function parseChangesAddress(address: string): ChangesTarget | undefined 
 }
 
 /**
- * Name a changes view: 变更 for the local changes, #N 的变更 for a change request with a number.
+ * Name a changes view: 本地变更 for the local changes, #N 的变更 for a change request with a number.
  * @param source - what the view shows.
  * @param t - forge panel copy.
  * @returns the title in the current language.
  */
 export function changesTitle(source: ChangesSource, t: TranslateNS<typeof NS>): string {
-  const number = source.kind === 'change' ? numberOf({ ref: null, url: source.url }) : null
+  if (source.kind === 'local') return t('changes.local.title')
+  const number = numberOf({ ref: null, url: source.url })
   return number === null ? t('diff.tab') : t('diff.tabNumbered', { number })
 }
 

@@ -1,8 +1,8 @@
-/** Read-only Git inspection of a Session's current directory in the Session's execution world. */
+/** Git queries in a Session's current directory, using its permissions and execution world. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-fs'
-import type { SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
+import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { SubprocessCollectedOutputs } from '@deepseek-ai/dsh-subprocess'
@@ -42,8 +42,13 @@ export interface GitOutput {
   readonly exitCode: number
 }
 
-/** Runs one Git subcommand in a fixed directory; output with an exit code outside `allowedExitCodes` throws. */
-export type Git = (name: string, args: readonly string[], allowedExitCodes?: readonly number[]) => Promise<GitOutput>
+/** Runs one Git subcommand with optional command-local configuration; output with an exit code outside `allowedExitCodes` throws. */
+export type Git = (
+  name: string,
+  args: readonly string[],
+  allowedExitCodes?: readonly number[],
+  configOverrides?: Readonly<Record<string, string>>,
+) => Promise<GitOutput>
 
 /** Thrown when a Git command prints more than `maxOutputBytes` on standard output. */
 export class GitOutputTooLarge extends Error {
@@ -75,9 +80,9 @@ const NOT_A_CHECKOUT = /not a git repository|must be run in a work tree/i
 
 /**
  * Inspect the checkout containing `directory`. Every command runs through the
- * mounted subprocess provider under a read-only confinement of the Session's
- * sandbox policy and reads refs and configuration only, never the working
- * tree. The top-level and shared Git directories Git prints are resolved
+ * mounted subprocess provider under the Session's sandbox policy and reads
+ * refs and configuration only, never the working tree.
+ * The top-level and shared Git directories Git prints are resolved
  * through `ctx.fs` into canonical process paths, the form the
  * working-directory service records.
  * @param ctx - context that provides `fs`, `subprocess`, `sandbox`, and `sandboxPolicy`.
@@ -125,7 +130,7 @@ export async function inspectCheckout(
 
 /**
  * List the local branches that can start a worktree of the checkout containing
- * `directory`, under the same confinement as {@link inspectCheckout}.
+ * `directory`, using the Session's permissions as in {@link inspectCheckout}.
  * @param ctx - context that provides `subprocess`, `sandbox`, and `sandboxPolicy`.
  * @param config - executable and process limits.
  * @param session - Session whose sandbox policy and execution world apply.
@@ -170,7 +175,7 @@ async function together<T extends readonly Promise<unknown>[]>(
 }
 
 /**
- * Report whether a local branch exists, under the same confinement as {@link inspectCheckout}.
+ * Report whether a local branch exists, using the Session's permissions as in {@link inspectCheckout}.
  * @param ctx - context that provides `subprocess`, `sandbox`, and `sandboxPolicy`.
  * @param config - executable and process limits.
  * @param session - Session whose sandbox policy and execution world apply.
@@ -194,8 +199,8 @@ export async function hasBranch(
 }
 
 /**
- * Bind the confined Git runner to one Session and directory: every command
- * runs under a read-only confinement of the Session's sandbox policy with the
+ * Bind the Git runner to one Session and directory: every command
+ * runs under the Session's sandbox policy with the
  * scrubbed environment, the fixed command prefix, and `config`'s limits.
  * @param ctx - context that provides `subprocess`, `sandbox`, and `sandboxPolicy`.
  * @param config - executable and process limits.
@@ -205,8 +210,9 @@ export async function hasBranch(
  * @returns the runner.
  */
 export function gitIn(ctx: Context, config: GitConfig, session: Session, directory: string, signal: AbortSignal): Git {
-  const policy: SandboxPolicy = { ...ctx.sandboxPolicy.resolve({ session, mode: 'read-only' }), mode: 'read-only' }
-  return (name, args, allowedExitCodes = [0]) => runGit(ctx, config, policy, directory, name, args, signal, allowedExitCodes)
+  const policy = ctx.sandboxPolicy.resolve({ session })
+  return (name, args, allowedExitCodes = [0], configOverrides = {}) =>
+    runGit(ctx, config, policy, directory, name, args, signal, allowedExitCodes, configOverrides)
 }
 
 /** Read the checked-out branch, including an unborn one; null when HEAD is detached. */
@@ -224,25 +230,37 @@ async function headCommit(git: Git): Promise<string | null> {
 async function runGit(
   ctx: Context,
   config: GitConfig,
-  policy: SandboxPolicy,
+  policy: SandboxExecutionPolicy,
   cwd: string,
   name: string,
   args: readonly string[],
   signal: AbortSignal,
   allowedExitCodes: readonly number[],
+  configOverrides: Readonly<Record<string, string>>,
 ): Promise<GitOutput> {
   using timeout = deadline(signal, config.gitTimeoutMs, 'FORGE_PANEL_GIT_TIMEOUT')
   const program = await ctx.subprocess.resolveExecutable(config.gitCommand, undefined, timeout.signal)
-  const confined = await ctx.sandbox.confine([program, ...GIT_PREFIX, ...args], policy, timeout.signal)
+  const command = [program, ...GIT_PREFIX, ...args]
+  const argv = policy.mode === 'danger-full-access'
+    ? command
+    : (await ctx.sandbox.confine(command, { ...policy, mode: policy.mode }, timeout.signal)).argv
   timeout.signal.throwIfAborted()
+  // Environment entries preserve filter subsection names containing '=' in configuration keys.
+  const overrides = Object.entries(configOverrides)
   /* jscpd:ignore-start -- the bounded spawn-and-collect sequence matches the
      worktree service's runner; the two differ in policy, environment, and
      error text, and a shared helper would make this panel depend on the
      worktree package or add a subprocess API for two experimental callers. */
   const child = ctx.subprocess.spawn({
-    argv: confined.argv,
+    argv,
     cwd,
-    env: GIT_ENV,
+    env: {
+      ...GIT_ENV,
+      GIT_CONFIG_COUNT: String(overrides.length),
+      ...Object.fromEntries(overrides.flatMap(([key, value], index) => [
+        [`GIT_CONFIG_KEY_${index}`, key], [`GIT_CONFIG_VALUE_${index}`, value],
+      ])),
+    },
     signal: timeout.signal,
     graceMs: config.graceMs,
     stdio: {

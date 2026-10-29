@@ -258,7 +258,7 @@ reader.on('line', (line) => {
     return
   }
   if (frame.method === undefined || frame.id === undefined) return
-  const respond = (result: object): void => { write({ jsonrpc: '2.0', id: frame.id, result }) }
+  const respond = (result: unknown): void => { write({ jsonrpc: '2.0', id: frame.id, result }) }
   switch (frame.method) {
     case 'initialize':
       if (typeof frame.params?.cwd === 'string') originCwd = frame.params.cwd
@@ -317,7 +317,22 @@ reader.on('line', (line) => {
       respond({ cwd })
       return
     }
+    case 'session/query':
     case 'session/prompt': {
+      const blocks = frame.params?.contentBlocks as { type: string; text?: string }[]
+      const text = blocks.filter(block => block.type === 'text').map(block => block.text).join('\n')
+      if (frame.method === 'session/query' && text === '/compact') {
+        const execution = { commandId: 'command-1', result: { kind: 'success', text: '/compact' } }
+        const completed = execution
+        event(sessionIdOf(frame.params), 'command/run', { commandId: completed.commandId })
+        event(sessionIdOf(frame.params), 'command/done', { commandId: completed.commandId, ...completed.result })
+        notify('session.query.completed', { sessionId: frame.params?.sessionId, commandId: completed.commandId,
+          finalResponse: completed.result?.text ?? '', finishReason: completed.result?.kind === 'error' ? 'error' : 'completed' })
+        respond({ kind: 'command', execution })
+        return
+      }
+      const promptResult = (messageId: string): object => frame.method === 'session/query'
+        ? { kind: 'prompt', messageId } : { messageId }
       const sessionId = sessionIdOf(frame.params)
       const messageId = `fake-user-${seq}`
       event(sessionId, 'agent/inbox/spliced', {
@@ -342,7 +357,7 @@ reader.on('line', (line) => {
       }
       if (env.FAKE_EXIT_DURING_PROMPT !== undefined) {
         const partial = env.FAKE_TEXT ?? 'partial before exit'
-        respond({ messageId })
+        respond(promptResult(messageId))
         event(sessionId, 'assistant/message', {
           turn: 0,
           step: 0,
@@ -366,7 +381,7 @@ reader.on('line', (line) => {
       runTurn(sessionId)
       notify('session.status', { sessionId, status: 'idle' })
       settledSessions.add(sessionId)
-      respond({ messageId })
+      respond(promptResult(messageId))
       return
     }
     case 'session/wait':

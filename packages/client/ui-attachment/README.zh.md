@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-图片拖放回调与输入框的原图读取回调通过 slot 注入从 [ui-file-drag](../ui-file-drag/README.zh.md) 获取。图片图库 Factory 也通过声明的注入接口接收回调；自定义 Factory 替换实现必须提供该接口。
+图片拖放回调与输入框的原图读取回调通过 slot 注入从 [ui-file-drag](../ui-file-drag/README.zh.md) 获取。图片图库 Factory 也通过声明的注入接口接收回调；自定义 Factory 替换实现必须提供该接口。 `MessageImage` 和 `ImageGallery` 必须接收普通 `getTriggerProps` 函数，每张原图绑定一次，将同一份 `contextMenuProps` 传给缩略图和灯箱。
 
 与 [`ui-conversation`](../ui-conversation/README.zh.md) 一起挂载本插件，工具结果需要图片图库时也要挂载 [`ui-tool`](../ui-tool/README.zh.md)。插件等待这些 slot 的声明，并把组件注册进去。用户会看到混合草稿附件栏、带上传控件的 DeepSeek Web 文件卡、带限制说明的拖放遮罩、按数量定尺寸的消息图片、工具卡片图库，以及支持 Escape、遮罩和关闭按钮的灯箱。
 
@@ -81,6 +81,8 @@ Trajectory 附件行使用 48px 方形缩略图，完整缩放图片而不裁剪
 - [客户端包映射](../README.zh.md)——相邻的浏览器 UI 包。
 
 -----
+
+消息图片和原图预览通过共享图片库将右键手势转发给 [ui-context-menu](../ui-context-menu/README.zh.md)。原始授权 URL 与 MIME 元数据独立于缩略图展示。
 
 <a id="model-experience"></a>
 ## 模型体验

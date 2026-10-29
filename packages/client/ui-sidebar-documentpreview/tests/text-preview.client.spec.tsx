@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * What the body draws from its pages and the file's metadata, and what it does
  * with a navigation: load until the asked line is held, jump to it once, then
@@ -699,4 +700,29 @@ describe('TextPreview — header controls', () => {
     h.controller.abort()
     expect(h.instance.getSnapshot().byTab[TAB_ID]).toBeUndefined()
   })
+})
+
+
+it('opens a path menu with the preview pane and requested line', async () => {
+  const h = harness({ 1: page(1, ['first'], true) })
+  const openFileMenu = vi.fn()
+  const view = render(<TextPreview {...h.props({ revision: 1, params: { line: 1 } })} useContextMenu={contextMenuHook(openFileMenu)} />)
+  await settle()
+  fireEvent.contextMenu(view.container.querySelector('[data-textpreview-path]')!, { clientX: 33, clientY: 44 })
+  expect(openFileMenu).toHaveBeenCalledWith({ kind: 'file', value: { sessionId: SESSION, path: ABSOLUTE_PATH, line: 1, paneId: 'pane-1' } }, { x: 33, y: 44 })
+  const p = h.props()
+  const info = p.useTabInfo()
+  view.rerender(<TextPreview {...p} useContextMenu={contextMenuHook(openFileMenu)} useDocumentPreviews={selector => selector([])}
+    useTabInfo={() => ({ ...info, tab: { ...info.tab, contentId: 'dsh-resource://file/session/s/archive.zip',
+      navigation: { address: 'dsh-resource://file/session/s/archive.zip', revision: 2, params: undefined } } })} />)
+  fireEvent.contextMenu(view.container.querySelector('[data-textpreview-path]')!, { clientX: 55, clientY: 66 })
+  expect(openFileMenu).toHaveBeenLastCalledWith({ kind: 'file', value: { sessionId: SESSION, path: ABSOLUTE_PATH, paneId: 'pane-1' } }, { x: 55, y: 66 })
+  view.rerender(<TextPreview {...h.props({ revision: 3, params: { line: 42 } })}
+    useContextMenu={contextMenuHook(openFileMenu)} useDocumentPreviews={selector => selector([])}
+    useTabInfo={() => ({ ...info, tab: { ...info.tab, contentId: 'dsh-resource://file/session/s/archive.zip',
+      navigation: { address: 'dsh-resource://file/session/s/archive.zip', revision: 3, params: { line: 42 } } } })} />)
+  fireEvent.keyDown(view.container.querySelector('[data-textpreview-path]')!, { key: 'F10', shiftKey: true })
+  expect(openFileMenu).toHaveBeenLastCalledWith({ kind: 'file', value: {
+    sessionId: SESSION, path: ABSOLUTE_PATH, line: 42, paneId: 'pane-1',
+  } }, { x: 0, y: 0 })
 })

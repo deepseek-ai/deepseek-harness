@@ -55,7 +55,7 @@ it('preserves common translation requests and results in SDK events without repl
     description: 'scripted SDK audit projection', initializeTimeoutMs: 5000,
   })
   try {
-    const result = await harness.run('Keep the original response.')
+    const result = await harness.run([{ type: 'text', text: 'Keep the original response.' }])
     const projection = {
       finalResponse: result.finalResponse,
       auditEvents: result.events.filter(isTranslationAudit),

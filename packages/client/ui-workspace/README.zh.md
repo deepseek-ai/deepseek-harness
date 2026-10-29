@@ -47,7 +47,7 @@ kind: "package-reference"
 
 层级仅使用已注册的规范路径，不扫描项目，也不解析符号链接别名。嵌套不会改变 Session 的工作目录、日志或 Workspace 归属。删除父 Workspace 后，子 Workspace 仍保持注册，并归入下一个已注册祖先；没有祖先时显示在根层级。
 
-在不支持悬停的设备上，Workspace 行始终显示菜单和新建会话按钮，已归档的搜索结果始终显示取消归档按钮。
+在不支持悬停的设备上，展开的 Workspace 行显示菜单和新建会话按钮，已归档的搜索结果始终显示取消归档按钮。
 
 ### 搜索
 
@@ -57,11 +57,11 @@ kind: "package-reference"
 
 ### 管理会话
 
-在支持悬停的设备上，悬停 Session 行会显示操作按钮。在不支持悬停的设备上，每个非空 Session 都会常驻显示“更多”，并保留尾部时间和静态置顶标记。快捷操作按钮在此隐藏，内置归档和置顶操作仍可从“更多”菜单进入。Workspace 行仅在展开时显示操作按钮，让折叠文件夹优先用于导航。无论设备是否支持悬停，行菜单打开期间都会保持操作区可见。
+在支持悬停的设备上，悬停 Session 行会显示操作按钮。不支持悬停时，非空 Session 保留“更多”、尾部状态图标和等待交互的状态文字，不再提供更新时间的展示入口。已置顶行在“更多”前显示取消置顶按钮，间距与 Workspace 操作按钮一致；没有取消置顶权限时保留静态置顶标记。置顶与归档仍可从“更多”菜单进入。Workspace 行仅在展开时显示操作按钮。无论设备是否支持悬停，行菜单打开期间都会保持操作区可见。
 
-Session 行“...”菜单的最后一个内置项为“复制 Session ID”。点击后关闭菜单并直接复制完整 ID，不打开对话框。复制成功或失败通过全局提示反馈；失败时可从菜单重试。复制不会 retain 会话、加载历史或调用 Host。
+“复制 Session ID”位于 Session 行“...”菜单的标识信息组。点击后关闭菜单并直接复制完整 ID，不打开对话框。复制成功或失败通过全局提示反馈；失败时可从菜单重试。复制不会 retain 会话、加载历史或调用 Host。
 
-Session 行内的 Rename 操作打开一个以该行显示标题预填的对话框；确认未修改的标题是有意允许的——这正是把当前自动标题钉住、不再被重新生成覆盖的手势。双击标题也会打开 Rename；对于未归档 Session，先发生的点击会打开其对话。当激活未聚焦窗口的那次点击不会传递给页面时（如在 macOS 上），下一次点击不会打开 Rename。Rename 使用临时 `workspaceOperation` reference，并等待首次历史打开。行内 Fork 正常读取普通冷历史。Host 报告源会话需要迁移时，应用级 Toast 提供打开该会话的操作；该操作仅导航，不重试 fork。成功的 fork 在源会话最后一个已完成轮次处创建分支，通过 Session Controller 递增继承的持久化标题，不 retain 子会话、不打开其历史，也不改变选择。Workspace 行内的 Delete 操作会打开确认框，说明保留边界；成功后该分组被移除，其 Session 则留在 Ungrouped 下。Pin、Rename、Fork、Archive 和复制 Session ID 本身就是 `sidebar.workspaces.session.menu.item` 列表的条目（pin 与 archive 同时也是 `sidebar.workspaces.session.row.action` 的条目），因此客户端插件的 action 由其 `order` 决定落在哪个位置。
+Session 行内的 Rename 操作打开一个以该行显示标题预填的对话框；确认未修改的标题是有意允许的——这正是把当前自动标题钉住、不再被重新生成覆盖的手势。双击标题也会打开 Rename；对于未归档 Session，先发生的点击会打开其对话。当激活未聚焦窗口的那次点击不会传递给页面时（如在 macOS 上），下一次点击不会打开 Rename。Rename 使用临时 `workspaceOperation` reference，并等待首次历史打开。行内 Fork 正常读取普通冷历史。Host 报告源会话需要迁移时，应用级 Toast 提供打开该会话的操作；该操作仅导航，不重试 fork。成功的 fork 在源会话最后一个已完成轮次处创建分支，通过 Session Controller 递增继承的持久化标题，不 retain 子会话、不打开其历史，也不改变选择。Workspace 行内的 Delete 操作会打开确认框，说明保留边界；成功后该分组被移除，其 Session 则留在 Ungrouped 下。内置菜单使用结构化贡献，参见 [Session 行动作](#session-row-actions)。
 
 对静止的 Session，Archive 不经确认对话框直接提交，并保留 Session 的记账位置。仍有工作在跑的 Session 是唯一会先询问的情形：Host 拒绝普通归档并列出这些工作，侧栏随即打开"停止并归档"对话框，按族列出——进行中的回合、运行中的子代理、后台任务、定时提醒，各带名称——并写明恢复路径；确认后请 Host 按停止按钮同样的方式停止这些工作，归档集合持久化后即完成归档，停止在后台收敛；取消则让 Session 继续运行并保持可见。视图选项以一组显式三选一控制显隐：隐藏已归档（默认项）隐藏已归档 Session，全部对话（显示已归档）将其纳入列表，仅显示已归档则隐藏普通 Session，并丢弃没有归档 Session 的 Workspace；树形分组下，被丢弃 Workspace 的子级挂到最近一个仍显示的祖先下。可见的归档行置灰，并提供无障碍说明，告知取消归档后才能打开；Rename、Fork 与取消归档仍然可用。归档成功后的提示提供"撤销"动作，并在归档行仍被隐藏时附带"筛选已归档会话"动作，后者直接把筛选切到全部对话（显示已归档）；停止并归档显示同样的提示但措辞不同，撤销只恢复 Session，不会让被停止的工作继续。取消归档移除归档标记，但不恢复置顶，也不改变保存的位置。列表为空时显示居中的"图标在上、文字在下"占位；仅显示已归档视图用自己的文案（暂无已归档会话），并附"查看其他会话"文字按钮，点击把筛选切回隐藏已归档。
 
@@ -76,6 +76,10 @@ Session 行渲染运行时的实时 `pendingInteraction` 分类：审批显示**
 ### 活动 Schedule 标识
 
 当成组的与平铺的 Session 行所对应的 Session 存在活动定时任务时，该行显示时钟标记。它是行首 `sidebar.session.row.leading` seat 的占用方，因此仅在该行主状态为 idle 时渲染，绝不与行自身的状态点同时出现；归档行该格同样留空，搜索结果没有该 seat，也不显示标记。它不是按钮，没有 Tab stop，点击其所在区域不会打开整行。标记自身的读取及其「活动」条件的确切含义由 [ui-schedule](../ui-schedule/README.zh.md) 负责。
+
+工作区标题的右键和省略号共用 `workspace` 右键操作对象。重命名和删除沿用现有确认对话框，打开前再次检查工作区是否存在及操作权限；本机目录显示由 [ui-open-in-app](../ui-open-in-app/README.zh.md) 提供。没有修改权限时仍可使用本机和插件菜单操作。打开菜单不改变展开状态或选中的会话。
+
+会话行通过 [ui-context-menu](../ui-context-menu/README.zh.md) 在右键与省略号按钮间共享现有操作贡献。操作对象固定为被点击的会话，不改变选中状态；`sidebar.workspaces.session.menu.item` 仍是组件扩展位置。内置分组依次为置顶、重命名、分叉；复制 Session ID 和可选的本机目录显示；归档，复制 Session ID 与归档之前各有一条分割线。
 
 -----
 
@@ -107,8 +111,6 @@ Workspace 和 Session 的启动基线均就绪后，空安装环境调用 `works
 
 在支持悬停的设备上，鼠标移入 Session 行、通过键盘聚焦行或其操作按钮、打开行菜单，都会用操作按钮替代时间、尾部图标和置顶标记。鼠标点击不会让按钮在指针移出后仍然显示。内置 Session 和 Workspace 行操作按钮使用 24px 点击热区，通过补偿外边距保留紧凑的布局占位与图标位置。
 
-不支持悬停的设备始终保留静态信息和更多菜单入口，菜单打开时也不隐藏；置顶与归档仍可通过该菜单操作。
-
 Session 行可通过 Tab 聚焦，使用不带修饰键的 Enter 或空格打开；Tab 也可移到行内操作按钮，组合键则继续交由全局快捷键处理。
 
 客户端调用方可以在 `uiWorkspace.startSession` 的第二参数中传入 `prompt`、`whenDraftExists` 与 `clearPreviousDraft`。提示词仅接受普通文字；结构化草稿由内部恢复和工作区携带流程处理。空稿直接采用提示词。目标已有文字或附件时，`whenDraftExists: 'keep'`（默认）保留原稿，`'replace'` 只用提示词替换目标 Session 的文字和内联引用、无提示词时清空，`'append'` 在原有文字之后另起段落追加提示词；附件在各种情况下都保留。只有未传 `whenDraftExists` 时，`clearPreviousDraft: true` 才等同 `'replace'`。在异步创建前捕获选项值，在导航提交前应用到准确保留的 binding。已被后续操作取代的导航不写内容；输入处于提交阻塞状态时拒绝准备并保留原选择。无论是否传入选项，都按上文所述选择并打开空白 Session，因此新会话会回到其未发送的草稿。[草稿初始化决策](../../../.agents/notes/implemented/architecture/2026-09-30-structured-draft-initialization.zh.md)说明输入 owner 的数据流。
@@ -117,11 +119,12 @@ Session 行可通过 Tab 聚焦，使用不带修饰键的 Enter 或空格打开
 
 每个注册各自声明一个**目录流子 slot**（`single` kind：`conversation.hero.workspace.directoryFlow`／`sidebar.workspaces.directoryFlow`），由组合的选择器包 client half 填入其选取交互——`-native` 后端的无渲染 OS 选择器驱动，`-browse` 组合下则是应用内浏览对话框。平铺显示的**添加工作区…** 操作仅在当前界面的 slot 被占用时渲染；slot 为空意味着该组合没有目录选择能力。侧栏的添加工作区操作保留已有空白 Session 及其草稿。本包持有触发与接纳：占用方通过 slot 的属主交互约定（`open`/`busy`/`onPicked`/`onCancel`/`onError`）每次打开上报一个所选路径，owner 通过对象层接纳它，并等待 Workspace 列表投影刷新后才选中已提交的 Workspace。
 
+<a id="session-row-actions"></a>
 ### Session 行 action
 
-Session 行的 "..." 菜单和行尾悬停按钮是 WorkspaceBrowser 注册项声明的两个 `list` slot：`sidebar.workspaces.session.menu.item` 与 `sidebar.workspaces.session.row.action`。每一个菜单行、每一个悬停按钮都是条目，本包自己的 action 也不例外：`apply` 以客户端插件注册自己 action 的同一方式注册 `pin`（菜单 100、按钮 200）、`rename`（200）、`fork`（300）、`archive`（菜单 400、按钮 100）和 `session-id`（450），因此插件 action 落在其 `order` 所指的位置，以另一个 `priority` 复用内置 id 则遮蔽该 action。
+内置 Session 菜单动作通过 `ctx.contextMenus` 注册结构化贡献：置顶（100）、重命名（200）、分支（300）、复制 ID（450）和归档（600）。本机目录定位由 ui-open-in-app 提供（500）。重命名、分支和归档关联已有命令 ID，以显示实时快捷键；点击仍针对捕获的 Session 调用现有业务回调。置顶和归档同时保留悬停按钮 Slot 条目。
 
-条目只接收行身份（`sessionId`、`displayTitle`），其余一切自己负责：用自己注入的 hook 读自己关心的 Host 状态（置顶与归档集合，以每次 Workspace 快照只派生一次的 Set 形式），自己决定是否显示（Host 规定归档与置顶互斥，所以 pin 在归档行上不渲染；`useSessionAccess(sessionId, 'session/fork')` 为 false 时 fork 不渲染），整套行为放在注册项自己的 `inject` face 里（置顶成功后顺带把会话推到保存顺序最前，归档成功后发提示），浮层也自己带——重命名对话框、停止并归档对话框和行 action 的提示是本包注册在 `shell.overlay` 的条目，由 action 注入的请求驱动。菜单条目渲染一个 `role="menuitem"` 的按钮（本包自己的行用 ui-primitives 的 `MenuItemButton`，它带宿主样式，开启新分组的行加 `separatorBefore`，分隔线随行一起出现和消失），并通过 slot 级 `useMenuOpenState` hook（菜单自身的打开状态，从该行的渲染出现处绑定）关闭菜单；悬停按钮条目渲染一个图标按钮，按钮条会拦住点击、不让它打开该行。browser 不再向行传任何 action 回调，它剩下的动作只有搜索结果里的恢复按钮和标题双击，后者发出的是同一个重命名请求。
+旧 `sidebar.workspaces.session.menu.item` Slot 保留给外部 React 条目，提供 `sessionId`、`displayTitle` 和用于关闭菜单的 `useMenuOpenState`。旧条目保持彼此顺序，集中显示在归档之前；其 priority 不再替换内置数据动作。新贡献使用[菜单服务](../ui-context-menu/README.zh.md)。内置动作在菜单打开时持续响应权限和置顶／归档状态；对话框与提示仍为应用级浮层。
 
 现有通知浮层按通知 kind 分派 `workspace.toast`。各 keyed 注册注入本地化展示映射与自己的操作，只有归档通知订阅查看筛选状态。它们渲染包内的 `workspace.toast.content` Factory，所有展示共用一处 Toast primitive。现有通知状态、显示序号、最新提示替换及关闭逻辑仍共享；语言或筛选变化不会重新启动同一条提示的计时。
 

@@ -553,6 +553,11 @@ describe('web e2e: sidebar search alignment and row action targets', () => {
     expect(tooltipBox.x + tooltipBox.width).toBe(anchorBox.x + anchorBox.width)
     await page.mouse.move(1000, 400)
     await tooltip.waitFor({ state: 'detached' })
+    if (kind === 'session') {
+      expect(await menuButton.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(await tooltipAnchor.isVisible()).toBe(true)
+    }
+    await page.mouse.click(1000, 400)
     expect(await tooltipAnchor.isVisible()).toBe(false)
     expect(await page.getByRole('tooltip').count()).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
