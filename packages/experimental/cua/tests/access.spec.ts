@@ -1,5 +1,4 @@
 /** Application decisions are checked at dispatch and revocation cancels owned work. */
-import { guideText } from './fixtures/permission-guide.client.ts'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -11,6 +10,14 @@ import type { CuaApplicationGrant } from '../src/access-types.ts'
 import type { CuaAppHandle } from '../src/types.ts'
 import { NativeClient } from '../src/native-client.ts'
 import { permissionFixture } from './permission-fixture.ts'
+
+const guideText = {
+  instruction: 'Drag {application} to the list above to allow Accessibility',
+  backLabel: 'Back',
+  finderLabel: 'Show in Finder',
+  unavailableMessage: 'Application unavailable',
+  settingsMessage: 'Open System Settings manually',
+}
 
 const native = vi.hoisted(() => ({ instances: [] as Array<{
   disposed: boolean

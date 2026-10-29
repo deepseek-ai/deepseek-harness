@@ -1,5 +1,4 @@
 /** Permission refreshes preserve observations and join user actions before withdrawal. */
-import { guideText } from './fixtures/permission-guide.client.ts'
 import { setImmediate } from 'node:timers/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-cua/remote'
@@ -7,6 +6,14 @@ import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import type { CuaApplicationId, CuaApplicationState, CuaSystemPermissionState } from '../src/access-types.ts'
 import { PermissionController } from '../src/client/controller.ts'
+
+const guideText = {
+  instruction: '将 {application} 拖入上方列表以允许辅助功能',
+  backLabel: '返回',
+  finderLabel: '在 Finder 中显示',
+  unavailableMessage: '找不到此应用',
+  settingsMessage: '请手动打开系统设置',
+}
 
 const value: CuaSystemPermissionState = { guidancePolling: { intervalMs: 1000, timeoutMs: 120000 }, guideOpen: true,
   accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
