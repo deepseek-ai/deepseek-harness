@@ -4,16 +4,44 @@ import AppKit
 import Darwin
 import Foundation
 
+@MainActor struct SystemPermissionActions {
+    var accessibility: () -> Bool
+    var screenRecording: () -> Bool
+    var requestAccessibility: () -> Void
+    var requestScreenRecording: () -> Void
+    var open: (URL) -> Bool
+    var reveal: ([URL]) -> Void
+
+    static func system() -> Self {
+        Self(accessibility: { AXIsProcessTrusted() }, screenRecording: { CGPreflightScreenCaptureAccess() },
+             requestAccessibility: {
+                 let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+                 _ = AXIsProcessTrustedWithOptions(options)
+             }, requestScreenRecording: { _ = CGRequestScreenCaptureAccess() },
+             open: { NSWorkspace.shared.open($0) }, reveal: { NSWorkspace.shared.activateFileViewerSelecting($0) })
+    }
+}
+
 @MainActor struct SystemPermissions {
     private let launchApplication: JSONValue?
+    private let actions: SystemPermissionActions
 
     // Capture the system-reported responsible app before startup completes and the launcher can exit.
-    init() { launchApplication = Self.responsibleApplication(for: getpid()) }
+    init() {
+        launchApplication = Self.responsibleApplication(for: getpid())
+            ?? Self.application(Bundle.main.bundleURL, identifier: Bundle.main.bundleIdentifier)
+        actions = .system()
+    }
+
+    init(application: JSONValue?, actions: SystemPermissionActions) {
+        launchApplication = application
+        self.actions = actions
+    }
 
     func status() -> JSONValue {
         var result: [String: JSONValue] = [
-            "accessibility": .bool(AXIsProcessTrusted()),
-            "screenRecording": .bool(CGPreflightScreenCaptureAccess()),
+            "accessibility": .bool(actions.accessibility()),
+            "screenRecording": .bool(actions.screenRecording()),
             "helper": Self.process(getpid()),
             "parent": Self.process(getppid()),
         ]
@@ -24,14 +52,12 @@ import Foundation
     func request(_ permission: String) throws -> JSONValue {
         switch permission {
         case "accessibility":
-            if !AXIsProcessTrusted() {
-                let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-                _ = AXIsProcessTrustedWithOptions(options)
-            }
+            if !actions.accessibility() { actions.requestAccessibility() }
         case "screenRecording":
-            if !CGPreflightScreenCaptureAccess() { _ = CGRequestScreenCaptureAccess() }
+            if !actions.screenRecording() { actions.requestScreenRecording() }
         default: throw RequestParameters.invalid("permission must be accessibility or screenRecording")
         }
+        _ = try openSettings(permission)
         return status()
     }
 
@@ -43,10 +69,21 @@ import Foundation
         default: throw RequestParameters.invalid("permission must be accessibility or screenRecording")
         }
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)"),
-              NSWorkspace.shared.open(url) else {
+              actions.open(url) else {
             throw NativeFailure(code: "SETTINGS_UNAVAILABLE", message: "Open System Settings > Privacy & Security manually")
         }
         return .object(["opened": .bool(true)])
+    }
+
+    func revealApplication(_ path: String) throws -> JSONValue {
+        guard path == launchApplication?["path"].string,
+              let bundle = Bundle(url: URL(fileURLWithPath: path)), let executable = bundle.executableURL,
+              FileManager.default.isExecutableFile(atPath: executable.path),
+              bundle.bundleIdentifier == launchApplication?["bundleId"].string else {
+            throw NativeFailure(code: "APPLICATION_UNAVAILABLE", message: "The permission application is unavailable; refresh the permission page")
+        }
+        actions.reveal([bundle.bundleURL])
+        return .object(["revealed": .bool(true)])
     }
 
     /// Resolve macOS process responsibility, including launchers outside the nearest GUI application.
@@ -54,7 +91,13 @@ import Foundation
         guard let responsible = NativePlatform.responsiblePID(pid),
               let app = NSRunningApplication(processIdentifier: responsible), !app.isTerminated,
               let bundle = app.bundleURL else { return nil }
-        var result: [String: JSONValue] = ["name": .string(bundle.lastPathComponent), "path": .string(bundle.path)]
+        return application(bundle, identifier: app.bundleIdentifier)
+    }
+
+    private static func application(_ bundle: URL, identifier: String?) -> JSONValue? {
+        guard bundle.pathExtension == "app", let identifier else { return nil }
+        var result: [String: JSONValue] = ["name": .string(bundle.lastPathComponent), "path": .string(bundle.path),
+                                         "bundleId": .string(identifier)]
         if let icon = ApplicationCatalog.icon(at: bundle.path) { result["icon"] = .string(icon) }
         return .object(result)
     }

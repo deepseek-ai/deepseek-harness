@@ -9,6 +9,7 @@ import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { localDragResource } from '../src/file-drag.ts'
+import type { ApplicationDragReference } from '@deepseek-ai/dsh-util-file-drag'
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-host-drag-'))
@@ -24,6 +25,21 @@ async function fixture() {
   await writeFile(path, bytes)
   return { ctx, root, id, path, bytes, address: sessionFileAddress(id, '报告.pdf') }
 }
+
+it('resolves applications through their owning plugin and withdraws access with that plugin', async () => {
+  const f = await fixture()
+  const reference = 'owned-application' as ApplicationDragReference
+  const owner = await f.ctx.plugin((ctx) => {
+    ctx.on('desktop/application-drag', async (received, signal) => {
+      signal.throwIfAborted()
+      return received === reference ? '/Applications/Permission Helper.app' : undefined
+    })
+  })
+  expect(await localDragResource(f.ctx, `application:${reference}`)).toEqual({ kind: 'application', path: '/Applications/Permission Helper.app' })
+  await expect(localDragResource(f.ctx, 'application:other')).rejects.toThrow('reference expired')
+  await owner.dispose()
+  await expect(localDragResource(f.ctx, `application:${reference}`)).rejects.toThrow('reference expired')
+})
 
 it('authorizes Session-relative file reads and returns their original digest privately to main', async () => {
   const f = await fixture()

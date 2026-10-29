@@ -10,6 +10,7 @@ import type { CuaApplicationGrant } from '../src/access-types.ts'
 import type { CuaAppHandle } from '../src/types.ts'
 import { NativeClient } from '../src/native-client.ts'
 import { permissionFixture } from './permission-fixture.ts'
+import type { ApplicationDragReference } from '@deepseek-ai/dsh-util-file-drag'
 
 const native = vi.hoisted(() => ({ instances: [] as Array<{
   disposed: boolean
@@ -38,6 +39,25 @@ const identity = ApplicationAuthorizationResult.parse({ id: 'a'.repeat(64), name
 const handle = 'fixture-app' as CuaAppHandle
 const signal = new AbortController().signal
 
+it('authorizes only the observed permission application and expires references when the running helper changes', async () => {
+  const f = await setup()
+  await f.ctx.cuaAccess.systemStatus()
+  const client = native.instances.at(-1)!
+  const state = { accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 1 },
+    launchApplication: { name: 'Helper.app', path: '/version-one/Helper.app', bundleId: 'test.helper' } }
+  client.request.mockResolvedValue(state)
+  const observed = await f.ctx.cuaAccess.systemStatus()
+  const reference = observed.launchApplication!.dragReference!
+  expect(await f.ctx.serial('desktop/application-drag', reference, signal)).toBe(state.launchApplication.path)
+  expect((await f.ctx.cuaAccess.systemStatus()).launchApplication?.dragReference).toBe(reference)
+  expect(await f.ctx.serial('desktop/application-drag', 'foreign' as ApplicationDragReference, signal)).toBeUndefined()
+  await f.ctx.cuaAccess.revealApplication(reference)
+  expect(client.request).toHaveBeenCalledWith('revealPermissionApplication', { path: state.launchApplication.path }, expect.any(AbortSignal))
+  client.request.mockResolvedValue({ ...state, helper: { pid: 10 } })
+  await expect(f.ctx.serial('desktop/application-drag', reference, signal)).rejects.toThrow('application changed')
+  await expect(f.ctx.cuaAccess.revealApplication(reference)).rejects.toThrow('application changed')
+})
+
 async function setup(choice = 'Allow for this session', options: { writable?: boolean; questions?: boolean; initial?: readonly CuaApplicationGrant[] } = {}) {
   native.instances.length = 0
   const ctx = new Context()
@@ -49,7 +69,8 @@ async function setup(choice = 'Allow for this session', options: { writable?: bo
   const answer = vi.fn<() => Promise<AskUserQuestionAnswer>>(async () => ({ answers: [{ id: 'cua-app-access', selected: [choice] }] }))
   ctx.on('user-questions/request', answer)
   const permissions = permissionFixture(ctx, options.initial, options.writable)
-  const access = installCuaAccess(ctx, { native: nativeConfig, createChannel: unusedConnector, store: permissions.store })
+  const access = installCuaAccess(ctx, { native: nativeConfig, createChannel: unusedConnector, store: permissions.store,
+    guidancePolling: { intervalMs: 1000, timeoutMs: 120000 } })
   const client = new NativeClient(ctx, nativeConfig, unusedConnector)
   return { ctx, owner, agent: owner.agent, answer, access, client, ...permissions }
 }

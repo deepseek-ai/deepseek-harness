@@ -127,6 +127,11 @@ function createApplicationState(socket, record, application, captureBroker, conn
     record('call', { requestId, method, params })
     if (method === 'applicationIcons') return Object.fromEntries(params.paths.map(path => [path, `data:image/png;base64,${png}`]))
     if (method === 'openPermissionSettings') return { opened: true }
+    if (method === 'revealPermissionApplication') {
+      const state = JSON.parse(readFileSync(new URL('./permissions.json', import.meta.url), 'utf8'))
+      if (state.launchApplication?.path !== params.path) refuse('APPLICATION_UNAVAILABLE', 'Permission application changed')
+      return { revealed: true }
+    }
     if (method === 'permissionStatus' || method === 'requestPermission') {
       const state = JSON.parse(readFileSync(new URL('./permissions.json', import.meta.url), 'utf8'))
       return { ...state, helper: { pid: process.pid }, parent: { pid: process.ppid } }

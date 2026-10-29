@@ -9,9 +9,11 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { PermissionPanel, PermissionSetup, PermissionToast, type PermissionPanelProps } from '../src/client/PermissionPanel.tsx'
 import type { PermissionView } from '../src/client/controller.ts'
 import { en, zh } from '../src/client/locales.ts'
+import type { ApplicationDragReference } from '@deepseek-ai/dsh-util-file-drag'
 
 afterEach(() => { cleanup(); vi.useRealTimers() })
-const value: CuaApplicationState & { system: CuaSystemPermissionState } = { system: { accessibility: false, screenRecording: true,
+const value: CuaApplicationState & { system: CuaSystemPermissionState } = { system: {
+  guidancePolling: { intervalMs: 1000, timeoutMs: 120000 }, accessibility: false, screenRecording: true,
   helper: { pid: 9, path: '/native/helper' }, parent: { pid: 8, path: '/host/node' } },
 allowedApps: [], blockedApps: [], persistentAvailable: true }
 
@@ -24,7 +26,7 @@ function fixture() {
   const state = createSnapshotStore<PermissionView>({
     runtime: { value: { persistent: false, writable: true }, busy: false, error: null },
     system: { value: null, busy: true, error: null }, applications: { value: null, busy: true, error: null },
-    icons: { value: null, busy: true, error: null }, busy: true, changing: false, toast: null,
+    icons: { value: null, busy: true, error: null }, busy: true, changing: false, guidance: null, toast: null,
   })
   const preset = createSnapshotStore<ConfigFormSnapshot<{ default: string; selectedDefault?: string }>>({
     status: 'ready', value: { default: 'standard', selectedDefault: 'ptc' },
@@ -34,13 +36,47 @@ function fixture() {
   const props = { useCuaPermissions: bindSnapshotSelector(state), t: makeTranslate(en),
     setPersistentPtc: vi.fn(async () => true),
     useCuaDefaultPreset: bindSnapshotSelector(preset), setPtcDefault: vi.fn(async () => true),
-    refresh, request: vi.fn(), openSettings: vi.fn(), revoke: vi.fn(),
+    refresh, request: vi.fn(), openSettings: vi.fn(), revealApplication: vi.fn(), closeGuidance: vi.fn(), revoke: vi.fn(),
     retryApproval: vi.fn(), dismissToast: vi.fn(),
   } satisfies PermissionPanelProps
   return { state, preset, props,
     publish(patch: Partial<PermissionView>) { act(() => { state.set({ ...state.getSnapshot(), ...patch }) }) },
   }
 }
+
+it.each([en, zh])('shows the selected permission route, Finder alternative, and native application drag', async (dictionary) => {
+  const f = fixture()
+  const reference = 'permission-application' as ApplicationDragReference
+  const application = { name: 'Helper.app', path: '/generation/Helper.app', icon: 'data:image/png;base64,aWNvbg==', dragReference: reference }
+  const release = vi.fn()
+  const prepare = vi.fn(async () => ({ start: vi.fn(() => false), release }))
+  const applicationDrag = { prepare, reportFailure: vi.fn() }
+  f.publish({ ...observe({ ...value, system: { ...value.system, launchApplication: application } }), guidance: 'accessibility' })
+  const shown = render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} applicationDrag={applicationDrag} />)
+  const group = screen.getByRole('group', { name: dictionary.accessibility })
+  expect(within(group).getByText(dictionary.accessibilitySettingsPath)).toBeTruthy()
+  expect(within(group).getByText(dictionary.dragApplicationHint)).toBeTruthy()
+  const icon = group.querySelector('img')!
+  expect(icon.draggable).toBe(true)
+  fireEvent.pointerEnter(icon)
+  await waitFor(() => { expect(prepare).toHaveBeenCalledWith(reference, expect.any(AbortSignal)) })
+  fireEvent.click(within(group).getByRole('button', { name: dictionary.showInFinder }))
+  expect(f.props.revealApplication).toHaveBeenCalledWith(reference)
+  fireEvent.click(within(group).getByRole('button', { name: dictionary.closeGuide }))
+  expect(f.props.closeGuidance).toHaveBeenCalledOnce()
+  shown.unmount()
+  expect(release).toHaveBeenCalledOnce()
+  expect(f.props.closeGuidance).toHaveBeenCalledTimes(2)
+})
+
+it('keeps manual settings guidance available when native dragging or attribution is unavailable', () => {
+  const f = fixture()
+  f.publish({ ...observe(value), guidance: 'accessibility' })
+  render(<PermissionPanel {...f.props} />)
+  expect(screen.getByText(en.addApplicationHint)).toBeTruthy()
+  expect(screen.queryByRole('button', { name: en.showInFinder })).toBeNull()
+  expect(screen.getByRole('button', { name: en.closeGuide })).toBeTruthy()
+})
 
 it('requests only a missing privilege and leaves OS attribution to the system prompt', () => {
   const f = fixture()

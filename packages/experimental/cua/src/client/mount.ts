@@ -8,6 +8,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type {} from '@deepseek-ai/dsh-client-ui-file-drag/client'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ApplicationApproval, selectApplicationApproval } from './ApplicationApproval.tsx'
 import { PermissionController } from './controller.ts'
@@ -22,7 +23,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Existing browser registries needed by the optional permission UI. */
-export const inject = ['remote', 'slots', 'locale', 'configForms']
+export const inject = ['remote', 'slots', 'locale', 'configForms', 'fileDrag']
 
 /**
  * Mount the optional permission Remote and its browser controls.
@@ -53,6 +54,9 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
     const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
     const settings = {
       ...face,
+      applicationDrag: ctx.fileDrag.application === undefined ? undefined : {
+        ...ctx.fileDrag.application, reportFailure: ctx.fileDrag.actions.reportFailure,
+      },
       hooks: { ...face.hooks, cuaDefaultPreset: preset },
       setPtcDefault: () => preset.set('selectedDefault', 'ptc'),
       setPersistentPtc: async () => {

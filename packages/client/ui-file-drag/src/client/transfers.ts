@@ -1,7 +1,7 @@
 /** File transport selected once per plugin activation; sources only receive prepared operations. */
 import {
   FILE_DRAG_TOKEN_TYPE, resolveDragFileName,
-  type DesktopFileDrag, type DesktopFileSource, type FileDragHandle, type FileDragRequestId,
+  type ApplicationDragReference, type DesktopFileDrag, type DesktopFileSource, type FileDragHandle, type FileDragRequestId,
 } from '@deepseek-ai/dsh-util-file-drag'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import type { FileDragSource, PreparedFileDrag } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -23,6 +23,22 @@ export class FileTransfers {
    */
   read(transfer: DataTransfer): File | undefined {
     return this.active?.token === transfer.getData(FILE_DRAG_TOKEN_TYPE) ? this.active.file : undefined
+  }
+
+  /**
+   * @param reference Provider-authorized application.
+   * @param signal Preparation cancellation.
+   * @returns Native drag operation; no byte-copy fallback exists for applications.
+   */
+  async prepareApplication(reference: ApplicationDragReference, signal: AbortSignal): Promise<PreparedFileDrag> {
+    signal = AbortSignal.any([signal, this.lifetime.signal])
+    this.assertOpen(signal)
+    const desktop = this.desktop
+    if (!desktop?.applications) throw new Error('Application dragging requires macOS Desktop')
+    const handle = await this.prepareNative(desktop, { kind: 'application', reference }, signal)
+    if (handle === undefined) throw new Error('Application preparation unavailable')
+    if (signal.aborted) { desktop.release(handle); signal.throwIfAborted() }
+    return this.native(desktop, handle)
   }
 
   private assertOpen(signal: AbortSignal): void {

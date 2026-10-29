@@ -2,6 +2,14 @@
 export const NS = 'cuaPermissions'
 /** English permission-page dictionary. */
 export const en = {
+  accessibilitySettingsPath: 'System Settings > Privacy & Security > Accessibility',
+  screenRecordingSettingsPath: 'System Settings > Privacy & Security > Screen & System Audio Recording',
+  dragApplicationHint: 'Drag the application icon above into the list and turn on its switch. If it is already listed, turn on its switch.',
+  addApplicationHint: 'On the Mac running DSH, click + below the permission list and select the application shown above. Use Finder to locate it.',
+  refreshHint: 'Permissions refresh when you return to this window. Follow any macOS quit-and-reopen prompt before returning.',
+  showInFinder: 'Show in Finder',
+  closeGuide: 'Close guide',
+  revealed: 'Finder was asked to show the application',
   title: 'Authorize computer use',
   applicationsTitle: 'Manage applications computer use can access',
   setupTitle: 'Set up computer use before use',
@@ -32,7 +40,7 @@ export const en = {
   blockedApps: 'Applications not allowed', retryApproval: 'Allow asking again',
   retryAllowed: 'The next application selection will ask again; access has not been granted',
   noApps: 'No always-allowed or blocked applications.',
-  revoke: 'Revoke', revoked: 'Application access revoked', requested: 'Review the macOS prompt, or open System Settings if no prompt appears', opened: 'System Settings opened',
+  revoke: 'Revoke', revoked: 'Application access revoked', requested: 'Enable the application in System Settings', opened: 'System Settings opened',
   applicationsFailed: 'Could not load application access: {message}', iconsFailed: 'Could not load application icons: {message}',
   failed: 'Could not update permissions: {message}', queryFailed: 'Could not check permissions: {message}',
 }
@@ -40,6 +48,14 @@ export const en = {
 export type CuaPermissionLocaleKey = keyof typeof en
 /** Chinese permission-page dictionary. */
 export const zh: Record<CuaPermissionLocaleKey, string> = {
+  accessibilitySettingsPath: '系统设置 > 隐私与安全性 > 辅助功能',
+  screenRecordingSettingsPath: '系统设置 > 隐私与安全性 > 屏幕与系统音频录制',
+  dragApplicationHint: '将上方应用图标拖入列表并开启开关。列表中已有此应用时，直接开启开关',
+  addApplicationHint: '请在运行 DSH 的 Mac 上点击授权列表下方的“＋”，选择上方应用。可先在 Finder 中定位',
+  refreshHint: '返回此窗口会重新检查权限。如 macOS 提示退出并重新打开应用，请按提示操作后返回',
+  showInFinder: '在 Finder 中显示',
+  closeGuide: '关闭引导',
+  revealed: '已请求 Finder 显示应用',
   title: '给 Computer Use 授权', applicationsTitle: '管理 Computer Use 可访问的应用', setupTitle: '使用 Computer Use 前需要设置',
   setupBody: 'Computer Use 插件已开启。使用前请切换到 PTC 模式，并授予辅助功能和屏幕录制权限。请前往插件详情页完成设置。',
   setupQueryFailed: 'Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。',
@@ -68,13 +84,21 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
   blockedApps: '不允许访问的应用', retryApproval: '允许再次询问',
   retryAllowed: '下次选择此应用时将重新询问，当前尚未授权',
   noApps: '暂无始终允许或不允许访问的应用。',
-  revoke: '撤销', revoked: '已撤销应用访问权限', requested: '请查看 macOS 提示；若未出现，请打开系统设置', opened: '已打开系统设置',
+  revoke: '撤销', revoked: '已撤销应用访问权限', requested: '请在系统设置中开启应用权限', opened: '已打开系统设置',
   applicationsFailed: '无法读取应用授权：{message}', iconsFailed: '无法读取应用图标：{message}',
   failed: '无法更新权限：{message}', queryFailed: '无法检测权限：{message}',
 }
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  accessibilitySettingsPath: 'システム設定 > プライバシーとセキュリティ > アクセシビリティ',
+  screenRecordingSettingsPath: 'システム設定 > プライバシーとセキュリティ > 画面収録とシステムオーディオ録音',
+  dragApplicationHint: '上のアプリアイコンを一覧にドラッグして、スイッチをオンにしてください。既に一覧にある場合はスイッチをオンにしてください。',
+  addApplicationHint: 'DSH を実行している Mac で、権限一覧の下にある「＋」から上のアプリを選択してください。Finder で場所を確認できます。',
+  refreshHint: 'このウィンドウに戻ると権限を再確認します。macOS に再起動を求められたら、その指示に従ってから戻ってください。',
+  showInFinder: 'Finder で表示',
+  closeGuide: 'ガイドを閉じる',
+  revealed: 'Finder にアプリの表示を要求しました',
   'title': 'コンピュータ操作を承認',
   'applicationsTitle': 'Computer Useがアクセスできるアプリを管理',
   'setupTitle': '使用前にComputer Useを設定',
@@ -118,7 +142,7 @@ export const ja = {
   'noApps': '常に許可またはブロックされたアプリケーションはありません。',
   'revoke': '取り消し',
   'revoked': 'アプリケーションのアクセスを取り消しました',
-  'requested': 'macOSのプロンプトを確認するか、プロンプトが表示されない場合はシステム設定を開いてください',
+  'requested': 'システム設定でアプリの権限を有効にしてください',
   'opened': 'システム設定を開きました',
   'applicationsFailed': 'アプリケーションのアクセスを読み込めませんでした: {message}',
   'iconsFailed': 'アプリケーションのアイコンを読み込めませんでした: {message}',
@@ -128,6 +152,14 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  accessibilitySettingsPath: 'Configuración del sistema > Privacidad y seguridad > Accesibilidad',
+  screenRecordingSettingsPath: 'Configuración del sistema > Privacidad y seguridad > Grabación de pantalla y audio del sistema',
+  dragApplicationHint: 'Arrastra el icono de la aplicación a la lista y activa su interruptor. Si ya aparece, activa su interruptor.',
+  addApplicationHint: 'En el Mac que ejecuta DSH, pulsa + debajo de la lista y selecciona la aplicación indicada. Usa Finder para localizarla.',
+  refreshHint: 'Los permisos se actualizan al volver a esta ventana. Si macOS pide cerrar y reabrir la aplicación, sigue las instrucciones antes de volver.',
+  showInFinder: 'Mostrar en Finder',
+  closeGuide: 'Cerrar guía',
+  revealed: 'Se solicitó a Finder que mostrara la aplicación',
   title: 'Autorizar el uso de la computadora',
   applicationsTitle: 'Administrar aplicaciones a las que puede acceder el uso de la computadora',
   setupTitle: 'Configurar el uso de la computadora antes de usarla',
@@ -158,13 +190,21 @@ export const es = {
   blockedApps: 'Aplicaciones no permitidas', retryApproval: 'Permitir preguntar de nuevo',
   retryAllowed: 'La siguiente selección de aplicación le preguntará nuevamente; el acceso no ha sido concedido',
   noApps: 'No hay aplicaciones siempre permitidas o bloqueadas.',
-  revoke: 'Revocar', revoked: 'Acceso a la aplicación revocado', requested: 'Revise el mensaje macOS o abra Configuración del sistema si no aparece ningún mensaje', opened: 'Configuración del sistema abierta',
+  revoke: 'Revocar', revoked: 'Acceso a la aplicación revocado', requested: 'Activa la aplicación en Configuración del sistema', opened: 'Configuración del sistema abierta',
   applicationsFailed: 'No se pudo cargar el acceso a la aplicación: {message}', iconsFailed: 'No se pudieron cargar los íconos de la aplicación: {message}',
   failed: 'No se pudieron actualizar los permisos: {message}', queryFailed: 'No se pudieron verificar los permisos: {message}',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  accessibilitySettingsPath: 'Réglages Système > Confidentialité et sécurité > Accessibilité',
+  screenRecordingSettingsPath: 'Réglages Système > Confidentialité et sécurité > Enregistrement de l’écran et de l’audio système',
+  dragApplicationHint: 'Faites glisser l’icône de l’application dans la liste et activez son interrupteur. Si elle y figure déjà, activez son interrupteur.',
+  addApplicationHint: 'Sur le Mac qui exécute DSH, cliquez sur + sous la liste et sélectionnez l’application indiquée. Utilisez le Finder pour la localiser.',
+  refreshHint: 'Les autorisations sont vérifiées à votre retour dans cette fenêtre. Si macOS demande de quitter et de rouvrir l’application, suivez les instructions avant de revenir.',
+  showInFinder: 'Afficher dans le Finder',
+  closeGuide: 'Fermer le guide',
+  revealed: 'L’affichage de l’application a été demandé au Finder',
   title: "Autoriser l'utilisation de l'ordinateur",
   applicationsTitle: "Gérer les applications auxquelles l'ordinateur peut accéder",
   setupTitle: "Configurer l'utilisation de l'ordinateur avant utilisation",
@@ -195,13 +235,21 @@ export const fr = {
   blockedApps: 'Applications non autorisées', retryApproval: 'Autoriser la demande à nouveau',
   retryAllowed: "La prochaine sélection de candidatures demandera à nouveau ; l'accès n'a pas été accordé",
   noApps: 'Aucune application toujours autorisée ou bloquée.',
-  revoke: 'Révoquer', revoked: "Accès à l'application révoqué", requested: "Consultez l'invite macOS ou ouvrez les paramètres système si aucune invite n'apparaît.", opened: 'Paramètres système ouverts',
+  revoke: 'Révoquer', revoked: "Accès à l'application révoqué", requested: 'Activez l’application dans Réglages Système', opened: 'Paramètres système ouverts',
   applicationsFailed: "Impossible de charger l'accès à l'application : {message}", iconsFailed: "Impossible de charger les icônes d'application : {message}",
   failed: 'Impossible de mettre à jour les autorisations : {message}', queryFailed: 'Impossible de vérifier les autorisations : {message}',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  accessibilitySettingsPath: 'Systemeinstellungen > Datenschutz & Sicherheit > Bedienungshilfen',
+  screenRecordingSettingsPath: 'Systemeinstellungen > Datenschutz & Sicherheit > Bildschirm- & Systemaudioaufnahme',
+  dragApplicationHint: 'Ziehe das Anwendungssymbol oben in die Liste und aktiviere den Schalter. Ist die Anwendung bereits aufgeführt, aktiviere ihren Schalter.',
+  addApplicationHint: 'Klicke auf dem Mac mit DSH auf + unter der Liste und wähle die angezeigte Anwendung aus. Im Finder kannst du sie finden.',
+  refreshHint: 'Bei der Rückkehr in dieses Fenster werden die Berechtigungen geprüft. Folge zuvor einer Aufforderung von macOS zum Beenden und erneuten Öffnen.',
+  showInFinder: 'Im Finder anzeigen',
+  closeGuide: 'Anleitung schließen',
+  revealed: 'Die Anzeige der Anwendung wurde im Finder angefordert',
   title: 'Autorisieren Sie die Computernutzung',
   applicationsTitle: 'Verwalten Sie Anwendungen, auf die der Computer zugreifen kann',
   setupTitle: 'Richten Sie die Computernutzung vor der Nutzung ein',
@@ -232,13 +280,21 @@ export const de = {
   blockedApps: 'Nicht erlaubte Anwendungen', retryApproval: 'Erlaube noch einmal nachzufragen',
   retryAllowed: 'Bei der nächsten Anwendungsauswahl werden Sie erneut gefragt; Der Zugriff wurde nicht gewährt',
   noApps: 'Keine immer erlaubten oder blockierten Anwendungen.',
-  revoke: 'Widerrufen', revoked: 'Anwendungszugriff widerrufen', requested: 'Überprüfen Sie die macOS-Eingabeaufforderung oder öffnen Sie die Systemeinstellungen, wenn keine Eingabeaufforderung angezeigt wird', opened: 'Systemeinstellungen geöffnet',
+  revoke: 'Widerrufen', revoked: 'Anwendungszugriff widerrufen', requested: 'Aktiviere die Anwendung in den Systemeinstellungen', opened: 'Systemeinstellungen geöffnet',
   applicationsFailed: 'Anwendungszugriff konnte nicht geladen werden: {message}', iconsFailed: 'Anwendungssymbole konnten nicht geladen werden: {message}',
   failed: 'Berechtigungen konnten nicht aktualisiert werden: {message}', queryFailed: 'Berechtigungen konnten nicht überprüft werden: {message}',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  accessibilitySettingsPath: 'Системные настройки > Конфиденциальность и безопасность > Универсальный доступ',
+  screenRecordingSettingsPath: 'Системные настройки > Конфиденциальность и безопасность > Запись экрана и системного аудио',
+  dragApplicationHint: 'Перетащите значок приложения в список и включите переключатель. Если приложение уже есть в списке, включите его переключатель.',
+  addApplicationHint: 'На Mac, где работает DSH, нажмите + под списком и выберите указанное приложение. Найти его можно через Finder.',
+  refreshHint: 'Разрешения проверяются при возвращении в это окно. Если macOS просит закрыть и снова открыть приложение, сначала выполните это.',
+  showInFinder: 'Показать в Finder',
+  closeGuide: 'Закрыть инструкцию',
+  revealed: 'В Finder отправлен запрос на показ приложения',
   title: 'Разрешить использование компьютера',
   applicationsTitle: 'Управление приложениями, к которым может иметь доступ компьютер',
   setupTitle: 'Настройте использование компьютера перед использованием',
@@ -269,13 +325,21 @@ export const ru = {
   blockedApps: 'Приложения не разрешены', retryApproval: 'Разрешить спросить еще раз',
   retryAllowed: 'При следующем выборе приложения запрос будет повторен; доступ не предоставлен',
   noApps: 'Никаких всегда разрешенных или заблокированных приложений.',
-  revoke: 'Отозвать', revoked: 'Доступ к приложению отозван', requested: 'Просмотрите подсказку macOS или откройте «Системные настройки», если подсказка не появляется.', opened: 'Системные настройки открыты',
+  revoke: 'Отозвать', revoked: 'Доступ к приложению отозван', requested: 'Включите разрешение для приложения в системных настройках', opened: 'Системные настройки открыты',
   applicationsFailed: 'Не удалось загрузить доступ к приложению: {message}.', iconsFailed: 'Не удалось загрузить значки приложений: {message}.',
   failed: 'Не удалось обновить разрешения: {message}.', queryFailed: 'Не удалось проверить разрешения: {message}',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  accessibilitySettingsPath: 'Ajustes do Sistema > Privacidade e Segurança > Acessibilidade',
+  screenRecordingSettingsPath: 'Ajustes do Sistema > Privacidade e Segurança > Gravação de Tela e Áudio do Sistema',
+  dragApplicationHint: 'Arraste o ícone do aplicativo para a lista e ative o interruptor. Se já estiver na lista, ative o interruptor.',
+  addApplicationHint: 'No Mac que executa DSH, clique em + abaixo da lista e selecione o aplicativo indicado. Use o Finder para localizá-lo.',
+  refreshHint: 'As permissões são verificadas ao voltar a esta janela. Se o macOS pedir para encerrar e reabrir o aplicativo, siga as instruções antes de voltar.',
+  showInFinder: 'Mostrar no Finder',
+  closeGuide: 'Fechar guia',
+  revealed: 'Foi solicitado ao Finder que mostrasse o aplicativo',
   title: 'Autorizar o uso do computador',
   applicationsTitle: 'Gerenciar aplicativos que o computador pode acessar',
   setupTitle: 'Configure o uso do computador antes de usar',
@@ -306,7 +370,7 @@ export const pt = {
   blockedApps: 'Aplicativos não permitidos', retryApproval: 'Permitir perguntar novamente',
   retryAllowed: 'A próxima seleção de aplicativos perguntará novamente; o acesso não foi concedido',
   noApps: 'Nenhum aplicativo sempre permitido ou bloqueado.',
-  revoke: 'Revogar', revoked: 'Acesso ao aplicativo revogado', requested: 'Revise o prompt macOS ou abra as Configurações do sistema se nenhum prompt aparecer', opened: 'Configurações do sistema abertas',
+  revoke: 'Revogar', revoked: 'Acesso ao aplicativo revogado', requested: 'Ative o aplicativo nos Ajustes do Sistema', opened: 'Configurações do sistema abertas',
   applicationsFailed: 'Não foi possível carregar o acesso ao aplicativo: {message}', iconsFailed: 'Não foi possível carregar os ícones do aplicativo: {message}',
   failed: 'Não foi possível atualizar as permissões: {message}', queryFailed: 'Não foi possível verificar as permissões: {message}',
 } satisfies Record<keyof typeof en, string>

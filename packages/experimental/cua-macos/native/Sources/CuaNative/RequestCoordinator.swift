@@ -179,6 +179,8 @@ import Darwin
             result = try permissions.request(params.string("permission"))
         } else if request.method == "openPermissionSettings" {
             result = try permissions.openSettings(params.string("permission"))
+        } else if request.method == "revealPermissionApplication" {
+            result = try permissions.revealApplication(params.string("path"))
         } else if request.method == "findApps" {
             result = .array(try ApplicationDiscovery.applications(matching: params.string("query"), exact: false,
                 limit: params.integer("maxAppMatches", in: 1...1000), cancellation: cancellation).map { $0.json(catalog: catalog) })

@@ -32,6 +32,9 @@
   vertical-align: middle;
 }
 .applicationBadge img { flex-shrink: 0; object-fit: contain; }
+.applicationBadge img[draggable="true"] { cursor: grab; }
+.permission > .permissionGuide { flex: 0 0 100%; min-width: 0; display: grid; gap: 8px; }
+.guideActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .applicationBadge > span { min-width: 0; overflow-wrap: anywhere; }
 .permissionAction, .buttonPlaceholder { width: 168px; flex-shrink: 0; }
 .permissionAction[data-configured]:disabled { opacity: 1; color: var(--dsw-alias-label-primary); cursor: default; }

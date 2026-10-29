@@ -7,6 +7,7 @@ import type {} from '@deepseek-ai/dsh-session-persistence'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { parseFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
+import type { ApplicationDragReference, DesktopDragResource } from '@deepseek-ai/dsh-util-file-drag'
 
 /** Private Host-to-main answer; never exposed to renderer JavaScript. */
 export interface LocalDragResource {
@@ -22,7 +23,16 @@ export interface LocalDragResource {
  * @param cancellation - caller cancellation, combined with the read deadline.
  * @returns verified Host-local path and content identity, or null for nonlocal resources.
  */
-export async function localDragResource(ctx: Context, address: string, cancellation?: AbortSignal): Promise<LocalDragResource | null> {
+export async function localDragResource(ctx: Context, address: string, cancellation?: AbortSignal): Promise<DesktopDragResource | null> {
+  const signal = cancellation === undefined ? AbortSignal.timeout(10_000) : AbortSignal.any([cancellation, AbortSignal.timeout(10_000)])
+  signal.throwIfAborted()
+  if (address.startsWith('application:')) {
+    const reference = address.slice('application:'.length) as ApplicationDragReference
+    const path = await ctx.serial('desktop/application-drag', reference, signal)
+    signal.throwIfAborted()
+    if (path === undefined) throw new Error('Application drag reference expired')
+    return { kind: 'application', path }
+  }
   const resource = parseFileAddress(address)
   if (resource?.scope !== 'session') throw new Error('File drag requires a Session resource')
   const sessions = ctx.get('sessions')
@@ -33,7 +43,6 @@ export async function localDragResource(ctx: Context, address: string, cancellat
   const sessionId = resource.sessionId as SessionId
   const header = sessions.get(sessionId)?.header ?? (await persistence?.stat(sessionId))?.header
   if (header === undefined) throw new Error('File drag Session unavailable')
-  const signal = cancellation === undefined ? AbortSignal.timeout(10_000) : AbortSignal.any([cancellation, AbortSignal.timeout(10_000)])
   signal.throwIfAborted()
   const cwd = header.cwd ?? policy.workspaceRoot
   const entry = await fs.lstat(resource.path, { cwd }, signal)

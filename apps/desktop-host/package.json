@@ -39,6 +39,7 @@
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "@deepseek-ai/dsh-brand": "workspace:*",
-    "@deepseek-ai/dsh-tool-executor-native": "workspace:*"
+    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
+    "@deepseek-ai/dsh-util-file-drag": "workspace:*"
   }
 }

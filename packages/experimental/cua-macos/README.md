@@ -22,7 +22,9 @@ Inspect macOS permissions, select running applications and windows, read accessi
 
 The helper supplies bounded 64-pixel PNG application icons for permission prompts and saved-application lists. Icon reads do not launch an application or inspect its windows; icons do not determine reusable consent.
 
-The helper runs through LaunchServices as the independent background application `DSH Computer Use.app`. Accessibility and Screen Recording permissions belong to this application. The permission page uses its system-reported name and icon; when attribution is unavailable, the system prompt identifies the application.
+The helper runs through LaunchServices as the independent background application `DSH Computer Use.app`. Accessibility and Screen Recording permissions belong to this application. The permission page uses the responsible application’s bundle URL, identifier, filename, and system icon captured at startup; if system attribution is unavailable, the independent helper supplies its own bundle. Finder selection validates that this bundle and its executable still exist and that its identifier matches. Existing connections retain their running application generation even when another build updates `current.json`.
+
+Permission requests open the selected privacy pane even when the native request leaves access denied. A rejected settings-open request reports `SETTINGS_UNAVAILABLE`; missing or replaced Finder targets report `APPLICATION_UNAVAILABLE`. System Settings owns whether a dragged application is accepted and whether relaunch is required. macOS 14 is the minimum supported version; cross-version settings navigation, drag acceptance, and permission refresh require installed-app qualification on each supported release.
 
 -----
 
@@ -47,6 +49,7 @@ The dump command checks profile composition without a model request. For a real 
 | `buildTimeoutMs` | `300000` | Maximum native preparation time. |
 | `timeoutMs` | `30000` | Per-operation deadline; cancellation can leave partial input. |
 | `connectTimeoutMs` | `5000` | Deadline for connecting to or starting the shared helper. |
+| `permissionPollIntervalMs` / `permissionPollTimeoutMs` | `1000` / `120000` | Interval and total duration of system-permission checks while the authorization guide is open. |
 | `screenshotTimeoutMs` | `5000` | Screenshot deadline including queue time, capped by `timeoutMs`. |
 | `axTimeoutMs` | `3000` | Deadline per Accessibility system call, configured independently of the complete operation. |
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 request and response limits. |

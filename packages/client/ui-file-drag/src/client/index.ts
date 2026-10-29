@@ -1,8 +1,8 @@
 /** Cordis-owned file transfers and localized feedback shared across independent entries. */
 import type { Context } from '@deepseek-ai/cordis'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { DesktopFileDrag } from '@deepseek-ai/dsh-util-file-drag'
-import type { FileDragActions } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ApplicationDragReference, DesktopFileDrag } from '@deepseek-ai/dsh-util-file-drag'
+import type { FileDragActions, PreparedFileDrag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -13,6 +13,11 @@ import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 /** Application-local file preparation and drop resolution. */
 export interface FileDragService {
   readonly actions: FileDragActions
+  /** Native application preparation, absent when this carrier cannot drag local application bundles. */
+  readonly application: {
+    /** @param reference Provider-issued application identity. @param signal Preparation cancellation. @returns Native drag preparation. */
+    prepare(reference: ApplicationDragReference, signal: AbortSignal): Promise<PreparedFileDrag>
+  } | undefined
   /** @param transfer - browser drop payload. @returns original file for a matching application-local token. */
   readonly read: (transfer: DataTransfer) => File | undefined
 }
@@ -40,6 +45,7 @@ export function apply(ctx: Context): void {
   const dismiss = (): void => { failure.set(null) }
   ctx.provide('fileDrag', {
     actions: { prepare: (source, signal) => transfers.prepare(source, signal), reportFailure },
+    application: desktop?.applications ? { prepare: (reference, signal) => transfers.prepareApplication(reference, signal) } : undefined,
     read: transfer => transfers.read(transfer),
   })
   ctx.effect(() => () => { transfers.dispose(); dismiss() })

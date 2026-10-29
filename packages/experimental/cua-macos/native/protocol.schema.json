@@ -1162,6 +1162,37 @@
         "params"
       ],
       "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "revealPermissionApplication"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
     }
   ]
 }

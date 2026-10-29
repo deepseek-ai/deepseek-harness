@@ -1,5 +1,7 @@
 /** Browser controls for the provider's application decisions and native permission work. */
 import type { Context } from '@deepseek-ai/cordis'
+import { randomUUID } from 'node:crypto'
+import type { ApplicationDragReference } from '@deepseek-ai/dsh-util-file-drag'
 import type {} from '@deepseek-ai/dsh-config-editor'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import { resolvePersistentExecution } from '@deepseek-ai/dsh-ptc-runtime-node/configuration'
@@ -16,12 +18,14 @@ export type * from './access-types.ts'
 interface ControlOptions extends AccessOptions {
   native: NativeClientConfig
   createChannel: NativeChannelFactory
+  guidancePolling: CuaSystemPermissionState['guidancePolling']
 }
-type Control = (method: string, params: Record<string, JsonValue>) => Promise<JsonValue>
+type Control = (method: string, params: Record<string, JsonValue>, signal?: AbortSignal) => Promise<JsonValue>
 const permissionProcess = z.object({ pid: z.number().int().positive(), path: z.string().optional(), name: z.string().optional() })
 const systemPermissions = z.object({
   accessibility: z.boolean(), screenRecording: z.boolean(), helper: permissionProcess, parent: permissionProcess,
-  launchApplication: z.object({ name: z.string().min(1), path: z.string().min(1), icon: ApplicationIcon.optional() }).optional(),
+  launchApplication: z.object({ name: z.string().min(1), path: z.string().min(1),
+    icon: ApplicationIcon.optional(), bundleId: z.string().optional() }).optional(),
 })
 
 declare module '@deepseek-ai/cordis' {
@@ -33,13 +37,42 @@ declare module '@deepseek-ai/cordis' {
 
 /** Browser controls for provider-owned native permission and application decisions. */
 export class CuaAccess extends TypertRemoteService {
+  private application: { reference: ApplicationDragReference; path: string; pid: number; bundleId: string | undefined } | undefined
   /**
    * @param ctx Provider context.
    * @param policy Application decision owner.
    * @param control Serialized native permission dispatch.
+   * @param guidancePolling Automatic permission-check bounds.
    */
   constructor(ctx: Context, private readonly policy: ApplicationAccess,
-    private readonly control: Control) { super(ctx, 'cuaAccess') }
+    private readonly control: Control, private readonly guidancePolling: CuaSystemPermissionState['guidancePolling']) {
+    super(ctx, 'cuaAccess')
+    ctx.on('desktop/application-drag', async (reference, signal) => {
+      if (reference !== this.application?.reference) return
+      return this.resolveApplication(reference, signal)
+    })
+  }
+
+  private observe(value: JsonValue): CuaSystemPermissionState {
+    const state = systemPermissions.parse(value)
+    const app = state.launchApplication
+    if (app === undefined) this.application = undefined
+    else if (this.application?.path !== app.path || this.application.pid !== state.helper.pid
+      || this.application.bundleId !== app.bundleId) {
+      this.application = { reference: randomUUID() as ApplicationDragReference,
+        path: app.path, pid: state.helper.pid, bundleId: app.bundleId }
+    }
+    return { ...state, guidancePolling: this.guidancePolling,
+      ...(app === undefined ? {} : { launchApplication: { ...app, dragReference: this.application?.reference } }) }
+  }
+
+  private async resolveApplication(reference: ApplicationDragReference, signal?: AbortSignal): Promise<string> {
+    const expected = this.application
+    if (expected?.reference !== reference) throw new Error('Permission application changed; refresh the permission page')
+    const state = this.observe(await this.control('permissionStatus', {}, signal))
+    if (state.launchApplication?.dragReference !== reference) throw new Error('Permission application changed; refresh the permission page')
+    return expected.path
+  }
 
   /** Read PTC execution state separately from native permission checks.
    * @returns Whether the shared runtime retains memory and has an editable profile entry.
@@ -78,7 +111,7 @@ export class CuaAccess extends TypertRemoteService {
    */
   @Remote
   async systemStatus(): Promise<CuaSystemPermissionState> {
-    return systemPermissions.parse(await this.control('permissionStatus', {}))
+    return this.observe(await this.control('permissionStatus', {}))
   }
 
   /**
@@ -94,13 +127,24 @@ export class CuaAccess extends TypertRemoteService {
   }
 
   /**
-   * Request a system privilege explicitly selected by the user.
+   * Request a system privilege and open its settings pane.
    * @param permission macOS privilege to request.
    * @returns Preflight state after requesting; a false value never implies consent.
    */
   @Remote
   async requestPermission(permission: CuaSystemPermission): Promise<CuaSystemPermissionState> {
-    return systemPermissions.parse(await this.control('requestPermission', { permission }))
+    return this.observe(await this.control('requestPermission', { permission }))
+  }
+
+  /**
+   * Select the displayed permission application in Finder.
+   * @param reference Application identity from the current permission observation.
+   * @returns Completion after dispatch to Finder; rejects stale or unavailable applications.
+   */
+  @Remote
+  async revealApplication(reference: ApplicationDragReference): Promise<void> {
+    const path = await this.resolveApplication(reference)
+    await this.control('revealPermissionApplication', { path })
   }
 
   /**
@@ -141,14 +185,16 @@ export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<Ap
   const lifetime = new AbortController()
   let client: NativeClient | undefined
   let tail: Promise<unknown> = Promise.resolve()
-  const control: Control = (method, params) => {
+  const control: Control = (method, params, cancellation) => {
     lifetime.signal.throwIfAborted()
+    const signal = cancellation === undefined ? lifetime.signal : AbortSignal.any([lifetime.signal, cancellation])
     const perform = async () => {
-      lifetime.signal.throwIfAborted()
+      signal.throwIfAborted()
       if (client?.disposed) await client.dispose()
       lifetime.signal.throwIfAborted()
       if (!client || client.disposed) client = new NativeClient(ctx, options.native, options.createChannel)
-      return client.request(method, params, lifetime.signal)
+      signal.throwIfAborted()
+      return client.request(method, params, signal)
     }
     const operation = tail.then(perform, perform)
     tail = operation
@@ -159,6 +205,6 @@ export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<Ap
     await Promise.allSettled([policy.dispose(), tail])
     await client?.dispose()
   }, 'cua-access.dispose')
-  new CuaAccess(ctx, policy, control)
+  new CuaAccess(ctx, policy, control, options.guidancePolling)
   return { select: policy.select.bind(policy), run: policy.run.bind(policy), forget: policy.forget.bind(policy), dispose }
 }

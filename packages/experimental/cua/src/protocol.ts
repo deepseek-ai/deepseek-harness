@@ -87,6 +87,7 @@ export const NativeOnlyOperations = [
   operation('applicationIcons', { paths: z.array(z.string().min(1)) }),
   operation('requestPermission', { permission: z.enum(['accessibility', 'screenRecording']) }),
   operation('openPermissionSettings', { permission: z.enum(['accessibility', 'screenRecording']) }),
+  operation('revealPermissionApplication', { path: z.string().min(1) }),
 ] as const
 
 /** Process identity returned only after a successful app selection. */

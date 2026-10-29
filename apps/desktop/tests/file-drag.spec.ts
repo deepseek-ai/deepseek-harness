@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
@@ -41,6 +41,41 @@ async function fixture() {
   const prepare = (bytes: Uint8Array, name = 'original.pdf', mediaType = 'application/pdf') => call(DESKTOP_IPC.fileDragPrepare, { kind: 'bytes', bytes, name, mediaType })
   return { root, window, frame, event, icon, call, prepare, dispose, resolve, detach: () => { current = undefined } }
 }
+
+it('drags only the Host-authorized application bundle and never removes it on release', async () => {
+  const f = await fixture()
+  const path = join(f.root, 'DSH Computer Use.app')
+  await mkdir(path)
+  const reference = randomUUID()
+  f.resolve.mockResolvedValue({ kind: 'application', path })
+  const handle = await f.call(DESKTOP_IPC.fileDragPrepare, { kind: 'application', reference })
+  expect(f.resolve).toHaveBeenCalledWith(`application:${reference}`, expect.any(AbortSignal))
+  expect(await f.call(DESKTOP_IPC.fileDragStart, handle)).toBe(true)
+  expect(f.window.webContents.startDrag).toHaveBeenCalledWith({ file: path, icon: f.icon })
+  await f.call(DESKTOP_IPC.fileDragRelease, handle)
+  await f.dispose()
+  expect(await readdir(f.root)).toEqual(['DSH Computer Use.app'])
+})
+
+it('rejects arbitrary paths, expired references, and application replacement before dragging', async () => {
+  const f = await fixture()
+  await expect(f.call(DESKTOP_IPC.fileDragPrepare, { kind: 'application', reference: '/Applications/Other.app' })).rejects.toThrow()
+  const request = { kind: 'application', reference: randomUUID() }
+  await expect(f.call(DESKTOP_IPC.fileDragPrepare, request)).rejects.toThrow('Application drag unavailable')
+  f.resolve.mockResolvedValue({ path: '/file', size: 0, sha256: 'a'.repeat(64) })
+  await expect(f.call(DESKTOP_IPC.fileDragPrepare, request)).rejects.toThrow('Application drag unavailable')
+  const path = join(f.root, 'Helper.app')
+  await writeFile(path, 'not an application directory')
+  f.resolve.mockResolvedValue({ kind: 'application', path })
+  await expect(f.call(DESKTOP_IPC.fileDragPrepare, request)).rejects.toThrow('Application bundle unavailable')
+  await rm(path)
+  await mkdir(path)
+  const handle = await f.call(DESKTOP_IPC.fileDragPrepare, request)
+  await rename(path, join(f.root, 'Previous.app'))
+  await mkdir(path)
+  expect(await f.call(DESKTOP_IPC.fileDragStart, handle)).toBe(false)
+  expect(f.window.webContents.startDrag).not.toHaveBeenCalled()
+})
 
 it('delivers original PDF bytes and filename through native copy drag', async () => {
   const f = await fixture()

@@ -20,6 +20,7 @@ enum NativeProtocol {
         "permissionStatus": [],
         "pressKey": ["appHandle", "key", "modifiers"],
         "requestPermission": ["permission"],
+        "revealPermissionApplication": ["path"],
         "screenshot": ["appHandle", "windowId"],
         "scroll": ["appHandle", "deltaLinesX", "deltaLinesY", "snapshotId", "windowId", "x", "y"],
         "selectText": ["appHandle", "elementIndex", "prefix", "selectionType", "snapshotId", "suffix", "text"],

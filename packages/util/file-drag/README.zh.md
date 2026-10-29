@@ -26,6 +26,8 @@ kind: "package-library"
 
 `DesktopFileDrag.prepare(source, requestId)` 接受完整字节或 Session 资源地址，返回不透明句柄。`cancel(requestId)` 可在句柄返回前停止未完成的准备。资源借用必须经过 Host 授权与主进程的内容、名称检查；无法借用时，调用方回退到字节准备。[插件](../../client/ui-file-drag/README.zh.md) 负责浏览器准备，[Desktop](../../../apps/desktop/README.zh.md) 负责原生交付。
 
+`DesktopFileDrag.applications` 声明原生应用拖动能力。`application` 来源携带提供方签发的 `ApplicationDragReference`，桌面 Host 通过串行事件 `desktop/application-drag` 解析。监听器仅为自己拥有的引用返回当前授权应用路径，没有监听器表示引用已失效。载体在借用和起拖前验证应用目录，该流程不会回退为导出图像字节。
+
 ## 已知限制与后续工作
 
 <a id="known-limitations-and-deferred-work"></a>

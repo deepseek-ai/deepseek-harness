@@ -128,9 +128,13 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await accessibility.getByRole('button', { name: 'Request permission', exact: true }).click()
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   expect(await accessibility.getByRole('button', { name: 'Request permission', exact: true }).count()).toBe(1)
+  await accessibility.getByRole('button', { name: 'Show in Finder', exact: true }).waitFor()
+  await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/guidance.expected.md', import.meta.url)),
+    await captureStableAria(page, '[data-cua-settings]', scaffold.workspaceCwd), webSnapshotMode())
+  await accessibility.getByRole('button', { name: 'Show in Finder', exact: true }).click()
+  await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   await writeFile(state, JSON.stringify({ accessibility: true, screenRecording: false, launchApplication }))
-  // Headless pages retain document focus; model returning from System Settings at the window-event boundary.
-  await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
+  // No focus event is delivered: the guide must observe a grant while System Settings remains active.
   await accessibility.getByText('Allowed', { exact: true }).waitFor()
   const screen = panel.getByRole('group', { name: 'Screen Recording', exact: true })
   expect(await accessibility.getByRole('button').count()).toBe(1)
@@ -153,7 +157,8 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(events.filter(event => event.method === 'openPermissionSettings')).toEqual([
     { method: 'openPermissionSettings', params: { permission: 'accessibility' } },
   ])
-  expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
+  expect(events).toContainEqual({ method: 'revealPermissionApplication', params: { path: launchApplication.path } })
+  expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'revealPermissionApplication', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
   const preview = plugins.locator('[data-detail-document] img')
   await preview.waitFor()
   await preview.evaluate(async (image: HTMLImageElement) => { await image.decode() })

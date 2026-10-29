@@ -2,15 +2,19 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, statSync, type Stats } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { basename, extname, isAbsolute } from 'node:path'
 import { app, ipcMain, type BrowserWindow, type IpcMainInvokeEvent, type NativeImage } from 'electron'
-import { resolveDragFileName, type DesktopFileSource, type FileDragHandle } from '@deepseek-ai/dsh-util-file-drag'
+import { resolveDragFileName, type ApplicationDragReference, type DesktopDragResource, type DesktopFileSource, type FileDragHandle } from '@deepseek-ai/dsh-util-file-drag'
 import { DESKTOP_IPC } from './ipc.ts'
 import { DragFiles } from './file-drag-files.ts'
 
 interface LocalResource { readonly path: string; readonly size: number; readonly sha256: string }
 
 function requestOf(value: unknown): DesktopFileSource {
+  if (typeof value === 'object' && value !== null && 'kind' in value && value.kind === 'application'
+    && 'reference' in value && typeof value.reference === 'string' && /^[a-f0-9-]{36}$/u.test(value.reference)) {
+    return { kind: 'application', reference: value.reference as ApplicationDragReference }
+  }
   if (typeof value !== 'object' || value === null || !('kind' in value)
     || !('mediaType' in value) || typeof value.mediaType !== 'string'
     || ('name' in value && value.name !== undefined && typeof value.name !== 'string')
@@ -67,7 +71,7 @@ async function cancellable<T>(operation: Promise<T>, signal: AbortSignal): Promi
  */
 export function installDesktopFileDrag(
   owner: (event: IpcMainInvokeEvent) => BrowserWindow,
-  resolveResource: (address: string, signal: AbortSignal) => Promise<LocalResource | null>,
+  resolveResource: (address: string, signal: AbortSignal) => Promise<DesktopDragResource | null>,
 ): () => Promise<void> {
   let disposed = false
   const preparations = new Map<string, AbortController>()
@@ -75,6 +79,7 @@ export function installDesktopFileDrag(
   const pending = new Set<Promise<FileDragHandle | undefined>>()
   const icons = new Map<string, NativeImage>()
   const borrowed = new Map<string, { resource: LocalResource; version: Stats }>()
+  const applications = new Map<string, { path: string; version: Stats }>()
   const authorize = (event: IpcMainInvokeEvent): BrowserWindow => {
     if (disposed) throw new Error('File transfer closed')
     return owner(event)
@@ -83,11 +88,20 @@ export function installDesktopFileDrag(
     authorize(event)
     const source = requestOf(value)
     let handle: FileDragHandle
-    if (source.kind === 'bytes') handle = await files.prepare(source.bytes, source)
+    if (source.kind === 'application') {
+      const resource = await cancellable(resolveResource(`application:${source.reference}`, signal), signal)
+      authorize(event)
+      if (resource === null || !('kind' in resource) || resource.kind !== 'application'
+        || !isAbsolute(resource.path) || extname(resource.path) !== '.app') throw new Error('Application drag unavailable')
+      const version = await stat(resource.path)
+      if (!version.isDirectory()) throw new Error('Application bundle unavailable')
+      handle = files.borrow(resource.path)
+      applications.set(handle, { path: resource.path, version })
+    } else if (source.kind === 'bytes') handle = await files.prepare(source.bytes, source)
     else {
       const resource = await cancellable(resolveResource(source.address, signal), signal)
       authorize(event)
-      if (resource === null || basename(resource.path) !== resolveDragFileName(source)
+      if (resource === null || 'kind' in resource || basename(resource.path) !== resolveDragFileName(source)
         || (source.sha256 !== undefined && source.sha256 !== resource.sha256)
         || (source.size !== undefined && source.size !== resource.size)) return undefined
       const version = await verifiedVersion(resource, signal)
@@ -105,6 +119,7 @@ export function installDesktopFileDrag(
       return handle
     } catch (error) {
       borrowed.delete(handle)
+      applications.delete(handle)
       await files.release(handle)
       throw error
     }
@@ -132,22 +147,30 @@ export function installDesktopFileDrag(
     try {
       const original = borrowed.get(handle)
       if (original !== undefined && !sameVersion(original.version, statSync(original.resource.path))) throw new Error('File changed before dragging')
+      const application = applications.get(handle)
+      if (application !== undefined) {
+        const current = statSync(application.path)
+        if (!current.isDirectory() || current.dev !== application.version.dev || current.ino !== application.version.ino
+          || current.mtimeMs !== application.version.mtimeMs || current.ctimeMs !== application.version.ctimeMs) throw new Error('Application changed before dragging')
+      }
       authorize(event)
       window.webContents.startDrag({ file, icon })
       files.take(handle)
       icons.delete(handle)
       borrowed.delete(handle)
+      applications.delete(handle)
       return true
     } catch (_error) {
       icons.delete(handle)
       borrowed.delete(handle)
+      applications.delete(handle)
       void files.release(handle).catch((error: unknown) => { console.error(error) })
       return false
     }
   })
   ipcMain.handle(DESKTOP_IPC.fileDragRelease, async (event, handle: unknown) => {
     authorize(event)
-    if (typeof handle === 'string') { icons.delete(handle); borrowed.delete(handle) }
+    if (typeof handle === 'string') { icons.delete(handle); borrowed.delete(handle); applications.delete(handle) }
     await files.release(handle)
   })
   return async () => {
@@ -162,6 +185,7 @@ export function installDesktopFileDrag(
     await Promise.allSettled(pending)
     icons.clear()
     borrowed.clear()
+    applications.clear()
     await files.dispose()
   }
 }

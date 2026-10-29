@@ -3,6 +3,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
 import { z } from 'zod'
+import type { DesktopDragResource } from '@deepseek-ai/dsh-util-file-drag'
 import type { PlatformSession } from '@deepseek-ai/dsh-deepseek-account'
 import { desktopNodeEnvironment } from './node-environment.ts'
 import { parsePluginOperationRecord, type PluginOperationRecord, type PluginOperationRunId } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
@@ -31,7 +32,7 @@ type DesktopHostEvent = ReadyEvent | FatalEvent | PlatformSessionEvent | {
 } | { readonly type: 'shutdown-complete' } | {
   readonly type: 'file-drag-resource'
   readonly requestId: number
-  readonly resource: { readonly path: string; readonly sha256: string; readonly size: number } | null
+  readonly resource: DesktopDragResource | null
   readonly error?: string
 } | {
   readonly type: 'update-tasks'
@@ -99,8 +100,9 @@ function isDesktopHostEvent(message: unknown): message is DesktopHostEvent {
       const resource = candidate.resource
       return Number.isSafeInteger(candidate.requestId) && (candidate.error === undefined || typeof candidate.error === 'string')
         && (resource === null || (typeof resource === 'object' && 'path' in resource && typeof resource.path === 'string'
-          && 'sha256' in resource && typeof resource.sha256 === 'string' && /^[a-f0-9]{64}$/u.test(resource.sha256)
-          && 'size' in resource && typeof resource.size === 'number' && Number.isSafeInteger(resource.size) && resource.size >= 0))
+          && (('kind' in resource && resource.kind === 'application')
+            || (!('kind' in resource) && 'sha256' in resource && typeof resource.sha256 === 'string' && /^[a-f0-9]{64}$/u.test(resource.sha256)
+              && 'size' in resource && typeof resource.size === 'number' && Number.isSafeInteger(resource.size) && resource.size >= 0))))
     }
     case 'quit-inspection':
       return Number.isSafeInteger(candidate.requestId) && typeof candidate.activeTasks === 'boolean'
@@ -298,7 +300,7 @@ export class DesktopHostProcess {
    * @returns privately authorized local resource, or null when nonlocal.
    */
   async resolveDragResource(address: string, signal?: AbortSignal): Promise<
-    { readonly path: string; readonly sha256: string; readonly size: number } | null
+    DesktopDragResource | null
   > {
     const response = await this.control({ type: 'file-drag-resource', address }, 12_000, 'File drag authorization timed out', 'file drag', signal)
     if (response.type !== 'file-drag-resource') throw new Error('Host returned a different control response')
