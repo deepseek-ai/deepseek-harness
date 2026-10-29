@@ -1,4 +1,4 @@
-/** Cold pnpm requests exercise shipped CUA dependency/platform metadata with inert package contents. */
+/** Cold pnpm requests exercise on-demand CUA dependency/platform metadata with inert package contents. */
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -37,18 +37,20 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
   const cli = await readManifest('apps/cli')
   const bundle = await readManifest('packages/experimental/cua-bundle')
   const native = await readManifest('packages/experimental/cua-macos')
-  expect(cli.dependencies).toHaveProperty(bundleName)
+  expect(cli.dependencies).not.toHaveProperty(bundleName)
   expect(bundle.dependencies).not.toHaveProperty(providerName)
   expect(bundle.optionalDependencies).toEqual({ [providerName]: 'workspace:*' })
   expect(native.os).toEqual(['darwin'])
   const version = '1.0.0'
   const bundleDependencies = Object.fromEntries(Object.keys(bundle.dependencies as Record<string, string>).map(name => [name, version]))
   const manifests = [
-    { name: cli.name, version, dependencies: { [bundleName]: version } },
+    { name: cli.name, version },
     { name: bundleName, version, dependencies: bundleDependencies, optionalDependencies: { [providerName]: version } },
     ...Object.keys(bundleDependencies).map(name => ({ name, version })),
     { name: providerName, version, os: native.os, files: native.files },
   ]
+  const generation = 'a'.repeat(64)
+  const nativePayload = `native/bin/darwin-arm64/${generation}/DSH Computer Use.app/Contents/MacOS/dsh-cua-native`
   const packages = new Map<string, { manifest: Record<string, unknown>; bytes: Buffer }>()
   for (const manifest of manifests) {
     const name = String(manifest.name)
@@ -56,18 +58,20 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
     await mkdir(directory)
     await writeFile(join(directory, 'package.json'), JSON.stringify(manifest))
     if (name === providerName) {
-      await mkdir(join(directory, 'native/bin/darwin-arm64'), { recursive: true })
+      await mkdir(join(directory, nativePayload, '..'), { recursive: true })
       for (const file of ['.gitignore', '.npmignore']) {
         await writeFile(join(directory, 'native', file), await readFile(join(repository, 'packages/experimental/cua-macos/native', file)))
       }
-      await writeFile(join(directory, 'native/bin/darwin-arm64/dsh-cua-native'), 'inert native payload')
+      await writeFile(join(directory, 'native/bin/darwin-arm64/current.json'), JSON.stringify({ bundle: generation }))
+      await writeFile(join(directory, nativePayload), 'inert native payload')
     }
     await command(['pack', '--out', 'package.tgz'], directory)
     const bytes = await readFile(join(directory, 'package.tgz'))
     packages.set(name, { manifest, bytes })
     if (name === providerName) {
       const result = await execa('tar', ['-tzf', join(directory, 'package.tgz')])
-      expect(result.stdout).toContain('package/native/bin/darwin-arm64/dsh-cua-native')
+      expect(result.stdout).toContain('package/native/bin/darwin-arm64/current.json')
+      expect(result.stdout).toContain(`package/${nativePayload}`)
     }
   }
   const requests: string[] = []
@@ -98,13 +102,13 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('fixture registry has no TCP address')
-  for (const target of ['darwin', 'win32', 'linux', 'linux-unrestricted']) {
+  for (const target of ['darwin-base', 'darwin', 'win32', 'linux', 'linux-unrestricted']) {
     unrestricted = target === 'linux-unrestricted'
     const project = join(root, target)
     await mkdir(project)
-    await writeFile(join(project, 'package.json'), JSON.stringify({ private: true, dependencies: { [String(cli.name)]: version } }))
+    await writeFile(join(project, 'package.json'), JSON.stringify({ private: true, dependencies: { [target === 'darwin-base' ? String(cli.name) : bundleName]: version } }))
     await writeFile(join(project, 'pnpm-workspace.yaml'), [
-      'autoInstallPeers: false', 'supportedArchitectures:', `  os: [${unrestricted ? 'linux' : target}]`,
+      'autoInstallPeers: false', 'supportedArchitectures:', `  os: [${unrestricted ? 'linux' : target === 'darwin-base' ? 'darwin' : target}]`,
       '  cpu: [arm64]', 'minimumReleaseAge: 0', '',
     ].join('\n'))
     requests.length = 0
@@ -113,8 +117,8 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
       `--config.registry=http://127.0.0.1:${address.port}/`, `--config.store-dir=${join(project, 'store')}`,
       `--config.cache-dir=${join(project, 'cache')}`, `--config.state-dir=${join(project, 'state')}`,
     ], project)
-    expect(requests).toContain(`/${bundleName}.tgz`)
-    expect(requests).toContain('/@deepseek-ai/dsh-cua.tgz')
+    expect(requests.includes(`/${bundleName}.tgz`)).toBe(target !== 'darwin-base')
+    expect(requests.includes('/@deepseek-ai/dsh-cua.tgz')).toBe(target !== 'darwin-base')
     expect(requests.includes(`/${providerName}.tgz`), `${target}: ${JSON.stringify(requests)}\n${output}`)
       .toBe(target === 'darwin' || unrestricted)
   }

@@ -111,6 +111,9 @@ describe('forge watch', () => {
     expect(provider.fetches).toHaveLength(3)
     await vi.advanceTimersByTimeAsync(60_000)
     expect(provider.fetches).toHaveLength(3)
+    await context.forge.submitReview(ref(1), { kind: 'review', headSha: 'a'.repeat(40), event: 'comment', body: 'Summary', comments: [] }, new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(4)
   })
 
   it('treats unknown mergeability as active work', async () => {
@@ -374,6 +377,28 @@ describe('forge watch', () => {
     ctx = undefined
 
     expect(provider.signals[0]?.aborted).toBe(true)
+    expect(updates).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  // Cordis disposes a provider plugin that injects `forge` before the service,
+  // so only a registration owned outside the service's dependents can still
+  // be serving when the service itself stops.
+  it('discards a fetch that settles after the service is disposed', async () => {
+    const provider = new FakeProvider()
+    const release = held(provider, target => snapshot(target))
+    ctx = new Context()
+    const service = ctx.plugin(ForgeService, config)
+    await service
+    ctx.get('forge')!.register(provider)
+    const { updates } = collect(ctx)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.signals).toHaveLength(1)
+
+    const disposal = service.dispose()
+    release()
+    await disposal
+
     expect(updates).toEqual([])
     expect(vi.getTimerCount()).toBe(0)
   })

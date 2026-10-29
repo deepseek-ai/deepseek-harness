@@ -868,6 +868,7 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
     await page.getByRole('menuitem', { name: 'Delete task', exact: true }).click()
     const confirmation = page.getByRole('dialog', { name: 'Delete this task?' })
     await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+    expect(await moreActions.evaluate(button => button === document.activeElement)).toBe(true)
     expect((await scaffold.ctx.schedule.catalog()).some(task => task.id === other.id)).toBe(true)
     await moreActions.click()
     await page.getByRole('menuitem', { name: 'Delete task', exact: true }).click()

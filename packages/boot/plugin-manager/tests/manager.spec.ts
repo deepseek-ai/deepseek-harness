@@ -127,24 +127,50 @@ it('allows supported bundle activation and permits deselecting an unsupported sa
 })
 
 it.each(['network', 'timeout'] as const)('stops a GitHub %s before pnpm and attributes it to the repository', async (kind) => {
-  const { manager, dir, connection } = await fixture()
+  const { ctx, manager, dir, connection } = await fixture()
+  const chunks: PluginInstallLogChunk[] = []
+  ctx.on('plugin-manager/install-log', (chunk) => { chunks.push(chunk) })
   const before = readFileSync(join(dir, 'package.json'), 'utf8')
-  const failure = { exitCode: 1, output: 'GitHub check failed', truncated: false, logPath: join(dir, 'git.log'), kind }
-  connection.mockResolvedValue(failure)
+  const argv = ['git', '-c', 'credential.helper=', 'ls-remote', '--', 'https://github.com/acme/dsh-plugin.git', 'HEAD']
+  const checked = {
+    argv, exitCode: 1, output: 'GitHub check failed', truncated: false, logPath: join(dir, 'git.log'), kind,
+    ...kind === 'timeout' ? { timedOut: true } : {},
+  }
+  connection.mockResolvedValue(checked)
   const pnpm = vi.spyOn(operations, 'runProfilePnpm')
   onTestFinished(() => { pnpm.mockRestore() })
-  expect(await manager.installBundle('https://github.com/acme/dsh-plugin.git')).toMatchObject({
-    application: 'failed', changed: false, stage: 'install', failedAt: 'spec-host', packageResult: failure,
+  const requestId = '824103ec-bc45-489d-bb85-5b4fe0aefc78' as PluginInstallRequestId
+  const result = await manager.installBundle('https://github.com/acme/dsh-plugin.git', { requestId })
+  expect(result).toMatchObject({
+    application: 'failed', changed: false, stage: 'install', failedAt: 'spec-host',
+    packageResult: { exitCode: 1, output: 'GitHub check failed', truncated: false, logPath: join(dir, 'git.log'), kind },
   })
+  // The command line belongs to the streamed run only; the answer stays a plain package result.
+  expect(result.packageResult).not.toHaveProperty('argv')
   expect(pnpm).not.toHaveBeenCalled()
   expect(connection).toHaveBeenCalledWith(expect.objectContaining({ host: 'github.com' }), dir, expect.objectContaining({ timeoutMs: 5000 }))
   expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
+  // The check is the installation's only run, so its diagnostic reaches the details panel. A timed-out Git has no exit
+  // code of its own, so its chunk reports none instead of the status the timeout coerced.
+  expect(chunks).toEqual([{
+    requestId, jobId: expect.any(String) as string, argv, cwd: dir, stream: 'stderr', text: 'GitHub check failed',
+    exitCode: kind === 'timeout' ? null : 1,
+  }])
+  // Without a request id there is no installation to stream the failed check under.
+  chunks.length = 0
+  expect(await manager.installBundle('https://github.com/acme/dsh-plugin.git')).toMatchObject({ failedAt: 'spec-host' })
+  expect(chunks).toEqual([])
 })
 
 it('leaves non-network GitHub errors to pnpm and forwards profile Git environment and deadline', async () => {
   const env = { GIT_CONFIG_GLOBAL: '/application/git.config' }
-  const { manager, connection } = await fixture('live', false, undefined, { githubConnectionTimeoutMs: 8000 }, { command: 'pnpm', args: [], env })
-  connection.mockResolvedValue({ exitCode: 128, output: 'fatal: Authentication failed', truncated: false, logPath: 'git.log', kind: 'unknown' })
+  const { ctx, manager, connection } = await fixture('live', false, undefined, { githubConnectionTimeoutMs: 8000 }, { command: 'pnpm', args: [], env })
+  const chunks: PluginInstallLogChunk[] = []
+  ctx.on('plugin-manager/install-log', (chunk) => { chunks.push(chunk) })
+  connection.mockResolvedValue({
+    argv: ['git', '-c', 'credential.helper=', 'ls-remote', '--', 'https://github.com/acme/private-plugin', 'HEAD'],
+    exitCode: 128, output: 'fatal: Authentication failed', truncated: false, logPath: 'git.log', kind: 'unknown',
+  })
   const failure = { exitCode: 1, output: 'pnpm owns authentication', truncated: false, logPath: 'pnpm.log', kind: 'unknown' as const }
   const pnpm = vi.spyOn(operations, 'runProfilePnpm').mockResolvedValue(failure)
   onTestFinished(() => { pnpm.mockRestore() })
@@ -154,6 +180,8 @@ it('leaves non-network GitHub errors to pnpm and forwards profile Git environmen
   expect(pnpm).toHaveBeenCalledOnce()
   expect(result.failedAt).toBeUndefined()
   expect(connection).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ timeoutMs: 8000, env }))
+  // A check failure pnpm may resolve streams no run of its own.
+  expect(chunks.filter(chunk => chunk.argv[0] === 'git')).toEqual([])
 })
 
 it('cancels an active GitHub check before starting pnpm', async () => {
@@ -162,7 +190,10 @@ it('cancels an active GitHub check before starting pnpm', async () => {
   connection.mockImplementation(async (_spec, _dir, options) => {
     entered.resolve(undefined)
     await new Promise<void>((resolve) => { options.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
-    return { exitCode: 1, output: 'cancelled', truncated: false, logPath: 'git.log', kind: 'unknown' }
+    return {
+      argv: ['git', '-c', 'credential.helper=', 'ls-remote', '--', 'https://github.com/acme/dsh-plugin', 'HEAD'],
+      exitCode: 1, output: 'cancelled', truncated: false, logPath: 'git.log', kind: 'unknown',
+    }
   })
   const pnpm = vi.spyOn(operations, 'runProfilePnpm')
   onTestFinished(() => { pnpm.mockRestore() })
@@ -244,7 +275,10 @@ it('disposal waits for an active GitHub check to stop', async () => {
     entered.resolve(undefined)
     await new Promise<void>((resolve) => { options.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
     released.resolve(undefined)
-    return { exitCode: 1, output: 'cancelled', truncated: false, logPath: 'git.log', kind: 'unknown' }
+    return {
+      argv: ['git', '-c', 'credential.helper=', 'ls-remote', '--', 'https://github.com/acme/addon', 'HEAD'],
+      exitCode: 1, output: 'cancelled', truncated: false, logPath: 'git.log', kind: 'unknown',
+    }
   })
   const pnpm = vi.spyOn(operations, 'runProfilePnpm')
   onTestFinished(() => { pnpm.mockRestore() })
@@ -1773,9 +1807,13 @@ it('lists absent Official entries offline without resolving their packages or co
   onTestFinished(() => { resolve.mockRestore(); registry.mockRestore() })
   const bundles = await manager.listBundles()
   for (const entry of OFFICIAL_ON_DEMAND_CATALOG) {
-    expect(bundles.filter(bundle => bundle.name === entry.packageName)).toEqual([{
+    expect(bundles.filter(bundle => bundle.name === entry.packageName)).toHaveLength(1)
+    expect(bundles.filter(bundle => bundle.name === entry.packageName)).toMatchObject([{
       name: entry.packageName, official: true, availability: 'missing', enabled: false, installed: false, optional: false,
       removable: false, updatable: false, rows: [], overrides: [], meta: entry.meta,
+      ...entry.listedByDefault === undefined ? {} : { listedByDefault: entry.listedByDefault },
+      ...entry.platforms !== undefined && !entry.platforms.includes(process.platform)
+        ? { listedByDefault: false, error: { code: 'unsupported-platform' } } : {},
       installTarget: { spec: `${entry.packageName}@${getDshRuntimeVersion()}`, version: getDshRuntimeVersion() },
     }])
     expect(resolve.mock.calls.some(([name]) => name === entry.packageName)).toBe(false)

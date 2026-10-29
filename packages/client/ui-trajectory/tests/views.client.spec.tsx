@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * View registration acceptance on the real framework stack: the plugin fiber
  * registers Trajectory into a real SlotRegistry view ring, tabs
@@ -236,6 +237,7 @@ function standaloneProps(
     useSessionRetainInfo: () => undefined,
     useWorkspaces: emptyWorkspaces(),
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useConversation: bindSnapshotSelector(createSnapshotStore(conversationSnapshot(trajectory))),
     useInput: bindSnapshotSelector(input),
     inputActions,
@@ -375,6 +377,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
     useSessionRetainInfo: () => undefined,
     useWorkspaces,
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useProjection,
     useInput,
     inputActions,

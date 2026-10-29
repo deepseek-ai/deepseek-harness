@@ -94,9 +94,61 @@ func refusesInvalidSharedConfiguration(_ name: String, _ value: JSONValue) throw
     for arguments in [
         ["--ensure-shared", "--runtime-key", "invalid", "--runtime-directory", "/tmp/cua", "--startup-timeout-ms", "1000"],
         ["--serve", "--runtime-key", runtimeKey, "--runtime-directory", "relative", "--startup-timeout-ms", "1000"],
+        ["--serve", "--runtime-key", runtimeKey, "--runtime-directory", "/tmp/cua", "--startup-timeout-ms", "1000", "--startup-id", "invalid"],
+        ["--ensure-shared", "--runtime-key", runtimeKey, "--runtime-directory", "/tmp/cua", "--startup-timeout-ms", "1000", "--startup-id", UUID().uuidString],
         ["--serve", "--runtime-key", runtimeKey, "--runtime-directory", "/tmp/cua", "--startup-timeout-ms", "0"],
         ["--serve", "--runtime-key", runtimeKey, "--runtime-directory", "/" + String(repeating: "x", count: 100), "--startup-timeout-ms", "1000"],
     ] {
         #expect(throws: NativeFailure.self) { try SharedHelperOptions(arguments: arguments) }
     }
+}
+
+@Test func startupFailuresAreScopedToOneLaunchAttempt() throws {
+    let directory = "/tmp/cua-\(UUID().uuidString.prefix(12))"
+    let arguments = ["--serve", "--runtime-key", runtimeKey, "--runtime-directory", directory,
+                     "--startup-timeout-ms", "5000", "--startup-id"]
+    let options = try SharedHelperOptions(arguments: arguments + [UUID().uuidString])
+    try options.prepareDirectory()
+    defer { try? FileManager.default.removeItem(atPath: directory) }
+    let other = try SharedHelperOptions(arguments: arguments + [UUID().uuidString])
+    try options.recordStartupFailure(NativeFailure(code: "NATIVE_RUNTIME_CONFLICT", message: "path is occupied"))
+    let failure = try SharedHelperOptions.startupFailure(at: options.failurePath)
+    #expect(failure?.code == "NATIVE_RUNTIME_CONFLICT")
+    #expect(failure?.message == "path is occupied")
+    #expect(try SharedHelperOptions.startupFailure(at: other.failurePath) == nil)
+    var info = stat()
+    #expect(lstat(try #require(options.failurePath), &info) == 0)
+    #expect(info.st_mode & 0o777 == 0o600)
+}
+
+@Test func readinessUsesTheRemainingStartupBudget() throws {
+    let directory = "/tmp/cua-\(UUID().uuidString.prefix(12))"
+    let options = try SharedHelperOptions(arguments: ["--ensure-shared", "--runtime-key", runtimeKey,
+        "--runtime-directory", directory, "--startup-timeout-ms", "5000"])
+    try options.prepareDirectory()
+    defer { try? FileManager.default.removeItem(atPath: directory) }
+    let start = DispatchTime.now().uptimeNanoseconds
+    do {
+        _ = try options.existingReady(deadline: start)
+        Issue.record("Expired startup returned readiness")
+    } catch let error as NativeFailure { #expect(error.code == "NATIVE_STARTUP_TIMEOUT") }
+    #expect(DispatchTime.now().uptimeNanoseconds - start < 1_000_000_000)
+}
+
+@Test func exitedStartupProcessFailsWithoutRunningTheMainRunLoop() throws {
+    let directory = "/tmp/cua-\(UUID().uuidString.prefix(12))"
+    let options = try SharedHelperOptions(arguments: ["--ensure-shared", "--runtime-key", runtimeKey,
+        "--runtime-directory", directory, "--startup-timeout-ms", "5000"])
+    try options.prepareDirectory()
+    defer { try? FileManager.default.removeItem(atPath: directory) }
+    let child = Process()
+    child.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+    try child.run()
+    child.waitUntilExit()
+    let start = DispatchTime.now().uptimeNanoseconds
+    do {
+        _ = try options.existingReady(deadline: options.startupDeadline(), launchedPID: child.processIdentifier)
+        Issue.record("Exited startup returned readiness")
+    } catch let error as NativeFailure { #expect(error.code == "NATIVE_STARTUP") }
+    #expect(DispatchTime.now().uptimeNanoseconds - start < 1_000_000_000)
 }

@@ -1,0 +1,8 @@
+/* The banner is mounted from the served page, outside the client UI's own tree. Its colors use the
+   platform tokens with system-color fallbacks, so it stays readable when the client stylesheet never
+   loads and still follows the deployed theme when it does. */
+.banner {
+  border: 0.5px solid var(--dsw-alias-border-l2, CanvasText);
+  background: var(--dsw-alias-bg-layer-2, Canvas);
+  color: var(--dsw-alias-label-primary, CanvasText);
+}

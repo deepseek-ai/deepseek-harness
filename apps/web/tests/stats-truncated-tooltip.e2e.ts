@@ -92,7 +92,7 @@ describe('web e2e: truncated composer statistics', () => {
     const cut = () => label.evaluate(element => element.scrollWidth > element.clientWidth)
     expect(await cut()).toBe(false)
 
-    await page.setViewportSize({ width: 390, height: 900 })
+    await page.setViewportSize({ width: 334, height: 900 })
     await expect.poll(cut).toBe(true)
     await usagePill.hover()
     await expect.poll(() => tooltip.textContent()).toBe(USAGE_READING)

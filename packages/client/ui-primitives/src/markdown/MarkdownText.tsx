@@ -176,7 +176,9 @@ class StreamingRenderer {
  * renderers, such as package READMEs. `textInteractionSource` marks the
  * existing root as a source for text selection interactions.
  * The provider's `openFile` enables local Markdown links in settled messages,
- * including `#L24` and `#L24-L30` destinations (ranges open at their first line).
+ * including `#L24` / `#L24-L30` fragments and `:24` / `:24-30` / `:24:5` suffixes
+ * (ranges open at their first line, columns are ignored, and invalid locations
+ * open only the file; see the README for URL/path classification).
  * @returns A GFM document with TeX math rendered through KaTeX; raw HTML never
  * renders as markup, and unsafe protocols are disabled. Local links without an opener remain text;
  * absolute HTTP(S) images render directly.

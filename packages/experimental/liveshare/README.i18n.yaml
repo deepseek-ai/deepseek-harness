@@ -1,0 +1,52 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/liveshare/README.md
+/:
+  en: 01889c844628a948
+  zh: 94366d9239f1c383
+/deepseek-ai-dsh-experimental-liveshare:
+  en: d922aebfcdd341f4
+  zh: 92b631fd849b6d03
+/deepseek-ai-dsh-experimental-liveshare/summary:
+  en: 5079cf4c5eb1d15a
+  zh: 96b21dd402dfae5c
+/deepseek-ai-dsh-experimental-liveshare/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 405b30feaf48c087
+/deepseek-ai-dsh-experimental-liveshare/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-experimental-liveshare/use-this-package/profile-and-build-requirements:
+  en: 86aa723d77827dca
+  zh: 3cb8774c8c7b1b8c
+/deepseek-ai-dsh-experimental-liveshare/use-this-package/default-visibility-and-enabling:
+  en: fe4942f55344093e
+  zh: dbc07edfe1d702d9
+/deepseek-ai-dsh-experimental-liveshare/use-this-package/owner-configuration:
+  en: 42b24e06e416eb1d
+  zh: 45f7e2003eb3ae2f
+/deepseek-ai-dsh-experimental-liveshare/use-this-package/sign-in-and-manage-shares:
+  en: a23d0162e0efa6a4
+  zh: 0d01659cfeb94640
+/deepseek-ai-dsh-experimental-liveshare/use-this-package/session-tiers:
+  en: f8d810298790cd3a
+  zh: 95fcec905f8d41d5
+/deepseek-ai-dsh-experimental-liveshare/understand-the-implementation:
+  en: 7620555e5da0a2e9
+  zh: 3c40fc8b97004fda
+/deepseek-ai-dsh-experimental-liveshare/further-exploration:
+  en: 0570170704bbe5b6
+  zh: 832f86024b26e5b3
+/deepseek-ai-dsh-experimental-liveshare/model-experience:
+  en: 3b248c02220df02d
+  zh: 9d752fb049a04e83
+/deepseek-ai-dsh-experimental-liveshare/model-experience/kv-cache-effect:
+  en: 22a9da7d4b23a015
+  zh: 5700901ba5f655c8
+/deepseek-ai-dsh-experimental-liveshare/known-limitations-and-deferred-work:
+  en: 6c4107962a32a8e7
+  zh: 2f4d7970b1ac90de
+/deepseek-ai-dsh-experimental-liveshare/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

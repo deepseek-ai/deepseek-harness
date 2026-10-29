@@ -45,6 +45,8 @@ type ChangeRequestKey = Branded<'ChangeRequestKey'>
 interface ForgeProvider {
   /** Forge family name stored in every repository this provider returns. */
   readonly forge: string
+  /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
+  submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /** Map a Git remote URL to its repository, or undefined when this provider does not serve it. */
   repositoryFromRemote(url: string): ForgeRepository | undefined
   /** Map a change request web URL to its reference, or undefined when this provider does not serve it. */
@@ -56,6 +58,8 @@ interface ForgeProvider {
     refs: readonly ChangeRequestRef[],
     signal: AbortSignal,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>
+  /** Read all checks for one change request on demand; omission declares that only the polling preview is available. */
+  fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>
   /** Find open change requests whose head is `branch` in `repository`, excluding the default branch and forks. */
   findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>
   /** Report whether the provider can reach `host` with current credentials. */
@@ -244,6 +248,37 @@ interface ForgeActionFailure {
   /** Human-readable cause, usually the host's own message. */
   readonly message: string
 }
+```
+
+`ctx.forge.submitReview` delegates an explicit comment or completed review to the provider. A provider that omits this capability returns unsupported. Consumers retain pending drafts and reconcile unknown write outcomes before resubmitting.
+
+```ts type-equiv
+/** One inline comment addressed to the old or new side of a pull request diff. */
+interface ForgeLineComment {
+  readonly path: string
+  readonly side: 'L' | 'R'
+  readonly startLine: number
+  readonly endLine: number
+  readonly body: string
+}
+```
+
+```ts type-equiv
+/** A single published comment or one completed review containing all pending comments. */
+type ForgeReviewRequest = {
+  /** Commit the user reviewed; providers must check it before writing and address that commit explicitly. */
+  readonly headSha: string
+} & (
+  | { readonly kind: 'comment'; readonly comment: ForgeLineComment }
+  | { readonly kind: 'review'; readonly event: 'comment' | 'approve' | 'request-changes'; readonly body: string; readonly comments: readonly ForgeLineComment[] }
+)
+```
+
+```ts type-equiv
+/** Result of a review write; unknown outcomes must be checked on the host before another submission. */
+type ForgeReviewResult =
+  | { readonly ok: true; readonly url: string }
+  | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
 ```
 
 ## Session bindings
@@ -736,6 +771,15 @@ async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeAction
 async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
 
 /**
+ * Read complete check details independently of periodic polling.
+ * @param ref - change request served by a registered provider.
+ * @param signal - cancellation of the detail view.
+ * @returns a complete snapshot or the provider's failure; unsupported providers return unavailable.
+ * @throws on cancellation, provider disposal, or expiry of this read's own `fetchTimeoutMs` deadline.
+ */
+async fetchChecks(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>
+
+/**
  * Read the changes of a change request as its host computes them.
  * @param ref - change request served by a registered provider.
  * @param signal - cancellation of the read.
@@ -743,6 +787,15 @@ async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): 
  * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
  */
 async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>
+
+/**
+ * Publish one comment or a completed review, then refresh the watched status.
+ * @param ref - change request served by a registered provider.
+ * @param request - explicitly selected commit, comments, and review decision.
+ * @param signal - request cancellation.
+ * @returns a publication URL or a failure, including an unknown write outcome.
+ */
+async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
 
 /**
  * Read the text of one file at a commit of a change request's repository.
@@ -798,7 +851,7 @@ Source: [`packages/experimental/forge/src/index.ts`](../../packages/experimental
 
 ### `ctx.forgePanel` — `ForgePanelController`
 
-Serves the forge panel. Following a Session inspects the checkout of its current directory read-only in the Session's execution world, recognizes the code host of the upstream remote or `origin`, probes sign-in for that host, and polls the Session's bound change requests through `ctx.forge` until the last follower of that Session leaves. A worktree request makes the panel create a branch and checkout through an optional `ctx.worktrees` and enter it while the Session's first message waits in the inbox, or at the first step proposal of a message no wait took. After a failed or stopped attempt the message keeps waiting for another attempt or for the request to be withdrawn. A message also waits while the worktree the Session works in is gone, until that worktree is checked out again or left for the source checkout. Changes to a Session's checkout run as Agent maintenance, so a message that arrives meanwhile waits for them.
+Serves the forge panel. Following a Session inspects the checkout of its current directory using the Session's permissions and execution world, recognizes the code host of the upstream remote or `origin`, probes sign-in for that host, and polls the Session's bound change requests through `ctx.forge` until the last follower of that Session leaves. A worktree request makes the panel create a branch and checkout through an optional `ctx.worktrees` and enter it while the Session's first message waits in the inbox, or at the first step proposal of a message no wait took. After a failed or stopped attempt the message keeps waiting for another attempt or for the request to be withdrawn. A message also waits while the worktree the Session works in is gone, until that worktree is checked out again or left for the source checkout. Changes to a Session's checkout run as Agent maintenance, so a message that arrives meanwhile waits for them.
 
 ```ts cordis-catalog
 /**
@@ -862,13 +915,14 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 
 /**
  * Read the changes one scope covers in the checkout of the Session's
- * current directory, with Git confined to the Session's read-only sandbox.
+ * current directory, with Git using the Session's sandbox policy.
  * @param session - Session whose checkout is read.
  * @param scope - which changes to read.
  * @param signal - request cancellation.
  * @returns the files, the base of the `branch` scope, and the untracked files left out.
  * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/no-fork-point` for the `branch`
- * scope of a checkout without one; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
+ * scope of a checkout without one; `forgePanel/filter-config-failed` when filter configuration cannot be read
+ * completely, before any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
  */
 @Remote async localDiff(session: Session, scope: ForgeLocalScope, signal: AbortSignal): Promise<ForgeLocalDiff>
 
@@ -884,6 +938,18 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * an error for a path outside the checkout, binary content, or a failed read.
  */
 @Remote async localText(session: Session, scope: ForgeLocalScope, path: string, signal: AbortSignal): Promise<string>
+
+/**
+ * Load complete checks for the change request whose list the user opened.
+ * @param session - Session retaining the visible binding.
+ * @param url - binding URL.
+ * @param headSha - commit displayed by the card; a different head rejects the result.
+ * @param signal - cancellation when the list closes.
+ * @returns the complete snapshot at the displayed head.
+ * @throws `forgePanel/not-bound` for an invisible binding, `forgePanel/stale-head` for a moved head,
+ * or `forgePanel/checks-failed` when the provider cannot complete the read.
+ */
+@Remote async changeRequestChecks(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ChangeRequestSnapshot>
 
 /**
  * Read the changes of a change request of a Session as its code host
@@ -914,6 +980,16 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * `forgePanel/diff-failed` when the host does not provide the file otherwise.
  */
 @Remote async changeRequestText(session: Session, url: string, commit: string, path: string, signal: AbortSignal): Promise<string>
+
+/**
+ * Publish a line comment or completed review for a visible Session binding.
+ * @param session - Session retaining the change request.
+ * @param url - visible binding URL.
+ * @param request - reviewed head, ranges, plain text, and explicit review decision.
+ * @param signal - request cancellation.
+ * @returns confirmed publication or a typed failure; unknown outcomes require reconciliation on the host.
+ */
+@Remote async submitReview(session: Session, url: string, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
 
 /**
  * Mark a draft change request of a Session ready for review; the change

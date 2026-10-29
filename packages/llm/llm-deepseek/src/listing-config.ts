@@ -5,7 +5,7 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 
 /** Default deadline of one model-listing request and of a first-use wait. */
 export const DEFAULT_MODELS_TIMEOUT_MS = 5_000
-/** Default listing age after which the next access refreshes it in the background. */
+/** Default interval between automatic listing refreshes after first use. */
 export const DEFAULT_MODELS_MAX_AGE_MS = 600_000
 
 /** Listing fields of a route Config. */
@@ -13,8 +13,8 @@ export interface ModelListingConfig {
   /** Deadline of one listing request, which also bounds a first-use wait (default five seconds). */
   modelsTimeoutMs: Volatile<number>
   /**
-   * Listing age after which the next access refreshes it in the background;
-   * a failed load retries after the same age (default ten minutes).
+   * Listing refresh interval after first use; failures retry at the same interval (default ten minutes).
+   * Zero refreshes on each access and disables automatic refresh.
    */
   modelsMaxAgeMs: Volatile<number>
 }

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 
 import type { ProcessGroupData } from '../src/client/contract/process-groups.ts'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
@@ -7,9 +8,10 @@ import type { GlobalStandardProps, PropsRenderFactories, PropsRenderSlots } from
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useEffect, useMemo } from 'react'
+import { useMarkdownDelegate, type MarkdownMenuTarget } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   AssistantMessageNode, ChatFlowHookContext, ChatFlowOwnerProps, ChatFlowSlotProps,
-  ChatNode, ChatNodeHookContext, ChatNodeOwnerProps, ChatSnapshot,
+  ChatNode, ChatNodeHookContext, ChatNodeOwnerProps, ChatSnapshot, UserBeforeOwnerProps,
   ChatViewSlotProps, CommandNode, CompactionSummaryNode, ContextMessageNode, ConversationNode,
   LegacyConversationSlice, ModelRetryNode, StartedToolCall, SteeringMessageNode,
   ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode,
@@ -264,7 +266,10 @@ declare const flowDispatch: PropsRenderSlots<'conversation.chat.flow'>['renderSl
 type NodeRenderer = typeof nodeDispatch<'conversation.chat.node'>
 type FlowRenderer = typeof flowDispatch<'conversation.chat.flow'>
 type ImageRenderer = (owner: MessageImagesOwnerProps) => React.ReactNode
-type HarnessStandardProps = ChatViewSlotProps & PropsRenderFactories
+declare const userChainDispatch: PropsRenderSlots<'conversation.chat.user.before'>['renderSlotChain']
+type UserChainRenderer = typeof userChainDispatch<'conversation.chat.user.before'>
+type UserChainState = { readonly renderer: UserChainRenderer | undefined }
+type HarnessStandardProps = ChatViewSlotProps & PropsRenderFactories & Pick<React.ComponentProps<typeof AssistantNodeView>, 'fileMentions'>
 
 function isImageOwner(owner: object): owner is MessageImagesOwnerProps {
   return 'images' in owner && Array.isArray(owner.images)
@@ -293,10 +298,22 @@ function HarnessChatFlow({ standard, owner, hookContext, renderSlot, useConnecti
     useGroupHeaderAction: CHAT_FLOW_INJECT.hooks.groupHeaderAction(standard, hookContext),
   }), [standard, hookContext])
   const { renderSlot: _rootRenderSlot, __renders: _rootRenders, ...shared } = standard
-  return <ChatFlow {...shared} {...owner} {...hooks} renderSlot={renderSlot} useConnectionState={useConnectionState} />
+  return <ChatFlow {...shared} {...owner} {...hooks} renderSlot={renderSlot}
+    useConnectionState={useConnectionState} />
 }
 
-function HarnessChatNode({ standard, owner, hookContext, usePerformanceUsage, toolOwners, fallback, renderAssistantSlot }: {
+function HarnessUserOrigin({ useRenderer, owner, options }: {
+  readonly useRenderer: SnapshotSelectorHook<UserChainState>
+  readonly owner: UserBeforeOwnerProps
+  readonly options: Parameters<UserChainRenderer>[2]
+}) {
+  const renderer = useRenderer(value => value.renderer)
+  return renderer?.('conversation.chat.user.before', owner, options) ?? options?.fallback ?? null
+}
+
+function HarnessChatNode({
+  standard, owner, hookContext, usePerformanceUsage, toolOwners, fallback, renderAssistantSlot, renderUserChain,
+}: {
   readonly standard: HarnessStandardProps
   readonly owner: RoutedChatNodeOwner
   readonly hookContext: ChatNodeHookContext
@@ -304,6 +321,7 @@ function HarnessChatNode({ standard, owner, hookContext, usePerformanceUsage, to
   readonly toolOwners: ToolOwner[]
   readonly fallback: React.ReactNode
   readonly renderAssistantSlot: React.ComponentProps<typeof AssistantNodeView>['renderSlot']
+  readonly renderUserChain: PropsRenderSlots<'conversation.chat.user.before'>['renderSlotChain']
 }) {
   const hooks = useMemo(() => ({
     useTurnData: CHAT_NODE_INJECT.hooks.turnData(standard, hookContext),
@@ -314,9 +332,9 @@ function HarnessChatNode({ standard, owner, hookContext, usePerformanceUsage, to
   const nodeProps = { ...shared, ...owner, ...hooks }
   switch (owner.node.kind) {
     case 'user':
-      return <UserMessageNodeView {...nodeProps} node={owner.node} />
+      return <UserMessageNodeView {...nodeProps} node={owner.node} renderSlotChain={renderUserChain} />
     case 'steering':
-      return <UserMessageNodeView {...nodeProps} node={owner.node} />
+      return <UserMessageNodeView {...nodeProps} node={owner.node} renderSlotChain={() => null} />
     case 'context':
       return <ContextMessageNodeView {...nodeProps} node={owner.node} />
     case 'assistant-step':
@@ -421,9 +439,11 @@ function makeHarness(
   const collapseTiming = createSnapshotStore<CollapseTiming>('completion')
   const foldedReplies = createSnapshotStore<FoldedReplies>('all')
   const performanceUsage = createSnapshotStore<'compact' | 'detailed'>('detailed')
+  const originRenderer = createSnapshotStore<UserChainState>({ renderer: undefined })
   const t = makeTranslate(zh, commonZh)
   const toolOwners: ToolOwner[] = []
   const usePerformanceUsage = bindSnapshotSelector(performanceUsage)
+  const useOriginRenderer = bindSnapshotSelector(originRenderer)
   let nodeSlotOverride: NodeRenderer | undefined
   let imageSlotOverride: ImageRenderer | undefined
   const renderImages = (name: string, owner: object, options?: { fallback?: React.ReactNode }) => {
@@ -438,7 +458,8 @@ function makeHarness(
     if (nodeSlotOverride !== undefined) return nodeSlotOverride(key, owner, opts)
     return <HarnessChatNode standard={props} owner={owner}
       hookContext={opts.hookContext} usePerformanceUsage={usePerformanceUsage}
-      toolOwners={toolOwners} fallback={opts.fallback} renderAssistantSlot={renderAssistantSlot} />
+      toolOwners={toolOwners} fallback={opts.fallback} renderAssistantSlot={renderAssistantSlot}
+      renderUserChain={renderUserChain} />
   }
   const renderFlowSlot: ChatFlowSlotProps['renderSlot'] = (key: string, owner: object, opts?: {
     fallback?: React.ReactNode
@@ -448,6 +469,10 @@ function makeHarness(
       return renderNodeSlot(key, owner as RoutedChatNodeOwner, opts as Parameters<NodeRenderer>[2])
     }
     throw new Error(`Undeclared flow child: ${key}`)
+  }
+  const renderUserChain: PropsRenderSlots<'conversation.chat.user.before'>['renderSlotChain'] = (key, owner, opts) => {
+    if (key !== 'conversation.chat.user.before') throw new Error(`Undeclared user chain: ${key}`)
+    return <HarnessUserOrigin useRenderer={useOriginRenderer} owner={owner as UserBeforeOwnerProps} options={opts} />
   }
   const renderFactorySlot: PropsRenderFactories['renderFactorySlot'] = (name, owner) => {
     if (name !== 'conversation.chat.user.content') throw new Error(`Unexpected Chat Factory: ${name}`)
@@ -469,6 +494,7 @@ function makeHarness(
   const SessionProviderStub: ChatViewSlotProps['SessionProvider'] = ({ children }) => <>{children}</>
   const props: HarnessStandardProps = {
     fileDrag,
+    resolveFilePath: vi.fn((path: string) => path),
     renderFactorySlot,
     usePanelInfo: selector => selector({ activePanelId: null }),
     sessionId: SID,
@@ -482,6 +508,7 @@ function makeHarness(
     useTrajectory: (() => { throw new Error('unused') }),
     useSessions: emptySessions(),
     useSessionRetainInfo: () => undefined,
+    useContextMenu: contextMenuHook(),
     useResource,
     useSessionStatus: bindSnapshotSelector(
       createSnapshotStore<SessionStatusSnapshot>(new Map()),
@@ -561,6 +588,7 @@ function makeHarness(
     setFoldedReplies: (replies: FoldedReplies) => { foldedReplies.set(replies) },
     setNodeRenderer: (renderer: NodeRenderer) => { nodeSlotOverride = renderer },
     setImageRenderer: (renderer: ImageRenderer) => { imageSlotOverride = renderer },
+    setOriginRenderer: (renderer: UserChainRenderer | undefined) => { originRenderer.set({ renderer }) },
   }
 }
 
@@ -682,6 +710,41 @@ function formatRunDuration(ms: number, t: Parameters<typeof durationParts>[1]): 
 
 describe('Chat node rendering', () => {
 
+  it('adapts Markdown targets with the original Session and resolves file paths when each gesture begins', () => {
+    const h = makeHarness()
+    const opened = vi.fn()
+    let directory = '/workspace'
+    h.props.useContextMenu = contextMenuHook(opened)
+    h.props.resolveFilePath = path => `${directory}/${path}`
+    const targets: MarkdownMenuTarget[] = [
+      { kind: 'file', path: 'src/a.ts', line: 24 },
+      { kind: 'file', path: 'src/b.ts' },
+      { kind: 'url', url: 'https://example.com/page' },
+      { kind: 'image', url: 'blob:remote' },
+      { kind: 'image', url: 'blob:local', path: 'image.svg', name: 'Image', mediaType: 'image/svg+xml' },
+    ]
+    function References() {
+      const { getTriggerProps } = useMarkdownDelegate()
+      return <>{targets.map((target, index) => <button key={index} {...getTriggerProps!(target)}>{index}</button>)}</>
+    }
+    const view = render(<ChatView {...h.props} renderSlot={() => <References />} />)
+    directory = '/workspace/moved'
+    for (const [index, target] of targets.entries()) {
+      const button = view.getByRole('button', { name: String(index) })
+      button.getBoundingClientRect = () => new DOMRect(10, 20, 30, 40)
+      fireEvent.contextMenu(button, { clientX: 50, clientY: 60 })
+      const { kind, ...value } = target
+      const expected = { kind, value: {
+        sessionId: SID, ...value, ...'path' in target ? { path: `${directory}/${target.path}` } : {},
+      } }
+      expect(opened).toHaveBeenLastCalledWith(expected, { x: 50, y: 60 })
+      fireEvent.keyDown(button, { key: 'F10', shiftKey: true })
+      expect(opened).toHaveBeenLastCalledWith(expected, { x: 10, y: 60 })
+    }
+    expect(opened).toHaveBeenCalledTimes(10)
+    expect(h.openFile).not.toHaveBeenCalled()
+  })
+
   it('opens Markdown references to unmodified files with line navigation', () => {
     const h = makeHarness({
       nodes: [user(1, 'explain'), assistant(2, '[source](src/index.ts#L24-L30)', 1)],
@@ -705,13 +768,18 @@ describe('Chat node rendering', () => {
       ],
       turnEnds: new Map([[1, 4]]),
     })
-    h.props.fileMentions = owner => ({
+    const opened = vi.fn()
+    let directory = '/workspace'
+    h.props.useContextMenu = contextMenuHook(opened)
+    h.props.resolveFilePath = path => `${directory}/${path}`
+    h.props.fileMentions = (owner, getFileTriggerProps) => ({
       resolve: (value) => {
         if (value !== 'report.html') return undefined
         return {
           open: () => { void h.openFile(`for-seq-${String(owner.seq)}/site/report.html`) },
           label: '打开 site/report.html',
           title: 'site/report.html',
+          contextMenuProps: getFileTriggerProps('site/report.html'),
         }
       },
     })
@@ -722,6 +790,17 @@ describe('Chat node rendering', () => {
     expect(mentions).toHaveLength(1)
     const mention = view.getByRole('button', { name: '打开 site/report.html' })
     expect(mention.getAttribute('title')).toBe('site/report.html')
+    fireEvent.contextMenu(mention, { clientX: 12, clientY: 34 })
+    expect(opened).toHaveBeenLastCalledWith({
+      kind: 'file', value: { sessionId: SID, path: '/workspace/site/report.html' },
+    }, { x: 12, y: 34 })
+    directory = '/workspace/moved'
+    fireEvent.keyDown(mention, { key: 'F10', shiftKey: true })
+    expect(opened).toHaveBeenLastCalledWith({
+      kind: 'file', value: { sessionId: SID, path: '/workspace/moved/site/report.html' },
+    }, { x: 0, y: 0 })
+    expect(opened).toHaveBeenCalledTimes(2)
+    expect(h.openFile).not.toHaveBeenCalled()
     fireEvent.click(mention)
     // The vocabulary was built from the closing message's own owner currency.
     expect(h.openFile).toHaveBeenCalledWith('for-seq-4/site/report.html')
@@ -1846,6 +1925,59 @@ describe('ChatView', () => {
         'fixture:user:1', 'fixture:turn-process:1', 'fixture:assistant:2',
         'fixture:tool:a', 'call:a', 'fixture:tool:b', 'call:b',
       ])
+  })
+
+  it('updates the user-before chain without remounting message content or decorating steering', () => {
+    const h = makeHarness({ nodes: [userInTurn(1, 'question', 1), steering(2, 'direction', 1)] })
+    const origin = vi.fn<UserChainRenderer>((_key, owner) => <span data-test-origin="">{owner.kind}</span>)
+    const empty = vi.fn<UserChainRenderer>(() => null)
+    const view = render(<h.ChatView {...h.props} />)
+    const userRow = view.container.querySelector<HTMLElement>('[data-chat-flow-kind="user"]')!
+    const steeringRow = view.container.querySelector<HTMLElement>('[data-chat-flow-kind="steering"]')!
+    expect(userRow).not.toBeNull()
+    expect(steeringRow).not.toBeNull()
+    const bubble = userRow.querySelector('[data-message-bubble]')
+    const text = within(userRow).getByText('question').firstChild
+    const copy = within(userRow).getByRole('button', { name: '复制' })
+    const actions = copy.closest('[data-clock]')
+    const steeringBubble = steeringRow.querySelector('[data-message-bubble]')
+    const steeringText = within(steeringRow).getByText('direction').firstChild
+    const steeringCopy = within(steeringRow).getByRole('button', { name: '复制' })
+    expect(bubble).not.toBeNull()
+    expect(text?.nodeType).toBe(Node.TEXT_NODE)
+    expect(actions).not.toBeNull()
+    expect(steeringBubble).not.toBeNull()
+    expect(steeringText?.nodeType).toBe(Node.TEXT_NODE)
+    expect(origin).not.toHaveBeenCalled()
+    expect(view.container.querySelector('[data-test-origin]')).toBeNull()
+
+    for (const renderer of [origin, empty, undefined]) {
+      act(() => { h.setOriginRenderer(renderer) })
+
+      expect(view.container.querySelector('[data-chat-flow-kind="user"]')).toBe(userRow)
+      expect(userRow.querySelector('[data-message-bubble]')).toBe(bubble)
+      expect(within(userRow).getByText('question').firstChild).toBe(text)
+      expect(within(userRow).getByRole('button', { name: '复制' })).toBe(copy)
+      expect(copy.closest('[data-clock]')).toBe(actions)
+      expect(view.container.querySelector('[data-chat-flow-kind="steering"]')).toBe(steeringRow)
+      expect(steeringRow.querySelector('[data-message-bubble]')).toBe(steeringBubble)
+      expect(within(steeringRow).getByText('direction').firstChild).toBe(steeringText)
+      expect(within(steeringRow).getByRole('button', { name: '复制' })).toBe(steeringCopy)
+      expect(steeringRow.querySelector('[data-test-origin]')).toBeNull()
+      const label = userRow.querySelector('[data-test-origin]')
+      if (renderer === origin) {
+        expect(label?.textContent).toBe('user')
+        expect(label!.compareDocumentPosition(bubble!) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+      } else {
+        expect(label).toBeNull()
+      }
+    }
+    expect(origin).toHaveBeenCalledExactlyOnceWith(
+      'conversation.chat.user.before', { source: null, kind: 'user' }, { fallback: null },
+    )
+    expect(empty).toHaveBeenCalledExactlyOnceWith(
+      'conversation.chat.user.before', { source: null, kind: 'user' }, { fallback: null },
+    )
   })
 
   it('renders Host-pending steering at the flow tail and hands off to the durable node', withClock(2_000, () => {
@@ -4589,7 +4721,13 @@ describe('ChatView', () => {
     expect(icon?.querySelectorAll('path')).toHaveLength(1)
     expect(icon?.getAttribute('style')).toBeNull()
     expect(status?.querySelector('animate')).toBeNull()
+    // The running bit clears before the Turn closes: the status keeps its slot unseen and unannounced.
     act(() => { h.setSession({ running: false }) })
+    const held = column.querySelector<HTMLElement>('[data-chat-running]')
+    expect(held?.hasAttribute('data-holding')).toBe(true)
+    expect(held?.getAttribute('aria-hidden')).toBe('true')
+    expect(within(held!).queryByRole('status')).toBeNull()
+    act(() => { h.setChat({ turnEnds: new Map([[1, 2]]) }) })
     expect(column.querySelector('[data-chat-running]')).toBeNull()
   })
 
@@ -4615,4 +4753,22 @@ const fileDrag = { prepare: vi.fn(async () => ({ start: () => true, release: () 
 
 it('formats Portuguese elapsed minutes with numeric units', () => {
   expect(formatRunDuration(90_000, key => pt[key])).toBe('1m 30s')
+})
+
+it('does not infer menu targets from links or data attributes inside a plugin flow slot', () => {
+  const h = makeHarness()
+  const custom = vi.fn()
+  const view = render(<ChatView {...h.props} renderSlot={() => <>
+    <a href="https://example.com/plugin">Plugin link</a>
+    <button data-file-path="/plugin/private.txt">Undeclared file</button>
+    <button onContextMenu={(event) => {
+      event.preventDefault()
+      custom()
+    }}>Custom target</button>
+  </>} />)
+  expect(fireEvent.contextMenu(view.getByRole('link', { name: 'Plugin link' }))).toBe(true)
+  expect(fireEvent.contextMenu(view.getByRole('button', { name: 'Undeclared file' }))).toBe(true)
+  fireEvent.contextMenu(view.getByRole('button', { name: 'Custom target' }))
+  expect(custom).toHaveBeenCalledOnce()
+  expect(h.props.resolveFilePath).not.toHaveBeenCalled()
 })

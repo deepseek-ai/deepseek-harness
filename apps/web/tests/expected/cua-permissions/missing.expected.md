@@ -10,11 +10,11 @@
     - button "Use persistent mode"
   - group "Accessibility":
     - strong: Accessibility
-    - paragraph: In System Settings, allow Visual Studio Code.app to read interface controls, click, and type.
+    - paragraph: In System Settings, allow DSH Computer Use.app to read interface controls, click, and type.
     - button "Request permission"
   - group "Screen Recording":
     - strong: Screen Recording
-    - paragraph: In System Settings, allow Visual Studio Code.app to capture application windows.
+    - paragraph: In System Settings, allow DSH Computer Use.app to capture application windows.
     - button "Request permission"
   - paragraph: Manage permissions in System Settings for the application named by macOS.
 - region "Manage applications computer use can access":

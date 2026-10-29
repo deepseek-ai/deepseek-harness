@@ -2,7 +2,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium, type Browser, type Page } from 'playwright'
+import { chromium, type Browser, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -16,6 +16,13 @@ import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './supp
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/markdown-file-links', import.meta.url))
 const MODE = webSnapshotMode()
+
+/** A restored preview resolves its Host path after the document's load event. */
+async function reloadPreview(page: Page, column: Locator, absolutePath: string): Promise<void> {
+  await page.reload({ waitUntil: 'load' })
+  await column.getByText(absolutePath, { exact: true }).waitFor()
+  expect(await column.locator('[data-textpreview-path]').textContent()).toBe(absolutePath)
+}
 
 /** Build live test input with a parent-path link and a read result naming the same Host file. */
 function parentPathFixture(path: string): string {
@@ -156,6 +163,54 @@ describe('web e2e: Markdown file links', () => {
     await assertFixtureInventory(SNAPSHOT_DIR, ['session.v3.jsonl', 'links.expected.md', 'preview.expected.md'])
   })
 
+  it('replays colon line suffixes as locations and shares tabs with fragment links', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-colon-file-links'))
+    const fixture = new URL('./fixtures/markdown-colon-file-links/session.v3.jsonl', import.meta.url)
+    const id = await seedSession(scaffold, await readFile(fixture, 'utf8'), 'colon-file-links')
+    await page.reload({ waitUntil: 'load' })
+    const workspace = page.getByRole('treeitem').first()
+    await workspace.waitFor()
+    if (await workspace.getAttribute('aria-expanded') !== 'true') await workspace.click()
+    await page.locator(`[data-row-key="session:${id}"]`).click()
+
+    const relative = page.getByRole('button', { name: 'Relative colon:24–30', exact: true })
+    await relative.waitFor()
+    expect(await page.getByRole('button', { name: 'Development server', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('link', { name: 'Development server', exact: true }).getAttribute('href')).toBe('localhost:3000')
+    expect(await page.getByRole('link', { name: 'Bare URL', exact: true }).getAttribute('href')).toBe('index.ts:24')
+    expect(await page.getByRole('link', { name: 'Blocked script', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('button', { name: 'Blocked script', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('link', { name: 'Mail', exact: true }).getAttribute('href')).toBe('mailto:10086')
+    await compareOrRefreshGolden(
+      fileURLToPath(new URL('./expected/markdown-colon-file-links.md', import.meta.url)),
+      await relative.locator('..').ariaSnapshot(), MODE,
+    )
+    const column = page.locator('[data-rightbar-col]')
+    for (const label of ['Zero line', 'Reversed range']) {
+      await page.getByRole('button', { name: label, exact: true }).click()
+      await expect.poll(() => column.locator('[data-textpreview-path]').textContent())
+        .toBe(join(scaffold.workspaceCwd, 'src/example.txt'))
+      await expect.poll(() => column.locator('[data-textpreview-line="1"]').textContent()).toBe('source line 1\n')
+      expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['example.txt'])
+    }
+    for (const [label, line] of [['Relative colon:24–30', 24], ['Absolute colon:30', 30], ['Column:24:5', 24], ['Fragment:12', 12]] as const) {
+      const link = page.getByRole('button', { name: label, exact: true })
+      await link.focus()
+      await link.press('Enter')
+      await expect.poll(() => column.locator(`[data-textpreview-target="${line}"]`).textContent())
+        .toBe(`source line ${line}\n`)
+      await expect.poll(() => column.locator('[data-textpreview-path]').textContent())
+        .toBe(join(scaffold.workspaceCwd, 'src/example.txt'))
+      expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['example.txt'])
+    }
+    await reloadPreview(page, column, join(scaffold.workspaceCwd, 'src/example.txt'))
+    await relative.click()
+    await expect.poll(() => column.locator('[data-textpreview-target="24"]').textContent()).toBe('source line 24\n')
+    expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['example.txt'])
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  })
+
   it('opens parent-path prose and read-card links while retaining each address across reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-parent-file-links'))
     // Return through the parent into this owned temp root; no shared parent file is created.
@@ -186,8 +241,7 @@ describe('web e2e: Markdown file links', () => {
     await expect.poll(() => column.locator('[data-textpreview-target="30"]').textContent()).toBe('parent line 30\n')
     expect(await tabs.allTextContents()).toEqual(['parent.txt'])
 
-    await page.reload({ waitUntil: 'load' })
-    await expect.poll(() => column.locator('[data-textpreview-path]').textContent()).toBe(join(scaffold.workspaceCwd, 'parent.txt'))
+    await reloadPreview(page, column, join(scaffold.workspaceCwd, 'parent.txt'))
     await expect.poll(stored).toContain(address)
     await source.click()
     await expect.poll(() => column.locator('[data-textpreview-target="24"]').textContent()).toBe('parent line 24\n')

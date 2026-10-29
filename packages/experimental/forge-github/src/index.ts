@@ -18,7 +18,7 @@ export interface Config {
   hosts?: string[]
   /** Deadline in milliseconds for one `gh` invocation. */
   timeoutMs?: number
-  /** Maximum captured bytes per `gh` output stream. */
+  /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read. */
   maxOutputBytes?: number
 }
 
@@ -44,5 +44,5 @@ export function apply(ctx: Context, config: Config): void {
   if (!Number.isSafeInteger(resolved.maxOutputBytes) || resolved.maxOutputBytes <= 0) {
     throw new Error('forge-github: maxOutputBytes must be a positive safe integer')
   }
-  ctx.forge.register(new GitHubProvider(ghRunner(resolved), resolved.hosts))
+  ctx.forge.register(new GitHubProvider(ghRunner(resolved), resolved.hosts, resolved.maxOutputBytes))
 }

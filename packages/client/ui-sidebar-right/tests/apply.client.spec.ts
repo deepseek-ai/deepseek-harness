@@ -10,10 +10,13 @@
  */
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
+import { IconCloseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { Shortcuts, ShortcutCommand } from '@deepseek-ai/dsh-client-shortcuts/client'
+import { TabMenuContent } from '../src/client/shell/TabMenuContent.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import type { GuideInjected, SidebarRightInjected } from '../src/client/index.ts'
 import { apply as hostApply } from '../src/index.ts'
@@ -71,6 +74,9 @@ async function boot(shortcuts: Partial<Shortcuts> = {}) {
   }
   const current = createSnapshotStore<{ key: SessionId | undefined }>({ key: undefined })
   const resources = { pin: vi.fn<(address: string, signal: AbortSignal) => void>() }
+  const menus = new MenuRegistry(vi.fn())
+  onTestFinished(() => { menus.dispose() })
+  ctx.provide('contextMenus', { register: menus.register.bind(menus), open: vi.fn() } as never)
   ctx.provide('slots', slots as never)
   ctx.provide('locale', locale as never)
   ctx.provide('shortcuts', { runtime: 'web', register: () => () => {},
@@ -90,7 +96,7 @@ async function boot(shortcuts: Partial<Shortcuts> = {}) {
     if (entry.inject === undefined) throw new Error(`expected ${entry.name} to inject`)
     return entry.inject(SESSION)
   }
-  return { ctx, slots, registered, dictionaries, layout, current, resources, fiber, seat, injectedOf }
+  return { ctx, menus, slots, registered, dictionaries, layout, current, resources, fiber, seat, injectedOf }
 }
 
 describe('ui-sidebar-right apply', () => {
@@ -129,10 +135,10 @@ describe('ui-sidebar-right apply', () => {
     expect(guide?.id).toBe(GUIDE_ID)
     expect(guide?.priority).toBe('builtin')
     expect(guide?.title('sidebar://guide')).toBe('tab.guide.title')
-    // Five registrations: the root and panel seats, the header's corner seat,
-    // and the guide body and chip title under the guide implementation's id.
     // The guide body binds the dictionary for its More card; the chip title draws no product copy.
     expect(registered.map(entry => [entry.name, entry.key, entry.locale, entry.component])).toEqual([
+      ['contextMenu.icon', 'sidebar.close', undefined, IconCloseOutlineRegular],
+      ['contextMenu.content', 'tab', undefined, TabMenuContent],
       ['rightbar', undefined, undefined, RightbarRoot],
       ['rightbar.session', undefined, 'sidebarRight', RightbarSeat],
       ['conversation.session.header.corner', undefined, 'sidebarRight', ExpandButton],
@@ -141,7 +147,7 @@ describe('ui-sidebar-right apply', () => {
     ])
     // The panel declares the extension seats; the guide declares its chain child.
     expect(Object.keys(seat('rightbar.session').children as object)).toEqual([
-      'sidebar.right.pane.tab', 'sidebar.right.pane.tab.title', 'sidebar.right.tab.menu.item',
+      'sidebar.right.pane.tab', 'sidebar.right.pane.tab.title',
     ])
     expect(seat('sidebar.right.pane.tab').children).toMatchObject({ 'sidebar.right.tab.guide': { kind: 'chain', scope: 'session' } })
     // Both seats read one store: the button only needs to know whether the panel is expanded.
@@ -340,6 +346,60 @@ describe('ui-sidebar-right apply', () => {
     expect(dictionaries.size).toBe(0)
     await ctx.plugin({ inject: [...inject], apply }).await()
     expect(ctx.sidebarRightTabs.get('guide')?.id).toBe(GUIDE_ID)
-    expect(registered).toHaveLength(5)
+    expect(registered).toHaveLength(7)
   })
+})
+
+it('closes captured pane tabs and rechecks tabs moved or closed while their menu was open', async () => {
+  const h = await boot()
+  onTestFinished(async () => { await h.ctx.fiber.dispose() })
+  vi.stubGlobal('document', { activeElement: null, querySelectorAll: () => [] })
+  onTestFinished(() => { vi.unstubAllGlobals() })
+  const handle = h.seat('rightbar.session').store as ReturnType<typeof createSidebarRightStore>
+  const instance = handle.create(SESSION)
+  instance.clearPersisted()
+  instance.actions.open(SESSION)
+  instance.actions.setExpanded(SESSION, true)
+  const surface = instance.getSnapshot().bySession[SESSION]!
+  const guide = Object.values(surface.layout.tabs)[0]!
+  const guideTarget = { kind: 'tab', value: { sessionId: SESSION, paneId: surface.layout.activePaneId, tab: guide } } as const
+  const empty = h.menus.resolve(guideTarget)
+  expect(empty.source.getSnapshot()).toEqual([])
+  empty.dispose()
+  const run = vi.fn()
+  const remove = h.menus.register({ id: 'plugin.guide', target: 'tab', order: 200,
+    resolve: () => [{ id: 'inspect', label: 'Inspect', run }],
+  })
+  const extended = h.menus.resolve(guideTarget)
+  expect(extended.source.getSnapshot().map(action => action.id)).toEqual(['plugin.guide/inspect'])
+  extended.select('plugin.guide/inspect')
+  expect(run).toHaveBeenCalledOnce()
+  remove()
+  const add = (name: string) => {
+    instance.actions.openContent(SESSION, { kind: 'text', contentId: `dsh-resource://file/session/s/${name}`, title: name }, () => {})
+    return Object.values(instance.getSnapshot().bySession[SESSION]!.layout.tabs).find(tab => tab.title === name)!
+  }
+  const first = add('first'), second = add('second'), third = add('third')
+  const paneId = instance.getSnapshot().bySession[SESSION]!.layout.activePaneId
+  const target = (tab: typeof first) => ({ kind: 'tab', value: { sessionId: SESSION, paneId, tab } }) as const
+  const right = h.menus.resolve(target(first))
+  expect(right.source.getSnapshot().map(action => [action.id, action.icon !== undefined])).toEqual([
+    ['sidebar.close/close', true], ['sidebar.close/others', false], ['sidebar.close/right', false],
+  ])
+  h.ctx.sidebarRight.closeIn(SESSION, second.id)
+  right.select('sidebar.close/right')
+  expect(instance.getSnapshot().bySession[SESSION]!.layout.tabs[third.id]).toBeUndefined()
+  expect(instance.getSnapshot().bySession[SESSION]!.layout.tabs[first.id]).toBeDefined()
+  const others = h.menus.resolve(target(first))
+  others.select('sidebar.close/others')
+  expect(Object.keys(instance.getSnapshot().bySession[SESSION]!.layout.tabs)).toEqual([first.id])
+  const close = h.menus.resolve(target(first))
+  close.select('sidebar.close/close')
+  expect(instance.getSnapshot().bySession[SESSION]!.layout.tabs[first.id]).toBeUndefined()
+  const fresh = add('fresh')
+  const stale = h.menus.resolve(target(fresh))
+  h.ctx.sidebarRight.closeIn(SESSION, fresh.id)
+  stale.select('sidebar.close/close')
+  expect(instance.getSnapshot().bySession[SESSION]!.layout.tabs[fresh.id]).toBeUndefined()
+  instance.clearPersisted()
 })

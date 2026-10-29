@@ -2,11 +2,11 @@
 
 import { useState, type ReactNode } from 'react'
 import clsx from 'clsx'
-import { IconChevronDownOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ForgeBranches, ForgePanelState } from '../types.ts'
+import type { ForgeBranches, ForgePanelState, ForgeWorktreeBlocker } from '../types.ts'
 import type { NS } from './locales.ts'
 import type { PanelSnapshot } from './source.ts'
 import css from './WorktreeToggle.module.css'
@@ -95,22 +95,28 @@ function BaseMenu({ base, held, branches, request, t }: {
 }
 
 /** What the option shows for a panel state, or undefined while it stays hidden. */
-function optionOf(state: ForgePanelState | null): { readonly usable: boolean; readonly current: string | null } | undefined {
+function optionOf(state: ForgePanelState | null): {
+  readonly blocker: Exclude<ForgeWorktreeBlocker, 'not-git'> | null
+  readonly current: string | null
+  readonly commit: string | null
+} | undefined {
   if (state === null || !state.worktree.editable) return undefined
+  const blocker = state.worktree.blocker
+  if (blocker === 'not-git') return undefined
   const checkout = state.checkout
-  if (checkout.state === 'none') return { usable: false, current: null }
   if (checkout.state !== 'ready') return undefined
-  return { usable: state.worktree.blocker === null, current: checkout.checkout.branch }
+  return { blocker, current: checkout.checkout.branch, commit: checkout.checkout.commit }
 }
 
 /**
  * Render the worktree option while the Session can still start in a worktree:
- * the base branch menu once requested, then the checkbox. When the checkout
- * cannot host a worktree, the tooltip gives the reason and the checkbox only
- * withdraws an open request. Both stay fixed while the worktree is being
- * created.
+ * the current branch, or the base branch menu once requested, then the checkbox.
+ * A blocked request keeps its selected base visible without a menu; the checkbox
+ * only withdraws it. Branch details support pointer, touch, and keyboard access.
+ * The request stays fixed while the worktree is being created.
  * @param props - panel snapshot hook, request actions, and copy.
- * @returns the option, or nothing once a turn started, the request settled, or no worktree service is mounted.
+ * @returns the option, or nothing outside a known Git checkout, once a turn started,
+ * the request settled, or no worktree service is mounted.
  */
 export function WorktreeToggle({ usePanel, request, cancel, branches, t }: WorktreeToggleProps): ReactNode {
   const state = usePanel(snapshot => snapshot.state)
@@ -119,18 +125,30 @@ export function WorktreeToggle({ usePanel, request, cancel, branches, t }: Workt
   if (state === null || option === undefined) return null
   const held = state.worktree.creation !== null
   const requested = pending ?? state.worktree.request !== null
-  const disabled = held || pending !== null || (!option.usable && !requested)
-  const blocker = state.worktree.blocker ?? 'not-git'
+  const usable = option.blocker === null
+  const disabled = held || pending !== null || (!usable && !requested)
+  const current = option.current ?? (option.commit === null ? t('checkout.detached') : t('worktree.detachedTip', { commit: option.commit }))
+  const base = state.worktree.request === null ? option.current : state.worktree.request.from
+  const branchText = requested ? base === null ? t('worktree.baseHead') : t('worktree.base', { branch: base }) : current
+  const branchTip = requested || option.current === null ? branchText : t('worktree.currentBranchTip', { branch: option.current })
   const change = (checked: boolean): void => {
     setPending(checked)
     void (checked ? request(option.current) : cancel()).then(() => { setPending(null) })
   }
   return (
     <span className={css.root} data-forge-worktree="">
-      {requested && option.usable && (
+      {requested && usable ? (
         <BaseMenu base={state.worktree.request?.from ?? option.current} held={held} branches={branches} request={request} t={t} />
+      ) : (
+        <Tooltip label={branchTip} side="bottom" portal openOnClick>
+          <button type="button" className={css.current} aria-label={branchTip}
+            data-forge-current-branch={requested ? undefined : ''} data-forge-base-branch={requested ? '' : undefined}>
+            <IconBranchOutlineRegular size={14} />
+            <span className={css.baseLabel}>{branchText}</span>
+          </button>
+        </Tooltip>
       )}
-      <Tooltip label={option.usable ? t('worktree.hint') : t(`worktree.blocked.${blocker}`)} side="bottom" delayMs={500}>
+      <Tooltip label={option.blocker === null ? t('worktree.hint') : t(`worktree.blocked.${option.blocker}`)} side="bottom" delayMs={500}>
         <label className={css.toggle} data-disabled={disabled ? '' : undefined}>
           <input
             type="checkbox"

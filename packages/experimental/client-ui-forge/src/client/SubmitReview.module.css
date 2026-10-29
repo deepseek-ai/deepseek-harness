@@ -1,0 +1,15 @@
+/* Review submission follows the settings dialogs' field and footer spacing. */
+.modal { width: min(520px, 100%); max-height: 100%; }
+.content { min-height: 0; overflow-y: auto; }
+.form { display: flex; flex-direction: column; gap: 16px; min-width: 0; font: var(--dsw-font-xs-13); font-family: Inter, var(--dsw-font-family); }
+.count { color: var(--dsw-alias-label-secondary); }
+.input { min-height: 112px; }
+.summary { display: flex; flex-direction: column; gap: 8px; }
+.hint { color: var(--dsw-alias-label-secondary); }
+.decisions { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.decisions label { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; color: var(--dsw-alias-label-primary); cursor: pointer; }
+.decisions input { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--dsw-alias-brand-primary); cursor: inherit; }
+.decisions input:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 2px; }
+.decisions label:has(input:disabled) { cursor: default; opacity: 0.5; }
+.error { color: var(--dsw-alias-state-error-primary); overflow-wrap: anywhere; }
+.reconcile { display: flex; flex-wrap: wrap; gap: 8px; }

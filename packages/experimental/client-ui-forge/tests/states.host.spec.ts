@@ -49,6 +49,7 @@ function fixture(sessions: readonly ListedSession[], stored: readonly ForgeChang
   const put = vi.fn<StoredStates['put']>(async (key, value) => { records.set(key, value) })
   const remove = vi.fn<StoredStates['delete']>(async key => records.delete(key))
   const table: StoredStates = { get: key => records.get(key), entries: () => records.entries(), put, delete: remove }
+  const close = vi.fn(async () => {})
   const sources = {
     sessions: vi.fn<ChangeRequestStateSources['sessions']>(async () => sessions),
     onBindings: vi.fn<ChangeRequestStateSources['onBindings']>((listener) => {
@@ -63,7 +64,7 @@ function fixture(sessions: readonly ListedSession[], stored: readonly ForgeChang
       watchers.set(target.number, listener)
       return () => { watchers.delete(target.number) }
     }),
-    open: vi.fn<ChangeRequestStateSources['open']>(async () => table),
+    open: vi.fn<ChangeRequestStateSources['open']>(async () => ({ table, close })),
     report: vi.fn<ChangeRequestStateSources['report']>(),
   }
   const hub = new ChangeRequestStates(sources)
@@ -73,6 +74,7 @@ function fixture(sessions: readonly ListedSession[], stored: readonly ForgeChang
     sources,
     records,
     put,
+    close,
     remove,
     watchers,
     listeners,
@@ -186,6 +188,7 @@ describe('ChangeRequestStates', () => {
     await second.close()
     expect([...f.watchers.keys()]).toEqual([])
     expect(f.listeners.size).toBe(0)
+    expect(f.close).toHaveBeenCalledOnce()
     const third = reader(f.hub)
     expect(await third.next()).toEqual({ type: 'baseline', states: [] })
     expect(f.sources.sessions).toHaveBeenCalledTimes(2)
@@ -293,6 +296,7 @@ describe('ChangeRequestStates', () => {
       f.records.set(key, value)
       order.push('written')
     })
+    f.close.mockImplementationOnce(async () => { order.push('closed') })
     const r = reader(f.hub)
     await r.next()
     f.poll(7)
@@ -300,7 +304,8 @@ describe('ChangeRequestStates', () => {
     const disposing = f.hub.dispose().then(() => { order.push('disposed') })
     release.resolve(undefined)
     await disposing
-    expect(order).toEqual(['written', 'disposed'])
+    expect(order).toEqual(['written', 'closed', 'disposed'])
+    expect(f.close).toHaveBeenCalledOnce()
     expect(f.records.get(storedKey(url(7)))).toEqual(state(7))
     expect(await reader(f.hub).next()).toBeUndefined()
     expect(f.sources.open).toHaveBeenCalledTimes(1)
@@ -347,7 +352,58 @@ describe('ChangeRequestStates', () => {
     f.sources.sessions.mockRejectedValueOnce(new Error('list unavailable'))
     await expect(reader(f.hub).next()).rejects.toThrow('list unavailable')
     expect(f.listeners.size).toBe(0)
+    expect(f.close).toHaveBeenCalledOnce()
     expect(await reader(f.hub).next()).toEqual({ type: 'baseline', states: [] })
+  })
+
+  it('closes storage that finishes opening after the run is cancelled', async () => {
+    const f = fixture([])
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const open = f.sources.open.getMockImplementation()!
+    f.sources.open.mockImplementationOnce(async () => {
+      entered.resolve(undefined)
+      await release.promise
+      return open()
+    })
+    const first = reader(f.hub).next()
+    await entered.promise
+    const disposing = f.hub.dispose()
+    release.resolve(undefined)
+
+    expect(await first).toBeUndefined()
+    await disposing
+    expect(f.close).toHaveBeenCalledOnce()
+    expect(f.sources.sessions).not.toHaveBeenCalled()
+    expect(f.listeners.size).toBe(0)
+  })
+
+  it('waits for the preceding storage close before reopening for another subscriber', async () => {
+    const f = fixture([{ id: S1, urls: [url(7)] }], [state(7)])
+    const first = reader(f.hub)
+    await first.next()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const order: string[] = []
+    f.close.mockImplementationOnce(async () => {
+      entered.resolve(undefined)
+      await release.promise
+      order.push('closed')
+    })
+    const closing = first.close()
+    await entered.promise
+    const second = reader(f.hub)
+    const opening = second.next().then((frame) => { order.push('reopened'); return frame })
+    try {
+      expect(f.sources.open).toHaveBeenCalledOnce()
+    } finally {
+      release.resolve(undefined)
+    }
+
+    await closing
+    expect(await opening).toEqual({ type: 'baseline', states: [state(7)] })
+    expect(order).toEqual(['closed', 'reopened'])
+    expect(f.sources.open).toHaveBeenCalledTimes(2)
   })
 
 

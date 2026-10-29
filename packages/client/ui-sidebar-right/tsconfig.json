@@ -49,6 +49,9 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../ui-context-menu"
     }
   ]
 }

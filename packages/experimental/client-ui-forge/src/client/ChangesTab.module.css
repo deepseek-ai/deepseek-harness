@@ -1,6 +1,7 @@
 /* Changes view: the source header, the toolbar, notices, then one scrolling
    list of file sections whose headers stick while their lines scroll. */
 .root {
+  container: forge-changes / inline-size;
   --forge-changes-bg: var(--dsw-alias-bg-base);
   --forge-fill: var(--dsw-static-neutral-50);
   --forge-diff-empty: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 50%, transparent);
@@ -227,10 +228,28 @@
   margin-left: auto;
 }
 
-.files {
+.body {
+  display: flex;
   flex: 1;
   min-height: 0;
+}
+
+.treeToggle { display: none; }
+
+@container forge-changes (min-width: 760px) {
+  .treeToggle { display: inline-flex; }
+  .treePane:not([hidden]) { display: block; }
+}
+
+.files {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
+}
+
+.files:focus {
+  outline: none;
 }
 
 /* The actions of a failed read, side by side. */
@@ -306,13 +325,6 @@
   display: flex;
   flex: 0 1 auto;
   min-width: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
 }
 
 .fileSpacer {
@@ -356,7 +368,7 @@
 
 .line {
   display: grid;
-  grid-template-columns: 3.5em 3.5em 1.4em minmax(0, 1fr);
+  grid-template-columns: var(--forge-number-width, 3.5em) var(--forge-number-width, 3.5em) 1.4em minmax(0, 1fr);
   box-sizing: border-box;
   min-height: 22px;
   line-height: 22px;
@@ -364,7 +376,7 @@
 }
 
 .code:not([data-wrap]):not([data-split]) .line {
-  grid-template-columns: 3.5em 3.5em 1.4em max-content;
+  grid-template-columns: var(--forge-number-width, 3.5em) var(--forge-number-width, 3.5em) 1.4em max-content;
 }
 
 .pair {
@@ -377,7 +389,7 @@
 
 .cell {
   display: grid;
-  grid-template-columns: 3.5em minmax(0, 1fr);
+  grid-template-columns: var(--forge-number-width, 3.5em) minmax(0, 1fr);
   box-sizing: border-box;
   min-width: 0;
 }
@@ -401,7 +413,8 @@
 }
 
 .number {
-  padding-right: 8px;
+  box-sizing: border-box;
+  padding-right: 6px;
   color: var(--dsw-alias-label-tertiary);
   text-align: right;
   user-select: none;
@@ -615,10 +628,22 @@
 .localView:focus-visible,
 .localToggle:focus-visible,
 .fileToggle:focus-visible,
-.filePath:focus-visible,
 .localFile:focus-visible,
 .select:focus-visible,
 .gap:focus-visible {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }
+
+.reviewNotice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; }
+
+.code[data-split][data-native-side="L"] [data-diff-side="R"],
+.code[data-split][data-native-side="L"] [data-diff-side="R"] *,
+.code[data-split][data-native-side="R"] [data-diff-side="L"],
+.code[data-split][data-native-side="R"] [data-diff-side="L"] * { user-select: none; }
+.reviewSubmit { flex: none; white-space: nowrap; }
+
+.code[data-single-side] .line { grid-template-columns: var(--forge-number-width) 1.4em minmax(0, 1fr); }
+.code[data-single-side]:not([data-wrap]) .line { grid-template-columns: var(--forge-number-width) 1.4em max-content; }
+.reviewFile { padding: 12px 0; }
+.reviewFile > h3 { margin: 0 10px; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }

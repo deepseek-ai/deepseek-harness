@@ -61,6 +61,24 @@
     },
     {
       "path": "../shortcuts/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-context-menu"
+    },
+    {
+      "path": "../../util/workspace-path"
+    },
+    {
+      "path": "../ui-sidebar-right"
+    },
+    {
+      "path": "../../api/workspace-files/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-sidebar-browser/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-workspace"
     }
   ]
 }
