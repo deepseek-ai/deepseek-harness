@@ -80,7 +80,7 @@ class NodeExecution {
 
   /**
    * Evaluate in a temporary process or reuse an enabled state owner's process.
-   * @param spec - Resolved request; concurrent calls for one owner are rejected.
+   * @param spec - Resolved request; active calls reject overlap, interrupted calls await cleanup.
    * @returns Captured logs, JSON completion, or a structured execution failure.
    */
   async run(spec: PtcRunSpec): Promise<PtcRunResult> {
@@ -89,7 +89,11 @@ class NodeExecution {
     const bindings = validateBindings(spec)
     const owner = this.mode.retainsState ? spec.stateOwner : undefined
     let worker = owner === undefined ? undefined : this.owners.get(owner)
-    worker?.assertIdle()
+    if (owner !== undefined && worker) {
+      await worker.waitForInterruption()
+      worker = this.owners.get(owner)
+      worker?.assertIdle()
+    }
     if (worker && !worker.closed && (worker.policy.mode !== spec.sandboxPolicy.mode
       || worker.policy.workspaceRoot !== spec.sandboxPolicy.workspaceRoot
       || worker.policy.sessionId !== spec.sandboxPolicy.sessionId
@@ -142,7 +146,7 @@ function sameAdditionalRoots(left: readonly string[] | undefined, right: readonl
 
 const STRIP_PREFIX = 'async function __dsh_program__() {\n'
 const STRIP_SUFFIX = '\n}'
-const RETAINED_STATE_INSTRUCTIONS = 'Changing the session sandbox mode clears retained variables. An approved sandbox escalation runs in a separate temporary environment: it cannot access retained variables, and its declarations are discarded afterward. Restart, Agent disposal, cancellation, timeout, output overflow, or process failure clears the environment. If a variable is undefined, recreate it and reacquire its resources. State is not restored from the conversation, and failed evaluations can leave earlier mutations in memory. Redeclaring an existing let, const, or class name fails; assign to a mutable binding or use a new name. Await all tool calls; background callbacks cannot call tools after their evaluation ends. Await child-process completion before ending an evaluation; raw subprocess output belongs to whichever evaluation is active when it arrives.'
+const RETAINED_STATE_INSTRUCTIONS = 'Changing the session sandbox mode clears retained variables. An approved sandbox escalation runs in a separate temporary environment: it cannot access retained variables, and its declarations are discarded afterward. Restart, Agent disposal, output overflow, or process failure clears the environment. Timeout and cancellation request cooperative stop: retained variables survive if the runtime acknowledges; otherwise the host terminates the process and clears them. Earlier mutations are not rolled back. If a variable is undefined, recreate it and reacquire its resources. State is not restored from the conversation, and failed evaluations can leave earlier mutations in memory. Redeclaring an existing let, const, or class name fails; assign to a mutable binding or use a new name. Await all tool calls and required cleanup before returning; unfinished tool calls reject when the evaluation ends or is canceled, so catch and finally handlers can run. Background callbacks cannot call tools or emit captured output after their evaluation ends; unmanaged asynchronous work may still mutate retained variables. Collect child-process output explicitly and print it; inherited native stdout/stderr is excluded from retained execution output.'
 
 function resolveMode(config: ResolvedConfig): ExecutionMode {
   switch (config.executionMode) {

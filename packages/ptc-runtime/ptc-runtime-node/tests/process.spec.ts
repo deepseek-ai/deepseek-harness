@@ -1,3 +1,4 @@
+import { brandNumber } from '@deepseek-ai/dsh-brand'
 import { spawn } from 'node:child_process'
 import { copyFile, cp, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Duplex } from 'node:stream'
 import { expect, it, onTestFinished } from 'vitest'
 import { createProcessRpc } from '../src/rpc.ts'
-import type { HostMethods, ProgramMethods } from '../src/protocol.ts'
+import type { EvaluationId, HostMethods, ProgramMethods } from '../src/protocol.ts'
 import { decodePtcJsonWire, encodePtcJsonWire } from '../src/json-wire.ts'
 
 it('boots an unbuilt source closure outside the workspace and exchanges tool replies', async () => {
@@ -36,17 +37,16 @@ it('boots an unbuilt source closure outside the workspace and exchanges tool rep
   if (!(control instanceof Duplex)) { child.kill(); await finished; throw new Error('missing child control channel') }
   const channel = createProcessRpc<ProgramMethods, HostMethods>(control, 100_000, {
     ready() {
-      void channel.run(directory, {
-        code: 'const answer = await tools.echo({ n: 21 }); return { answer, env: { ...process.env } }',
+      void channel.run(brandNumber<EvaluationId>(1), directory, {
+        code: 'const { setTimeout } = await import("node:timers/promises"); const answer = await setTimeout(1, await tools.echo({ n: 21 })); return { answer, env: { ...process.env } }',
         namespaces: [{ global: 'tools', names: ['echo'] }],
         maxOutputBytes: 10_000,
-        retainsState: false,
       }).then((result) => {
         if (result.error) completed.reject(new Error(result.error.message))
         else completed.resolve(decodePtcJsonWire(result.value))
       }, (error: unknown) => { completed.reject(error) })
     },
-    async invoke(_global, _name, args) {
+    async invoke(_id, _global, _name, args) {
       expect(decodePtcJsonWire(args)).toEqual({ n: 21 })
       return encodePtcJsonWire(42)
     },
@@ -57,4 +57,4 @@ it('boots an unbuilt source closure outside the workspace and exchanges tool rep
   expect(await completed.promise).toEqual({ answer: 42, env: {} })
   channel.$close()
   await finished
-})
+}, 30_000)

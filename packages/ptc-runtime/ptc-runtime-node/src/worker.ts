@@ -1,6 +1,7 @@
 /** Managed Node process shared by temporary and owner-retained evaluations. */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Context } from '@deepseek-ai/cordis'
+import { brandNumber } from '@deepseek-ai/dsh-brand'
 import type { PtcRunSpec, PtcRunResult, PtcRunSandbox, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { SandboxUnavailableError, classifyRunnerFailure, isRunnerSpawnFailure } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
@@ -16,12 +17,15 @@ import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
 import { decodePtcJsonWire } from './json-wire.ts'
 import { OutputLedger } from './output-ledger.ts'
 import { drainOutput, terminateProcess } from './output-stream.ts'
-import { readProgramResult, type ProgramBootData, type ProgramMethods, type HostMethods } from './protocol.ts'
+import { isEvaluationId, readProgramResult, type EvaluationId, type ProgramBootData, type ProgramMethods, type HostMethods } from './protocol.ts'
 
 const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error)
 
 interface Evaluation {
-  settled: boolean
+  id: EvaluationId
+  controller: AbortController
+  finished: Promise<PtcRunResult>
+  dispatched: boolean
   data: ProgramBootData
   spec: PtcRunSpec
   bindings: Map<string, PtcBindingNamespace>
@@ -39,6 +43,7 @@ export class ProgramWorker {
   private handle?: SubprocessHandle
   private channel?: BirpcReturn<ProgramMethods, HostMethods>
   private active: Evaluation | undefined
+  private sequence = 0
   /** Admission remains reserved until the result includes completed process cleanup. */
   private running = false
   private cleanupPending = false
@@ -69,6 +74,12 @@ export class ProgramWorker {
     private readonly retainsState: boolean,
   ) {
     this.unregister = processes.register(policy, () => this.dispose())
+  }
+
+  /** Wait for an ended evaluation's required cleanup before attempting reuse. */
+  async waitForInterruption(): Promise<void> {
+    const evaluation = this.active
+    if (evaluation?.controller.signal.aborted) await evaluation.finished
   }
 
   /** Reject reuse until the previous evaluation and required cleanup settle. */
@@ -127,13 +138,20 @@ export class ProgramWorker {
     let overflowed = false
     const result = Promise.withResolvers<PtcRunResult>()
     const timer = spec.timeoutMs === null ? undefined : setTimeout(() => {
-      evaluation.finish({ kind: 'timeout', message: this.message(`execution deadline reached (${spec.timeoutMs}ms)`) }, undefined, true)
+      const phase = evaluation.dispatched ? 'during execution' : 'before code started'
+      const message = `execution timed out ${phase} (${spec.timeoutMs}ms)`
+      evaluation.finish({ kind: 'timeout', message }, undefined, !evaluation.dispatched)
     }, spec.timeoutMs)
-    const onAbort = (): void => { evaluation.finish({ kind: 'abort', message: this.abortMessage(spec.signal) }, undefined, true) }
+    const onAbort = (): void => {
+      evaluation.finish({ kind: 'abort', message: this.retainsState ? 'execution canceled' : messageOf(spec.signal?.reason) }, undefined, !evaluation.dispatched)
+    }
     const evaluation: Evaluation = {
-      settled: false,
+      id: brandNumber<EvaluationId>(++this.sequence),
+      controller: new AbortController(),
+      finished: result.promise,
+      dispatched: false,
       data: {
-        code: '', programFormat: this.mode.format, retainsState: this.retainsState,
+        code: '', programFormat: this.mode.format,
         maxOutputBytes: this.config.maxOutputBytes,
         namespaces: [...bindings.values()].map(binding => ({
           global: binding.global, names: Object.keys(binding.functions), ...binding.errorClass ? { errorClass: binding.errorClass } : {},
@@ -149,17 +167,30 @@ export class ProgramWorker {
         }
       },
       finish: (error, value, discard = false) => {
-        if (evaluation.settled) return
-        evaluation.settled = true
+        if (evaluation.controller.signal.aborted) return
+        evaluation.controller.abort()
         clearTimeout(timer)
         spec.signal?.removeEventListener('abort', onAbort)
         const complete = (): PtcRunResult => overflowed || error?.kind === 'output-limit' ? output.limit(logs)
           : error ? output.failure(logs, error) : output.success(logs, value)
         const outcome = complete()
-        const cleanup = discard || outcome.error?.kind === 'output-limit' || !this.retainsState ? this.stop() : Promise.resolve(true)
-        void cleanup.then((drained) => {
+        const cleanup = async (): Promise<PtcRunResult> => {
+          const interrupted = error?.kind === 'timeout' || error?.kind === 'abort'
+          const stopRequired = discard || outcome.error?.kind === 'output-limit' || !this.retainsState
+          const stopped = stopRequired ? { drained: await this.stop(), preserved: false }
+            : interrupted ? await this.requestStop(evaluation.id) : { drained: true, preserved: true }
+          if (interrupted && this.retainsState && error) {
+            const fallback = !stopRequired && !stopped.preserved ? '; runtime did not confirm stopping; runtime terminated' : ''
+            error = { ...error, message: `${error.message}${fallback}; retained variables were ${stopped.preserved ? 'preserved' : 'cleared'}` }
+          }
+          const completed = complete()
+          // The final stop diagnostic also consumes output budget.
+          const drained = completed.error?.kind === 'output-limit' && stopped.preserved ? await this.stop() : stopped.drained
+          return drained ? completed : output.failure(logs, { kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
+        }
+        void cleanup().then((completed) => {
           this.active = undefined
-          result.resolve(drained ? complete() : output.failure(logs, { kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' }))
+          result.resolve(completed)
         }, (failure: unknown) => {
           this.active = undefined
           result.resolve(output.failure(logs, { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(failure)}` }))
@@ -183,9 +214,28 @@ export class ProgramWorker {
     return await result.promise
   }
 
+  private async requestStop(id: EvaluationId): Promise<{ drained: boolean; preserved: boolean }> {
+    if (!this.channel || this.channel.$closed || this.closed) return { drained: await this.stop(), preserved: false }
+    const deadline = Promise.withResolvers<never>()
+    const timer = setTimeout(() => { deadline.reject(new Error(`stop acknowledgment exceeded ${this.config.stopGraceMs}ms`)) }, this.config.stopGraceMs)
+    const abort = (): void => { deadline.reject(new Error('environment disposed during interruption')) }
+    this.controller.signal.addEventListener('abort', abort, { once: true })
+    try {
+      const acknowledgment = await Promise.race<unknown>([this.channel.revoke(id), deadline.promise])
+      if (acknowledgment !== undefined || this.controller.signal.aborted) throw new Error('runtime stop was not confirmed')
+      return { drained: true, preserved: true }
+    } catch (_error: unknown) {
+      // Missing, rejected or malformed acknowledgment requires process termination.
+      return { drained: await this.stop(), preserved: false }
+    } finally {
+      clearTimeout(timer)
+      this.controller.signal.removeEventListener('abort', abort)
+    }
+  }
+
   /** Cancel active work and await managed process termination and output drainage. */
   async dispose(): Promise<void> {
-    this.active?.finish({ kind: 'abort', message: this.message('PTC environment disposed') }, undefined, true)
+    this.active?.finish({ kind: 'abort', message: 'PTC environment disposed' }, undefined, true)
     await this.stop()
   }
 
@@ -219,13 +269,14 @@ export class ProgramWorker {
   }
 
   private dispatch(evaluation: Evaluation): void {
-    void this.channel?.run(evaluation.spec.cwd, evaluation.data).then((raw) => {
-      if (evaluation.settled) return
-      const { error, value } = readProgramResult(raw)
+    evaluation.dispatched = true
+    void this.channel?.run(evaluation.id, evaluation.spec.cwd, evaluation.data).then((raw) => {
+      if (evaluation.controller.signal.aborted) return
+      const { error, value } = readProgramResult(raw, evaluation.id)
       // Raw stdio can be queued beside the RPC result on separate pipes.
       setImmediate(() => { evaluation.finish(error, value) })
     }).catch((error: unknown) => {
-      if (this.active === evaluation && !this.channel?.$closed) this.fail('protocol', messageOf(error))
+      if (this.active === evaluation && !evaluation.controller.signal.aborted && !this.channel?.$closed) this.fail('protocol', messageOf(error))
     })
   }
 
@@ -246,7 +297,7 @@ export class ProgramWorker {
       ...bootstrapArgs(this.ctx.fs, this.config.launch, this.config.maxMessageBytes, this.retainsState)]
     const policy = this.policy
     this.confined = policy.mode === 'danger-full-access' ? undefined : await this.ctx.sandbox.confine(argv, { ...policy, mode: policy.mode }, this.controller.signal)
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- Cancellation can close the process during confinement.
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- Confinement may yield while disposal closes the process.
     if (this.closed) return
     const env: NodeJS.ProcessEnv = Object.fromEntries(Object.keys(process.env)
       .filter(key => !STARTUP_ENVIRONMENT_NAMES.has(key.toUpperCase()) && key.toUpperCase() !== 'ELECTRON_RUN_AS_NODE')
@@ -262,29 +313,37 @@ export class ProgramWorker {
       stream.setEncoding('utf8')
       stream.on('data', (text: string) => {
         if (stream === handle.stderr) this.stderr = (this.stderr + text).slice(-this.config.maxOutputBytes)
-        this.active?.admit(text)
+        // Retained processes cannot attribute inherited native stdio to an evaluation.
+        // Startup diagnostics and temporary-process output have only one possible owner.
+        if (!this.retainsState || !this.ready) this.active?.admit(text)
       })
       stream.on('error', (error: Error) => { this.fail('worker-exit', error.message) })
     }
     // A rejected wire call closes its endpoint before birpc can answer it.
     const refuse = (message: string): never => { this.fail('protocol', message); throw new Error(message) }
+    const evaluationFor = (id: unknown): Evaluation | undefined => {
+      if (!isEvaluationId(id) || id > this.sequence) return refuse('invalid PTC evaluation identity')
+      const evaluation = this.active
+      return evaluation?.id === id && !evaluation.controller.signal.aborted ? evaluation : undefined
+    }
     this.channel = createProcessRpc<ProgramMethods, HostMethods>(handle.control, this.config.maxMessageBytes, {
       ready: () => {
         if (this.ready || !this.active) { this.fail('protocol', 'duplicate program readiness'); return }
         this.ready = true
         this.dispatch(this.active)
       },
-      log: (text: unknown) => {
-        if (!this.ready || this.active === undefined || typeof text !== 'string') this.fail('protocol', 'invalid program log')
-        else this.active.admit(text)
+      log: (id, text: unknown) => {
+        if (!this.ready || typeof text !== 'string') { this.fail('protocol', 'invalid program log'); return }
+        evaluationFor(id)?.admit(text)
       },
-      outputLimit: () => {
-        if (!this.ready || this.active === undefined) this.fail('protocol', 'idle PTC output limit')
-        else this.active.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
+      outputLimit: (id) => {
+        if (!this.ready) { this.fail('protocol', 'idle PTC output limit'); return }
+        evaluationFor(id)?.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
       },
-      invoke: async (global, name, wire) => {
-        const evaluation = this.active
-        if (!this.ready || evaluation === undefined || evaluation.settled) return refuse('binding call arrived without an active PTC evaluation')
+      invoke: async (id, global, name, wire) => {
+        if (!this.ready) return refuse('binding call arrived without an active PTC evaluation')
+        const evaluation = evaluationFor(id)
+        if (evaluation === undefined) return null
         const functions = evaluation.bindings.get(global)?.functions
         const fn = functions !== undefined && Object.hasOwn(functions, name) ? functions[name] : undefined
         if (!this.mode.retainsState && typeof fn !== 'function') return refuse('program requested an undeclared binding')
@@ -299,9 +358,10 @@ export class ProgramWorker {
         try {
           const value = await evaluation.invoke(fn, args)
           // A late binding result must not fill the pipe shared with the next evaluation.
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- The evaluation may settle while the binding is pending.
-          if (this.active !== evaluation || evaluation.settled) throw new Error('PTC evaluation ended before the binding completed')
-          return value
+          return evaluation.controller.signal.aborted ? null : value
+        } catch (error) {
+          if (evaluation.controller.signal.aborted) return null
+          throw error
         } finally {
           evaluation.pending -= 1
           evaluation.pendingBytes -= bytes
@@ -311,7 +371,9 @@ export class ProgramWorker {
       if (kind === 'protocol') this.fail('protocol', error.message)
       else {
         if (kind === 'io') this.controlFailure = error.message
-        setImmediate(() => { if (!this.closed && this.exitOutcome === undefined) handle.terminate() })
+        setImmediate(() => {
+          if (!this.closed && this.exitOutcome === undefined) handle.terminate()
+        })
       }
     })
     void handle.done.then(async (outcome) => {

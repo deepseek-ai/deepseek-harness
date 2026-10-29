@@ -4,7 +4,7 @@
  */
 
 import { inspect, types } from 'node:util'
-import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
+import type { BindingMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue } from './json-wire.ts'
 
@@ -255,7 +255,7 @@ function bindingFailure(errorClass: BindingErrorConstructor | undefined, memberN
  */
 export function makeNamespaces(
   data: Pick<ProgramBootData, 'namespaces'>,
-  host: Pick<HostMethods, 'invoke'>,
+  host: BindingMethods,
   errorClasses: Pick<ReadonlyMap<string, BindingErrorConstructor>, 'get'>,
 ): Record<string, unknown>[] {
   return data.namespaces.map(({ global, names }) => {

@@ -1,10 +1,11 @@
+import { brandNumber } from '@deepseek-ai/dsh-brand'
 import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { createProcessRpc } from '../src/rpc.ts'
 import { runNodeMain, type ProgramProcess } from '../src/process.ts'
-import type { HostMethods, ProgramBootData, ProgramMethods } from '../src/protocol.ts'
+import type { EvaluationId, HostMethods, ProgramBootData, ProgramMethods } from '../src/protocol.ts'
 import { decodePtcJsonWire, encodePtcJsonWire } from '../src/json-wire.ts'
 
 function endpoints() {
@@ -29,23 +30,24 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
   const methods: HostMethods = {
     ready: () => { ready.resolve(undefined) },
     invoke: async () => encodePtcJsonWire(42),
-    log: (text) => { logs.push(text) },
+    log: (_id, text) => { logs.push(text) },
     outputLimit: () => {},
   }
   const peer = createProcessRpc<ProgramMethods, HostMethods>(host, limit, methods, [], () => {})
   const main = runNodeMain(child, limit, state)
   onTestFinished(async () => { peer.$close(); child.destroy(); await main })
   await ready.promise
-  const run = (code: string, maxOutputBytes = 1024, programFormat?: PtcProgramFormat) => peer.run('/', {
+  let sequence = 0
+  const run = (code: string, maxOutputBytes = 1024, programFormat?: PtcProgramFormat) => peer.run(brandNumber<EvaluationId>(++sequence), '/', {
     code, ...programFormat === undefined ? {} : { programFormat },
-    retainsState: false, namespaces, maxOutputBytes,
-  })
+    namespaces, maxOutputBytes,
+  }).then(({ evaluationId: _id, ...result }) => result)
   return { child, host, state, nativeEnvironment, methods, peer, main, logs, run }
 }
 
 it('clears the environment and returns a binding result after captured output', async () => {
   const h = await setup()
-  h.methods.invoke = async (_global, _name, wire) => {
+  h.methods.invoke = async (_id, _global, _name, wire) => {
     const args = decodePtcJsonWire(wire) as { n: number }
     return encodePtcJsonWire(args.n * 2)
   }
@@ -61,12 +63,12 @@ it('clears the environment and returns a binding result after captured output', 
   expect(h.state.exitCode).toBeUndefined()
 })
 
-it('keeps unfinished calls pending and suppresses later logs while awaiting host shutdown', async () => {
+it('rejects unfinished calls and suppresses later logs while awaiting host shutdown', async () => {
   const h = await setup()
   const release = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
   h.methods.invoke = () => release.promise
   try {
-    expect(decodePtcJsonWire((await h.run('void tools.echo({}); void tools.echo({}).catch(() => console.log("late rejection")); setImmediate(() => console.log("late timer")); return 42;')).value)).toBe(42)
+    expect(decodePtcJsonWire((await h.run('void tools.echo({}).catch(() => {}); void tools.echo({}).catch(() => console.log("late rejection")); setImmediate(() => console.log("late timer")); return 42;')).value)).toBe(42)
     await nextTurn()
     expect(h.child.destroyed).toBe(false)
     release.resolve(encodePtcJsonWire(42))
@@ -82,12 +84,12 @@ it('rejects a binding call that the host fails during the run', async () => {
   expect(decodePtcJsonWire(result.value)).toBe('denied by host')
 })
 
-it.each(['function-body', 'repl', 'script'] as const)('keeps an unawaited call pending when a temporary %s process closes after the result', async (format) => {
+it.each(['function-body', 'repl', 'script'] as const)('rejects an unawaited call when a temporary %s process closes after the result', async (format) => {
   const h = await setup()
   const pending = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
   onTestFinished(() => { pending.resolve(encodePtcJsonWire(null)) })
   h.methods.invoke = () => pending.promise
-  const code = format === 'function-body' ? 'void tools.echo({}); return 42' : 'void tools.echo({}); 42'
+  const code = format === 'function-body' ? 'void tools.echo({}).catch(() => {}); return 42' : 'void tools.echo({}).catch(() => {}); 42'
   expect(decodePtcJsonWire((await h.run(code, 1024, format)).value)).toBe(42)
   h.peer.$close()
   await h.main

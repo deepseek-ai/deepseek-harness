@@ -1,0 +1,260 @@
+import { Context } from '@deepseek-ai/cordis'
+import { describe, expect, it, vi } from 'vitest'
+import type { PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
+import { fakeChild, NO_INITIAL_FRAME } from './fake-child.ts'
+import { mountRuntime } from './setup.ts'
+import type { Config } from '../src/config.ts'
+
+describe.each([false, true])('deadline reporting with retained state %s', (retained) => {
+  async function setup() {
+    const ctx = new Context()
+    const { runtime } = await mountRuntime(ctx, { executionMode: 'vm-script', scriptPersistence: retained, timeoutMs: 100 })
+    const controller = new AbortController()
+    const request: PtcRunRequest = { program: 'while (true) {}', bindings: [], stateOwner: {}, signal: controller.signal }
+    return { controller, ...fakeChild(ctx, runtime, request), request }
+  }
+
+  const cleared = retained ? '; retained variables were cleared' : ''
+
+  it('expires during executable lookup without starting code or returning before setup settles', async () => {
+    const h = await setup()
+    const lookup = Promise.withResolvers<string>()
+    h.resolveExecutable.mockReturnValue(lookup.promise)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const run = h.start(h.request, NO_INITIAL_FRAME)
+    try {
+      const settled = vi.fn()
+      void run.then(settled)
+      await vi.advanceTimersByTimeAsync(100)
+      expect(settled).not.toHaveBeenCalled()
+      lookup.resolve(process.execPath)
+      expect(await run).toMatchObject({ logs: [], error: { kind: 'timeout', message: `execution timed out before code started (100ms)${cleared}` } })
+      expect(h.spawn).not.toHaveBeenCalled()
+    } finally {
+      h.controller.abort('test cleanup')
+      lookup.resolve(process.execPath)
+      await run
+      vi.useRealTimers()
+    }
+  })
+
+  it('expires before readiness without dispatching code and retains startup output', async () => {
+    const h = await setup()
+    const spawned = Promise.withResolvers<undefined>()
+    h.spawn.mockImplementation(() => { spawned.resolve(undefined); return h.handle })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const run = h.start(h.request, NO_INITIAL_FRAME)
+    try {
+      await spawned.promise
+      h.stderr.write('startup diagnostic')
+      await vi.advanceTimersByTimeAsync(100)
+      expect(await run).toMatchObject({ logs: ['startup diagnostic'], error: { kind: 'timeout', message: `execution timed out before code started (100ms)${cleared}` } })
+      expect(h.messages).not.toContainEqual(expect.objectContaining({ m: 'run' }))
+      expect(h.terminate).toHaveBeenCalledOnce()
+      expect(h.waitForExit).toHaveBeenCalledOnce()
+    } finally {
+      h.controller.abort('test cleanup')
+      await run
+      vi.useRealTimers()
+    }
+  })
+
+  it('retains output and waits for interruption or process cleanup', async () => {
+    const h = await setup()
+    const booted = Promise.withResolvers<undefined>()
+    const exited = Promise.withResolvers<boolean>()
+    h.onBoot(() => { h.emit({ t: 'q', m: 'log', a: [1, 'partial output'] }); booted.resolve(undefined) })
+    h.waitForExit.mockReturnValue(exited.promise)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const run = h.start()
+    try {
+      await booted.promise
+      const settled = vi.fn()
+      void run.then(settled)
+      await vi.advanceTimersByTimeAsync(100)
+      if (retained) {
+        expect(h.terminate).not.toHaveBeenCalled()
+        const revoke = requestId(h.messages, 'revoke')
+        expect(settled).not.toHaveBeenCalled()
+        h.emit({ t: 's', i: revoke })
+      } else {
+        expect(h.terminate).toHaveBeenCalledOnce()
+        expect(settled).not.toHaveBeenCalled()
+        exited.resolve(true)
+      }
+      const suffix = retained ? '; retained variables were preserved' : ''
+      expect(await run).toMatchObject({ logs: ['partial output'], error: { kind: 'timeout', message: `execution timed out during execution (100ms)${suffix}` } })
+    } finally {
+      h.controller.abort('test cleanup')
+      exited.resolve(true)
+      await run
+      vi.useRealTimers()
+    }
+  })
+})
+
+function requestId(messages: unknown[], method: string): string {
+  const message = messages.findLast(value => typeof value === 'object' && value !== null && 'm' in value && value.m === method)
+  if (!message || typeof message !== 'object' || !('i' in message) || typeof message.i !== 'string') throw new Error(`missing ${method} request`)
+  return message.i
+}
+
+async function retainedChild(config: Config = {}) {
+  const ctx = new Context()
+  const { runtime } = await mountRuntime(ctx, { executionMode: 'vm-script', scriptPersistence: true, timeoutMs: 100, stopGraceMs: 50, ...config })
+  const controller = new AbortController()
+  const request = { program: 'while (true) {}', bindings: [], stateOwner: {}, signal: controller.signal }
+  const h = fakeChild(ctx, runtime, request)
+  const booted = Promise.withResolvers<undefined>()
+  h.onBoot(() => { booted.resolve(undefined) })
+  return { ...h, ctx, runtime, request, booted, controller }
+}
+
+describe.each(['timeout', 'abort'] as const)('retained %s', (action) => {
+  it.each(['missing acknowledgment', 'rejection', 'malformed acknowledgment'] as const)('terminates after %s and recreates the environment', async (failure) => {
+    const h = await retainedChild()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const pending = h.start()
+      await h.booted.promise
+      if (action === 'timeout') await vi.advanceTimersByTimeAsync(100)
+      else { h.controller.abort(); await vi.advanceTimersByTimeAsync(0) }
+      const revoke = requestId(h.messages, 'revoke')
+      expect(h.terminate).not.toHaveBeenCalled()
+      if (failure === 'rejection') h.emit({ t: 's', i: revoke, e: { message: 'stop failed' } })
+      else if (failure === 'malformed acknowledgment') h.emit({ t: 's', i: revoke, r: {} })
+      else {
+        await vi.advanceTimersByTimeAsync(49)
+        expect(h.terminate).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(1)
+      }
+      const result = await pending
+      expect(result.error?.kind).toBe(action)
+      expect(result.error?.message).toContain('runtime terminated; retained variables were cleared')
+      expect(h.terminate).toHaveBeenCalledOnce()
+      expect(h.waitForExit).toHaveBeenCalledOnce()
+      const replacement = fakeChild(h.ctx, h.runtime, { ...h.request, signal: new AbortController().signal })
+      replacement.onBoot(() => { replacement.complete({}) })
+      expect((await replacement.start()).error).toBeUndefined()
+      expect(replacement.spawn).toHaveBeenCalledTimes(2)
+    } finally { await h.runtime.release(h.request.stateOwner); vi.useRealTimers() }
+  })
+
+  it('waits for acknowledged revocation without terminating the process', async () => {
+    const h = await retainedChild()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const pending = h.start()
+      const settled = vi.fn()
+      void pending.then(settled)
+      await h.booted.promise
+      if (action === 'timeout') await vi.advanceTimersByTimeAsync(100)
+      else { h.controller.abort(); await vi.advanceTimersByTimeAsync(0) }
+      expect(settled).not.toHaveBeenCalled()
+      h.emit({ t: 's', i: requestId(h.messages, 'revoke') })
+      expect((await pending).error?.message).toContain('retained variables were preserved')
+      await vi.advanceTimersByTimeAsync(100)
+      expect(h.terminate).not.toHaveBeenCalled()
+    } finally { await h.runtime.release(h.request.stateOwner); vi.useRealTimers() }
+  })
+
+})
+
+it('waits for fallback process cleanup before returning or admitting another run', async () => {
+  const h = await retainedChild()
+  const exited = Promise.withResolvers<boolean>()
+  h.waitForExit.mockReturnValue(exited.promise)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const pending = h.start()
+    const settled = vi.fn()
+    void pending.then(settled)
+    await h.booted.promise
+    await vi.advanceTimersByTimeAsync(150)
+    expect(h.terminate).toHaveBeenCalledOnce()
+    expect(settled).not.toHaveBeenCalled()
+    const replacement = fakeChild(h.ctx, h.runtime, h.request)
+    replacement.onBoot(() => { replacement.complete({}) })
+    const next = replacement.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(replacement.spawn).toHaveBeenCalledOnce()
+    exited.resolve(true)
+    expect((await pending).error?.kind).toBe('timeout')
+    expect((await next).error).toBeUndefined()
+    expect(replacement.spawn).toHaveBeenCalledTimes(2)
+  } finally { exited.resolve(true); await h.runtime.release(h.request.stateOwner); vi.useRealTimers() }
+})
+
+it('blocks reuse after fallback cleanup fails until release succeeds', async () => {
+  const h = await retainedChild()
+  h.waitForExit.mockRejectedValueOnce(new Error('exit not confirmed'))
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const pending = h.start()
+    await h.booted.promise
+    await vi.advanceTimersByTimeAsync(150)
+    expect((await pending).error?.message).toContain('managed process cleanup failed: exit not confirmed')
+    await expect(h.runtime.run(h.runtime.resolve(h.request))).rejects.toThrow('cleanup is incomplete')
+    await h.runtime.release(h.request.stateOwner)
+    const replacement = fakeChild(h.ctx, h.runtime, h.request)
+    replacement.onBoot(() => { replacement.complete({}) })
+    expect((await replacement.start()).error).toBeUndefined()
+  } finally { await h.runtime.release(h.request.stateOwner); vi.useRealTimers() }
+})
+
+it('allows explicit release to terminate a process awaiting stop acknowledgment', async () => {
+  const h = await retainedChild()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const pending = h.start()
+    await h.booted.promise
+    await vi.advanceTimersByTimeAsync(100)
+    await h.runtime.release(h.request.stateOwner)
+    expect((await pending).error?.message).toContain('retained variables were cleared')
+    expect(h.terminate).toHaveBeenCalledOnce()
+  } finally { vi.useRealTimers() }
+})
+
+it('terminates when the final stop diagnostic exceeds the output budget', async () => {
+  const h = await retainedChild({ maxOutputBytes: 70 })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const pending = h.start()
+    await h.booted.promise
+    await vi.advanceTimersByTimeAsync(100)
+    h.emit({ t: 's', i: requestId(h.messages, 'revoke') })
+    expect((await pending).error?.kind).toBe('output-limit')
+    expect(h.terminate).toHaveBeenCalledOnce()
+  } finally { await h.runtime.release(h.request.stateOwner); vi.useRealTimers() }
+})
+
+it('waits for recovery before admitting the next run and ignores a late completion', async () => {
+  const h = await retainedChild()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const pending = h.start()
+    await h.booted.promise
+    await vi.advanceTimersByTimeAsync(100)
+    const next = h.runtime.run(h.runtime.resolve({ ...h.request, program: '42' }))
+    h.complete({ error: { kind: 'exception', message: 'late completion' } })
+    expect(h.messages.filter(value => typeof value === 'object' && value !== null && 'm' in value && value.m === 'run')).toHaveLength(1)
+    h.onBoot(() => { h.complete({}) })
+    h.emit({ t: 's', i: requestId(h.messages, 'revoke') })
+    expect((await pending).error?.kind).toBe('timeout')
+    expect((await next).error).toBeUndefined()
+    expect(h.spawn).toHaveBeenCalledOnce()
+    expect(h.terminate).not.toHaveBeenCalled()
+  } finally { vi.useRealTimers() }
+})
+
+it('does not interrupt an evaluation that completed before its deadline', async () => {
+  const h = await retainedChild()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    h.onBoot(() => { h.complete({}) })
+    expect((await h.start()).error).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(h.messages).not.toContainEqual(expect.objectContaining({ m: 'revoke' }))
+    expect(h.terminate).not.toHaveBeenCalled()
+  } finally { vi.useRealTimers() }
+})

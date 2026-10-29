@@ -9,8 +9,8 @@
   en: 7e1a8657a212c70b
   zh: afb7a8c6a3afd718
 /deepseek-ai-dsh-ptc-runtime-node/summary:
-  en: 79d30a488dfb61a9
-  zh: 6b375f440656da9c
+  en: fd81f3e969a3d8cc
+  zh: a8211ce7c308dfd2
 /deepseek-ai-dsh-ptc-runtime-node/table-of-contents:
   en: d152484eb41ac6b4
   zh: 725b47765ee8f30b
@@ -18,17 +18,17 @@
   en: 9c742ab3175c4f80
   zh: 5fa7d1ce9c3920d2
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/configuration:
-  en: 34b5a336733ea39f
-  zh: 7604b03999b61517
+  en: 8d42f921a1fa8e5c
+  zh: 27b79ec4ec52b3fd
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/execution-and-results:
   en: 2a9fa3292bf07355
   zh: db0b5684820915eb
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/in-memory-modes:
-  en: 647286ffa607df3b
-  zh: ddf6d548e914cf4c
+  en: fe1343b3dcf3fd4a
+  zh: 3e758eaa441e3b85
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/deadlines-and-cancellation:
-  en: 3e7ab293fac35688
-  zh: 617ed4930bbef6c7
+  en: f2b94caabfc54746
+  zh: 81900232442fd348
 /deepseek-ai-dsh-ptc-runtime-node/use-this-package/failures:
   en: 34a221d0f26b8e47
   zh: 2fd20ac9c9953c7f
@@ -36,8 +36,8 @@
   en: 50e6cd38e298da31
   zh: c8b252b3acf59147
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/launch-and-control:
-  en: cf3105f3951b5b42
-  zh: 8d30992ff2b2f00c
+  en: d8d807563940235f
+  zh: 5ed77a2e5d4fcf06
 /deepseek-ai-dsh-ptc-runtime-node/understand-the-implementation/source-and-built-bootstraps:
   en: df46dbe89d12a37e
   zh: 461854a7bd67f2a0

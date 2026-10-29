@@ -49,6 +49,7 @@
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "acorn": "^8.18.0",

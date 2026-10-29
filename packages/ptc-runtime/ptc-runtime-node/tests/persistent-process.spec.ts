@@ -1,13 +1,14 @@
+import { brandNumber } from '@deepseek-ai/dsh-brand'
 import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate } from 'node:timers/promises'
-import { expect, it, onTestFinished } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import { createProcessRpc } from '../src/rpc.ts'
 import { runPersistentMain } from '../src/persistent-process.ts'
 import type { ProgramProcess } from '../src/process.ts'
 import { decodePtcJsonWire, encodePtcJsonWire } from '../src/json-wire.ts'
-import type { ProgramBootData, HostMethods, ProgramMethods } from '../src/protocol.ts'
+import type { EvaluationId, ProgramBootData, HostMethods, ProgramMethods } from '../src/protocol.ts'
 
-async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}) {
+async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}, programFormat: 'repl' | 'script' = 'repl') {
   const first = new PassThrough()
   const second = new PassThrough()
   const child = Duplex.from({ readable: first, writable: second })
@@ -20,11 +21,11 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}) {
   const seen: Record<string, unknown>[] = []
   const methods: HostMethods = {
     ready: () => { ready.resolve(true) },
-    invoke: async (global, name, args) => {
+    invoke: async (_id, global, name, args) => {
       seen.push({ type: 'call', global, name, args })
       return encodePtcJsonWire(42)
     },
-    log: (text) => { seen.push({ type: 'log', text }) },
+    log: (_id, text) => { seen.push({ type: 'log', text }) },
     outputLimit: () => { seen.push({ type: 'output-limit' }) },
   }
   const peer = createProcessRpc<ProgramMethods, HostMethods>(host, limit, methods, [], () => {})
@@ -32,8 +33,9 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}) {
   const close = async () => { peer.$close(); host.destroy(); child.destroy(); await main }
   onTestFinished(close)
   await ready.promise
+  let sequence = 0
   const run = (code: string, namespaces: ProgramBootData['namespaces'] = [], maxOutputBytes = 1024) => {
-    return peer.run('/', { code, namespaces, maxOutputBytes, retainsState: true }).then((result) => {
+    return peer.run(brandNumber<EvaluationId>(++sequence), '/', { code, namespaces, maxOutputBytes, programFormat }).then(({ evaluationId: _id, ...result }) => {
       seen.push({ type: 'done', ...result })
       return result
     })
@@ -117,24 +119,83 @@ it('closes the process channel when a terminal result cannot fit its write budge
   await h.main
 })
 
-it('ignores output and rejects tool calls from a completed evaluation', async () => {
+it('ignores output and rejects new tool calls from a completed evaluation', async () => {
   const h = await setup()
   const declarations = [{ global: 'tools', names: ['echo'] }]
   await h.run('let finish; let old; const trigger = new Promise(resolve => { finish = resolve }); void trigger.then(async () => { console.log("late"); try { await tools.echo({}) } catch (error) { old = error.message } });', declarations)
   const result = await h.run('finish(); await new Promise(resolve => setImmediate(resolve)); old', declarations)
-  expect(decodePtcJsonWire(result.value)).toContain('evaluation has ended')
+  expect(decodePtcJsonWire(result.value)).toBe('PTC evaluation ended')
   expect(h.seen.some(item => item.type === 'log' || item.type === 'call')).toBe(false)
   expect(decodePtcJsonWire((await h.run('await tools.echo({})', declarations)).value)).toBe(42)
   expect(h.seen.filter(item => item.type === 'call')).toHaveLength(1)
 })
 
-it('rejects unfinished binding waits when a program returns', async () => {
+it.each(['resolve', 'reject'] as const)('rejects an unfinished binding once when a completed program receives a late %s', async (outcome) => {
   const h = await setup()
   const pending = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
   onTestFinished(() => { pending.resolve(encodePtcJsonWire(null)) })
   h.setCall(() => pending.promise)
-  await h.run('let rejected; void tools.echo({}).catch(error => { rejected = error.message });', [{ global: 'tools', names: ['echo'] }])
-  expect(decodePtcJsonWire((await h.run('rejected')).value)).toContain('ended before the binding completed')
+  await h.run('let effects = []; void tools.echo({}).then(() => effects.push("then")).catch(() => effects.push("catch")).finally(() => effects.push("finally"));', [{ global: 'tools', names: ['echo'] }])
+  if (outcome === 'resolve') pending.resolve(encodePtcJsonWire(42))
+  else pending.reject(new Error('late failure'))
+  await setImmediate()
+  expect(decodePtcJsonWire((await h.run('effects')).value)).toEqual(['catch', 'finally'])
+})
+
+it.each([['resolve', 'repl'], ['reject', 'repl'], ['resolve', 'script'], ['reject', 'script']] as const)('revokes an awaiting program after a late %s in %s', async (outcome, format) => {
+  const h = await setup(4096, undefined, format)
+  const pending = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
+  const started: PromiseWithResolvers<void> = Promise.withResolvers()
+  onTestFinished(() => { pending.resolve(encodePtcJsonWire(null)) })
+  h.setCall(() => { started.resolve(); return pending.promise })
+  const declarations = [{ global: 'tools', names: ['echo'] }]
+  const first = h.run('let kept = 42; let effects = []; try { await tools.echo({}); effects.push("then") } catch { effects.push("catch") } finally { effects.push("finally") }', declarations)
+  await started.promise
+  await h.peer.revoke(brandNumber<EvaluationId>(1))
+  expect(await first).toMatchObject({ error: { kind: 'abort' } })
+  await h.peer.revoke(brandNumber<EvaluationId>(1))
+  if (outcome === 'resolve') pending.resolve(encodePtcJsonWire(42))
+  else pending.reject(new Error('late failure'))
+  await setImmediate()
+  expect(decodePtcJsonWire((await h.run('({ kept, effects })')).value)).toEqual({ kept: 42, effects: ['catch', 'finally'] })
+  await h.peer.revoke(brandNumber<EvaluationId>(1))
+  expect(decodePtcJsonWire((await h.run('kept + 1')).value)).toBe(43)
+})
+
+it.each(['repl', 'script'] as const)('waits for an arbitrary user Promise before acknowledging %s revocation', async (format) => {
+  const h = await setup(4096, undefined, format)
+  const resume = Promise.withResolvers<undefined>()
+  const started = Promise.withResolvers<undefined>()
+  // A host-controlled Promise models asynchronous work outside the managed binding wait.
+  Object.defineProperty(h.state, 'wait', { value: () => { started.resolve(undefined); return resume.promise } })
+  const first = h.run('var mutation = 0; var serialized = 0; await process.wait(); mutation++; console.log("late"); ({ get value() { serialized++; return 1 } })')
+  await started.promise
+  const acknowledged = vi.fn()
+  const stopping = h.peer.revoke(brandNumber<EvaluationId>(1)).then(acknowledged)
+  await setImmediate()
+  expect(acknowledged).not.toHaveBeenCalled()
+  await expect(h.peer.run(brandNumber<EvaluationId>(2), '/', { code: '1', namespaces: [], maxOutputBytes: 1024 })).rejects.toThrow('invalid or overlapping')
+  resume.resolve(undefined)
+  await stopping
+  expect(await first).toMatchObject({ error: { kind: 'abort' } })
+  expect(decodePtcJsonWire((await h.run('({ mutation, serialized })')).value)).toEqual({ mutation: 1, serialized: 0 })
+  expect(h.seen.filter(item => item.type === 'log')).toEqual([])
+})
+
+it('rejects reused, future, and overlapping evaluation identities', async () => {
+  const h = await setup()
+  const data: ProgramBootData = { code: '1', namespaces: [], maxOutputBytes: 1024 }
+  await expect(h.peer.revoke(brandNumber<EvaluationId>(1))).rejects.toThrow('invalid PTC revocation identity')
+  await h.run('1')
+  await expect(h.peer.run(brandNumber<EvaluationId>(1), '/', data)).rejects.toThrow('invalid or overlapping')
+  const started: PromiseWithResolvers<void> = Promise.withResolvers()
+  h.setCall(() => { started.resolve(); return new Promise(() => {}) })
+  const first = h.run('await tools.echo({})', [{ global: 'tools', names: ['echo'] }])
+  await started.promise
+  await expect(h.peer.run(brandNumber<EvaluationId>(3), '/', data)).rejects.toThrow('invalid or overlapping')
+  await expect(h.peer.revoke(brandNumber<EvaluationId>(0))).rejects.toThrow('invalid PTC revocation identity')
+  await h.peer.revoke(brandNumber<EvaluationId>(2))
+  await first
 })
 
 it.each([0, 1.5])('rejects an invalid control limit %s', async (limit) => {
@@ -156,4 +217,16 @@ it('ignores a REPL asynchronous diagnostic after its evaluation has completed', 
   await setImmediate()
   expect(decodePtcJsonWire((await h.run('2')).value)).toBe(2)
   expect(h.seen.filter(message => message.type === 'done')).toHaveLength(2)
+})
+
+
+it('throws for a host-revoked binding and runs user cleanup', async () => {
+  const h = await setup()
+  const invoked: PromiseWithResolvers<void> = Promise.withResolvers()
+  h.setCall(async () => { invoked.resolve(); return null })
+  const first = h.run('let resumed = false; try { await tools.echo({}); resumed = true } finally { resumed = true }', [{ global: 'tools', names: ['echo'] }])
+  await invoked.promise
+  expect((await first).error?.kind).toBe('exception')
+  await h.peer.revoke(brandNumber<EvaluationId>(1))
+  expect(decodePtcJsonWire((await h.run('resumed')).value)).toBe(true)
 })

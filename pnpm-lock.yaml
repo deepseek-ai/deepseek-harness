@@ -13844,6 +13844,9 @@ importers:
 
   packages/ptc-runtime/ptc-runtime-node:
     dependencies:
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:*
+        version: link:../../util/brand
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values

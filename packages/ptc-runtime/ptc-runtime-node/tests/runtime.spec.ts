@@ -110,11 +110,11 @@ describe('Node program process', () => {
     expect(result.value).toEqual({ value: { n: 42 }, rejected: [true, 'ToolCallError', 'fail', 'denied'] })
   })
 
-  it('returns cleanly while an unawaited binding call is still running', async () => {
+  it('returns cleanly when an unfinished binding handles cancellation', async () => {
     const { run } = await setup()
     const release = Promise.withResolvers<null>()
     onTestFinished(() => { release.resolve(null) })
-    const result = await run({ program: 'void tools.slow({}); return 1', bindings: bindings({ slow: () => release.promise }) })
+    const result = await run({ program: 'void tools.slow({}).catch(() => {}); return 1', bindings: bindings({ slow: () => release.promise }) })
     expect(result).toMatchObject({ logs: [], value: 1 })
     expect(result.error).toBeUndefined()
   })
@@ -168,11 +168,22 @@ describe('Node program process', () => {
     expect((await run({ program, bindings: [] })).error?.kind).toBe('timeout')
   })
 
-  it('retains console output emitted immediately before a non-yielding program', async () => {
-    const { run } = await setup({ timeoutMs: 1000, graceMs: 50 })
-    const result = await run({ program: 'console.log("before hot loop"); for (;;) {}', bindings: [] })
-    expect(result.error?.kind).toBe('timeout')
-    expect(result.logs).toEqual(['before hot loop'])
+  it('retains console output when a non-yielding program is canceled', async () => {
+    const { run } = await setup()
+    const entered = Promise.withResolvers<undefined>()
+    const controller = new AbortController()
+    const pending = run({
+      program: 'console.log("before hot loop"); void tools.enter({}).catch(() => {}); for (;;) {}',
+      signal: controller.signal, timeoutMs: null,
+      bindings: bindings({ enter: async () => { entered.resolve(undefined); return null } }),
+    })
+    try {
+      await entered.promise
+      controller.abort('stop')
+      const result = await pending
+      expect(result.error?.kind).toBe('abort')
+      expect(result.logs).toEqual(['before hot loop'])
+    } finally { controller.abort(); await pending }
   })
 
   it('does not pause the deadline while a binding is pending', async () => {
