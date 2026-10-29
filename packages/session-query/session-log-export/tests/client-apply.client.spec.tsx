@@ -96,6 +96,19 @@ describe('session-log-download browser plugin', () => {
     expect(b.active.getSnapshot()).toEqual({ kind: 'sessionHeader', value: { sessionId: 'another' } })
   })
 
+  it('dismisses the same Header menu after its button anchor moves more than four pixels', async () => {
+    const b = await bench()
+    const face = injectedOf(b.slots.entries('conversation.session.header.utilities')[0]) as SessionLogDownloadHeaderInjected
+    face.openMenu(SID, { x: 20, y: 30 })
+    const moved = { x: 120, y: 80 }
+    face.openMenu(SID, moved)
+    expect(b.close).toHaveBeenCalledOnce()
+    expect(b.open).toHaveBeenCalledOnce()
+    expect(b.active.getSnapshot()).toBeNull()
+    face.openMenu(SID, moved)
+    expect(b.open).toHaveBeenLastCalledWith({ kind: 'sessionHeader', value: { sessionId: SID } }, moved)
+  })
+
   it('provides one controller and removes its Header and overlay contributions on disposal', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 500 })))
     const b = await bench()

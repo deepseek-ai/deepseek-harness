@@ -17,7 +17,7 @@ export interface SessionLogDownloadHeaderInjected extends SessionLogDownloadDial
     headerMenu: ObservableSnapshot<ContextMenuTarget | null>
   }
   /**
-   * Toggle the shared menu for the captured Header Session.
+   * Toggle the shared menu by Header Session identity, regardless of anchor movement.
    * @param sessionId - Session displayed by this Header.
    * @param point - trigger's viewport anchor.
    */

@@ -23,13 +23,6 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
-  interface ContextMenuTargetMap {
-    /** Header utilities, independent of Session-row and title context actions. */
-    sessionHeader: { readonly sessionId: SessionId }
-  }
-}
-
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     'session-log-download': SessionLogDownloadKey
@@ -113,6 +106,7 @@ export function apply(ctx: ClientContext): void {
       dismiss: (sessionId: SessionId) => { controller.dismiss(sessionId) },
       openMenu: (sessionId, point) => {
         const active = ctx.contextMenus.active.getSnapshot()
+        // A second button activation dismisses its menu even if layout moved the anchor.
         if (active?.kind === 'sessionHeader' && active.value.sessionId === sessionId) ctx.contextMenus.close()
         else ctx.contextMenus.open({ kind: 'sessionHeader', value: { sessionId } }, point)
       },

@@ -1,4 +1,4 @@
-/** Viewport placement for Menu's portaled child card, independent of input device. */
+/** Event-driven viewport placement and width ownership for Menu's portaled child card. */
 import { useLayoutEffect, useState, type RefObject } from 'react'
 import { overlayTopMargin } from './overlay-top-margin.ts'
 
@@ -13,6 +13,9 @@ interface SubmenuPosition {
 /**
  * Fit a child beside its parent, or over the parent's panel when neither side fits.
  * CSS cannot choose a sibling portal's placement from both measured card widths.
+ * This hook owns the child's inline width; callers must not also render that style.
+ * Scroll and viewport resize place immediately. Observer and font changes share one
+ * requested frame; relevant running animations track frames until they settle.
  * @param active - The mounted parent's row ID, or null while closed.
  * @param parent - Parent card, including its scroll region.
  * @param trigger - The parent row opening the child.
@@ -30,26 +33,59 @@ export function useMenuSubmenuPosition(
   const [position, setPosition] = useState<SubmenuPosition | null>(null)
   useLayoutEffect(() => {
     if (active === null) { setPosition(null); return }
+    const parentElement = parent.current
+    const triggerElement = trigger.current
+    const childElement = child.current
+    /* v8 ignore next -- Menu mounts all three refs before activating this layout effect; cleanup disconnects their observers. */
+    if (parentElement === null || triggerElement === null || childElement === null) return
+    const initialWidth = childElement.style.width
+    let disposed = false
+    let frame: number | null = null
+    let movement: IntersectionObserver[] = []
+    let previousBoxes = ''
+    const motionTargets: HTMLElement[] = [parentElement, triggerElement]
+    // Shrinking transforms can stay wholly inside an intersection root. Track
+    // their active animation only; a settled menu schedules no idle frame.
+    const moving = () => motionTargets.some(element => typeof element.getAnimations === 'function'
+      && element.getAnimations().some(animation => animation.playState === 'running'))
+    const schedule = () => {
+      if (disposed || frame !== null) return
+      frame = requestAnimationFrame(() => {
+        frame = null
+        place()
+        if (!disposed && moving()) schedule()
+      })
+    }
+    // A tight observer root detects position changes, including transforms and
+    // layout shifts that change neither the element's size nor scroll offsets.
+    const observeMovement = (element: Element, rect: DOMRect) => {
+      const observer = new IntersectionObserver((entries) => {
+        if (entries.some(entry => entry.boundingClientRect.left !== rect.left || entry.boundingClientRect.top !== rect.top
+          || entry.boundingClientRect.width !== rect.width || entry.boundingClientRect.height !== rect.height)) schedule()
+      }, { rootMargin: `${-rect.top}px ${rect.right - window.innerWidth}px ${rect.bottom - window.innerHeight}px ${-rect.left}px`, threshold: 1 })
+      observer.observe(element)
+      movement.push(observer)
+    }
     const place = () => {
-      if (parent.current === null || trigger.current === null || child.current === null) return
-      const panel = parent.current.getBoundingClientRect()
-      const row = trigger.current.getBoundingClientRect()
+      if (disposed) return
+      const panel = parentElement.getBoundingClientRect()
+      const row = triggerElement.getBoundingClientRect()
       const margin = 12
       const gap = 4
       const vw = window.innerWidth
       const vh = window.innerHeight
       const topMargin = contextual ? margin : overlayTopMargin(margin, row, gap)
       const maxHeight = Math.max(0, vh - topMargin - margin)
-      // Keep natural width measurable after returning from a single-panel page.
-      child.current.style.width = ''
-      const width = child.current.offsetWidth
+      // Intrinsic width is refreshed only on placement invalidation, not idle frames.
+      if (childElement.style.width !== '') childElement.style.width = ''
+      const width = childElement.offsetWidth
       const right = panel.right + gap
       const left = panel.left - gap - width
       const page = right + width > vw - margin && left < margin
       const pageWidth = Math.min(Math.max(panel.width, width), vw - margin * 2)
       const actualWidth = page ? pageWidth : width
       const x = page ? panel.left : right + width <= vw - margin ? right : left
-      const height = Math.min(child.current.offsetHeight, maxHeight)
+      const height = Math.min(childElement.offsetHeight, maxHeight)
       const y = page ? panel.top : row.top
       const next: SubmenuPosition = {
         left: Math.max(margin, Math.min(x, vw - actualWidth - margin)),
@@ -58,20 +94,56 @@ export function useMenuSubmenuPosition(
         ...(page ? { width: pageWidth } : {}),
         page,
       }
-      if (page) child.current.style.width = `${pageWidth}px`
+      if (page) childElement.style.width = `${pageWidth}px`
       setPosition(current => current?.left === next.left && current.top === next.top
         && current.maxHeight === next.maxHeight && current.width === next.width && current.page === next.page ? current : next)
+      const boxes = [panel.left, panel.top, panel.width, panel.height, row.left, row.top, row.width, row.height, vw, vh].join(',')
+      if (typeof IntersectionObserver !== 'undefined' && boxes !== previousBoxes) {
+        for (const observer of movement) observer.disconnect()
+        movement = []
+        previousBoxes = boxes
+        observeMovement(parentElement, panel)
+        observeMovement(triggerElement, row)
+      }
     }
     place()
-    let frame: number
-    const track = () => { place(); frame = requestAnimationFrame(track) }
-    frame = requestAnimationFrame(track)
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
+    resize?.observe(parentElement)
+    resize?.observe(triggerElement)
+    resize?.observe(childElement)
+    const mutation = new MutationObserver((records) => {
+      if (records.some(record => record.target !== childElement || record.attributeName !== 'style')) schedule()
+    })
+    const attributes = { attributes: true, attributeFilter: ['class', 'style', 'hidden'], childList: true }
+    mutation.observe(parentElement, { ...attributes, subtree: true, characterData: true })
+    mutation.observe(childElement, { ...attributes, subtree: true, characterData: true })
+    for (let ancestor = parentElement.parentElement; ancestor !== null; ancestor = ancestor.parentElement) {
+      mutation.observe(ancestor, attributes)
+      motionTargets.push(ancestor)
+    }
+    const onMotion = (event: Event) => {
+      if (event.target instanceof HTMLElement && motionTargets.includes(event.target)) schedule()
+    }
+    const motionEvents = ['animationstart', 'animationend', 'animationcancel', 'transitionrun', 'transitionend', 'transitioncancel']
+    for (const event of motionEvents) document.addEventListener(event, onMotion, true)
+    if (moving()) schedule()
+    const fonts = 'fonts' in document ? document.fonts : undefined
+    fonts?.addEventListener('loadingdone', schedule)
+    fonts?.addEventListener('loadingerror', schedule)
     window.addEventListener('resize', place)
     window.addEventListener('scroll', place, true)
     return () => {
-      cancelAnimationFrame(frame)
+      disposed = true
+      if (frame !== null) cancelAnimationFrame(frame)
+      resize?.disconnect()
+      mutation.disconnect()
+      for (const event of motionEvents) document.removeEventListener(event, onMotion, true)
+      for (const observer of movement) observer.disconnect()
+      fonts?.removeEventListener('loadingdone', schedule)
+      fonts?.removeEventListener('loadingerror', schedule)
       window.removeEventListener('resize', place)
       window.removeEventListener('scroll', place, true)
+      childElement.style.width = initialWidth
     }
   }, [active, parent, trigger, child, contextual])
   return position

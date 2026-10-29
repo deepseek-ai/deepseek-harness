@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-The browser half of `@deepseek-ai/dsh-session-log-export` requires `contextMenus` to render its Header More menu. Custom Web compositions that previously mounted session-log-export without a context-menu provider must add one; otherwise the browser plugin waits for the missing service. The default Web composition already includes the provider. Host export routes and the `/export` command are unchanged.
+The browser half of `@deepseek-ai/dsh-session-log-export` requires `contextMenus` to render its Header More menu. Custom Web compositions that previously mounted session-log-export without a context-menu provider must add one; otherwise the entire Header More button disappears, including access to copy, download, and feedback actions. The default Web composition already includes the provider. Host export routes and the `/export` command are unchanged.
 
 ## Migration
 

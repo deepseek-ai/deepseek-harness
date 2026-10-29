@@ -100,7 +100,7 @@ Web bundle 将本包与 Connection、`dsh-commands`、`dsh-client-ui-commands`�
 
 本包分为两部分。Host 半包（[`src/index.ts`](src/index.ts)）注册 `/export` 命令，并向 Connection 贡献精确的 `GET`/`HEAD /api/session.export` 与 `/api/session.markdown` Fetch 路由；[`src/archive.ts`](src/archive.ts) 构建有界 ZIP 流，[`src/markdown.ts`](src/markdown.ts) 渲染 Markdown 记录。浏览器半包（[`src/client/index.ts`](src/client/index.ts)）提供共享下载与 Markdown 复制控制器和 UI，并观察 `command/executed`，因此只有提交命令的浏览器会启动下载。
 
-Header 的更多入口使用公共紧凑 Button，点击区域为 28px 正方形，与右侧栏展开控件共用圆角和 hover 底色。本包通过声明合并定义被捕获的 `sessionHeader` 目标，独立于会话行及标题右键操作。导出及可选反馈贡献观察各自的控制器、可用性与语言源；按钮通过共享活动目标显示展开状态。会话范围的下载弹窗保持挂载在按钮旁，菜单焦点和关闭由共享浮层管理。
+Header 的更多入口使用公共紧凑 Button，点击区域为 28px 正方形，与右侧栏展开控件共用圆角和 hover 底色。共享右键菜单包声明被捕获的 `sessionHeader` 目标，独立于会话行及标题右键操作；本包持有 Header 入口。导出及可选反馈贡献观察各自的控制器、可用性与语言源；按钮通过共享活动目标显示展开状态。会话范围的下载弹窗保持挂载在按钮旁，菜单焦点和关闭由共享浮层管理。
 
 ### 下载流程
 

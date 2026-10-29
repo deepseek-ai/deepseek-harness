@@ -27,6 +27,8 @@ export type UseContextMenu = () => ContextMenuBindings
 /** External plugins extend this map with their own target families. */
 export interface ContextMenuTargetMap {
   session: { readonly sessionId: SessionId; readonly displayTitle: string }
+  /** Header utilities, independent of Session-row and title context actions. */
+  sessionHeader: { readonly sessionId: SessionId }
   file: { readonly sessionId: SessionId; readonly path: string; readonly line?: number; readonly paneId?: PaneId }
   directory: { readonly sessionId: SessionId; readonly path: string }
   url: { readonly sessionId: SessionId; readonly url: string }

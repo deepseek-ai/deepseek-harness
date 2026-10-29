@@ -169,7 +169,7 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * @param props.contextual - cursor positioning, context dismissal, and per-divider icon alignment.
  * @param props.exiting - retain an inert popup during dismissal or replacement fade.
  * @param props.returnFocus - original control captured before asynchronous menu preparation;
- * pointer presses on it or its descendants stay inside the menu interaction.
+ * contextual menus keep presses on external `data-context-menu-trigger` controls inside the menu interaction.
  * @param props.autoFocus - focus the first item on open; the arrow keys walk the list either way.
  * @param props.open - whether the list is showing (owner-controlled).
  * @param props.anchor - the trigger element (rendered in place).
@@ -490,7 +490,8 @@ export function Menu({ open, anchor, items = [], children, submenuBackLabel, sel
     const onPointerDown = (e: PointerEvent) => {
       if (!(e.target instanceof Node) || (contextual && e.button === 2)) return
       // The portaled list is outside the anchor subtree; check both.
-      if (rootRef.current?.contains(e.target) === true || returnFocus?.()?.contains(e.target) === true) return
+      if (rootRef.current?.contains(e.target) === true) return
+      if (contextual && e.target instanceof Element && e.target.closest('[data-context-menu-trigger]') !== null) return
       if (listRef.current?.contains(e.target) === true || submenuRef.current?.contains(e.target) === true) return
       onClose()
     }
@@ -518,7 +519,7 @@ export function Menu({ open, anchor, items = [], children, submenuBackLabel, sel
         returnToParent()
         return
       }
-      if (e.key === 'ArrowRight' && anchored && focused instanceof HTMLButtonElement
+      if (e.key === 'ArrowRight' && insideList && focused instanceof HTMLButtonElement
         && focused.getAttribute('aria-haspopup') === 'menu') {
         e.preventDefault()
         focused.click()
@@ -620,7 +621,7 @@ export function Menu({ open, anchor, items = [], children, submenuBackLabel, sel
   }, [open, cancelClose, cancelSubmenuClose])
 
   const hoverAllowed = (event: { pointerType: string }): boolean => event.pointerType !== 'touch'
-    && window.matchMedia('(hover: hover)').matches
+    && window.matchMedia('(any-hover: hover)').matches
 
   const itemColumns = iconColumns(items, contextual)
   const footerColumns = iconColumns(footer ?? [], contextual)
@@ -679,7 +680,7 @@ export function Menu({ open, anchor, items = [], children, submenuBackLabel, sel
             className={clsx(css.submenu, css.scrollable, dense && css.denseList, compact && css.compactList)}
             style={submenuPosition === null ? MEASURE_STYLE : {
               left: submenuPosition.left, top: submenuPosition.top,
-              maxHeight: submenuPosition.maxHeight, width: submenuPosition.width,
+              maxHeight: submenuPosition.maxHeight,
               visibility: submenuHidden ? 'hidden' : undefined,
             }} role="menu"
             onPointerEnter={cancelSubmenuClose}

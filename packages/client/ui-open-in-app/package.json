@@ -79,7 +79,6 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-host-open-in-app": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-session-log-export": "workspace:*",
     "react": "^18.2.0",
     "@deepseek-ai/dsh-client-ui-deliverables": "workspace:*",
     "@deepseek-ai/dsh-native-command": "workspace:*",

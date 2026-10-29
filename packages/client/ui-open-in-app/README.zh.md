@@ -27,6 +27,8 @@ kind: "package-reference"
 
 把本插件与 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 并排挂载到 Web 组合；本行不接受配置。会话目录已知且至少有一个已安装、已本地化的目录应用时，显示在应用中打开子菜单。Host 通过 `session.canOpenWorkspacePath` 报告桌面可用时，[`ui-sidebar-documentpreview`](../ui-sidebar-documentpreview/README.zh.md) 的文档预览显示文件控件；删除本行会移除其全部控件与菜单贡献。
 
+头部入口使用 [`dsh-session-log-export`](../../session-query/session-log-export/README.zh.md) 持有的现有更多按钮。未挂载该插件时，本包仅向其他已挂载的入口提供功能，例如会话行、标题右键菜单和文件树控件；不会创建头部按钮。
+
 ### 预期行为
 
 会话头部把**在应用中打开**放在下载之后、反馈之前的独立分隔组。会话行更多、行右键及标题右键菜单把它放在复制 Session ID 之后、归档之前。只有一个应用时仍保留子菜单。文件树与文档标题栏保留高 24px、圆角 9px 的纯图标分体按钮。这些按钮的悬停提示显示默认应用或定位动作，其菜单保留默认标记。所有应用图标加载失败时均使用原生打开图标。文件树按钮以所属组件传入的 `absolutePath` 为目标，并与会话菜单共享应用选择及启动占用状态。目录选择仅在启动成功后持久化到 `dsh.open-in-app.choice`；原选择不可用时回退到首个符合条件的应用。目录启动忙碌时，禁用子菜单父项和全部应用行。
@@ -55,7 +57,7 @@ kind: "package-reference"
 <details>
 <summary>实现内幕——点击展开</summary>
 
-[`session-open-with.ts`](src/client/session-open-with.ts) 为 `session` 和头部所属包声明的 `sessionHeader` 目标共用一个解析器；其他贡献不会在这两种目标间扩散。文件树插槽通过所属组件的 `absolutePath` 使用 `OpenInAppAction`；会话头部没有独立打开按钮插槽。页面生命周期的 [`controller`](src/client/controller.ts) 持有可用性、持久化偏好与启动 POST 状态。菜单观察器和组件注入 hooks 读取同一组源。文档相对路由与载荷类型来自 Host 的浏览器安全子路径 `@deepseek-ai/dsh-host-open-in-app/shared`。适配器将原生操作及传输失败解析为具名结果；跳过的请求不播报。
+[`session-open-with.ts`](src/client/session-open-with.ts) 为共享右键菜单包声明的 `session` 和 `sessionHeader` 目标共用一个解析器；其他贡献不会在这两种目标间扩散。文件树插槽通过所属组件的 `absolutePath` 使用 `OpenInAppAction`；会话头部没有独立打开按钮插槽。页面生命周期的 [`controller`](src/client/controller.ts) 持有可用性、持久化偏好与启动 POST 状态。菜单观察器和组件注入 hooks 读取同一组源。文档相对路由与载荷类型来自 Host 的浏览器安全子路径 `@deepseek-ai/dsh-host-open-in-app/shared`。适配器将原生操作及传输失败解析为具名结果；跳过的请求不播报。
 
 目录和文件适配器把应用信息与操作交给 [`OpenTargetButton`](src/client/OpenTargetButton.tsx)，由它统一管理菜单顺序、默认标记、图标和尺寸。注入的回调将结果交给本功能在 `shell.overlay` 中持有的唯一 toast，因此切换会话或关闭发起操作的预览不会丢失结果。文件标题栏和空态共用 `FileOpenTarget`，`OpenPathInjected.applications` 通过 [`open-path.ts`](src/client/open-path.ts) 查询 `session.workspacePathApplications`。打开操作使用 `session.openWorkspacePath`，Host 在启动前重新验证指定的关联应用。`FileRouteAction` 通过 `deliverables.file.actions` 和 `deliverables.review.file.actions` 为交付卡片和变更对比页提供同一控件，其认证路由保留会话文件校验。目录适配器继续使用已有的应用列表路由，文件查询失败或不可用时无需增加平台专用的界面实现。
 

@@ -36,7 +36,7 @@ afterEach(() => {
 })
 
 function pointer(
-  target: Element, type: 'pointerover' | 'pointerout' | 'pointerdown', pointerType: 'mouse' | 'touch', relatedTarget: EventTarget | null = null,
+  target: Element, type: 'pointerover' | 'pointerout' | 'pointerdown', pointerType: 'mouse' | 'pen' | 'touch', relatedTarget: EventTarget | null = null,
 ) {
   const event = new MouseEvent(type, { bubbles: true, relatedTarget })
   Object.defineProperty(event, 'pointerType', { value: pointerType })
@@ -66,7 +66,8 @@ function ExternalTriggerFixture({ onClose }: { onClose: () => void }) {
   const trigger = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   return <>
-    <button ref={trigger} onClick={() => { setOpen(value => !value) }}><span>External more</span></button>
+    <button ref={trigger} data-context-menu-trigger="" aria-haspopup="menu"
+      onClick={() => { setOpen(value => !value) }}><span>External more</span></button>
     <Menu open={open} anchor={null} portal contextual returnFocus={() => trigger.current}
       getAnchorRect={() => trigger.current?.getBoundingClientRect() ?? null}
       items={entries} onClose={() => { onClose(); setOpen(false) }} />
@@ -85,6 +86,51 @@ function childMenu() {
 }
 
 describe('Menu submenus', () => {
+  it('dismisses a non-contextual menu when an external marked trigger is pressed', () => {
+    const close = vi.fn()
+    render(<>
+      <button data-context-menu-trigger="">Header more</button>
+      <Menu open anchor={null} items={entries} onClose={close} />
+    </>)
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Header more' }))
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('does not activate an external popup trigger on ArrowRight', () => {
+    render(<ExternalTriggerFixture onClose={vi.fn()} />)
+    const trigger = screen.getByRole('button', { name: 'External more' })
+    act(() => { trigger.focus() })
+    fireEvent.click(trigger)
+    fireEvent.keyDown(trigger, { key: 'ArrowRight' })
+    expect(screen.getByRole('menu')).toBeDefined()
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('dismisses on a return-focus subtree that is not marked as a menu trigger', () => {
+    const close = vi.fn()
+    const restore = document.createElement('div')
+    const target = document.createElement('button')
+    restore.append(target)
+    document.body.append(restore)
+    try {
+      render(<Menu open anchor={null} contextual returnFocus={() => restore} items={entries} onClose={close} />)
+      fireEvent.pointerDown(target)
+      expect(close).toHaveBeenCalledOnce()
+    } finally { restore.remove() }
+  })
+
+  it.each(['mouse', 'pen'] as const)('accepts a secondary %s when the primary pointer cannot hover', (pointerType) => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query === '(any-hover: hover)' })))
+    render(<Fixture />)
+    openMenu()
+    const parent = screen.getByRole('menuitem', { name: 'Applications' })
+    pointer(parent, 'pointerover', 'touch')
+    fireEvent.mouseOver(parent)
+    expect(screen.queryByRole('menuitem', { name: 'First app' })).toBeNull()
+    pointer(parent, 'pointerover', pointerType)
+    expect(screen.getByRole('menuitem', { name: 'First app' })).toBeDefined()
+  })
+
   it('lets an external return-focus trigger toggle closed through pointerdown then click', () => {
     const close = vi.fn()
     render(<ExternalTriggerFixture onClose={close} />)

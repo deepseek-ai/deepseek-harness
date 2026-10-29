@@ -9,7 +9,7 @@ description: "使用 session-log-export 的自定义 Web 组合必须提供右�
 
 ## 变更
 
-`@deepseek-ai/dsh-session-log-export` 的浏览器半包需要 `contextMenus` 来渲染头部更多菜单。此前挂载 session-log-export 但没有右键菜单提供者的自定义 Web 组合必须补充该提供者，否则浏览器插件会等待缺失的服务。默认 Web 组合已包含提供者。Host 导出路由及 `/export` 命令不变。
+`@deepseek-ai/dsh-session-log-export` 的浏览器半包需要 `contextMenus` 来渲染头部更多菜单。此前挂载 session-log-export 但没有右键菜单提供者的自定义 Web 组合必须补充该提供者，否则整个头部更多按钮都会消失，复制、下载和反馈操作的入口也随之消失。默认 Web 组合已包含提供者。Host 导出路由及 `/export` 命令不变。
 
 ## 迁移
 
