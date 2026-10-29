@@ -1,19 +1,13 @@
-/** Browser mirror of the Host's Feishu account and the Plugins page's connection actions. */
-import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-api-remotes/client'
-import { CliAccountConnection, type CliAccountSnapshot } from '@deepseek-ai/dsh-client-ui-cli-account'
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+/** The Feishu connection the Plugins page shows, derived from the Host's account view. */
+import type { CliAccountSnapshot } from '@deepseek-ai/dsh-client-ui-cli-account/client'
 import type { FeishuAppId, FeishuState } from '@deepseek-ai/dsh-feishu-cli/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 
 /** The npm package whose bundle page carries the connection section. */
 export const FEISHU_PACKAGE = '@deepseek-ai/dsh-feishu'
 
-/** Outcomes the page reports after an operation this browser started succeeds. */
-export type FeishuNotice = 'app-linked' | 'connected' | 'signed-out'
-
 /** The page's whole view: the Host's account view plus this browser's stream, pending action, and notice. */
-export type ConnectionSnapshot = CliAccountSnapshot<FeishuState, FeishuNotice>
+export type ConnectionSnapshot = CliAccountSnapshot<FeishuState>
 
 /** The step a connection or sign-out in progress shows. */
 export type ConnectionStep = 'configuring' | 'authorizing' | 'connecting' | 'signing-out'
@@ -31,23 +25,6 @@ export type ConnectionPresentation =
     readonly url: string | undefined
     readonly cancellable: boolean
   }
-
-/** Page-facing actions and the snapshot hook the slot entries inject. */
-export interface ConnectionFace {
-  hooks: { feishuConnection: HostObservable<ConnectionSnapshot> }
-  /** Check the account again. */
-  check(): void
-  /** Link an app, replacing a configured one after the page confirms it. */
-  linkApp(): void
-  /** Sign the linked app's user in. */
-  signIn(): void
-  cancel(): void
-  signOut(): void
-  openAuthorization(): void
-  /** Reopen the Host stream after it stopped. */
-  retry(): void
-  dismissNotice(): void
-}
 
 function step(phase: Exclude<NonNullable<FeishuState['operation']>['phase'], 'checking'>): ConnectionStep {
   switch (phase) {
@@ -90,27 +67,4 @@ export function presentConnection(snapshot: Pick<ConnectionSnapshot, 'view' | 's
     /* v8 ignore next -- closed account state union */
     default: return assertNever(account)
   }
-}
-
-/**
- * Mirror the `feishu` Remote and bind the page's actions to it.
- * @param ctx - the browser plugin context whose Remote the connection follows.
- * @returns the connection to dispose with the plugin, and the face the slot entries inject.
- */
-export function createConnection(ctx: Context): { connection: CliAccountConnection<FeishuState, FeishuNotice>; face: ConnectionFace } {
-  const connection = new CliAccountConnection<FeishuState, FeishuNotice>(ctx, {
-    name: 'Feishu connection',
-    follow: signal => ctx.remote.feishu.follow(signal),
-    cancel: id => ctx.remote.feishu.cancel(id),
-    notices: { 'link-app': 'app-linked', 'sign-in': 'connected', 'sign-out': 'signed-out' },
-  })
-  const face: ConnectionFace = {
-    hooks: { feishuConnection: connection.state },
-    check: () => { connection.start(() => ctx.remote.feishu.check()) },
-    linkApp: () => { connection.start(() => ctx.remote.feishu.linkApp()) },
-    signIn: () => { connection.start(() => ctx.remote.feishu.signIn()) },
-    signOut: () => { connection.start(() => ctx.remote.feishu.signOut()) },
-    ...connection.actions,
-  }
-  return { connection, face }
 }
