@@ -1,0 +1,29 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "text before "
+            }
+          ],
+          [
+            {
+              "tag": "img",
+              "image_key": "fake:fake:test:image:a68ab9e2b4d4"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": " text after"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

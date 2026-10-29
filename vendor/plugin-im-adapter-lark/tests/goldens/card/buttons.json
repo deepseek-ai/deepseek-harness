@@ -1,0 +1,79 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "button",
+              "element_id": "esvscuerndmclyrj",
+              "text": {
+                "tag": "plain_text",
+                "content": "Stop"
+              },
+              "type": "default",
+              "disabled": false,
+              "behaviors": [
+                {
+                  "type": "callback",
+                  "value": {
+                    "v4": {
+                      "id": "btn-stop"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "tag": "button",
+              "element_id": "ez7pozmx522n6vnn",
+              "text": {
+                "tag": "plain_text",
+                "content": "Open"
+              },
+              "type": "default",
+              "disabled": false,
+              "behaviors": [
+                {
+                  "type": "open_url",
+                  "default_url": "https://example.com/open"
+                }
+              ]
+            },
+            {
+              "tag": "markdown",
+              "element_id": "ezy5eif4bjiq623i",
+              "content": "Compact `/compact`",
+              "text_align": "left"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [
+      {
+        "tag": "button-group",
+        "via": "button",
+        "path": "message/button-group[0]"
+      },
+      {
+        "tag": "button",
+        "variant": "input",
+        "via": "p",
+        "path": "message/button-group[0]>/button[2]"
+      }
+    ],
+    "moved": [],
+    "split": 0,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

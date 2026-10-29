@@ -1,0 +1,35 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "img",
+              "element_id": "ekamtivxrdhpv6z5",
+              "img_key": "fake:fake:test:image:d9d33215365f",
+              "alt": {
+                "tag": "plain_text",
+                "content": "block image"
+              },
+              "preview": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [],
+    "moved": [],
+    "split": 0,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

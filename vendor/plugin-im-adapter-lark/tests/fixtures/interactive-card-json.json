@@ -1,0 +1,26 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_type": "im.message.receive_v1",
+    "event_id": "ev_card_json",
+    "app_id": "cli_lark",
+    "create_time": "1700000026000"
+  },
+  "event": {
+    "sender": {
+      "sender_id": {
+        "open_id": "ou_user"
+      },
+      "sender_type": "user",
+      "tenant_key": "t1"
+    },
+    "message": {
+      "message_id": "om_card_json",
+      "chat_id": "oc_chat",
+      "chat_type": "group",
+      "message_type": "interactive",
+      "create_time": "1700000026000",
+      "content": "{\"schema\":\"2.0\",\"header\":{\"title\":{\"tag\":\"plain_text\",\"content\":\"发布提醒\"},\"template\":\"blue\"},\"body\":{\"elements\":[{\"tag\":\"markdown\",\"content\":\"**v1.2.0** 已上线\"},{\"tag\":\"button\",\"text\":{\"tag\":\"plain_text\",\"content\":\"打开链接\"},\"behaviors\":[{\"type\":\"open_url\",\"default_url\":\"https://example.com/release\"}]}]}}"
+    }
+  }
+}

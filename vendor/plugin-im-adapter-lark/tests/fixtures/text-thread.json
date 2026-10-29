@@ -1,0 +1,27 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_type": "im.message.receive_v1",
+    "event_id": "ev_text_thread",
+    "app_id": "cli_lark",
+    "create_time": "1700000005000"
+  },
+  "event": {
+    "sender": {
+      "sender_id": { "open_id": "ou_user" },
+      "sender_type": "user",
+      "tenant_key": "t1"
+    },
+    "message": {
+      "message_id": "om_text_thread",
+      "chat_id": "oc_topic",
+      "chat_type": "group",
+      "message_type": "text",
+      "create_time": "1700000005000",
+      "root_id": "om_root",
+      "parent_id": "om_root",
+      "thread_id": "omt_thread",
+      "content": "{\"text\":\"这条属于话题\"}"
+    }
+  }
+}

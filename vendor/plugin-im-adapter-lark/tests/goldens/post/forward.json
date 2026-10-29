@@ -1,0 +1,23 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "\\[合并转发\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "message after the forward"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]
