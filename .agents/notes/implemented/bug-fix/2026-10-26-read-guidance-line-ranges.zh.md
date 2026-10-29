@@ -25,7 +25,7 @@ read 指导只把 `cat` 点名为 read 工具替代的 shell 命令，并把 `of
 ## 验证
 
 - `packages/fs/tool-fs/tests/tools.spec.ts` 断言渲染出的指导文本。
-- 83 个 `snapshots/**/system-prompt*.expected.md` sidecar 和 6 个 `snapshots/web/*` sidecar 带有恢复后的句子；`test:snapshot` 回放 83 个 session/SDK sidecar，`pnpm run test:web:ci` 回放 6 个 web sidecar（`node 24 / snapshots and artifacts` lane 两条都跑）。两个显式 pin 的历史 sidecar（`web/cordis-tool-round`、`web/schedule-catalog`）保留录制文本。
+- 所有渲染 read 指导的 `system-prompt*.expected.md` sidecar 都带有恢复后的句子：`test:snapshot` 回放 session 与 SDK 集合，`pnpm run test:web:ci` 回放 `snapshots/web` 集合（`node 24 / snapshots and artifacts` lane 两条都跑）。两个显式 pin 的历史 sidecar（`web/cordis-tool-round`、`web/schedule-catalog`）保留录制文本。
 - 上面的评测在 native SDK profile 上只改了这一句进行测量。
 
 ## 影响

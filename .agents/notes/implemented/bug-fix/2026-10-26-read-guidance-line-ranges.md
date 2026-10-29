@@ -25,7 +25,7 @@ Restore the #6054 wording, byte-identical: `Use the read tool — not shell comm
 ## Verification
 
 - `packages/fs/tool-fs/tests/tools.spec.ts` asserts the rendered guidance text.
-- 83 `snapshots/**/system-prompt*.expected.md` sidecars and 6 `snapshots/web/*` sidecars carry the restored sentence; `test:snapshot` replays the 83 session and SDK sidecars, and `pnpm run test:web:ci` replays the 6 web sidecars (the `node 24 / snapshots and artifacts` lane runs both). Two pinned historical sidecars (`web/cordis-tool-round`, `web/schedule-catalog`) retain their recorded text.
+- Every recorded `system-prompt*.expected.md` sidecar that renders the read guidance carries the restored sentence: `test:snapshot` replays the session and SDK set, and `pnpm run test:web:ci` replays the `snapshots/web` set (the `node 24 / snapshots and artifacts` lane runs both). Two pinned historical sidecars (`web/cordis-tool-round`, `web/schedule-catalog`) retain their recorded text.
 - The evaluation above measured this single change on the native SDK profile.
 
 ## Consequences
