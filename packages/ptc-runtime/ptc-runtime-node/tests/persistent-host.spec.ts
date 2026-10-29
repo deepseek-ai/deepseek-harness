@@ -1,3 +1,4 @@
+import { PROGRAM_PROTOCOL_VERSION } from '../src/protocol.ts'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -466,7 +467,7 @@ it('logs unexpected idle readiness and its failed cleanup', async () => {
     h.onBoot(() => { h.complete({}) })
     await h.start()
     h.waitForExit.mockRejectedValueOnce(new Error('idle cleanup failed'))
-    h.emit({ t: 'q', m: 'ready', a: [] })
+    h.emit({ t: 'q', m: 'ready', a: [PROGRAM_PROTOCOL_VERSION] })
     await vi.waitFor(() => { expect(reported).toHaveBeenCalledTimes(2) })
     expect(reported.mock.calls).toEqual([['duplicate program readiness'], ['idle cleanup failed']])
   } finally { reported.mockRestore() }

@@ -35,7 +35,7 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}, prog
   await ready.promise
   let sequence = 0
   const run = (code: string, namespaces: ProgramBootData['namespaces'] = [], maxOutputBytes = 1024) => {
-    return peer.run(brandNumber<EvaluationId>(++sequence), '/', { code, namespaces, maxOutputBytes, programFormat }).then(({ evaluationId: _id, ...result }) => {
+    return peer.run(brandNumber<EvaluationId>(++sequence), '/', { code, namespaces, maxOutputBytes, programFormat, retainsState: true }).then(({ evaluationId: _id, ...result }) => {
       seen.push({ type: 'done', ...result })
       return result
     })
@@ -174,7 +174,7 @@ it.each(['repl', 'script'] as const)('waits for an arbitrary user Promise before
   const stopping = h.peer.revoke(brandNumber<EvaluationId>(1)).then(acknowledged)
   await setImmediate()
   expect(acknowledged).not.toHaveBeenCalled()
-  await expect(h.peer.run(brandNumber<EvaluationId>(2), '/', { code: '1', namespaces: [], maxOutputBytes: 1024 })).rejects.toThrow('invalid or overlapping')
+  await expect(h.peer.run(brandNumber<EvaluationId>(2), '/', { code: '1', namespaces: [], maxOutputBytes: 1024, retainsState: true })).rejects.toThrow('invalid or overlapping')
   resume.resolve(undefined)
   await stopping
   expect(await first).toMatchObject({ error: { kind: 'abort' } })
@@ -184,7 +184,7 @@ it.each(['repl', 'script'] as const)('waits for an arbitrary user Promise before
 
 it('rejects reused, future, and overlapping evaluation identities', async () => {
   const h = await setup()
-  const data: ProgramBootData = { code: '1', namespaces: [], maxOutputBytes: 1024 }
+  const data: ProgramBootData = { code: '1', namespaces: [], maxOutputBytes: 1024, retainsState: true }
   await expect(h.peer.revoke(brandNumber<EvaluationId>(1))).rejects.toThrow('invalid PTC revocation identity')
   await h.run('1')
   await expect(h.peer.run(brandNumber<EvaluationId>(1), '/', data)).rejects.toThrow('invalid or overlapping')

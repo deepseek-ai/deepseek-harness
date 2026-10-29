@@ -17,14 +17,13 @@ import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
 import { decodePtcJsonWire } from './json-wire.ts'
 import { OutputLedger } from './output-ledger.ts'
 import { drainOutput, terminateProcess } from './output-stream.ts'
-import { isEvaluationId, readProgramResult, type EvaluationId, type ProgramBootData, type ProgramMethods, type HostMethods } from './protocol.ts'
+import { isEvaluationId, readProgramResult, PROGRAM_PROTOCOL_VERSION, type EvaluationId, type ProgramBootData, type ProgramMethods, type HostMethods } from './protocol.ts'
 
 const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error)
 
 interface Evaluation {
   id: EvaluationId
   controller: AbortController
-  finished: Promise<PtcRunResult>
   dispatched: boolean
   data: ProgramBootData
   spec: PtcRunSpec
@@ -45,7 +44,7 @@ export class ProgramWorker {
   private active: Evaluation | undefined
   private sequence = 0
   /** Admission remains reserved until the result includes completed process cleanup. */
-  private running = false
+  private running: Promise<void> | undefined
   private cleanupPending = false
   private ready = false
   private stderr = ''
@@ -76,10 +75,10 @@ export class ProgramWorker {
     this.unregister = processes.register(policy, () => this.dispose())
   }
 
-  /** Wait for an ended evaluation's required cleanup before attempting reuse. */
+  /** Direct service callers await interrupted runs, including final admission release. */
   async waitForInterruption(): Promise<void> {
     const evaluation = this.active
-    if (evaluation?.controller.signal.aborted) await evaluation.finished
+    if (evaluation?.controller.signal.aborted) await this.running
   }
 
   /** Reject reuse until the previous evaluation and required cleanup settle. */
@@ -95,7 +94,8 @@ export class ProgramWorker {
    * @returns Output after any required process cleanup.
    */
   async run(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>): Promise<PtcRunResult> {
-    this.running = true
+    const finished = Promise.withResolvers<void>()
+    this.running = finished.promise
     const sandbox: PtcRunSandbox = { mode: this.policy.mode, denied: false }
     try {
       const result = await this.evaluate(spec, bindings)
@@ -105,7 +105,7 @@ export class ProgramWorker {
           result.error?.message.toLowerCase().includes(signature.toLowerCase()))
       }
       return { ...result, sandbox }
-    } finally { this.running = false }
+    } finally { this.running = undefined; finished.resolve() }
   }
 
   private output(): OutputLedger {
@@ -148,10 +148,9 @@ export class ProgramWorker {
     const evaluation: Evaluation = {
       id: brandNumber<EvaluationId>(++this.sequence),
       controller: new AbortController(),
-      finished: result.promise,
       dispatched: false,
       data: {
-        code: '', programFormat: this.mode.format,
+        code: '', programFormat: this.mode.format, retainsState: this.retainsState,
         maxOutputBytes: this.config.maxOutputBytes,
         namespaces: [...bindings.values()].map(binding => ({
           global: binding.global, names: Object.keys(binding.functions), ...binding.errorClass ? { errorClass: binding.errorClass } : {},
@@ -327,7 +326,11 @@ export class ProgramWorker {
       return evaluation?.id === id && !evaluation.controller.signal.aborted ? evaluation : undefined
     }
     this.channel = createProcessRpc<ProgramMethods, HostMethods>(handle.control, this.config.maxMessageBytes, {
-      ready: () => {
+      ready: (version) => {
+        if (version !== PROGRAM_PROTOCOL_VERSION) {
+          this.fail('protocol', 'bootstrap protocol mismatch; upgrade launch.bootstrapPath with the host')
+          return
+        }
         if (this.ready || !this.active) { this.fail('protocol', 'duplicate program readiness'); return }
         this.ready = true
         this.dispatch(this.active)

@@ -46,7 +46,9 @@ export async function probeRestrictedWorker(
   // The probe program calls no bindings and prints nothing, so the host serves only readiness.
   const channel = createProcessRpc<ProgramMethods, Pick<HostMethods, 'ready'>>(control, 1_048_576, {
     ready() {
-      void channel.run(brandNumber<EvaluationId>(1), workspace, { code, namespaces: [], maxOutputBytes: 65_536 }).then((result) => {
+      void channel.run(brandNumber<EvaluationId>(1), workspace, {
+        code, namespaces: [], maxOutputBytes: 65_536, retainsState: false,
+      }).then((result) => {
         if (result.error !== undefined) completed.reject(new Error(JSON.stringify(result.error)))
         else completed.resolve(decodePtcJsonWire(result.value))
         channel.$close()

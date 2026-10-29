@@ -40,7 +40,7 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
   let sequence = 0
   const run = (code: string, maxOutputBytes = 1024, programFormat?: PtcProgramFormat) => peer.run(brandNumber<EvaluationId>(++sequence), '/', {
     code, ...programFormat === undefined ? {} : { programFormat },
-    namespaces, maxOutputBytes,
+    namespaces, maxOutputBytes, retainsState: false,
   }).then(({ evaluationId: _id, ...result }) => result)
   return { child, host, state, nativeEnvironment, methods, peer, main, logs, run }
 }
@@ -63,7 +63,7 @@ it('clears the environment and returns a binding result after captured output', 
   expect(h.state.exitCode).toBeUndefined()
 })
 
-it('rejects unfinished calls and suppresses later logs while awaiting host shutdown', async () => {
+it('keeps unfinished temporary calls pending and suppresses later logs while awaiting host shutdown', async () => {
   const h = await setup()
   const release = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
   h.methods.invoke = () => release.promise
@@ -84,7 +84,7 @@ it('rejects a binding call that the host fails during the run', async () => {
   expect(decodePtcJsonWire(result.value)).toBe('denied by host')
 })
 
-it.each(['function-body', 'repl', 'script'] as const)('rejects an unawaited call when a temporary %s process closes after the result', async (format) => {
+it.each(['function-body', 'repl', 'script'] as const)('leaves an unawaited call pending when a temporary %s process closes after the result', async (format) => {
   const h = await setup()
   const pending = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
   onTestFinished(() => { pending.resolve(encodePtcJsonWire(null)) })

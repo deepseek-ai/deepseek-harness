@@ -4,6 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import { onTestFinished, vi } from 'vitest'
+import { PROGRAM_PROTOCOL_VERSION } from '../src/protocol.ts'
 import type NodeRuntime from '../src/index.ts'
 import { rawPeer } from './raw-peer.ts'
 
@@ -81,7 +82,7 @@ export function fakeChild(ctx: Context, runtime: NodeRuntime, request: PtcRunReq
     direct.resolve({ exitCode: 0, signal: null })
     await Promise.all(writes)
   })
-  const start = (input: PtcRunRequest = request, first: unknown = { t: 'q', m: 'ready', a: [] }) => {
+  const start = (input: PtcRunRequest = request, first: unknown = { t: 'q', m: 'ready', a: [PROGRAM_PROTOCOL_VERSION] }) => {
     const result = runtime.run(runtime.resolve(input))
     if (first !== NO_INITIAL_FRAME) queueMicrotask(() => { emit(first) })
     return result

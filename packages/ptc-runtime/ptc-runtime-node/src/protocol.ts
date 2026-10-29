@@ -3,6 +3,9 @@ import type { PtcProgramFormat, PtcJsonValue, PtcRunFailure } from '@deepseek-ai
 import type { BrandedNumber } from '@deepseek-ai/dsh-brand'
 import { decodePtcJsonWire, type PtcJsonWire } from './json-wire.ts'
 
+/** Wire revision required before the host dispatches program code. */
+export const PROGRAM_PROTOCOL_VERSION = 1
+
 /** Process-local identity of one evaluation; never reused within that process. */
 export type EvaluationId = BrandedNumber<'PtcEvaluationId'>
 
@@ -21,6 +24,8 @@ export interface ProgramBootData {
   code: string
   /** Evaluation syntax; omitted uses the installed bootstrap's default. */
   programFormat?: PtcProgramFormat
+  /** Whether unfinished calls must reject before this environment is reused. */
+  retainsState: boolean
   /** Globals and callable names injected into the program. */
   namespaces: {
     global: string
@@ -56,8 +61,11 @@ export interface BindingMethods {
 
 /** Host operations for the current evaluation; one pipe delivers its messages before its result. */
 export interface HostMethods {
-  /** Announce readiness before accepting an evaluation. */
-  ready(): void
+  /**
+   * Announce readiness before accepting an evaluation.
+   * @param version - Bootstrap wire revision, checked against the host.
+   */
+  ready(version: number): void
   /**
    * Invoke a binding under its originating host execution context.
    * @param evaluationId - Originating evaluation.

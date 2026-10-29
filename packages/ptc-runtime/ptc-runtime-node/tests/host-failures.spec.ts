@@ -1,3 +1,4 @@
+import { PROGRAM_PROTOCOL_VERSION } from '../src/protocol.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { setImmediate } from 'node:timers/promises'
@@ -258,9 +259,17 @@ describe('Node runtime host failures', () => {
     expect((await h.start()).error?.kind).toBe('protocol')
   })
 
+  it.each([[], [0], [PROGRAM_PROTOCOL_VERSION + 1], ['1']])('refuses bootstrap readiness with incompatible version arguments %j before dispatch', async (...args) => {
+    const h = await setup()
+    const result = await h.start(request, { t: 'q', m: 'ready', a: args })
+    expect(result.error).toEqual({ kind: 'protocol', message: 'bootstrap protocol mismatch; upgrade launch.bootstrapPath with the host' })
+    expect(h.messages).not.toContainEqual(expect.objectContaining({ m: 'run' }))
+    expect(h.terminate).toHaveBeenCalledOnce()
+  })
+
   it.each<[unknown, string]>([
     [null, 'not a JSON object'],
-    [{ t: 'q', m: 'ready', a: [] }, 'duplicate program readiness'],
+    [{ t: 'q', m: 'ready', a: [PROGRAM_PROTOCOL_VERSION] }, 'duplicate program readiness'],
     [{ t: 'q', m: 'log', a: [1, 1] }, 'invalid program log'],
     [{ t: 'q', m: 'invoke', a: [1, null, 'test', []], i: 'call' }, 'undeclared binding'],
     [{ t: 'q', m: 'invoke', a: [1, 'tools', 'constructor', []], i: 'call' }, 'undeclared binding'],

@@ -110,11 +110,11 @@ describe('Node program process', () => {
     expect(result.value).toEqual({ value: { n: 42 }, rejected: [true, 'ToolCallError', 'fail', 'denied'] })
   })
 
-  it('returns cleanly when an unfinished binding handles cancellation', async () => {
+  it('returns cleanly while an unawaited binding call is still running', async () => {
     const { run } = await setup()
     const release = Promise.withResolvers<null>()
     onTestFinished(() => { release.resolve(null) })
-    const result = await run({ program: 'void tools.slow({}).catch(() => {}); return 1', bindings: bindings({ slow: () => release.promise }) })
+    const result = await run({ program: 'void tools.slow({}); return 1', bindings: bindings({ slow: () => release.promise }) })
     expect(result).toMatchObject({ logs: [], value: 1 })
     expect(result.error).toBeUndefined()
   })
@@ -169,16 +169,15 @@ describe('Node program process', () => {
   })
 
   it('retains console output when a non-yielding program is canceled', async () => {
-    const { run } = await setup()
-    const entered = Promise.withResolvers<undefined>()
+    const { run, cwd } = await setup()
     const controller = new AbortController()
     const pending = run({
-      program: 'console.log("before hot loop"); void tools.enter({}).catch(() => {}); for (;;) {}',
+      program: 'const fs = await import("node:fs"); console.log("before hot loop"); await tools.enter({}); fs.writeFileSync("entered-loop", "ready"); for (;;) {}',
       signal: controller.signal, timeoutMs: null,
-      bindings: bindings({ enter: async () => { entered.resolve(undefined); return null } }),
+      bindings: bindings({ enter: async () => null }),
     })
     try {
-      await entered.promise
+      await expect.poll(async () => readFile(join(cwd, 'entered-loop'), 'utf8')).toBe('ready')
       controller.abort('stop')
       const result = await pending
       expect(result.error?.kind).toBe('abort')
