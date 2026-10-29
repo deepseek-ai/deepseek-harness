@@ -5,6 +5,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { McpManagedServerStatus } from '@deepseek-ai/dsh-mcp-manager'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import { createScope } from '@deepseek-ai/dsh-scope'
@@ -27,7 +28,7 @@ async function fixture(servers: Record<string, unknown> = {}) {
   }
   const mount = (config: Partial<Notion.Config> = {}) => world.ctx.plugin(Notion, { url: world.origin + '/mcp', ...config })
   const prompt = async () => renderPrompt(await world.ctx.systemPrompt.assemble())
-  const ping = () => world.ctx.tools.execute({
+  const ping = () => executeToolFixture(world.ctx, {
     callId: ToolCallId('notion-ping'), name: 'mcp__notion__ping', arguments: {}, signal: new AbortController().signal,
   })
   const grant = async () => (await world.ctx.credentials.describeRecord(parseCredentialKey('mcp-client/notion'))).configured
@@ -86,7 +87,7 @@ it('keeps Notion tools hidden from an agent until it loads them, unless loading 
   await b.authorize()
   expect(b.ctx.tools.get('mcp__notion__ping', agent)).toBeUndefined()
   expect(b.ctx.tools.get('mcp__notion__load_tools', agent)).toBeDefined()
-  expect(await b.ctx.tools.execute({
+  expect(await executeToolFixture(b.ctx, {
     callId: ToolCallId('notion-load'), name: 'mcp__notion__load_tools', arguments: { tools: ['ping'] },
     signal: new AbortController().signal, agent,
   })).toMatchObject({ isError: false, value: 'Loaded: mcp__notion__ping.' })
