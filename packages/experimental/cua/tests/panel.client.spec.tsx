@@ -69,11 +69,12 @@ it.each([en, zh])('shows the selected permission route, Finder alternative, and 
   expect(f.props.closeGuidance).toHaveBeenCalledTimes(2)
 })
 
-it('keeps manual settings guidance available when native dragging or attribution is unavailable', () => {
+it.each(['accessibility', 'screenRecording'] as const)('keeps manual %s guidance available without native dragging or attribution', (permission) => {
   const f = fixture()
-  f.publish({ ...observe(value), guidance: 'accessibility' })
+  f.publish({ ...observe(value), guidance: permission })
   render(<PermissionPanel {...f.props} />)
   expect(screen.getByText(en.addApplicationHint)).toBeTruthy()
+  expect(screen.getByText(en[permission === 'accessibility' ? 'accessibilitySettingsPath' : 'screenRecordingSettingsPath'])).toBeTruthy()
   expect(screen.queryByRole('button', { name: en.showInFinder })).toBeNull()
   expect(screen.getByRole('button', { name: en.closeGuide })).toBeTruthy()
 })

@@ -6,7 +6,7 @@ import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { DraggableImage } from '@deepseek-ai/dsh-client-ui-primitives'
-import { FILE_DRAG_TOKEN_TYPE, type DesktopFileDrag, type FileDragHandle } from '@deepseek-ai/dsh-util-file-drag'
+import { FILE_DRAG_TOKEN_TYPE, type ApplicationDragReference, type DesktopFileDrag, type FileDragHandle } from '@deepseek-ai/dsh-util-file-drag'
 import * as plugin from '../src/client/index.ts'
 import { apply as applyHost } from '../src/index.ts'
 
@@ -41,6 +41,20 @@ async function bench(language: 'zh' | 'en' | 'ja' = 'zh') {
 }
 
 it('keeps the Host entry empty', () => { applyHost() })
+
+it('exposes application preparation through the native carrier and releases it with the plugin', async () => {
+  const handle = 'application-handle' as FileDragHandle
+  const desktop: DesktopFileDrag = { applications: true,
+    prepare: vi.fn(async () => handle), cancel: vi.fn(), start: vi.fn(async () => true), release: vi.fn(),
+  }
+  vi.stubGlobal('dshDesktop', { protocolVersion: 1, fileDrag: desktop })
+  const { service, owner } = await bench()
+  const reference = 'application-reference' as ApplicationDragReference
+  await service.application!.prepare(reference, new AbortController().signal)
+  expect(desktop.prepare).toHaveBeenCalledWith({ kind: 'application', reference }, expect.any(String))
+  await owner.dispose()
+  expect(desktop.release).toHaveBeenCalledWith(handle)
+})
 
 it('retains bytes after source unmount and releases on the detached node dragend', async () => {
   const { service, owner, runtime } = await bench()

@@ -98,6 +98,19 @@ it('refreshes after a user request without treating the request itself as a gran
   await f.controller.dispose()
 })
 
+it('reports Finder dispatch independently of grants and ignores guide dismissal after disposal', async () => {
+  const f = fixture()
+  const reference = 'application-reference' as import('@deepseek-ai/dsh-util-file-drag').ApplicationDragReference
+  f.face.revealApplication(reference)
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().toast?.kind).toBe('revealed') })
+  expect(f.actions.revealApplication).toHaveBeenCalledWith(reference)
+  expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
+  await f.controller.dispose()
+  const before = f.controller.state.getSnapshot()
+  f.face.closeGuidance()
+  expect(f.controller.state.getSnapshot()).toBe(before)
+})
+
 it('retains the last observation while marking a failed refresh', async () => {
   const f = fixture()
   f.face.refresh()

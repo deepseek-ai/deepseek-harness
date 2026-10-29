@@ -25,7 +25,7 @@ function actionsOf(value: Record<string, unknown>): asserts value is Record<stri
   assert(typeof value.hooks === 'object' && value.hooks !== null)
 }
 
-async function fixture(fail = false) {
+async function fixture(fail = false, nativeDragging = false) {
   const ctx = new Context(), unmount = vi.fn(async () => {})
   class Remote extends Service {
     constructor() { super(ctx, 'remote') }
@@ -36,7 +36,8 @@ async function fixture(fail = false) {
     }
   }
   new Remote()
-  ctx.provide('fileDrag', { application: undefined, actions: { prepare: vi.fn(), reportFailure: vi.fn() }, read: vi.fn() })
+  ctx.provide('fileDrag', { application: nativeDragging ? { prepare: vi.fn() } : undefined,
+    actions: { prepare: vi.fn(), reportFailure: vi.fn() }, read: vi.fn() })
   const changes = createSnapshotStore(false)
   ctx.provide('pluginChanges', { bundle: (name) => {
     expect(name).toBe('@deepseek-ai/dsh-cua-bundle')
@@ -76,6 +77,17 @@ async function fixture(fail = false) {
     requestPermission, openSettings, revoke, retryApproval, setDefault, setPersistent, runtimeConfiguration,
   }
 }
+
+it('supplies native application dragging only when the desktop carrier provides it', async () => {
+  const f = await fixture(false, true)
+  try {
+    await f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
+    const entry = f.ctx.slots.entries('plugins.bundle.config')[0]!
+    expect(entry.inject!()).toMatchObject({ applicationDrag: {
+      prepare: f.ctx.fileDrag.application!.prepare, reportFailure: f.ctx.fileDrag.actions.reportFailure,
+    } })
+  } finally { await f.ctx.fiber.dispose() }
+})
 
 it('withdraws the permission Remote and all controls with the optional plugin', async () => {
   const f = await fixture()
