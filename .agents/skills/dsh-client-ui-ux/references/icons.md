@@ -47,7 +47,11 @@ Distinguish click target, visible button base, icon slot and painted glyph. Equa
 
 An icon and its associated text for one action, value or input prompt must share foreground color, effective opacity and state changes. This includes submenu value chevrons and search placeholders; inherit the shared role instead of assigning an independent icon token. Typed text and independent clear actions may differ; status, warning and brand roles retain semantic colors. Check computed color and ancestor opacity in both themes. Apply the rule to changed consumers; updating it does not certify untouched UI. Compare native file icons and folder outlines deliberately; do not normalize logos, status dots or decorative illustrations to toolbar icons.
 
-Use the shared Tooltip for unclear icon-only actions and HoverCard for informational content requiring hover or selection; prefer these primitives over ad-hoc `title` attributes. [Responsive UI](../../dsh-responsive-ui/SKILL.md) owns mobile tooltips and label collapse. Every right-sidebar tab needs a meaningful icon. Preserve accessible labels and focus; [alignment](alignment.md) owns positioning and [spacing](spacing.md) owns gaps.
+Every right-sidebar tab needs a meaningful icon. [Alignment](alignment.md) owns positioning and [spacing](spacing.md) owns gaps.
+
+## Icon controls and interaction
+
+Use the shared Tooltip for unclear icon-only actions and HoverCard for informational content requiring hover or selection; prefer these primitives over ad-hoc `title` attributes. Preserve accessible labels and focus. [Responsive UI](../../dsh-responsive-ui/SKILL.md) owns mobile tooltips and label collapse.
 
 ## Verification and handoff
 
