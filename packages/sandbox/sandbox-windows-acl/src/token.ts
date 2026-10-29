@@ -101,8 +101,7 @@ export function makeWellKnownSid(api: Win32Bindings, type: number): NativePtr {
  * (child stdio) therefore fails the write pass-2 check at creation
  * (ERROR_ACCESS_DENIED; Node surfaces it as spawn EPERM), breaking every
  * piped-stdio grandchild spawn. The merged ACE names a RESTRICTING SID (the
- * private-temp SID, otherwise the first directory SID, or Everyone when
- * neither is present), so each new
+ * write SID under workspace-write, Everyone under read-only), so each new
  * object's own DACL passes pass-2 while object creation itself stays gated by
  * the parent container's DACL (files outside the granted trees remain
  * uncreatable). Fails closed: any Win32 failure throws before the spawn.
@@ -183,7 +182,7 @@ export interface RestrictingSidSet {
  * Create the write-restricted token with the mode-selected restricting list
  * (verified on Win11 26200, see the POC-worktree restrict-variant harness):
  *  - read-only:       [logon SID, EVERYONE]
- *  - workspace-write: [logon SID, EVERYONE, ...directory SIDs, optional temp SID]
+ *  - workspace-write: [logon SID, EVERYONE, workspace SID, optional temp SID]
  *
  * The logon SID + EVERYONE keep-alive group is shared by both modes: early
  * DLL init dies with 0xC0000142 and CNG (`\Device\CNG` write trustee —
@@ -192,7 +191,7 @@ export interface RestrictingSidSet {
  * from an earlier workspace-write period (a `/permission` mode downgrade, or
  * a crash-resumed session) stays INERT under read-only: the WRITE_RESTRICTED
  * pass-2 check grants only what the restricting list carries, keeping that
- * directory grant inert under read-only while the unrevoked ACE keeps the
+ * workspace grant inert under read-only while the unrevoked ACE keeps the
  * re-upgrade free (the grant's exact-ACE skip — no re-propagation).
  * Everyone's own ambient grants remain the documented partial boundary.
  * Authenticated Users is absent from BOTH lists: the WMI
@@ -208,7 +207,7 @@ export interface RestrictingSidSet {
  * @param api - the binding table.
  * @param currentToken - the process token to restrict.
  * @param logonSid - the copied logon session SID.
- * @param writeSids - the distinct write SIDs forming the directory and
+ * @param writeSids - the distinct write SIDs forming the workspace and
  * optional temp allowlists (workspace-write only; empty under read-only).
  * @param known - the well-known SIDs entering the restricting list.
  * @param mode - selects the restricting list (workspace-write adds the capability SIDs).

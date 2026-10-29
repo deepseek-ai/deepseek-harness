@@ -66,7 +66,7 @@ function renderPolicyContext(policy: SandboxExecutionPolicy): string {
       const additional = policy.additionalWritableRoots
       const extra = additional === undefined
         ? ''
-        : ` Additional writable directories: ${JSON.stringify(additional)}.`
+        : ` Additional writable directories: ${JSON.stringify(additional)}. On Windows, these additional grants apply to file tools only, not sandboxed processes.`
       return `Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify(policy.workspaceRoot)}.${extra} Some platform temporary areas may also be writable.`
     }
     case 'danger-full-access':
@@ -106,7 +106,7 @@ export interface Config {
    * automatic repository or gitfile discovery. Entries are execution-world
    * paths: this service validates absoluteness and detaches the list, while
    * the enforcing host rejects missing, non-directory, or symlinked paths. They grant nothing under
-   * `read-only`.
+   * `read-only`. Windows process confinement ignores them; harness file tools honor them.
    */
   additionalWritableRoots?: string[]
 }
@@ -218,6 +218,7 @@ export class SandboxPolicyService extends Service {
    * registration. Other grants to the directory remain effective. Existing
    * operations and persistent processes retain their resolved permissions.
    * Grants are runtime-only and must be registered again after resume or fork.
+   * On Windows, only harness file tools honor extra grants; process permissions stay unchanged.
    * @param session - exact live Session receiving the grant; other Sessions and agentless calls are unaffected.
    * @param directory - absolute execution-world path; execution rejects missing, non-directory, or symlinked paths.
    * @returns the exact Cordis effect disposer for this registration.

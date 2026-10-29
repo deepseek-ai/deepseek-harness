@@ -8,13 +8,13 @@
 
 ## 模式与强制执行
 
-`SandboxMode` 仅管控文件系统效果。`read-only` 要求后端拒绝写入——POSIX runner 还会授予其 shell 所需的 `/dev/null` 接收器，而 Windows ACL runner 不授予任何显式可写根目录，并因环境 ACL 缺口报告部分强制执行；`workspace-write` 允许在工作区根目录、显式额外目录及后端承诺的临时区域下写入；`danger-full-access` 绕过隔离。网络与进程可见性不在此处的定义范围内。
+`SandboxMode` 仅管控文件系统效果。`read-only` 要求后端拒绝写入——POSIX runner 还会授予其 shell 所需的 `/dev/null` 接收器，而 Windows ACL runner 不授予任何显式可写根目录，并因环境 ACL 缺口报告部分强制执行；`workspace-write` 允许在工作区根目录、受支持的额外目录及后端承诺的临时区域下写入；`danger-full-access` 绕过隔离。Windows 子进程忽略额外目录授权；Harness 文件工具独立执行这些授权。网络与进程可见性不在此处的定义范围内。
 
 ```ts type-equiv
 /**
  * File-effect policy for confined processes. `read-only` permits only required
  * sinks such as `/dev/null`; `workspace-write` also permits the workspace,
- * explicit extra roots, and backend-defined temp areas; `danger-full-access` bypasses confinement. Network
+ * explicit extra roots where supported, and backend-defined temp areas; `danger-full-access` bypasses confinement. Network
  * and process visibility are outside this vocabulary.
  */
 type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -57,6 +57,7 @@ interface SandboxExecutionPolicy {
    * Extra physical absolute directories `workspace-write` may also write under.
    * Absence means none. The enforcing host rejects missing, non-directory, and
    * symlinked entries on each call. Remote paths are checked on the remote host.
+   * Windows process confinement ignores these; harness filesystem operations honor them.
    * These grant nothing under `read-only` or `danger-full-access`.
    */
   additionalWritableRoots?: readonly string[]
@@ -64,7 +65,7 @@ interface SandboxExecutionPolicy {
    * Opaque identity of the calling session (the branded `dsh-session`
    * SessionId). Backends key per-session state off it (e.g. windows-acl gives
    * each live session/workspace pair a random private temp directory and SID,
-   * while standing grants are keyed by individual writable directories); absent
+   * while the workspace SID and standing grant remain per-workspace); absent
    * for agentless calls, which fall back to per-call backend state.
    */
   sessionId?: SessionId
@@ -221,6 +222,7 @@ resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
  * registration. Other grants to the directory remain effective. Existing
  * operations and persistent processes retain their resolved permissions.
  * Grants are runtime-only and must be registered again after resume or fork.
+ * On Windows, only harness file tools honor extra grants; process permissions stay unchanged.
  * @param session - exact live Session receiving the grant; other Sessions and agentless calls are unaffected.
  * @param directory - absolute execution-world path; execution rejects missing, non-directory, or symlinked paths.
  * @returns the exact Cordis effect disposer for this registration.

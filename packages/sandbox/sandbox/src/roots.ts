@@ -70,9 +70,9 @@ export function canonicalPath(path: string): string {
 /**
  * The workspace-owned writable roots — the policy's workspace root plus its
  * explicit extra directories, as a canonical, deduplicated allow-list. Both
- * the workspace and every extra root must be granted together by every
- * backend; this is the one derivation of that set, kept separate from the
- * platform temp policy each backend documents for itself (Seatbelt and the fs
+ * the workspace and every extra root are included by the filesystem fence and
+ * POSIX process backends; Windows process confinement ignores extra roots.
+ * This derivation is separate from each backend's platform temp policy (Seatbelt and the fs
  * fence use {@link writableRoots}; bwrap and Landlock add their own temp
  * grants).
  * @param policy - the file-effect policy to derive the allow-list from.

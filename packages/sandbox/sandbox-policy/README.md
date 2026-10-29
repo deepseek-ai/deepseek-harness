@@ -46,7 +46,7 @@ Load the package with a default mode; the fail-safe default is `read-only`, and 
 |---|---|---|
 | `mode` | `read-only` | The deployment default mode a session starts from, validated at load |
 | `workspaceRoot` | `process.cwd()` | Absolute fallback root for agentless calls or sessions without a cwd; relative values fail at load. Normal agent calls use the session's immutable cwd |
-| `additionalWritableRoots` | `[]` | Explicit physical absolute directories also writable under `workspace-write`; other confined modes grant no access to them |
+| `additionalWritableRoots` | `[]` | Physical absolute directories also writable under `workspace-write`; Windows file tools honor them, Windows subprocesses ignore them, and `read-only` grants no access |
 
 For a linked Git worktree, the caller can grant its shared Git directory with `additionalWritableRoots`. The caller selects that directory explicitly; the policy does not inspect Git files or grant a parent checkout. These grants are deployment configuration shared by the composition's sessions, rather than saved Session permissions. Granting the entire Git directory also permits changes to hooks and configuration that a later host Git invocation can execute outside the sandbox; use that grant only for trusted tasks. Use physical absolute directory paths. The enforcing host rejects missing paths, non-directories, and symlinked directories on each call, including a directory replaced by a symlink between calls. Remote grants are validated on the remote host.
 
@@ -56,7 +56,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 A plugin calls `ctx.sandboxPolicy.registerWritableRoot(session, directory)` through its owning context to add one physical absolute directory to that live Session's `workspace-write` permissions. The method returns the exact Cordis effect disposer; plugin unload or explicit disposal removes only that registration. Duplicate registrations and configured grants remain independent. Mount session-specific plugins under the Agent's context so their effects also end with the Agent. Registration validates the path spelling; the directory must exist on the execution host before an operation uses the grant. The same path checks as configured roots apply.
 
-Registration and disposal affect subsequent policy resolutions and the next model request's logged context. Other Sessions, including subagent Sessions, and agentless calls receive no such grant. Grants are not saved or inherited through Session history; a resumed or forked Session needs its own registration. Already-resolved operations and persistent processes keep their original permissions, including directories whose registration has been removed. Start a new process to use the current grants. `read-only` remains read-only.
+Registration and disposal affect subsequent policy resolutions and the next model request's logged context. Other Sessions, including subagent Sessions, and agentless calls receive no such grant. Grants are not saved or inherited through Session history; a resumed or forked Session needs its own registration. Already-resolved operations and persistent processes keep their original permissions, including directories whose registration has been removed. Start a new process to use the current grants. `read-only` remains read-only. On Windows, `write` and `edit` honor extra directories, while sandboxed processes ignore them and keep workspace and private-temp access; see [sandbox-local](../sandbox-local/README.md#known-limitations-and-deferred-work).
 
 ### Switching a session's mode
 
@@ -134,7 +134,7 @@ Current DSH file policy: workspace-write. Any available operation enforced by th
 ##### Workspace-write with extra directories
 
 ```markdown
-Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "<workspace root>". Additional writable directories: ["/repo/.git"]. Some platform temporary areas may also be writable.
+Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: "<workspace root>". Additional writable directories: ["/repo/.git"]. On Windows, these additional grants apply to file tools only, not sandboxed processes. Some platform temporary areas may also be writable.
 ```
 
 ##### Danger-full-access

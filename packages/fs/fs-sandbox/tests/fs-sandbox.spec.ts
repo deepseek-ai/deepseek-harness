@@ -92,13 +92,17 @@ describe('read-only', () => {
 describe('workspace-write containment', () => {
   beforeEach(() => boot('workspace-write'))
 
-  it('applies session grants to later writes and removes them when their plugin unloads', async ({ onTestFinished }) => {
+  it('applies session grants to writes and edits until their plugin unloads', async ({ onTestFinished }) => {
     onTestFinished(() => ctx.fiber.dispose())
     const first = Session.create(SessionId('memory-first'))
     const second = Session.create(SessionId('memory-second'))
     const path = join(outside, 'memory.txt')
     const write = async (session: Session, content: string) => fs.writeText(
       await target(path), content, undefined, undefined, ctx.sandboxPolicy.resolve({ session }),
+    )
+    const edit = async (session: Session) => fs.editText(
+      await target(path), { oldString: 'memory', newString: 'edited', replaceAll: false },
+      undefined, undefined, ctx.sandboxPolicy.resolve({ session }),
     )
     await expect(write(first, 'denied')).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
     const plugin = await ctx.plugin({
@@ -108,12 +112,17 @@ describe('workspace-write containment', () => {
     await write(first, 'memory')
     expect(await readFile(path, 'utf8')).toBe('memory')
     await expect(write(second, 'other session')).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    await expect(edit(second)).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    await edit(first)
+    expect(await readFile(path, 'utf8')).toBe('edited')
     setSandboxMode(first, 'read-only')
     await expect(write(first, 'read-only')).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    await expect(edit(first)).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
     setSandboxMode(first, 'workspace-write')
     await write(first, 'updated')
     await plugin.dispose()
     await expect(write(first, 'revoked')).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    await expect(edit(first)).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
     expect(await readFile(path, 'utf8')).toBe('updated')
   })
 

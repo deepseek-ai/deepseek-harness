@@ -288,7 +288,7 @@ describe('sandbox:policy request context', () => {
       additionalWritableRoots: ['/projects/shared/.git', '/projects/shared/worktrees'],
     })
     expect(await policyContext(ctx, session('sess-extra', '/projects/current'))).toBe(
-      `Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify('/projects/current')}. Additional writable directories: ["/projects/shared/.git","/projects/shared/worktrees"]. Some platform temporary areas may also be writable.`,
+      `Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: ${JSON.stringify('/projects/current')}. Additional writable directories: ["/projects/shared/.git","/projects/shared/worktrees"]. On Windows, these additional grants apply to file tools only, not sandboxed processes. Some platform temporary areas may also be writable.`,
     )
   })
 

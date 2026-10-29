@@ -8,13 +8,13 @@ Source: [`packages/sandbox/sandbox/src/index.ts`](../../packages/sandbox/sandbox
 
 ## Modes and enforcement
 
-`SandboxMode` governs filesystem effects only. `read-only` asks the backend to deny writes — the POSIX runners additionally grant the `/dev/null` sink their shells require, while the Windows ACL runner grants no explicit writable root and reports partial enforcement for its ambient ACL gaps; `workspace-write` permits writes under the workspace root, explicit extra directories, and the backend's promised temp area; `danger-full-access` bypasses confinement. Network and process visibility are outside this vocabulary.
+`SandboxMode` governs filesystem effects only. `read-only` asks the backend to deny writes — the POSIX runners additionally grant the `/dev/null` sink their shells require, while the Windows ACL runner grants no explicit writable root and reports partial enforcement for its ambient ACL gaps; `workspace-write` permits writes under the workspace root, extra directories where supported, and the backend's promised temp area; `danger-full-access` bypasses confinement. Windows subprocesses ignore extra directory grants; the harness file tools enforce them independently. Network and process visibility are outside this vocabulary.
 
 ```ts type-equiv
 /**
  * File-effect policy for confined processes. `read-only` permits only required
  * sinks such as `/dev/null`; `workspace-write` also permits the workspace,
- * explicit extra roots, and backend-defined temp areas; `danger-full-access` bypasses confinement. Network
+ * explicit extra roots where supported, and backend-defined temp areas; `danger-full-access` bypasses confinement. Network
  * and process visibility are outside this vocabulary.
  */
 type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -57,6 +57,7 @@ interface SandboxExecutionPolicy {
    * Extra physical absolute directories `workspace-write` may also write under.
    * Absence means none. The enforcing host rejects missing, non-directory, and
    * symlinked entries on each call. Remote paths are checked on the remote host.
+   * Windows process confinement ignores these; harness filesystem operations honor them.
    * These grant nothing under `read-only` or `danger-full-access`.
    */
   additionalWritableRoots?: readonly string[]
@@ -64,7 +65,7 @@ interface SandboxExecutionPolicy {
    * Opaque identity of the calling session (the branded `dsh-session`
    * SessionId). Backends key per-session state off it (e.g. windows-acl gives
    * each live session/workspace pair a random private temp directory and SID,
-   * while standing grants are keyed by individual writable directories); absent
+   * while the workspace SID and standing grant remain per-workspace); absent
    * for agentless calls, which fall back to per-call backend state.
    */
   sessionId?: SessionId
@@ -221,6 +222,7 @@ resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
  * registration. Other grants to the directory remain effective. Existing
  * operations and persistent processes retain their resolved permissions.
  * Grants are runtime-only and must be registered again after resume or fork.
+ * On Windows, only harness file tools honor extra grants; process permissions stay unchanged.
  * @param session - exact live Session receiving the grant; other Sessions and agentless calls are unaffected.
  * @param directory - absolute execution-world path; execution rejects missing, non-directory, or symlinked paths.
  * @returns the exact Cordis effect disposer for this registration.

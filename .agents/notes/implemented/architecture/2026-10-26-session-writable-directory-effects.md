@@ -16,8 +16,6 @@ Registration disposal affects subsequent operations, not already-resolved calls 
 
 Missing, non-directory, and symlinked extra paths stop execution with `SandboxInvalidRootError`, which identifies the path and its problem. Silently skipping a path would hide an invalid grant and let execution proceed with permissions different from those requested. Registration checks path spelling; enforcement validates the physical directory on each call without retaining an earlier resolution. Symlinks remain disallowed, keeping configured and plugin grants under the same validation rules.
 
-Windows standing ACL grants follow the [per-directory identity decision](2026-10-28-windows-directory-write-identities.md): each new execution carries only its currently permitted directory SIDs, while private temp capabilities remain separate.
-
 ## Alternatives considered
 
 **Shared mutable extra roots.** Enabling memory in one Session would also authorize unrelated Sessions using the same service.
@@ -28,4 +26,4 @@ Windows standing ACL grants follow the [per-directory identity decision](2026-10
 
 ## Consequences
 
-Independent registrations for the same directory survive another owner's disposal. Removing a registration cannot revoke overlapping configured or workspace access. A running process may retain a removed grant, or lack a newly added grant; a new process uses the current policy. Focused coverage checks Session isolation, duplicate ownership, plugin unload, filesystem denial and mutation, request context, and retained PTC launch permissions.
+Independent registrations for the same directory survive another owner's disposal. Removing a registration cannot revoke overlapping configured or workspace access. A running process may retain a removed grant, or lack a newly added grant; a new process uses the current policy. Windows subprocesses ignore extra roots while file tools enforce them; the [Windows scope decision](2026-10-29-windows-file-tool-directory-grants.md) records this limitation. Focused coverage checks Session isolation, duplicate ownership, plugin unload, filesystem denial and mutation, request context, and retained PTC launch permissions.
