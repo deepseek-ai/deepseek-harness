@@ -12,25 +12,10 @@
       "path": "../../../vendor/cordis"
     },
     {
-      "path": "../../api/gateway/tsconfig.client.json"
-    },
-    {
       "path": "../../api/remotes/tsconfig.client.json"
     },
     {
       "path": "../locale/tsconfig.client.json"
-    },
-    {
-      "path": "../store"
-    },
-    {
-      "path": "../ui-layout"
-    },
-    {
-      "path": "../ui-plugin-manager/tsconfig.client.json"
-    },
-    {
-      "path": "../ui-renderer"
     },
     {
       "path": "../ui-slots"

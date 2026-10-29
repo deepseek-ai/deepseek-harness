@@ -49,9 +49,9 @@ kind: "package-reference"
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-Host 半部 [`src/index.ts`](src/index.ts) 是空的 `apply`，只为让本包持有一行 Loader 条目，客户端模块系统据此提供浏览器半部。浏览器半部 [`src/client/index.ts`](src/client/index.ts) 用 `ctx.remote.$mount` 自行挂载 `wecom` Remote，因为随产品发布的 Remote 集合不包含按需安装的包；卸载 Remote 之前会先撤下自己的注册。
+Host 半部 [`src/index.ts`](src/index.ts) 是空的 `apply`，只为让本包持有一行 Loader 条目，客户端模块系统据此提供浏览器半部。浏览器半部 [`src/client/index.ts`](src/client/index.ts) 用 `ctx.remote.$mount` 自行挂载 `wecom` Remote，因为随产品发布的 Remote 集合不包含按需安装的包；卸载 Remote 之前会先撤下授权注册。
 
-[`src/client/connection.ts`](src/client/connection.ts) 为每个浏览器插件基于 `wecom` Remote 创建一个来自 [CLI 插件页组件](../ui-cli-account/README.zh.md)的 `CliAccountConnection`，只根据 Host 的视图推导页面状态。该连接只为本浏览器发起的操作打开链接，每个链接只打开一次，且只打开 HTTPS 链接。[`src/client/WecomConnection.tsx`](src/client/WecomConnection.tsx) 用企业微信的操作渲染共用的区块、标签、开启引导和提示；Web 外壳以平台模块提供这个共用库，因此本包的 bundle 不包含它。它以 `@deepseek-ai/dsh-wecom` 为 key 注册 `plugins.bundle.config` 作为区块，注册 `plugins.bundle.activation` 作为引导、`plugins.detail.badge` 作为标签，以及一个 `shell.overlay` 提示。页面文案，包括共用组件读取的键，位于本包的 `wecom` 词典。
+浏览器半部通过 `ctx.cliAccounts` 把企业微信授权注册到 [CLI 账号界面](../ui-cli-account/README.zh.md)，由它跟随 `wecom` Remote，并为 `@deepseek-ai/dsh-wecom` 渲染区块、标签、开启引导和提示。链接只为本浏览器发起的操作打开，每个链接只打开一次，且只打开 HTTPS 链接。[`src/client/connection.ts`](src/client/connection.ts) 只根据 Host 的视图推导授权状态，[`src/client/account.ts`](src/client/account.ts) 再把它映射为区块的按钮、技能下载行和失败建议。页面文案，包括共用界面读取的键，位于本包的 `wecom` 词典。
 
 </details>
 
@@ -62,8 +62,8 @@ Host 半部 [`src/index.ts`](src/index.ts) 是空的 `apply`，只为让本包�
 
 - [企业微信插件](../../connector/wecom/README.zh.md)——插入本行与 Host 行的 bundle。
 - [企业微信 CLI 与技能](../../connector/wecom-cli/README.zh.md)——Host 行，以及本页面发起的授权操作。
-- [CLI 插件页组件](../ui-cli-account/README.zh.md)——本页面渲染的共用连接镜像与组件。
-- [ui-plugin-manager](../ui-plugin-manager/README.zh.md)——插件页，以及本页面注册进的 bundle slot。
+- [CLI 账号界面](../ui-cli-account/README.zh.md)——跟随 Remote 并渲染本页面授权的注册表。
+- [ui-plugin-manager](../ui-plugin-manager/README.zh.md)——插件页，以及账号界面填入的 bundle slot。
 
 -----
 

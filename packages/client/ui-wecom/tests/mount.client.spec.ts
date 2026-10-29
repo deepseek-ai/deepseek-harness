@@ -1,65 +1,72 @@
-/** The browser half mounts the WeCom Remote, registers its surfaces, and withdraws both on disposal or failure. */
+/** The browser half mounts the WeCom Remote, registers its authorization, and withdraws both on disposal or failure. */
 import { Context, Service } from '@deepseek-ai/cordis'
+import type { CliOperationId } from '@deepseek-ai/dsh-cli-account/types'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { CliAccountPage, CliAccountRegistration } from '@deepseek-ai/dsh-client-ui-cli-account/client'
 import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
+import type { WecomState } from '@deepseek-ai/dsh-wecom-cli/types'
 import { expect, it, vi } from 'vitest'
 import { apply as hostApply } from '../src/index.ts'
-import { WecomConnectionActivation, WecomConnectionBadge, WecomConnectionSection, WecomConnectionToast } from '../src/client/WecomConnection.tsx'
+import { en } from '../src/client/locales.ts'
 
 const REMOTE: TypertRemoteContribution = { package: '@deepseek-ai/dsh-wecom-cli', descriptors: [] }
-const SLOTS = [
-  ['plugins.bundle.config', WecomConnectionSection],
-  ['plugins.bundle.activation', WecomConnectionActivation],
-  ['plugins.detail.badge', WecomConnectionBadge],
-  ['shell.overlay', WecomConnectionToast],
-] as const
+const OP = 'op' as CliOperationId
 
 async function fixture() {
   const ctx = new Context()
   const unmount = vi.fn(async () => {})
-  const dispose = vi.fn(async () => {})
+  const remote = { follow: vi.fn(), cancel: vi.fn(), check: vi.fn(), connect: vi.fn() }
   class Remote extends Service {
     constructor() { super(ctx, 'remote') }
     async $mount(contribution: TypertRemoteContribution) {
       expect(contribution).toBe(REMOTE)
-      ctx.provide('remote.wecom', { follow: vi.fn() })
+      ctx.provide('remote.wecom', remote)
       return unmount
-    }
-    $stream() {
-      return { async *[Symbol.asyncIterator]() { /* the Host reports nothing in this composition */ }, dispose }
     }
   }
   new Remote()
-  ctx.provide('locale', new LocaleRuntime(ctx))
-  await ctx.plugin(SlotRegistry)
-  ctx.slots.register({ name: 'root', children: {
-    'plugins.bundle.activation': { kind: 'keyed', scope: 'root' },
-    'plugins.bundle.config': { kind: 'keyed', scope: 'root' },
-    'plugins.detail.badge': { kind: 'list', scope: 'root' },
-    'shell.overlay': { kind: 'list', scope: 'root' },
-  } } as never, () => null)
+  const locale = new LocaleRuntime(ctx)
+  ctx.provide('locale', locale)
+  const unregister = vi.fn()
+  const register = vi.fn((_account: CliAccountRegistration<WecomState>) => unregister)
+  ctx.provide('cliAccounts', { register })
   vi.doMock('@deepseek-ai/dsh-wecom-cli/remote', () => ({ default: REMOTE }))
   const browser = await import('../src/client/index.ts')
-  return { ctx, unmount, dispose, browser }
+  return { ctx, locale, unmount, remote, register, unregister, browser }
 }
 
-it('registers the connection surfaces with one shared face, then withdraws them and the Remote', async () => {
+it('registers the WeCom authorization over its Remote, then withdraws it and the Remote', async () => {
   hostApply()
   const b = await fixture()
   try {
     const fiber = b.ctx.plugin({ inject: [...b.browser.inject], apply: b.browser.apply })
     await fiber
-    const faces = SLOTS.map(([slot, component]) => {
-      const [entry] = b.ctx.slots.entries(slot)
-      expect(entry).toMatchObject({ locale: 'wecom', component })
-      return entry!.inject!()
-    })
-    expect(new Set(faces.map(face => face.hooks)).size).toBe(1)
-    expect(b.ctx.slots.entries('plugins.bundle.config')[0]!.options.key).toBe('@deepseek-ai/dsh-wecom')
+    b.locale.setLocale('en')
+    expect(b.register).toHaveBeenCalledOnce()
+    const account = b.register.mock.calls[0]![0]
+    expect(account).toMatchObject({ packageName: '@deepseek-ai/dsh-wecom', locale: 'wecom' })
+    const signal = new AbortController().signal
+    void account.follow(signal)
+    void account.cancel(OP)
+    expect(b.remote.follow).toHaveBeenCalledWith(signal)
+    expect(b.remote.cancel).toHaveBeenCalledWith(OP)
+    expect(account.notices.connect?.()).toBe(en['notice.connected'])
+    expect(account.notices.check).toBeUndefined()
+
+    const page: CliAccountPage = { start: vi.fn<CliAccountPage['start']>((call) => { void call() }), cancel: vi.fn(), openAuthorization: vi.fn(), retry: vi.fn() }
+    const snapshot = { linked: true, stopped: false, busy: false, notice: undefined }
+    const press = (view: WecomState, label: string) => {
+      const found = account.present({ ...snapshot, view }, page).actions?.find(item => item.label === label)
+      expect(found).toBeDefined()
+      found!.onClick()
+    }
+    press({ account: { state: 'unauthorized', skills: 'installed' } }, en['action.connect'])
+    press({ account: { state: 'unchecked', skills: 'installed' }, result: { id: OP, kind: 'check', outcome: 'failed' } }, en['action.retry'])
+    expect(b.remote.connect).toHaveBeenCalledOnce()
+    expect(b.remote.check).toHaveBeenCalledOnce()
+
     await fiber.dispose()
-    for (const [slot] of SLOTS) expect(b.ctx.slots.entries(slot)).toHaveLength(0)
-    expect(b.dispose).toHaveBeenCalledOnce()
+    expect(b.unregister).toHaveBeenCalledOnce()
     expect(b.unmount).toHaveBeenCalledOnce()
   } finally {
     await b.ctx.fiber.dispose()
@@ -67,11 +74,11 @@ it('registers the connection surfaces with one shared face, then withdraws them 
   }
 })
 
-it('withdraws the Remote when the surfaces fail to register', async () => {
+it('withdraws the Remote when the authorization fails to register', async () => {
   const b = await fixture()
-  vi.spyOn(b.ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot failed') })
+  b.register.mockImplementationOnce(() => { throw new Error('register failed') })
   try {
-    await expect(b.browser.apply(b.ctx)).rejects.toThrow('slot failed')
+    await expect(b.browser.apply(b.ctx)).rejects.toThrow('register failed')
     expect(b.unmount).toHaveBeenCalledOnce()
   } finally {
     await b.ctx.fiber.dispose()
