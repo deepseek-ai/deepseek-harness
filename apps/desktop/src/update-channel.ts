@@ -1,7 +1,8 @@
 /** Resolve the update channel sealed into the installed application manifest. */
+import type { DesktopUpdatePreferences } from './settings-file.ts'
 
 /** Installer-owned channel, independent of release version and upload environment. */
-export type DesktopUpdateChannel = 'nightly' | 'latest'
+export type DesktopUpdateChannel = DesktopUpdatePreferences['channel']
 
 /**
  * Read the packaged channel; older manifests retain their existing nightly behavior.

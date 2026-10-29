@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
 import { readDesktopSettings } from '../src/settings.ts'
-import { DesktopUpdateSettings, DesktopUpdateSettingsError } from '../src/update-settings.ts'
+import { DesktopUpdateSettings } from '../src/update-settings.ts'
+import { DesktopSettingsFileError } from '../src/settings-file.ts'
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'desktop-channel-'))
@@ -40,7 +41,7 @@ it.each(['{', 'null', '{"updates":[]}', '{"updates":{"channel":"alpha"}}', '{"up
 it('refuses to replace malformed user JSON during a UI save', async () => {
   const settings = await fixture()
   await writeFile(settings.path, '{')
-  await expect(settings.save('nightly')).rejects.toBeInstanceOf(DesktopUpdateSettingsError)
+  await expect(settings.save('nightly')).rejects.toBeInstanceOf(DesktopSettingsFileError)
   expect(await readFile(settings.path, 'utf8')).toBe('{')
 })
 
@@ -53,12 +54,12 @@ it('reports unreadable configuration instead of silently choosing a default', as
 it('updates the document initialized by shell settings without losing the popup preference', async () => {
   const root = await mkdtemp(join(tmpdir(), 'desktop-shared-settings-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
-  expect(readDesktopSettings(root).updates.allowTestAuthPopupWindow).toBe(false)
+  expect((await readDesktopSettings(root)).updates.allowTestAuthPopupWindow).toBe(false)
   const settings = new DesktopUpdateSettings(root, 'latest')
   await settings.save('nightly')
   expect(JSON.parse(await readFile(settings.path, 'utf8'))).toEqual({
     updates: { allowTestAuthPopupWindow: false, channel: 'nightly' },
   })
-  expect(readDesktopSettings(root).updates.allowTestAuthPopupWindow).toBe(false)
+  expect((await readDesktopSettings(root)).updates.allowTestAuthPopupWindow).toBe(false)
   expect(await settings.load()).toEqual({ kind: 'ready', channel: 'nightly' })
 })

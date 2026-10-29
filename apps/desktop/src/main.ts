@@ -2,7 +2,8 @@
 
 import { installFileActions } from './file-actions.ts'
 import type { DesktopChannelState } from '@deepseek-ai/dsh-client-ui-settings-general/types'
-import { DesktopUpdateSettings, DesktopUpdateSettingsError, isDesktopUpdateChannel } from './update-settings.ts'
+import { DesktopUpdateSettings } from './update-settings.ts'
+import { DesktopSettingsFileError, isDesktopUpdateChannel } from './settings-file.ts'
 import type { ProductEventMap, ProductEvent } from '@deepseek-ai/dsh-client-product-analytics/types'
 import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 import { access, readFile, writeFile } from 'node:fs/promises'
@@ -368,7 +369,7 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
 }
 
 async function main(): Promise<void> {
-  const desktopSettings = readDesktopSettings(app.getPath('userData'))
+  const desktopSettings = await readDesktopSettings(app.getPath('userData'))
   void pruneCrashReports(app.getPath('logs'))
   const journalDirectory = process.env.DSH_DESKTOP_UPDATE_JOURNAL_DIR
   const updateJournal = journalDirectory === undefined ? undefined : new DesktopUpdateJournal(journalDirectory, app.getVersion())
@@ -904,7 +905,7 @@ async function main(): Promise<void> {
       return publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: --channelRequests > 0 })
     } catch (error) {
       return publishChannel({ ...channelState, changing: --channelRequests > 0,
-        error: error instanceof DesktopUpdateSettingsError ? error.kind : 'apply' })
+        error: error instanceof DesktopSettingsFileError ? error.kind : 'apply' })
     }
   })
   ipcMain.handle(DESKTOP_IPC.updatesStatus, (event) => {
