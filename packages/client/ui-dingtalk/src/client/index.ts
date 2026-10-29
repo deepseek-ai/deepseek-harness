@@ -11,14 +11,14 @@ import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import dingtalkRemote from '@deepseek-ai/dsh-dingtalk-cli/remote'
 import { DINGTALK_PACKAGE, createConnection } from './connection.ts'
-import { en, NS, zh } from './locales.ts'
+import { de, en, es, fr, ja, NS, pt, ru, zh } from './locales.ts'
 import { DingtalkConnectionActivation, DingtalkConnectionBadge, DingtalkConnectionSection, DingtalkConnectionToast } from './DingtalkConnection.tsx'
 
 /** Services the Remote mount and the slot registrations need. */
 export const inject = ['remote', 'slots', 'locale']
 
 function registerUi(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dingtalk: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'dingtalk: dictionaries')
   const { connection, face } = createConnection(ctx)
   ctx.effect(() => async () => { await connection.dispose() }, 'dingtalk: connection')
   ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
