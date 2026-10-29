@@ -129,9 +129,10 @@ export interface PiAiAdapterOptions {
    */
   onReplayDegrade?: (detail: { provider: string; model: string; reason: string }) => void
   /**
-   * Observe one request omitting replayed Anthropic thinking whose request
-   * prefix changed or was never recorded; stale messages stay omitted, so
-   * every later request of the conversation reports them again.
+   * Observe how many replayed assistant messages one request sent without
+   * their Anthropic thinking because the request prefix changed or was never
+   * recorded; called for every request, including with a zero count. Stale
+   * messages stay omitted, so later requests of the conversation count them again.
    */
   onThinkingOmitted?: (detail: { provider: string; model: string; count: number }) => void
 }
@@ -465,7 +466,7 @@ export class PiAiAdapter extends LlmAdapter {
           },
         }, onReplayDegrade, updates.systemPromptUpdate === 'in-history', prefixDigests)
       const { context, digest, omitted } = bindThinkingToPrefix(converted, model, prefixDigests)
-      if (omitted > 0) this.config.onThinkingOmitted?.({ provider: options.provider, model: options.model, count: omitted })
+      this.config.onThinkingOmitted?.({ provider: options.provider, model: options.model, count: omitted })
       const events = snapshot.models.streamSimple(model, context, {
         ...profileOptions(profile, reasoning, apiKey),
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
