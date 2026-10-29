@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-mcp-manager",
   "description": "MCP server manager: a settings-driven fleet of mcp-client instances with runtime status, restart, and probe",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -31,6 +31,7 @@
       "default": "./lib/typert.remote-client.js"
     },
     "./src/*": "./src/*",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
