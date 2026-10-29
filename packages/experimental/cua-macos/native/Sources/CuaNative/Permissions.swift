@@ -5,8 +5,8 @@ import Darwin
 import Foundation
 
 @MainActor struct SystemPermissionActions {
-    var accessibility: () -> Bool
-    var screenRecording: () -> Bool
+    var accessibility: @MainActor () -> Bool
+    var screenRecording: @MainActor () -> Bool
     var open: (URL) -> Bool
 
     static func system() -> Self {
@@ -46,7 +46,7 @@ import Foundation
     }
 
     func request(_ permission: String, owner: UUID, text: PermissionGuideText, interval: TimeInterval) throws -> JSONValue {
-        let observe: () -> Bool
+        let observe: @MainActor () -> Bool
         switch permission {
         case "accessibility": observe = actions.accessibility
         case "screenRecording": observe = actions.screenRecording
