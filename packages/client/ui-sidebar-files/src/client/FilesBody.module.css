@@ -1,10 +1,9 @@
-/* The pane body is a block scroller with a definite height, so the tree takes
-   that height outright: the header row stays put and the levels below are the
-   one scroller. */
-.root {
+/* The `files` page: its header across the pane, then the content row. */
+.page {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
+  min-width: 0;
   height: 100%;
   min-height: 0;
   color: var(--dsw-alias-label-primary);
@@ -12,10 +11,152 @@
   line-height: 1.5;
 }
 
-/* One 38px row flush under the pane's strip: the root's path, then reload at
-   its end. With the strip's 38px above, its rule lies where the conversation
-   header's does (ui-conversation ConversationRoot `.header`, 76px with the
-   same rule). */
+/* Below the header: the pane's navigator. Like the document preview's
+   content row, it is the box a navigator that fills the row is positioned
+   against. */
+.content {
+  position: relative;
+  /* Child layers stay below the floating pane's resize handle. */
+  isolation: isolate;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The navigator takes its content row's height, on its own left rule, at the
+   pane's clamped width preference the component passes in. */
+.navigator {
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: var(--files-navigator-width);
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.5;
+  background: var(--dsw-alias-bg-base);
+  border-left: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+/* The `files` page's navigator fills the page below its header. */
+.wholePage {
+  flex: 1 1 auto;
+  width: auto;
+  border-left: 0;
+}
+
+/* The resize edge straddles the navigator's left rule. */
+.separator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  z-index: 1;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+/* A row narrower than FileNavigator `FILL_BELOW`. */
+.fill {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: auto;
+  height: auto;
+  border-left: 0;
+}
+
+/* Covered content stays laid out but cannot receive keyboard focus. */
+:has(> .navigator.fill) > :not(.navigator) {
+  visibility: hidden;
+}
+
+/* navigator-layout `FULLSCREEN_QUERY`: every layout fills the row. */
+@media (width < 768px) {
+  :has(> .navigator:not(.wholePage)) > :not(.navigator) {
+    visibility: hidden;
+  }
+
+  .navigator {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    width: auto;
+    height: auto;
+    border-left: 0;
+  }
+
+  .separator {
+    display: none;
+  }
+}
+
+/* Beside a preview in a row from FileNavigator `FILL_BELOW` on, the navigator
+   is a raised card inset by the tree body's own 8px so its corners show, with
+   the floating dock panel's surface (ui-dockkit `.float`) at a radius sized
+   for a panel this narrow. */
+@media (width >= 768px) {
+  .push,
+  .overlay {
+    background: var(--dsw-alias-bg-layer-2);
+    border: 0;
+    border-radius: var(--dsw-radius-lg);
+    --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
+    box-shadow: var(--dsw-elevation-prominent);
+    /* Elevated surface: the tree's scrollbar takes the l2 thumb pair (ui-theme
+       styles/scrollbar.css). */
+    --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+    --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  }
+
+  /* From store `PUSH_FROM` on: a flex item of the row that narrows the body.
+     The horizontal margins are store `PUSH_MARGINS`. */
+  .push {
+    align-self: stretch;
+    height: auto;
+    margin: 8px;
+  }
+
+  /* Below it: floating over the body's right part. */
+  .overlay {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 2;
+    height: auto;
+  }
+
+  :global(body[data-ds-dark-theme]) .push,
+  :global(body[data-ds-dark-theme]) .overlay {
+    background: var(--dsw-alias-bg-base);
+    box-shadow:
+      var(--dsw-elevation-stroke),
+      0 3px 8px 0 color-mix(in srgb, var(--dsw-static-neutral-00) 8%, transparent),
+      0 0 20px 0 color-mix(in srgb, var(--dsw-static-neutral-00) 6%, transparent);
+  }
+
+  /* The bar stops where the card's corners curve, so they do not clip it. */
+  .push .body::-webkit-scrollbar-track,
+  .overlay .body::-webkit-scrollbar-track {
+    margin: var(--dsw-radius-lg) 2px;
+  }
+}
+
+.dragging {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* The page's 38px row flush under the pane's strip: the root's path, then
+   reload and the directory actions. With the strip's 38px above, its rule lies where the conversation header's does
+   (ui-conversation ConversationRoot `.header`, 76px with the same rule). */
 .header {
   display: flex;
   flex: 0 0 auto;
@@ -51,77 +192,7 @@
   margin: 2px;
 }
 
-.level {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Every nested level indents by one step; the root level sits under the header. */
-.level .level {
-  padding-left: 18px;
-}
-
-.item {
-  margin: 0;
-  padding: 0;
-}
-
-.row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-  /* Rows abut, so the hover fill is the whole row; the tree's air is this
-     inset, not a gap between rows. */
-  padding: 5px 10px;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-radius: var(--dsw-radius-md);
-  cursor: pointer;
-}
-
-@media (hover: hover) {
-  .row:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-}
-
-/* The folder glyph rides the tertiary ink, as the workspace tree's does (ui-workspace Rows `.slot`). */
-.icon {
-  flex: 0 0 auto;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-/* The type's coloured sheet at the folder glyph's 16px; its colour is its own. */
-.fileIcon {
-  flex: 0 0 auto;
-}
-
-.name {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* Neither a file nor a directory: shown so the directory is reported whole,
-   greyed so nobody tries to open it. */
-.other {
-  color: var(--dsw-alias-label-tertiary);
-  cursor: default;
-}
-
-@media (hover: hover) {
-  .other:hover {
-    background: transparent;
-  }
-}
-
+/* The navigator's line before its tree starts, in the tree's note style (ui-primitives `.note`). */
 .note {
   margin: 0;
   padding: 3px 10px;
@@ -172,7 +243,8 @@
   }
 }
 
-.tool[aria-pressed='true'] {
+.tool[aria-pressed='true'],
+.tool[aria-expanded='true'] {
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-interactive-bg-hover);
 }

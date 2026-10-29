@@ -30,7 +30,7 @@ const unused = (): never => { throw new Error('the forge tab does not call this 
 function tabInfo(visible: boolean, openResource: SidebarRightTabActions['openResource']): SidebarRightTabInfo {
   return {
     sidebar: { expanded: true, fullscreen: false },
-    panel: { id: 'pane-1' as PaneId },
+    panel: { id: 'pane-1' as PaneId, isFloating: false },
     tab: {
       id: 'tab-forge' as TabId,
       kind: 'forge-panel',
