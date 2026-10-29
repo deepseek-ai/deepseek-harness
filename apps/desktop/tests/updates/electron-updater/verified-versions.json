@@ -1,4 +1,8 @@
 {
-  "windows": null,
+  "windows": {
+    "electron": "44.7.0",
+    "electron-updater": "6.8.9",
+    "builder-util-runtime": "9.7.0"
+  },
   "macos": null
 }
