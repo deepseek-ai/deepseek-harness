@@ -69,7 +69,7 @@ const { helperPath: _helperPath, ...automaticConfig } = config
 it('defaults source builds to ad-hoc signatures and accepts only the two signing choices', () => {
   expect(NativeProvider.Config({}).sourceSigning).toBe('ad-hoc')
   expect(NativeProvider.Config({ sourceSigning: 'local-identity' }).sourceSigning).toBe('local-identity')
-  expect(() => NativeProvider.Config(JSON.parse('{"sourceSigning":"developer-id"}'))).toThrow()
+  expect(() => NativeProvider.Config({ sourceSigning: 'developer-id' } as never)).toThrow()
 })
 
 it('defaults the explicit click hold limit to five seconds and accepts a configured zero or larger limit', () => {
