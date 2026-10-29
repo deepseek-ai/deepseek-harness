@@ -175,14 +175,14 @@ describe('dsh-tool-subagent-control', () => {
     expect(ctx.tools.schemas()).toEqual(schemas)
   })
 
-  it('continues a named child by path while keeping raw ID message attribution', async () => {
+  it('continues a named child by path with named message text and durable Session id attribution', async () => {
     const { ctx, parent } = await setup([textResponse('first result'), textResponse('continued result')])
-    const reservation = ctx.subagentNames.reserve(parent, 'reviewer')
+    const reservation = ctx.subagentNames.reserve(parent.session, parent.id, 'reviewer')
     const child = await ctx.subagents.startActivation({
       provider: 'spawn', label: 'review', delivery: 'parent', parent,
       prompt: [{ type: 'text', text: 'review' }], signal: testToolSignal,
     })
-    ctx.subagentNames.bind(parent, child.childId, reservation.name)
+    ctx.subagentNames.bind(parent.session, child.childId, reservation.name)
     reservation.dispose()
     await child.result
     const result = await callTool(ctx, 'send_message', { name: reservation.name, message: 'check once more' }, parent)
@@ -194,7 +194,7 @@ describe('dsh-tool-subagent-control', () => {
     const stored = await loadStoredSession(ctx.sessionPersistence, child.childId)
     expect(stored.events.some(event => event.type === 'user/message'
       && event.data.source.kind === 'agent-message' && event.data.source.senderSessionId === parent.id
-      && text(event.data).includes(`Agent ${parent.id} sent a message: `))).toBe(true)
+      && text(event.data).includes('Agent lead sent a message: '))).toBe(true)
   })
 
   it('registers send_message once, globally, with the two required parameters', async () => {
@@ -312,6 +312,26 @@ describe('dsh-tool-subagent-control', () => {
     toolSet.dispose()
   })
 
+  it('uses the full child name in messages while preserving the sender Session id', async () => {
+    const { ctx, parent } = await setup([])
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('named-sender'),
+      meta: { origin: 'subagent', parentSession: parent.id },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, parent) },
+    })
+    ctx.subagentNames.bind(parent.session, handle.agent.id, 'lead/reviewer')
+    const followup = vi.spyOn(parent, 'steer')
+    const result = await callTool(ctx, 'send_message', { name: 'lead', message: 'Review complete.' }, handle.agent)
+    expect(result.isError).toBe(false)
+    const message = followup.mock.calls.map(([message]) => message).find(message => message.source.kind === 'agent-message')
+    expect(message?.content).toEqual([
+      { type: 'text', text: 'Agent lead/reviewer sent a message: ' },
+      { type: 'text', text: 'Review complete.' },
+    ])
+    expect(message?.source).toEqual({ kind: 'agent-message', form: 'relay', senderSessionId: handle.agent.id })
+    await handle.dispose()
+  })
+
   it.each(['parent', 'caller'] as const)('keeps %s result delivery independent of messaging tools', async (delivery) => {
     const { ctx, parent, adapter, controlFiber } = await setup([textResponse('child result')])
     await controlFiber.dispose()
@@ -399,7 +419,7 @@ describe('dsh-tool-subagent-control', () => {
       senderSessionId: parent.id,
     })
     expect(followUp?.type === 'user/message' && followUp.data.content).toEqual([
-      { type: 'text', text: `Agent ${parent.id} sent a message: ` },
+      { type: 'text', text: 'Agent lead sent a message: ' },
       { type: 'text', text: 'and then?' },
     ])
   })
@@ -431,7 +451,7 @@ describe('dsh-tool-subagent-control', () => {
       : [])
     expect(prompts).toEqual([
       'long work',
-      `Agent ${parent.id} sent a message: `,
+      'Agent lead sent a message: ',
       'also consider Y',
     ])
   })
@@ -585,9 +605,9 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       : [])
     expect(prompts).toEqual([
       'long work',
-      `Agent ${parent.id} sent a message: `,
+      'Agent lead sent a message: ',
       'parked follow-up',
-      `Agent ${parent.id} sent a message: `,
+      'Agent lead sent a message: ',
       'wake up',
     ])
   })

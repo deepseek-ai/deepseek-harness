@@ -130,7 +130,7 @@ async function startWait(ctx: Context, agent: Agent) {
 
 /** Start a continuable child and record its display name after acceptance. */
 async function spawn(ctx: Context, lead: Agent, description: string | undefined, prompt: string, provider = 'spawn'): Promise<SubagentActivation & { readonly name: string }> {
-  const reservation = ctx.subagentNames.reserve(lead, `child-${randomUUID()}`)
+  const reservation = ctx.subagentNames.reserve(lead.session, lead.id, `child-${randomUUID()}`)
   try {
     const started = await ctx.subagents.startActivation({
       provider,
@@ -139,7 +139,7 @@ async function spawn(ctx: Context, lead: Agent, description: string | undefined,
       signal: SIGNAL,
       delivery: 'parent',
     })
-    ctx.subagentNames.bind(lead, started.childId, reservation.name)
+    ctx.subagentNames.bind(lead.session, started.childId, reservation.name)
     return { ...started, name: reservation.name }
   } finally {
     reservation.dispose()
@@ -210,7 +210,7 @@ describe('dsh-tool-team', () => {
     })
     const controller = new AbortController()
     const result = execute(ctx, lead, 'team_task_update', {
-      task_id: task.id, expected_revision: task.revision, action: 'reassign', owner: ctx.subagentNames.nameOf(ctx.agents.get(childId)!),
+      task_id: task.id, expected_revision: task.revision, action: 'reassign', owner: ctx.subagentNames.nameOf(lead.session, childId),
     }, controller.signal)
     try {
       await entered.promise
@@ -319,7 +319,7 @@ describe('dsh-tool-team', () => {
       setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead, [lead.id, child.agent.id]) },
     })
     expect(renderContextSnapshot(await assembly(ctx, nested.agent))).toContain(teammateIdentity(lead))
-    expect(renderContextSnapshot(await assembly(ctx, nested.agent))).not.toContain(`Team led by ${JSON.stringify(ctx.subagentNames.nameOf(child.agent))}`)
+    expect(renderContextSnapshot(await assembly(ctx, nested.agent))).not.toContain(`Team led by ${JSON.stringify(ctx.subagentNames.nameOf(lead.session, child.agent.id))}`)
   })
 
   it.each([undefined, 'in-history'] as const)('appends current Lead identity to a teammate fork with update mode %s', async (systemPromptUpdate) => {
@@ -434,7 +434,7 @@ describe('dsh-tool-team', () => {
       expected_revision: task.revision,
       action: 'claim',
     })
-    expect(JSON.parse(text(claimed))).toMatchObject({ status: 'in_progress', ownerName: ctx.subagentNames.nameOf(ctx.agents.get(childId)!) })
+    expect(JSON.parse(text(claimed))).toMatchObject({ status: 'in_progress', ownerName: ctx.subagentNames.nameOf(lead.session, childId) })
     const stale = await execute(ctx, lead, 'team_task_update', {
       task_id: task.id,
       expected_revision: task.revision,
@@ -510,7 +510,7 @@ describe('dsh-tool-team', () => {
       task_id: first.id,
       expected_revision: dependency.revision,
       action: 'reassign',
-      owner: ctx.subagentNames.nameOf(ctx.agents.get(childId)!),
+      owner: ctx.subagentNames.nameOf(lead.session, childId),
     })).isError).toBe(true)
 
     const child = ctx.agents.get(childId)!
@@ -542,14 +542,14 @@ describe('dsh-tool-team', () => {
 
   it('edits named task owners without Session queries', async () => {
     const { ctx, lead, queryFiber } = await setup([textResponse('done')])
-    const { task } = await taskWithSettledOwner(ctx, lead)
+    const { task, ownerName } = await taskWithSettledOwner(ctx, lead)
     await queryFiber.dispose()
 
     const result = await execute(ctx, lead, 'team_task_update', {
       task_id: task.id, expected_revision: task.revision, action: 'edit', subject: 'Edited',
     })
     expect(result.isError).toBe(false)
-    expect(JSON.parse(text(result))).toMatchObject({ subject: 'Edited', ownerName: ctx.subagentNames.nameOf(lead, task.ownerId) })
+    expect(JSON.parse(text(result))).toMatchObject({ subject: 'Edited', ownerName })
     expect(ctx.agentTeams.getTask(lead, task.id)).toMatchObject({ subject: 'Edited', revision: task.revision + 1 })
     await using stored = await ctx.sessionPersistence.open(lead.id, 'read')
     expect((await stored.read()).events.filter(event => event.type === 'team/task')).toHaveLength(3)
@@ -578,7 +578,7 @@ describe('dsh-tool-team', () => {
     const unrelated = await ctx.agents.create({
       sessionId: SessionId('unrelated-task-owner'), agentOptions: { provider: 'mock', model: 'mock' },
     })
-    ctx.subagentNames.bind(lead, unrelated.agent.id, 'lead/not-a-teammate')
+    ctx.subagentNames.bind(lead.session, unrelated.agent.id, 'lead/not-a-teammate')
     const task = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Requires a teammate' })
     const result = await execute(ctx, lead, 'team_task_update', {
       task_id: task.id, expected_revision: task.revision, action: 'reassign', owner: 'lead/not-a-teammate',

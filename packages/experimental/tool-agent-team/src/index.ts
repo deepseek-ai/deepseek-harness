@@ -81,9 +81,10 @@ type NamedTaskView = Omit<TeamTaskView, 'ownerId'> & { readonly ownerName?: stri
 function taskOwnerNames(
   ctx: Context, caller: Agent, owners: readonly (SessionId | undefined)[],
 ): ReadonlyMap<SessionId, string> {
+  const rootSession = ctx.subagents.rootOf(caller).session
   const names = new Map<SessionId, string>()
   for (const ownerId of owners) {
-    if (ownerId !== undefined && !names.has(ownerId)) names.set(ownerId, ctx.subagentNames.nameOf(caller, ownerId))
+    if (ownerId !== undefined && !names.has(ownerId)) names.set(ownerId, ctx.subagentNames.nameOf(rootSession, ownerId))
   }
   return names
 }
@@ -232,7 +233,7 @@ function install(agent: Agent, ctx: Context): () => void {
         const taskId = TeamTaskId(args.task_id)
         const current = ctx.agentTeams.getTask(caller, taskId)
         const owner = args.owner === undefined ? undefined
-          : ctx.subagentNames.resolveName(caller, args.owner)
+          : ctx.subagentNames.resolveName(ctx.subagents.rootOf(caller).session, args.owner)
         const keepsOwner = !['claim', 'release', 'reopen', 'reassign'].includes(args.action)
         // Names are immutable; the service still checks the revision and authority after these reads.
         const names = taskOwnerNames(ctx, caller, [

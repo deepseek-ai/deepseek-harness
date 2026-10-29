@@ -73,6 +73,9 @@
     },
     {
       "path": "../../session/working-directory"
+    },
+    {
+      "path": "../subagent-names"
     }
   ]
 }

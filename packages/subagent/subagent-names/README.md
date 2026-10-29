@@ -29,7 +29,7 @@ Mount this plugin with the naming-aware [delegation tool](../tool-subagent/READM
 
 ### Minimal configuration
 
-Add this row to a composition providing `subagents` and `sessionProjections`:
+Add this row to a composition providing `sessionProjections`:
 
 ```yaml
 - name: '@deepseek-ai/dsh-subagent-names'
@@ -45,7 +45,7 @@ The root is `lead`. `nameOf` returns a bound full name, or the original Session 
 
 ### Binding after startup
 
-Call `reserve(parent, requested?)`, start the child through `ctx.subagents.startActivation`, then call `bind(parent, childId, reservation.name)` with the successful receipt. Release the reservation with `dispose()` in `finally`, whether startup and binding succeed or fail.
+Resolve `rootSession = ctx.subagents.rootOf(parent).session`, then call `reserve(rootSession, parent.id, requested?)`, start the child through `ctx.subagents.startActivation`, then call `bind(rootSession, childId, reservation.name)` with the successful receipt. Release the reservation with `dispose()` in `finally`, whether startup and binding succeed or fail.
 
 Binding records the full name in the root Session. If binding fails after startup succeeds, the caller must report the already-started child id; the child remains managed by the subagent service. A crash before binding can likewise leave an unnamed child that remains addressable by id.
 
@@ -57,7 +57,7 @@ Binding records the full name in the root Session. If binding fails after startu
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Each root Session stores its own name-to-id bindings. A projection recovers those bindings and excludes inherited fork records. Lookups read this root mapping without observing ancestor Sessions or joining child catalogs. Callers own transient reservations and release them after their operation.
+Each root Session stores its own name-to-id bindings. All naming operations receive that root Session explicitly; the naming service does not resolve live Agent membership. A projection recovers those bindings and excludes inherited fork records. Lookups read this root mapping without observing ancestor Sessions or joining child catalogs. Callers own transient reservations and release them after their operation.
 
 The mapping retains one binding per named child: storage is O(n), a lookup or binding is O(n), and replaying n distinct bindings is O(n²) in the worst case because each event searches the binding array.
 
@@ -89,7 +89,7 @@ Indirectly, through the [delegation tool](../tool-subagent/README.md) and [contr
 
 #### KV Cache effect
 
-This plugin adds no prompt text or tool schema. Its consumers own any model-visible name text and its cache effect.
+The subagent message service reads sender names from this service automatically. This plugin adds no prompt text or tool schema. Its consumers own any model-visible name text and its cache effect.
 
 ## Known Limitations and Deferred Work
 
