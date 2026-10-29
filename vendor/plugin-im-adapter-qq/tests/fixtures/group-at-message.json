@@ -1,0 +1,27 @@
+{
+  "op": 0,
+  "s": 1201,
+  "t": "GROUP_AT_MESSAGE_CREATE",
+  "id": "GROUP_AT_MESSAGE_CREATE:9f8c1a6e5b7d4c3a2f1e0d9c8b7a6f5e",
+  "d": {
+    "id": "ROBOT1.0_k3N4mQ2sT7vB9xY1zA5cD8eF0gH2jK4lM6nP8qR0sT2uV4wX6yZ8aB0cD2eF4gH6jK8lM0nP",
+    "author": {
+      "id": "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4",
+      "member_openid": "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4",
+      "member_role": "member",
+      "username": "小明",
+      "bot": false
+    },
+    "content": " /今日天气 上海",
+    "group_openid": "B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5",
+    "message_type": 0,
+    "timestamp": "2026-07-21T10:00:00+08:00",
+    "message_scene": {
+      "source": "default",
+      "ext": [
+        "msg_idx=REFIDX_xxxxxxxxxxxxxxx==",
+        "auth_token=7c9c0b3a5d1e4f8a9b2c3d4e5f6a7b8c"
+      ]
+    }
+  }
+}
