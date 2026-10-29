@@ -27,7 +27,7 @@ kind: "package-reference"
 
 `fs/delete-intent` 与 `fs/edit-intent` 要求相同的存在观察：未见源以 `FS_NOT_OBSERVED` 失败，确认缺失的源以 `FS_NOT_FOUND` 失败，存在源提供观察到的版本。补丁和移动源复用 `fs/edit-intent`；移动目标复用 `fs/write-intent`。
 
-当部署希望模型在覆盖或编辑文件之前先读取该文件时，把本插件与 `ctx.fs` 后端及 `dsh-tool-fs` 工具一起加载。插件无需配置，也不注入任何服务；它只监听工具分派的 `fs/*` 事件。
+当部署希望模型在覆盖或编辑文件之前先读取该文件时，把本插件与 `ctx.fs` 后端及 `dsh-tool-fs` 工具一起加载。插件无需配置，也不注入任何服务；它只监听工具分派的 `fs/*` 事件。随发行版交付的组合默认不启用它：[`dsh-base`](../../bundle/base/cordis.patch.yml) 中的 `fs-observation-policy` 行写着 `disabled: true`，因为开启防护时模型 `apply_patch` 失败里 20–27% 是先读拒绝、另有 9–14% 是 hunk 能匹配却因版本过期被拒，而 hunk 上下文本身已能拒绝内容偏离的文件；把该行改为 `false` 即可为所有修改工具恢复防护。
 
 ### 最小组合
 

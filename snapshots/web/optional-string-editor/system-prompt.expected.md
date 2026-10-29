@@ -10,9 +10,9 @@ Check the [exit code: N] marker on every bash result; investigate failures befor
 
 Use the read tool — not shell commands like cat — to inspect text files. Use offset and limit to continue reading large files.
 
-Read an existing file before overwriting it with write (the default fs-observation-policy requires it) and prefer edit for targeted changes.
+Read an existing file before overwriting it with write and prefer edit for targeted changes.
 
-Read a file before editing it (the default fs-observation-policy requires it), unless you just created or edited it in this session.
+Read a file before editing it unless you just created or edited it in this session.
 
 Use the glob tool — not shell find — to discover files by path pattern.
 

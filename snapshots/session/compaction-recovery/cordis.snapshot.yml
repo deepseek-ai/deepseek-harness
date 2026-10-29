@@ -27,3 +27,8 @@
             models:
               - id: deepseek-v4-flash
                 contextWindow: 128000
+
+# Keep the recorded tool set shared by the fixed-budget compaction scenarios.
+- id: tool-fs
+  config:
+    applyPatch: false

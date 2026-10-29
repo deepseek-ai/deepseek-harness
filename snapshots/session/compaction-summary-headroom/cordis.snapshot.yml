@@ -1,6 +1,11 @@
 # The summary output cap inherits the 1,800-token headroom. A 1,000-token
 # request output reservation lowers the proactive trigger to 5,822 tokens.
 
+# Keep the recorded tool set for the fixed compaction thresholds.
+- id: tool-fs
+  config:
+    applyPatch: false
+
 - id: agent-instructions
   disabled: true
 
