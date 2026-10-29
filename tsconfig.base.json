@@ -369,6 +369,7 @@
       "@deepseek-ai/dsh-sdk-protocol": ["./packages/sdk/protocol/src"],
       "@deepseek-ai/dsh-sdk-jsonrpc-server": ["./packages/sdk/server/src"],
       "@deepseek-ai/dsh-agent-team": ["./packages/team/agent-team/src"],
+      "@deepseek-ai/dsh-agent-team/types": ["./packages/team/agent-team/src/types.ts"],
       "@deepseek-ai/dsh-experimental-auto-review": ["./packages/experimental/auto-review/src"],
       "@deepseek-ai/dsh-experimental-claude-code-mods": ["./packages/experimental/claude-code-mods/src"],
       "@deepseek-ai/dsh-tool-agent-team": ["./packages/team/tool-agent-team/src"],
