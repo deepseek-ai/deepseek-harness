@@ -85,7 +85,8 @@ describe('Anthropic thinking prefix binding', () => {
       { events: frames('fifth', false) },
     ])
     const first = await run([user('Look up the value.')])
-    expect(first.source).toMatchObject({ replayState: { response: { prefixDigest: expect.stringMatching(/^[0-9a-f]{64}$/) } } })
+    const prefixDigest: unknown = expect.stringMatching(/^[0-9a-f]{64}$/)
+    expect(first.source).toMatchObject({ replayState: { response: { prefixDigest } } })
     const second = await run([user('Look up the value.'), first, result(callId(first), 'large output')])
     expect(wire(server.requests[1])).toContain('"signature":"first"')
     expect(wire(server.requests[1])).toContain('redacted-first')
