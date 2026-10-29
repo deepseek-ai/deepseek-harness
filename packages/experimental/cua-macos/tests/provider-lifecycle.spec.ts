@@ -389,7 +389,7 @@ it('keeps native element diagnostics out of model-visible state and structured t
   await selectApplication(f)
   const visible = { appHandle: 'app-one', pid: 17, windowId: null, focusedWindowId: null,
     snapshotId: 'state-one', tree: '- [0] AXButton "Save"', windows: [], truncated: false }
-  native.request.mockResolvedValue({ ...visible, elements: [{ index: 0, role: 'AXButton', bounds: [10, 20, 30, 40] }] })
+  native.request.mockResolvedValue({ ...visible, elements: [{ elementId: '0', role: 'AXButton', bounds: [10, 20, 30, 40] }] })
   const result = await f.execute('getState', { appHandle: 'app-one' })
   expect(result.isError).toBe(false)
   expect(result.value).toMatchObject(visible)

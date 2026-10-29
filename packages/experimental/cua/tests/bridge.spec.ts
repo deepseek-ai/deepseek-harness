@@ -1,10 +1,14 @@
 /** Retained app objects use fresh execution bindings while tool results own image admission. */
 import { Buffer } from 'node:buffer'
 import { expect, it, vi } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { connectCua } from '../src/bridge.ts'
 import type { CuaToolBinding } from '../src/bridge.ts'
-import type { CuaOperation } from '../src/types.ts'
+import type { CuaElementId, CuaOperation } from '../src/types.ts'
+
+/** Element ids are opaque strings; these fixtures use the macOS decimal form. */
+const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
 
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const selected = { appHandle: 'app-17', pid: 17, name: 'Editor' }
@@ -23,9 +27,9 @@ it('uses the current tool binding when a retained app is called by another execu
   const second = vi.fn(async (): Promise<JsonValue> => ({ dispatched: true, verified: false }))
   current = second
 
-  await expect(app.click(0)).resolves.toEqual({ dispatched: true, verified: false })
+  await expect(app.click(element('0'))).resolves.toEqual({ dispatched: true, verified: false })
   expect(first).toHaveBeenCalledTimes(2)
-  expect(second).toHaveBeenCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 0 } })
+  expect(second).toHaveBeenCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '0' } })
   expect(text).not.toHaveBeenCalled()
   current = first
   await app.getAXState()

@@ -14,7 +14,9 @@ const click = { ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).op
   holdMs: z.number().int().nonnegative().optional()
     .describe('Milliseconds between each mouse press and release; omitted for an ordinary click.') }
 const window = { ...app, windowId: id }
-const snapshot = { ...app, snapshotId: z.string().min(1), elementIndex: z.number().int().nonnegative() }
+export const elementId = z.string().min(1)
+  .describe('Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.')
+const snapshot = { ...app, snapshotId: z.string().min(1), elementId }
 const coordinate = { ...window, snapshotId: z.string().min(1).optional(), x: point, y: point }
 const absoluteCoordinate = { ...coordinate, relative: z.literal(false).optional().describe('Omitted or false uses pixels in the latest screenshot returned by this tool.') }
 const relativeCoordinate = { ...coordinate, relative: z.literal(true).describe('Use integer thousandths of the window width and height, from 0 to 999.'), x: relativePoint, y: relativePoint }

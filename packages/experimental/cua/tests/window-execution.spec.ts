@@ -104,7 +104,7 @@ it('returns only the selected observation and rejects changes of handle, PID or 
   for (const [method, params] of [
     ['show', {}], ['screenshot', {}],
     ['drag', { fromX: 1, fromY: 2, toX: 3, toY: 4 }],
-    ['click', { elementIndex: 1, snapshotId: 's1' }],
+    ['click', { elementId: '1', snapshotId: 's1' }],
     ['typeText', { text: 'hello' }],
   ] as const) {
     await f.run(method, { windowHandle: 'window-a', ...params })

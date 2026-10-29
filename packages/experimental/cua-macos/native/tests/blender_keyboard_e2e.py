@@ -169,7 +169,7 @@ def exercise(args, artifacts, transcript, summary):
                     window_elements = [element for element in observed["elements"] if element["role"] == "AXWindow"]
                     assert len(window_elements) == 1, observed
                     call("performSecondaryAction", {**owner, "snapshotId": observed["snapshotId"],
-                        "elementIndex": window_elements[0]["index"], "action": "raise"})
+                        "elementId": window_elements[0]["elementId"], "action": "raise"})
                     observed = call("getState", {**owner, "windowId": window["windowId"],
                                                   "maxElements": 2000, "maxDepth": 25})
                     window = next(value for value in observed["windows"] if value["windowId"] == window["windowId"])

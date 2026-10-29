@@ -1,4 +1,4 @@
-/** Pixel mappings follow the delivered screenshot and invalidate independently of AX indices. */
+/** Pixel mappings follow the delivered screenshot and invalidate independently of element ids. */
 import { expect, it } from 'vitest'
 import { CuaCoordinates } from '../src/coordinates.ts'
 import { Request } from '../src/protocol.ts'
@@ -87,7 +87,7 @@ it('keeps different application/window mappings independent and leaves element a
   coordinates.screenshot(handle, 7, window().bounds, { width: 1280, height: 960 })
   coordinates.screenshot('other' as CuaAppHandle, 7, window(100, 100).bounds, { width: 100, height: 100 })
   expect(coordinates.parameters(call('click', { x: 640, y: 480 }))).toMatchObject({ x: 320, y: 240 })
-  const request = Request.parse({ method: 'hover', params: { appHandle: handle, snapshotId: 's', elementIndex: 2 } })
+  const request = Request.parse({ method: 'hover', params: { appHandle: handle, snapshotId: 's', elementId: '2' } })
   expect(coordinates.parameters(request)).toEqual(request.params)
 })
 

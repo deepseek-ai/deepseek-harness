@@ -53,6 +53,14 @@ struct RequestParameters: Sendable {
     }
     func windowID() throws -> UInt32 { UInt32(try integer("windowId", in: 1...Int(UInt32.max))) }
     func optionalWindowID() throws -> UInt32? { contains("windowId") ? try windowID() : nil }
+    /// Element ids are opaque strings on the wire; this helper accepts its decimal form and returns the snapshot index.
+    func elementIdIndex() throws -> Int {
+        let text = try string("elementId")
+        guard !text.isEmpty, text.allSatisfy({ $0.isASCII && $0.isWholeNumber }), let index = Int(text) else {
+            throw Self.invalid("elementId must be a decimal element id")
+        }
+        return index
+    }
     func modifiers() throws -> [String] {
         guard let value = values["modifiers"] else { return [] }
         guard case .array(let items) = value else { throw Self.invalid("modifiers must be an array") }

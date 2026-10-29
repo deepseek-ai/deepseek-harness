@@ -310,16 +310,16 @@
                         "type": "string",
                         "minLength": 1
                       },
-                      "elementIndex": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 9007199254740991
+                      "elementId": {
+                        "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
+                        "type": "string",
+                        "minLength": 1
                       }
                     },
                     "required": [
                       "appHandle",
                       "snapshotId",
-                      "elementIndex"
+                      "elementId"
                     ],
                     "additionalProperties": false
                   },
@@ -431,10 +431,10 @@
                         "type": "string",
                         "minLength": 1
                       },
-                      "elementIndex": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 9007199254740991
+                      "elementId": {
+                        "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
+                        "type": "string",
+                        "minLength": 1
                       },
                       "mouseButton": {
                         "type": "string",
@@ -479,7 +479,7 @@
                     "required": [
                       "appHandle",
                       "snapshotId",
-                      "elementIndex"
+                      "elementId"
                     ],
                     "additionalProperties": false
                   },
@@ -667,10 +667,10 @@
                     "type": "string",
                     "minLength": 1
                   },
-                  "elementIndex": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
+                  "elementId": {
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
+                    "type": "string",
+                    "minLength": 1
                   },
                   "value": {
                     "type": "string"
@@ -679,7 +679,7 @@
                 "required": [
                   "appHandle",
                   "snapshotId",
-                  "elementIndex",
+                  "elementId",
                   "value"
                 ],
                 "additionalProperties": false
@@ -709,10 +709,10 @@
                     "type": "string",
                     "minLength": 1
                   },
-                  "elementIndex": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
+                  "elementId": {
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
+                    "type": "string",
+                    "minLength": 1
                   },
                   "text": {
                     "type": "string",
@@ -736,7 +736,7 @@
                 "required": [
                   "appHandle",
                   "snapshotId",
-                  "elementIndex",
+                  "elementId",
                   "text"
                 ],
                 "additionalProperties": false
@@ -766,10 +766,10 @@
                     "type": "string",
                     "minLength": 1
                   },
-                  "elementIndex": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
+                  "elementId": {
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
+                    "type": "string",
+                    "minLength": 1
                   },
                   "action": {
                     "type": "string",
@@ -779,7 +779,7 @@
                 "required": [
                   "appHandle",
                   "snapshotId",
-                  "elementIndex",
+                  "elementId",
                   "action"
                 ],
                 "additionalProperties": false

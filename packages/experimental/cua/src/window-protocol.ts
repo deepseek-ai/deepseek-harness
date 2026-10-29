@@ -1,12 +1,12 @@
 /** Window-directed model operations; application-oriented macOS operations remain separate. */
 import { z } from 'zod'
-import { WindowsResult } from './protocol.ts'
+import { elementId, WindowsResult } from './protocol.ts'
 
 const windowId = z.number().int().positive().max(2 ** 32 - 1)
 const handle = { windowHandle: z.string().min(1) }
 const modifiers = z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional()
 const pointer = { mouseButton: z.enum(['left', 'right', 'middle']).optional(), modifiers }
-const snapshot = { ...handle, snapshotId: z.string().min(1), elementIndex: z.number().int().nonnegative() }
+const snapshot = { ...handle, snapshotId: z.string().min(1), elementId }
 const point = z.number().nonnegative()
 const relativePoint = z.number().int().min(0).max(999)
 const coordinates = { ...handle, snapshotId: z.string().min(1).optional() }

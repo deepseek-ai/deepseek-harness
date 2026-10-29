@@ -1,9 +1,13 @@
 /** App and window behavior over a fixture operation dispatcher, without desktop access. */
 import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { createCuaApi } from '../src/api.ts'
-import type { CuaApp, CuaOperation, CuaScreenshot } from '../src/types.ts'
+import type { CuaApp, CuaElementId, CuaOperation, CuaScreenshot } from '../src/types.ts'
+
+/** Element ids are opaque strings; these fixtures use the macOS decimal form. */
+const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
 
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const bounds = { x: -640, y: 100, width: 640, height: 480 }
@@ -150,11 +154,11 @@ describe('hover across observations', () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     f.dispatch.mockClear()
-    expect(await app.hover(0)).toEqual({ ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false })
+    expect(await app.hover(element('0'))).toEqual({ ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false })
     await app.getAXStateAndScreenshot({ emit: false })
     expect(await app.hover([30, 40])).toEqual({ ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false })
     expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
-      { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 0 } },
+      { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '0' } },
       { method: 'getState', params: { appHandle: 'app-17' } },
       { method: 'screenshot', params: { appHandle: 'app-17', windowId: 23 } },
       { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', windowId: 23, x: 30, y: 40 } },
@@ -176,7 +180,7 @@ describe('pointer buttons and modifiers', () => {
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow(23)
     for (const surface of [app, window]) {
-      for (const target of [0, [10, 20] as const]) {
+      for (const target of [element('0'), [10, 20] as const]) {
         await surface.click(target, { holdMs, mouseButton: 'right' })
         expect(f.dispatch.mock.calls.at(-1)?.[0]).toMatchObject({ method: 'click', params: { holdMs, mouseButton: 'right' } })
         f.dispatch.mockClear()
@@ -189,9 +193,9 @@ describe('pointer buttons and modifiers', () => {
   it('retains middle-button and modifier intent through click and drag dispatch', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
-    await app.click(0, { mouseButton: 'middle', modifiers: ['shift'] })
+    await app.click(element('0'), { mouseButton: 'middle', modifiers: ['shift'] })
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: {
-      appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 0, mouseButton: 'middle', modifiers: ['shift'],
+      appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '0', mouseButton: 'middle', modifiers: ['shift'],
     } })
     await app.click([10, 20], { modifiers: ['command'] })
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: {
@@ -204,7 +208,7 @@ describe('pointer buttons and modifiers', () => {
       mouseButton: 'middle', modifiers: ['shift', 'option'],
     } })
     const count = f.dispatch.mock.calls.length
-    await expect(app.click(0, { mouseButton: 'middle', clickCount: 2 })).rejects.toThrow('Only left double-click')
+    await expect(app.click(element('0'), { mouseButton: 'middle', clickCount: 2 })).rejects.toThrow('Only left double-click')
     expect(f.dispatch).toHaveBeenCalledTimes(count)
   })
 })
@@ -213,43 +217,43 @@ describe('text selections', () => {
   it('binds literal text and optional disambiguation to the latest observed control', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
-    await app.selectText(1, 'target')
+    await app.selectText(element('1'), 'target')
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'selectText', params: {
-      appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 1, text: 'target',
+      appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '1', text: 'target',
     } })
-    await app.selectText(1, 'target', { prefix: 'second ', suffix: '.', selectionType: 'cursor_after' })
+    await app.selectText(element('1'), 'target', { prefix: 'second ', suffix: '.', selectionType: 'cursor_after' })
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'selectText', params: {
-      appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 1, text: 'target',
+      appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '1', text: 'target',
       prefix: 'second ', suffix: '.', selectionType: 'cursor_after',
     } })
     const calls = f.dispatch.mock.calls.length
-    await expect(app.selectText(1, '')).rejects.toThrow()
+    await expect(app.selectText(element('1'), '')).rejects.toThrow()
     expect(f.dispatch).toHaveBeenCalledTimes(calls)
   })
 })
 
 describe('application and window observations', () => {
-  it('keeps the latest AX index scope separate for an app and each selected window', async () => {
+  it('keeps the latest element id scope separate for an app and each selected window', async () => {
     const f = fixture()
     f.setWindows([23, 24])
     const app = await f.api.getApp('Editor')
     expect(await app.getWindows({ emit: false })).toEqual([windowInfo(23), windowInfo(24)])
     const first = await app.getWindow(23)
     const second = await app.getWindow(24)
-    await app.click(0)
-    await first.setValue(1, 'First document')
-    await second.click(2)
+    await app.click(element('0'))
+    await first.setValue(element('1'), 'First document')
+    await second.click(element('2'))
     expect(f.dispatch.mock.calls.slice(-3).map(([operation]) => operation)).toEqual([
-      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 0 } },
-      { method: 'setValue', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementIndex: 1, value: 'First document' } },
-      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-3', elementIndex: 2 } },
+      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '0' } },
+      { method: 'setValue', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '1', value: 'First document' } },
+      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-3', elementId: '2' } },
     ])
     expect(first.windowId).toBe(23)
     expect(second.windowId).toBe(24)
     expect(f.sink.text.mock.calls.map(([text]) => text)).toEqual([])
     await expect(second.getAXState({ emit: false, disableDiffing: true })).resolves.toBe('Tree 4')
-    await second.click(3)
-    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-4', elementIndex: 3 } })
+    await second.click(element('3'))
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-4', elementId: '3' } })
     expect(f.sink.text).not.toHaveBeenCalled()
   })
 
@@ -351,7 +355,7 @@ describe('application and window observations', () => {
     f.dispatch.mockResolvedValueOnce(state(identity))
     await expect(app.getAXState()).rejects.toThrow('another application or window')
     const calls = f.dispatch.mock.calls.length
-    await expect(app.click(0)).rejects.toThrow('Read getAXState')
+    await expect(app.click(element('0'))).rejects.toThrow('Read getAXState')
     expect(f.dispatch).toHaveBeenCalledTimes(calls)
   })
 
@@ -372,7 +376,7 @@ describe('application and window observations', () => {
     const failure = new Error('Native app is busy')
     f.dispatch.mockRejectedValueOnce(failure)
     await expect(app.getAXState()).rejects.toBe(failure)
-    await expect(app.setValue(0, 'stale')).rejects.toThrow('Read getAXState')
+    await expect(app.setValue(element('0'), 'stale')).rejects.toThrow('Read getAXState')
     f.sink.text.mockClear()
     await app.getScreenshot()
     expect(f.dispatch.mock.calls.slice(-2).map(([operation]) => operation.method)).toEqual(['getState', 'screenshot'])
@@ -420,7 +424,7 @@ describe('screenshots', () => {
 })
 
 describe('input actions', () => {
-  it('passes explicit relative mode to every coordinate gesture and rejects it on element indices', async () => {
+  it('passes explicit relative mode to every coordinate gesture and rejects it on element ids', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     await app.click([500, 250], { relative: true })
@@ -433,8 +437,8 @@ describe('input actions', () => {
       expect.objectContaining({ fromX: 0, toX: 999, relative: true }),
       expect.objectContaining({ x: 500, y: 250, relative: true }),
     ])
-    await expect(app.click(1, { relative: true })).rejects.toThrow()
-    await expect(app.hover(1, { relative: true })).rejects.toThrow()
+    await expect(app.click(element('1'), { relative: true })).rejects.toThrow()
+    await expect(app.hover(element('1'), { relative: true })).rejects.toThrow()
   })
 
   it('keeps the selected app and window when scroll options include another target identity', async () => {
@@ -470,14 +474,14 @@ describe('input actions', () => {
 
   const invalidActions: Array<[string, (app: CuaApp) => Promise<unknown>]> = [
     ['right double click', app => app.click([1, 2], { mouseButton: 'right', clickCount: 2 })],
-    ['right AX double click', app => app.click(0, { mouseButton: 'right', clickCount: 2 })],
-    ['negative hover index', app => app.hover(-1)],
+    ['right AX double click', app => app.click(element('0'), { mouseButton: 'right', clickCount: 2 })],
+    ['empty hover element id', app => app.hover(element(''))],
     ['negative hover point', app => app.hover([-1, 0])],
     ['nonfinite hover point', app => app.hover([NaN, 0])],
-    ['negative AX index', app => app.click(-1)],
+    ['empty click element id', app => app.click(element(''))],
     ['nonfinite coordinate', app => app.click([NaN, 0])],
     ['negative coordinate', app => app.click([-1, 0])],
-    ['negative value index', app => app.setValue(-1, 'value')],
+    ['empty value element id', app => app.setValue(element(''), 'value')],
     ['zero scroll', app => app.scroll({ x: 0, y: 0, deltaLinesX: 0, deltaLinesY: 0 })],
     ['oversized scroll', app => app.scroll({ x: 0, y: 0, deltaLinesX: 11, deltaLinesY: 0 })],
     ['fractional scroll', app => app.scroll({ x: 0, y: 0, deltaLinesX: 0.5, deltaLinesY: 0 })],
@@ -490,10 +494,10 @@ describe('input actions', () => {
   ]
   it.each<[string, (app: CuaApp) => Promise<unknown>]>([
     ['getState windowId: Too small: expected number to be >0', app => app.getWindow(0)],
-    ['selectText text: Too small: expected string to have >=1 characters', app => app.selectText(0, '')],
+    ['selectText text: Too small: expected string to have >=1 characters', app => app.selectText(element('0'), '')],
     ['hover x: Invalid input: expected number, received NaN', app => app.hover([NaN, 0])],
     ['hover x: Too big: expected number to be <=999', app => app.hover([1000, 0], { relative: true })],
-    ['click relative: not accepted for these arguments', app => app.click(650, { relative: true })],
+    ['click relative: not accepted for these arguments', app => app.click(element('650'), { relative: true })],
   ])('reports a readable validation failure: %s', async (message, run) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
@@ -540,14 +544,25 @@ describe('input actions', () => {
     ])
   })
 
-  it('retains the snapshot identity for indexed right and double clicks', async () => {
+  it('retains the snapshot identity for element right and double clicks', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
-    await app.click(12, { mouseButton: 'right' })
-    await app.click(13, { clickCount: 2 })
+    await app.click(element('12'), { mouseButton: 'right' })
+    await app.click(element('13'), { clickCount: 2 })
     expect(f.dispatch.mock.calls.slice(-2).map(([operation]) => operation)).toEqual([
-      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 12, mouseButton: 'right' } },
-      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementIndex: 13, clickCount: 2 } },
+      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '12', mouseButton: 'right' } },
+      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '13', clickCount: 2 } },
+    ])
+  })
+
+  it('dispatches an opaque provider element id unchanged', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    await app.click(element('42.12345'))
+    await app.hover(element('42.12345'))
+    expect(f.dispatch.mock.calls.slice(-2).map(([operation]) => operation)).toEqual([
+      { method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '42.12345' } },
+      { method: 'hover', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '42.12345' } },
     ])
   })
 
@@ -555,11 +570,11 @@ describe('input actions', () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow(23)
-    await window.performSecondaryAction(2, 'raise')
+    await window.performSecondaryAction(element('2'), 'raise')
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'performSecondaryAction', params: {
-      appHandle: 'app-17', snapshotId: 'snapshot-2', elementIndex: 2, action: 'raise',
+      appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '2', action: 'raise',
     } })
-    await expect(window.performSecondaryAction(2, '')).rejects.toThrow()
+    await expect(window.performSecondaryAction(element('2'), '')).rejects.toThrow()
   })
 
   it('does not activate on selection and dispatches only an explicit activation request', async () => {
@@ -578,7 +593,7 @@ describe('input actions', () => {
     await expect(app.typeText('hello')).rejects.toBe(failure)
     expect(f.dispatch).toHaveBeenCalledTimes(3)
     f.dispatch.mockResolvedValueOnce({ dispatched: true, verified: true })
-    await expect(app.click(0)).rejects.toThrow()
+    await expect(app.click(element('0'))).rejects.toThrow()
     expect(f.dispatch).toHaveBeenCalledTimes(4)
   })
 

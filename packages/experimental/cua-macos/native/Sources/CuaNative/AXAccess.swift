@@ -447,7 +447,7 @@ final class AXAccess {
             if let index {
                 let frameJSON: JSONValue = frame.map { .array([.number($0.x), .number($0.y), .number($0.width), .number($0.height)]) } ?? .null
                 elements.append(.object([
-                    "index": .number(Double(index)), "role": .string(role), "title": title.map(JSONValue.string) ?? .null,
+                    "elementId": .string(String(index)), "role": .string(role), "title": title.map(JSONValue.string) ?? .null,
                     "value": value.map(JSONValue.string) ?? .null, "description": description.map(JSONValue.string) ?? .null,
                     "identifier": identifier.map(JSONValue.string) ?? .null,
                     "bounds": frameJSON, "actions": .array(actionNames.map(JSONValue.string)), "enabled": enabled.map(JSONValue.bool) ?? .null,

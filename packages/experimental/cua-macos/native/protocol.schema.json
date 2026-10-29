@@ -296,16 +296,16 @@
                   "type": "string",
                   "minLength": 1
                 },
-                "elementIndex": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 9007199254740991
+                "elementId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                 }
               },
               "required": [
                 "appHandle",
                 "snapshotId",
-                "elementIndex"
+                "elementId"
               ],
               "additionalProperties": false
             },
@@ -375,10 +375,10 @@
                   "type": "string",
                   "minLength": 1
                 },
-                "elementIndex": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 9007199254740991
+                "elementId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                 },
                 "mouseButton": {
                   "type": "string",
@@ -423,7 +423,7 @@
               "required": [
                 "appHandle",
                 "snapshotId",
-                "elementIndex"
+                "elementId"
               ],
               "additionalProperties": false
             },
@@ -530,10 +530,10 @@
               "type": "string",
               "minLength": 1
             },
-            "elementIndex": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
+            "elementId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
             },
             "value": {
               "type": "string"
@@ -542,7 +542,7 @@
           "required": [
             "appHandle",
             "snapshotId",
-            "elementIndex",
+            "elementId",
             "value"
           ],
           "additionalProperties": false
@@ -576,10 +576,10 @@
               "type": "string",
               "minLength": 1
             },
-            "elementIndex": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
+            "elementId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
             },
             "text": {
               "type": "string",
@@ -603,7 +603,7 @@
           "required": [
             "appHandle",
             "snapshotId",
-            "elementIndex",
+            "elementId",
             "text"
           ],
           "additionalProperties": false
@@ -637,10 +637,10 @@
               "type": "string",
               "minLength": 1
             },
-            "elementIndex": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
+            "elementId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
             },
             "action": {
               "type": "string",
@@ -650,7 +650,7 @@
           "required": [
             "appHandle",
             "snapshotId",
-            "elementIndex",
+            "elementId",
             "action"
           ],
           "additionalProperties": false

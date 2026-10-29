@@ -8,6 +8,8 @@ import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, Re
 export type CuaAppHandle = Branded<'CuaAppHandle'>
 /** Helper-issued accessibility observation identity. */
 export type CuaSnapshotId = Branded<'CuaSnapshotId'>
+/** Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot. */
+export type CuaElementId = Branded<'CuaElementId'>
 /** One operation sent through an authorized and logged host dispatcher. */
 export type CuaOperation = z.output<typeof Request>
 type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { method: M }>['params']
@@ -32,7 +34,7 @@ export interface CuaObservationSink {
 }
 /** Observations emit by default. Returned values are unaffected by this option. */
 export interface CuaObservationOptions { emit?: boolean }
-/** Full observations of the requested content; each read replaces this surface's indices. */
+/** Full observations of the requested content; each read replaces this surface's current snapshot. */
 export interface CuaAxOptions extends CuaObservationOptions {
   /** Reserved compatibility option; observations are never diffs. */
   disableDiffing?: boolean
@@ -100,7 +102,7 @@ export interface CuaSurface {
   /**
    * Read fresh AX text, with menu contents collapsed by default.
    * @param options - emission, menu expansion and field detail options.
-   * @returns AX text with element indices.
+   * @returns AX text with element ids.
    */
   getAXState(options?: CuaAxOptions): Promise<string>
   /**
@@ -120,41 +122,41 @@ export interface CuaSurface {
    * The system-pointer route requires the app to be foreground and the point unobscured; never activates or raises it.
    * Returning and subsequent observations do not restore the previous pointer position.
    * Other input and application changes can interrupt hover; observe before continuing.
-   * @param target - current AX index or screenshot-local [x,y].
+   * @param target - current element id or screenshot-local [x,y].
    * @param options - coordinate mode; applies only to [x,y].
    * @returns dispatch evidence and the selected route; observe the resulting UI after its hover delay.
    */
-  hover(target: number | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
+  hover(target: CuaElementId | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
   /**
-   * Click a current AX index or screenshot-local point.
+   * Click a current element id or screenshot-local point.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.
-   * @param target - index or [x,y].
+   * @param target - element id or [x,y].
    * @param options - button, click count, modifiers, optional hold duration and coordinate mode.
    * @returns dispatch evidence.
    */
-  click(target: number | readonly [number, number], options?: CuaClickOptions): Promise<CuaActionResult>
+  click(target: CuaElementId | readonly [number, number], options?: CuaClickOptions): Promise<CuaActionResult>
   /**
    * Set an observed control value.
-   * @param index - index from this surface's latest tree.
+   * @param elementId - element id from this surface's latest observation.
    * @param value - replacement value.
    * @returns dispatch evidence.
    */
-  setValue(index: number, value: string): Promise<CuaActionResult>
+  setValue(elementId: CuaElementId, value: string): Promise<CuaActionResult>
   /**
    * Select one literal text occurrence through writable AXSelectedTextRange and verify its range.
-   * @param index - Text control index from this surface's latest tree.
+   * @param elementId - Text control element id from this surface's latest observation.
    * @param text - Nonempty literal text; multiple matches require adjacent context.
    * @param options - Adjacent prefix/suffix and selection or cursor placement.
    * @returns Dispatch evidence; rejects unsupported, ambiguous or changed text without keyboard fallback.
    */
-  selectText(index: number, text: string, options?: CuaSelectTextOptions): Promise<CuaActionResult>
+  selectText(elementId: CuaElementId, text: string, options?: CuaSelectTextOptions): Promise<CuaActionResult>
   /**
    * Invoke an action advertised by an observed element; raising a window activates its app.
-   * @param index - Index from this surface's latest AX tree.
+   * @param elementId - element id from this surface's latest observation.
    * @param action - Advertised action name, such as raise or zoomwindow.
    * @returns Dispatch evidence; menu and window actions can change focus.
    */
-  performSecondaryAction(index: number, action: string): Promise<CuaActionResult>
+  performSecondaryAction(elementId: CuaElementId, action: string): Promise<CuaActionResult>
   /**
    * Scroll at a screenshot-local point or integer ratio.
    * @param options - point, coordinate mode and line deltas; at least one delta must be nonzero.

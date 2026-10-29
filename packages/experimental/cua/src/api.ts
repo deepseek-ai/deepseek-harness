@@ -191,7 +191,7 @@ export function createCuaSurface(dispatch: CuaDispatch, sink: CuaObservationSink
     },
     async hover(target, options) {
       const relative = options?.relative === undefined ? {} : { relative: options.relative }
-      if (typeof target === 'number') return HoverResult.parse(await call('hover', { ...snapshotParams(), elementIndex: target, ...relative }))
+      if (typeof target === 'string') return HoverResult.parse(await call('hover', { ...snapshotParams(), elementId: target, ...relative }))
       const [x, y] = target
       return HoverResult.parse(await call('hover', { ...snapshotParams(), windowId: windowId(), x, y, ...relative }))
     },
@@ -202,23 +202,23 @@ export function createCuaSurface(dispatch: CuaDispatch, sink: CuaObservationSink
       const modifiers = options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] }
       const hold = options?.holdMs === undefined ? {} : { holdMs: options.holdMs }
       const relative = options?.relative === undefined ? {} : { relative: options.relative }
-      if (typeof target === 'number') {
-        return action('click', { ...snapshotParams(), ...modifiers, ...hold, ...relative, elementIndex: target,
+      if (typeof target === 'string') {
+        return action('click', { ...snapshotParams(), ...modifiers, ...hold, ...relative, elementId: target,
           ...mouseButton === 'left' ? {} : { mouseButton }, ...clickCount === 1 ? {} : { clickCount },
         })
       }
       const [x, y] = target
       return action('click', { ...snapshotParams(), windowId: windowId(), x, y, mouseButton, clickCount, ...modifiers, ...hold, ...relative })
     },
-    async setValue(index, value) { return action('setValue', { ...snapshotParams(), elementIndex: index, value }) },
-    async selectText(index, text, options) {
-      return action('selectText', { ...snapshotParams(), elementIndex: index, text,
+    async setValue(elementId, value) { return action('setValue', { ...snapshotParams(), elementId, value }) },
+    async selectText(elementId, text, options) {
+      return action('selectText', { ...snapshotParams(), elementId, text,
         ...options?.prefix === undefined ? {} : { prefix: options.prefix },
         ...options?.suffix === undefined ? {} : { suffix: options.suffix },
         ...options?.selectionType === undefined ? {} : { selectionType: options.selectionType },
       })
     },
-    async performSecondaryAction(index, name) { return action('performSecondaryAction', { ...snapshotParams(), elementIndex: index, action: name }) },
+    async performSecondaryAction(elementId, name) { return action('performSecondaryAction', { ...snapshotParams(), elementId, action: name }) },
     async scroll(options) {
       if (options.deltaLinesX === 0 && options.deltaLinesY === 0) throw new Error('At least one scroll delta must be nonzero')
       return action('scroll', {

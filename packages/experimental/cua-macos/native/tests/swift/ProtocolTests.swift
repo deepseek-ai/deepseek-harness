@@ -82,9 +82,25 @@ func rejectsInvalidWindowIDs(_ value: String) throws {
 }
 
 @Test func rejectsRoundedIntegerOverflowWithoutTrapping() throws {
-    let request = try NativeRequest(data: Data(#"{"id":"call","method":"click","params":{"elementIndex":9223372036854775808}}"#.utf8))
+    let request = try NativeRequest(data: Data(#"{"id":"call","method":"click","params":{"clickCount":9223372036854775808}}"#.utf8))
     let params = try RequestParameters(request)
-    #expect(throws: NativeFailure.self) { try params.integer("elementIndex", in: 0...Int.max) }
+    #expect(throws: NativeFailure.self) { try params.integer("clickCount", in: 0...Int.max) }
+}
+
+@Test(arguments: [("12", 12), ("007", 7)])
+func resolvesDecimalElementIdentifiers(_ source: String, _ index: Int) throws {
+    let request = try NativeRequest(data: Data("{\"id\":\"call\",\"method\":\"click\",\"params\":{\"elementId\":\"\(source)\"}}".utf8))
+    #expect(try RequestParameters(request).elementIdIndex() == index)
+}
+
+@Test(arguments: [
+    #"12"#, #""""#, #""-1""#, #""+1""#, #"" 1""#, #""1.0""#, #""abc""#, #""e12""#,
+    #""9223372036854775808""#, #""١٢""#,
+])
+func rejectsNonDecimalElementIdentifiers(_ value: String) throws {
+    let request = try NativeRequest(data: Data("{\"id\":\"call\",\"method\":\"click\",\"params\":{\"elementId\":\(value)}}".utf8))
+    let params = try RequestParameters(request)
+    #expect(throws: NativeFailure.self) { try params.elementIdIndex() }
 }
 
 @Test func nestedSeparatorsAndEscapedQuotesDoNotChangeEnvelopeFieldCount() throws {

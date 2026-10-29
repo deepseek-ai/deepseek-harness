@@ -146,8 +146,8 @@ actor AXWorker {
     }
     private func element(_ handle: String, _ params: RequestParameters) throws -> AXUIElement {
         let value = try snapshot(handle, params.string("snapshotId"))
-        let index = try params.integer("elementIndex", in: 0...Int.max)
-        guard let element = value.elements[index] else { throw RequestParameters.invalid("elementIndex is absent from the selected snapshot") }
+        let index = try params.elementIdIndex()
+        guard let element = value.elements[index] else { throw RequestParameters.invalid("elementId is absent from the selected snapshot") }
         return element
     }
     private func coordinateSnapshot(_ handle: String, _ params: RequestParameters, _ windowID: UInt32) throws {
@@ -340,7 +340,7 @@ actor AXWorker {
             if action == "AXRaise" {
                 try ax().requireEnabled(selected)
                 return .foreground(ForegroundPlan(appHandle: handle, identity: identity, snapshotID: try params.string("snapshotId"),
-                    index: try params.integer("elementIndex", in: 0...Int.max), targetWindowID: try ax().windowID(selected),
+                    index: try params.elementIdIndex(), targetWindowID: try ax().windowID(selected),
                     role: try ax().string(selected, "AXRole"), main: try ax().boolean(selected, "AXMain"), minimized: try ax().boolean(selected, "AXMinimized")))
             }
             try ax().perform(selected, action)
@@ -353,7 +353,7 @@ actor AXWorker {
             let window: WindowInfo
             let point: WindowPoint
             var hoverElement: AXUIElement?
-            if params.contains("elementIndex") {
+            if params.contains("elementId") {
                 guard !params.contains("x"), !params.contains("y"), !params.contains("windowId") else { throw RequestParameters.invalid("Element and coordinate targets cannot be combined") }
                 let selected = try element(handle, params)
                 hoverElement = selected

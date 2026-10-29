@@ -74,14 +74,14 @@ def main():
                 first = helper.call('getState', params)
                 buttons = [element for element in first['elements'] if element['title'] == 'Increment AXless fixture']
                 assert len(buttons) == 1, first
-                old_index = {**owner, 'snapshotId': first['snapshotId'], 'elementIndex': buttons[0]['index']}
+                old_index = {**owner, 'snapshotId': first['snapshotId'], 'elementId': buttons[0]['elementId']}
                 os.kill(fixture, signal.SIGUSR1)
                 actual = wait_state(lambda state: state['hiddenAX'], 'fixture did not remove its AX roots')
                 empty = helper.call('getState', params)
                 assert empty['tree'] == '' and empty['elements'] == [] and empty['truncated'] is False, empty
                 assert empty['snapshotId'] != first['snapshotId']
                 helper.call('click', old_index, 'STALE_SNAPSHOT')
-                helper.call('click', {**owner, 'snapshotId': empty['snapshotId'], 'elementIndex': 0}, 'INVALID_ARGUMENT')
+                helper.call('click', {**owner, 'snapshotId': empty['snapshotId'], 'elementId': '0'}, 'INVALID_ARGUMENT')
                 capture = helper.call('screenshot', {**owner, 'windowId': window_id})
                 assert base64.b64decode(capture['data'], validate=True).startswith(b'\x89PNG\r\n\x1a\n')
                 x, y = actual['buttonPoint']

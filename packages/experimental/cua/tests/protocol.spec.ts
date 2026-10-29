@@ -8,9 +8,10 @@ const rejectedRequests: Array<{ reason: string; request: JsonValue }> = [
   { reason: 'unknown native method', request: { method: 'shutdown', params: {} } },
   { reason: 'host-owned traversal limit', request: { method: 'getState', params: { appHandle: 'app', maxElements: 1000000 } } },
   { reason: 'extra tool argument', request: { method: 'listApps', params: {}, helperPath: '/untrusted/helper' } },
-  { reason: 'element click without an observed snapshot', request: { method: 'click', params: { appHandle: 'app', elementIndex: 0 } } },
+  { reason: 'element click without an observed snapshot', request: { method: 'click', params: { appHandle: 'app', elementId: '0' } } },
+  { reason: 'numeric element id', request: { method: 'click', params: { appHandle: 'app', snapshotId: 'snapshot', elementId: 0 } } },
   { reason: 'coordinate click without a window', request: { method: 'click', params: { appHandle: 'app', x: 1, y: 2 } } },
-  { reason: 'mixed element and coordinate click', request: { method: 'click', params: { appHandle: 'app', snapshotId: 'snapshot', elementIndex: 0, windowId: 23, x: 1, y: 2 } } },
+  { reason: 'mixed element and coordinate click', request: { method: 'click', params: { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', windowId: 23, x: 1, y: 2 } } },
   { reason: 'unsupported modifier', request: { method: 'pressKey', params: { appHandle: 'app', key: 'a', modifiers: ['hyper'] } } },
 ]
 
@@ -19,7 +20,7 @@ it.each(rejectedRequests)('rejects $reason at operation admission', ({ request }
 })
 
 it.each([
-  { appHandle: 'app', snapshotId: 'snapshot', elementIndex: 0 },
+  { appHandle: 'app', snapshotId: 'snapshot', elementId: '0' },
   { appHandle: 'app', windowId: 23, x: 1, y: 2 },
   { appHandle: 'app', windowId: 23, x: 1, y: 2, relative: true },
 ])('validates optional per-press hold duration for %j', (params) => {
@@ -59,7 +60,7 @@ it('accepts disclosure options without accepting host traversal limits', () => {
 })
 
 it.each([
-  { appHandle: 'app', snapshotId: 'snapshot', elementIndex: 0 },
+  { appHandle: 'app', snapshotId: 'snapshot', elementId: '0' },
   { appHandle: 'app', windowId: 23, x: 1, y: 2 },
 ])('accepts a hover target %j without button input', (params) => {
   expect(Request.parse({ method: 'hover', params })).toEqual({ method: 'hover', params })
@@ -69,11 +70,17 @@ it.each([
 })
 
 it.each([
-  { appHandle: 'app', elementIndex: 0 },
+  { appHandle: 'app', elementId: '0' },
   { appHandle: 'app', x: 1, y: 2 },
-  { appHandle: 'app', snapshotId: 'snapshot', elementIndex: 0, windowId: 23, x: 1, y: 2 },
+  { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', windowId: 23, x: 1, y: 2 },
 ])('rejects incomplete or mixed hover targets %j', (params) => {
   expect(Request.safeParse({ method: 'hover', params }).success).toBe(false)
+})
+
+it.each(['0', '42.12345', 'runtime:7/child', 'e12'])('admits an opaque element id %j without provider format rules', (elementId) => {
+  const params = { appHandle: 'app', snapshotId: 'snapshot', elementId }
+  expect(Request.parse({ method: 'click', params })).toEqual({ method: 'click', params })
+  expect(Request.safeParse({ method: 'click', params: { ...params, elementId: '' } }).success).toBe(false)
 })
 
 it.each(['click', 'hover', 'scroll', 'drag'])('validates 0–999 integer coordinates for %s', (method) => {

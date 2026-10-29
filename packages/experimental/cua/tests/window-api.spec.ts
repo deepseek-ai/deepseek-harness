@@ -1,9 +1,14 @@
 /** Window discovery stays separate from launch and authorized window input. */
 import { expect, it, vi } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { createCuaWindowApi } from '../src/window-api.ts'
 import { WindowRequest } from '../src/window-protocol.ts'
+import type { CuaElementId } from '../src/types.ts'
 import type { CuaWindowOperation } from '../src/window-types.ts'
+
+/** Element ids are opaque strings; these fixtures use the macOS decimal form. */
+const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
 
 const metadata = { windowId: 7, pid: 10, appName: 'Editor', title: 'Document', bounds: { x: -100, y: 0, width: 800, height: 600 }, isOnScreen: true, onCurrentSpace: null }
 function fixture() {
@@ -35,7 +40,7 @@ it('binds all observation and keyboard operations to a selected window and suppr
   expect(f.text).not.toHaveBeenCalled()
   await window.getAXState()
   expect(f.text).toHaveBeenCalledWith('AX window')
-  await window.click(0)
+  await window.click(element('0'))
   await window.activate()
   await window.typeText('hello')
   await window.paste('world')

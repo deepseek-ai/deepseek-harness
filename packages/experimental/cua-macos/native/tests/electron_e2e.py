@@ -99,7 +99,7 @@ def main():
 
                 window = next(window for window in state['windows'] if window['windowId'] == window_id)
                 if not args.hover_only:
-                    call('click', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': buttons[0]['index']})
+                    call('click', {**owner, 'snapshotId': state['snapshotId'], 'elementId': buttons[0]['elementId']})
                     wait_state(lambda actual: actual['clicks'] == 1 and actual['lastClickTrusted'] is True,
                                'Native AX press did not produce one trusted DOM click')
                     state = observe()
@@ -133,8 +133,8 @@ def main():
                     expected_clicks = before['popupClicks'] + 1
                     call('hover', {**owner, 'windowId': window_id, 'x': -1, 'y': 0}, 'INVALID_ARGUMENT')
                     call('hover', {**owner, 'windowId': window_id, 'x': 100000, 'y': 0}, 'INVALID_ARGUMENT')
-                    call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': trigger['index'], 'x': 0}, 'INVALID_ARGUMENT')
-                    call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementIndex': trigger['index']})
+                    call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementId': trigger['elementId'], 'x': 0}, 'INVALID_ARGUMENT')
+                    call('hover', {**owner, 'snapshotId': state['snapshotId'], 'elementId': trigger['elementId']})
                     actual = wait_state(lambda actual: actual['popupOpen'], 'Hover did not reveal delayed information')
                     assert actual['pointerDowns'] == baseline and actual['lastMove'] == {'buttons': 0, 'trusted': True}, actual
                     state = observe()
