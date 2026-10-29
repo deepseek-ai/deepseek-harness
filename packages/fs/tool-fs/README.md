@@ -286,7 +286,7 @@ Not executed:
 - operation 3 (add src/d.ts)
 
 Patch rejected before any change (1 problems):
-- operation 1 (update src/a.ts, patch line 2): cannot modify "src/a.ts": file has not been read — read the file, then retry
+- operation 1 (update src/a.ts, patch line 2): cannot patch "src/a.ts": hunk at patch line 3 (oldLines) does not match — const old = 1
 ```
 
 #### Token effect

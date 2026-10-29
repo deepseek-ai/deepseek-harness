@@ -18,8 +18,6 @@ export const toolParityExceptions: Record<ToolMode, readonly Exception[]> = {
       reason: 'SDK PTC changes are persisted for restart without replacing active bindings because HMR is disabled; Desktop PTC excludes management in its HMR-enabled preset.' },
     { tool: 'workflow', side: 'sdk',
       reason: 'The SDK PTC overlay changes only the executor so existing base workflow callers keep working; Desktop PTC uses run_code orchestration and omits the separate workflow surface.' },
-    { tool: 'apply_patch', side: 'sdk',
-      reason: 'The SDK PTC overlay keeps the base tool-fs row, which ships apply_patch beside edit; the Desktop PTC preset lists its own tool-fs row with applyPatch: false.' },
   ],
 }
 
