@@ -106,7 +106,7 @@ function PermissionDescription({ application, permission, loading, t, applicatio
   const reference = application?.dragReference
   const drag = useMemo<FileDragActions | undefined>(() => reference === undefined || applicationDrag === undefined ? undefined : {
     prepare: (_source, signal) => applicationDrag.prepare(reference, signal),
-    reportFailure: applicationDrag.reportFailure,
+    reportFailure: () => { applicationDrag.reportFailure() },
   }, [applicationDrag, reference])
   if (!loading && application === undefined) return <p>{t(permission === 'accessibility' ? 'accessibilityUse' : 'screenRecordingUse')}</p>
   const [before, after] = t(permission === 'accessibility' ? 'accessibilityPermission' : 'screenRecordingPermission').split('{application}')

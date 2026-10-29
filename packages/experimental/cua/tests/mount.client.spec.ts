@@ -11,6 +11,8 @@ import { expect, it, vi } from 'vitest'
 import type { PermissionFace } from '../src/client/controller.ts'
 import { mountCuaPermissions, inject } from '../src/client/mount.ts'
 import type { ApplicationApprovalProps } from '../src/client/ApplicationApproval.tsx'
+import type { PermissionPanelProps } from '../src/client/PermissionPanel.tsx'
+import type { ApplicationDragReference } from '@deepseek-ai/dsh-util-file-drag'
 
 const contribution: TypertRemoteContribution = { package: '@deepseek-ai/dsh-cua', descriptors: [] }
 const value: CuaApplicationState & { system: CuaSystemPermissionState } = {
@@ -36,8 +38,10 @@ async function fixture(fail = false, nativeDragging = false) {
     }
   }
   new Remote()
-  ctx.provide('fileDrag', { application: nativeDragging ? { prepare: vi.fn() } : undefined,
-    actions: { prepare: vi.fn(), reportFailure: vi.fn() }, read: vi.fn() })
+  const prepareApplication = vi.fn(async () => ({ start: () => false, release: () => {} }))
+  const reportDragFailure = vi.fn()
+  ctx.provide('fileDrag', { application: nativeDragging ? { prepare: prepareApplication } : undefined,
+    actions: { prepare: vi.fn(), reportFailure: reportDragFailure }, read: vi.fn() })
   const changes = createSnapshotStore(false)
   ctx.provide('pluginChanges', { bundle: (name) => {
     expect(name).toBe('@deepseek-ai/dsh-cua-bundle')
@@ -73,7 +77,7 @@ async function fixture(fail = false, nativeDragging = false) {
     'conversation.composer': { kind: 'chain', scope: 'session' },
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
-  return { ctx, changes, unmount, status, systemStatus, applicationIcons,
+  return { ctx, changes, unmount, status, systemStatus, applicationIcons, prepareApplication, reportDragFailure,
     requestPermission, openSettings, revoke, retryApproval, setDefault, setPersistent, runtimeConfiguration,
   }
 }
@@ -83,9 +87,13 @@ it('supplies native application dragging only when the desktop carrier provides 
   try {
     await f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
     const entry = f.ctx.slots.entries('plugins.bundle.config')[0]!
-    expect(entry.inject!()).toMatchObject({ applicationDrag: {
-      prepare: f.ctx.fileDrag.application!.prepare, reportFailure: f.ctx.fileDrag.actions.reportFailure,
-    } })
+    const presentation = entry.inject!() as Pick<PermissionPanelProps, 'applicationDrag'>
+    const reference = 'permission-application' as ApplicationDragReference
+    const signal = new AbortController().signal
+    await presentation.applicationDrag!.prepare(reference, signal)
+    presentation.applicationDrag!.reportFailure()
+    expect(f.prepareApplication).toHaveBeenCalledWith(reference, signal)
+    expect(f.reportDragFailure).toHaveBeenCalledOnce()
   } finally { await f.ctx.fiber.dispose() }
 })
 

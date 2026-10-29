@@ -52,10 +52,13 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
       })
     })
     const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
+    const applicationDrag = ctx.fileDrag.application
     const settings = {
       ...face,
-      applicationDrag: ctx.fileDrag.application === undefined ? undefined : {
-        ...ctx.fileDrag.application, reportFailure: ctx.fileDrag.actions.reportFailure,
+      applicationDrag: applicationDrag === undefined ? undefined : {
+        prepare: (reference: Parameters<typeof applicationDrag.prepare>[0], signal: AbortSignal) =>
+          applicationDrag.prepare(reference, signal),
+        reportFailure: () => { ctx.fileDrag.actions.reportFailure() },
       },
       hooks: { ...face.hooks, cuaDefaultPreset: preset },
       setPtcDefault: () => preset.set('selectedDefault', 'ptc'),
