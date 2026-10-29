@@ -63,6 +63,21 @@ const state = todoProjectionHandle.stateOf(session)
 const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 ```
 
+<a id="bind-several-states-to-one-session"></a>
+### Bind several states to one Session
+
+Call `handle.readerFor(session)` on an awaited registration handle to obtain a `() => S` callback. Calling it reads the current state without a Session argument. An owner composing several states passes a typed object of these callbacks to its runtime. New states add properties instead of constructor arguments; ordinary plugins still use domain-service methods.
+
+```text
+const projections = {
+  todo: todoProjectionHandle.readerFor(session),
+  goal: goalProjectionHandle.readerFor(session),
+}
+const todo = projections.todo()
+```
+
+Each reader captures the exact Session and delegates to the original handle's `stateOf(session)`, preserving readiness requirements, null and undefined values, state references, and synchronous failures. Creating a reader does not read state, prepare the Session, perform storage I/O, or create a state cache. Readers own no registration or disposal. The original handle keeps its disposal responsibility; a reader keeps reading the original unit after deregistration or version replacement. One handle can create readers for several Sessions independently. Registration and Session preparation remain the owner's responsibility; client snapshots remain separate.
+
 A domain that owns projected state declares `sessionProjections` as a Cordis service dependency and keeps its handle private. Consumers inject that domain service and use its methods, such as `ctx.agents.turnBoundaryOf(session)`, without importing definitions or retaining projection readers. Optional contributors may register under `ctx.inject(['sessionProjections'], …)`. Carriers use `ctx.get('sessionProjections')` and omit their block or frames when the registry is absent.
 
 <a id="deprecated-plugin-compatibility"></a>

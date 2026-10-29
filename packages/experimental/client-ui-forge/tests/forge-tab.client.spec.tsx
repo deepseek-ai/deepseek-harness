@@ -30,7 +30,7 @@ const unused = (): never => { throw new Error('the forge tab does not call this 
 function tabInfo(visible: boolean, openResource: SidebarRightTabActions['openResource']): SidebarRightTabInfo {
   return {
     sidebar: { expanded: true, fullscreen: false },
-    panel: { id: 'pane-1' as PaneId },
+    panel: { id: 'pane-1' as PaneId, isFloating: false },
     tab: {
       id: 'tab-forge' as TabId,
       kind: 'forge-panel',
@@ -54,6 +54,7 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
   const remove = vi.fn<(entry: ForgePanelChangeRequest) => void>()
   const markReady = vi.fn<(entry: ForgePanelChangeRequest) => Promise<void>>(async () => {})
   const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(async () => {})
+  const readChecks = vi.fn<ForgeTabProps['readChecks']>(async () => snapshot(1))
   const restore = vi.fn<() => void>()
   const openLink = vi.fn<(url: string) => void>()
   const copyText = vi.fn<(text: string) => void>()
@@ -67,12 +68,12 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
     usePanel: bindSnapshotSelector(panel),
     useHost: bindSnapshotSelector(host),
     useLocale: bindSnapshotSelector(createSnapshotStore<string>('en')),
-    reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, copyPath, reportVisible, createChangeRequest,
+    reconnect, refresh, remove, markReady, merge, readChecks, restore, openLink, copyText, copyPath, reportVisible, createChangeRequest,
     t,
   }
   const view = render(<ForgeTab {...props} />)
   return {
-    view, panel, visibility, reconnect, refresh, remove, markReady, merge, restore, openLink, copyText, copyPath, reportVisible,
+    view, panel, visibility, reconnect, refresh, remove, markReady, merge, readChecks, restore, openLink, copyText, copyPath, reportVisible,
     createChangeRequest, openResource,
   }
 }

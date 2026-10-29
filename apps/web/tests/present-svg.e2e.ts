@@ -87,7 +87,8 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
     scaffold = await launchWebScaffold({
       compareReplaySession: true,
       extraOverlayPath: fileURLToPath(new URL('./present-svg.overlay.yml', import.meta.url)),
-      ...(replayOverride === undefined ? {} : { replayFixture: FIXTURE, replayOverride }),
+      // Replay the large SVG incrementally to avoid a zero-delay traffic burst.
+      ...(replayOverride === undefined ? {} : { replayFixture: FIXTURE, replayOverride, paceMs: 5 }),
     })
     browser = await chromium.launch()
     page = await browser.newPage({

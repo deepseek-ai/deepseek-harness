@@ -281,6 +281,7 @@ describe('DockSurface', () => {
     expect(disabled.hasAttribute('disabled')).toBe(true)
     expect(disabled.parentElement?.getAttribute('aria-label')).toBe(TEST_LABELS.splitPaneDisabled)
     expect(disabled.getAttribute('data-dockkit-split-blocked')).toBe('budget')
+    expect(disabled.parentElement?.hasAttribute('data-dockkit-split-control')).toBe(true)
     intents.splitPane.mockClear()
     const hint = disabled.parentElement!
     fireEvent.pointerDown(hint, { pointerType: 'touch' })
@@ -735,6 +736,8 @@ describe('DockSurface', () => {
     // A press on the nested control must not reach the chip's gesture handler;
     // if it did, the pointer would be captured and this click would never land.
     fireEvent.pointerDown(close)
+    expect(fireEvent.keyDown(close, { key: 'Enter' })).toBe(true)
+    expect(fireEvent.keyDown(close, { key: ' ' })).toBe(true)
     fireEvent.click(close)
     expect(intents.closeTab).toHaveBeenCalledTimes(1)
     expect(intents.focusTab).not.toHaveBeenCalled()

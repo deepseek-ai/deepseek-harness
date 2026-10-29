@@ -337,7 +337,8 @@ jobs:
           smoke_python="$venv/bin/python"
           "$smoke_python" -m pip install \
             "dist-python/$SDK_WHEEL" \
-            "dist-python/$RUNTIME_WHEEL"
+            "dist-python/$RUNTIME_WHEEL" \
+            'pytest>=8.0'
           echo "python=$smoke_python" >> "$GITHUB_OUTPUT"
 
       - name: Install local SDK and runtime wheels into a clean venv (Windows)
@@ -351,7 +352,7 @@ jobs:
           $venv = (& python -c 'import tempfile; print(tempfile.mkdtemp(prefix="dsh-sdk-smoke-"))').Trim()
           python -m venv $venv
           $smokePython = Join-Path $venv 'Scripts\python.exe'
-          & $smokePython -m pip install "dist-python/$env:SDK_WHEEL" "dist-python/$env:RUNTIME_WHEEL"
+          & $smokePython -m pip install "dist-python/$env:SDK_WHEEL" "dist-python/$env:RUNTIME_WHEEL" 'pytest>=8.0'
           if ($LASTEXITCODE -ne 0) { throw "Wheel installation failed with exit code $LASTEXITCODE" }
           "python=$smokePython" >> $env:GITHUB_OUTPUT
 
@@ -381,6 +382,19 @@ jobs:
           } finally {
             Pop-Location
           }
+
+      - name: Run installed-wheel native command tests (POSIX)
+        if: runner.os != 'Windows'
+        run: >-
+          "${{ steps.smoke-venv-posix.outputs.python }}" -I
+          "$GITHUB_WORKSPACE/python/sdk/tests/run_installed_commands.py"
+
+      - name: Run installed-wheel native command tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & "${{ steps.smoke-venv-windows.outputs.python }}" -I "$env:GITHUB_WORKSPACE\python\sdk\tests\run_installed_commands.py"
+          if ($LASTEXITCODE -ne 0) { throw "Installed-wheel native command tests failed with exit code $LASTEXITCODE" }
 
       - name: Preflight installed-wheel real API test (POSIX)
         if: >-

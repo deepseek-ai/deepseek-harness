@@ -81,6 +81,17 @@ describe('Official bundle catalog generation', () => {
     expect(() => { syncOfficialBundleCatalog(root, true) }).toThrow('is stale')
   })
 
+  it('preserves default-hidden discovery before installation', () => {
+    const root = fixture()
+    const name = ON_DEMAND_BUNDLES[0]!
+    updateManifest(root, name, { dsh: { bundle: { patch: './cordis.patch.yml', listedByDefault: false } } })
+    expect(generateOfficialBundleCatalog(root)[0]?.listedByDefault).toBe(false)
+    syncOfficialBundleCatalog(root, false)
+    expect(readFileSync(join(root, output), 'utf8')).toContain('listedByDefault: false')
+    updateManifest(root, name, { dsh: { bundle: { patch: './cordis.patch.yml', listedByDefault: 'hidden' } } })
+    expect(() => generateOfficialBundleCatalog(root)).toThrow('listedByDefault must be a boolean')
+  })
+
   it.each([[], ['macos'], 'darwin'].map(platforms => ({ platforms })))('rejects invalid package platform metadata $platforms', ({ platforms }) => {
     const root = fixture()
     updateManifest(root, ON_DEMAND_BUNDLES[0]!, { dsh: { bundle: { patch: './cordis.patch.yml', platforms } } })

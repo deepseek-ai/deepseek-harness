@@ -63,9 +63,9 @@ it.skipIf(process.platform !== 'darwin').each([
       const dialog = page.getByRole('dialog', { name: '添加插件', exact: true })
       await dialog.getByRole('textbox', { name: '包名或地址', exact: true }).fill('@deepseek-ai/dsh-cua-bundle')
       await dialog.getByRole('button', { name: '安装', exact: true }).click()
-      const ready = page.getByRole('dialog', { name: '插件已随 DSH 提供', exact: true })
+      const ready = page.getByRole('dialog', { name: '已安装', exact: true })
       await ready.waitFor()
-      expect(await ready.getByText('无需下载，启用即可使用', { exact: true }).count()).toBe(1)
+      expect(await ready.getByText('无需下载，启用即可使用', { exact: true }).count()).toBe(0)
       return ready.getByRole('button', { name: '立即启用', exact: true })
     }
     const enableNow = await offerCua()
@@ -199,8 +199,7 @@ it.skipIf(process.platform !== 'darwin').each([
     const program = 'globalThis.counter = (globalThis.counter ?? 0) + 1'
     expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(1)
     await toggle.click()
-    await toggle.waitFor({ state: 'hidden' })
-    await card.waitFor({ state: 'hidden' })
+    await toggle.and(page.locator('[aria-checked="false"]')).waitFor({ state: 'visible' })
     expect(scaffold.ctx.get('computerUse')).toBeUndefined()
     expect(runtimeFiber() === persistentRuntimeFiber).toBe(true)
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
@@ -211,7 +210,7 @@ it.skipIf(process.platform !== 'darwin').each([
     }
     expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(2)
     expect(await readFile(settingsPath, 'utf8')).toBe(saved)
-    await (await offerCua()).click()
+    await toggle.click()
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
     await setup.waitFor()
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
@@ -249,9 +248,8 @@ it.skipIf(process.platform !== 'darwin').each([
       expect.objectContaining({ id: 'agent-preset-registry', config: { default: 'standard', selectedDefault: 'ptc' } }),
     ]))
     await toggle.click()
-    await toggle.waitFor({ state: 'hidden' })
-    await card.waitFor({ state: 'hidden' })
-    await (await offerCua()).click()
+    await toggle.and(page.locator('[aria-checked="false"]')).waitFor({ state: 'visible' })
+    await toggle.click()
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
     await setup.waitFor()
     expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)

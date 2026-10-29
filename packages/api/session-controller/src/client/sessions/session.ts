@@ -800,7 +800,10 @@ export class Session implements SessionFace {
         }
       }
       this.observeSubmissionInsertions(target, inserted, start, event.seq)
-      for (const message of inserted) this.observeSubmissionMessage(message, false)
+      // A queued echo waits for the inbox projection the queue dock renders, which can arrive after this
+      // event; retiring it here would empty the dock for a frame. A claim in the same projection notification
+      // still retires it through the durable user message.
+      for (const message of inserted) this.observeSubmissionMessage(message, false, false)
       return
     }
     if (event.type === 'request/context' || event.type === 'turn/end') {
@@ -818,21 +821,24 @@ export class Session implements SessionFace {
       const source = message.source
       if (source.kind !== 'user' || !('rpcId' in source)) continue
       const settlement = this.submissionSettlements.get(source.rpcId)
-      if (settlement === undefined || settlement.placement === 'queued'
-        || settlement.retiring || (settlement.receipt?.seq ?? -1) > seq) continue
+      if (settlement === undefined || settlement.retiring || (settlement.receipt?.seq ?? -1) > seq) continue
+      // Either proof accepts a prompt; an Inbox row can reach the Client before the prompt receipt. Later splices
+      // move the recorded position, so a canceled splice that removes the row retires its echo, queued ones
+      // included; a queued echo otherwise leaves once the queue dock renders its row or its message is admitted.
       settlement.receipt = { target, seq, index: start + index, attachments: attachmentRefsIn(message.content) }
-      // An Inbox row can reach the Client before the prompt receipt.
       this.acceptPrompt(source.rpcId)
     }
   }
 
-  private observeSubmissionMessage(message: UserMessage, admitted: boolean): void {
+  private observeSubmissionMessage(message: UserMessage, admitted: boolean, retireQueued = true): void {
     const source = message.source
     if (source.kind !== 'user' || !('rpcId' in source)) return
     const settlement = this.submissionSettlements.get(source.rpcId)
     if (settlement === undefined || settlement.retiring) return
     if (!admitted) {
-      if (settlement.placement === 'queued') this.scheduleObservedRetirement(source.rpcId, attachmentRefsIn(message.content))
+      if (settlement.placement === 'queued' && retireQueued) {
+        this.scheduleObservedRetirement(source.rpcId, attachmentRefsIn(message.content))
+      }
       return
     }
     settlement.admitted = attachmentRefsIn(message.content)

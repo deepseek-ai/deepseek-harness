@@ -120,7 +120,7 @@ it('does not announce provider withdrawal after its registry has stopped', async
   expect(observer).toHaveBeenCalledTimes(1)
 })
 
-it.each(['readiness', 'markReady', 'merge', 'diff', 'fileText'] as const)(
+it.each(['readiness', 'markReady', 'merge', 'diff', 'fileText', 'submitReview', 'fetchChecks'] as const)(
   'cancels and drains %s when its provider stops', async (method) => {
     ctx = await forgeContext()
     const provider: ForgeProvider = new FakeProvider()
@@ -139,10 +139,14 @@ it.each(['readiness', 'markReady', 'merge', 'diff', 'fileText'] as const)(
     vi.spyOn(provider, 'merge').mockImplementation(async (_ref, _request, signal) => { await hold(signal); return undefined })
     vi.spyOn(provider, 'diff').mockImplementation(async (_ref, signal) => { await hold(signal); return 'diff' })
     vi.spyOn(provider, 'fileText').mockImplementation(async (_ref, _commit, _path, signal) => { await hold(signal); return 'file' })
+    provider.submitReview = async (_ref, _request, signal) => { await hold(signal); return { ok: true, url: 'https://fake.test/review' } }
+    provider.fetchChecks = async (target, signal) => { await hold(signal); return snapshot(target) }
     const fiber = await provide(ctx, provider)
     const service = ctx.forge
     const signal = new AbortController().signal
     const calls = {
+      fetchChecks: () => service.fetchChecks(ref(1), signal),
+      submitReview: () => service.submitReview(ref(1), { kind: 'review', headSha: 'a'.repeat(40), event: 'approve', body: '', comments: [] }, signal),
       readiness: () => service.readiness(demo, signal),
       markReady: () => service.markReady(ref(1), signal),
       merge: () => service.merge(ref(1), { method: 'squash', headSha: 'a'.repeat(40) }, signal),
@@ -165,3 +169,33 @@ it.each(['readiness', 'markReady', 'merge', 'diff', 'fileText'] as const)(
     }
   },
 )
+
+it('a check-detail deadline does not replace successfully polled snapshots', async () => {
+  vi.useFakeTimers()
+  ctx = await forgeContext({ fetchTimeoutMs: 30 })
+  const provider: ForgeProvider = new FakeProvider()
+  const a = snapshot(ref(1))
+  const b = snapshot(ref(2))
+  vi.spyOn(provider, 'fetch').mockResolvedValue(new Map([[changeRequestKey(ref(1)), a], [changeRequestKey(ref(2)), b]]))
+  provider.fetchChecks = (_target, signal) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => { reject(new Error(String(signal.reason))) }, { once: true })
+  })
+  await provide(ctx, provider)
+  const first: ChangeRequestUpdate[] = []
+  const second: ChangeRequestUpdate[] = []
+  ctx.forge.watch(ref(1), (update) => { first.push(update) })
+  ctx.forge.watch(ref(2), (update) => { second.push(update) })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(first.at(-1)).toMatchObject({ snapshot: a })
+  expect(second.at(-1)).toMatchObject({ snapshot: b })
+  const beforeRefresh = second.length
+  const rejected = expect(ctx.forge.fetchChecks(ref(1), new AbortController().signal)).rejects.toThrow('FORGE_FETCH_TIMEOUT')
+  ctx.forge.refresh(ref(2))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(second.length).toBe(beforeRefresh + 1)
+  const initialCounts = [first.length, second.length]
+  await vi.advanceTimersByTimeAsync(30)
+  await rejected
+  expect([first.length, second.length]).toEqual(initialCounts)
+  expect(ctx.forge.latest(ref(2))).toMatchObject({ snapshot: b })
+})

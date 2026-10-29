@@ -922,17 +922,19 @@ describe('loading diagnostics and configuration', () => {
     const mod = writeMod('sleeper-mod', `
       export function register(on) {
         on('session.start', async ($, e, next) => {
-          $.clock.after(1, async () => { await $.clock.sleep(60_000) })
+          $.clock.after(1, async () => {
+            const sleeping = $.clock.sleep(60_000)
+            await $.ui.log('timer sleeping')
+            await sleeping
+          })
           return next(e)
         })
       }
     `)
     const h = await harness([mod], new MockAdapter([]))
     await h.agent()
-    await new Promise(resolve => setTimeout(resolve, 20))
-    const started = Date.now()
+    await vi.waitFor(() => { expect(h.info.mock.calls.flat().join(' ')).toContain('timer sleeping') })
     await h.mods.dispose()
-    expect(Date.now() - started).toBeLessThan(5_000)
     expect(h.warn).toHaveBeenCalledWith('claude-code-mods: sleeper-mod: timer callback failed: claude-code-mods disposed')
   })
 

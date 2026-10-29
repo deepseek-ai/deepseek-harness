@@ -7,8 +7,8 @@
  *
  * - A long answer leaves the folded group above the viewport. The scroll position changes in one direction
  *   only: the fold never scrolls the view away and then snaps it back.
- * - A short answer leaves fold room below the tail. Growth fills that room without scrolling, so the running
- *   status keeps its entrance slide when the new Step's first row appears instead of moving in one frame.
+ * - A short answer leaves fold room below the tail. The new Turn's growth fills that room without scrolling
+ *   through Turn end, the room never grows back, and the running status only moves down.
  */
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -26,7 +26,7 @@ import { newEnglishPage, openSettings } from './support.ts'
 
 declare global {
   interface Window {
-    openFoldTrace?: { readonly frames: TraceFrame[]; readonly slides: number[]; stop(): void }
+    openFoldTrace?: { readonly frames: TraceFrame[]; stop(): void }
   }
 }
 
@@ -43,8 +43,6 @@ interface TraceFrame {
   readonly floor: number
   /** Height of the fold room below the transcript. */
   readonly spacer: number
-  /** The column marks the tail as pinned, which runs the status slide at zero duration. */
-  readonly pinned: boolean
   /** The running status's top relative to the scrollport, when it is mounted. */
   readonly status: number | null
   readonly folding: boolean
@@ -162,17 +160,13 @@ async function openLatestGroup(page: Page): Promise<void> {
   await page.mouse.move(0, 0)
 }
 
-/**
- * Sample the scrollport on every animation frame, and record the duration of every status entrance slide
- * that a flow change starts.
- */
+/** Sample the scrollport on every animation frame. */
 async function startTrace(page: Page): Promise<void> {
   await page.evaluate((selector) => {
     const host = document.querySelector<HTMLElement>(selector)!
     const column = host.querySelector<HTMLElement>('[data-chat-flow]')!
     const spacer = host.querySelector<HTMLElement>('[data-chat-turn-spacer]')!
     const frames: TraceFrame[] = []
-    const slides: number[] = []
     let frame = 0
     const tick = (): void => {
       const status = host.querySelector<HTMLElement>('[data-chat-running]')
@@ -180,32 +174,18 @@ async function startTrace(page: Page): Promise<void> {
         top: host.scrollTop,
         floor: Math.max(0, host.scrollHeight - host.clientHeight),
         spacer: spacer.getBoundingClientRect().height,
-        pinned: column.hasAttribute('data-chat-tail-pinned'),
         status: status === null ? null : status.getBoundingClientRect().top - host.getBoundingClientRect().top,
         folding: column.hasAttribute('data-input-fold') || host.querySelector('[data-chat-motion="collapse"]') !== null,
       })
       frame = requestAnimationFrame(tick)
     }
-    // The slide starts at the style update after the flow change; reading animations there sees its duration.
-    const observer = new MutationObserver(() => {
-      const status = host.querySelector<HTMLElement>('[data-chat-running]')
-      for (const animation of status?.getAnimations() ?? []) {
-        if (animation instanceof CSSAnimation && animation.animationName.includes('running-follows-output')) {
-          slides.push(Number(animation.effect?.getComputedTiming().duration ?? 0))
-        }
-      }
-    })
-    observer.observe(column, { childList: true, subtree: true })
-    window.openFoldTrace = { frames, slides, stop: () => { cancelAnimationFrame(frame); observer.disconnect() } }
+    window.openFoldTrace = { frames, stop: () => { cancelAnimationFrame(frame) } }
     frame = requestAnimationFrame(tick)
   }, ROOT)
 }
 
-async function readTrace(page: Page): Promise<{ frames: TraceFrame[]; slides: number[] }> {
-  return page.evaluate(() => {
-    const trace = window.openFoldTrace!
-    return { frames: [...trace.frames], slides: [...trace.slides] }
-  })
+async function readTrace(page: Page): Promise<{ frames: TraceFrame[] }> {
+  return page.evaluate(() => ({ frames: [...window.openFoldTrace!.frames] }))
 }
 
 /** Per-frame scroll movements larger than subpixel rounding. */
@@ -339,26 +319,28 @@ describe.skipIf(MODE === 'record')('web e2e: next-message fold of an opened proc
     }
   })
 
-  it('keeps the running status slide while fold room below a short answer takes the new Step', async () => {
+  it('keeps the view still while fold room below a short answer takes the new Turn', async () => {
     const world = await sendFromOpenedGroup(browser, 'short', 2)
     try {
-      const folded = (await readTrace(world.page)).frames.at(-1)!
+      const foldedFrames = (await readTrace(world.page)).frames
+      const folded = foldedFrames.at(-1)!
       expect.soft(folded.spacer, 'fold room below the short answer').toBeGreaterThan(0)
-      expect.soft(folded.pinned, 'tail pin while fold room remains').toBe(false)
       world.releaseTurn()
       // The running Step's group row is the first row after the user message; output stays held until then.
       await world.page.locator(`${ROOT} [data-chat-group-key][data-chat-turn="${String(TURNS + 1)}"]`).waitFor({ timeout: 30_000 })
       await world.page.locator(`${ROOT} [data-chat-running]`).waitFor()
-      await world.page.waitForTimeout(300)
-      const { frames, slides } = await readTrace(world.page)
-      const statusSteps = movements(frames.map(frame => ({ ...frame, top: frame.status ?? Number.NaN })))
-        .filter(step => Number.isFinite(step))
-      // The fold runs status moves at zero duration on its own, so only settled frames show the pin's effect.
-      const pinnedOverRoom = frames.filter(frame => !frame.folding && frame.pinned && frame.spacer > 0)
-      expect.soft(pinnedOverRoom, 'settled frames pinned over fold room').toEqual([])
-      expect.soft(slides.some(duration => duration > 0), `status slide durations ${JSON.stringify(slides)}; status movements ${JSON.stringify(statusSteps)}`).toBe(true)
       world.releaseModel()
       await world.ended
+      await stableScroll(world.page)
+      // Frames from the settled fold through Turn end.
+      const after = (await readTrace(world.page)).frames.slice(foldedFrames.length - 1)
+      const roomed = after.filter(frame => frame.spacer > 0)
+      const regrowth = roomed.some((frame, index) => index > 0 && frame.spacer > roomed[index - 1]!.spacer + 1)
+      const statusSteps = movements(after.map(frame => ({ ...frame, top: frame.status ?? Number.NaN })))
+        .filter(step => Number.isFinite(step))
+      expect.soft(movements(roomed), 'scroll movements while fold room remains').toEqual([])
+      expect.soft(regrowth, `fold room grows back; spacer ${JSON.stringify(roomed.map(frame => Math.round(frame.spacer)))}`).toBe(false)
+      expect.soft(statusSteps.every(step => step > 0), `running status movements ${JSON.stringify(statusSteps)}`).toBe(true)
       expect(world.tripwire.pageErrors).toEqual([])
     } finally {
       await world.close()

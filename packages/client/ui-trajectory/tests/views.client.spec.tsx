@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * View registration acceptance on the real framework stack: the plugin fiber
  * registers Trajectory into a real SlotRegistry view ring, tabs
@@ -41,7 +42,6 @@ import { createConversationStore } from '@deepseek-ai/dsh-client-ui-conversation
 import { zh as conversationZh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
 import * as localePlugin from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-trajectory/client'
-import { apply as nodeApply } from '@deepseek-ai/dsh-client-ui-trajectory'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import type { TrajectoryTurnModel } from '../src/client/layout.ts'
 import { TrajectoryTimeline as LocalizedTrajectoryTimeline } from '../src/client/TrajectoryTimeline.tsx'
@@ -237,6 +237,7 @@ function standaloneProps(
     useSessionRetainInfo: () => undefined,
     useWorkspaces: emptyWorkspaces(),
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useConversation: bindSnapshotSelector(createSnapshotStore(conversationSnapshot(trajectory))),
     useInput: bindSnapshotSelector(input),
     inputActions,
@@ -261,6 +262,7 @@ type ConversationTargetSources = {
 /** Real-stack bench: root Context + real SlotRegistry ring + the plugin fiber. */
 async function bench(snapshot = historySnapshot(NODES)) {
   const runtime = await SlotTestRuntime.create()
+  runtime.remote.provideNamespaces({ toolResults: {} })
   runtimes.push(runtime)
   const ctx = runtime.ctx
   const slots = runtime.slots
@@ -375,6 +377,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
     useSessionRetainInfo: () => undefined,
     useWorkspaces,
     ...allowAllAccess,
+    useContextMenu: contextMenuHook(),
     useProjection,
     useInput,
     inputActions,
@@ -1547,6 +1550,7 @@ describe('TrajectoryView state', () => {
     const first = render(
       <TrajectoryView
         {...commonProps}
+        {...standaloneDuration()}
         useDuration={bindSnapshotSelector(firstDuration)}
         setActualDuration={(value) => { firstDuration.set(value) }}
       />,
@@ -1562,6 +1566,7 @@ describe('TrajectoryView state', () => {
     render(
       <TrajectoryView
         {...commonProps}
+        {...standaloneDuration()}
         useDuration={bindSnapshotSelector(restoredDuration)}
         setActualDuration={(value) => { restoredDuration.set(value) }}
       />,
@@ -1603,10 +1608,4 @@ describe('TrajectoryView state', () => {
     )).toBeTruthy()
   })
 
-})
-
-describe('node half', () => {
-  it('node apply is an intentional no-op (loader-managed lifecycle only)', () => {
-    expect(() => { nodeApply() }).not.toThrow()
-  })
 })

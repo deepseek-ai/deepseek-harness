@@ -1,3 +1,6 @@
+import { IconFolderOpenOutlineRegular, IconCopyOutlineRegular, IconPanelLeftOutlineRegular, IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { ContextMenuApplicationIcon, registerContextMenus } from './context-menus.tsx'
+import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /**
  * Shared native opening controls for workspace directories, document previews,
  * delivery cards, and changed-file review. Directory choices persist in the browser;
@@ -20,6 +23,7 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/remote'
 import { OPEN_IN_APP_ICON_PREFIX_ROUTE } from '@deepseek-ai/dsh-host-open-in-app/shared'
 import { OpenInAppController } from './controller.ts'
+import { registerSessionReveal } from './session-reveal.tsx'
 import { OpenInAppAction, type OpenInAppActionInjected, type OpenInAppActionProps } from './OpenInAppAction.tsx'
 import { OpenInAppPathController } from './open-path.ts'
 import { OpenPathAction, type OpenPathInjected } from './OpenPathAction.tsx'
@@ -43,7 +47,7 @@ export type { OpenPathActionProps, OpenPathInjected } from './OpenPathAction.tsx
 export type { OpenPathEmptyActionProps } from './OpenPathEmptyAction.tsx'
 
 /** Required services: sessions, layout selection, the slot registry, copy, Remote calls, and shortcuts. */
-export const inject = ['sessions', 'slots', 'locale', 'remote', 'remote.session', 'shortcuts', 'layout']
+export const inject = ['contextMenus', 'sidebarRight', 'sidebarRightTabs', 'sessions', 'slots', 'locale', 'remote', 'remote.session', 'remote.workspaceFiles', 'shortcuts', 'layout']
 
 /**
  * Client plugin body: register dictionaries, workspace directory controls, and
@@ -58,6 +62,15 @@ export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
   // Keep operation feedback visible after its initiating panel closes.
   const announcement = createOpenInAppToastSource()
+  ctx.slots.inject('contextMenu.icon', function* () {
+    for (const [key, Icon] of Object.entries({
+      'open-in-app.reveal': IconFolderOpenOutlineRegular, 'open-in-app.copy': IconCopyOutlineRegular,
+      'open-in-app.sidebar': IconPanelLeftOutlineRegular, 'open-in-app.float': IconRightUpOutlineRegular,
+    })) yield ctx.slots.register({ name: 'contextMenu.icon', key }, Icon)
+    yield ctx.slots.register({ name: 'contextMenu.icon', key: 'open-in-app.application' }, ContextMenuApplicationIcon)
+  })
+  registerContextMenus(ctx, paths, t, controller, announcement.report)
+  registerSessionReveal(ctx, controller, t, announcement.report)
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay', id: 'open-in-app.toast', locale: NS,
     inject: () => ({ hooks: announcement.hooks, dismiss: announcement.dismiss }),

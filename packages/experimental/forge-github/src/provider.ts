@@ -3,12 +3,13 @@
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
   ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
-  ForgeRepository, MergeRequest,
+  ForgeRepository, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from './gh.ts'
 import type { GhOutput, GhRunner } from './gh.ts'
-import { hasGraphqlFields, HEAD_QUERY, mapHeadResponse, mapSnapshotResponse, snapshotQuery } from './graphql.ts'
+import { CHECKS_QUERY, hasGraphqlFields, HEAD_QUERY, mapCheckPageResponse, mapHeadResponse, mapSnapshotResponse, snapshotQuery } from './graphql.ts'
 import { checkedRepository, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
+import { submitGitHubReview } from './review.ts'
 
 const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
 
@@ -29,11 +30,18 @@ export class GitHubProvider implements ForgeProvider {
   readonly forge = 'github'
   private readonly hosts: ReadonlySet<string>
 
+  async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return { ok: false, code: 'failed', message: failure.message }
+    return await submitGitHubReview(this.gh, ref, request, signal)
+  }
+
   /**
    * @param gh - runner that executes `gh` on the host.
    * @param hosts - host names this provider serves, such as `github.com` and Enterprise hosts.
+   * @param maxOutputBytes - maximum combined JSON bytes retained by an explicit check read.
    */
-  constructor(private readonly gh: GhRunner, hosts: readonly string[]) {
+  constructor(private readonly gh: GhRunner, hosts: readonly string[], private readonly maxOutputBytes: number) {
     this.hosts = new Set(hosts.map(host => host.toLowerCase()))
   }
 
@@ -74,6 +82,22 @@ export class GitHubProvider implements ForgeProvider {
       for (const [key, result] of await this.fetchHost(host, group, signal)) results.set(key, result)
     }
     return results
+  }
+
+  async fetchChecks(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return failure
+    try {
+      const results = await this.fetchHost(ref.repository.host, [ref], signal, true)
+      // oxlint-disable-next-line typescript/no-non-null-assertion -- fetchHost returns one result for each requested ref.
+      return results.get(changeRequestKey(ref))!
+    } catch (error) {
+      if (signal.aborted) throw signal.reason
+      if (error instanceof GhUnavailableError || error instanceof GhTimeoutError || error instanceof GhOutputLimitError) {
+        return { code: error instanceof GhOutputLimitError ? 'too-large' : 'unavailable', message: error.message }
+      }
+      throw error
+    }
   }
 
   async findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]> {
@@ -206,11 +230,33 @@ export class GitHubProvider implements ForgeProvider {
     host: string,
     refs: readonly ChangeRequestRef[],
     signal: AbortSignal,
+    completeChecks = false,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>> {
     const query = snapshotQuery(refs)
     const output = await this.gh(['api', 'graphql', '--hostname', host, '-f', `query=${query.document}`], signal)
     const body = parseJson(output.stdout)
-    if (hasGraphqlFields(body)) return mapSnapshotResponse(body, query)
+    if (!completeChecks && hasGraphqlFields(body)) return await mapSnapshotResponse(body, query)
+    let bytes = Buffer.byteLength(output.stdout)
+    const tooLarge: ForgeFailure = { code: 'too-large', message: 'GitHub check details exceed the output size limit' }
+    if (bytes > this.maxOutputBytes) return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), tooLarge]))
+    if (hasGraphqlFields(body)) return await mapSnapshotResponse(body, query, async (id, cursor) => {
+      signal.throwIfAborted()
+      let page: GhOutput
+      try {
+        page = await this.gh(['api', 'graphql', '--hostname', host,
+          '-f', `query=${CHECKS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`], signal)
+      } catch (error) {
+        if (signal.aborted) throw signal.reason
+        if (error instanceof GhUnavailableError || error instanceof GhTimeoutError || error instanceof GhOutputLimitError) {
+          return { ok: false, failure: { code: error instanceof GhOutputLimitError ? 'too-large' : 'unavailable', message: error.message } }
+        }
+        throw error
+      }
+      bytes += Buffer.byteLength(page.stdout)
+      if (bytes > this.maxOutputBytes) return { ok: false, failure: tooLarge }
+      const value = parseJson(page.stdout)
+      return hasGraphqlFields(value) ? mapCheckPageResponse(value) : { ok: false, failure: responseFailure(page, value) }
+    })
     const failure = responseFailure(output, body)
     return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), failure] as const))
   }

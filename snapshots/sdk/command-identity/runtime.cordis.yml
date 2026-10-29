@@ -1,0 +1,7 @@
+- insert:
+    - id: command-identity-fixture
+      name: './runtime.mjs'
+    - id: command-identity-capture
+      name: '../manual-compact/capture-requests.mjs'
+      config:
+        path: !!js dshHomePath('command-identity-requests.jsonl')

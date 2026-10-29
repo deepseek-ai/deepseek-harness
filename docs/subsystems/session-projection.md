@@ -19,6 +19,13 @@ interface ProjectionHandle<S> {
    */
   stateOf(session: Session): S
   /**
+   * Create a reader for one exact Session without reading state or preparing it.
+   * The reader retains this unit after unregistration and owns no disposal.
+   * @param session - Session whose committed events the bound reader folds.
+   * @returns a synchronous callback with the same state and failures as `stateOf(session)`.
+   */
+  readerFor(session: Session): () => S
+  /**
    * Unregister from global drives and snapshots without invalidating this reader.
    * @returns a promise that resolves when this registration is released.
    */
@@ -27,6 +34,8 @@ interface ProjectionHandle<S> {
 ```
 
 The [compatibility rules](../../packages/session/session-projection/README.md#deprecated-plugin-compatibility) define legacy disposal, keyed reads, and their once-per-key deprecation warnings.
+
+`ProjectionHandle.readerFor(session)` returns a `() => S` callback for one exact Session. Calling it reads the original unit and preserves borrowed state, readiness requirements and synchronous failures. Owners can compose several readers in a typed object; domain services keep them private. See [binding several states](../../packages/session/session-projection/README.md#bind-several-states-to-one-session).
 
 ## The unit
 

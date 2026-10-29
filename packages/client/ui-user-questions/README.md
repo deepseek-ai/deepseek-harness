@@ -25,7 +25,7 @@ The Web client shows an agent's question beside the chat input. Users choose opt
 <a id="use-this-package"></a>
 ## Use this package
 
-When the agent asks a question, the attached card temporarily occupies the composer seat: answer each question, navigate with the pager, or skip it. A first choice marked “Recommended” starts selected, but remains an unsubmitted draft and does not pause a timed countdown. Clicking a single-select choice advances immediately. Enter on a focused option attempts to submit the batch without selecting that option; missing answers return to the first incomplete question. Enter in a text answer continues the flow, while Shift+Enter breaks a line instead (during IME composition Enter only confirms the input candidate without advancing).
+When the agent asks a question, the attached card temporarily occupies the composer seat: answer each question, navigate with the pager, or skip it. When a single-select question’s first choice is marked “Recommended”, it starts selected; in a multi-select question, every marked choice starts selected. These preselections remain unsubmitted drafts and do not pause a timed countdown. Clicking a single-select choice advances immediately. Enter on a focused option attempts to submit the batch without selecting that option; missing answers return to the first incomplete question. Enter in a text answer continues the flow, while Shift+Enter breaks a line instead (during IME composition Enter only confirms the input candidate without advancing).
 
 ### Answering
 
