@@ -48,9 +48,9 @@ Leaving the page does not cancel a sign-in, which the Host owns. The authorizati
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Host half, [`src/index.ts`](src/index.ts), is an empty `apply`, present only so the package holds the Loader row the client module system serves the browser half for. The browser half, [`src/client/index.ts`](src/client/index.ts), mounts the `dingtalk` Remote itself with `ctx.remote.$mount`, because the shipped Remote assembly does not include on-demand packages, and withdraws its registrations before unmounting it.
+The Host half, [`src/index.ts`](src/index.ts), is an empty `apply`, present only so the package holds the Loader row the client module system serves the browser half for. The browser half, [`src/client/index.ts`](src/client/index.ts), mounts the `dingtalk` Remote itself with `ctx.remote.$mount`, because the shipped Remote assembly does not include on-demand packages, and withdraws its account registration before unmounting it.
 
-[`src/client/connection.ts`](src/client/connection.ts) creates one `CliAccountConnection` from the [CLI plugin page pieces](../ui-cli-account/README.md) per browser plugin over the `dingtalk` Remote, and derives the page state from the Host's view alone. That connection opens a link only for the operation this browser started, only once, and only over HTTPS. [`src/client/DingtalkConnection.tsx`](src/client/DingtalkConnection.tsx) renders the shared section, sign-out confirmation, tag, activation prompt, and toast with the DingTalk actions; the Web shell supplies the shared library as a platform module, so this package's bundle does not include it. It registers `plugins.bundle.config` keyed by `@deepseek-ai/dsh-dingtalk` for the section, `plugins.bundle.activation` for the guidance, `plugins.detail.badge` for the tag, and a `shell.overlay` toast. The page's copy, including the keys the shared pieces read, lives in this package's `dingtalk` dictionary.
+The browser half registers the DingTalk account with the [CLI account surfaces](../ui-cli-account/README.md) through `ctx.cliAccounts`, which follow the `dingtalk` Remote and render the section, sign-out confirmation, tag, activation prompt, and toast for `@deepseek-ai/dsh-dingtalk`. A link opens only for the operation this browser started, only once, and only over HTTPS. [`src/client/connection.ts`](src/client/connection.ts) derives the account state from the Host's view alone, and [`src/client/account.ts`](src/client/account.ts) maps it to the section's buttons, signed-in user, confirmation, and failure guidance. The page's copy, including the keys the shared surfaces read, lives in this package's `dingtalk` dictionary.
 
 </details>
 
@@ -61,8 +61,8 @@ The Host half, [`src/index.ts`](src/index.ts), is an empty `apply`, present only
 
 - [DingTalk plugin](../../connector/dingtalk/README.md) — the bundle that inserts this row and the Host row.
 - [DingTalk CLI and skills](../../connector/dingtalk-cli/README.md) — the Host row and the account operations this page drives.
-- [CLI plugin page pieces](../ui-cli-account/README.md) — the shared connection mirror and components this page renders.
-- [ui-plugin-manager](../ui-plugin-manager/README.md) — the Plugins page and the bundle slots the page registers into.
+- [CLI account surfaces](../ui-cli-account/README.md) — the registry that follows the Remote and renders this page's account.
+- [ui-plugin-manager](../ui-plugin-manager/README.md) — the Plugins page and the bundle slots the account surfaces fill.
 
 -----
 

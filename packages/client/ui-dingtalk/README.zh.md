@@ -48,9 +48,9 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-Host 部分 [`src/index.ts`](src/index.ts) 是一个空的 `apply`，它的存在只是为了让本包持有一个 Loader 行，客户端模块系统据此提供浏览器部分。浏览器部分 [`src/client/index.ts`](src/client/index.ts) 用 `ctx.remote.$mount` 自行挂载 `dingtalk` Remote，因为随产品发布的 Remote 集合不包含按需安装的包；卸载前它会先撤下自己的注册。
+Host 部分 [`src/index.ts`](src/index.ts) 是一个空的 `apply`，它的存在只是为了让本包持有一个 Loader 行，客户端模块系统据此提供浏览器部分。浏览器部分 [`src/client/index.ts`](src/client/index.ts) 用 `ctx.remote.$mount` 自行挂载 `dingtalk` Remote，因为随产品发布的 Remote 集合不包含按需安装的包；卸载前它会先撤下账号注册。
 
-[`src/client/connection.ts`](src/client/connection.ts) 为每个浏览器插件在 `dingtalk` Remote 上创建一个来自 [CLI 插件页零件](../ui-cli-account/README.zh.md)的 `CliAccountConnection`，并只根据 Host 的视图推导页面状态。该连接只为本浏览器发起的操作打开链接，只打开一次，并且只用 HTTPS。[`src/client/DingtalkConnection.tsx`](src/client/DingtalkConnection.tsx) 用钉钉的操作渲染共享的区块、退出确认、标签、激活提示和提示条；Web shell 以平台模块提供该共享库，因此本包的 bundle 不包含它。它注册以 `@deepseek-ai/dsh-dingtalk` 为 key 的 `plugins.bundle.config` 作为区块，`plugins.bundle.activation` 作为引导，`plugins.detail.badge` 作为标签，以及一个 `shell.overlay` 提示条。页面文案，包括共享零件读取的键，都在本包的 `dingtalk` 字典中。
+浏览器部分通过 `ctx.cliAccounts` 把钉钉账号注册到 [CLI 账号界面](../ui-cli-account/README.zh.md)，由它跟随 `dingtalk` Remote，并为 `@deepseek-ai/dsh-dingtalk` 渲染区块、退出确认、标签、激活提示和提示条。链接只为本浏览器发起的操作打开，只打开一次，并且只用 HTTPS。[`src/client/connection.ts`](src/client/connection.ts) 只根据 Host 的视图推导账号状态，[`src/client/account.ts`](src/client/account.ts) 再把它映射为区块的按钮、已登录用户、退出确认和失败建议。页面文案，包括共享界面读取的键，都在本包的 `dingtalk` 字典中。
 
 </details>
 
@@ -61,8 +61,8 @@ Host 部分 [`src/index.ts`](src/index.ts) 是一个空的 `apply`，它的存�
 
 - [钉钉插件](../../connector/dingtalk/README.zh.md) — 插入本行和 Host 行的 bundle。
 - [钉钉 CLI 与技能](../../connector/dingtalk-cli/README.zh.md) — Host 行，以及本页面发起的账号操作。
-- [CLI 插件页零件](../ui-cli-account/README.zh.md) — 本页面渲染的共享连接镜像和组件。
-- [ui-plugin-manager](../ui-plugin-manager/README.zh.md) — 插件页，以及本页面注册进去的 bundle 插槽。
+- [CLI 账号界面](../ui-cli-account/README.zh.md) — 跟随 Remote 并渲染本页面账号的注册表。
+- [ui-plugin-manager](../ui-plugin-manager/README.zh.md) — 插件页，以及账号界面填入的 bundle 插槽。
 
 -----
 
