@@ -12,6 +12,7 @@ import { IconClockOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { formatScheduleFrequency, nextRunParts, orderScheduleRecords, taskName } from './schedule-format.ts'
+import { taskNextRunAt } from './task-record.ts'
 import {
   useSessionScheduleFacts, type SessionScheduleCatalogObservable,
 } from './session-schedule-state.ts'
@@ -53,7 +54,8 @@ export function SessionScheduleHover({
   return (
     <div className={css.tasks} data-session-schedule-tasks="">
       {shown.map((record) => {
-        const nextRun = nextRunParts(record.scheduledAt, t('time.locale'), now, t)
+        const nextRunAt = taskNextRunAt(record)
+        const nextRun = nextRunParts(nextRunAt, t('time.locale'), now, t)
         return (
           <div className={css.task} key={record.id} data-session-schedule-task="">
             <span className={css.taskIcon} aria-hidden="true"><IconClockOutlineRegular size={12} /></span>
@@ -63,7 +65,7 @@ export function SessionScheduleHover({
                   card show: the device-zone stamp first, then the distance. */}
               <span className={css.taskTiming}>
                 {`${formatScheduleFrequency(record, t)} · `}
-                <time dateTime={record.scheduledAt}>{nextRun.absolute}</time>
+                <time dateTime={nextRunAt}>{nextRun.absolute}</time>
                 {' '}
                 <span className={css.taskRelative}>{nextRun.relative}</span>
               </span>

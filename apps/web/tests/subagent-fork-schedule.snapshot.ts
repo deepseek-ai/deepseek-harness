@@ -81,9 +81,9 @@ it.skipIf(MODE === 'record')('replays inherited schedule tools and refusals in a
     const results = child.snapshotEvents().slice(child.inheritedEventCount)
       .filter(event => event.type === 'tool/result')
     expect(results.map(event => event.data.message.content)).toEqual(Array.from({ length: 4 }, () => [
-      { type: 'text', text: '{"code":"subagent_session","message":"A delegated subagent cannot use reminders."}' },
+      { type: 'text', text: '{"code":"subagent_session","message":"A delegated subagent cannot use scheduled tasks."}' },
     ]))
-    expect(await scaffold.ctx.schedule.list({ sessionId: child.id })).toEqual([])
+    expect((await scaffold.ctx.schedule.list({ active: true })).items).toEqual([])
 
     if (MODE === 'refresh') {
       const replacements = refreshFixtureReplacements(raw.map((content, index) => ({

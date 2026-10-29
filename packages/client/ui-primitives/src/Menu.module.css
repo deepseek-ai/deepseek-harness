@@ -121,7 +121,7 @@
 }
 
 @media (hover: hover) {
-  .item:hover:not(:disabled) {
+  .item:hover:not(:disabled):not([aria-disabled='true']) {
     background: var(--dsw-alias-interactive-bg-hover);
   }
 }
@@ -173,7 +173,8 @@
   line-height: 15px;
 }
 
-.item:disabled {
+.item:disabled,
+.item[aria-disabled='true'] {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -251,7 +252,7 @@
 }
 
 @media (hover: hover) {
-  .danger:hover:not(:disabled) {
+  .danger:hover:not(:disabled):not([aria-disabled='true']) {
     background: var(--dsw-alias-interactive-bg-hover-danger);
   }
 }
