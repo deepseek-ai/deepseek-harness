@@ -50,9 +50,9 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-Host 部分 [`src/index.ts`](src/index.ts) 是一个空的 `apply`，存在的目的只是让本包占有一个 Loader 行，客户端模块系统据此提供浏览器部分。浏览器部分 [`src/client/index.ts`](src/client/index.ts) 用 `ctx.remote.$mount` 自行挂载 `tencentMeeting` Remote，因为随产品交付的 Remote 组装不包含按需安装的包；它在卸载该 Remote 之前先撤回自己的注册。
+Host 部分 [`src/index.ts`](src/index.ts) 是一个空的 `apply`，存在的目的只是让本包占有一个 Loader 行，客户端模块系统据此提供浏览器部分。浏览器部分 [`src/client/index.ts`](src/client/index.ts) 用 `ctx.remote.$mount` 自行挂载 `tencentMeeting` Remote，因为随产品交付的 Remote 组装不包含按需安装的包；它在卸载该 Remote 之前先撤回账号注册。
 
-[`src/client/connection.ts`](src/client/connection.ts) 为每个浏览器插件在 `tencentMeeting` Remote 上创建一个来自 [CLI 插件页组件](../ui-cli-account/README.zh.md)的 `CliAccountConnection`，并只根据 Host 的视图推导页面状态。该连接只为本浏览器发起的操作打开链接，每个链接只打开一次，并且只打开 HTTPS 链接。[`src/client/TencentMeetingConnection.tsx`](src/client/TencentMeetingConnection.tsx) 用腾讯会议的操作渲染共用的区块、退出登录确认、标签、开启引导和 toast；Web shell 以平台模块提供这个共用库，因此本包的 bundle 不包含它。它注册以 `@deepseek-ai/dsh-tencent-meeting` 为键的 `plugins.bundle.config` 区块、`plugins.bundle.activation` 引导、`plugins.detail.badge` 标签，以及一个 `shell.overlay` toast。页面文案，包括共用组件读取的键，都在本包的 `tencent-meeting` 字典中。
+浏览器部分通过 `ctx.cliAccounts` 把腾讯会议账号注册到 [CLI 账号界面](../ui-cli-account/README.zh.md)，由它跟随 `tencentMeeting` Remote，并为 `@deepseek-ai/dsh-tencent-meeting` 渲染区块、退出登录确认、标签、开启引导和 toast。链接只为本浏览器发起的操作打开，每个链接只打开一次，并且只打开 HTTPS 链接。[`src/client/connection.ts`](src/client/connection.ts) 只根据 Host 的视图推导账号状态，[`src/client/account.ts`](src/client/account.ts) 再把它映射为区块的按钮、已登录用户、退出确认、技能下载行和失败建议。页面文案，包括共用界面读取的键，都在本包的 `tencent-meeting` 字典中。
 
 </details>
 
@@ -63,8 +63,8 @@ Host 部分 [`src/index.ts`](src/index.ts) 是一个空的 `apply`，存在的�
 
 - [腾讯会议插件](../../connector/tencent-meeting/README.zh.md) — 插入本行和 Host 行的 bundle。
 - [腾讯会议 CLI 与技能](../../connector/tencent-meeting-cli/README.zh.md) — Host 行以及本页面发起的账号操作。
-- [CLI 插件页组件](../ui-cli-account/README.zh.md) — 本页面渲染的共用连接镜像和组件。
-- [ui-plugin-manager](../ui-plugin-manager/README.zh.md) — 插件页以及本页面注册进去的 bundle 插槽。
+- [CLI 账号界面](../ui-cli-account/README.zh.md) — 跟随 Remote 并渲染本页面账号的注册表。
+- [ui-plugin-manager](../ui-plugin-manager/README.zh.md) — 插件页以及账号界面填入的 bundle 插槽。
 
 -----
 
