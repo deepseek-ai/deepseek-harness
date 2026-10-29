@@ -87,7 +87,6 @@ describe('wait_agent', () => {
     agent.inbox.splice('next-turn', 0, 0, [input('queued')])
     other.inject(input('someone else'))
     emitAgentEvent(ctx, other, 'agent/status', { status: 'running' })
-    emitAgentEvent(ctx, other, 'agent/wait-notified', {})
     await vi.advanceTimersByTimeAsync(9_999)
     expect(returned).toBe(false)
     agent.inject(input('steering'))
@@ -97,22 +96,21 @@ describe('wait_agent', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('ends all current waits for an exact agent without retaining notifications', async () => {
-    const { ctx, agent, other } = await setup()
+  it('ends concurrent waits on input without consuming it', async () => {
+    const { ctx, agent } = await setup()
     vi.useFakeTimers()
-    emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
     const first = await startWait(ctx, agent, { timeout_ms: 10_000 })
     const second = await startWait(ctx, agent, { timeout_ms: 10_000 })
     let returned = false
     void first.result.then(() => { returned = true })
-    emitAgentEvent(ctx, other, 'agent/wait-notified', {})
     await vi.advanceTimersByTimeAsync(9_999)
     expect(returned).toBe(false)
-    emitAgentEvent(ctx, agent, 'agent/wait-notified', {})
+    agent.inject(input())
     for (const result of await Promise.all([first.result, second.result])) {
       expect(result).toMatchObject({ isError: false, value: { timedOut: false } })
     }
-    expect(agent.inbox.nextStep).toHaveLength(0)
+    expect(agent.inbox.nextStep).toHaveLength(1)
+    agent.inbox.clear()
     expect(agent.inbox.nextTurn).toHaveLength(0)
     expect(vi.getTimerCount()).toBe(0)
     const later = await startWait(ctx, agent, { timeout_ms: 10_000 })
@@ -120,12 +118,12 @@ describe('wait_agent', () => {
     expect(await later.result).toMatchObject({ isError: false, value: { timedOut: true } })
   })
 
-  it.each(['input', 'notification', 'timeout', 'cancel', 'dispose', 'unload'] as const)(
-    'removes its notification subscription after %s',
+  it.each(['input', 'timeout', 'cancel', 'dispose', 'unload'] as const)(
+    'removes its subscriptions after %s',
     async (settlement) => {
       const { ctx, agent, handle, fiber } = await setup()
       vi.useFakeTimers()
-      const listeners = () => ['agent/inbox/inserted', 'agent/wait-notified', 'agent/disposed'].map(name =>
+      const listeners = () => ['agent/inbox/inserted', 'agent/disposed'].map(name =>
         ctx.events.dispatch('emit', [agentCarrier(agent), name, { agent }]).length)
       const baseline = listeners()
       const controller = new AbortController()
@@ -133,7 +131,6 @@ describe('wait_agent', () => {
       expect(listeners()).toEqual(baseline.map(count => count + 1))
       switch (settlement) {
         case 'input': agent.inject(input()); break
-        case 'notification': emitAgentEvent(ctx, agent, 'agent/wait-notified', {}); break
         case 'timeout': await vi.advanceTimersByTimeAsync(10_000); break
         case 'cancel': controller.abort(new Error('stop waiting')); break
         case 'dispose': await handle.dispose(); break

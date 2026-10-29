@@ -29,7 +29,6 @@ function waitForInput(
     const finish = (settle: () => void): void => {
       clearTimeout(timer)
       offInbox()
-      offNotified()
       offDisposed()
       signal.removeEventListener('abort', onAbort)
       lifetime.removeEventListener('abort', onUnload)
@@ -44,9 +43,6 @@ function waitForInput(
     const onUnload = (): void => { finish(() => { reject(lifetime.reason) }) }
     const offInbox = ctx.on('agent/inbox/inserted', ({ agent: recipient }) => {
       if (recipient === agent) onInput()
-    })
-    const offNotified = ctx.on('agent/wait-notified', ({ agent: recipient }) => {
-      if (recipient === agent) finish(() => { resolve({ timedOut: false }) })
     })
     const offDisposed = ctx.on('agent/disposed', ({ agent: disposed }) => {
       if (disposed === agent) {

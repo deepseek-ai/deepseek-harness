@@ -9,7 +9,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset, SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import SubagentService, { SubagentError, type SubagentActivation } from '@deepseek-ai/dsh-subagent'
+import SubagentService, { type SubagentActivation } from '@deepseek-ai/dsh-subagent'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -638,8 +638,8 @@ describe('Team shared task DAG', () => {
   })
 })
 
-describe('Task-board wait notifications', () => {
-  it('notifies the root and every resident descendant without writing inboxes or starting idle agents', async () => {
+describe('Task-board persistence', () => {
+  it('commits tasks without writing inboxes or starting idle agents', async () => {
     const { ctx, lead, adapter } = await setup([])
     const alpha = await resident(ctx, lead, 'notify-alpha')
     const beta = (await ctx.agents.create({
@@ -653,19 +653,10 @@ describe('Task-board wait notifications', () => {
       meta: { origin: 'subagent', parentSession: lead.id },
       agentOptions: { provider: 'mock', model: 'mock' },
     })).agent
-    const notified: Agent[] = []
-    const rootNotifications: Agent[] = []
-    const betaNotifications: Agent[] = []
-    ctx.on('agent/wait-notified', ({ agent }) => { notified.push(agent) })
-    lead.ctx.on('agent/wait-notified', ({ agent }) => { rootNotifications.push(agent) })
-    beta.ctx.on('agent/wait-notified', ({ agent }) => { betaNotifications.push(agent) })
     const first = await ctx.agentTeams.createTask(lead, { subject: 'one', description: 'first change' })
     await ctx.agentTeams.updateTask(beta, {
       taskId: first.id, expectedRevision: first.revision, action: 'claim',
     })
-    expect(notified).toEqual([lead, alpha, beta, lead, alpha, beta])
-    expect(rootNotifications).toEqual([lead, lead])
-    expect(betaNotifications).toEqual([beta, beta])
     for (const agent of [lead, alpha, beta, unrelated, unbound]) {
       expect(agent.inbox.nextStep).toHaveLength(0)
       expect(agent.inbox.nextTurn).toHaveLength(0)
@@ -675,34 +666,8 @@ describe('Task-board wait notifications', () => {
     expect(adapter.requests).toHaveLength(0)
   })
 
-  it.each([
-    new Error('unexpected root lookup failure'),
-    new SubagentError('runtime unavailable', 'RUNTIME_UNAVAILABLE'),
-  ])('propagates unexpected root lookup failures after committing the task: %s', async (failure) => {
+  it('resolves task commits only after persistence succeeds', async () => {
     const { ctx, lead } = await setup([])
-    const child = await resident(ctx, lead, 'failed-root-lookup')
-    const rootOf = ctx.subagents.rootOf.bind(ctx.subagents)
-    vi.spyOn(ctx.subagents, 'rootOf').mockImplementation((agent) => {
-      if (agent === child) throw failure
-      return rootOf(agent)
-    })
-    const notified: Agent[] = []
-    ctx.on('agent/wait-notified', ({ agent }) => { notified.push(agent) })
-
-    await expect(ctx.agentTeams.createTask(lead, { subject: 'committed', description: 'notification interrupted' }))
-      .rejects.toBe(failure)
-
-    expect(notified).toEqual([lead])
-    expect(ctx.agentTeams.getTask(lead, TeamTaskId('task-1'))).toMatchObject({ subject: 'committed', revision: 1 })
-    await using stored = await ctx.sessionPersistence.open(lead.id, 'read')
-    expect((await stored.read()).events.filter(event => event.type === 'team/task')).toHaveLength(1)
-  })
-
-  it('publishes notifications only after persistence succeeds', async () => {
-    const { ctx, lead } = await setup([])
-    const child = await resident(ctx, lead, 'flush-recipient')
-    const notified: Agent[] = []
-    ctx.on('agent/wait-notified', ({ agent }) => { notified.push(agent) })
     const flush = ctx.sessions.flush.bind(ctx.sessions)
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
@@ -711,16 +676,19 @@ describe('Task-board wait notifications', () => {
       await release.promise
       return await flush(session)
     })
-    const creating = ctx.agentTeams.createTask(lead, { subject: 'one', description: 'wait for flush' })
+    let committed = false
+    const creating = ctx.agentTeams.createTask(lead, { subject: 'one', description: 'wait for flush' }).then((task) => {
+      committed = true
+      return task
+    })
     try {
       await entered.promise
-      expect(notified).toEqual([])
+      expect(committed).toBe(false)
     } finally {
       release.resolve(undefined)
       await creating
     }
-    expect(notified).toEqual([lead, child])
-    notified.length = 0
+    expect(committed).toBe(true)
     vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(new Error('storage unavailable'))
     await expect(ctx.agentTeams.createTask(lead, { subject: 'two', description: 'failed flush' })).rejects.toMatchObject({
       code: 'TEAM_TASK_PERSISTENCE_UNCONFIRMED',
@@ -729,50 +697,23 @@ describe('Task-board wait notifications', () => {
     })
     expect(ctx.agentTeams.getTask(lead, TeamTaskId('task-2'))).toMatchObject({ subject: 'two', revision: 1 })
     expect(ctx.agentTeams.listTasks(lead)).toHaveLength(2)
-    expect(notified).toEqual([])
     await expect(ctx.agentTeams.updateTask(lead, {
       taskId: TeamTaskId('task-1'), expectedRevision: 99, action: 'claim',
     })).rejects.toMatchObject({ code: 'TEAM_TASK_STALE_REVISION' })
-    expect(notified).toEqual([])
   })
 
-  it('reports unconfirmed task revisions without notifications when no flush listener participates', async () => {
+  it('reports unconfirmed task revisions when no flush listener participates', async () => {
     const { ctx, lead } = await setup([])
-    const notified: Agent[] = []
-    ctx.on('agent/wait-notified', ({ agent }) => { notified.push(agent) })
     vi.spyOn(ctx.sessions, 'flush').mockResolvedValue(false)
 
     await expect(ctx.agentTeams.createTask(lead, { subject: 'unconfirmed', description: 'read before retrying' }))
       .rejects.toMatchObject({ code: 'TEAM_TASK_PERSISTENCE_UNCONFIRMED' })
     const taskId = TeamTaskId('task-1')
     expect(ctx.agentTeams.getTask(lead, taskId)).toMatchObject({ subject: 'unconfirmed', revision: 1 })
-    expect(notified).toEqual([])
 
     await expect(ctx.agentTeams.updateTask(lead, { taskId, expectedRevision: 1, action: 'claim' }))
       .rejects.toMatchObject({ code: 'TEAM_TASK_PERSISTENCE_UNCONFIRMED' })
     expect(ctx.agentTeams.getTask(lead, taskId)).toMatchObject({ revision: 2, ownerId: lead.id })
-    expect(notified).toEqual([])
   })
 
-  it('contains listener failures and continues notifying the same agent and later recipients', async () => {
-    const { ctx, lead } = await setup([])
-    const child = await resident(ctx, lead, 'healthy-recipient')
-    const warnings: string[] = []
-    ctx.logger.warn = ((message: unknown) => { warnings.push(String(message)) }) as typeof ctx.logger.warn
-    lead.ctx.on('agent/wait-notified', () => { throw new Error('sync listener') })
-    lead.ctx.on('agent/wait-notified', () => Promise.reject(new Error('async listener')) as never)
-    const notified: Agent[] = []
-    ctx.on('agent/wait-notified', ({ agent }) => { notified.push(agent) })
-    const task = await ctx.agentTeams.createTask(lead, { subject: 'committed', description: 'listener failure' })
-    expect(task).toMatchObject({ id: 'task-1', revision: 1 })
-    expect(notified).toEqual([lead, child])
-    expect(warnings).toEqual([
-      'agent event "agent/wait-notified" listener threw: Error: sync listener',
-      'agent event "agent/wait-notified" listener rejected: Error: async listener',
-    ])
-    await using stored = await ctx.sessionPersistence.open(lead.id, 'read')
-    const events = (await stored.read()).events.filter(event => event.type === 'team/task')
-    expect(events).toHaveLength(1)
-    expect(events[0]!.data).toMatchObject({ task: { id: task.id, revision: 1, subject: 'committed' } })
-  })
 })

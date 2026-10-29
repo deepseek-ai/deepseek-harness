@@ -857,7 +857,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Agent Teams coordination domain',
     mode: 'core',
     consumers: ['experimental-tool-agent-team'],
-    note: 'Owns the shared task DAG and wait signals for a subagent tree; tool-agent-team contributes task controls.',
+    note: 'Owns the shared task DAG for a subagent tree; tool-agent-team contributes task controls.',
   },
   {
     key: 'claudeCodeMods',

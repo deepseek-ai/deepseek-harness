@@ -1117,27 +1117,6 @@ Types: [Scoped](scope.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
 
-<a id="agentwait-notified--emit"></a>
-
-#### `agent/wait-notified` — emit
-
-End current input waits without adding inbox content or starting the agent. This process-local signal is not retained for later waits.
-
-```ts cordis-catalog
-/**
- * End current input waits without adding inbox content or starting the agent.
- * This process-local signal is not retained for later waits.
- * @param payload.agent - the exact agent whose current waits should end.
- * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
- * @mode emit
- */
-'agent/wait-notified'(this: Scoped<Agent>, payload: { agent: Agent }): void
-```
-
-Types: [Scoped](scope.md)
-
-Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
-
 <a id="agent-loop-events"></a>
 
 ### `agent-loop/*` events
