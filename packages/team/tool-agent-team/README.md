@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package lets every agent in a subagent tree create, claim, and complete shared tasks. It adds four task schemas and shared-board guidance. Ordinary subagent controls own discovery, messaging, interruption, and inbox waiting. The base bundle loads the service and tools; new Sessions default to Team mode off.
+This package lets every agent in a subagent tree create, claim, and complete shared tasks. It adds four task schemas, shared-board guidance, and required Team identity. Ordinary subagent controls own discovery, messaging, interruption, and inbox waiting. The base bundle loads the service and tools; new Sessions default to Team mode off.
 
 ## Table of Contents
 
@@ -88,11 +88,11 @@ The [subagent teammates Agent Note](../../../.agents/notes/implemented/architect
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry, removed-key rejection, Team policy, and four scoped task tools |
+| [`src/index.ts`](src/index.ts) | Plugin entry, removed-key rejection, Team policy and identity, and four scoped task tools |
 
 ### Policy and tools
 
-One `team:policy` section and four task schemas are registered on each Team-enabled Agent scope, including fork children. Tree authority comes from `ctx.subagents.rootOf(agent)`; `ctx.subagentNames` supplies task-owner names. Identity, discovery, communication, and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md) and remain unchanged when Team mode switches. The subagent runtime delivers final results.
+One `team:policy` section, required `team:identity` context, and four task schemas are registered on each Agent scope, including fork children. Tree authority comes from `ctx.subagents.rootOf(agent)`; `ctx.subagentNames` supplies bound display names or original Session ids. If the root is unavailable, the context reports that shared tasks, subagent discovery, and messaging are unavailable; it does not infer a parent from Session lineage. Communication and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md); the subagent runtime delivers final results.
 
 ### Scoped registration and teardown
 
@@ -128,11 +128,11 @@ Every Team member's system prompt carries one `team:policy` section; the Lead an
 ##### Team policy
 
 ```markdown
-A shared task board is available in this session. Task owners use agent names from list_agents, or Session ids when no name is bound. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+A shared task board is available to every agent in your subagent tree. Task owners use agent names from list_agents, or Session ids when no name is bound. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
-Record expected write scopes on shared tasks and use dependencies when work must be ordered. Write-scope overlap is advisory, not a lock. List tasks, read their details, claim with the current revision, perform the work, then complete the task. Task readiness does not start an agent; use send_message to start an inactive agent when needed.
+Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
-Task changes end current wait_agent calls in your subagent tree. After wait_agent returns, read the latest tasks before acting.
+Task changes end current wait_agent calls in your subagent tree. Changes outside a wait are not retained as notifications, and no task-board messages are added to an inbox. After wait_agent returns, read the latest tasks before acting. Task changes do not start idle agents; use send_message when an agent needs to continue working.
 ```
 
 #### Token effect
@@ -142,6 +142,28 @@ The section is a fixed cost on every request of every Team member.
 #### KV Cache effect
 
 The text is identical for the Lead and every descendant and does not change while the plugin stays loaded, so it keeps a stable system-prompt prefix, including between a parent and its `subagent_fork` child. Loading or unloading the plugin changes the system prompt of every member and invalidates their cached prefixes.
+
+### Team identity runtime context
+
+#### What the model sees
+
+Required `team:identity` context uses the following text for the root and its teammates. If the root is unavailable, the context reports that fact and permits independent work. Optional-context suppression cannot remove this identity; the ordinary runtime-context mechanism restores it after compaction. The identity uses the current agent’s full name (`lead` for the root), or its Session id until a name is bound.
+
+##### Agent identity
+
+```markdown
+Your name is "<full agent path>". Your team lead is "lead".
+Use list_agents({}) to find your teammates and their full names.
+Use send_message({ name: "<full agent path>", message: "..." }) to message a teammate.
+```
+
+#### Token effect
+
+Identity is part of the full runtime-context snapshot. Stable retained context adds no new message.
+
+#### KV Cache effect
+
+Identity appends through runtime context while shared system text stays identical across members. An ordinary Session fork in Team mode receives its own root identity; actual provider cache reuse remains best-effort.
 
 ### Task tool schemas
 
