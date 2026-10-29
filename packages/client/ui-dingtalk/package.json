@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-dingtalk",
   "description": "DingTalk plugin page: sign in to DingTalk and check the account from the Plugins page",
-  "version": "0.2.1-rc.4",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
