@@ -67,8 +67,6 @@ The welcome page requires Get started. The credit page always appears. A positiv
 
 Access: the account stream, quota notice, settings launcher, account settings section, and models sign-in entry exist only while the current Peer may call `account/watch`; Desktop onboarding and the platform page are not gated. Losing that access discards the account reads that grant started, closes a pending authorization tab, and clears the account view, details, picture, and sign-in dialog state; a later grant shows the account section again once its first frame arrives. The owner always has access.
 
-The sign-in close icon’s complete box aligns with the action row’s trailing edge while retaining the larger click target.
-
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

@@ -24,9 +24,11 @@ export function Checkbox({ checked, onChange, label, disabled = false, title, cl
 }) {
   return (
     <label className={clsx(css.checkbox, className)} title={title}>
-      <input type="checkbox" checked={checked} disabled={disabled}
-        onChange={(event) => { onChange(event.target.checked) }} />
-      <span className={css.mark} aria-hidden="true"><IconCheckOutlineRegular size={12} /></span>
+      <span className={css.control}>
+        <input type="checkbox" checked={checked} disabled={disabled}
+          onChange={(event) => { onChange(event.target.checked) }} />
+        <span className={css.mark} aria-hidden="true"><IconCheckOutlineRegular size={12} /></span>
+      </span>
       <span>{label}</span>
     </label>
   )

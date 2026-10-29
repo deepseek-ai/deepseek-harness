@@ -95,6 +95,11 @@ describe('MessageFeedbackActions row styles', () => {
 })
 
 describe('FeedbackDialog layout styles', () => {
+  it('separates dialog groups without negative category margins', () => {
+    expect(block('FeedbackDialog', '.dialog.dialog')).toMatch(/gap:\s*24px/)
+    expect(block('FeedbackDialog', '.categories')).not.toMatch(/margin(?:-top)?:[^;]*-/)
+  })
+
   it('uses theme text colours and submit-button geometry', () => {
     expect(block('FeedbackDialog', '.chip')).toMatch(/color:\s*var\(--dsw-alias-label-primary\)/)
     expect(block('FeedbackDialog', '.detail::placeholder')).toMatch(/color:\s*var\(--dsw-alias-label-caption\)/)

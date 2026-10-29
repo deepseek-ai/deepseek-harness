@@ -1,5 +1,4 @@
 .checkbox {
-  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -7,6 +6,12 @@
   line-height: 20px;
   color: var(--dsw-alias-label-primary);
   cursor: pointer;
+}
+
+.control {
+  position: relative;
+  display: inline-flex;
+  flex: none;
 }
 
 .checkbox input {
@@ -30,7 +35,7 @@
 .mark {
   position: absolute;
   inset-inline-start: 2px;
-  top: calc(50% - 6px);
+  top: 2px;
   display: flex;
   width: 12px;
   height: 12px;
