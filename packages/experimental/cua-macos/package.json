@@ -31,6 +31,7 @@
     "native/Info.plist",
     "native/DSHComputerUse.icns",
     "native/build_app.py",
+    "native/dev_signing.py",
     "native/Sources",
     "native/tests/swift",
     "native/tests/test_swift.py",
@@ -97,6 +98,8 @@
   },
   "scripts": {
     "build:native": "xcrun python3 native/build_app.py",
+    "dev-signing:setup": "xcrun python3 native/dev_signing.py setup",
+    "dev-signing:remove": "xcrun python3 native/dev_signing.py remove",
     "build:icon": "node native/generate_icon.mjs"
   },
   "os": [

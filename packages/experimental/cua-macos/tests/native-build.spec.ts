@@ -69,7 +69,7 @@ it.each([['linux', 'arm64'], ['win32', 'x64'], ['darwin', 'ia32']])('refuses uns
   expect(() => nativeHostArchitecture(platform, architecture)).toThrow('requires macOS')
 })
 
-it('returns a bundled executable only after the managed builder exits', async () => {
+it('builds the development variant and returns its executable only after the managed builder exits', async () => {
   const f = await fixture()
   const path = await buildNativeExecutable(f.spec)
   expect(await readFile(path)).toEqual(f.output)
@@ -77,7 +77,7 @@ it('returns a bundled executable only after the managed builder exits', async ()
   expect(f.spawn.mock.calls[0]![0].argv).toEqual([
     '/usr/bin/xcrun', 'python3', join(f.spec.packageRoot, 'native/build_app.py'),
     '--scratch-path', join(f.spec.packageRoot, 'native/.build/runtime-arm64'),
-    '--output-directory', f.directory, '--arch', 'arm64',
+    '--output-directory', f.directory, '--arch', 'arm64', '--variant', 'dev',
   ])
   expect(f.terminate).toHaveBeenCalledTimes(1)
   expect(f.waitForExit).toHaveBeenCalledTimes(1)
