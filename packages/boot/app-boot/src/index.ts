@@ -413,7 +413,7 @@ async function recompose(
         // Ascending original positions put each row back where it was.
         for (const { group, options, index } of stopped.toSorted((left, right) => left.index - right.index)) {
           // `create` starts the entry but leaves the group's option list as it is; that list is what the next update
-          // compares against to remove the row and what the Include writes back.
+          // compares against to remove the row.
           group.data.splice(index, 0, options)
           await group.create(options)
         }

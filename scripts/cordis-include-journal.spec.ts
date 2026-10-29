@@ -150,11 +150,30 @@ it('keeps generated ids and fibers for anonymous file and inserted rows across u
 
 it('persists a row moved into the Include from another tree as a complete creation', async () => {
   const app = await fixture([{ id: 'g', name: 'cordis:group', group: true, config: [] }])
-  const id = await app.ctx.loader.create({ name: 'cordis:example', config: { value: 1 } })
+  const apply = vi.fn()
+  app.ctx.loader.builtins.counted = apply
+  const id = await app.ctx.loader.create({ name: 'cordis:counted', config: { value: 1 } })
   await app.ctx.loader.await()
+  const entry = app.ctx.loader.store[id]!
   await app.ctx.loader.update(id, { config: { value: 2 } }, `${app.id}:g`)
   await app.include.flush()
+  await app.ctx.loader.await()
+  expect(app.include.store[id] === entry).toBe(true)
+  expect(id in app.ctx.loader.store).toBe(false)
+  expect(apply).toHaveBeenCalledTimes(2)
+  expect(entry.fiber!.state).toBe(FiberState.ACTIVE)
   expect(await app.read()).toEqual([{ id: 'g', name: 'cordis:group', group: true, config: [
-    { id, name: 'cordis:example', config: { value: 2 } },
+    { id, name: 'cordis:counted', config: { value: 2 } },
   ] }])
+})
+
+it('rejects a cross-tree move onto an id the destination already holds', async () => {
+  const app = await fixture([{ id: 'g', name: 'cordis:group', group: true, config: [row('x', 1)] }])
+  await app.ctx.loader.create({ id: 'x', name: 'cordis:example', config: { value: 2 } } as EntryOptions)
+  await app.ctx.loader.await()
+  await expect(app.ctx.loader.update('x', {}, `${app.id}:g`)).rejects.toThrow('already exists in the target tree')
+  expect(app.ctx.loader.root.data.map(options => options.id)).toContain('x')
+  expect(app.value('x')).toBe(1)
+  await app.include.flush()
+  expect(await app.read()).toEqual([{ id: 'g', name: 'cordis:group', group: true, config: [row('x', 1)] }])
 })

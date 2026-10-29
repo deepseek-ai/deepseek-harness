@@ -14,6 +14,7 @@ English | [中文](guide.zh.md)
 - `EntryTree.write()` is removed. Subclasses implement `commit(change: EntryChange)`, which receives each create, update, move, removal and explicit Fiber save synchronously. In-memory trees implement a no-op.
 - `applyEntryPatches(data, patches, warn)` always returns cloned entries, including without patches, and clones inserted rows. Callers can no longer mutate the input through the result.
 - Include persists runtime changes through a journal reconciled with the latest file. File edits win conflicting fields and are logged as conflicts. Changes to patch-owned fields and inserted rows update the parent Include's patches. `flush()` waits for pending writes and rejects while changes remain unsaved; `refresh()` and `stop()` return the same result.
+- Include writes generated ids back into file rows that had none. Runtime changes to rows inserted by patches, including bundle rows, update the parent's patches instead of the included file. The parent of the `dsh` profile's root Include is the in-memory Loader, so such changes, for example a bundle row's self-disposal `disabled: true`, no longer survive a restart; previously the whole patched tree was written into `cordis.yml`.
 
 ## Migration
 

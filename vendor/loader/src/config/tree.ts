@@ -134,9 +134,17 @@ export abstract class EntryTree {
     const legacy = { ...entry.options }
     if (parent !== undefined) {
       const target = this.resolveGroup(parent)
+      if (target.tree !== source.tree && target.tree.store[legacy.id]) {
+        throw new Error(`entry ${legacy.id} already exists in the target tree`)
+      }
       source.unlink(entry.options)
       target.data.splice(position ?? Infinity, 0, entry.options)
       entry.parent = target
+      // Each tree indexes its own entries, so a cross-tree move transfers the registration.
+      if (target.tree !== source.tree) {
+        delete source.tree.store[legacy.id]
+        target.tree.store[legacy.id] = entry
+      }
     }
     // `Entry.update` assigns the new options before its first `await`, so the
     // change is fully visible to `commit()` once the call returns.
