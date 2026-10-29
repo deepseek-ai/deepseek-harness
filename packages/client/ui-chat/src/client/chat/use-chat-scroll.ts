@@ -17,6 +17,8 @@ export interface ChatScrollInput extends ChatNavigationInput {
   readonly lastIsUser: boolean
   readonly steeringId: string | null
   readonly submissionId: string | null
+  /** The latest visible submission steers the running Turn instead of opening a new one. */
+  readonly submissionSteers: boolean
   readonly running: boolean
   /** Enable the browser-local delayed-fold experiment and its input reveal animation. */
   readonly deferCompletedTurns: boolean
@@ -44,8 +46,8 @@ interface ChatScrollState extends ChatReadingState {
  */
 export function useChatScroll(input: ChatScrollInput): ChatScrollState {
   const {
-    ready, order, firstSeq, lastKey, lastIsUser, steeringId, submissionId, running, deferCompletedTurns,
-    loadedTurns, chatScroll, hasMore, loadingOlder, loadOlder, loadThrough, transcriptView,
+    ready, order, firstSeq, lastKey, lastIsUser, steeringId, submissionId, submissionSteers, running,
+    deferCompletedTurns, loadedTurns, chatScroll, hasMore, loadingOlder, loadOlder, loadThrough, transcriptView,
   } = input
   const { viewport, listRef, columnRef } = useChatViewport()
   const { reading, state } = useChatReading(viewport, chatScroll, loadedTurns.at(-1)?.turn ?? null)
@@ -64,11 +66,11 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
     const current = content.current.input
     if (!current.ready && !content.current.opened) return
     const previous = content.current.applied
-    const ownInput = (current.lastIsUser && current.lastKey !== previous?.lastKey)
-      || (current.steeringId !== null && current.steeringId !== previous?.steeringId
-        && current.steeringId !== previous?.submissionId)
-      || (current.submissionId !== null && current.submissionId !== previous?.submissionId
-        && current.submissionId !== previous?.steeringId)
+    const steeringInput = current.steeringId !== null && current.steeringId !== previous?.steeringId
+      && current.steeringId !== previous?.submissionId
+    const submissionInput = current.submissionId !== null && current.submissionId !== previous?.submissionId
+      && current.submissionId !== previous?.steeringId
+    const ownInput = (current.lastIsUser && current.lastKey !== previous?.lastKey) || steeringInput || submissionInput
     if (reading.pending && !ownInput) return
     content.current.applied = current
     if (current.ready && !content.current.opened) {
@@ -79,8 +81,11 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
     }
     if (ownInput) {
       navigation.cancel()
-      if (current.deferCompletedTurns && reading.followInputFold()) return
-      reading.followTail(current.deferCompletedTurns ? 'smooth' : 'instant')
+      if (current.deferCompletedTurns && reading.followInputFold(true)) return
+      // Steering lands at once: the running Turn keeps streaming above its echo, and that growth would push
+      // the echo down under a native animation.
+      const steering = steeringInput || (submissionInput && current.submissionSteers)
+      reading.followTail(current.deferCompletedTurns && !steering ? 'smooth' : 'instant')
       return
     }
     if (navigation.contentCommitted()) {
@@ -93,7 +98,7 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
       || current.steeringId !== previous.steeringId || current.submissionId !== previous.submissionId
     if (tipChanged && reading.followingTail) {
       navigation.cancel()
-      if (current.deferCompletedTurns && reading.followInputFold()) return
+      if (current.deferCompletedTurns && reading.followInputFold(false)) return
       reading.followTail()
     } else navigation.reconcile()
   }, [reading, navigation])
@@ -136,8 +141,8 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
   useLayoutEffect(() => {
     const previous = content.current.input
     content.current.input = {
-      ready, order, lastKey, lastIsUser, steeringId, submissionId, running, loadedTurns, chatScroll,
-      deferCompletedTurns, transcriptView, ...navigationInput,
+      ready, order, lastKey, lastIsUser, steeringId, submissionId, submissionSteers, running, loadedTurns,
+      chatScroll, deferCompletedTurns, transcriptView, ...navigationInput,
     }
     if (!deferCompletedTurns) {
       cancelPendingFollow()
@@ -151,7 +156,8 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
     if (layoutChanged && content.current.opened) reading.refreshActiveTurn()
   }, [
     viewport, reading, processContent, navigationInput, ready, order, lastKey, lastIsUser,
-    steeringId, submissionId, running, loadedTurns, chatScroll, deferCompletedTurns, transcriptView, cancelPendingFollow,
+    steeringId, submissionId, submissionSteers, running, loadedTurns, chatScroll, deferCompletedTurns, transcriptView,
+    cancelPendingFollow,
   ])
 
   const previousView = useRef(transcriptView)

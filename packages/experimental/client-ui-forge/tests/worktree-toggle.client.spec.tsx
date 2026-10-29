@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import menuCss from '@deepseek-ai/dsh-client-ui-primitives/src/Menu.module.css'
-import { en } from '../src/client/locales.ts'
+import { en, zh } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
 import { WorktreeToggle } from '../src/client/WorktreeToggle.tsx'
 import type { ForgeBranches, ForgeCheckoutState, ForgePanelState, ForgePanelWorktree, ForgeWorktreeBlocker } from '../src/types.ts'
@@ -32,7 +32,7 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function option(state: ForgePanelState | null) {
+function option(state: ForgePanelState | null, translate = t) {
   const panel = createSnapshotStore<PanelSnapshot>({ state, disconnected: false })
   const request = vi.fn(async (_from: string | null) => true)
   const cancel = vi.fn(async () => true)
@@ -43,7 +43,7 @@ function option(state: ForgePanelState | null) {
       request={request}
       cancel={cancel}
       branches={branches}
-      t={t}
+      t={translate}
     />,
   )
   const checkbox = (): HTMLInputElement => {
@@ -83,6 +83,7 @@ describe('WorktreeToggle visibility', () => {
     ['once the Session can no longer change its worktree', ready()],
     ['while the first inspection runs', editable({}, { state: 'pending' })],
     ['when the inspection failed', editable({}, { state: 'failed', message: 'git status failed' })],
+    ['outside a Git checkout', editable({ blocker: 'not-git' }, { state: 'none' })],
   ])('renders nothing %s', (_label, state) => {
     expect(option(state).view.container.innerHTML).toBe('')
   })
@@ -97,15 +98,6 @@ describe('WorktreeToggle visibility', () => {
 })
 
 describe('WorktreeToggle checkbox', () => {
-  it('disables the option outside a Git checkout and says why', () => {
-    const b = option(editable({ blocker: 'not-git' }, { state: 'none' }))
-    expect(b.checkbox().disabled).toBe(true)
-    expect(b.checkbox().checked).toBe(false)
-    expect(b.checkbox().closest('label')?.hasAttribute('data-disabled')).toBe(true)
-    expect(b.base()).toBeNull()
-    expect(hint(b)).toBe(en['worktree.blocked.not-git'])
-  })
-
   it.each<[ForgeWorktreeBlocker, string]>([
     ['read-only', en['worktree.blocked.read-only']],
     ['outside-writable-root', en['worktree.blocked.outside-writable-root']],
@@ -118,20 +110,54 @@ describe('WorktreeToggle checkbox', () => {
     expect(hint(b)).toBe(reason)
   })
 
-  it('keeps an open request of a blocked checkout checked, without its base menu, until it is withdrawn', async () => {
-    const b = option(editable({ blocker: 'read-only', request: { from: 'main' } }))
+  it.each(['read-only', 'outside-writable-root'] as const)('keeps the selected base visible after %s blocks a request until it is withdrawn', async (blocker) => {
+    const b = option(editable({ request: { from: 'release' } }))
+    b.publish(editable({ blocker, request: { from: 'release' } }))
     expect(b.checkbox().checked).toBe(true)
     expect(b.checkbox().disabled).toBe(false)
     expect(b.checkbox().closest('label')?.hasAttribute('data-disabled')).toBe(false)
     expect(b.base()).toBeNull()
-    expect(hint(b)).toBe(en['worktree.blocked.read-only'])
+    expect(b.view.getByRole('button', { name: 'From release' }).textContent).toBe('From release')
+    expect(hint(b)).toBe(en[`worktree.blocked.${blocker}`])
     vi.useRealTimers()
     await act(async () => { fireEvent.click(b.checkbox()) })
     expect(b.cancel).toHaveBeenCalledOnce()
     expect(b.request).not.toHaveBeenCalled()
-    b.publish(editable({ blocker: 'read-only' }))
+    b.publish(editable({ blocker }))
     expect(b.checkbox().checked).toBe(false)
     expect(b.checkbox().disabled).toBe(true)
+    expect(b.view.getByRole('button', { name: 'Current branch: main' })).toBeTruthy()
+  })
+
+  it('preserves a HEAD base while blocked and restores the selected branch menu when permission returns', () => {
+    const b = option(editable({ blocker: 'read-only', request: { from: null } }))
+    expect(b.view.getByRole('button', { name: en['worktree.baseHead'] })).toBeTruthy()
+    b.publish(editable({ blocker: 'read-only', request: { from: 'release' } }))
+    b.publish(editable({ request: { from: 'release' } }))
+    expect(b.base()?.textContent).toBe('From release')
+    expect(b.checkbox().checked).toBe(true)
+  })
+
+  it.each([
+    ['en', en, 'Current branch: main', 'Not on a branch · 0a1b2c3'],
+    ['zh', zh, '当前分支：main', '未在分支上 · 0a1b2c3'],
+  ] as const)('names the branch and detached checkout in an informational tooltip (%s)', (_locale, copy, branchLabel, detachedLabel) => {
+    const b = option(editable(), makeTranslate(copy))
+    const chip = b.view.getByRole('button', { name: branchLabel })
+    fireEvent.click(chip)
+    expect(screen.getByRole('tooltip').textContent).toBe(branchLabel)
+    expect(chip.getAttribute('aria-describedby')).toBe(screen.getByRole('tooltip').id)
+    fireEvent.click(chip)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    b.publish(ready({ worktree: worktree({ editable: true }) }, { branch: null }))
+    const detached = b.view.getByRole('button', { name: detachedLabel })
+    fireEvent.click(detached)
+    expect(screen.getByRole('tooltip').textContent).toBe(detachedLabel)
+    fireEvent.click(detached)
+    b.publish(ready({ worktree: worktree({ editable: true }) }, { branch: null, commit: null }))
+    expect(b.view.getByRole('button', { name: copy['checkout.detached'] })).toBeTruthy()
+    expect(b.request).not.toHaveBeenCalled()
+    expect(b.branches).not.toHaveBeenCalled()
   })
 
   it('offers the option again once the blocker clears', () => {
@@ -142,13 +168,17 @@ describe('WorktreeToggle checkbox', () => {
     expect(hint(b)).toBe(en['worktree.hint'])
   })
 
-  it('offers the option unchecked inside a Git checkout', () => {
+  it('shows the current branch without requesting a worktree inside a Git checkout', () => {
     const b = option(editable())
     expect(b.checkbox().disabled).toBe(false)
     expect(b.checkbox().checked).toBe(false)
     expect(b.checkbox().closest('label')?.hasAttribute('data-disabled')).toBe(false)
     expect(b.base()).toBeNull()
     expect(hint(b)).toBe(en['worktree.hint'])
+    const current = b.view.getByText('main')
+    fireEvent.click(current)
+    expect(b.request).not.toHaveBeenCalled()
+    expect(b.branches).not.toHaveBeenCalled()
   })
 
   it('requests a worktree from the current branch and holds the checked state until the Host answers', async () => {
@@ -171,6 +201,7 @@ describe('WorktreeToggle checkbox', () => {
 
   it('requests a worktree from HEAD on a detached checkout', async () => {
     const b = option(ready({ worktree: worktree({ editable: true }) }, { branch: null }))
+    expect(b.view.getByText(`${en['checkout.detached']} · 0a1b2c3`)).toBeTruthy()
     await act(async () => { fireEvent.click(b.checkbox()) })
     expect(b.request).toHaveBeenCalledWith(null)
     b.publish(ready({ worktree: worktree({ editable: true, request: { from: null } }) }, { branch: null }))
@@ -186,7 +217,7 @@ describe('WorktreeToggle checkbox', () => {
     expect(b.base()).toBeNull()
   })
 
-  it('withdraws an open request and hides the base branch until the Host answers', async () => {
+  it('withdraws an open request and shows the current branch until the Host answers', async () => {
     const b = option(editable({ request: { from: 'release' } }))
     expect(b.checkbox().checked).toBe(true)
     expect(b.base()?.textContent).toBe('From release')

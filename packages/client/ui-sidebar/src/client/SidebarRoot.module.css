@@ -1,5 +1,5 @@
 /* Sidebar column: vertical stack, padding 8/6, sidebar
-   fill + 1px right border painted by the layout column. Collapse is a
+   fill and desktop divider painted by the layout column. Collapse is a
    slide + crossfade, not a morph: the content holds its frozen expanded
    layout (inline width set by the component) and fades in place (.fading)
    while the sliding column (AppFrame grid tracks) clips it; the rail layout
@@ -23,6 +23,10 @@
      scrollbar uses the l2 pair. .quietBars hides it without changing layout. */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+:global([data-animating]:not([data-dragging])) .root {
+  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
 /* macOS desktop: the AppFrame column owns the translucent sidebar tint; an
@@ -445,22 +449,22 @@
 /* macOS: the themed elevated fill reads as a foreign slab on the vibrancy
    sidebar; a white wash sits in the glass like native macOS sidebar
    controls. Dark keeps the same white ink at lower alpha. */
-:global([data-platform='darwin']) .newSession {
+:global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession {
   background: rgb(255 255 255 / 0.55);
 }
 
 @media (hover: hover) {
-  :global([data-platform='darwin']) .newSession:hover {
+  :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession:hover {
     background: rgb(255 255 255 / 0.3);
   }
 }
 
-:global([data-platform='darwin']) :global([data-ds-dark-theme]) .newSession {
+:global([data-platform='darwin']) :global([data-ds-dark-theme]) :where(.root:not([role='dialog'])) .newSession {
   background: rgb(255 255 255 / 0.15);
 }
 
 @media (hover: hover) {
-  :global([data-platform='darwin']) :global([data-ds-dark-theme]) .newSession:hover {
+  :global([data-platform='darwin']) :global([data-ds-dark-theme]) :where(.root:not([role='dialog'])) .newSession:hover {
     background: rgb(255 255 255 / 0.2);
   }
 }
@@ -668,6 +672,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :global([data-animating]:not([data-dragging])) .root,
   .wide,
   .fading > *,
   .railIn .iconButton,

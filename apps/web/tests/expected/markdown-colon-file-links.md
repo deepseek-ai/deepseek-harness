@@ -1,0 +1,21 @@
+- paragraph:
+  - button "Relative colon:24–30"
+  - text: ·
+  - button "Absolute colon:30"
+  - text: ·
+  - button "Fragment:12"
+  - text: ·
+  - button "Column:24:5"
+  - text: ·
+  - button "Zero line"
+  - text: ·
+  - button "Reversed range"
+  - text: ·
+  - link "Bare URL":
+    - /url: index.ts:24
+  - text: · Blocked script ·
+  - link "Development server":
+    - /url: localhost:3000
+  - text: ·
+  - link "Mail":
+    - /url: mailto:10086

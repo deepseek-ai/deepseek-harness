@@ -39,6 +39,14 @@ File menus list the discovered associated applications without a separate “Ope
 
 Mounted controls with the same association reader and file share one query and its results; opening either menu refreshes all of them. Releasing the last control cancels the query and discards its state. Cancelled queries cannot replace another file’s results. A failed query displays a menu message and leaves reveal available as the default action. File-association discovery follows [native-command](../../util/native-command/README.md); an empty result, including a platform without a discovery adapter, uses the same reveal fallback without platform branches in the control.
 
+Workspace context menus open the captured folder through the same directory application catalog as the Session header. File-tree directories expose native reveal and Copy folder path; they do not offer file preview or save.
+
+Context menus contribute file preview, native application opening, original-file reveal, and URL navigation and copying through [ui-context-menu](../ui-context-menu/README.md). Session reveal follows the installed file-manager catalog and registers a structured Session contribution at order 500, between Copy session ID and Archive. Native context-menu operations share the feature's overlay toast and mobile/desktop feedback policy after dismissal. Native file actions resolve Session paths through authorized metadata before querying applications. Missing files disable path actions; image reveal requires an actual Host file and always targets that original. [ui-file-actions](../ui-file-actions/README.md) owns copy, download, save-as, and their completion feedback, including revealing the saved destination from its toast.
+
+File menus copy absolute paths without line numbers; URL copying preserves query and fragment. Image files also expose image copy and original download, alongside the existing file actions. Successful downloads and saves show the shared Toast; picker cancellation is silent.
+
+A file menu offers “Open in sidebar” and “Open in floating panel”, which call `ctx.sidebarRight.openResourceIn` with `destination: 'sidebar'` or `'float'` and the target's line, never the pane the menu was raised in. A file already open in the requested place is revealed; one open in the other place moves there with its reading position, so the menu can move a preview between the docked column and a floating panel. Left-click opens files as before.
+
 -----
 
 <a id="understand-the-implementation"></a>

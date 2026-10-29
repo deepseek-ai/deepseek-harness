@@ -112,7 +112,7 @@ root: this
 
 ```ts cordis-catalog
 /** Base URL used to resolve relative plugin/module specifiers, if the runtime sets one. */
-baseUrl?: string
+baseUrl?: string | undefined
 ```
 
 用于解析相对插件／模块说明符的基础 URL，前提是运行时设置了该值。

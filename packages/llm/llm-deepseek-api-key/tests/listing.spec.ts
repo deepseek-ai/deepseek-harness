@@ -19,6 +19,7 @@ const BUILT_IN = ['deepseek-flash', 'deepseek-v4-pro']
 const contexts: Context[] = []
 afterEach(async () => {
   for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
+  vi.useRealTimers()
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
 })
@@ -57,6 +58,20 @@ it('follows the official listing while the catalog is the built-in one', async (
   })
   expect(requests.map(request => request.headers.get('x-api-key'))).toEqual(['fixture-api-key'])
   expect(diagnostics).toHaveBeenCalledExactlyOnceWith('[llm-deepseek-api-key]', expect.stringContaining('loaded 3 model(s), skipped 0 row(s)') as string)
+})
+
+it('advertises listed badges only while it follows the listing', async () => {
+  const badge = { text: '1017', tone: 'info' }
+  officialListing(listing({ ...FLASH, client_metadata: { 'deepseek-harness': { badge } } }, PRO))
+  const { ctx } = await host()
+  await ctx.plugin(ApiKey, {})
+  const listed = await ctx.llm.listModels('deepseek-official')
+  expect(listed.map(model => [model.id, model.badge])).toEqual([['deepseek-flash', badge], ['deepseek-v4-pro', undefined]])
+  await expect(ctx.llm.resolveModelInfo('deepseek-official', 'deepseek-flash')).resolves.not.toHaveProperty('badge')
+
+  const other = await host()
+  await other.ctx.plugin(ApiKey, { baseURL: 'http://127.0.0.1:9/anthropic' })
+  expect((await other.ctx.llm.listModels('deepseek-official')).some(model => model.badge !== undefined)).toBe(false)
 })
 
 it('keeps a customized catalog without requesting the listing', async () => {
@@ -158,4 +173,24 @@ it('keeps following the listing across an update the adapter rejects', async () 
   await live.replace({})
   expect(await ids(ctx)).toEqual(BUILT_IN)
   expect(requests).toHaveLength(1)
+})
+
+it.each([undefined, null])('notifies an idle client when a badge is replaced and cleared with %s', async (clear) => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  let badge: { text: string; tone: string } | null | undefined = { text: 'New', tone: 'info' }
+  officialListing(() => listing({ ...FLASH, client_metadata: { 'deepseek-harness': { badge } } })())
+  const { ctx } = await host()
+  await ctx.plugin(ApiKey, {})
+  const changed = vi.fn()
+  ctx.on('llm/models-updated', changed)
+  expect((await ctx.llm.listModels('deepseek-official'))[0]?.badge?.text).toBe('New')
+  badge = { text: 'Updated', tone: 'success' }
+  await vi.advanceTimersByTimeAsync(600_000)
+  expect(changed).toHaveBeenCalledTimes(2)
+  expect(changed).toHaveBeenLastCalledWith('deepseek-official')
+  expect((await ctx.llm.listModels('deepseek-official'))[0]?.badge).toEqual(badge)
+  badge = clear
+  await vi.advanceTimersByTimeAsync(600_000)
+  expect(changed).toHaveBeenCalledTimes(3)
+  expect((await ctx.llm.listModels('deepseek-official'))[0]).not.toHaveProperty('badge')
 })

@@ -1,9 +1,17 @@
 /** DeepSeek `GET /models` listing: one authenticated request and per-entry decoding. */
 import { APP_IDENTITY, attributionHeaders, LlmError } from '@deepseek-ai/dsh-llm'
-import type { ModelModality } from '@deepseek-ai/dsh-llm'
+import type { LlmModelBadge, LlmModelBadgeTone, ModelModality } from '@deepseek-ai/dsh-llm'
 import { timeoutOf } from '@deepseek-ai/dsh-timeout'
 
 const LISTED_MODALITIES = ['text', 'image'] as const satisfies readonly ModelModality[]
+const BADGE_TONES = ['neutral', 'info', 'success', 'warning'] as const satisfies readonly LlmModelBadgeTone[]
+const LANGUAGE_ID = /^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$/u
+const UNREADABLE_BADGE_CHARACTER = /[\p{Cc}\p{Zl}\p{Zp}\p{Bidi_Control}]/u
+const VISIBLE_BADGE_CHARACTER = /[^\p{White_Space}\p{Default_Ignorable_Code_Point}]/u
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+
+/** Longest badge text this build displays, in user-perceived characters, for every translation. */
+export const MAX_BADGE_TEXT_LENGTH = 12
 
 /** Code of a listing deadline's timeout reason; {@link requestModelListing} reports it as `TIMEOUT`. */
 export const LISTING_TIMEOUT = 'MODEL_LISTING_TIMEOUT'
@@ -37,6 +45,11 @@ export interface ListedFacts {
   readonly toolUpdate?: 'in-history' | 'addition-only' | 'leading-only'
 }
 
+/** A badge one listing entry declares, or why this build cannot display it. */
+export type ListedBadge =
+  | { readonly kind: 'badge'; readonly badge: LlmModelBadge }
+  | { readonly kind: 'invalid'; readonly reason: string }
+
 /** Declared capabilities, or why the Messages transport cannot drive the model. */
 export type ListedCapabilities =
   | { readonly usable: true; readonly facts: ListedFacts }
@@ -52,6 +65,11 @@ export interface ListingEntry {
   readonly requirement: ClientRequirement
   /** Declared capabilities. */
   readonly capabilities: ListedCapabilities
+  /**
+   * Selector badge declared under `client_metadata[APP_IDENTITY.product].badge`; absent when the
+   * entry declares none, and never a reason to hide the entry.
+   */
+  readonly badge?: ListedBadge
 }
 
 /** A decoded listing with at least one entry. */
@@ -94,6 +112,61 @@ function requirementOf(entry: Fields): ClientRequirement {
   return typeof own.min_version === 'string' && own.min_version.length > 0
     ? { kind: 'min-version', version: own.min_version }
     : { kind: 'invalid' }
+}
+
+/** One trimmed, visible badge text on one line, without control characters and at most {@link MAX_BADGE_TEXT_LENGTH} graphemes. */
+function badgeText(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const text = value.trim()
+  const length = Array.from(GRAPHEMES.segment(text)).length
+  return length <= MAX_BADGE_TEXT_LENGTH && VISIBLE_BADGE_CHARACTER.test(text) && !UNREADABLE_BADGE_CHARACTER.test(value)
+    ? text : undefined
+}
+
+/** A literal badge text, or translations keyed by lowercase language id that include English. */
+function localizedBadgeText(value: unknown): LlmModelBadge['text'] | undefined {
+  if (typeof value === 'string') return badgeText(value)
+  const variants = fieldsOf(value)
+  if (variants === undefined) return undefined
+  const texts: [string, string][] = []
+  for (const [language, variant] of Object.entries(variants)) {
+    const text = badgeText(variant)
+    if (!LANGUAGE_ID.test(language) || text === undefined) return undefined
+    texts.push([language, text])
+  }
+  const translations = Object.fromEntries(texts)
+  const en = translations.en
+  return en === undefined ? undefined : { ...translations, en }
+}
+
+/** This client's entry in a listing entry's `client_metadata`, as diagnostics name it. */
+const OWN_METADATA = `client_metadata["${APP_IDENTITY.product}"]`
+
+/** An optional object field: `undefined` when absent or `null`, `false` when it is not an object. */
+function optionalFields(value: unknown): Fields | undefined | false {
+  return value === undefined || value === null ? undefined : fieldsOf(value) ?? false
+}
+
+function badgeOf(entry: Fields): ListedBadge | undefined {
+  // `null` at any level declares no badge, like an absent field; this build ships none to fall back on.
+  const metadata = optionalFields(entry.client_metadata)
+  if (metadata === false) return { kind: 'invalid', reason: 'client_metadata is not an object' }
+  const own = optionalFields(metadata?.[APP_IDENTITY.product])
+  if (own === false) return { kind: 'invalid', reason: `${OWN_METADATA} is not an object` }
+  const declared = optionalFields(own?.badge)
+  if (declared === false) return { kind: 'invalid', reason: `${OWN_METADATA}.badge is not an object` }
+  if (declared === undefined) return undefined
+  const text = localizedBadgeText(declared.text)
+  if (text === undefined) {
+    return {
+      kind: 'invalid',
+      reason: `${OWN_METADATA}.badge.text is not a string or an object of lowercase language ids including "en", `
+        + `each text 1 to ${MAX_BADGE_TEXT_LENGTH} characters on one line`,
+    }
+  }
+  // An absent or unrecognized tone keeps the text at the least emphasis.
+  const tone = BADGE_TONES.find(candidate => candidate === declared.tone) ?? 'neutral'
+  return { kind: 'badge', badge: { text, tone } }
 }
 
 function capabilitiesOf(entry: Fields): ListedCapabilities {
@@ -142,11 +215,13 @@ export function parseModelListing(body: unknown): ModelListing {
     const id = entry?.id
     if (entry === undefined || typeof id !== 'string' || id.length === 0 || seen.has(id)) continue
     seen.add(id)
+    const badge = badgeOf(entry)
     entries.push({
       id,
       ...typeof entry.name === 'string' && entry.name.length > 0 ? { name: entry.name } : {},
       requirement: requirementOf(entry),
       capabilities: capabilitiesOf(entry),
+      ...badge === undefined ? {} : { badge },
     })
   }
   if (entries.length === 0) throw new LlmError('DeepSeek model listing contains no model entry', 'INVALID_RESPONSE')

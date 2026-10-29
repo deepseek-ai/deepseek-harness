@@ -190,6 +190,12 @@ describe('additive wire fields reject invalid values', () => {
     expect(request({ credential: 123 })).toBeUndefined()
   })
 
+  it('accepts an actor display name and refuses blank or non-string ones', () => {
+    expect(request({ displayName: '许翰翔' })).toMatchObject({ actor: { displayName: '许翰翔' } })
+    expect(request({ displayName: '' })).toBeUndefined()
+    expect(request({ displayName: 7 })).toBeUndefined()
+  })
+
   it('refuses an unknown connection mode and defaults an absent one to relay', () => {
     const share = {
       shareId: 'share', sessionId: 'session', sessionTitle: 'Source', accessMode: 'selected',

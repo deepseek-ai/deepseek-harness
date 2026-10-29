@@ -1,0 +1,10 @@
+/* Container width keeps navigation separate from the compact files menu. */
+.pane { display: none; position: relative; flex: none; min-width: 0; min-height: 0; box-sizing: border-box; border-inline-start: 0.5px solid var(--dsw-alias-border-l3); }
+.pane[hidden] { display: none; }
+.pane[data-position='left'] { order: -1; border-inline-start: 0; border-inline-end: 0.5px solid var(--dsw-alias-border-l3); }
+.navigation { height: 100%; min-width: 0; overflow-y: auto; }
+.resize { position: absolute; inset-block: 0; inset-inline-start: -4px; width: 8px; z-index: 2; cursor: col-resize; touch-action: none; user-select: none; }
+.resize::after { content: ''; position: absolute; inset-block: 0; inset-inline-start: 3px; width: 2px; }
+.pane[data-position='left'] .resize { inset-inline-start: auto; inset-inline-end: -4px; }
+.resize:focus-visible::after { background: var(--dsw-alias-state-business-primary); }
+@media (hover: hover) { .resize:hover::after { background: var(--dsw-alias-state-business-primary); } }

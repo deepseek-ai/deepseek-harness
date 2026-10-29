@@ -98,12 +98,15 @@ export class Entry {
     return evaluate(this.ctx, expr)
   }
 
-  private _patchContext(diff: string[]) {
-    this.context.waterfall('loader/patch-context', this, () => {
+  private async _patchContext(diff: string[]) {
+    await this.context.waterfall('loader/patch-context', this, async () => {
       Object.setPrototypeOf(this.ctx, this.parent.ctx)
 
       if (this.fiber?.uid && (diff.includes('config') || this.options.group)) {
-        this.fiber.update(this.options.config, true)
+        // A simultaneous context/config edit must restart against the new dependencies.
+        const fiber = this.fiber.ctx.fiber
+        for (const name of Object.keys(fiber.inject)) fiber._checkImpl(name)
+        await fiber.update(this.options.config, true)
       }
     })
   }
@@ -134,7 +137,7 @@ export class Entry {
 
     // step 2: execute
     if (this.disabled) {
-      this.fiber?.dispose()
+      await this.fiber?.dispose()
       return
     }
 
@@ -150,7 +153,7 @@ export class Entry {
       const pending = volatileOnly && this._commitVolatile() ? [] : changes
       if (!pending.length && !force) return
       this.context.emit('loader/partial-dispose', this, legacy, true)
-      this._patchContext(pending)
+      await this._patchContext(pending)
     } else {
       await this.init()
     }
@@ -162,7 +165,7 @@ export class Entry {
    * @returns `false` when an ordinary effective value changed, so the caller applies the ordinary update lifecycle.
    */
   private _commitVolatile(): boolean {
-    const fiber = this.fiber!
+    const fiber = this.fiber!.ctx.fiber
     const refs = volatileEntries(fiber.effectiveConfig)
     if (!refs.length) return true
     const raw = this.options.config
@@ -213,11 +216,10 @@ export class Entry {
     } finally {
       this._initTask = undefined
     }
-    const notify = () => {
+    this.fiber?.await().catch(() => {}).finally(() => {
       if (this.loader.getTasks().length) return
       this.ctx.reflect.notify(['loader'])
-    }
-    this.fiber?.await().then(notify, notify)
+    })
   }
 
   private async _init() {
@@ -227,13 +229,11 @@ export class Entry {
     } catch (error) {
       this.ctx.logger.error(error)
       return
-    } finally {
-      this._initTask = undefined
     }
     const plugin = this.loader.unwrapExports(moduleNamespace)
-    this._patchContext([])
+    await this._patchContext([])
     this.loader.showLog(this, 'apply')
-    this.fiber = this.ctx.registry.plugin(plugin, this.options.config, this.getOuterStack).ctx.fiber
+    this.fiber = this.ctx.registry.plugin(plugin, this.options.config, this.getOuterStack)
     this.moduleNamespace = moduleNamespace
   }
 }

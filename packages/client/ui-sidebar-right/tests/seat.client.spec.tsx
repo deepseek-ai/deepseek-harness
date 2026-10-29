@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
+import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 /** Sidebar presentation and tab subscriptions through the production slot renderer. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent } from '@testing-library/react'
+import { act, fireEvent, waitFor } from '@testing-library/react'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { SlotTestRuntime, type SlotView } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -80,9 +81,11 @@ async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0, o
   const catalog = createSnapshotStore<readonly ShortcutCatalogEntry[]>([])
   runtime.ctx.provide('shortcuts', { register: () => () => {}, catalog } as never)
   runtime.slots.installLocale(locale)
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
   await runtime.declare({
     'sidebar-right.test.opener': { kind: 'single', scope: 'session' },
     'rightbar': { kind: 'single', scope: 'root' },
+    'shell.overlay': { kind: 'list', scope: 'root' },
     'conversation.session.header.corner': { kind: 'single', scope: 'session' },
   })
   await runtime.sessions.add({ id: SESSION })
@@ -205,9 +208,67 @@ it('keeps duplicate Session Tabs independent and preserves a body through dockin
   expect(h.controller.focusedTarget()?.tabId).toBe(tab.id)
   act(() => { h.controller.dock(floating.paneId) })
   expect(document.querySelector('[data-page-input]')).toBe(body)
-  expect(body.closest('[aria-hidden="true"]')).not.toBeNull()
-  act(() => { h.controller.toggleExpanded() })
+  // Docking expands the collapsed column, which shows the same body.
+  expect(h.controller.isExpanded()).toBe(true)
+  expect(body.closest('[aria-hidden="true"]')).toBeNull()
   expect(body.closest('[data-dockkit-host]')).toBe(cell)
+})
+
+it('never detaches a retained page\'s embedded element across floating replacements, page opens, moves, and collapsing', async () => {
+  const h = await mountSeat()
+  // A Desktop browser page keeps its `webview` in the DOM; detaching it would reload the guest.
+  const webview = document.createElement('webview')
+  await act(async () => {
+    h.runtime.ctx.sidebarRightTabs.register({ id: 'test/webapp', kind: 'webapp', keepMounted: true, title: () => 'Web app' })
+    h.runtime.slots.register({ name: 'sidebar.right.pane.tab', key: 'test/webapp' },
+      () => <div data-webview-host ref={(host) => { if (host !== null && !host.contains(webview)) host.append(webview) }} />)
+    h.registerPage('files')
+  })
+  act(() => { h.controller.openTab('webapp') })
+  const page = h.controller.active()!
+  const parent = webview.parentElement
+  expect(webview.isConnected).toBe(true)
+  const observer = new MutationObserver(() => {})
+  observer.observe(h.view.container, { childList: true, subtree: true })
+  const detached = (): Node[] => observer.takeRecords()
+    .flatMap(record => [...record.removedNodes]).filter(node => node === webview || node.contains(webview))
+  const kept = (): void => {
+    expect(detached()).toEqual([])
+    expect(webview.isConnected).toBe(true)
+    expect(webview.parentElement).toBe(parent)
+  }
+
+  // A floating tab is replaced in its panel by new content, then reveals content already open.
+  const a = h.open('a.txt')
+  act(() => { h.controller.float(a.id) })
+  h.open('b.txt', { replaceTab: a.id })
+  kept()
+  const floating = h.controller.active()!
+  h.open('c.txt')
+  h.open('c.txt', { replaceTab: floating.id })
+  kept()
+  // A page opens from a docked target and from a floating one.
+  act(() => { h.controller.openTabFromTarget('files', h.controller.commandTarget()!) })
+  kept()
+  const target = h.controller.focusedTarget(element(h.view.container, `[data-tab-body="${floating.id}"]`))!
+  act(() => { h.controller.openTabFromTarget('files', target) })
+  kept()
+  // The page itself floats, docks, and moves to another pane.
+  act(() => { h.controller.float(page.id) })
+  kept()
+  const float = h.layout().floats.find(id => getPane(h.layout(), id).tabs.includes(page.id))!
+  act(() => { h.controller.dock(float) })
+  kept()
+  let other: PaneId | undefined
+  act(() => { other = h.controller.split() })
+  act(() => { h.actions.placeTab(SESSION, page.id, other!, 0) })
+  expect(getPane(h.layout(), other!).tabs).toContain(page.id)
+  kept()
+  act(() => { h.controller.toggleExpanded() })
+  expect(h.layout().expanded).toBe(false)
+  act(() => { h.controller.toggleExpanded() })
+  kept()
+  observer.disconnect()
 })
 
 it('retains a collapsed Session Tab and remounts an unretained hidden body', async () => {
@@ -807,6 +868,9 @@ describe('slot-owned useTabInfo', () => {
     expect(bodyA.dataset['instance']).not.toBe(bodyB.dataset['instance'])
     expect(bodyA.dataset['tabBody']).toBe(a.id)
     const signal = h.bodies.get(a.id)!.tab.signal
+    const docked = h.bodies.get(a.id)!.panel.id
+    expect(h.bodies.get(a.id)?.panel).toEqual({ id: docked, isFloating: false })
+    expect(h.titles.get(a.id)?.panel).toEqual({ id: docked, isFloating: false })
     act(() => { h.actions.setExpanded(SESSION, false) })
     expect(h.bodies.get(a.id)?.tab.visible).toBe(false)
     expect(h.titles.get(a.id)?.tab.visible).toBe(false)
@@ -817,8 +881,14 @@ describe('slot-owned useTabInfo', () => {
     expect(h.bodies.get(a.id)?.tab.visible).toBe(true)
     const paneId = h.bodies.get(a.id)!.panel.id
     expect(h.layout().floats).toContain(paneId)
+    expect(h.bodies.get(a.id)?.panel).toEqual({ id: paneId, isFloating: true })
+    expect(h.titles.get(a.id)?.panel).toEqual({ id: paneId, isFloating: true })
+    expect(h.bodies.get(a.id)?.tab.id).toBe(a.id)
     act(() => { h.controller.dock(paneId) })
     expect(h.layout().floats).toHaveLength(0)
+    expect(h.bodies.get(a.id)?.panel).toEqual({ id: docked, isFloating: false })
+    expect(h.titles.get(a.id)?.panel).toEqual({ id: docked, isFloating: false })
+    expect(h.bodies.get(a.id)?.tab.id).toBe(a.id)
     expect(h.bodies.get(a.id)?.tab.signal).toBe(signal)
   })
 
@@ -907,7 +977,9 @@ describe('slot-owned useTabInfo', () => {
     })
     expect(h.view.container.querySelector('[data-sidebar-right-unavailable]')).not.toBeNull()
     const chip = element(h.view.container, '[data-dockkit-tab]')
+    h.runtime.renderSlot('shell.overlay', {})
     fireEvent.contextMenu(chip)
+    await waitFor(() => { expect(menu).toBeDefined() })
     expect(menu?.tab.id).toBe(chip.getAttribute('data-dockkit-tab'))
     act(() => { menu?.dismiss() })
     expect(document.querySelector('[data-dockkit-tab-menu]')).toBeNull()
@@ -1042,4 +1114,61 @@ it('keeps a resource tab and reports a synchronous cleanup failure from its clos
     logged.mockRestore()
     release()
   }
+})
+
+describe('the reveal glow', () => {
+  it('marks the pane of a revealed tab already on screen, docked or floating, restarts on a repeat, and clears when the animation ends', async () => {
+    const h = await mountSeat()
+    const a = h.open('a.txt')
+    h.open('b.txt')
+    const marked = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[data-sidebar-right-flash]')]
+    expect(marked()).toEqual([])
+    // Switching back to a background tab is the visible change and marks nothing.
+    h.open('a.txt')
+    expect(marked()).toEqual([])
+    h.open('a.txt')
+    const pane = document.querySelector<HTMLElement>(`[data-dockkit-pane="${h.layout().activePaneId}"]`)!
+    expect(marked()).toEqual([pane])
+    expect(pane.dataset.sidebarRightFlash).toBe('odd')
+    h.open('a.txt')
+    expect(pane.dataset.sidebarRightFlash).toBe('even')
+    fireEvent.animationEnd(pane)
+    expect(marked()).toEqual([])
+    act(() => { h.controller.float(a.id) })
+    h.open('a.txt')
+    const floating = document.querySelector<HTMLElement>('[data-dockkit-float]')!
+    expect(marked()).toEqual([floating])
+    fireEvent.animationEnd(floating)
+    // An open that lands new content marks nothing.
+    h.open('c.txt')
+    expect(marked()).toEqual([])
+  })
+
+  it('plays each request once and only on screen: a hidden Session ends its glow and never replays it, and a later mount skips it', async () => {
+    const h = await mountSeat()
+    h.open('a.txt')
+    h.open('b.txt')
+    const marked = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[data-sidebar-right-flash]')]
+    h.open('b.txt')
+    expect(marked()).toHaveLength(1)
+    act(() => { h.runtime.panelInfo.set({ activePanelId: 'other-panel' as MainPanelId }) })
+    expect(marked()).toEqual([])
+    act(() => { h.runtime.panelInfo.set({ activePanelId: null }) })
+    expect(marked()).toEqual([])
+    // A request whose Session is hidden in the same commit is dropped, not deferred.
+    act(() => {
+      h.controller.openResource('dsh-resource://file/session/s-test/b.txt')
+      h.runtime.panelInfo.set({ activePanelId: 'other-panel' as MainPanelId })
+    })
+    expect(marked()).toEqual([])
+    act(() => { h.runtime.panelInfo.set({ activePanelId: null }) })
+    expect(marked()).toEqual([])
+    // A second panel for the Session mounts after the request and leaves it unplayed.
+    const again = h.runtime.renderSlot('rightbar', { width: 420, viewportWidth: 1440, canShow: true })
+    expect(again.container.querySelector('[data-dockkit-pane]')).not.toBeNull()
+    expect(marked()).toEqual([])
+    // A new request still plays.
+    h.open('b.txt')
+    expect(marked().length).toBeGreaterThan(0)
+  })
 })

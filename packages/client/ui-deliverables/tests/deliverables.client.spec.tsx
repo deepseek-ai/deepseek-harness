@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * ui-deliverables browser half: the derivation contract of produced paths,
  * recorded changes, and deliveries over engine-published Turn data, the
@@ -43,7 +44,10 @@ function openProps(controller = new PresentedOpenController(), summaries = new C
   controller.host.set({ name: 'desktop', available: true, fileManager: 'finder' })
   const diffs = new ChangesDiffStore()
   const sessions: SessionListState = { ids: [], byId: {}, phase: 'ready', projectionsBySession: {} }
+  const openMenu = vi.fn()
   return {
+    openMenu,
+    useContextMenu: contextMenuHook(openMenu),
     SessionProvider: ({ children }: { children?: import('react').ReactNode }) => <>{children}</>,
     renderSlot: renderFileActions,
     useChangesDiff: <T,>(select: (state: ReturnType<typeof diffs.state.getSnapshot>) => T): T => select(diffs.state.getSnapshot()),
@@ -838,6 +842,7 @@ describe('producedFileMentions resolver', () => {
 describe('plugin registration', () => {
   it('registers the tail entry and fiber disposal removes it', async () => {
     const ctx = new Context()
+    ctx.provide('contextMenus', { register: () => () => {}, open: vi.fn() } as never)
     await ctx.plugin(SlotRegistry).await()
     new UiConversation(ctx, { binding: () => undefined } as never)
     // The owning view's child declaration, stood up by a bench root entry.
@@ -906,10 +911,16 @@ describe('plugin registration', () => {
     const preview = vi.fn<(path: string) => void>()
     for (const produced of [[], [{ path: 'out/report.docx' }]]) {
       const delivered = tailOwner({ produced, presented: [{ path: 'out/report.docx', seq: 2, index: 0 }] }, 3, preview)
-      const mentions = service?.forClosing(delivered, SessionId('child-session'))
+      const { getTriggerProps } = contextMenuHook((target, point) => { ctx.contextMenus.open(target, point) })()
+      const mentions = service?.forClosing(delivered, SessionId('child-session'), path =>
+        getTriggerProps({ kind: 'file', value: { sessionId: SessionId('child-session'), path } }))
       for (const text of ['report.docx', 'out/report.docx']) {
         const mention = mentions?.resolve(text)
         expect(mention?.label).toBe('Open out/report.docx in sidebar')
+        const trigger = render(<button {...mention?.contextMenuProps}>Mention</button>)
+        fireEvent.contextMenu(trigger.getByRole('button'), { clientX: 41, clientY: 52 })
+        trigger.unmount()
+        expect(vi.spyOn(ctx.contextMenus, 'open')).toHaveBeenLastCalledWith({ kind: 'file', value: { sessionId: 'child-session', path: 'out/report.docx' } }, { x: 41, y: 52 })
         mention?.open()
       }
     }
@@ -1014,6 +1025,8 @@ describe('presented files', () => {
     const props = openProps()
     props.openPresented.mockResolvedValue({ kind: 'opened' })
     const view = render(<Deliverables {...props} matched={matched} openFile={owner.openFile} sessionId={SessionId('child-session')} t={makeTranslate(en)} />)
+    fireEvent.contextMenu(view.getByRole('button', { name: 'Preview report-0.docx in sidebar' }), { clientX: 18, clientY: 29 })
+    expect(props.openMenu).toHaveBeenCalledWith({ kind: 'file', value: { sessionId: 'child-session', path: 'report-0.docx' } }, { x: 18, y: 29 })
     expect(view.container.querySelectorAll('[data-presented-file]')).toHaveLength(4)
     const expand = view.getByRole('button', { name: 'Show all 8 delivered files' })
     expect(expand.getAttribute('aria-expanded')).toBe('false')
