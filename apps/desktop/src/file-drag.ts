@@ -74,12 +74,13 @@ export function installDesktopFileDrag(
   resolveResource: (address: string, signal: AbortSignal) => Promise<DesktopDragResource | null>,
 ): () => Promise<void> {
   let disposed = false
+  const lifetime = new AbortController()
   const preparations = new Map<string, AbortController>()
   const files = new DragFiles(app.getPath('temp'))
-  const pending = new Set<Promise<FileDragHandle | undefined>>()
+  const pending = new Set<Promise<unknown>>()
   const icons = new Map<string, NativeImage>()
   const borrowed = new Map<string, { resource: LocalResource; version: Stats }>()
-  const applications = new Map<string, { path: string; version: Stats }>()
+  const applications = new Map<string, { path: string; version: Stats; reference: ApplicationDragReference }>()
   const authorize = (event: IpcMainInvokeEvent): BrowserWindow => {
     if (disposed) throw new Error('File transfer closed')
     return owner(event)
@@ -96,7 +97,7 @@ export function installDesktopFileDrag(
       const version = await stat(resource.path)
       if (!version.isDirectory()) throw new Error('Application bundle unavailable')
       handle = files.borrow(resource.path)
-      applications.set(handle, { path: resource.path, version })
+      applications.set(handle, { path: resource.path, version, reference: source.reference })
     } else if (source.kind === 'bytes') handle = await files.prepare(source.bytes, source)
     else {
       const resource = await cancellable(resolveResource(source.address, signal), signal)
@@ -138,17 +139,21 @@ export function installDesktopFileDrag(
     authorize(event)
     if (typeof requestId === 'string') preparations.get(requestId)?.abort(new Error('File preparation cancelled'))
   })
-  ipcMain.handle(DESKTOP_IPC.fileDragStart, (event, handle: unknown) => {
+  const start = async (event: IpcMainInvokeEvent, handle: unknown): Promise<boolean> => {
     const window = authorize(event)
     const icon = typeof handle === 'string' ? icons.get(handle) : undefined
     if (icon === undefined || typeof handle !== 'string') return false
     const file = files.take(handle, false)
     if (file === undefined) return false
+    icons.delete(handle)
     try {
       const original = borrowed.get(handle)
       if (original !== undefined && !sameVersion(original.version, statSync(original.resource.path))) throw new Error('File changed before dragging')
       const application = applications.get(handle)
       if (application !== undefined) {
+        const resource = await cancellable(resolveResource(`application:${application.reference}`, lifetime.signal), lifetime.signal)
+        if (resource === null || !('kind' in resource) || resource.kind !== 'application' || resource.path !== application.path
+          || files.take(handle, false) !== file) throw new Error('Application changed before dragging')
         const current = statSync(application.path)
         if (!current.isDirectory() || current.dev !== application.version.dev || current.ino !== application.version.ino
           || current.mtimeMs !== application.version.mtimeMs || current.ctimeMs !== application.version.ctimeMs) throw new Error('Application changed before dragging')
@@ -167,6 +172,12 @@ export function installDesktopFileDrag(
       void files.release(handle).catch((error: unknown) => { console.error(error) })
       return false
     }
+  }
+  ipcMain.handle(DESKTOP_IPC.fileDragStart, (event, handle: unknown) => {
+    const operation = start(event, handle)
+    pending.add(operation)
+    void operation.then(() => { pending.delete(operation) }, () => { pending.delete(operation) })
+    return operation
   })
   ipcMain.handle(DESKTOP_IPC.fileDragRelease, async (event, handle: unknown) => {
     authorize(event)
@@ -176,6 +187,7 @@ export function installDesktopFileDrag(
   return async () => {
     if (!disposed) {
       disposed = true
+      lifetime.abort(new Error('File transfer closed'))
       for (const abort of preparations.values()) abort.abort(new Error('File transfer closed'))
       ipcMain.removeHandler(DESKTOP_IPC.fileDragPrepare)
       ipcMain.removeHandler(DESKTOP_IPC.fileDragCancel)

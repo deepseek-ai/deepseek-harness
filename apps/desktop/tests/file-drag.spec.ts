@@ -77,6 +77,28 @@ it('rejects arbitrary paths, expired references, and application replacement bef
   expect(f.window.webContents.startDrag).not.toHaveBeenCalled()
 })
 
+it('rechecks application authority at drag start and cancels a stalled check during shutdown', async () => {
+  const f = await fixture()
+  const path = join(f.root, 'Helper.app')
+  await mkdir(path)
+  const request = { kind: 'application', reference: randomUUID() }
+  f.resolve.mockResolvedValue({ kind: 'application', path })
+  const expired = await f.call(DESKTOP_IPC.fileDragPrepare, request)
+  f.resolve.mockResolvedValueOnce(null)
+  expect(await f.call(DESKTOP_IPC.fileDragStart, expired)).toBe(false)
+  expect(f.window.webContents.startDrag).not.toHaveBeenCalled()
+  const pending = await f.call(DESKTOP_IPC.fileDragPrepare, request)
+  const lookup = Promise.withResolvers<Awaited<ReturnType<Parameters<typeof installDesktopFileDrag>[1]>>>()
+  onTestFinished(() => { lookup.resolve(null) })
+  f.resolve.mockReturnValueOnce(lookup.promise)
+  const starting = f.call(DESKTOP_IPC.fileDragStart, pending)
+  await vi.waitFor(() => { expect(f.resolve).toHaveBeenCalledTimes(4) })
+  await f.dispose()
+  expect(await starting).toBe(false)
+  expect(f.resolve.mock.calls[3]![1].aborted).toBe(true)
+  expect(f.window.webContents.startDrag).not.toHaveBeenCalled()
+})
+
 it('delivers original PDF bytes and filename through native copy drag', async () => {
   const f = await fixture()
   const bytes = new TextEncoder().encode('%PDF-1.4\noriginal\n%%EOF')

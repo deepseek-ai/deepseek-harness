@@ -169,7 +169,7 @@ it('copies already loaded PDF bytes when optional resource authorization rejects
   const prepared = await files.prepare({ ...blobSource(), resourceAddress: 'dsh-resource://file/session/s/report.pdf' }, signal())
   const request = vi.mocked(desktop.prepare).mock.calls[1]![0]
   expect(request.kind).toBe('bytes')
-  expect(request.name).toBe('report.pdf')
+  expect(request.kind === 'bytes' ? request.name : undefined).toBe('report.pdf')
   if (request.kind === 'bytes') expect(new TextDecoder().decode(request.bytes)).toBe('%PDF-original')
   prepared.release()
   files.dispose()
