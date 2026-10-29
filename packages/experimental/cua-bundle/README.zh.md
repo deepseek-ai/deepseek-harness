@@ -24,7 +24,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 macOS 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。组合包随 DSH 提供并随之升级，开启时无需下载。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 在开启时准备临时签名的 helper。打开 Computer Use 详情，按需设置 PTC，并为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。源码 Web 在仓库根目录运行以下命令：
+在 macOS 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。组合包随 DSH 提供并随之升级，开启时无需下载。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 在开启时准备临时签名的 helper。打开它的详情，按需设置 PTC，并为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。源码 Web 在仓库根目录运行以下命令：
 
 ```sh
 pnpm run build
@@ -86,7 +86,6 @@ CUA 生效和卸载会改变 PTC SDK 与系统指引，后续请求使用更新�
 <a id="known-limitations-and-deferred-work"></a>
 
 - 系统权限需用户在 macOS 中确认，开启组合包不会自动授予权限。
-- 从注册表安装过组合包的 profile 会保留该依赖。加载的是安装目录中的副本，插件页不提供移除这条多余依赖的操作。
 - PTC 执行方式由 profile 共享，需单独配置。未启用 HMR 的 Host 在重启时应用已保存的变更。
 
 <a id="dev-note"></a>

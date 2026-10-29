@@ -24,7 +24,7 @@ Enable macOS Computer Use from Plugins for existing and new PTC sessions. Window
 <a id="use-this-package"></a>
 ## Use this package
 
-On macOS, open **Plugins → More** and switch on Computer use in the Experimental plugins list. The bundle ships with DSH and updates with it, so enabling it downloads nothing. Published packages contain the signed and notarized helper; users need no compiler. Source Web and development Desktop prepare an ad-hoc helper when enabled. Open Computer Use details, choose PTC if needed, and grant Accessibility and Screen Recording to `DSH Computer Use.app`. An enabled bundle also appears in the main plugin list; switching it off returns it to the Experimental plugins list only. For source Web, run these commands from the repository root:
+On macOS, open **Plugins → More** and switch on **Computer use** in the Experimental plugins list. The bundle ships with DSH and updates with it, so enabling it downloads nothing. Published packages contain the signed and notarized helper; users need no compiler. Source Web and development Desktop prepare an ad-hoc helper when enabled. Open its details, choose PTC if needed, and grant Accessibility and Screen Recording to `DSH Computer Use.app`. An enabled bundle also appears in the main plugin list; switching it off returns it to the Experimental plugins list only. For source Web, run these commands from the repository root:
 
 ```sh
 pnpm run build
@@ -86,7 +86,6 @@ CUA activation and removal change the PTC SDK and system guidance; subsequent re
 <a id="known-limitations-and-deferred-work"></a>
 
 - System permissions require the user’s approval in macOS; enabling the bundle does not grant them.
-- A profile that installed the bundle from a registry keeps that dependency. The installation’s copy loads instead, and the plugin page offers no removal for the redundant dependency.
 - PTC execution is shared by the profile and is configured independently. A Host without HMR applies saved changes at restart.
 
 <a id="dev-note"></a>
