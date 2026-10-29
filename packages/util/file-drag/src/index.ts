@@ -1,7 +1,6 @@
-/** File export naming, browser transfer tokens, and native file/application requests. */
+/** File export naming, browser transfer token type, and native byte-or-resource requests. */
 import mime from 'mime'
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { Context } from '@deepseek-ai/cordis'
 
 /** Browser transfer token type; original bytes stay with the application owner. */
 export const FILE_DRAG_TOKEN_TYPE = 'application/x-dsh-file'
@@ -12,41 +11,6 @@ export type FileDragHandle = Branded<'FileDragHandle'>
 /** Caller-minted identity for cancelling a native preparation before it returns a handle. */
 export type FileDragRequestId = Branded<'FileDragRequestId'>
 
-/** Provider-owned reference to an application authorized for native dragging. */
-export type ApplicationDragReference = Branded<'ApplicationDragReference'>
-
-/** Private Host response; application directories are borrowed without copying or deleting them. */
-export type DesktopDragResource = { readonly path: string; readonly sha256: string; readonly size: number }
-  | { readonly kind: 'application'; readonly path: string }
-
-declare module '@deepseek-ai/cordis' {
-  interface Events {
-    /**
-     * Resolve a provider-issued application reference for the local desktop carrier.
-     * @mode serial
-     * @param reference Opaque application identity issued by the owning provider.
-     * @param signal Preparation cancellation.
-     * @returns Authorized application path, or undefined when this listener does not own the reference.
-     */
-    'desktop/application-drag'(reference: ApplicationDragReference, signal: AbortSignal): Promise<string | undefined>
-  }
-}
-
-/**
- * Resolve a live application reference through its owning Host plugin.
- * @param ctx Host event context.
- * @param reference Provider-issued application identity.
- * @param signal Preparation cancellation.
- * @returns Authorized bundle path; rejects expired references and cancelled preparations.
- */
-export async function resolveApplicationDrag(ctx: Context, reference: ApplicationDragReference, signal: AbortSignal): Promise<string> {
-  signal.throwIfAborted()
-  const path = await ctx.serial('desktop/application-drag', reference, signal)
-  signal.throwIfAborted()
-  if (path === undefined) throw new Error('Application drag reference expired')
-  return path
-}
-
 /** Caller-supplied export naming, shared by Web and Desktop. */
 export interface DragFileName {
   readonly name?: string | undefined
@@ -55,17 +19,15 @@ export interface DragFileName {
 }
 
 /** Native preparation copies bytes or asks the Host to authorize borrowing a resource. */
-export type DesktopFileSource = (DragFileName & (
+export type DesktopFileSource = DragFileName & (
   | { readonly kind: 'bytes'; readonly bytes: Uint8Array }
   | { readonly kind: 'resource'; readonly address: string; readonly sha256?: string; readonly size?: number }
-)) | { readonly kind: 'application'; readonly reference: ApplicationDragReference }
+)
 
 /** Native file operations; no request accepts a raw renderer filesystem path. */
 export interface DesktopFileDrag {
-  /** Whether this carrier can drag provider-authorized macOS application directories. */
-  readonly applications?: boolean
   /**
-   * @param source - bytes, a Session resource, or a provider-issued application reference.
+   * @param source - bytes or a verifiable resource.
    * @param requestId - cancellation identity.
    * @returns a handle, or undefined if the resource needs a byte copy.
    */

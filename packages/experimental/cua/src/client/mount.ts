@@ -8,7 +8,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import type {} from '@deepseek-ai/dsh-client-ui-file-drag/client'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ApplicationApproval, selectApplicationApproval } from './ApplicationApproval.tsx'
 import { PermissionController } from './controller.ts'
@@ -23,7 +22,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Existing browser registries needed by the optional permission UI. */
-export const inject = ['remote', 'slots', 'locale', 'configForms', 'fileDrag']
+export const inject = ['remote', 'slots', 'locale', 'configForms']
 
 /**
  * Mount the optional permission Remote and its browser controls.
@@ -35,7 +34,13 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
   const transport = ctx.plugin(async (owner) => { await owner.remote.$mount(contribution) })
   const ui = ctx.inject(['remote.cuaAccess', 'slots', 'locale'], (ctx) => {
     ctx.effect(() => ctx.locale.register(NS, { en, zh, ja, es, fr, de, ru, pt }))
-    const controller = new PermissionController(ctx.remote.cuaAccess)
+    const t = ctx.locale.bind(NS)
+    const controller = new PermissionController(ctx.remote.cuaAccess, permission => ({
+      instruction: t('nativeInstruction', { application: '{application}', permission: t(permission) }),
+      backLabel: t('nativeBack'), finderLabel: t('nativeFinder'),
+      unavailableMessage: t('nativeUnavailable'),
+      settingsMessage: t('nativeSettingsUnavailable', { permission: t(permission) }),
+    }))
     const face = controller.face()
     ctx.slots.inject('conversation.composer', () => ctx.slots.register({
       name: 'conversation.composer', priority: -1, locale: NS,
@@ -52,14 +57,8 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
       })
     })
     const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
-    const applicationDrag = ctx.fileDrag.application
     const settings = {
       ...face,
-      applicationDrag: applicationDrag === undefined ? undefined : {
-        prepare: (reference: Parameters<typeof applicationDrag.prepare>[0], signal: AbortSignal) =>
-          applicationDrag.prepare(reference, signal),
-        reportFailure: () => { ctx.fileDrag.actions.reportFailure() },
-      },
       hooks: { ...face.hooks, cuaDefaultPreset: preset },
       setPtcDefault: () => preset.set('selectedDefault', 'ptc'),
       setPersistentPtc: async () => {

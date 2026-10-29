@@ -85,9 +85,11 @@ export const NativeResourceParameters = {
 export const NativeOnlyOperations = [
   operation('launchApp', app), operation('permissionStatus', {}),
   operation('applicationIcons', { paths: z.array(z.string().min(1)) }),
-  operation('requestPermission', { permission: z.enum(['accessibility', 'screenRecording']) }),
+  operation('requestPermission', { permission: z.enum(['accessibility', 'screenRecording']),
+    instruction: z.string().min(1), backLabel: z.string().min(1), finderLabel: z.string().min(1),
+    unavailableMessage: z.string().min(1), settingsMessage: z.string().min(1),
+    pollIntervalMs: z.number().int().min(100).max(2 ** 31 - 1) }),
   operation('openPermissionSettings', { permission: z.enum(['accessibility', 'screenRecording']) }),
-  operation('revealPermissionApplication', { path: z.string().min(1) }),
 ] as const
 
 /** Process identity returned only after a successful app selection. */

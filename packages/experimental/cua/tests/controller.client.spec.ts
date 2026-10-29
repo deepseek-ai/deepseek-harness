@@ -1,4 +1,5 @@
 /** Permission refreshes preserve observations and join user actions before withdrawal. */
+import { guideText } from './fixtures/permission-guide.ts'
 import { setImmediate } from 'node:timers/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-cua/remote'
@@ -7,7 +8,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import type { CuaApplicationId, CuaApplicationState, CuaSystemPermissionState } from '../src/access-types.ts'
 import { PermissionController } from '../src/client/controller.ts'
 
-const value: CuaSystemPermissionState = { guidancePolling: { intervalMs: 1000, timeoutMs: 120000 },
+const value: CuaSystemPermissionState = { guidancePolling: { intervalMs: 1000, timeoutMs: 120000 }, guideOpen: true,
   accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
 const applications: CuaApplicationState = {
   allowedApps: [], blockedApps: [], persistentAvailable: true }
@@ -20,95 +21,58 @@ function fixture() {
     applicationIcons: vi.fn<CuaRemote['applicationIcons']>(async () => ({ ok: true, value: {} })),
     requestPermission: vi.fn<CuaRemote['requestPermission']>(async () => ({ ok: true, value })),
     openSettings: vi.fn<CuaRemote['openSettings']>(async () => ({ ok: true, value: undefined })),
-    revealApplication: vi.fn<CuaRemote['revealApplication']>(async () => ({ ok: true, value: undefined })),
     revoke: vi.fn<CuaRemote['revoke']>(async () => ({ ok: true, value: undefined })),
     retryApproval: vi.fn<CuaRemote['retryApproval']>(async () => ({ ok: true, value: undefined })),
     enablePersistentPtc: vi.fn<CuaRemote['enablePersistentPtc']>(async () => ({ ok: true, value: undefined })),
   }
-  const controller = new PermissionController(actions)
+  const controller = new PermissionController(actions, () => guideText)
   onTestFinished(() => controller.dispose())
   return { actions, controller, face: controller.face() }
 }
 
-it('polls only system permissions while guiding and closes the guide after observing a grant', async () => {
+it('polls only permission status until the native guide closes', async () => {
   vi.useFakeTimers()
   const f = fixture()
   try {
     f.face.request('screenRecording')
     await vi.advanceTimersByTimeAsync(0)
-    expect(f.controller.state.getSnapshot().guidance).toBe('screenRecording')
     await vi.advanceTimersByTimeAsync(1000)
     expect(f.actions.systemStatus).toHaveBeenCalledTimes(2)
-    expect(f.actions.requestPermission).toHaveBeenCalledOnce()
+    expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording', guideText)
     expect(f.actions.applicationIcons).toHaveBeenCalledOnce()
-    f.actions.systemStatus.mockResolvedValueOnce({ ok: true, value: { ...value, screenRecording: true } })
+    f.actions.systemStatus.mockResolvedValueOnce({ ok: true, value: { ...value, guideOpen: false, screenRecording: true } })
     await vi.advanceTimersByTimeAsync(1000)
-    expect(f.controller.state.getSnapshot().guidance).toBeNull()
+    expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(true)
     await vi.advanceTimersByTimeAsync(10000)
     expect(f.actions.systemStatus).toHaveBeenCalledTimes(3)
   } finally { await f.controller.dispose(); vi.useRealTimers() }
 })
 
-it.each(['close', 'dispose', 'timeout', 'query-error'] as const)('stops permission polling after %s', async (reason) => {
+it.each(['page-close', 'dispose', 'timeout', 'query-error'] as const)('stops native-guide observations on %s', async (reason) => {
   vi.useFakeTimers()
   const f = fixture()
-  const observed = { ...value, guidancePolling: { intervalMs: 100, timeoutMs: 250 } }
-  f.actions.systemStatus.mockResolvedValue({ ok: true, value: observed })
+  f.actions.systemStatus.mockResolvedValue({ ok: true, value: { ...value, guidancePolling: { intervalMs: 100, timeoutMs: 250 } } })
   try {
     f.face.request('screenRecording')
     await vi.advanceTimersByTimeAsync(0)
-    if (reason === 'close') f.face.closeGuidance()
+    if (reason === 'page-close') f.face.stopWatchingPermissions()
     else if (reason === 'dispose') await f.controller.dispose()
     else if (reason === 'query-error') f.actions.systemStatus.mockRejectedValueOnce(new Error('helper disconnected'))
     await vi.advanceTimersByTimeAsync(1000)
     expect(f.actions.systemStatus).toHaveBeenCalledTimes(reason === 'timeout' ? 3 : reason === 'query-error' ? 2 : 1)
-    if (reason === 'query-error') expect(f.controller.state.getSnapshot().system.error).toBe('helper disconnected')
   } finally { await f.controller.dispose(); vi.useRealTimers() }
-})
-
-it('discards a pending poll after the guide closes and joins it before disposal completes', async () => {
-  vi.useFakeTimers()
-  const f = fixture()
-  const pending = Promise.withResolvers<CuaSystemPermissionState>()
-  try {
-    f.face.request('screenRecording')
-    await vi.advanceTimersByTimeAsync(0)
-    f.actions.systemStatus.mockImplementationOnce(async () => ({ ok: true, value: await pending.promise }))
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(f.actions.systemStatus).toHaveBeenCalledTimes(2)
-    f.face.closeGuidance()
-    const before = f.controller.state.getSnapshot()
-    const closed = f.controller.dispose()
-    pending.resolve({ ...value, screenRecording: true })
-    await closed
-    expect(f.controller.state.getSnapshot()).toBe(before)
-    expect(vi.getTimerCount()).toBe(0)
-  } finally { pending.resolve(value); await f.controller.dispose(); vi.useRealTimers() }
 })
 
 it('refreshes after a user request without treating the request itself as a grant', async () => {
   const f = fixture()
   f.face.request('screenRecording')
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
-  expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording')
+  expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording', guideText)
   expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
   expect(f.controller.state.getSnapshot().toast?.kind).toBe('requested')
   f.face.dismissToast()
   expect(f.controller.state.getSnapshot().toast).toBeNull()
   await f.controller.dispose()
-})
-
-it('reports Finder dispatch independently of grants and ignores guide dismissal after disposal', async () => {
-  const f = fixture()
-  const reference = 'application-reference' as import('@deepseek-ai/dsh-util-file-drag').ApplicationDragReference
-  f.face.revealApplication(reference)
-  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().toast?.kind).toBe('revealed') })
-  expect(f.actions.revealApplication).toHaveBeenCalledWith(reference)
-  expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
-  await f.controller.dispose()
-  const before = f.controller.state.getSnapshot()
-  f.face.closeGuidance()
-  expect(f.controller.state.getSnapshot()).toBe(before)
 })
 
 it('retains the last observation while marking a failed refresh', async () => {

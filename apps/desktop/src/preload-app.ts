@@ -22,7 +22,6 @@ function createProductApi(): DshDesktopProductApi {
     },
     browser: createDesktopBrowserBridge(),
     fileDrag: {
-      applications: process.platform === 'darwin',
       prepare: (source, requestId) => ipcRenderer.invoke(DESKTOP_IPC.fileDragPrepare, source, requestId) as
         Promise<FileDragHandle | undefined>,
       cancel: (requestId) => { void ipcRenderer.invoke(DESKTOP_IPC.fileDragCancel, requestId).catch((_error: unknown) => {

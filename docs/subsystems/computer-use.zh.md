@@ -103,18 +103,12 @@ Browser controls for provider-owned native permission and application decisions.
 @Remote async applicationIcons(): Promise<Record<string, string>>
 
 /**
- * Request a system privilege and open its settings pane.
+ * Open System Settings and a native application-drag guide for the privilege selected by the user.
  * @param permission macOS privilege to request.
- * @returns Preflight state after requesting; a false value never implies consent.
+ * @param text Localized guide copy; application identity comes from the native helper.
+ * @returns Current access and guide state; opening the guide does not grant permission.
  */
-@Remote async requestPermission(permission: CuaSystemPermission): Promise<CuaSystemPermissionState>
-
-/**
- * Select the displayed permission application in Finder.
- * @param reference Application identity from the current permission observation.
- * @returns Completion after dispatch to Finder; rejects stale or unavailable applications.
- */
-@Remote async revealApplication(reference: ApplicationDragReference): Promise<void>
+@Remote async requestPermission(permission: CuaSystemPermission, text: CuaPermissionGuideText): Promise<CuaSystemPermissionState>
 
 /**
  * Open the macOS privacy pane selected by the user.
@@ -137,8 +131,6 @@ Browser controls for provider-owned native permission and application decisions.
  */
 @Remote async retryApproval(id: CuaApplicationId): Promise<void>
 ```
-
-Types: [ApplicationDragReference](web-server.zh.md)
 
 Source: [`packages/experimental/cua/src/access.ts`](../../packages/experimental/cua/src/access.ts)
 <!-- END GENERATED cordis-surface -->

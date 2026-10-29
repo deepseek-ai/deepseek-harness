@@ -9,7 +9,6 @@
   ],
   "references": [
     { "path": "../../vendor/cordis" },
-    { "path": "../../packages/util/file-drag" },
     { "path": "../../packages/core/agent" },
     { "path": "../../packages/jobs/jobs" },
     { "path": "../../packages/schedule/schedule" },

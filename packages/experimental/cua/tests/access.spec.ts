@@ -1,4 +1,5 @@
 /** Application decisions are checked at dispatch and revocation cancels owned work. */
+import { guideText } from './fixtures/permission-guide.ts'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -10,7 +11,6 @@ import type { CuaApplicationGrant } from '../src/access-types.ts'
 import type { CuaAppHandle } from '../src/types.ts'
 import { NativeClient } from '../src/native-client.ts'
 import { permissionFixture } from './permission-fixture.ts'
-import type { ApplicationDragReference } from '@deepseek-ai/dsh-util-file-drag'
 
 const native = vi.hoisted(() => ({ instances: [] as Array<{
   disposed: boolean
@@ -23,7 +23,7 @@ vi.mock('../src/native-client.ts', async original => ({
   NativeClient: class {
     disposed = false
     request = vi.fn(async (method: string) => method === 'openPermissionSettings' ? { opened: true }
-      : method === 'applicationIcons' ? {} : { accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+      : method === 'applicationIcons' ? {} : { accessibility: false, screenRecording: false, guideOpen: false, helper: { pid: 9 }, parent: { pid: 8 } })
     invalidate() { this.disposed = true }
     dispose = vi.fn(async () => { this.disposed = true })
     constructor() { native.instances.push(this) }
@@ -38,25 +38,6 @@ const executablePath = '/Applications/Fixture.app/Contents/MacOS/Fixture'
 const identity = ApplicationAuthorizationResult.parse({ id: 'a'.repeat(64), name: 'Test application', executablePath, persistable: true })
 const handle = 'fixture-app' as CuaAppHandle
 const signal = new AbortController().signal
-
-it('authorizes only the observed permission application and expires references when the running helper changes', async () => {
-  const f = await setup()
-  await f.ctx.cuaAccess.systemStatus()
-  const client = native.instances.at(-1)!
-  const state = { accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 1 },
-    launchApplication: { name: 'Helper.app', path: '/version-one/Helper.app', bundleId: 'test.helper' } }
-  client.request.mockResolvedValue(state)
-  const observed = await f.ctx.cuaAccess.systemStatus()
-  const reference = observed.launchApplication!.dragReference!
-  expect(await f.ctx.serial('desktop/application-drag', reference, signal)).toBe(state.launchApplication.path)
-  expect((await f.ctx.cuaAccess.systemStatus()).launchApplication?.dragReference).toBe(reference)
-  expect(await f.ctx.serial('desktop/application-drag', 'foreign' as ApplicationDragReference, signal)).toBeUndefined()
-  await f.ctx.cuaAccess.revealApplication(reference)
-  expect(client.request).toHaveBeenCalledWith('revealPermissionApplication', { path: state.launchApplication.path }, expect.any(AbortSignal))
-  client.request.mockResolvedValue({ ...state, helper: { pid: 10 } })
-  await expect(f.ctx.serial('desktop/application-drag', reference, signal)).rejects.toThrow('application changed')
-  await expect(f.ctx.cuaAccess.revealApplication(reference)).rejects.toThrow('application changed')
-})
 
 async function setup(choice = 'Allow for this session', options: { writable?: boolean; questions?: boolean; initial?: readonly CuaApplicationGrant[] } = {}) {
   native.instances.length = 0
@@ -181,9 +162,11 @@ it('checks native permissions without converting an OS request into a grant', as
   const before = (await f.ctx.cuaAccess.applications())
   expect(before).toEqual({ allowedApps: [], blockedApps: [], persistentAvailable: true })
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ accessibility: false, screenRecording: false })
-  expect(await f.ctx.cuaAccess.requestPermission('accessibility')).toMatchObject({ accessibility: false })
+  expect(await f.ctx.cuaAccess.requestPermission('accessibility', guideText)).toMatchObject({ accessibility: false })
   await f.ctx.cuaAccess.openSettings('screenRecording')
   const transport = native.instances[1]!
+  expect(transport.request).toHaveBeenCalledWith('requestPermission',
+    { permission: 'accessibility', ...guideText, pollIntervalMs: 1000 }, expect.any(AbortSignal))
   expect(transport.request).toHaveBeenCalledWith('openPermissionSettings', { permission: 'screenRecording' }, expect.any(AbortSignal))
   transport.request.mockRejectedValueOnce(new Error('transport ended'))
   await expect(f.ctx.cuaAccess.systemStatus()).rejects.toThrow('transport ended')
@@ -415,7 +398,7 @@ it('preserves captured launch metadata separately from the current helper parent
   const control = native.instances.at(-1)!
   const launchApplication = { name: 'Visual Studio Code', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
   control.request.mockResolvedValueOnce({ accessibility: false, screenRecording: false,
-    helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
+    guideOpen: false, helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ parent: { pid: 1 }, launchApplication })
 })
 

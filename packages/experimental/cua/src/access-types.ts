@@ -1,10 +1,17 @@
 /** Client-safe Computer Use permission observations and saved application decisions. */
 import type { CuaApplicationGrant } from './application-types.ts'
-import type { ApplicationDragReference } from '@deepseek-ai/dsh-util-file-drag/types'
 export type { CuaApplicationGrant, CuaApplicationId } from './application-types.ts'
 
 /** macOS privileges used by the native provider. */
 export type CuaSystemPermission = 'accessibility' | 'screenRecording'
+/** Localized native guide copy; the helper replaces the literal {application} with its own bundle name. */
+export interface CuaPermissionGuideText {
+  instruction: string
+  backLabel: string
+  finderLabel: string
+  unavailableMessage: string
+  settingsMessage: string
+}
 /** Observed process; neither the helper nor its parent is assumed to be the TCC owner. */
 export interface CuaPermissionProcess {
   pid: number
@@ -15,18 +22,14 @@ export interface CuaPermissionProcess {
 export interface CuaSystemPermissionState {
   accessibility: boolean
   screenRecording: boolean
+  /** Whether the native permission guide remains open. */
+  guideOpen: boolean
+  /** Browser observation interval and duration; native guidance lives until dismissed or authorized. */
+  guidancePolling: { intervalMs: number; timeoutMs: number }
   helper: CuaPermissionProcess
   parent: CuaPermissionProcess
   /** Application macOS reports as responsible for the helper, captured at startup; absent when it cannot be identified. */
-  launchApplication?: {
-    name: string
-    path: string
-    icon?: string | undefined
-    bundleId?: string | undefined
-    dragReference?: ApplicationDragReference | undefined
-  } | undefined
-  /** Bounds for permission-only checks while the user follows the authorization guide. */
-  guidancePolling: { intervalMs: number; timeoutMs: number }
+  launchApplication?: { name: string; path: string; icon?: string | undefined; bundleId?: string | undefined } | undefined
 }
 /** Saved grants and refused applications, independent of native permission checks and icons. */
 export interface CuaApplicationState {

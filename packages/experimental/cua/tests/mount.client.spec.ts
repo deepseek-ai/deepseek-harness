@@ -11,12 +11,10 @@ import { expect, it, vi } from 'vitest'
 import type { PermissionFace } from '../src/client/controller.ts'
 import { mountCuaPermissions, inject } from '../src/client/mount.ts'
 import type { ApplicationApprovalProps } from '../src/client/ApplicationApproval.tsx'
-import type { PermissionPanelProps } from '../src/client/PermissionPanel.tsx'
-import type { ApplicationDragReference } from '@deepseek-ai/dsh-util-file-drag'
 
 const contribution: TypertRemoteContribution = { package: '@deepseek-ai/dsh-cua', descriptors: [] }
 const value: CuaApplicationState & { system: CuaSystemPermissionState } = {
-  system: { guidancePolling: { intervalMs: 1000, timeoutMs: 120000 },
+  system: { guidancePolling: { intervalMs: 1000, timeoutMs: 120000 }, guideOpen: false,
     accessibility: false, screenRecording: false, helper: { pid: 2 }, parent: { pid: 1 } },
   allowedApps: [], blockedApps: [], persistentAvailable: true }
 
@@ -27,7 +25,7 @@ function actionsOf(value: Record<string, unknown>): asserts value is Record<stri
   assert(typeof value.hooks === 'object' && value.hooks !== null)
 }
 
-async function fixture(fail = false, nativeDragging = false) {
+async function fixture(fail = false) {
   const ctx = new Context(), unmount = vi.fn(async () => {})
   class Remote extends Service {
     constructor() { super(ctx, 'remote') }
@@ -38,10 +36,6 @@ async function fixture(fail = false, nativeDragging = false) {
     }
   }
   new Remote()
-  const prepareApplication = vi.fn(async () => ({ start: () => false, release: () => {} }))
-  const reportDragFailure = vi.fn()
-  ctx.provide('fileDrag', { application: nativeDragging ? { prepare: prepareApplication } : undefined,
-    actions: { prepare: vi.fn(), reportFailure: reportDragFailure }, read: vi.fn() })
   const changes = createSnapshotStore(false)
   ctx.provide('pluginChanges', { bundle: (name) => {
     expect(name).toBe('@deepseek-ai/dsh-cua-bundle')
@@ -67,8 +61,7 @@ async function fixture(fail = false, nativeDragging = false) {
   const retryApproval = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   ctx.provide('remote.cuaAccess', {
     ptcConfiguration: runtimeConfiguration, enablePersistentPtc: setPersistent,
-    applications: status, systemStatus, applicationIcons, requestPermission, openSettings,
-    revealApplication: vi.fn(async () => ({ ok: true as const, value: undefined })), revoke, retryApproval })
+    applications: status, systemStatus, applicationIcons, requestPermission, openSettings, revoke, retryApproval })
   ctx.provide('locale', new LocaleRuntime(ctx))
   await ctx.plugin(SlotRegistry)
   ctx.slots.register({ name: 'root', children: {
@@ -77,25 +70,10 @@ async function fixture(fail = false, nativeDragging = false) {
     'conversation.composer': { kind: 'chain', scope: 'session' },
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
-  return { ctx, changes, unmount, status, systemStatus, applicationIcons, prepareApplication, reportDragFailure,
+  return { ctx, changes, unmount, status, systemStatus, applicationIcons,
     requestPermission, openSettings, revoke, retryApproval, setDefault, setPersistent, runtimeConfiguration,
   }
 }
-
-it('supplies native application dragging only when the desktop carrier provides it', async () => {
-  const f = await fixture(false, true)
-  try {
-    await f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
-    const entry = f.ctx.slots.entries('plugins.bundle.config')[0]!
-    const presentation = entry.inject!() as Pick<PermissionPanelProps, 'applicationDrag'>
-    const reference = 'permission-application' as ApplicationDragReference
-    const signal = new AbortController().signal
-    await presentation.applicationDrag!.prepare(reference, signal)
-    presentation.applicationDrag!.reportFailure()
-    expect(f.prepareApplication).toHaveBeenCalledWith(reference, signal)
-    expect(f.reportDragFailure).toHaveBeenCalledOnce()
-  } finally { await f.ctx.fiber.dispose() }
-})
 
 it('withdraws the permission Remote and all controls with the optional plugin', async () => {
   const f = await fixture()

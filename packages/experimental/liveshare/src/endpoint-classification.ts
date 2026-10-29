@@ -180,7 +180,6 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'cuaAccess/openSettings': 'owner-only', // owner computer-use permissions
   'cuaAccess/ptcConfiguration': 'owner-only', // owner computer-use permissions
   'cuaAccess/requestPermission': 'owner-only', // owner computer-use permissions
-  'cuaAccess/revealApplication': 'owner-only', // owner computer-use permissions
   'cuaAccess/retryApproval': 'owner-only', // owner computer-use permissions
   'cuaAccess/revoke': 'owner-only', // owner computer-use permissions
   'cuaAccess/systemStatus': 'owner-only', // owner computer-use permissions

@@ -22,9 +22,9 @@ kind: "package-reference"
 
 helper 为授权提示和已授权应用列表提供 64 像素 PNG 图标。读取图标不会启动应用或检查窗口，图标不决定可复用授权。
 
-helper 通过 LaunchServices 以独立的 `DSH Computer Use.app` 后台运行，辅助功能和屏幕录制权限归属于这个应用。权限页使用启动时记录的责任应用包 URL、标识符、文件名和系统图标；系统归属信息不可用时，独立 helper 提供自身应用包。Finder 定位会核对该应用包及可执行文件仍存在，且标识符一致。即使后续构建更新了 `current.json`，已有连接仍使用当前运行的应用版本。
+helper 通过 LaunchServices 作为独立应用 `DSH Computer Use.app` 运行。辅助功能和屏幕录制权限属于此应用。授权引导使用启动时记录的责任应用 bundle URL、标识、文件名和系统图标；系统归属信息不可用时使用独立 helper 自身的 bundle。拖动和 Finder 选择会验证 bundle 标识及可执行文件。其他构建更新 `current.json` 后，已有连接仍指向正在运行的应用版本。
 
-原生申请后仍未授权时，权限请求也会打开所选隐私设置页。系统拒绝打开设置时报告 `SETTINGS_UNAVAILABLE`；Finder 目标缺失或被替换时报告 `APPLICATION_UNAVAILABLE`。系统设置决定是否接收拖入的应用，以及是否要求重新启动。最低支持 macOS 14；设置导航、拖入接收和权限刷新需要在各支持版本的已安装应用中验收。
+权限请求打开对应隐私设置页和原生悬浮引导框。引导框通过窗口边界跟随系统设置窗口底部，定位不申请辅助功能权限；无法获取边界时放在屏幕底部附近。最新请求替换共享引导，连接清理只关闭自身创建的引导。系统拒绝打开设置时报告 `SETTINGS_UNAVAILABLE`；应用目标缺失或被替换时报告 `APPLICATION_UNAVAILABLE`。系统设置决定是否接收拖入的应用，以及是否要求重新启动。最低支持 macOS 14；设置导航、拖动和权限刷新需要在各支持版本验收。
 
 -----
 
@@ -49,7 +49,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
 | `connectTimeoutMs` | `5000` | 连接或启动共享 helper 的截止时间。 |
-| `permissionPollIntervalMs` / `permissionPollTimeoutMs` | `1000` / `120000` | 授权引导打开期间系统权限检查的间隔与总时长。 |
+| `permissionPollIntervalMs` / `permissionPollTimeoutMs` | `1000` / `120000` | 原生引导与页面观察间隔，以及页面轮询的最长持续时间。 |
 | `screenshotTimeoutMs` | `5000` | 截图总期限，包含排队时间，且不超过 `timeoutMs`。 |
 | `axTimeoutMs` | `3000` | 每次 Accessibility 系统调用的截止时间，与完整操作截止独立配置。 |
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 请求与响应字节限制。 |

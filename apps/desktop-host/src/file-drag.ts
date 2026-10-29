@@ -1,4 +1,4 @@
-/** Resolve desktop-only file and application references through their Host owners. */
+/** Resolve desktop-only file references through the active Host filesystem and Session. */
 import { createHash } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -7,23 +7,22 @@ import type {} from '@deepseek-ai/dsh-session-persistence'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { parseFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
-import { resolveApplicationDrag, type ApplicationDragReference, type DesktopDragResource } from '@deepseek-ai/dsh-util-file-drag'
+
+/** Private Host-to-main answer; never exposed to renderer JavaScript. */
+export interface LocalDragResource {
+  readonly path: string
+  readonly sha256: string
+  readonly size: number
+}
 
 /**
- * Authorize a local file through filesystem reads, or an application through its issuing provider.
+ * Authorize an unmodified local file through the composed filesystem's actual read operations.
  * @param ctx - booted Desktop Host.
- * @param address - Session-scoped file address or application reference.
+ * @param address - Session-scoped resource reference.
  * @param cancellation - caller cancellation, combined with the read deadline.
- * @returns authorized application or verified local file, or null for nonlocal file resources.
+ * @returns verified Host-local path and content identity, or null for nonlocal resources.
  */
-export async function localDragResource(ctx: Context, address: string, cancellation?: AbortSignal): Promise<DesktopDragResource | null> {
-  const signal = cancellation === undefined ? AbortSignal.timeout(10_000) : AbortSignal.any([cancellation, AbortSignal.timeout(10_000)])
-  signal.throwIfAborted()
-  if (address.startsWith('application:')) {
-    const reference = address.slice('application:'.length) as ApplicationDragReference
-    const path = await resolveApplicationDrag(ctx, reference, signal)
-    return { kind: 'application', path }
-  }
+export async function localDragResource(ctx: Context, address: string, cancellation?: AbortSignal): Promise<LocalDragResource | null> {
   const resource = parseFileAddress(address)
   if (resource?.scope !== 'session') throw new Error('File drag requires a Session resource')
   const sessions = ctx.get('sessions')
@@ -34,6 +33,7 @@ export async function localDragResource(ctx: Context, address: string, cancellat
   const sessionId = resource.sessionId as SessionId
   const header = sessions.get(sessionId)?.header ?? (await persistence?.stat(sessionId))?.header
   if (header === undefined) throw new Error('File drag Session unavailable')
+  const signal = cancellation === undefined ? AbortSignal.timeout(10_000) : AbortSignal.any([cancellation, AbortSignal.timeout(10_000)])
   signal.throwIfAborted()
   const cwd = header.cwd ?? policy.workspaceRoot
   const entry = await fs.lstat(resource.path, { cwd }, signal)

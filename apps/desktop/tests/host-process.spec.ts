@@ -39,11 +39,6 @@ process.on('message', message => {
   }
   if (message.type === 'file-drag-resource') {
     if (message.address === 'pending') return
-    if (message.address === 'application') {
-      process.send({ type: 'file-drag-resource', requestId: message.requestId,
-        resource: { kind: 'application', path: '/authorized/Helper.app' } })
-      return
-    }
     if (message.address === 'invalid') {
       process.send({ type: 'file-drag-resource', requestId: message.requestId, resource: { path: '/invalid', sha256: 'bad', size: -1 } })
       return
@@ -180,7 +175,6 @@ ${HTTP_HOST}`)
     await host.start()
     expect(await Promise.all([host.resolveDragResource('local'), host.resolveDragResource('remote')]))
       .toEqual([{ path: '/authorized/report.pdf', sha256: 'a'.repeat(64), size: 42 }, null])
-    expect(await host.resolveDragResource('application')).toEqual({ kind: 'application', path: '/authorized/Helper.app' })
     await expect(host.resolveDragResource('denied')).rejects.toThrow('File read denied')
     await host.stop(true)
     await expect(host.resolveDragResource('local')).rejects.toThrow('file drag: Host is unavailable')

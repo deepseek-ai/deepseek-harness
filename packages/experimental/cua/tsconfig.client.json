@@ -60,12 +60,6 @@
     },
     {
       "path": "../../client/ui-conversation/tsconfig.client.json"
-    },
-    {
-      "path": "../../util/file-drag"
-    },
-    {
-      "path": "../../client/ui-file-drag"
     }
   ]
 }

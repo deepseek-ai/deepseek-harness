@@ -93,7 +93,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 `DSH Computer Use.app` 需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
 
-仅供 Host 使用的权限操作为 `permissionStatus {}`、`requestPermission {permission}` 和 `openPermissionSettings {permission}`，其中 permission 为 `accessibility` 或 `screenRecording`。这些操作不出现在模型工具及 `getCapabilities.methods` 中。权限状态包含观察到的 helper 和父进程路径，这些路径不能确定 TCC 归属的应用。系统授权提示负责指出应用并询问用户决定。helper 使用可选的 libSystem 内部接口 `responsibility_get_pid_responsible_for_pid` 查询责任进程，在报告就绪前记录对应应用的名称和图标。接口通过动态加载解析，函数签名与 [Chromium](https://chromium.googlesource.com/chromium/src/+/refs/tags/134.0.6998.28/base/process/process_info_mac.mm) 使用的一致。符号、进程或应用信息不可用时，归属保持未知，不根据最近的 GUI 祖先推断。权限检查独立于这些信息。
+仅供 Host 使用的权限操作为 `permissionStatus {}`、`requestPermission` 和 `openPermissionSettings {permission}`，其中 permission 为 `accessibility` 或 `screenRecording`。请求携带本地化的 `instruction`、`backLabel`、`finderLabel`、`unavailableMessage`、`settingsMessage`，以及 100–2147483647 的整数 `pollIntervalMs`。原生引导将 `{application}` 替换为自身应用名。状态返回 `guideOpen`、权限观测、进程诊断和 `launchApplication` 信息。这些操作不出现在模型工具及 `getCapabilities.methods` 中。helper 动态解析 `responsibility_get_pid_responsible_for_pid`，函数签名与 [Chromium](https://chromium.googlesource.com/chromium/src/+/refs/tags/134.0.6998.28/base/process/process_info_mac.mm) 一致，在报告就绪前记录责任 bundle，无法获取时使用自身 bundle。父进程路径不决定授权归属。
 
 观察通过 `AXUIElementCopyMultipleAttributeValues` 读取每个非布局节点的描述属性和子节点。逐属性错误保留单独读取的规则；不支持批量 API 时使用单独读取。值只在本次观察期间保留，输入读取即时属性。应用状态可能在节点之间变化，批量读取不使整棵树具备原子性。
 

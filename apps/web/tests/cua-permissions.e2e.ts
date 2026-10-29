@@ -128,13 +128,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await accessibility.getByRole('button', { name: 'Request permission', exact: true }).click()
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   expect(await accessibility.getByRole('button', { name: 'Request permission', exact: true }).count()).toBe(1)
-  await accessibility.getByRole('button', { name: 'Show in Finder', exact: true }).waitFor()
-  await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/guidance.expected.md', import.meta.url)),
-    await captureStableAria(page, '[data-cua-settings]', scaffold.workspaceCwd), webSnapshotMode())
-  await accessibility.getByRole('button', { name: 'Show in Finder', exact: true }).click()
-  await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   await writeFile(state, JSON.stringify({ accessibility: true, screenRecording: false, launchApplication }))
-  // No focus event is delivered: the guide must observe a grant while System Settings remains active.
   await accessibility.getByText('Allowed', { exact: true }).waitFor()
   const screen = panel.getByRole('group', { name: 'Screen Recording', exact: true })
   expect(await accessibility.getByRole('button').count()).toBe(1)
@@ -153,12 +147,15 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect((await scaffold.ctx.cuaAccess.applications()).allowedApps).toEqual([])
   const events = (await readFile(audit, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { event: string; method: string; params: object })
     .filter(record => record.event === 'call').map(({ method, params }) => ({ method, params }))
-  expect(events).toContainEqual({ method: 'requestPermission', params: { permission: 'accessibility' } })
+  expect(events).toContainEqual({ method: 'requestPermission', params: { permission: 'accessibility',
+    instruction: 'Drag {application} to the list above to allow Accessibility',
+    backLabel: 'Back', finderLabel: 'Show in Finder',
+    unavailableMessage: 'Application unavailable. Enable Computer Use again and retry.',
+    settingsMessage: 'Open System Settings > Privacy & Security > Accessibility manually.', pollIntervalMs: 1000 } })
   expect(events.filter(event => event.method === 'openPermissionSettings')).toEqual([
     { method: 'openPermissionSettings', params: { permission: 'accessibility' } },
   ])
-  expect(events).toContainEqual({ method: 'revealPermissionApplication', params: { path: launchApplication.path } })
-  expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'revealPermissionApplication', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
+  expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
   const preview = plugins.locator('[data-detail-document] img')
   await preview.waitFor()
   await preview.evaluate(async (image: HTMLImageElement) => { await image.decode() })

@@ -990,16 +990,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Optional native PNG icons keyed by executable path; applications without paths are skipped.',
       },
       {
-        signature: '@Remote async requestPermission(permission: CuaSystemPermission): Promise<CuaSystemPermissionState>',
-        description: 'Request a system privilege and open its settings pane.',
-        parameters: [{ name: 'permission', description: 'macOS privilege to request.' }],
-        returns: 'Preflight state after requesting; a false value never implies consent.',
-      },
-      {
-        signature: '@Remote async revealApplication(reference: ApplicationDragReference): Promise<void>',
-        description: 'Select the displayed permission application in Finder.',
-        parameters: [{ name: 'reference', description: 'Application identity from the current permission observation.' }],
-        returns: 'Completion after dispatch to Finder; rejects stale or unavailable applications.',
+        signature: '@Remote async requestPermission(permission: CuaSystemPermission, text: CuaPermissionGuideText): Promise<CuaSystemPermissionState>',
+        description: 'Open System Settings and a native application-drag guide for the privilege selected by the user.',
+        parameters: [{ name: 'permission', description: 'macOS privilege to request.' }, { name: 'text', description: 'Localized guide copy; application identity comes from the native helper.' }],
+        returns: 'Current access and guide state; opening the guide does not grant permission.',
       },
       {
         signature: '@Remote async openSettings(permission: CuaSystemPermission): Promise<void>',
@@ -4925,14 +4919,6 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
-    name: 'desktop/application-drag',
-    mode: 'serial',
-    signature: '\'desktop/application-drag\'(reference: ApplicationDragReference, signal: AbortSignal): Promise<string | undefined>',
-    summary: 'Resolve a provider-issued application reference for the local desktop carrier.',
-    description: 'Resolve a provider-issued application reference for the local desktop carrier.',
-    parameters: [{ name: 'reference', description: 'Opaque application identity issued by the owning provider.' }, { name: 'signal', description: 'Preparation cancellation.' }],
-  },
-  {
     name: 'domain/changed',
     mode: 'emit',
     signature: '\'domain/changed\'(change: DomainChanged): void',
@@ -5525,10 +5511,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ApiSessionAgentResult = {\n    readonly agent: Agent;\n} | {\n    readonly error: ApiSessionAgentError;\n};',
   },
   {
-    name: 'ApplicationDragReference',
-    declaration: 'export type ApplicationDragReference = Branded<\'ApplicationDragReference\'>;',
-  },
-  {
     name: 'ApprovalOutcome',
     declaration: 'export type ApprovalOutcome = \'allowed-once\' | \'rejected\' | \'cancelled\' | \'unavailable\';',
   },
@@ -6117,6 +6099,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CuaApplicationState {\n    allowedApps: readonly CuaApplicationGrant[];\n    blockedApps: readonly CuaApplicationGrant[];\n    persistentAvailable: boolean;\n}',
   },
   {
+    name: 'CuaPermissionGuideText',
+    declaration: 'export interface CuaPermissionGuideText {\n    instruction: string;\n    backLabel: string;\n    finderLabel: string;\n    unavailableMessage: string;\n    settingsMessage: string;\n}',
+  },
+  {
     name: 'CuaPermissionProcess',
     declaration: 'export interface CuaPermissionProcess {\n    pid: number;\n    path?: string | undefined;\n    name?: string | undefined;\n}',
   },
@@ -6126,7 +6112,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaSystemPermissionState',
-    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n        bundleId?: string | undefined;\n        dragReference?: ApplicationDragReference | undefined;\n    } | undefined;\n    guidancePolling: {\n        intervalMs: number;\n        timeoutMs: number;\n    };\n}',
+    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    guideOpen: boolean;\n    guidancePolling: {\n        intervalMs: number;\n        timeoutMs: number;\n    };\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n        bundleId?: string | undefined;\n    } | undefined;\n}',
   },
   {
     name: 'DailyInput',

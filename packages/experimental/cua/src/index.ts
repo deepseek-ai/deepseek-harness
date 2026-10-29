@@ -71,9 +71,9 @@ export interface CuaConfig {
   textEventIntervalMs: number
   /** Native connection cleanup, socket-write and launcher termination budget in milliseconds. */
   graceMs: number
-  /** Interval between system-permission checks while the authorization guide is open. */
+  /** Interval between native guide updates and browser permission observations. */
   permissionPollIntervalMs: number
-  /** Maximum duration of automatic checks after opening the authorization guide. */
+  /** Maximum duration of browser permission checks; the native guide observes until it closes. */
   permissionPollTimeoutMs: number
   /** Maximum nodes admitted by a native accessibility snapshot. */
   maxElements: number

@@ -74,9 +74,6 @@
     },
     {
       "path": "../../boot/config-editor"
-    },
-    {
-      "path": "../../util/file-drag"
     }
   ],
   "exclude": [

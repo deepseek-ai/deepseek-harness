@@ -1,7 +1,6 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
-import { useEffect, useMemo, useState } from 'react'
-import { Button, DraggableImage, IconSettingsOutlineRegular, Modal, Toast, type FileDragActions } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { FileDragService } from '@deepseek-ai/dsh-client-ui-file-drag/client'
+import { useEffect, useState } from 'react'
+import { Button, IconSettingsOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -25,9 +24,7 @@ type DefaultPresetProps = PermissionProps & InjectFace<{
 type PersistentPtcProps = PermissionProps & { setPersistentPtc: () => Promise<boolean> }
 
 /** The detail page owns explicit preset and execution-mode settings. */
-export type PermissionPanelProps = PermissionProps & DefaultPresetProps & PersistentPtcProps & {
-  applicationDrag?: (NonNullable<FileDragService['application']> & Pick<FileDragActions, 'reportFailure'>) | undefined
-}
+export type PermissionPanelProps = PermissionProps & DefaultPresetProps & PersistentPtcProps
 
 function DefaultPresetSetting(props: DefaultPresetProps) {
   const preset = props.useCuaDefaultPreset(value => value)
@@ -98,25 +95,18 @@ function Applications({ title, apps, icons, onAction, label, disabled }: {
   </section>
 }
 
-function PermissionDescription({ application, permission, loading, t, applicationDrag }: Pick<PermissionPanelProps, 't' | 'applicationDrag'> & {
+function PermissionDescription({ application, permission, loading, t }: Pick<PermissionProps, 't'> & {
   application: CuaSystemPermissionState['launchApplication']
   permission: 'accessibility' | 'screenRecording'
   loading: boolean
 }) {
-  const reference = application?.dragReference
-  const drag = useMemo<FileDragActions | undefined>(() => reference === undefined || applicationDrag === undefined ? undefined : {
-    prepare: (_source, signal) => applicationDrag.prepare(reference, signal),
-    reportFailure: () => { applicationDrag.reportFailure() },
-  }, [applicationDrag, reference])
   if (!loading && application === undefined) return <p>{t(permission === 'accessibility' ? 'accessibilityUse' : 'screenRecordingUse')}</p>
   const [before, after] = t(permission === 'accessibility' ? 'accessibilityPermission' : 'screenRecordingPermission').split('{application}')
   return <p>
     {before}
-    <span className={css.applicationBadge} title={application?.path}>
+    <span className={css.applicationBadge}>
       {application === undefined ? <span className={css.appPlaceholder} aria-hidden /> : <>
-        {application.icon !== undefined && (drag === undefined
-          ? <img src={application.icon} alt="" width={20} height={20} draggable={false} />
-          : <DraggableImage fileDrag={drag} src={application.icon} name={application.name} alt="" width={20} height={20} />)}
+        {application.icon !== undefined && <img src={application.icon} alt="" width={20} height={20} draggable={false} />}
         <span>{application.name}</span>
       </>}
     </span>
@@ -141,7 +131,7 @@ function PermissionAction({ permission, granted, loading, busy, request, openSet
 
 /** @param props Host observation and explicit user actions. @returns Permission controls without automatic system prompts. */
 export function PermissionPanel(props: PermissionPanelProps) {
-  const { t, refresh, closeGuidance } = props
+  const { t, refresh, stopWatchingPermissions } = props
   const state = props.useCuaPermissions(value => value)
   const observed = state.system.value
   const apps = state.applications.value
@@ -150,12 +140,11 @@ export function PermissionPanel(props: PermissionPanelProps) {
   const appsBusy = transitioning || state.applications.busy
   const loading = observed === null && state.system.error === null
   const application = state.system.error !== null ? undefined : observed?.launchApplication
-  const applicationReference = application?.dragReference
   useEffect(() => {
     refresh()
     window.addEventListener('focus', refresh)
-    return () => { window.removeEventListener('focus', refresh); closeGuidance() }
-  }, [refresh, closeGuidance])
+    return () => { window.removeEventListener('focus', refresh); stopWatchingPermissions() }
+  }, [refresh, stopWatchingPermissions])
   return <div className={css.panels} data-cua-settings aria-busy={transitioning || state.busy || loading}>
     <section className={css.panel} aria-label={t('title')}>
       <h3>{t('title')}</h3>
@@ -170,22 +159,11 @@ export function PermissionPanel(props: PermissionPanelProps) {
           role="group" aria-label={t(permission)}>
           <div>
             <strong>{t(permission)}</strong>
-            <PermissionDescription application={application} permission={permission} loading={loading}
-              t={t} applicationDrag={props.applicationDrag} />
+            <PermissionDescription application={application} permission={permission} loading={loading} t={t} />
           </div>
           <PermissionAction permission={permission}
             granted={observed === null || state.system.error !== null ? null : observed[permission]}
             loading={loading} busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
-          {state.guidance === permission && <div className={css.permissionGuide}>
-            <p>{t(permission === 'accessibility' ? 'accessibilitySettingsPath' : 'screenRecordingSettingsPath')}</p>
-            <p>{t(props.applicationDrag !== undefined && application?.icon !== undefined && application.dragReference !== undefined ? 'dragApplicationHint' : 'addApplicationHint')}</p>
-            <p>{t('refreshHint')}</p>
-            <div className={css.guideActions}>
-              {applicationReference !== undefined && <Button size="sm" variant="outline" disabled={busy}
-                onClick={() => { props.revealApplication(applicationReference) }}>{t('showInFinder')}</Button>}
-              <Button size="sm" variant="ghost" onClick={closeGuidance}>{t('closeGuide')}</Button>
-            </div>
-          </div>}
         </div>)}
       </div>
       <p>{t('permissionHint')}</p>

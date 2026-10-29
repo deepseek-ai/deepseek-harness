@@ -2,7 +2,7 @@
 import { File as NodeFile, Blob as NodeBlob } from 'node:buffer'
 import { webcrypto } from 'node:crypto'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { FILE_DRAG_TOKEN_TYPE, type ApplicationDragReference, type DesktopFileDrag, type FileDragHandle } from '@deepseek-ai/dsh-util-file-drag'
+import { FILE_DRAG_TOKEN_TYPE, type DesktopFileDrag, type FileDragHandle } from '@deepseek-ai/dsh-util-file-drag'
 import { FileTransfers } from '../src/client/transfers.ts'
 
 const revokeUrl = vi.fn<(url: string) => void>()
@@ -24,41 +24,6 @@ function transfer(): DataTransfer {
   return Object.assign({} as DataTransfer, { items: { clear: vi.fn() }, effectAllowed: 'none',
     setData: (key: string, value: string) => { data.set(key, value) }, getData: (key: string) => data.get(key) ?? '' })
 }
-
-it('prepares an application reference without reading image bytes and releases a cancelled preparation', async () => {
-  const desktop = { ...native(), applications: true }
-  const files = new FileTransfers(desktop, vi.fn())
-  const reference = 'application-reference' as ApplicationDragReference
-  try {
-    const prepared = await files.prepareApplication(reference, signal())
-    expect(desktop.prepare).toHaveBeenCalledWith({ kind: 'application', reference }, expect.any(String))
-    prepared.release()
-    expect(desktop.release).toHaveBeenCalledWith('handle')
-    const pending = Promise.withResolvers<FileDragHandle>()
-    vi.mocked(desktop.prepare).mockReturnValueOnce(pending.promise)
-    const abort = new AbortController()
-    const preparing = files.prepareApplication(reference, abort.signal)
-    const rejected = expect(preparing).rejects.toThrow()
-    abort.abort()
-    pending.resolve('late-application' as FileDragHandle)
-    await rejected
-    expect(desktop.cancel).toHaveBeenCalledOnce()
-    expect(desktop.release).toHaveBeenCalledWith('late-application')
-  } finally { files.dispose() }
-})
-
-it('keeps application dragging unavailable without a macOS carrier and never copies a refused application', async () => {
-  const reference = 'application-reference' as ApplicationDragReference
-  const web = new FileTransfers(undefined, vi.fn())
-  const desktop = { ...native(), applications: true }
-  const files = new FileTransfers(desktop, vi.fn())
-  try {
-    await expect(web.prepareApplication(reference, signal())).rejects.toThrow('macOS Desktop')
-    vi.mocked(desktop.prepare).mockResolvedValueOnce(undefined)
-    await expect(files.prepareApplication(reference, signal())).rejects.toThrow('preparation unavailable')
-    expect(desktop.prepare).toHaveBeenCalledOnce()
-  } finally { web.dispose(); files.dispose() }
-})
 
 it('borrows an authorized resource before fetching URL bytes', async () => {
   const desktop = native()
@@ -169,7 +134,7 @@ it('copies already loaded PDF bytes when optional resource authorization rejects
   const prepared = await files.prepare({ ...blobSource(), resourceAddress: 'dsh-resource://file/session/s/report.pdf' }, signal())
   const request = vi.mocked(desktop.prepare).mock.calls[1]![0]
   expect(request.kind).toBe('bytes')
-  expect(request.kind === 'bytes' ? request.name : undefined).toBe('report.pdf')
+  expect(request.name).toBe('report.pdf')
   if (request.kind === 'bytes') expect(new TextDecoder().decode(request.bytes)).toBe('%PDF-original')
   prepared.release()
   files.dispose()
