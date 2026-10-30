@@ -14,7 +14,7 @@ import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
-import { DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_MAX_REQUEST_IMAGES, resolveProfiles } from '../src/config.ts'
+import { DEFAULT_IMAGE_OFFLOAD_COUNT_QUANTUM, DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_MAX_REQUEST_IMAGES, resolveProfiles } from '../src/config.ts'
 import { memoryAuth } from './auth-double.ts'
 import { assemble } from './assemble.ts'
 import { anthropicTextEvents, closeMockServers, mockServer, textEvents } from './mock-server.ts'
@@ -42,6 +42,45 @@ class MappedFileSystem extends Service {
 
   processPathFromHostPath(hostPath: string): string | undefined {
     return hostPath === HOST_IMAGE_PATH ? MODEL_IMAGE_PATH : undefined
+  }
+}
+
+/** Attachment provider that serves every request image as one 1-byte PNG. */
+class RequestImageStore extends AttachmentStore {
+  readonly imageLimits: ImageAttachmentLimits = {
+    maxImageBytes: 1,
+    maxImagesPerMessage: 1,
+    maxMessageImageBytes: 1,
+    maxImagePixels: 1,
+    maxImageDimension: 1,
+    mediaTypes: ['image/png'],
+  }
+
+  validateImage(_input: SaveImageAttachment): Promise<void> {
+    return Promise.reject(new Error('not used'))
+  }
+
+  saveImage(_input: SaveImageAttachment): Promise<ImageAttachmentRef> {
+    return Promise.reject(new Error('not used'))
+  }
+
+  readImage(ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
+    return Promise.resolve({ ref, data: Uint8Array.of(1) })
+  }
+
+  override readImageRequest(value: ImageAttachmentRef): Promise<RequestImageAttachment> {
+    return Promise.resolve({
+      variantId: ImageVariantId(`sha256:${'b'.repeat(64)}`),
+      attachment: value,
+      data: Uint8Array.of(1),
+      mediaType: value.mediaType,
+      bytes: 1,
+      width: value.width,
+      height: value.height,
+      depth: 'uchar',
+      space: 'srgb',
+      hasAlpha: true,
+    })
   }
 }
 
@@ -262,7 +301,7 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.paths).toEqual(['/v1/responses'])
   })
 
-  it('resolves attachment and filesystem services mounted after the adapter when dispatching an image and enforces the default image-count bound', async () => {
+  it('resolves attachment and filesystem services mounted after the adapter when dispatching an image', async () => {
     const server = await mockServer([{ status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) }])
     const attachmentId = AttachmentId(`sha256:${'a'.repeat(64)}`)
     const ref: ImageAttachmentRef = {
@@ -353,17 +392,31 @@ describe('PiAiAdapter provider routing', () => {
     }, expect.any(AbortSignal))
     expect(JSON.stringify(server.requests[0])).toContain(MODEL_IMAGE_PATH)
     expect(server.paths).toEqual(['/v1/responses'])
+  })
 
-    const overCount = await assemble(ctx, {
+  it.each([
+    { name: 'the default count bound rejects', profile: {}, failure: { code: 'IMAGE_OFFLOAD_REQUIRED', offloadImages: DEFAULT_IMAGE_OFFLOAD_COUNT_QUANTUM }, requests: 0 },
+    { name: 'a raised count bound dispatches', profile: { maxRequestImages: 60 }, failure: { code: 'AUTH' }, requests: 1 },
+  ])('$name a request carrying 51 retained images', async ({ profile, failure, requests }) => {
+    const server = await mockServer([{ status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: { openai: { apiKeyEnv: 'PI_TEST_KEY', baseURL: `${server.url}/v1`, ...profile } },
+    })
+    await ctx.plugin(RequestImageStore)
+
+    const result = await assemble(ctx, {
       provider: 'openai',
       model: 'gpt-4.1',
       messages: Array.from({ length: DEFAULT_MAX_REQUEST_IMAGES + 1 }, () => createUserMessage({
-        content: [{ type: 'image', attachment: ref }],
+        content: [{ type: 'image', attachment: IMAGE_REF }],
         source: { kind: 'test' },
       })),
     })
-    expect(overCount.finish).toMatchObject({ kind: 'error', failure: { code: 'IMAGE_OFFLOAD_REQUIRED', offloadImages: 1 } })
-    expect(server.requests).toHaveLength(1)
+
+    expect(result.finish).toMatchObject({ kind: 'error', failure })
+    expect(server.requests).toHaveLength(requests)
   })
 
   it('forces one wire request for an SDK-retryable provider failure', async () => {
@@ -931,6 +984,11 @@ describe('provider profile lifecycle', () => {
     expect(() => resolveProfiles({ openai: { maxRequestImages: 1.5 } })).toThrow(/maxRequestImages must/)
     expect(resolveProfiles({ openai: {} }).get('openai')?.maxRequestImages).toBe(DEFAULT_MAX_REQUEST_IMAGES)
     expect(resolveProfiles({ openai: { maxRequestImages: 100 } }).get('openai')?.maxRequestImages).toBe(100)
+    expect(resolveProfiles({ openai: {} }).get('openai')?.imageOffloadCountQuantum).toBe(DEFAULT_IMAGE_OFFLOAD_COUNT_QUANTUM)
+    expect(resolveProfiles({ openai: { maxRequestImages: 4 } }).get('openai')?.imageOffloadCountQuantum).toBe(4)
+    expect(() => resolveProfiles({ openai: { maxRequestImages: 4, imageOffloadCountQuantum: 5 } }))
+      .toThrow(/imageOffloadCountQuantum must be .* no greater than maxRequestImages/)
+    expect(() => resolveProfiles({ openai: { imageOffloadCountQuantum: 0 } })).toThrow(/imageOffloadCountQuantum must/)
   })
 
   it.each([

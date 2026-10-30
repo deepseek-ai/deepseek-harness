@@ -368,6 +368,8 @@ describe('pi-ai request context conversion', () => {
 
     await expect(toPiContext(request(images(5)), imageContext(attachments, { maxRequestImages: 3 })))
       .rejects.toMatchObject({ code: 'IMAGE_OFFLOAD_REQUIRED', failure: { offloadImages: 2 } })
+    await expect(toPiContext(request(images(5)), imageContext(attachments, { maxRequestImages: 4, imageOffloadCountQuantum: 3 })))
+      .rejects.toMatchObject({ code: 'IMAGE_OFFLOAD_REQUIRED', failure: { offloadImages: 3 } })
     const fitted = await toPiContext(request(images(5, 2)), imageContext(attachments, { maxRequestImages: 3 }))
     expect(JSON.stringify(fitted.messages).match(/"type":"image"/g)).toHaveLength(3)
   })

@@ -278,6 +278,8 @@ export interface PiImageRequestContext {
   maxRequestImageBytes?: number
   /** Request-level bound on retained image occurrences; omission leaves the count unchecked. */
   maxRequestImages?: number
+  /** Oldest occurrences offloaded per count overflow; omission offloads the minimum. */
+  imageOffloadCountQuantum?: number
   /** Route pixel and raw encoded-byte budgets. */
   requestImagePolicy?: PiImageRequestBudget
 }
@@ -321,8 +323,9 @@ export function toPiContext(
  * Tool result names are recovered from preceding assistant tool calls. Image
  * occurrences the surface marks offloaded become text placeholders; when the
  * retained occurrences still exceed `maxRequestImages` or their exact base64
- * payload exceeds `maxRequestImageBytes`, the call fails with `IMAGE_OFFLOAD_REQUIRED` naming
- * how many more oldest occurrences must be offloaded.
+ * payload exceeds `maxRequestImageBytes`, the call fails with
+ * `IMAGE_OFFLOAD_REQUIRED` naming how many more oldest occurrences must be
+ * offloaded, rounded up to `imageOffloadCountQuantum` for a count overflow.
  * @param options - projected request; one-shot system text precedes the leading history prompt.
  * @param images - attachment provider, current path resolver, and request limits.
  * @param onReplayDegrade - forwarded to {@link toPiAssistant} for each assistant message.
@@ -352,7 +355,7 @@ async function toPiContextWithImages(
   supportsMidConvoSystemMessages: boolean,
   onReplayDegrade?: (reason: string) => void,
 ): Promise<PiContext> {
-  const { attachments, resolveImageAccess, maxRequestImageBytes, maxRequestImages } = images
+  const { attachments, resolveImageAccess, maxRequestImageBytes, maxRequestImages, imageOffloadCountQuantum } = images
   const requestImagePolicy = images.requestImagePolicy ?? {
     maxPixels: DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET,
     maxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
@@ -366,12 +369,13 @@ async function toPiContextWithImages(
       representation: 'base64',
       ...maxRequestImageBytes === undefined ? {} : { maxBytes: maxRequestImageBytes },
       ...maxRequestImages === undefined ? {} : { maxImages: maxRequestImages },
+      ...imageOffloadCountQuantum === undefined ? {} : { countQuantum: imageOffloadCountQuantum },
     },
     block => (requestImages.get(block.attachment.attachmentId) as RequestImageAttachment).bytes,
   )
   if (offloadImages > 0) {
     throw new LlmError(
-      `pi-ai request images exceed the route bound (${maxRequestImages ?? 'unbounded'} images, ${maxRequestImageBytes ?? 'unbounded'} base64 bytes); ${offloadImages} more oldest occurrence(s) must be offloaded.`,
+      `pi-ai request images exceed the route image budget; ${offloadImages} more oldest occurrence(s) must be offloaded.`,
       IMAGE_OFFLOAD_REQUIRED_CODE,
       { offloadImages },
     )
