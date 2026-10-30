@@ -24,7 +24,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import {
-  ImChatKey, splitKey, type ImApi, type ImConfig, type ImHistory, type ImMessage, type ImSendResult,
+  ImChatKey, splitKey, type ImApi, type ImConfig, type ImHistory, type ImMessage, type ImOutputs, type ImSendResult,
   type ImSessionRecord, type ImSessions,
 } from './api.ts'
 import { ImError } from './error.ts'
@@ -45,6 +45,8 @@ export interface ImToolHost extends Pick<ImApi, 'send' | 'readMessage'> {
   /** The two session lookups of the caller guard and the grant chain. */
   readonly sessions: Pick<ImSessions, 'of' | 'get'>
   readonly history: ImHistory
+  /** Output renderers a session may name: whether its turn text reaches the chat. */
+  readonly outputs: Pick<ImOutputs, 'get'>
   /** Image reads of one media label. */
   readonly media: Pick<ImMediaStore, 'read'>
 }
@@ -384,14 +386,30 @@ function guidance(im: ImToolHost, record: ImSessionRecord, config: ImConfig): st
   if (config.tools.readOnly) {
     parts.push('Read with im_read, im_history and im_read_image; this preset publishes nothing.')
   } else {
-    parts.push('Answer in your own reply text unless you mean to publish: im_send publishes one markdown message, '
-      + 'im_reply quotes a message and answers it, im_send_file publishes a local file.',
-    'confirmed means the platform published the message; failed means nothing was published and the same content may '
-      + 'be sent again; uncertain means the chat must be inspected before a new intentional send, because the same '
-      + 'tool call is never resent; partial means only some parts were published. The report line names what the '
-      + 'platform could not render natively.')
+    // A session whose `output` names a registered renderer has its turn text rendered into the chat; every other
+    // session — the default, whose output is `none` — publishes only through its tools.
+    parts.push(rendersTurnText(im, record)
+      ? 'Answer in your own reply text unless you mean to publish: im_send publishes one markdown message, '
+        + 'im_reply quotes a message and answers it, im_send_file publishes a local file.'
+      : 'Only im_send, im_reply and im_send_file reach the chat: your reply text stays in the Session. Answer with '
+        + 'im_reply (or im_send and the chat key); im_send publishes one markdown message, im_reply quotes a message '
+        + 'and answers it, im_send_file publishes a local file.')
+    parts.push('confirmed means the platform published the message; failed means nothing was published and the same '
+      + 'content may be sent again; uncertain means the chat must be inspected before a new intentional send, because '
+      + 'the same tool call is never resent; partial means only some parts were published. The report line names what '
+      + 'the platform could not render natively.')
   }
   parts.push('Media arrives as a label such as [图片 #12.1]; im_read_image with that id reads exactly that image of '
     + 'the chat.')
   return parts.join(' ')
+}
+
+/**
+ * Whether a session's turn text reaches its chat: its `output` names a renderer that is registered right now.
+ * @param im - host slice holding the renderer registry.
+ * @param record - the session whose `output` is asked about.
+ * @returns true when a registered renderer publishes this session's turns.
+ */
+function rendersTurnText(im: ImToolHost, record: ImSessionRecord): boolean {
+  return record.output !== undefined && im.outputs.get(record.output) !== undefined
 }

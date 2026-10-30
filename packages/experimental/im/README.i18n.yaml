@@ -72,11 +72,14 @@
   en: edc3d8b35b98e6d2
   zh: 534bfb9655dcf7d6
 /deepseek-ai-dsh-experimental-im/model-experience/im-tools-guidance-in-the-system-prompt/what-the-model-sees:
-  en: cc5c2da9789da3c0
-  zh: dcc07110fd0c00ac
+  en: aa309ff814eb78cd
+  zh: a45521fc23e99578
 /deepseek-ai-dsh-experimental-im/model-experience/im-tools-guidance-in-the-system-prompt/what-the-model-sees/sentences-of-the-section-with-the-chat-lists-substituted:
   en: f2bcf01036d70bab
   zh: cd4f020abd39eb63
+/deepseek-ai-dsh-experimental-im/model-experience/im-tools-guidance-in-the-system-prompt/what-the-model-sees/sentences-when-the-session-s-output-names-a-registered-renderer:
+  en: 9652be2d2863d143
+  zh: a97839ea4ca56c3d
 /deepseek-ai-dsh-experimental-im/model-experience/im-tools-guidance-in-the-system-prompt/token-effect:
   en: 2042ffcb81ec868f
   zh: 55fc0f0c7f0c8ff2

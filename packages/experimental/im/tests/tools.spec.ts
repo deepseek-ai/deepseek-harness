@@ -14,7 +14,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import ToolRuntime, { type ToolExecutionMode, type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import {
   ImChatKey, ImMessageKey, ImSourceId, type ImBinding, type ImChat, type ImConfig, type ImHistory, type ImMessage,
-  type ImSendOptions, type ImSendResult, type ImSessionRecord,
+  type ImOutputRenderer, type ImSendOptions, type ImSendResult, type ImSessionRecord,
 } from '../src/api.ts'
 import { Config } from '../src/config.ts'
 import { ImError } from '../src/error.ts'
@@ -116,6 +116,12 @@ class FakeIm {
   readonly sessions = new FakeSessions()
   readonly history = new FakeHistory([message(1), message(2), message(3)])
   readonly media = new FakeMedia()
+  /** Output renderer ids this host has registered; a session naming one renders its turn text into the chat. */
+  readonly renderers = new Set<string>()
+  readonly outputs = {
+    get: (id: string): ImOutputRenderer | undefined =>
+      (this.renderers.has(id) ? {} as ImOutputRenderer : undefined),
+  }
   /** Messages the platform holds but this deployment never received, by platform id. */
   readonly platform = new Map<string, ImMessage>()
   readonly sends: { chat: ImChatKey; content: Fragment; options: ImSendOptions }[] = []
@@ -248,8 +254,24 @@ describe('im tool registration', () => {
     const text = await mounted.prompt(fakeAgent(SessionId('im-session')))
     expect(text).toContain(`Your chats: ${CHAT}, ${OTHER}`)
     expect(text).toContain(`Publishing chats: ${CHAT}`)
-    expect(text).toContain('im_send publishes one markdown message')
+    expect(text).toContain('Only im_send, im_reply and im_send_file reach the chat')
+    expect(text).not.toContain('Answer in your own reply text')
     expect(text).toContain('[图片 #12.1]')
+  })
+
+  it('tells a session with a registered renderer to answer in its reply text', async () => {
+    const mounted = await mount()
+    const rendered = mounted.im.sessions.add('rendered', [{ chat: CHAT, writable: true, home: true }])
+    rendered.output = 'probe'
+    mounted.im.renderers.add('probe')
+    const text = await mounted.prompt(fakeAgent(SessionId('rendered')))
+    expect(text).toContain('Answer in your own reply text')
+    expect(text).not.toContain('Only im_send, im_reply and im_send_file reach the chat')
+
+    // An id nobody registered renders nothing, so the session publishes through its tools again.
+    mounted.im.renderers.delete('probe')
+    expect(await mounted.prompt(fakeAgent(SessionId('rendered'))))
+      .toContain('Only im_send, im_reply and im_send_file reach the chat')
   })
 
   it('guides a read-only session and a session without chats', async () => {
@@ -259,7 +281,7 @@ describe('im tool registration', () => {
     bareMounted.im.sessions.add('bare', [])
     const bare = await bareMounted.prompt(fakeAgent(SessionId('bare')))
     expect(bare).not.toContain('Your chats:')
-    expect(bare).toContain('Answer in your own reply text')
+    expect(bare).toContain('Only im_send, im_reply and im_send_file reach the chat')
   })
 
   it('renders no IM guidance for a call without an agent', async () => {
