@@ -37,7 +37,6 @@ import Foundation
         var result: [String: JSONValue] = [
             "accessibility": .bool(actions.accessibility()),
             "screenRecording": .bool(actions.screenRecording()),
-            "guideOpen": .bool(guide.isOpen),
             "helper": Self.process(getpid()),
             "parent": Self.process(getppid()),
         ]

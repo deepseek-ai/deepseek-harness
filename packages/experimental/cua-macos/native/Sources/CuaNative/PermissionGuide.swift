@@ -28,7 +28,6 @@ struct PermissionGuideApplication: Sendable {
 }
 
 @MainActor protocol PermissionGuidePresenting: AnyObject {
-    var isOpen: Bool { get }
     func show(application: PermissionGuideApplication, text: PermissionGuideText, owner: UUID,
               interval: TimeInterval, granted: @escaping @MainActor () -> Bool) throws
     func reportSettingsFailure()
@@ -56,7 +55,6 @@ enum PermissionGuidePlacement {
     private var instructionLabel: NSTextField?
     private var text: PermissionGuideText?
     private var hasSeenSettings = false
-    var isOpen: Bool { panel != nil }
 
     func show(application: PermissionGuideApplication, text: PermissionGuideText, owner: UUID,
               interval: TimeInterval, granted: @escaping @MainActor () -> Bool) throws {

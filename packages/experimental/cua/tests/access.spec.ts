@@ -30,7 +30,7 @@ vi.mock('../src/native-client.ts', async original => ({
   NativeClient: class {
     disposed = false
     request = vi.fn(async (method: string) => method === 'openPermissionSettings' ? { opened: true }
-      : method === 'applicationIcons' ? {} : { accessibility: false, screenRecording: false, guideOpen: false, helper: { pid: 9 }, parent: { pid: 8 } })
+      : method === 'applicationIcons' ? {} : { accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
     invalidate() { this.disposed = true }
     dispose = vi.fn(async () => { this.disposed = true })
     constructor() { native.instances.push(this) }
@@ -58,7 +58,7 @@ async function setup(choice = 'Allow for this session', options: { writable?: bo
   ctx.on('user-questions/request', answer)
   const permissions = permissionFixture(ctx, options.initial, options.writable)
   const access = installCuaAccess(ctx, { native: nativeConfig, createChannel: unusedConnector, store: permissions.store,
-    guidancePolling: { intervalMs: 1000, timeoutMs: 120000 } })
+    permissionPollIntervalMs: 1000 })
   const client = new NativeClient(ctx, nativeConfig, unusedConnector)
   return { ctx, owner, agent: owner.agent, answer, access, client, ...permissions }
 }
@@ -405,7 +405,7 @@ it('preserves captured launch metadata separately from the current helper parent
   const control = native.instances.at(-1)!
   const launchApplication = { name: 'Visual Studio Code', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
   control.request.mockResolvedValueOnce({ accessibility: false, screenRecording: false,
-    guideOpen: false, helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
+    helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ parent: { pid: 1 }, launchApplication })
 })
 

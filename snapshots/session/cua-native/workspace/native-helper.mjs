@@ -118,7 +118,6 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
   const snapshots = new Map()
   const methods = ['getCapabilities', 'listApps', 'getApp', 'activate', 'show', 'listWindows', 'getState', 'hover', 'click', 'setValue', 'typeText', 'paste', 'pressKey', 'scroll', 'drag', 'screenshot']
-  let guidePermission = null
   let acquired = false
   let generation = 0
   let observationChanged = false
@@ -129,10 +128,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
     if (method === 'applicationIcons') return Object.fromEntries(params.paths.map(path => [path, `data:image/png;base64,${png}`]))
     if (method === 'openPermissionSettings') return { opened: true }
     if (method === 'permissionStatus' || method === 'requestPermission') {
-      if (method === 'requestPermission') guidePermission = params.permission
       const state = JSON.parse(readFileSync(new URL('./permissions.json', import.meta.url), 'utf8'))
-      if (guidePermission && state[guidePermission]) guidePermission = null
-      return { ...state, guideOpen: guidePermission !== null, helper: { pid: process.pid }, parent: { pid: process.ppid } }
+      return { ...state, helper: { pid: process.pid }, parent: { pid: process.ppid } }
     }
     if (method === 'getCapabilities') return { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: true }, methods, coordinateSpace: 'window-points', browser: false }
     if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId }]

@@ -15,7 +15,7 @@ const guideText = {
   settingsMessage: '请手动打开系统设置',
 }
 
-const value: CuaSystemPermissionState = { guidancePolling: { intervalMs: 1000, timeoutMs: 120000 }, guideOpen: true,
+const value: CuaSystemPermissionState = {
   accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
 const applications: CuaApplicationState = {
   allowedApps: [], blockedApps: [], persistentAvailable: true }
@@ -37,36 +37,21 @@ function fixture() {
   return { actions, controller, face: controller.face() }
 }
 
-it('polls only permission status until the native guide closes', async () => {
+it('refreshes after a request and then waits for an explicit refresh', async () => {
   vi.useFakeTimers()
   const f = fixture()
   try {
     f.face.request('screenRecording')
     await vi.advanceTimersByTimeAsync(0)
-    await vi.advanceTimersByTimeAsync(1000)
+    expect(f.actions.systemStatus).toHaveBeenCalledOnce()
+    f.actions.systemStatus.mockResolvedValue({ ok: true, value: { ...value, screenRecording: true } })
+    await vi.advanceTimersByTimeAsync(120000)
+    expect(f.actions.systemStatus).toHaveBeenCalledOnce()
+    expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
+    f.face.refresh()
+    await vi.advanceTimersByTimeAsync(0)
     expect(f.actions.systemStatus).toHaveBeenCalledTimes(2)
-    expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording', guideText)
-    expect(f.actions.applicationIcons).toHaveBeenCalledOnce()
-    f.actions.systemStatus.mockResolvedValueOnce({ ok: true, value: { ...value, guideOpen: false, screenRecording: true } })
-    await vi.advanceTimersByTimeAsync(1000)
     expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(true)
-    await vi.advanceTimersByTimeAsync(10000)
-    expect(f.actions.systemStatus).toHaveBeenCalledTimes(3)
-  } finally { await f.controller.dispose(); vi.useRealTimers() }
-})
-
-it.each(['page-close', 'dispose', 'timeout', 'query-error'] as const)('stops native-guide observations on %s', async (reason) => {
-  vi.useFakeTimers()
-  const f = fixture()
-  f.actions.systemStatus.mockResolvedValue({ ok: true, value: { ...value, guidancePolling: { intervalMs: 100, timeoutMs: 250 } } })
-  try {
-    f.face.request('screenRecording')
-    await vi.advanceTimersByTimeAsync(0)
-    if (reason === 'page-close') f.face.stopWatchingPermissions()
-    else if (reason === 'dispose') await f.controller.dispose()
-    else if (reason === 'query-error') f.actions.systemStatus.mockRejectedValueOnce(new Error('helper disconnected'))
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(f.actions.systemStatus).toHaveBeenCalledTimes(reason === 'timeout' ? 3 : reason === 'query-error' ? 2 : 1)
   } finally { await f.controller.dispose(); vi.useRealTimers() }
 })
 

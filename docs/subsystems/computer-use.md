@@ -106,7 +106,7 @@ Browser controls for provider-owned native permission and application decisions.
  * Open System Settings and a native application-drag guide for the privilege selected by the user.
  * @param permission macOS privilege to request.
  * @param text Localized guide copy; application identity comes from the native helper.
- * @returns Current access and guide state; opening the guide does not grant permission.
+ * @returns Current permission observations; opening the guide does not grant permission.
  */
 @Remote async requestPermission(permission: CuaSystemPermission, text: CuaPermissionGuideText): Promise<CuaSystemPermissionState>
 

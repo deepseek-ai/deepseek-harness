@@ -993,7 +993,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async requestPermission(permission: CuaSystemPermission, text: CuaPermissionGuideText): Promise<CuaSystemPermissionState>',
         description: 'Open System Settings and a native application-drag guide for the privilege selected by the user.',
         parameters: [{ name: 'permission', description: 'macOS privilege to request.' }, { name: 'text', description: 'Localized guide copy; application identity comes from the native helper.' }],
-        returns: 'Current access and guide state; opening the guide does not grant permission.',
+        returns: 'Current permission observations; opening the guide does not grant permission.',
       },
       {
         signature: '@Remote async openSettings(permission: CuaSystemPermission): Promise<void>',
@@ -6112,7 +6112,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaSystemPermissionState',
-    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    guideOpen: boolean;\n    guidancePolling: {\n        intervalMs: number;\n        timeoutMs: number;\n    };\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n        bundleId?: string | undefined;\n    } | undefined;\n}',
+    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n        bundleId?: string | undefined;\n    } | undefined;\n}',
   },
   {
     name: 'DailyInput',

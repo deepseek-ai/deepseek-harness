@@ -49,7 +49,7 @@ The dump command checks profile composition without a model request. For a real 
 | `buildTimeoutMs` | `300000` | Maximum native preparation time. |
 | `timeoutMs` | `30000` | Per-operation deadline; cancellation can leave partial input. |
 | `connectTimeoutMs` | `5000` | Deadline for connecting to or starting the shared helper. |
-| `permissionPollIntervalMs` / `permissionPollTimeoutMs` | `1000` / `120000` | Native guide and browser observation interval; maximum browser polling duration. |
+| `permissionPollIntervalMs` | `1000` | Interval in milliseconds between permission and position checks while the native guide is open. |
 | `screenshotTimeoutMs` | `5000` | Screenshot deadline including queue time, capped by `timeoutMs`. |
 | `axTimeoutMs` | `3000` | Deadline per Accessibility system call, configured independently of the complete operation. |
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 request and response limits. |

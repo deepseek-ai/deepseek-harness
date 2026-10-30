@@ -49,7 +49,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
 | `connectTimeoutMs` | `5000` | 连接或启动共享 helper 的截止时间。 |
-| `permissionPollIntervalMs` / `permissionPollTimeoutMs` | `1000` / `120000` | 原生引导与页面观察间隔，以及页面轮询的最长持续时间。 |
+| `permissionPollIntervalMs` | `1000` | 原生引导打开期间检查权限和窗口位置的间隔，单位为毫秒。 |
 | `screenshotTimeoutMs` | `5000` | 截图总期限，包含排队时间，且不超过 `timeoutMs`。 |
 | `axTimeoutMs` | `3000` | 每次 Accessibility 系统调用的截止时间，与完整操作截止独立配置。 |
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 请求与响应字节限制。 |

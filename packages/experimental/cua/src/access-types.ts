@@ -22,10 +22,6 @@ export interface CuaPermissionProcess {
 export interface CuaSystemPermissionState {
   accessibility: boolean
   screenRecording: boolean
-  /** Whether the native permission guide remains open. */
-  guideOpen: boolean
-  /** Browser observation interval and duration; native guidance lives until dismissed or authorized. */
-  guidancePolling: { intervalMs: number; timeoutMs: number }
   helper: CuaPermissionProcess
   parent: CuaPermissionProcess
   /** Application macOS reports as responsible for the helper, captured at startup; absent when it cannot be identified. */
