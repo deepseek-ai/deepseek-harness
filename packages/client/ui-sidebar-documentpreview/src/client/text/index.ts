@@ -13,7 +13,7 @@ export const PLAIN_BODY_ID = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview
  * @returns plain-text registration metadata.
  */
 export function textBodyDefinition(title: () => string): DocumentPreviewDefinition {
-  return { id: PLAIN_BODY_ID, extensions: [], priority: 'builtin', title, loading: 'text-pages', wrap: true }
+  return { id: PLAIN_BODY_ID, extensions: [], priority: 'builtin', title, loading: 'text-pages', wrap: true, sourceLines: true }
 }
 
 /** @param ctx - owning plugin context. Register the fallback metadata and keyed body. */

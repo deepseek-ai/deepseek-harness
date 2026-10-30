@@ -7,7 +7,16 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import type { CuaApplicationId, CuaApplicationState, CuaSystemPermissionState } from '../src/access-types.ts'
 import { PermissionController } from '../src/client/controller.ts'
 
-const value: CuaSystemPermissionState = { accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
+const guideText = {
+  instruction: '将 {application} 拖入上方列表以允许辅助功能',
+  backLabel: '返回',
+  finderLabel: '在 Finder 中显示',
+  unavailableMessage: '找不到此应用',
+  settingsMessage: '请手动打开系统设置',
+}
+
+const value: CuaSystemPermissionState = { guidancePolling: { intervalMs: 1000, timeoutMs: 120000 }, guideOpen: true,
+  accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
 const applications: CuaApplicationState = {
   allowedApps: [], blockedApps: [], persistentAvailable: true }
 type CuaRemote = Context['remote']['cuaAccess']
@@ -23,15 +32,49 @@ function fixture() {
     retryApproval: vi.fn<CuaRemote['retryApproval']>(async () => ({ ok: true, value: undefined })),
     enablePersistentPtc: vi.fn<CuaRemote['enablePersistentPtc']>(async () => ({ ok: true, value: undefined })),
   }
-  const controller = new PermissionController(actions)
+  const controller = new PermissionController(actions, () => guideText)
+  onTestFinished(() => controller.dispose())
   return { actions, controller, face: controller.face() }
 }
+
+it('polls only permission status until the native guide closes', async () => {
+  vi.useFakeTimers()
+  const f = fixture()
+  try {
+    f.face.request('screenRecording')
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(f.actions.systemStatus).toHaveBeenCalledTimes(2)
+    expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording', guideText)
+    expect(f.actions.applicationIcons).toHaveBeenCalledOnce()
+    f.actions.systemStatus.mockResolvedValueOnce({ ok: true, value: { ...value, guideOpen: false, screenRecording: true } })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(true)
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(f.actions.systemStatus).toHaveBeenCalledTimes(3)
+  } finally { await f.controller.dispose(); vi.useRealTimers() }
+})
+
+it.each(['page-close', 'dispose', 'timeout', 'query-error'] as const)('stops native-guide observations on %s', async (reason) => {
+  vi.useFakeTimers()
+  const f = fixture()
+  f.actions.systemStatus.mockResolvedValue({ ok: true, value: { ...value, guidancePolling: { intervalMs: 100, timeoutMs: 250 } } })
+  try {
+    f.face.request('screenRecording')
+    await vi.advanceTimersByTimeAsync(0)
+    if (reason === 'page-close') f.face.stopWatchingPermissions()
+    else if (reason === 'dispose') await f.controller.dispose()
+    else if (reason === 'query-error') f.actions.systemStatus.mockRejectedValueOnce(new Error('helper disconnected'))
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(f.actions.systemStatus).toHaveBeenCalledTimes(reason === 'timeout' ? 3 : reason === 'query-error' ? 2 : 1)
+  } finally { await f.controller.dispose(); vi.useRealTimers() }
+})
 
 it('refreshes after a user request without treating the request itself as a grant', async () => {
   const f = fixture()
   f.face.request('screenRecording')
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
-  expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording')
+  expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording', guideText)
   expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
   expect(f.controller.state.getSnapshot().toast?.kind).toBe('requested')
   f.face.dismissToast()

@@ -1,0 +1,9 @@
+version: 1
+scenario: goal-rounds
+profile: sdk
+composition: sdk-desktop
+recording: authored
+header:
+  class: sdk-desktop
+replay:
+  override: true

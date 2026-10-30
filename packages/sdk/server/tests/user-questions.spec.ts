@@ -80,9 +80,17 @@ it.each([
   { answers: [{ id: 'format', selected: [] }, { id: 'format', selected: [] }] },
   { answers: [{ id: 'format', selected: [1] }] },
   { answers: [{ id: 'format', selected: [], custom: false }] },
+  { cancelled: false },
+  { cancelled: true, answers: [] },
 ])('rejects an invalid host answer without treating it as approval: %j', async (value) => {
   const f = await fixture(async () => value)
   await expect(f.ctx.userQuestions.ask({ agent: f.agent, questions })).rejects.toMatchObject({ code: 'BAD_ANSWER' })
+})
+
+it('maps an explicit user dismissal to native ASK_CANCELLED', async () => {
+  const f = await fixture(async () => ({ cancelled: true }))
+  await expect(f.ctx.userQuestions.ask({ agent: f.agent, questions })).rejects.toMatchObject({ code: 'ASK_CANCELLED' })
+  expect(f.transport.notify).not.toHaveBeenCalledWith('user-question.cancelled', expect.anything())
 })
 
 it.each(['tool', 'shutdown'] as const)('cancels an outstanding host request on %s cancellation', async (kind) => {

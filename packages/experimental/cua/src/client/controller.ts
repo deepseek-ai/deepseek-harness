@@ -4,7 +4,7 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-cua/remote'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { CuaApplicationId, CuaApplicationState, CuaSystemPermission, CuaSystemPermissionState } from '../access-types.ts'
+import type { CuaApplicationId, CuaApplicationState, CuaPermissionGuideText, CuaSystemPermission, CuaSystemPermissionState } from '../access-types.ts'
 
 interface PermissionData {
   runtime: { persistent: boolean; writable: boolean }
@@ -30,6 +30,7 @@ export interface PermissionFace {
   refresh: () => void
   request: (permission: CuaSystemPermission) => void
   openSettings: (permission: CuaSystemPermission) => void
+  stopWatchingPermissions: () => void
   revoke: (id: CuaApplicationId) => void
   retryApproval: (id: CuaApplicationId) => void
   dismissToast: () => void
@@ -50,8 +51,16 @@ export class PermissionController {
   private closed = false
   private epoch = 0
   private sequence = 0
-  /** @param remote Generated CUA Remote namespace; failed results are handled with query and action failures. */
-  constructor(private readonly remote: Context['remote']['cuaAccess']) {}
+  private systemSequence = 0
+  private watching = false
+  private watchStarted = 0
+  private pollTimer: ReturnType<typeof setTimeout> | undefined
+  /**
+   * @param remote Generated CUA Remote namespace; failed results follow the query and action paths.
+   * @param guideText Copy in the current Client locale for the selected native permission guide.
+   */
+  constructor(private readonly remote: Context['remote']['cuaAccess'],
+    private readonly guideText: (permission: CuaSystemPermission) => CuaPermissionGuideText) {}
   /**
    * Bind the permission projection to its user actions.
    * @returns Reactive state and controls shared by the page, prompt, and toast host.
@@ -60,8 +69,14 @@ export class PermissionController {
     return {
       hooks: { cuaPermissions: this.state },
       refresh: () => { this.enqueue() },
-      request: (permission) => { this.enqueue(() => this.remote.requestPermission(permission), 'requested') },
+      request: (permission) => {
+        if (this.closed || this.state.getSnapshot().changing) return
+        this.watching = true
+        this.watchStarted = performance.now()
+        this.enqueue(() => this.remote.requestPermission(permission, this.guideText(permission)), 'requested')
+      },
       openSettings: (permission) => { this.enqueue(() => this.remote.openSettings(permission), 'opened') },
+      stopWatchingPermissions: () => { this.stopWatching() },
       revoke: (id) => { this.enqueue(() => this.remote.revoke(id), 'revoked') },
       retryApproval: (id) => { this.enqueue(() => this.remote.retryApproval(id), 'retryAllowed') },
       dismissToast: () => { if (!this.closed) this.state.update((state) => { state.toast = null }) },
@@ -74,6 +89,7 @@ export class PermissionController {
   setChanging(changing: boolean): void {
     if (this.closed || changing === this.state.getSnapshot().changing) return
     this.epoch++
+    this.stopWatching()
     this.state.update((state) => {
       state.changing = changing
       state.busy = true
@@ -82,9 +98,35 @@ export class PermissionController {
     if (!changing) this.enqueue()
   }
   /** Prevent publication after UI withdrawal and join the accepted Remote work. */
-  async dispose(): Promise<void> { this.closed = true; await this.tail; await this.reads }
+  async dispose(): Promise<void> { this.closed = true; this.stopWatching(); await this.tail; await this.reads }
+  private stopWatching(): void {
+    this.watching = false
+    clearTimeout(this.pollTimer)
+    this.pollTimer = undefined
+  }
+  private schedulePoll(): void {
+    clearTimeout(this.pollTimer)
+    this.pollTimer = undefined
+    const state = this.state.getSnapshot()
+    if (!this.watching || this.closed || state.changing || state.system.error !== null || !state.system.value?.guideOpen) {
+      this.stopWatching()
+      return
+    }
+    const { intervalMs, timeoutMs } = state.system.value.guidancePolling
+    if (performance.now() - this.watchStarted + intervalMs > timeoutMs) { this.stopWatching(); return }
+    const epoch = this.epoch
+    this.pollTimer = setTimeout(() => {
+      this.pollTimer = undefined
+      const current = () => !this.closed && this.watching && epoch === this.epoch
+      const read = this.read('system', this.remote.systemStatus, current)
+      this.reads = Promise.all([this.reads, read]).then(() => {})
+    }, intervalMs)
+  }
   private enqueue(action?: () => Promise<RemoteResult<unknown>>, kind?: 'requested' | 'opened' | 'revoked' | 'retryAllowed'): void {
     if (this.closed || this.state.getSnapshot().changing) return
+    clearTimeout(this.pollTimer)
+    this.pollTimer = undefined
+    this.systemSequence++
     const epoch = this.epoch
     const current = () => !this.closed && epoch === this.epoch
     const sequence = ++this.sequence
@@ -123,16 +165,19 @@ export class PermissionController {
     key: K, read: () => Promise<RemoteResult<PermissionData[K]>>, current: () => boolean,
   ): Promise<void> {
     if (!current()) return
+    const sequence = key === 'system' ? ++this.systemSequence : this.systemSequence
+    const latest = () => current() && (key !== 'system' || sequence === this.systemSequence)
     try {
       const result = await read()
-      if (!current()) return
+      if (!latest()) return
       if (!result.ok) throw result.error
       this.state.update((state) => { state[key].value = result.value; state[key].error = null; state[key].busy = false })
     } catch (error) {
-      if (!current()) return
+      if (!latest()) return
       this.state.update((state) => {
         state[key].error = error instanceof Error ? error.message : String(error); state[key].busy = false
       })
     }
+    if (key === 'system' && latest()) this.schedulePoll()
   }
 }

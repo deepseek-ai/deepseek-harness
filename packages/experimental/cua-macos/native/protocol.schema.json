@@ -1114,10 +1114,41 @@
                 "accessibility",
                 "screenRecording"
               ]
+            },
+            "instruction": {
+              "type": "string",
+              "minLength": 1
+            },
+            "backLabel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "finderLabel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "unavailableMessage": {
+              "type": "string",
+              "minLength": 1
+            },
+            "settingsMessage": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pollIntervalMs": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 2147483647
             }
           },
           "required": [
-            "permission"
+            "permission",
+            "instruction",
+            "backLabel",
+            "finderLabel",
+            "unavailableMessage",
+            "settingsMessage",
+            "pollIntervalMs"
           ],
           "additionalProperties": false
         }

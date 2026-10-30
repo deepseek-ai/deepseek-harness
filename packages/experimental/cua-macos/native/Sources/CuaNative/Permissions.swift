@@ -1,19 +1,43 @@
-// System consent is requested only by the Host's user-facing permission controls.
+// System permission guidance belongs to the native application whose bundle the user authorizes.
 import AppKit
 @preconcurrency import ApplicationServices
 import Darwin
 import Foundation
 
-@MainActor struct SystemPermissions {
-    private let launchApplication: JSONValue?
+@MainActor struct SystemPermissionActions {
+    var accessibility: @MainActor () -> Bool
+    var screenRecording: @MainActor () -> Bool
+    var open: (URL) -> Bool
 
-    // Capture the system-reported responsible app before startup completes and the launcher can exit.
-    init() { launchApplication = Self.responsibleApplication(for: getpid()) }
+    static func system() -> Self {
+        Self(accessibility: { AXIsProcessTrusted() }, screenRecording: { CGPreflightScreenCaptureAccess() },
+             open: { NSWorkspace.shared.open($0) })
+    }
+}
+
+@MainActor final class SystemPermissions {
+    private let launchApplication: JSONValue?
+    private let actions: SystemPermissionActions
+    private let guide: any PermissionGuidePresenting
+
+    init() {
+        launchApplication = Self.responsibleApplication(for: getpid())
+            ?? Self.application(Bundle.main.bundleURL, identifier: Bundle.main.bundleIdentifier)
+        actions = .system()
+        guide = PermissionGuide()
+    }
+
+    init(application: JSONValue?, actions: SystemPermissionActions, guide: any PermissionGuidePresenting) {
+        launchApplication = application
+        self.actions = actions
+        self.guide = guide
+    }
 
     func status() -> JSONValue {
         var result: [String: JSONValue] = [
-            "accessibility": .bool(AXIsProcessTrusted()),
-            "screenRecording": .bool(CGPreflightScreenCaptureAccess()),
+            "accessibility": .bool(actions.accessibility()),
+            "screenRecording": .bool(actions.screenRecording()),
+            "guideOpen": .bool(guide.isOpen),
             "helper": Self.process(getpid()),
             "parent": Self.process(getppid()),
         ]
@@ -21,19 +45,26 @@ import Foundation
         return .object(result)
     }
 
-    func request(_ permission: String) throws -> JSONValue {
+    func request(_ permission: String, owner: UUID, text: PermissionGuideText, interval: TimeInterval) throws -> JSONValue {
+        let observe: @MainActor () -> Bool
         switch permission {
-        case "accessibility":
-            if !AXIsProcessTrusted() {
-                let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-                _ = AXIsProcessTrustedWithOptions(options)
-            }
-        case "screenRecording":
-            if !CGPreflightScreenCaptureAccess() { _ = CGRequestScreenCaptureAccess() }
+        case "accessibility": observe = actions.accessibility
+        case "screenRecording": observe = actions.screenRecording
         default: throw RequestParameters.invalid("permission must be accessibility or screenRecording")
         }
+        if !observe() {
+            guard let path = launchApplication?["path"].string, let identifier = launchApplication?["bundleId"].string else {
+                throw NativeFailure(code: "APPLICATION_UNAVAILABLE", message: "The permission application could not be identified; enable Computer Use again")
+            }
+            try guide.show(application: PermissionGuideApplication(url: URL(fileURLWithPath: path), identifier: identifier),
+                           text: text, owner: owner, interval: interval, granted: observe)
+        }
+        do { _ = try openSettings(permission) }
+        catch { guide.reportSettingsFailure(); throw error }
         return status()
     }
+
+    func closeGuide(owner: UUID) { guide.close(owner: owner) }
 
     func openSettings(_ permission: String) throws -> JSONValue {
         let pane: String
@@ -42,8 +73,7 @@ import Foundation
         case "screenRecording": pane = "Privacy_ScreenCapture"
         default: throw RequestParameters.invalid("permission must be accessibility or screenRecording")
         }
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)"),
-              NSWorkspace.shared.open(url) else {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)"), actions.open(url) else {
             throw NativeFailure(code: "SETTINGS_UNAVAILABLE", message: "Open System Settings > Privacy & Security manually")
         }
         return .object(["opened": .bool(true)])
@@ -54,7 +84,13 @@ import Foundation
         guard let responsible = NativePlatform.responsiblePID(pid),
               let app = NSRunningApplication(processIdentifier: responsible), !app.isTerminated,
               let bundle = app.bundleURL else { return nil }
-        var result: [String: JSONValue] = ["name": .string(bundle.lastPathComponent), "path": .string(bundle.path)]
+        return application(bundle, identifier: app.bundleIdentifier)
+    }
+
+    private static func application(_ bundle: URL, identifier: String?) -> JSONValue? {
+        guard bundle.pathExtension == "app", let identifier else { return nil }
+        var result: [String: JSONValue] = ["name": .string(bundle.lastPathComponent), "path": .string(bundle.path),
+                                         "bundleId": .string(identifier)]
         if let icon = ApplicationCatalog.icon(at: bundle.path) { result["icon"] = .string(icon) }
         return .object(result)
     }

@@ -29,20 +29,20 @@
           - textbox "模型 ID 1":
             - /placeholder: 模型 ID
             - text: deepseek-flash
+          - button "模型选项 1"
+          - button "删除模型 1"
           - textbox "显示名称 1":
             - /placeholder: 显示名称
             - text: DeepSeek-V4.1-Flash
-          - button "模型选项 1"
-          - button "删除模型 1"
           - button "调整模型顺序 2"
           - textbox "模型 ID 2":
             - /placeholder: 模型 ID
             - text: deepseek-v4-pro
+          - button "模型选项 2"
+          - button "删除模型 2"
           - textbox "显示名称 2":
             - /placeholder: 显示名称
             - text: DeepSeek-V4-Pro
-          - button "模型选项 2"
-          - button "删除模型 2"
           - button "添加模型"
       - button "取消"
       - button "保存"

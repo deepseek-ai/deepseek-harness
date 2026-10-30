@@ -19,7 +19,7 @@ enum NativeProtocol {
         "performSecondaryAction": ["action", "appHandle", "elementIndex", "snapshotId"],
         "permissionStatus": [],
         "pressKey": ["appHandle", "key", "modifiers"],
-        "requestPermission": ["permission"],
+        "requestPermission": ["backLabel", "finderLabel", "instruction", "permission", "pollIntervalMs", "settingsMessage", "unavailableMessage"],
         "screenshot": ["appHandle", "windowId"],
         "scroll": ["appHandle", "deltaLinesX", "deltaLinesY", "snapshotId", "windowId", "x", "y"],
         "selectText": ["appHandle", "elementIndex", "prefix", "selectionType", "snapshotId", "suffix", "text"],

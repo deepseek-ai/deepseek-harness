@@ -34,7 +34,13 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
   const transport = ctx.plugin(async (owner) => { await owner.remote.$mount(contribution) })
   const ui = ctx.inject(['remote.cuaAccess', 'slots', 'locale'], (ctx) => {
     ctx.effect(() => ctx.locale.register(NS, { en, zh, ja, es, fr, de, ru, pt }))
-    const controller = new PermissionController(ctx.remote.cuaAccess)
+    const t = ctx.locale.bind(NS)
+    const controller = new PermissionController(ctx.remote.cuaAccess, permission => ({
+      instruction: t('nativeInstruction', { application: '{application}', permission: t(permission) }),
+      backLabel: t('nativeBack'), finderLabel: t('nativeFinder'),
+      unavailableMessage: t('nativeUnavailable'),
+      settingsMessage: t('nativeSettingsUnavailable', { permission: t(permission) }),
+    }))
     const face = controller.face()
     ctx.slots.inject('conversation.composer', () => ctx.slots.register({
       name: 'conversation.composer', priority: -1, locale: NS,
