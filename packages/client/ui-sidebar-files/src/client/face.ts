@@ -190,7 +190,8 @@ export interface FilesInjected {
   readonly currentDrawn: (paneId: PaneId, row: HTMLElement | null) => void
   /**
    * Register a navigator's element, or with `null` as gone. While it is
-   * drawn, the face measures the row it is laid out in and, when `closable`,
+   * drawn, the face marks its parent for covered-content CSS, measures the
+   * row it is laid out in and, when `closable`,
    * closes the navigator on Escape in that row. When a new width leaves the
    * focused resize edge removed or hidden, the tree takes keyboard focus.
    * When a closable navigator starts filling the row, including its first
@@ -652,8 +653,11 @@ export function filesFace(
           drop(paneId)
           return
         }
+        const parent = navigator.parentElement
+        if (parent === null) return
         const row = layoutParent(navigator)
         if (row === null) return
+        parent.setAttribute('data-files-navigator-row', '')
         const document = row.ownerDocument
         // The resize edge while it holds the keyboard. A width at which the
         // tree fills the row removes it, and the fullscreen viewport hides it,
@@ -741,6 +745,7 @@ export function filesFace(
         navigator.addEventListener('focusin', focusin)
         navigator.addEventListener('focusout', focusout)
         pane.unobserve = () => {
+          parent.removeAttribute('data-files-navigator-row')
           observer.disconnect()
           viewport?.removeEventListener('change', measure)
           document.removeEventListener('keydown', close)
