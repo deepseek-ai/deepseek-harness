@@ -16,15 +16,17 @@
 // recorded gap shrinks here first and the manifest follows.
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { initialShortcutConfig } from '@deepseek-ai/dsh-client-shortcuts/protocol'
+import { ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { Session } from '@deepseek-ai/dsh-session'
 import {
   INTERACTIVE_SELECTOR, RECALL_MARK, isDraggableAt, type RegionRect,
 } from '@deepseek-ai/dsh-client-web/src/window-drag/regions.ts'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
 
 /** One collected box: its app-region value, whether it is interactive, and where it is. */
 interface CollectedRegion extends RegionRect {
@@ -179,6 +181,32 @@ async function settled(page: Page): Promise<void> {
   { timeout: 20_000 }).toBe(true)
 }
 
+/**
+ * Scroll a content box above its scrollport while its untrimmed bounds overlap window chrome.
+ * @param target - Rendered content whose geometry Electron collects without overflow clipping.
+ * @param scrollport - The content's actual scrolling owner.
+ * @param chrome - The chrome row that must retain its drag pixels.
+ * @returns A point inside the clipped content box and the chrome row.
+ */
+async function scrollBehindChrome(target: Locator, scrollport: Locator, chrome: Rect): Promise<readonly [number, number]> {
+  const bottom = chrome.y + 8
+  const bounds = await target.boundingBox()
+  if (bounds === null) throw new Error('The scroll fixture has no layout box')
+  await scrollport.evaluate((element, delta) => { element.scrollTop += delta }, bounds.y + bounds.height - bottom)
+  await expect.poll(() => target.evaluate((element, edge) => Math.abs(element.getBoundingClientRect().bottom - edge), bottom),
+    { timeout: 15_000, message: 'the content box reaches the chrome while remaining clipped by its scrollport' }).toBeLessThan(1)
+  const rect = await target.boundingBox()
+  if (rect === null) throw new Error('The clipped fixture lost its layout box')
+  const scrollTop = await scrollport.evaluate(element => element.getBoundingClientRect().top)
+  expect(rect.y + rect.height).toBeLessThan(scrollTop)
+  const x = rect.x + rect.width / 2
+  const y = bottom - Math.min(4, rect.height / 2)
+  expect(x).toBeGreaterThan(chrome.x)
+  expect(x).toBeLessThan(chrome.x + chrome.width)
+  expect(y).toBeGreaterThanOrEqual(rect.y)
+  return [x, y]
+}
+
 describe('web e2e: macOS window drag coverage', () => {
   let scaffold: WebScaffold
   let browser: Browser
@@ -230,6 +258,175 @@ describe('web e2e: macOS window drag coverage', () => {
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     return { page, tripwire }
   }
+
+  /** Wait for the workspace's asynchronous Session creation and the browser's selection of that Session. */
+  async function connectWorkspaceSession(page: Page, name: string): Promise<Session> {
+    await connectFreshWorkspace(page, scaffold.workspaceCwd, name)
+    const cwd = join(scaffold.workspaceCwd, name)
+    await expect.poll(() => scaffold.ctx.agents.list().find(candidate => candidate.session.header.cwd === cwd),
+      { timeout: 15_000 }).toBeDefined()
+    const agent = scaffold.ctx.agents.list().find(candidate => candidate.session.header.cwd === cwd)
+    if (agent === undefined) throw new Error('The workspace did not create a Session')
+    await expect.poll(() => page.locator('[data-conversation-session]').getAttribute('data-conversation-session'), { timeout: 15_000 })
+      .toBe(agent.session.id)
+    return agent.session
+  }
+
+  /** Create a selected, nonblank Session and wait for its right-sidebar seat to mount. */
+  async function connectTranscriptWorkspace(page: Page, name: string): Promise<void> {
+    const session = await connectWorkspaceSession(page, name)
+    const text = `Window drag fixture for ${name}.`
+    session.append('turn/start', { turn: 1 })
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'Inspect window chrome.' }], source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    session.append('step/start', { turn: 1, step: 1 })
+    session.append('assistant/message', { stream: [], turn: 1, step: 1, message: createAssistantMessage({
+      content: [{ type: 'text', text }], source: { provider: 'fixture', model: 'fixture' },
+    }) }, { surfaceOp: 'append' })
+    session.append('step/end', { turn: 1, step: 1 })
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    await scaffold.ctx.sessions.flush(session)
+    await page.locator('[data-conversation-scroll]').getByText(text, { exact: true }).waitFor()
+    await page.locator(`[data-sidebar-right-session="${session.id}"]:not([data-sidebar-right-panel]):not([hidden])`)
+      .waitFor({ state: 'attached' })
+  }
+
+  it('keeps the header draggable when transcript controls scroll above their clip', async () => {
+    const { page, tripwire } = await desktopPage()
+    try {
+      const session = await connectWorkspaceSession(page, 'scrolled-drag-content')
+      const callId = ToolCallId('window-drag-scroll-command')
+      const args = JSON.stringify({ command: 'printf drag-fixture', description: 'Inspect scroll fixture' })
+      session.append('turn/start', { turn: 1 })
+      session.append('user/message', createUserMessage({
+        content: [{ type: 'text', text: 'Show a table, code, and a reference link.' }], source: { kind: 'user' },
+      }), { surfaceOp: 'append' })
+      session.append('step/start', { turn: 1, step: 1 })
+      session.append('assistant/message', { stream: [], turn: 1, step: 1, message: createAssistantMessage({
+        content: [{ type: 'tool-call', id: callId, name: 'bash', arguments: args }],
+        source: { provider: 'fixture', model: 'fixture' },
+      }) }, { surfaceOp: 'append' })
+      const call = session.append('tool/call', { turn: 1, step: 1, callId, name: 'bash', arguments: args })
+      session.append('tool/result', { turn: 1, step: 1, message: createToolResultMessage({
+        callId, content: [{ type: 'text', text: 'drag-fixture\n[exit code: 0]' }], isError: false,
+      }) }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
+      session.append('step/end', { turn: 1, step: 1 })
+      session.append('step/start', { turn: 1, step: 2 })
+      const markdown = [
+        '| Drag table | Value | Status | Detail |',
+        '| --- | --- | --- | --- |',
+        ...Array.from({ length: 8 }, (_, index) => `| Row ${String(index)} | Value | Ready | Detail |`),
+        '',
+        '```typescript',
+        ...Array.from({ length: 12 }, (_, index) => `const scrollValue${String(index)} = ${String(index)}`),
+        '```',
+        '',
+        '[Scroll reference](https://example.com/drag-reference)',
+        '',
+        ...Array.from({ length: 24 }, (_, index) => `Trailing paragraph ${String(index)} leaves room to scroll every control above the transcript.\n`),
+        'Drag scroll fixture complete.',
+      ].join('\n')
+      session.append('assistant/message', { stream: [], turn: 1, step: 2, message: createAssistantMessage({
+        content: [{ type: 'text', text: markdown }], source: { provider: 'fixture', model: 'fixture' },
+      }) }, { surfaceOp: 'append' })
+      session.append('step/end', { turn: 1, step: 2 })
+      session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      await scaffold.ctx.sessions.flush(session)
+      await page.getByText('Drag scroll fixture complete.', { exact: true }).waitFor()
+      const tool = page.locator('[data-sample="bash"]').first()
+      await expandOwningTurnProcess(page, tool)
+      await tool.waitFor()
+      expect(await tool.getAttribute('role')).toBe('button')
+      expect(await tool.getAttribute('tabindex')).toBe('0')
+      await page.locator('.md-code-block pre[tabindex="0"]').waitFor()
+      await page.evaluate(async () => { await document.fonts.ready })
+      await settled(page)
+
+      const scrollport = page.locator('[data-conversation-scroll]').first()
+      const header = await rectOf(page, '[data-slot="conversation.header"] > header')
+      const controls = [
+        ['wide table', page.locator('.md-table-wide[tabindex="0"]')],
+        ['code block', page.locator('.md-code-block pre[tabindex="0"]')],
+        ['reference link', page.getByRole('link', { name: 'Scroll reference', exact: true })],
+        ['code action', page.locator('.md-code-block button').first()],
+        ['tool disclosure', tool],
+      ] as const
+      for (const [name, control] of controls) {
+        const [x, y] = await scrollBehindChrome(control, scrollport, header)
+        expect(await page.evaluate(point => document.elementFromPoint(point.x, point.y)?.closest('[data-window-drag]')
+          ?.matches('[data-slot="conversation.header"] > header') ?? false, { x, y }), name).toBe(true)
+        const regions = await collectedRegions(page, INTERACTIVE_SELECTOR)
+        expect(isDraggableAt(regions, x, y), `${name} cannot subtract clipped pixels from the header`).toBe(true)
+        const button = await rectOf(page, '[data-sidebar-right-expand]')
+        expect(isDraggableAt(regions, button.x + button.width / 2, button.y + button.height / 2),
+          'the header action stays clickable').toBe(false)
+      }
+      expect(tripwire.pageErrors).toEqual([])
+    } catch (error) {
+      await saveFailureShot(page, 'window-drag-scrolled-transcript')
+      throw error
+    } finally { await page.close() }
+  })
+
+  it('keeps no-drag subtraction within pane bodies and horizontally scrolling tab viewports', async () => {
+    const { page, tripwire } = await desktopPage()
+    try {
+      await connectTranscriptWorkspace(page, 'scrolled-drag-pane')
+      await page.locator('[data-sidebar-right-expand]').click()
+      const panel = page.locator('[data-sidebar-right-panel][data-sidebar-right-open]')
+      await panel.waitFor()
+      await settled(page)
+      const body = panel.locator('[data-dockkit-pane] > [class*="_paneBody_"]').first()
+      await body.waitFor()
+      // The existing pane supplies the no-drag owner; plain fixture content isolates CSS inheritance from plugin behavior.
+      await body.evaluate((element) => {
+        const content = document.createElement('div')
+        content.dataset.dragScrollFixture = ''
+        content.style.height = '240px'
+        content.textContent = 'Scrollable pane content'
+        const tail = document.createElement('div')
+        tail.style.height = '1600px'
+        element.append(content, tail)
+      })
+      const child = body.locator('[data-drag-scroll-fixture]')
+      const strip = await rectOf(page, '[data-dockkit-strip]')
+      const [x, y] = await scrollBehindChrome(child, body, strip)
+      expect(await body.evaluate(element => getComputedStyle(element).getPropertyValue('app-region'))).toBe('no-drag')
+      expect(await child.evaluate(element => getComputedStyle(element).getPropertyValue('app-region'))).toBe('none')
+      const regions = await collectedRegions(page, INTERACTIVE_SELECTOR)
+      expect(isDraggableAt(regions, x, y), 'scrolled descendants do not subtract the pane tab strip').toBe(true)
+
+      const tabs = panel.locator('[data-dockkit-strip-tabs]').first()
+      const tab = tabs.locator('[data-dockkit-tab]').first()
+      await tabs.evaluate((element) => {
+        const tail = document.createElement('div')
+        tail.style.flex = '0 0 1600px'
+        element.append(tail)
+        element.scrollTo({ left: 24, behavior: 'instant' })
+      })
+      await expect.poll(() => tabs.evaluate(element => element.scrollLeft)).toBe(24)
+      const viewport = await tabs.boundingBox()
+      const tabBounds = await tab.boundingBox()
+      if (viewport === null || tabBounds === null) throw new Error('The tab scroll fixture has no layout box')
+      const tabPoint = { x: viewport.x - 4, y: tabBounds.y + tabBounds.height / 2 }
+      expect(tabBounds.x).toBeLessThan(tabPoint.x)
+      expect(tabBounds.x + tabBounds.width).toBeGreaterThan(tabPoint.x)
+      expect(tabPoint.x).toBeGreaterThan(strip.x)
+      expect(await page.evaluate((point) => {
+        const hit = document.elementFromPoint(point.x, point.y)
+        return hit !== null && hit.closest('[data-dockkit-strip]') !== null && hit.closest('[data-dockkit-tab]') === null
+      }, tabPoint)).toBe(true)
+      expect(await tabs.evaluate(element => getComputedStyle(element).getPropertyValue('app-region'))).toBe('no-drag')
+      expect(await tab.evaluate(element => getComputedStyle(element).getPropertyValue('app-region'))).toBe('none')
+      expect(isDraggableAt(await collectedRegions(page, INTERACTIVE_SELECTOR), tabPoint.x, tabPoint.y),
+        'a clipped tab does not subtract the blank run beside its viewport').toBe(true)
+      expect(tripwire.pageErrors).toEqual([])
+    } catch (error) {
+      await saveFailureShot(page, 'window-drag-scrolled-pane')
+      throw error
+    } finally { await page.close() }
+  })
 
   it('keeps the macOS sidebar toggle stationary as its expanded content starts fading', async () => {
     const { page, tripwire } = await desktopPage()
@@ -357,10 +554,7 @@ describe('web e2e: macOS window drag coverage', () => {
   it('leaves no interactive box inside the drag surface, and keeps the panel strip row draggable', async () => {
     const { page, tripwire } = await desktopPage()
     try {
-      await connectFreshWorkspace(page, scaffold.workspaceCwd)
-      const agent = scaffold.ctx.agents.list()[0]
-      if (agent === undefined) throw new Error('connected workspace did not create an Agent')
-      agent.session.append('turn/start', { turn: 1 })
+      await connectTranscriptWorkspace(page, 'panel-drag-coverage')
       const pulsing = firstRecallPulse(page)
       await page.locator('[data-sidebar-right-expand]').click()
       await page.locator('[data-sidebar-right-panel][data-sidebar-right-open]').waitFor({ timeout: 15_000 })
@@ -506,12 +700,22 @@ describe('web e2e: macOS window drag coverage', () => {
   it('keeps the drawer titlebar draggable without swallowing its close button', async () => {
     const { page, tripwire } = await desktopPage()
     try {
+      await connectTranscriptWorkspace(page, 'drawer-drag-pane')
+      await page.locator('[data-sidebar-right-expand]').click()
+      await page.locator('[data-sidebar-right-panel][data-sidebar-right-open] [data-dockkit-pane]').first().waitFor()
+      // Retain the mounted pane without letting its narrow fullscreen presentation cover the drawer opener.
+      await page.locator('[data-sidebar-right-toggle]').click()
+      await page.locator('[data-sidebar-right-panel][data-sidebar-right-open]').waitFor({ state: 'hidden' })
       await page.setViewportSize({ width: 571, height: 696 })
       await page.locator('[data-sidebar-drawer][data-sidebar-collapsed]').waitFor()
       await page.locator('[data-shell-leading]').getByRole('button', { name: 'Open sidebar', exact: true }).click()
       const drawer = page.getByRole('dialog', { name: 'Navigation', exact: true })
       await drawer.waitFor()
       await settled(page)
+      expect(await page.locator('[inert] [data-dockkit-pane]').count()).toBeGreaterThan(0)
+      expect(await page.locator('[inert], [inert] *').evaluateAll(elements => elements
+        .filter(element => getComputedStyle(element).getPropertyValue('app-region') !== 'none')
+        .map(element => `${element.tagName}.${element.getAttribute('class')}`))).toEqual([])
       const toggle = drawer.getByRole('button', { name: 'Collapse sidebar', exact: true })
       const button = (await toggle.boundingBox())!
       const seat = await rectOf(page, '[data-shell-leading]')
@@ -527,6 +731,55 @@ describe('web e2e: macOS window drag coverage', () => {
     } finally {
       await page.close()
     }
+  })
+
+  it('subtracts tooltips and hover cards that cover otherwise draggable header pixels', async () => {
+    const { page, tripwire } = await desktopPage()
+    try {
+      await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
+      const opener = page.locator('[data-sidebar-opener]')
+      await opener.waitFor()
+      await settled(page)
+
+      /** Check a surface against the drag geometry captured before it opened. */
+      const assertOverlay = async (overlay: Locator, before: readonly RegionRect[]): Promise<void> => {
+        await overlay.waitFor()
+        expect(await overlay.evaluate(element => getComputedStyle(element).getPropertyValue('app-region'))).toBe('no-drag')
+        const bounds = await overlay.boundingBox()
+        if (bounds === null) throw new Error('The overlay has no layout box')
+        const edge = Math.min(4, bounds.height / 4)
+        const samples = [0.2, 0.5, 0.8].flatMap(column => [edge, bounds.height / 2, bounds.height - edge]
+          .map(row => [bounds.x + bounds.width * column, bounds.y + row] as const))
+        const point = samples.find(([x, y]) => isDraggableAt(before, x, y))
+        expect(point, 'the real overlay covers a previously draggable point').toBeDefined()
+        if (point === undefined) throw new Error('The overlay did not overlap the drag surface')
+        expect(isDraggableAt(await collectedRegions(page, INTERACTIVE_SELECTOR), ...point)).toBe(false)
+      }
+
+      const beforeTooltip = await collectedRegions(page, INTERACTIVE_SELECTOR)
+      await opener.hover()
+      await assertOverlay(page.getByRole('tooltip'), beforeTooltip)
+      await page.mouse.move(1000, 900)
+      await page.getByRole('tooltip').waitFor({ state: 'hidden' })
+      await opener.click()
+      const workspace = 'drag-overlay-workspace'
+      await connectFreshWorkspace(page, scaffold.workspaceCwd, workspace)
+      const row = page.locator('[data-row-key^="workspace:"]').filter({ hasText: workspace })
+      // Keep the shipped HoverCard and its portal; move only its anchor so the card crosses window chrome.
+      await row.locator('..').evaluate((element) => {
+        Object.assign((element as HTMLElement).style, { position: 'fixed', left: '320px', top: '12px', width: '260px', zIndex: '2000' })
+      })
+      await settled(page)
+      const beforeCard = await collectedRegions(page, INTERACTIVE_SELECTOR)
+      await row.hover()
+      const card = page.getByRole('button', { name: `Copy: ${join(scaffold.workspaceCwd, workspace)}`, exact: true })
+      await assertOverlay(card, beforeCard)
+      expect(await card.evaluate(element => element.parentElement?.parentElement === document.body)).toBe(true)
+      expect(tripwire.pageErrors).toEqual([])
+    } catch (error) {
+      await saveFailureShot(page, 'window-drag-hover-overlays')
+      throw error
+    } finally { await page.close() }
   })
 
   it('keeps an entry page’s chrome row draggable', async () => {

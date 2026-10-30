@@ -1,12 +1,11 @@
 /**
  * The window drag-region contract for the macOS desktop shell: Electron hands
  * the page's `-webkit-app-region` boxes to the native window, which hit-tests
- * them by geometry in DOM order, ignoring stacking. The property does not inherit:
- * Blink collects one box per element whose own computed value is not `none`,
- * skipping subtrees that are not visible, and the window applies them in that
- * order: `drag` adds geometry, `no-drag` removes it. The composition is therefore
- * equivalent to "the last matching box decides" — a point is draggable when the
- * last collected box containing it is `drag`.
+ * them by geometry in DOM order, ignoring stacking and overflow clipping.
+ * Chromium inherits the property; base.css resets it on each element so only
+ * explicit owners contribute boxes. Blink collects visible layout boxes whose
+ * computed value is not `none`: `drag` adds geometry and `no-drag` removes it.
+ * A point is draggable when the last collected box containing it is `drag`.
  *
  * This module is the executable statement of that rule. Production CSS authors
  * the boxes; tests and the browser coverage scenario both decide points through
@@ -48,10 +47,10 @@ export const DRAG_MARK = 'data-window-drag'
 export const RECALL_MARK = 'data-window-drag-recall'
 
 /**
- * The interactive-element selector that subtracts a control from any drag row it
- * overlaps. ui-web `base.css` declares it for the darwin platform; this constant
- * is the single source both that sheet and its contract spec compare against, so
- * the two cannot drift.
+ * The interactive-element selector that subtracts controls inside marked drag
+ * rows or explicit controls scopes. Terminal no-drag viewports own their whole
+ * box instead of their clipped controls. ui-web `base.css` scopes this on darwin;
+ * this constant is the source that sheet and its contract spec compare against.
  */
 export const INTERACTIVE_SELECTOR = [
   'button', 'a', 'input', 'select', 'textarea', 'summary', "[contenteditable='true']", '[tabindex]',

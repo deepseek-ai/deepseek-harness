@@ -311,16 +311,18 @@
    rule drags it over its own box; the chip run, the strip-end chrome, the pane
    body, and the split divider subtract their whole boxes so tabs, controls,
    content, and the resize grab stay usable wherever they overlap that row. The
-   divider must be named here: it is a plain div, so ui-web base.css's
+   chip viewport uses `data-window-no-drag` so clipped chips do not contribute
+   their scrolled boxes. The pane also subtracts its box when floats disable the
+   strip's drag mark. The divider must be named here: it is a plain div, so ui-web base.css's
    interactive-element subtraction never matches it. A floating pane subtracts its
    own box the same way, so the strip row never drags the window over it. Hidden
    surfaces contribute nothing: Blink skips non-visible boxes when it collects
    draggable regions. */
-:global(html[data-platform='darwin']) .stripTabs,
-:global(html[data-platform='darwin']) .stripChrome,
-:global(html[data-platform='darwin']) .paneBody,
-:global(html[data-platform='darwin']) .float,
-:global(html[data-platform='darwin']) .divider {
+:global(:where(html[data-platform='darwin'])) .pane,
+:global(:where(html[data-platform='darwin'])) .stripChrome,
+:global(:where(html[data-platform='darwin'])) .paneBody,
+:global(:where(html[data-platform='darwin'])) .float,
+:global(:where(html[data-platform='darwin'])) .divider {
   -webkit-app-region: no-drag;
 }
 
