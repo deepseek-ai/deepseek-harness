@@ -28,7 +28,9 @@
   padding-bottom: 10px;
 }
 
-/* Blank Sessions retain navigation controls without conversation title or tabs. */
+/* Blank Sessions retain navigation controls without conversation title or tabs.
+   The same 40px row (10px inset + 30px title row) applies before a Session
+   exists, so the Hero centers below one header height in both states. */
 .headerBlank {
   min-height: 0;
   padding-bottom: 0;
@@ -37,15 +39,6 @@
 
 .headerBlank .headerCorner {
   margin-left: auto;
-}
-
-/* Only the macOS titlebar needs reserved drag space before a Session exists. */
-:global(html:not([data-platform='darwin'])) .headerSessionless {
-  padding-top: 0;
-}
-
-:global(html:not([data-platform='darwin'])) .headerSessionless .titleRow {
-  min-height: 0;
 }
 
 /* macOS hiddenInset titlebar: the header block owns the window drag over its
@@ -332,8 +325,9 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  /* Concrete overflow content establishes z-index 1, while the sticky
-     composer remains above both layers. */
+  /* Fixed in every state: concrete overflow content (z-index 1) and the
+     composer seat (z-index 9) stay above the strip, so the footer band is
+     never a resize target. Pointer capture keeps a drag active under it. */
   z-index: 0;
   width: min(
     10px,
@@ -392,13 +386,6 @@
   .widthHandle:hover::after {
     opacity: 1;
   }
-}
-
-/* A drag starts above the composer band. Pointer capture keeps it active when
-   crossing the footer; lift only the active handle so its indicator remains
-   visible without making the resting footer gutter draggable. */
-.widthHandle[data-dragging] {
-  z-index: 8;
 }
 
 /* Views that elect a composer overlay (trajectory etc.) own their full-bleed
@@ -508,14 +495,27 @@
 .embeddedBody[data-content-phase='active'] .composerSeat {
   position: sticky;
   bottom: 0;
-  /* Above markdown CodeBlock sticky banners (z-index 6) so the footer never
-     paints under a sticking code header while scrolling. The pinned compaction
-     header (MessageItem.module.css, ui-chat) and the turn-navigation rail slot
-     (TurnNavigator.module.css, ui-chat) also take 7 to clear the same banners.
-     Among elements of equal rank the later one in DOM order wins, so the
-     composer stays above the pinned header on the extreme small-viewport
-     overlap and the pinned header stays above the rail. */
-  z-index: 7;
+  /* Takes the scroll body's free space whenever the transcript is shorter than
+     the scrollport, so the seat rests at the floor even when no View fills the
+     column. A sticky `bottom` only lifts a seat that would sit below the floor. */
+  margin-top: auto;
+  /* One fixed rank that no state changes: above markdown CodeBlock banners (6),
+     the pinned compaction header (7, MessageItem.module.css) and turn rail (7,
+     TurnNavigator.module.css) in ui-chat, and the back-to-bottom control (8,
+     ChatView.module.css), so menus the composer opens upward cover that
+     control. At rest the control sits 16px above the input card. */
+  z-index: 9;
+  /* A direct compositing reason: without it the seat is composited only while
+     it overlaps other composited content, so its layer could come and go with
+     the transcript beneath it. A transform hint keeps descendant backdrop blur
+     sampling the transcript, but makes the seat the containing block for
+     fixed-position descendants, so every fixed overlay inside the composer
+     (tooltips, menus, panels) must portal to the document body. The permanent
+     layer has a translucent top, so Chromium renders the seat's text with
+     grayscale antialiasing where it would otherwise use LCD text. */
+  will-change: transform;
+  /* Scroll anchoring never selects composer content as its anchor. */
+  overflow-anchor: none;
   /* Input mask (figma 1205:27463): transcript fades out under a FIXED 36px
      band at the seat's top (the figma 24% of the resting ~150px composer),
      solid below — px stops, not %, so a growing draft only widens the solid
@@ -527,15 +527,6 @@
     color-mix(in srgb, var(--dsw-alias-bg-base) 0%, transparent) 0px,
     var(--dsw-alias-bg-base) 36px
   );
-}
-
-/* An open @/slash menu (data-trigger-menu, ui-input-trigger) renders inside
-   the input card, so the seat's stacking context caps its z-index; lift the
-   seat above the back-to-bottom control (z-index 8, ui-chat ChatView) while
-   the menu is open. The steady state stays 7 so the control keeps painting
-   over the card. */
-.root[data-phase='active'] .composerSeat:has([data-trigger-menu]) {
-  z-index: 9;
 }
 
 /* Views may opt into a composer overlay while ConversationRoot retains
