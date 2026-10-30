@@ -41,7 +41,7 @@ kind: "package-reference"
 
 检查行先显示轮询预览。不完整时，卡片使用托管平台的总体状态而不显示失败总数，并注明已加载的检查数量尚不完整。打开列表后，经 `changeRequestChecks` 单独读取该 PR 的后续页，时限独立于轮询。读取失败时保留预览并提供重试。关闭列表、head 变化或组件卸载会取消读取，忽略迟到结果；重新打开会读取当前详情。Remote 要求 URL 是该 Session 可见的绑定，并拒绝 head 提交不一致的响应。
 
-diff 按文件树的深度优先顺序排列：同层目录在前、文件在后，各组按名称排序。筛选或折叠文件树不会改变 diff 的顺序。点击 diff 内容区可将焦点移入。左右方向键按 diff 顺序跳到上一个、下一个文件并展开它；到达首尾时停留。上下方向键保留原有滚动行为。手动滚动后，文件跳转从视口顶部的文件继续。文本编辑、非折叠文本选区、组合键、菜单与文件树控件保留各自的键盘行为。
+diff 按文件树的深度优先顺序排列：同层目录在前、文件在后，各组按显示名称以区分大小写的 UTF-16 码元顺序排序。压缩目录链作为一个完整名称参与比较。筛选或折叠文件树不会改变 diff 的顺序。点击 diff 内容区可将焦点移入。左右方向键按 diff 顺序跳到上一个、下一个文件并展开它；到达首尾时停留。上下方向键保留原有滚动行为。手动滚动后，文件跳转从视口顶部的文件继续。文本编辑、非折叠文本选区、组合键、菜单与文件树控件保留各自的键盘行为。
 
 `gitCommand`、`gitTimeoutMs`、`graceMs`、`maxOutputBytes`、`readinessTimeoutMs`、`maxBranches`、`worktreePrefix`、`maxDiffBytes`、`maxUntrackedFiles` 与 `maxCachedDiffBytes` 列在[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-client-ui-forge)中。
 

@@ -290,7 +290,10 @@ describe('ChangesTab keyboard file navigation', () => {
     expect(m.paths()).toEqual(expected)
   })
 
-  it.each([{ kind: 'local' }, { kind: 'change', url: URL7 }] as const)('moves between $kind files, expands the destination and keeps focus in the diff', async (source) => {
+  it.each([
+    { source: { kind: 'local' }, label: 'lib/a.txt → lib/b.txt' },
+    { source: { kind: 'change', url: URL7 }, label: 'src/app.ts' },
+  ] as const)('moves between $source.kind files, expands the destination and keeps focus in the diff', async ({ source, label }) => {
     const m = mount({ source })
     await settle()
     const { viewport, nodes } = fileViewport(m)
@@ -303,7 +306,7 @@ describe('ChangesTab keyboard file navigation', () => {
     expect(destination.hasAttribute('data-expanded')).toBe(true)
     expect(document.activeElement).toBe(viewport)
     const tree = within(m.view.getByRole('navigation'))
-    expect(tree.getByRole('button', { current: true }).getAttribute('aria-label')).toContain(destination.dataset.forgeDiffFile!)
+    expect(tree.getByRole('button', { current: true }).getAttribute('aria-label')).toBe(label)
     fireEvent.scroll(viewport)
     fireEvent.keyDown(viewport, { key: 'ArrowLeft' })
     expect(scrolled.mock.contexts.at(-1)).toBe(nodes[1])

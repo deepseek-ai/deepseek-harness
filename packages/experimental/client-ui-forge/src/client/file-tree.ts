@@ -59,7 +59,7 @@ export function changedFileTree(files: readonly ForgeDiffFile[]): readonly Chang
  * @returns the original file objects in display order.
  */
 export function filesInTreeOrder(nodes: readonly ChangedFileNode[]): readonly ForgeDiffFile[] {
-  return nodes.flatMap((node) => {
+  return nodes.flatMap((node): readonly ForgeDiffFile[] => {
     switch (node.kind) {
       case 'file': return [node.file]
       case 'directory': return filesInTreeOrder(node.children)
