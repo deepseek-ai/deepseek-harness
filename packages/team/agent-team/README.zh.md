@@ -57,19 +57,19 @@ kind: "package-reference"
 
 ### Teammate
 
-让 Lead 使用同级内唯一的 `name` 和工作 `description` 启动子代理：`subagent` 从全新上下文开始，`subagent_fork` 继承已完成轮次。返回的完整路径用于寻址队友；描述可以重复。
+让 Lead 使用工作 `description` 启动子代理：`subagent` 从全新上下文开始，`subagent_fork` 继承已完成轮次。返回的 Session id 用于寻址队友；描述可以重复。
 
 每个根 agent 及其后代组成一个 Team。任务可分配给根 agent 或 subagent 运行时发现的任意深度的可继续执行后代。历史名册记录仍可读取，但不授予分配权限。
 
 ### teammate 之间的消息
 
-成员通过标准 `list_agents` 发现整棵树，并通过 `send_message` 按完整 agent 路径联系另一成员。subagent 运行时负责路由、发送方归属和冷恢复。
+成员通过标准 `list_agents` 发现整棵树，并通过 `send_message` 按 Session id 联系另一成员。subagent 运行时负责路由、发送方归属和冷恢复。
 
 ### 共享任务板
 
 任何成员都可以添加任务，包含标题、详情、对其他任务的可选依赖，以及可选的文件触及提示。只有其全部依赖完成后，任务才可 claim。
 
-成员可认领任务开始工作、完成任务、释放任务或重新打开任务。根 agent 可按完整 agent 路径将任务重新分配给自身或任意可达的可继续执行后代。其他成员自行认领任务。所有变更均采用比较并交换，过期更新无法覆盖较新的工作。
+成员可认领任务开始工作、完成任务、释放任务或重新打开任务。根 agent 可按 Session id 将任务重新分配给自身或任意可达的可继续执行后代。其他成员自行认领任务。所有变更均采用比较并交换，过期更新无法覆盖较新的工作。
 
 当两个 in-progress 任务计划触及重叠路径时，文件提示会产生警告——它们绝不阻止任何操作。已删除任务保留在历史中，但从活动列表中消失。
 
@@ -146,7 +146,7 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 
 `agentTeam` 投影发布未删除任务视图，并在最后有效状态旁报告失败。历史名册与邮箱记录不会导致任务板投影失败。投影失败后，任务读取和修改均报错，不再追加任务事件。模式选择仍可保存并生效，包括关闭 Team；投影错误持续可见。无效模式载荷保留最后有效选择，并发布投影错误。[子系统参考](../../../docs/subsystems/agent-team.zh.md#web-projection)定义线上的类型。
 
-[Web UI](../../client/ui-agent-team/README.zh.md)仅展示任务。普通 subagent 导航负责成员列表；任务所有者标签复用 Session 和目录数据，缺失时使用 id。
+[Web UI](../../client/ui-agent-team/README.zh.md)仅展示任务。普通 subagent 导航负责成员列表；任务所有者标签显示 Session id。
 
 </details>
 
