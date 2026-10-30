@@ -3,6 +3,7 @@
 import { accessSync, constants } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 
 /** The name wecom-cli's guides and scripts run it by. */
 export const PROGRAM = 'wecom-cli'
@@ -20,11 +21,11 @@ function platformDirectory(): string {
 /**
  * Locate the managed executable.
  * @param binDir - absolute override; defaults to the `bin` of the installed `@wecom/cli-<platform>-<arch>` package.
- * @returns the absolute path of the executable `wecom-cli`.
+ * @returns the absolute path of the executable `wecom-cli`, `wecom-cli.exe` on Windows.
  * @throws when the platform package is missing or the executable is not executable.
  */
 export function resolveCliExecutable(binDir: string | undefined): string {
-  const program = join(binDir ?? platformDirectory(), PROGRAM)
+  const program = join(binDir ?? platformDirectory(), executableFileName(PROGRAM))
   try {
     accessSync(program, constants.X_OK)
   } catch (error) {

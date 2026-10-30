@@ -55,7 +55,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `binDir` | 已安装 `@wecom/cli-<platform>-<arch>` 包的 `bin` | 包含可执行 `wecom-cli` 的绝对目录 |
+| `binDir` | 已安装 `@wecom/cli-<platform>-<arch>` 包的 `bin` | 包含可执行 `wecom-cli`（Windows 上为 `wecom-cli.exe`）的绝对目录 |
 | `commandTimeoutMs` | `30000` | 单次授权检查的期限，包含可执行文件查找 |
 | `skillsDir` | 无 | 按仓库路径存放 `skills/` 文件的目录；设置后不下载子指南 |
 | `skillsUrls` | `['https://codeload.github.com']` | 按顺序尝试的归档下载前缀 |
@@ -73,7 +73,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 是注册为 `ctx.wecom` 的 Remote 服务。它检查 `binDir/wecom-cli` 是否可执行，在运行时上下文中把这个路径告诉模型，并通过[上游技能库](../upstream-skills/README.zh.md)按 [`src/skills.ts`](src/skills.ts) 中的固定信息注册 `wecom` skill。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。[`src/directory.ts`](src/directory.ts) 定位 `@wecom/cli` 作为可选依赖安装的平台包。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现企业微信的命令，并从 `auth init` 的输出行中读取扫码链接。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
+[`src/index.ts`](src/index.ts) 是注册为 `ctx.wecom` 的 Remote 服务。它检查 `binDir/wecom-cli`（Windows 上为 `wecom-cli.exe`）是否可执行，在运行时上下文中把这个路径告诉模型，并通过[上游技能库](../upstream-skills/README.zh.md)按 [`src/skills.ts`](src/skills.ts) 中的固定信息注册 `wecom` skill。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。[`src/directory.ts`](src/directory.ts) 定位 `@wecom/cli` 作为可选依赖安装的平台包。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现企业微信的命令，并从 `auth init` 的输出行中读取扫码链接。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
 
 [`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) 是本包携带的唯一 skill：DSH 指引、子指南索引和打开方式。上游只在其仓库发布这些子指南，没有放进 npm 包，因此由该库下载；它们是 skill 基础目录下的文件，不是独立的 skill。DSH 指引与 `wecomcli-shared` 不一致时，总入口要求 agent 以 DSH 指引为准：使用插件提供的 `wecom-cli`，不再自行安装，并把授权引导到插件页。引用文件是每个子指南目录中的普通文件。
 
@@ -136,6 +136,13 @@ WeCom CLI: run `wecom-cli` by its absolute path "<binDir>/wecom-cli"; the bare n
 Scripts in the WeCom skill call `wecom-cli` by name; prefix only the commands that run them with PATH="<binDir>:$PATH", and never export PATH or run `wecom-cli` by name yourself.
 ```
 
+##### Windows 上的运行时上下文条目
+
+```markdown
+WeCom CLI: run `wecom-cli` by its absolute path with the call operator, & '<binDir>\wecom-cli.exe'; the bare name may resolve to another installation or to none.
+Scripts in the WeCom skill call `wecom-cli` by name; start only the commands that run them with $env:PATH = '<binDir>;' + $env:PATH, and never run `wecom-cli` by name yourself.
+```
+
 #### Token 影响
 
 每份运行时上下文快照中两行，约 280 个字符加上路径及其目录。
@@ -148,7 +155,7 @@ Scripts in the WeCom skill call `wecom-cli` by name; prefix only the commands th
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 仅支持 macOS。其他平台未经验证，且不会定位 Windows 可执行文件名 `wecom-cli.exe`。
+- 仅支持 macOS 和 Windows x64；其他平台未经验证。`@wecom/cli` 没有发布 Windows arm64 平台包。
 - 命令必须在本 Host 上运行。组合把命令放到别处运行（例如通过 SSH）时，插件仍会加载，但每条运行 `wecom-cli` 的命令都会因为那里没有这个路径而失败。
 - 插件使用 CLI 的默认配置。在 DSH 中授权会影响用户自己的终端，没有 DSH 私有机器人或机器人选择器。`wecom-cli` 无法撤销授权，因此页面和关闭插件都不会移除它。
 - 连接从 `auth init --noninteractive --no-browser` 的纯文本输出中读取扫码链接；CLI 版本改变该输出时，连接以可重试的结果失败。

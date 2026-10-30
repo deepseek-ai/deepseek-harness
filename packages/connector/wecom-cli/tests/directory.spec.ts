@@ -2,7 +2,10 @@ import { constants } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 import { resolveCliExecutable } from '../src/directory.ts'
+
+const FILE = executableFileName('wecom-cli')
 
 const fs = vi.hoisted(() => ({ accessSync: vi.fn() }))
 vi.mock('node:fs', async importOriginal => ({ ...await importOriginal<typeof import('node:fs')>(), accessSync: fs.accessSync }))
@@ -17,8 +20,8 @@ beforeEach(() => {
 })
 
 it('defaults to the executable in the bin directory of the platform package that @wecom/cli installs', () => {
-  expect(resolveCliExecutable(undefined)).toBe(join(PACKAGE_BIN, 'wecom-cli'))
-  expect(fs.accessSync).toHaveBeenCalledWith(join(PACKAGE_BIN, 'wecom-cli'), constants.X_OK)
+  expect(resolveCliExecutable(undefined)).toBe(join(PACKAGE_BIN, FILE))
+  expect(fs.accessSync).toHaveBeenCalledWith(join(PACKAGE_BIN, FILE), constants.X_OK)
 })
 
 it('names the platform package @wecom/cli does not provide', () => {
@@ -30,8 +33,8 @@ it('names the platform package @wecom/cli does not provide', () => {
 })
 
 it('accepts a configured directory and names the missing executable with the remedy', () => {
-  expect(resolveCliExecutable('/opt/wecom/bin')).toBe('/opt/wecom/bin/wecom-cli')
+  expect(resolveCliExecutable('/opt/wecom/bin')).toBe(join('/opt/wecom/bin', FILE))
   fs.accessSync.mockImplementation(() => { throw new Error('EACCES') })
   expect(() => resolveCliExecutable(PACKAGE_BIN))
-    .toThrow(`wecom: ${join(PACKAGE_BIN, 'wecom-cli')} is not executable; reinstall the plugin or set binDir`)
+    .toThrow(`wecom: ${join(PACKAGE_BIN, FILE)} is not executable; reinstall the plugin or set binDir`)
 })

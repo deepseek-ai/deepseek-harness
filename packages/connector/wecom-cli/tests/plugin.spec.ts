@@ -5,6 +5,8 @@ import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
+import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
 import Wecom from '../src/index.ts'
 import { createBinDir, ScriptedSubprocess } from './harness.ts'
 
@@ -69,8 +71,7 @@ describe('WeCom plugin', () => {
     const fiber = await ctx.plugin(Wecom, { ...CONFIG, binDir, skillsDir })
     expect(await runtimeContext()).toEqual([{
       name: 'wecom:cli',
-      text: `WeCom CLI: run \`wecom-cli\` by its absolute path "${join(binDir, 'wecom-cli')}"; the bare name may resolve to another installation or to none.\n`
-        + `Scripts in the WeCom skill call \`wecom-cli\` by name; prefix only the commands that run them with PATH="${binDir}:$PATH", and never export PATH or run \`wecom-cli\` by name yourself.`,
+      text: cliPathContextText({ name: 'wecom:cli', product: 'WeCom', program: 'wecom-cli', executable: join(binDir, executableFileName('wecom-cli')), scripts: true }, process.platform),
     }])
     expect(await ctx.skills.list()).not.toEqual([])
 

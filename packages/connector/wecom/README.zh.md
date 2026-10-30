@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-企业微信插件让对话通过官方 `wecom-cli` 使用企业微信。安装这个 bundle 会加入两行：带技能的 CLI，以及插件页上的企业微信授权区块；用户在插件页扫码绑定机器人，不需要先开始对话。CLI 把授权保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
+企业微信插件让对话通过官方 `wecom-cli` 使用企业微信。安装这个 bundle 会加入两行：带技能的 CLI，以及插件页上的企业微信授权区块；用户在插件页扫码绑定机器人，不需要先开始对话。CLI 把授权保存在默认配置中，与用户自己的终端共用。仅支持 macOS 和 Windows x64。
 
 ## 目录
 
@@ -82,7 +82,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 仅支持 macOS；两个行包各自列出其限制。
+- 仅支持 macOS 和 Windows x64；两个行包各自列出其限制。
 
 <a id="dev-note"></a>
 ### 开发备注

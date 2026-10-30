@@ -55,7 +55,7 @@ A check runs `auth show --status`. The authorization reads `authorized` or `unau
 
 | Field | Default | Meaning |
 |---|---|---|
-| `binDir` | the installed `@wecom/cli-<platform>-<arch>` package's `bin` | Absolute directory containing an executable `wecom-cli` |
+| `binDir` | the installed `@wecom/cli-<platform>-<arch>` package's `bin` | Absolute directory containing an executable `wecom-cli`, `wecom-cli.exe` on Windows |
 | `commandTimeoutMs` | `30000` | Deadline for one authorization check, including executable lookup |
 | `skillsDir` | none | Directory holding the files of `skills/` at their repository paths; when set, the guides are not downloaded |
 | `skillsUrls` | `['https://codeload.github.com']` | Archive download prefixes tried in order |
@@ -73,7 +73,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-we
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.wecom`. It checks that `binDir/wecom-cli` is executable, gives that path to the model in runtime context, and registers the `wecom` skill through the [upstream skills library](../upstream-skills/README.md) with the pin in [`src/skills.ts`](src/skills.ts). The account view carries the download state, and each check restarts a failed download without waiting for it. [`src/directory.ts`](src/directory.ts) resolves the platform package that `@wecom/cli` installs as an optional dependency. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the WeCom commands and reads the QR-code link from the output lines of `auth init`. Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
+[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.wecom`. It checks that `binDir/wecom-cli` (`wecom-cli.exe` on Windows) is executable, gives that path to the model in runtime context, and registers the `wecom` skill through the [upstream skills library](../upstream-skills/README.md) with the pin in [`src/skills.ts`](src/skills.ts). The account view carries the download state, and each check restarts a failed download without waiting for it. [`src/directory.ts`](src/directory.ts) resolves the platform package that `@wecom/cli` installs as an optional dependency. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the WeCom commands and reads the QR-code link from the output lines of `auth init`. Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
 
 [`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) is the only skill this package carries: the DSH guidance, an index of the guides, and how to open them. Upstream publishes the guides only in its repository and not in the npm package, so the library downloads them; they are files under the skill's base directory, not separate skills. Where the DSH guidance and `wecomcli-shared` disagree, the entry tells the agent to follow the DSH guidance: it uses the plugin's `wecom-cli` instead of installing one, and sends authorization to the plugin page. References are ordinary files in each guide's directory.
 
@@ -136,6 +136,13 @@ WeCom CLI: run `wecom-cli` by its absolute path "<binDir>/wecom-cli"; the bare n
 Scripts in the WeCom skill call `wecom-cli` by name; prefix only the commands that run them with PATH="<binDir>:$PATH", and never export PATH or run `wecom-cli` by name yourself.
 ```
 
+##### Runtime-context entry on Windows
+
+```markdown
+WeCom CLI: run `wecom-cli` by its absolute path with the call operator, & '<binDir>\wecom-cli.exe'; the bare name may resolve to another installation or to none.
+Scripts in the WeCom skill call `wecom-cli` by name; start only the commands that run them with $env:PATH = '<binDir>;' + $env:PATH, and never run `wecom-cli` by name yourself.
+```
+
 #### Token effect
 
 Two lines of about 280 characters plus the path and its directory in each runtime-context snapshot.
@@ -148,7 +155,7 @@ The system prompt does not change; loading or unloading the row, or a changed pa
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only macOS is supported. Other platforms are unverified, and the Windows executable name `wecom-cli.exe` is not located.
+- Only macOS and Windows x64 are supported; other platforms are unverified. `@wecom/cli` publishes no Windows arm64 package.
 - Commands must run on this Host. When a composition runs them elsewhere, such as over SSH, the plugin still loads, and each command that runs `wecom-cli` fails because the path does not exist there.
 - The plugin uses the CLI's default configuration. Authorizing from DSH affects the user's own terminal, and there is no DSH-private bot or bot picker. `wecom-cli` cannot revoke the authorization, so neither the page nor turning the plugin off removes it.
 - Connection reads the QR-code link from the plain-text output of `auth init --noninteractive --no-browser`; a CLI version that changes that output fails the connection with a retryable result.

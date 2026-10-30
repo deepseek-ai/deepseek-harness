@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The WeCom plugin lets conversations use WeCom through the official `wecom-cli`. Installing this bundle adds two rows: the CLI with its skills, and the WeCom authorization section on the Plugins page, where the user binds a bot by scanning a QR code without starting a conversation. The CLI keeps the authorization in its default configuration, which the user's own terminal shares. Only macOS is supported.
+The WeCom plugin lets conversations use WeCom through the official `wecom-cli`. Installing this bundle adds two rows: the CLI with its skills, and the WeCom authorization section on the Plugins page, where the user binds a bot by scanning a QR code without starting a conversation. The CLI keeps the authorization in its default configuration, which the user's own terminal shares. Only macOS and Windows x64 are supported.
 
 ## Table of Contents
 
@@ -82,7 +82,7 @@ None beyond the `wecom` row's skill catalog; the bundle itself sends no provider
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only macOS is supported; the row packages list their own limitations.
+- Only macOS and Windows x64 are supported; the row packages list their own limitations.
 
 <a id="dev-note"></a>
 ### Dev Note

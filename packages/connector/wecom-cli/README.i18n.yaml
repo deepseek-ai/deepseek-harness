@@ -27,11 +27,11 @@
   en: 7d0ec689a89b609e
   zh: 86ce0058d42f38b1
 /deepseek-ai-dsh-wecom-cli/use-this-package/configure:
-  en: f1b6018a0973a809
-  zh: 7ef13b5390e8d188
+  en: 1cd879ed3382e9a3
+  zh: 7ffab4fbfe74ac73
 /deepseek-ai-dsh-wecom-cli/understand-the-implementation:
-  en: 889a6a3e2d8f98b3
-  zh: 7af9867550d1a69a
+  en: 1e91ac6e55d2aa1e
+  zh: 7c66c6858edd9048
 /deepseek-ai-dsh-wecom-cli/further-exploration:
   en: 981114250537a07b
   zh: 03dbf4b65446bd89
@@ -71,6 +71,9 @@
 /deepseek-ai-dsh-wecom-cli/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
   en: c91314832f78f460
   zh: aac156ea0b5b816a
+/deepseek-ai-dsh-wecom-cli/model-experience/cli-path/what-the-model-sees/runtime-context-entry-on-windows:
+  en: 54f899bbaf7ed198
+  zh: 31256473a192427b
 /deepseek-ai-dsh-wecom-cli/model-experience/cli-path/token-effect:
   en: 2caf581d193f3dba
   zh: 3b5e94d4cc69ca3b
@@ -78,8 +81,8 @@
   en: 67398dd4e4b02db9
   zh: a873eacd006fa656
 /deepseek-ai-dsh-wecom-cli/known-limitations-and-deferred-work:
-  en: bb6669be6f36bce5
-  zh: af1b95b1568836bb
+  en: 0a20579ae2c3c6e8
+  zh: 462c6b147628f9f9
 /deepseek-ai-dsh-wecom-cli/known-limitations-and-deferred-work/dev-note:
   en: 71cc23fc507e649e
   zh: 3dbd0498845467cc
