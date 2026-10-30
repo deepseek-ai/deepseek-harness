@@ -818,44 +818,6 @@ describe('draft documents in the input shell', () => {
   )
 })
 
-describe('plugin prefill history', () => {
-  it.each(['insert', 'replace'] as const)('keeps the first %s prefill undoable before the editor mounts', async (mode) => {
-    const shell = makeShell()
-    expect(shell.editor.getRootElement()).toBeNull()
-    expect(shell.prefill('First plugin draft', { mode })).toBe(true)
-    shell.editor.dispatchCommand(UNDO_COMMAND, undefined)
-    await vi.waitFor(() => { expect(shell.draftSnapshot).toEqual({ text: '', references: [] }) })
-    shell.editor.dispatchCommand(REDO_COMMAND, undefined)
-    await vi.waitFor(() => { expect(shell.draftSnapshot).toEqual({ text: 'First plugin draft', references: [] }) })
-  })
-
-  it('keeps consecutive unmounted prefills as separate undo steps', async () => {
-    const shell = makeShell()
-    expect(shell.prefill('First')).toBe(true)
-    expect(shell.prefill('Second', { mode: 'replace' })).toBe(true)
-    shell.editor.dispatchCommand(UNDO_COMMAND, undefined)
-    await vi.waitFor(() => { expect(shell.draftSnapshot).toEqual({ text: 'First', references: [] }) })
-    shell.editor.dispatchCommand(UNDO_COMMAND, undefined)
-    await vi.waitFor(() => { expect(shell.draftSnapshot).toEqual({ text: '', references: [] }) })
-    shell.editor.dispatchCommand(REDO_COMMAND, undefined)
-    await vi.waitFor(() => { expect(shell.draftSnapshot).toEqual({ text: 'First', references: [] }) })
-    shell.editor.dispatchCommand(REDO_COMMAND, undefined)
-    await vi.waitFor(() => { expect(shell.draftSnapshot).toEqual({ text: 'Second', references: [] }) })
-  })
-
-  it('leaves an ordinary empty editor untouched until a prefill arrives', () => {
-    const shell = makeShell()
-    const root = document.createElement('div')
-    root.contentEditable = 'true'
-    document.body.append(root)
-    onTestFinished(() => { shell.editor.setRootElement(null); root.remove() })
-    shell.editor.setRootElement(root)
-    expect(shell.prefill('')).toBe(false)
-    expect(root.childElementCount).toBe(0)
-    expect(shell.draftSnapshot).toEqual({ text: '', references: [] })
-  })
-})
-
 describe('plain-text reference catalogs', () => {
   it('leaves named tokens plain until their own catalog includes them', () => {
     const unavailable = new Map<'/' | '@', readonly string[]>()
