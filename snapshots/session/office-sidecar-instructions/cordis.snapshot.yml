@@ -52,8 +52,7 @@
       disabled: false
       config:
         assetRoot: !!js process.cwd() + '/office-skills'
-        cli: !!js process.env.DSH_BUNDLED_OFFICE_CLI ?? false
-        pythonEnvironment: workspace-dependencies
+        cli: false
 
 - id: tool-bash
   disabled: true

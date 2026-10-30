@@ -1,6 +1,5 @@
 /** Recorded-session replay through the shipped headless `dsh` profile. */
 
-import { desktopOfficeEnvironment } from '../../apps/desktop/src/office-cli.ts'
 import { startHttpMcpFixture } from '../../packages/mcp/mcp-client/tests/http-fixture.ts'
 import { chmod, cp, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -1407,10 +1406,6 @@ describe('headless recorded-session snapshots', () => {
         ? await startHttpMcpFixture({ rejectToolCalls: scenario.name === 'mcp-template-error' }) : undefined
       let result: Awaited<ReturnType<typeof runLoaderSmoke>>
       try {
-        const office = scenario.name === 'office-sidecar-instructions'
-          ? desktopOfficeEnvironment(join(spillRoot, 'app.asar', 'dsh'), join(spillRoot, 'runtime', 'primary-runtime'))
-          : undefined
-        if (office !== undefined) expect(office.kind).toBe('kit-unavailable')
         result = await runLoaderSmoke({
           label: `${scenario.name} headless snapshot`,
           tempDirPrefix: 'dsh-log-snap-',
@@ -1450,7 +1445,6 @@ describe('headless recorded-session snapshots', () => {
               ? {}
               : { DSH_PERMISSION_MODE: scenario.manifest.permission }),
             ...scenario.manifest.environment,
-            ...office?.environment,
             ...(scenario.name === 'mcp-resources' || scenario.name === 'mcp-resources-ptc' ? {
               DSH_MCP_RESOURCES_FIXTURE: join(repoRoot, 'packages/mcp/mcp-client/tests/fixtures/resources-server.ts'),
             } : {}),

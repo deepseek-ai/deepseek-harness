@@ -19,6 +19,12 @@
     },
     {
       "path": "../skill"
+    },
+    {
+      "path": "../../document/office-kit"
+    },
+    {
+      "path": "../../util/values"
     }
   ]
 }

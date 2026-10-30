@@ -53,6 +53,7 @@
       config:
         assetRoot: !!js process.cwd() + '/office-skills'
         cli: false
+        pythonEnvironment: user
 
 - id: tool-bash
   disabled: true

@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DesktopHostProcess } from '../src/host-process.ts'
-import { desktopOfficeEnvironment } from '../src/office-cli.ts'
 import { builtHost, prepareDesktopHome, repository } from './harness.ts'
 
 afterEach(() => { vi.unstubAllEnvs() })
@@ -66,13 +65,15 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
       writeFileSync(join(paths.profile, 'cordis.patch.yml'), '- id: webserver\n  config:\n    host: 127.0.0.1\n    port: 0\n')
       if (mode === 'missing-kit') installSkillProbe(root, paths.profile)
       const primaryRuntime = mode === 'relative-source' ? 'runtime/primary-runtime' : join(runtime, 'primary-runtime')
-      // An ASAR runtime path without its unpacked sibling locates no Kit; the Host itself still runs from the project.
-      writeFileSync(join(root, 'app.asar'), 'archive fixture')
-      const office = desktopOfficeEnvironment(mode === 'missing-kit' ? join(root, 'app.asar', 'dsh') : project, primaryRuntime)
-      expect(office.kind).toBe(mode === 'missing-kit' ? 'kit-unavailable' : 'ready')
+      if (mode === 'missing-kit') {
+        const nodeBin = join(primaryRuntime, 'dependencies', 'node', 'bin')
+        mkdirSync(nodeBin, { recursive: true })
+        writeFileSync(join(nodeBin, process.platform === 'win32' ? 'node.exe' : 'node'), '')
+      }
       const inherited: NodeJS.ProcessEnv = { ...process.env, DSH_BUNDLED_OFFICE_CLI: join(root, 'stale-cli.js') }
       host = new DesktopHostProcess(process.execPath, project, paths.profile, undefined,
-        { ...inherited, ...office.environment }, (error) => { failures.push(error) })
+        { ...inherited, DSH_BUNDLED_PRIMARY_RUNTIME: primaryRuntime,
+          DSH_BUNDLED_RUNTIME_ROOT: mode === 'missing-kit' ? project : undefined }, (error) => { failures.push(error) })
       const { url } = await host.start()
       // The authenticated URL exchanges its token for a session cookie by redirecting.
       const response = await fetch(url, { redirect: 'manual' })
@@ -87,7 +88,7 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
         expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS)
         expect(skills.content['office-docx']).toEqual(expect.any(String))
         expect(skills.content['office-docx']).not.toContain('LibreOffice Kit is disabled')
-        expect(skills.content['office-export-pdf']).toMatch(/\n\nLibreOffice Kit is disabled in this deployment\.$/u)
+        expect(skills.content['office-export-pdf']).toMatch(/\n\nLibreOffice Kit is not available in this deployment\.$/u)
         expect(skills.content['office-export-pdf']).not.toContain('libreofficeKit')
       }
       expect(failures).toEqual([])

@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/document/office-kit/README.md
+/:
+  en: d82e65e0aba9dfff
+  zh: d153f62694b8c0c6
+/deepseek-ai-dsh-office-kit:
+  en: 37156fb2f1de123c
+  zh: 44b77def8f181d4b
+/deepseek-ai-dsh-office-kit/summary:
+  en: 8594151e982956c1
+  zh: bf62ad569be39d7f
+/deepseek-ai-dsh-office-kit/table-of-contents:
+  en: 8454159e70cbfb27
+  zh: ce266c78e285fe9c
+/deepseek-ai-dsh-office-kit/use-this-package:
+  en: bdb62ed6ce658cf9
+  zh: bf7d07fef918380f
+/deepseek-ai-dsh-office-kit/locate-kit:
+  en: 37c66ceeb4ab5c84
+  zh: 7371945d1e0285c4
+/deepseek-ai-dsh-office-kit/understand-the-implementation:
+  en: 171f940605ab3c8b
+  zh: 784e20c927427316
+/deepseek-ai-dsh-office-kit/further-exploration:
+  en: 947e55254885b2b7
+  zh: 5b4138196e4fd688
+/deepseek-ai-dsh-office-kit/model-experience:
+  en: b03ae5780f8495eb
+  zh: 2a5428663141e3db
+/deepseek-ai-dsh-office-kit/model-experience/kv-cache-effect:
+  en: e77332dfb6691852
+  zh: 2d7ce43f908b35ef
+/deepseek-ai-dsh-office-kit/known-limitations-and-deferred-work:
+  en: ead6d24281dee00e
+  zh: 220fdf2d96bcbc19
+/deepseek-ai-dsh-office-kit/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

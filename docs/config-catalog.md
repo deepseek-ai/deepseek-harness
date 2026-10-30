@@ -2530,12 +2530,12 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-message-feedback -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-office-to-pdf -->
-<a id="deepseek-aidsh-office-to-pdf"></a>
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-office-kit -->
+<a id="deepseek-aidsh-office-kit"></a>
 
-## `@deepseek-ai/dsh-office-to-pdf`
+## `@deepseek-ai/dsh-office-kit`
 
-- `source`: [`packages/document/office-to-pdf/src/index.ts:32`](../packages/document/office-to-pdf/src/index.ts)
+- `source`: [`packages/document/office-kit/src/index.ts:32`](../packages/document/office-kit/src/index.ts)
 
 ```ts config-catalog
 /** Provider concurrency and kit rendering/font configuration. */
@@ -2580,7 +2580,7 @@ export interface Config {
   maxLoadedFontBytes: number
 }
 ```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-office-to-pdf -->
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-office-kit -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-permission-presets -->
 <a id="deepseek-aidsh-permission-presets"></a>
@@ -3422,7 +3422,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-skill-office`
 
 - `inject`: `skills`
-- `source`: [`packages/skill/skill-office/src/index.ts:40`](../packages/skill/skill-office/src/index.ts)
+- `source`: [`packages/skill/skill-office/src/index.ts:46`](../packages/skill/skill-office/src/index.ts)
 
 ```ts config-catalog
 /** Configuration after schema defaults apply. */
@@ -3437,9 +3437,14 @@ export interface Config {
   assetRoot?: string
   /** Standalone Node executable; defaults to the current executable outside Electron. */
   node?: string
-  /** Absolute LibreOffice Kit CLI entry; false explicitly disables CLI access. */
+  /** Absolute LibreOffice Kit CLI entry; false explicitly disables CLI access, and omission uses the CLI of this package's Kit. */
   cli?: string | false
-  /** Python environment named in the Python authoring and verification skills. @default 'user' */
+  /**
+   * Absolute directory restricting automatic Kit entry and CLI discovery after realpath and ASAR-unpacked mapping.
+   * Omission leaves discovery unrestricted; explicit `cli` bypasses the restriction.
+   */
+  kitRoot?: string
+  /** Python environment named in the Python authoring and verification skills. @default 'workspace-dependencies' */
   pythonEnvironment?: PythonEnvironment
 }
 
@@ -5100,7 +5105,6 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-llm-mock-server` | — | [`packages/test-support/llm-mock-server/src/index.ts`](../packages/test-support/llm-mock-server/src/index.ts) |
 | `@deepseek-ai/dsh-loader-smoke` | — | [`packages/test-support/loader-smoke/src/index.ts`](../packages/test-support/loader-smoke/src/index.ts) |
 | `@deepseek-ai/dsh-native-command` | — | [`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts) |
-| `@deepseek-ai/dsh-office-engine-resolver` | — | [`packages/document/office-engine-resolver/src/index.ts`](../packages/document/office-engine-resolver/src/index.ts) |
 | `@deepseek-ai/dsh-official-bundles` | — | [`packages/util/official-bundles/src/index.ts`](../packages/util/official-bundles/src/index.ts) |
 | `@deepseek-ai/dsh-output-retention` | — | [`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts) |
 | `@deepseek-ai/dsh-package-manifest` | — | [`packages/util/package-manifest/src/index.ts`](../packages/util/package-manifest/src/index.ts) |

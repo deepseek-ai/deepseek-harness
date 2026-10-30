@@ -7,8 +7,8 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include, { applyEntryPatches } from '@deepseek-ai/cordis-plugin-include'
 import { loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
-import { OfficeSourceKey, type OfficeToPdfRequest } from '@deepseek-ai/dsh-office-to-pdf'
-import * as LibreOfficeProvider from '@deepseek-ai/dsh-office-to-pdf'
+import { OfficeSourceKey, type OfficeKitRequest } from '@deepseek-ai/dsh-office-kit'
+import * as LibreOfficeProvider from '@deepseek-ai/dsh-office-kit'
 import { expect, it, onTestFinished } from 'vitest'
 
 it('loads one shared conversion row and retains caller-owned PDFs after disposal', async () => {
@@ -20,9 +20,9 @@ it('loads one shared conversion row and retains caller-owned PDFs after disposal
   })
   const rows = loadOverlayPatches('conversion-test', fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)))
     .flatMap(patch => patch.insert ?? [])
-    .filter(row => row.name === '@deepseek-ai/dsh-office-to-pdf')
-  expect(rows.map(row => row.id)).toEqual(['office-to-pdf'])
-  const configured = applyEntryPatches(rows, [{ id: 'office-to-pdf', config: { maxConcurrentConversions: 1 } }],
+    .filter(row => row.name === '@deepseek-ai/dsh-office-kit')
+  expect(rows.map(row => row.id)).toEqual(['office-kit'])
+  const configured = applyEntryPatches(rows, [{ id: 'office-kit', config: { maxConcurrentConversions: 1 } }],
     (message) => { throw new Error(message) })
   const configPath = join(directory, 'cordis.yml')
   await writeFile(configPath, JSON.stringify(configured))
@@ -33,19 +33,19 @@ it('loads one shared conversion row and retains caller-owned PDFs after disposal
   ctx.loader.internal = {
     version: 'v2',
     async import(specifier: string) {
-      if (specifier !== '@deepseek-ai/dsh-office-to-pdf') throw new Error(`Unexpected plugin: ${specifier}`)
+      if (specifier !== '@deepseek-ai/dsh-office-kit') throw new Error(`Unexpected plugin: ${specifier}`)
       return LibreOfficeProvider
     },
   } as unknown as NonNullable<typeof ctx.loader.internal>
   await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
   await ctx.loader.await()
-  const entry = [...ctx.loader.entries()].find(candidate => candidate.options.id === 'office-to-pdf')!
+  const entry = [...ctx.loader.entries()].find(candidate => candidate.options.id === 'office-kit')!
   await entry.fiber!.await()
   expect(ctx.get('workspaceFiles')).toBeUndefined()
   expect(ctx.get('skills')).toBeUndefined()
   const bytes = await readFile(new URL('./fixtures/document-conversion.docx', import.meta.url))
   let reads = 0
-  const request = (key: string): OfficeToPdfRequest => ({
+  const request = (key: string): OfficeKitRequest => ({
     extension: 'docx', priority: 'foreground',
     source: { key: OfficeSourceKey(key), version: 'fixture', bytes: bytes.length,
       async read(signal, maxBytes) {
@@ -56,7 +56,7 @@ it('loads one shared conversion row and retains caller-owned PDFs after disposal
       },
     },
   })
-  const provider = ctx.officeToPdf
+  const provider = ctx.officeKit
   const [first, second] = await Promise.all([provider.convert(request('first')), provider.convert(request('second'))])
   expect(reads).toBe(2)
   expect(Buffer.from(first.pdf).subarray(0, 5).toString()).toBe('%PDF-')

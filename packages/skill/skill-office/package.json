@@ -41,6 +41,8 @@
     "@deepseek-ai/cordis-plugin-include": "workspace:~"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-office-kit": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/libreoffice-kit": "0.2.3",
     "@deepseek-ai/schemastery": "workspace:~",
     "yaml": "^2.4.2"

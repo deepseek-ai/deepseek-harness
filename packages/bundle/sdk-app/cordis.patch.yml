@@ -47,7 +47,7 @@
         assetRoot: !!js "process.env.DSH_BUNDLED_OFFICE_SKILLS ?? ((process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME) ? process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME, '..', 'office-skills') : undefined)"
         cli: !!js "process.env.DSH_BUNDLED_OFFICE_CLI === '' ? false : process.env.DSH_BUNDLED_OFFICE_CLI"
         node: !!js "process.env.DSH_BUNDLED_OFFICE_NODE ?? ((process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME) ? process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME, 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node') : undefined)"
-        pythonEnvironment: !!js "(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME) ? 'workspace-dependencies' : 'user'"
+        pythonEnvironment: !!js "(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME) ? undefined : 'user'"
 
 # Share native desktop tools and model context without starting a Web server.
 - insert:

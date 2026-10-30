@@ -764,6 +764,9 @@ importers:
       '@deepseek-ai/dsh-home-paths':
         specifier: workspace:*
         version: link:../../packages/util/home-paths
+      '@deepseek-ai/dsh-office-kit':
+        specifier: workspace:*
+        version: link:../../packages/document/office-kit
       '@deepseek-ai/dsh-official-bundles':
         specifier: workspace:*
         version: link:../../packages/util/official-bundles
@@ -1540,9 +1543,9 @@ importers:
       '@deepseek-ai/dsh-message-feedback':
         specifier: workspace:*
         version: link:../../feedback/message-feedback
-      '@deepseek-ai/dsh-office-to-pdf':
+      '@deepseek-ai/dsh-office-kit':
         specifier: workspace:*
-        version: link:../../document/office-to-pdf
+        version: link:../../document/office-kit
       '@deepseek-ai/dsh-permission-presets':
         specifier: workspace:*
         version: link:../../interaction/permission-presets
@@ -3221,9 +3224,9 @@ importers:
       '@deepseek-ai/dsh-message-quotes':
         specifier: workspace:*
         version: link:../../session/message-quotes
-      '@deepseek-ai/dsh-office-to-pdf':
+      '@deepseek-ai/dsh-office-kit':
         specifier: workspace:*
-        version: link:../../document/office-to-pdf
+        version: link:../../document/office-kit
       '@deepseek-ai/dsh-persona':
         specifier: workspace:*
         version: link:../../preset/persona
@@ -6324,9 +6327,9 @@ importers:
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:*
         version: link:../../host/webserver
-      '@deepseek-ai/dsh-office-to-pdf':
+      '@deepseek-ai/dsh-office-kit':
         specifier: workspace:*
-        version: link:../../document/office-to-pdf
+        version: link:../../document/office-kit
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
@@ -8320,20 +8323,11 @@ importers:
         specifier: workspace:*
         version: link:../../session/working-directory
 
-  packages/document/office-engine-resolver:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
-
-  packages/document/office-to-pdf:
+  packages/document/office-kit:
     dependencies:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:*
         version: link:../../util/brand
-      '@deepseek-ai/dsh-office-engine-resolver':
-        specifier: workspace:*
-        version: link:../office-engine-resolver
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:*
         version: link:../../typert/protocol
@@ -15673,6 +15667,12 @@ importers:
 
   packages/skill/skill-office:
     dependencies:
+      '@deepseek-ai/dsh-office-kit':
+        specifier: workspace:*
+        version: link:../../document/office-kit
+      '@deepseek-ai/dsh-util-values':
+        specifier: workspace:*
+        version: link:../../util/values
       '@deepseek-ai/libreoffice-kit':
         specifier: 0.2.3
         version: 0.2.3

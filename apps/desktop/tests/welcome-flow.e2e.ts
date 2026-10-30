@@ -10,7 +10,6 @@ import { DesktopHostProcess } from '../src/host-process.ts'
 import { desktopClientMetadata } from '../src/client-metadata.ts'
 import { connectDesktopWelcome, type DesktopWelcomeBackend } from '../src/welcome-backend.ts'
 import { authenticateWebHost } from '../src/web-document.ts'
-import { desktopOfficeEnvironment } from '../src/office-cli.ts'
 import { builtHost, prepareDesktopHome, repository } from './harness.ts'
 
 afterEach(() => { vi.unstubAllEnvs() })
@@ -91,7 +90,7 @@ describe.skipIf(!existsSync(builtHost))('built Desktop welcome flow', () => {
       const restart = async (): Promise<void> => {
         await host?.stop()
         host = new DesktopHostProcess(process.execPath, project, paths.profile, undefined,
-          { ...process.env, ...desktopOfficeEnvironment(project, join(root, 'runtime', 'primary-runtime')).environment })
+          { ...process.env, DSH_BUNDLED_PRIMARY_RUNTIME: join(root, 'runtime', 'primary-runtime'), DSH_BUNDLED_RUNTIME_ROOT: undefined })
         const { url } = await host.start()
         hostOrigin = new URL(url).origin
         backend = connectDesktopWelcome(url, await authenticateWebHost(url))

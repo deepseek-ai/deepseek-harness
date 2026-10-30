@@ -15,7 +15,6 @@ import { en, zh } from '../src/locale.ts'
 import { DesktopUpdatePreparationError } from '../src/update-error.ts'
 import { writeCrashReport } from '../src/crash-report.ts'
 import { runOperationReportJob } from '../src/operation-report-job.ts'
-import { OFFICE_KIT_DIAGNOSTIC, desktopOfficeEnvironment, writeOfficeKitDiagnostic, type DesktopOfficeEnvironment } from '../src/office-cli.ts'
 
 type InvokeEvent = { sender?: unknown; senderFrame: { url: string } }
 type InvokeHandler = (event: InvokeEvent, ...args: unknown[]) => unknown
@@ -348,17 +347,6 @@ vi.mock('../src/login-shell-environment.ts', async importOriginal => ({
   readDesktopLoginShellEnvironment: harness.loginShell,
 }))
 vi.mock('../src/runtime-tree.ts', () => ({ readDesktopRuntime: () => ({ release: { version: '1.0.0' } }) }))
-// Most cases need a located Kit without a runtime tree; Office cases restore the real locator over fixtures.
-vi.mock('../src/office-cli.ts', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/office-cli.ts')>()
-  return {
-    ...actual,
-    desktopOfficeEnvironment: vi.fn((runtime: string, primaryRuntime: string): DesktopOfficeEnvironment => ({ kind: 'ready', environment: {
-      DSH_BUNDLED_PRIMARY_RUNTIME: primaryRuntime, DSH_BUNDLED_OFFICE_CLI: join(runtime, 'office-cli.js'),
-    } })),
-    writeOfficeKitDiagnostic: vi.fn(actual.writeOfficeKitDiagnostic),
-  }
-})
 vi.mock('../src/paths.ts', () => ({ resolveDesktopPaths: () => ({ profile: 'desktop-test-profile' }) }))
 vi.mock('../src/project-manager.ts', () => ({
   DesktopProjectManager: class {
@@ -484,6 +472,8 @@ beforeEach(() => {
   vi.stubEnv('DSH_DESKTOP_DSH_DIR', 'test-runtime')
   vi.stubEnv('DSH_DESKTOP_PRIMARY_RUNTIME_DIR', 'test-primary-runtime')
   vi.stubGlobal('process', { ...process, platform: 'win32', arch: 'x64', resourcesPath: 'desktop-test-resources' })
+  vi.stubEnv('DSH_BUNDLED_OFFICE_CLI', undefined)
+  vi.stubEnv('DSH_BUNDLED_RUNTIME_ROOT', undefined)
   vi.stubEnv('DSH_DESKTOP_HOST_INSPECT_PORT', undefined)
   vi.stubEnv('DSH_DESKTOP_DEV_PROJECT_DIR', undefined)
   vi.stubEnv('DSH_DESKTOP_MANDATORY_UPDATE_CONFIG', undefined)
@@ -515,8 +505,9 @@ describe('desktop main startup', () => {
     expect(host.node).toBe(process.execPath)
     expect(host.environment).toMatchObject({
       DSH_BUNDLED_PRIMARY_RUNTIME: packaged ? join('desktop-test-resources', 'runtime', 'primary-runtime') : 'test-primary-runtime',
-      DSH_BUNDLED_OFFICE_CLI: join(host.runtime, 'office-cli.js'),
+      DSH_BUNDLED_RUNTIME_ROOT: packaged ? join('desktop-test-app', 'dsh') : undefined,
     })
+    expect(host.environment).not.toHaveProperty('DSH_BUNDLED_OFFICE_CLI')
     expect(host.packageManager).toMatchObject({
       pnpm: packaged
         ? join('desktop-test-resources', 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs')
@@ -738,98 +729,26 @@ describe('desktop main startup', () => {
     expect(await invoke(DESKTOP_IPC.updatesStatus, 'app')).toMatchObject({ configurationError: 'channel' })
   })
 
-  /** Restore the real Kit locator over a development runtime path whose ASAR sibling has no unpacked runtime. */
-  async function missingKitRuntime(): Promise<string> {
+  it.each([true, false])('overrides an inherited Kit root before Host startup (packaged=%s)', async (packaged) => {
+    harness.app.isPackaged = packaged
+    vi.stubEnv('DSH_BUNDLED_RUNTIME_ROOT', 'stale-runtime')
+    const host = await readyForUpdate()
+    expect(host.environment).toHaveProperty('DSH_BUNDLED_RUNTIME_ROOT', packaged ? host.runtime : undefined)
+  })
+
+  it('starts the Host without resolving Kit or writing a diagnostic file', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-main-office-'))
     onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
     writeFileSync(join(root, 'app.asar'), 'archive fixture')
-    const actual = await vi.importActual<typeof import('../src/office-cli.ts')>('../src/office-cli.ts')
-    vi.mocked(desktopOfficeEnvironment).mockImplementationOnce(actual.desktopOfficeEnvironment)
     harness.app.isPackaged = false
     vi.stubEnv('DSH_DESKTOP_DSH_DIR', join(root, 'app.asar', 'dsh'))
-    // The login shell environment carries an earlier CLI value that the Office entries must replace.
-    vi.stubEnv('DSH_BUNDLED_OFFICE_CLI', join(root, 'stale-cli.js'))
-    return join(root, 'app.asar', 'dsh')
-  }
-
-  const launched = () => harness.analytics.mock.calls.some(([event]) => (event as { eventName: string }).eventName === 'desktop_app_launch')
-
-  it('starts the Host without a Kit CLI and records why when the bundled Kit cannot be located', async () => {
-    const runtime = await missingKitRuntime()
     const host = await readyForUpdate()
-    await vi.waitFor(() => { expect(launched()).toBe(true) })
+    await vi.waitFor(() => { expect(harness.analytics.mock.calls.some(([event]) => (event as { eventName: string }).eventName === 'desktop_app_launch')).toBe(true) })
     expect(host.environment).toHaveProperty('DSH_BUNDLED_PRIMARY_RUNTIME', 'test-primary-runtime')
-    expect(Object.hasOwn(host.environment!, 'DSH_BUNDLED_OFFICE_CLI')).toBe(true)
-    expect(host.environment!.DSH_BUNDLED_OFFICE_CLI).toBeUndefined()
-    const report = readFileSync(join(harness.app.getPath('logs'), OFFICE_KIT_DIAGNOSTIC), 'utf8')
-    expect(report).toContain(`runtime: ${runtime}`)
-    expect(report).toContain('Office skills and the Desktop Host continue without CLI paths')
-    expect(report).toContain('reinstall Desktop')
-    expect(report).toContain('ENOENT')
+    expect(host.environment).not.toHaveProperty('DSH_BUNDLED_OFFICE_CLI')
+    expect(existsSync(harness.app.getPath('logs'))).toBe(false)
     expect(writeCrashReport).not.toHaveBeenCalled()
     expect(harness.dialog.showMessageBox).not.toHaveBeenCalledWith(expect.objectContaining({ title: en.startupFailed }))
-  })
-
-  it('starts the Host when the Kit diagnostic cannot be written', async () => {
-    await missingKitRuntime()
-    writeFileSync(harness.app.getPath('logs'), 'not a directory')
-    await readyForUpdate()
-    await vi.waitFor(() => { expect(launched()).toBe(true) })
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('LibreOffice Kit diagnostic could not be written'),
-      join(harness.app.getPath('logs'), OFFICE_KIT_DIAGNOSTIC), expect.any(Error), expect.objectContaining({ code: 'ENOENT' }))
-    expect(writeCrashReport).not.toHaveBeenCalled()
-    expect(harness.dialog.showMessageBox).not.toHaveBeenCalledWith(expect.objectContaining({ title: en.startupFailed }))
-  })
-
-  it('settles Host readiness only after the pending Kit diagnostic', async () => {
-    await missingKitRuntime()
-    const diagnostic = Promise.withResolvers<undefined>()
-    vi.mocked(writeOfficeKitDiagnostic).mockImplementationOnce(() => diagnostic.promise)
-    const host = await readyForUpdate()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(launched()).toBe(false)
-    diagnostic.resolve(undefined)
-    await vi.waitFor(() => { expect(launched()).toBe(true) })
-    expect(host.stop).not.toHaveBeenCalled()
-  })
-
-  it('reports a Host startup failure as fatal only after the pending Kit diagnostic', async () => {
-    await missingKitRuntime()
-    const diagnostic = Promise.withResolvers<undefined>()
-    vi.mocked(writeOfficeKitDiagnostic).mockImplementationOnce(() => diagnostic.promise)
-    await import('../src/main.ts')
-    await harness.preparing.promise
-    harness.prepared.resolve()
-    await harness.hostStarted.promise
-    const host = harness.hosts[0]!
-    host.ready.reject(new Error('core services failed'))
-    await vi.advanceTimersByTimeAsync(0)
-    expect(host.stop).not.toHaveBeenCalled()
-    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
-    diagnostic.resolve(undefined)
-    await host.stopping.promise
-    host.exited.resolve()
-    await harness.dialogShown.promise
-    expect((harness.dialog.showMessageBox.mock.calls[0]![0] as MessageBoxOptions).detail).toContain('core services failed')
-  })
-
-  it('stops the spawned Host when quit arrives during the Kit diagnostic', async () => {
-    await missingKitRuntime()
-    const diagnostic = Promise.withResolvers<undefined>()
-    vi.mocked(writeOfficeKitDiagnostic).mockImplementationOnce(() => diagnostic.promise)
-    await import('../src/main.ts')
-    await harness.preparing.promise
-    harness.prepared.resolve()
-    await harness.hostStarted.promise
-    const host = harness.hosts[0]!
-    harness.app.quit()
-    await host.stopping.promise
-    host.exited.resolve()
-    diagnostic.resolve(undefined)
-    await harness.quitCompleted.promise
-    expect(host.stop).toHaveBeenCalledOnce()
-    expect(harness.hosts).toHaveLength(1)
-    expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
   })
 
   it('starts the Host with authentication popups disabled when local settings are invalid', async () => {

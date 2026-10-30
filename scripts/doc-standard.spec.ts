@@ -55,7 +55,6 @@ const KIND_TEMPLATES: Readonly<Record<string, string>> = {
  * library; the check re-derives the entry shape so a stale entry fails loud.
  */
 const PACKAGE_LIBRARIES: Readonly<Record<string, string>> = {
-  'packages/document/office-engine-resolver': 'Consumer-anchored Kit engine manifest resolver without plugin registration.',
   'packages/util/file-drag': 'File naming and native transfer declarations without a plugin entry.',
   'packages/experimental/browser-use-runtime': 'Provider-owned browser resource management and MCP integration helpers; no plugin entry.',
   'packages/boot/app-boot': 'Boot library the app bins import; plain helper exports.',

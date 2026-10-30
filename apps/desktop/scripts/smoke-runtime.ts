@@ -9,7 +9,9 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { readPrimaryRuntime, workspaceDependencyPaths } from '../../../packages/skill/tool-workspace-dependencies/src/index.ts'
 import { DesktopHostProcess } from '../src/host-process.ts'
-import { desktopOfficeEnvironment } from '../src/office-cli.ts'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
+import { resolveKitCli, unpackedPath } from '@deepseek-ai/dsh-office-kit/locate'
 import { createPluginProfile } from '../src/project-manager.ts'
 import type { DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
 
@@ -25,9 +27,16 @@ import type { DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
 export async function smokeDesktopRuntime(
   root: string, node: string, runtime: DesktopRuntimeDescriptor, environment: NodeJS.ProcessEnv, resourcesRuntime: string,
 ): Promise<void> {
-  const office = desktopOfficeEnvironment(root, join(resourcesRuntime, 'primary-runtime'))
-  // Desktop starts without a Kit CLI; a release that cannot locate one is still broken.
-  if (office.kind !== 'ready') throw new Error('desktop runtime: LibreOffice Kit CLI is missing from the runtime', { cause: office.error })
+  // Plain Node cannot read ASAR; the skill package anchor need not exist in the unpacked tree.
+  const anchor = unpackedPath(join(root, 'node_modules', '@deepseek-ai', 'dsh-skill-office', 'package.json'))
+  const office = resolveKitCli({
+    root,
+    lookupKitEntry: () => pathToFileURL(createRequire(anchor).resolve('@deepseek-ai/libreoffice-kit')),
+  })
+  if (office.kind !== 'available') {
+    throw new Error('desktop runtime: LibreOffice Kit CLI is missing from the runtime',
+      { cause: office.kind === 'missing' ? office.error : undefined })
+  }
   const home = mkdtempSync(join(tmpdir(), 'dsh-desktop-smoke-'))
   const profile = join(home, 'profiles', 'desktop')
   const hostEnvironment = {
@@ -39,7 +48,7 @@ export async function smokeDesktopRuntime(
     npm_config_store_dir: join(home, 'store'), npm_config_enable_global_virtual_store: 'false',
   }
   const host = new DesktopHostProcess(node, root, profile, undefined,
-    { ...hostEnvironment, ...office.environment },
+    { ...hostEnvironment, DSH_BUNDLED_PRIMARY_RUNTIME: join(resourcesRuntime, 'primary-runtime'), DSH_BUNDLED_RUNTIME_ROOT: root },
     undefined,
     { pnpm: join(resourcesRuntime, 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs'), nodeBin: join(resourcesRuntime, 'bin') })
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -128,7 +137,7 @@ export function apply(ctx) {
       async handler(_request, response) {
         try {
           const bytes = Buffer.from(input.bytes, 'base64')
-          const result = await ctx.officeToPdf.convert({ extension: input.extension, priority: 'foreground',
+          const result = await ctx.officeKit.convert({ extension: input.extension, priority: 'foreground',
             source: { key: 'desktop-smoke-' + input.extension, version: 'fixture', bytes: bytes.length,
               async read() { return { bytes, version: 'fixture' } } } })
           response.end(Buffer.from(result.pdf))
@@ -140,7 +149,7 @@ export function apply(ctx) {
   }
 }
 `)
-    writeFileSync(join(plugin, 'bundle.yml'), '- insert:\n    - id: desktop-runtime-smoke-plugin\n      name: desktop-runtime-smoke-plugin\n      inject: [webServer, officeToPdf, skills, pluginManager]\n')
+    writeFileSync(join(plugin, 'bundle.yml'), '- insert:\n    - id: desktop-runtime-smoke-plugin\n      name: desktop-runtime-smoke-plugin\n      inject: [webServer, officeKit, skills, pluginManager]\n')
     cpSync(plugin, join(profile, 'node_modules', pluginName), { recursive: true })
     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')) as {
       dependencies?: Record<string, string>

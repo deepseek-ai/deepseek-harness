@@ -11,11 +11,11 @@ Combined authoring and rendering instructions spend context on operations unrela
 ## Decision
 
 
-The [Office provider](../../../../packages/skill/skill-office/README.md) lists a compact router and six format-specific authoring or operation skills. The model loads full instructions by name and selects rendering for appearance-focused changes unless the user explicitly skips it. Rendering uses a private, randomly named temporary directory inside the task workspace and removes it after inspection. Skills invoke the shared Python checker and configured LibreOffice Kit CLI through ordinary Bash or PowerShell. The Web application and SDK profiles mount the skills in every deployment; the shared base does not. Only Desktop, or an SDK with a primary runtime, directs Python work to the bundled workspace dependencies.
+The [Office provider](../../../../packages/skill/skill-office/README.md) lists a compact router and six format-specific authoring or operation skills. The model loads full instructions by name and selects rendering for appearance-focused changes unless the user explicitly skips it. Rendering uses a private, randomly named temporary directory inside the task workspace and removes it after inspection. Skills invoke the shared Python checker and configured LibreOffice Kit CLI through ordinary Bash or PowerShell. SDK and Desktop own their Office composition separately; ordinary Web and the shared base do not mount these plugins. [Office skills in every deployment](2026-10-26-cross-deployment-office-kit.md) supersedes this mounting decision.
 
 Carriers own interpreter and resource locations. Operation skills append the configured Node and CLI paths only when their bodies are loaded; authoring skills use the selected Python and shared checker resource. Loading instructions does not prepare engines or authoring payloads. Ordinary shell execution retains its existing permissions and process management.
 
-Office dependency ranges allow patch updates; the root lock records the resolved adapter and engine versions.
+LibreOffice Kit dependencies declare one exact version in every manifest; the root lock records the resolved adapter and engine versions.
 
 ## Alternatives considered
 

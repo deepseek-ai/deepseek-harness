@@ -11,11 +11,11 @@ Status: implemented
 ## 决策
 
 
-[Office 提供者](../../../../packages/skill/skill-office/README.zh.md) 列出精简路由和六个各格式创作或操作技能。模型按名称加载完整说明；以外观为目标的修改会选择渲染，除非用户明确要求跳过。渲染使用任务工作区内随机命名的私有临时目录，并在检查后删除。技能通过普通 Bash 或 PowerShell 调用共享 Python 检查器和配置的 LibreOffice Kit CLI。Web 应用和 SDK profile 在所有部署中挂载这些技能；共享 base 不挂载。只有 Desktop 或带主运行时的 SDK 把 Python 工作导向内置的工作区依赖。
+[Office 提供者](../../../../packages/skill/skill-office/README.zh.md) 列出精简路由和六个各格式创作或操作技能。模型按名称加载完整说明；以外观为目标的修改会选择渲染，除非用户明确要求跳过。渲染使用任务工作区内随机命名的私有临时目录，并在检查后删除。技能通过普通 Bash 或 PowerShell 调用共享 Python 检查器和配置的 LibreOffice Kit CLI。SDK 和 Desktop 分别拥有 Office 组合；普通 Web 和共享 base 不挂载这些插件。[Office 技能在所有部署中可用](2026-10-26-cross-deployment-office-kit.zh.md)取代此挂载决策。
 
 载体负责解释器和资源位置。操作技能仅在加载正文时附加配置的 Node 与 CLI 路径；创作技能使用选定的 Python 和共享检查器资源。加载说明不准备引擎或创作 payload。普通 shell 执行保留现有权限和进程管理。
 
-Office 依赖范围允许补丁版本更新；根锁文件记录实际解析的适配器与引擎版本。
+LibreOffice Kit 依赖在每个清单中声明同一个精确版本；根锁文件记录实际解析的适配器与引擎版本。
 
 ## 考虑过的替代方案
 
