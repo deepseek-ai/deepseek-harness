@@ -11,7 +11,8 @@ interface SubmenuPosition {
 }
 
 /**
- * Fit a child beside its parent, or over the parent's panel when neither side fits.
+ * Fit a child beside its parent, or over the parent's panel when neither side fits
+ * the visual viewport, using the root Menu's WebKit coordinate normalization.
  * CSS cannot choose a sibling portal's placement from both measured card widths.
  * This hook owns the child's inline width; callers must not also render that style.
  * Scroll and viewport resize place immediately. Observer and font changes share one
@@ -39,6 +40,10 @@ export function useMenuSubmenuPosition(
     /* v8 ignore next -- Menu mounts all three refs before activating this layout effect; cleanup disconnects their observers. */
     if (parentElement === null || triggerElement === null || childElement === null) return
     const initialWidth = childElement.style.width
+    const viewport = window.visualViewport
+    // Match useAnchoredPosition: WebKit client rects start at the visual origin,
+    // while fixed CSS coordinates and viewport bounds use the layout origin.
+    const visualOrigin = typeof window.CSS !== 'undefined' && window.CSS.supports('-webkit-backdrop-filter', 'none')
     let disposed = false
     let frame: number | null = null
     let movement: IntersectionObserver[] = []
@@ -72,24 +77,28 @@ export function useMenuSubmenuPosition(
       const row = triggerElement.getBoundingClientRect()
       const margin = 12
       const gap = 4
-      const vw = window.innerWidth
-      const vh = window.innerHeight
+      const viewportLeft = viewport?.offsetLeft ?? 0
+      const viewportTop = viewport?.offsetTop ?? 0
+      const vw = viewport?.width ?? (document.documentElement.clientWidth || window.innerWidth)
+      const vh = viewport?.height ?? (document.documentElement.clientHeight || window.innerHeight)
+      const offsetX = visualOrigin ? viewportLeft : 0
+      const offsetY = visualOrigin ? viewportTop : 0
       const topMargin = contextual ? margin : overlayTopMargin(margin, row, gap)
       const maxHeight = Math.max(0, vh - topMargin - margin)
       // Intrinsic width is refreshed only on placement invalidation, not idle frames.
       if (childElement.style.width !== '') childElement.style.width = ''
       const width = childElement.offsetWidth
-      const right = panel.right + gap
-      const left = panel.left - gap - width
-      const page = right + width > vw - margin && left < margin
+      const right = offsetX + panel.right + gap
+      const left = offsetX + panel.left - gap - width
+      const page = right + width > viewportLeft + vw - margin && left < viewportLeft + margin
       const pageWidth = Math.min(Math.max(panel.width, width), vw - margin * 2)
       const actualWidth = page ? pageWidth : width
-      const x = page ? panel.left : right + width <= vw - margin ? right : left
+      const x = page ? offsetX + panel.left : right + width <= viewportLeft + vw - margin ? right : left
       const height = Math.min(childElement.offsetHeight, maxHeight)
-      const y = page ? panel.top : row.top
+      const y = offsetY + (page ? panel.top : row.top)
       const next: SubmenuPosition = {
-        left: Math.max(margin, Math.min(x, vw - actualWidth - margin)),
-        top: Math.max(topMargin, Math.min(y, vh - height - margin)),
+        left: Math.max(viewportLeft + margin, Math.min(x, viewportLeft + vw - actualWidth - margin)),
+        top: Math.max(viewportTop + topMargin, Math.min(y, viewportTop + vh - height - margin)),
         maxHeight,
         ...(page ? { width: pageWidth } : {}),
         page,
@@ -97,7 +106,9 @@ export function useMenuSubmenuPosition(
       if (page) childElement.style.width = `${pageWidth}px`
       setPosition(current => current?.left === next.left && current.top === next.top
         && current.maxHeight === next.maxHeight && current.width === next.width && current.page === next.page ? current : next)
-      const boxes = [panel.left, panel.top, panel.width, panel.height, row.left, row.top, row.width, row.height, vw, vh].join(',')
+      const boxes = [
+        panel.left, panel.top, panel.width, panel.height, row.left, row.top, row.width, row.height, vw, vh, viewportLeft, viewportTop,
+      ].join(',')
       if (typeof IntersectionObserver !== 'undefined' && boxes !== previousBoxes) {
         for (const observer of movement) observer.disconnect()
         movement = []
@@ -132,6 +143,8 @@ export function useMenuSubmenuPosition(
     fonts?.addEventListener('loadingerror', schedule)
     window.addEventListener('resize', place)
     window.addEventListener('scroll', place, true)
+    viewport?.addEventListener('resize', place)
+    viewport?.addEventListener('scroll', place)
     return () => {
       disposed = true
       if (frame !== null) cancelAnimationFrame(frame)
@@ -143,6 +156,8 @@ export function useMenuSubmenuPosition(
       fonts?.removeEventListener('loadingerror', schedule)
       window.removeEventListener('resize', place)
       window.removeEventListener('scroll', place, true)
+      viewport?.removeEventListener('resize', place)
+      viewport?.removeEventListener('scroll', place)
       childElement.style.width = initialWidth
     }
   }, [active, parent, trigger, child, contextual])

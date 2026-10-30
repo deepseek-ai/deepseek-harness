@@ -11653,6 +11653,12 @@ importers:
       buffer:
         specifier: ^6.0.3
         version: 6.0.3
+      eslint-scope:
+        specifier: ^9.1.2
+        version: 9.1.2
+      eslint-visitor-keys:
+        specifier: ^5.0.1
+        version: 5.0.1
       picomatch:
         specifier: ^4.0.7
         version: 4.0.7
@@ -11714,6 +11720,9 @@ importers:
       '@deepseek-ai/node-addon-system':
         specifier: workspace:~
         version: link:../../../native/system/packages/entry
+      '@types/estree':
+        specifier: ^1.0.9
+        version: 1.0.9
       '@types/picomatch':
         specifier: ^4.0.3
         version: 4.0.3

@@ -1139,9 +1139,6 @@
   "packages/experimental/webworker-packer/tests/preview.spec.ts": {
     "cdd46c8ceda6d5707bc2abfba329351ba06bcc030b314a3c799d72a4971bd5a4": 1
   },
-  "packages/experimental/webworker-runtime/src/compile/transform.ts": {
-    "48bb7e26a882fa7a44a4175f843d20846606976c7d6fdaf67c8a08dd8830b95e": 1
-  },
   "packages/experimental/webworker-runtime/src/node/builtin_modules/implemented/stream.ts": {
     "8d4298961ca8095e069df7c940bd5082e0a90f76a24f517d5f547566e0631b6c": 1
   },

@@ -96,6 +96,7 @@
     "apps/web/tests/cua-permissions.e2e.ts",
     "apps/web/tests/schedule-header.e2e.ts",
     "apps/web/tests/schedule-phone.e2e.ts",
+    "apps/web/tests/schedule-pickers.e2e.ts",
     "apps/web/tests/worktree-opt-in.e2e.ts",
     "apps/web/tests/session-inspector.e2e.ts",
     "apps/web/tests/shared-inspector.e2e.ts",
