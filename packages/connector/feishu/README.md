@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The Feishu plugin lets conversations use Feishu through the official `lark-cli`. Installing this bundle adds two rows: the CLI with its embedded skills, and the Feishu account section on the Plugins page, where the user links an app and signs in without starting a conversation. The CLI keeps the account in its default configuration, which the user's own terminal shares. Only macOS is supported.
+The Feishu plugin lets conversations use Feishu through the official `lark-cli`. Installing this bundle adds two rows: the CLI with its embedded skills, and the Feishu account section on the Plugins page, where the user links an app and signs in without starting a conversation. The CLI keeps the account in its default configuration, which the user's own terminal shares. Only macOS and Windows x64 are supported.
 
 ## Table of Contents
 
@@ -82,7 +82,7 @@ None beyond the `feishu` row's skill catalog; the bundle itself sends no provide
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only macOS is supported; the row packages list their own limitations.
+- Only macOS and Windows x64 are supported; the row packages list their own limitations.
 
 <a id="dev-note"></a>
 ### Dev Note

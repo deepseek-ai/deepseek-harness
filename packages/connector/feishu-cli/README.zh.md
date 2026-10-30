@@ -55,7 +55,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `binDir` | 已安装 `@larksuite/cli` 包的 `bin` | 包含可执行 `lark-cli` 的绝对目录 |
+| `binDir` | 已安装 `@larksuite/cli` 包的 `bin` | 包含可执行 `lark-cli`（Windows 上为 `lark-cli.exe`）的绝对目录 |
 | `commandTimeoutMs` | `30000` | 单条 skill 命令、账号检查或退出登录的期限，包含可执行文件查找 |
 
 应用配置和登录最多等待用户在浏览器中操作 10 分钟，每条命令最多保留 1 MiB 的 stdout；这两个上限由 [CLI 账号库](../cli-account/README.zh.md)固定。
@@ -70,7 +70,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 是注册为 `ctx.feishu` 的 Remote 服务。它检查 `binDir/lark-cli` 是否可执行，在运行时上下文中把这个路径告诉模型，并注册 skill 提供方。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli` 并解析其命令的 JSON 输出。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个账号操作。[`src/account.ts`](src/account.ts) 在该运行时上实现飞书的命令，从命令输出行中读取配置与登录链接，并通过 [`src/diagnostic.ts`](src/diagnostic.ts) 对失败分类。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
+[`src/index.ts`](src/index.ts) 是注册为 `ctx.feishu` 的 Remote 服务。它检查 `binDir/lark-cli`（Windows 上为 `lark-cli.exe`）是否可执行，在运行时上下文中把这个路径告诉模型，并注册 skill 提供方。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli` 并解析其命令的 JSON 输出。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个账号操作。[`src/account.ts`](src/account.ts) 在该运行时上实现飞书的命令，从命令输出行中读取配置与登录链接，并通过 [`src/diagnostic.ts`](src/diagnostic.ts) 对失败分类。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
 
 [`src/skills.ts`](src/skills.ts) 列出 `feishu` skill 时不运行 CLI。每次加载运行 `lark-cli skills list --json`，依次放入 DSH 指引、由每个子指南名称与描述组成的索引，以及打开子指南及其引用文件的说明；目录读取失败时本次加载失败，下次加载会重新读取目录。子指南内嵌在二进制中，因此 skill 的资源基址是 opaque 类型。
 
@@ -163,6 +163,12 @@ Read a file that a guide references, such as `references/...`, with `lark-cli sk
 Feishu CLI: run `lark-cli` by its absolute path "<binDir>/lark-cli"; the bare name may resolve to another installation or to none.
 ```
 
+##### Windows 上的运行时上下文条目
+
+```markdown
+Feishu CLI: run `lark-cli` by its absolute path with the call operator, & '<binDir>\lark-cli.exe'; the bare name may resolve to another installation or to none.
+```
+
 #### Token 影响
 
 每份运行时上下文快照中一行，约 110 个字符加上路径。
@@ -175,7 +181,7 @@ Feishu CLI: run `lark-cli` by its absolute path "<binDir>/lark-cli"; the bare na
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 仅支持 macOS。其他平台未经验证，且不会定位 Windows 可执行文件名 `lark-cli.exe`。
+- 仅支持 macOS 和 Windows x64；其他平台未经验证。
 - 命令必须在本 Host 上运行。组合把命令放到别处运行（例如通过 SSH）时，插件仍会加载，但每条运行 `lark-cli` 的命令都会因为那里没有这个路径而失败。
 - 插件使用 CLI 的默认配置。在 DSH 中登录或退出会影响用户自己的终端，没有 DSH 私有账号或账号选择器。插件不提供解绑操作；关闭插件会保留配置与登录。
 - 登录从 `lark-cli auth login --json` 的事件中读取设备授权链接和完成结果；CLI 版本改变这些事件时，连接以可重试的结果失败。

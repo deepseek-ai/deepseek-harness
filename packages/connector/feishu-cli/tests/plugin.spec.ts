@@ -4,6 +4,8 @@ import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry, { renderSkillContent } from '@deepseek-ai/dsh-skill'
 import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
+import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
 import Feishu from '../src/index.ts'
 import { byArguments, CATALOG, createBinDir, ScriptedSubprocess } from './harness.ts'
 
@@ -68,7 +70,7 @@ describe('Feishu plugin', () => {
     expect(sections.indexOf('## Opening a guide')).toBeGreaterThan(guides)
     expect(content).toContain('open one with `lark-cli skills read <name>` in the Host Shell, not with the skill tool')
     expect(content).toContain('without the leading `../`: `lark-cli skills read lark-foo/...`')
-    expect(subprocess.lookups.map(lookup => lookup.command)).toEqual([join(binDir, 'lark-cli')])
+    expect(subprocess.lookups.map(lookup => lookup.command)).toEqual([join(binDir, executableFileName('lark-cli'))])
   })
 
   it('renders the lark-cli 1.0.97 guide index below the tool-result pruning threshold', async () => {
@@ -117,7 +119,7 @@ describe('Feishu plugin', () => {
     const fiber = await ctx.plugin(Feishu, { ...CONFIG, binDir })
     expect(await runtimeContext()).toEqual([{
       name: 'feishu:cli',
-      text: `Feishu CLI: run \`lark-cli\` by its absolute path "${join(binDir, 'lark-cli')}"; the bare name may resolve to another installation or to none.`,
+      text: cliPathContextText({ name: 'feishu:cli', product: 'Feishu', program: 'lark-cli', executable: join(binDir, executableFileName('lark-cli')) }, process.platform),
     }])
     const loading = expect(load()).rejects.toThrow()
     await vi.waitFor(() => { expect(subprocess.processes).toHaveLength(1) })

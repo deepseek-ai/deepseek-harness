@@ -27,11 +27,11 @@
   en: 21b806690bb289f6
   zh: 08465992827a0e3c
 /deepseek-ai-dsh-feishu-cli/use-this-package/configure:
-  en: 6e777c8d3e50258e
-  zh: 6622a5fa0f2b0775
+  en: d4458b73049501cd
+  zh: f929f9aada46111b
 /deepseek-ai-dsh-feishu-cli/understand-the-implementation:
-  en: 796e562005463d41
-  zh: 1be570f8158483e0
+  en: 51921c1d270a397e
+  zh: d55ebd66db3159d8
 /deepseek-ai-dsh-feishu-cli/further-exploration:
   en: fcf26946d254f126
   zh: 31f194af698606d9
@@ -80,6 +80,9 @@
 /deepseek-ai-dsh-feishu-cli/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
   en: c91314832f78f460
   zh: aac156ea0b5b816a
+/deepseek-ai-dsh-feishu-cli/model-experience/cli-path/what-the-model-sees/runtime-context-entry-on-windows:
+  en: 54f899bbaf7ed198
+  zh: 31256473a192427b
 /deepseek-ai-dsh-feishu-cli/model-experience/cli-path/token-effect:
   en: 2952585b710ffd05
   zh: 6e93e58b6256d534
@@ -87,8 +90,8 @@
   en: 67398dd4e4b02db9
   zh: a873eacd006fa656
 /deepseek-ai-dsh-feishu-cli/known-limitations-and-deferred-work:
-  en: 3806fa58c1987177
-  zh: 6f41143f206e5b9e
+  en: 950376afffef9d49
+  zh: a2c6f7ae150ff5ca
 /deepseek-ai-dsh-feishu-cli/known-limitations-and-deferred-work/dev-note:
   en: ae8a15329b9dc2d8
   zh: bec9872542b38b58

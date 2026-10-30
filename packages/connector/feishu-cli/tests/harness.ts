@@ -4,6 +4,7 @@ import { chmod, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type {
   SubprocessCollectedOutputs,
@@ -116,13 +117,13 @@ export function byArguments(replies: Record<string, CliReply>): (process: Script
 }
 
 /**
- * Create a temporary directory holding an executable `lark-cli` placeholder.
+ * Create a temporary directory holding an executable `lark-cli` placeholder, `lark-cli.exe` on Windows.
  * @returns the absolute bin directory.
  */
 export async function createBinDir(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-feishu-bin-'))
-  await writeFile(join(directory, 'lark-cli'), '')
-  await chmod(join(directory, 'lark-cli'), 0o755)
+  await writeFile(join(directory, executableFileName('lark-cli')), '')
+  await chmod(join(directory, executableFileName('lark-cli')), 0o755)
   return directory
 }
 

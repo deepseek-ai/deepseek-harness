@@ -55,7 +55,7 @@ A check runs `auth status --verify --json`. The account reads `connected` only w
 
 | Field | Default | Meaning |
 |---|---|---|
-| `binDir` | the installed `@larksuite/cli` package's `bin` | Absolute directory containing an executable `lark-cli` |
+| `binDir` | the installed `@larksuite/cli` package's `bin` | Absolute directory containing an executable `lark-cli`, `lark-cli.exe` on Windows |
 | `commandTimeoutMs` | `30000` | Deadline for one skill command, account check, or sign-out, including executable lookup |
 
 App setup and sign-in wait up to 10 minutes for the user in the browser, and each command keeps at most 1 MiB of stdout; the [CLI account library](../cli-account/README.md) fixes both limits.
@@ -70,7 +70,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-fe
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.feishu`. It checks that `binDir/lark-cli` is executable, gives that path to the model in runtime context, and registers the skill provider. [`src/cli.ts`](src/cli.ts) locates `lark-cli` and parses the JSON output of its commands. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one account operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the Feishu commands, reads setup and sign-in links from their output lines, and classifies failures through [`src/diagnostic.ts`](src/diagnostic.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
+[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.feishu`. It checks that `binDir/lark-cli` (`lark-cli.exe` on Windows) is executable, gives that path to the model in runtime context, and registers the skill provider. [`src/cli.ts`](src/cli.ts) locates `lark-cli` and parses the JSON output of its commands. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one account operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the Feishu commands, reads setup and sign-in links from their output lines, and classifies failures through [`src/diagnostic.ts`](src/diagnostic.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
 
 [`src/skills.ts`](src/skills.ts) lists the `feishu` skill without running the CLI. Each load runs `lark-cli skills list --json` and places the DSH guidance, an index of each guide's name and description, and the instructions for opening a guide and the files it references; a failed catalog read fails that load, and the next load reads the catalog again. Guides are embedded in the binary, so the skill's resource base is opaque.
 
@@ -163,6 +163,12 @@ While the row is loaded, the [CLI account library](../cli-account/README.md#mode
 Feishu CLI: run `lark-cli` by its absolute path "<binDir>/lark-cli"; the bare name may resolve to another installation or to none.
 ```
 
+##### Runtime-context entry on Windows
+
+```markdown
+Feishu CLI: run `lark-cli` by its absolute path with the call operator, & '<binDir>\lark-cli.exe'; the bare name may resolve to another installation or to none.
+```
+
 #### Token effect
 
 One line of about 110 characters plus the path in each runtime-context snapshot.
@@ -175,7 +181,7 @@ The system prompt does not change; loading or unloading the row, or a changed pa
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only macOS is supported. Other platforms are unverified, and the Windows executable name `lark-cli.exe` is not located.
+- Only macOS and Windows x64 are supported; other platforms are unverified.
 - Commands must run on this Host. When a composition runs them elsewhere, such as over SSH, the plugin still loads, and each command that runs `lark-cli` fails because the path does not exist there.
 - The plugin uses the CLI's default configuration. Signing in or out from DSH affects the user's own terminal, and there is no DSH-private account or account picker. The plugin offers no unbind operation; turning it off keeps the configuration and sign-in.
 - Sign-in reads the device-authorization link and the completion from `lark-cli auth login --json` events; a CLI version that changes those events fails the connection with a retryable result.

@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-飞书插件让对话通过官方 `lark-cli` 使用飞书。安装这个 bundle 会加入两行：带内嵌技能的 CLI，以及插件页上的飞书账号区块；用户在插件页关联应用并登录，不需要先开始对话。CLI 把账号保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
+飞书插件让对话通过官方 `lark-cli` 使用飞书。安装这个 bundle 会加入两行：带内嵌技能的 CLI，以及插件页上的飞书账号区块；用户在插件页关联应用并登录，不需要先开始对话。CLI 把账号保存在默认配置中，与用户自己的终端共用。仅支持 macOS 和 Windows x64。
 
 ## 目录
 
@@ -82,7 +82,7 @@ pnpm 会拦截 `@larksuite/cli` 的安装脚本，该脚本负责下载并校验
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 仅支持 macOS；两个行包各自列出其限制。
+- 仅支持 macOS 和 Windows x64；两个行包各自列出其限制。
 
 <a id="dev-note"></a>
 ### 开发备注
