@@ -14,7 +14,6 @@ import {
   ImChatKey, ImMessageKey, ImSourceId, type ImConfig, type ImMessage, type ImSourceConfig,
 } from '../src/api.ts'
 import { Config } from '../src/config.ts'
-import { ImError } from '../src/error.ts'
 import { admit, draftOf, ImIntake, parseCommand } from '../src/intake.ts'
 import { ImStore } from '../src/store.ts'
 
@@ -83,11 +82,6 @@ function inbound(patch: Partial<InboundMessage> = {}): InboundMessage {
 /** Deliver one platform event the way an adapter does: `bot.receive` awaits intake before ACKing. */
 function deliver(bot: FakeAdapter, eventId: string, message: InboundMessage): Promise<void> {
   return bot.receive(bot.session({ type: 'message', id: eventId, timestamp: 1000, message }))
-}
-
-/** `bot.receive` collects listener failures, so an intake rejection arrives wrapped. */
-function unwrap(error: unknown): unknown {
-  return error instanceof AggregateError ? error.errors[0] : error
 }
 
 const CHAT = ImChatKey('fake:bot', 'chat')
@@ -228,12 +222,16 @@ describe('ImIntake admission', () => {
     expect(dispatched[0]!.command).toEqual({ name: 'stop', rawInput: ' now' })
   })
 
-  it('refuses an input over maxInputBytes', async () => {
+  it('acknowledges an input over maxInputBytes instead of leaving it unacknowledged', async () => {
     const { bot, store, intake } = await boot({ config: { maxInputBytes: 64 } })
-    const error = await deliver(bot, 'evt-1', inbound({ content: h('message', h.text('x'.repeat(200))) }))
-      .then(() => undefined, (reason: unknown) => unwrap(reason))
-    expect(error).toBeInstanceOf(ImError)
-    expect((error as ImError).code).toBe('capacity')
+    const oversized = inbound({ content: h('message', h.text('x'.repeat(200))) })
+    await deliver(bot, 'evt-1', oversized)
+    await intake.idle()
+    // Refusing the frame would leave it unacknowledged, and the platform would redeliver it forever.
+    expect(store.after(CHAT, 0, 10)).toEqual([])
+    expect(store.event('fake:bot|evt-1')).toBeDefined()
+    // The redelivery is a cheap no-op rather than a second admission.
+    await deliver(bot, 'evt-1', oversized)
     await intake.idle()
     expect(store.after(CHAT, 0, 10)).toEqual([])
   })
@@ -314,6 +312,28 @@ describe('ImIntake pump', () => {
     expect(attempts).toBe(2)
     expect(store.state(key)?.dispatch).toBe('done')
     expect(dispatched).toHaveLength(2)
+  })
+
+  it('stops draining a chat whose first message failed and resumes in order', async () => {
+    const harness = await boot()
+    const { ctx, intake, dispatched } = harness
+    let failing = true
+    ctx.on('im/message', async (event, next) => {
+      if (event.message.text === 'a1' && failing) throw new Error('transient')
+      return next()
+    })
+    await record(harness, inbound({ id: 'a1', content: h('message', h.text('a1')) }))
+    await record(harness, inbound({ id: 'a2', content: h('message', h.text('a2')) }))
+
+    intake.pump()
+    await intake.idle()
+    // The second message of the chat must not overtake the one that stays pending.
+    expect(dispatched.map(message => message.text)).toEqual(['a1'])
+
+    failing = false
+    intake.pump()
+    await intake.idle()
+    expect(dispatched.map(message => message.text)).toEqual(['a1', 'a1', 'a2'])
   })
 
   it('settles a pending record whose admitting source was removed', async () => {
@@ -470,7 +490,7 @@ describe('admission and drafts', () => {
     expect(admit([{ ...source, users: ['nobody'] }], 'fake:bot', message)).toBeUndefined()
   })
 
-  it('builds the draft of an inbound message', () => {
+  it('builds the draft of a stored message', () => {
     const bot = { id: 'fake:bot', selfId: 'bot-user' } as Bot
     const quoted = inbound({
       thread: { id: 't1', root: 'r1' },
@@ -478,7 +498,7 @@ describe('admission and drafts', () => {
       sender: { id: 'bot-user' },
       mentions: { self: true, all: false, users: [{ id: 'bot-user' }] },
     })
-    expect(draftOf(bot, quoted, source, 'button')).toEqual({
+    expect(draftOf(bot, quoted, source, 'self')).toEqual({
       key: ImMessageKey('fake:bot', 'm1'),
       chat: { key: CHAT, bot: 'fake:bot', ref: quoted.chat, source: ImSourceId('team') },
       thread: { id: 't1', root: 'r1' },
@@ -489,7 +509,7 @@ describe('admission and drafts', () => {
       mentions: quoted.mentions,
       addressed: true,
       time: 1000,
-      via: 'button',
+      via: 'self',
     })
     const bare = draftOf(bot, inbound({ quote: { id: 'q2' } }), source, 'platform')
     expect(bare.quote).toEqual({ key: ImMessageKey('fake:bot', 'q2') })

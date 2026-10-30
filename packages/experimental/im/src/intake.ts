@@ -11,7 +11,6 @@ import {
   ImChatKey, ImMessageKey, ImSourceId, splitKey, type ImChat, type ImCommand, type ImConfig, type ImMessage,
   type ImMessageEvent, type ImOutcome, type ImSourceConfig,
 } from './api.ts'
-import { ImError } from './error.ts'
 import type { ImDispatchState, ImMessageDraft, ImStore } from './store.ts'
 
 /** What the dispatch loop needs from the service to build waterfall events. */
@@ -42,8 +41,9 @@ const ignore = (): Promise<ImOutcome> => Promise.resolve({ kind: 'ignored' })
  *
  * Contract:
  * - {@link receive} resolves only after the message record *and* the event receipt are durable; the adapter ACKs
- *   afterwards. A rejection (a message over `maxInputBytes`, a storage failure) therefore leaves the platform event
- *   unacked and a redelivery is expected.
+ *   afterwards. A rejection (a storage failure) therefore leaves the platform event unacked and a redelivery is
+ *   expected. A message over `maxInputBytes` is remembered and acknowledged instead: refusing it would have the
+ *   platform redeliver a message that can never be accepted.
  * - A `(bot, event id)` the intake already recorded is one delivery: the record the first delivery stored stands, a
  *   payload that drifted from it is logged once, and the redelivered frame is ACKed like any duplicate.
  * - A chat matched by no `sources` rule is neither stored nor emitted.
@@ -245,7 +245,12 @@ export class ImIntake {
     }
     const bytes = Buffer.byteLength(JSON.stringify(draft))
     if (bytes > this.config.maxInputBytes) {
-      throw new ImError('capacity', `IM message ${draft.key} is ${bytes} bytes (maxInputBytes is ${this.config.maxInputBytes}).`)
+      // Acknowledge and dedupe like a drifted redelivery: a refusal would leave the frame unacked, and the platform
+      // would redeliver a message that can never be accepted.
+      this.ctx.logger.warn('IM message %s is %s bytes (maxInputBytes is %s); acknowledged without dispatching',
+        draft.key, bytes, this.config.maxInputBytes)
+      await this.store.remember(key, { digest, receivedAt })
+      return
     }
     await this.store.touchChat(draft.chat)
     const stored = await this.store.put(draft, 'pending')
@@ -265,30 +270,39 @@ export class ImIntake {
     await Promise.all([...chats.values()].map(group => this.drain(group)))
   }
 
-  /** Dispatch one chat's pending records in seq order. */
+  /**
+   * Dispatch one chat's pending records in seq order, stopping at the first one that fails: its record stays pending,
+   * and the next message of that chat must wait for it instead of overtaking it.
+   */
   private async drain(states: readonly ImDispatchState[]): Promise<void> {
     for (const state of states) {
       if (this.disposed) return
-      await this.dispatch(state)
+      if (!await this.dispatch(state)) return
     }
   }
 
-  /** Run the waterfall for one record and record its outcome; a failure leaves it pending for a retry. */
-  private async dispatch(state: ImDispatchState): Promise<void> {
+  /**
+   * Run the waterfall for one record and record its outcome; a failure leaves it pending for a retry.
+   * @param state - the stored message and its dispatch state.
+   * @returns true when the record settled, false when it stays pending for the next pass.
+   */
+  private async dispatch(state: ImDispatchState): Promise<boolean> {
     const { message } = state
     const source = this.config.sources.find(candidate => candidate.id === message.chat.source)
     try {
       if (source === undefined) {
         // The admitting rule is gone (config edit); retrying forever would never succeed.
         await this.store.settle(message.key, { kind: 'ignored', reason: `source ${message.chat.source} removed` })
-        return
+        return true
       }
       const event = this.host.event(message, source)
       const unhandled = this.host.unhandled
       const fallback = unhandled === undefined ? ignore : () => unhandled(event)
       await this.store.settle(message.key, await this.ctx.waterfall('im/message', event, fallback))
+      return true
     } catch (error) {
       this.ctx.logger.warn('IM message %s was not dispatched and stays pending: %s', message.key, String(error))
+      return false
     }
   }
 }
@@ -385,8 +399,13 @@ function admitsChat(source: ImSourceConfig, bot: string, chat: ChatRef): boolean
   return (source.bot === '*' || source.bot === bot) && allows(source.chats, chat.id)
 }
 
-/** An absent or empty allowlist admits anything. */
-function allows(list: readonly string[] | undefined, value: string): boolean {
+/**
+ * Whether one allowlist admits a platform id; an absent or empty list admits anything.
+ * @param list - configured ids of a source's `chats` or `users`, or undefined when not configured.
+ * @param value - the platform id to test (a chat id or a user id).
+ * @returns true when the list admits the value.
+ */
+export function allows(list: readonly string[] | undefined, value: string): boolean {
   return list === undefined || list.length === 0 || list.includes(value)
 }
 
