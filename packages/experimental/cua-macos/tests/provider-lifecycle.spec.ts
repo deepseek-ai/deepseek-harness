@@ -59,7 +59,7 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 }))
 
 const config = {
-  permissionPollIntervalMs: 1000, permissionPollTimeoutMs: 120000,
+  permissionPollIntervalMs: 1000,
   agentPreset: false,
   helperPath: resolve('fixture-helper'), buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
   graceMs: 10, textEventIntervalMs: 8, maxClickHoldMs: 7000, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
@@ -271,7 +271,7 @@ it('keeps Agent disposal pending until its helper cleanup completes', async () =
 
 it('retains the computer-use registration until permission helper cleanup settles', async () => {
   const f = await setup()
-  native.request.mockResolvedValue({ accessibility: false, screenRecording: false, guideOpen: false,
+  native.request.mockResolvedValue({ accessibility: false, screenRecording: false,
     helper: { pid: 9 }, parent: { pid: 8 } })
   await f.ctx.cuaAccess.systemStatus()
   const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
@@ -687,7 +687,7 @@ async function permissionProfile(allowedApps: Array<{ id: string; name: string; 
   await mountRootInclude(f.ctx, join(dir, 'cordis.yml'), readProfilePatches('test', profile))
   await f.ctx.loader.await()
   native.request.mockImplementation(async (method: string) => method === 'applicationIcons' ? {}
-    : { accessibility: true, screenRecording: true, guideOpen: false, helper: { pid: 2 }, parent: { pid: 1 } })
+    : { accessibility: true, screenRecording: true, helper: { pid: 2 }, parent: { pid: 1 } })
   expect((await f.ctx.cuaAccess.applications()).persistentAvailable).toBe(true)
   await f.ctx.plugin(Settings)
   await f.ctx.plugin(Timer)
@@ -724,7 +724,7 @@ it.each([true, false])('stores persistable application consent separately from c
   const stored = files.find(file => file.startsWith('cua_permissions_'))!
   expect(await readFile(join(profile.home, 'storages', stored), 'utf8')).toContain(authorization.id)
   native.request.mockImplementation(async (method: string) => method === 'applicationIcons' ? {}
-    : { accessibility: true, screenRecording: true, guideOpen: false, helper: { pid: 2 }, parent: { pid: 1 } })
+    : { accessibility: true, screenRecording: true, helper: { pid: 2 }, parent: { pid: 1 } })
   const permission = await f.ctx.cuaAccess.applications()
   expect(permission.allowedApps).toHaveLength(1)
   await f.ctx.cuaAccess.revoke(permission.allowedApps[0]!.id)

@@ -129,6 +129,8 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   expect(await accessibility.getByRole('button', { name: 'Request permission', exact: true }).count()).toBe(1)
   await writeFile(state, JSON.stringify({ accessibility: true, screenRecording: false, launchApplication }))
+  // Returning from System Settings refreshes the page's native permission observation.
+  await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
   await accessibility.getByText('Allowed', { exact: true }).waitFor()
   const screen = panel.getByRole('group', { name: 'Screen Recording', exact: true })
   expect(await accessibility.getByRole('button').count()).toBe(1)
