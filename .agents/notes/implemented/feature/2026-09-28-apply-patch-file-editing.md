@@ -20,7 +20,7 @@ Commit reports return `isError: false` so completed diff metadata survives a sto
 
 [Review capture](../../../../packages/deliverables/workspace-changes/README.md) uses filesystem intent listeners, not argument parsing. `tools/pre-execute` associates the execution with its turn recorder; prepended write, edit, and delete listeners first await the policy decision, then await capture before provider mutation. Moves capture both endpoints. Each turn retains its first baseline and compares actual final bytes, so repeated edits yield one net diff and reverted changes disappear. Existing size, count, time, location, and Session-lifetime limits remain.
 
-`tool-fs.applyPatch` defaults to `false`, so every shipped composition keeps the model request it had before the tool existed; the `tool-fs` rows that enable `edit` (`dsh-base` and the Web `standard`, `ptc`, and `cordis` presets) state `applyPatch: false`, and a deployment turns the tool on by changing that one line, or by a profile patch on the `tool-fs` id where no preset owns the row. The tool consults the `fs/*` intent waterfalls like `write` and `edit`, so the mounted observation policy requires a prior read and rejects stale versions for every patch operation. The schema names its argument `input` as the Codex tool does: across 2,226 recorded DS-Bench and DeepSWE rollouts, 14% of `apply_patch` calls arrived with that key and were rejected while the argument was named `patch`. The tool registers its schema, guidance, native/PTC execution, and tool presentation through plugin effects; the agent loop is unchanged.
+`tool-fs.applyPatch` defaults to `false`; each shipped `tool-fs` row that enables `edit` states its own value, so turning the tool on or off is one line per composition, or a profile patch on the `tool-fs` id where no preset owns the row. The tool consults the `fs/*` intent waterfalls like `write` and `edit`, so a mounted observation policy requires a prior read and rejects stale versions for every patch operation. The shipped values of those rows and of the `fs-observation-policy` row are decided by [Shipped filesystem mutation defaults](2026-10-29-shipped-fs-mutation-defaults.md), which supersedes this note's opt-in baseline. The schema names its argument `input` as the Codex tool does: across 2,226 recorded DS-Bench and DeepSWE rollouts, 14% of `apply_patch` calls arrived with that key and were rejected while the argument was named `patch`. The tool registers its schema, guidance, native/PTC execution, and tool presentation through plugin effects; the agent loop is unchanged.
 
 ## Alternatives considered
 
@@ -32,11 +32,11 @@ Commit reports return `isError: false` so completed diff metadata survives a sto
 
 **Expand Review while adding the tool.** Rename presentation, persistent storage, SSH capture, and capture-failure policy are independent product decisions; existing whole-file capture and rendering cover this integration.
 
-**Register the tool by default wherever `write` and `edit` are both enabled.** This would add a schema and a guidance section to every default model request and change every recorded request expectation before the tool's effect on ordinary sessions is measured; the explicit switch keeps the baseline composition unchanged and lets comparison runs opt in.
+**Register the tool by default wherever `write` and `edit` are both enabled.** This would add a schema and a guidance section to every default model request and change every recorded request expectation before the tool's effect on ordinary sessions is measured; the explicit switch keeps the baseline composition unchanged and lets comparison runs opt in. The shipped defaults were decided afterwards in [Shipped filesystem mutation defaults](2026-10-29-shipped-fs-mutation-defaults.md).
 
 ## Consequences
 
-One call can express related edits. Default model requests are unchanged; a composition that enables the switch includes another tool schema and its guidance, so its recorded request expectations differ from the baseline. Preflight cannot prevent a later conflict, cancellation, or storage failure; callers inspect operation statuses before retrying. Permissive upstream matching remains pinned and tested rather than tightened. Provider implementations and external subclasses must support three additional operations, and partial moves require handling both endpoints.
+One call can express related edits. A composition that enables the switch includes another tool schema and its guidance, so its recorded request expectations differ from a composition without it. Preflight cannot prevent a later conflict, cancellation, or storage failure; callers inspect operation statuses before retrying. Permissive upstream matching remains pinned and tested rather than tightened. Provider implementations and external subclasses must support three additional operations, and partial moves require handling both endpoints.
 
 ## Testing
 
@@ -44,4 +44,4 @@ Parser and matcher fixtures cover the pinned syntax, whitespace, repeated contex
 
 ## Deferred
 
-A controlled editing-task evaluation comparing final-file correctness, task success, tokens, tool calls, retries, latency, and Review coverage against `edit` on identical initial states. SSH Review, closing-prose file references for `apply_patch`, and Codex `PreserveLineEndings`.
+SSH Review, closing-prose file references for `apply_patch`, and Codex `PreserveLineEndings`.

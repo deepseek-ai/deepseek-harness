@@ -10,9 +10,11 @@ Check the [exit code: N] marker on every bash result; investigate failures befor
 
 Use the read tool — not shell commands like cat — to inspect text files. Use offset and limit to continue reading large files.
 
-Read an existing file before overwriting it with write (the default fs-observation-policy requires it) and prefer edit for targeted changes.
+Read an existing file before overwriting it with write and prefer edit for targeted changes.
 
-Read a file before editing it (the default fs-observation-policy requires it), unless you just created or edited it in this session.
+Read a file before editing it unless you just created or edited it in this session.
+
+Prefer apply_patch over separate edit calls for changes across files or separated regions. Give every hunk enough surrounding context lines to match one place in the current file. The whole patch is checked first (syntax, hunk matching, missing files) and a rejected patch changes nothing; once applying starts, operations run in order, stop at the first failure, and are not rolled back, so re-read affected files before retrying when needed.
 
 Use the glob tool — not shell find — to discover files by path pattern.
 
@@ -51,6 +53,15 @@ Program-only SDK bindings:
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 
 interface ToolArgsMap {
+  /** Create, update, delete, or move UTF-8 text files with one Codex-style patch; prefer it over multiple edit calls when a change spans several files or separated regions. */
+  apply_patch: {
+    /** Codex patch text: start with *** Begin Patch and end with *** End Patch. Use *** Add File: path with + lines; *** Update File: path, optionally followed by *** Move to: path, with @@ or @@ context and space-prefixed context, + added, or - removed lines; *** End of File anchors the last hunk to the file end. Use *** Delete File: path to delete. Paths are relative to the Session working directory. */
+    input: string;
+    /** The narrowest wider sandbox mode for a one-shot retry of the exact operation the sandbox just denied; the retry asks the user for approval. */
+    sandbox_permissions?: "workspace-write" | "danger-full-access";
+    /** Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access. Use the language of the user’s current request. */
+    justification?: string;
+  } & Record<string, JsonValue>;
   /** Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding. An answer item with empty selected and no custom means the user skipped that question: continue without it, do not ask it again, and do not treat the skip as permission. */
   ask_user_question: {
     /** Questions to ask the user before continuing. */
@@ -359,6 +370,27 @@ interface ToolArgsMap {
 }
 
 interface ToolOutputMap {
+  apply_patch: {
+    phase: "commit";
+    cancelled: boolean;
+    operations: ({
+      index: number;
+      kind: "add" | "update" | "delete" | "move";
+      path: string;
+      destination?: string;
+      patchLine: number;
+      status: "completed" | "failed" | "unknown" | "skipped";
+      code?: string;
+      message?: string;
+      hunkLine?: number;
+      changes?: ({
+        path: string;
+        before: string | null;
+        after: string | null;
+      })[];
+    })[];
+    affectedPaths: string[];
+  };
   ask_user_question: {
     answers: {
       id: string;
