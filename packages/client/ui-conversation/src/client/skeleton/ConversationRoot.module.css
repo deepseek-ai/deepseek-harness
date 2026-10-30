@@ -510,7 +510,9 @@
      the transcript beneath it. A transform hint keeps descendant backdrop blur
      sampling the transcript, but makes the seat the containing block for
      fixed-position descendants, so every fixed overlay inside the composer
-     (tooltips, menus, panels) portals to the document body. */
+     (tooltips, menus, panels) must portal to the document body. The permanent
+     layer has a translucent top, so Chromium renders the seat's text with
+     grayscale antialiasing where it would otherwise use LCD text. */
   will-change: transform;
   /* Scroll anchoring never selects composer content as its anchor. */
   overflow-anchor: none;

@@ -276,7 +276,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.session.header.views.actions': { kind: 'list'; scope: 'root'; owner: ConversationViewActionsOwnerProps }
     /** Registered Conversation target Views, rendered one at a time. */
     'conversation.view': { kind: 'list'; scope: 'session'; owner: ConvViewOwnerProps }
-    /** Selector-routed replacements for the current Session's resident composer. */
+    /**
+     * Selector-routed replacements for the current Session's resident composer; fixed overlays must
+     * portal to the document body because the docked composer contains them.
+     */
     'conversation.composer': { kind: 'chain'; scope: 'session'; owner: ComposerChainProps }
     /** Workspace picker shown by the blank-session Hero. */
     'conversation.hero.workspace': { kind: 'single'; scope: 'root'; owner: EmptyWorkspaceOwnerProps }
@@ -286,34 +289,66 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.hero.agentPreset': { kind: 'single'; scope: 'session-maybe'; owner: HeroAgentPresetOwnerProps }
     /** Compact options right-aligned in the New Session row after the workspace and preset controls; rendered only with a Session. */
     'conversation.hero.options': { kind: 'list'; scope: 'session' }
-    /** Full-width entries above the composer card. */
+    /**
+     * Full-width entries above the composer card; fixed overlays must portal to the document body
+     * because the docked composer contains them.
+     */
     'conversation.input.dock': { kind: 'list'; scope: 'session'; owner: InputZone }
-    /** Floating entries rendered inside the resident composer card. */
+    /**
+     * Floating entries rendered inside the resident composer card; fixed overlays must portal to
+     * the document body because the docked composer contains them.
+     */
     'conversation.input.overlay': { kind: 'list'; scope: 'session' }
-    /** Ambient entries below the composer card. */
+    /**
+     * Ambient entries below the composer card; fixed overlays must portal to the document body
+     * because the docked composer contains them.
+     */
     'conversation.composer.dock': { kind: 'list'; scope: 'session' }
-    /** Compact controls at the left of the composer tool row. */
+    /**
+     * Compact controls at the left of the composer tool row; fixed overlays must portal to the
+     * document body because the docked composer contains them.
+     */
     'conversation.input.left': { kind: 'list'; scope: 'session' }
-    /** Compact controls before the composer submit action. */
+    /**
+     * Compact controls before the composer submit action; fixed overlays must portal to the
+     * document body because the docked composer contains them.
+     */
     'conversation.input.right': { kind: 'list'; scope: 'session' }
-    /** Compact action after the model selector; it can expand across the toolbar while retaining the editor and submit action. */
+    /**
+     * Compact action after the model selector; it can expand across the toolbar while retaining the
+     * editor and submit action, and fixed overlays must portal to the document body because the
+     * docked composer contains them.
+     */
     'conversation.input.activity': { kind: 'single'; scope: 'session'; owner: InputActivityOwnerProps }
-    /** Resident composer body, including the no-Session inert state. */
+    /**
+     * Resident composer body, including the no-Session inert state; fixed overlays must portal to
+     * the document body because the docked composer contains them.
+     */
     'conversation.composer.bar': { kind: 'single'; scope: 'session-maybe'; owner: ComposerBarOwnerProps }
-    /** Optional draft-attachment rail and drop target. */
+    /**
+     * Optional draft-attachment rail and drop target; fixed overlays must portal to the document
+     * body because the docked composer contains them.
+     */
     'conversation.input.attachments': {
       kind: 'single'
       scope: 'session-maybe'
       owner: ComposerAttachmentsOwnerProps
     }
-    /** Plan control inside the composer tool row. */
+    /**
+     * Plan control inside the composer tool row; fixed overlays must portal to the document body
+     * because the docked composer contains them.
+     */
     'conversation.input.plan': { kind: 'single'; scope: 'session'; owner: InputControlOwnerProps }
-    /** Current-session permission control inside the composer tool row. */
+    /**
+     * Current-session permission control inside the composer tool row; fixed overlays must portal
+     * to the document body because the docked composer contains them.
+     */
     'conversation.input.permission': { kind: 'single'; scope: 'session'; owner: InputControlOwnerProps }
     /**
      * Model selector inside the composer tool row. When expanded controls cannot
      * share a line, the row sets --dsh-composer-model-text-display to none and
      * --dsh-composer-model-icon-display to block for an occupant's compact display.
+     * Fixed overlays must portal to the document body because the docked composer contains them.
      */
     'conversation.input.model': { kind: 'single'; scope: 'session'; owner: InputControlOwnerProps }
   }

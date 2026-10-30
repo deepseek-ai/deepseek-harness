@@ -88,6 +88,8 @@ describe('web e2e: startup auto-selection', () => {
     await connectFreshWorkspace(page, scaffold.workspaceCwd, 'startup-auto-selection')
     await page.locator('[data-slot="conversation.session.header"]').waitFor({ timeout: 15_000 })
     // Binding the Workspace keeps the input card at the same height in the Hero.
+    // This holds for the default plugin set: `conversation.hero.options` entries
+    // render only with a Session and can change the Hero's height.
     expect(Math.abs(await heroCardOffset() - sessionlessOffset)).toBeLessThanOrEqual(0.5)
 
     expect(await page.evaluate(() => {

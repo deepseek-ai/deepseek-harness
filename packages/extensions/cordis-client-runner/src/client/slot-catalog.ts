@@ -757,8 +757,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'conversation.composer',
     kind: 'chain',
     scope: 'session',
-    summary: 'Selector-routed replacements for the current Session\'s resident composer.',
-    doc: 'Selector-routed replacements for the current Session\'s resident composer.',
+    summary: 'Selector-routed replacements for the current Session\'s resident composer; fixed overlays must portal to the document body because the docked composer contains them.',
+    doc: 'Selector-routed replacements for the current Session\'s resident composer; fixed overlays must\nportal to the document body because the docked composer contains them.',
     registerOptions: [
       {
         name: 'select',
@@ -808,14 +808,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.composer\', () => ctx.slots.register(\n      { name: \'conversation.composer\', select: owner => null },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:280',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:283',
   },
   {
     key: 'conversation.composer.bar',
     kind: 'single',
     scope: 'session-maybe',
-    summary: 'Resident composer body, including the no-Session inert state.',
-    doc: 'Resident composer body, including the no-Session inert state.',
+    summary: 'Resident composer body, including the no-Session inert state; fixed overlays must portal to the document body because the docked composer contains them.',
+    doc: 'Resident composer body, including the no-Session inert state; fixed overlays must portal to\nthe document body because the docked composer contains them.',
     registerOptions: [],
     ownerProps: [
       '/** Owner share of the resident composer bar. */\nexport interface ComposerBarOwnerProps {\n  /** Hero uses centered placement; composer uses the active bottom placement. */\n  variant: \'hero\' | \'composer\'\n  /** A feature-owned reason that makes message input inert while leaving model selection live. */\n  blocked?: { readonly reason: string }\n  /** Lock all message actions while preserving the resident composer surface. */\n  disabled?: boolean\n  /** Whether the shared Workspace picker is expanded. */\n  workspacePickerOpen?: boolean\n  /** Open the Workspace picker from the inert composer surface. */\n  onRequestWorkspace?: () => void\n  placeholder?: string\n  /** Optional content rendered above the composer surface. */\n  accessory?: ReactNode\n}',
@@ -851,14 +851,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.composer.bar\', () => ctx.slots.register(\n      { name: \'conversation.composer.bar\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:302',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:327',
   },
   {
     key: 'conversation.composer.dock',
     kind: 'list',
     scope: 'session',
-    summary: 'Ambient entries below the composer card.',
-    doc: 'Ambient entries below the composer card.',
+    summary: 'Ambient entries below the composer card; fixed overlays must portal to the document body because the docked composer contains them.',
+    doc: 'Ambient entries below the composer card; fixed overlays must portal to the document body\nbecause the docked composer contains them.',
     registerOptions: [
       {
         name: 'id',
@@ -912,7 +912,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.composer.dock\', () => ctx.slots.register(\n      { name: \'conversation.composer.dock\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:294',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:306',
   },
   {
     key: 'conversation.header',
@@ -1024,7 +1024,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.hero.agentPreset\', () => ctx.slots.register(\n      { name: \'conversation.hero.agentPreset\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:286',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:289',
   },
   {
     key: 'conversation.hero.brand.mark',
@@ -1056,7 +1056,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.hero.brand.mark\', () => ctx.slots.register(\n      { name: \'conversation.hero.brand.mark\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:284',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:287',
   },
   {
     key: 'conversation.hero.options',
@@ -1116,7 +1116,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.hero.options\', () => ctx.slots.register(\n      { name: \'conversation.hero.options\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:288',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:291',
   },
   {
     key: 'conversation.hero.workspace',
@@ -1152,7 +1152,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.hero.workspace\', () => ctx.slots.register(\n      { name: \'conversation.hero.workspace\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:282',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:285',
   },
   {
     key: 'conversation.hero.workspace.directoryFlow',
@@ -1193,8 +1193,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'conversation.input.activity',
     kind: 'single',
     scope: 'session',
-    summary: 'Compact action after the model selector; it can expand across the toolbar while retaining the editor and submit action.',
-    doc: 'Compact action after the model selector; it can expand across the toolbar while retaining the editor and submit action.',
+    summary: 'Compact action after the model selector; it can expand across the toolbar while retaining the editor and submit action, and fixed overlays must portal to the document body because the docked composer contains them.',
+    doc: 'Compact action after the model selector; it can expand across the toolbar while retaining the\neditor and submit action, and fixed overlays must portal to the document body because the\ndocked composer contains them.',
     registerOptions: [],
     ownerProps: [
       '/** A toolbar activity hides ordinary accessory controls while expanded; its occupant must release expansion on unmount. */\nexport interface InputActivityOwnerProps extends InputControlOwnerProps {\n  /** @param active - whether the occupant needs the toolbar width before the submit action. */\n  onActiveChange: (active: boolean) => void\n}',
@@ -1232,14 +1232,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.activity\', () => ctx.slots.register(\n      { name: \'conversation.input.activity\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:300',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:322',
   },
   {
     key: 'conversation.input.attachments',
     kind: 'single',
     scope: 'session-maybe',
-    summary: 'Optional draft-attachment rail and drop target.',
-    doc: 'Optional draft-attachment rail and drop target.',
+    summary: 'Optional draft-attachment rail and drop target; fixed overlays must portal to the document body because the docked composer contains them.',
+    doc: 'Optional draft-attachment rail and drop target; fixed overlays must portal to the document\nbody because the docked composer contains them.',
     registerOptions: [],
     ownerProps: [
       '/** Input state handed to the optional attachment presentation plugin. */\nexport interface ComposerAttachmentsOwnerProps {\n  /** Browser-owned draft attachments in input order. */\n  attachments: readonly ComposerAttachment[]\n  /** Whether a document-level file drop may add attachments now. */\n  canAcceptDrop: boolean\n  /**\n   * Add one dropped batch through the composer\'s validation path.\n   * @param files - dropped, pasted, or picked browser files in source order.\n   * @param directories - members of `files` the drop source identified as directories.\n   */\n  onAddFiles: (files: readonly File[], directories?: ReadonlySet<File>) => void\n  /** Remove one draft attachment through the Conversation service. */\n  onRemoveAttachment: (id: DraftAttachmentId) => void\n  /** Current per-draft upload states for file-kind attachments. */\n  uploads: DraftFileUploads\n  /** Restart one failed file upload. */\n  onRetryFile: (id: DraftAttachmentId) => void\n  /**\n   * Explain one upload the Host refused; such a draft cannot be retried and\n   * stays until it is removed.\n   * @param reason - the refusal `reason` the failed upload carries.\n   * @returns localized text naming the limit or the way out.\n  /* …truncated — full shape in source */',
@@ -1277,14 +1277,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.attachments\', () => ctx.slots.register(\n      { name: \'conversation.input.attachments\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:304',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:332',
   },
   {
     key: 'conversation.input.dock',
     kind: 'list',
     scope: 'session',
-    summary: 'Full-width entries above the composer card.',
-    doc: 'Full-width entries above the composer card.',
+    summary: 'Full-width entries above the composer card; fixed overlays must portal to the document body because the docked composer contains them.',
+    doc: 'Full-width entries above the composer card; fixed overlays must portal to the document body\nbecause the docked composer contains them.',
     registerOptions: [
       {
         name: 'id',
@@ -1346,14 +1346,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.dock\', () => ctx.slots.register(\n      { name: \'conversation.input.dock\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:290',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:296',
   },
   {
     key: 'conversation.input.left',
     kind: 'list',
     scope: 'session',
-    summary: 'Compact controls at the left of the composer tool row.',
-    doc: 'Compact controls at the left of the composer tool row.',
+    summary: 'Compact controls at the left of the composer tool row; fixed overlays must portal to the document body because the docked composer contains them.',
+    doc: 'Compact controls at the left of the composer tool row; fixed overlays must portal to the\ndocument body because the docked composer contains them.',
     registerOptions: [
       {
         name: 'id',
@@ -1404,14 +1404,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.left\', () => ctx.slots.register(\n      { name: \'conversation.input.left\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:296',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:311',
   },
   {
     key: 'conversation.input.model',
     kind: 'single',
     scope: 'session',
     summary: 'Model selector inside the composer tool row.',
-    doc: 'Model selector inside the composer tool row. When expanded controls cannot\nshare a line, the row sets --dsh-composer-model-text-display to none and\n--dsh-composer-model-icon-display to block for an occupant\'s compact display.',
+    doc: 'Model selector inside the composer tool row. When expanded controls cannot\nshare a line, the row sets --dsh-composer-model-text-display to none and\n--dsh-composer-model-icon-display to block for an occupant\'s compact display.\nFixed overlays must portal to the document body because the docked composer contains them.',
     registerOptions: [],
     ownerProps: [
       '/** Owner share of the named plan, permission, and model controls. */\nexport interface InputControlOwnerProps {\n  /** Whether the composer currently refuses interaction. */\n  locked: boolean\n}',
@@ -1448,7 +1448,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.model\', () => ctx.slots.register(\n      { name: \'conversation.input.model\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:318',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:353',
   },
   {
     key: 'conversation.input.model.label',
@@ -1498,8 +1498,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'conversation.input.overlay',
     kind: 'list',
     scope: 'session',
-    summary: 'Floating entries rendered inside the resident composer card.',
-    doc: 'Floating entries rendered inside the resident composer card.',
+    summary: 'Floating entries rendered inside the resident composer card; fixed overlays must portal to the document body because the docked composer contains them.',
+    doc: 'Floating entries rendered inside the resident composer card; fixed overlays must portal to\nthe document body because the docked composer contains them.',
     registerOptions: [
       {
         name: 'id',
@@ -1554,14 +1554,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.overlay\', () => ctx.slots.register(\n      { name: \'conversation.input.overlay\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:292',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:301',
   },
   {
     key: 'conversation.input.permission',
     kind: 'single',
     scope: 'session',
-    summary: 'Current-session permission control inside the composer tool row.',
-    doc: 'Current-session permission control inside the composer tool row.',
+    summary: 'Current-session permission control inside the composer tool row; fixed overlays must portal to the document body because the docked composer contains them.',
+    doc: 'Current-session permission control inside the composer tool row; fixed overlays must portal\nto the document body because the docked composer contains them.',
     registerOptions: [],
     ownerProps: [
       '/** Owner share of the named plan, permission, and model controls. */\nexport interface InputControlOwnerProps {\n  /** Whether the composer currently refuses interaction. */\n  locked: boolean\n}',
@@ -1598,14 +1598,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.permission\', () => ctx.slots.register(\n      { name: \'conversation.input.permission\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:312',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:346',
   },
   {
     key: 'conversation.input.plan',
     kind: 'single',
     scope: 'session',
-    summary: 'Plan control inside the composer tool row.',
-    doc: 'Plan control inside the composer tool row.',
+    summary: 'Plan control inside the composer tool row; fixed overlays must portal to the document body because the docked composer contains them.',
+    doc: 'Plan control inside the composer tool row; fixed overlays must portal to the document body\nbecause the docked composer contains them.',
     registerOptions: [],
     ownerProps: [
       '/** Owner share of the named plan, permission, and model controls. */\nexport interface InputControlOwnerProps {\n  /** Whether the composer currently refuses interaction. */\n  locked: boolean\n}',
@@ -1641,14 +1641,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.plan\', () => ctx.slots.register(\n      { name: \'conversation.input.plan\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:310',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:341',
   },
   {
     key: 'conversation.input.right',
     kind: 'list',
     scope: 'session',
-    summary: 'Compact controls before the composer submit action.',
-    doc: 'Compact controls before the composer submit action.',
+    summary: 'Compact controls before the composer submit action; fixed overlays must portal to the document body because the docked composer contains them.',
+    doc: 'Compact controls before the composer submit action; fixed overlays must portal to the\ndocument body because the docked composer contains them.',
     registerOptions: [
       {
         name: 'id',
@@ -1699,7 +1699,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.right\', () => ctx.slots.register(\n      { name: \'conversation.input.right\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:298',
+    source: 'packages/client/ui-conversation/src/client/contract/slots.ts:316',
   },
   {
     key: 'conversation.plan-review.actions',

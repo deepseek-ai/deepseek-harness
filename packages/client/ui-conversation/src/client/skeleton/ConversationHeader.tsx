@@ -20,6 +20,8 @@ export function ConversationHeader({ sessionId, useSession, useConversation, ren
         {renderSlot('conversation.header.leading', {})}
       </div>
       {sessionId === undefined
+        // The empty title row keeps the blank-Session header height, so the
+        // Hero centers its input card at the same offset before a Session exists.
         ? <div className={css.titleRow} />
         : renderSlot('conversation.session.header', { hideChrome: blank })}
     </header>
