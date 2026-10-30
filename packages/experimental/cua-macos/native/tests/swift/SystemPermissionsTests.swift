@@ -1,4 +1,5 @@
 // Permission control tests replace native presentation and never change the machine's grants.
+import AppKit
 import Foundation
 import Testing
 @testable import CuaNative
@@ -119,4 +120,40 @@ func anUnknownPermissionApplicationDoesNotOfferAnotherBundle() throws {
     #expect(throws: (any Error).self) { try PermissionGuideApplication(url: app, identifier: "test.other").validatedURL() }
     try FileManager.default.removeItem(at: app)
     #expect(throws: (any Error).self) { try target.validatedURL() }
+}
+
+@Test func permissionGuideChoosesTheSettingsMainWindowBehindAuthentication() {
+    let main = PermissionGuideWindow(id: 10, frame: CGRect(x: 100, y: 80, width: 800, height: 700))
+    let authentication = PermissionGuideWindow(id: 11, frame: CGRect(x: 300, y: 250, width: 260, height: 340))
+    #expect(PermissionGuidePlacement.target(in: [authentication, main], pinned: nil)?.id == main.id)
+    #expect(PermissionGuidePlacement.target(in: [main, authentication], pinned: nil)?.id == main.id)
+    #expect(PermissionGuidePlacement.target(in: [], pinned: nil) == nil)
+}
+
+@Test func permissionGuideKeepsItsWindowIdentityAcrossDialogsAndResizing() {
+    let resized = PermissionGuideWindow(id: 10, frame: CGRect(x: -800, y: 50, width: 600, height: 500))
+    let other = PermissionGuideWindow(id: 11, frame: CGRect(x: 100, y: 80, width: 1200, height: 900))
+    #expect(PermissionGuidePlacement.target(in: [other, resized], pinned: resized.id)?.frame == resized.frame)
+    #expect(PermissionGuidePlacement.target(in: [other], pinned: resized.id) == nil)
+}
+
+@MainActor @Test(arguments: [NSSize(width: 360, height: 160), NSSize(width: 620, height: 128)])
+func permissionGuideMaterialKeepsTransparentCornersWhenResized(size: NSSize) throws {
+    let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
+        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+    let context = try #require(NSGraphicsContext(bitmapImageRep: bitmap))
+    NSGraphicsContext.saveGraphicsState()
+    defer { NSGraphicsContext.restoreGraphicsState() }
+    NSGraphicsContext.current = context
+    PermissionGuideAppearance.materialMask().draw(in: NSRect(origin: .zero, size: size),
+        from: .zero, operation: .copy, fraction: 1)
+    for x in [0, bitmap.pixelsWide - 1] {
+        for y in [0, bitmap.pixelsHigh - 1] {
+            #expect(try #require(bitmap.colorAt(x: x, y: y)).alphaComponent == 0)
+        }
+    }
+    #expect(try #require(bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2)).alphaComponent == 1)
+    #expect(try #require(bitmap.colorAt(x: 25, y: 0)).alphaComponent == 1)
+    #expect(try #require(bitmap.colorAt(x: 0, y: 25)).alphaComponent == 1)
 }

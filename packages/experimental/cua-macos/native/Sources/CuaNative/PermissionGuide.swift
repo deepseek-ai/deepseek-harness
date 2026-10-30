@@ -34,7 +34,18 @@ struct PermissionGuideApplication: Sendable {
     func close(owner: UUID)
 }
 
+struct PermissionGuideWindow {
+    let id: CGWindowID
+    let frame: CGRect
+}
+
 enum PermissionGuidePlacement {
+    /// Bind to the largest settings window once; dialogs never replace an existing anchor.
+    static func target(in windows: [PermissionGuideWindow], pinned: CGWindowID?) -> PermissionGuideWindow? {
+        if let pinned { return windows.first { $0.id == pinned } }
+        return windows.max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
+    }
+
     /// AppKit coordinates; the guide overlays the settings window's lower margin and stays on screen.
     static func frame(settings: CGRect?, visible: CGRect, size: CGSize) -> CGRect {
         let width = min(size.width, max(1, visible.width - 24))
@@ -54,7 +65,8 @@ enum PermissionGuidePlacement {
     private var failureLabel: NSTextField?
     private var instructionLabel: NSTextField?
     private var text: PermissionGuideText?
-    private var hasSeenSettings = false
+    private var settingsWindowID: CGWindowID?
+    private var dragging = false
 
     func show(application: PermissionGuideApplication, text: PermissionGuideText, owner: UUID,
               interval: TimeInterval, granted: @escaping @MainActor () -> Bool) throws {
@@ -65,7 +77,8 @@ enum PermissionGuidePlacement {
         self.text = text
         self.granted = granted
         returnApplication = previousApplication?.bundleIdentifier == "com.apple.systempreferences" ? nil : previousApplication
-        hasSeenSettings = false
+        settingsWindowID = nil
+        dragging = false
 
         let panel = PermissionGuidePanel(contentRect: NSRect(x: 0, y: 0, width: 620, height: 128),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -75,7 +88,8 @@ enum PermissionGuidePlacement {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
-        panel.level = .floating
+        panel.level = .normal
+        panel.isFloatingPanel = false
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
@@ -91,6 +105,7 @@ enum PermissionGuidePlacement {
         surface.layer?.borderWidth = 0.5
         surface.layer?.borderColor = NSColor.separatorColor.cgColor
         surface.layer?.masksToBounds = true
+        surface.maskImage = PermissionGuideAppearance.materialMask()
         panel.contentView = surface
 
         let arrow = NSImageView()
@@ -116,9 +131,17 @@ enum PermissionGuidePlacement {
         back.toolTip = text.backLabel
         back.setAccessibilityLabel(text.backLabel)
         back.translatesAutoresizingMaskIntoConstraints = false
-        let item = PermissionApplicationView(application: application, finderLabel: text.finderLabel) { [weak self] in
-            self?.showFailure(text.unavailableMessage)
-        }
+        let item = PermissionApplicationView(application: application, finderLabel: text.finderLabel,
+            dragBegan: { [weak self, weak panel] in
+                guard let self, let panel, self.panel === panel else { return }
+                self.dragging = true
+                panel.orderOut(nil)
+            }, dragEnded: { [weak self, weak panel] operation in
+                guard let self, let panel, self.panel === panel else { return }
+                self.dragging = false
+                if operation.isEmpty { self.update() }
+                else { self.dismiss(activatePrevious: false) }
+            }, reportFailure: { [weak self] in self?.showFailure(text.unavailableMessage) })
         panel.initialFirstResponder = item
         let row = NSStackView(views: [back, item])
         row.orientation = .horizontal
@@ -157,7 +180,6 @@ enum PermissionGuidePlacement {
         }
         self.timer = timer
         RunLoop.main.add(timer, forMode: .common)
-        panel.orderFrontRegardless()
     }
 
     func reportSettingsFailure() {
@@ -188,6 +210,8 @@ enum PermissionGuidePlacement {
         failureLabel = nil
         instructionLabel = nil
         text = nil
+        settingsWindowID = nil
+        dragging = false
         window?.close()
         if activatePrevious, let previous, !previous.isTerminated { _ = previous.activate(options: []) }
     }
@@ -199,16 +223,17 @@ enum PermissionGuidePlacement {
     }
 
     private func update() {
-        guard panel != nil else { return }
+        guard panel != nil, !dragging else { return }
         if granted?() == true { dismiss(activatePrevious: false); return }
         updatePosition()
     }
 
     private func updatePosition() {
-        guard let panel, let primary = NSScreen.screens.first else { return }
-        let settings = Self.settingsFrame(primaryHeight: primary.frame.height)
-        if settings != nil { hasSeenSettings = true }
-        else if hasSeenSettings { dismiss(activatePrevious: false); return }
+        guard let panel, !dragging, let primary = NSScreen.screens.first else { return }
+        let target = PermissionGuidePlacement.target(in: Self.settingsWindows(primaryHeight: primary.frame.height), pinned: settingsWindowID)
+        if let target { settingsWindowID = target.id }
+        else if settingsWindowID != nil { dismiss(activatePrevious: false); return }
+        let settings = target?.frame
         let screen = NSScreen.screens.max { left, right in
             let target = settings ?? primary.frame
             let a = left.frame.intersection(target), b = right.frame.intersection(target)
@@ -221,20 +246,42 @@ enum PermissionGuidePlacement {
         let failureHeight = failureLabel?.isHidden == false ? 10 + (failureLabel?.fittingSize.height ?? 0) : 0
         let height = max(128, ceil(headingHeight + 10 + 44 + 28 + failureHeight))
         let frame = PermissionGuidePlacement.frame(settings: settings, visible: screen.visibleFrame, size: CGSize(width: width, height: height))
-        if panel.frame != frame { panel.setFrame(frame, display: true) }
+        if panel.frame != frame {
+            panel.setFrame(frame, display: true)
+            panel.invalidateShadow()
+        }
+        if let target { panel.order(.above, relativeTo: Int(target.id)) }
+        else if !panel.isVisible { panel.orderFrontRegardless() }
     }
 
-    private static func settingsFrame(primaryHeight: CGFloat) -> CGRect? {
+    private static func settingsWindows(primaryHeight: CGFloat) -> [PermissionGuideWindow] {
         guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.systempreferences").first,
-              let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] else { return nil }
-        for window in windows {
+              let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] else { return [] }
+        return windows.compactMap { window in
             guard (window[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == app.processIdentifier,
                   (window[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
+                  let id = window[kCGWindowNumber as String] as? NSNumber,
                   let bounds = window[kCGWindowBounds as String] as? [String: Any],
-                  let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary), frame.width > 200, frame.height > 200 else { continue }
-            return CGRect(x: frame.minX, y: primaryHeight - frame.maxY, width: frame.width, height: frame.height)
+                  let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary), frame.width > 200, frame.height > 200 else { return nil }
+            return PermissionGuideWindow(id: id.uint32Value,
+                frame: CGRect(x: frame.minX, y: primaryHeight - frame.maxY, width: frame.width, height: frame.height))
         }
-        return nil
+    }
+}
+
+@MainActor enum PermissionGuideAppearance {
+    /// The material mask also defines the window shadow; layer clipping alone leaves the backdrop rectangular.
+    static func materialMask() -> NSImage {
+        let radius: CGFloat = 18
+        let size = NSSize(width: radius * 2 + 1, height: radius * 2 + 1)
+        let image = NSImage(size: size, flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
+        image.resizingMode = .stretch
+        return image
     }
 }
 
@@ -247,11 +294,16 @@ enum PermissionGuidePlacement {
 @MainActor private final class PermissionApplicationView: NSView, NSDraggingSource {
     private let application: PermissionGuideApplication
     private let reportFailure: () -> Void
+    private let dragBegan: () -> Void
+    private let dragEnded: (NSDragOperation) -> Void
     private let icon: NSImage
 
-    init(application: PermissionGuideApplication, finderLabel: String, reportFailure: @escaping () -> Void) {
+    init(application: PermissionGuideApplication, finderLabel: String, dragBegan: @escaping () -> Void,
+         dragEnded: @escaping (NSDragOperation) -> Void, reportFailure: @escaping () -> Void) {
         self.application = application
         self.reportFailure = reportFailure
+        self.dragBegan = dragBegan
+        self.dragEnded = dragEnded
         icon = NSWorkspace.shared.icon(forFile: application.url.path)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -317,6 +369,8 @@ enum PermissionGuidePlacement {
         else { super.keyDown(with: event) }
     }
 
+    func draggingSession(_ session: NSDraggingSession, willBeginAt screenPoint: NSPoint) { dragBegan() }
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) { dragEnded(operation) }
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation { .copy }
     func ignoreModifierKeys(for session: NSDraggingSession) -> Bool { true }
 
