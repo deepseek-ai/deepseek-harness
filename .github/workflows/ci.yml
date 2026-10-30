@@ -269,14 +269,12 @@ jobs:
 
   node-24-bench:
     if: github.event_name == 'pull_request'
-    runs-on: >-
-      ${{ vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-4vcpu-ubuntu-2404'
-          || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     name: node 24 / benchmarks
     # Wall-clock budgets need an otherwise idle runner, so this job runs the
     # benchmark lane alone instead of joining a concurrent gate aggregate, with
-    # one measured file at a time inside that runner. The self-hosted
-    # failover pool is shared, so the benchmarks stay on hosted Linux there.
+    # one measured file at a time inside that runner. Keep the hosted runner
+    # family used to calibrate the budgets, independently of general CI routing.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7.0.1
