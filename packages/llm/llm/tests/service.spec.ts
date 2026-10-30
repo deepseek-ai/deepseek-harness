@@ -345,6 +345,7 @@ describe('LlmRuntime', () => {
       expect(projected, fixture.name).toMatchObject({ type: 'text' })
       if (projected?.type !== 'text') throw new Error(`expected projected text for ${fixture.name}`)
       expect(projected.text, fixture.name).toContain(fixture.expected)
+      expect(ctx.llm.fileRequestText(attachment), fixture.name).toBe(projected.text)
       if (fixture.fs !== undefined) {
         expect(projected.text, fixture.name).toContain('include this saved path in the delegation prompt')
       }
@@ -1500,56 +1501,58 @@ describe('LlmRuntime', () => {
     expect(assistant.source.replayState).toEqual({ private: 'state' })
   })
 
-  it('keeps replay state when historical and target providers belong to the same adapter instance', async () => {
+  it('keeps history by identity when historical and target providers belong to the same adapter instance', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     const adapter = new RecordingAdapter(SCRIPT)
     ctx.llm.registerAdapter(['historical', 'target'], adapter)
     const replayState = { private: 'state' }
+    const messages = [createMessage({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'old response' }],
+      source: { kind: 'model', provider: 'historical', model: 'old-model', replayState },
+    })]
 
     for await (const _chunk of ctx.llm.stream({
-      provider: 'target',
-      model: 'new-model',
-      messages: [createMessage({
-        role: 'assistant',
-        content: [{ type: 'text', text: 'old response' }],
-        source: {
-          kind: 'model',
-          ...{ provider: 'historical', model: 'old-model', replayState },
-        },
-      })],
+      provider: 'target', model: 'new-model', messages,
     })) { /* drain */ }
 
+    expect(adapter.lastOptions?.messages).toBe(messages)
     expect(adapter.lastOptions?.messages[0]?.source).toEqual({
       kind: 'model', provider: 'historical', model: 'old-model', replayState,
     })
   })
 
-  it('strips replay state but preserves provider and model when the target uses a different adapter instance', async () => {
+  it('strips foreign replay state while retaining prefix, intervening and suffix message identities', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     ctx.llm.registerAdapter(['historical'], new RecordingAdapter(SCRIPT))
     const target = new RecordingAdapter(SCRIPT)
     ctx.llm.registerAdapter(['target'], target)
+    const prompt = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'continue' }] })
+    const assistant = (provider: string) => createMessage({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'old response' }],
+      source: { kind: 'model', provider, model: 'old-model', replayState: { private: 'state' } },
+    })
+    const foreign = assistant('historical')
+    const owned = assistant('target')
+    const messages = [prompt, foreign, owned, foreign, prompt]
+    Object.freeze(messages)
 
     for await (const _chunk of ctx.llm.stream({
-      provider: 'target',
-      model: 'new-model',
-      messages: [createMessage({
-        role: 'assistant',
-        content: [{ type: 'text', text: 'old response' }],
-        source: {
-          kind: 'model',
-          ...{ provider: 'historical', model: 'old-model', replayState: { private: 'state' } },
-        },
-      })],
+      provider: 'target', model: 'new-model', messages,
     })) { /* drain */ }
 
-    expect(target.lastOptions?.messages[0]?.source).toEqual({
-      kind: 'model',
-      provider: 'historical',
-      model: 'old-model',
-    })
+    expect(target.lastOptions?.messages).not.toBe(messages)
+    expect(target.lastOptions?.messages).toHaveLength(5)
+    for (const index of [0, 2, 4]) expect(target.lastOptions?.messages[index]).toBe(messages[index])
+    for (const index of [1, 3]) {
+      expect(target.lastOptions?.messages[index]).toEqual({
+        ...foreign, source: { kind: 'model', provider: 'historical', model: 'old-model' },
+      })
+    }
+    expect(foreign.source.replayState).toEqual({ private: 'state' })
   })
 
   it('preserves immutability while stripping replay state from frozen requests', async () => {
