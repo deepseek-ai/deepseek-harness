@@ -63,6 +63,7 @@ export function filesInTreeOrder(nodes: readonly ChangedFileNode[]): readonly Fo
     switch (node.kind) {
       case 'file': return [node.file]
       case 'directory': return filesInTreeOrder(node.children)
+      /* v8 ignore next -- closed ChangedFileNode union exhaustiveness guard */
       default: return assertNever(node, 'ChangedFileNode')
     }
   })
