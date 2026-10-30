@@ -151,13 +151,6 @@ export interface CuaSurface {
    */
   selectText(elementId: CuaElementId, text: string, options?: CuaSelectTextOptions): Promise<CuaActionResult>
   /**
-   * Invoke an action advertised by an observed element; raising a window activates its app.
-   * @param elementId - element id from this surface's latest observation.
-   * @param action - Advertised action name, such as raise or zoomwindow.
-   * @returns Dispatch evidence; menu and window actions can change focus.
-   */
-  performSecondaryAction(elementId: CuaElementId, action: string): Promise<CuaActionResult>
-  /**
    * Scroll at a screenshot-local point or integer ratio.
    * @param options - point, coordinate mode and line deltas; at least one delta must be nonzero.
    * @returns dispatch evidence.

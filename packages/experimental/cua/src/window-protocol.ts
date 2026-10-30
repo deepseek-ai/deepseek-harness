@@ -32,7 +32,6 @@ export const WindowRequest = z.discriminatedUnion('method', [
   operation('setValue', { ...snapshot, value: z.string() }),
   operation('selectText', { ...snapshot, text: z.string().min(1), prefix: z.string().optional(), suffix: z.string().optional(),
     selectionType: z.enum(['text', 'cursor_before', 'cursor_after']).optional() }),
-  operation('performSecondaryAction', { ...snapshot, action: z.string().min(1) }),
   z.object({ method: z.literal('hover'), params: z.union([z.object(snapshot).strict(), z.object(absolute).strict(), z.object(relative).strict()]) }).strict(),
   z.object({ method: z.literal('click'), params: z.union([
     z.object({ ...snapshot, ...click }).strict(),

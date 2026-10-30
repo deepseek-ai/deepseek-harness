@@ -224,21 +224,17 @@ import Darwin
     }
     private func performForeground(_ plan: ForegroundPlan, requestID: String) async throws -> JSONValue {
         let before = try await worker.foregroundObservation(plan)
-        let raiseRequested = plan.isRaise && AXWorker.shouldRaise(plan, before: before)
         var activationRequested = false
-        if !plan.isRaise || raiseRequested {
-            if before.frontPID != plan.identity.pid {
-                try cancellation.check()
-                try ApplicationCatalog.activate(plan.identity)
-                activationRequested = true
-            }
+        if before.frontPID != plan.identity.pid {
+            try cancellation.check()
+            try ApplicationCatalog.activate(plan.identity)
+            activationRequested = true
         }
-        if raiseRequested { try await worker.raise(plan) }
         let after = try await worker.foregroundObservation(plan)
         return .object(["dispatched": .bool(true), "verified": .bool(false), "foreground": .object([
-            "requestId": .string(requestID), "operation": .string(plan.isRaise ? "AXRaise" : "activate"),
-            "targetPid": .number(Double(plan.identity.pid)), "targetWindowId": plan.targetWindowID.map { .number(Double($0)) } ?? .null,
-            "before": before.json, "after": after.json, "activationRequested": .bool(activationRequested), "raiseRequested": .bool(raiseRequested),
+            "requestId": .string(requestID), "operation": .string("activate"),
+            "targetPid": .number(Double(plan.identity.pid)), "targetWindowId": .null,
+            "before": before.json, "after": after.json, "activationRequested": .bool(activationRequested), "raiseRequested": .bool(false),
         ])])
     }
     private func transportFailed(_ failure: NativeFailure) {

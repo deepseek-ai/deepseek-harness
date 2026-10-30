@@ -218,7 +218,6 @@ export function createCuaSurface(dispatch: CuaDispatch, sink: CuaObservationSink
         ...options?.selectionType === undefined ? {} : { selectionType: options.selectionType },
       })
     },
-    async performSecondaryAction(elementId, name) { return action('performSecondaryAction', { ...snapshotParams(), elementId, action: name }) },
     async scroll(options) {
       if (options.deltaLinesX === 0 && options.deltaLinesY === 0) throw new Error('At least one scroll delta must be nonzero')
       return action('scroll', {

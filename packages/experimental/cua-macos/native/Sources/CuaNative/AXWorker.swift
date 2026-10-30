@@ -27,13 +27,6 @@ struct CaptureTarget: Sendable {
 struct ForegroundPlan: Sendable {
     let appHandle: String
     let identity: ProcessIdentity
-    let snapshotID: String?
-    let index: Int?
-    let targetWindowID: UInt32?
-    let role: String?
-    let main: Bool?
-    let minimized: Bool?
-    var isRaise: Bool { index != nil }
 }
 struct ForegroundObservation: Sendable {
     let frontPID: Int32?
@@ -177,18 +170,6 @@ actor AXWorker {
         try WindowGeometry.validateObservedSize(observed: observedWindowBounds[handle]?[windowID], current: window.bounds)
         return window
     }
-    static func actionKey(_ value: String) -> String {
-        let name = AXTextFormatter.actionName(value)
-        return name.filter { !$0.isWhitespace }.lowercased()
-    }
-    static func resolveAction(_ requested: String, names: [String]) throws -> String {
-        if names.contains(requested) { return requested }
-        let matches = names.filter { actionKey($0) == actionKey(requested) }
-        guard matches.count == 1, let action = matches.first else {
-            throw NativeFailure(code: "NATIVE_ERROR", message: "Action is missing or ambiguous; read details=true and use its complete name")
-        }
-        return action
-    }
     static var actionResult: JSONValue { .object(["dispatched": .bool(true), "verified": .bool(false)]) }
 
     // Only observation failures allow a fresh read. Input failures can follow
@@ -282,7 +263,7 @@ actor AXWorker {
             return .result(.object(["dispatched": .bool(true), "verified": .bool(false),
                 "windowId": restored.map { .number(Double($0)) } ?? .null, "foregroundChanged": changed]))
         case "activate":
-            return .foreground(ForegroundPlan(appHandle: handle, identity: identity, snapshotID: nil, index: nil, targetWindowID: nil, role: nil, main: nil, minimized: nil))
+            return .foreground(ForegroundPlan(appHandle: handle, identity: identity))
         case "getState":
             let window = try params.optionalWindowID()
             if let window { _ = try NativePlatform.ownedWindow(identity.pid, window) }
@@ -333,17 +314,6 @@ actor AXWorker {
         case "selectText":
             try ax().selectText(element(handle, params), text: params.string("text"), prefix: params.optionalString("prefix"),
                                 suffix: params.optionalString("suffix"), mode: params.optionalString("selectionType") ?? "text")
-        case "performSecondaryAction":
-            let selected = try element(handle, params)
-            let requested = try params.string("action")
-            let action = try Self.resolveAction(requested, names: ax().actions(selected))
-            if action == "AXRaise" {
-                try ax().requireEnabled(selected)
-                return .foreground(ForegroundPlan(appHandle: handle, identity: identity, snapshotID: try params.string("snapshotId"),
-                    index: try params.elementIdIndex(), targetWindowID: try ax().windowID(selected),
-                    role: try ax().string(selected, "AXRole"), main: try ax().boolean(selected, "AXMain"), minimized: try ax().boolean(selected, "AXMinimized")))
-            }
-            try ax().perform(selected, action)
         case "click", "hover":
             let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 0...maxClickHoldMs) : nil
             let button = try params.optionalString("mouseButton") ?? "left"
@@ -450,20 +420,6 @@ actor AXWorker {
         let top = NativePlatform.windows().first { $0.isOnScreen }
         return ForegroundObservation(frontPID: NativePlatform.frontPID(), focusedWindowID: try ax().focusedWindowID(plan.identity.pid),
                                      frontWindowID: top?.windowID, frontWindowPID: top?.pid)
-    }
-    static func shouldRaise(_ plan: ForegroundPlan, before: ForegroundObservation) -> Bool {
-        guard let id = plan.targetWindowID else { return true }
-        return !(plan.role == "AXWindow" && plan.main == true && plan.minimized == false && before.frontPID == plan.identity.pid
-                 && before.focusedWindowID == id && before.frontWindowID == id && before.frontWindowPID == plan.identity.pid)
-    }
-    func raise(_ plan: ForegroundPlan) throws {
-        _ = try validateIdentity(plan.appHandle)
-        try NativePlatform.requireUnlocked(observeSession())
-        try NativePlatform.requireAccessibility()
-        guard let id = plan.snapshotID, let index = plan.index, let element = try snapshot(plan.appHandle, id).elements[index] else {
-            throw NativeFailure(code: "STALE_SNAPSHOT", message: "Raise target is no longer available")
-        }
-        try ax().perform(element, "AXRaise")
     }
     func finishCapture(_ target: CaptureTarget, image: CapturedPNG, trace: ScreenshotTrace? = nil) throws -> JSONValue {
         trace?.mark("postflight.begin")

@@ -566,17 +566,6 @@ describe('input actions', () => {
     ])
   })
 
-  it('routes an explicit secondary action through the selected window snapshot', async () => {
-    const f = fixture()
-    const app = await f.api.getApp('Editor')
-    const window = await app.getWindow(23)
-    await window.performSecondaryAction(element('2'), 'raise')
-    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'performSecondaryAction', params: {
-      appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '2', action: 'raise',
-    } })
-    await expect(window.performSecondaryAction(element('2'), '')).rejects.toThrow()
-  })
-
   it('does not activate on selection and dispatches only an explicit activation request', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
