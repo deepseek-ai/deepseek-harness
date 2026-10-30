@@ -94,6 +94,8 @@ export interface SessionsHarness {
   failFormat(error?: Error): void
   /** Let `ctx.im.format` work again. */
   healFormat(): void
+  /** Hold the next `ctx.im.format` call until the returned `release` runs, so a test can interleave a write. */
+  holdFormat(): { entered: Promise<void>; release: () => void }
   /** Unmount session persistence (its flush listener) after an agent is already open. */
   dropPersistence(): Promise<void>
   close(): Promise<void>
@@ -155,10 +157,17 @@ export async function boot(options: BootOptions = {}): Promise<SessionsHarness> 
 
   const formats: FormatCall[] = []
   let formatFailure: Error | undefined
+  let formatHold: { entered: PromiseWithResolvers<undefined>; release: PromiseWithResolvers<undefined> } | undefined
   const formatter: ImSessionHostDeps['formatter'] = {
     format: async (messages: readonly ImMessage[], formatOptions?: ImFormatOptions) => {
       formats.push({ messages, options: formatOptions })
       if (formatFailure) throw formatFailure
+      const hold = formatHold
+      if (hold !== undefined) {
+        formatHold = undefined
+        hold.entered.resolve(undefined)
+        await hold.release.promise
+      }
       const text = messages.map(message => message.text).join('\n')
       return [{ type: 'text', text }] satisfies UserMessage['content']
     },
@@ -172,6 +181,11 @@ export async function boot(options: BootOptions = {}): Promise<SessionsHarness> 
     ctx, host, agents, model, pool, root, created, resets, formats,
     failFormat(error = new Error('format offline')): void { formatFailure = error },
     healFormat(): void { formatFailure = undefined },
+    holdFormat(): { entered: Promise<void>; release: () => void } {
+      const hold = { entered: Promise.withResolvers<undefined>(), release: Promise.withResolvers<undefined>() }
+      formatHold = hold
+      return { entered: hold.entered.promise, release: () => { hold.release.resolve(undefined) } }
+    },
     dropPersistence: () => persistence.dispose(),
     async close(): Promise<void> {
       await host.dispose()

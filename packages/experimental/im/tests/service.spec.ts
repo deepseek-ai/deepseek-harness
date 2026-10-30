@@ -116,6 +116,17 @@ describe('ImService facade', () => {
     await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
   })
 
+  it('refuses a stored message that belongs to another chat of the same bot', async () => {
+    const { service, bot } = await mount()
+    const other = ImChatKey('fake:bot', 'other')
+    await deliver(bot, inbound('m1', { chat: { id: 'other', type: 'group' } }))
+    await vi.waitFor(() => { expect(service.chat(other)).toBeDefined() })
+    // The message is stored under this bot, so a lookup by key alone would hand it to any chat of the bot.
+    expect(service.history.get(ImMessageKey('fake:bot', 'm1'))).toBeDefined()
+    await expect(service.readMessage(CHAT, 'm1')).rejects.toMatchObject({ code: 'access' })
+    await expect(service.readMessage(other, 'm1')).resolves.toMatchObject({ key: ImMessageKey('fake:bot', 'm1') })
+  })
+
   it('publishes and streams through the send funnel of its sender', async () => {
     const { service, bot } = await mount()
     await deliver(bot, inbound('m1'))

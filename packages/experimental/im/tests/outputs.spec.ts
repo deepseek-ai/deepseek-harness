@@ -290,6 +290,21 @@ describe('ImOutputRegistry buttons', () => {
     expect(harness.stopped).toEqual([])
   })
 
+  it('ignores a click from a sender the admitting source does not allow', async () => {
+    const harness = booted()
+    const hosted = harness.host({ output: 'probe' })
+    harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['another-user'] })
+
+    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
+    expect(harness.buttons).toEqual([])
+    expect(harness.stopped).toEqual([])
+
+    // The sender the rule admits reaches the host again.
+    harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['user-1'] })
+    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
+    expect(harness.stopped).toEqual([hosted.sessionId])
+  })
+
   it('keeps a click without a stored message unattributed and ignores foreign chats', async () => {
     const harness = booted()
     harness.host({ output: 'probe' })
@@ -368,6 +383,7 @@ describe('ImOutputRegistry referrers', () => {
     const registry = new ImOutputRegistry(ctx, {
       im: {
         chat: (key: ImChatKey) => (key === chat.key ? chat : undefined),
+        source: () => undefined,
         history: store,
         sessions,
       } satisfies ImOutputDeps['im'],

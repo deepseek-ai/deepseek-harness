@@ -218,6 +218,17 @@ describe('ImStore write rules', () => {
     expect(store.chat(CHAT.key)?.source).toBe('other')
   })
 
+  it('keeps the seq counter when a chat identity is refreshed while a message is queued', async () => {
+    const { store } = await boot()
+    await store.touchChat(CHAT)
+    // The put is still queued when the identity change starts, so the write must re-read the counter.
+    const queued = store.put(draft('m1'), 'none')
+    await store.touchChat({ ...CHAT, source: ImSourceId('other') })
+    expect((await queued).seq).toBe(1)
+    // A counter rolled back to 0 here would hand out seq 1 a second time.
+    expect((await store.put(draft('m2'), 'none')).seq).toBe(2)
+  })
+
   it('fails writes before start and after dispose', async () => {
     const closed = new ImStore(new Context(), Config({ sources: [] }))
     await expect(closed.put(draft('m1'), 'none')).rejects.toThrow(/not open/)

@@ -266,6 +266,26 @@ describe('delivery', () => {
     expect(await insertions(harness, record.sessionId)).toHaveLength(1)
   })
 
+  it('keeps a binding committed while an admission awaits the formatter', async () => {
+    const harness = await booted()
+    const other = ImChatKey('fake:bot', 'other')
+    await harness.host.ensure(spec())
+
+    const hold = harness.holdFormat()
+    const admitting = harness.host.deliver(`conv:${CHAT.key}`, messagesDelivery('steer', [message('first')]))
+    await hold.entered
+
+    // A second chat's message binds its chat while the first admission is still inside the formatter.
+    await harness.host.ensure(spec({
+      bindings: [{ chat: CHAT.key, writable: true, home: true }, { chat: other, writable: true }],
+    }))
+    hold.release()
+    await admitting
+
+    // The admission's own write must keep the binding that landed while it awaited.
+    expect(harness.host.get(`conv:${CHAT.key}`)?.bindings.map(binding => binding.chat)).toEqual([CHAT.key, other])
+  })
+
   it('retries a recorded intent whose first admission failed', async () => {
     const harness = await booted()
     const record = await harness.host.ensure(spec())

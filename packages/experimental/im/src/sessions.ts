@@ -261,17 +261,20 @@ export class ImSessionHost implements ImSessions {
       await this.deps.agents.dispose(old.sessionId)
     })
     const record = await this.write(async () => {
+      // Re-read inside the write: disposing the agent awaited, and an ensure()/bind() may have committed a newer
+      // record (another chat's binding) meanwhile. Advancing the generation from the stale copy would drop it.
+      const current = this.records.get(key) ?? old
       for (const [id, stored] of this.deliveries) {
-        if (stored.session !== old.sessionId || stored.admitted) continue
+        if (stored.session !== current.sessionId || stored.admitted) continue
         await this.domainOf().table('deliveries').delete(id)
         this.deliveries.delete(id)
       }
-      this.ids.delete(old.sessionId)
-      this.triggers.delete(old.sessionId)
-      const generation = old.generation + 1
+      this.ids.delete(current.sessionId)
+      this.triggers.delete(current.sessionId)
+      const generation = current.generation + 1
       const sessionId = sessionIdOf(key, generation)
       const now = Date.now()
-      const next: ImSessionRecord = { ...old, sessionId, generation, createdAt: now, lastActiveAt: now }
+      const next: ImSessionRecord = { ...current, sessionId, generation, createdAt: now, lastActiveAt: now }
       await this.save(next)
       return next
     })
@@ -369,11 +372,13 @@ export class ImSessionHost implements ImSessions {
         await this.flush(agent)
       })
       const admitted: StoredDelivery = { ...stored, admitted: true }
-      const active: ImSessionRecord = { ...record, lastActiveAt: Date.now() }
       await this.write(async () => {
         await this.domainOf().table('deliveries').put(id, admitted)
         this.deliveries.set(id, admitted)
-        await this.save(active)
+        // Re-read inside the write: admission awaited the agent, and a concurrent ensure()/bind() may have committed a
+        // newer record (another chat's binding) meanwhile. Writing the record read before that await would drop it.
+        const current = this.hosted(sessionId) ?? record
+        await this.save({ ...current, lastActiveAt: Date.now() })
       })
       if (record.ephemeral && delivery.mode !== 'inject') {
         void agent.whenIdle().then(() => this.deps.agents.dispose(sessionId)).catch((error: unknown) => {

@@ -128,7 +128,11 @@ export class ImService extends Service implements ImApi {
       await this.store.dispose()
     }
     ctx.on('satori/receive', session => this.intake.receive(session))
-    ctx.on('send', (bot, result) => { void this.intake.outbound(bot, result) })
+    ctx.on('send', (bot, result) => {
+      void this.intake.outbound(bot, result).catch((error: unknown) => {
+        ctx.logger.warn('IM outbound message of bot %s was not stored: %s', bot.id, String(error))
+      })
+    })
     this.activity.start()
     this.outputs.start()
     ctx.inject(['tools', 'systemPrompt'], (scoped) => { applyTools(scoped, this, this.config) })
@@ -145,7 +149,9 @@ export class ImService extends Service implements ImApi {
     this.timer = setInterval(() => {
       this.intake.pump()
       this.sessions.retry()
-      void this.store.sweep(Date.now())
+      void this.store.sweep(Date.now()).catch((error: unknown) => {
+        ctx.logger.warn('IM store sweep failed: %s', String(error))
+      })
     }, this.config.retryIntervalMs)
   }
 
@@ -221,7 +227,14 @@ export class ImService extends Service implements ImApi {
   async readMessage(chat: ImChatKey, id: string): Promise<ImMessage> {
     const bot = this.bot(chat)
     const known = this.store.get(ImMessageKey(bot.id, id))
-    if (known !== undefined) return known
+    if (known !== undefined) {
+      // A message key is per bot, not per chat, and one bot serves every chat it was added to: a stored message must
+      // belong to the chat the tool asked about, or a session bound to one chat could read another chat's message.
+      if (known.chat.key !== chat) {
+        throw new ImError('access', `Message ${id} belongs to chat ${known.chat.key}, not ${chat}.`)
+      }
+      return known
+    }
     const record = this.chat(chat)
     if (record === undefined) throw new ImError('access', `Chat ${chat} was never admitted, so message ${id} cannot be read.`)
     if (bot.getMessage === undefined) throw new ImError('unavailable', `Bot ${bot.id} cannot read one message by id.`)

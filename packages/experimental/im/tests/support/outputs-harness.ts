@@ -11,7 +11,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   ImChatKey, ImMessageKey, ImSourceId,
   type ImActivity, type ImButtonEvent, type ImChat, type ImMessage, type ImSendOptions,
-  type ImSendResult, type ImSessionRecord,
+  type ImSendResult, type ImSessionRecord, type ImSourceConfig,
 } from '../../src/api.ts'
 import { ImOutputRegistry, type ImOutputDeps } from '../../src/outputs.ts'
 import type { ImMessageDraft } from '../../src/store.ts'
@@ -149,14 +149,18 @@ export class OutputsHarness {
   readonly messages = new Map<ImMessageKey, ImMessage>()
   /** Hosted sessions by key and by id (`sessions.get`). */
   readonly hosted = new Map<string, ImSessionRecord>()
+  /** Configured admission rules by id (`source`); a click must pass the rule's `users`. */
+  readonly sources = new Map<string, ImSourceConfig>()
   /** Sessions the stop route cancelled. */
   readonly stopped: SessionId[] = []
   /** Every `sessions.stop()` call rejects. */
   stopFails = false
 
   constructor() {
+    this.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all' })
     const im = {
       chat: (key: ImChatKey): ImChat | undefined => this.chats.get(key),
+      source: (id: string): ImSourceConfig | undefined => this.sources.get(id),
       history: { get: (key: ImMessageKey) => this.messages.get(key) },
       sessions: {
         get: (target: string | SessionId) => this.hosted.get(target),

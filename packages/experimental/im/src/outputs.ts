@@ -19,9 +19,10 @@ import {
   ImChatKey, ImMessageKey,
   type ImActivity, type ImActivityChange, type ImBinding, type ImButtonEvent, type ImChat, type ImHistory,
   type ImOutputIO, type ImOutputRenderer, type ImOutputs, type ImSendOptions, type ImSendResult, type ImSessions,
-  type ImTurnOutput,
+  type ImSourceConfig, type ImTurnOutput,
 } from './api.ts'
 import { ImError } from './error.ts'
+import { allows } from './intake.ts'
 import type { ImSender } from './send.ts'
 
 /** Button id prefix the core routes to `sessions.stop`. */
@@ -30,9 +31,11 @@ export const STOP_BUTTON_PREFIX = 'dsh:stop:'
 /** Reserved `spec.output` value that names no renderer: nothing is published unless the agent calls `im_send`. */
 export const NO_OUTPUT = 'none'
 
-/** The IM host slice one rendered turn reads: the chat of a session and its history tail. */
+/** The IM host slice one rendered turn reads: the chat of a session, its admitting source and its history tail. */
 export interface ImOutputHost {
   chat(key: ImChatKey): ImChat | undefined
+  /** The configured admission rule of a chat, whose `users` allowlist gates button clicks. */
+  source(id: string): ImSourceConfig | undefined
   readonly history: Pick<ImHistory, 'get'>
   readonly sessions: Pick<ImSessions, 'get' | 'stop'>
 }
@@ -69,7 +72,11 @@ export class ImOutputRegistry implements ImOutputs {
   /** Subscribe `im/activity` and `interaction/button` (disposed with `ctx`). */
   start(): void {
     this.ctx.on('im/activity', (activity, change) => { this.activity(activity, change) })
-    this.ctx.on('interaction/button', (session) => { void this.button(session) })
+    this.ctx.on('interaction/button', (session) => {
+      void this.button(session).catch((error: unknown) => {
+        this.ctx.logger.warn('IM button click was not handled: %s', String(error))
+      })
+    })
   }
 
   register(renderer: ImOutputRenderer): () => void {
@@ -98,6 +105,9 @@ export class ImOutputRegistry implements ImOutputs {
     const chat = this.deps.im.chat(ImChatKey(bot.id, button.chat.id))
     // A click outside the admitted chats is invisible to this host.
     if (chat === undefined) return
+    // The clicker is admitted like any sender: a button must not be a way around the source's user allowlist.
+    const source = this.deps.im.source(chat.source)
+    if (source !== undefined && !allows(source.users, button.user.id)) return
     const message = button.message === undefined
       ? undefined
       : this.deps.im.history.get(ImMessageKey(bot.id, button.message.id))

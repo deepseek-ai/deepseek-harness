@@ -83,16 +83,19 @@ export class ImStore implements ImHistory {
    */
   async touchChat(chat: ImChat): Promise<void> {
     if (this.isCurrent(chat)) return
-    const known = this.chats.get(chat.key)
-    const record: StoredChat = {
-      key: chat.key,
-      bot: chat.bot,
-      ref: { ...chat.ref },
-      source: chat.source,
-      seq: known?.seq ?? 0,
-      updatedAt: Date.now(),
-    }
     await this.serialize(async () => {
+      // Re-check and read the counter inside the serialized job: a queued put() advances it, and writing a seq read
+      // before the queue would roll the chat's counter back so the next put reuses a number already handed out.
+      if (this.isCurrent(chat)) return
+      const known = this.chats.get(chat.key)
+      const record: StoredChat = {
+        key: chat.key,
+        bot: chat.bot,
+        ref: { ...chat.ref },
+        source: chat.source,
+        seq: known?.seq ?? 0,
+        updatedAt: Date.now(),
+      }
       await this.domainOf().table('chats').put(chat.key, record)
       this.chats.set(chat.key, record)
     })
