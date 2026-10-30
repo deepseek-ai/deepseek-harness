@@ -81,6 +81,17 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
   })
 
   it('passes the same target to preparation, packaging and retention', () => {
+    const archive = workflow.jobs['upload-artifact']!
+    expect(archive.env).toMatchObject({
+      DESKTOP_RETAINED_DIRECTORY: '${{ needs.package.outputs.directory }}',
+      DESKTOP_PACKAGE_ATTEMPT: '${{ needs.package.outputs.attempt }}',
+      DESKTOP_PACKAGE_RUNNER: '${{ needs.package.outputs.runner-name }}',
+    })
+    for (const step of archive.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))) {
+      expect(step.with?.name).toContain('${{ needs.package.outputs.version }}')
+      expect(step.with?.name).toContain('${{ needs.package.outputs.attempt }}')
+      expect(step.with?.name).not.toContain('github.run_attempt')
+    }
     const job = workflow.jobs.package!
     expect(job.env.DSH_DESKTOP_TARGET_PLATFORM).toBe('darwin')
     expect(job.env.DSH_DESKTOP_TARGET_ARCH).toBe(arch)

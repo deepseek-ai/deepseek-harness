@@ -107,6 +107,17 @@ it('validates before building and passes the same mode and version to checks and
 it('retains failure diagnostics and uploads only the selected successful installer', () => {
   const uploads = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
   expect(uploads).toHaveLength(1)
+  const archive = workflow.jobs['upload-artifact']!
+  expect(archive.env).toMatchObject({
+    DESKTOP_RETAINED_DIRECTORY: '${{ needs.package.outputs.directory }}',
+    DESKTOP_PACKAGE_ATTEMPT: '${{ needs.package.outputs.attempt }}',
+    DESKTOP_PACKAGE_RUNNER: '${{ needs.package.outputs.runner-name }}',
+  })
+  for (const step of archive.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))) {
+    expect(step.with?.name).toContain('${{ needs.package.outputs.version }}')
+    expect(step.with?.name).toContain('${{ needs.package.outputs.attempt }}')
+    expect(step.with?.name).not.toContain('github.run_attempt')
+  }
   const archival = workflow.jobs['upload-artifact']!.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
   expect(archival).toHaveLength(2)
   expect(uploads[0]!.if).toBe("always() && steps.checkout.outcome == 'success'")
