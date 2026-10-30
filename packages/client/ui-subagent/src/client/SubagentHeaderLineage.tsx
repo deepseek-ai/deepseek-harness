@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { useMemo, useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   type SessionProjectionMap, type SessionSummary,
@@ -375,13 +375,9 @@ function CatalogRows({
                   <StateDot state={entry.activity === 'running' ? 'ongoing' : completed ? 'done' : 'idle'} />
                 </span>
                 <span className={css.content}>
-                  <Tooltip label={primaryLabel} onlyWhenClipped delayMs={500} portal side="top">
-                    <span className={`${css.label} ${isCurrent ? css.currentLabel : ''}`}>{primaryLabel}</span>
-                  </Tooltip>
+                  <span className={`${css.label} ${isCurrent ? css.currentLabel : ''}`}>{primaryLabel}</span>
                   {secondaryLabel !== undefined && (
-                    <Tooltip label={secondaryLabel} onlyWhenClipped delayMs={500} portal side="top">
-                      <span className={css.secondaryLabel}>{secondaryLabel}</span>
-                    </Tooltip>
+                    <span className={css.secondaryLabel}>{secondaryLabel}</span>
                   )}
                   {requiresOpening && <span className={css.summary}>{t('catalog.migrationRequired')}</span>}
                 </span>
@@ -524,6 +520,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const countRef = useRef<HTMLSpanElement>(null)
+  const activityId = useId()
   const menuRef = useRef<HTMLDivElement>(null)
   const menuPosition = useAnchoredPosition({
     open, anchorRef: triggerRef, panelRef: menuRef, gap: 5, margin: 16,
@@ -722,10 +719,8 @@ function CatalogDropdown(props: CatalogDropdownProps) {
           aria-expanded={open}
           aria-label={variant === 'switcher'
             ? t('switcher.aria', { title: switcherDisplayTitle })
-            : t(
-              runningCount > 0 ? runningCountKey : totalCountKey,
-              { count: runningCount > 0 ? runningCount : directCount },
-            )}
+            : t(totalCountKey, { count: directCount })}
+          aria-describedby={variant === 'count' && runningCount > 0 ? activityId : undefined}
           onClick={openTitle === undefined
             ? () => {
               cancelHoverOpen()
@@ -765,6 +760,9 @@ function CatalogDropdown(props: CatalogDropdownProps) {
           {variant === 'switcher' && <SubagentSwitcherIcon />}
         </button>
       </Tooltip>
+      {variant === 'count' && runningCount > 0 && (
+        <span id={activityId} hidden>{t(runningCountKey, { count: runningCount })}</span>
+      )}
       {open && createPortal((
         <MenuSurface
           ref={menuRef}

@@ -57,7 +57,7 @@ kind: "package-reference"
 
 ### 受管理的委派
 
-运行时接受子任务后，每次调用都会返回 `started subagent <childId>`。顶层调用还会在结果展示 metadata 中持久化 `{ kind: 'activation', subagentId: <childId> }`；嵌套 Code 派发不附加这份 metadata。调用不等待子任务结果。activation 独立于已完成的工具调用拥有这项工作；运行时发送完成通知并释放执行资源。
+运行时接受子任务后，每次调用都会返回 `started subagent <childId>`。顶层调用在结果展示 metadata 中持久化 `{ kind: 'activation', subagentId: <childId> }`；嵌套 Code 派发将其保存在对应 `tool/ptc-dispatch` 事件的 `meta` 字段中。调用不等待子任务结果。activation 独立于已完成的工具调用拥有这项工作；运行时发送完成通知并释放执行资源。
 
 所有后端都由运行时自动递送完成通知，前提是子任务结束时调用方 Agent 仍在线。通知包含最终回答，除非子任务在结束前刚向该 Agent 发过消息。本地 Spawn 和 Fork 子任务还可以发送消息，在活跃期间通过 `send_message` 接受更多工作，或在结束后恢复。Codex、Claude Code、ACP 与 DSH SDK 后端不接受后续消息。
 

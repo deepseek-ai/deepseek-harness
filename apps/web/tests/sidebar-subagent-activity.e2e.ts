@@ -145,7 +145,7 @@ describe('web e2e: sidebar subagent activity', () => {
     )
     expect(await ownerRow.locator('[data-state="ongoing"]').count()).toBe(1)
     await ownerRow.click()
-    const runningTrigger = page.getByRole('button', { name: '1 subagent running' })
+    const runningTrigger = page.getByRole('button', { name: '1 subagent', exact: true })
     await runningTrigger.waitFor({ timeout: 10_000 })
     expect(await runningTrigger.locator('[data-state="ongoing"]').count()).toBe(1)
     // This directly created owner has no tool preset; the fixture collects its own job.

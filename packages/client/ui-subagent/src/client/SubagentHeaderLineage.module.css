@@ -342,13 +342,6 @@
 .label,
 .secondaryLabel,
 .summary {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.row[aria-disabled="true"] .label,
-.row[aria-disabled="true"] .secondaryLabel {
   white-space: normal;
   overflow-wrap: anywhere;
 }

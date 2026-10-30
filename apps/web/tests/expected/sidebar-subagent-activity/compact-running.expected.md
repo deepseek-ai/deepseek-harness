@@ -1,6 +1,6 @@
 - banner:
   - navigation "Session hierarchy": Delegate a background job.
-  - button "1 subagent running"
+  - button "1 subagent"
   - button "1 background job"
   - button "More actions"
   - button "Open right sidebar"

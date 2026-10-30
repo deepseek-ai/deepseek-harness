@@ -398,49 +398,42 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     }
   })
 
-  it('shows the description above the ID and reveals clipped IDs without hover navigation', async () => {
+  it('shows complete descriptions and IDs without hover at desktop and touch widths', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-catalog-labels'))
-    const trigger = page.getByRole('button', { name: '2 subagents', exact: true })
-    await trigger.click()
-    const panel = page.locator('[data-subagent-panel]')
-    const row = panel.getByRole('treeitem', { name: new RegExp(LABEL) })
-    const primary = row.getByText(LABEL, { exact: true })
-    const secondary = row.getByText(childId, { exact: true })
-    expect(await primary.evaluate(element => element.tagName)).toBe('SPAN')
-    expect(await secondary.evaluate(element => element.tagName)).toBe('SPAN')
-    const primaryBounds = await primary.boundingBox()
-    const secondaryBounds = await secondary.boundingBox()
-    expect(primaryBounds).not.toBeNull()
-    expect(secondaryBounds).not.toBeNull()
-    expect(primaryBounds!.y + primaryBounds!.height).toBeLessThanOrEqual(secondaryBounds!.y)
-    expect(await row.getAttribute('aria-label')).toContain(`${LABEL} ${childId} `)
-    expect(await row.getByRole('button', { name: /description/u }).count()).toBe(0)
-    expect(await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).count()).toBe(1)
-    expect(await row.getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).count()).toBe(1)
-    const beforeHover = page.url()
-    // UUID glyph widths vary across values and host fonts; this fixture requires clipping.
-    const secondaryStyle = await secondary.getAttribute('style')
-    await secondary.evaluate((element) => { element.style.maxWidth = '12ch' })
+    const originalViewport = page.viewportSize()!
+    const originalUrl = page.url()
     try {
-      for (const [label, clipped] of [[primary, false], [secondary, true]] as const) {
-        expect(await label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(clipped)
-        await label.hover()
-        if (clipped) await page.getByRole('tooltip', { name: childId, exact: true }).waitFor()
-        else expect(await page.getByRole('tooltip').count()).toBe(0)
-        expect(page.url()).toBe(beforeHover)
-        expect(await page.getByText(PARENT_PROMPT, { exact: true }).isVisible()).toBe(true)
-        expect(await page.locator('[data-sidebar-chat]').count()).toBe(0)
+      for (const width of [originalViewport.width, 390]) {
+        await page.setViewportSize({ ...originalViewport, width })
+        const trigger = page.getByRole('button', { name: '2 subagents', exact: true })
+        await trigger.click()
+        const panel = page.locator('[data-subagent-panel]')
+        const row = panel.getByRole('treeitem', { name: new RegExp(LABEL) })
+        const primary = row.getByText(LABEL, { exact: true })
+        const secondary = row.getByText(childId, { exact: true })
+        const primaryBounds = await primary.boundingBox()
+        const secondaryBounds = await secondary.boundingBox()
+        expect(primaryBounds).not.toBeNull()
+        expect(secondaryBounds).not.toBeNull()
+        expect(primaryBounds!.y + primaryBounds!.height).toBeLessThanOrEqual(secondaryBounds!.y)
+        for (const label of [primary, secondary]) {
+          expect(await label.evaluate(element => element.scrollWidth <= element.clientWidth
+            && element.scrollHeight <= element.clientHeight)).toBe(true)
+        }
+        expect(await row.getAttribute('aria-label')).toContain(`${LABEL} ${childId} `)
+        expect(await row.getByRole('button', { name: /description/u }).count()).toBe(0)
+        expect(await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).count()).toBe(1)
+        expect(await row.getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).count()).toBe(1)
+        expect(page.url()).toBe(originalUrl)
+        expect(await page.getByRole('tooltip').count()).toBe(0)
+        expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
+        await page.keyboard.press('Escape')
+        await panel.waitFor({ state: 'detached' })
       }
     } finally {
-      await secondary.evaluate((element, style) => {
-        if (style === null) element.removeAttribute('style')
-        else element.setAttribute('style', style)
-      }, secondaryStyle)
+      await page.setViewportSize(originalViewport)
+      await page.locator('[data-composer-input]').first().hover()
     }
-    expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
-    await page.keyboard.press('Escape')
-    await panel.waitFor({ state: 'detached' })
-    await page.locator('[data-composer-input]').first().hover()
   })
 
   it('recovers a current-format cold child catalog cache miss without activating either level', async () => {
