@@ -15,10 +15,10 @@ import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
 import { DetailFailure, readmeName, type FoundFile } from '@deepseek-ai/dsh-plugin-detail'
 
 /**
- * Git deadlines one operation's lock waits for: an operation runs at most a fetch and a file read that contact the
- * remote, each bounded by the deadline, plus short local commands.
+ * Git deadlines one operation's lock waits for: an operation runs at most a fetch, its SSH retry, and a file read that
+ * contact the remote, each bounded by the deadline, plus short local commands.
  */
-const OPERATION_COMMANDS = 4
+const OPERATION_COMMANDS = 5
 
 /** Limits, location, and transports of the clone cache. */
 export interface RepositoryCacheOptions {
@@ -66,6 +66,18 @@ class FileTooLarge extends DetailFailure {
 /** The failure of a Git command that contacts the remote: `network` for a timeout or a connection failure, otherwise `denied`. */
 function remoteFailureOf(result: GitResult, label: string): DetailFailure {
   return new DetailFailure(NETWORK_FAILURE.test(result.diagnostic) ? 'network' : 'denied', `${label}: ${result.diagnostic}`)
+}
+
+/**
+ * The SSH form of an http(s) repository URL: `ssh://git@<host>/<path>` on SSH's default port, the form plugin
+ * installation also falls back to.
+ * @returns undefined for another scheme, or a URL with credentials or a query.
+ */
+function sshUrlOf(url: string): string | undefined {
+  if (!/^https?:/iu.test(url)) return undefined
+  const parsed = new URL(url)
+  if (parsed.username !== '' || parsed.password !== '' || parsed.search !== '') return undefined
+  return `ssh://git@${parsed.hostname}${parsed.pathname}`
 }
 
 /** A value reused until it expires. */
@@ -259,17 +271,35 @@ export class RepositoryCache {
     const head = this.heads.get(url)
     const known = commit ?? (head !== undefined && head.expiresAt > Date.now() ? head.value : undefined)
     if (known !== undefined && !(await this.git(['show-ref', '--verify', '--quiet', `refs/dsh/${known}`], repository, signal)).failed) return known
-    await this.fetch(repository, url, commit ?? 'HEAD', signal)
+    await this.fetch(repository, commit ?? 'HEAD', signal)
     const fetched = commit ?? (await this.run(repository, ['rev-parse', 'FETCH_HEAD'], signal)).toString('utf8').trim()
     await this.run(repository, ['update-ref', `refs/dsh/${fetched}`, fetched], signal)
     if (commit === undefined) this.heads.set(url, { value: fetched, expiresAt: Date.now() + this.options.ttlMs })
     return fetched
   }
 
-  /** Fetch one commit without file contents. */
-  private async fetch(repository: string, url: string, target: string, signal: AbortSignal): Promise<void> {
+  /**
+   * Fetch one commit without file contents. When Git refuses an http(s) URL, the clone's remote switches to the SSH form
+   * of that URL and the fetch runs again, so a user with only SSH credentials for the host can read it; later reads of
+   * the clone keep that remote. An SSH fetch that fails for any reason but the size limit reports `denied` with both
+   * diagnostics.
+   */
+  private async fetch(repository: string, target: string, signal: AbortSignal): Promise<void> {
     const args = ['fetch', '--quiet', '--depth', '1', '--filter=blob:none', '--no-tags', 'origin', target]
-    await this.watched(repository, url, args, signal, `${url}: git fetch`)
+    // The remote is the URL this cache wrote, or its SSH form; neither approaches the buffer.
+    const remote = (await this.run(repository, ['config', 'remote.origin.url'], signal, 64 * 1024)).toString('utf8').trim()
+    try {
+      await this.watched(repository, remote, args, signal, `${remote}: git fetch`)
+    } catch (error) {
+      const ssh = sshUrlOf(remote)
+      if (ssh === undefined || !(error instanceof DetailFailure) || error.reason !== 'denied') throw error
+      await this.run(repository, ['config', 'remote.origin.url', ssh], signal)
+      await this.watched(repository, ssh, args, signal, `${ssh}: git fetch`).catch((sshError: unknown) => {
+        throw sshError instanceof DetailFailure && sshError.reason !== 'too-large'
+          ? new DetailFailure('denied', `${error.message}\n${sshError.message}`, { cause: sshError })
+          : sshError
+      })
+    }
     await this.evict(repository)
   }
 
