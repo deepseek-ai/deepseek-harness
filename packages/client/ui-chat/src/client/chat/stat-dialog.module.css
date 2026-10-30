@@ -15,8 +15,8 @@
      Both bounds yield to a viewport narrower than themselves (12px margins),
      so a fixed floor cannot push the panel past the placement clamp. */
   width: max-content;
-  min-width: min(300px, calc(100vw - 24px));
-  max-width: min(440px, calc(100vw - 24px));
+  min-width: min(300px, calc(100vw - 24px), var(--dsh-anchored-max-width, 100vw));
+  max-width: min(440px, calc(100vw - 24px), var(--dsh-anchored-max-width, 100vw));
   padding: 16px;
   border: 0;
   border-radius: var(--dsw-radius-lg);
@@ -28,6 +28,11 @@
   line-height: 18px;
   color: var(--dsw-alias-label-secondary);
   cursor: default;
+  max-height: var(--dsh-anchored-max-height, none);
+  overflow-x: hidden;
+  overflow-y: auto;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 /* Dialog heading row: the section name left, the section's headline value

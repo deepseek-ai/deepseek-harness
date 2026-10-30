@@ -10,7 +10,7 @@ import {
 function record(
   index: number,
   cell: Partial<TrajectoryCellProps> = {},
-  collapsedSummaryKind?: 'turn' | 'assistant',
+  collapsedSummaryKind?: VirtualizableTrajectoryRecord['collapsedSummaryKind'],
 ): VirtualizableTrajectoryRecord {
   return {
     cell: {
@@ -54,8 +54,8 @@ describe('trajectory virtual rows', () => {
     })
   })
 
-  it('uses the rendered collapsed-summary height', () => {
-    const summary = record(1, { sourceSeq: 10 }, 'turn')
+  it.each(['turn', 'assistant', 'tool'] as const)('uses the rendered %s summary height', (kind) => {
+    const summary = record(1, { sourceSeq: 10 }, kind)
 
     expect(groupTrajectoryVirtualRows([summary])[0]?.height).toBe(20)
   })
@@ -78,9 +78,9 @@ describe('trajectory virtual rows', () => {
       .toBe(groupTrajectoryVirtualRows([content])[0]?.key)
   })
 
-  it('distinguishes a folded summary from its source record', () => {
+  it.each(['turn', 'assistant', 'tool'] as const)('distinguishes a %s summary from its source record', (kind) => {
     const source = record(1, { sourceSeq: 10 })
-    const summary = record(1, { sourceSeq: 10 }, 'assistant')
+    const summary = record(1, { sourceSeq: 10 }, kind)
 
     expect(trajectoryVirtualRecordKey(summary)).not.toBe(trajectoryVirtualRecordKey(source))
   })

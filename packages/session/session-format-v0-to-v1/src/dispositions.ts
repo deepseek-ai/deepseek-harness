@@ -90,8 +90,8 @@ export const RELEASED_V0_EVENT_DISPOSITIONS: Readonly<Record<string, ReleasedV0P
   'step/end': disposition(['turn', 'step']),
   'step/start': disposition(['turn', 'step']),
   'subagent/descriptor': disposition(
-    ['mode', 'version', 'provider'],
-    ['label', 'agentProvider', 'agentModel', 'agentReasoningEffort', 'persona', 'toolFilter'],
+    ['version', 'provider'],
+    ['mode', 'label', 'agentProvider', 'agentModel', 'agentReasoningEffort', 'persona', 'toolFilter'],
   ),
   'subagent/model-selection-policy': disposition(['allowedModels']),
   'team/member': disposition(['version', 'teamId', 'member']),
