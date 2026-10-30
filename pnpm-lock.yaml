@@ -3981,6 +3981,13 @@ importers:
         version: 18.3.1(react@18.3.1)
 
   packages/client/ui-cli-account:
+    dependencies:
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:*
+        version: link:../../typert/protocol
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~
@@ -4018,9 +4025,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:*
         version: link:../ui-slots
-      '@deepseek-ai/dsh-typert-protocol':
+      '@deepseek-ai/dsh-package-manifest':
         specifier: workspace:*
-        version: link:../../typert/protocol
+        version: link:../../util/package-manifest
       '@testing-library/react':
         specifier: ^16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -7410,6 +7417,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-package-manifest':
+        specifier: workspace:*
+        version: link:../../util/package-manifest
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:*
         version: link:../../subprocess/subprocess
@@ -14254,15 +14264,15 @@ importers:
       '@deepseek-ai/dsh-subagent':
         specifier: workspace:*
         version: link:../../subagent/subagent
-      '@deepseek-ai/dsh-tool-testkit':
-        specifier: workspace:*
-        version: link:../../test-support/tool-testkit
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:*
         version: link:../../core/system-prompt
       '@deepseek-ai/dsh-tool-executor-ptc':
         specifier: workspace:*
         version: link:../../core/tool-executor-ptc
+      '@deepseek-ai/dsh-tool-testkit':
+        specifier: workspace:*
+        version: link:../../test-support/tool-testkit
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../core/tools

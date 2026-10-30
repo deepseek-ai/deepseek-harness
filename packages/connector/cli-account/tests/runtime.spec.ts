@@ -73,6 +73,23 @@ describe('CliAccountRuntime', () => {
     expect(await settled(id)).toEqual({ account: { state: 'signed-in' }, result: { id, kind: 'check', outcome: 'succeeded' } })
   })
 
+  it('notifies an observer of each change without starting a check, until its disposer runs', async () => {
+    account.script = checkScript
+    subprocess.respond = (process) => { process.reply({ stdout: 'in\n' }) }
+    const changes: View[] = []
+    const stop = account.observe(() => { changes.push(account.snapshot()) })
+    expect(account.snapshot().operation).toBeUndefined()
+
+    const id = account.start('check')
+    await settled(id)
+    expect(changes.map(view => view.operation?.phase ?? view.result?.outcome)).toContain('succeeded')
+    expect(changes[0]?.operation).toMatchObject({ id, kind: 'check' })
+    const seen = changes.length
+    stop()
+    await settled(account.start('check'))
+    expect(changes).toHaveLength(seen)
+  })
+
   it('offers only trusted HTTPS authorization links, reports which it accepted, and clears them on the next stage', async () => {
     let login!: ScriptedProcess
     const offers: boolean[] = []
@@ -204,49 +221,18 @@ describe('CliAccountRuntime', () => {
     expect(errors()).toEqual([['fixture: account operation failed: %o', { id, kind: 'check', phase: 'checking' }]])
   })
 
-  it('streams the account view to each follower, checking for a follower that finds no operation', async () => {
-    let status!: ScriptedProcess
-    subprocess.respond = (process) => { status = process }
-    account.script = checkScript
-    const leave = new AbortController()
-    const views: View[] = []
-    const following = (async () => {
-      for await (const view of account.follow(leave.signal)) {
-        views.push(view)
-        if (view.result !== undefined) leave.abort()
-      }
-    })()
-
-    await vi.waitFor(() => { expect(status).toBeDefined() })
-    const second = account.follow(new AbortController().signal)[Symbol.asyncIterator]()
-    expect((await second.next()).value).toMatchObject({ operation: { kind: 'check' } })
-    await second.return?.()
-    status.reply({ stdout: 'in' })
-    await following
-
-    expect(subprocess.processes).toHaveLength(1)
-    expect(views[0]).toMatchObject({ account: { state: 'unchecked' }, operation: { kind: 'check', phase: 'checking' } })
-    expect(views.at(-1)).toMatchObject({ account: { state: 'signed-in' }, result: { outcome: 'succeeded' } })
-  })
-
-  it('stops account work, ends streams, and refuses new work on disposal', async () => {
+  it('stops account work and refuses new work on disposal', async () => {
     subprocess.respond = () => {}
     account.script = async (_kind, control, signal) => {
       control.stage('authorizing')
       await control.run('login', ['login'], signal, { awaitsUser: true })
     }
     const id = account.start('connect')
-    const views: View[] = []
-    const following = (async () => {
-      for await (const view of account.follow(new AbortController().signal)) views.push(view)
-    })()
     await vi.waitFor(() => { expect(subprocess.processes).toHaveLength(1) })
 
     await account.dispose()
-    await following
 
     expect(account.snapshot().result).toEqual({ id, kind: 'connect', outcome: 'cancelled' })
-    expect(views.length).toBeGreaterThan(0)
     expect(() => account.start('check')).toThrow('fixture: plugin disposed')
     account.refresh()
     expect(account.snapshot().operation).toBeUndefined()

@@ -179,6 +179,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Fetches and validates the index sources the user configures; installation goes through the plugin manager.',
   },
   {
+    key: 'cliAccounts',
+    pkg: 'client-ui-cli-account',
+    title: 'CLI app accounts on the Plugins page',
+    mode: 'service',
+    note: 'Holds the accounts CLI app plugins register and serves them to the Plugins page through one Remote; links and notices stay in the browser that started the operation.',
+  },
+  {
     key: 'profileContext',
     pkg: 'app-boot',
     title: 'Launcher-owned profile data',

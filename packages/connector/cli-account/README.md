@@ -27,11 +27,11 @@ CLI app plugins such as Feishu and WeCom use this library to run their vendor CL
 
 ### When to use it
 
-Use it in the Host row of a plugin whose vendor CLI signs the user in and keeps the credentials, so DSH only starts commands, shows their results, and owns their processes. The plugin's Plugins page mirrors the view with [`@deepseek-ai/dsh-client-ui-cli-account`](../../client/ui-cli-account/README.md). A plugin that connects a hosted service over MCP uses the MCP manager instead, which owns OAuth itself.
+Use it in the Host row of a plugin whose vendor CLI signs the user in and keeps the credentials, so DSH only starts commands, shows their results, and owns their processes. The plugin shows the account on the Plugins page by registering the runtime with [`@deepseek-ai/dsh-client-ui-cli-account`](../../client/ui-cli-account/README.md). A plugin that connects a hosted service over MCP uses the MCP manager instead, which owns OAuth itself.
 
 ### Entry point
 
-A plugin states its CLI path in runtime context, subclasses the runtime, runs each command through its control, and serves the runtime's methods over its own Remote:
+A plugin states its CLI path in runtime context, subclasses the runtime, and runs each command through its control:
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
@@ -57,7 +57,7 @@ const account = new Account({
 })
 ```
 
-`account.start(kind)` returns the operation id and throws while another operation runs. `account.follow(signal)` yields the current `CliAccountView`, starting a check when no operation runs, then each changed view. `account.cancel(id)` stops the named operation only in a declared cancellable phase. `account.dispose()` cancels the active operation, waits for its process to exit, and disposes the executor. The contracts in [`src/runtime.ts`](src/runtime.ts), [`src/executor.ts`](src/executor.ts), and [`src/context.ts`](src/context.ts) are authoritative.
+`account.start(kind)` returns the operation id and throws while another operation runs. `account.snapshot()` returns the current `CliAccountView`, `account.observe(listener)` calls the listener after each change, and `account.refresh()` starts a check unless an operation runs. `account.cancel(id)` stops the named operation only in a declared cancellable phase. `account.dispose()` cancels the active operation, waits for its process to exit, and disposes the executor. The contracts in [`src/runtime.ts`](src/runtime.ts), [`src/executor.ts`](src/executor.ts), and [`src/context.ts`](src/context.ts) are authoritative.
 
 ### Runtime context
 
@@ -88,14 +88,14 @@ Plugins with no other fields use `CliAccountConfig` as their `Config`:
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The runtime owns the operation lifecycle and the plugin owns the meaning of each command. One active operation holds its abort controller, phase, and link; the runtime builds the view from them and notifies followers on every change, and a follower that reads late sees only the latest view. The executor verifies the configured absolute path through the subprocess runtime and spawns it without adding environment variables; the runtime context names the same path, so the plugin and the model's Shell commands run the same executable.
+The runtime owns the operation lifecycle and the plugin owns the meaning of each command. One active operation holds its abort controller, phase, and link; the runtime builds the view from them and calls each observer after every change. The executor verifies the configured absolute path through the subprocess runtime and spawns it without adding environment variables; the runtime context names the same path, so the plugin and the model's Shell commands run the same executable.
 
 | File | Role |
 |---|---|
 | [`src/executor.ts`](src/executor.ts) | Bounded command execution and process ownership |
-| [`src/runtime.ts`](src/runtime.ts) | One-at-a-time operations, cancellation, link filtering, failure classification, and the follow stream |
+| [`src/runtime.ts`](src/runtime.ts) | One-at-a-time operations, cancellation, link filtering, failure classification, and observers |
 | [`src/context.ts`](src/context.ts) | The runtime-context entry that names the executable path |
-| [`src/types.ts`](src/types.ts) | The generic Remote view types |
+| [`src/types.ts`](src/types.ts) | The generic account view types and the Plugins page registration and display types |
 | [`src/index.ts`](src/index.ts) | The entry module and the shared config fields |
 
 </details>
@@ -106,7 +106,7 @@ The runtime owns the operation lifecycle and the plugin owns the meaning of each
 ## Further Exploration
 
 - [Connector packages](../README.md) — the group this library and the CLI app plugins belong to.
-- [CLI account surfaces](../../client/ui-cli-account/README.md) — the Plugins page registry that mirrors the view.
+- [CLI account surfaces](../../client/ui-cli-account/README.md) — the Plugins page registry the runtime registers with.
 - [System prompt](../../core/system-prompt/README.md) — the registry that orders and renders runtime context.
 - [Subprocess](../../subprocess/subprocess/README.md) — the runtime that resolves and spawns the CLI.
 

@@ -33,6 +33,8 @@ flowchart LR
   pkg_plugin_market["plugin-market"]
   svc_pluginMarket["ctx.pluginMarket<br/>Plugin market index reader"]
   pkg_client_ui_plugin_market["client-ui-plugin-market"]
+  pkg_client_ui_cli_account["client-ui-cli-account"]
+  svc_cliAccounts["ctx.cliAccounts<br/>CLI app accounts on the Plugins page"]
   svc_profileContext["ctx.profileContext<br/>Launcher-owned profile data"]
   pkg_client_connection["client-connection"]
   svc_connection["ctx.connection<br/>Authenticated browser transport"]
@@ -345,6 +347,7 @@ flowchart LR
   pkg_client_file_upload --> svc_fileUploads
   pkg_client_modules --> svc_clientModules
   pkg_client_product_analytics --> svc_productAnalytics
+  pkg_client_ui_cli_account --> svc_cliAccounts
   pkg_client_ui_plugin_manager --> svc_pluginRegistryProbe
   pkg_command_feedback --> svc_sessionFeedback
   pkg_commands --> svc_commands
@@ -661,6 +664,7 @@ flowchart LR
 | `ctx.pluginRegistryProbe` | `core` | [`client-ui-plugin-manager`](../packages/client/ui-plugin-manager) | - | [`client-ui-plugin-manager`](../packages/client/ui-plugin-manager) | - | 在 Host 上并发比较公共安装源响应；初始安装源推荐由 Client 负责。 |
 | `ctx.pluginManager` | `core` | [`plugin-manager`](../packages/boot/plugin-manager) | - | [`plugin-manager`](../packages/boot/plugin-manager), `ui-settings-plugin-inventory` | - | 与 CLI 共享 profile 包操作，并向 Web 和 Agent 调用方分别报告持久状态与运行状态。 |
 | `ctx.pluginMarket` | `core` | [`plugin-market`](../packages/boot/plugin-market) | - | [`client-ui-plugin-market`](../packages/client/ui-plugin-market), [`plugin-market`](../packages/boot/plugin-market) | - | 获取并校验用户配置的索引源；安装通过插件管理器完成。 |
+| `ctx.cliAccounts` | `service` | [`client-ui-cli-account`](../packages/client/ui-cli-account) | - | - | - | 保存 CLI 应用插件注册的账号，并通过一个 Remote 提供给插件页；链接和提示只留在发起操作的浏览器中。 |
 | `ctx.profileContext` | `core` | [`app-boot`](../packages/boot/app-boot) | - | [`plugin-manager`](../packages/boot/plugin-manager) | - | dsh launcher 提供纯数据形式的 profile 位置与组合输入；重载调度由 dsh-hmr 负责。 |
 | `ctx.connection` | `core` | [`client-connection`](../packages/client/connection) | - | [`api-gateway`](../packages/api/gateway), [`host-frontend-static`](../packages/host/frontend-static) | - | 负责浏览器认证与共享 HTTP 请求分发；API 适配器注册端点和流。 |
 | `ctx.forge` | `seam` | [`experimental-forge`](../packages/experimental/forge) | [`experimental-forge-github`](../packages/experimental/forge-github) | [`experimental-forge-session`](../packages/experimental/forge-session), [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | - | 提供方映射远端与变更请求 URL、按 head 分支查找变更请求并批量读取状态；同一变更请求的监听方共享一个轮询循环。 |

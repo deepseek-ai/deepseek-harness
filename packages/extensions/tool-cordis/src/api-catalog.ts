@@ -632,6 +632,40 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'cliAccounts',
+    summary: 'Holds the registered accounts and serves them to the Plugins page.',
+    description: 'Holds the registered accounts and serves them to the Plugins page.',
+    methods: [
+      {
+        signature: 'register<View extends AnyCliAccountView>(registration: CliAccountRegistration<View>): () => void',
+        description: 'Show one account on the Plugins page for as long as the returned disposer has not run.',
+        parameters: [{ name: 'registration', description: 'the bundle package, the account source, the page operations, and the presentation.' }],
+        returns: 'an idempotent disposer that withdraws the account.',
+        throws: ['when another account already uses the package.'],
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *watch(signal: AbortSignal): AsyncIterable<CliAccountsView>',
+        description: 'Follow every registered account; each new subscriber starts a check of each account that runs no operation.',
+        parameters: [{ name: 'signal', description: 'the Client\'s observation lifetime; disposal also ends the stream.' }],
+        returns: 'the current accounts, then each changed set, coalescing changes that arrive before the next read.',
+      },
+      {
+        signature: '@Remote start(packageName: string, operation: string): CliOperationId',
+        description: 'Start one of the operations the account registered as page actions.',
+        parameters: [{ name: 'packageName', description: 'the account\'s bundle package.' }, { name: 'operation', description: 'the operation kind.' }],
+        returns: 'the operation identity.',
+        throws: ['for an unknown package or operation, while another operation runs, or after the account\'s disposal.'],
+      },
+      {
+        signature: '@Remote cancel(packageName: string, id: CliOperationId): Promise<void>',
+        description: 'Cancel one operation while its phase is cancellable, and wait for it to settle.',
+        parameters: [{ name: 'packageName', description: 'the account\'s bundle package.' }, { name: 'id', description: 'the operation to cancel; a finished one or a phase that is not cancellable is ignored.' }],
+        returns: 'after the operation settles, or at once when nothing is cancelled.',
+        throws: ['for an unknown package.'],
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle and package-asset route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
@@ -5562,6 +5596,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AnonymousTranslationSpec extends TranslationSpecFields {\n    readonly provider: AnonymousTranslationProvider;\n}',
   },
   {
+    name: 'AnyCliAccountView',
+    declaration: 'export type AnyCliAccountView = CliAccountView<unknown, string, string>;',
+  },
+  {
     name: 'AnyHook',
     declaration: 'export type AnyHook = ModHook<unknown, unknown>;',
   },
@@ -5826,8 +5864,84 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ClaimOutcome {\n    readonly claimed: number;\n    readonly skipped: number;\n}',
   },
   {
+    name: 'CliAccountButton',
+    declaration: 'export interface CliAccountButton {\n    readonly label: LocalizedText;\n    readonly command: CliAccountCommand;\n    readonly variant?: \'primary\' | \'ghost\';\n    readonly confirm?: CliAccountConfirmation;\n}',
+  },
+  {
+    name: 'CliAccountCommand',
+    declaration: 'export type CliAccountCommand = {\n    readonly kind: \'start\';\n    readonly operation: string;\n} | {\n    readonly kind: \'cancel\';\n} | {\n    readonly kind: \'open\';\n};',
+  },
+  {
+    name: 'CliAccountConfirmation',
+    declaration: 'export interface CliAccountConfirmation {\n    readonly title: LocalizedText;\n    readonly body: LocalizedText;\n    readonly label: LocalizedText;\n}',
+  },
+  {
+    name: 'CliAccountCopy',
+    declaration: 'export interface CliAccountCopy {\n    readonly title: LocalizedText;\n    readonly hint: LocalizedText;\n    readonly activation: {\n        readonly title: LocalizedText;\n        readonly body: LocalizedText;\n        readonly connect: LocalizedText;\n    };\n}',
+  },
+  {
+    name: 'CliAccountDisplay',
+    declaration: 'export interface CliAccountDisplay {\n    readonly phase: CliAccountPhase;\n    readonly status: LocalizedText;\n    readonly badge?: LocalizedText;\n    readonly buttons: readonly CliAccountButton[];\n    readonly detail?: LocalizedText;\n    readonly notes: readonly CliAccountNote[];\n    readonly failure?: CliAccountFailure;\n}',
+  },
+  {
+    name: 'CliAccountEntry',
+    declaration: 'export interface CliAccountEntry {\n    readonly packageName: string;\n    readonly copy: CliAccountCopy;\n    readonly display: CliAccountDisplay;\n    readonly operation?: {\n        readonly id: CliOperationId;\n        readonly authorizationUrl?: string;\n        readonly cancellable: boolean;\n    };\n    readonly result?: {\n        readonly id: CliOperationId;\n        readonly outcome: CliOperationResult<string>[\'outcome\'];\n        readonly notice?: LocalizedText;\n    };\n}',
+  },
+  {
+    name: 'CliAccountFailure',
+    declaration: 'export interface CliAccountFailure {\n    readonly text: LocalizedText;\n    readonly command?: CliCommandFailure;\n    readonly details?: readonly string[];\n}',
+  },
+  {
+    name: 'CliAccountNote',
+    declaration: 'export interface CliAccountNote {\n    readonly text: LocalizedText;\n    readonly button?: CliAccountButton;\n}',
+  },
+  {
+    name: 'CliAccountOperation',
+    declaration: 'export interface CliAccountOperation<Kind extends string> {\n    readonly kind: Kind;\n    readonly notice?: LocalizedText;\n}',
+  },
+  {
+    name: 'CliAccountPhase',
+    declaration: 'export type CliAccountPhase = \'checking\' | \'connecting\' | \'connected\' | \'disconnected\' | \'unavailable\';',
+  },
+  {
+    name: 'CliAccountRegistration',
+    declaration: 'export interface CliAccountRegistration<View extends AnyCliAccountView> {\n    readonly packageName: string;\n    readonly source: CliAccountSource<View>;\n    readonly operations: readonly CliAccountOperation<CliOperationKindOf<View>>[];\n    readonly copy: CliAccountCopy;\n    readonly present: (view: View) => CliAccountDisplay;\n}',
+  },
+  {
+    name: 'CliAccountSource',
+    declaration: 'export interface CliAccountSource<View extends AnyCliAccountView> {\n    snapshot(): View;\n    observe(listener: () => void): () => void;\n    refresh(): void;\n    start(kind: CliOperationKindOf<View>): CliOperationId;\n    cancel(id: CliOperationId): Promise<void>;\n}',
+  },
+  {
+    name: 'CliAccountsView',
+    declaration: 'export interface CliAccountsView {\n    readonly accounts: readonly CliAccountEntry[];\n}',
+  },
+  {
+    name: 'CliAccountView',
+    declaration: 'export interface CliAccountView<Account, Kind extends string, Phase extends string, Failure extends CliCommandFailure = CliCommandFailure> {\n    readonly account: Account;\n    readonly operation?: CliOperation<Kind, Phase>;\n    readonly result?: CliOperationResult<Kind, Failure>;\n}',
+  },
+  {
+    name: 'CliCommandFailure',
+    declaration: 'export interface CliCommandFailure<Command extends string = string> {\n    readonly command: Command;\n    readonly exitCode: number | null;\n}',
+  },
+  {
     name: 'ClientArtifactBaseline',
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
+  },
+  {
+    name: 'CliOperation',
+    declaration: 'export interface CliOperation<Kind extends string, Phase extends string> {\n    readonly id: CliOperationId;\n    readonly kind: Kind;\n    readonly phase: Phase | \'checking\' | \'cancelling\';\n    readonly cancellable: boolean;\n    readonly authorizationUrl?: string;\n}',
+  },
+  {
+    name: 'CliOperationId',
+    declaration: 'export type CliOperationId = Branded<\'CliOperationId\'>;',
+  },
+  {
+    name: 'CliOperationKindOf',
+    declaration: 'export type CliOperationKindOf<View extends AnyCliAccountView> = NonNullable<View[\'result\']>[\'kind\'];',
+  },
+  {
+    name: 'CliOperationResult',
+    declaration: 'export interface CliOperationResult<Kind extends string, Failure extends CliCommandFailure = CliCommandFailure> {\n    readonly id: CliOperationId;\n    readonly kind: Kind;\n    readonly outcome: \'succeeded\' | \'cancelled\' | \'failed\';\n    readonly failure?: Failure;\n}',
   },
   {
     name: 'CollectedOutput',

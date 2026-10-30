@@ -1,5 +1,5 @@
 ---
-description: "Show a CLI app plugin's account section, title tag, activation prompt, confirmations, and notices on the Plugins page through `ctx.cliAccounts`, following the plugin's Host account Remote with copy the plugin translates."
+description: "Register a CLI app plugin's account on the Host with `ctx.cliAccounts` and show its section, title tag, activation prompt, confirmations, and notices on the Plugins page through one `cliAccounts` Remote, with the plugin's own text and the shared copy of this package."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-CLI app plugins such as Feishu and WeCom show their account on the Plugins page by registering it with `ctx.cliAccounts`. The registry follows the plugin's account stream, opens an authorization link once in the browser that started the operation, and renders the section, title tag, activation prompt, confirmations, and notices. Each plugin keeps its own Remote operations, presentation, and dictionary. The Web and Desktop compositions mount the registry through [`dsh-web-app`](../../bundle/web-app/README.md).
+CLI app plugins such as Feishu and WeCom register their account on the Host with `ctx.cliAccounts` to show it on the Plugins page. The registry serves every account through one `cliAccounts` Remote and starts or cancels only the operations each account lists. The browser half renders each account's section, title tag, activation prompt, confirmations, and notices, and opens an authorization link once in the browser that started the operation. Plugins supply their text as `LocalizedText`; the shared copy comes from this package's dictionary. The Web and Desktop compositions load both halves through [`dsh-web-app`](../../bundle/web-app/README.md).
 
 ## Table of Contents
 
@@ -25,53 +25,52 @@ CLI app plugins such as Feishu and WeCom show their account on the Plugins page 
 <a id="use-this-package"></a>
 ## Use this package
 
-A plugin's browser half registers its account once, with its Remote operations, its dictionary, and a presenter that maps the page snapshot to what the section shows.
+A plugin's Host row registers its account once; the plugin ships no browser code for the account.
 
 ### When to choose it
 
-Choose it for the page half of a plugin built on [`@deepseek-ai/dsh-cli-account`](../../connector/cli-account/README.md), whose Remote streams a `CliAccountView`. A plugin that connects a hosted service over MCP uses the MCP account surfaces instead.
+Choose it for a plugin built on [`@deepseek-ai/dsh-cli-account`](../../connector/cli-account/README.md), whose vendor CLI keeps the account. A plugin that connects a hosted service over MCP uses the MCP account surfaces instead.
 
 ### Register an account
 
-The plugin's browser half injects `locale` and `cliAccounts`, registers its dictionary, and registers its account for its own lifetime:
+The plugin's Host row registers its `CliAccountRuntime` while the registry runs, so a composition without the registry, such as a headless profile, skips the registration:
 
 ```ts ignore-check
-export const inject = ['remote', 'locale', 'cliAccounts']
+import type {} from '@deepseek-ai/dsh-client-ui-cli-account'
 
 export function apply(ctx: Context): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'acme: dictionaries')
-  const t = ctx.locale.bind(NS)
-  ctx.effect(() => ctx.cliAccounts.register({
-    packageName: '@acme/cli', locale: NS,
-    follow: signal => ctx.remote.acme.follow(signal),
-    cancel: id => ctx.remote.acme.cancel(id),
-    notices: { connect: () => t('notice.connected') },
-    present: (snapshot, page) => presentAccount(snapshot, page, t),
-  }), 'acme: account')
+  const account = new AcmeAccount(options)
+  ctx.effect(() => () => account.dispose(), 'acme: account')
+  ctx.inject(['cliAccounts'], (scope) => {
+    scope.effect(() => scope.cliAccounts.register({
+      packageName: '@acme/cli', source: account, copy,
+      operations: [{ kind: 'check' }, { kind: 'connect', notice: { en: 'Acme connected', zh: 'Acme 已连接' } }],
+      present: presentAccount,
+    }), 'acme: Plugins page account')
+  })
 }
 ```
 
-`packageName` is the npm package whose bundle page carries the section and tag. `locale` names the plugin's dictionary namespace, which must translate every [shared key](#shared-dictionary-keys); TypeScript rejects a namespace that lacks one. `follow` and `cancel` call the plugin's Remote. `notices` maps an operation kind to the translated notice its success reports in the browser that started it; unlisted kinds report none. The plugin lists `@deepseek-ai/dsh-client-ui-cli-account` in `dsh.client.inject` and imports its types with `import type`. The returned disposer removes the surfaces and closes the account's Host stream. A registration whose package is already registered throws and leaves none of its surfaces behind.
+`packageName` is the npm package whose bundle page carries the section and tag; a second registration for the same package throws. `source` is the account, which `CliAccountRuntime` implements. `operations` lists the kinds a page button may start, each with the optional text its success reports in the browser that started it; the registry rejects any other kind. `copy` holds the section title, the hint under it, and the activation prompt's title, body, and Connect label. The plugin imports the registry's types with `import type`. The returned disposer withdraws the account from every page.
 
 ### Present the section
 
-`present(snapshot, page)` runs while a surface renders and returns a `CliAccountDisplay`: the phase, an optional status label, buttons, detail, extra rows, and failure, with every string translated. It reads only the snapshot, so translating through `ctx.locale.bind` follows a language switch. Button callbacks use `page`: `start(call)` runs one Remote start at a time, and `cancel`, `openAuthorization`, and `retry` act on the followed operation and the Host stream. The snapshot carries the Host view, whether the stream is delivering or has stopped, whether a page action is pending, and the latest notice.
+`present(view)` maps the account view to a `CliAccountDisplay`: the phase, the status line, the optional title tag, buttons, detail, notes, and failure. The registry calls it for every stream on each change, so it only maps the view. Every string is `LocalizedText`, which each browser resolves in its active language. A button carries a command: `start` with one of the registered operation kinds, `cancel` for the operation in progress while the Host marks it cancellable, or `open` to reopen its authorization link. A button with `confirm` asks first and runs only after the user accepts.
 
 | Surface | Behavior |
 |---|---|
-| Section | Title, status, buttons, detail, extra rows, failure, and hint; the status defaults to the phase's `status.*` copy, with `connecting` labelled as checking. Buttons are disabled while a page action is pending or the Host stream is down, except while stopped so retry can reopen it. A button with `confirm` asks first and runs only after the user accepts. A failure shows the plugin's guidance, then the classified command, exit code, and allowlisted details |
-| Title tag | Shown only on the enabled bundle's page or one of its row pages, and only once the phase settles |
+| Section | Title, status, buttons, detail, notes, failure, and hint. Buttons are disabled while an action this browser started is pending or the Host stream is down. A failure shows the plugin's text, then the classified command, exit code, and the plugin's details |
+| Title tag | The display's `badge`, shown only on the enabled bundle's page or one of its row pages, and only while the display has one |
 | Activation prompt | Open while the phase is `disconnected` after the bundle is switched on; Connect opens the bundle page and runs the section's first primary button that asks no confirmation. It dismisses itself once the phase settles elsewhere |
-| Notice | The latest outcome, outside the Plugins panel's lifetime: the plugin's success copy, or the shared failure copy with a warning icon |
+| Notice | The latest outcome in this browser, outside the Plugins panel's lifetime: the operation's success text, or the shared failure copy with a warning icon |
 
 ### Following operations
 
-The page follows the operation its latest start returned, from that answer until the stream delivers the operation's result; each start attempt first drops the operation followed before, so a rejected start leaves none and reports the `action-failed` notice once. Clicks while a page action is pending are ignored. Each link the followed operation offers opens once in a new window, over HTTPS only, and a later operation that offers the same link opens it again. A result that a later operation replaces before the stream delivers it reports nothing. A stream that fails for good marks the snapshot stopped, and `retry` reopens it once, however often it is called. Removing the registration closes the stream; afterwards the page opens no link and reports no notice, while Host-owned operations keep running.
+Each browser opens one stream when the Web app loads, and the Host checks every account that runs no operation for each new stream; an account registered while a stream is open is checked at once. A browser follows the operation its latest start returned, from that answer until the stream delivers the operation's result; each start attempt first drops the operation followed before, so a rejected start leaves none and reports the failure notice once. Clicks while an action is pending are ignored. Each link the followed operation offers opens once in a new window, over HTTPS only. Other browsers show the same section but open no link and report no notice. A stream that fails for good shows the account service as not running with Retry, which reopens the stream once however often it is pressed. Unloading the browser half closes the stream; Host-owned operations keep running.
 
-<a id="shared-dictionary-keys"></a>
-### Shared dictionary keys
+### Shared copy
 
-The surfaces read these keys from the plugin's namespace: `section.title`, `hint`, `close`, `action.cancel`, `action.connect`, `activation.title`, `activation.body`, `activation.later`, `failure.details` (with `{details}`), `failure.exitCode` (with `{code}`), `notice.action-failed`, `badge.<phase>` for every phase but `checking`, and `status.<phase>` for every phase but `connecting`.
+The `cliAccount` dictionary holds the copy every account shares: Close, Cancel, Retry, Later, the diagnostic templates, the failure notice, and the not-running status, tag, and detail. Every other string comes from the plugin.
 
 -----
 
@@ -81,15 +80,21 @@ The surfaces read these keys from the plugin's namespace: `section.title`, `hint
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-`register()` creates one `CliAccountConnection` per account. It mirrors the plugin's `follow` stream and keeps the Host view, whether the stream is delivering, whether a page action is pending, and the latest notice. The registration contributes `plugins.bundle.config` and `plugins.bundle.activation` keyed by the package name, a `plugins.detail.badge` entry with id `<package>.account`, and a `shell.overlay` notice with id `<package>.account-toast`. Each entry declares the plugin's namespace, so the renderer supplies its `t`, and all four inject one face that shares one snapshot and calls the plugin's presenter. The registration is one effect of this plugin's fiber: a setup failure disposes what it already added, and teardown removes the slot entries before closing the stream, whichever of the plugin's disposer and this plugin's unload runs first.
+The Host half, `CliAccounts`, is a Remote service. `register()` observes the account's source, and each `watch` stream reads every account's entry after each change, coalescing changes that arrive before the next read: the copy, `present(view)`, the operation in progress, and the latest result with its success text. `start` and `cancel` route by package to the account's source.
+
+The browser half mounts the `cliAccounts` Remote and opens one `watch` stream through `CliAccountsConnection`, which keeps one snapshot store per account: the Host entry, whether the stream is delivering or has stopped, whether an action this browser started is pending, and the latest notice. For each account the Host reports, it registers `plugins.bundle.config` and `plugins.bundle.activation` keyed by the package name, a `plugins.detail.badge` entry with id `<package>.account`, and a `shell.overlay` notice with id `<package>.account-toast`, all under the `cliAccount` namespace and injecting one face. An account the Host drops loses its four entries, and unloading withdraws the entries and the stream before the Remote.
 
 | File | Role |
 |---|---|
-| [`src/client/index.ts`](src/client/index.ts) | The `ctx.cliAccounts` registry and the four slot registrations |
-| [`src/client/types.ts`](src/client/types.ts) | Registration, display, snapshot, and dictionary types |
-| [`src/client/connection.ts`](src/client/connection.ts) | The Host view mirror, link opening, notices, and pending-action guard |
+| [`src/index.ts`](src/index.ts) | The `ctx.cliAccounts` registry and its Remote |
+| [`src/client/index.ts`](src/client/index.ts) | The browser entry bound to the generated Remote |
+| [`src/client/mount.ts`](src/client/mount.ts) | The Remote mount, the dictionary, and the slot registrations of each account |
+| [`src/client/connection.ts`](src/client/connection.ts) | The stream mirror, link opening, notices, and pending-action guard |
 | [`src/client/components.tsx`](src/client/components.tsx) | The surfaces and the slot entries that read the face |
-| [`src/index.ts`](src/index.ts) | The empty Node half |
+| [`src/client/locales.ts`](src/client/locales.ts) | The shared dictionary |
+| [`src/client/types.ts`](src/client/types.ts) | Snapshot, notice, and face types |
+
+The registration, display, and entry types live in [`@deepseek-ai/dsh-cli-account/types`](../../connector/cli-account/src/types.ts).
 
 </details>
 
@@ -98,7 +103,7 @@ The surfaces read these keys from the plugin's namespace: `section.title`, `hint
 <a id="further-exploration"></a>
 ## Further Exploration
 
-- [CLI account library](../../connector/cli-account/README.md) — the Host half that streams the view.
+- [CLI account library](../../connector/cli-account/README.md) — the account runtime and the page types.
 - [Plugin manager page](../ui-plugin-manager/README.md) — the Plugins page and its bundle slots.
 - [Client package map](../README.md) — adjacent browser UI packages.
 
@@ -107,7 +112,7 @@ The surfaces read these keys from the plugin's namespace: `section.title`, `hint
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as the account surfaces are browser UI and add no model input. Each plugin documents the CLI and skills its account enables.
+None, as the registry and its surfaces are Plugins page UI and add no model input. Each plugin documents the CLI and skills its account enables.
 
 #### KV Cache effect
 
@@ -117,9 +122,9 @@ None; registering or removing an account changes no model-visible text.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The six display phases are fixed; a plugin maps any further account state onto one of them.
-- The shared dictionary keys are the same for every plugin; a plugin cannot rename them.
-- Each account opens its own Host stream.
+- The five display phases are fixed; a plugin maps any further account state onto one of them.
+- A plugin whose Host row fails to load shows no account section; the Plugins page still lists the bundle with its load failure.
+- Each browser that loads the Web app starts a check of every idle account.
 - The Web and Desktop compositions load the registry whether or not a CLI app plugin is installed.
 
 <a id="dev-note"></a>
@@ -128,6 +133,6 @@ None; registering or removing an account changes no model-visible text.
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-Client specs drive `CliAccountConnection` with a fake Remote stream, render the surfaces with a key-echo translator, and register accounts against a real slot registry.
+Host specs drive the registry with fake account sources. Client specs drive `CliAccountsConnection` with a fake Remote stream, render the surfaces with the Chinese dictionary, and mount the browser half against a real slot registry and locale runtime. Source coverage excludes `src/client/index.ts`, which imports the generated Remote that exists only in `lib/`.
 
 </details>

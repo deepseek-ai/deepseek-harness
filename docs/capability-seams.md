@@ -31,6 +31,8 @@ flowchart LR
   pkg_plugin_market["plugin-market"]
   svc_pluginMarket["ctx.pluginMarket<br/>Plugin market index reader"]
   pkg_client_ui_plugin_market["client-ui-plugin-market"]
+  pkg_client_ui_cli_account["client-ui-cli-account"]
+  svc_cliAccounts["ctx.cliAccounts<br/>CLI app accounts on the Plugins page"]
   svc_profileContext["ctx.profileContext<br/>Launcher-owned profile data"]
   pkg_client_connection["client-connection"]
   svc_connection["ctx.connection<br/>Authenticated browser transport"]
@@ -343,6 +345,7 @@ flowchart LR
   pkg_client_file_upload --> svc_fileUploads
   pkg_client_modules --> svc_clientModules
   pkg_client_product_analytics --> svc_productAnalytics
+  pkg_client_ui_cli_account --> svc_cliAccounts
   pkg_client_ui_plugin_manager --> svc_pluginRegistryProbe
   pkg_command_feedback --> svc_sessionFeedback
   pkg_commands --> svc_commands
@@ -659,6 +662,7 @@ flowchart LR
 | `ctx.pluginRegistryProbe` | `core` | [`client-ui-plugin-manager`](../packages/client/ui-plugin-manager) | - | [`client-ui-plugin-manager`](../packages/client/ui-plugin-manager) | - | Races public registry responses on the Host; the Client owns the initial registry recommendation. |
 | `ctx.pluginManager` | `core` | [`plugin-manager`](../packages/boot/plugin-manager) | - | [`plugin-manager`](../packages/boot/plugin-manager), `ui-settings-plugin-inventory` | - | Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers. |
 | `ctx.pluginMarket` | `core` | [`plugin-market`](../packages/boot/plugin-market) | - | [`client-ui-plugin-market`](../packages/client/ui-plugin-market), [`plugin-market`](../packages/boot/plugin-market) | - | Fetches and validates the index sources the user configures; installation goes through the plugin manager. |
+| `ctx.cliAccounts` | `service` | [`client-ui-cli-account`](../packages/client/ui-cli-account) | - | - | - | Holds the accounts CLI app plugins register and serves them to the Plugins page through one Remote; links and notices stay in the browser that started the operation. |
 | `ctx.profileContext` | `core` | [`app-boot`](../packages/boot/app-boot) | - | [`plugin-manager`](../packages/boot/plugin-manager) | - | The dsh launcher supplies data-only profile locations and composition inputs; reload scheduling belongs to dsh-hmr. |
 | `ctx.connection` | `core` | [`client-connection`](../packages/client/connection) | - | [`api-gateway`](../packages/api/gateway), [`host-frontend-static`](../packages/host/frontend-static) | - | Owns browser authentication and shared HTTP request dispatch; API adapters register endpoints and streams. |
 | `ctx.forge` | `seam` | [`experimental-forge`](../packages/experimental/forge) | [`experimental-forge-github`](../packages/experimental/forge-github) | [`experimental-forge-session`](../packages/experimental/forge-session), [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | - | Providers map remote and change request URLs, look up change requests by head branch, and read status in batches; watchers of one change request share one polling loop. |

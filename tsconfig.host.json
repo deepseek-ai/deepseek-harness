@@ -344,6 +344,7 @@
     { "path": "./packages/util/lazy-require" },
     { "path": "./packages/util/native-command" },
     { "path": "./packages/util/home-paths" },
+    { "path": "./packages/client/ui-cli-account/tsconfig.host.json" },
     { "path": "./packages/client/ui-plugin-manager/tsconfig.host.json" },
     { "path": "./packages/client/ui-trajectory/tsconfig.host.json" },
     { "path": "./packages/connector/cli-account" },
