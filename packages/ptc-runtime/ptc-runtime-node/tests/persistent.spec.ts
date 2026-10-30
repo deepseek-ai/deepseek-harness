@@ -138,13 +138,14 @@ describe.each([
     expect(called).toHaveBeenCalledTimes(1)
   })
 
-  it('excludes inherited child stdout and stderr without losing retained variables', async () => {
+  it('captures inherited child stdout and stderr without losing retained variables', async () => {
     const { run } = await setup()
     const childProgram = 'process.stdout.write("stdout marker"); process.stderr.write("stderr marker")'
     const result = await run(`let retained = 17; const child = await import("node:child_process"); child.execFileSync(process.execPath, ["-e", ${JSON.stringify(childProgram)}], { stdio: "inherit" }); retained`)
     expect(result.error).toBeUndefined()
     expect(result.value).toBe(17)
-    expect(result.logs).toEqual([])
+    expect(result.logs.join('')).toContain('stdout marker')
+    expect(result.logs.join('')).toContain('stderr marker')
     expect((await run('retained')).value).toBe(17)
   })
 
@@ -154,7 +155,7 @@ describe.each([
     expect(result.error?.kind).toBe('worker-exit')
     expect(result.error?.message).toContain('7')
     expect(result.error?.message).toContain('fatal fixture')
-    expect(result.logs).toEqual([])
+    expect(result.logs.join('')).toContain('fatal fixture')
     expect((await run('42')).value).toBe(42)
   })
 

@@ -311,9 +311,7 @@ export class ProgramWorker {
       stream.setEncoding('utf8')
       stream.on('data', (text: string) => {
         if (stream === handle.stderr) this.stderr = (this.stderr + text).slice(-this.config.maxOutputBytes)
-        // Retained processes cannot attribute inherited native stdio to an evaluation.
-        // Startup diagnostics and temporary-process output have only one possible owner.
-        if (!this.retainsState || !this.ready) this.active?.admit(text)
+        this.active?.admit(text)
       })
       stream.on('error', (error: Error) => { this.fail('worker-exit', error.message) })
     }

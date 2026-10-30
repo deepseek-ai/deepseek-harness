@@ -226,14 +226,14 @@ describe('persistent PTC host protocol', () => {
     expect(waiting.spawn).not.toHaveBeenCalled()
   })
 
-  it('excludes untagged native output from retained evaluations', async () => {
+  it('captures active native output and ignores output while idle', async () => {
     const h = await setup()
     h.onBoot(() => {
       h.stdout.write('stdout')
       h.stderr.write('stderr')
       h.complete({})
     })
-    expect(await h.start()).toMatchObject({ logs: [] })
+    expect(await h.start()).toMatchObject({ logs: ['stdout', 'stderr'] })
     h.stdout.write('idle stdout')
     h.stderr.write('idle stderr')
     h.onBoot(() => { h.complete({}) })
