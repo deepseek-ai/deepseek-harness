@@ -8,8 +8,8 @@ import type { BindingErrorConstructor, PatchableStream } from './bootstrap.ts'
 import { clearProgramEnvironment } from './environment.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
 import type { ProgramEvaluator } from './evaluators/types.ts'
-import { isEvaluationId, PROGRAM_PROTOCOL_VERSION } from './protocol.ts'
-import type { BindingMethods, EvaluationId, ProgramResult, HostMethods, ProgramMethods } from './protocol.ts'
+import { PROGRAM_PROTOCOL_VERSION } from './protocol.ts'
+import type { ProgramResult, HostMethods, ProgramMethods } from './protocol.ts'
 
 /** Process-owned environment, output and directory control consumed by the child. */
 export interface ProgramProcess {
@@ -21,11 +21,10 @@ export interface ProgramProcess {
 }
 
 interface Evaluation {
-  id: EvaluationId
   logs: LogBuffer
   maxOutputBytes: number
   active: boolean
-  retainsState: boolean
+  reusable: boolean
   revoked: boolean
   finish(result: ProgramResult): void
 }
@@ -50,21 +49,20 @@ export async function runNodeMain(
   const unsettled = new Promise<never>(() => {})
   let evaluator: ProgramEvaluator | undefined
   let current: Evaluation | undefined
-  let lastEvaluationId = 0
   const acceptsCalls = (evaluation: Evaluation): boolean => evaluation.active && !evaluation.revoked
-  const host: BindingMethods = {
+  const host: Pick<HostMethods, 'invoke'> = {
     invoke: async (global, name, args) => {
       const evaluation = context.getStore()
-      if (evaluation && !evaluation.active && !evaluation.retainsState) return unsettled
+      if (evaluation && !evaluation.active && !evaluation.reusable) return unsettled
       if (!evaluation || !acceptsCalls(evaluation)) throw new Error('PTC evaluation ended')
       let value
-      try { value = await connection.invoke(evaluation.id, global, name, args) } catch (error) {
+      try { value = await connection.invoke(global, name, args) } catch (error) {
         // Closing a temporary process must not resume an unawaited call with a rejection.
-        if (!evaluation.active && !evaluation.retainsState) return unsettled
+        if (!evaluation.active && !evaluation.reusable) return unsettled
         throw error
       }
-      if (!evaluation.active && !evaluation.retainsState) return unsettled
-      if (!acceptsCalls(evaluation) || value === null) throw new Error('PTC evaluation canceled')
+      if (!evaluation.active && !evaluation.reusable) return unsettled
+      if (!acceptsCalls(evaluation)) throw new Error('PTC evaluation canceled')
       return value
     },
   }
@@ -75,21 +73,20 @@ export async function runNodeMain(
   captureStreamWrites(logSink, processState.stdout)
   captureStreamWrites(logSink, processState.stderr)
   const connection = createProcessRpc<HostMethods, ProgramMethods>(stream, maxMessageBytes, {
-    async run(id, cwd, data) {
-      if (!isEvaluationId(id) || id <= lastEvaluationId || current?.active) throw new Error('invalid or overlapping PTC evaluation')
-      lastEvaluationId = id
+    async run(cwd, data) {
+      if (current?.active) throw new Error('overlapping PTC evaluation')
       const completion = Promise.withResolvers<ProgramResult>()
       const logs = new LogBuffer(data.maxOutputBytes,
-        (text) => { void connection.log(id, text) }, () => { void connection.outputLimit(id) })
+        (text) => { void connection.log(text) }, () => { void connection.outputLimit() })
       const format = data.programFormat ?? defaultFormat
       const evaluation: Evaluation = {
-        id, logs, maxOutputBytes: data.maxOutputBytes, active: true, retainsState: data.retainsState, revoked: false,
+        logs, maxOutputBytes: data.maxOutputBytes, active: true, reusable: data.retainsState, revoked: false,
         finish(result) {
           evaluation.active = false
-          if (evaluation.retainsState) {
+          if (evaluation.reusable) {
             void connection.$rejectPendingCalls(({ reject }) => { reject(new Error('PTC evaluation ended')) })
           }
-          completion.resolve(evaluation.revoked ? { error: { kind: 'abort', message: 'PTC evaluation revoked' } } : result)
+          completion.resolve(result)
         },
       }
       current = evaluation
@@ -134,9 +131,9 @@ export async function runNodeMain(
       })
       return await completion.promise
     },
-    revoke(id) {
+    revoke() {
       const evaluation = current
-      if (evaluation?.id !== id || !evaluation.active) return
+      if (!evaluation?.active) return
       evaluation.revoked = true
       void connection.$rejectPendingCalls(({ reject }) => { reject(new Error('PTC evaluation canceled')) })
     },

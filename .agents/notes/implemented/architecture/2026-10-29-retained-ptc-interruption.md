@@ -10,7 +10,7 @@ Terminating a retained Node process on every timeout or cancellation loses unrel
 
 ## Decision
 
-The host revokes execution authority immediately and requests cooperative stop over the existing control channel. The runtime rejects pending bindings; the original `run()` response confirms that evaluation has settled. Revocation is a one-way notification, and RPC request correlation identifies the completion without a second result identity. Acknowledgment permits reuse of the VM and retained objects; earlier mutations remain. The next evaluation waits for acknowledgment or fallback process cleanup.
+The host revokes execution authority immediately and requests cooperative stop over the existing control channel. The runtime rejects pending bindings; the original `run()` response confirms that evaluation has settled. Revocation is a one-way notification. The ordered pipe and single active evaluation determine notification ownership; RPC requests associate replies with callers. Acknowledgment permits reuse of the VM and retained objects; earlier mutations remain. Callers await acknowledgment or fallback process cleanup before starting another evaluation.
 
 The host bounds acknowledgment with `stopGraceMs`. Missing or failed acknowledgment terminates the managed process range and awaits cleanup. Results retain the original timeout or cancellation kind and report whether variables survived. Confirmed termination allows a fresh environment on the next call; failed cleanup blocks reuse until host release succeeds. Explicit reset, disposal and policy invalidation terminate immediately. Reset uses the existing release path and exposes no additional model tool.
 

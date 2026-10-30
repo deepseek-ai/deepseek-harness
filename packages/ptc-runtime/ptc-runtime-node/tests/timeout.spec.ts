@@ -4,6 +4,7 @@ import type { PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
 import { fakeChild, NO_INITIAL_FRAME } from './fake-child.ts'
 import { mountRuntime } from './setup.ts'
 import type { Config } from '../src/config.ts'
+import { encodePtcJsonWire } from '../src/json-wire.ts'
 
 describe.each([false, true])('deadline reporting with retained state %s', (retained) => {
   async function setup() {
@@ -63,7 +64,7 @@ describe.each([false, true])('deadline reporting with retained state %s', (retai
     const h = await setup()
     const booted = Promise.withResolvers<undefined>()
     const exited = Promise.withResolvers<boolean>()
-    h.onBoot(() => { h.emit({ t: 'q', m: 'log', a: [1, 'partial output'] }); booted.resolve(undefined) })
+    h.onBoot(() => { h.emit({ t: 'q', m: 'log', a: ['partial output'] }); booted.resolve(undefined) })
     h.waitForExit.mockReturnValue(exited.promise)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const run = h.start()
@@ -74,7 +75,7 @@ describe.each([false, true])('deadline reporting with retained state %s', (retai
       await vi.advanceTimersByTimeAsync(100)
       if (retained) {
         expect(h.terminate).not.toHaveBeenCalled()
-        expect(h.messages).toContainEqual({ t: 'q', m: 'revoke', a: [1] })
+        expect(h.messages).toContainEqual({ t: 'q', m: 'revoke', a: [] })
         expect(settled).not.toHaveBeenCalled()
         h.complete({})
       } else {
@@ -120,7 +121,7 @@ describe.each(['timeout', 'abort'] as const)('retained %s', (action) => {
       if (action === 'timeout') await vi.advanceTimersByTimeAsync(100)
       else { h.controller.abort(); await vi.advanceTimersByTimeAsync(0) }
       const runId = requestId(h.messages, 'run')
-      expect(h.messages).toContainEqual({ t: 'q', m: 'revoke', a: [1] })
+      expect(h.messages).toContainEqual({ t: 'q', m: 'revoke', a: [] })
       expect(h.terminate).not.toHaveBeenCalled()
       if (failure === 'rejection') h.emit({ t: 's', i: runId, e: { message: 'stop failed' } })
       else if (failure === 'malformed completion') h.complete(null)
@@ -141,19 +142,26 @@ describe.each(['timeout', 'abort'] as const)('retained %s', (action) => {
     } finally { await h.runtime.release(h.request.stateOwner); vi.useRealTimers() }
   })
 
-  it('waits for the original run to finish after revocation without terminating the process', async () => {
+  it('rejects queued activity after revocation and waits for the original run without terminating the process', async () => {
     const h = await retainedChild()
+    const binding = vi.fn(async () => 42)
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
-      const pending = h.start()
+      const pending = h.start({ ...h.request, bindings: [{ global: 'tools', functions: { value: binding } }] })
       const settled = vi.fn()
       void pending.then(settled)
       await h.booted.promise
       if (action === 'timeout') await vi.advanceTimersByTimeAsync(100)
       else { h.controller.abort(); await vi.advanceTimersByTimeAsync(0) }
       expect(settled).not.toHaveBeenCalled()
+      h.emit({ t: 'q', m: 'log', a: ['queued output'] })
+      h.emit({ t: 'q', i: 'queued', m: 'invoke', a: ['tools', 'value', encodePtcJsonWire(null)] })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(binding).not.toHaveBeenCalled()
+      expect(h.messages).toContainEqual({ t: 's', i: 'queued', e: { message: 'PTC evaluation ended before the binding completed' } })
       h.complete({})
       expect((await pending).error?.message).toContain('retained variables were preserved')
+      expect((await pending).logs).toEqual([])
       await vi.advanceTimersByTimeAsync(100)
       expect(h.terminate).not.toHaveBeenCalled()
     } finally { await h.runtime.release(h.request.stateOwner); vi.useRealTimers() }
@@ -161,7 +169,7 @@ describe.each(['timeout', 'abort'] as const)('retained %s', (action) => {
 
 })
 
-it('waits for fallback process cleanup before returning or admitting another run', async () => {
+it('rejects overlapping runs until fallback process cleanup completes', async () => {
   const h = await retainedChild()
   const exited = Promise.withResolvers<boolean>()
   h.waitForExit.mockReturnValue(exited.promise)
@@ -174,14 +182,13 @@ it('waits for fallback process cleanup before returning or admitting another run
     await vi.advanceTimersByTimeAsync(150)
     expect(h.terminate).toHaveBeenCalledOnce()
     expect(settled).not.toHaveBeenCalled()
-    const replacement = fakeChild(h.ctx, h.runtime, h.request)
-    replacement.onBoot(() => { replacement.complete({}) })
-    const next = replacement.start()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(replacement.spawn).toHaveBeenCalledOnce()
+    await expect(h.runtime.run(h.runtime.resolve(h.request))).rejects.toThrow('concurrent runs')
+    expect(h.spawn).toHaveBeenCalledOnce()
     exited.resolve(true)
     expect((await pending).error?.kind).toBe('timeout')
-    expect((await next).error).toBeUndefined()
+    const replacement = fakeChild(h.ctx, h.runtime, h.request)
+    replacement.onBoot(() => { replacement.complete({}) })
+    expect((await replacement.start()).error).toBeUndefined()
     expect(replacement.spawn).toHaveBeenCalledTimes(2)
   } finally { exited.resolve(true); await h.runtime.release(h.request.stateOwner); vi.useRealTimers() }
 })
@@ -252,16 +259,15 @@ it('keeps the timeout outcome when run completes during recovery and ignores a d
     await vi.advanceTimersByTimeAsync(100)
     const nextBooted = Promise.withResolvers<undefined>()
     h.onBoot(() => { nextBooted.resolve(undefined) })
-    const next = h.runtime.run(h.runtime.resolve({ ...h.request, program: '42' }))
+    await expect(h.runtime.run(h.runtime.resolve({ ...h.request, program: '42' }))).rejects.toThrow('concurrent runs')
     expect(h.messages.filter(value => typeof value === 'object' && value !== null && 'm' in value && value.m === 'run')).toHaveLength(1)
     h.complete({ error: { kind: 'exception', message: 'late completion' } })
     expect((await pending).error?.kind).toBe('timeout')
+    const next = h.runtime.run(h.runtime.resolve({ ...h.request, program: '42' }))
     await nextBooted.promise
     const settled = vi.fn()
     void next.then(settled)
     h.emit({ t: 's', i: firstId, r: { error: { kind: 'exception', message: 'duplicate completion' } } })
-    h.emit({ t: 'q', m: 'log', a: [1, 'stale output'] })
-    h.emit({ t: 'q', m: 'outputLimit', a: [1] })
     await vi.advanceTimersByTimeAsync(0)
     expect(settled).not.toHaveBeenCalled()
     h.complete({})

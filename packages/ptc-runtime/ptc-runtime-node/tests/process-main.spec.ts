@@ -1,11 +1,10 @@
-import { brandNumber } from '@deepseek-ai/dsh-brand'
 import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { Duplex, PassThrough } from 'node:stream'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { createProcessRpc } from '../src/rpc.ts'
 import { runNodeMain, type ProgramProcess } from '../src/process.ts'
-import type { EvaluationId, HostMethods, ProgramBootData, ProgramMethods } from '../src/protocol.ts'
+import type { HostMethods, ProgramBootData, ProgramMethods } from '../src/protocol.ts'
 import { decodePtcJsonWire, encodePtcJsonWire } from '../src/json-wire.ts'
 
 function endpoints() {
@@ -30,15 +29,14 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
   const methods: HostMethods = {
     ready: () => { ready.resolve(undefined) },
     invoke: async () => encodePtcJsonWire(42),
-    log: (_id, text) => { logs.push(text) },
+    log: (text) => { logs.push(text) },
     outputLimit: () => {},
   }
   const peer = createProcessRpc<ProgramMethods, HostMethods>(host, limit, methods, [], () => {})
   const main = runNodeMain(child, limit, state)
   onTestFinished(async () => { peer.$close(); child.destroy(); await main })
   await ready.promise
-  let sequence = 0
-  const run = (code: string, maxOutputBytes = 1024, programFormat?: PtcProgramFormat) => peer.run(brandNumber<EvaluationId>(++sequence), '/', {
+  const run = (code: string, maxOutputBytes = 1024, programFormat?: PtcProgramFormat) => peer.run('/', {
     code, ...programFormat === undefined ? {} : { programFormat },
     namespaces, maxOutputBytes, retainsState: false,
   })
@@ -47,7 +45,7 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
 
 it('clears the environment and returns a binding result after captured output', async () => {
   const h = await setup()
-  h.methods.invoke = async (_id, _global, _name, wire) => {
+  h.methods.invoke = async (_global, _name, wire) => {
     const args = decodePtcJsonWire(wire) as { n: number }
     return encodePtcJsonWire(args.n * 2)
   }

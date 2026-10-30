@@ -1,7 +1,6 @@
 /** Managed Node process shared by temporary and owner-retained evaluations. */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Context } from '@deepseek-ai/cordis'
-import { brandNumber } from '@deepseek-ai/dsh-brand'
 import type { PtcRunSpec, PtcRunResult, PtcRunSandbox, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { SandboxUnavailableError, classifyRunnerFailure, isRunnerSpawnFailure } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
@@ -17,12 +16,11 @@ import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
 import { decodePtcJsonWire } from './json-wire.ts'
 import { OutputLedger } from './output-ledger.ts'
 import { drainOutput, terminateProcess } from './output-stream.ts'
-import { isEvaluationId, readProgramResult, PROGRAM_PROTOCOL_VERSION, type EvaluationId, type ProgramBootData, type ProgramMethods, type HostMethods } from './protocol.ts'
+import { readProgramResult, PROGRAM_PROTOCOL_VERSION, type ProgramBootData, type ProgramMethods, type HostMethods } from './protocol.ts'
 
 const messageOf = (error: unknown): string => error instanceof Error ? error.message : String(error)
 
 interface Evaluation {
-  id: EvaluationId
   settled: boolean
   completion: Promise<ReturnType<typeof readProgramResult>> | undefined
   data: ProgramBootData
@@ -42,9 +40,8 @@ export class ProgramWorker {
   private handle?: SubprocessHandle
   private channel?: BirpcReturn<ProgramMethods, HostMethods>
   private active: Evaluation | undefined
-  private sequence = 0
   /** Admission remains reserved until the result includes completed process cleanup. */
-  private running: Promise<void> | undefined
+  private running = false
   private cleanupPending = false
   private ready = false
   private stderr = ''
@@ -75,12 +72,6 @@ export class ProgramWorker {
     this.unregister = processes.register(policy, () => this.dispose())
   }
 
-  /** Direct service callers await interrupted runs, including final admission release. */
-  async waitForInterruption(): Promise<void> {
-    const evaluation = this.active
-    if (evaluation?.settled) await this.running
-  }
-
   /** Reject reuse until the previous evaluation and required cleanup settle. */
   assertIdle(): void {
     if (this.running) throw new Error('persistent PTC does not accept concurrent runs for one state owner')
@@ -94,8 +85,7 @@ export class ProgramWorker {
    * @returns Output after any required process cleanup.
    */
   async run(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>): Promise<PtcRunResult> {
-    const finished = Promise.withResolvers<void>()
-    this.running = finished.promise
+    this.running = true
     const sandbox: PtcRunSandbox = { mode: this.policy.mode, denied: false }
     try {
       const result = await this.evaluate(spec, bindings)
@@ -105,7 +95,7 @@ export class ProgramWorker {
           result.error?.message.toLowerCase().includes(signature.toLowerCase()))
       }
       return { ...result, sandbox }
-    } finally { this.running = undefined; finished.resolve() }
+    } finally { this.running = false }
   }
 
   private output(): OutputLedger {
@@ -142,7 +132,6 @@ export class ProgramWorker {
       evaluation.finish({ kind: 'abort', message: this.retainsState ? 'execution canceled' : messageOf(spec.signal?.reason) }, undefined, evaluation.completion === undefined)
     }
     const evaluation: Evaluation = {
-      id: brandNumber<EvaluationId>(++this.sequence),
       settled: false,
       completion: undefined,
       data: {
@@ -218,7 +207,7 @@ export class ProgramWorker {
     const abort = (): void => { deadline.reject(new Error('environment disposed during interruption')) }
     this.controller.signal.addEventListener('abort', abort, { once: true })
     try {
-      await Promise.race([this.channel.revoke(evaluation.id).then(() => completion), deadline.promise])
+      await Promise.race([this.channel.revoke().then(() => completion), deadline.promise])
       this.controller.signal.throwIfAborted()
       return true
     } catch (_error: unknown) {
@@ -267,7 +256,7 @@ export class ProgramWorker {
   }
 
   private dispatch(evaluation: Evaluation): void {
-    const completion = this.channel?.run(evaluation.id, evaluation.spec.cwd, evaluation.data).then(readProgramResult)
+    const completion = this.channel?.run(evaluation.spec.cwd, evaluation.data).then(readProgramResult)
     evaluation.completion = completion
     void completion?.then(({ error, value }) => {
       if (evaluation.settled) return
@@ -317,11 +306,6 @@ export class ProgramWorker {
     }
     // A rejected wire call closes its endpoint before birpc can answer it.
     const refuse = (message: string): never => { this.fail('protocol', message); throw new Error(message) }
-    const evaluationFor = (id: unknown): Evaluation | undefined => {
-      if (!isEvaluationId(id) || id > this.sequence) return refuse('invalid PTC evaluation identity')
-      const evaluation = this.active
-      return evaluation?.id === id && !evaluation.settled ? evaluation : undefined
-    }
     this.channel = createProcessRpc<ProgramMethods, HostMethods>(handle.control, this.config.maxMessageBytes, {
       ready: (version) => {
         if (version !== PROGRAM_PROTOCOL_VERSION) {
@@ -332,18 +316,18 @@ export class ProgramWorker {
         this.ready = true
         this.dispatch(this.active)
       },
-      log: (id, text: unknown) => {
-        if (!this.ready || typeof text !== 'string') { this.fail('protocol', 'invalid program log'); return }
-        evaluationFor(id)?.admit(text)
+      log: (text: unknown) => {
+        if (!this.ready || !this.active || typeof text !== 'string') { this.fail('protocol', 'invalid program log'); return }
+        if (!this.active.settled) this.active.admit(text)
       },
-      outputLimit: (id) => {
-        if (!this.ready) { this.fail('protocol', 'idle PTC output limit'); return }
-        evaluationFor(id)?.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
+      outputLimit: () => {
+        if (!this.ready || !this.active) { this.fail('protocol', 'idle PTC output limit'); return }
+        this.active.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
       },
-      invoke: async (id, global, name, wire) => {
-        if (!this.ready) return refuse('binding call arrived without an active PTC evaluation')
-        const evaluation = evaluationFor(id)
-        if (evaluation === undefined) return null
+      invoke: async (global, name, wire) => {
+        const evaluation = this.active
+        if (!this.ready || !evaluation) return refuse('binding call arrived without an active PTC evaluation')
+        if (evaluation.settled) throw new Error('PTC evaluation ended before the binding completed')
         const functions = evaluation.bindings.get(global)?.functions
         const fn = functions !== undefined && Object.hasOwn(functions, name) ? functions[name] : undefined
         if (!this.mode.retainsState && typeof fn !== 'function') return refuse('program requested an undeclared binding')
@@ -355,17 +339,21 @@ export class ProgramWorker {
         }
         evaluation.pending += 1
         evaluation.pendingBytes += bytes
+        let value
         try {
-          const value = await evaluation.invoke(fn, args)
-          // A late binding result must not fill the pipe shared with the next evaluation.
-          return evaluation.settled ? null : value
+          value = await evaluation.invoke(fn, args)
         } catch (error) {
-          if (evaluation.settled) return null
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- The evaluation may settle while the binding is pending.
+          if (evaluation.settled) throw new Error('PTC evaluation ended before the binding completed')
           throw error
         } finally {
           evaluation.pending -= 1
           evaluation.pendingBytes -= bytes
         }
+        // A late binding result must not fill the pipe shared with the next evaluation.
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- The evaluation may settle while the binding is pending.
+        if (evaluation.settled) throw new Error('PTC evaluation ended before the binding completed')
+        return value
       },
     }, ['revoke'], (error, kind) => {
       if (kind === 'protocol') this.fail('protocol', error.message)

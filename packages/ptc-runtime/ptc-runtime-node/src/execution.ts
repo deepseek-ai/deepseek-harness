@@ -80,7 +80,7 @@ class NodeExecution {
 
   /**
    * Evaluate in a temporary process or reuse an enabled state owner's process.
-   * @param spec - Resolved request; active calls reject overlap, interrupted calls await cleanup.
+   * @param spec - Resolved request; concurrent calls for one owner are rejected.
    * @returns Captured logs, JSON completion, or a structured execution failure.
    */
   async run(spec: PtcRunSpec): Promise<PtcRunResult> {
@@ -89,11 +89,7 @@ class NodeExecution {
     const bindings = validateBindings(spec)
     const owner = this.mode.retainsState ? spec.stateOwner : undefined
     let worker = owner === undefined ? undefined : this.owners.get(owner)
-    if (owner !== undefined && worker) {
-      await worker.waitForInterruption()
-      worker = this.owners.get(owner)
-      worker?.assertIdle()
-    }
+    worker?.assertIdle()
     if (worker && !worker.closed && (worker.policy.mode !== spec.sandboxPolicy.mode
       || worker.policy.workspaceRoot !== spec.sandboxPolicy.workspaceRoot
       || worker.policy.sessionId !== spec.sandboxPolicy.sessionId

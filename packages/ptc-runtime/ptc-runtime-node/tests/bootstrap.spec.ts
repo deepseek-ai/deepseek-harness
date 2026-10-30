@@ -2,11 +2,11 @@ import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 import { LogBuffer, makeBindingErrorClass, makeConsoleShim, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException } from '../src/bootstrap.ts'
 import type { BindingErrorConstructor, PatchableStream } from '../src/bootstrap.ts'
-import type { BindingMethods } from '../src/protocol.ts'
+import type { HostMethods } from '../src/protocol.ts'
 import { encodePtcJsonWire } from '../src/json-wire.ts'
 
-function host(): Pick<BindingMethods, 'invoke'> {
-  return { invoke: vi.fn<BindingMethods['invoke']>(async () => encodePtcJsonWire(42)) }
+function host(): Pick<HostMethods, 'invoke'> {
+  return { invoke: vi.fn<HostMethods['invoke']>(async () => encodePtcJsonWire(42)) }
 }
 const TOOL_ERROR_CLASS = { name: 'ToolCallError', memberNameProperty: 'toolName' } as const
 function toolNamespace(names: string[]) { return { global: 'tools', names, errorClass: TOOL_ERROR_CLASS } }

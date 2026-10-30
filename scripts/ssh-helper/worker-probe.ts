@@ -1,12 +1,11 @@
 /** Run the embedded worker while macOS denies access to the checkout and host Node. */
 import assert from 'node:assert/strict'
-import { brandNumber } from '@deepseek-ai/dsh-brand'
 import { spawn } from 'node:child_process'
 import { Duplex, type Readable, type Writable } from 'node:stream'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { createProcessRpc } from '../../packages/ptc-runtime/ptc-runtime-node/src/rpc.ts'
-import type { EvaluationId, HostMethods, ProgramMethods } from '../../packages/ptc-runtime/ptc-runtime-node/src/protocol.ts'
+import type { HostMethods, ProgramMethods } from '../../packages/ptc-runtime/ptc-runtime-node/src/protocol.ts'
 import { decodePtcJsonWire } from '../../packages/ptc-runtime/ptc-runtime-node/src/json-wire.ts'
 import { SUBPROCESS_CONTROL_ENV, SUBPROCESS_CONTROL_FD } from '../../packages/subprocess/subprocess/src/control.ts'
 
@@ -46,9 +45,7 @@ export async function probeRestrictedWorker(
   // The probe program calls no bindings and prints nothing, so the host serves only readiness.
   const channel = createProcessRpc<ProgramMethods, Pick<HostMethods, 'ready'>>(control, 1_048_576, {
     ready() {
-      void channel.run(brandNumber<EvaluationId>(1), workspace, {
-        code, namespaces: [], maxOutputBytes: 65_536, retainsState: false,
-      }).then((result) => {
+      void channel.run(workspace, { code, retainsState: false, namespaces: [], maxOutputBytes: 65_536 }).then((result) => {
         if (result.error !== undefined) completed.reject(new Error(JSON.stringify(result.error)))
         else completed.resolve(decodePtcJsonWire(result.value))
         channel.$close()

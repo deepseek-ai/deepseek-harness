@@ -23,7 +23,7 @@ async function setup(config: Config = {}, mode: 'read-only' | 'danger-full-acces
 }
 
 function call(id: number, value: string = '') {
-  return { t: 'q', i: String(id), m: 'invoke', a: [1, 'tools', 'test', encodePtcJsonWire(value)] }
+  return { t: 'q', i: String(id), m: 'invoke', a: ['tools', 'test', encodePtcJsonWire(value)] }
 }
 
 function withBinding(fn: PtcBindingFunction): PtcRunRequest {
@@ -268,7 +268,7 @@ describe('Node runtime host failures', () => {
   })
 
   it.each<[unknown, string]>([
-    [{ t: 'q', m: 'outputLimit', a: [1] }, 'idle PTC output limit'],
+    [{ t: 'q', m: 'outputLimit', a: [] }, 'idle PTC output limit'],
     [call(1), 'binding call arrived without an active PTC evaluation'],
   ])('refuses program traffic before readiness %j', async (frame, message) => {
     const h = await setup()
@@ -283,10 +283,10 @@ describe('Node runtime host failures', () => {
   it.each<[unknown, string]>([
     [null, 'not a JSON object'],
     [{ t: 'q', m: 'ready', a: [PROGRAM_PROTOCOL_VERSION] }, 'duplicate program readiness'],
-    [{ t: 'q', m: 'log', a: [1, 1] }, 'invalid program log'],
-    [{ t: 'q', m: 'invoke', a: [1, null, 'test', []], i: 'call' }, 'undeclared binding'],
-    [{ t: 'q', m: 'invoke', a: [1, 'tools', 'constructor', []], i: 'call' }, 'undeclared binding'],
-    [{ t: 'q', m: 'invoke', a: [1, 'tools', 'test'], i: 'call' }, 'arguments must be lossless JSON'],
+    [{ t: 'q', m: 'log', a: [1] }, 'invalid program log'],
+    [{ t: 'q', m: 'invoke', a: [null, 'test', []], i: 'call' }, 'undeclared binding'],
+    [{ t: 'q', m: 'invoke', a: ['tools', 'constructor', []], i: 'call' }, 'undeclared binding'],
+    [{ t: 'q', m: 'invoke', a: ['tools', 'test'], i: 'call' }, 'arguments must be lossless JSON'],
   ])('rejects malformed program traffic %j', async (frame, message) => {
     const h = await setup()
     const binding = vi.fn(async () => null)
@@ -380,7 +380,7 @@ describe('Node runtime host failures', () => {
       const run = message as { m?: string; i?: string }
       if (run.m !== 'run') return
       const result = { t: 's', i: run.i, r: { error: { kind: 'exception', message: 'EACCES: blocked' } } }
-      const log = { t: 'q', m: 'log', a: [1, 'x'.repeat(100)] }
+      const log = { t: 'q', m: 'log', a: ['x'.repeat(100)] }
       h.control.push(Buffer.from(`${JSON.stringify(result)}\n${JSON.stringify(log)}\n`))
     })
     const result = await h.start()
@@ -391,7 +391,7 @@ describe('Node runtime host failures', () => {
   it('retains admitted logs when the program reports its own output limit', async () => {
     const h = await setup()
     h.onBoot(() => {
-      h.emit({ t: 'q', m: 'log', a: [1, 'retained'] })
+      h.emit({ t: 'q', m: 'log', a: ['retained'] })
       h.complete({ error: { kind: 'output-limit', message: 'child ledger exhausted' } })
     })
     const result = await h.start()

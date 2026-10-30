@@ -400,7 +400,7 @@ it.each(['_', '_error'])('keeps %s assignments and subsequent tools in the activ
   expect((await run(name)).value).toBe(42)
 })
 
-it('waits for release cleanup before starting the next run for its owner', async () => {
+it('rejects a new run until release cleanup has completed for its owner', async () => {
   const { run, ctx, runtime, owner } = await setupRuntime()
   const entered = Promise.withResolvers<true>()
   const cleanup = Promise.withResolvers<true>()
@@ -414,23 +414,18 @@ it('waits for release cleanup before starting the next run for its owner', async
   const pending = run('await tools.value({}); await new Promise(() => {})', {
     signal: abort.signal, bindings: bindings(async () => { entered.resolve(true); return null }),
   })
-  let next: ReturnType<typeof run> | undefined
   let resetting: Promise<void> | undefined
   try {
     await entered.promise
     resetting = runtime.release(owner)
     await cleanup.promise
-    const settled = vi.fn()
-    next = run('42')
-    void next.then(settled)
-    await Promise.resolve()
-    expect(settled).not.toHaveBeenCalled()
+    await expect(run('42')).rejects.toThrow('concurrent runs')
     expect(intercepted).toHaveBeenCalledTimes(1)
     released.resolve(true)
     expect((await pending).error?.kind).toBe('abort')
-    expect((await next).value).toBe(42)
     await resetting
-  } finally { released.resolve(true); await pending; await next; await resetting; intercepted.mockRestore() }
+    expect((await run('42')).value).toBe(42)
+  } finally { released.resolve(true); await pending; await resetting; intercepted.mockRestore() }
 })
 
 it('retains implicit REPL globals and does not attribute a completed callback exception to a later evaluation', async () => {

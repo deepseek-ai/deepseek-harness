@@ -1,4 +1,3 @@
-import { brandNumber } from '@deepseek-ai/dsh-brand'
 import { spawn } from 'node:child_process'
 import { copyFile, cp, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -7,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Duplex } from 'node:stream'
 import { expect, it, onTestFinished } from 'vitest'
 import { createProcessRpc } from '../src/rpc.ts'
-import type { EvaluationId, HostMethods, ProgramMethods } from '../src/protocol.ts'
+import type { HostMethods, ProgramMethods } from '../src/protocol.ts'
 import { decodePtcJsonWire, encodePtcJsonWire } from '../src/json-wire.ts'
 
 it.each(['awaited', 'unawaited', 'unawaited script'] as const)('boots an unbuilt source closure outside the workspace with %s tool calls', async (scenario) => {
@@ -38,7 +37,7 @@ it.each(['awaited', 'unawaited', 'unawaited script'] as const)('boots an unbuilt
   if (!(control instanceof Duplex)) { child.kill(); await finished; throw new Error('missing child control channel') }
   const channel = createProcessRpc<ProgramMethods, HostMethods>(control, 100_000, {
     ready() {
-      void channel.run(brandNumber<EvaluationId>(1), directory, {
+      void channel.run(directory, {
         code: scenario === 'awaited' ? 'const answer = await tools.echo({ n: 21 }); return { answer, env: { ...process.env } }'
           : 'tools.echo({ n: 21 }); setImmediate(() => tools.echo({ n: 21 })); ' + (scenario === 'unawaited script' ? '42' : 'return 42'),
         retainsState: false,
@@ -50,11 +49,11 @@ it.each(['awaited', 'unawaited', 'unawaited script'] as const)('boots an unbuilt
         else completed.resolve(decodePtcJsonWire(result.value))
       }, (error: unknown) => { completed.reject(error) })
     },
-    async invoke(_id, _global, _name, args) {
+    async invoke(_global, _name, args) {
       expect(decodePtcJsonWire(args)).toEqual({ n: 21 })
       return scenario === 'awaited' ? encodePtcJsonWire(42) : await new Promise<never>(() => {})
     },
-    log(_id, text) { logs.push(text) },
+    log(text) { logs.push(text) },
     outputLimit() {},
   }, [], (error) => { completed.reject(error) })
   onTestFinished(async () => { channel.$close(); child.kill(); await finished })
