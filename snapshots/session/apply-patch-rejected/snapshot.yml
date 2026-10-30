@@ -1,0 +1,10 @@
+version: 1
+scenario: apply-patch-rejected
+profile: headless
+composition: apply-patch
+recording: live
+header:
+  class: apply-patch
+platform: posix
+workspace:
+  final: true

@@ -37,5 +37,8 @@
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-fs-patch": "workspace:*"
   }
 }

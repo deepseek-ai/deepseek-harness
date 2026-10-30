@@ -5,7 +5,6 @@ import { Deque } from '@deepseek-ai/dsh-deque'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { entryFor } from '../history.ts'
 import type { SessionProjectionChange, SessionEventEntry } from '../types.ts'
 
@@ -128,7 +127,7 @@ export function eventItem(item: EventItem, next?: number): {
   return { events, next }
 }
 
-/** Sparse projection changes retain every key, including keys sharing a seq. */
+/** Projection changes of one Session, one change per committed event that changed a projection. */
 export class ProjectionListener implements Disposable {
   private readonly buffer: ListenerBuffer<{ session: Session; change: SessionProjectionChange }>
 
@@ -142,12 +141,12 @@ export class ProjectionListener implements Disposable {
     const input = this.buffer.createInput<{ session: Session; change: SessionProjectionChange }>(item => [item])
     const target = sessionId
     try {
-      this.buffer.own(ctx.sessionProjections.onChanged((session, key, value, seq) => {
+      this.buffer.own(ctx.sessionProjections.onEventChanged((session, changes, seq) => {
         if (session.id !== target) return
         this.buffer.capture(() => {
-          input.append({
-            session, change: { type: 'projection', key, value: value as JsonValue, seq } satisfies SessionProjectionChange,
-          })
+          // Every projection definition validates its value before change publication.
+          const change: SessionProjectionChange = { type: 'projection', seq, changes: changes as SessionProjectionChange['changes'] }
+          input.append({ session, change })
         })
       }))
     } catch (error: unknown) {
@@ -156,8 +155,8 @@ export class ProjectionListener implements Disposable {
     }
   }
 
-  /** Consume sparse per-key projection replacements.
-   * @returns validated replacement frames; projection seqs need not be contiguous. */
+  /** Consume per-event projection changes.
+   * @returns validated change frames, one per committed event; projection seqs need not be contiguous. */
   async *changes(): AsyncIterable<SessionProjectionChange> {
     try {
       for await (const { change } of this.buffer.items()) {

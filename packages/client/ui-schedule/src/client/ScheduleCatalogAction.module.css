@@ -46,8 +46,8 @@
   flex-direction: column;
   gap: 1px;
   width: 336px;
-  max-width: min(336px, calc(100vw - 32px));
-  max-height: min(420px, calc(100vh - 140px));
+  max-width: min(336px, calc(100vw - 32px), var(--dsh-anchored-max-width, 100vw));
+  max-height: min(420px, calc(100vh - 140px), var(--dsh-anchored-max-height, 100vh));
   margin: 0;
   padding: 3px;
   overflow: auto;

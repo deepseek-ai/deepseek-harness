@@ -1253,6 +1253,19 @@ describe('web e2e: plugin manager', () => {
           const registryToggle = dialog.getByRole('button', { name: /^安装源/ })
           await registryToggle.click()
           const registry = probe.locator('[data-install-registry]')
+          await registry.waitFor()
+          for (const width of [390, 800, 1680]) {
+            await probe.setViewportSize({ width, height: 1000 })
+            await probe.clock.runFor(300)
+            await expect.poll(async () => {
+              const rect = await registry.boundingBox()
+              const anchor = await registryToggle.boundingBox()
+              return rect !== null && anchor !== null
+                && rect.x >= 11 && rect.x + rect.width <= width - 11
+                && rect.y >= 11 && rect.y + rect.height <= 989
+                && Math.abs(rect.x - Math.max(12, Math.min(anchor.x + anchor.width - rect.width, width - rect.width - 12))) <= 1
+            }).toBe(true)
+          }
           const offered = registry.getByRole('radio', { name: 'npm 官方源 registry.npmjs.org', exact: true })
           const custom = registry.getByRole('radio', { name: '自定义地址', exact: true })
           field = registry.getByRole('textbox', { name: '自定义地址', exact: true })

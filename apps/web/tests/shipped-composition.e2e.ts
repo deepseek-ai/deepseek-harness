@@ -473,6 +473,7 @@ function assertLeanChildRecord(agent: Agent): void {
  * Agent Note owns the rationale and its sources.
  */
 const EXPECTED_TOOLS = [
+  'apply_patch',
   'ask_user_question',
   'bash',
   'create_goal',
@@ -490,9 +491,9 @@ const EXPECTED_TOOLS = [
   'read',
   'read_image',
   'schedule_create',
-  'schedule_delete',
+  'schedule_edit',
   'schedule_list',
-  'schedule_update',
+  'schedule_view',
   'send_message',
   'skill',
   'subagent',
