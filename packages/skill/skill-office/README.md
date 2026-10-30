@@ -39,12 +39,12 @@ Mount the skill provider beside the skill registry and `dsh-tool-skill`. The pro
 | `node` | Host Node.js | Standalone Node executable for operation skills; packaged carriers supply it explicitly. |
 | `cli` | Installed Kit CLI | Absolute CLI entry; `false` disables operation execution. |
 
-Invalid skill assets reject registration. Authoring instructions do not resolve renderer paths; loading operation instructions validates existing interpreter and CLI files without preparing engines. Bash or PowerShell owns approvals, sandboxing, cancellation, and output management. Resources and execution tools must refer to the same host.
+A relative `assetRoot` rejects registration. Catalog discovery reads each `SKILL.md`. A missing or invalid skill is omitted from the catalog with a warning, and a skill whose file disappears after discovery fails to load and leaves the catalog. Other read errors, such as a locked file, leave discovery incomplete so the registry retries it. Authoring instructions do not resolve renderer paths; loading operation instructions validates existing interpreter and CLI files without preparing engines. Bash or PowerShell owns approvals, sandboxing, cancellation, and output management. Resources and execution tools must refer to the same host.
 
 <a id="progressive-loading"></a>
 ### Progressive loading
 
-The model chooses skills from the task; the host does not inject complete instructions based on file extensions. All seven skills are listed and loadable by name through `skill` or explicit user invocation. Requested appearance changes, including spreadsheet cell fills and text alignment, require rendering even without an explicit visual-check request; an explicit request to skip rendering takes precedence. Pure operations can enter the corresponding skill directly.
+The model chooses skills from the task; the host does not inject complete instructions based on file extensions. With complete resources, all seven skills are listed and loadable by name through `skill` or explicit user invocation. Requested appearance changes, including spreadsheet cell fills and text alignment, require rendering even without an explicit visual-check request; an explicit request to skip rendering takes precedence. Pure operations can enter the corresponding skill directly.
 
 ```mermaid
 flowchart TD
@@ -87,13 +87,13 @@ Ordinary Word text edits inspect the target runs and formatting, then reopen the
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The provider reads descriptions at registration and bodies on demand. Registry precedence, scope, and invocation permissions apply to every skill. Each loaded skill includes its resource directory for relative references. Disposal unregisters all candidates.
+The provider reads descriptions during catalog discovery and bodies on demand. Registry precedence, scope, and invocation permissions apply to every skill. Each loaded skill includes its resource directory for relative references. Disposal unregisters all candidates.
 
 The provider registers no tools or activation projection. Loaded skill results remain logged through the generic skill loader. In PTC programs, print or return the full `tools.skill(...)` result so its instructions reach the model. Resume and fork use existing session history and tool declaration reconciliation. Interpreter and CLI paths are resolved only when an operation skill is loaded.
 
 | File | Responsibility |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Resource registration and unchanged skill bodies. |
+| [`src/index.ts`](src/index.ts) | Provider registration, per-skill resource reads, and unchanged skill bodies. |
 
 | [`assets/`](assets/) | Router and six subskills. |
 
@@ -117,7 +117,7 @@ Indirectly, through `dsh-tool-skill`, which renders the initial Office summary a
 
 #### KV Cache effect
 
-Skill results append to history without changing tool declarations, and loaded text or images remain after an operation finishes. Character estimates use `ceil(characters / 4)`: the summary is at most 50 tokens and the router body at most 200; authoring bodies are at least 35% smaller than the combined authoring and operation guides. Skill wrappers, the generic catalog, shell declarations, and `load_workspace_dependencies` are separate costs, and these estimates are not server usage.
+Skill results append to history without changing tool declarations, and loaded text or images remain after an operation finishes. A skill omitted or removed for unreadable resources changes the catalog, which a later step publishes as a catalog update. Character estimates use `ceil(characters / 4)`: the summary is at most 50 tokens and the router body at most 200; authoring bodies are at least 35% smaller than the combined authoring and operation guides. Skill wrappers, the generic catalog, shell declarations, and `load_workspace_dependencies` are separate costs, and these estimates are not server usage.
 
 ## Known Limitations and Deferred Work
 
@@ -126,6 +126,8 @@ Skill results append to history without changing tool declarations, and loaded t
 - The provider does not install authoring libraries.
 - LibreOffice output can differ from native Office applications.
 - Legacy, encrypted, and macro-enabled files need an appropriate separate workflow.
+- An omitted skill is reported only through `ctx.logger`; no product UI tells the user that installed resources are missing.
+- The `office` router body names every subskill, so it still points to a subskill omitted for missing resources; the `skill` tool reports that subskill as unavailable.
 
 <a id="dev-note"></a>
 ### Dev Note

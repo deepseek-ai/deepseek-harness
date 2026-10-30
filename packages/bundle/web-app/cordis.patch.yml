@@ -291,6 +291,24 @@
     - id: office-to-pdf
       name: '@deepseek-ai/dsh-office-to-pdf'
 
+    # Desktop Office skills and bundled authoring dependencies. The Desktop
+    # Host sets both carrier paths before boot; a row that fails to load leaves
+    # the rest of the Host running.
+    - id: workspace-dependencies
+      name: '@deepseek-ai/dsh-tool-workspace-dependencies'
+      disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"
+      config:
+        source: !!js process.env.DSH_BUNDLED_PRIMARY_RUNTIME
+        root: !!js dshHomePath('dsh-runtimes', 'dsh-primary-runtime')
+
+    - id: skill-office
+      name: '@deepseek-ai/dsh-skill-office'
+      disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"
+      config:
+        assetRoot: !!js "process.getBuiltinModule('node:path').join(process.env.DSH_BUNDLED_PRIMARY_RUNTIME, '..', 'office-skills')"
+        node: !!js "process.getBuiltinModule('node:path').join(process.env.DSH_BUNDLED_PRIMARY_RUNTIME, 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node')"
+        cli: !!js process.env.DSH_BUNDLED_OFFICE_CLI
+
     # The right Sidebar's document tab: bounded file reads with selectable
     # Markdown, code, HTML, PDF, Office, and plain-text renderers.
     - id: ui-sidebar-documentpreview

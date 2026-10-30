@@ -636,7 +636,6 @@ it.each(['unset', 'empty', 'bundled', 'full', 'python-only', 'python-only-no-cli
     ]))
   }
   if (mode === 'python-only') expect(stderr).not.toContain('ENOENT')
-  if (mode === 'missing-assets') expect(stderr).toContain('SKILL.md')
   await send(3, 'shutdown')
   const exit = await child
   expect(exit.timedOut).toBe(false)

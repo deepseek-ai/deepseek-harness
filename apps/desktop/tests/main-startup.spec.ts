@@ -169,10 +169,9 @@ const harness = await vi.hoisted(async () => {
     constructor(
       readonly node: string, readonly runtime: string, readonly profile: string,
       readonly inspectPort?: number, readonly environment?: NodeJS.ProcessEnv, readonly onFailure?: (error: Error) => void,
-      readonly primaryRuntime?: string,
       readonly packageManager?: { pnpm: string; nodeBin: string },
-      readonly onPlatformSession?: ConstructorParameters<typeof DesktopHostProcess>[8],
-      readonly onPluginOperation?: ConstructorParameters<typeof DesktopHostProcess>[9],
+      readonly onPlatformSession?: ConstructorParameters<typeof DesktopHostProcess>[7],
+      readonly onPluginOperation?: ConstructorParameters<typeof DesktopHostProcess>[8],
     ) { hosts.push(this) }
   }
   const app = Object.assign(new EventEmitter(), {
@@ -348,6 +347,11 @@ vi.mock('../src/login-shell-environment.ts', async importOriginal => ({
   readDesktopLoginShellEnvironment: harness.loginShell,
 }))
 vi.mock('../src/runtime-tree.ts', () => ({ readDesktopRuntime: () => ({ release: { version: '1.0.0' } }) }))
+vi.mock('../src/office-cli.ts', () => ({
+  desktopOfficeEnvironment: (runtime: string, primaryRuntime: string) => ({
+    DSH_BUNDLED_PRIMARY_RUNTIME: primaryRuntime, DSH_BUNDLED_OFFICE_CLI: join(runtime, 'office-cli.js'),
+  }),
+}))
 vi.mock('../src/paths.ts', () => ({ resolveDesktopPaths: () => ({ profile: 'desktop-test-profile' }) }))
 vi.mock('../src/project-manager.ts', () => ({
   DesktopProjectManager: class {
@@ -502,8 +506,10 @@ describe('desktop main startup', () => {
     await readyForUpdate()
     const host = harness.hosts[0]!
     expect(host.node).toBe(process.execPath)
-    expect(host.primaryRuntime).toBe(packaged
-      ? join('desktop-test-resources', 'runtime', 'primary-runtime') : 'test-primary-runtime')
+    expect(host.environment).toMatchObject({
+      DSH_BUNDLED_PRIMARY_RUNTIME: packaged ? join('desktop-test-resources', 'runtime', 'primary-runtime') : 'test-primary-runtime',
+      DSH_BUNDLED_OFFICE_CLI: join(host.runtime, 'office-cli.js'),
+    })
     expect(host.packageManager).toMatchObject({
       pnpm: packaged
         ? join('desktop-test-resources', 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs')
@@ -2844,7 +2850,7 @@ describe('desktop main startup', () => {
     expect(harness.hosts[0]).toMatchObject({
       node: process.execPath,
       runtime: join(harness.app.getAppPath(), 'dsh'),
-      primaryRuntime: join('desktop-test-resources', 'runtime', 'primary-runtime'),
+      environment: { DSH_BUNDLED_PRIMARY_RUNTIME: join('desktop-test-resources', 'runtime', 'primary-runtime') },
       profile: 'desktop-test-profile',
     })
     expect(harness.hosts[0]!.environment).not.toBe(process.env)
@@ -2866,7 +2872,7 @@ describe('desktop main startup', () => {
     await harness.hostStarted.promise
     const project = join(harness.app.getAppPath(), '.desktop-build', 'development', 'project')
     expect(harness.hosts[0]).toMatchObject({ node: process.execPath, runtime: project,
-      primaryRuntime: 'test-primary-runtime', profile: 'desktop-test-profile' })
+      environment: { DSH_BUNDLED_PRIMARY_RUNTIME: 'test-primary-runtime' }, profile: 'desktop-test-profile' })
     expect(harness.applyRelease).toHaveBeenCalledOnce()
     harness.hosts[0]!.ready.resolve()
     await harness.navigated.promise

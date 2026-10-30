@@ -5,6 +5,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Converter, ConverterOptions } from '@deepseek-ai/libreoffice-kit'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import OfficeToPdf, { Config, OfficeSourceKey, type OfficeToPdfRequest } from '../src/index.ts'
+import { resolveEnginePackage } from '../src/engine-package.ts'
 
 const kit = vi.hoisted(() => ({ create: vi.fn<(options?: ConverterOptions) => Promise<Converter>>() }))
 vi.mock('@deepseek-ai/libreoffice-kit', () => ({ createConverter: kit.create }))
@@ -90,7 +91,7 @@ it('passes configured limits to the kit, reuses the converter, and removes all s
   const { maxConcurrentConversions: _count, maxQueuedJobs: _queued, maxReaders: _readers, maxSourceBytes: _source,
     maxBackgroundConversions: _background, maxCachedEntries: _entries, maxCachedBytes: _cached,
     maxSourceEntries: _aliases, ...options } = config
-  expect(kit.create).toHaveBeenCalledExactlyOnceWith(options)
+  expect(kit.create).toHaveBeenCalledExactlyOnceWith({ ...options, resolveEnginePackage })
   await ctx.fiber.dispose()
   expect(dispose).toHaveBeenCalledOnce()
   expect(result.pdf).toEqual(Uint8Array.from(pdf))

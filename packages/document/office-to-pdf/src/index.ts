@@ -14,6 +14,7 @@ import { OfficeToPdfError } from './errors.ts'
 import { OfficeToPdfGeneration, type OfficeSourceKey } from './identity.ts'
 import type { OfficeExtension, OfficeToPdfRequest, OfficeToPdfResult, OfficeToPdfPriority, RenderedDocumentBytes } from './types.ts'
 import { readPdf } from './output.ts'
+import { resolveEnginePackage } from './engine-package.ts'
 import { ConversionQueue } from './queue.ts'
 
 export * from './errors.ts'
@@ -118,8 +119,8 @@ export class OfficeToPdf extends TypertRemoteService {
     if (config.maxSourceBytes < config.maxInputBytes) throw new Error('maxSourceBytes must be at least maxInputBytes.')
     const { fontDirectories, fontFallbacks, timeoutMs, maxInputBytes, maxOutputBytes, maxImageResolution,
       maxArchiveEntries, maxUncompressedBytes, maxFontFiles, maxFontFileBytes, maxLoadedFontBytes } = config
-    this.options = { timeoutMs, maxInputBytes, maxOutputBytes, maxImageResolution, maxArchiveEntries, maxUncompressedBytes,
-      maxFontFiles, maxFontFileBytes, maxLoadedFontBytes,
+    this.options = { resolveEnginePackage, timeoutMs, maxInputBytes, maxOutputBytes, maxImageResolution,
+      maxArchiveEntries, maxUncompressedBytes, maxFontFiles, maxFontFileBytes, maxLoadedFontBytes,
       ...(fontDirectories === undefined ? {} : { fontDirectories }),
       ...(fontFallbacks === undefined ? {} : { fontFallbacks }),
     }
