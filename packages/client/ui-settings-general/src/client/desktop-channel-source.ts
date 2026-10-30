@@ -1,13 +1,23 @@
-/** One shell-owned channel subscription shared by Settings views. */
+/** One shell-owned channel subscription shared by Settings views and their toast. */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { DesktopChannelBridge, DesktopChannelState, DesktopUpdateChannel } from '../types.ts'
+import type { DesktopChannelBridge, DesktopChannelState, DesktopUpdateChannel, DesktopChannelChangeResult } from '../types.ts'
+
+type Notice = { sequence: number; outcome: 'applied' | Extract<DesktopChannelChangeResult, { kind: 'failed' }>['reason'] }
+/** Actual shell state, optimistic selection and transient operation feedback. */
+export interface DesktopChannelSnapshot {
+  state?: DesktopChannelState
+  failed: boolean
+  pending?: DesktopUpdateChannel
+  notice?: Notice
+}
 
 /** Client observation; no Host service or configuration file is read here. */
 export class DesktopChannelSource {
-  /** Stable settings observation shared by mounted General views. */
-  readonly store = createSnapshotStore<{ state?: DesktopChannelState; failed: boolean }>({ failed: false })
+  /** Stable observation shared by mounted General views and the shell toast. */
+  readonly store = createSnapshotStore<DesktopChannelSnapshot>({ failed: false })
   private live = true
   private revision = 0
+  private sequence = 0
   private readonly unsubscribe: () => void
 
   /** @param bridge - Isolated shell API, present only in Desktop. */
@@ -15,29 +25,51 @@ export class DesktopChannelSource {
     this.unsubscribe = bridge.subscribe((state) => {
       if (!this.live) return
       this.revision++
-      this.store.set({ state, failed: false })
+      this.store.set({ ...this.store.getSnapshot(), state, failed: false })
     })
     void bridge.get().then((state) => {
-      if (this.live && this.revision === 0) this.store.set({ state, failed: false })
+      if (this.live && this.revision === 0) this.store.set({ ...this.store.getSnapshot(), state, failed: false })
     }, () => {
-      if (this.live && this.revision === 0) this.store.set({ failed: true })
+      if (this.live && this.revision === 0) this.store.set({ ...this.store.getSnapshot(), failed: true })
     })
   }
 
   /**
-   * Ask the shell to persist and apply a UI choice; failures remain visible.
+   * Show a pending choice until the shell reports its actual selection.
    * @param channel - Selected feed.
    * @returns After the shell reports the result.
    */
   async select(channel: DesktopUpdateChannel): Promise<void> {
-    if (!this.isLive()) return
+    if (!this.isLive() || this.store.getSnapshot().pending !== undefined) return
     const revision = this.revision
+    const { notice: _notice, ...previous } = this.store.getSnapshot()
+    this.store.set({ ...previous, pending: channel })
+    let result: DesktopChannelChangeResult | undefined
     try {
-      const state = await this.bridge.set(channel)
-      if (this.live && revision === this.revision) this.store.set({ state, failed: false })
+      result = await this.bridge.set(channel)
     } catch (_error) {
-      if (this.live && revision === this.revision) this.store.set({ ...this.store.getSnapshot(), failed: true })
+      // An IPC failure has no reliable user-facing detail or confirmed new selection.
     }
+    if (!this.isLive()) return
+    const accept = result !== undefined && revision === this.revision
+    if (accept) this.revision++
+    const { pending: _pending, ...current } = this.store.getSnapshot()
+    this.store.set({
+      ...current,
+      ...(accept && result !== undefined ? { state: result.state, failed: false } : {}),
+      notice: { sequence: ++this.sequence, outcome: result?.kind === 'applied' ? 'applied' : result?.reason ?? 'save' },
+    })
+  }
+
+  /**
+   * Retire only the toast whose animation completed.
+   * @param sequence - Notice identity captured by the rendered toast.
+   */
+  dismissNotice(sequence: number): void {
+    const current = this.store.getSnapshot()
+    if (current.notice?.sequence !== sequence) return
+    const { notice: _notice, ...next } = current
+    this.store.set(next)
   }
 
   private isLive(): boolean { return this.live }

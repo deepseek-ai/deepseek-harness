@@ -1,6 +1,6 @@
 /** Desktop channel selection; persistence and updater transitions remain in Electron. */
 import { useState } from 'react'
-import { Menu, IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Menu, Toast, IconLoadingOutlineRegular, IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DesktopChannelSource } from './desktop-channel-source.ts'
 import type { DesktopUpdateChannel } from '../types.ts'
@@ -19,10 +19,10 @@ export interface DesktopChannelRowInjected {
  */
 export function DesktopChannelRow({ useChannel, select, t }:
   PropsRuntime<'settings.general.item'> & PropsLocale<'settings'> & InjectFace<DesktopChannelRowInjected>) {
-  const { state, failed } = useChannel(value => value)
+  const { state, failed, pending } = useChannel(value => value)
   const [open, setOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const busy = saving || state?.changing === true
+  const busy = pending !== undefined || state?.changing === true
+  const channel = pending ?? state?.channel
   return <div className={css.row} role="group" aria-label={t('desktop.channel.title')}>
     <div className={css.rowText}>
       <div className={css.title}>{t('desktop.channel.title')}</div>
@@ -30,19 +30,37 @@ export function DesktopChannelRow({ useChannel, select, t }:
       {(failed || state?.error !== undefined) && <div role="alert">{t('desktop.channel.error')}</div>}
     </div>
     <Menu open={open} onClose={() => { setOpen(false) }} portal align="end"
-      selectedId={state?.channel ?? ''}
+      selectedId={channel ?? ''}
       items={[{ id: 'latest', label: t('desktop.channel.latest') }, { id: 'nightly', label: t('desktop.channel.nightly') }]}
       onSelect={(id) => {
         setOpen(false)
-        setSaving(true)
-        void select(id as DesktopUpdateChannel).finally(() => { setSaving(false) })
+        void select(id as DesktopUpdateChannel)
       }}
       anchor={<button type="button" className={css.selector} disabled={busy || state === undefined}
-        aria-label={t('desktop.channel.title')} aria-haspopup="menu" aria-expanded={open}
+        aria-busy={busy} aria-label={t('desktop.channel.title')} aria-haspopup="menu" aria-expanded={open}
         onClick={() => { setOpen(!open) }}>
-        {busy ? t('desktop.channel.changing') : state?.channel === undefined || state.channel === null
-          ? t('desktop.channel.unavailable') : t(state.channel === 'latest' ? 'desktop.channel.latest' : 'desktop.channel.nightly')}
-        <IconChevronDownOutlineRegular className={css.chevron} />
+        {channel === undefined || channel === null
+          ? t('desktop.channel.unavailable') : t(channel === 'latest' ? 'desktop.channel.latest' : 'desktop.channel.nightly')}
+        {busy ? <IconLoadingOutlineRegular className={css.spinner} /> : <IconChevronDownOutlineRegular className={css.chevron} />}
       </button>} />
   </div>
+}
+
+/** Shell-owned operation feedback that survives closing Settings. */
+export interface DesktopChannelToastInjected {
+  hooks: { channel: DesktopChannelSource['store'] }
+  dismiss(sequence: number): void
+}
+
+/**
+ * Render the latest channel save result outside Settings.
+ * @param props - Shared operation state, dismissal and localized copy.
+ * @returns A transient toast, or nothing.
+ */
+export function DesktopChannelToast({ useChannel, dismiss, t }:
+  PropsRuntime<'shell.overlay'> & PropsLocale<'settings'> & InjectFace<DesktopChannelToastInjected>) {
+  const notice = useChannel(value => value.notice)
+  if (notice === undefined) return null
+  return <Toast key={notice.sequence} text={t(`desktop.channel.result.${notice.outcome}`)}
+    onDone={() => { dismiss(notice.sequence) }} {...notice.outcome === 'applied' ? { tone: 'success' as const } : {}} />
 }

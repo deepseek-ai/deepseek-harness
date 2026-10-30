@@ -63,7 +63,7 @@ Access: the settings shell and the `settings.open` shortcut are registered only 
 
 -----
 
-Desktop also contributes an **Update channel** row to General when the preload exposes the channel API. Its loading, saved-choice and failure states follow the Electron subscription; selecting a channel calls the shell directly. Ordinary browsers omit this row. File ownership and restart rules are documented in [local desktop settings](../../../apps/desktop/README.md#local-desktop-settings).
+Desktop also contributes an **Update channel** row to General when the preload exposes the channel API. Selecting a channel calls Electron directly and temporarily displays that choice with a spinner. The reply settles the selection against actual shell state; failure rolls it back. A shell-owned toast reports success or a short save failure, including after Settings closes. Persistent updater suspensions remain in the update indicator; a failed save does not create one. Ordinary browsers omit this row. File ownership and restart rules are documented in [local desktop settings](../../../apps/desktop/README.md#local-desktop-settings).
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation

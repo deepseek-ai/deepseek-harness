@@ -36,7 +36,7 @@ import { SettingsRoot } from './SettingsRoot.tsx'
 import { DesktopUpdateBadge } from './DesktopUpdateIndicator.tsx'
 import type { DesktopUpdateBridge } from '../types.ts'
 import { DesktopChannelSource } from './desktop-channel-source.ts'
-import { DesktopChannelRow } from './DesktopChannelRow.tsx'
+import { DesktopChannelRow, DesktopChannelToast } from './DesktopChannelRow.tsx'
 import { DesktopUpdateSource } from './desktop-update-source.ts'
 import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
 import { GeneralSection } from './GeneralSection.tsx'
@@ -114,6 +114,10 @@ export function apply(ctx: ClientContext): void {
       name: 'settings.general.item', id: 'desktop-update-channel', order: 95, locale: NS,
       inject: () => ({ hooks: { channel: channel.store }, select: (value: 'nightly' | 'latest') => channel.select(value) }),
     }, DesktopChannelRow))
+    ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+      name: 'shell.overlay', id: 'desktop-channel-toast', locale: NS,
+      inject: () => ({ hooks: { channel: channel.store }, dismiss: (sequence: number) => { channel.dismissNotice(sequence) } }),
+    }, DesktopChannelToast))
   }
 
   ctx.slots.inject('sidebar.toggle.badge', () => ctx.slots.register({

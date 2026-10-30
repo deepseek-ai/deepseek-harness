@@ -1,7 +1,7 @@
 import type { DesktopFileActions } from '@deepseek-ai/dsh-client-ui-file-actions/types'
 /** Typed preload operations exposed only by the Electron shell. */
 
-export type { DesktopChannelState } from '@deepseek-ai/dsh-client-ui-settings-general/types'
+export type { DesktopChannelState, DesktopChannelChangeResult } from '@deepseek-ai/dsh-client-ui-settings-general/types'
 import type { DesktopChannelBridge, DesktopChannelState } from '@deepseek-ai/dsh-client-ui-settings-general/types'
 import type { DesktopKeyboardApi, DesktopShortcutsApi } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import type { IpcMainInvokeEvent } from 'electron'

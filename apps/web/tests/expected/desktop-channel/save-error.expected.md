@@ -1,4 +1,4 @@
 - group "Update channel":
   - text: Update channel Stable receives stable releases only. Development includes prereleases and may be unstable. Switching never downgrades.
-  - alert: Could not apply update settings. Open the desktop update indicator for details.
   - button "Update channel": Stable
+- alert: "Could not save: invalid settings file"

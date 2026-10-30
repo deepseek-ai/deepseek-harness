@@ -202,12 +202,12 @@ it('localizes fullscreen timeout guidance and preserves the retry action', async
 
 it('keeps a configuration error actionable while download progress continues', async () => {
   const f = fixture()
-  await f.emit({ phase: 'idle', configurationError: 'invalid' })
+  await f.emit({ phase: 'idle', configurationError: 'format' })
   const error = screen.getByRole('button', { name: '配置不可用' })
   fireEvent.click(error)
   await act(async () => {})
   expect(f.open).toHaveBeenCalledOnce()
-  await f.emit({ phase: 'downloading', percent: 58, configurationError: 'write' })
+  await f.emit({ phase: 'downloading', percent: 58, configurationError: 'cleanup' })
   fireEvent.click(screen.getByRole('button', { name: '配置不可用' }))
   await act(async () => {})
   expect(f.open).toHaveBeenCalledTimes(2)

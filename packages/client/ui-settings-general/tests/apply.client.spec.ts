@@ -17,7 +17,7 @@ import { inject } from '../src/client/index.ts'
 import type { DeveloperToolsRowInjected } from '../src/client/DeveloperToolsRow.tsx'
 import { HostReleasePrompt, type HostReleasePromptInjected } from '../src/client/HostReleasePrompt.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
-import type { DesktopChannelRowInjected } from '../src/client/DesktopChannelRow.tsx'
+import type { DesktopChannelRowInjected, DesktopChannelToastInjected } from '../src/client/DesktopChannelRow.tsx'
 import type { DesktopChannelBridge } from '../src/types.ts'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
 import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
@@ -213,7 +213,7 @@ describe('ui-settings-general apply', () => {
   it('removes the Desktop channel row and shell subscription when its plugin unloads', async ({ mock, start }) => {
     const unsubscribe = vi.fn()
     const state = { channel: 'nightly', packagedChannel: 'nightly', changing: false } as const
-    const save = vi.fn(async () => state)
+    const save = vi.fn(async () => ({ kind: 'applied' as const, state }))
     const channels: DesktopChannelBridge = { get: async () => state, set: save,
       subscribe: () => unsubscribe }
     vi.stubGlobal('dshDesktop', { protocolVersion: 1, updates: { channels,
@@ -221,12 +221,21 @@ describe('ui-settings-general apply', () => {
     onTestFinished(() => { vi.unstubAllGlobals() })
     const { c } = await client(mock, start)
     const row = c.ctx.slots.entries('settings.general.item').find(row => row.options.id === 'desktop-update-channel')!
+    expect(c.ctx.slots.entries('shell.overlay').some(entry => entry.options.id === 'desktop-channel-toast')).toBe(true)
     const select = row.inject!().select as DesktopChannelRowInjected['select']
     await select('latest')
     expect(save).toHaveBeenCalledWith('latest')
+    const toast = c.ctx.slots.entries('shell.overlay').find(entry => entry.options.id === 'desktop-channel-toast')!
+    const injected = toast.inject!()
+    const hooks = injected.hooks as DesktopChannelToastInjected['hooks']
+    const dismiss = injected.dismiss as DesktopChannelToastInjected['dismiss']
+    expect(hooks.channel.getSnapshot().notice?.outcome).toBe('applied')
+    dismiss(1)
+    expect(hooks.channel.getSnapshot().notice).toBeUndefined()
     await c.unload(SELF)
     await c.flush()
     expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(c.ctx.slots.entries('shell.overlay').some(entry => entry.options.id === 'desktop-channel-toast')).toBe(false)
   })
 
   it('the nav label thunk follows the active locale without re-registration', async ({ mock, start }) => {

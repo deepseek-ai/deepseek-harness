@@ -306,6 +306,7 @@ it('discards a check result that belongs to the previous channel', async () => {
 it('does not check or install while startup channel configuration is invalid', async () => {
   const f = fixture()
   f.coordinator.suspendConfiguration('/settings.json')
+  expect(f.coordinator.configurationFailure).toBe('startup')
   await f.coordinator.check(true)
   await f.coordinator.download('1.1.0-rc.2')
   expect(f.checkForUpdates).not.toHaveBeenCalled()
@@ -313,6 +314,7 @@ it('does not check or install while startup channel configuration is invalid', a
   expect(f.coordinator.state).toMatchObject({ phase: 'error', failedOperation: 'configuration' })
   await f.coordinator.switchChannel('nightly', async () => {})
   expect(f.coordinator.state.phase).toBe('available')
+  expect(f.coordinator.configurationFailure).toBeUndefined()
 })
 
 
@@ -367,4 +369,22 @@ it('does not accept a channel switch after installer handoff even if a later err
   const save = vi.fn(async () => {})
   await expect(f.coordinator.switchChannel('latest', save)).rejects.toThrow('installation is in progress')
   expect(save).not.toHaveBeenCalled()
+})
+
+it('suspends updates if retiring a downloaded target fails and recovers on a later switch', async () => {
+  const f = fixture()
+  await f.coordinator.check()
+  await f.coordinator.download('1.1.0-rc.2')
+  const clear = vi.fn().mockRejectedValueOnce(new Error('locked cache')).mockResolvedValueOnce(undefined)
+  Object.assign(f.updater, { downloadedUpdateHelper: { clear } })
+  await expect(f.coordinator.switchChannel('latest', async () => {})).rejects.toThrow('locked cache')
+  expect(f.coordinator.configurationFailure).toBe('cleanup')
+  expect(f.coordinator.state).toMatchObject({ phase: 'error', failedOperation: 'configuration' })
+  const checks = f.checkForUpdates.mock.calls.length
+  await f.coordinator.check(true)
+  await expect(f.coordinator.install('1.1.0-rc.2')).rejects.toThrow('channel selection is not ready')
+  expect(f.checkForUpdates).toHaveBeenCalledTimes(checks)
+  expect(f.quitAndInstall).not.toHaveBeenCalled()
+  await f.coordinator.switchChannel('latest', async () => {})
+  expect(f.coordinator.configurationFailure).toBeUndefined()
 })

@@ -369,6 +369,7 @@ vi.mock('../src/update-dialog.ts', () => ({ DesktopUpdateDialog: class {
 vi.mock('../src/update-coordinator.ts', () => ({ DesktopUpdateCoordinator: class {
   selectedChannel: 'nightly' | 'latest' = 'nightly'
   revision = 0
+  configurationFailure: 'startup' | 'cleanup' | undefined
   constructor(publish: (state: DesktopUpdateState) => DesktopUpdateState, beforeRestart: () => Promise<boolean>,
     _updater: unknown, _enabled: unknown, _version: unknown, _downloadResult: unknown, channel: 'nightly' | 'latest') {
     this.selectedChannel = channel
@@ -378,10 +379,12 @@ vi.mock('../src/update-coordinator.ts', () => ({ DesktopUpdateCoordinator: class
   async switchChannel(channel: 'nightly' | 'latest', persist: () => Promise<void>) {
     await persist()
     this.selectedChannel = channel
+    this.configurationFailure = undefined
     this.revision++
     harness.updateState = { phase: 'idle' }
   }
-  suspendConfiguration(detail: string) {
+  suspendConfiguration(detail: string, reason: 'startup' | 'cleanup' = 'startup') {
+    this.configurationFailure = reason
     harness.updateState = { phase: 'error', failedOperation: 'configuration', message: detail }
     harness.publishUpdate(harness.updateState)
   }
@@ -505,7 +508,7 @@ describe('desktop main startup', () => {
     configureTestAuthPopup(true)
     await readyForUpdate()
     expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toMatchObject({ channel: 'nightly', changing: false })
-    expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'latest')).toEqual({ channel: 'latest', packagedChannel: 'nightly', changing: false })
+    expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'latest')).toEqual({ kind: 'applied', state: { channel: 'latest', packagedChannel: 'nightly', changing: false } })
     const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ updates: { allowTestAuthPopupWindow: true, channel: 'latest' } })
     writeFileSync(path, JSON.stringify({ updates: { channel: 'nightly' } }))
@@ -520,9 +523,18 @@ describe('desktop main startup', () => {
     await readyForUpdate()
     const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
     writeFileSync(path, '{broken')
-    expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'latest')).toMatchObject({ channel: 'nightly', changing: false, error: 'invalid' })
+    expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'latest')).toMatchObject({ kind: 'failed', reason: 'format', state: { channel: 'nightly', changing: false } })
     expect(readFileSync(path, 'utf8')).toBe('{broken')
-    expect(await invoke(DESKTOP_IPC.updatesStatus, 'app')).toMatchObject({ configurationError: 'invalid' })
+    expect(await invoke(DESKTOP_IPC.updatesStatus, 'app')).not.toHaveProperty('configurationError')
+  })
+
+  it('keeps the previous ready update installable after a channel save fails', async () => {
+    await readyForUpdate()
+    harness.updateState = { phase: 'ready', version: '1.0.1' }
+    writeFileSync(join(harness.app.getPath('userData'), 'desktop', 'settings.json'), '{broken')
+    await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'latest')
+    await invoke(DESKTOP_IPC.updatesOpen, 'app')
+    expect(harness.updateInstall).toHaveBeenCalledWith('1.0.1', 0)
   })
 
   it('keeps startup channel errors visible and recovers after a valid UI selection', async () => {
@@ -530,9 +542,44 @@ describe('desktop main startup', () => {
     const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
     writeFileSync(path, JSON.stringify({ updates: { channel: 'unknown' } }))
     await readyForUpdate()
-    expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toMatchObject({ channel: null, error: 'invalid' })
+    expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toMatchObject({ channel: null, error: 'channel' })
     expect(harness.hosts).toHaveLength(1)
-    expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'latest')).toEqual({ channel: 'latest', packagedChannel: 'nightly', changing: false })
+    expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'latest')).toEqual({ kind: 'applied', state: { channel: 'latest', packagedChannel: 'nightly', changing: false } })
+  })
+
+
+  it('keeps cleanup suspension visible with restart guidance after a failed switch', async () => {
+    await readyForUpdate()
+    const { DesktopUpdateCoordinator } = await import('../src/update-coordinator.ts')
+    vi.spyOn(DesktopUpdateCoordinator.prototype, 'switchChannel').mockImplementationOnce(async function (this: InstanceType<typeof DesktopUpdateCoordinator>, _channel, persist) {
+      await persist()
+      this.suspendConfiguration('cache retirement failed', 'cleanup')
+      throw new Error('cache retirement failed')
+    })
+    expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'latest')).toMatchObject({
+      kind: 'failed', reason: 'apply', state: { channel: 'nightly', error: 'cleanup' },
+    })
+    expect(await invoke(DESKTOP_IPC.updatesStatus, 'app')).toMatchObject({ configurationError: 'cleanup' })
+    await invoke(DESKTOP_IPC.updatesOpen, 'app')
+    const options = harness.dialog.showMessageBox.mock.lastCall![0] as MessageBoxOptions
+    expect(options.message).toBe(en.updateConfigurationCleanup)
+    expect(options.detail).toBeUndefined()
+  })
+
+  it('shows the invalid startup field and file path until a valid channel is applied', async () => {
+    configureTestAuthPopup(false)
+    const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
+    writeFileSync(path, JSON.stringify({ updates: { channel: 'unknown' } }))
+    await readyForUpdate()
+    await invoke(DESKTOP_IPC.updatesOpen, 'app')
+    expect(harness.dialog.showMessageBox.mock.lastCall![0]).toMatchObject({
+      message: en.updateConfigurationChannel, detail: path,
+    })
+    writeFileSync(path, '{broken')
+    expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'latest')).toMatchObject({
+      kind: 'failed', reason: 'format', state: { channel: null, error: 'channel' },
+    })
+    expect(await invoke(DESKTOP_IPC.updatesStatus, 'app')).toMatchObject({ configurationError: 'channel' })
   })
 
   it('starts the Host with authentication popups disabled when local settings are invalid', async () => {

@@ -24,7 +24,7 @@ export class DesktopUpdateCoordinator {
   private downloadGeneration = 0
   private switchTail: Promise<void> = Promise.resolve()
   private cancellation: UpdateCheckResult['cancellationToken']
-  private configurationError: string | undefined
+  private configurationError: 'startup' | 'cleanup' | undefined
   private checkOperation: Promise<DesktopUpdateState> | undefined
   private downloadOperation: Promise<DesktopUpdateState> | undefined
   private installOperation: Promise<DesktopUpdateState> | undefined
@@ -87,6 +87,9 @@ export class DesktopUpdateCoordinator {
   /** Latest observable state; complete download identity remains main-process-owned. */
   get state(): DesktopUpdateState { return this.current }
 
+  /** Reason ordinary updates are suspended, independently of the last operation result. */
+  get configurationFailure(): 'startup' | 'cleanup' | undefined { return this.configurationError }
+
   /** Selected runtime channel, including while a new feed is being checked. */
   get selectedChannel(): DesktopUpdateChannel { return this.channel }
 
@@ -94,11 +97,12 @@ export class DesktopUpdateCoordinator {
   get revision(): number { return this.generation }
 
   /**
-   * Suspend ordinary updates when startup settings cannot select a trusted channel.
+   * Suspend ordinary updates when settings or previous-target cleanup are invalid.
    * @param detail - File path and safe diagnostic, without document contents.
+   * @param reason - Startup validation or retirement of a previous target.
    */
-  suspendConfiguration(detail: string): void {
-    this.configurationError = detail
+  suspendConfiguration(detail: string, reason: 'startup' | 'cleanup' = 'startup'): void {
+    this.configurationError = reason
     this.setState({ phase: 'error', failedOperation: 'configuration', message: detail })
   }
 
@@ -127,7 +131,7 @@ export class DesktopUpdateCoordinator {
       this.release = { kind: 'none' }
       this.cancellation = undefined
       try { await this.discard(this.updater) } catch (error) {
-        this.suspendConfiguration('desktop update: could not retire the previous update')
+        this.suspendConfiguration('desktop update: could not retire the previous update', 'cleanup')
         throw error
       }
       this.channel = channel

@@ -12,7 +12,7 @@ const BUSY_PHASES: ReadonlySet<DesktopUpdatePresentation['phase']> = new Set([
 ])
 
 function updateCopy(state: DesktopUpdatePresentation, t: SettingsTranslate): { label: string; detail: string } {
-  if (state.configurationError !== undefined) return { label: t('desktop.channel.unavailable'), detail: t('desktop.update.configurationFailed') }
+  if (state.configurationError !== undefined) return { label: t('desktop.channel.unavailable'), detail: t(`desktop.update.configuration.${state.configurationError}`) }
   const labels: Readonly<Record<DesktopUpdatePresentation['phase'], string>> = {
     idle: '',
     checking: t('desktop.update.checking'),

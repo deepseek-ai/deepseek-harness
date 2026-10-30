@@ -46,8 +46,13 @@ export interface DesktopChannelState {
   readonly channel: DesktopUpdateChannel | null
   readonly packagedChannel: DesktopUpdateChannel
   readonly changing: boolean
-  readonly error?: 'read' | 'invalid' | 'write' | 'apply'
+  readonly error?: 'read' | 'format' | 'channel' | 'cleanup'
 }
+
+/** Outcome of one UI action; failures are not global updater state. */
+export type DesktopChannelChangeResult =
+  | { readonly kind: 'applied'; readonly state: DesktopChannelState }
+  | { readonly kind: 'failed'; readonly state: DesktopChannelState; readonly reason: 'save' | 'format' | 'permission' | 'apply' }
 
 /** UI choices persist in the shell configuration, independently of Host settings. */
 export interface DesktopChannelBridge {
@@ -57,7 +62,7 @@ export interface DesktopChannelBridge {
    * @param channel - Explicit user choice to persist and apply.
    * @returns The resulting selection or failure; it does not authorize installation.
    */
-  set(channel: DesktopUpdateChannel): Promise<DesktopChannelState>
+  set(channel: DesktopUpdateChannel): Promise<DesktopChannelChangeResult>
   /**
    * @param listener - Receives changes made from any Desktop window.
    * @returns Removes this window's subscription.

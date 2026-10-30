@@ -1,9 +1,10 @@
 /** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
 import { installFileActions } from './file-actions.ts'
-import type { DesktopChannelState } from '@deepseek-ai/dsh-client-ui-settings-general/types'
+import { configurationFailure, channelSaveFailure, configurationMessage } from './update-configuration.ts'
+import type { DesktopChannelState, DesktopChannelChangeResult } from '@deepseek-ai/dsh-client-ui-settings-general/types'
 import { DesktopUpdateSettings } from './update-settings.ts'
-import { DesktopSettingsFileError, isDesktopUpdateChannel } from './settings-file.ts'
+import { isDesktopUpdateChannel } from './settings-file.ts'
 import type { ProductEventMap, ProductEvent } from '@deepseek-ai/dsh-client-product-analytics/types'
 import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 import { access, readFile, writeFile } from 'node:fs/promises'
@@ -687,7 +688,7 @@ async function main(): Promise<void> {
   const initialChannel = await channelSettings.load()
   channelState = { channel: initialChannel.kind === 'ready' ? initialChannel.channel : null,
     packagedChannel, changing: false,
-    ...(initialChannel.kind === 'error' ? { error: initialChannel.error.kind } : {}) }
+    ...(initialChannel.kind === 'error' ? { error: configurationFailure(initialChannel.error) } : {}) }
   const updateChannel = initialChannel.kind === 'ready' ? initialChannel.channel : packagedChannel
   const updates = new DesktopUpdateCoordinator(
     publishUpdate,
@@ -894,7 +895,7 @@ async function main(): Promise<void> {
     return channelState
   })
   let channelRequests = 0
-  ipcMain.handle(DESKTOP_IPC.updatesChannelSet, async (event, channel: unknown) => {
+  ipcMain.handle(DESKTOP_IPC.updatesChannelSet, async (event, channel: unknown): Promise<DesktopChannelChangeResult> => {
     assertProductSender(event)
     if (!isDesktopUpdateChannel(channel)) throw new Error('desktop update: unsupported channel')
     if (channelState === undefined) throw new Error('desktop update: settings are not initialized')
@@ -902,10 +903,12 @@ async function main(): Promise<void> {
     publishChannel({ ...channelState, changing: true })
     try {
       await updates.switchChannel(channel, () => channelSettings.save(channel))
-      return publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: --channelRequests > 0 })
+      return { kind: 'applied', state: publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: --channelRequests > 0 }) }
     } catch (error) {
-      return publishChannel({ ...channelState, changing: --channelRequests > 0,
-        error: error instanceof DesktopSettingsFileError ? error.kind : 'apply' })
+      console.error('desktop update: channel change failed', error)
+      const state = publishChannel({ ...channelState, changing: --channelRequests > 0,
+        ...(updates.configurationFailure === 'cleanup' ? { error: 'cleanup' as const } : {}) })
+      return { kind: 'failed', state, reason: channelSaveFailure(error) }
     }
   })
   ipcMain.handle(DESKTOP_IPC.updatesStatus, (event) => {
@@ -941,7 +944,8 @@ async function main(): Promise<void> {
   const openUpdatePrompt = (manual = false): Promise<void> => {
     if (channelState?.error !== undefined) {
       return ordinaryMessageBox({ type: 'error', title: locale.messages.updateFailedTitle,
-        message: locale.messages.updateConfigurationFailed, detail: channelSettings.path }).then(() => {})
+        message: configurationMessage(channelState.error, locale.messages),
+        ...(channelState.error === 'cleanup' ? {} : { detail: channelSettings.path }) }).then(() => {})
     }
     if (authenticationOperation !== undefined) {
       policyAuth?.focus(); updateDialog.focus()

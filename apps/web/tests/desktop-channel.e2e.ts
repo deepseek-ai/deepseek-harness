@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { expect, it } from 'vitest'
 import { DesktopUpdateSettings } from '../../desktop/src/update-settings.ts'
-import type { DesktopChannelState } from '../../desktop/src/ipc.ts'
+import type { DesktopChannelState, DesktopChannelChangeResult } from '../../desktop/src/ipc.ts'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode } from './scaffold.ts'
 import { openSettings } from './support.ts'
 
@@ -20,17 +20,17 @@ it('persists a Desktop channel from Settings and keeps external edits startup-on
       const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: 'en-US' })
       const tripwire = watchConsole(page)
       await page.exposeFunction('readChannel', () => state)
-      await page.exposeFunction('setChannel', async (channel: 'nightly' | 'latest') => {
+      await page.exposeFunction('setChannel', async (channel: 'nightly' | 'latest'): Promise<DesktopChannelChangeResult> => {
         try {
           await settings.save(channel)
           state = { ...state, channel, error: undefined }
-        } catch (_error) { state = { ...state, error: 'invalid' } }
-        return state
+          return { kind: 'applied', state }
+        } catch (_error) { return { kind: 'failed', state, reason: 'format' } }
       })
       await page.addInitScript(() => {
         const bridge = globalThis as typeof globalThis & {
           readChannel(): Promise<DesktopChannelState>
-          setChannel(channel: 'nightly' | 'latest'): Promise<DesktopChannelState>
+          setChannel(channel: 'nightly' | 'latest'): Promise<DesktopChannelChangeResult>
         }
         Object.assign(globalThis, { dshDesktop: { protocolVersion: 1, updates: {
           status: async () => ({ phase: 'idle' }), open: async () => {}, subscribe: () => () => {},
@@ -45,6 +45,7 @@ it('persists a Desktop channel from Settings and keeps external edits startup-on
       await row.getByRole('button', { name: 'Update channel', exact: true }).click()
       await page.getByRole('menuitem', { name: 'Stable', exact: true }).click()
       await row.getByText('Stable', { exact: true }).waitFor()
+      await page.getByText('Update channel changed', { exact: true }).waitFor()
       expect(JSON.parse(await readFile(settings.path, 'utf8'))).toMatchObject({ updates: { channel: 'latest' } })
       await compareOrRefreshGolden(fileURLToPath(new URL('./expected/desktop-channel/stable.expected.md', import.meta.url)),
         await captureStableAria(page, '[role="group"][aria-label="Update channel"]', scaffold.workspaceCwd), webSnapshotMode())
@@ -54,12 +55,13 @@ it('persists a Desktop channel from Settings and keeps external edits startup-on
       await writeFile(settings.path, '{broken')
       await row.getByRole('button', { name: 'Update channel', exact: true }).click()
       await page.getByRole('menuitem', { name: 'Development', exact: true }).click()
-      await row.getByRole('alert').waitFor()
+      await page.getByText('Could not save: invalid settings file', { exact: true }).waitFor()
       await row.getByText('Stable', { exact: true }).waitFor()
       expect(await row.getByText('Stable', { exact: true }).count()).toBe(1)
       expect(await readFile(settings.path, 'utf8')).toBe('{broken')
       await compareOrRefreshGolden(fileURLToPath(new URL('./expected/desktop-channel/save-error.expected.md', import.meta.url)),
-        await captureStableAria(page, '[role="group"][aria-label="Update channel"]', scaffold.workspaceCwd), webSnapshotMode())
+        await captureStableAria(page, '[role="group"][aria-label="Update channel"]', scaffold.workspaceCwd) + '\n'
+          + await captureStableAria(page, '[role="alert"]', scaffold.workspaceCwd), webSnapshotMode())
       expect(tripwire.pageErrors).toEqual([])
       expect(tripwire.warnings).toEqual([])
     } finally { await browser.close() }
