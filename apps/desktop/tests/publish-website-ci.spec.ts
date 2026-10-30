@@ -52,7 +52,11 @@ it.each(['accepted', 'unconfirmed', 'upload', 'uploaded', 'approval'] as const)(
           await expect(publishWebsiteCi('upload', { ...env, DESKTOP_WEBSITE_APPROVAL: 'changed' })).rejects.toThrow('approved build or destination changed')
           expect(server.requests).toHaveLength(0)
         } else {
+          const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
           await publishWebsiteCi('upload', env)
+          expect(output.mock.calls.map(call => String(call[0])).join('')).toContain(scenario === 'upload'
+            ? 'identical remote bytes confirmed; skipped' : 'previous upload confirmed by journal; skipped')
+          if (scenario === 'upload') expect(server.requests[0]!.path).toBe('/desktop/dsh-latest-macos-arm64.dmg')
           expect(server.requests.map(request => request.method)).toEqual(scenario === 'upload' ? ['GET'] : [])
           expect(JSON.parse(await readFile(join(records, 'state.json'), 'utf8'))).toMatchObject({ approval, upload: 'uploaded' })
           expect(await readFile(env.GITHUB_OUTPUT, 'utf8')).toContain(`record=${records}`)

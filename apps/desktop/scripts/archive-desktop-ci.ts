@@ -1,6 +1,6 @@
 /** Validate the original machine and immutable inventory before GitHub artifact archival. */
-import { desktopPublicationFailure } from './desktop-publication-failure.ts'
 import { resolve } from 'node:path'
+import { desktopPublicationFailure } from './desktop-publication-failure.ts'
 import { desktopReleasesRoot } from './retain-desktop-ci.ts'
 import { retainedDesktopPath, verifyRetainedDesktopRelease } from './desktop-release-store.ts'
 

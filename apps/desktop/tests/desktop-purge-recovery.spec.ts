@@ -55,6 +55,16 @@ describe('website purge recovery', () => {
     expect(JSON.stringify(f.records)).not.toContain(config.secretKey)
   })
 
+  it('does not claim deadline expiry when the extra query resumes processing', async () => {
+    const f = fixture()
+    f.client.DescribePurgeTasks.mockRejectedValueOnce(new Error('transient')).mockResolvedValue(f.task('processing'))
+    const result = await recoverDesktopPurge(config, undefined, f.client, f.options)
+    expect(result.diagnostic).toBe('task still processing after an additional query')
+    expect(result.status).toBe('unknown')
+    expect(f.client.DescribePurgeTasks).toHaveBeenCalledTimes(2)
+    expect(f.options.now()).toBeLessThan(Date.parse(submittedAt) + f.options.waitMs)
+  })
+
   it('bounds processing observations and makes one final query', async () => {
     const f = fixture()
     f.client.DescribePurgeTasks.mockResolvedValue(f.task('processing'))

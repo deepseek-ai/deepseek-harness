@@ -53,7 +53,7 @@ it.each(['mac-arm64', 'win-x64'] as const)('preflights a complete retained %s bu
     expect(prepared.plan.version).toBe('1.0.0')
     expect(prepared.plan.artifacts.every(file => file.path.startsWith(retained))).toBe(true)
     expect(signatureChecks).toBe(1)
-    const summary = await desktopPublicationSummary(prepared.manifest.source, prepared.plan, 'c'.repeat(64))
+    const summary = await desktopPublicationSummary(prepared.manifest.source, prepared.plan, 'c'.repeat(64), false)
     await expect(summary).toMatchFileSnapshot(`./expected/publication-${target}.md`)
     const feed = prepared.plan.artifacts.find(file => file.channelMetadata)!
     expect(summary).toContain(createHash('sha256').update(feed.contents!).digest('hex'))

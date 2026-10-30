@@ -90,6 +90,9 @@ it('defaults to production website upload and separates cache-only recovery', ()
   expect(purge.concurrency).toEqual({ group: 'desktop-website-purge-${{ needs.prepare.outputs.website-destination }}', 'cancel-in-progress': false })
   for (const job of [upload, purge]) {
     expect(job.environment).toBe('desktop-production')
+    const preflight = job.steps.findIndex(step => step.run === 'node apps/desktop/scripts/preflight-desktop-publish-local.mjs')
+    expect(preflight).toBeGreaterThan(-1)
+    expect(preflight).toBeLessThan(job.steps.findIndex(step => step.run === 'pnpm install --frozen-lockfile'))
     expect(job.env?.DESKTOP_WEBSITE_APPROVAL).toBe('${{ needs.prepare.outputs.website-approval }}')
   }
   expect(upload.steps.find(step => step.id === 'website')?.run).toBe('node --import tsx apps/desktop/scripts/publish-website-ci.ts upload')

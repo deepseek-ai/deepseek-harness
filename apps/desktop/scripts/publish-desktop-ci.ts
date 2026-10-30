@@ -71,7 +71,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     if (mode === '--check') {
       if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT, `website-destination=${createHash('sha256').update(`${config.bucket}/${plan.target}`).digest('hex')}\nwebsite-approval=${websiteApproval(manifest, config.bucket)}\napproval=${approval}\nlabel=${plan.version} → ${manifest.source.channel} / ${plan.target} / ${plan.environment}\n`)
       if (env.GITHUB_STEP_SUMMARY && !env.DESKTOP_APPROVED_PACKAGE) await appendFile(env.GITHUB_STEP_SUMMARY,
-        await desktopPublicationSummary(manifest.source, plan, approval))
+        await desktopPublicationSummary(manifest.source, plan, approval, env.DESKTOP_UPLOAD_WEBSITE === 'true'))
       if (env.GITHUB_OUTPUT && config.githubApp) await appendFile(env.GITHUB_OUTPUT,
         `app-client-id=${config.githubApp.clientId}\napp-key-file=${config.githubApp.privateKeyFile}\n`)
       process.stdout.write(`desktop publish: verified ${plan.target} ${plan.version}; no credentials read or COS requests made\n`)

@@ -24,6 +24,12 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
     }>
   }
 
+  it('archives using the same persistent pnpm store as packaging', () => {
+    const cache = (job: string) => workflow.jobs[job]!.steps.find(step => step.name === 'Configure persistent package caches')
+    expect(cache('upload-artifact')).toEqual(cache('package'))
+    expect(cache('upload-artifact')?.run).toContain('PNPM_CONFIG_STORE_DIR=')
+  })
+
   it('confines signed Mac packaging to manual dispatch and a dedicated Apple Silicon runner', () => {
     expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
     expect(workflow.jobs.package).not.toHaveProperty('name')

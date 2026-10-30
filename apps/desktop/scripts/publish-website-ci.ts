@@ -68,17 +68,18 @@ export async function publishWebsiteCi(mode: 'upload' | 'purge', env: NodeJS.Pro
     const installer = await prepareWebsiteInstaller(retainedDesktopPath(root, route.runId, route.attempt), manifest, route,
       env.GITHUB_REPOSITORY || '', config.bucket)
     try {
-      await withDesktopChannelLock(join(dirname(root), 'publish-locks'), `${config.bucket}/${installer.plan.artifacts[0]!.key}`, async () => {
+      const outcome = await withDesktopChannelLock(join(dirname(root), 'publish-locks'), `${config.bucket}/${installer.plan.artifacts[0]!.key}`, async () => {
         if (state.upload === 'uploaded') {
-          process.stdout.write('website installer: this publication already uploaded; skipping retransmission\n')
-          return
+          return 'recorded' as const
         }
-        await uploadWebsiteInstaller(installer, credentials, desktopPublishCos(installer.plan, credentials), async (event) => {
+        return uploadWebsiteInstaller(installer, credentials, desktopPublishCos(installer.plan, credentials), async (event) => {
           state = { ...state, upload: event }
           await save()
         })
       })
-      const text = `Website installer uploaded: ${installer.plan.publicUrl}; version ${installer.plan.version}\n`
+      const disposition = outcome === 'recorded' ? 'previous upload confirmed by journal; skipped'
+        : outcome === 'present' ? 'identical remote bytes confirmed; skipped' : 'uploaded'
+      const text = `Website installer ${disposition}: ${installer.plan.publicUrl}; version ${installer.plan.version}\n`
       process.stdout.write(text)
       if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY, text)
     } finally { await installer.handle.close() }
@@ -104,9 +105,8 @@ export async function publishWebsiteCi(mode: 'upload' | 'purge', env: NodeJS.Pro
   })
   const details = `${publicUrl}\nTask: ${result.jobId ?? 'unknown'}\nObserved: ${result.observedAt}\n${result.diagnostic ?? ''}\n`
   if (result.status === 'unknown') {
-    const acceptance = result.jobId ? '刷新已提交，执行结果未确认' : '刷新提交未确认，可能尚未提交；请核对 EdgeOne 历史后人工恢复'
-
-    process.stdout.write(`::warning title=官网缓存刷新结果未确认::官网资源已上传；${acceptance}。请检查 EdgeOne 任务记录。\n${details}`)
+    const acceptance = result.jobId ? '刷新已提交，执行结果未确认' : '刷新提交未确认，可能尚未提交'
+    process.stdout.write(`::warning title=官网缓存刷新结果未确认::官网资源已上传；${acceptance}。请核对 EdgeOne 任务记录后人工恢复。\n${details}`)
     if (env.GITHUB_STEP_SUMMARY) {
       let existing = ''
       try { existing = await readFile(env.GITHUB_STEP_SUMMARY, 'utf8') }

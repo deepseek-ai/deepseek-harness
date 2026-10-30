@@ -80,13 +80,13 @@ Environment 审批限制此工作流，不限制同一机器账户运行的任�
 
 ## 恢复与记录
 
-打包 workflow 将 `package` 与 `upload-artifact`（GitHub 产物归档）分开。所有打包模式（包括 test 和 unsigned）都要求在打包前配置 `DESKTOP_PUBLISH_RUNNERS`，用于将归档路由到原机器。归档失败后仅重跑 `upload-artifact`；它校验原始 manifest 和 hash，不重新构建、签名或公证。打包诊断归档尽力执行，不改变构建成功状态。
+打包 workflow 将 `package` 与 `upload-artifact`（GitHub 产物归档）分开。所有打包模式（包括 test 和 unsigned）都要求在打包前配置 `DESKTOP_PUBLISH_RUNNERS`，用于将归档路由到原机器。归档失败后仅重跑 `upload-artifact`；它校验原始 manifest 和 hash，不重新构建、签名或公证。打包诊断归档尽力执行，不改变构建成功状态。归档重跑若一直排队且未分配 runner，应先检查解析出的 runner 标签和上游 package 输出，不能直接认定机器离线。输出缺失时需由操作者从原留存目录和 manifest 恢复文件；重跑整个 workflow 会重新构建，不属于仅归档恢复。Actions 验收须验证输出复用。
 
-生产 COS 发布默认勾选“同时上传官网安装包并刷新缓存”（`upload_website=true`）。取消后仅发布版本化资源及自动更新清单；test 发布不修改生产官网。`upload-website-installer` 上传固定安装包，`purge-website-installer` 刷新该 URL。官网安装包校验器只需要最终 DMG/EXE 和保留的 manifest，匹配生产资格、构建身份及平台，只计算一次安装包 hash，并通过同一打开的文件句柄上传。production nightly 和 latest 包都可以替换官网固定安装包。操作者负责选择预期版本；固定对象没有防降级保护，重跑旧发布可能覆盖新安装包。原有版本与自动更新发布保留自身校验。
+生产 COS 发布默认勾选“同时上传官网安装包并刷新缓存”（`upload_website=true`）。取消后仅发布版本化资源及自动更新清单；test 发布不修改生产官网。`upload-website-installer` 上传固定安装包，`purge-website-installer` 刷新该 URL。官网安装包校验器只需要最终 DMG/EXE 和保留的 manifest，匹配生产资格、构建身份及平台，只计算一次安装包 hash，并通过同一打开的文件句柄上传。production nightly 和 latest 包都可以替换官网固定安装包。操作者负责选择预期版本；固定对象没有防降级保护，重跑旧发布可能覆盖新安装包。勾选官网上传时，审批前摘要展示固定官网 URL、选定版本和无防降级保护的说明。原有版本与自动更新发布保留自身校验。
 
 将仓库变量 `DOWNLOAD_PROD_EO_ZONE_ID` 配置为生产 EdgeOne 站点。生产 COS 凭据还需要 `teo:CreatePurgeTask` 和 `teo:DescribePurgeTasks` 权限。官网上传在 Actions 中按 bucket/平台互斥，在原机器上按 bucket/对象互斥；缓存观察单独运行。版本发布、官网上传和缓存刷新分别使用生产审批 Environment，后续 job 和重跑可能需要再次审批。GitHub 每个并发组最多保留一个排队 job，新排队 job 可能取消旧排队 job；重跑前应检查取消记录。
 
-官网状态保存在 releases 根目录同级的 `upload-records/website-<发布 run ID>-<target>/state.json`。macOS 和 Windows 在各自本地磁盘使用相同记录格式。job 重跑不重复已确认完成的上传；结果未知的上传先核对远端字节。仅重跑刷新 job 即可查询已保存任务；人工重跑确认旧任务失败后可提交一次。提交响应丢失时查询匹配的历史记录，不重新提交。unknown 带任务 ID 表示提交已确认；没有 ID 则可能从未提交。人工恢复前应检查 EdgeOne 历史，需要重新提交时发起新的发布运行。
+官网状态保存在 releases 根目录同级的 `upload-records/website-<发布 run ID>-<target>/state.json`。macOS 和 Windows 在各自本地磁盘使用相同记录格式。job 重跑不重复已确认完成的上传；结果未知的上传先核对远端字节。仅重跑刷新 job 即可查询已保存任务；人工重跑确认旧任务失败后可提交一次。提交响应丢失时查询匹配的历史记录，不重新提交。unknown 带任务 ID 表示提交已确认；没有 ID 则可能从未提交。人工恢复前应检查 EdgeOne 历史，重新发起发布运行是恢复方式之一。已配置目标 production dotenv 和凭据的操作者也可在配置机器上执行 `node --import tsx apps/desktop/scripts/upload-target.ts <target> --latest --purge-only`，只提交固定 URL 刷新，不观察完成状态，也不更新本次 Actions 运行的 journal。确认恢复完成前应在 EdgeOne 检查返回的任务。
 
 刷新观察每十秒查询一次，最长五分钟；结果未知或观察超时后额外查询一次。明确的 failed、timeout、canceled 结果使 job 失败。仍无法确认时成功退出，并输出 Actions warning 和醒目摘要；持久化状态保持 unknown，不标为完成。诊断 artifact 尽力归档，本地记录仍是恢复依据。模拟服务测试覆盖这些路径；发布操作者必须在生产依赖恢复能力前验证 COS/EdgeOne 权限、job-id 筛选、时间范围查询、任务类型和时间戳格式、Actions 跨 attempt 恢复及实际 CDN 行为。
 

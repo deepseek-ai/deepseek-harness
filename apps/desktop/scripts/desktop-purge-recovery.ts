@@ -139,7 +139,7 @@ export async function recoverDesktopPurge(config: DesktopPurgeConfig, previous: 
     if (current.status === 'success') return current
     if (failed(current.status)) throw new DesktopPurgeExecutionError(current.status)
     if (extraQuery) {
-      current = { ...current, status: 'unknown', diagnostic: current.diagnostic ?? 'observation deadline exceeded' }
+      current = { ...current, status: 'unknown', diagnostic: current.diagnostic ?? (options.now() >= deadline ? 'observation deadline exceeded' : 'task still processing after an additional query') }
       await options.save(current)
       return current
     }

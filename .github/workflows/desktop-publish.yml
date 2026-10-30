@@ -61,7 +61,6 @@ jobs:
     outputs:
       route: ${{ steps.local.outputs.route }}
       preset: ${{ steps.local.outputs.preset }}
-      target: ${{ fromJSON(steps.local.outputs.route).target }}
       approval: ${{ steps.check.outputs.approval }}
       website-approval: ${{ steps.check.outputs.website-approval }}
       website-destination: ${{ steps.check.outputs.website-destination }}
@@ -196,6 +195,9 @@ jobs:
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
+      - name: Check local publication configuration
+        working-directory: website-publisher
+        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
       - run: pnpm install --frozen-lockfile
         working-directory: website-publisher
       - name: Upload website installer
@@ -238,6 +240,9 @@ jobs:
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
+      - name: Check local publication configuration
+        working-directory: website-publisher
+        run: node apps/desktop/scripts/preflight-desktop-publish-local.mjs
       - run: pnpm install --frozen-lockfile
         working-directory: website-publisher
       - name: Recover and observe website cache purge

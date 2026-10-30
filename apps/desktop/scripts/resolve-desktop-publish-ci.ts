@@ -37,9 +37,7 @@ export function selectDesktopPackage(repository: string, inputsValue: unknown, r
   let packages = jobs.filter(job => job.name === 'package')
   if (packages.length === 0 || packages.every(job => job.run_attempt < Number(attempt))) {
     // An archival-only attempt owns no new build; select the latest actual package job, never a prior success over a failed build.
-    const historySchema = z.array(z.object({ jobs: z.array(z.object({ name: z.string(), run_attempt: z.number().int().positive(),
-      runner_name: z.string().nullable(), conclusion: z.string().nullable() })) }))
-    const history = historySchema.parse(api(`${base}/jobs?filter=all&per_page=100`, true)).flatMap(page => page.jobs)
+    const history = z.array(jobsSchema).parse(api(`${base}/jobs?filter=all&per_page=100`, true)).flatMap(page => page.jobs)
       .filter(job => job.name === 'package' && job.run_attempt <= Number(attempt))
       .sort((left, right) => right.run_attempt - left.run_attempt)
     const original = history[0]
