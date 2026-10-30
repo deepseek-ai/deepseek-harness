@@ -1142,7 +1142,7 @@ describe('web e2e: plugin manager', () => {
       await teamPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await connectFreshWorkspaceZh(teamPage, scaffold.workspaceCwd)
       await teamPage.getByRole('button', { name: /^选择模型/u }).click()
-      const mode = teamPage.getByRole('switch', { name: '使用智能体团队', exact: true })
+      const mode = teamPage.getByRole('switch', { name: '启用智能体团队协作', exact: true })
       await mode.waitFor()
       expect(await mode.getAttribute('aria-checked')).toBe('false')
       await mode.click()

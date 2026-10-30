@@ -642,6 +642,9 @@ describe('web e2e: agent teamwork panel', () => {
     const board = panel.locator('[data-team-panel]')
     const row = board.locator(`[data-team-task="${task.id}"]`)
     const emptyRow = board.locator(`[data-team-task="${completed.id}"]`)
+    onTestFinished(() => page.setViewportSize(viewport))
+    // Constrain the menu so closed and expanded task rows both exercise its scrollbar.
+    await page.setViewportSize({ width: viewport.width, height: 540 })
     await trigger.click()
     await row.waitFor()
     expect(await panel.evaluate(element => element.getBoundingClientRect().width)).toBe(360)
@@ -666,7 +669,8 @@ describe('web e2e: agent teamwork panel', () => {
       return {
         innerWidth: bounds.width - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)
           - Number.parseFloat(style.borderLeftWidth) - Number.parseFloat(style.borderRightWidth),
-        clientWidth: scroller.clientWidth, overflowing: scroller.scrollHeight > scroller.clientHeight,
+        clientWidth: scroller.clientWidth, clientHeight: scroller.clientHeight, scrollHeight: scroller.scrollHeight,
+        overflowing: scroller.scrollHeight > scroller.clientHeight,
         gutter: scrollStyle.scrollbarGutter, marginRight: scrollStyle.marginRight,
         trackMargin: scrollStyle.getPropertyValue('--dsh-scrollbar-track-margin').trim(),
         taskLeft: taskBounds.left, taskRight: taskBounds.right,
@@ -676,7 +680,7 @@ describe('web e2e: agent teamwork panel', () => {
       }
     })
     const closedScroll = await measureScroll()
-    expect(closedScroll.overflowing).toBe(true)
+    expect(closedScroll.overflowing, JSON.stringify(closedScroll)).toBe(true)
     expect(Math.abs(closedScroll.clientWidth - closedScroll.innerWidth), JSON.stringify(closedScroll)).toBeLessThanOrEqual(1)
     expect(closedScroll.gutter).toBe('stable')
     expect(closedScroll.marginRight).toBe('-5px')

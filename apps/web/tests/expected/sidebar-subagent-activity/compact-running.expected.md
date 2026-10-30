@@ -6,4 +6,5 @@
   - button "Open right sidebar"
   - tablist:
     - tab "Chat" [selected]
+    - tab "Trajectory"
   - button "More conversation views"
