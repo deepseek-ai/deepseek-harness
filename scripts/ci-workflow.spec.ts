@@ -675,12 +675,18 @@ describe('CI workflow', () => {
     }
   })
 
-  it('keeps required benchmarks on their calibrated hosted Linux runner', () => {
+  it('runs required benchmarks on a four-vCPU Blacksmith runner and falls back to hosted Linux', () => {
     const workflow = loadWorkflow('.github/workflows/ci.yml')
     const benchmark = workflowJob(workflow, 'node-24-bench')
     const aggregate = workflowJob(workflow, 'all-checks-passed')
 
-    expect(benchmark['runs-on']).toBe('ubuntu-24.04')
+    // The shared self-hosted pool is not an idle runner, so only the
+    // Blacksmith leg moves the benchmarks off hosted Linux.
+    expect(evaluateRunsOn(benchmark['runs-on'], { vars: { DSH_CI_FAILOVER_LINUX: 'blacksmith' } }))
+      .toBe('blacksmith-4vcpu-ubuntu-2404')
+    for (const mode of ['', 'selfhosted', 'unexpected']) {
+      expect(evaluateRunsOn(benchmark['runs-on'], { vars: { DSH_CI_FAILOVER_LINUX: mode } })).toBe('ubuntu-24.04')
+    }
     expect(JSON.stringify(benchmark.steps)).not.toContain('DSH_CI_FAILOVER_LINUX')
     expect(benchmark.if).toBe("github.event_name == 'pull_request'")
     expect(benchmark.needs).toBeUndefined()

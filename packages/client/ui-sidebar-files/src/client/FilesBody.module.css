@@ -72,14 +72,15 @@
   border-left: 0;
 }
 
-/* Covered content stays laid out but cannot receive keyboard focus. */
-:has(> .navigator.fill) > :not(.navigator) {
+/* Only the drawn navigator row hides covered content; unscoped :has()
+   would invalidate unrelated conversation subtrees on each streamed update. */
+:global([data-files-navigator-row]):has(> .navigator.fill) > :not(.navigator) {
   visibility: hidden;
 }
 
 /* navigator-layout `FULLSCREEN_QUERY`: every layout fills the row. */
 @media (width < 768px) {
-  :has(> .navigator:not(.wholePage)) > :not(.navigator) {
+  :global([data-files-navigator-row]):has(> .navigator:not(.wholePage)) > :not(.navigator) {
     visibility: hidden;
   }
 
