@@ -65,7 +65,8 @@ PTC 执行器公开保留的 `run_code` 传输，以及按所加载运行时语�
 
 自定义宿主集成保留自己的 `PtcExecutor` 实例，通过 `reset(agent)` 清空该 Agent 的环境；重置不是模型工具或 SDK 绑定。该操作要求运行时保留状态，会取消活动调用、调用 `release(agent)`，并等待进程及已启动嵌套工具的清理，无需程序响应。接纳新程序前，它排入 `Program environment reset; retained variables cleared. Completed tool effects remain.` 上下文。通知消费时写入日志；取消或 Agent 销毁可能在状态已清空后丢弃通知。并发重置共享清理过程。运行时缺失或不受支持时，操作拒绝但不阻止后续准入。清理或通知入队失败会抛出 `CodeResetFailedError`；后续程序报告带宿主重置指引的 `CodeRunFailedError`，直到显式重试成功。重置不会撤销已完成的工具操作。
 
-- [`src/index.ts`](src/index.ts) — 配置校验和作用域注册；工具描述和批次执行。
+- [`src/index.ts`](src/index.ts) — 作用域注册、工具描述、批次执行及宿主环境重置。
+- [`src/ptc-calls.ts`](src/ptc-calls.ts) — 调用准入和取消；重置等待运行时释放及嵌套工具清理后，才接纳新调用。
 
 </details>
 

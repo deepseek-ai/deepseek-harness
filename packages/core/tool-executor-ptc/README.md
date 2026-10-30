@@ -65,7 +65,8 @@ When the caller cancels and the runtime reports `abort`, `run_code` waits for cl
 
 Custom host integrations retain their `PtcExecutor` instance and call `reset(agent)` to clear that Agent's environment; reset is not a model tool or SDK binding. It requires a state-retaining runtime, cancels active calls, invokes `release(agent)`, and waits for process and started nested-tool cleanup without requiring the program to respond. Before admitting new programs, it queues `Program environment reset; retained variables cleared. Completed tool effects remain.` The notice is logged when consumed; cancellation or Agent disposal can discard it after state is cleared. Concurrent resets share cleanup. Missing or unsupported runtimes reject without blocking admission. Cleanup or notice-admission failure throws `CodeResetFailedError`; later programs report `CodeRunFailedError` with host-reset guidance until an explicit retry succeeds. Reset does not undo completed tool effects.
 
-- [`src/index.ts`](src/index.ts) — Validated configuration and scoped registration; tool descriptions and batch execution.
+- [`src/index.ts`](src/index.ts) — Scoped registration, tool descriptions, batch execution and host environment reset.
+- [`src/ptc-calls.ts`](src/ptc-calls.ts) — Call admission and cancellation; reset waits for runtime release and nested-tool cleanup before admitting new calls.
 
 </details>
 

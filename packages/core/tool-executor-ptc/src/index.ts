@@ -1,16 +1,17 @@
 /** PTC execution plugin for the mounting Agent, preset, or deployment scope. @module */
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Context } from '@deepseek-ai/cordis'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { RUN_CODE_NAME, ToolNotFoundError, projectToolSchema } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ToolExecutor, ToolModelInput, ToolPromptSection, ToolBatchInput, ToolBatchResult } from '@deepseek-ai/dsh-tools'
-import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
+import { ToolExecutionPipeline, executeToolBatch, toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
 import { createRunCodeTool, requirePtcRuntime, type PtcSdkLanguage } from './ptc.ts'
 import { renderToolsSdk, type ToolSdkSchema } from './ts-types.ts'
 import { renderToolsSdkPy } from './py-types.ts'
 import { Config } from './config.ts'
 import { PtcCalls } from './ptc-calls.ts'
-import { resetPtcEnvironment } from './reset.ts'
+import { CodeResetFailedError } from './errors.ts'
 
 const PTC_ONLY_INSTRUCTION = `\`${RUN_CODE_NAME}\` is the only tool you can call directly — a tool call naming any other tool fails. Reach every tool the SDK declares below from inside the program.`
 
@@ -69,8 +70,19 @@ export class PtcExecutor implements ToolExecutor {
    * @throws CodeResetFailedError if the runtime does not retain state, without changing admission;
    * or if cleanup or notice admission fails, blocking programs until a reset retry succeeds.
    */
-  reset(agent: Agent): Promise<void> {
-    return resetPtcEnvironment(this.ctx, this.calls, agent)
+  async reset(agent: Agent): Promise<void> {
+    const runtime = requirePtcRuntime(this.ctx)
+    if (!runtime.retainsState) throw new CodeResetFailedError('The PTC runtime does not retain an environment')
+    try {
+      await this.calls.reset(agent.session.id, () => runtime.release(agent), () => {
+        agent.inject(createUserMessage({
+          content: [{ type: 'text', text: 'Program environment reset; retained variables cleared. Completed tool effects remain.' }],
+          source: { kind: 'ptc-mode' },
+        }))
+      })
+    } catch (error) {
+      throw new CodeResetFailedError(`Program environment reset failed: ${toolErrorMessage(error)}. State may not be cleared; retry the host reset before running more code.`)
+    }
   }
 
   /** Keep the reserved transport outside registered capabilities and their restrictions. */
