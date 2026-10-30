@@ -41,7 +41,10 @@ import Foundation
             "helper": Self.process(getpid()),
             "parent": Self.process(getppid()),
         ]
-        if let launchApplication { result["launchApplication"] = launchApplication }
+        if let launchApplication, case .object(var application) = launchApplication {
+            application.removeValue(forKey: "bundleId")
+            result["launchApplication"] = .object(application)
+        }
         return .object(result)
     }
 
@@ -78,9 +81,13 @@ import Foundation
 
     func closeGuide(owner: UUID) { guide.close(owner: owner) }
 
-    func openSettings(_ permission: String) throws(NativeFailure) -> JSONValue {
+    func openSettings(_ permission: String, failureMessage: String) throws(NativeFailure) -> JSONValue {
         guide.dismiss()
-        return try openPane(permission)
+        do { return try openPane(permission) }
+        catch {
+            guard error.code == "SETTINGS_UNAVAILABLE" else { throw error }
+            throw NativeFailure(code: error.code, message: failureMessage)
+        }
     }
 
     private func openPane(_ permission: String) throws(NativeFailure) -> JSONValue {

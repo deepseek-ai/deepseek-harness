@@ -184,7 +184,7 @@ import Darwin
             result = try permissions.request(params.string("permission"), owner: permissionOwner, text: text,
                 interval: Double(params.integer("pollIntervalMs", in: 100...Int(Int32.max))) / 1000)
         } else if request.method == "openPermissionSettings" {
-            result = try permissions.openSettings(params.string("permission"))
+            result = try permissions.openSettings(params.string("permission"), failureMessage: params.string("settingsMessage"))
         } else if request.method == "findApps" {
             result = .array(try ApplicationDiscovery.applications(matching: params.string("query"), exact: false,
                 limit: params.integer("maxAppMatches", in: 1...1000), cancellation: cancellation).map { $0.json(catalog: catalog) })

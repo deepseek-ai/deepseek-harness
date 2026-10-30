@@ -1115,6 +1115,10 @@
                 "screenRecording"
               ]
             },
+            "settingsMessage": {
+              "type": "string",
+              "minLength": 1
+            },
             "instruction": {
               "type": "string",
               "minLength": 1
@@ -1131,10 +1135,6 @@
               "type": "string",
               "minLength": 1
             },
-            "settingsMessage": {
-              "type": "string",
-              "minLength": 1
-            },
             "pollIntervalMs": {
               "type": "integer",
               "minimum": 100,
@@ -1143,11 +1143,11 @@
           },
           "required": [
             "permission",
+            "settingsMessage",
             "instruction",
             "backLabel",
             "finderLabel",
             "unavailableMessage",
-            "settingsMessage",
             "pollIntervalMs"
           ],
           "additionalProperties": false
@@ -1179,10 +1179,15 @@
                 "accessibility",
                 "screenRecording"
               ]
+            },
+            "settingsMessage": {
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [
-            "permission"
+            "permission",
+            "settingsMessage"
           ],
           "additionalProperties": false
         }

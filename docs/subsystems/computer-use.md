@@ -14,7 +14,6 @@ The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit sys
 |---|---|
 | `CuaApplicationId`, `CuaApplicationGrant` | A platform-provided application identity and its displayed saved decision. |
 | `CuaSystemPermission` | Accessibility or Screen Recording, selected by the human. |
-| `CuaPermissionGuideText` | Client-localized native guide instructions and recovery messages; the helper supplies the application name. |
 | `CuaPermissionProcess`, `CuaSystemPermissionState` | Native privilege checks, observed helper/parent processes, and the application identified by macOS process responsibility at helper startup. The independent helper uses its own bundle when system attribution is unavailable; application metadata is absent if neither bundle can be identified. |
 | `CuaApplicationState` | Saved grants, refused applications, and whether persistence is available. Session-only grants remain internal to the provider. System observations and application icons are queried separately so the page can display each result as it arrives. |
 
@@ -104,21 +103,20 @@ Browser controls for provider-owned native permission and application decisions.
 @Remote async applicationIcons(): Promise<Record<string, string>>
 
 /**
- * Open the selected System Settings pane; show the native drag guide only for a missing privilege.
- * Guide preparation failures still attempt settings navigation before reporting the failure.
+ * Request the selected system privilege through the native provider.
  * @param permission macOS privilege to request.
- * @param text Localized guide copy; application identity comes from the native helper.
- * @returns Current permission observations; opening the guide does not grant permission.
+ * @param locale Current Client language for provider-owned permission UI.
+ * @returns Current permission observations; requesting does not establish consent.
  */
-@Remote async requestPermission(permission: CuaSystemPermission, text: CuaPermissionGuideText): Promise<CuaSystemPermissionState>
+@Remote async requestPermission(permission: CuaSystemPermission, locale: string): Promise<CuaSystemPermissionState>
 
 /**
  * Open the macOS privacy pane selected by the user.
  * @param permission Corresponding system privilege.
- * @param failureMessage Localized manual navigation instructions if macOS rejects the open request.
+ * @param locale Current Client language for provider-owned recovery instructions.
  * @returns Completion after macOS accepted the open request.
  */
-@Remote async openSettings(permission: CuaSystemPermission, failureMessage: string): Promise<void>
+@Remote async openSettings(permission: CuaSystemPermission, locale: string): Promise<void>
 
 /**
  * Remove saved and session access and join affected operations.
