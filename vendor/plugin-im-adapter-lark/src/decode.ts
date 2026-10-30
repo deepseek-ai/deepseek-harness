@@ -297,7 +297,7 @@ function contentNodes(bot: LarkBot, input: ContentInput): Element[] {
     case 'media':
       return mediaNodes(bot, input)
     case 'interactive':
-      return interactiveNodes(input)
+      return interactiveNodes(bot, input)
     case 'merge_forward':
       // The entries are separate messages of their own read (`upper_message_id`); this one is an identity reference.
       return [h('forward', { id: input.messageId })]
@@ -521,6 +521,8 @@ interface CardWalk {
   lines: string[]
   /** Every target the card links to. */
   links: string[]
+  /** Every picture the card shows, by the `image_key` the platform downloads it with. */
+  images: { key: string; alt?: string }[]
   /** Display name the platform gives each mention key the message resolves. */
   names: Map<string, string>
 }
@@ -555,6 +557,8 @@ function walkCard(value: unknown, walk: CardWalk): void {
   if (tag === 'img' || tag === 'image') {
     const alt = cardLabel(element.alt)
     walk.lines.push(alt ? `[image: ${alt}]` : '[image]')
+    const key = nonEmpty(element.image_key)
+    if (key) walk.images.push(alt === undefined ? { key } : { key, alt })
   } else if (tag === 'at') {
     // A delivered `at` element names its user by the message-scoped key it was authored with.
     const key = typeof element.user_id === 'string' ? element.user_id : ''
@@ -588,12 +592,13 @@ function walkCard(value: unknown, walk: CardWalk): void {
 }
 
 /**
- * `interactive`: the card's text and links as `<raw type="interactive">` children.
+ * `interactive`: the card's text, pictures and links as `<raw type="interactive">` children.
  *
+ * @param bot - adapter instance, which authorizes a picture's `satori:` URL.
  * @param input - the message body.
  * @returns the node.
  */
-function interactiveNodes(input: ContentInput): Element[] {
+function interactiveNodes(bot: LarkBot, input: ContentInput): Element[] {
   const card = parseBody(input.content)
   // Content the platform did not send as JSON carries no structure to walk; it is still the card's own text.
   if (!card) return [rawElement(input, undefined, input.content ? [h.text(input.content)] : [])]
@@ -601,7 +606,7 @@ function interactiveNodes(input: ContentInput): Element[] {
   for (const mention of input.mentions) {
     if (mention.key && !mention.all) names.set(mention.key, mention.name ?? mention.id ?? mention.key)
   }
-  const walk: CardWalk = { lines: [], links: [], names }
+  const walk: CardWalk = { lines: [], links: [], images: [], names }
   walkCard(card, walk)
   const children: Element[] = []
   const pushLine = (nodes: Element[]) => {
@@ -615,6 +620,11 @@ function interactiveNodes(input: ContentInput): Element[] {
   }
   for (const link of new Set(walk.links)) {
     pushLine([h.text('[link] '), h('a', { href: link }, link)])
+  }
+  // A picture the card shows stays a media element, so a reader can fetch it with the bot's credentials.
+  for (const image of walk.images) {
+    const src = bot.getCardImageUrl(image.key)
+    pushLine([image.alt === undefined ? h('img', { src }) : h('img', { src, alt: image.alt })])
   }
   if (!children.length) children.push(h.text('[卡片消息]'))
   return [h('raw', { platform: 'lark', type: 'interactive', data: card }, ...children)]

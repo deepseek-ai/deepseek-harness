@@ -493,6 +493,19 @@ export class LarkApi {
     )
   }
 
+  /**
+   * Bytes of one image by its `image_key` (`GET /im/v1/images/{image_key}`). A card shows its pictures by key rather
+   * than as resources of the message, and the platform hands a key only to the application that sent it: another
+   * application's key answers `234008` ("The app is not the resource sender").
+   *
+   * @param imageKey - platform `image_key` of the picture.
+   * @param signal - cancellation.
+   * @returns the bytes and their media type.
+   */
+  async getImage(imageKey: string, signal?: AbortSignal): Promise<LarkResourceAnswer> {
+    return await this.download('GET', `/im/v1/images/${encodeURIComponent(imageKey)}`, { signal })
+  }
+
   // -------------------------------------------------------------------------------------------------------------
   // Reactions
 

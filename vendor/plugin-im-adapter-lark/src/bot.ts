@@ -127,6 +127,12 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
       return new Response(answer.data, answer.mime ? { headers: { 'content-type': answer.mime } } : {})
     })
 
+    // A card shows its pictures by `image_key`, which is downloaded by key rather than as a resource of the message.
+    this.defineInternalRoute('/images/:imageKey', async (request) => {
+      const answer = await this.api.getImage(request.params.imageKey, request.signal)
+      return new Response(answer.data, answer.mime ? { headers: { 'content-type': answer.mime } } : {})
+    })
+
     ctx.plugin(WsClient, this)
   }
 
@@ -293,6 +299,16 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
    */
   getResourceUrl(messageId: string, fileKey: string, type: 'image' | 'file' = 'image') {
     return this.getInternalUrl(`/messages/${encodeURIComponent(messageId)}/resources/${encodeURIComponent(fileKey)}`, { type })
+  }
+
+  /**
+   * `satori:` URL of one card image: `satori:<platform>/<selfId>/images/<image_key>`.
+   *
+   * @param imageKey - platform `image_key` the card shows.
+   * @returns the internal URL the image route serves.
+   */
+  getCardImageUrl(imageKey: string) {
+    return this.getInternalUrl(`/images/${encodeURIComponent(imageKey)}`)
   }
 
   /**
