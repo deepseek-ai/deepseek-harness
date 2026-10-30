@@ -30,8 +30,6 @@ export interface NativeBuildSpec {
   architecture: NativeArchitecture
   /** Signature of a source-checkout build; installed packages ignore it. */
   sourceSigning: Config['sourceSigning']
-  /** Resolved DSH home for the automatically generated signing identity. */
-  dshHome: string
   subprocess: Pick<SubprocessRuntime, 'spawn'>
   signal: AbortSignal
   timeoutMs: number
@@ -86,8 +84,8 @@ export async function buildNativeExecutable(spec: NativeBuildSpec): Promise<stri
   return withFileLock(join(nativeRoot, '.build', 'application-build'), async () => {
     const signing = spec.sourceSigning
     const signingArgs = typeof signing === 'string'
-      ? ['--signing', signing, ...(signing === 'local-identity' ? ['--dsh-home', spec.dshHome] : [])]
-      : ['--identity', signing.identity, ...(signing.keychain === undefined ? [] : ['--keychain', signing.keychain])]
+      ? ['--identity', '-']
+      : ['--identity', signing.identity, '--keychain', signing.keychain]
     const handle = spec.subprocess.spawn({
       argv: ['/usr/bin/xcrun', 'python3', join(nativeRoot, 'build_app.py'),
         '--scratch-path', join(nativeRoot, '.build', `runtime-${spec.architecture}`),

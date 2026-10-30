@@ -1,7 +1,6 @@
 """Build, sign and publish immutable Computer Use application generations."""
 import argparse
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -114,26 +113,6 @@ def publish(binary, output, identity, plist, variant="release", keychain=None):
         return select(output, temporary, key, name)
 
 
-def load_dev_signing():
-    """Load the sibling module whether this file runs as a script or is imported by path."""
-    location = Path(__file__).resolve().with_name("dev_signing.py")
-    spec = importlib.util.spec_from_file_location("dev_signing", location)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def signing_identity(variant, identity, signing, dsh_home=None, keychain=None):
-    """Select a user certificate, an ad-hoc signature, or an identity retained in DSH home."""
-    if identity is not None:
-        return identity, keychain
-    if variant == "release" or signing == "ad-hoc":
-        return "-", None
-    signing_module = load_dev_signing()
-    local = signing_module.setup(signing_module.default_directory(dsh_home))
-    return local.sha1, local.keychain
-
-
 def main():
     root = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__)
@@ -142,26 +121,20 @@ def main():
     parser.add_argument("--output-directory", type=Path)
     parser.add_argument("--variant", choices=["release", "dev"], default="release",
                         help="dev uses a separate bundle identifier")
-    signing_options = parser.add_mutually_exclusive_group()
-    signing_options.add_argument("--signing", choices=["ad-hoc", "local-identity"],
-                                 help="defaults to local-identity for dev and ad-hoc for release")
-    signing_options.add_argument("--identity", help="existing codesign certificate name or SHA-1 fingerprint")
+    parser.add_argument("--identity", default="-", help="existing codesign certificate name or SHA-1 fingerprint; defaults to ad-hoc (-)")
     parser.add_argument("--keychain", type=Path, help="absolute keychain path for --identity; the user owns unlocking it")
-    parser.add_argument("--dsh-home", type=Path, help="home for local-identity; defaults to DSH_HOME or ~/.dsh")
     args = parser.parse_args()
-    if args.identity is not None and not args.identity.strip():
+    if not args.identity.strip():
         parser.error("--identity must name an existing certificate")
-    if args.keychain is not None and (args.identity is None or not args.keychain.is_absolute()):
+    if args.keychain is not None and (args.identity == "-" or not args.keychain.is_absolute()):
         parser.error("--keychain requires --identity and an absolute path")
     architecture = "x64" if args.arch == "x86_64" else "arm64"
     scratch = args.scratch_path or root / ".build" / f"runtime-{architecture}"
     output = args.output_directory or root / "bin" / f"darwin-{architecture}"
-    signing = args.signing or ("local-identity" if args.variant == "dev" else "ad-hoc")
-    identity, keychain = signing_identity(args.variant, args.identity, signing, args.dsh_home, args.keychain)
     subprocess.run(["/usr/bin/xcrun", "swift", "build", "--package-path", str(root),
                     "--scratch-path", str(scratch), "--configuration", "release",
                     "--product", "dsh-cua-native", "--arch", args.arch], check=True)
-    executable = publish(scratch / "release/dsh-cua-native", output, identity, root / "Info.plist", args.variant, keychain)
+    executable = publish(scratch / "release/dsh-cua-native", output, args.identity, root / "Info.plist", args.variant, args.keychain)
     print(executable)
 
 

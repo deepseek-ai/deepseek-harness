@@ -1,4 +1,4 @@
-"""Own the signing identity retained in DSH home for source-built Computer Use applications.
+"""Manage an explicitly requested developer identity outside DSH home.
 
 macOS keeps Accessibility and Screen Recording grants for a bundle identifier together with the
 designated requirement of the signature that was granted. An ad-hoc signature's requirement is the
@@ -28,8 +28,8 @@ import tempfile
 COMMON_NAME = "DSH Computer Use Dev (local)"
 SECURITY = "/usr/bin/security"
 OPENSSL = "/usr/bin/openssl"
-SETUP_COMMAND = "pnpm --dir packages/experimental/cua-macos run dev-signing:setup"
-REMOVE_COMMAND = "pnpm --dir packages/experimental/cua-macos run dev-signing:remove"
+SETUP_COMMAND = "python3 .agents/skills/dsh-cua-macos-signing/scripts/signing_identity.py setup"
+REMOVE_COMMAND = "python3 .agents/skills/dsh-cua-macos-signing/scripts/signing_identity.py remove"
 CERTIFICATE_CONFIG = f"""[req]
 distinguished_name = subject
 x509_extensions = extensions
@@ -94,17 +94,9 @@ def keychain_path(directory):
     return directory / "signing.keychain-db"
 
 
-def default_directory(dsh_home=None):
-    """Use the Host-resolved home, or DSH_HOME / ~/.dsh for standalone Python commands."""
-    selected = dsh_home if dsh_home is not None else os.environ.get("DSH_HOME", "")
-    selected = str(selected)
-    if not selected.strip():
-        home = Path.home() / ".dsh"
-    elif selected == "~" or selected.startswith(("~/", "~\\")):
-        home = Path.home() / selected[2:]
-    else:
-        home = Path(selected)
-    return Path(os.path.abspath(home)) / "computer-use-dev-signing"
+def default_directory():
+    """Keep developer credentials independent of DSH profiles, homes, and worktrees."""
+    return Path.home() / ".cua-macos-keys" / "dev"
 
 
 def load(directory):
@@ -113,9 +105,9 @@ def load(directory):
     Returns None when setup has not run. Raises when setup ran but its keychain is missing or no
     longer on the search list, because signing would otherwise fail or prompt for a password.
     """
-    home_argument = shlex.quote(str(directory.parent))
-    setup_command = f"{SETUP_COMMAND} --dsh-home {home_argument}"
-    remove_command = f"{REMOVE_COMMAND} --dsh-home {home_argument}"
+    directory_argument = shlex.quote(str(directory))
+    setup_command = f"{SETUP_COMMAND} --directory {directory_argument}"
+    remove_command = f"{REMOVE_COMMAND} --directory {directory_argument}"
     record = record_path(directory)
     if not record.exists():
         return None
@@ -216,15 +208,15 @@ def remove_locked(directory):
 def main():
     parser = argparse.ArgumentParser(description="Manage the local signing identity for source-built Computer Use applications.")
     parser.add_argument("action", choices=["setup", "remove"])
-    parser.add_argument("--dsh-home", type=Path, help="DSH home; defaults to DSH_HOME or ~/.dsh")
+    parser.add_argument("--directory", type=Path, default=default_directory(), help="identity directory; defaults to ~/.cua-macos-keys/dev")
     args = parser.parse_args()
-    directory = default_directory(args.dsh_home)
+    directory = args.directory.expanduser().resolve()
     if args.action == "setup":
         identity = setup(directory)
-        print(f"Prepared \"{COMMON_NAME}\" ({identity.sha1}) in {directory}")
+        print(json.dumps({"identity": identity.sha1, "keychain": str(identity.keychain)}, indent=2))
     else:
         remove(directory)
-        print("Removed the development signing identity; select ad-hoc or a user certificate to prevent recreation")
+        print("Removed the development signing identity; remove its sourceSigning configuration before the next build")
 
 
 if __name__ == "__main__":

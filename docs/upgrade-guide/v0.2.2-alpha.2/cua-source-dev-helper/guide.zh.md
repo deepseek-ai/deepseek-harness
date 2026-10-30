@@ -9,11 +9,11 @@ description: "源码构建的 Computer Use helper 使用独立的开发版 Bundl
 
 ## 变更
 
-此前源码检出构建的 `DSH Computer Use.app` 使用正式版 Bundle ID `com.deepseek.harness.computer-use` 和临时签名。现在构建的是 `DSH Computer Use Dev.app`，Bundle ID 为 `com.deepseek.harness.computer-use.dev`。旧条目上的辅助功能和屏幕录制授权不适用于它。桌面端和 npm 安装版不变。 源码构建现在默认在 `$DSH_HOME/computer-use-dev-signing` 中生成并复用固定签名身份，未设置 `DSH_HOME` 时使用 `~/.dsh`。
+源码检出原先以临时签名构建 `DSH Computer Use.app`，使用正式版 Bundle ID `com.deepseek.harness.computer-use`。现在构建 `DSH Computer Use Dev.app`，使用 `com.deepseek.harness.computer-use.dev`。旧条目的辅助功能和屏幕录制授权不能沿用。Desktop 和 npm 安装版不变。源码构建默认仍为临时签名；固定身份由开发者在 DSH home 之外生成和维护，再通过配置指定。
 
 ## 迁移
 
-1. 默认的 `sourceSigning: local-identity` 无需手动 setup；各 worktree 使用同一 DSH home 即可复用身份。如需临时签名，在 `cordis.patch.yml` 的 `id: cua` 节点设置 `config.sourceSigning: ad-hoc`；如需已有证书，使用[用户签名配置](../../../../packages/experimental/cua-macos/README.zh.md#use-this-package)。
-2. 从源码检出启动 DSH 并调用 Computer Use，在系统设置中给 `DSH Computer Use Dev` 授予辅助功能和屏幕录制权限。
-3. 确认 `getCapabilities` 报告两项权限均为 `true`。只有在没有已安装的 DSH 使用旧的 `DSH Computer Use` 条目时才移除它。
-4. 停用自动身份时，先改用临时签名或用户证书，再运行 `pnpm --dir packages/experimental/cua-macos run dev-signing:remove`。自定义 home 通过同一个 `DSH_HOME` 或 `--dsh-home <路径>` 指定。删除 DSH home 后会重新生成证书，届时需要重新授权。
+1. 保持默认 `sourceSigning: ad-hoc` 即可使用临时签名。需要减少重新编译和跨 worktree 的授权次数时，按[开发者签名 skill](../../../../.agents/skills/dsh-cua-macos-signing/SKILL.md)生成或复用证书，并将 `sourceSigning: { identity, keychain }` 写入 DSH home 的 `cordis.patch.yml`；`keychain` 必须为绝对路径。
+2. 从源码检出启动 DSH，调用 Computer Use，在系统设置中给 `DSH Computer Use Dev` 授予辅助功能和屏幕录制权限。
+3. 确认 `getCapabilities` 的两项权限均为 `true`。使用固定签名时，在修改 Swift 源码重建和另一个 worktree 中分别复查。只有确认没有安装版 DSH 使用旧条目时，才移除旧 `DSH Computer Use` 条目。
+4. 钥匙串锁定后，按 skill 重新运行 setup 解锁并复用现有身份。停止使用时改回 `ad-hoc` 或移除该配置，再按 skill 删除身份；删除 DSH home 不会删除开发者钥匙串。

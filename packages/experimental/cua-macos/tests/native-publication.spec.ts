@@ -10,13 +10,6 @@ it.skipIf(process.platform === 'win32')('preserves signed generations and reject
   expect(output).toBe('')
 })
 
-it.skipIf(process.platform === 'win32')('keeps one unlocked development signing identity on the user keychain search list', () => {
-  const output = execFileSync('python3', [fileURLToPath(new URL('../native/tests/test_dev_signing.py', import.meta.url))], {
-    encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  expect(output).toBe('')
-})
-
 it.skipIf(process.platform === 'win32')('accepts shallow bare reference paths in native test helpers', () => {
   const output = execFileSync('python3', [fileURLToPath(new URL('../native/tests/test_native_test_support.py', import.meta.url))], {
     encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'],

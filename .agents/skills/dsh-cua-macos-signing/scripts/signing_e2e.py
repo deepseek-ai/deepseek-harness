@@ -9,13 +9,12 @@ from pathlib import Path
 import plistlib
 import subprocess
 import tempfile
-from unittest.mock import patch
 
-NATIVE = Path(__file__).resolve().parents[1]
+NATIVE = Path(__file__).resolve().parents[4] / "packages/experimental/cua-macos/native"
 
 
 def module(name):
-    spec = importlib.util.spec_from_file_location(name, NATIVE / f"{name}.py")
+    spec = importlib.util.spec_from_file_location(name, NATIVE / "build_app.py" if name == "build_app" else Path(__file__).with_name("signing_identity.py"))
     loaded = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(loaded)
     return loaded
@@ -31,16 +30,14 @@ def main():
     before = signing.user_keychains()
     with tempfile.TemporaryDirectory(prefix="cua-dev-signing-e2e-") as temporary:
         root = Path(temporary)
-        home = root / "home"
-        directory = signing.default_directory(home)
+        directory = root / "keys/dev"
         try:
-            with patch.object(builder, "load_dev_signing", return_value=signing):
-                sha1, keychain = builder.signing_identity("dev", None, "local-identity", home)
-                assert builder.signing_identity("dev", None, "local-identity", home) == (sha1, keychain)
-            assert keychain == home / "computer-use-dev-signing/signing.keychain-db"
+            identity = signing.setup(directory)
+            assert signing.setup(directory) == identity
+            sha1, keychain = identity.sha1, identity.keychain
             assert (directory / "identity.json").stat().st_mode & 0o777 == 0o600
-            with patch.object(builder, "load_dev_signing", side_effect=AssertionError("ad-hoc accessed keychain")):
-                assert builder.signing_identity("dev", None, "ad-hoc") == ("-", None)
+            signing.security("lock-keychain", str(keychain))
+            assert signing.setup(directory) == identity, "setup must unlock an existing developer keychain"
             requirements = []
             for status in (0, 1):
                 (root / "main.c").write_text(f"int main(void) {{ return {status}; }}\n")
@@ -59,12 +56,10 @@ def main():
             subprocess.run(["/usr/bin/codesign", "--verify", f"-R={first_requirement}", str(second)], check=True)
             selected = json.loads((root / "checkout-1/current.json").read_text())["bundle"]
             assert second.parent.name == selected
-            with patch.object(builder, "load_dev_signing", side_effect=AssertionError("custom signing accessed managed identity")):
-                for index, (certificate, selected_keychain) in enumerate(((sha1, None), (signing.COMMON_NAME, keychain))):
-                    custom_identity, custom_keychain = builder.signing_identity("dev", certificate, None, keychain=selected_keychain)
-                    custom = builder.publish(root / "helper", root / f"custom-{index}", custom_identity, NATIVE / "Info.plist", "dev", custom_keychain)
-                    assert requirement(custom.parents[2]) == first_requirement
-            print(f"PASS: DSH-home identity is reused across changed builds; user-supplied signatures share {first_requirement}")
+            for index, (certificate, selected_keychain) in enumerate(((sha1, keychain), (signing.COMMON_NAME, keychain))):
+                custom = builder.publish(root / "helper", root / f"custom-{index}", certificate, NATIVE / "Info.plist", "dev", selected_keychain)
+                assert requirement(custom.parents[2]) == first_requirement
+            print(f"PASS: developer setup reuses and unlocks its identity; configured signatures across changed builds share {first_requirement}")
         finally:
             signing.remove(directory)
     assert signing.user_keychains() == before, "the user keychain search list was not restored"

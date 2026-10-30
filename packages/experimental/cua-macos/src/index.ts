@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { CuaConfig, installCua } from '@deepseek-ai/dsh-cua'
-import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { nativeHostArchitecture, prepareNativeExecutable } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
 import { GUIDANCE } from './guidance.ts'
@@ -17,15 +16,15 @@ export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'ag
 /** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
 export interface Config extends CuaConfig {
   /**
-   * Source-build signing: `local-identity` (default) creates or reuses an identity in DSH home;
-   * `ad-hoc` binds grants to the code hash; an object selects an existing user-managed certificate.
+   * Source-build signing: `ad-hoc` (default) binds grants to the code hash;
+   * an object selects an existing certificate in an explicitly configured keychain.
    * Installed packages and `helperPath` keep their own signature.
    */
-  sourceSigning: 'ad-hoc' | 'local-identity' | {
+  sourceSigning: 'ad-hoc' | {
     /** Existing codesign certificate name or SHA-1 fingerprint. */
     identity: string
-    /** Absolute keychain path; omission uses the user's keychain search list. The user owns unlocking it. */
-    keychain?: string
+    /** Absolute keychain path. The developer owns creating and unlocking it. */
+    keychain: string
   }
 }
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
@@ -33,12 +32,12 @@ export const Config = Schema.object({
   // Schemastery erases object field types on dict; the shared Config declares their output types.
   ...CuaConfig.dict as { [Key in keyof CuaConfig]: Schema<unknown, CuaConfig[Key]> },
   sourceSigning: Schema.union([
-    Schema.const('ad-hoc'), Schema.const('local-identity'),
+    Schema.const('ad-hoc'),
     Schema.object({
       identity: Schema.string().pattern(/\S/).required(),
-      keychain: Schema.string().pattern(/^\/.+/),
+      keychain: Schema.string().pattern(/^\/.+/).required(),
     }),
-  ]).default('local-identity'),
+  ]).default('ad-hoc'),
 }) satisfies Schema<Record<string, unknown>, Config>
 
 const description = 'Inspect macOS permissions, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.'
@@ -59,7 +58,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const controller = new AbortController()
   const prepared = prepareNativeExecutable({
     packageRoot: resolve(fileURLToPath(new URL('..', import.meta.url))),
-    architecture, sourceSigning: config.sourceSigning, dshHome: resolveDshHome(), subprocess: ctx.subprocess,
+    architecture, sourceSigning: config.sourceSigning, subprocess: ctx.subprocess,
     timeoutMs: config.buildTimeoutMs, graceMs: config.graceMs, signal: controller.signal,
   })
   ctx.effect(() => async () => {

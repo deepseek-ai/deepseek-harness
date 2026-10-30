@@ -31,7 +31,6 @@
     "native/Info.plist",
     "native/DSHComputerUse.icns",
     "native/build_app.py",
-    "native/dev_signing.py",
     "native/Sources",
     "native/tests/swift",
     "native/tests/test_swift.py",
@@ -57,8 +56,7 @@
     "@deepseek-ai/schemastery": "workspace:~",
     "zod": "^4.4.3",
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
-    "@deepseek-ai/dsh-cua": "workspace:*",
-    "@deepseek-ai/dsh-home-paths": "workspace:*"
+    "@deepseek-ai/dsh-cua": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-working-directory": "workspace:*",
@@ -100,8 +98,6 @@
   },
   "scripts": {
     "build:native": "xcrun python3 native/build_app.py",
-    "dev-signing:setup": "xcrun python3 native/dev_signing.py setup",
-    "dev-signing:remove": "xcrun python3 native/dev_signing.py remove",
     "build:icon": "node native/generate_icon.mjs"
   },
   "os": [

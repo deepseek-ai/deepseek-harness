@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location("dev_signing", Path(__file__).resolve().parents[1] / "dev_signing.py")
+spec = importlib.util.spec_from_file_location("dev_signing", Path(__file__).with_name("signing_identity.py"))
 signing = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(signing)
 
@@ -56,28 +56,24 @@ class DevelopmentSigningTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         return security
 
-    def test_signing_directory_follows_dsh_home_and_explicit_overrides(self):
+    def test_default_identity_is_outside_dsh_home(self):
         home = self.root / "user"
         with patch.object(Path, "home", return_value=home):
-            for value in ("", "   "):
+            for value in ("", str(self.root / "custom-dsh-home")):
                 with patch.dict(signing.os.environ, {"DSH_HOME": value}):
-                    self.assertEqual(signing.default_directory(), home / ".dsh/computer-use-dev-signing")
-            for value, expected in ((str(self.root / "custom"), self.root / "custom"),
-                                    ("~/custom", home / "custom"), ("~", home),
-                                    ("relative-home", Path(signing.os.path.abspath("relative-home")))):
-                with patch.dict(signing.os.environ, {"DSH_HOME": value}):
-                    self.assertEqual(signing.default_directory(), expected / "computer-use-dev-signing")
-                    self.assertEqual(signing.default_directory(self.root / "explicit"),
-                                     self.root / "explicit/computer-use-dev-signing")
+                    self.assertEqual(signing.default_directory(), home / ".cua-macos-keys/dev")
+        self.assertFalse(home.exists())
 
-    def test_setup_and_remove_commands_target_the_selected_dsh_home(self):
-        directory = self.root / "home/computer-use-dev-signing"
+    def test_setup_and_remove_target_the_explicit_identity_directory(self):
+        directory = self.root / "keys/dev"
         identity = signing.SigningIdentity("ABC123", directory / "signing.keychain-db")
         for action in ("setup", "remove"):
-            with patch.object(signing.sys, "argv", ["dev_signing.py", action, "--dsh-home", str(directory.parent)]), \
-                 patch.object(signing, action, return_value=identity) as operation, contextlib.redirect_stdout(io.StringIO()):
+            with patch.object(signing.sys, "argv", ["signing_identity.py", action, "--directory", str(directory)]), \
+                 patch.object(signing, action, return_value=identity) as operation, contextlib.redirect_stdout(io.StringIO()) as output:
                 signing.main()
             operation.assert_called_once_with(directory)
+            if action == "setup":
+                self.assertEqual(json.loads(output.getvalue()), {"identity": "ABC123", "keychain": str(identity.keychain)})
 
     def test_missing_setup_leaves_builds_unconfigured(self):
         self.fake([self.login])
@@ -97,7 +93,7 @@ class DevelopmentSigningTests(unittest.TestCase):
 
     def test_unlisted_or_missing_keychains_fail_with_the_setup_command(self):
         security = self.configure(listed=False)
-        with self.assertRaisesRegex(RuntimeError, "search list; run pnpm"):
+        with self.assertRaisesRegex(RuntimeError, "search list; run python3"):
             signing.load(self.directory)
         self.keychain.unlink()
         with self.assertRaisesRegex(RuntimeError, "keychain is missing"):
@@ -131,41 +127,29 @@ class DevelopmentSigningTests(unittest.TestCase):
         before = record.read_bytes()
         self.keychain.unlink()
         with patch.object(signing, "create_certificate") as create:
-            with self.assertRaisesRegex(RuntimeError, "keychain is missing: .*; run .*remove --dsh-home .*, then .*setup --dsh-home "):
+            with self.assertRaisesRegex(RuntimeError, "keychain is missing: .*; run .*remove --directory .*, then .*setup --directory "):
                 signing.setup(self.directory)
         create.assert_not_called()
         self.assertEqual(record.read_bytes(), before)
         self.assertFalse(self.keychain.exists())
         self.assertEqual(security.commands, [])
 
-    def test_build_cli_stops_without_replacing_a_recorded_identity_missing_its_keychain(self):
-        home = self.root / "home"
-        directory = home / "computer-use-dev-signing"
+    def test_setup_cli_preserves_a_recorded_identity_missing_its_keychain(self):
+        directory = self.root / "keys/dev"
         directory.mkdir(parents=True)
         record = directory / "identity.json"
         before = json.dumps({"sha1": "ABC123", "password": "secret-password"}).encode()
         record.write_bytes(before)
-        output = self.root / "applications"
-        script = """import runpy, sys
-from pathlib import Path
-from unittest.mock import patch
-test_home = Path(sys.argv[2])
-Path.home = lambda: test_home
-sys.argv = [sys.argv[1], '--variant', 'dev', '--dsh-home', sys.argv[2], '--output-directory', sys.argv[3]]
-with patch('subprocess.run', side_effect=AssertionError('unexpected native build or signing command')):
-    runpy.run_path(sys.argv[0], run_name='__main__')
-"""
-        result = subprocess.run([sys.executable, "-c", script, str(Path(signing.__file__).with_name("build_app.py")), str(home), str(output)],
+        result = subprocess.run([sys.executable, str(Path(signing.__file__)), "setup", "--directory", str(directory)],
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 1)
         self.assertEqual(len(result.stderr.splitlines()), 1)
         self.assertIn("keychain is missing", result.stderr)
-        self.assertIn(f"run {signing.REMOVE_COMMAND} --dsh-home {home}, then {signing.SETUP_COMMAND} --dsh-home {home}", result.stderr)
+        self.assertIn(f"run {signing.REMOVE_COMMAND} --directory {directory}, then {signing.SETUP_COMMAND} --directory {directory}", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
         self.assertNotIn("secret-password", result.stderr)
         self.assertEqual(record.read_bytes(), before)
         self.assertFalse(signing.keychain_path(directory).exists())
-        self.assertFalse(output.exists())
 
     def test_remove_restores_the_other_search_list_entries_and_deletes_the_password(self):
         security = self.configure()
@@ -178,7 +162,7 @@ with patch('subprocess.run', side_effect=AssertionError('unexpected native build
     def test_missing_certificate_requires_explicit_removal_instead_of_changing_identity(self):
         self.configure()
         (self.directory / "identity.json").write_text(json.dumps({"sha1": "MISSING", "password": "secret"}))
-        with self.assertRaisesRegex(RuntimeError, "certificate is missing; run .*remove --dsh-home .*, then .*setup --dsh-home "):
+        with self.assertRaisesRegex(RuntimeError, "certificate is missing; run .*remove --directory .*, then .*setup --directory "):
             signing.setup(self.directory)
         self.assertTrue(self.keychain.is_file())
 
@@ -227,18 +211,18 @@ with open(sys.argv[1], 'w') as lock:
         with signing.identity_lock(self.directory):
             pass
 
-    def test_build_cli_reports_signing_timeout_without_traceback_or_password(self):
+    def test_setup_cli_reports_signing_timeout_without_traceback_or_password(self):
         script = """import runpy, sys, subprocess
 from unittest.mock import patch
 from pathlib import Path
 test_home = Path(sys.argv[2])
 Path.home = lambda: test_home
-sys.argv = [sys.argv[1], '--variant', 'dev', '--dsh-home', sys.argv[2]]
+sys.argv = [sys.argv[1], 'setup', '--directory', sys.argv[2]]
 with patch('subprocess.run', side_effect=subprocess.TimeoutExpired(['security', 'unlock-keychain', '-p', 'secret-password'], 60)):
     runpy.run_path(sys.argv[0], run_name='__main__')
 """
         # Fail at the first security command, before setup can modify any keychain.
-        result = subprocess.run([sys.executable, "-c", script, str(Path(signing.__file__).with_name("build_app.py")), str(self.root / "home")],
+        result = subprocess.run([sys.executable, "-c", script, str(Path(signing.__file__)), str(self.root / "home")],
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 1)
         self.assertEqual(len(result.stderr.splitlines()), 1)

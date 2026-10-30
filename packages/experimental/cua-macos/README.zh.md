@@ -39,23 +39,24 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。helper 需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图；按系统提示给 helper 授权。源码构建的应用包名为 `DSH Computer Use Dev.app`，Info.plist 声明名称 `DSH Computer Use Dev`；授权时选择开发版条目。`getCapabilities` 查询权限和锁屏状态，不弹出系统授权窗口。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 和 `cua.getState` 列出运行中的应用。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。授权前从磁盘读取应用的 Bundle ID 和可执行路径，在启动前后重新读取并核对；没有 Bundle ID 的应用使用规范化的可执行路径复用授权。选择尚未运行的安装副本时，会请求为该副本创建新实例。helper 等待应用完成启动后才返回其 PID。启动后验证失败会使待启动句柄失效，但进程可能仍在运行；应先查看运行中的应用，再取得新句柄。返回的对象读取初始 AX，不自动激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏或最小化时，先尝试 `app.show()` 或 `window.show()`，再重新观察。它请求取消隐藏和恢复最小化，不主动激活、抬起窗口或切换桌面空间；应用级恢复选择焦点窗口、主窗口或唯一 AX 窗口。结果通过 `windowId` 指明选中的窗口，未选中时为 null；`foregroundChanged` 比较操作前后的前台应用和最上层窗口，无法取得完整观察时为 null，返回后仍可能发生焦点变化。恢复失败或窗口仍不可用时，说明需要前台的步骤，再调用 `app.activate()` 或窗口的 `raise` 动作并重新观察。必须使用前台时，以完成任务为先。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
 
-源码构建默认使用 `sourceSigning: local-identity`：首次构建在 `$DSH_HOME/computer-use-dev-signing` 中生成固定身份，后续构建和使用同一 DSH home 的 worktree 复用它。未设置 `DSH_HOME` 时使用 `~/.dsh`。临时签名可配置为 `sourceSigning: ad-hoc`；已有签名证书可在 profile 的 `cordis.patch.yml` 中这样选择，`cua` 是加载 `@deepseek-ai/dsh-experimental-cua-macos` 的节点 ID：
+源码构建默认使用 `sourceSigning: ad-hoc` 临时签名，不创建证书或钥匙串。二进制变化后可能需要重新授权。需要减少开发重建和跨 worktree 的授权次数时，在 DSH home 的 `cordis.patch.yml` 中选择已有证书及其钥匙串绝对路径；`cua` 是加载 `@deepseek-ai/dsh-experimental-cua-macos` 的节点 ID：
 
 ```yaml
 - id: cua
   config:
     sourceSigning:
-      identity: "Apple Development: Your name (TEAMID)"
+      identity: "<certificate SHA-1 fingerprint>"
+      keychain: "/Users/<user>/.cua-macos-keys/dev/signing.keychain-db"
 ```
 
-将 `identity` 替换为已有证书的名称或 SHA-1 指纹。可选的 `keychain` 指定钥匙串绝对路径；省略时使用用户钥匙串搜索列表，解锁由用户负责。自定义证书模式不会创建、解锁或修改自动生成的身份。自动模式会保存私钥和密码，同一用户的进程可以读取并使用它们；详见[开发签名](native/README.zh.md#build-and-service)。
+`identity` 是已有证书名称或 SHA-1 指纹，`keychain` 是必填的绝对路径。开发者负责生成和解锁钥匙串；构建只使用所选证书。合并配置时保留该节点已有的其他字段。仓库的[开发者签名 skill](../../../.agents/skills/dsh-cua-macos-signing/SKILL.md)指导 Agent 在 `~/.cua-macos-keys/` 中生成、复用和移除身份，并只将选择身份的配置写入 DSH home。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
 | `agentPreset` | `ptc` | 仅为绑定该 preset 的 Agent 注册工具和指引；`false` 表示全局注册。 |
 | `allowedApps` | `[]` | 旧路径和签名许可，只导入 profile 存储一次供撤销，不授予新 Bundle ID 身份访问权限。 |
 | `helperPath` | 包内可执行文件 | 已签名 helper `.app` 内可执行文件的绝对路径；裸二进制会触发 `NATIVE_APPLICATION_REQUIRED`。 |
-| `sourceSigning` | `local-identity` | 源码签名：自动生成固定身份、`ad-hoc` 临时签名，或 `{ identity, keychain? }` 指定已有证书。安装版和 `helperPath` 忽略此项。 |
+| `sourceSigning` | `ad-hoc` | 源码签名：`ad-hoc` 临时签名，或 `{ identity, keychain }` 指定已有证书及钥匙串路径。安装版和 `helperPath` 忽略此项。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
 | `connectTimeoutMs` | `5000` | 连接或启动共享 helper 的截止时间。 |

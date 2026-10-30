@@ -1113,21 +1113,21 @@ export interface Config {
 
 - `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
 - `refs`: [`CuaConfig`](../packages/experimental/cua/src/index.ts)
-- `source`: [`packages/experimental/cua-macos/src/index.ts:18`](../packages/experimental/cua-macos/src/index.ts)
+- `source`: [`packages/experimental/cua-macos/src/index.ts:17`](../packages/experimental/cua-macos/src/index.ts)
 
 ```ts config-catalog
 /** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
 export interface Config extends CuaConfig {
   /**
-   * Source-build signing: `local-identity` (default) creates or reuses an identity in DSH home;
-   * `ad-hoc` binds grants to the code hash; an object selects an existing user-managed certificate.
+   * Source-build signing: `ad-hoc` (default) binds grants to the code hash;
+   * an object selects an existing certificate in an explicitly configured keychain.
    * Installed packages and `helperPath` keep their own signature.
    */
-  sourceSigning: 'ad-hoc' | 'local-identity' | {
+  sourceSigning: 'ad-hoc' | {
     /** Existing codesign certificate name or SHA-1 fingerprint. */
     identity: string
-    /** Absolute keychain path; omission uses the user's keychain search list. The user owns unlocking it. */
-    keychain?: string
+    /** Absolute keychain path. The developer owns creating and unlocking it. */
+    keychain: string
   }
 }
 ```

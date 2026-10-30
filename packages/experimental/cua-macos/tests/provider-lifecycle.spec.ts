@@ -62,20 +62,19 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 
 const config = {
   agentPreset: false,
-  helperPath: resolve('fixture-helper'), sourceSigning: 'local-identity', buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
+  helperPath: resolve('fixture-helper'), sourceSigning: 'ad-hoc', buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
   graceMs: 10, textEventIntervalMs: 8, maxClickHoldMs: 7000, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
 } satisfies Omit<NativeProvider.Config, 'allowedApps'>
 
 const { helperPath: _helperPath, ...automaticConfig } = config
 
-it('defaults to a generated identity and validates all three signing choices', () => {
-  expect(NativeProvider.Config({}).sourceSigning).toBe('local-identity')
+it('defaults to ad-hoc signing and requires a keychain path for certificate signing', () => {
+  expect(NativeProvider.Config({}).sourceSigning).toBe('ad-hoc')
   expect(NativeProvider.Config({ sourceSigning: 'ad-hoc' }).sourceSigning).toBe('ad-hoc')
-  expect(NativeProvider.Config({ sourceSigning: 'local-identity' }).sourceSigning).toBe('local-identity')
-  for (const sourceSigning of [{ identity: 'Apple Development: Example' }, { identity: 'ABC123', keychain: '/keychains/custom.keychain-db' }]) {
+  for (const sourceSigning of [{ identity: 'Apple Development: Example', keychain: '/keychains/custom.keychain-db' }, { identity: 'ABC123', keychain: '/keychains/custom.keychain-db' }]) {
     expect(NativeProvider.Config({ sourceSigning }).sourceSigning).toEqual(sourceSigning)
   }
-  for (const sourceSigning of ['developer-id', {}, { identity: '' }, { identity: ' ' }, { identity: 'Example', keychain: 'relative' }]) {
+  for (const sourceSigning of ['local-identity', 'developer-id', {}, { identity: 'Example' }, { identity: '' }, { identity: ' ' }, { identity: 'Example', keychain: 'relative' }]) {
     expect(() => NativeProvider.Config({ sourceSigning } as never)).toThrow()
   }
 })
@@ -88,8 +87,8 @@ it('projects shared controls and macOS signing without adding signing to the sha
   }
   expect(CuaConfig({})).not.toHaveProperty('sourceSigning')
   expect(CuaConfig.dict).not.toHaveProperty('sourceSigning')
-  expect(NativeProvider.Config({ sourceSigning: 'local-identity', timeoutMs: 1234 })).toMatchObject({
-    agentPreset: 'ptc', sourceSigning: 'local-identity', timeoutMs: 1234,
+  expect(NativeProvider.Config({ sourceSigning: 'ad-hoc', timeoutMs: 1234 })).toMatchObject({
+    agentPreset: 'ptc', sourceSigning: 'ad-hoc', timeoutMs: 1234,
   })
 })
 
@@ -609,7 +608,7 @@ it('prepares the selected native component before registering CUA and creates no
   native.prepare.mockReset().mockResolvedValue(resolve('prepared-helper'))
   await NativeProvider.apply(f.ctx, { ...automaticConfig, allowedApps: [] })
   expect(native.prepare).toHaveBeenCalledTimes(1)
-  expect(native.prepare.mock.calls[0]![0].sourceSigning).toBe('local-identity')
+  expect(native.prepare.mock.calls[0]![0].sourceSigning).toBe('ad-hoc')
   expect(native.instances).toHaveLength(0)
   await f.execute()
   expect(native.instances).toHaveLength(1)

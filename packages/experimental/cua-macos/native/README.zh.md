@@ -25,13 +25,13 @@ kind: "package-reference"
 
 运行 `pnpm --dir packages/experimental/cua-macos run build:native`，在 `native/bin/darwin-<arch>` 下生成带签名的 `DSH Computer Use.app`，`current.json` 选择完整的内容摘要目录。默认使用临时签名；正式打包可传入 `--identity` 指定 Developer ID，并由发布流程完成公证。Host 运行应用内的 `--ensure-shared` 入口，经 LaunchServices 后台启动服务。最后一条连接完成清理后，服务退出。
 
-源码检出以 `--variant dev` 构建，应用包为 `DSH Computer Use Dev.app`，Bundle ID 为 `com.deepseek.harness.computer-use.dev`。开发版默认使用 `local-identity`，首次构建自动生成固定身份；显式 `--signing ad-hoc` 使用临时签名，不访问自动身份。临时签名的指定要求包含代码哈希，二进制变化后可能需要重新授权。
+源码检出以 `--variant dev` 构建，应用包为 `DSH Computer Use Dev.app`，Bundle ID 为 `com.deepseek.harness.computer-use.dev`。开发版和正式版默认临时签名。临时签名的指定要求包含代码哈希，二进制变化后可能需要重新授权。
 
-自动模式在 `$DSH_HOME/computer-use-dev-signing` 下的专用钥匙串中创建或复用 `DSH Computer Use Dev (local)` 证书，并把钥匙串加入用户搜索列表。Host 通过公共 home 路径解析器传入 `--dsh-home`；独立 Python 命令依次使用 `--dsh-home`、非空 `DSH_HOME`、`~/.dsh`。身份、密码和锁文件都在该 home 内，文件锁让同一 home 的初始化与移除串行执行。每次构建使用旁边权限为 `0600` 的身份记录解锁钥匙串。同一用户的进程可以读取密码并签名。指定要求包含 Bundle ID 和证书，重新编译和跨 worktree 后实际保留授权的效果仍需手动验证。
+源码 provider 的 `sourceSigning: { identity, keychain }` 选择已有证书及其钥匙串绝对路径。构建 CLI 使用 `--identity <证书名称或 SHA-1 指纹>` 和 `--keychain <绝对路径>`；正式打包也可省略 `--keychain`，使用用户搜索列表。构建不生成、解锁或移除签名身份；所选证书不可用时签名失败。
 
-用户证书模式使用 `sourceSigning: { identity, keychain? }`，或命令行 `--identity <证书名称或 SHA-1 指纹>`。可选的 `--keychain <绝对路径>` 指定钥匙串，否则使用用户搜索列表。构建不创建证书，不读取自动身份，也不解锁用户钥匙串。`--identity` 与 `--signing` 不能同时指定；正式构建仍默认临时签名，并支持指定证书。
+仓库的[开发者签名 skill](../../../../.agents/skills/dsh-cua-macos-signing/SKILL.md)负责 Agent 操作流程：在 `~/.cua-macos-keys/` 生成独立身份，将指向它的配置写入 DSH home，并按需解锁或移除。私钥和密码由开发者单独维护，删除 DSH home 不会删除它们。同一用户的进程可以读取保存的密码并使用该身份签名。
 
-`pnpm --dir packages/experimental/cua-macos run dev-signing:setup` 可提前生成自动身份；`dev-signing:remove` 删除当前 DSH home 中的身份、密码和钥匙串搜索条目，保留空锁文件。两条命令均接受 `--dsh-home <路径>`。停止使用自动身份时，先选择临时签名或用户证书，否则下次构建会重新生成身份。删除 DSH home 也会删除身份，新证书需要重新授权。已有记录但钥匙串或证书缺失时，构建保留记录并报错，提示使用该 home 明确移除后重新初始化；系统设置中的授权需单独移除。
+使用相同证书的构建共用包含 Bundle ID 和证书的指定要求。首次授权仍需在系统设置中完成；签名要求相同不代替授权后重建、跨 worktree 的实际权限验证。
 
 证书签名包含签名时间。开发构建在 `sources/` 中记录每个未签名应用与证书指纹对应的目录，内容不变时复用该目录。临时签名使用独立记录。显式传入证书名称时会重新签名，因为续期可能改变名称对应的证书。
 
@@ -129,7 +129,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 运行 `python3 packages/experimental/cua-macos/native/tests/startup_e2e.py`，通过 LaunchServices 检查启动即退出、原始错误传递、过期就绪记录拒绝，以及卡住的新实例退出。检查使用自建应用，不申请系统权限。发布单元测试模拟签名；`build:native` 调用真实的 `codesign --verify --strict`，`launcher_identity_e2e.py` 验证 LaunchServices 授权归属。
 
-使用 `python3 packages/experimental/cua-macos/native/tests/test_swift.py` 通过选定 Apple 工具链的 Swift Testing 框架和运行时路径执行离线单元检查；使用 `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` 检查 JSONL 接纳、有序回复和 EOF 退出，不执行桌面操作。应用与协议端到端检查接受 `--helper` 以选择单独构建的对比二进制。 `python3 packages/experimental/cua-macos/native/tests/test_build_app.py` 验证应用发布、开发版构建、已签名目录复用、签名失败和损坏副本拒绝。`python3 packages/experimental/cua-macos/native/tests/test_dev_signing.py` 用模拟的 `security` 命令验证身份初始化、解锁和移除。`python3 packages/experimental/cua-macos/native/tests/dev_signing_e2e.py` 创建临时身份，签出两个不同的构建并检查二者的指定要求相同，随后移除身份并核对钥匙串搜索列表已恢复。
+使用 `python3 packages/experimental/cua-macos/native/tests/test_swift.py` 通过选定 Apple 工具链的 Swift Testing 框架和运行时路径执行离线单元检查；使用 `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` 检查 JSONL 接纳、有序回复和 EOF 退出，不执行桌面操作。应用与协议端到端检查接受 `--helper` 以选择单独构建的对比二进制。 `python3 packages/experimental/cua-macos/native/tests/test_build_app.py` 验证应用发布、开发版构建、已签名目录复用、签名失败和损坏副本拒绝。开发者签名工具的单测由 `scripts/cua-macos-signing.spec.ts` 执行；真实签名验证命令见[开发者签名 skill](../../../../.agents/skills/dsh-cua-macos-signing/SKILL.md)。
 
 运行 `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper`，通过测试自建的 AppKit fixture 核实并发启动、共享服务 PID、独立句柄、同一应用交接、请求级截图期限、连接清理和信号退出。需要已经给所选的正式版或开发版 helper 授予辅助功能和屏幕录制权限。`--without-desktop` 将检查限定为协议与进程生命期。
 
