@@ -421,6 +421,8 @@ function sharedHygieneGates(): Gate[] {
     pnpmScript('plugin-record-callers', 'verify-plugin-record-callers', { label: 'plugin record callers' }),
     pnpmScript('no-unknown-casts', 'verify-no-unknown-casts', { label: 'no new unknown casts' }),
     pnpmScript('no-top-level-await', 'verify-no-top-level-await', { label: 'no module-scope await' }),
+    // No network: the committed subset is compared against the digests recorded at generation time.
+    pnpmScript('vendor-im-types', 'verify:vendor-im', { label: 'vendored Feishu types' }),
   ]
 }
 

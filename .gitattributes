@@ -16,3 +16,6 @@ docs/persistence-changes/historical-formats/*.schema.json linguist-generated=tru
 
 # Unified patch blank context lines require their leading space.
 patches/*.patch whitespace=-blank-at-eol
+
+# Committed output of the pinned Feishu API codegen (scripts/gen-vendor-im-types.ts).
+vendor/plugin-im-adapter-lark/src/types/** linguist-generated=true
