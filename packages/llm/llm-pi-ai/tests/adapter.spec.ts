@@ -14,7 +14,7 @@ import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
-import { DEFAULT_MAX_REQUEST_IMAGE_BYTES, resolveProfiles } from '../src/config.ts'
+import { DEFAULT_MAX_REQUEST_IMAGE_BYTES, DEFAULT_MAX_REQUEST_IMAGES, resolveProfiles } from '../src/config.ts'
 import { memoryAuth } from './auth-double.ts'
 import { assemble } from './assemble.ts'
 import { anthropicTextEvents, closeMockServers, mockServer, textEvents } from './mock-server.ts'
@@ -262,7 +262,7 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.paths).toEqual(['/v1/responses'])
   })
 
-  it('resolves attachment and filesystem services mounted after the adapter when dispatching an image', async () => {
+  it('resolves attachment and filesystem services mounted after the adapter when dispatching an image and enforces the default image-count bound', async () => {
     const server = await mockServer([{ status: 401, body: JSON.stringify({ error: { message: 'expected mock failure' } }) }])
     const attachmentId = AttachmentId(`sha256:${'a'.repeat(64)}`)
     const ref: ImageAttachmentRef = {
@@ -353,6 +353,17 @@ describe('PiAiAdapter provider routing', () => {
     }, expect.any(AbortSignal))
     expect(JSON.stringify(server.requests[0])).toContain(MODEL_IMAGE_PATH)
     expect(server.paths).toEqual(['/v1/responses'])
+
+    const overCount = await assemble(ctx, {
+      provider: 'openai',
+      model: 'gpt-4.1',
+      messages: Array.from({ length: DEFAULT_MAX_REQUEST_IMAGES + 1 }, () => createUserMessage({
+        content: [{ type: 'image', attachment: ref }],
+        source: { kind: 'test' },
+      })),
+    })
+    expect(overCount.finish).toMatchObject({ kind: 'error', failure: { code: 'IMAGE_OFFLOAD_REQUIRED', offloadImages: 1 } })
+    expect(server.requests).toHaveLength(1)
   })
 
   it('forces one wire request for an SDK-retryable provider failure', async () => {
@@ -916,6 +927,10 @@ describe('provider profile lifecycle', () => {
       .toBe(DEFAULT_MAX_REQUEST_IMAGE_BYTES)
     expect(resolveProfiles({ openai: { maxRequestImageBytes: 1024 } }).get('openai')?.maxRequestImageBytes)
       .toBe(1024)
+    expect(() => resolveProfiles({ openai: { maxRequestImages: 0 } })).toThrow(/maxRequestImages must/)
+    expect(() => resolveProfiles({ openai: { maxRequestImages: 1.5 } })).toThrow(/maxRequestImages must/)
+    expect(resolveProfiles({ openai: {} }).get('openai')?.maxRequestImages).toBe(DEFAULT_MAX_REQUEST_IMAGES)
+    expect(resolveProfiles({ openai: { maxRequestImages: 100 } }).get('openai')?.maxRequestImages).toBe(100)
   })
 
   it.each([
@@ -949,6 +964,7 @@ describe('provider profile lifecycle', () => {
       { maxRequestImageBytes: 0 },
       { maxRequestImageBytes: 1.5 },
       { maxRequestImageBytes: Number.NaN },
+      { maxRequestImages: 0 },
     ]
     for (const entry of invalid) {
       const ctx = new Context()

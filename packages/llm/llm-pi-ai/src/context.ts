@@ -276,6 +276,8 @@ export interface PiImageRequestContext {
   resolveImageAccess: ImageAttachmentAccessResolver
   /** Request-level bound on the base64-encoded payload of retained images; omission leaves the bound unchecked. */
   maxRequestImageBytes?: number
+  /** Request-level bound on retained image occurrences; omission leaves the count unchecked. */
+  maxRequestImages?: number
   /** Route pixel and raw encoded-byte budgets. */
   requestImagePolicy?: PiImageRequestBudget
 }
@@ -318,8 +320,8 @@ export function toPiContext(
  * Convert harness history to a pi-ai Context while resolving durable images.
  * Tool result names are recovered from preceding assistant tool calls. Image
  * occurrences the surface marks offloaded become text placeholders; when the
- * retained occurrences' exact base64 payload still exceeds
- * `maxRequestImageBytes`, the call fails with `IMAGE_OFFLOAD_REQUIRED` naming
+ * retained occurrences still exceed `maxRequestImages` or their exact base64
+ * payload exceeds `maxRequestImageBytes`, the call fails with `IMAGE_OFFLOAD_REQUIRED` naming
  * how many more oldest occurrences must be offloaded.
  * @param options - projected request; one-shot system text precedes the leading history prompt.
  * @param images - attachment provider, current path resolver, and request limits.
@@ -350,7 +352,7 @@ async function toPiContextWithImages(
   supportsMidConvoSystemMessages: boolean,
   onReplayDegrade?: (reason: string) => void,
 ): Promise<PiContext> {
-  const { attachments, resolveImageAccess, maxRequestImageBytes } = images
+  const { attachments, resolveImageAccess, maxRequestImageBytes, maxRequestImages } = images
   const requestImagePolicy = images.requestImagePolicy ?? {
     maxPixels: DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET,
     maxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
@@ -358,19 +360,21 @@ async function toPiContextWithImages(
   assertSupportedHistory(options.messages)
   const split = splitSystemPrompt(options)
   const requestImages = await prepareRequestImages(split.messages, attachments, requestImagePolicy, options.signal)
-  if (maxRequestImageBytes !== undefined) {
-    const offloadImages = requiredImageOffload(
-      split.messages,
-      { representation: 'base64', maxBytes: maxRequestImageBytes },
-      block => (requestImages.get(block.attachment.attachmentId) as RequestImageAttachment).bytes,
+  const offloadImages = requiredImageOffload(
+    split.messages,
+    {
+      representation: 'base64',
+      ...maxRequestImageBytes === undefined ? {} : { maxBytes: maxRequestImageBytes },
+      ...maxRequestImages === undefined ? {} : { maxImages: maxRequestImages },
+    },
+    block => (requestImages.get(block.attachment.attachmentId) as RequestImageAttachment).bytes,
+  )
+  if (offloadImages > 0) {
+    throw new LlmError(
+      `pi-ai request images exceed the route bound (${maxRequestImages ?? 'unbounded'} images, ${maxRequestImageBytes ?? 'unbounded'} base64 bytes); ${offloadImages} more oldest occurrence(s) must be offloaded.`,
+      IMAGE_OFFLOAD_REQUIRED_CODE,
+      { offloadImages },
     )
-    if (offloadImages > 0) {
-      throw new LlmError(
-        `pi-ai request images exceed the ${maxRequestImageBytes}-byte base64 bound; ${offloadImages} more oldest occurrence(s) must be offloaded.`,
-        IMAGE_OFFLOAD_REQUIRED_CODE,
-        { offloadImages },
-      )
-    }
   }
   const exactMessages = projectOffloadedImages(
     split.messages,
