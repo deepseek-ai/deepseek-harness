@@ -82,6 +82,7 @@ it.each([new Error('write refused'), 'write refused'])('reports settings and rev
   const f = fixture()
   f.face.openSettings('accessibility')
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().toast?.kind).toBe('opened') })
+  expect(f.actions.openSettings).toHaveBeenCalledWith('accessibility', guideText.settingsMessage)
   f.face.revoke('a'.repeat(64) as CuaApplicationId)
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().toast?.kind).toBe('revoked') })
   f.face.retryApproval('a'.repeat(64) as CuaApplicationId)

@@ -14,13 +14,12 @@ struct PermissionGuideText: Sendable {
 struct PermissionGuideApplication: Sendable {
     let url: URL
     let identifier: String
-    var name: String { url.deletingPathExtension().lastPathComponent }
+    var name: String { url.lastPathComponent }
 
-    func validatedURL() throws -> URL {
+    func validatedURL() throws(NativeFailure) -> URL {
         guard url.isFileURL, url.pathExtension == "app",
-              let bundle = Bundle(url: url), bundle.bundleIdentifier == identifier,
-              let executable = bundle.executableURL,
-              FileManager.default.isExecutableFile(atPath: executable.path) else {
+              let application = InstalledApplication.read(url), application.bundleID == identifier,
+              FileManager.default.isExecutableFile(atPath: application.executablePath) else {
             throw NativeFailure(code: "APPLICATION_UNAVAILABLE", message: "The permission application is unavailable; enable Computer Use again")
         }
         return url
@@ -29,8 +28,9 @@ struct PermissionGuideApplication: Sendable {
 
 @MainActor protocol PermissionGuidePresenting: AnyObject {
     func show(application: PermissionGuideApplication, text: PermissionGuideText, owner: UUID,
-              interval: TimeInterval, granted: @escaping @MainActor () -> Bool) throws
+              interval: TimeInterval, granted: @escaping @MainActor () -> Bool) throws(NativeFailure)
     func reportSettingsFailure()
+    func dismiss()
     func close(owner: UUID)
 }
 
@@ -77,10 +77,10 @@ enum PermissionGuidePlacement {
     private var settingsOpenFailed = false
 
     func show(application: PermissionGuideApplication, text: PermissionGuideText, owner: UUID,
-              interval: TimeInterval, granted: @escaping @MainActor () -> Bool) throws {
-        _ = try application.validatedURL()
+              interval: TimeInterval, granted: @escaping @MainActor () -> Bool) throws(NativeFailure) {
         let previousApplication = NSWorkspace.shared.frontmostApplication
         dismiss(activatePrevious: false)
+        _ = try application.validatedURL()
         self.owner = owner
         self.text = text
         self.granted = granted
@@ -195,6 +195,8 @@ enum PermissionGuidePlacement {
         settingsOpenFailed = true
         if let text { showFailure(text.settingsMessage) }
     }
+
+    func dismiss() { dismiss(activatePrevious: false) }
 
     func close(owner: UUID) {
         guard self.owner == owner else { return }

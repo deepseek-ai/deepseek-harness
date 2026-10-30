@@ -11,8 +11,10 @@ import Testing
     var text: PermissionGuideText?
     var granted: (@MainActor () -> Bool)?
     var settingsFailure = false
+    var showFailure: NativeFailure?
     func show(application: PermissionGuideApplication, text: PermissionGuideText, owner: UUID,
-              interval: TimeInterval, granted: @escaping @MainActor () -> Bool) throws {
+              interval: TimeInterval, granted: @escaping @MainActor () -> Bool) throws(NativeFailure) {
+        if let showFailure { throw showFailure }
         self.application = application
         self.text = text
         self.owner = owner
@@ -20,8 +22,9 @@ import Testing
         isOpen = true
     }
     func reportSettingsFailure() { settingsFailure = true }
+    func dismiss() { isOpen = false; granted = nil; owner = nil }
     func close(owner: UUID) {
-        if self.owner == owner { isOpen = false; granted = nil }
+        if self.owner == owner { dismiss() }
     }
 }
 
@@ -62,7 +65,10 @@ func settingsFailureRetainsTheNativeGuideWithManualInstructions() throws {
     do {
         _ = try permissions.request("accessibility", owner: UUID(), text: copy, interval: 1)
         Issue.record("Settings-open failure was accepted")
-    } catch let failure as NativeFailure { #expect(failure.code == "SETTINGS_UNAVAILABLE") }
+    } catch let failure as NativeFailure {
+        #expect(failure.code == "SETTINGS_UNAVAILABLE")
+        #expect(failure.message == copy.settingsMessage)
+    }
     #expect(guide.isOpen && guide.settingsFailure)
 }
 
@@ -70,21 +76,54 @@ func settingsFailureRetainsTheNativeGuideWithManualInstructions() throws {
 func grantedPermissionsOpenSettingsWithoutCreatingAGuide() throws {
     let guide = GuideFixture()
     var opened = false
+    guide.isOpen = true
     let permissions = SystemPermissions(application: application,
         actions: SystemPermissionActions(accessibility: { true }, screenRecording: { true }, open: { _ in opened = true; return true }), guide: guide)
     #expect(try permissions.request("screenRecording", owner: UUID(), text: copy, interval: 1)["screenRecording"] == .bool(true))
     #expect(opened && !guide.isOpen)
 }
 
-@MainActor @Test
-func anUnknownPermissionApplicationDoesNotOfferAnotherBundle() throws {
+@MainActor @Test(arguments: [false, true])
+func unavailablePermissionApplicationsStillOpenSettings(identified: Bool) throws {
     let guide = GuideFixture()
-    let permissions = SystemPermissions(application: nil,
-        actions: SystemPermissionActions(accessibility: { false }, screenRecording: { false }, open: { _ in true }), guide: guide)
+    guide.showFailure = NativeFailure(code: "APPLICATION_UNAVAILABLE", message: "Native bundle validation failed")
+    var opened: [URL] = []
+    let permissions = SystemPermissions(application: identified ? application : nil,
+        actions: SystemPermissionActions(accessibility: { false }, screenRecording: { false }, open: { opened.append($0); return true }),
+        guide: guide)
     do {
         _ = try permissions.request("accessibility", owner: UUID(), text: copy, interval: 1)
-        Issue.record("Unknown application was accepted")
-    } catch let failure as NativeFailure { #expect(failure.code == "APPLICATION_UNAVAILABLE") }
+        Issue.record("Unavailable application was accepted")
+    } catch let failure as NativeFailure {
+        #expect(failure.code == "APPLICATION_UNAVAILABLE")
+        #expect(failure.message == copy.unavailableMessage)
+    }
+    #expect(opened.map(\.absoluteString) == ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"])
+    #expect(!guide.isOpen)
+}
+
+@MainActor @Test func simultaneousGuideAndSettingsFailuresKeepBothRecoveryInstructions() throws {
+    let guide = GuideFixture()
+    var openCalls = 0
+    let permissions = SystemPermissions(application: nil,
+        actions: SystemPermissionActions(accessibility: { false }, screenRecording: { false }, open: { _ in openCalls += 1; return false }),
+        guide: guide)
+    do {
+        _ = try permissions.request("screenRecording", owner: UUID(), text: copy, interval: 1)
+        Issue.record("Failed settings navigation was accepted")
+    } catch let failure as NativeFailure {
+        #expect(failure.code == "SETTINGS_UNAVAILABLE")
+        #expect(failure.message == copy.unavailableMessage + "\n" + copy.settingsMessage)
+    }
+    #expect(openCalls == 1 && !guide.isOpen)
+}
+
+@MainActor @Test func explicitSettingsNavigationDismissesThePreviousPermissionGuide() throws {
+    let guide = GuideFixture()
+    guide.isOpen = true
+    let permissions = SystemPermissions(application: application,
+        actions: SystemPermissionActions(accessibility: { false }, screenRecording: { true }, open: { _ in true }), guide: guide)
+    #expect(try permissions.openSettings("screenRecording")["opened"] == .bool(true))
     #expect(!guide.isOpen)
 }
 
@@ -116,8 +155,22 @@ func anUnknownPermissionApplicationDoesNotOfferAnotherBundle() throws {
     try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: contents.appendingPathComponent("Info.plist"))
     let target = PermissionGuideApplication(url: app, identifier: "test.helper")
     #expect(try target.validatedURL().path == app.path)
-    #expect(target.name == "Helper")
+    #expect(target.name == "Helper.app")
     #expect(throws: (any Error).self) { try PermissionGuideApplication(url: app, identifier: "test.other").validatedURL() }
+    let cached = try #require(Bundle(url: app))
+    #expect(cached.bundleIdentifier == "test.helper")
+    try withExtendedLifetime(cached) {
+        var replacement = info
+        replacement["CFBundleIdentifier"] = "test.replacement"
+        try PropertyListSerialization.data(fromPropertyList: replacement, format: .xml, options: 0)
+            .write(to: contents.appendingPathComponent("Info.plist"), options: .atomic)
+        #expect(InstalledApplication.read(app)?.bundleID == "test.replacement")
+        #expect(throws: NativeFailure.self) { try target.validatedURL() }
+        #expect(try PermissionGuideApplication(url: app, identifier: "test.replacement").validatedURL().path == app.path)
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+            .write(to: contents.appendingPathComponent("Info.plist"), options: .atomic)
+        #expect(try target.validatedURL().path == app.path)
+    }
     try FileManager.default.removeItem(at: app)
     #expect(throws: (any Error).self) { try target.validatedURL() }
 }

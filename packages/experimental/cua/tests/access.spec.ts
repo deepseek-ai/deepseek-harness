@@ -8,7 +8,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import { ApplicationAuthorizationResult, installCuaAccess } from '../src/access.ts'
 import type { CuaApplicationGrant } from '../src/access-types.ts'
 import type { CuaAppHandle } from '../src/types.ts'
-import { NativeClient } from '../src/native-client.ts'
+import { NativeClient, NativeError } from '../src/native-client.ts'
 import { permissionFixture } from './permission-fixture.ts'
 
 const guideText = {
@@ -170,7 +170,7 @@ it('checks native permissions without converting an OS request into a grant', as
   expect(before).toEqual({ allowedApps: [], blockedApps: [], persistentAvailable: true })
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ accessibility: false, screenRecording: false })
   expect(await f.ctx.cuaAccess.requestPermission('accessibility', guideText)).toMatchObject({ accessibility: false })
-  await f.ctx.cuaAccess.openSettings('screenRecording')
+  await f.ctx.cuaAccess.openSettings('screenRecording', guideText.settingsMessage)
   const transport = native.instances[1]!
   expect(transport.request).toHaveBeenCalledWith('requestPermission',
     { permission: 'accessibility', ...guideText, pollIntervalMs: 1000 }, expect.any(AbortSignal))
@@ -471,3 +471,23 @@ it('does not reactivate old handles when stored permission was revoked and later
   await f.access.select(f.agent, replacement, handle, identity, signal)
   expect(f.answer).toHaveBeenCalledOnce()
 })
+
+it('localizes settings-open refusal and retains the native cause', async () => {
+  const f = await setup()
+  await f.ctx.cuaAccess.systemStatus()
+  const failure = new NativeError('SETTINGS_UNAVAILABLE', 'Native settings-open failure')
+  native.instances.at(-1)!.request.mockRejectedValueOnce(failure)
+  const promise = f.ctx.cuaAccess.openSettings('accessibility', '请手动打开系统设置中的辅助功能')
+  await expect(promise).rejects.toMatchObject({
+    code: 'SETTINGS_UNAVAILABLE', message: 'SETTINGS_UNAVAILABLE: 请手动打开系统设置中的辅助功能', cause: failure,
+  })
+})
+
+it.each([new Error('transport ended'), new NativeError('NATIVE_EXIT', 'helper exited')])(
+  'keeps unrelated settings failures intact: %s', async (failure) => {
+    const f = await setup()
+    await f.ctx.cuaAccess.systemStatus()
+    native.instances.at(-1)!.request.mockRejectedValueOnce(failure)
+    await expect(f.ctx.cuaAccess.openSettings('accessibility', guideText.settingsMessage)).rejects.toBe(failure)
+  },
+)
