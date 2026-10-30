@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { CuaConfig, installCua } from '@deepseek-ai/dsh-cua'
+import { createPermissionParameters } from './permission-guide.ts'
 import { nativeHostArchitecture, prepareNativeExecutable } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
 import { GUIDANCE } from './guidance.ts'
@@ -15,6 +16,8 @@ export const name = 'experimental-cua-macos'
 export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'agents']
 /** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
 export interface Config extends CuaConfig {
+  /** Interval in milliseconds between permission and position checks while the native guide is open. */
+  permissionPollIntervalMs: number
   /**
    * Source-build signing: `ad-hoc` (default) binds grants to the code hash;
    * an object selects an existing certificate in an explicitly configured keychain.
@@ -31,6 +34,7 @@ export interface Config extends CuaConfig {
 export const Config = Schema.object({
   // Schemastery erases object field types on dict; the shared Config declares their output types.
   ...CuaConfig.dict as { [Key in keyof CuaConfig]: Schema<unknown, CuaConfig[Key]> },
+  permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
   sourceSigning: Schema.union([
     Schema.const('ad-hoc'),
     Schema.object({
@@ -49,9 +53,11 @@ const description = 'Inspect macOS permissions, select an application and window
  * @returns Completion after native preparation and tool registration.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
+  const backend = { createChannel: createSharedNativeChannel, guidance: GUIDANCE, description,
+    permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
-    installCua(ctx, config, { helperPath: config.helperPath, createChannel: createSharedNativeChannel, guidance: GUIDANCE, description })
+    installCua(ctx, config, { helperPath: config.helperPath, ...backend })
     return
   }
   const architecture = nativeHostArchitecture(process.platform, process.arch)
@@ -68,5 +74,5 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }, 'dsh-cua.native-preparation')
   const helperPath = await prepared
   controller.signal.throwIfAborted()
-  installCua(ctx, config, { helperPath, createChannel: createSharedNativeChannel, guidance: GUIDANCE, description })
+  installCua(ctx, config, { helperPath, ...backend })
 }

@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ForgeDiffFile } from '../src/types.ts'
 import { ChangedFiles, type ChangedFilesState } from '../src/client/ChangedFiles.tsx'
-import { changedFileTree, filterFileTree } from '../src/client/file-tree.ts'
+import { changedFileTree, filesInTreeOrder, filterFileTree } from '../src/client/file-tree.ts'
 import { en } from '../src/client/locales.ts'
 import { FileTreePane } from '../src/client/FileTreePane.tsx'
 
@@ -19,10 +19,12 @@ function file(path: string, previousPath: string | null = null): ForgeDiffFile {
 it('compacts directory chains, sorts directories before files, and keeps identical basenames distinct', () => {
   const tree = changedFileTree([file('z.ts'), file('src/client/b.ts'), file('docs/a.ts'), file('src/client/a.ts')])
   expect(tree.map(node => [node.kind, node.name])).toEqual([['directory', 'docs'], ['directory', 'src/client'], ['file', 'z.ts']])
+  expect(filesInTreeOrder(tree).map(file => file.path)).toEqual(['docs/a.ts', 'src/client/a.ts', 'src/client/b.ts', 'z.ts'])
   expect(filterFileTree(tree, 'A.TS').map(node => node.path)).toEqual(['docs', 'src/client'])
   expect(filterFileTree(tree, ' ')).toBe(tree)
   expect(filterFileTree(tree, 'missing')).toEqual([])
   expect(changedFileTree([])).toEqual([])
+  expect(filesInTreeOrder([])).toEqual([])
 })
 
 it('matches renamed paths and keeps file names containing backslashes literal', () => {
@@ -33,7 +35,7 @@ it('matches renamed paths and keeps file names containing backslashes literal', 
 
 it('preserves input order for repeated paths with distinct file metadata', () => {
   const first = file('same.ts', 'original.ts'), second = file('same.ts')
-  expect(changedFileTree([file('z.ts'), first, file('a.ts'), second]).map(node => node.kind === 'file' && node.file))
+  expect(filesInTreeOrder(changedFileTree([file('z.ts'), first, file('a.ts'), second])))
     .toEqual([file('a.ts'), first, second, file('z.ts')])
 })
 

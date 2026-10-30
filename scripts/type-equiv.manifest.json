@@ -2137,6 +2137,11 @@
       "source": "packages/session/session-projection/src/index.ts"
     },
     {
+      "doc": "docs/subsystems/session-projection.md",
+      "symbol": "ProjectionEventChangeListener",
+      "source": "packages/session/session-projection/src/index.ts"
+    },
+    {
       "doc": "docs/subsystems/core.md",
       "symbol": "AgentHandle",
       "source": "packages/core/agent/src/index.ts"
