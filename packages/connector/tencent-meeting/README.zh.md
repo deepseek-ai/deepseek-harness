@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-腾讯会议插件让对话通过官方 `tmeet` CLI 使用腾讯会议。安装本 bundle 会添加两行：CLI 及其技能，以及插件页上的腾讯会议账号区块，用户无需先发起对话就能在那里登录和退出登录。CLI 把登录保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
+腾讯会议插件让对话通过官方 `tmeet` CLI 使用腾讯会议。安装本 bundle 会添加两行：CLI 及其技能，以及插件页上的腾讯会议账号区块，用户无需先发起对话就能在那里登录和退出登录。CLI 把登录保存在默认配置中，与用户自己的终端共用。仅支持 macOS 和 Windows x64。
 
 ## 目录
 
@@ -82,7 +82,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 仅支持 macOS；各行包列出了自己的限制。
+- 仅支持 macOS 和 Windows x64；各行包列出了自己的限制。
 - 安装新版本的 `@tencentcloud/tmeet` 会退出这台电脑上 tmeet 的登录，因为已允许的安装脚本会运行 `tmeet auth logout`。
 
 <a id="dev-note"></a>

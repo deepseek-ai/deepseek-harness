@@ -3,6 +3,7 @@
 import { accessSync, constants } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 
 /** The name tmeet's guides run it by. */
 export const PROGRAM = 'tmeet'
@@ -13,6 +14,7 @@ const PLATFORM_EXECUTABLES: Readonly<Partial<Record<string, string>>> = {
   'darwin-x64': 'tmeet-macOS-Intel',
   'linux-arm64': 'tmeet-Linux-ARM64',
   'linux-x64': 'tmeet-Linux-x86_64',
+  'win32-x64': 'tmeet-Windows-x86_64.exe',
 }
 
 function requireExecutable(program: string, remedy: string): void {
@@ -33,15 +35,16 @@ function platformExecutable(): string {
 
 /**
  * Locate the managed executable.
- * @param binDir - absolute override holding an executable `tmeet`; defaults to the installed `@tencentcloud/tmeet`
+ * @param binDir - absolute override holding an executable `tmeet`, `tmeet.exe` on Windows; defaults to the installed `@tencentcloud/tmeet`
  *   executable for this platform.
  * @returns the absolute path of the executable.
  * @throws when the platform has no packaged executable or the executable is missing or not executable.
  */
 export function resolveCliExecutable(binDir: string | undefined): string {
   if (binDir !== undefined) {
-    const executable = join(binDir, PROGRAM)
-    requireExecutable(executable, 'set binDir to a directory containing an executable tmeet')
+    const file = executableFileName(PROGRAM)
+    const executable = join(binDir, file)
+    requireExecutable(executable, `set binDir to a directory containing an executable ${file}`)
     return executable
   }
   const executable = platformExecutable()

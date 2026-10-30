@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The Tencent Meeting plugin lets conversations use Tencent Meeting through the official `tmeet` CLI. Installing this bundle adds two rows: the CLI with its skill, and the Tencent Meeting account section on the Plugins page, where the user signs in and out without starting a conversation. The CLI keeps the sign-in in its default configuration, which the user's own terminal shares. Only macOS is supported.
+The Tencent Meeting plugin lets conversations use Tencent Meeting through the official `tmeet` CLI. Installing this bundle adds two rows: the CLI with its skill, and the Tencent Meeting account section on the Plugins page, where the user signs in and out without starting a conversation. The CLI keeps the sign-in in its default configuration, which the user's own terminal shares. Only macOS and Windows x64 are supported.
 
 ## Table of Contents
 
@@ -82,7 +82,7 @@ None beyond the `tencent-meeting` row's skill catalog; the bundle itself sends n
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only macOS is supported; the row packages list their own limitations.
+- Only macOS and Windows x64 are supported; the row packages list their own limitations.
 - Installing a new `@tencentcloud/tmeet` version signs out tmeet on this computer, because its approved install script runs `tmeet auth logout`.
 
 <a id="dev-note"></a>

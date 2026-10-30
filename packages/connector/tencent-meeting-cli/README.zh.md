@@ -56,7 +56,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `binDir` | 不设置，此时运行当前平台已安装的 `@tencentcloud/tmeet` 可执行文件 | 包含可执行 `tmeet` 的绝对目录 |
+| `binDir` | 不设置，此时运行当前平台已安装的 `@tencentcloud/tmeet` 可执行文件 | 包含可执行 `tmeet`（Windows 上为 `tmeet.exe`）的绝对目录 |
 | `commandTimeoutMs` | `30000` | 一次账号检查或退出登录的截止时间，包含可执行文件查找 |
 | `skillsDir` | 无 | 按仓库路径存放 `skills/tmeet-skill/` 文件的目录；设置后不下载子指南 |
 | `skillsUrls` | `['https://codeload.github.com']` | 按顺序尝试的归档下载前缀 |
@@ -136,6 +136,12 @@ kind: "package-reference"
 Tencent Meeting CLI: run `tmeet` by its absolute path "<executable>"; the bare name may resolve to another installation or to none.
 ```
 
+##### Windows 上的运行时上下文条目
+
+```markdown
+Tencent Meeting CLI: run `tmeet` by its absolute path with the call operator, & '<executable>'; the bare name may resolve to another installation or to none.
+```
+
 #### Token 影响
 
 每份运行时上下文快照中一行，约 115 个字符加上路径。
@@ -148,7 +154,7 @@ Tencent Meeting CLI: run `tmeet` by its absolute path "<executable>"; the bare n
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 仅支持 macOS。Linux 未经验证，Windows 没有对应的可执行文件。
+- 仅支持 macOS 和 Windows x64；Linux 未经验证。`@tencentcloud/tmeet` 没有 Windows arm64 可执行文件。
 - 命令必须在本 Host 上运行。组合把命令放到别处运行（例如通过 SSH）时，插件仍会加载，但每条运行 `tmeet` 的命令都会因为那里没有这个路径而失败。
 - 插件使用 CLI 的默认配置。在 DSH 中登录或退出登录会影响用户自己的终端，没有 DSH 专用的账号，也没有账号选择。
 - 账号状态来自 tmeet 1.0.18 `auth status` 的纯文本输出，登录链接来自它的 `authorize url:` 行；改变这些文本的 CLI 版本会使检查或登录失败，并给出可重试的结果。服务端没有返回用户名的账号会显示为待确认。

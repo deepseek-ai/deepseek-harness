@@ -56,7 +56,7 @@ A check runs `auth status`, which in tmeet 1.0.18 prints plain text and exits wi
 
 | Field | Default | Meaning |
 |---|---|---|
-| `binDir` | unset, which runs the installed `@tencentcloud/tmeet` executable for this platform | Absolute directory containing an executable `tmeet` |
+| `binDir` | unset, which runs the installed `@tencentcloud/tmeet` executable for this platform | Absolute directory containing an executable `tmeet`, `tmeet.exe` on Windows |
 | `commandTimeoutMs` | `30000` | Deadline for one account check or sign-out, including executable lookup |
 | `skillsDir` | none | Directory holding the files of `skills/tmeet-skill/` at their repository paths; when set, the guide is not downloaded |
 | `skillsUrls` | `['https://codeload.github.com']` | Archive download prefixes tried in order |
@@ -136,6 +136,12 @@ While the row is loaded, the [CLI account library](../cli-account/README.md#mode
 Tencent Meeting CLI: run `tmeet` by its absolute path "<executable>"; the bare name may resolve to another installation or to none.
 ```
 
+##### Runtime-context entry on Windows
+
+```markdown
+Tencent Meeting CLI: run `tmeet` by its absolute path with the call operator, & '<executable>'; the bare name may resolve to another installation or to none.
+```
+
 #### Token effect
 
 One line of about 115 characters plus the path in each runtime-context snapshot.
@@ -148,7 +154,7 @@ The system prompt does not change; loading or unloading the row, or a changed pa
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only macOS is supported. Linux is unverified, and Windows has no mapped executable.
+- Only macOS and Windows x64 are supported; Linux is unverified. `@tencentcloud/tmeet` ships no Windows arm64 executable.
 - Commands must run on this Host. When a composition runs them elsewhere, such as over SSH, the plugin still loads, and each command that runs `tmeet` fails because the path does not exist there.
 - The plugin uses the CLI's default configuration. Signing in or out from DSH affects the user's own terminal, and there is no DSH-private account or account picker.
 - The account state comes from the plain-text output of tmeet 1.0.18's `auth status`, and the sign-in link from its `authorize url:` line; a CLI version that changes that text fails the check or the sign-in with a retryable result. An account for which the server returns no user name reads as unconfirmed.

@@ -5,6 +5,8 @@ import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
+import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
 import TencentMeeting from '../src/index.ts'
 import { createBinDir, ScriptedSubprocess } from './harness.ts'
 
@@ -70,7 +72,7 @@ describe('Tencent Meeting plugin', () => {
     const fiber = await ctx.plugin(TencentMeeting, { ...CONFIG, binDir, skillsDir })
     expect(await runtimeContext()).toEqual([{
       name: 'tencent-meeting:cli',
-      text: `Tencent Meeting CLI: run \`tmeet\` by its absolute path "${join(binDir, 'tmeet')}"; the bare name may resolve to another installation or to none.`,
+      text: cliPathContextText({ name: 'tencent-meeting:cli', product: 'Tencent Meeting', program: 'tmeet', executable: join(binDir, executableFileName('tmeet')) }, process.platform),
     }])
     expect(await ctx.skills.list()).not.toEqual([])
 

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, it, onTestFinished } from 'vitest'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 import { resolveCliExecutable } from '../src/directory.ts'
 import { createBinDir } from './harness.ts'
 
@@ -12,6 +13,7 @@ const PLATFORM_EXECUTABLES: Readonly<Partial<Record<string, string>>> = {
   'darwin-x64': 'tmeet-macOS-Intel',
   'linux-arm64': 'tmeet-Linux-ARM64',
   'linux-x64': 'tmeet-Linux-x86_64',
+  'win32-x64': 'tmeet-Windows-x86_64.exe',
 }
 const executable = PLATFORM_EXECUTABLES[`${process.platform}-${process.arch}`]
 const PACKAGE_DIST = join(dirname(fileURLToPath(import.meta.resolve('@tencentcloud/tmeet/package.json'))), 'dist')
@@ -35,7 +37,8 @@ it('accepts a configured directory and names its missing executable with the rem
     await rm(binDir, { recursive: true, force: true })
     await rm(empty, { recursive: true, force: true })
   })
-  expect(resolveCliExecutable(binDir)).toBe(join(binDir, 'tmeet'))
+  const file = executableFileName('tmeet')
+  expect(resolveCliExecutable(binDir)).toBe(join(binDir, file))
   expect(() => resolveCliExecutable(empty))
-    .toThrow(`tencent-meeting: ${join(empty, 'tmeet')} is not executable; set binDir to a directory containing an executable tmeet`)
+    .toThrow(`tencent-meeting: ${join(empty, file)} is not executable; set binDir to a directory containing an executable ${file}`)
 })

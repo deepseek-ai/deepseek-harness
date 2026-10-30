@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
+import { CliCommandExecutor, executableFileName, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills'
@@ -219,7 +219,7 @@ describe('Tencent Meeting Remote', () => {
     expect(await finished()).toMatchObject({ kind: 'check', outcome: 'succeeded' })
     expect(states[0]).toMatchObject({ account: { state: 'unchecked', skills: 'installed' }, operation: { kind: 'check' } })
     expect(states.at(-1)?.account).toEqual({ state: 'signed-out', skills: 'installed' })
-    expect(subprocess.lookups[0]?.command).toBe(join(binDir, 'tmeet'))
+    expect(subprocess.lookups[0]?.command).toBe(join(binDir, executableFileName('tmeet')))
     expect(await finished(ctx.tencentMeeting.check())).toMatchObject({ kind: 'check', outcome: 'succeeded' })
 
     script[LOGIN] = () => {}

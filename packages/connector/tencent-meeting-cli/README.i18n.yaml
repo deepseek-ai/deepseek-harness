@@ -27,8 +27,8 @@
   en: ea83411e51508537
   zh: e7523c08f654c347
 /deepseek-ai-dsh-tencent-meeting-cli/use-this-package/configure:
-  en: d328064a9a1e719d
-  zh: 66dc0533b987d458
+  en: 632b75c3fcacdef7
+  zh: e112db4fad4207e3
 /deepseek-ai-dsh-tencent-meeting-cli/understand-the-implementation:
   en: bbdcbec918b8d321
   zh: 5248787bf2f2d916
@@ -71,6 +71,9 @@
 /deepseek-ai-dsh-tencent-meeting-cli/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
   en: c91314832f78f460
   zh: aac156ea0b5b816a
+/deepseek-ai-dsh-tencent-meeting-cli/model-experience/cli-path/what-the-model-sees/runtime-context-entry-on-windows:
+  en: 54f899bbaf7ed198
+  zh: 31256473a192427b
 /deepseek-ai-dsh-tencent-meeting-cli/model-experience/cli-path/token-effect:
   en: 3fb1f01010d97c7d
   zh: c0aa6fb57ceadf95
@@ -78,8 +81,8 @@
   en: 67398dd4e4b02db9
   zh: a873eacd006fa656
 /deepseek-ai-dsh-tencent-meeting-cli/known-limitations-and-deferred-work:
-  en: 51dabb3ec8484f15
-  zh: 8e454e1dbbf48aa9
+  en: 052965a0a5cb8710
+  zh: 530a8f284ecfe44c
 /deepseek-ai-dsh-tencent-meeting-cli/known-limitations-and-deferred-work/dev-note:
   en: d67cf464f2df6693
   zh: ff08f0d56a5ea79d
