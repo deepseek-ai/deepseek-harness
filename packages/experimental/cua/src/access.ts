@@ -8,22 +8,21 @@ import { ApplicationAccess, type AccessOptions } from './application-access.ts'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { ApplicationIcon } from './protocol.ts'
-import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
-import type { CuaApplicationId, CuaApplicationState, CuaPermissionGuideText, CuaSystemPermission, CuaSystemPermissionState } from './access-types.ts'
+import { NativeClient, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
+import type { CuaApplicationId, CuaApplicationState, CuaSystemPermission, CuaSystemPermissionState } from './access-types.ts'
 export { ApplicationAuthorizationResult } from './application-access.ts'
 export type * from './access-types.ts'
 
 interface ControlOptions extends AccessOptions {
   native: NativeClientConfig
   createChannel: NativeChannelFactory
-  permissionPollIntervalMs: number
+  permissionParameters: (method: 'requestPermission' | 'openPermissionSettings', permission: CuaSystemPermission, locale: string) => Record<string, JsonValue>
 }
 type Control = (method: string, params: Record<string, JsonValue>) => Promise<JsonValue>
 const permissionProcess = z.object({ pid: z.number().int().positive(), path: z.string().optional(), name: z.string().optional() })
 const systemPermissions = z.object({
   accessibility: z.boolean(), screenRecording: z.boolean(), helper: permissionProcess, parent: permissionProcess,
-  launchApplication: z.object({ name: z.string().min(1), path: z.string().min(1),
-    icon: ApplicationIcon.optional(), bundleId: z.string().optional() }).optional(),
+  launchApplication: z.object({ name: z.string().min(1), path: z.string().min(1), icon: ApplicationIcon.optional() }).optional(),
 })
 
 declare module '@deepseek-ai/cordis' {
@@ -39,10 +38,10 @@ export class CuaAccess extends TypertRemoteService {
    * @param ctx Provider context.
    * @param policy Application decision owner.
    * @param control Serialized native permission dispatch.
-   * @param permissionPollIntervalMs Interval between native guide permission and position checks.
+   * @param permissionParameters Provider-owned native parameters for the selected action and Client language.
    */
   constructor(ctx: Context, private readonly policy: ApplicationAccess,
-    private readonly control: Control, private readonly permissionPollIntervalMs: number) {
+    private readonly control: Control, private readonly permissionParameters: ControlOptions['permissionParameters']) {
     super(ctx, 'cuaAccess')
   }
 
@@ -99,33 +98,27 @@ export class CuaAccess extends TypertRemoteService {
   }
 
   /**
-   * Open the selected System Settings pane; show the native drag guide only for a missing privilege.
-   * Guide preparation failures still attempt settings navigation before reporting the failure.
+   * Request the selected system privilege through the native provider.
    * @param permission macOS privilege to request.
-   * @param text Localized guide copy; application identity comes from the native helper.
-   * @returns Current permission observations; opening the guide does not grant permission.
+   * @param locale Current Client language for provider-owned permission UI.
+   * @returns Current permission observations; requesting does not establish consent.
    */
   @Remote
-  async requestPermission(permission: CuaSystemPermission, text: CuaPermissionGuideText): Promise<CuaSystemPermissionState> {
+  async requestPermission(permission: CuaSystemPermission, locale: string): Promise<CuaSystemPermissionState> {
     return systemPermissions.parse(await this.control('requestPermission',
-      { permission, ...text, pollIntervalMs: this.permissionPollIntervalMs }))
+      this.permissionParameters('requestPermission', permission, locale)))
   }
 
   /**
    * Open the macOS privacy pane selected by the user.
    * @param permission Corresponding system privilege.
-   * @param failureMessage Localized manual navigation instructions if macOS rejects the open request.
+   * @param locale Current Client language for provider-owned recovery instructions.
    * @returns Completion after macOS accepted the open request.
    */
   @Remote
-  async openSettings(permission: CuaSystemPermission, failureMessage: string): Promise<void> {
-    try { z.object({ opened: z.literal(true) }).parse(await this.control('openPermissionSettings', { permission })) }
-    catch (error) {
-      if (error instanceof NativeError && error.code === 'SETTINGS_UNAVAILABLE') {
-        throw new NativeError(error.code, failureMessage, { cause: error })
-      }
-      throw error
-    }
+  async openSettings(permission: CuaSystemPermission, locale: string): Promise<void> {
+    z.object({ opened: z.literal(true) }).parse(await this.control('openPermissionSettings',
+      this.permissionParameters('openPermissionSettings', permission, locale)))
   }
 
   /**
@@ -174,6 +167,6 @@ export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<Ap
     await Promise.allSettled([policy.dispose(), tail])
     await client?.dispose()
   }, 'cua-access.dispose')
-  new CuaAccess(ctx, policy, control, options.permissionPollIntervalMs)
+  new CuaAccess(ctx, policy, control, options.permissionParameters)
   return { select: policy.select.bind(policy), run: policy.run.bind(policy), forget: policy.forget.bind(policy), dispose }
 }

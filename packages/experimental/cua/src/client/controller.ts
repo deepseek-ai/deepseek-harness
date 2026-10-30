@@ -4,7 +4,7 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-cua/remote'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { CuaApplicationId, CuaApplicationState, CuaPermissionGuideText, CuaSystemPermission, CuaSystemPermissionState } from '../access-types.ts'
+import type { CuaApplicationId, CuaApplicationState, CuaSystemPermission, CuaSystemPermissionState } from '../access-types.ts'
 
 interface PermissionData {
   runtime: { persistent: boolean; writable: boolean }
@@ -52,10 +52,10 @@ export class PermissionController {
   private sequence = 0
   /**
    * @param remote Generated CUA Remote namespace; failed results follow the query and action paths.
-   * @param guideText Copy in the current Client locale for the selected native permission guide.
+   * @param locale Current Client language, read when a permission action starts.
    */
   constructor(private readonly remote: Context['remote']['cuaAccess'],
-    private readonly guideText: (permission: CuaSystemPermission) => CuaPermissionGuideText) {}
+    private readonly locale: () => string) {}
   /**
    * Bind the permission projection to its user actions.
    * @returns Reactive state and controls shared by the page, prompt, and toast host.
@@ -65,10 +65,10 @@ export class PermissionController {
       hooks: { cuaPermissions: this.state },
       refresh: () => { this.enqueue() },
       request: (permission) => {
-        this.enqueue(() => this.remote.requestPermission(permission, this.guideText(permission)), 'requested')
+        this.enqueue(() => this.remote.requestPermission(permission, this.locale()), 'requested')
       },
       openSettings: (permission) => {
-        this.enqueue(() => this.remote.openSettings(permission, this.guideText(permission).settingsMessage), 'opened')
+        this.enqueue(() => this.remote.openSettings(permission, this.locale()), 'opened')
       },
       revoke: (id) => { this.enqueue(() => this.remote.revoke(id), 'revoked') },
       retryApproval: (id) => { this.enqueue(() => this.remote.retryApproval(id), 'retryAllowed') },

@@ -990,15 +990,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Optional native PNG icons keyed by executable path; applications without paths are skipped.',
       },
       {
-        signature: '@Remote async requestPermission(permission: CuaSystemPermission, text: CuaPermissionGuideText): Promise<CuaSystemPermissionState>',
-        description: 'Open the selected System Settings pane; show the native drag guide only for a missing privilege. Guide preparation failures still attempt settings navigation before reporting the failure.',
-        parameters: [{ name: 'permission', description: 'macOS privilege to request.' }, { name: 'text', description: 'Localized guide copy; application identity comes from the native helper.' }],
-        returns: 'Current permission observations; opening the guide does not grant permission.',
+        signature: '@Remote async requestPermission(permission: CuaSystemPermission, locale: string): Promise<CuaSystemPermissionState>',
+        description: 'Request the selected system privilege through the native provider.',
+        parameters: [{ name: 'permission', description: 'macOS privilege to request.' }, { name: 'locale', description: 'Current Client language for provider-owned permission UI.' }],
+        returns: 'Current permission observations; requesting does not establish consent.',
       },
       {
-        signature: '@Remote async openSettings(permission: CuaSystemPermission, failureMessage: string): Promise<void>',
+        signature: '@Remote async openSettings(permission: CuaSystemPermission, locale: string): Promise<void>',
         description: 'Open the macOS privacy pane selected by the user.',
-        parameters: [{ name: 'permission', description: 'Corresponding system privilege.' }, { name: 'failureMessage', description: 'Localized manual navigation instructions if macOS rejects the open request.' }],
+        parameters: [{ name: 'permission', description: 'Corresponding system privilege.' }, { name: 'locale', description: 'Current Client language for provider-owned recovery instructions.' }],
         returns: 'Completion after macOS accepted the open request.',
       },
       {
@@ -6099,10 +6099,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CuaApplicationState {\n    allowedApps: readonly CuaApplicationGrant[];\n    blockedApps: readonly CuaApplicationGrant[];\n    persistentAvailable: boolean;\n}',
   },
   {
-    name: 'CuaPermissionGuideText',
-    declaration: 'export interface CuaPermissionGuideText {\n    instruction: string;\n    backLabel: string;\n    finderLabel: string;\n    unavailableMessage: string;\n    settingsMessage: string;\n}',
-  },
-  {
     name: 'CuaPermissionProcess',
     declaration: 'export interface CuaPermissionProcess {\n    pid: number;\n    path?: string | undefined;\n    name?: string | undefined;\n}',
   },
@@ -6112,7 +6108,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaSystemPermissionState',
-    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n        bundleId?: string | undefined;\n    } | undefined;\n}',
+    declaration: 'export interface CuaSystemPermissionState {\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n}',
   },
   {
     name: 'DailyInput',

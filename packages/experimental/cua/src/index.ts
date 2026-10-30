@@ -15,7 +15,7 @@ import { z } from 'zod'
 import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
 import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
-import type { CuaApplicationGrant, CuaApplicationId } from './access-types.ts'
+import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
 import { CuaCoordinates } from './coordinates.ts'
@@ -71,8 +71,6 @@ export interface CuaConfig {
   textEventIntervalMs: number
   /** Native connection cleanup, socket-write and launcher termination budget in milliseconds. */
   graceMs: number
-  /** Interval in milliseconds between permission and position checks while the native guide is open. */
-  permissionPollIntervalMs: number
   /** Maximum nodes admitted by a native accessibility snapshot. */
   maxElements: number
   /** Maximum depth traversed by a native accessibility snapshot. */
@@ -102,7 +100,6 @@ export const CuaConfig = Schema.object({
   maxResponseBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
   textEventIntervalMs: Schema.number().min(0).max(1000).default(0.25),
   graceMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
-  permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
   maxElements: Schema.number().step(1).min(1).max(10000).default(2000),
   maxDepth: Schema.number().step(1).min(1).max(100).default(25),
 }) satisfies Schema<Record<string, unknown>, CuaConfig>
@@ -151,6 +148,14 @@ export interface CuaBackend {
   createChannel: NativeChannelFactory
   guidance: string
   description: string
+  /**
+   * Build native permission parameters for the selected action and Client language.
+   * @param method Native permission action.
+   * @param permission System privilege selected by the user.
+   * @param locale Current Client language.
+   * @returns Parameters accepted by the provider's native implementation.
+   */
+  permissionParameters: (method: 'requestPermission' | 'openPermissionSettings', permission: CuaSystemPermission, locale: string) => Record<string, JsonValue>
 }
 
 /**
@@ -170,7 +175,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   }
   const access = installCuaAccess(ctx, {
     native, createChannel: backend.createChannel,
-    permissionPollIntervalMs: config.permissionPollIntervalMs,
+    permissionParameters: backend.permissionParameters,
     store: new CuaPermissionStore(ctx, config.allowedApps.map(grant => ({ ...grant, id: grant.id as CuaApplicationId })), config.timeoutMs),
   })
   const clients = new Map<Agent, NativeClient>()

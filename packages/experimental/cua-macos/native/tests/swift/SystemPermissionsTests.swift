@@ -43,6 +43,8 @@ func permissionRequestOpensTheNativeGuideAndMatchingSettings(permission: String)
     #expect(!guide.isOpen)
     let state = try permissions.request(permission, owner: owner, text: copy, interval: 1)
     #expect(state[permission] == .bool(false))
+    #expect(state["launchApplication"]["name"] == .string("Helper.app"))
+    #expect(state["launchApplication"]["bundleId"] == .null)
     #expect(guide.isOpen)
     #expect(guide.application?.url.path == "/generation/Helper.app")
     #expect(guide.text?.instruction == copy.instruction)
@@ -123,7 +125,7 @@ func unavailablePermissionApplicationsStillOpenSettings(identified: Bool) throws
     guide.isOpen = true
     let permissions = SystemPermissions(application: application,
         actions: SystemPermissionActions(accessibility: { false }, screenRecording: { true }, open: { _ in true }), guide: guide)
-    #expect(try permissions.openSettings("screenRecording")["opened"] == .bool(true))
+    #expect(try permissions.openSettings("screenRecording", failureMessage: copy.settingsMessage)["opened"] == .bool(true))
     #expect(!guide.isOpen)
 }
 
@@ -222,4 +224,22 @@ func permissionGuideMaterialKeepsTransparentCornersWhenResized(size: NSSize) thr
     #expect(PermissionGuidePlacement.needsOrdering(guide: 20, above: 10, frontToBack: [20, 30, 10]))
     #expect(PermissionGuidePlacement.needsOrdering(guide: 20, above: 10, frontToBack: [30, 10]))
     #expect(!PermissionGuidePlacement.needsOrdering(guide: 20, above: 10, frontToBack: [30, 20, 10]))
+}
+
+@MainActor @Test(arguments: ["accessibility", "invalid"])
+func explicitSettingsFailuresPreserveValidationAndLocalizeNavigation(permission: String) throws {
+    let permissions = SystemPermissions(application: application,
+        actions: SystemPermissionActions(accessibility: { false }, screenRecording: { false }, open: { _ in false }),
+        guide: GuideFixture())
+    do {
+        _ = try permissions.openSettings(permission, failureMessage: "请手动打开系统设置中的辅助功能")
+        Issue.record("Failed settings navigation was accepted")
+    } catch let failure as NativeFailure {
+        if permission == "accessibility" {
+            #expect(failure.code == "SETTINGS_UNAVAILABLE")
+            #expect(failure.message == "请手动打开系统设置中的辅助功能")
+        } else {
+            #expect(failure.code == "INVALID_ARGUMENT")
+        }
+    }
 }

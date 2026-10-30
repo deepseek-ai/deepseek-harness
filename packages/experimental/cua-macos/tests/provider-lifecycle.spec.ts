@@ -754,3 +754,20 @@ it.each([true, false])('uses configured grants without requesting a human answer
   expect(native.instances).toHaveLength(1)
   expect(native.request).toHaveBeenCalledTimes(2)
 })
+
+it('routes permission actions through the macOS provider with the Client language and configured interval', async () => {
+  const f = await setup()
+  native.request.mockResolvedValueOnce({ accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+  await f.ctx.cuaAccess.requestPermission('accessibility', 'zh')
+  expect(native.request).toHaveBeenLastCalledWith('requestPermission', {
+    permission: 'accessibility', pollIntervalMs: 1000,
+    instruction: '将 {application} 拖入上方列表以允许辅助功能', backLabel: '返回', finderLabel: '在 Finder 中显示',
+    unavailableMessage: '找不到此应用。请重新启用 Computer Use 后重试',
+    settingsMessage: '请手动打开系统设置 > 隐私与安全性 > 辅助功能',
+  }, expect.any(AbortSignal))
+  native.request.mockResolvedValueOnce({ opened: true })
+  await f.ctx.cuaAccess.openSettings('screenRecording', 'en')
+  expect(native.request).toHaveBeenLastCalledWith('openPermissionSettings', {
+    permission: 'screenRecording', settingsMessage: 'Open System Settings > Privacy & Security > Screen Recording manually.',
+  }, expect.any(AbortSignal))
+})

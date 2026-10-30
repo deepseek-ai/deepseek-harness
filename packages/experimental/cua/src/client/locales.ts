@@ -2,11 +2,6 @@
 export const NS = 'cuaPermissions'
 /** English permission-page dictionary. */
 export const en = {
-  nativeInstruction: 'Drag {application} to the list above to allow {permission}',
-  nativeBack: 'Back',
-  nativeFinder: 'Show in Finder',
-  nativeUnavailable: 'Application unavailable. Enable Computer Use again and retry.',
-  nativeSettingsUnavailable: 'Open System Settings > Privacy & Security > {permission} manually.',
   title: 'Authorize computer use',
   applicationsTitle: 'Manage applications computer use can access',
   setupTitle: 'Set up computer use before use',
@@ -45,11 +40,6 @@ export const en = {
 export type CuaPermissionLocaleKey = keyof typeof en
 /** Chinese permission-page dictionary. */
 export const zh: Record<CuaPermissionLocaleKey, string> = {
-  nativeInstruction: '将 {application} 拖入上方列表以允许{permission}',
-  nativeBack: '返回',
-  nativeFinder: '在 Finder 中显示',
-  nativeUnavailable: '找不到此应用。请重新启用 Computer Use 后重试',
-  nativeSettingsUnavailable: '请手动打开系统设置 > 隐私与安全性 > {permission}',
   title: '给 Computer Use 授权', applicationsTitle: '管理 Computer Use 可访问的应用', setupTitle: '使用 Computer Use 前需要设置',
   setupBody: 'Computer Use 插件已开启。使用前请切换到 PTC 模式，并授予辅助功能和屏幕录制权限。请前往插件详情页完成设置。',
   setupQueryFailed: 'Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。',
@@ -85,11 +75,6 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
-  nativeInstruction: '{permission}を許可するには、{application}を上の一覧にドラッグしてください',
-  nativeBack: '戻る',
-  nativeFinder: 'Finder で表示',
-  nativeUnavailable: 'アプリが見つかりません。Computer Use を再度有効にしてください。',
-  nativeSettingsUnavailable: 'システム設定 > プライバシーとセキュリティ > {permission} を開いてください。',
   'title': 'コンピュータ操作を承認',
   'applicationsTitle': 'Computer Useがアクセスできるアプリを管理',
   'setupTitle': '使用前にComputer Useを設定',
@@ -143,11 +128,6 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  nativeInstruction: 'Arrastra {application} a la lista de arriba para permitir {permission}',
-  nativeBack: 'Volver',
-  nativeFinder: 'Mostrar en Finder',
-  nativeUnavailable: 'Aplicación no disponible. Vuelve a activar Computer Use e inténtalo de nuevo.',
-  nativeSettingsUnavailable: 'Abre Configuración del sistema > Privacidad y seguridad > {permission}.',
   title: 'Autorizar el uso de la computadora',
   applicationsTitle: 'Administrar aplicaciones a las que puede acceder el uso de la computadora',
   setupTitle: 'Configurar el uso de la computadora antes de usarla',
@@ -185,11 +165,6 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  nativeInstruction: 'Glissez {application} dans la liste ci-dessus pour autoriser {permission}',
-  nativeBack: 'Retour',
-  nativeFinder: 'Afficher dans le Finder',
-  nativeUnavailable: 'Application introuvable. Réactivez Computer Use et réessayez.',
-  nativeSettingsUnavailable: 'Ouvrez Réglages Système > Confidentialité et sécurité > {permission}.',
   title: "Autoriser l'utilisation de l'ordinateur",
   applicationsTitle: "Gérer les applications auxquelles l'ordinateur peut accéder",
   setupTitle: "Configurer l'utilisation de l'ordinateur avant utilisation",
@@ -227,11 +202,6 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  nativeInstruction: 'Ziehe {application} in die Liste oben, um {permission} zu erlauben',
-  nativeBack: 'Zurück',
-  nativeFinder: 'Im Finder anzeigen',
-  nativeUnavailable: 'Anwendung nicht verfügbar. Aktiviere Computer Use erneut.',
-  nativeSettingsUnavailable: 'Öffne Systemeinstellungen > Datenschutz & Sicherheit > {permission}.',
   title: 'Autorisieren Sie die Computernutzung',
   applicationsTitle: 'Verwalten Sie Anwendungen, auf die der Computer zugreifen kann',
   setupTitle: 'Richten Sie die Computernutzung vor der Nutzung ein',
@@ -269,11 +239,6 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  nativeInstruction: 'Перетащите {application} в список выше, чтобы разрешить {permission}',
-  nativeBack: 'Назад',
-  nativeFinder: 'Показать в Finder',
-  nativeUnavailable: 'Приложение недоступно. Снова включите Computer Use и повторите попытку.',
-  nativeSettingsUnavailable: 'Откройте Системные настройки > Конфиденциальность и безопасность > {permission}.',
   title: 'Разрешить использование компьютера',
   applicationsTitle: 'Управление приложениями, к которым может иметь доступ компьютер',
   setupTitle: 'Настройте использование компьютера перед использованием',
@@ -311,11 +276,6 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  nativeInstruction: 'Arraste {application} para a lista acima para permitir {permission}',
-  nativeBack: 'Voltar',
-  nativeFinder: 'Mostrar no Finder',
-  nativeUnavailable: 'Aplicativo indisponível. Ative Computer Use novamente e tente de novo.',
-  nativeSettingsUnavailable: 'Abra Ajustes do Sistema > Privacidade e Segurança > {permission}.',
   title: 'Autorizar o uso do computador',
   applicationsTitle: 'Gerenciar aplicativos que o computador pode acessar',
   setupTitle: 'Configure o uso do computador antes de usar',

@@ -7,14 +7,6 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import type { CuaApplicationId, CuaApplicationState, CuaSystemPermissionState } from '../src/access-types.ts'
 import { PermissionController } from '../src/client/controller.ts'
 
-const guideText = {
-  instruction: '将 {application} 拖入上方列表以允许辅助功能',
-  backLabel: '返回',
-  finderLabel: '在 Finder 中显示',
-  unavailableMessage: '找不到此应用',
-  settingsMessage: '请手动打开系统设置',
-}
-
 const value: CuaSystemPermissionState = {
   accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
 const applications: CuaApplicationState = {
@@ -32,9 +24,10 @@ function fixture() {
     retryApproval: vi.fn<CuaRemote['retryApproval']>(async () => ({ ok: true, value: undefined })),
     enablePersistentPtc: vi.fn<CuaRemote['enablePersistentPtc']>(async () => ({ ok: true, value: undefined })),
   }
-  const controller = new PermissionController(actions, () => guideText)
+  let locale = 'zh'
+  const controller = new PermissionController(actions, () => locale)
   onTestFinished(() => controller.dispose())
-  return { actions, controller, face: controller.face() }
+  return { actions, controller, face: controller.face(), setLocale: (value: string) => { locale = value } }
 }
 
 it('refreshes after a request and then waits for an explicit refresh', async () => {
@@ -59,7 +52,7 @@ it('refreshes after a user request without treating the request itself as a gran
   const f = fixture()
   f.face.request('screenRecording')
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
-  expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording', guideText)
+  expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording', 'zh')
   expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
   expect(f.controller.state.getSnapshot().toast?.kind).toBe('requested')
   f.face.dismissToast()
@@ -82,7 +75,7 @@ it.each([new Error('write refused'), 'write refused'])('reports settings and rev
   const f = fixture()
   f.face.openSettings('accessibility')
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().toast?.kind).toBe('opened') })
-  expect(f.actions.openSettings).toHaveBeenCalledWith('accessibility', guideText.settingsMessage)
+  expect(f.actions.openSettings).toHaveBeenCalledWith('accessibility', 'zh')
   f.face.revoke('a'.repeat(64) as CuaApplicationId)
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().toast?.kind).toBe('revoked') })
   f.face.retryApproval('a'.repeat(64) as CuaApplicationId)
@@ -392,4 +385,15 @@ it('preserves settled failures and values while all four observations are paused
     expect(f.controller.state.getSnapshot()[key].error).toBeNull()
   }
   await f.controller.dispose()
+})
+
+it('reads the current Client language for each permission action', async () => {
+  const f = fixture()
+  f.face.request('accessibility')
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
+  expect(f.actions.requestPermission).toHaveBeenLastCalledWith('accessibility', 'zh')
+  f.setLocale('en')
+  f.face.openSettings('screenRecording')
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
+  expect(f.actions.openSettings).toHaveBeenLastCalledWith('screenRecording', 'en')
 })
