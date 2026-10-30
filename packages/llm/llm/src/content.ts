@@ -374,8 +374,14 @@ export interface ProjectedToolUpdates {
 }
 
 function withoutDeveloperMessages(messages: readonly RequestMessage[]): readonly RequestMessage[] {
-  const retained = messages.filter(message => message.role !== 'developer')
-  return retained.length === messages.length ? messages : retained
+  let retained: RequestMessage[] | undefined
+  let index = 0
+  for (const message of messages) {
+    if (message.role === 'developer') retained ??= messages.slice(0, index)
+    else retained?.push(message)
+    index++
+  }
+  return retained ?? messages
 }
 
 function toolDeclarations(
@@ -415,6 +421,7 @@ function toolDeclarations(
  * Construct provider declarations from session-folded history without changing logged active tools.
  * Unsupported routes and incomplete history use current declarations without developer updates.
  * Explicitly deferred baseline tools become available only after their first retained addition.
+ * Histories without removed or replaced messages retain their original array identity.
  * @param messages - complete request inputs, or the prefix selected for an auxiliary call.
  * @param tools - currently active tool schemas.
  * @param toolUpdate - the resolved route's update mode.

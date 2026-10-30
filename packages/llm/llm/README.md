@@ -130,6 +130,8 @@ A request is validated against its exact model's capability — context window, 
 
 File detection reads current content, including tool-role result content, on every request without caching message identities or freeze state. The [archived file-scan decision](../../../.agents/notes/archived/simplification/2026-09-07-file-content-scan.md) records the measured traversal cost.
 
+Developer-message filtering and replay-state stripping reuse unchanged request histories. A new history array is allocated only when a message is removed or replaced; retained messages keep their identities, and projected frozen requests remain frozen. Each dispatch reads the current messages and adapter ownership.
+
 ### Invariants
 
 - **Model-visible ⟺ logged** — callers must keep every provider request's model-visible input reconstructable from the session log; loop-built requests arrive deep-frozen and cannot be rewritten.
