@@ -23,6 +23,10 @@ beforeEach(() => {
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
 })
 
+beforeEach(() => {
+  vi.stubGlobal('CSS', { supports: (property: string) => property === '-webkit-backdrop-filter' })
+})
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
@@ -652,6 +656,36 @@ describe('JobListAction observation', () => {
       .closest<HTMLElement>('[data-menu-material]')
     expect(menu?.style.left).toBe('12px')
     expect(menu?.style.top).toBe('468px')
+  })
+
+  it('follows Visual Viewport panning and resizing and releases its listeners when closed', () => {
+    const viewport = Object.assign(new EventTarget(), { width: 600, height: 500, offsetLeft: 40, offsetTop: 60 })
+    vi.stubGlobal('visualViewport', viewport)
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(120)
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(80)
+    const remove = vi.spyOn(viewport, 'removeEventListener')
+    render(<JobListAction {...props([outputJob()])} />)
+    const trigger = screen.getByRole('button', { name: '1 个后台任务' })
+    vi.spyOn(trigger.parentElement!, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 300, 200, 20))
+    fireEvent.click(trigger)
+    const menu = screen.getByRole('list', { name: zh['list.aria'] }).closest<HTMLElement>('[data-menu-material]')!
+    expect(menu.style.left).toBe('140px')
+    expect(menu.style.top).toBe('385px')
+    act(() => {
+      viewport.offsetLeft = 100
+      viewport.offsetTop = 120
+      viewport.dispatchEvent(new Event('scroll'))
+    })
+    expect(menu.style.left).toBe('200px')
+    expect(menu.style.top).toBe('445px')
+    act(() => {
+      viewport.height = 200
+      viewport.dispatchEvent(new Event('resize'))
+    })
+    expect(menu.style.top).toBe('228px')
+    fireEvent.click(trigger)
+    expect(screen.queryByRole('list', { name: zh['list.aria'] })).toBeNull()
+    expect(remove.mock.calls.map(([type]) => type)).toEqual(expect.arrayContaining(['scroll', 'resize']))
   })
 
   it('keeps portaled controls interactive and releases observation on dismissal and unmount', () => {

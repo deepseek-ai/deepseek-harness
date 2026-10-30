@@ -882,6 +882,30 @@ describe('SubagentHeaderLineage', () => {
     view.unmount()
   })
 
+  it('keeps the catalog inside a resized visual viewport', () => {
+    const viewport = Object.assign(new EventTarget(), { width: 500, height: 400, offsetLeft: 0, offsetTop: 0 })
+    vi.stubGlobal('visualViewport', viewport)
+    vi.spyOn(HTMLDivElement.prototype, 'offsetWidth', 'get').mockReturnValue(336)
+    vi.spyOn(HTMLDivElement.prototype, 'offsetHeight', 'get').mockReturnValue(160)
+    render(<HeaderCatalog {...props(catalog())} />)
+    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(new DOMRect(300, 200, 70, 20))
+    fireEvent.click(trigger)
+    const menu = screen.getByRole('dialog')
+    expect(menu.style.left).toBe('148px')
+    expect(menu.style.top).toBe('224px')
+
+    act(() => {
+      viewport.width = 400
+      viewport.height = 300
+      viewport.dispatchEvent(new Event('resize'))
+    })
+    expect(menu.style.left).toBe('48px')
+    expect(menu.style.top).toBe('124px')
+    expect(menu.style.getPropertyValue('--dsh-anchored-max-width')).toBe('368px')
+    expect(menu.style.getPropertyValue('--dsh-anchored-max-height')).toBe('268px')
+  })
+
   it('cancels a pending hover when the trigger becomes hidden', async () => {
     vi.useFakeTimers()
     const view = render(<HeaderCatalog {...props(catalog())} />)

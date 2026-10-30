@@ -207,7 +207,7 @@ export function ClockPicker({ open, anchorRef, value, onPick, onClose, seconds =
             className={clsx(css.option, option === picked[at] && css.selected)}
             onClick={() => { pick(at, option, index) }}
             onKeyDown={(event) => { onOptionKeyDown(event, at, index, option, column.options.length) }}
-          >{option}</div>
+          ><span className={css.optionLabel}>{option}</span></div>
         ))}
       </div>
     ))}

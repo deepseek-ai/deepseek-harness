@@ -283,7 +283,19 @@ export const ToolRow = memo(function ToolRow({
             />
           )
           : diffBody !== null
-            ? <DiffBlock {...diffBody.card} labels={diffLabels} maxLines={CHAT_DIFF_MAX_LINES} className={css.diffBody} />
+            ? (
+              <>
+                <DiffBlock {...diffBody.card} labels={diffLabels} maxLines={CHAT_DIFF_MAX_LINES} className={css.diffBody} />
+                {state === 'error' && outputText !== null && (
+                  <div className={css.ioCard}>
+                    <div className={css.ioSection}>
+                      <span className={css.ioLabel}>{t('row.output')}</span>
+                      <span className={css.ioText} data-error>{outputText}</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            )
             : readBody !== null
               ? <ReadBlock {...readBody} labels={readLabels} maxLines={CHAT_READ_MAX_LINES} className={css.readBody} />
               : imageBody !== null

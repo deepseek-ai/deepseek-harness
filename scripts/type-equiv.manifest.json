@@ -1362,6 +1362,41 @@
       "source": "packages/fs/tool-fs/src/read-render.ts"
     },
     {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "FsDeleteOutcome",
+      "source": "packages/fs/fs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "FsMoveSourceFailure",
+      "source": "packages/fs/fs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "FsMoveOutcome",
+      "source": "packages/fs/fs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "HunkApplyFailure",
+      "source": "packages/fs/fs-patch/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "ApplyHunksResult",
+      "source": "packages/fs/fs-patch/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "PatchHunk",
+      "source": "packages/fs/fs-patch/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "PatchOperation",
+      "source": "packages/fs/fs-patch/src/types.ts"
+    },
+    {
       "doc": "docs/subsystems/skills.md",
       "symbol": "SkillSource",
       "source": "packages/skill/skill/src/index.ts"
@@ -2094,6 +2129,11 @@
     {
       "doc": "docs/subsystems/session-projection.md",
       "symbol": "ProjectionChangeListener",
+      "source": "packages/session/session-projection/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-projection.md",
+      "symbol": "ProjectionEventChangeListener",
       "source": "packages/session/session-projection/src/index.ts"
     },
     {

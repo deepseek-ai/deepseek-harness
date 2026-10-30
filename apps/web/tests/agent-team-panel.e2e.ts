@@ -600,6 +600,10 @@ describe('web e2e: agent teamwork panel', () => {
   })
 
   it('keeps the hovered panel open when the pointer returns directly to its trigger', async () => {
+    onTestFailed(async () => {
+      await saveFailureShot(page, 'web-e2e-agent-team-hover')
+      console.error('Agent Team hover diagnostics', JSON.stringify({ errors: tripwire.pageErrors, warnings: tripwire.warnings }))
+    })
     const trigger = page.locator('[data-subagent-action]').getByRole('button', { name: /subagents?$/u })
     const panel = page.locator('[data-subagent-panel]')
     await trigger.hover()

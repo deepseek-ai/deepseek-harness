@@ -1,6 +1,7 @@
-// Browser geometry for the input card across Chat and Trajectory. The browser
-// must expose layout-consuming scrollbars, and an uncompensated control keeps
-// equal rectangles from passing vacuously.
+// Browser geometry for the input card across Chat and Trajectory, plus the
+// docked seat's stacking rank, fixed overlays, floor position, and statistics
+// row. The browser must expose layout-consuming scrollbars, and an
+// uncompensated control keeps equal rectangles from passing vacuously.
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
@@ -11,7 +12,7 @@ import {
   assertFixtureInventory, compareOrRefreshGolden, launchWebScaffold, seedSession, watchConsole,
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, saveFailureShot } from './support.ts'
+import { newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/composer-tab-geometry', import.meta.url))
 /** Records platform-neutral distances between the two tabs' card rectangles. */
@@ -159,6 +160,28 @@ async function compareTabs(page: Page): Promise<TabComparison> {
 }
 
 /**
+ * Run one measurement with an extra stylesheet in the page, then remove it.
+ * @param page - the page under test.
+ * @param id - the stylesheet element id, unique per rule set.
+ * @param css - rules applied only for the measurement.
+ * @param measure - the measurement taken while the rules apply.
+ * @returns the measurement's result.
+ */
+async function withPageStyle<T>(page: Page, id: string, css: string, measure: () => Promise<T>): Promise<T> {
+  await page.evaluate(({ styleId, text }) => {
+    const style = document.createElement('style')
+    style.id = styleId
+    style.textContent = text
+    document.head.append(style)
+  }, { styleId: id, text: css })
+  try {
+    return await measure()
+  } finally {
+    await page.evaluate((styleId) => { document.getElementById(styleId)?.remove() }, id)
+  }
+}
+
+/**
  * Run the uncompensated cascade in the page for one measurement, then lift it:
  * the overlay seat's `right` compensation dropped to 0, so it measures the
  * full padding box while Chat's seat still rides the reserved content box.
@@ -166,17 +189,7 @@ async function compareTabs(page: Page): Promise<TabComparison> {
  * @returns the comparison as the column lays out without the compensation.
  */
 async function compareTabsWithoutCompensation(page: Page): Promise<TabComparison> {
-  await page.evaluate(({ id, css }) => {
-    const style = document.createElement('style')
-    style.id = id
-    style.textContent = css
-    document.head.append(style)
-  }, { id: CONTROL_STYLE_ID, css: CONTROL_CSS })
-  try {
-    return await compareTabs(page)
-  } finally {
-    await page.evaluate((id) => { document.getElementById(id)?.remove() }, CONTROL_STYLE_ID)
-  }
+  return await withPageStyle(page, CONTROL_STYLE_ID, CONTROL_CSS, () => compareTabs(page))
 }
 
 /**
@@ -342,6 +355,110 @@ describe('web e2e: input card position across view tabs', () => {
     // into the remaining measurements.
     const restored = await compareTabs(page)
     expect(restored.leftShift).toBe(0)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('keeps the docked composer at one stacking rank while its command menu opens', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-composer-seat-rank'))
+    await setMeasuredViewport(page, WIDE_VIEWPORT, false)
+    const host = page.locator('[data-conversation-scroll]')
+    const seat = page.locator('[data-conversation-scroll] > [data-composer-seat]')
+    const rank = (): Promise<number> => seat.evaluate(element => Number(getComputedStyle(element).zIndex))
+    // Scroll anchoring never selects composer content.
+    expect(await seat.evaluate(element => getComputedStyle(element).overflowAnchor)).toBe('none')
+    await host.evaluate((element) => { element.scrollTop = 0 })
+    const backToBottom = page.getByRole('button', { name: 'Back to bottom', exact: true })
+    await backToBottom.waitFor({ timeout: 10_000 })
+    const controlRank = await backToBottom.evaluate((element) => {
+      for (let node: Element | null = element; node !== null; node = node.parentElement) {
+        const zIndex = getComputedStyle(node).zIndex
+        if (zIndex !== 'auto') return Number(zIndex)
+      }
+      throw new Error('back-to-bottom control has no stacking rank')
+    })
+    const resting = await rank()
+    expect(resting).toBeGreaterThan(controlRank)
+    const input = page.locator('[data-composer-input]').last()
+    await writeComposerDraft(page, input, '/')
+    await page.locator('[data-trigger-menu]').waitFor({ timeout: 10_000 })
+    expect(await rank()).toBe(resting)
+    await page.keyboard.press('Escape')
+    await writeComposerDraft(page, input, '')
+    await page.locator('[data-trigger-menu]').waitFor({ state: 'detached', timeout: 10_000 })
+    expect(await rank()).toBe(resting)
+    await host.evaluate((element) => { element.scrollTop = element.scrollHeight })
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('keeps fixed-position overlays out of the docked composer', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-composer-seat-fixed-overlays'))
+    await setMeasuredViewport(page, WIDE_VIEWPORT, false)
+    const seat = page.locator('[data-conversation-scroll] > [data-composer-seat]')
+    // The transform hint makes the seat the containing block for fixed descendants.
+    expect(await seat.evaluate(element => getComputedStyle(element).willChange)).toBe('transform')
+    const fixedInside = (): Promise<number> => seat.evaluate(element => [...element.querySelectorAll('*')]
+      .filter(node => getComputedStyle(node).position === 'fixed').length)
+    const commands = seat.getByRole('button', { name: 'Add files or run commands', exact: true })
+    await commands.hover()
+    const tooltip = page.getByRole('tooltip').filter({ hasText: 'Add files or run commands' })
+    await tooltip.waitFor({ timeout: 10_000 })
+    expect(await tooltip.evaluate(node => node.closest('[data-composer-seat]') === null)).toBe(true)
+    expect(await fixedInside()).toBe(0)
+    // Viewport coordinates still place the bubble above its button.
+    const [bubbleBox, buttonBox] = await Promise.all([tooltip.boundingBox(), commands.boundingBox()])
+    expect(bubbleBox).not.toBeNull()
+    expect(buttonBox).not.toBeNull()
+    if (bubbleBox !== null && buttonBox !== null) {
+      expect(bubbleBox.y + bubbleBox.height).toBeLessThanOrEqual(buttonBox.y + 0.5)
+      expect(bubbleBox.x).toBeLessThan(buttonBox.x + buttonBox.width)
+      expect(bubbleBox.x + bubbleBox.width).toBeGreaterThan(buttonBox.x)
+    }
+    await page.mouse.move(0, 0)
+    const input = page.locator('[data-composer-input]').last()
+    await writeComposerDraft(page, input, '/')
+    await page.locator('[data-trigger-menu]').waitFor({ timeout: 10_000 })
+    expect(await fixedInside()).toBe(0)
+    await page.keyboard.press('Escape')
+    await writeComposerDraft(page, input, '')
+    await page.locator('[data-trigger-menu]').waitFor({ state: 'detached', timeout: 10_000 })
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('rests the docked composer at the floor when no View fills the column', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-composer-seat-floor'))
+    await setMeasuredViewport(page, WIDE_VIEWPORT, false)
+    // Hides the View subtree, which normally stretches to push the seat down.
+    const gap = await withPageStyle(
+      page,
+      'composer-seat-floor-probe',
+      '[data-conversation-scroll] > :not([data-composer-seat]) { display: none !important; }',
+      () => page.locator('[data-conversation-scroll]').evaluate((element) => {
+        const seat = element.querySelector(':scope > [data-composer-seat]')
+        if (seat === null) throw new Error('no composer seat in the scroll body')
+        const box = element.getBoundingClientRect()
+        return box.top + element.clientTop + element.clientHeight - seat.getBoundingClientRect().bottom
+      }),
+    )
+    expect(Math.abs(gap)).toBeLessThanOrEqual(0.5)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('keeps the statistics row height whether or not its readings are present', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-composer-seat-stats-row'))
+    await setMeasuredViewport(page, WIDE_VIEWPORT, false)
+    const dock = page.locator('[data-conversation-scroll] > [data-composer-seat] [data-composer-dock]')
+    // Vacuity guard: the seeded usage must produce at least one reading.
+    await expect.poll(() => dock.locator('[data-composer-stat], button[aria-haspopup="dialog"]').count(), { timeout: 10_000 })
+      .toBeGreaterThan(0)
+    const height = (): Promise<number> => dock.evaluate(element => element.getBoundingClientRect().height)
+    const withReadings = await height()
+    const withoutReadings = await withPageStyle(
+      page,
+      'composer-seat-stats-row-probe',
+      '[data-composer-dock] > * { display: none !important; }',
+      height,
+    )
+    expect(Math.abs(withReadings - withoutReadings)).toBeLessThanOrEqual(0.5)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

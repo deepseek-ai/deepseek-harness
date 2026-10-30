@@ -106,7 +106,7 @@ These distinctions prevent one overloaded `undefined` from representing cache mi
 |---|---|---|---|
 | Session list hints | Partial | Last durable checkpoint or bounded fallback cut | Unknown |
 | Follow opening baseline | Complete for the Host composition | Exact opening cursor | Capability absent |
-| Projection frame | One whole key | Event sequence carried by the frame | Not applicable |
+| Projection frame | Every key the frame lists, each a whole value | Event sequence carried by the frame | Unchanged |
 
 The Client stores one row per key. A row the connected Host computed carries its sequence number: a newer baseline or frame replaces it, an equal or older input is ignored, and reconnect can therefore replace the event window without rolling back a projection frame that was already accepted at a later sequence. A list hint viewed from the persisted cache carries no comparable sequence number and yields to every Host-sequenced write ([projection cache listing identity and cached rows](2026-09-19-projection-cache-listing-identity-and-cached-rows.md)).
 

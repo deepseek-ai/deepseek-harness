@@ -135,7 +135,22 @@ type ProjectionChangeListener = (
 ) => void
 ```
 
-`snapshot(session)` 完全同步：载体在切出页面切片的同一 tick 内读取它，因此 `asOfSeq` 使两次读取使用同一个序号。它只返回客户端视图，并在返回前通过各单元的 `viewSchema` 校验。`handle.stateOf(session)` 可在不计算无关视图的情况下读取一份实时 host 状态；调用方不得修改这一借用引用。state 引用变化时，注册表计算并缓存一次原始 view；只有该结果通过 `Object.is` 判定为变化时才触发变更流，对象 view 若要在仅内部 state 变化时抑制发布就必须保留引用。
+```ts type-equiv
+/**
+ * Event-level change-feed listener: one committed event changed the raw `view`
+ * result of at least one client-visible unit by `Object.is` for one session.
+ * `changes` holds one entry per such unit in registration order, each with the
+ * unit's `key` and its schema-validated view as `val`; `seq` is the seq of the
+ * causing event.
+ */
+type ProjectionEventChangeListener = (
+  session: Session,
+  changes: readonly { readonly key: Extract<keyof SessionProjectionMap, string>; readonly val: unknown }[],
+  seq: SessionSeq,
+) => void
+```
+
+`snapshot(session)` 完全同步：载体在切出页面切片的同一 tick 内读取它，因此 `asOfSeq` 使两次读取使用同一个序号。它只返回客户端视图，并在返回前通过各单元的 `viewSchema` 校验。`handle.stateOf(session)` 可在不计算无关视图的情况下读取一份实时 host 状态；调用方不得修改这一借用引用。state 引用变化时，注册表计算并缓存一次原始 view；只有该结果通过 `Object.is` 判定为变化时才触发变更流，对象 view 若要在仅内部 state 变化时抑制发布就必须保留引用。一个已提交事件驱动完所有单元后，事件级变更流以该事件改变了视图的全部客户端可见 key 调用每个 `onEventChanged` 监听器一次；未改变任何客户端视图的事件不产生事件级调用。
 
 ## 摘要读取
 
@@ -345,6 +360,18 @@ register<K extends string, S>( definition: ProjectionDefinition<K, S> & { key: E
  * @returns the exact disposer that unsubscribes.
  */
 onChanged(listener: ProjectionChangeListener): () => void
+
+/**
+ * Subscribe to the event-level change feed. The registration is an effect on
+ * the calling context's fiber. The listener runs synchronously inside the
+ * committed event's `session/event` handling, once after every unit has been
+ * driven and after every {@link onChanged} call for that event. If a unit or
+ * an {@link onChanged} listener throws during that drive, the listener still
+ * receives the changes made before the throw.
+ * @param listener - called once per committed event that changed at least one client-visible unit's raw view by `Object.is`.
+ * @returns the exact disposer that unsubscribes.
+ */
+onEventChanged(listener: ProjectionEventChangeListener): () => void
 
 /**
  * One consistent cut over every registered client-visible unit for one session, read from

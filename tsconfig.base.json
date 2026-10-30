@@ -455,6 +455,7 @@
       "@deepseek-ai/dsh-fs": ["./packages/fs/fs/src"],
       "@deepseek-ai/dsh-fs-local": ["./packages/fs/fs-local/src"],
       "@deepseek-ai/dsh-fs-observation-policy": ["./packages/fs/fs-observation-policy/src"],
+      "@deepseek-ai/dsh-fs-patch": ["./packages/fs/fs-patch/src"],
       "@deepseek-ai/dsh-fs-sandbox": ["./packages/fs/fs-sandbox/src"],
       "@deepseek-ai/dsh-fs-ssh": ["./packages/ssh/fs-ssh/src"],
       "@deepseek-ai/dsh-goal": ["./packages/goal/goal/src"],
