@@ -47,10 +47,11 @@ function appendCall(agent: Agent, turn: number, callId: ToolCallId, args: string
   return agent.session.append('tool/call', { turn, step: 1, callId, name, arguments: args })
 }
 
-function finishCall(agent: Agent, call: SessionEvent<'tool/call'>, text: string, isError = false): void {
+function finishCall(agent: Agent, call: SessionEvent<'tool/call'>, text: string, isError = false, meta?: SessionEvent<'tool/result'>['data']['meta']): void {
   const { turn, step, callId } = call.data
   agent.session.append('tool/result', {
     turn, step, message: createToolResultMessage({ callId, content: [{ type: 'text', text }], isError }),
+    ...meta === undefined ? {} : { meta },
   }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
   agent.session.append('step/end', { turn, step })
   agent.session.append('turn/end', { turn, reason: { kind: 'completed' } })
@@ -151,7 +152,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagent task summary', () => {
     await expectSummary(card, DESCRIPTION)
     await capture('Running')
 
-    finishCall(agent, call, 'started subagent summary-worker\nname: lead/foo')
+    finishCall(agent, call, 'Delegation accepted.', false, { kind: 'activation', name: 'lead/foo' })
     await scaffold.ctx.sessions.flush(agent.session)
     await expect.poll(() => card.getAttribute('data-state')).toBe('ok')
     await expectSummary(card, DESCRIPTION)
@@ -160,8 +161,8 @@ describe.skipIf(MODE === 'record')('web e2e: subagent task summary', () => {
     await expectSummary(card, DESCRIPTION)
     expect(await card.getByText('Agent response', { exact: true }).count()).toBe(0)
     await card.getByText('Started', { exact: true }).waitFor()
-    expect(await card.locator('dt').allTextContents()).toEqual(['Agent ID', 'Agent name'])
-    expect(await card.locator('dd').allTextContents()).toEqual(['summary-worker', 'lead/foo'])
+    expect(await card.locator('dt').allTextContents()).toEqual(['Agent task description', 'Agent name'])
+    expect(await card.locator('dd').allTextContents()).toEqual([`${DESCRIPTION}\nAdditional description context`, 'lead/foo'])
     await capture('Creation receipt and complete task')
 
     const beforeReload = tripwire.warnings.length
@@ -248,8 +249,8 @@ describe.skipIf(MODE === 'record')('web e2e: subagent task summary', () => {
     await expect.poll(() => card.getAttribute('data-state')).toBe('ok')
     await expandTask(card, prompt)
     await expectForkSummary()
-    expect(await card.locator('dt').allTextContents()).toEqual(['Agent ID', 'Agent name'])
-    expect(await card.locator('dd').allTextContents()).toEqual(['fork-worker', 'lead/context-reviewer'])
+    expect(await card.locator('dt').allTextContents()).toEqual(['Agent task description', 'Agent name'])
+    expect(await card.locator('dd').allTextContents()).toEqual([description, 'lead/context-reviewer'])
     expect(await card.getByText('Agent response', { exact: true }).count()).toBe(0)
     await capture('Creation receipt and complete task')
     const beforeReload = tripwire.warnings.length

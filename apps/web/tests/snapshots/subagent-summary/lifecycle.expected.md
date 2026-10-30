@@ -22,8 +22,8 @@
 - list:
   - listitem:
     - text: Started
-    - term: Agent ID
-    - definition: summary-worker
+    - term: Agent task description
+    - definition: Review subagent task summaries Additional description context
     - term: Agent name
     - definition: lead/foo
     - group:
@@ -40,8 +40,8 @@
 - list:
   - listitem:
     - text: Started
-    - term: Agent ID
-    - definition: summary-worker
+    - term: Agent task description
+    - definition: Review subagent task summaries Additional description context
     - term: Agent name
     - definition: lead/foo
     - group:

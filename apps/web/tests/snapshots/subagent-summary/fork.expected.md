@@ -10,8 +10,8 @@
 - list:
   - listitem:
     - text: Started
-    - term: Agent ID
-    - definition: fork-worker
+    - term: Agent task description
+    - definition: Review inherited conversation context
     - term: Agent name
     - definition: lead/context-reviewer
     - group:
@@ -28,8 +28,8 @@
 - list:
   - listitem:
     - text: Started
-    - term: Agent ID
-    - definition: fork-worker
+    - term: Agent task description
+    - definition: Review inherited conversation context
     - term: Agent name
     - definition: lead/context-reviewer
     - group:

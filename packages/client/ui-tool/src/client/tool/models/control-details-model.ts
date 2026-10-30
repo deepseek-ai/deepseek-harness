@@ -1,7 +1,7 @@
 /** Entity lists and receipts for agent, job, terminal, and language-server tools. */
 import type { ToolDetailsModel } from '../components/ToolDetails.tsx'
 import {
-  detailBadge, detailList, detailRecord, inspectionItems,
+  detailBadge, detailList, detailRecord, inspectionItems, nonempty,
   type DetailItem, type DetailTranslate,
 } from './detail-model-shared.ts'
 
@@ -95,6 +95,39 @@ function lspDetails(args: Record<string, unknown>, text: string, t: DetailTransl
 }
 
 /**
+ * Read a successful delegation receipt from persisted metadata or historical text.
+ * @param args - Recorded creation arguments, including description and full prompt.
+ * @param text - Single recorded text block; absent for other content layouts.
+ * @param meta - Tool-owned result metadata; only absent metadata permits legacy text parsing.
+ * @param t - Conversation translator.
+ * @returns Started task details, a historical synchronous reply, or null for unsupported data.
+ */
+export function subagentDetails(
+  args: Record<string, unknown>, text: string | undefined, meta: unknown, t: DetailTranslate,
+): ToolDetailsModel | null {
+  const fields: DetailItem['fields'][number][] = []
+  const description = arg(args, 'description')
+  if (nonempty(description)) fields.push({ label: t('detail.field.agentDescription'), value: description })
+  if (meta !== undefined) {
+    if (!detailRecord(meta) || meta.kind !== 'activation' || !nonempty(meta.name)) return null
+    fields.push({ label: t('detail.field.agentName'), value: meta.name })
+  } else {
+    if (text === undefined) return null
+    // Historical results lack the structured receipt stored by current tools.
+    const started = /^started (background subagent job|subagent) (\S+)(?:\nname: (\S+))?$/u.exec(text)
+    if (started === null) {
+      return detailList([{ title: t('detail.agent.reply'), markdown: text, fields: [], groups: [{ label: t('detail.field.task'), items: [{ description: arg(args, 'prompt'), fields: [] }] }] }], t('detail.agent.reply'), t)
+    }
+    if (started[1] === 'background subagent job') fields.push({ label: t('detail.field.job'), value: started[2] ?? '' })
+    if (started[3] !== undefined) fields.push({ label: t('detail.field.agentName'), value: started[3] })
+  }
+  return detailList([{
+    title: t('detail.receipt.started'), fields,
+    groups: [{ label: t('detail.field.task'), items: [{ description: arg(args, 'prompt'), fields: [] }] }],
+  }], description || arg(args, 'prompt'), t)
+}
+
+/**
  * Derive entity lists and operation receipts from supported recorded output formats.
  * @param name - Wire tool name, including Team-scoped aliases.
  * @param args - Parsed recorded arguments.
@@ -147,19 +180,6 @@ export function controlDetails(
         summary: label,
         expandedSummary: '',
       }
-    }
-    case 'subagent':
-    case 'subagent_fork': {
-      const started = /^started (background subagent job|subagent) (\S+)(?:\nname: (\S+))?$/u.exec(text)
-      if (started !== null) {
-        const fields = [{ label: t(started[1] === 'subagent' ? 'detail.field.agent' : 'detail.field.job'), value: started[2] ?? '' }]
-        if (started[3] !== undefined) fields.push({ label: t('detail.field.agentName'), value: started[3] })
-        return detailList([{
-          title: t('detail.receipt.started'), fields,
-          groups: [{ label: t('detail.field.task'), items: [{ description: arg(args, 'prompt'), fields: [] }] }],
-        }], arg(args, 'description') || arg(args, 'prompt'), t)
-      }
-      return detailList([{ title: t('detail.agent.reply'), markdown: text, fields: [], groups: [{ label: t('detail.field.task'), items: [{ description: arg(args, 'prompt'), fields: [] }] }] }], t('detail.agent.reply'), t)
     }
     case 'list_subagent_models': {
       const items = text.split('\n').map((line) => {
