@@ -19,7 +19,6 @@ Desktop product events use the optional [product analytics service](../product-a
 - [Sent user text](#sent-user-text)
 - [Shell and standard props](#shell-and-standard-props)
 - [Temporary composer entries](#temporary-composer-entries)
-- [Plugin prefill API](#plugin-prefill-api)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
@@ -186,15 +185,6 @@ The selector must be a pure function of the owner currency. Its non-null return 
 `conversation.input.activity` hosts one control between the model selector and Send. Its `onActiveChange` callback expands that control across the toolbar and hides ordinary accessory controls and the context meter while preserving the editor and submit action. Closing the activity restores those controls with context details closed. The empty hero dock remains collapsed when it has no content. The occupant releases expansion on unmount and owns any activity-specific feedback.
 
 Session title context gestures use the shared [context menu](../ui-context-menu/README.md) with the clicked breadcrumb’s Session. The reusable image gallery receives `getTriggerProps` from its Factory’s injected `useContextMenu` hook.
-
-<a id="plugin-prefill-api"></a>
-## Plugin prefill API
-
-A plugin can write reviewable text into the current composer through the stable `prefill` action. Slot components receive it as `inputActions.prefill(text, options)`. A session-scope plugin resolves the same action with `ctx.conversation.input.for(actx).prefill(text, options)`.
-
-The exported `ComposerPrefillOptions` type and `InputActions.prefill` signature are defined in the [input contracts](src/client/contract/input.ts).
-
-An empty string is ignored and returns `false`. An empty or whitespace-only draft, or `mode: 'replace'`, replaces the whole draft only while the composer is in the plain phase and the session is live; that replacement is its own undo step. Otherwise the text replaces the current selection in one undo step, preceded by `separator` when the editor text before the selection ends in non-whitespace; the separator defaults to a newline and an empty separator inserts verbatim. A rejected write — a non-plain replacement, a changed draft revision, a locked submission phase, or a disposed session — returns `false` without changing the draft. `prefill` never sends the draft.
 
 <a id="model-experience"></a>
 ## Model Experience

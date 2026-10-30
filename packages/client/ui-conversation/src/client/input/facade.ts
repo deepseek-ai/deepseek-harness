@@ -15,7 +15,7 @@ import {
 } from '@deepseek-ai/dsh-client-store'
 import type { LexicalEditor } from 'lexical'
 import type {
-  CommandClaim, ComposerPrefillOptions, ConsumeTokenRequest, DraftAttachmentId, DraftInitializationOptions, DraftInitializationResult,
+  CommandClaim, ConsumeTokenRequest, DraftAttachmentId, DraftInitializationOptions, DraftInitializationResult,
   InputActions, InputEffect, InputNotice, InputState, InputTriggerController, PickOutcome,
   SessionInput, SubmitAttempt, SubmitAttachment, SubmitOutcome,
 } from '../contract/input.ts'
@@ -148,7 +148,6 @@ export class SessionInputShell implements SessionInput {
       return this.draftEditor.insertAsyncText(span, text)
     },
     setDraft: (text) => { this.setDraft(text) },
-    prefill: (text, options) => this.prefill(text, options),
     persistDraft: () => { this.persistCurrentDraft() },
     addAttachments: ids => this.addAttachments(ids),
     removeAttachment: (id) => { this.removeAttachment(id) },
@@ -237,27 +236,6 @@ export class SessionInputShell implements SessionInput {
     const inserted = this.draftEditor.insertQuote(text.replace(/\r\n?/gu, '\n'), { remove: this.deps.quoteRemoveLabel?.() ?? '' })
     if (inserted) this.focus()
     return inserted
-  }
-
-  /**
-   * Write plugin-owned text into the draft in one undo step.
-   * @param text - text to write; an empty string is ignored.
-   * @param options - replacement mode and insertion separator.
-   * @returns whether the draft accepted the write.
-   */
-  prefill(text: string, options: ComposerPrefillOptions = {}): boolean {
-    if (text.length === 0) return false
-    if ((options.mode ?? 'insert') === 'replace' || this.snapshot.draft.trim() === '') {
-      if (this.snapshot.phase !== 'plain' || this.disposed) return false
-      this.cancelCommandRestore()
-      this.draftEditor.replaceDraft(text)
-      return true
-    }
-    const span = this.actions.captureInsertion()
-    const separator = options.separator ?? '\n'
-    const preceding = this.projection.detectText.slice(0, span.start)
-    const prefix = separator.length > 0 && span.start > 0 && !/\s$/.test(preceding) ? separator : ''
-    return this.actions.insertText(`${prefix}${text}`, span)
   }
 
   /**
