@@ -344,10 +344,10 @@
   right: 0;
   bottom: 16px;
   left: 0;
-  /* Above the sticky composer (z-index 7) so the control stays clickable and
-     visible over the input card. Exception: while an @/slash menu is open the
-     seat lifts to 9 (ui-conversation ConversationRoot) so the menu is never
-     covered by this control. */
+  /* Above transcript sticky chrome (CodeBlock banners 6, the pinned compaction
+     header and turn rail 7) and below the composer seat (9, ui-conversation
+     ConversationRoot), so menus the composer opens upward cover this control.
+     At rest the control sits 16px above the input card. */
   z-index: 8;
   height: 0;
   display: flex;

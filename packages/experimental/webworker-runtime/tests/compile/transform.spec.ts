@@ -192,8 +192,8 @@ check(
 }
 
 {
-  // Named imports are snapshots (CommonJS destructuring semantics), which is the
-  // documented, accepted divergence from ESM live bindings on the import side.
+  // Named imports read the required module at each reference; cycles, live
+  // reads, and shadowing are covered in transform-imports.spec.ts.
   const code = transformModule("import { a, b as c } from 'p'\nexport const out = [a, c]\n", 'probe.js')
   parsesAsScript('named imports', code)
   const exports = runBody(code, () => ({ a: 1, b: 2 }))
@@ -210,6 +210,12 @@ check(
   const esModule = { __esModule: true, default: 'D', x: 'X' }
   const withEsm = runBody(code, () => esModule)
   check('default import of an __esModule module reads .default', (withEsm.seen as unknown[])[0], 'D')
+
+  // Some CommonJS bundles mark their export object as __esModule without
+  // providing a default export. The default import is still that object.
+  const cjsEsModule = { __esModule: true, x: 'X' }
+  const withCjsEsModule = runBody(code, () => cjsEsModule)
+  check('default import of an __esModule CommonJS module keeps its exports', (withCjsEsModule.seen as unknown[])[0], cjsEsModule)
 
   // A plain CommonJS module: the module object *is* the default, and the
   // namespace gains a `default` key pointing at it.

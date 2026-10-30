@@ -10,6 +10,7 @@ import Darwin
     private let worker: AXWorker
     private let capture: WindowCapture
     private let permissions: SystemPermissions
+    private let permissionOwner: UUID
     private let clipboard = ClipboardPaste()
     private let input: JSONLInput
     private let writer: JSONLWriter
@@ -28,12 +29,13 @@ import Darwin
     private var nextCancelled = false
 
     init(configuration: HelperConfiguration, capture: WindowCapture, channel: SharedSocket,
-         cancellation: CancellationLatch, scheduler: RequestScheduler, writer: JSONLWriter, permissions: SystemPermissions,
+         cancellation: CancellationLatch, scheduler: RequestScheduler, writer: JSONLWriter, permissions: SystemPermissions, permissionOwner: UUID,
          onClose: @escaping @MainActor @Sendable () -> Void,
          onFatal: @escaping @Sendable (NativeFailure, Double) -> Void) {
         self.configuration = configuration
         self.capture = capture
         self.permissions = permissions
+        self.permissionOwner = permissionOwner
         self.cancellation = cancellation
         self.channel = channel
         self.scheduler = scheduler
@@ -176,9 +178,13 @@ import Darwin
             }
             result = .object(icons)
         } else if request.method == "requestPermission" {
-            result = try permissions.request(params.string("permission"))
+            let text = try PermissionGuideText(instruction: params.string("instruction"), backLabel: params.string("backLabel"),
+                finderLabel: params.string("finderLabel"), unavailableMessage: params.string("unavailableMessage"),
+                settingsMessage: params.string("settingsMessage"))
+            result = try permissions.request(params.string("permission"), owner: permissionOwner, text: text,
+                interval: Double(params.integer("pollIntervalMs", in: 100...Int(Int32.max))) / 1000)
         } else if request.method == "openPermissionSettings" {
-            result = try permissions.openSettings(params.string("permission"))
+            result = try permissions.openSettings(params.string("permission"), failureMessage: params.string("settingsMessage"))
         } else if request.method == "findApps" {
             result = .array(try ApplicationDiscovery.applications(matching: params.string("query"), exact: false,
                 limit: params.integer("maxAppMatches", in: 1...1000), cancellation: cancellation).map { $0.json(catalog: catalog) })
@@ -250,6 +256,7 @@ import Darwin
     private func shutdown() {
         guard !stopping else { return }
         stopping = true
+        permissions.closeGuide(owner: permissionOwner)
         cancellation.cancel()
         deadline?.cancel()
         deadline = nil

@@ -228,9 +228,8 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
   })
   mock.unary('session/list', () => ok({ items: structuredClone(sessions) }))
   // The shipped composition mounts the `ui-schedule` row, so the Schedule
-  // client reads the catalog and the per-Session list over this mock.
+  // client reads the catalog over this mock.
   mock.unary('schedule/catalog', () => ok([]))
-  mock.unary('schedule/list', () => ok([]))
   mock.unary('session/projections', (request: unknown) => {
     const sessionId = recordString(recordValue(request, 'request'), 'sessionId')
     const summary = sessions.find(candidate => candidate.sessionId === sessionId)

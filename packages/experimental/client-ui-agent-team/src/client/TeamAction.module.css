@@ -53,7 +53,7 @@
   z-index: 100;
   box-sizing: border-box;
   width: min(500px, 100vw - 32px);
-  max-height: min(680px, calc(100vh - 32px));
+  max-height: min(680px, calc(100vh - 32px), var(--dsh-anchored-max-height, 100vh));
   /* Horizontal insets live on the toolbar and scroll body, not the panel, so
      member-card hover shadows stay inside the body's clip box; the thumb hugs
      the panel edge (2px) while the body's stable gutter and trailing padding
@@ -64,6 +64,7 @@
   border-radius: 12px;
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
+  max-width: var(--dsh-anchored-max-width, none);
 }
 
 /* The menu skin lives on a pseudo-element: backdrop-filter on the panel

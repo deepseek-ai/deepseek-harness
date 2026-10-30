@@ -99,16 +99,25 @@ function weekdayText(days: unknown, t: Translate): string | undefined {
 }
 
 function scheduleItem(value: unknown, t: Translate, locale: string): DetailItem | null {
-  if (!detailRecord(value) || !nonempty(value.id) || !nonempty(value.prompt)
-    || typeof value.scheduledAt !== 'string'
-    // `host` is the current Host-delivered view; `session-local` stays readable
-    // for results recorded before the Host storage domain owned delivery.
-    || (value.deliveryMode !== 'host' && value.deliveryMode !== 'session-local')
-    || (value.state !== 'scheduled' && value.state !== 'overdue')) return null
+  if (!detailRecord(value) || !nonempty(value.id) || typeof value.scheduledAt !== 'string') return null
+  const title = nonempty(value.title) ? value.title : value.prompt
+  if (!nonempty(title)) return null
+  const state = value.status ?? value.state
+  if (value.status === undefined) {
+    if (!nonempty(value.prompt) || (value.deliveryMode !== 'host' && value.deliveryMode !== 'session-local')
+      || (state !== 'scheduled' && state !== 'overdue')) return null
+  } else if (!nonempty(value.title) || (state !== 'active' && state !== 'paused' && state !== 'ended')) return null
   const date = new Date(value.scheduledAt)
   if (!Number.isFinite(date.getTime()) || date.toISOString() !== value.scheduledAt) return null
   let frequency: string
   switch (value.kind) {
+    case 'rrule': {
+      if (typeof value.rrule !== 'string') return null
+      const rule = value.rrule.split('\n').find(line => line.startsWith('RRULE:'))?.slice('RRULE:'.length)
+      if (!nonempty(rule)) return null
+      frequency = t('detail.schedule.custom')
+      break
+    }
     case 'at': frequency = t('detail.schedule.once'); break
     case 'after':
       if (!count(value.afterSeconds) || value.afterSeconds === 0) return null
@@ -136,14 +145,22 @@ function scheduleItem(value: unknown, t: Translate, locale: string): DetailItem 
   }
   const dateText = formatDate(date, locale, value.scheduledAt)
   return {
-    // Every Host view carries a title; a recorded result without one keeps its instruction.
-    title: nonempty(value.title) ? value.title : value.prompt,
+    title,
     fields: [
       { label: t('detail.schedule.when'), value: dateText },
       { label: t('detail.schedule.frequency'), value: frequency },
-      { label: t('detail.state'), value: t(`detail.schedule.${value.state}`) },
+      { label: t('detail.state'), value: t(`detail.schedule.${state}`) },
     ],
   }
+}
+
+function single(item: DetailItem | null): ToolDetailsModel | null {
+  return item === null ? null : { items: [item] }
+}
+
+function deletedTask(value: unknown, t: Translate): ToolDetailsModel | null {
+  if (!detailRecord(value) || !nonempty(value.id) || value.deleted !== true) return null
+  return { items: [{ title: value.id, fields: [{ label: t('detail.state'), value: t('detail.schedule.deleted') }] }] }
 }
 
 /**
@@ -167,24 +184,23 @@ export function detailsCardModel(block: ToolCallBlock, t: Translate, locale: str
     case 'create_goal':
     case 'get_goal':
     case 'update_goal': return goalDetail(value, t)
+    // Retain readers for results in stored Sessions.
     case 'schedule_create':
-    case 'schedule_update': {
-      const item = scheduleItem(value, t, locale)
-      return item === null ? null : { items: [item] }
-    }
+    case 'schedule_update':
+    case 'schedule_view': return single(scheduleItem(value, t, locale))
+    case 'schedule_edit': return deletedTask(value, t) ?? single(scheduleItem(value, t, locale))
     case 'schedule_list': {
-      if (!Array.isArray(value)) return null
+      const entries = Array.isArray(value) ? value : detailRecord(value) ? value.items : undefined
+      if (!Array.isArray(entries)) return null
       const items: DetailItem[] = []
-      for (const entry of value) {
+      for (const entry of entries) {
         const item = scheduleItem(entry, t, locale)
         if (item === null) return null
         items.push(item)
       }
       return { items, summary: t('detail.schedule.count', { count: items.length }), empty: t('detail.schedule.empty') }
     }
-    case 'schedule_delete':
-      if (!detailRecord(value) || !nonempty(value.id) || value.deleted !== true) return null
-      return { items: [{ title: value.id, fields: [{ label: t('detail.state'), value: t('detail.schedule.deleted') }] }] }
+    case 'schedule_delete': return deletedTask(value, t)
     default: return null
   }
 }

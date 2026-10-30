@@ -239,7 +239,7 @@ describe('Session Controller access', () => {
       for (;;) {
         const next = await iterator.next()
         if (next.done === true) throw new Error('control stream ended')
-        if (next.value.type === 'projection' && next.value.key === 'inbox') return next.value.sessionId
+        if (next.value.type === 'projection' && next.value.changes.some(change => change.key === 'inbox')) return next.value.sessionId
       }
     }
     // The owner sees the private Session's frame first; the guest's first Inbox frame is the shared one.

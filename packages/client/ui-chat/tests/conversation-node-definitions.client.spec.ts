@@ -2254,6 +2254,18 @@ describe('built-in conversation node Definitions', () => {
       .map(candidate => candidate.data)).toEqual([{ text: 'A' }, { text: 'B', update: true }, { text: 'C' }])
   })
 
+  it('hides a published prompt node while a prepended replacement makes its prompt unknown', () => {
+    const value = assembler([systemAt(10, 'Shown')], true)
+    const { key } = node(snapshot(value), 'system-prompt')!
+    expect(snapshot(value).nodes.get(key)?.visibility).toBe('visible')
+    value.prepend([systemAt(5, 'Older', 2)], true)
+    value.flush()
+    expect(snapshot(value).nodes.get(key)).toMatchObject({ visibility: 'hidden', data: { text: 'Shown' } })
+    value.prepend([systemAt(1, 'First')], false)
+    value.flush()
+    expect(snapshot(value).nodes.get(key)).toMatchObject({ visibility: 'visible', data: { text: 'Shown', update: true } })
+  })
+
   it('never renders a system/message as a transcript bubble', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),
