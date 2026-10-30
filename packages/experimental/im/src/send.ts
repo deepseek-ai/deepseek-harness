@@ -5,7 +5,9 @@
  * Contract:
  * - **Grants.** A publication with `options.session` needs a *writable* binding of the chat on that session or on one
  *   of its hosted ancestors (`record.parent` chain); anything else is an `ImError('access')`. Without a session the
- *   caller is core code with no agent identity to check (renderers and plugins pass their session).
+ *   publication is host- or plugin-originated (the session command plugin's replies and notices, an event's own
+ *   `reply`), so only the chat's admission gates it: `sources[].writable` is a property of a session's binding, not a
+ *   chat-wide permission.
  * - **Target.** `target()` resolves the chat ref of an admitted chat and the caller's thread wish; `quote` becomes the
  *   content's `<quote id>` envelope element, so the platform reply rides the normal transform/fallback path, and the
  *   quoted stored message's adapter referrer becomes `Target.referrer` (passive replies, thread placement) — for a
@@ -15,11 +17,13 @@
  *   `PlatformError.published === 'no'`), `partial` (`PartialSendError`) or `uncertain` (anything else — transport
  *   errors, timeouts, cancellation after dispatch). Replaying one operation id returns the recorded outcome and never
  *   sends again: an operation whose dispatch has no recorded outcome reads as `uncertain`, because the only safe
- *   statement about it is "inspect the chat". A reused operation id with *different* content is a `conflict`.
+ *   statement about it is "inspect the chat". A reused operation id with *different* content is a `conflict`. A stream
+ *   cannot be replayed: an operation id that already opened one is a `conflict` whatever its content.
  * - **Own messages.** The first stored platform message of each publication is attributed to the sending session
  *   (`sessionOf`, button routing) and named in the receipt, so a later button click can find its owner.
  * - **Streams.** `stream()` runs the same grants check; with an operation id the receipt starts `pending` and settles
- *   with the stream's own outcome. A reply quote is applied to every state the caller publishes.
+ *   with the stream's own outcome, and the platform stream is opened only after that receipt is reserved. A reply
+ *   quote is applied to every state the caller publishes.
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
@@ -164,6 +168,8 @@ export class ImSender {
 
   /**
    * Open a streamed message. The caller owns the states; a `quote` is applied to each of them.
+   *
+   * A stream cannot be replayed: an `operationId` that already opened one is a `conflict`, whatever its content.
    * @param chat - admitted chat key.
    * @param options - send and stream options; `operationId` records a durable receipt for the publication.
    * @returns the stream, already gated on the grants check.
@@ -171,15 +177,19 @@ export class ImSender {
   async stream(chat: ImChatKey, options: ImSendOptions & StreamOptions = {}): Promise<MessageStream> {
     this.grant(chat, options.session)
     const target = this.target(chat, options)
-    const stream = this.botOf(chat).stream(target, options)
     const id = options.operationId
-    if (id === undefined) return this.watched(this.quoted(stream, options.quote), chat)
+    if (id === undefined) {
+      return this.watched(this.quoted(this.botOf(chat).stream(target, options), options.quote), chat)
+    }
     return await this.serial(id, async () => {
       const previous = this.receipts.get(id)
       if (previous !== undefined) {
         throw new ImError('conflict', `IM operation ${id} already opened a stream (${previous.status}).`)
       }
       await this.reserve()
+      // The platform stream is opened only once the receipt is reserved: a refusal (a conflict, a full store) must
+      // not leave a platform stream nobody closes.
+      const stream = this.botOf(chat).stream(target, options)
       const pending: StoredReceipt = {
         chat, ...options.session === undefined ? {} : { session: options.session },
         digest: fingerprint(undefined, options), status: 'pending', createdAt: Date.now(),
@@ -400,7 +410,10 @@ export class ImSender {
     }
   }
 
-  /** Grants: `session` (or a hosted ancestor) must hold a writable binding of the chat. */
+  /**
+   * Grants: `session` (or a hosted ancestor) must hold a writable binding of the chat. A publication without a
+   * session has no agent identity to check — it is host- or plugin-originated, and only the chat's admission gates it.
+   */
   private grant(chat: ImChatKey, session: SessionId | undefined): void {
     if (session === undefined) return
     for (const record of grantChain(this.deps.sessions, session)) {
