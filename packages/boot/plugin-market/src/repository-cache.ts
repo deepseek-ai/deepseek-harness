@@ -69,8 +69,8 @@ function remoteFailureOf(result: GitResult, label: string): DetailFailure {
 }
 
 /**
- * The SSH form of an http(s) repository URL: `ssh://git@<host>/<path>` on SSH's default port, the form plugin
- * installation also falls back to.
+ * The SSH form of an http(s) repository URL: `ssh://git@<host>/<path>` on SSH's default port, the form that
+ * `sshGitSpec` in `@deepseek-ai/dsh-plugin-manager` gives installation.
  * @returns undefined for another scheme, or a URL with credentials or a query.
  */
 function sshUrlOf(url: string): string | undefined {
@@ -281,12 +281,12 @@ export class RepositoryCache {
   /**
    * Fetch one commit without file contents. When Git refuses an http(s) URL, the clone's remote switches to the SSH form
    * of that URL and the fetch runs again, so a user with only SSH credentials for the host can read it; later reads of
-   * the clone keep that remote. An SSH fetch that fails for any reason but the size limit reports `denied` with both
-   * diagnostics.
+   * the clone keep that remote. A failed SSH fetch reports both diagnostics, as `network` or `too-large` when it failed
+   * for that reason and as `denied` otherwise.
    */
   private async fetch(repository: string, target: string, signal: AbortSignal): Promise<void> {
     const args = ['fetch', '--quiet', '--depth', '1', '--filter=blob:none', '--no-tags', 'origin', target]
-    // The remote is the URL this cache wrote, or its SSH form; neither approaches the buffer.
+    // The remote is the URL this cache wrote or its SSH form; 64 KiB holds any such URL.
     const remote = (await this.run(repository, ['config', 'remote.origin.url'], signal, 64 * 1024)).toString('utf8').trim()
     try {
       await this.watched(repository, remote, args, signal, `${remote}: git fetch`)
@@ -296,7 +296,7 @@ export class RepositoryCache {
       await this.run(repository, ['config', 'remote.origin.url', ssh], signal)
       await this.watched(repository, ssh, args, signal, `${ssh}: git fetch`).catch((sshError: unknown) => {
         throw sshError instanceof DetailFailure && sshError.reason !== 'too-large'
-          ? new DetailFailure('denied', `${error.message}\n${sshError.message}`, { cause: sshError })
+          ? new DetailFailure(sshError.reason === 'network' ? 'network' : 'denied', `${error.message}\n${sshError.message}`, { cause: sshError })
           : sshError
       })
     }

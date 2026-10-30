@@ -199,6 +199,23 @@ it('fetches over SSH when Git refuses the https URL, and reports the https refus
   }
 })
 
+it('reports an SSH retry that cannot connect as a network failure, and does not retry an https URL that cannot connect', async () => {
+  vi.stubEnv('GIT_SSH_COMMAND', 'ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=5')
+  for (const name of ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY']) vi.stubEnv(name, '')
+  writeFileSync(join(root, 'home', '.gitconfig'), [
+    '[url "ssh://127.0.0.1:1/down.git"]', ' insteadOf = ssh://git@git.example/team/down.git',
+    '[url "http://127.0.0.1:1/offline.git"]', ' insteadOf = https://git.example/team/offline.git',
+    '[http]', ' proxy =', '',
+  ].join('\n'))
+  const refused = cache().read('https://git.example/team/down.git', undefined, 'README.md', 100, signal)
+  await expectRejection(refused, { reason: 'network' }, 'https://git.example/team/down.git: git fetch')
+  await expect(refused).rejects.toThrow('ssh://git@git.example/team/down.git: git fetch')
+  const offline = await cache({ transports: ['http', 'ssh'] }).read('https://git.example/team/offline.git', undefined, 'README.md', 100, signal)
+    .catch((error: unknown) => error)
+  expect(offline).toMatchObject({ reason: 'network' })
+  expect((offline as Error).message).not.toContain('ssh://')
+})
+
 it('stops a fetch once the repository grows past its limit, and deletes the repository', async () => {
   const source = repository('e', { 'README.md': 'x' })
   // The empty repository already exceeds one byte, so the first size check stops Git.
