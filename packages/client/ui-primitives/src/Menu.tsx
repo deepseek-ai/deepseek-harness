@@ -1,9 +1,9 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode, SyntheticEvent } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import { IconCheckOutlineRegular } from './icons/index.tsx'
-import { overlayTopMargin } from './overlay-top-margin.ts'
+import { useAnchoredPosition } from './useAnchoredPosition.ts'
 import { usePointerGrace } from './pointer-grace.ts'
 import { isBehindModal } from './useModalLayer.ts'
 import { observeComposition } from './keyboard-composition.ts'
@@ -178,9 +178,9 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * @param props.align - list alignment against the anchor (default 'start').
  * @param props.side - open below (`bottom`, default) or above (`top`) the anchor.
  * @param props.portal - render the list into document.body, fixed-positioned
- * from the anchor rect (follows movement and resizing while open). Use when an
- * ancestor's overflow clipping would crop the in-place list; default false
- * keeps the pure-CSS in-place behavior.
+ * synchronously (follows movement, resizing, and browser zoom while open)
+ * and clamped inside the visual viewport. Use when an ancestor's overflow clipping would crop the
+ * in-place list; default false keeps the pure-CSS in-place behavior.
  * @param props.closeOnPointerLeave - close the list once the pointer has left
  * both trigger and list for the pointer grace (default false keeps it open
  * until outside click/Escape/selection). The grace makes the 4px trigger->list
@@ -191,8 +191,8 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * directly (e.g. from a host-owned trigger button) instead of measuring the
  * Menu's own wrapper span. Required when the wrapper isn't itself laid out at
  * the trigger (render-prop anchors, effect-positioned proxies — measuring the
- * wrapper there races the host's layout effects). Called on open, each animation
- * frame, and scroll/resize; return null to skip placement for that frame.
+ * wrapper there races the host's layout effects). Called while tracking the
+ * anchor and on scroll/resize; return null to defer placement.
  * @param props.minWidthFromAnchor - in portal mode, keep the menu at least as wide as its anchor, bounded by viewport margins.
  * @param props.footer - rows pinned below the scrolling items area, separated
  * by a hairline; contextual menus reuse an explicit leading separator. These rows stay visible while the items above scroll.
@@ -298,80 +298,33 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   const openRef = useRef(open)
   openRef.current = open
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null)
-  const [fixedPos, setFixedPos] = useState<CSSProperties | null>(null)
   const close = useRef(onClose)
   close.current = onClose
+  // Keep the dismissal fade at the last interactive anchor position.
+  const lastAnchorRect = useRef<DOMRect | null>(null)
+  const readAnchor = useCallback(() => {
+    const anchorElement = returnFocus?.() ?? rootRef.current
+    if (anchorElement?.closest('[inert], [hidden]') != null) {
+      if (exitingRef.current === undefined) close.current()
+      return lastAnchorRect.current
+    }
+    lastAnchorRect.current = getAnchorRect === undefined ? rootRef.current?.getBoundingClientRect() ?? null : getAnchorRect()
+    return lastAnchorRect.current
+  }, [getAnchorRect, returnFocus])
+  const fixedPos = useAnchoredPosition({
+    open: open && portal,
+    anchorRef: rootRef,
+    panelRef: listRef,
+    side,
+    align,
+    gap: 4,
+    margin: 12,
+    frameClearance: !contextual,
+    minWidthFromAnchor,
+    getAnchorRect: readAnchor,
+  })
+  const positioned = !portal || fixedPos !== null
   const { arm: armClose, cancel: cancelClose } = usePointerGrace(onClose)
-
-  // Portal mode: fixed-position the list from the anchor rect before paint;
-  // track the anchor while open (capture-phase scroll catches nested panes).
-  // getAnchorRect trumps measuring the wrapper span: a child layout effect
-  // runs before the parent's, so a wrapper the host positions in its own
-  // effect measures stale here — the host callback owns the truth instead.
-  useLayoutEffect(() => {
-    if (!open || !portal) { setFixedPos(null); return }
-    const place = () => {
-      const anchorElement = returnFocus?.() ?? rootRef.current
-      if (anchorElement?.closest('[inert], [hidden]') != null) {
-        if (exitingRef.current === undefined) close.current()
-        return
-      }
-      let r: DOMRect | null
-      if (getAnchorRect !== undefined) {
-        r = getAnchorRect()
-      } else {
-        /* v8 ignore next 2 -- the ref is attached before the layout effect runs and the listeners die with it. */
-        r = rootRef.current?.getBoundingClientRect() ?? null
-      }
-      if (r === null) return
-      const MARGIN = 12
-      const GAP = 4
-      const vw = window.innerWidth
-      const vh = window.innerHeight
-      const listEl = listRef.current
-      if (listEl !== null) {
-        const minimum = minWidthFromAnchor ? `${Math.min(r.width, Math.max(0, vw - MARGIN * 2))}px` : ''
-        if (listEl.style.minWidth !== minimum) listEl.style.minWidth = minimum
-      }
-      const lw = listEl?.offsetWidth ?? 0
-      const lh = listEl?.offsetHeight ?? 0
-
-      let x: number
-      let y: number
-      if (side === 'right') {
-        x = r.right + GAP
-        y = r.top
-      } else if (align === 'start') {
-        x = r.left
-        y = side === 'bottom' ? r.bottom + GAP : r.top - lh - GAP
-      } else {
-        x = r.right - lw
-        y = side === 'bottom' ? r.bottom + GAP : r.top - lh - GAP
-      }
-
-      if (lw > 0) x = Math.min(Math.max(x, MARGIN), vw - lw - MARGIN)
-      if (lh > 0) y = Math.min(Math.max(y, contextual ? MARGIN : overlayTopMargin(MARGIN, r, GAP)), vh - lh - MARGIN)
-
-      setFixedPos(current => current?.left === x && current.top === y ? current : { left: x, top: y })
-    }
-    // First run measures the hidden pre-render (same commit as `open`), so
-    // end/top alignment and clamping use real dimensions before anything
-    // paints — no visible jump from a zero-size first guess.
-    place()
-    // Dragging or transforming an ancestor moves the anchor without a scroll or resize event.
-    const track = () => {
-      place()
-      frame = requestAnimationFrame(track)
-    }
-    let frame = requestAnimationFrame(track)
-    window.addEventListener('scroll', place, true)
-    window.addEventListener('resize', place)
-    return () => {
-      cancelAnimationFrame(frame)
-      window.removeEventListener('scroll', place, true)
-      window.removeEventListener('resize', place)
-    }
-  }, [open, portal, align, side, getAnchorRect, minWidthFromAnchor, contextual, returnFocus])
 
   // Opening remembers where the keyboard was, so closing can hand it back to
   // that control — an anchor wrapping several (a split button) cannot be asked
@@ -385,12 +338,12 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   }, [open])
 
   useEffect(() => {
-    if (!open || exiting !== undefined || (portal && fixedPos === null) || !autoFocus
+    if (!open || exiting !== undefined || !autoFocus || !positioned
       || listRef.current?.contains(document.activeElement)) return
     const first = listRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')
     walkIndex.current = first === undefined || first === null ? null : 0
     if (first != null) focusWithoutRing(first)
-  }, [open, autoFocus, items.length, footer?.length, fixedPos, portal, exiting])
+  }, [open, autoFocus, items.length, footer?.length, positioned, exiting])
 
   useEffect(() => {
     if (!open || exiting !== undefined) {
@@ -601,10 +554,7 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
     setOpenSubmenuId(null)
   }
 
-  // Portal lists render hidden until placed: the placement effect measures
-  // this pre-render in the same commit, so the first painted frame is
-  // already at the final position (with getAnchorRect returning null the
-  // list simply stays hidden).
+  // Portal lists stay hidden until their first synchronous measurement.
   const list = open && (
     <MenuSurface compact={compact} id={contextual ? menuId : undefined}
       ref={listRef}

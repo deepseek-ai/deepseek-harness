@@ -18,7 +18,7 @@ Status: implemented
 
 `usingObservation({ sessionId, projection }, signal, callback?)` 获取已有的可释放 SessionObservation。有回调时租约借给回调直到其结束；无回调时由调用方释放。普通历史、状态及 Wait 输出读取不请求投影。Follow、精确投影读取和子会话历史 descriptor 校验请求投影。读取不会隐式激活 Agent。
 
-`observeEvent` 和 `observeProjections` 安装监听而不获取 Observation。首个 `ready` 确认订阅生效，不代表快照游标、实体存在、父子关系有效或 Agent 就绪。历史从首个收到的事件建立连续性；投影更新替换单个键，多个更新可以共享序号。`observeState` 则从完整状态读取开始，并合并后续 Session 和 Agent 失效通知。
+`observeEvent` 和 `observeProjections` 安装监听而不获取 Observation。首个 `ready` 确认订阅生效，不代表快照游标、实体存在、父子关系有效或 Agent 就绪。历史从首个收到的事件建立连续性；每个投影变更帧对应一个已提交事件，只替换帧内列出的键。`observeState` 则从完整状态读取开始，并合并后续 Session 和 Agent 失效通知。
 
 历史、历史观察和 Follow 接收 Address 请求；投影和状态操作接收 Session ID。所有内部读取器和监听器都使用 Session ID。History 和 Follow 在 Controller 层以开场 Observation 校验 Address，包括已有的子会话 descriptor 规则。纯历史观察不为实体校验获取读取。Gateway 资源授权与之独立：注册的 Session 解析器在访问判定前从请求提取目标 ID。
 

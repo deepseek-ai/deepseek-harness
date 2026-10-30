@@ -106,6 +106,7 @@
     "tests/cua-permissions.e2e.ts",
     "tests/schedule-header.e2e.ts",
     "tests/schedule-phone.e2e.ts",
+    "tests/schedule-pickers.e2e.ts",
     "tests/worktree-opt-in.e2e.ts",
     "tests/session-inspector.e2e.ts",
     "tests/shared-inspector.e2e.ts",

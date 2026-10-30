@@ -192,8 +192,8 @@ check(
 }
 
 {
-  // Named imports are snapshots (CommonJS destructuring semantics), which is the
-  // documented, accepted divergence from ESM live bindings on the import side.
+  // Named imports read the required module at each reference; cycles, live
+  // reads, and shadowing are covered in transform-imports.spec.ts.
   const code = transformModule("import { a, b as c } from 'p'\nexport const out = [a, c]\n", 'probe.js')
   parsesAsScript('named imports', code)
   const exports = runBody(code, () => ({ a: 1, b: 2 }))

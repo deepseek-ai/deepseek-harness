@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { useMemo, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   type SessionProjectionMap, type SessionSummary,
@@ -7,7 +7,8 @@ import {
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconRefreshOutlineRegular, MenuSurface, StateDot, Tooltip,
+  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconRefreshOutlineRegular,
+  MenuSurface, StateDot, Tooltip, useAnchoredPosition,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
@@ -475,21 +476,6 @@ type CatalogDropdownProps = CatalogDropdownSharedProps & (
   }
 )
 
-const MENU_VIEWPORT_MARGIN = 16
-
-/** Place a portaled catalog below its trigger without crossing the viewport edge. */
-function catalogMenuPosition(trigger: HTMLButtonElement, withBoard: boolean): CSSProperties {
-  const rect = trigger.getBoundingClientRect()
-  const width = Math.min(withBoard ? 500 : 336, window.innerWidth - MENU_VIEWPORT_MARGIN * 2)
-  return {
-    top: rect.bottom + 5,
-    left: Math.min(
-      Math.max(MENU_VIEWPORT_MARGIN, rect.left),
-      window.innerWidth - width - MENU_VIEWPORT_MARGIN,
-    ),
-  }
-}
-
 /** One trigger-plus-tree dropdown over the catalog rooted at `rootSessionId`. */
 function CatalogDropdown(props: CatalogDropdownProps) {
   const {
@@ -519,11 +505,14 @@ function CatalogDropdown(props: CatalogDropdownProps) {
   }, [projections, summaries, statuses])
   const catalog = catalogs[rootSessionId]
   const [open, setOpen] = useState(false)
-  const [menuPosition, setMenuPosition] = useState<CSSProperties>()
   const [expanded, setExpanded] = useState<ReadonlySet<SessionId>>(() => new Set())
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const menuPosition = useAnchoredPosition({
+    open, anchorRef: triggerRef, panelRef: menuRef, gap: 5, margin: 16,
+    layoutKey: withBoard ? 1 : 0,
+  })
   const hoverOpenTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const hoverCloseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // A click-opened (pinned) menu ignores hover-out; only explicit dismissal closes it.
@@ -563,12 +552,10 @@ function CatalogDropdown(props: CatalogDropdownProps) {
       /* v8 ignore next -- a queued callback can outlive the trigger */
       if (trigger === null) return
       setOpen(true)
-      setMenuPosition(catalogMenuPosition(trigger, withBoard))
     }
     else {
       pinnedRef.current = false
       setOpen(false)
-      setMenuPosition(undefined)
       setExpanded(new Set())
     }
     if (restoreFocus) queueMicrotask(() => { triggerRef.current?.focus() })
@@ -640,23 +627,6 @@ function CatalogDropdown(props: CatalogDropdownProps) {
       document.removeEventListener('keydown', dismiss)
     }
   }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const placeMenu = (): void => {
-      const trigger = triggerRef.current
-      /* v8 ignore next -- native resize or scroll can outlive the trigger */
-      if (trigger === null) return
-      setMenuPosition(catalogMenuPosition(trigger, withBoard))
-    }
-    placeMenu()
-    window.addEventListener('resize', placeMenu)
-    document.addEventListener('scroll', placeMenu, true)
-    return () => {
-      window.removeEventListener('resize', placeMenu)
-      document.removeEventListener('scroll', placeMenu, true)
-    }
-  }, [open, withBoard])
 
   useEffect(() => () => {
     cancelHoverOpen()
@@ -772,7 +742,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
         <MenuSurface
           ref={menuRef}
           className={`${css.menu} ${withBoard ? css.menuWithBoard : ''}`}
-          style={menuPosition}
+          style={menuPosition ?? { visibility: 'hidden' }}
           role="dialog"
           tabIndex={-1}
           aria-label={t('tree.aria')}

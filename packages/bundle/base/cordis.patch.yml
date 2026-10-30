@@ -291,9 +291,13 @@
 
     - id: fs-observation-policy
       name: '@deepseek-ai/dsh-fs-observation-policy'
+      disabled: true
 
     - id: tool-fs
       name: '@deepseek-ai/dsh-tool-fs'
+      config:
+        # Set false to drop the apply_patch tool beside edit.
+        applyPatch: true
 
     - id: tool-fs-search
       name: '@deepseek-ai/dsh-tool-fs-search'

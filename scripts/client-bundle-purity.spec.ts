@@ -1,6 +1,6 @@
 /**
- * Pins shared client-bundle preset rules: module-edge purity, source-map
- * chaining, and physical watch dependencies hidden behind virtual CSS Modules.
+ * Pins shared client-bundle preset rules: build modes, module-edge purity,
+ * source-map chaining, and physical watch dependencies hidden behind virtual CSS Modules.
  */
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -109,6 +109,63 @@ describe('client bundle build faces', () => {
   })
 })
 
+async function clientChunkOutput(root: string, config: UserConfig, fileName: string): Promise<string> {
+  let builds: TsdownBundle[] = []
+  try {
+    builds = await build({
+      ...config, cwd: root, config: false, tsconfig: false,
+      write: false, clean: false, exports: false, report: false, logLevel: 'silent',
+    })
+    const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
+    const output = chunks.find(chunk => chunk.fileName === fileName)?.code
+    if (output === undefined) throw new Error(`client output missing: ${fileName}`)
+    return output
+  } finally {
+    for (const bundle of builds) await bundle[Symbol.asyncDispose]()
+  }
+}
+
+describe('statically linked client build modes', () => {
+  it.each([
+    { label: 'defaults to production', mode: undefined, expectedMode: 'production', frozen: false },
+    { label: 'retains explicit development', mode: 'development', expectedMode: 'development', frozen: true },
+  ])('$label when compiling conditional branches', async ({ mode, expectedMode, frozen }) => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-static-client-mode-'))
+    onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
+    const entry = join(root, 'lib/types/client/index.js')
+    mkdirSync(dirname(entry), { recursive: true })
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: REQUESTING_PACKAGE, type: 'module' }))
+    writeFileSync(entry, [
+      'export const snapshot = { value: 1 }',
+      "if (process.env.NODE_ENV !== 'production') Object.freeze(snapshot)",
+      'export const mode = process.env.NODE_ENV',
+      '',
+    ].join('\n'))
+
+    const previousMode = process.env.NODE_ENV
+    let config: UserConfig | undefined
+    try {
+      if (mode === undefined) Reflect.deleteProperty(process.env, 'NODE_ENV')
+      else process.env.NODE_ENV = mode
+      config = staticLinked(root, ['lib/types/client/index.js'])({ env: { DSH_BUILD_FACE: 'client' } })
+        .find(candidate => candidate.platform === 'browser')
+    } finally {
+      if (previousMode === undefined) Reflect.deleteProperty(process.env, 'NODE_ENV')
+      else process.env.NODE_ENV = previousMode
+    }
+    if (config === undefined) throw new Error('static client config missing')
+
+    const output = await clientChunkOutput(root, config, 'index.js')
+    const emitted = await import(`data:text/javascript,${encodeURIComponent(output)}`) as {
+      mode: string
+      snapshot: { value: number }
+    }
+    expect(emitted.mode).toBe(expectedMode)
+    expect(emitted.snapshot).toEqual({ value: 1 })
+    expect(Object.isFrozen(emitted.snapshot)).toBe(frozen)
+  })
+})
+
 function dynamicImportFixture(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix))
   onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
@@ -148,19 +205,9 @@ describe('client bundle dynamic imports', () => {
     const config = clientConfigs()[0]
     if (config === undefined) throw new Error('client config missing')
 
-    let builds: TsdownBundle[] = []
-    try {
-      builds = await build({
-        ...config, cwd: root, config: false, tsconfig: false,
-        write: false, clean: false, exports: false, report: false, logLevel: 'silent',
-      })
-      const chunks = builds.flatMap(bundle => bundle.chunks).filter(chunk => chunk.type === 'chunk')
-      const output = chunks.find(chunk => chunk.fileName === 'client.js')?.code
-      expect(output).toContain('require.async("./client.terminal.js")')
-      expect(output).not.toContain('Promise.resolve().then(() => require("./client.terminal.js"))')
-    } finally {
-      for (const bundle of builds) await bundle[Symbol.asyncDispose]()
-    }
+    const output = await clientChunkOutput(root, config, 'client.js')
+    expect(output).toContain('require.async("./client.terminal.js")')
+    expect(output).not.toContain('Promise.resolve().then(() => require("./client.terminal.js"))')
   })
 })
 

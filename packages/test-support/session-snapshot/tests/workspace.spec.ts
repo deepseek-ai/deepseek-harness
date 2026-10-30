@@ -53,6 +53,19 @@ describe('workspace snapshots', () => {
     ])
   })
 
+  it('uses nested expected markers for empty directories without hiding actual workspace files', async () => {
+    const directory = await root()
+    await mkdir(join(directory, 'locked'))
+    await writeFile(join(directory, 'locked', EMPTY_WORKSPACE_MARKER), '')
+
+    expect(await captureExpectedWorkspaceSnapshot(directory)).toEqual([
+      { path: 'locked', kind: 'empty-directory' },
+    ])
+    expect(await captureWorkspaceSnapshot(directory)).toEqual([
+      { path: 'locked/.empty', kind: 'text', content: '' },
+    ])
+  })
+
   it('treats NUL-bearing UTF-8 as binary workspace state', async () => {
     const directory = await root()
     await writeFile(join(directory, 'nul.bin'), Buffer.from([0x61, 0x00, 0x62]))

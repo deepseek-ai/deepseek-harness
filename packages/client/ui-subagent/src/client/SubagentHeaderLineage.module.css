@@ -110,8 +110,8 @@
   display: flex;
   flex-direction: column;
   width: 336px;
-  max-width: calc(100vw - 32px);
-  max-height: min(560px, calc(100vh - 140px));
+  max-width: min(calc(100vw - 32px), var(--dsh-anchored-max-width, 100vw));
+  max-height: min(560px, calc(100vh - 140px), var(--dsh-anchored-max-height, 100vh));
   padding: 4px;
   overflow: hidden;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
