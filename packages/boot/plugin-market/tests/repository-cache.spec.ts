@@ -5,9 +5,15 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, sym
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import * as subprocess from 'execa'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { DetailFailure } from '@deepseek-ai/dsh-plugin-detail'
 import { RepositoryCache, type RepositoryCacheOptions } from '../src/repository-cache.ts'
+
+vi.mock('execa', async (original) => {
+  const module = await original<typeof import('execa')>()
+  return { ...module, execa: vi.fn(module.execa) }
+})
 
 /** Await a rejection that matches `fields` and whose message contains `message`. */
 async function expectRejection(promise: Promise<unknown>, fields: object, message: string): Promise<void> {
@@ -149,9 +155,18 @@ it('reports an unreachable host as a network failure, a failed local command as 
   await expect(broken).rejects.toThrow('git update-ref')
   await expect(broken).rejects.not.toBeInstanceOf(DetailFailure)
   expect(readdirSync(join(root, 'cache'))).toEqual([])
-  // Git that cannot answer `git --version` within the deadline cannot run.
   const other = repository('t2', { 'README.md': 'x' })
-  await expectRejection(cache({ timeoutMs: 1 }).read(other.url, other.commit, 'README.md', 100, signal), { reason: 'git-unavailable' }, 'timed out')
+  // A real 1 ms deadline can expire during either the version probe or a later Git command.
+  const probe = vi.spyOn(subprocess, 'execa').mockResolvedValueOnce({
+    failed: true, shortMessage: 'Command timed out: git --version', stdout: '', stderr: '', isMaxBuffer: false,
+  } as Awaited<ReturnType<typeof subprocess.execa>>)
+  try {
+    await expectRejection(cache().read(other.url, other.commit, 'README.md', 100, signal), { reason: 'git-unavailable' }, 'timed out')
+    expect(probe).toHaveBeenCalledTimes(1)
+    expect(probe).toHaveBeenCalledWith('git', expect.arrayContaining(['--version']), expect.anything())
+  } finally {
+    probe.mockRestore()
+  }
   vi.stubEnv('PATH', join(root, 'no-git'))
   const missing = cache().read(other.url, other.commit, 'README.md', 100, signal)
   await expectRejection(missing, { reason: 'git-unavailable' }, 'git --version')
