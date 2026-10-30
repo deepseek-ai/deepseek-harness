@@ -38,6 +38,7 @@ const CONFIGURATION_ONLY_DEV_DEPENDENCIES = {
 const DUPLICATE_SAFE_PACKAGES: readonly string[] = [
   '@deepseek-ai/dsh-brand',
   '@deepseek-ai/dsh-lazy-require',
+  '@deepseek-ai/dsh-office-engine-resolver',
   '@deepseek-ai/dsh-typert-protocol',
   '@deepseek-ai/dsh-util-code-language',
   '@deepseek-ai/dsh-util-crypto',

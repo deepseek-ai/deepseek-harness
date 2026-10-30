@@ -9,12 +9,12 @@ import z from '@deepseek-ai/schemastery'
 import type { WorkspaceFileScope, WorkspaceFileStat } from '@deepseek-ai/dsh-api-workspace-files'
 import type {} from '@deepseek-ai/dsh-fs'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { createEnginePackageResolver } from '@deepseek-ai/dsh-office-engine-resolver'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { OfficeToPdfError } from './errors.ts'
 import { OfficeToPdfGeneration, type OfficeSourceKey } from './identity.ts'
 import type { OfficeExtension, OfficeToPdfRequest, OfficeToPdfResult, OfficeToPdfPriority, RenderedDocumentBytes } from './types.ts'
 import { readPdf } from './output.ts'
-import { resolveEnginePackage } from './engine-package.ts'
 import { ConversionQueue } from './queue.ts'
 
 export * from './errors.ts'
@@ -119,7 +119,8 @@ export class OfficeToPdf extends TypertRemoteService {
     if (config.maxSourceBytes < config.maxInputBytes) throw new Error('maxSourceBytes must be at least maxInputBytes.')
     const { fontDirectories, fontFallbacks, timeoutMs, maxInputBytes, maxOutputBytes, maxImageResolution,
       maxArchiveEntries, maxUncompressedBytes, maxFontFiles, maxFontFileBytes, maxLoadedFontBytes } = config
-    this.options = { resolveEnginePackage, timeoutMs, maxInputBytes, maxOutputBytes, maxImageResolution,
+    this.options = { resolveEnginePackage: createEnginePackageResolver(import.meta.resolve('@deepseek-ai/libreoffice-kit')),
+      timeoutMs, maxInputBytes, maxOutputBytes, maxImageResolution,
       maxArchiveEntries, maxUncompressedBytes, maxFontFiles, maxFontFileBytes, maxLoadedFontBytes,
       ...(fontDirectories === undefined ? {} : { fontDirectories }),
       ...(fontFallbacks === undefined ? {} : { fontFallbacks }),

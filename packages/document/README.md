@@ -26,6 +26,7 @@ Each package owns its configuration and lifetime rules; the subsystem reference 
 
 | Package | Role | ctx key |
 |---|---|---|
+| [office-engine-resolver](office-engine-resolver/README.md) | Consumer-anchored Kit engine manifests with native ASAR paths | None |
 | [office-to-pdf](office-to-pdf/README.md) | Authorized Office bytes to complete PDFs with bounded queues and caching | `ctx.officeToPdf` |
 
 -----

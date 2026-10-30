@@ -20,12 +20,13 @@ const names = ['office', 'office-docx', 'office-export-pdf', 'office-pptx', 'off
 
 afterEach(() => { vi.unstubAllEnvs() })
 
-async function boot(profile: string, primaryRuntime: (root: string) => string | undefined) {
+async function boot(profile: string, primaryRuntime: (root: string) => string | undefined,
+  officeCli: (root: string) => string | undefined = root => join(root, 'office-cli.js')) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-desktop-office-rows-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   vi.stubEnv('DSH_HOME', join(root, 'home'))
   vi.stubEnv('DSH_BUNDLED_PRIMARY_RUNTIME', primaryRuntime(root))
-  vi.stubEnv('DSH_BUNDLED_OFFICE_CLI', join(root, 'office-cli.js'))
+  vi.stubEnv('DSH_BUNDLED_OFFICE_CLI', officeCli(root))
   await cp(assets, join(root, 'office-skills'), { recursive: true })
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
@@ -60,6 +61,21 @@ it('mounts Office skills and workspace dependencies from the Desktop carrier pat
     source: join(root, 'primary-runtime'), root: join(root, 'home', 'dsh-runtimes', 'dsh-primary-runtime'),
   })
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
+  expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['load_workspace_dependencies'])
+})
+
+it('keeps Office skills without CLI paths when the Desktop shell supplies no Kit CLI', async () => {
+  const { ctx, root } = await boot('desktop', root => join(root, 'primary-runtime'), () => undefined)
+  expect(ctx.loader.resolve('skill-office').fiber?.config).toMatchObject({ assetRoot: join(root, 'office-skills'), cli: false })
+  expect(ctx.loader.resolve('workspace-dependencies').fiber?.config).toEqual({
+    source: join(root, 'primary-runtime'), root: join(root, 'home', 'dsh-runtimes', 'dsh-primary-runtime'),
+  })
+  expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
+  for (const name of ['office-render', 'office-recalculate', 'office-export-pdf']) {
+    const content = (await ctx.skills.get(name))?.content
+    expect(content).toMatch(/\n\nLibreOffice Kit is disabled in this deployment\.$/u)
+    expect(content).not.toContain('libreofficeKit')
+  }
   expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['load_workspace_dependencies'])
 })
 

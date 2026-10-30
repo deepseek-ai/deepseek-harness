@@ -232,6 +232,7 @@ describe('package dependency scope', () => {
     expect(PACKAGE_DEPENDENCY_POLICY.duplicateSafePackages).toEqual([
       '@deepseek-ai/dsh-brand',
       '@deepseek-ai/dsh-lazy-require',
+      '@deepseek-ai/dsh-office-engine-resolver',
       '@deepseek-ai/dsh-typert-protocol',
       '@deepseek-ai/dsh-util-code-language',
       '@deepseek-ai/dsh-util-crypto',

@@ -12,7 +12,6 @@
   ],
   "dependencies": {
     "koffi": "3.1.1",
-    "@deepseek-ai/libreoffice-kit": "0.2.3-rc.4",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",

@@ -25,6 +25,9 @@ import type { DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
 export async function smokeDesktopRuntime(
   root: string, node: string, runtime: DesktopRuntimeDescriptor, environment: NodeJS.ProcessEnv, resourcesRuntime: string,
 ): Promise<void> {
+  const office = desktopOfficeEnvironment(root, join(resourcesRuntime, 'primary-runtime'))
+  // Desktop starts without a Kit CLI; a release that cannot locate one is still broken.
+  if (office.kind !== 'ready') throw new Error('desktop runtime: LibreOffice Kit CLI is missing from the runtime', { cause: office.error })
   const home = mkdtempSync(join(tmpdir(), 'dsh-desktop-smoke-'))
   const profile = join(home, 'profiles', 'desktop')
   const hostEnvironment = {
@@ -36,7 +39,7 @@ export async function smokeDesktopRuntime(
     npm_config_store_dir: join(home, 'store'), npm_config_enable_global_virtual_store: 'false',
   }
   const host = new DesktopHostProcess(node, root, profile, undefined,
-    { ...hostEnvironment, ...desktopOfficeEnvironment(root, join(resourcesRuntime, 'primary-runtime')) },
+    { ...hostEnvironment, ...office.environment },
     undefined,
     { pnpm: join(resourcesRuntime, 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs'), nodeBin: join(resourcesRuntime, 'bin') })
   let timer: ReturnType<typeof setTimeout> | undefined

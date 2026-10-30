@@ -52,7 +52,7 @@
       disabled: false
       config:
         assetRoot: !!js process.cwd() + '/office-skills'
-        cli: false
+        cli: !!js process.env.DSH_BUNDLED_OFFICE_CLI ?? false
 
 - id: tool-bash
   disabled: true

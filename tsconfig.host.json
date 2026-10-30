@@ -323,6 +323,7 @@
     { "path": "./packages/client/ui-sidebar-documentpreview/tsconfig.host.json" },
     { "path": "./packages/client/ui-sidebar-browser/tsconfig.host.json" },
     { "path": "./packages/client/ui-settings-general/tsconfig.host.json" },
+    { "path": "./packages/document/office-engine-resolver" },
     { "path": "./packages/document/office-to-pdf" },
 
     { "path": "./packages/api/account-controller" },

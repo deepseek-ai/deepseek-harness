@@ -26,6 +26,7 @@ kind: "package-group"
 
 | 包 | 职责 | ctx 键 |
 |---|---|---|
+| [office-engine-resolver](office-engine-resolver/README.zh.md) | 以消费方 Kit 为起点解析引擎清单，并映射原生 ASAR 路径 | 无 |
 | [office-to-pdf](office-to-pdf/README.zh.md) | 将已授权 Office 字节转换为完整 PDF，并提供有界队列和缓存 | `ctx.officeToPdf` |
 
 -----

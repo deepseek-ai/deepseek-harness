@@ -28,8 +28,8 @@ import {
 } from 'electron'
 import { resolveDesktopPaths } from './paths.ts'
 import { DesktopProjectManager } from './project-manager.ts'
-import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError } from './host-process.ts'
-import { desktopOfficeEnvironment } from './office-cli.ts'
+import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError, type DesktopHostReady } from './host-process.ts'
+import { desktopOfficeEnvironment, writeOfficeKitDiagnostic } from './office-cli.ts'
 import { DesktopPlatformView, PLATFORM_IPC, platformBounds } from './platform-view.ts'
 import { installDesktopFileDrag } from './file-drag.ts'
 import { installDesktopDirectoryPicker } from './directory-picker.ts'
@@ -525,10 +525,11 @@ async function main(): Promise<void> {
     owner => isMandatory() || updateOverlays.input(owner).blocked)
   const backend = new DesktopBackendController((onFailure) => {
     const hostInspectPort = developmentHostInspectPort(development)
+    const office = desktopOfficeEnvironment(resources.dsh, primaryRuntime)
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
       hostInspectPort, {
         ...hostEnvironment,
-        ...desktopOfficeEnvironment(resources.dsh, primaryRuntime),
+        ...office.environment,
         DSH_CLIENT_VERSION: desktopClientVersion(),
       }, onFailure,
       resources, (next) => { platformView.setSession(next) }, (record) => {
@@ -539,7 +540,12 @@ async function main(): Promise<void> {
       })
     return {
       start: async () => {
-        const ready = await host.start()
+        // Spawn in the same turn: awaiting the record first would let stop() finish before the child exists.
+        const diagnostic = office.kind === 'kit-unavailable'
+          ? writeOfficeKitDiagnostic(app.getPath('logs'), resources.dsh, office.error, new Date()) : undefined
+        const started = host.start()
+        let ready: DesktopHostReady
+        try { ready = await started } finally { await diagnostic }
         const cookie = await authenticateWebHost(ready.url)
         hostCookie = cookie
         hostUrl = ready.url

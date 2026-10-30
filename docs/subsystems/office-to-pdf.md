@@ -8,6 +8,7 @@ The [document package family](../../packages/document/README.md) converts Office
 
 | Owner | Responsibility |
 |---|---|
+| [office-engine-resolver](../../packages/document/office-engine-resolver/README.md) | Resolve engine manifests from the caller's Kit installation and map native paths to ASAR unpacked directories |
 | [office-to-pdf](../../packages/document/office-to-pdf/README.md) | `ctx.officeToPdf`: shared LibreOffice conversion, bounded admission, and PDF caching |
 | [Web bundle](../../packages/bundle/web-app/README.md) | One configurable conversion provider shared by Host consumers |
 | [Office preview Client](../../packages/client/ui-sidebar-documentpreview/README.md#office-preview) | Office extension selection, PDF reuse, and missing-font notices |

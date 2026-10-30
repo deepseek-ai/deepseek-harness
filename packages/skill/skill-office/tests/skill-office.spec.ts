@@ -12,6 +12,10 @@ import { execa } from 'execa'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('node:sea', () => ({ isSea: vi.fn(() => false) }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return { ...actual, readFile: vi.fn(actual.readFile) }
+})
 
 const assets = fileURLToPath(new URL('../assets/', import.meta.url))
 const names = ['office', 'office-docx', 'office-export-pdf', 'office-pptx', 'office-recalculate', 'office-render', 'office-xlsx']
@@ -213,6 +217,43 @@ describe('bundled Office skills', () => {
     }
   })
 
+  it.each([
+    ['an Error without a code', new Error('temporary read failure')],
+    ['a non-Error rejection', 'temporary read failure'],
+  ])('retries discovery and preserves load failures for %s', async (_label, error) => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-office-unknown-read-'))
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SkillRegistry)
+      await cp(assets, root, { recursive: true })
+      const docx = join(root, 'office-docx', 'SKILL.md')
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      const read = vi.mocked(readFile)
+      let failRead = true
+      try {
+        read.mockImplementation((path, options) => path === docx && failRead
+          // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- Exercise primitive read failures.
+          ? Promise.reject(error) : actual.readFile(path, options))
+        await ctx.plugin(SkillOffice, { assetRoot: root })
+        const incomplete = await ctx.skills.snapshot()
+        expect({ complete: incomplete.complete, names: incomplete.skills.map(skill => skill.name) })
+          .toEqual({ complete: false, names: names.filter(name => name !== 'office-docx') })
+        failRead = false
+        const recovered = await ctx.skills.snapshot()
+        expect({ complete: recovered.complete, names: recovered.skills.map(skill => skill.name) })
+          .toEqual({ complete: true, names })
+        failRead = true
+        await expect(ctx.skills.get('office-docx')).rejects.toBe(error)
+      } finally {
+        read.mockReset()
+      }
+      expect((await ctx.skills.get('office-docx'))?.content).toContain('python-docx')
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('retries read errors other than a missing path instead of omitting the skill', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-office-retry-'))
     const ctx = new Context()
@@ -259,7 +300,7 @@ it('executes capabilities using only paths returned by the loaded skill from a s
     expect(result.timedOut, result.stderr).toBe(false)
     expect(result.signal, result.stderr).toBeUndefined()
     expect(result.exitCode, result.stderr).toBe(0)
-    expect(JSON.parse(result.stdout)).toMatchObject({ runtime: { version: '0.2.3-rc.4', cliPath: libreofficeKit.cli } })
+    expect(JSON.parse(result.stdout)).toMatchObject({ runtime: { version: '0.2.3', cliPath: libreofficeKit.cli } })
   } finally {
     await ctx.fiber.dispose()
     await rm(root, { recursive: true, force: true })

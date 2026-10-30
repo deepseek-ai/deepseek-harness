@@ -8,6 +8,7 @@
 
 | 所有者 | 职责 |
 |---|---|
+| [office-engine-resolver](../../packages/document/office-engine-resolver/README.zh.md) | 从调用方的 Kit 安装定位引擎清单，并将原生路径映射到 ASAR 解包目录 |
 | [office-to-pdf](../../packages/document/office-to-pdf/README.zh.md) | `ctx.officeToPdf`：共享 LibreOffice 转换、有界准入和 PDF 缓存 |
 | [Web bundle](../../packages/bundle/web-app/README.zh.md) | 由宿主消费者共享的单个可配置转换提供方 |
 | [Office 预览 Client](../../packages/client/ui-sidebar-documentpreview/README.zh.md#office-preview) | Office 扩展名选择、PDF 复用和缺失字体提示 |

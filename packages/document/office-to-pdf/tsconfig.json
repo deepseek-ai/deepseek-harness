@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../office-engine-resolver"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {

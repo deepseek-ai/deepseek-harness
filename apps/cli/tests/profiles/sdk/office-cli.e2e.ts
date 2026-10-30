@@ -107,7 +107,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || process.platform === 'win32')(`agent 
       for (const operation of ['capabilities', 'convert']) expect(commandText, diagnostic).toMatch(new RegExp(`\\s${operation}\\b`, 'u'))
       expect(existsSync(decoyMarker), 'the agent must not invoke system Office when the bundled CLI is supplied').toBe(false)
       const capabilities = JSON.parse(await readFile(join(root, 'capabilities.json'), 'utf8')) as { runtime: { version: string; cliPath: string } }
-      expect(capabilities.runtime.version).toBe('0.1.5')
+      expect(capabilities.runtime.version).toBe('0.2.3')
       expect(capabilities.runtime.cliPath).toMatch(/lib[/\\]cli\.js$/u)
       const pdf = await readFile(join(root, 'result.pdf'))
       expect(pdf.subarray(0, 5).toString()).toBe('%PDF-')

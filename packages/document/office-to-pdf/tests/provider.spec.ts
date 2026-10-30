@@ -5,7 +5,12 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Converter, ConverterOptions } from '@deepseek-ai/libreoffice-kit'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import OfficeToPdf, { Config, OfficeSourceKey, type OfficeToPdfRequest } from '../src/index.ts'
-import { resolveEnginePackage } from '../src/engine-package.ts'
+import { createEnginePackageResolver } from '@deepseek-ai/dsh-office-engine-resolver'
+
+vi.mock('@deepseek-ai/dsh-office-engine-resolver', async (original) => {
+  const actual = await original<typeof import('@deepseek-ai/dsh-office-engine-resolver')>()
+  return { ...actual, createEnginePackageResolver: vi.fn(actual.createEnginePackageResolver) }
+})
 
 const kit = vi.hoisted(() => ({ create: vi.fn<(options?: ConverterOptions) => Promise<Converter>>() }))
 vi.mock('@deepseek-ai/libreoffice-kit', () => ({ createConverter: kit.create }))
@@ -26,6 +31,7 @@ let dispose: ReturnType<typeof vi.fn<Converter['dispose']>>
 let converter: Converter
 
 beforeEach(() => {
+  vi.mocked(createEnginePackageResolver).mockClear()
   ctx = new Context()
   render = vi.fn<Converter['render']>().mockImplementation(async ({ outputPath }) => {
     await writeFile(outputPath, pdf)
@@ -46,6 +52,14 @@ async function mount(config: Partial<Config> = {}): Promise<OfficeToPdf> {
   await ctx.plugin(OfficeToPdf, config)
   return ctx.officeToPdf
 }
+
+it('passes a resolver anchored to its own Kit installation to the converter', async () => {
+  const provider = await mount()
+  await provider.convert(request)
+  expect(createEnginePackageResolver).toHaveBeenCalledExactlyOnceWith(import.meta.resolve('@deepseek-ai/libreoffice-kit'))
+  expect(kit.create.mock.calls[0]?.[0]?.resolveEnginePackage)
+    .toBe(vi.mocked(createEnginePackageResolver).mock.results[0]?.value)
+})
 
 it('preserves the kit font defaults when font configuration is omitted', async () => {
   const provider = await mount()
@@ -91,7 +105,9 @@ it('passes configured limits to the kit, reuses the converter, and removes all s
   const { maxConcurrentConversions: _count, maxQueuedJobs: _queued, maxReaders: _readers, maxSourceBytes: _source,
     maxBackgroundConversions: _background, maxCachedEntries: _entries, maxCachedBytes: _cached,
     maxSourceEntries: _aliases, ...options } = config
-  expect(kit.create).toHaveBeenCalledExactlyOnceWith({ ...options, resolveEnginePackage })
+  const resolver = vi.mocked(createEnginePackageResolver).mock.results[0]
+  if (resolver?.type !== 'return') throw new Error('Expected the engine resolver factory to return')
+  expect(kit.create).toHaveBeenCalledExactlyOnceWith({ ...options, resolveEnginePackage: resolver.value })
   await ctx.fiber.dispose()
   expect(dispose).toHaveBeenCalledOnce()
   expect(result.pdf).toEqual(Uint8Array.from(pdf))
