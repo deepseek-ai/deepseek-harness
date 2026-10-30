@@ -418,14 +418,24 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     expect(await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).count()).toBe(1)
     expect(await row.getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).count()).toBe(1)
     const beforeHover = page.url()
-    for (const [label, clipped] of [[primary, false], [secondary, true]] as const) {
-      expect(await label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(clipped)
-      await label.hover()
-      if (clipped) await page.getByRole('tooltip', { name: childId, exact: true }).waitFor()
-      else expect(await page.getByRole('tooltip').count()).toBe(0)
-      expect(page.url()).toBe(beforeHover)
-      expect(await page.getByText(PARENT_PROMPT, { exact: true }).isVisible()).toBe(true)
-      expect(await page.locator('[data-sidebar-chat]').count()).toBe(0)
+    // UUID glyph widths vary across values and host fonts; this fixture requires clipping.
+    const secondaryStyle = await secondary.getAttribute('style')
+    await secondary.evaluate((element) => { element.style.maxWidth = '12ch' })
+    try {
+      for (const [label, clipped] of [[primary, false], [secondary, true]] as const) {
+        expect(await label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(clipped)
+        await label.hover()
+        if (clipped) await page.getByRole('tooltip', { name: childId, exact: true }).waitFor()
+        else expect(await page.getByRole('tooltip').count()).toBe(0)
+        expect(page.url()).toBe(beforeHover)
+        expect(await page.getByText(PARENT_PROMPT, { exact: true }).isVisible()).toBe(true)
+        expect(await page.locator('[data-sidebar-chat]').count()).toBe(0)
+      }
+    } finally {
+      await secondary.evaluate((element, style) => {
+        if (style === null) element.removeAttribute('style')
+        else element.setAttribute('style', style)
+      }, secondaryStyle)
     }
     expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
     await page.keyboard.press('Escape')
