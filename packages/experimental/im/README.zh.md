@@ -59,7 +59,7 @@ kind: "package-reference"
 | `media.download` / `media.maxBytes` / `media.maxItems` | `true` / 10 MiB / 9 | 是否将入站图片下载为附件，以及单张字节上限与单条消息下载数量上限 |
 | `send.maxBytes` / `send.maxMediaBytes` / `send.operationTimeoutMs` | 30 KB / 10 MiB / 30 秒 | 出站单段文本大小上限、媒体文件大小上限与单次发送超时时间 |
 | `tools.readOnly` / `tools.maxReadBytes` / `tools.maxHistoryItems` | `false` / 64 KiB / 50 | 是否仅注册只读工具、单次工具返回最大字节数，以及 `im_history` 单页最大条数 |
-| `defaultDispatch` | 不配置 | 可选[默认分派会话](#the-default-dispatcher)：必填 `agentPreset`、`provider`、`model` 与绝对路径 `cwd`，可选 `output`（`'none'`）、`delivery`（`'steer'`）与 `prompt`（`im:dispatcher`，order 81） |
+| `defaultDispatch` | 不配置 | 可选[默认分派会话](#the-default-dispatcher)：必填 `agentPreset`、`provider`、`model` 与绝对路径 `cwd`，可选 `output`（`'none'`）、`delivery`（`'steer'`）、`restrict`（不限制工具）与 `prompt`（`im:dispatcher`，order 81） |
 
 不匹配任何规则的聊天消息既不会入库也不会发出事件。完整字段定义见生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-im)。
 
@@ -258,6 +258,8 @@ You are the default IM session: you receive every message that addresses the bot
 - **单个存储目录仅限单进程使用** — `im_messages`、`im_sessions` 与 `im_receipts` 在内存和磁盘上均由单个进程独占维护，不支持多进程并发共享同一存储。
 - **未挂载路由插件且未配置 `defaultDispatch` 时不会回复** — 若没有任何 `im/message` 监听器认领消息且未配置 `defaultDispatch`，被接纳的消息只会入库并标记为 `ignored`。
 - **多个路由插件按注册顺序生效** — 第一个返回 `handled` 的监听器会终止事件链；同时挂载两个规则重叠的路由插件不会在启动时报错。
+- **`sources[].writable` 只约束会话发起的发送** — 不携带会话的发送（事件的 `reply`/`send`、会话命令插件的应答）只受聊天是否被接纳约束，不受绑定约束，因此只读聊天仍会收到命令回复。
+- **默认分派会话用同一份历史服务所有已接纳聊天** — 任一被接纳发送者的命令都会作用于该共享会话，其工具结果对所有聊天可见；请按来源规则限制 `users`，并通过 `defaultDispatch.restrict` 收回不应跨聊天生效的工具。
 - **监听器必须自行保证幂等键** — 监听器抛错会让消息保持 `pending` 并在后续重试；插件在投递或发送时必须传入稳定的幂等 id，否则重试时会重复执行。
 - **平台 ACK 不代表模型处理完成** — 接收层在消息记录持久化后立即向平台返回 ACK，模型的轮次推理与工具调用在后台异步进行。
 - **恢复投递需线性扫描会话日志** — 核对待恢复投递是否已写入收件箱时，需要读取目标会话的日志事件。

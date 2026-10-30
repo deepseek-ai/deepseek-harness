@@ -14,10 +14,10 @@ IM 保存每条被接纳规则接受的消息，并通过 `im/message` 事件链
 | `ImChatKey` | 全局聊天标识，格式为 `${bot}\|${chat.id}` |
 | `ImMessageKey` | 全局消息标识，格式为 `${bot}\|${message.id}` |
 | `ImChat` | 已接纳的聊天：全局键、所属机器人 id、适配器的 `ChatRef` 以及接纳它的规则 id |
-| `ImMessage` | 已存储的消息：全局键、入库时分配的聊天内递增 `seq`、聊天信息、话题线程、带 `self` 标记的发送者、消息元素树、纯文本、引用信息、提及信息、`addressed` 标记、可选的解析后 `command`、时间戳、来源途径 `via`（`platform`、`button` 或 `self`）以及适配器上下文 `referrer` |
+| `ImMessage` | 已存储的消息：全局键、入库时分配的聊天内递增 `seq`、聊天信息、话题线程、带 `self` 标记的发送者、消息元素树、纯文本、引用信息、提及信息、`addressed` 标记、可选的解析后 `command`、时间戳、来源途径 `via`（`platform` 或 `self`）以及适配器上下文 `referrer` |
 | `ImCommand` | 去除开头的机器人自身提及后解析出的斜杠命令：命令名与原始参数文本 |
 | `ImOutcome` | 事件链的处理结果：由某个具名插件 `handled`（可附带目标会话 id 列表），或 `ignored`（可附带原因） |
-| `ImMessageEvent` | 事件链参数：已存消息、匹配的来源配置、机器人实例与当前聊天能力，以及绑定到该聊天的 `reply`、`send` 和幂等 `deliver` 方法 |
+| `ImMessageEvent` | 事件链参数：已存消息、匹配的来源配置、机器人实例，以及绑定到该聊天的 `reply`、`send` 和幂等 `deliver` 方法 |
 | `ImButtonEvent` | 已接纳聊天中的按钮点击事件：按钮 id、附加数据、聊天、触发用户、机器人、按钮所属的已存消息、发布该消息的会话以及原始交互对象 |
 | `ImComposition` | 托管会话的 agent 配置：agent 预设、工作目录、provider、model 以及可选的工具限制 |
 | `ImBinding` | 单个聊天的访问授权：是否允许发送消息、是否为默认（`home`）聊天，以及可选的话题线程限制 |
@@ -30,13 +30,13 @@ IM 保存每条被接纳规则接受的消息，并通过 `im/message` 事件链
 | `ImSendResult` | 发送结果（`confirmed`、`failed`、`uncertain` 或 `partial`），附带平台消息句柄、渲染报告、已存自身消息与错误信息 |
 | `ImHistory` | 按聊天内 `seq` 读取历史的接口：`after`、`before`、`get` 与 `latest` |
 | `ImFormatOptions` | 消息格式化选项：`xml` 或 `line` 格式、是否附带媒体图片块、可选头部文本与取消信号 |
-| `ImApi` | `ctx.im` 服务接口：`sessions`、`history`、`outputs`、`send`、`stream`、`format`、`bot`、`chat`、`caps` 与 `status` |
+| `ImApi` | `ctx.im` 服务接口：`sessions`、`history`、`outputs`、`send`、`stream`、`readMessage`、`format`、`bot`、`chat` 与 `status` |
 | `ImStatus` | 诊断状态快照：已挂载机器人、已配置来源规则、托管会话、待完成投递数、待派发消息数以及最近的处理结果 |
 | `ImSegment` | 单轮活动中的一个片段：累积的助手文本、累积的思考内容，或带有限长度参数与结果预览及状态的工具调用 |
 | `ImActivity` | 托管会话单轮活动的快照：会话记录、轮次号、运行状态、当前所有片段、触发消息、错误信息与时间戳 |
 | `ImActivityChange` | 活动更新类型：`start`、`delta`、`tool` 或 `end` |
 | `ImOutputRenderer` | 输出渲染器插件接口：包含唯一 `id` 以及在轮次开始时调用的 `begin(activity, io)` |
-| `ImOutputIO` | 传给渲染器的单轮发布接口：目标聊天、聊天能力，以及归属到该会话的 `stream` 与 `send` 方法 |
+| `ImOutputIO` | 传给渲染器的单轮发布接口：目标聊天，以及归属到该会话的 `stream` 与 `send` 方法 |
 | `ImTurnOutput` | 渲染器返回的单轮控制句柄：运行期间调用 `update`，轮次结束时调用一次 `end` |
 
 `confirmed` 表示平台已确认发布并写入持久化回执。`failed` 表示平台明确返回错误且未发布任何内容。`partial` 表示多段消息中仅有部分分段发布成功。请求发出后发生网络错误、超时或取消，或者已记录发送但无结果回执的操作，均返回 `uncertain`；此时必须先检查目标聊天，再决定是否重新发送。使用相同 `operationId` 重放会直接返回已记录的结果而不会重复发送；相同 `operationId` 传入不同内容会抛出 `conflict` 错误。服务不会自动重发状态为 `uncertain` 的操作。
@@ -114,6 +114,16 @@ bot(chat: ImChatKey): Bot
  * @returns the chat record, or undefined when the chat was never admitted.
  */
 chat(key: ImChatKey): ImChat | undefined
+
+/**
+ * One message of one chat: the stored message when this deployment received it, and a platform read otherwise, so a
+ * reference to a message that never reached this deployment still resolves. A platform read is admitted and stored
+ * like any other message, which gives it a sequence number and keeps later reads of it local.
+ * @param chat - chat to read in; its bot serves the platform request.
+ * @param id - platform message id.
+ * @returns the message as the store holds it.
+ */
+async readMessage(chat: ImChatKey, id: string): Promise<ImMessage>
 
 /**
  * A snapshot of the deployment: bots, sources, sessions, pending work and recent messages.
@@ -209,7 +219,7 @@ A hosted session was reset: its generation advanced and a fresh session id was i
 ```ts cordis-catalog
 /**
  * A hosted session was reset: its generation advanced and a fresh session id was issued.
- * @param record - the reset record that is now current.
+ * @param record - the record that was just replaced; the new record arrives through `im/session/created`.
  * @param reason - why the reset happened, as the caller reported it.
  * @mode emit
  */
@@ -222,11 +232,11 @@ Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/s
 
 #### `im/stored` — emit
 
-A message was stored: an admitted inbound message, an own outbound publication, or an edit.
+A message was stored: an admitted inbound message or an own outbound publication.
 
 ```ts cordis-catalog
 /**
- * A message was stored: an admitted inbound message, an own outbound publication, or an edit.
+ * A message was stored: an admitted inbound message or an own outbound publication.
  * @param message - the stored record with its per-chat sequence number.
  * @mode emit
  */

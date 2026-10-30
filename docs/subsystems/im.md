@@ -14,10 +14,10 @@ The public [contracts](../../packages/experimental/im/src/api.ts) define platfor
 | `ImChatKey` | Global chat identity, `${bot}\|${chat.id}` |
 | `ImMessageKey` | Global message identity, `${bot}\|${message.id}` |
 | `ImChat` | An admitted chat: its key, the bot that serves it, the adapter's `ChatRef`, and the rule that admitted it |
-| `ImMessage` | A stored message: key, per-chat `seq` assigned at store time, chat, thread, sender with `self` flag, content, plain text, quote, mentions, `addressed`, optional parsed `command`, timestamp, `via` (`platform`, `button`, or `self`), and adapter referrer |
+| `ImMessage` | A stored message: key, per-chat `seq` assigned at store time, chat, thread, sender with `self` flag, content, plain text, quote, mentions, `addressed`, optional parsed `command`, timestamp, `via` (`platform` or `self`), and adapter referrer |
 | `ImCommand` | A slash command parsed from a message after stripping leading self-mentions: command name and raw input |
 | `ImOutcome` | Waterfall result: `handled` by a named plugin (with optional target session ids), or `ignored` (with optional reason) |
-| `ImMessageEvent` | Waterfall argument: the stored message, its source configuration, the bot and chat capabilities, plus chat-bound `reply`, `send`, and idempotent `deliver` helpers |
+| `ImMessageEvent` | Waterfall argument: the stored message, its source configuration, the bot, plus chat-bound `reply`, `send`, and idempotent `deliver` helpers |
 | `ImButtonEvent` | A button click in an admitted chat: button id, data, chat, user, bot, the stored message carrying the button, the session that published it, and the raw interaction |
 | `ImComposition` | Agent configuration for a hosted session: agent preset, working directory, provider, model, and optional tool restriction |
 | `ImBinding` | Access grant for one chat: whether the session may publish there, whether it is the default (`home`) chat, and an optional thread restriction |
@@ -30,13 +30,13 @@ The public [contracts](../../packages/experimental/im/src/api.ts) define platfor
 | `ImSendResult` | Publication outcome (`confirmed`, `failed`, `uncertain`, or `partial`), with the platform handle, render report, stored own message, and error message |
 | `ImHistory` | Per-chat history queries by `seq`: `after`, `before`, `get`, and `latest` |
 | `ImFormatOptions` | Message formatting options: `xml` or `line` style, media attachment flag, optional header, and abort signal |
-| `ImApi` | Service interface on `ctx.im`: `sessions`, `history`, `outputs`, `send`, `stream`, `format`, `bot`, `chat`, `caps`, and `status` |
+| `ImApi` | Service interface on `ctx.im`: `sessions`, `history`, `outputs`, `send`, `stream`, `readMessage`, `format`, `bot`, `chat`, and `status` |
 | `ImStatus` | Diagnostic snapshot: mounted bots, configured sources, hosted sessions, pending deliveries, pending messages, and recent outcomes |
 | `ImSegment` | One segment of a turn: accumulated assistant text, accumulated reasoning, or a tool call with bounded argument and result previews and status |
 | `ImActivity` | Turn activity snapshot of a hosted session: session record, turn number, status, segments, trigger message, error message, and timestamps |
 | `ImActivityChange` | Activity event kind: `start`, `delta`, `tool`, or `end` |
 | `ImOutputRenderer` | Turn output renderer registered under an id, with `begin(activity, io)` called at turn start |
-| `ImOutputIO` | Per-turn publication interface passed to a renderer: target chat, capabilities, and session-attributed `stream` and `send` |
+| `ImOutputIO` | Per-turn publication interface passed to a renderer: the target chat and session-attributed `stream` and `send` |
 | `ImTurnOutput` | Per-turn renderer handle: `update` during the turn and `end` when the turn settles |
 
 A `confirmed` result has a durable platform receipt. `failed` means the platform rejected the request before publishing anything. `partial` means only some parts of a multi-part message were published. A transport error, timeout, or cancellation after dispatch, or a stored operation with no recorded outcome, returns `uncertain`; callers must inspect the chat before sending the same content again. Replaying an `operationId` returns the recorded receipt without resending, while reusing an `operationId` with different content throws a `conflict` error. The service never resends an uncertain operation automatically.
@@ -114,6 +114,16 @@ bot(chat: ImChatKey): Bot
  * @returns the chat record, or undefined when the chat was never admitted.
  */
 chat(key: ImChatKey): ImChat | undefined
+
+/**
+ * One message of one chat: the stored message when this deployment received it, and a platform read otherwise, so a
+ * reference to a message that never reached this deployment still resolves. A platform read is admitted and stored
+ * like any other message, which gives it a sequence number and keeps later reads of it local.
+ * @param chat - chat to read in; its bot serves the platform request.
+ * @param id - platform message id.
+ * @returns the message as the store holds it.
+ */
+async readMessage(chat: ImChatKey, id: string): Promise<ImMessage>
 
 /**
  * A snapshot of the deployment: bots, sources, sessions, pending work and recent messages.
@@ -209,7 +219,7 @@ A hosted session was reset: its generation advanced and a fresh session id was i
 ```ts cordis-catalog
 /**
  * A hosted session was reset: its generation advanced and a fresh session id was issued.
- * @param record - the reset record that is now current.
+ * @param record - the record that was just replaced; the new record arrives through `im/session/created`.
  * @param reason - why the reset happened, as the caller reported it.
  * @mode emit
  */
@@ -222,11 +232,11 @@ Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/s
 
 #### `im/stored` — emit
 
-A message was stored: an admitted inbound message, an own outbound publication, or an edit.
+A message was stored: an admitted inbound message or an own outbound publication.
 
 ```ts cordis-catalog
 /**
- * A message was stored: an admitted inbound message, an own outbound publication, or an edit.
+ * A message was stored: an admitted inbound message or an own outbound publication.
  * @param message - the stored record with its per-chat sequence number.
  * @mode emit
  */

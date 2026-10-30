@@ -460,7 +460,7 @@ export type Config = LocalConfig
 ## `@deepseek-ai/dsh-client-connection`
 
 - `inject`: `credentials`
-- `source`: [`packages/client/connection/src/index.ts:96`](../packages/client/connection/src/index.ts)
+- `source`: [`packages/client/connection/src/index.ts:105`](../packages/client/connection/src/index.ts)
 
 ```ts config-catalog
 /** Browser authentication, request limits, and connection recovery configuration. */
@@ -1191,7 +1191,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-im`
 
 - `inject`: `satori` · `agents` · `sessions` · `sessionPersistence` · `storageDomain` · `attachments`
-- `source`: [`packages/experimental/im/src/api.ts:222`](../packages/experimental/im/src/api.ts)
+- `source`: [`packages/experimental/im/src/api.ts:227`](../packages/experimental/im/src/api.ts)
 
 ```ts config-catalog
 /**
@@ -1279,6 +1279,16 @@ export interface ImDispatcherConfig {
   output: string
   /** How a dispatched message reaches the agent (default `steer`). */
   delivery: ImDeliveryMode
+  /**
+   * Global tools the dispatcher session keeps visible (the composition's `restrict`). The dispatcher answers chats
+   * that share one history, so an operator can withdraw tools that must not act for every chat at once.
+   */
+  restrict?: {
+    /** Global tool names that stay visible; everything else is removed. */
+    allow?: string[]
+    /** Global tool names removed from visibility. */
+    deny?: string[]
+  } | undefined
   /** The prompt section rendered for the dispatcher session only. */
   prompt: {
     /** Unique section name in the system prompt (default `im:dispatcher`). */

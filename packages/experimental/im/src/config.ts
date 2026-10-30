@@ -1,4 +1,4 @@
-/** Operator configuration of dsh-im: admission sources, deployment limits, and the default dispatcher. */
+/** Operator configuration of dsh-experimental-im: admission sources, deployment limits, and the default dispatcher. */
 import z from '@deepseek-ai/schemastery'
 import type { ImConfig } from './api.ts'
 
@@ -27,6 +27,10 @@ const Dispatcher = z.object({
   cwd: z.string().required(),
   output: z.string().default('none'),
   delivery: z.union(['steer', 'followup', 'inject']).default('steer'),
+  /** Global tools the dispatcher session keeps visible; omitted leaves every tool of the preset available. */
+  restrict: z.union([z.object({
+    allow: z.array(z.string()), deny: z.array(z.string()),
+  }), z.const(undefined)]),
   prompt: z.object({
     name: z.string().default('im:dispatcher'),
     order: z.natural().default(81),

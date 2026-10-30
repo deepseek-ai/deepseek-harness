@@ -59,7 +59,7 @@ Each entry in `sources` is an ordered admission rule. A rule specifies a unique 
 | `media.download` / `media.maxBytes` / `media.maxItems` | `true` / 10 MiB / 9 | Whether to download inbound images into attachments, and per-item / per-message limits |
 | `send.maxBytes` / `send.maxMediaBytes` / `send.operationTimeoutMs` | 30 KB / 10 MiB / 30 s | Outbound text size limit, file size limit, and per-send timeout |
 | `tools.readOnly` / `tools.maxReadBytes` / `tools.maxHistoryItems` | `false` / 64 KiB / 50 | Whether to register only read tools, maximum tool output bytes, and maximum `im_history` page size |
-| `defaultDispatch` | absent | Optional [default dispatcher](#the-default-dispatcher): `agentPreset`, `provider`, `model`, and absolute `cwd` (required), plus `output` (`'none'`), `delivery` (`'steer'`), and `prompt` (`im:dispatcher` at order 81) |
+| `defaultDispatch` | absent | Optional [default dispatcher](#the-default-dispatcher): `agentPreset`, `provider`, `model`, and absolute `cwd` (required), plus `output` (`'none'`), `delivery` (`'steer'`), `restrict` (no tool restriction), and `prompt` (`im:dispatcher` at order 81) |
 
 Messages from chats that match no rule are neither stored nor emitted. See the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-im) for the complete schema.
 
@@ -258,6 +258,8 @@ The following constraints apply to `@deepseek-ai/dsh-experimental-im`:
 - **Single process per storage directory** — `im_messages`, `im_sessions`, and `im_receipts` are owned by one process in memory and on disk; concurrent processes cannot share the same storage domains.
 - **No replies without a routing plugin or `defaultDispatch`** — if no `im/message` listener claims an admitted message and `defaultDispatch` is not configured, the message is stored and settled as `ignored`.
 - **Multiple routing plugins resolve by listener order** — the first listener that returns `handled` ends the waterfall; mounting two overlapping strategies does not raise a configuration error.
+- **`sources[].writable` gates session publications only** — a publication without a session (an event's `reply`/`send`, the session command plugin's answers) is gated by the chat's admission, not by a binding, so a read-only chat still receives command replies.
+- **The shared dispatcher serves every admitted chat from one history** — a command from any admitted sender acts on that shared session, and its tool results are common to all its chats; restrict `users` per source, and pass `defaultDispatch.restrict` to withdraw tools that must not act for every chat at once.
 - **Listeners must supply idempotency keys** — a throwing listener leaves the message `pending` for re-dispatch; plugins must pass deterministic delivery ids and `operationId` values to avoid duplicate actions on retry.
 - **Platform ACK precedes model execution** — intake acknowledges the platform event as soon as the message record is persisted; model turns and tool calls run asynchronously afterwards.
 - **Recovery scans session logs linearly** — reconciling a pending delivery reads the target session's log events to check for prior inbox insertion.

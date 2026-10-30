@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-experimental-im-session-commands",
-  "description": "Slash-command handling at the head of the dsh-im message waterfall",
+  "description": "Slash-command handling at the head of the dsh-experimental-im message waterfall",
   "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"

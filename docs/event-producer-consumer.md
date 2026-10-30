@@ -55,12 +55,12 @@ Application listeners are outside this package matrix. Desktop Host subscribes t
 | `goal/changed` | `emit` | [`packages/goal/goal/src/domain.ts:114`](../packages/goal/goal/src/domain.ts) | [`goal`](../packages/goal/goal) (`emit`) | [`goal-round-driver`](../packages/goal/goal-round-driver) |
 | `hmr/change` | `emit` | [`packages/boot/hmr/src/index.ts:35`](../packages/boot/hmr/src/index.ts) | [`hmr`](../packages/boot/hmr) (`emit`) | - |
 | `hmr/reload` | `emit` | [`packages/boot/hmr/src/index.ts:40`](../packages/boot/hmr/src/index.ts) | [`hmr`](../packages/boot/hmr) (`emit`) | - |
-| `im/activity` | `emit` | [`packages/experimental/im/src/api.ts:179`](../packages/experimental/im/src/api.ts) | `im` (`emit`) | `im` |
-| `im/button` | `emit` | [`packages/experimental/im/src/api.ts:172`](../packages/experimental/im/src/api.ts) | `im` (`emit`) | - |
-| `im/message` | `waterfall` | [`packages/experimental/im/src/api.ts:160`](../packages/experimental/im/src/api.ts) | `im` (`waterfall`) | `im-session-commands` |
-| `im/session/created` | `emit` | [`packages/experimental/im/src/api.ts:185`](../packages/experimental/im/src/api.ts) | `im` (`emit`) | - |
-| `im/session/reset` | `emit` | [`packages/experimental/im/src/api.ts:192`](../packages/experimental/im/src/api.ts) | `im` (`emit`) | - |
-| `im/stored` | `emit` | [`packages/experimental/im/src/api.ts:166`](../packages/experimental/im/src/api.ts) | `im` (`emit`) | - |
+| `im/activity` | `emit` | [`packages/experimental/im/src/api.ts:184`](../packages/experimental/im/src/api.ts) | `im` (`emit`) | `im` |
+| `im/button` | `emit` | [`packages/experimental/im/src/api.ts:177`](../packages/experimental/im/src/api.ts) | `im` (`emit`) | - |
+| `im/message` | `waterfall` | [`packages/experimental/im/src/api.ts:165`](../packages/experimental/im/src/api.ts) | `im` (`waterfall`) | `im-session-commands` |
+| `im/session/created` | `emit` | [`packages/experimental/im/src/api.ts:190`](../packages/experimental/im/src/api.ts) | `im` (`emit`) | - |
+| `im/session/reset` | `emit` | [`packages/experimental/im/src/api.ts:197`](../packages/experimental/im/src/api.ts) | `im` (`emit`) | - |
+| `im/stored` | `emit` | [`packages/experimental/im/src/api.ts:171`](../packages/experimental/im/src/api.ts) | `im` (`emit`) | - |
 | `llm/adapters-updated` | `emit` | [`packages/llm/llm/src/types.ts:24`](../packages/llm/llm/src/types.ts) | [`llm`](../packages/llm/llm) (`events.dispatch`) | [`acp`](../packages/acp/acp), `remotes` |
 | `llm/models-updated` | `emit` | [`packages/llm/llm/src/types.ts:30`](../packages/llm/llm/src/types.ts) | [`llm-deepseek`](../packages/llm/llm-deepseek) (`emit`) | `remotes` |
 | `llm/stream` | `waterfall` | [`packages/llm/llm/src/index.ts:75`](../packages/llm/llm/src/index.ts) | [`llm`](../packages/llm/llm) (`waterfall`) | [`llm-replay`](../packages/test-support/llm-replay), [`session-checkpoint-policy`](../packages/session/session-checkpoint-policy), [`session-title`](../packages/session/session-title) |

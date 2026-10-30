@@ -88,6 +88,7 @@ export class ImDispatcher {
         composition: {
           agentPreset: this.config.agentPreset, cwd: this.config.cwd,
           provider: this.config.provider, model: this.config.model,
+          ...this.config.restrict === undefined ? {} : { restrict: this.config.restrict },
         },
         bindings: bindingsWith(known?.bindings ?? [], event),
         output: this.config.output,

@@ -70,8 +70,9 @@ export interface ImChat {
 }
 
 /**
- * One stored message — inbound, own outbound, or an edit — as the store keeps it: the per-chat sequence number that
- * history and media ids are addressed by, plus the admission facts (addressed, command, referrer) later readers need.
+ * One stored message — inbound or an own outbound publication — as the store keeps it: the per-chat sequence number
+ * that history and media ids are addressed by, plus the admission facts (addressed, command, referrer) later readers
+ * need.
  */
 export interface ImMessage {
   key: ImMessageKey
@@ -90,10 +91,10 @@ export interface ImMessage {
   /** Leading self-mentions stripped; set when the remaining text is a slash command. */
   command?: ImCommand
   time: number
-  via: 'platform' | 'button' | 'self'
+  via: 'platform' | 'self'
   /**
    * Adapter-private reply context of the platform event that delivered this message (`InboundMessage.referrer`): the
-   * passive-reply key of a QQ event, the thread placement of a Lark event. dsh-im never inspects it — it is stored
+   * passive-reply key of a QQ event, the thread placement of a Lark event. The IM host never inspects it — it is stored
    * as-is (JSON) and handed back as `Target.referrer` when a publication answers this message.
    */
   referrer?: unknown
@@ -118,9 +119,13 @@ export interface ImMessageEvent {
   /** The admitting source configuration (strategies read `writable`). */
   readonly source: ImSourceConfig
   readonly bot: Bot
-  /** Send into the chat quoting this message (and in its thread, if any); its adapter referrer rides on the target. */
+  /**
+   * Send into the chat quoting this message (and in its thread, if any); its adapter referrer rides on the target.
+   * The publication carries no session, so the chat's admission is its only gate (`sources[].writable` governs the
+   * publications a session claims).
+   */
   reply(content: Fragment, options?: ImSendOptions): Promise<ImSendResult>
-  /** Send into the same chat without quote. */
+  /** Send into the same chat without quote, under the same gates as {@link reply}. */
   send(content: Fragment, options?: ImSendOptions): Promise<ImSendResult>
   /**
    * Convenience: deliver this message into a session. `id` defaults to the message key (idempotent on
@@ -159,7 +164,7 @@ declare module '@deepseek-ai/cordis' {
      */
     'im/message'(event: ImMessageEvent, next: () => Promise<ImOutcome>): Promise<ImOutcome>
     /**
-     * A message was stored: an admitted inbound message, an own outbound publication, or an edit.
+     * A message was stored: an admitted inbound message or an own outbound publication.
      * @param message - the stored record with its per-chat sequence number.
      * @mode emit
      */
@@ -185,7 +190,7 @@ declare module '@deepseek-ai/cordis' {
     'im/session/created'(record: ImSessionRecord): void
     /**
      * A hosted session was reset: its generation advanced and a fresh session id was issued.
-     * @param record - the reset record that is now current.
+     * @param record - the record that was just replaced; the new record arrives through `im/session/created`.
      * @param reason - why the reset happened, as the caller reported it.
      * @mode emit
      */
@@ -281,6 +286,16 @@ export interface ImDispatcherConfig {
   output: string
   /** How a dispatched message reaches the agent (default `steer`). */
   delivery: ImDeliveryMode
+  /**
+   * Global tools the dispatcher session keeps visible (the composition's `restrict`). The dispatcher answers chats
+   * that share one history, so an operator can withdraw tools that must not act for every chat at once.
+   */
+  restrict?: {
+    /** Global tool names that stay visible; everything else is removed. */
+    allow?: string[]
+    /** Global tool names removed from visibility. */
+    deny?: string[]
+  } | undefined
   /** The prompt section rendered for the dispatcher session only. */
   prompt: {
     /** Unique section name in the system prompt (default `im:dispatcher`). */
@@ -392,7 +407,7 @@ export interface ImSessions {
   /** `agent.cancel({ kind: 'user' })` if running; false when nothing was running. */
   stop(target: SessionId | string): Promise<boolean>
   /** The message whose delivery started the session's current turn (renderers and task placements read it). */
-  trigger?(sessionId: SessionId): ImMessage | undefined
+  trigger(sessionId: SessionId): ImMessage | undefined
 }
 
 // ---------------------------------------------------------------------------------------------------------------

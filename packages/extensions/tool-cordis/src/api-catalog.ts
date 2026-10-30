@@ -1831,6 +1831,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the chat record, or undefined when the chat was never admitted.',
       },
       {
+        signature: 'async readMessage(chat: ImChatKey, id: string): Promise<ImMessage>',
+        description: 'One message of one chat: the stored message when this deployment received it, and a platform read otherwise, so a reference to a message that never reached this deployment still resolves. A platform read is admitted and stored like any other message, which gives it a sequence number and keeps later reads of it local.',
+        parameters: [{ name: 'chat', description: 'chat to read in; its bot serves the platform request.' }, { name: 'id', description: 'platform message id.' }],
+        returns: 'the message as the store holds it.',
+      },
+      {
         signature: 'status(): ImStatus',
         description: 'A snapshot of the deployment: bots, sources, sessions, pending work and recent messages.',
         parameters: [],
@@ -5130,14 +5136,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     signature: '\'im/session/reset\'(record: ImSessionRecord, reason: string): void',
     summary: 'A hosted session was reset: its generation advanced and a fresh session id was issued.',
     description: 'A hosted session was reset: its generation advanced and a fresh session id was issued.',
-    parameters: [{ name: 'record', description: 'the reset record that is now current.' }, { name: 'reason', description: 'why the reset happened, as the caller reported it.' }],
+    parameters: [{ name: 'record', description: 'the record that was just replaced; the new record arrives through `im/session/created`.' }, { name: 'reason', description: 'why the reset happened, as the caller reported it.' }],
   },
   {
     name: 'im/stored',
     mode: 'emit',
     signature: '\'im/stored\'(message: ImMessage): void',
-    summary: 'A message was stored: an admitted inbound message, an own outbound publication, or an edit.',
-    description: 'A message was stored: an admitted inbound message, an own outbound publication, or an edit.',
+    summary: 'A message was stored: an admitted inbound message or an own outbound publication.',
+    description: 'A message was stored: an admitted inbound message or an own outbound publication.',
     parameters: [{ name: 'message', description: 'the stored record with its per-chat sequence number.' }],
   },
   {
@@ -6810,7 +6816,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImDispatcherConfig',
-    declaration: 'export interface ImDispatcherConfig {\n    agentPreset: string;\n    provider: string;\n    model: string;\n    cwd: string;\n    output: string;\n    delivery: ImDeliveryMode;\n    prompt: {\n        name: string;\n        order: number;\n        text: string;\n    };\n}',
+    declaration: 'export interface ImDispatcherConfig {\n    agentPreset: string;\n    provider: string;\n    model: string;\n    cwd: string;\n    output: string;\n    delivery: ImDeliveryMode;\n    restrict?: {\n        allow?: string[];\n        deny?: string[];\n    } | undefined;\n    prompt: {\n        name: string;\n        order: number;\n        text: string;\n    };\n}',
   },
   {
     name: 'ImDispatchState',
@@ -6834,7 +6840,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImHistory',
-    declaration: 'export interface ImHistory {\n    after(chat: ImChatKey, seq: number, limit: number): ImMessage[];\n    before(chat: ImChatKey, seq: number, limit: number): ImMessage[];\n    get(key: ImMessageKey): ImMessage | undefined;\n    latest(chat: ImChatKey): ImMessage | undefined;\n}',
+    declaration: 'export interface ImHistory {\n    after(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[];\n    before(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[];\n    get(key: ImMessageKey): ImMessage | undefined;\n    latest(chat: ImChatKey): ImMessage | undefined;\n}',
   },
   {
     name: 'ImIntake',
@@ -6862,7 +6868,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImMessage',
-    declaration: 'export interface ImMessage {\n    key: ImMessageKey;\n    seq: number;\n    chat: ImChat;\n    thread?: {\n        id: string;\n        root?: string;\n    };\n    sender: UserRef & {\n        self: boolean;\n    };\n    content: Element<\'message\'>;\n    text: string;\n    quote?: {\n        key: ImMessageKey;\n        sender?: UserRef;\n        text?: string;\n    };\n    mentions: InboundMessage[\'mentions\'];\n    addressed: boolean;\n    command?: ImCommand;\n    time: number;\n    via: \'platform\' | \'button\' | \'self\';\n    referrer?: unknown;\n}',
+    declaration: 'export interface ImMessage {\n    key: ImMessageKey;\n    seq: number;\n    chat: ImChat;\n    thread?: {\n        id: string;\n        root?: string;\n    };\n    sender: UserRef & {\n        self: boolean;\n    };\n    content: Element<\'message\'>;\n    text: string;\n    quote?: {\n        key: ImMessageKey;\n        sender?: UserRef;\n        text?: string;\n    };\n    mentions: InboundMessage[\'mentions\'];\n    addressed: boolean;\n    command?: ImCommand;\n    time: number;\n    via: \'platform\' | \'self\';\n    referrer?: unknown;\n}',
   },
   {
     name: 'ImMessageDraft',
@@ -6918,7 +6924,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImSessions',
-    declaration: 'export interface ImSessions {\n    ensure(spec: ImSessionSpec): Promise<ImSessionRecord>;\n    get(keyOrId: string | SessionId): ImSessionRecord | undefined;\n    list(filter?: ImSessionFilter): ImSessionRecord[];\n    forChat(chat: ImChatKey): ImSessionRecord[];\n    deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>;\n    reset(key: string, reason: string): Promise<void>;\n    bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>;\n    agent(target: SessionId | string): Promise<Agent>;\n    of(sessionId: SessionId): ImSessionRecord | undefined;\n    stop(target: SessionId | string): Promise<boolean>;\n    trigger?(sessionId: SessionId): ImMessage | undefined;\n}',
+    declaration: 'export interface ImSessions {\n    ensure(spec: ImSessionSpec): Promise<ImSessionRecord>;\n    get(keyOrId: string | SessionId): ImSessionRecord | undefined;\n    list(filter?: ImSessionFilter): ImSessionRecord[];\n    forChat(chat: ImChatKey): ImSessionRecord[];\n    deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>;\n    reset(key: string, reason: string): Promise<void>;\n    bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>;\n    agent(target: SessionId | string): Promise<Agent>;\n    of(sessionId: SessionId): ImSessionRecord | undefined;\n    stop(target: SessionId | string): Promise<boolean>;\n    trigger(sessionId: SessionId): ImMessage | undefined;\n}',
   },
   {
     name: 'ImSessionSpec',
@@ -6938,7 +6944,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImStore',
-    declaration: 'export class ImStore implements ImHistory {\n    domain: ImDomain | undefined;\n    constructor(readonly ctx: Context, readonly config: ImConfig);\n    async start(): Promise<void>;\n    async dispose(): Promise<void>;\n    async touchChat(chat: ImChat): Promise<void>;\n    chat(key: ImChatKey): ImChat | undefined;\n    put(draft: ImMessageDraft, dispatch: \'pending\' | \'none\'): Promise<ImMessage>;\n    settle(key: ImMessageKey, outcome: ImOutcome): Promise<void>;\n    pending(): ImDispatchState[];\n    state(key: ImMessageKey): ImDispatchState | undefined;\n    recent(limit: number): {\n        key: ImMessageKey;\n        outcome: ImOutcome;\n        at: number;\n    }[];\n    event(key: string): StoredEvent | undefined;\n    remember(key: string, event: StoredEvent): Promise<void>;\n    sweep(now: number): Promise<void>;\n    after(chat: ImChatKey, seq: number, limit: number): ImMessage[];\n    before(chat: ImChatKey, seq: number, limit: number): ImMessage[];\n    get(key: ImMessageKey): ImMessage | undefined;\n    latest(chat: ImChatKey): ImMessage | undefined;\n}',
+    declaration: 'export class ImStore implements ImHistory {\n    domain: ImDomain | undefined;\n    constructor(readonly ctx: Context, readonly config: ImConfig);\n    async start(): Promise<void>;\n    async dispose(): Promise<void>;\n    async touchChat(chat: ImChat): Promise<void>;\n    chat(key: ImChatKey): ImChat | undefined;\n    put(draft: ImMessageDraft, dispatch: \'pending\' | \'none\'): Promise<ImMessage>;\n    settle(key: ImMessageKey, outcome: ImOutcome): Promise<void>;\n    pending(): ImDispatchState[];\n    state(key: ImMessageKey): ImDispatchState | undefined;\n    recent(limit: number): {\n        key: ImMessageKey;\n        outcome: ImOutcome;\n        at: number;\n    }[];\n    event(key: string): StoredEvent | undefined;\n    remember(key: string, event: StoredEvent): Promise<void>;\n    sweep(now: number): Promise<void>;\n    after(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[];\n    before(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[];\n    get(key: ImMessageKey): ImMessage | undefined;\n    latest(chat: ImChatKey): ImMessage | undefined;\n}',
   },
   {
     name: 'IncompatiblePlugin',
