@@ -179,8 +179,7 @@ export class ProgramWorker {
           const stopped = stopRequired ? { drained: await this.stop(), preserved: false }
             : interrupted ? await this.requestStop(evaluation.id) : { drained: true, preserved: true }
           if (interrupted && this.retainsState && error) {
-            const fallback = !stopRequired && !stopped.preserved ? '; runtime did not confirm stopping; runtime terminated' : ''
-            error = { ...error, message: `${error.message}${fallback}; retained variables were ${stopped.preserved ? 'preserved' : 'cleared'}` }
+            error = { ...error, message: `${error.message}; retained variables were ${stopped.preserved ? 'preserved' : 'cleared'}` }
           }
           const completed = complete()
           // The final stop diagnostic also consumes output budget.

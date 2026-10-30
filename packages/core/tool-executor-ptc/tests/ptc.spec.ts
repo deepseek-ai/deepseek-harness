@@ -2403,7 +2403,7 @@ describe('host environment reset', () => {
     await reset()
     expect(release).toHaveBeenCalledExactlyOnceWith(agent)
     expect(inject).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-      content: [{ type: 'text', text: 'The host reset the program environment. All retained variables have been cleared. The next run_code starts fresh. Completed tool effects have not been undone.' }],
+      content: [{ type: 'text', text: 'Program environment reset; retained variables cleared. Completed tool effects remain.' }],
       source: { kind: 'ptc-mode' },
     }))
     vi.spyOn(runtime, 'retainsState', 'get').mockReturnValue(false)
@@ -2451,7 +2451,7 @@ describe('host environment reset', () => {
     const blocked = await runCode(ctx, '1', { agent })
     expect(blocked.isError).toBe(true)
     expect(blocked.error?.info?.code).toBe('CODE_RUN_FAILED')
-    expect(blocked.content.find(block => block.type === 'text')?.text).toContain('ask the host to retry reset')
+    expect(blocked.content.find(block => block.type === 'text')?.text).toContain('Ask the host to reset it before running more code')
     expect(run).not.toHaveBeenCalled()
     await reset()
     expect(inject).toHaveBeenCalledOnce()

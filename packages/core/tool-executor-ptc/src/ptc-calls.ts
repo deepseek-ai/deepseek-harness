@@ -58,7 +58,7 @@ export class PtcCalls {
       const reset = this.resets.get(sessionId)
       if (reset !== undefined) {
         try { await reset.done } catch (error) {
-          throw new CodeRunFailedError(`Program environment is unavailable after a failed host reset: ${toolErrorMessage(error)}. State may not be cleared; ask the host to retry reset before running more code.`)
+          throw new CodeRunFailedError(`Program environment unavailable: ${toolErrorMessage(error)}. Ask the host to reset it before running more code.`)
         }
         continue
       }

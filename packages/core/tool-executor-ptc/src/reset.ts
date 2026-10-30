@@ -20,7 +20,7 @@ export async function resetPtcEnvironment(ctx: Context, calls: PtcCalls, agent: 
   try {
     await calls.reset(agent.session.id, () => runtime.release(agent), () => {
       agent.inject(createUserMessage({
-        content: [{ type: 'text', text: 'The host reset the program environment. All retained variables have been cleared. The next run_code starts fresh. Completed tool effects have not been undone.' }],
+        content: [{ type: 'text', text: 'Program environment reset; retained variables cleared. Completed tool effects remain.' }],
         source: { kind: 'ptc-mode' },
       }))
     })

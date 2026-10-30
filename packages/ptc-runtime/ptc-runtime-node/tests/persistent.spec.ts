@@ -260,7 +260,7 @@ describe.each([
       const result = await pending
       expect(result.logs).toEqual(['before stop'])
       expect(result.error?.kind).toBe(action)
-      expect(result.error?.message).toContain('runtime did not confirm stopping; runtime terminated; retained variables were cleared')
+      expect(result.error?.message).toContain('retained variables were cleared')
       expect((await run('typeof kept')).value).toBe('undefined')
     } finally { controller.abort(); await pending }
   })
@@ -276,7 +276,7 @@ describe.each([
     try {
       await expect.poll(async () => readFile(join(cwd, 'entered-loop'), 'utf8')).toBe('ready')
       controller.abort()
-      expect((await pending).error?.message).toContain('runtime terminated; retained variables were cleared')
+      expect((await pending).error?.message).toContain('retained variables were cleared')
       expect((await run('typeof kept')).value).toBe('undefined')
     } finally { controller.abort(); await pending }
   })
@@ -291,7 +291,7 @@ describe.each([
     await run('var kept = 42;')
     const result = await run(program, { timeoutMs: 200, bindings: bindings(() => new Promise(() => {})) })
     expect(result.error?.kind).toBe('timeout')
-    expect(result.error?.message).toContain('runtime terminated; retained variables were cleared')
+    expect(result.error?.message).toContain('retained variables were cleared')
     expect((await run('typeof kept')).value).toBe('undefined')
   })
 

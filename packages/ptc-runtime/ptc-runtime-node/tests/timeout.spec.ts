@@ -130,7 +130,7 @@ describe.each(['timeout', 'abort'] as const)('retained %s', (action) => {
       }
       const result = await pending
       expect(result.error?.kind).toBe(action)
-      expect(result.error?.message).toContain('runtime terminated; retained variables were cleared')
+      expect(result.error?.message).toContain('retained variables were cleared')
       expect(h.terminate).toHaveBeenCalledOnce()
       expect(h.waitForExit).toHaveBeenCalledOnce()
       const replacement = fakeChild(h.ctx, h.runtime, { ...h.request, signal: new AbortController().signal })
