@@ -14,7 +14,7 @@ On Linux, `--with-deps` installs dependencies through the system package manager
 
 Ordinary scenarios begin with no registered Workspace or Session and a durable marker recording a removed default Workspace, so explicit folder-selection scenarios retain control of their cwd. `launchWebScaffold({ firstUse: true })` leaves initialization eligible for startup scenarios.
 
-Same-day message goldens use the shared `WEB_FIXTURE_TIME`: seeded transcripts pass it as `createdAt` and pin the browser calendar with `pinBrowserClock`; scenarios that submit live messages also use `pinHostClock` and restore it after teardown. These clocks advance with real elapsed time while keeping native timers intact, so midnight does not change a scenario's date labels.
+Same-day message goldens use the shared `WEB_FIXTURE_TIME`: seeded transcripts pass it as `createdAt` and pin the browser calendar with `pinBrowserClock`; scenarios that submit live messages, including autonomous Goal rounds, also use `pinHostClock` and restore it after teardown. These clocks advance with real elapsed time while keeping native timers intact, so midnight does not change a scenario's date labels.
 
 ## Completion observations
 
