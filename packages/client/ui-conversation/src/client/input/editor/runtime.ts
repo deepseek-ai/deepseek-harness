@@ -274,8 +274,8 @@ export class DraftEditorRuntime {
    */
   caretSpan(): { start: number; end: number } {
     let span = { start: 0, end: 0 }
-    // Read the editor instead of the last projected snapshot: a native
-    // selection can move before the next update listener projects it.
+    // A snapshot read misses uncommitted native selection. A discrete update
+    // synchronizes it; nested calls read the enclosing update's pending state.
     this.applyEdit(() => {
       const projection = $projectComposer(key => this.occurrenceIdOf(key))
       const at = projection.detectText.length

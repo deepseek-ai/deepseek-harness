@@ -726,7 +726,7 @@ describe('plugin composer prefill API guards and history', () => {
     expect(b.shell.snapshot.draft).toBe('Text')
   })
 
-  it('reads the native caret before its selection is projected', async () => {
+  it.each(['captureInsertion', 'prefill'] as const)('reads the native caret through %s before its selection is projected', async (entry) => {
     const b = await bench()
     act(() => { b.shell.setDraft('Keep text') })
     b.textarea.focus()
@@ -735,6 +735,19 @@ describe('plugin composer prefill API guards and history', () => {
     if (text === undefined || text === null || selection === null) throw new Error('missing native draft selection')
     selection.setBaseAndExtent(text, 0, text, 0)
     const before = b.shell.draftSnapshot
+    if (entry === 'captureInsertion') {
+      const revision = b.shell.snapshot.draftRev
+      const track = vi.spyOn(b.controller, 'track')
+      const expected = { start: 0, end: 0, draftRev: revision }
+      expect(b.shell.actions.captureInsertion()).toEqual(expected)
+      expect(track).toHaveBeenCalledOnce()
+      expect(b.shell.actions.captureInsertion()).toEqual(expected)
+      expect(track).toHaveBeenCalledOnce()
+      expect(b.shell.draftSnapshot).toBe(before)
+      expect(b.shell.snapshot.draftRev).toBe(revision)
+      expect(b.sink).not.toHaveBeenCalled()
+      return
+    }
     act(() => { expect(b.shell.prefill('Head', { separator: '' })).toBe(true) })
     expect(b.shell.snapshot.draft).toBe('HeadKeep text')
     act(() => { b.shell.editor.dispatchCommand(UNDO_COMMAND, undefined) })
