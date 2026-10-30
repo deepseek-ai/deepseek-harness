@@ -1,4 +1,5 @@
 /** Directory navigation derived only from the files in one loaded diff. */
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { ForgeDiffFile } from '../types.ts'
 
 /** A changed file or a compacted chain of directories containing changed files. */
@@ -50,6 +51,21 @@ export function changedFileTree(files: readonly ForgeDiffFile[]): readonly Chang
     directory.files.push(file)
   }
   return childrenOf(root)
+}
+
+/**
+ * Read every file in the tree's depth-first display order, independent of navigation folds and filtering.
+ * @param nodes - the complete directory-first tree.
+ * @returns the original file objects in display order.
+ */
+export function filesInTreeOrder(nodes: readonly ChangedFileNode[]): readonly ForgeDiffFile[] {
+  return nodes.flatMap((node) => {
+    switch (node.kind) {
+      case 'file': return [node.file]
+      case 'directory': return filesInTreeOrder(node.children)
+      default: return assertNever(node, 'ChangedFileNode')
+    }
+  })
 }
 
 /**
