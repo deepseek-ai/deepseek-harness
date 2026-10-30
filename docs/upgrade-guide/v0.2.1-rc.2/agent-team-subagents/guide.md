@@ -19,7 +19,7 @@ Descriptions label responsibilities; only Session ids identify recipients.
 - Runtime instances share root ownership without changing creation ancestry. Member settlement does not dispose descendants. Messages restore only their target. Hosts close the tree when its root closes; members obtain required results explicitly.
 - Cold resume uses saved presets and permissions, not the creator’s current generation. Missing presets fail restoration; historical targets without one use host composition plus descriptor overrides. Lifecycle dispatch uses the root scope while retaining the direct creator in `parentSessionId`. Browser continuation requires the root online; failure uses `subagent/delivery-unavailable`.
 - Historical Team roster and mailbox records remain readable. Historical names do not resolve message recipients or task owners. Subagent catalog payloads are unchanged.
-- The Web Team panel shows tasks only; ordinary subagent navigation owns member browsing. The wire `agentTeam.members` field and `TeamMemberProjection` are removed; persisted roster state still decodes. After flush, task commits end all resident Agents’ active waits in the tree. Signals retain no unread state and start no agents; changes outside a wait cannot wake later waits.
+- The Web Team panel shows tasks only; subagent navigation owns member browsing. The wire `agentTeam.members` field and `TeamMemberProjection` are removed; persisted roster state still decodes. Task commits do not end waits, deliver messages, or start idle Agents. Message another Agent when it needs to act on task changes.
 
 ## Migration
 
@@ -28,4 +28,4 @@ Descriptions label responsibilities; only Session ids identify recipients.
 3. Use `send_message({ agent_id, message })` and `interrupt_agent({ agent_id })`. Discover all Team member ids with `list_agents`.
 4. Pass member Session ids to task `owner` fields and read `ownerId` in results. Use the Lead's Session id instead of the alias `lead`.
 5. Replace `spawnTeammate`, `sendMessage`, and `interrupt` with `ctx.subagents.startActivation`, `sendMessage`, and `interrupt`. Replace `membership`/`tryMembership` with `rootOf`, and `listMembers` with `listDescendants`. Replace `waitForChange` with `wait_agent`, then re-read tasks.
-6. SDK `session/resume` rejects subagent sessions. Resume the root Session instead. Verify navigation, nested task assignment, and active-wait wakeups.
+6. SDK `session/resume` rejects subagent sessions. Resume the root Session instead. Verify navigation, nested task assignment, and that messages end inbox waits while task commits do not.
