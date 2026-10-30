@@ -33,9 +33,9 @@ it('does not treat failed upload output as a completed submission', async () => 
   command.mockRejectedValueOnce(Object.assign(new Error('upload failed'), {
     code: 1, stdout: JSON.stringify({ id }), stderr: '',
   }))
-  await expect(runLoggedNotarytool(args)).rejects.toMatchObject({
-    message: expect.stringContaining('notarytool submit failed (code: 1'), cause: expect.objectContaining({ message: 'upload failed' }),
-  })
+  const work = runLoggedNotarytool(args)
+  await expect(work).rejects.toThrow('notarytool submit failed (code: 1')
+  await expect(work).rejects.toHaveProperty('cause.message', 'upload failed')
   expect(command).toHaveBeenCalledOnce()
 })
 
