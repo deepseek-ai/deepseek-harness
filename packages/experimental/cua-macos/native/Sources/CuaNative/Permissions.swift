@@ -16,6 +16,7 @@ import Foundation
 }
 
 @MainActor final class SystemPermissions {
+    /// Captured at startup because a launcher can exit before permission is requested.
     private let launchApplication: JSONValue?
     private let actions: SystemPermissionActions
     private let guide: any PermissionGuidePresenting
@@ -51,21 +52,38 @@ import Foundation
         case "screenRecording": observe = actions.screenRecording
         default: throw RequestParameters.invalid("permission must be accessibility or screenRecording")
         }
+        var guideFailure: NativeFailure?
         if !observe() {
-            guard let path = launchApplication?["path"].string, let identifier = launchApplication?["bundleId"].string else {
-                throw NativeFailure(code: "APPLICATION_UNAVAILABLE", message: "The permission application could not be identified; enable Computer Use again")
+            do throws(NativeFailure) {
+                guard let path = launchApplication?["path"].string, let identifier = launchApplication?["bundleId"].string else {
+                    throw NativeFailure(code: "APPLICATION_UNAVAILABLE", message: text.unavailableMessage)
+                }
+                try guide.show(application: PermissionGuideApplication(url: URL(fileURLWithPath: path), identifier: identifier),
+                               text: text, owner: owner, interval: interval, granted: observe)
+            } catch {
+                guide.dismiss()
+                guideFailure = error.code == "APPLICATION_UNAVAILABLE"
+                    ? NativeFailure(code: error.code, message: text.unavailableMessage) : error
             }
-            try guide.show(application: PermissionGuideApplication(url: URL(fileURLWithPath: path), identifier: identifier),
-                           text: text, owner: owner, interval: interval, granted: observe)
+        } else { guide.dismiss() }
+        do { _ = try openPane(permission) }
+        catch {
+            guide.reportSettingsFailure()
+            let message = guideFailure.map { $0.message + "\n" } ?? ""
+            throw NativeFailure(code: error.code, message: message + text.settingsMessage)
         }
-        do { _ = try openSettings(permission) }
-        catch { guide.reportSettingsFailure(); throw error }
+        if let guideFailure { throw guideFailure }
         return status()
     }
 
     func closeGuide(owner: UUID) { guide.close(owner: owner) }
 
-    func openSettings(_ permission: String) throws -> JSONValue {
+    func openSettings(_ permission: String) throws(NativeFailure) -> JSONValue {
+        guide.dismiss()
+        return try openPane(permission)
+    }
+
+    private func openPane(_ permission: String) throws(NativeFailure) -> JSONValue {
         let pane: String
         switch permission {
         case "accessibility": pane = "Privacy_Accessibility"

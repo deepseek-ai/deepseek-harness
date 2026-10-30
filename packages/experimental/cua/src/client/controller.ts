@@ -67,7 +67,9 @@ export class PermissionController {
       request: (permission) => {
         this.enqueue(() => this.remote.requestPermission(permission, this.guideText(permission)), 'requested')
       },
-      openSettings: (permission) => { this.enqueue(() => this.remote.openSettings(permission), 'opened') },
+      openSettings: (permission) => {
+        this.enqueue(() => this.remote.openSettings(permission, this.guideText(permission).settingsMessage), 'opened')
+      },
       revoke: (id) => { this.enqueue(() => this.remote.revoke(id), 'revoked') },
       retryApproval: (id) => { this.enqueue(() => this.remote.retryApproval(id), 'retryAllowed') },
       dismissToast: () => { if (!this.closed) this.state.update((state) => { state.toast = null }) },

@@ -8,7 +8,7 @@ import { ApplicationAccess, type AccessOptions } from './application-access.ts'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { ApplicationIcon } from './protocol.ts'
-import { NativeClient, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
+import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
 import type { CuaApplicationId, CuaApplicationState, CuaPermissionGuideText, CuaSystemPermission, CuaSystemPermissionState } from './access-types.ts'
 export { ApplicationAuthorizationResult } from './application-access.ts'
 export type * from './access-types.ts'
@@ -99,7 +99,8 @@ export class CuaAccess extends TypertRemoteService {
   }
 
   /**
-   * Open System Settings and a native application-drag guide for the privilege selected by the user.
+   * Open the selected System Settings pane; show the native drag guide only for a missing privilege.
+   * Guide preparation failures still attempt settings navigation before reporting the failure.
    * @param permission macOS privilege to request.
    * @param text Localized guide copy; application identity comes from the native helper.
    * @returns Current permission observations; opening the guide does not grant permission.
@@ -113,11 +114,18 @@ export class CuaAccess extends TypertRemoteService {
   /**
    * Open the macOS privacy pane selected by the user.
    * @param permission Corresponding system privilege.
+   * @param failureMessage Localized manual navigation instructions if macOS rejects the open request.
    * @returns Completion after macOS accepted the open request.
    */
   @Remote
-  async openSettings(permission: CuaSystemPermission): Promise<void> {
-    z.object({ opened: z.literal(true) }).parse(await this.control('openPermissionSettings', { permission }))
+  async openSettings(permission: CuaSystemPermission, failureMessage: string): Promise<void> {
+    try { z.object({ opened: z.literal(true) }).parse(await this.control('openPermissionSettings', { permission })) }
+    catch (error) {
+      if (error instanceof NativeError && error.code === 'SETTINGS_UNAVAILABLE') {
+        throw new NativeError(error.code, failureMessage, { cause: error })
+      }
+      throw error
+    }
   }
 
   /**

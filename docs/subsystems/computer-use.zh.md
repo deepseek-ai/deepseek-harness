@@ -14,7 +14,8 @@ CUA provider 通过 `ctx.cuaAccess` 提供系统权限状态、用户主动申�
 |---|---|
 | `CuaApplicationId`、`CuaApplicationGrant` | 平台提供的应用身份，以及显示给用户的已保存决定。 |
 | `CuaSystemPermission` | 用户选择申请的辅助功能或屏幕录制权限。 |
-| `CuaPermissionProcess`、`CuaSystemPermissionState` | 观测到的 helper、父进程和原生权限状态，以及 helper 启动时由 macOS 责任进程记录识别出的应用。可选系统查询或应用查找不可用时，省略应用信息。 |
+| `CuaPermissionGuideText` | Client 提供的本地化原生引导说明和恢复提示；应用名由 helper 提供。 |
+| `CuaPermissionProcess`、`CuaSystemPermissionState` | 观测到的 helper、父进程和原生权限状态，以及 helper 启动时由 macOS 责任进程记录识别出的应用。系统归属信息不可用时，独立 helper 使用自身 bundle；两者都无法识别时才省略应用信息。 |
 | `CuaApplicationState` | 持久授权、拒绝记录，以及能否持久保存。会话授权只保留在 provider 内部。系统权限和应用图标分别查询，页面在各项结果返回后分别显示。 |
 
 ## 选择提供方
@@ -103,7 +104,8 @@ Browser controls for provider-owned native permission and application decisions.
 @Remote async applicationIcons(): Promise<Record<string, string>>
 
 /**
- * Open System Settings and a native application-drag guide for the privilege selected by the user.
+ * Open the selected System Settings pane; show the native drag guide only for a missing privilege.
+ * Guide preparation failures still attempt settings navigation before reporting the failure.
  * @param permission macOS privilege to request.
  * @param text Localized guide copy; application identity comes from the native helper.
  * @returns Current permission observations; opening the guide does not grant permission.
@@ -113,9 +115,10 @@ Browser controls for provider-owned native permission and application decisions.
 /**
  * Open the macOS privacy pane selected by the user.
  * @param permission Corresponding system privilege.
+ * @param failureMessage Localized manual navigation instructions if macOS rejects the open request.
  * @returns Completion after macOS accepted the open request.
  */
-@Remote async openSettings(permission: CuaSystemPermission): Promise<void>
+@Remote async openSettings(permission: CuaSystemPermission, failureMessage: string): Promise<void>
 
 /**
  * Remove saved and session access and join affected operations.
