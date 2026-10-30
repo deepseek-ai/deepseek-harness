@@ -274,8 +274,8 @@ jobs:
           || 'ubuntu-24.04' }}
     name: node 24 / benchmarks
     # Wall-clock budgets need an otherwise idle runner, so this job runs the
-    # benchmark lane alone instead of joining a concurrent gate aggregate, and
-    # keeps its own two-file parallelism inside that runner. The self-hosted
+    # benchmark lane alone instead of joining a concurrent gate aggregate, with
+    # one measured file at a time inside that runner. The self-hosted
     # failover pool is shared, so the benchmarks stay on hosted Linux there.
     timeout-minutes: 20
     steps:
