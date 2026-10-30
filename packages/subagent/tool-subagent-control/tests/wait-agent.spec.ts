@@ -116,6 +116,21 @@ describe('wait_agent', () => {
     expect(await later.result).toMatchObject({ isError: false, value: { timedOut: true } })
   })
 
+  it('waits for its own inbox without resolving a subagent tree root', async () => {
+    const { ctx, agent } = await setup()
+    const child = (await ctx.agents.create({
+      sessionId: SessionId('unmanaged'), meta: { origin: 'subagent', parentSession: agent.id },
+    })).agent
+    vi.useFakeTimers()
+    const lookup = vi.spyOn(ctx.subagents, 'rootOf')
+    const { result } = await startWait(ctx, child, { timeout_ms: 10_000 })
+    expect(lookup).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(1)
+    child.inject(input())
+    expect(await result).toMatchObject({ isError: false, value: { timedOut: false } })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it.each(['input', 'timeout', 'cancel', 'dispose', 'unload'] as const)(
     'removes its subscriptions after %s',
     async (settlement) => {

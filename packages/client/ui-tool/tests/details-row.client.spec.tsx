@@ -11,6 +11,7 @@ import { detailsCardModel, todosDetail } from '../src/client/tool/models/details
 import { DetailsRow, detailsToolview } from '../src/client/tool/toolviews/details-row.tsx'
 import { useDisclosure } from '@deepseek-ai/dsh-client-ui-chat/src/client/chat/use-disclosure.ts'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
+import { ToolDetails } from '../src/client/tool/components/ToolDetails.tsx'
 
 const t = makeTranslate(en, commonEn)
 const goal = { id: 'goal-1', revision: 2, objective: 'Ship compact cards', phase: 'active', roundsStarted: 2, maxGoalRounds: 8 }
@@ -152,6 +153,28 @@ describe('todosDetail', () => {
 })
 
 describe('DetailsRow', () => {
+  it('puts agent names first and lets a compact description expand and collapse', () => {
+    const description = 'Verify every construction bound. '.repeat(20)
+    const block = { ...result('list_agents', null), content: [{ type: 'text' as const, text: `lead/tree-checker [running] parent=lead depth=1 — ${description}` }] }
+    const model = detailsCardModel(block, t, 'en')!
+    render(<ToolDetails model={model} t={t} />)
+    const name = screen.getByText('lead/tree-checker')
+    const toggle = screen.getByRole('button', { name: 'Expand description for lead/tree-checker' })
+    expect(name.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(toggle.textContent).toBe(description)
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Collapse description for lead/tree-checker' }).getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('uses an unqualified accessible name when a compact description has no title', () => {
+    render(<ToolDetails model={{ compact: true, items: [{ subtitle: 'Details', fields: [] }] }} t={t} />)
+    const toggle = screen.getByRole('button', { name: 'Expand' })
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBe(toggle)
+  })
+
   it('expands fields with the keyboard and keeps Inspect available', () => {
     const inspect = vi.fn()
     render(<DetailsRow {...{ useDisclosure, toolName: 'get_goal', block: result('get_goal', { goal, activation: 'armed' }), inspect, t } as Parameters<typeof DetailsRow>[0]} />)
@@ -164,12 +187,24 @@ describe('DetailsRow', () => {
     expect(inspect).toHaveBeenCalledOnce()
   })
 
-  it('presents teammate-coordination tools under the two-person team icon', () => {
+  it.each([[false, 'Wait ended'], [true, 'Wait timed out']] as const)('shows one settled wait label with the team icon (%s)', (timedOut, label) => {
     const inspect = vi.fn()
     const expectedIcon = render(<IconUsersOutlineRegular size={14} />).container.querySelector('svg')!.outerHTML
-    const view = render(<DetailsRow {...{ useDisclosure, toolName: 'wait_agent', block: result('wait_agent', { timedOut: true }), inspect, t } as Parameters<typeof DetailsRow>[0]} />)
-    expect(screen.getByText('Wait for input')).toBeTruthy()
+    const view = render(<DetailsRow {...{ useDisclosure, toolName: 'wait_agent', block: result('wait_agent', { timedOut }), inspect, t } as Parameters<typeof DetailsRow>[0]} />)
+    const header = screen.getByRole('button', { expanded: false })
+    expect(header.textContent).toBe(label)
     expect(view.container.querySelector('svg')?.outerHTML).toBe(expectedIcon)
+    fireEvent.click(header)
+    expect(screen.getByRole('button', { expanded: true }).textContent).toBe(label)
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect' }))
+    expect(inspect).toHaveBeenCalledOnce()
+  })
+
+  it('shows a running wait without appending its timeout arguments', () => {
+    const block = { phase: 'start' as const, args: PartialArguments.fromText('{"timeout_ms":30000}'), callId: 'wait', name: 'wait_agent', argsRaw: '{"timeout_ms":30000}', turn: 1, step: 1, time: 1000, subCalls: [] }
+    render(<DetailsRow {...{ useDisclosure, toolName: 'wait_agent', block, t } as Parameters<typeof DetailsRow>[0]} />)
+    const header = screen.getByRole('button', { expanded: false })
+    expect(header.textContent).toBe('Waiting for messages…')
   })
 
   it('registers the supported tool names through the scoped keyed slot', () => {

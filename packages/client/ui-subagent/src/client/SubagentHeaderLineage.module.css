@@ -110,29 +110,18 @@
   display: flex;
   flex-direction: column;
   width: 336px;
-  max-width: min(400px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
   max-height: min(560px, calc(100vh - 140px));
   padding: 4px;
   overflow: hidden;
-  border-radius: var(--dsw-radius-lg);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
 }
 
-/* The menu skin lives on a pseudo-element: backdrop-filter on the menu itself
-   would turn it into the containing block for fixed descendants, so the
-   sidebar-button Tooltip bubbles would be re-anchored into the menu and
-   clipped by its hidden overflow. */
-.menu::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--dsw-specific-menu);
-  backdrop-filter: var(--dsw-menu-backdrop-filter);
+.menuWithBoard {
+  width: 500px;
 }
 
 .menuBody {
@@ -147,7 +136,7 @@
   position: relative;
   min-width: 0;
 }
-.menuBody > .node {
+.menuBody > [role="tree"] > .node {
   margin-left: -2px;
 }
 
@@ -257,7 +246,42 @@
 }
 
 .currentLabel {
-  font-weight: 600;
+  font-weight: 500;
+}
+
+.description {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.description > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.description > svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.description[aria-expanded='true'] > span {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.description[aria-expanded='true'] > svg {
+  transform: rotate(90deg);
 }
 
 .summary,

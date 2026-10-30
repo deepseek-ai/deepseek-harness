@@ -1,5 +1,3 @@
 - insert:
-    - id: agent-team
-      name: '@deepseek-ai/dsh-experimental-agent-team'
-    - id: tool-agent-team
-      name: '@deepseek-ai/dsh-experimental-tool-agent-team'
+    - id: enable-team-fixture
+      name: ../../../packages/team/agent-team/tests/enable-team-fixture.ts

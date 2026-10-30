@@ -845,10 +845,10 @@ const SERVICE_ROLES: ServiceRole[] = [
   },
   {
     key: 'agentTeams',
-    pkg: 'experimental-agent-team',
+    pkg: 'agent-team',
     title: 'Agent Teams coordination domain',
     mode: 'core',
-    consumers: ['experimental-tool-agent-team'],
+    consumers: ['tool-agent-team'],
     note: 'Owns the shared task DAG for a subagent tree; tool-agent-team contributes task controls.',
   },
   {

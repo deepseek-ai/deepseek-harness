@@ -1,7 +1,12 @@
-- dialog "Task board":
-  - heading "Shared tasks 1" [level=3]
-  - article:
-    - strong: Agent task
-    - text: In progress
-    - paragraph: Created by the root agent
-    - text: "task-1Owner: LeadWrite scopes: src/web"
+- dialog "Subagent sessions":
+  - tree "Subagent sessions":
+    - 'treeitem "researcher Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. · External task" [disabled] [level=1]':
+      - text: researcher
+      - button "Expand description for researcher": "Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result."
+  - region "Task board":
+    - heading "Shared tasks 1" [level=3]
+    - article:
+      - strong: Agent task
+      - text: In progress
+      - paragraph: Created by the root agent
+      - text: "task-1Owner: LeadWrite scopes: src/web"

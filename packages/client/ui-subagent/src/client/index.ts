@@ -3,7 +3,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { SubagentCatalogAction, SubagentHeaderLineage, type SubagentCatalogInjected } from './SubagentHeaderLineage.tsx'
+import { SubagentCatalogAction, SubagentHeaderLineage, type SubagentCatalogInjected, type SubagentCatalogActionInjected } from './SubagentHeaderLineage.tsx'
 import {
   SubagentReadOnlyComposer, type SubagentReadOnlyMatch,
 } from './SubagentReadOnlyComposer.tsx'
@@ -15,6 +15,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type SubagentKey } from './locales.ts'
+export type * from './slots.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -24,7 +25,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 export type {
-  SubagentCatalogActionProps, SubagentCatalogInjected, SubagentHeaderLineageProps,
+  SubagentCatalogActionProps, SubagentCatalogInjected, SubagentCatalogActionInjected, SubagentHeaderLineageProps,
 } from './SubagentHeaderLineage.tsx'
 export type {
   SubagentReadOnlyComposerProps, SubagentReadOnlyMatch,
@@ -65,6 +66,10 @@ export function apply(ctx: ClientContext): void {
       void ctx.sessions.refreshProjections(parentSessionId)
     },
   })
+  const footerAvailable = {
+    getSnapshot: () => ctx.slots.entries('conversation.session.header.actions.subagent.footer').length > 0,
+    subscribe: (listener: () => void) => ctx.slots.subscribe('conversation.session.header.actions.subagent.footer', listener),
+  }
   ctx.slots.inject(
     'conversation.session.header.lineage',
     () => ctx.slots.register({
@@ -81,7 +86,10 @@ export function apply(ctx: ClientContext): void {
       // Between the preset label (-10) and background tasks (20).
       order: 10,
       locale: NS,
-      inject: catalogActions,
+      inject: (sessionId): SubagentCatalogActionInjected => ({
+        ...catalogActions(sessionId), hooks: { footerAvailable },
+      }),
+      children: { 'conversation.session.header.actions.subagent.footer': { kind: 'list', scope: 'session' } },
     }, SubagentCatalogAction),
   )
   ctx.slots.inject(

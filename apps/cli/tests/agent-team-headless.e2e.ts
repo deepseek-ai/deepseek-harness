@@ -27,15 +27,12 @@ describe('dsh run with Agent Teams enabled', () => {
       await writeFile(join(profileDir, 'package.json'), JSON.stringify({
         name: 'dsh-profile-headless',
         private: true,
-        dependencies: {
-          '@deepseek-ai/dsh-experimental-agent-team-profile': 'workspace:^',
-        },
+        dependencies: {},
         dsh: {
           profile: {
             bundles: [
               '@deepseek-ai/dsh-base',
               '@deepseek-ai/dsh-headless',
-              '@deepseek-ai/dsh-experimental-agent-team-profile',
             ],
           },
         },
@@ -91,8 +88,8 @@ describe('dsh run with Agent Teams enabled', () => {
       const workflowChild = parsed.find(log => log.some(record => record.type === 'user/message'
         && JSON.stringify((record.data as { content: unknown }).content) === JSON.stringify([{ type: 'text', text: 'TEAM_WORKFLOW_CHILD' }])))
       expect(workflowChild).toBeDefined()
-      expect(workflowChild!.find(record => record.type === 'subagent/descriptor')?.data)
-        .toMatchObject({ mode: 'continuable', provider: 'spawn' })
+      const workflowDescriptor = workflowChild!.find(record => record.type === 'subagent/descriptor')?.data as Record<string, unknown>
+      expect(workflowDescriptor).toMatchObject({ mode: 'continuable', provider: 'spawn' })
       expect(workflowChild!.filter(record => record.type === 'user/message'
         && (record.data as { source: { kind: string } }).source.kind === 'user').map(record => record.data))
         .toEqual([expect.objectContaining({ content: [{ type: 'text', text: 'TEAM_WORKFLOW_CHILD' }] })])
@@ -105,10 +102,15 @@ describe('dsh run with Agent Teams enabled', () => {
       expect(eventTypes).not.toContain('team/member')
       const catalog = root!.filter(record => record.type === 'subagent/catalog').map(record => record.data)
       expect(catalog).toEqual(expect.arrayContaining([
+        expect.objectContaining({ version: 0, childId: workflowChild![0]?.id }),
         expect.objectContaining({ version: 0, label: 'Own deterministic implementation.' }),
         expect.objectContaining({ version: 0, label: 'Own deterministic research.' }),
       ]))
-      for (const entry of catalog) expect(entry).not.toHaveProperty('name')
+      const names = root!.filter(record => record.type === 'subagent-name/bound').map(record => record.data)
+      expect(names).toEqual(expect.arrayContaining([
+        expect.objectContaining({ version: 1, name: 'lead/implementer' }),
+        expect.objectContaining({ version: 1, name: 'lead/researcher' }),
+      ]))
       expect(eventTypes).not.toContain('team/message/queued')
       expect(eventTypes).not.toContain('team/message/delivered')
       const peerMessages = parsed.flatMap(log => log.filter(record => record.type === 'user/message'

@@ -382,6 +382,9 @@
     - id: ui-skill
       name: '@deepseek-ai/dsh-client-ui-skill'
 
+    - id: ui-agent-team
+      name: '@deepseek-ai/dsh-client-ui-agent-team'
+
     - id: ui-subagent
       name: '@deepseek-ai/dsh-client-ui-subagent'
 

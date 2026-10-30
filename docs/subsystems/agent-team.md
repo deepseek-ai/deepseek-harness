@@ -2,7 +2,7 @@
 
 English | [中文](agent-team.zh.md)
 
-Types shared by the experimental task board, model tools, and host adapters. The [task-board wait decision](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.md) owns coordination semantics; this page records durable and client-visible forms from [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts).
+Types shared by the shared task board, model tools, and host adapters. The [task-board wait decision](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.md) owns coordination semantics; this page records durable and client-visible forms from [`packages/team/agent-team/src/types.ts`](../../packages/team/agent-team/src/types.ts).
 
 ## Identity and historical roster
 
@@ -75,7 +75,9 @@ interface TeamTaskSnapshot {
 
 ## Web projection
 
-The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted Team record beside the last valid state. Historical member fields remain in persisted projection state but are omitted from the browser view. The task panel labels the root as Lead and other owners from catalog labels, Session titles, or ids.
+`agentTeam.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. The Web menu calls the same method through `remote.agentTeams.setEnabled`, with the root Session id resolved to its live Agent by the Gateway. Mode writes take effect before awaiting persistence. Tools resolve availability at step preparation; prompt providers read the selection when evaluated. Task mutations check the current mode when their queued operation starts; admitted mutations may finish. Mode changes do not end inbox waits. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
+
+The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted task or mode record beside the last valid state. Historical roster and mailbox records are not projected. The task panel labels the root as Lead and other owners from catalog labels, Session titles, or ids.
 
 ```ts type-equiv
 /** Runtime-enriched task view returned to tools and hosts. */
@@ -100,6 +102,7 @@ interface TeamTaskView {
  * record; tasks then stay at the last valid state.
  */
 interface TeamProjection {
+  readonly enabled: boolean
   readonly tasks: TeamTaskView[]
   readonly failure?: string
 }
@@ -107,7 +110,7 @@ interface TeamProjection {
 
 ## Replay
 
-The `agentTeam` projection replays historical roster, task, and mailbox records selected by `TeamId`. Subagent discovery owns current tree membership and ignores inherited catalog authority. Session event `seq` and `time` own ordering and timing. Committed durable generations are preserved. The [package README](../../packages/experimental/agent-team/README.md) defines task operations and limits.
+The `agentTeam` projection replays task records selected by `TeamId` and the Session’s own mode selections. Subagent discovery owns current tree membership and ignores inherited catalog authority. Session event `seq` and `time` own ordering and timing. Committed durable generations are preserved. The [package README](../../packages/team/agent-team/README.md) defines task operations and limits.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -124,6 +127,27 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Agent Teams service backed by the exact live Lead Session log.
 
 ```ts cordis-catalog
+/**
+ * Read the Team selection shared by the caller's subagent tree.
+ * @param caller - exact live root or descendant.
+ * @returns whether Team tools and guidance are enabled.
+ */
+isEnabled(caller: Agent): boolean
+
+/**
+ * Save a root Session's Team selection without stopping children or deleting tasks.
+ * The selection takes effect before awaiting persistence. Tools resolve availability at
+ * step preparation; prompt providers read the selection when evaluated. Task mutations
+ * check the current mode when their queued operation starts; admitted operations finish.
+ * @param agent - exact live root whose tree receives the selection.
+ * @param enabled - selected Team mode.
+ * @param signal - cancellation checked before changing the selection.
+ * @returns fulfillment after the selection flushes.
+ * @throws when called by a descendant or persistence fails. An appended selection remains active;
+ * retrying the same selection flushes without a duplicate event.
+ */
+@Remote async setEnabled(agent: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>
+
 /**
  * Create one unowned pending task in the Team Lead log.
  * @param caller - exact live Team member creating the task.
@@ -162,5 +186,5 @@ async updateTask(caller: Agent, request: UpdateTeamTaskRequest, signal?: AbortSi
 
 Types: [Agent](core.md)
 
-Source: [`packages/experimental/agent-team/src/index.ts`](../../packages/experimental/agent-team/src/index.ts)
+Source: [`packages/team/agent-team/src/index.ts`](../../packages/team/agent-team/src/index.ts)
 <!-- END GENERATED cordis-surface -->

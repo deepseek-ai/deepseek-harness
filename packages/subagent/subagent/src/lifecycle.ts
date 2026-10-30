@@ -1,5 +1,5 @@
 /**
- * Lifecycle-edge publication for managed subagent activations.
+ * Contained lifecycle notifications for subagents.
  *
  * The service owns scoped dispatch and listener containment; the manager
  * supplies event payloads from each activation.
@@ -14,9 +14,9 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SubagentResult, SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
 
 /**
- * Publish one lifecycle edge with per-listener exception containment. Run edges
- * carry the subagent tree root that keys scoped dispatch; provider removal has no
- * parent carrier and reaches listeners unscoped.
+ * Publish one notification with per-listener exception containment. Run edges
+ * carry the subagent tree root that keys scoped dispatch. Provider removal
+ * reaches all scopes.
  *
  * The service owns this closure because scoped dispatch keys its carrier by the
  * exact service instance, whose own context filter composes into the carrier;

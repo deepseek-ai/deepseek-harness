@@ -968,12 +968,6 @@
   "packages/document/office-to-pdf/tests/queue.spec.ts": {
     "bbe31b89b81048bb47c7158e78670deec5f2973286f9abc591290a8fdd851cf1": 1
   },
-  "packages/experimental/agent-team/tests/projection-events.spec.ts": {
-    "71ffbcca0bb71d3b595143632491d4c5d580aaf6ac384c22116e038995b2f2b5": 1,
-    "a66c8967969859328890e6049a0bd9e90403861eb19ed5d6937da5505aa79c05": 1,
-    "bd3a42d7bc38a7deb366d7ad1364f2ab01be2af077aae04e49b9c8a61b9e1c7d": 1,
-    "d8076a64f8d940fb0a5c3df15e9e1c8fb7ac05e84762a6198dbbfcffcf379821": 1
-  },
   "packages/experimental/browser-use-runtime/src/index.ts": {
     "04bc8a44533574365dfedf563e2356458bcf95f990a00906938c977c1d683356": 1
   },
@@ -1831,6 +1825,10 @@
     "0e5e16451a64b77aaf268f7b49fdf757fb1725cbe69901221c1db28689358eff": 1,
     "574bce326cab70f3080b19219844405565d1c4c23df4eec85e7838f9ec1038ed": 1,
     "f5b7ed19aea21153c86ef4e2596f39d1b667b3b8a1d1ba2b2a2a95bf90869b58": 1
+  },
+  "packages/team/agent-team/tests/projection-events.spec.ts": {
+    "71ffbcca0bb71d3b595143632491d4c5d580aaf6ac384c22116e038995b2f2b5": 1,
+    "a66c8967969859328890e6049a0bd9e90403861eb19ed5d6937da5505aa79c05": 1
   },
   "packages/terminal/terminal-bash/tests/index.spec.ts": {
     "2878860b606c2614696f97227e4e580a65b1ae1680b6261f233163cd8b838ee0": 1,

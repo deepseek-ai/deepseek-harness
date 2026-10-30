@@ -10,19 +10,19 @@ The subagent seam supplies fresh/fork providers, durable child Sessions, FIFO fo
 
 All same-process Agents also share one checkout. Filesystem edit tools can reject an observed stale version, but Bash, formatters, generators, and external writers bypass that fence. Treating a teammate name or task owner as a file lock would hide rather than solve this concurrency boundary.
 
-Agent Teams needs an explicit opt-in composition while its public contracts remain experimental. The default tool catalog and simple-task behavior must remain unchanged, while an explicitly requested Team must survive child Activation settlement and mailbox delivery races long enough for the Lead to aggregate the result before process teardown.
+Team collaboration requires explicit opt-in; [Session selection](../architecture/2026-10-20-session-team-mode.md) owns its granularity and default composition. The default tool catalog and simple-task behavior must remain unchanged, while an explicitly requested Team must survive child Activation settlement and mailbox delivery races long enough for the Lead to aggregate the result before process teardown.
 
 ## Decision
 
 Every ordinary root and its descendants form the Team identified by the root `SessionId`; durable task state begins with the first task event. [Subagent teammates](../architecture/2026-10-15-agent-teams-as-subagents.md) owns the single agent identity. [Task-board wait coordination](../architecture/2026-10-19-team-task-board-inbox.md) owns task-board signals and ordinary inbox waiting. An ordinary Session fork leads a new tree and excludes inherited Team authority.
 
-The implementation is split into `@deepseek-ai/dsh-experimental-agent-team`, which owns `ctx.agentTeams` and durable semantics, and `@deepseek-ai/dsh-experimental-tool-agent-team`, which owns scoped schemas and model guidance. Every Team tool declares its complete result schema and renders that value as compact JSON, so the compiler checks each `execute` against what the model is promised and no result spends tokens on indentation. Deployments mount both plugins explicitly; Team registers no tool that shares a name with the subagent controls. The shared policy announces Team availability and describes coordination responsibilities. Both packages are public members of `packages/experimental/`; the [experimental package reference](../../../../packages/experimental/AGENTS.md) owns publication, dependency isolation, and promotion.
+The implementation is split into `@deepseek-ai/dsh-agent-team`, which owns `ctx.agentTeams` and durable semantics, and `@deepseek-ai/dsh-tool-agent-team`, which owns scoped schemas and model guidance. Every Team tool declares its complete result schema and renders that value as compact JSON, so the compiler checks each `execute` against what the model is promised and no result spends tokens on indentation. The base bundle mounts both plugins; Team registers no tool that shares a name with the subagent controls. The shared policy announces Team availability and describes coordination responsibilities. Both packages belong to the [subagent family](../../../../packages/subagent/README.md); the root Session’s saved selection gates the task tools and policy. The [Session-mode upgrade guide](../../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.md) describes profile migration.
 
 The Lead must wait for required work before its final answer. Process teardown remains the final lifecycle owner and drains continuation Activations; a Team task owner is durable state and is not automatically released by idle, interruption, or process exit.
 
 ## Profile delegation
 
-The [Team profile](../../../../packages/experimental/agent-team-profile/README.md) inserts the Team rows and keeps the base delegation and control tools; teammates are started with those tools as described in [subagents](../architecture/2026-10-15-agent-teams-as-subagents.md). Ordinary Session forks retain their history; [current identity handling](../architecture/2026-10-13-team-identity-runtime-context.md) supplies the fork's own role.
+The [base bundle](../../../../packages/bundle/base/README.md) inserts the Team rows and keeps the base delegation and control tools; teammates are started with those tools as described in [subagents](../architecture/2026-10-15-agent-teams-as-subagents.md). Ordinary Session forks retain their history; [current identity handling](../architecture/2026-10-13-team-identity-runtime-context.md) supplies the fork's own role.
 
 ## Team identity
 
@@ -34,9 +34,7 @@ Teammate creation and cold resume belong to the subagent runtime ([subagent team
 
 ## Mailbox and task transactions
 
-The historical Lead-log mailbox remains a readable format: queued and delivered records keep their stable identity and sender, and Team payload validation still applies to them. Team never delivers or acknowledges them; messages between members use the target Agent inbox through the subagent operation ([subagents](../architecture/2026-10-15-agent-teams-as-subagents.md)).
-
-Unknown mailbox content stays as decoded JSON during event projection and checkpoint admission. Validation inspects its type without rebuilding its fields, because generic object parsing can omit a valid own `__proto__` key. Locally declared content variants undergo structural validation; opaque plugin fields do not gain Team semantics. Cache invalidation is necessary because parser correction alone cannot recover keys omitted from cached state. The [Team documentation](../../../../packages/experimental/agent-team/README.md) owns the restore behavior.
+The historical Lead-log mailbox remains readable in original Session logs. The [task-only projection decision](../simplification/2026-10-29-team-task-only-projection.md) supersedes mailbox projection, checkpoint retention, and Team payload validation. Historical queued messages are never delivered or acknowledged.
 
 Member messages use the subagent `send_message` operation, which steers running, idle, and cold targets and returns inbox acceptance.
 
@@ -78,7 +76,7 @@ Publication requires `apply` to return a new state per applied event and replace
 
 Package tests cover task transitions, tree-based assignment, historical roster and mailbox decoding, and post-commit wait signals. Ordinary subagent tests cover inbox waiting; recorded Team compositions cover identity, task policy, and tools.
 
-Inbox waiting follows [subagent controls](../../../../packages/subagent/tool-subagent-control/README.md); Team identity and task policy follow the [Team tool reference](../../../../packages/experimental/tool-agent-team/README.md).
+Inbox waiting follows [subagent controls](../../../../packages/subagent/tool-subagent-control/README.md); Team identity and task policy follow the [Team tool reference](../../../../packages/team/tool-agent-team/README.md).
 
 ## Consequences
 

@@ -22,14 +22,6 @@
     compression: none
 
 - insert:
-    - id: agent-team
-      name: '@deepseek-ai/dsh-experimental-agent-team'
-      config:
-        maxTasks: 256
-
-    - id: tool-agent-team
-      name: '@deepseek-ai/dsh-experimental-tool-agent-team'
-
     - id: team-fixture-llm
       name: './tests/fixtures/team-llm.mjs'
 

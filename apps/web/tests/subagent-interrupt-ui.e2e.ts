@@ -210,7 +210,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
       acknowledgeReloadConnectionLoss(tripwire, warningStart)
       await page.getByRole('button', { name: /1 subagent/ }).click()
-      await page.getByRole('treeitem', { name: new RegExp(LABEL) }).click()
+      await page.getByRole('treeitem', { name: new RegExp(LABEL) }).press('Enter')
       const input = page.locator('[data-composer-input]').first()
       await input.waitFor({ timeout: 15_000 })
       await page.getByText(/^Explain event sourcing in one sentence\./)
@@ -270,7 +270,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     await page.getByRole('navigation', { name: 'Session hierarchy' })
       .getByRole('button').first().click()
     await page.getByRole('button', { name: /1 subagent/ }).click()
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).click()
+    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).press('Enter')
     // A live continuable child advertises the ordinary steer-all gesture, so
     // that placeholder is the composer's accessible name in this window. It
     // changes back as the queue drains, so later interactions address the

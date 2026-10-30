@@ -10,19 +10,19 @@ subagent seam 已提供 fresh／fork provider、持久 child Session、FIFO foll
 
 同进程 Agent 还共享一个 checkout。文件系统 edit 工具可以拒绝已观察到的陈旧版本，但 Bash、formatter、generator 与外部 writer 会绕过该屏障。把 teammate name 或 task owner 当作文件锁只会掩盖而不是解决该并发边界。
 
-Agent Teams 的公开约定仍处于实验阶段，因此需要显式启用的组合。默认工具目录与简单任务行为必须保持不变；而显式请求的 Team 必须能跨越 child Activation settlement 与 mailbox 投递竞争，使 Lead 在进程 teardown 前汇总结果。
+Team 协作需要显式开启；[Session 选择](../architecture/2026-10-20-session-team-mode.zh.md)负责选择粒度与默认组合。默认工具目录与简单任务行为必须保持不变；而显式请求的 Team 必须能跨越 child Activation settlement 与 mailbox 投递竞争，使 Lead 在进程 teardown 前汇总结果。
 
 ## Decision
 
 每个普通根及其后代组成以根 `SessionId` 标识的 Team；持久任务状态从首个任务事件开始。[subagent 队友](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)负责单一 agent 身份。[任务板等待协调](../architecture/2026-10-19-team-task-board-inbox.zh.md)负责任务板信号和普通收件箱等待。普通 Session fork 成为一棵新树的根，并排除继承的 Team 权限。
 
-实现拆分为 `@deepseek-ai/dsh-experimental-agent-team` 与 `@deepseek-ai/dsh-experimental-tool-agent-team`：前者负责 `ctx.agentTeams` 和持久语义，后者负责 scoped schema 与模型指引。每个 Team 工具都声明完整的结果 schema，并把该值渲染为紧凑 JSON，因此编译器会检查每个 `execute` 是否符合对模型的承诺，也没有结果把 token 花在缩进上。部署显式挂载两个插件；Team 不注册与 subagent control 同名的工具。共享策略声明 Team 可用，并说明协调责任。两个包都是 `packages/experimental/` 的公开成员；[实验性包参考](../../../../packages/experimental/AGENTS.md)负责发布、依赖隔离与 promotion。
+实现拆分为 `@deepseek-ai/dsh-agent-team` 与 `@deepseek-ai/dsh-tool-agent-team`：前者负责 `ctx.agentTeams` 和持久语义，后者负责 scoped schema 与模型指引。每个 Team 工具都声明完整的结果 schema，并把该值渲染为紧凑 JSON，因此编译器会检查每个 `execute` 是否符合对模型的承诺，也没有结果把 token 花在缩进上。基础 bundle 挂载两个插件；Team 不注册与 subagent control 同名的工具。共享策略声明 Team 可用，并说明协调责任。两个包属于 [subagent 家族](../../../../packages/subagent/README.zh.md)；根 Session 保存的选择控制任务工具与策略。[Session 模式升级指南](../../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.zh.md)说明 profile 迁移。
 
 Lead 必须等待所需工作后才能给出最终答案。进程 teardown 仍是最终生命周期 owner，并会 drain continuation Activation；Team task owner 是持久状态，不会因 idle、interrupt 或进程退出自动释放。
 
 ## Profile delegation
 
-[Team profile](../../../../packages/experimental/agent-team-profile/README.zh.md) 插入 Team 行，并保留 base 的委派与控制工具；teammate 按[subagent](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)所述使用这些工具启动。普通 Session fork 保留历史；[当前身份处理](../architecture/2026-10-13-team-identity-runtime-context.zh.md)提供 fork 自己的角色。
+[基础 bundle](../../../../packages/bundle/base/README.zh.md) 插入 Team 行，并保留 base 的委派与控制工具；teammate 按[subagent](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)所述使用这些工具启动。普通 Session fork 保留历史；[当前身份处理](../architecture/2026-10-13-team-identity-runtime-context.zh.md)提供 fork 自己的角色。
 
 ## Team identity
 
@@ -34,9 +34,7 @@ Lead 必须等待所需工作后才能给出最终答案。进程 teardown 仍�
 
 ## Mailbox and task transactions
 
-历史 Lead-log mailbox 仍是可读格式：queued 与 delivered 记录保留稳定身份与发送者，Team payload 校验仍适用于它们。Team 从不投递或确认这些记录；member 之间的消息通过 subagent 操作进入目标 Agent inbox（[subagent](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)）。
-
-事件投影和 checkpoint 准入期间，未知 mailbox 内容保持为已解码 JSON。校验只检查其 type，不重建字段，因为通用对象解析可能省略有效的自有 `__proto__` 键。本地声明的内容变体接受结构校验；不透明的插件字段不获得 Team 语义。缓存失效是必要的，因为只修正解析器无法恢复缓存状态中省略的键。[Team 文档](../../../../packages/experimental/agent-team/README.zh.md)拥有恢复行为的说明。
+历史 Lead-log mailbox 仍可从原始 Session 日志读取。[仅投影任务的决策](../simplification/2026-10-29-team-task-only-projection.zh.md)取代邮箱投影、检查点保留和 Team 载荷校验。历史排队消息绝不再投递或确认。
 
 member 消息使用 subagent 的 `send_message` 操作，它对 running、idle 和 cold target 使用 Steer，并返回 inbox 接收结果。
 
@@ -78,7 +76,7 @@ Web panel 读取 Lead Session 的 `agentTeam` 传输投影，因为现有投影�
 
 包测试覆盖任务转换、基于树的分配、历史名册和邮箱解码，以及提交后等待信号。普通 subagent 测试覆盖收件箱等待；录制 Team 组合覆盖身份、任务策略和工具。
 
-收件箱等待遵循 [subagent 控制工具](../../../../packages/subagent/tool-subagent-control/README.zh.md)；Team 身份和任务策略遵循 [Team 工具参考](../../../../packages/experimental/tool-agent-team/README.zh.md)。
+收件箱等待遵循 [subagent 控制工具](../../../../packages/subagent/tool-subagent-control/README.zh.md)；Team 身份和任务策略遵循 [Team 工具参考](../../../../packages/team/tool-agent-team/README.zh.md)。
 
 ## Consequences
 

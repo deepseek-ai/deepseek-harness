@@ -1,0 +1,147 @@
+.count {
+  color: var(--dsw-alias-label-caption);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+}
+
+.board {
+  margin-top: 8px;
+  padding: 8px 8px 4px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.taskTitle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.taskTitle strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.board h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.meta {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.error {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.emptyNotice {
+  margin: 0 0 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.task {
+  overflow-wrap: anywhere;
+  padding: 11px 13px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.taskState {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.task p {
+  margin: 5px 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+}
+
+.clampedDescription {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.expandToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  /* Floated ahead of the meta spans: it keeps the first line's top-right
+     corner, so wrapped meta lines continue below it instead of pushing the
+     toggle under content it expands. */
+  float: right;
+  margin-left: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.expandToggle:focus-visible {
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .expandToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.expandToggle svg {
+  transition: transform 120ms ease;
+}
+
+.expandToggleOpen {
+  transform: rotate(180deg);
+}
+
+.meta {
+  line-height: 20px;
+}
+
+.meta > span {
+  margin-right: 10px;
+}
+
+.notice,
+.error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px;
+  font-size: 12px;
+}
+
+@media (hover: none) {
+  .memberModel {
+    display: inline;
+  }
+}

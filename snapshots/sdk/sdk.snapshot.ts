@@ -705,6 +705,7 @@ const legacySdkCompositions = new Set([
   'sdk-dsh-sdk-dynamic-route',
   'sdk-minimal',
   'sdk-serial-created',
+  'sdk-team-session-mode',
   'sdk-upload',
   'session-title',
   'session-title-stability',

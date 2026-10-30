@@ -2,7 +2,7 @@
 
 [English](agent-team.md) | 中文
 
-实验性任务板、模型工具和 host 适配器共享的类型。[任务板等待决策](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.zh.md)负责协调语义；本页记录 [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts) 中的持久化和客户端可见形式。
+共享任务板、模型工具和 host 适配器共享的类型。[任务板等待决策](../../.agents/notes/implemented/architecture/2026-10-19-team-task-board-inbox.zh.md)负责协调语义；本页记录 [`packages/team/agent-team/src/types.ts`](../../packages/team/agent-team/src/types.ts) 中的持久化和客户端可见形式。
 
 ## 身份与历史名册
 
@@ -75,7 +75,9 @@ interface TeamTaskSnapshot {
 
 ## Web 投影
 
-根 Session 通过 `SessionProjectionMap.agentTeam` 发布未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久化 Team 记录。历史成员字段保留在持久化投影状态中，但不发送到浏览器。任务面板将根标记为主代理，其他负责人依次使用目录标签、Session 标题或 id。
+`agentTeam.enabled` 提供根 Session 保存的选择。新 Session 默认为 false；`team/mode` 记录显式选择。历史任务在显式选择前视为开启。仅根可调用 `setEnabled`；后代共享该模式。Web 菜单通过 `remote.agentTeams.setEnabled` 调用同一方法，Gateway 将根 Session id 解析为其存活 Agent。模式写入先立即生效，再等待刷盘。工具在步骤准备时确定可用性；提示词提供方在求值时读取选择。任务修改在排队操作开始时检查当前模式；已获准的修改可继续完成。模式变更不会结束收件箱等待。刷盘失败时已追加的选择仍然生效；重试相同选择会再次刷盘，不重复追加事件。
+
+根 Session 通过 `SessionProjectionMap.agentTeam` 发布未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久化任务或模式记录。历史名册与邮箱记录不参与投影。任务面板将根标记为主代理，其他负责人依次使用目录标签、Session 标题或 id。
 
 ```ts type-equiv
 /** Runtime-enriched task view returned to tools and hosts. */
@@ -100,6 +102,7 @@ interface TeamTaskView {
  * record; tasks then stay at the last valid state.
  */
 interface TeamProjection {
+  readonly enabled: boolean
   readonly tasks: TeamTaskView[]
   readonly failure?: string
 }
@@ -107,7 +110,7 @@ interface TeamProjection {
 
 ## 回放
 
-`agentTeam` 投影按 `TeamId` 重放历史名册、任务和邮箱记录。subagent 发现负责当前树成员关系，不将继承目录作为权限来源。Session 事件的 `seq` 和 `time` 负责排序和时间。已提交的持久化代次保持不变。[包 README](../../packages/experimental/agent-team/README.zh.md)定义任务操作和限制。
+`agentTeam` 投影按 `TeamId` 重放任务记录，并重放 Session 自身的模式选择。subagent 发现负责当前树成员关系，不将继承目录作为权限来源。Session 事件的 `seq` 和 `time` 负责排序和时间。已提交的持久化代次保持不变。[包 README](../../packages/team/agent-team/README.zh.md)定义任务操作和限制。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -124,6 +127,27 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 Agent Teams service backed by the exact live Lead Session log.
 
 ```ts cordis-catalog
+/**
+ * Read the Team selection shared by the caller's subagent tree.
+ * @param caller - exact live root or descendant.
+ * @returns whether Team tools and guidance are enabled.
+ */
+isEnabled(caller: Agent): boolean
+
+/**
+ * Save a root Session's Team selection without stopping children or deleting tasks.
+ * The selection takes effect before awaiting persistence. Tools resolve availability at
+ * step preparation; prompt providers read the selection when evaluated. Task mutations
+ * check the current mode when their queued operation starts; admitted operations finish.
+ * @param agent - exact live root whose tree receives the selection.
+ * @param enabled - selected Team mode.
+ * @param signal - cancellation checked before changing the selection.
+ * @returns fulfillment after the selection flushes.
+ * @throws when called by a descendant or persistence fails. An appended selection remains active;
+ * retrying the same selection flushes without a duplicate event.
+ */
+@Remote async setEnabled(agent: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>
+
 /**
  * Create one unowned pending task in the Team Lead log.
  * @param caller - exact live Team member creating the task.
@@ -162,5 +186,5 @@ async updateTask(caller: Agent, request: UpdateTeamTaskRequest, signal?: AbortSi
 
 Types: [Agent](core.zh.md)
 
-Source: [`packages/experimental/agent-team/src/index.ts`](../../packages/experimental/agent-team/src/index.ts)
+Source: [`packages/team/agent-team/src/index.ts`](../../packages/team/agent-team/src/index.ts)
 <!-- END GENERATED cordis-surface -->

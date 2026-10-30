@@ -19,6 +19,17 @@ export interface ModelLabelOwner {
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
+    /** Session options appended after model and reasoning controls in the root menu. */
+    'conversation.input.model.options': {
+      kind: 'list'
+      scope: 'session'
+      owner: {
+        /** Whether the composer currently refuses selection changes. */
+        locked: boolean
+        /** Report a failed selection through the menu owner's persistent toast. */
+        reportFailure: (message: string) => void
+      }
+    }
     /**
      * Non-interactive inline model label; selection controls remain owner-managed.
      * Without a contribution, the badge precedes the catalog name in the trigger

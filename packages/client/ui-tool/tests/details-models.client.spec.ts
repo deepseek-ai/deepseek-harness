@@ -55,18 +55,22 @@ describe('shared detail values', () => {
 
 describe('control detail adapters', () => {
   it.each([
-    [{ timedOut: false }, '等待结果 · 等待结束'],
-    [{ timedOut: true }, '等待结果 · 等待超时'],
+    [{ timedOut: false }, '等待已结束'],
+    [{ timedOut: true }, '等待已超时'],
     [{ timedOut: false, noProgress: { message: 'No pending work' } }, '没有正在运行的子智能体'],
   ] as const)('renders inbox wait results and historical activity diagnostics (%j)', (value, summary) => {
     const translate = makeTranslate(zh, commonZh)
-    expect(translate('tool.title.waitAgent')).toBe('等待输入')
+    expect(translate('tool.title.waitAgent')).toBe('等待消息…')
     expect(detailsCardModel(output('wait_agent', JSON.stringify(value)), translate, 'zh-CN')?.summary).toBe(summary)
   })
 
   it('uses producer wording for agent, job, terminal, and LSP lists', () => {
     const agents = details('list_agents', 'a1 [running] — Build\na2 [ready] parent=a1 depth=1 — Review', { scope: 'descendants' })
     expect(agents?.summary).toBe('2 agents')
+    expect(agents?.items).toEqual([
+      { title: 'a1', subtitle: 'Build', badge: { label: 'Running', tone: 'info' }, fields: [] },
+      { title: 'a2', subtitle: 'Review', badge: { label: 'Ready', tone: 'neutral' }, fields: [] },
+    ])
     expect(details('list_agents', '(no subagents)')?.empty).toBe('No results')
     expect(details('job_list', 'j1 [bash] running — Build')?.items[0]?.fields).toContainEqual({ label: 'Type', value: 'bash' })
     expect(details('job_list', '(no background jobs)')?.empty).toBe('No results')
@@ -89,9 +93,9 @@ describe('control detail adapters', () => {
     expect(details('team_task_create', '{"id":"task-1","subject":"Review","status":"pending"}')?.summary).toBe('Review')
     expect(details('team_task_list', '{"tasks":[{"id":"task-1","subject":"Review"}],"nextCursor":3}')?.caption).toBe('More tasks available; next cursor is 3')
     expect(details('send_message', '{"status":"queued"}', { agent_id: 'a1', message: 'hello' })?.items[0]?.badge?.label).toBe('Queued')
-    expect(details('send_message', 'message delivered to agent a1', { agent_id: 'a1', message: 'hello' })?.summary).toBe('a1 · Message delivered')
+    expect(details('send_message', 'message delivered to agent reviewer', { agent_id: 'reviewer', message: 'hello' })?.summary).toBe('reviewer · Message delivered')
     expect(details('interrupt_agent', '{"previousStatus":"running"}', { agent_id: 'a1' })?.items[0]?.fields).toContainEqual({ label: 'Previous status', value: 'Running' })
-    expect(details('wait_agent', '{"timedOut":true}')?.summary).toBe('Wait result · Wait timed out')
+    expect(details('wait_agent', '{"timedOut":true}')?.summary).toBe('Wait timed out')
     expect(details('wait_agent', '{"timedOut":false,"noProgress":{"message":"No peer"}}')?.items[0]?.description).toBe('No peer')
     expect(details('subagent', 'started background subagent job job-1', { prompt: 'Do work' })?.items[0]?.fields).toContainEqual({ label: 'Job ID', value: 'job-1' })
     expect(details('subagent', 'A useful reply', { prompt: 'Do work' })?.items[0]?.markdown).toBe('A useful reply')
@@ -110,7 +114,7 @@ describe('control detail adapters', () => {
     expect(details('unknown', 'x')).toBeNull()
     expect(details('team_task_list', '{"tasks":[],"nextCursor":"bad"}')).toBeNull()
     expect(details('terminal_read', 'bad', { sessionId: 'pty-1' })).toBeNull()
-    expect(details('interrupt_agent', 'interrupt requested for agent a1', { agent_id: 'a1' })?.summary).toContain('Interrupt')
+    expect(details('interrupt_agent', 'interrupt requested for agent reviewer', { agent_id: 'reviewer' })?.summary).toContain('Interrupt')
     expect(details('interrupt_agent', 'unexpected', { agent_id: 'a1' })).toBeNull()
     expect(details('job_kill', 'unexpected', { job_id: 'j1' })).toBeNull()
     expect(details('terminal_close', 'unexpected', { sessionId: 'pty-1' })).toBeNull()
