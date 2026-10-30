@@ -46,7 +46,7 @@ vi.mock('execa', () => ({ execa: async (_command: string, args: string[]) => {
 } }))
 vi.mock('tar', () => ({
   create: async ({ file }: { file: string }) => writeFile(file, 'fixture archive'),
-  extract: async ({ cwd }: { cwd: string }) => mkdir(cwd),
+  extract: async () => {},
 }))
 vi.mock('./payload.ts', async importOriginal => ({
   ...await importOriginal<typeof import('./payload.ts')>(),
@@ -75,7 +75,11 @@ it.each([false, true])('retains helper packaging outcome and restores the inheri
     vi.resetModules()
     const work = import('./package.ts')
     if (reject) await expect(work).rejects.toThrow('CUA helper packaging failed; see')
-    else await work
+    else {
+      try { await work } catch (error) {
+        throw new Error(stderr.mock.calls.map(([chunk]) => String(chunk)).join(''), { cause: error })
+      }
+    }
     expect(state.requestedRoot).toBe(resolve('apps/desktop/.desktop-build/packaging-runs'))
     expect(state.directory).not.toBe('')
     const events = await readFile(join(state.directory, 'events.jsonl'), 'utf8')
