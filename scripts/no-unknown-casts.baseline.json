@@ -217,8 +217,7 @@
     "e9721557773cba96e50cea1b0c6737991a9fb2490bcd83e934311e46310d8b68": 1
   },
   "packages/api/session-controller/tests/control-queue.host.spec.ts": {
-    "9b2258e1e99500b30d66b0b93e0f0bc5077278877903fc8cc6712167411f6109": 1,
-    "f2fe8bd862649a2492b7f99f0c35e78ba051a248f339d248d0dcfab163c69752": 1
+    "9b2258e1e99500b30d66b0b93e0f0bc5077278877903fc8cc6712167411f6109": 1
   },
   "packages/api/session-controller/tests/controller.host.spec.ts": {
     "40725eab4d86929b16d87c88d5cf83168035def78b4d901613dd0369876f0731": 3,
