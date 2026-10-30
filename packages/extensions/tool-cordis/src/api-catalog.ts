@@ -991,14 +991,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote async requestPermission(permission: CuaSystemPermission, text: CuaPermissionGuideText): Promise<CuaSystemPermissionState>',
-        description: 'Open System Settings and a native application-drag guide for the privilege selected by the user.',
+        description: 'Open the selected System Settings pane; show the native drag guide only for a missing privilege. Guide preparation failures still attempt settings navigation before reporting the failure.',
         parameters: [{ name: 'permission', description: 'macOS privilege to request.' }, { name: 'text', description: 'Localized guide copy; application identity comes from the native helper.' }],
         returns: 'Current permission observations; opening the guide does not grant permission.',
       },
       {
-        signature: '@Remote async openSettings(permission: CuaSystemPermission): Promise<void>',
+        signature: '@Remote async openSettings(permission: CuaSystemPermission, failureMessage: string): Promise<void>',
         description: 'Open the macOS privacy pane selected by the user.',
-        parameters: [{ name: 'permission', description: 'Corresponding system privilege.' }],
+        parameters: [{ name: 'permission', description: 'Corresponding system privilege.' }, { name: 'failureMessage', description: 'Localized manual navigation instructions if macOS rejects the open request.' }],
         returns: 'Completion after macOS accepted the open request.',
       },
       {

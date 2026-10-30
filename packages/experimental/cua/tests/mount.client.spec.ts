@@ -94,6 +94,8 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('requested') })
     actions.openSettings('screenRecording')
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('opened') })
+    expect(f.openSettings).toHaveBeenCalledWith('screenRecording',
+      'Open System Settings > Privacy & Security > Screen Recording manually.')
     actions.revoke('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId)
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('revoked') })
     actions.retryApproval('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId)
