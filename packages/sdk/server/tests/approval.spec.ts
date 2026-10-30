@@ -238,7 +238,29 @@ describe('SDK approval bridge', () => {
   })
 
   it.each([
+    { name: 'SubagentError', code: 'UNAUTHORIZED' },
+    Object.assign(new Error('not a managed subagent'), { name: 'SubagentError', code: 'UNAUTHORIZED' }),
+  ])('delegates approval for an unauthorized ownership lookup by error fields: %s', async (error) => {
+    const h = await setup(true, true)
+    const foreign = await h.ctx.agents.create({ sessionId: SessionId('foreign') })
+    onTestFinished(() => foreign.dispose())
+    foreign.agent.session.append('turn/start', { turn: 1 })
+    vi.spyOn(h.ctx.subagents, 'rootOf').mockImplementationOnce(() => { throw error })
+    const clientDecision = vi.fn(async () => ({ outcome: 'allowed-once' }))
+    h.client.onRequest(clientDecision)
+    const fallback = vi.fn(() => Promise.resolve('rejected' as const))
+    h.ctx.on('approval/request', fallback)
+    await expect(h.ctx.approval.request({ agent: foreign.agent, toolName: 'bash' })).resolves.toBe('rejected')
+    expect(fallback).toHaveBeenCalledOnce()
+    expect(clientDecision).not.toHaveBeenCalled()
+  })
+
+  it.each([
     new Error('root lookup failed'), new SubagentError('root lookup failed', 'NOT_RESUMABLE'),
+    null, undefined, 'root lookup failed', {},
+    { name: 'SubagentError' }, { code: 'UNAUTHORIZED' },
+    { name: 'OtherError', code: 'UNAUTHORIZED' },
+    { name: 'SubagentError', code: 'NOT_RESUMABLE' },
   ])('does not pass a failed ownership lookup to another approval answerer: %s', async (error) => {
     const h = await setup(true, true)
     const foreign = await h.ctx.agents.create({ sessionId: SessionId('foreign') })

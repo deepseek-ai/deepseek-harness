@@ -21,7 +21,7 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-user-approval'
 
 import type {} from '@deepseek-ai/dsh-schedule'
-import { SubagentError, type SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
+import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import type {
   ApprovalRequestParams,
@@ -382,6 +382,11 @@ export class HarnessSdkJsonRpcServer {
     }
   }
 
+  /**
+   * Resolves live SDK ownership; root lookup failures other than SubagentError/UNAUTHORIZED propagate.
+   * @param agent - Agent whose requests need routing.
+   * @returns Whether this server owns the Agent or its live subagent tree root.
+   */
   private ownsAgent(agent: Agent): boolean {
     const agents = this.ctx.agents
     if (agents.get(agent.id) !== agent) return false
@@ -392,7 +397,9 @@ export class HarnessSdkJsonRpcServer {
     try {
       root = subagents.rootOf(agent)
     } catch (error: unknown) {
-      if (error instanceof SubagentError && error.code === 'UNAUTHORIZED') return false
+      if (typeof error === 'object' && error !== null
+        && 'name' in error && error.name === 'SubagentError'
+        && 'code' in error && error.code === 'UNAUTHORIZED') return false
       throw error
     }
     return this.sessions.get(root.session.id)?.handle.agent === root
