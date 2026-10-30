@@ -146,7 +146,9 @@ describe('Linux process inspector', () => {
     expect(linuxProcessGroupLiveMember(77, 11, fake.internals)).toBe(12)
     fake.files.set('/proc/12/stat', stat(12, 88, 12, -1, '502'))
     expect(linuxProcessGroupLiveMember(77, 12, fake.internals)).toBe(false)
-    expect(scans).toBe(2)
+    fake.files.delete('/proc/12/stat')
+    expect(linuxProcessGroupLiveMember(77, 12, fake.internals)).toBe(false)
+    expect(scans).toBe(3)
   })
 
   it('parses stat safely, captures only the rooted process tree, and signals identities', () => {

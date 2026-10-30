@@ -404,14 +404,15 @@ describe('spawnSubprocess', () => {
     }
   })
 
-  it.skipIf(process.platform === 'win32')('passes the last live Linux group member back to the next probe', async () => {
+  it.skipIf(process.platform === 'win32')('passes the last found Linux group member back to the next probe', async () => {
     const pidFile = join(spillDir, `known-member-${Date.now()}.pid`)
     const known: Array<number | undefined> = []
+    const results: Array<number | false | undefined> = [4242, undefined]
     const running = spawnSubprocess(spec(`sleep 60 & echo $! > ${pidFile}; echo leader-done`, { graceMs: 100 }), {
       platform: 'linux',
       linuxProcessGroupLiveMember: (_group, knownMember) => {
         known.push(knownMember)
-        return known.length < 3 ? 4242 : false
+        return known.length <= results.length ? results[known.length - 1] : false
       },
     })
     const descendant = await waitForPidFile(pidFile)

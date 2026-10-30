@@ -224,7 +224,7 @@ function fallbackOwner(
       if (directSettled && platform === 'linux') {
         const member = linuxGroupLiveMember(pid, liveMember)
         if (member === false) return false
-        liveMember = member
+        if (member !== undefined) liveMember = member
       }
       return true
     } catch (error) {
