@@ -157,7 +157,7 @@ it('reports an unreachable host as a network failure, a failed local command as 
   expect(readdirSync(join(root, 'cache'))).toEqual([])
   const other = repository('t2', { 'README.md': 'x' })
   // A real 1 ms deadline can expire during either the version probe or a later Git command.
-  const probe = vi.spyOn(subprocess, 'execa').mockResolvedValueOnce({
+  const probe = vi.spyOn(subprocess, 'execa').mockClear().mockResolvedValueOnce({
     failed: true, shortMessage: 'Command timed out: git --version', stdout: '', stderr: '', isMaxBuffer: false,
   } as Awaited<ReturnType<typeof subprocess.execa>>)
   try {
