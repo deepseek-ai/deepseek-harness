@@ -117,20 +117,20 @@ describe('control detail adapters', () => {
 
   it.each(['subagent', 'subagent_fork'])('%s renders persisted creation metadata independently of result wording', (name) => {
     const args = { description: 'Review the changes', prompt: 'Read the diff and report defects.', name: 'requested-name' }
-    const block = { ...output(name, 'Delegation accepted.', args), meta: { kind: 'activation', name: 'lead/agent-1' } }
+    const block = { ...output(name, 'Delegation accepted.', args), meta: { kind: 'activation', subagentId: 'child-1' } }
     const model = detailsCardModel(block, t, 'en')
     expect(model?.items[0]).toEqual({
       title: 'Started',
-      fields: [{ label: 'Agent task description', value: args.description }, { label: 'Agent name', value: 'lead/agent-1' }],
+      fields: [{ label: 'Agent task description', value: args.description }, { label: 'ID', value: 'child-1' }],
       groups: [{ label: 'Task', items: [{ description: args.prompt, fields: [] }] }],
     })
     expect(detailsCardModel({ ...block, content: [] }, t, 'en')).toEqual(model)
     expect(detailsCardModel({ ...block, isError: true }, t, 'en')).toBeNull()
     expect(detailsCardModel(block, makeTranslate(zh, commonZh), 'zh-CN')?.items[0]?.fields)
-      .toEqual([{ label: '智能体任务描述', value: args.description }, { label: '智能体名称', value: 'lead/agent-1' }])
+      .toEqual([{ label: '智能体任务描述', value: args.description }, { label: 'ID', value: 'child-1' }])
   })
 
-  it.each([null, [], {}, { kind: 'other', name: 'lead/reviewer' }, { kind: 'activation' }, { kind: 'activation', name: 1 }, { kind: 'activation', name: ' ' }])(
+  it.each([null, [], {}, { kind: 'other', subagentId: 'child-1' }, { kind: 'activation' }, { kind: 'activation', subagentId: 1 }, { kind: 'activation', subagentId: ' ' }])(
     'keeps malformed metadata on the generic result path (%j)', (meta) => {
       const block = { ...output('subagent', 'started subagent child-1\nname: lead/reviewer'), meta }
       expect(detailsCardModel(block, t, 'en')).toBeNull()

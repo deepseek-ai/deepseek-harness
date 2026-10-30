@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-会话页头的普通面包屑使用会话标题。subagent 面包屑优先使用创建时的原始描述（`entry.label`），再依次回退到绑定的同级名称和 id。普通与 subagent 面包屑标题均使用 14px 文字和 20px 行高。当会话的直接目录有子项或读取失败时，后代数量触发器渲染在页头操作区中预设标签之后，不带任何面包屑分隔符。目录缺席或为空时隐藏数量触发器，除非根 Session 已开启且可用的 Team 任务板有共享任务或任务记录错误。仅开启 Team 模式不会显示空入口。触发器打开该直接目录，报告总数与运行数，并且只在行展开时加载嵌套目录。选择任意深度，即可用该子会话的确切 `{parentSessionId, childSessionId, mode}` 地址打开其对话；也可以使用非当前本地行的行尾箭头在右侧 Sidebar 打开同一地址，并在空间允许时优先使用独立分栏。
+会话页头的普通面包屑使用会话标题。subagent 面包屑优先使用创建时的原始描述（`entry.label`），缺少时回退到 Session id。普通与 subagent 面包屑标题均使用 14px 文字和 20px 行高。当会话的直接目录有子项或读取失败时，后代数量触发器渲染在页头操作区中预设标签之后，不带任何面包屑分隔符。目录缺席或为空时隐藏数量触发器，除非根 Session 已开启且可用的 Team 任务板有共享任务或任务记录错误。仅开启 Team 模式不会显示空入口。触发器打开该直接目录，报告总数与运行数，并且只在行展开时加载嵌套目录。选择任意深度，即可用该子会话的确切 `{parentSessionId, childSessionId, mode}` 地址打开其对话；也可以使用非当前本地行的行尾箭头在右侧 Sidebar 打开同一地址，并在空间允许时优先使用独立分栏。
 
 本包注册 `dsh-resource://subagentchat/session/<child>?parent=<parent>&mode=<mode>` 资源与 builtin Sidebar tab 类型。资源直接根据地址保留 child 的 `SessionReference`，不刷新 parent 目录，并在 tab 记录关闭时释放 reference。tab 通过 `sidebar.chat.conversation` 渲染共享 `conversation.content` Factory，把局部 View 固定为 Chat，并省略主 Conversation 的 Header 与宽度控制。
 
@@ -39,7 +39,7 @@ kind: "package-reference"
 
 菜单文字、数量、负责人及侧边栏操作的工具提示在悬停 500ms 后显示。悬停文字可见的触发器 150ms 后打开目录；指针离开触发器和目录后，经过 120ms 关闭。点击后代数量触发器会打开并固定目录，或关闭已固定的目录。纯图标数量触发器不会因悬停而打开，包括等待悬停打开期间切换到窄布局的情况。点击可切换固定菜单的开关状态；ArrowDown 会打开并固定菜单，并将焦点移至首行。点击外部或按 Escape 可关闭已固定的菜单。点击会将焦点移入面板，此时 ArrowDown/Home 进入首个树行，ArrowUp/End 进入最后一个树行；Escape 在焦点原本位于面板内时将其送回。点击面包屑标题会导航至对应会话。
 
-具名行在上方显示创建时的原始描述，下方显示名称；历史行在 label 或 id 上方显示由日志支撑的可选 title。缺少描述或历史 title 时，该行只显示名称、label 或 id。本地行使用紧凑的 4px 垂直内边距；可点击内容使用 6px 水平内边距和 7px 间距，与共享任务行对齐，同时保留树的左侧偏移。当前对话在行尾显示装饰性对勾，该对勾不是操作控件；其他本地行保留侧边栏箭头。主标题使用 13px 文字，次级名称使用 12px。本地行文本为单行，溢出时以省略号截断；悬停被截断的文本时通过工具提示显示完整内容。外部任务没有详情页，因此描述与名称换行完整展示。running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的 14px 列宽，并将较小的圆点居中，使 title 与 loading 状态对齐。文字可见的页头触发器会垂直居中活动图标与数量，并保留 4px 水平间距。尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时。键盘导航：ArrowRight/ArrowLeft 展开和折叠分支；ArrowUp/ArrowDown、Home、End 与 Escape 用于导航或关闭树。没有 label 的 one-shot 行回退到其会话 id。只有一行自身的目录加载为空后，它才是已知叶子。
+目录行在 Session id 上方显示创建描述，缺少创建描述时使用可用的 Session title。两者均缺少时，该行仅显示 Session id。本地行使用紧凑的 4px 垂直内边距；可点击内容使用 6px 水平内边距和 7px 间距，与共享任务行对齐，同时保留树的左侧偏移。当前对话在行尾显示装饰性对勾，该对勾不是操作控件；其他本地行保留侧边栏箭头。主标题使用 13px 文字，次级 id 使用 12px。本地行文本为单行，溢出时以省略号截断；悬停被截断的文本时通过工具提示显示完整内容。外部任务没有详情页，因此描述与 id 换行完整展示。running 使用共享 ongoing loading，最近一个已结束轮次正常完成的 inactive child 使用共享 success 绿点，其他 inactive child 使用共享 idle 灰点。每行都为状态图标预留相同的 14px 列宽，并将较小的圆点居中，使 title 与 loading 状态对齐。文字可见的页头触发器会垂直居中活动图标与数量，并保留 4px 水平间距。尾随列在上行显示提供方的持久化 token 用量总计，在下行显示活跃轮次耗时。键盘导航：ArrowRight/ArrowLeft 展开和折叠分支；ArrowUp/ArrowDown、Home、End 与 Escape 用于导航或关闭树。没有 label 的 one-shot 行回退到其会话 id。只有一行自身的目录加载为空后，它才是已知叶子。
 
 ### 续接对话
 
@@ -61,7 +61,7 @@ kind: "package-reference"
 
 ### 目录派生
 
-页头谱系 renderer 通过标准 `useSessions` 钩子读取 `projectionsBySession`。renderer 从每个 Session 的共享值中选择 `subagentCatalog`，用于成员关系、展开控件与数量，并从已加载根会话的 `subagentNames` 投影读取显示名称；活动状态优先使用统一 UI status，缺少时使用 Session 摘要；摘要提供标题与用量。展开行读取目标投影，包括普通冷历史。列表行的 `formatStatus` 为 `migration-required` 时，行在展开前即显示“需要迁移”，保留打开历史的操作，但不能展开下级，也不改变子会话的 mode；投影读取需要迁移且缺少目录时，也显示同一提示。打开会话后，历史与 control 投影提供其目录。其他情况下，已有目录仍可使用，包括显式空目录。实时 projection 帧更新所有已加载层级，无需菜单订阅或重复成员查询。其他行在目录缺席、加载中或失败时保持可展开，并在目录就绪且为空后成为已知叶子。外部行始终为叶子，不加载子 Session。
+页头谱系 renderer 通过标准 `useSessions` 钩子读取 `projectionsBySession`。renderer 从每个 Session 的共享值中选择 `subagentCatalog`，用于成员关系、展开控件与数量。活动状态优先使用统一 UI status，缺少时使用 Session 摘要；摘要提供标题与用量。展开行读取目标投影，包括普通冷历史。列表行的 `formatStatus` 为 `migration-required` 时，行在展开前即显示“需要迁移”，保留打开历史的操作，但不能展开下级，也不改变子会话的 mode；投影读取需要迁移且缺少目录时，也显示同一提示。打开会话后，历史与 control 投影提供其目录。其他情况下，已有目录仍可使用，包括显式空目录。实时 projection 帧更新所有已加载层级，无需菜单订阅或重复成员查询。其他行在目录缺席、加载中或失败时保持可展开，并在目录就绪且为空后成为已知叶子。外部行始终为叶子，不加载子 Session。
 
 每个页头入口在树下方声明 footer 插槽。可选 UI 通过该插槽加入同一滚动容器；目录负责打开、定位和关闭。
 

@@ -71,8 +71,7 @@
     "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:*",
     "@deepseek-ai/dsh-client-ui-session": "workspace:*",
     "@deepseek-ai/dsh-client-ui-workspace": "workspace:*",
-    "@deepseek-ai/dsh-agent-team": "workspace:*",
-    "@deepseek-ai/dsh-subagent-names": "workspace:*"
+    "@deepseek-ai/dsh-agent-team": "workspace:*"
   },
   "files": [
     "locale/*.json",

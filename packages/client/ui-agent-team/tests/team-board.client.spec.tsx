@@ -3,7 +3,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type {} from '@deepseek-ai/dsh-subagent-names'
 import type { TeamProjection, TeamTaskId, TeamTaskView as TeamTask } from '@deepseek-ai/dsh-agent-team/client'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -19,7 +18,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const SESSION = 'lead' as SessionId
+const SESSION = 'root-session-id' as SessionId
 const WORKER = 'worker-id' as SessionId
 const NESTED = 'nested-id' as SessionId
 const TASK_1 = 'task-1' as TeamTaskId
@@ -142,8 +141,8 @@ describe('TeamBoard', () => {
     const details = document.getElementById(first.getAttribute('aria-controls')!)!
     const owner = details.querySelector('[data-team-task-owner]')!
     expect(owner.tagName).toBe('P')
-    expect(owner.textContent).toBe(`${zh.owner}: ${zh.lead}`)
-    expect(ownerValue()).toBe(zh.lead)
+    expect(owner.textContent).toBe(`${zh.owner}: ${SESSION}`)
+    expect(ownerValue()).toBe(SESSION)
     const paragraphs = details.querySelectorAll('p')
     expect(paragraphs).toHaveLength(2)
     expect(paragraphs[0]?.textContent).toBe(description)
@@ -180,7 +179,7 @@ describe('TeamBoard', () => {
     expect(row('Completed second').querySelector('[data-state="done"]')).toBeTruthy()
     fireEvent.click(row('Completed second'))
     expect(row('Completed second').getAttribute('aria-expanded')).toBe('true')
-    expect(ownerValue()).toBe(zh.lead)
+    expect(ownerValue()).toBe(SESSION)
     expect(screen.getByText(task.description)).toBeTruthy()
   })
 
@@ -213,49 +212,29 @@ describe('TeamBoard', () => {
     fireEvent.click(row())
     expect(within(row()).getByRole('img', { name: zh['status.pending'] })).toBeTruthy()
     expect(row().querySelector('[data-state="idle"]')).toBeTruthy()
-    expect(ownerValue()).toBe(zh.lead)
+    expect(ownerValue()).toBe(SESSION)
     expect(document.querySelector('[data-team-task-details]')?.children).toHaveLength(1)
     expect(document.querySelector('[data-team-task-details] p:not([data-team-task-owner])')).toBeNull()
   })
 
-  it('prefers root and parent short-name bindings before catalog, title, display title, and id', () => {
+  it('uses the owner id independently of catalog descriptions and Session titles', () => {
     const b = bench({
       byId: { [SESSION]: summary(SESSION), [NESTED]: { ...summary(NESTED, 'Session title'), parentId: WORKER } },
       projections: {
         [SESSION]: { state: 'ready', error: null, values: {
           agentTeam: { ...team, tasks: [{ ...task, ownerId: NESTED }] },
-          subagentNames: [{ childId: NESTED, name: 'root/Short root name' }],
         } },
         [WORKER]: { state: 'ready', error: null, values: {
-          subagentNames: [{ childId: NESTED, name: 'root/parent/Short nested name' }],
           subagentCatalog: [{ id: NESTED, createdAt: 0, mode: 'continuable', label: 'Catalog responsibility' }],
         } },
       },
     })
     render(<TeamBoard {...b.props} />)
     fireEvent.click(row())
-    expect(ownerValue()).toBe('Short root name')
-    setProjection(b.sessions, SESSION, { ...team, tasks: [{ ...task, ownerId: NESTED }] })
-    expect(ownerValue()).toBe('Short nested name')
-    const parent = b.sessions.getSnapshot().projectionsBySession[WORKER]!
-    setProjectionSnapshot(b.sessions, WORKER, { ...parent, values: { ...parent.values, subagentNames: [] } })
-    expect(ownerValue()).toBe('Catalog responsibility')
-    setProjectionSnapshot(b.sessions, WORKER, { state: 'ready', error: null, values: {} })
-    expect(ownerValue()).toBe('Session title')
-    act(() => { b.sessions.update((draft) => { draft.byId[NESTED] = { ...summary(NESTED), displayTitle: 'Display title' } }) })
-    expect(ownerValue()).toBe('Display title')
-    act(() => { b.sessions.update((draft) => { draft.byId = { [SESSION]: summary(SESSION) } }) })
     expect(ownerValue()).toBe(NESTED)
-  })
-
-  it('uses root catalog labels without an owner summary', () => {
-    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: {
-      agentTeam: { ...team, tasks: [{ ...task, ownerId: WORKER }] },
-      subagentCatalog: [{ id: WORKER, createdAt: 0, mode: 'continuable', label: 'Current responsibility' }],
-    } } } })
-    render(<TeamBoard {...b.props} />)
-    fireEvent.click(row())
-    expect(ownerValue()).toBe('Current responsibility')
+    setProjectionSnapshot(b.sessions, WORKER, { state: 'ready', error: null, values: {} })
+    act(() => { b.sessions.update((draft) => { draft.byId[NESTED] = { ...summary(NESTED), displayTitle: 'Display title' } }) })
+    expect(ownerValue()).toBe(NESTED)
     setProjection(b.sessions, SESSION, { ...team, tasks: [{ ...task, ownerId: WORKER }] })
     expect(ownerValue()).toBe(WORKER)
   })
@@ -365,8 +344,8 @@ describe('TeamBoard', () => {
     render(<TeamBoard {...b.props} t={makeTranslate(en)} />)
     expect(screen.getByRole('heading').textContent).toBe(`${en.tasks}${makeTranslate(en)('progress.active', { count: 1 })}`)
     fireEvent.click(row())
-    expect(ownerValue()).toBe(en.lead)
-    expect(document.querySelector('[data-team-task-owner]')?.textContent).toBe(`${en.owner}: ${en.lead}`)
+    expect(ownerValue()).toBe(SESSION)
+    expect(document.querySelector('[data-team-task-owner]')?.textContent).toBe(`${en.owner}: ${SESSION}`)
     expect(screen.queryByText(TASK_1)).toBeNull()
     expect(screen.queryByText('Show more')).toBeNull()
     expect(screen.queryByText('Show less')).toBeNull()
@@ -375,14 +354,13 @@ describe('TeamBoard', () => {
   it('shows the clipped owner tooltip after 500ms of hover', () => {
     vi.useFakeTimers()
     enableTooltips()
-    const ownerName = 'A long owner name that does not fit the compact task menu'
+    const ownerId = '8c0404a0-4c67-48ab-9513-50b4a755d6de' as SessionId
     const b = bench({
-      value: { ...team, tasks: [{ ...task, ownerId: WORKER }] },
-      byId: { [WORKER]: summary(WORKER, ownerName) },
+      value: { ...team, tasks: [{ ...task, ownerId }] },
     })
     const view = render(<TeamBoard {...b.props} />)
     fireEvent.click(row())
-    const owner = screen.getByText(ownerName)
+    const owner = screen.getByText(ownerId)
     expect(owner.parentElement?.hasAttribute('data-team-task-owner')).toBe(true)
     const scrollWidth = vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(80)
     vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(80)
@@ -395,7 +373,7 @@ describe('TeamBoard', () => {
     act(() => { vi.advanceTimersByTime(499) })
     expect(screen.queryByRole('tooltip')).toBeNull()
     act(() => { vi.advanceTimersByTime(1) })
-    expect(screen.getByRole('tooltip').textContent).toBe(ownerName)
+    expect(screen.getByRole('tooltip').textContent).toBe(ownerId)
     expect(view.container.contains(screen.getByRole('tooltip'))).toBe(false)
     expect(document.querySelectorAll('[data-team-task-owner]')).toHaveLength(1)
     fireEvent.click(row())

@@ -22,7 +22,6 @@
     { "path": "../ui-primitives" },
     { "path": "../ui-renderer" },
     { "path": "../ui-slots" },
-    { "path": "../../core/session" },
-    { "path": "../../subagent/subagent-names" }
+    { "path": "../../core/session" }
   ]
 }

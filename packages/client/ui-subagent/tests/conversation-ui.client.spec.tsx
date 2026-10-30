@@ -38,7 +38,6 @@ type CatalogFixtureEntry<Entry = SubagentCatalogEntry> = Entry extends SubagentC
 
 type CatalogFixture = {
   team?: TeamProjection
-  names?: { childId: SessionId; name: string }[]
   entries: readonly CatalogFixtureEntry[]
   state: SessionListState['projectionsBySession'][SessionId]['state']
   error: SessionListState['projectionsBySession'][SessionId]['error']
@@ -97,7 +96,6 @@ function props(
       state: catalog.state, error: catalog.error,
       values: {
         ...catalog.team === undefined ? {} : { agentTeam: catalog.team },
-        subagentNames: catalog.names ?? [],
         subagentCatalog: catalog.entries.map(({ activity: _activity, ...entry }) => ({ ...entry, createdAt: 1 })),
       },
     }])) ,
@@ -270,18 +268,17 @@ describe('SubagentHeaderLineage', () => {
     },
   )
 
-  it('shows the description above the sibling name and opens the row without a description toggle', () => {
+  it('shows the description above the Session id and opens the row without a description toggle', () => {
     const description = 'Check the construction and all bounds. '.repeat(20).trim()
     const input = props(catalog({
-      names: [{ childId: CHILD, name: 'lead/tree-checker' }],
       entries: [{ id: CHILD, mode: 'continuable', label: description, activity: 'running' }],
     }))
     render(<HeaderCatalog {...input} />)
     fireEvent.click(screen.getByRole('button', { name: '1 个子智能体，正在运行' }))
-    const row = screen.getByRole('treeitem', { name: /tree-checker/ })
+    const row = screen.getByRole('treeitem', { name: new RegExp(CHILD) })
     const primary = within(row).getByText(description)
-    const name = within(row).getByText('tree-checker')
-    expect(primary.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const id = within(row).getByText(CHILD)
+    expect(primary.compareDocumentPosition(id) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(row.getAttribute('aria-label')).toMatch(/^Check the construction/)
     expect(primary.tagName).toBe('SPAN')
     expect(primary.getAttribute('aria-expanded')).toBeNull()
@@ -292,16 +289,15 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.queryByRole('treeitem')).toBeNull()
   })
 
-  it.each([undefined, ''])('keeps a single name line when the creation description is %s', (label) => {
+  it.each([undefined, ''])('keeps a single ID line when the creation description is %s', (label) => {
     const input = props(catalog({
-      names: [{ childId: CHILD, name: 'lead/tree-checker' }],
       entries: [{ id: CHILD, mode: 'one-shot', ...label === undefined ? {} : { label }, activity: 'running' }],
-    }))
+    }), {}, { [CHILD]: { ...summary(CHILD, 1), running: true } })
     render(<HeaderCatalog {...input} />)
     fireEvent.click(screen.getByRole('button', { name: '1 个子智能体，正在运行' }))
-    const row = screen.getByRole('treeitem', { name: /tree-checker/ })
-    expect(within(row).getAllByText('tree-checker')).toHaveLength(1)
-    expect(row.getAttribute('aria-label')).toMatch(/^tree-checker/)
+    const row = screen.getByRole('treeitem', { name: new RegExp(CHILD) })
+    expect(within(row).getAllByText(CHILD)).toHaveLength(1)
+    expect(row.getAttribute('aria-label')).toMatch(new RegExp(`^${CHILD}`))
   })
 
   it('hides an empty Team entry but keeps shared tasks and errors reachable without children', () => {
@@ -490,8 +486,9 @@ describe('SubagentHeaderLineage', () => {
 
     expect(input.refreshProjection).not.toHaveBeenCalled()
     expect(screen.getAllByRole('treeitem')).toHaveLength(2)
-    expect(screen.getByText('正在扫描项目文件')).toBeTruthy()
-    expect(screen.getByRole('treeitem', { name: /reviewer 一次性 · 当前未运行/ })).toBeTruthy()
+    expect(screen.getByText('worker')).toBeTruthy()
+    expect(screen.queryByText('正在扫描项目文件')).toBeNull()
+    expect(screen.getByRole('treeitem', { name: /reviewer child-2 · 一次性 · 当前未运行/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: '展开 worker 的下级子智能体' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '展开 reviewer 的下级子智能体' })).toBeTruthy()
 
@@ -654,14 +651,12 @@ describe('SubagentHeaderLineage', () => {
   })
 
   describe.each(['root', 'child'] as const)('%s catalog tooltip timing', (surface) => {
-    it.each(['description', 'name', 'sidebar'] as const)('delays the %s hover tooltip by 500ms', (target) => {
+    it.each(['description', 'id', 'sidebar'] as const)('delays the %s hover tooltip by 500ms', (target) => {
       vi.useFakeTimers()
       enableTooltips()
       const sibling = 'child-2' as SessionId
       const description = 'Review all implementation details and report remaining issues'
-      const name = 'reviewer-name'
       const input = props(catalog({
-        names: [{ childId: sibling, name: `lead/${name}` }],
         entries: [
           { id: CHILD, mode: 'continuable', label: 'worker', activity: 'running' },
           { id: sibling, mode: 'one-shot', label: description, activity: 'inactive' },
@@ -673,11 +668,11 @@ describe('SubagentHeaderLineage', () => {
       const sessionId = surface === 'root' ? PARENT : CHILD
       render(<HeaderCatalog {...input} sessionId={sessionId} lineageSessionId={sessionId} />)
       fireEvent.click(screen.getByRole('button'))
-      const entry = screen.getByRole('treeitem', { name: /reviewer-name/u })
+      const entry = screen.getByRole('treeitem', { name: new RegExp(sibling) })
       const anchor = target === 'sidebar'
         ? within(entry).getByRole('button', { name: /在侧边栏打开/u })
-        : within(entry).getByText(target === 'description' ? description : name)
-      const label = target === 'sidebar' ? zh['open.sidebar'] : target === 'description' ? description : name
+        : within(entry).getByText(target === 'description' ? description : sibling)
+      const label = target === 'sidebar' ? zh['open.sidebar'] : target === 'description' ? description : sibling
       vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(240)
       vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(80)
       fireEvent.pointerEnter(anchor)
@@ -1271,7 +1266,7 @@ describe('SubagentHeaderLineage', () => {
     fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
     expect(screen.queryByText(/需要迁移/)).toBeNull()
     expect(screen.queryByText(/模式未知/)).toBeNull()
-    expect(screen.queryByRole('treeitem', { name: /grandchild/ })).toBeNull()
+    expect(screen.getByRole('treeitem', { name: /indexer grandchild/ })).toBeTruthy()
     fireEvent.click(screen.getByRole('treeitem', { name: /indexer/ }))
     expect(input.openChild).toHaveBeenLastCalledWith({
       parentSessionId: CHILD, childSessionId: GRANDCHILD, mode: 'continuable',
@@ -1480,11 +1475,11 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('prefers the creation description in the breadcrumb while keeping the row name and navigation actions', () => {
+  it('prefers the creation description in the breadcrumb while keeping the row ID and navigation actions', () => {
     const sibling = 'child-2' as SessionId
     const entries = catalog().entries
     const input = {
-      ...props(catalog({ entries, names: [{ childId: CHILD, name: 'lead/tree-checker' }] }), {}, {
+      ...props(catalog({ entries }), {}, {
         [CHILD]: {
           ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' as const,
         },
@@ -1509,10 +1504,10 @@ describe('SubagentHeaderLineage', () => {
 
     hoverCatalog(switcher)
     expect(input.refreshProjection).not.toHaveBeenCalled()
-    const current = screen.getByRole('treeitem', { name: /tree-checker/ })
+    const current = screen.getByRole('treeitem', { name: /^worker child / })
     expect(current.getAttribute('aria-current')).toBe('true')
     expect(within(current).getByText('worker').className).toContain('currentLabel')
-    expect(within(current).queryByRole('button', { name: '在侧边栏打开 tree-checker' })).toBeNull()
+    expect(within(current).queryByRole('button', { name: '在侧边栏打开 worker' })).toBeNull()
     const selectedMark = current.querySelector('[data-subagent-current]')
     expect(selectedMark?.getAttribute('aria-hidden')).toBe('true')
     expect(selectedMark?.querySelector('[data-icon="dsw-icon-check-outline-regular"]')).toBeTruthy()
@@ -1545,16 +1540,15 @@ describe('SubagentHeaderLineage', () => {
     expect(input.refreshProjection).not.toHaveBeenCalled()
   })
 
-  it.each([undefined, ''])('uses the short name in the breadcrumb when the creation description is %s', (label) => {
+  it.each([undefined, ''])('uses the Session id in the breadcrumb when the creation description is %s', (label) => {
     const input = props(catalog({
       team: sharedTeam,
-      names: [{ childId: CHILD, name: 'lead/tree-checker' }],
       entries: [{ id: CHILD, mode: 'one-shot', activity: 'inactive', ...label === undefined ? {} : { label } }],
     }), {}, { [CHILD]: { ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' } })
     render(<HeaderCatalog {...input} sessionId={CHILD} lineageSessionId={CHILD} />)
-    const switcher = screen.getByRole('button', { name: '切换子智能体：tree-checker' })
+    const switcher = screen.getByRole('button', { name: `切换子智能体：${CHILD}` })
     fireEvent.click(switcher)
-    expect(screen.getByRole('treeitem', { name: /tree-checker/u })).toBeTruthy()
+    expect(screen.getByRole('treeitem', { name: new RegExp(CHILD) })).toBeTruthy()
     expect(screen.queryByRole('heading')).toBeNull()
     expect(screen.queryByText(zh['section.empty'])).toBeNull()
   })

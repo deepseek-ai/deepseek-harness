@@ -109,8 +109,8 @@ export function subagentDetails(
   const description = arg(args, 'description')
   if (nonempty(description)) fields.push({ label: t('detail.field.agentDescription'), value: description })
   if (meta !== undefined) {
-    if (!detailRecord(meta) || meta.kind !== 'activation' || !nonempty(meta.name)) return null
-    fields.push({ label: t('detail.field.agentName'), value: meta.name })
+    if (!detailRecord(meta) || meta.kind !== 'activation' || !nonempty(meta.subagentId)) return null
+    fields.push({ label: t('detail.field.id'), value: meta.subagentId })
   } else {
     if (text === undefined) return null
     // Historical results lack the structured receipt stored by current tools.

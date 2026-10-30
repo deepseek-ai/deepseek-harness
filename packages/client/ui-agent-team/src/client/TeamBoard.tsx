@@ -2,7 +2,6 @@ import { useState } from 'react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TeamTaskView, TeamTaskId } from '@deepseek-ai/dsh-agent-team/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
-import type {} from '@deepseek-ai/dsh-subagent-names'
 import {
   IconChecklistOutlineRegular, IconChevronDownOutlineRegular,
   StateDot, Tooltip, type StateDotState,
@@ -38,25 +37,13 @@ function progressLabel(tasks: readonly VisibleTask[], t: TeamBoardProps['t']): s
   ].join('\u2002·\u2002')
 }
 
-function TaskRow({ task, rootId, expanded, onToggle, useSessions, t }: Pick<TeamBoardProps, 'useSessions' | 't'> & {
+function TaskRow({ task, rootId, expanded, onToggle, t }: Pick<TeamBoardProps, 't'> & {
   task: VisibleTask
   rootId: SessionId
   expanded: boolean
   onToggle: () => void
 }) {
-  const owner = useSessions((state) => {
-    if (task.ownerId === undefined) return t('unowned')
-    if (task.ownerId === rootId) return t('lead')
-    const summary = state.byId[task.ownerId]
-    const parentId = summary?.parentId ?? rootId
-    const root = state.projectionsBySession[rootId]?.values
-    const parent = state.projectionsBySession[parentId]?.values
-    const name = root?.subagentNames?.find(binding => binding.childId === task.ownerId)?.name
-      ?? parent?.subagentNames?.find(binding => binding.childId === task.ownerId)?.name
-    return name?.split('/').at(-1)
-      ?? parent?.subagentCatalog?.find(child => child.id === task.ownerId)?.label
-      ?? summary?.title ?? summary?.displayTitle ?? task.ownerId
-  })
+  const owner = task.ownerId ?? t('unowned')
   const blocked = task.status === 'pending' && !task.ready
   const detailsId = `team-task-${rootId}-${task.id}`
   return (
@@ -116,7 +103,7 @@ export function TeamBoard({ sessionId, useProjection, useSessions, t }: TeamBoar
             key={task.id} task={task} rootId={sessionId}
             expanded={expandedTaskId === task.id}
             onToggle={() => { setExpandedTaskId(current => current === task.id ? null : task.id) }}
-            useSessions={useSessions} t={t}
+            t={t}
           />
         ))}
       </ul>

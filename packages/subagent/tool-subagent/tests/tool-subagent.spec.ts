@@ -75,7 +75,7 @@ describe('dsh-tool-subagent', () => {
     if (result.isError) throw new Error('expected subagent success')
     expect(result.value).toHaveProperty('kind', 'activation')
     expect(result.value).toHaveProperty('name', 'lead/agent-1')
-    expect(result.meta).toEqual({ kind: 'activation', name: 'lead/agent-1' })
+    expect(result.meta).toEqual({ kind: 'activation', subagentId: result.value.subagentId })
     expect(text(result)).toMatch(/^started subagent /)
   })
 

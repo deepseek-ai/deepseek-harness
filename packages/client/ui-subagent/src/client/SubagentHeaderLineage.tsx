@@ -15,13 +15,12 @@ import { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-token-meter/client'
 import type {} from '@deepseek-ai/dsh-agent-team/client'
-import type {} from '@deepseek-ai/dsh-subagent-names'
 import type {} from './slots.ts'
 import css from './SubagentHeaderLineage.module.css'
 
 type SubagentCatalogSnapshot = Omit<SessionProjectionSnapshot, 'values' | 'state'> & {
   state: 'loading' | 'ready' | 'migration-required' | 'error'
-  entries: (SessionProjectionMap['subagentCatalog'][number] & { name: string | undefined; activity: 'running' | 'inactive' })[]
+  entries: (SessionProjectionMap['subagentCatalog'][number] & { activity: 'running' | 'inactive' })[]
 }
 type Catalogs = Readonly<Record<SessionId, SubagentCatalogSnapshot>>
 
@@ -282,10 +281,9 @@ function CatalogRows({
         const childLoading = childCatalog === undefined
           || (childCatalog.state === 'loading' && childCatalog.entries.length === 0)
         const summary = summaries[entry.id]
-        const label = entry.name ?? entry.label ?? entry.id
-        const description = entry.name === undefined ? summary?.title : entry.label
-        const primaryLabel = description || label
-        const secondaryLabel = description ? label : undefined
+        const description = entry.label || summary?.title
+        const primaryLabel = description || entry.id
+        const secondaryLabel = description ? entry.id : undefined
         const mode = external ? t('mode.external') : entry.mode === 'unknown' ? t('mode.unknown')
           : entry.mode === 'one-shot' ? t('mode.oneShot') : t('mode.continuable')
         const completed = completedEntry(entry, summary)
@@ -366,7 +364,7 @@ function CatalogRows({
                     type="button"
                     tabIndex={-1}
                     className={`${css.disclosure} ${isExpanded ? css.disclosureOpen : ''}`}
-                    aria-label={t(isExpanded ? 'branch.collapse' : 'branch.expand', { label })}
+                    aria-label={t(isExpanded ? 'branch.collapse' : 'branch.expand', { label: primaryLabel })}
                     onClick={toggle}
                   >
                     <IconChevronRightOutlineRegular />
@@ -411,7 +409,7 @@ function CatalogRows({
                       <button
                         type="button"
                         className={css.sidebarButton}
-                        aria-label={t('open.sidebar.aria', { label })}
+                        aria-label={t('open.sidebar.aria', { label: primaryLabel })}
                         onClick={(event) => {
                           event.preventDefault()
                           event.stopPropagation()
@@ -519,8 +517,6 @@ function CatalogDropdown(props: CatalogDropdownProps) {
   const summaries = useSessions(state => state.byId)
   const statuses = useSessionStatus(value => value)
   const catalogs = useMemo<Catalogs>(() => {
-    const names = new Map(Object.values(projections).flatMap(snapshot =>
-      (snapshot.values.subagentNames ?? []).map(binding => [binding.childId, binding.name] as const)))
     return Object.fromEntries(Object.entries(projections).map(([id, snapshot]) => {
       const projected = snapshot.values.subagentCatalog
       const state = snapshot.state === 'idle'
@@ -531,7 +527,6 @@ function CatalogDropdown(props: CatalogDropdownProps) {
         error: snapshot.error,
         entries: (projected ?? []).map(entry => ({
           ...entry,
-          name: names.get(entry.id)?.split('/').at(-1),
           activity: (statuses.get(entry.id)?.running ?? summaries[entry.id]?.running) === true
             ? 'running' as const : 'inactive' as const,
         })),
@@ -554,7 +549,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
     ? undefined
     : catalog?.entries.find(entry => entry.id === currentSessionId)
   const switcherDisplayTitle = currentEntry !== undefined
-    ? currentEntry.label || currentEntry.name || currentEntry.id
+    ? currentEntry.label || currentEntry.id
     : displayTitle
   const directChildren = catalog?.entries ?? []
   const directCount = directChildren.length
