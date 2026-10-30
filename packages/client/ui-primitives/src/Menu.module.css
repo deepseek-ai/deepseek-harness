@@ -296,8 +296,10 @@
 .submenu {
   position: fixed;
   z-index: 1101;
-  min-width: 163px;
-  max-width: min(360px, calc(100vw - 24px));
+  width: var(--dsh-anchored-width, max-content);
+  min-width: min(163px, var(--dsh-anchored-max-width, calc(100vw - 24px)));
+  max-width: min(360px, var(--dsh-anchored-max-width, calc(100vw - 24px)));
+  max-height: var(--dsh-anchored-max-height, calc(100dvh - 24px));
 }
 
 /* Retain the parent's geometry and rows for placement and focus restoration. */

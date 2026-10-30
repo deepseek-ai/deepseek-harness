@@ -245,7 +245,7 @@ describe('Menu submenus', () => {
     expect(menu.parentElement).toBe(document.body)
     expect(menu.style.left).toBe('576px')
     expect(menu.style.top).toBe('12px')
-    expect(menu.style.maxHeight).toBe('744px')
+    expect(menu.style.getPropertyValue('--dsh-anchored-max-height')).toBe('744px')
     expect(screen.getByRole('menuitem', { name: 'Applications' }).closest('[role="menu"]')?.contains(menu)).toBe(false)
   })
 
@@ -260,7 +260,7 @@ describe('Menu submenus', () => {
     const menu = childMenu()
     expect(screen.getAllByRole('menu')).toHaveLength(1)
     expect(menu.style.left).toBe('170px')
-    expect(menu.style.width).toBe('200px')
+    expect(menu.style.getPropertyValue('--dsh-anchored-width')).toBe('200px')
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'First app' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '返回上级' }))
     expect(select).not.toHaveBeenCalled()

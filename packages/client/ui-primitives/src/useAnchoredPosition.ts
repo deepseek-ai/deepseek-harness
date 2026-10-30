@@ -36,9 +36,48 @@ export interface AnchoredPositionOptions {
  * @returns Fixed left/top coordinates, or null while closed or awaiting an anchor; the first measurement completes before paint.
  */
 export function useAnchoredPosition(options: AnchoredPositionOptions): CSSProperties | null {
-  const { open, anchorRef, panelRef, side = 'bottom', align = 'start', gap, margin,
+  return usePositionedOverlay(options)?.style ?? null
+}
+
+/** Layout-origin geometry supplied to the package's submenu placement strategy. */
+export interface OverlayGeometry {
+  anchor: DOMRect
+  parent: DOMRect
+  width: number
+  gap: number
+  bounds: { left: number; right: number }
+}
+
+/** Preferred coordinates and optional explicit width, before viewport clamping. */
+export interface OverlayPlacement {
+  left: number
+  top: number
+  width?: number
+  page: boolean
+}
+
+/** Fixed coordinates and navigation mode from the same placement measurement. */
+interface PositionedOverlay {
+  style: CSSProperties
+  page: boolean
+}
+
+/**
+ * Package-internal placement core shared by anchored overlays and Menu children.
+ * Owns size variables, coordinate conversion, observers, and movement tracking.
+ * A custom placement consumes natural width and may set `--dsh-anchored-width`;
+ * CSS must consume it with a max-content fallback. Managed styles restore on cleanup.
+ * @param options - Anchored inputs plus an optional parent card and pure placement strategy.
+ * @returns Coordinates and page mode together, or null while no anchor is available.
+ */
+export function usePositionedOverlay(options: Omit<AnchoredPositionOptions, 'layoutKey'> & {
+  parentRef?: RefObject<HTMLElement | null>
+  placement?: (geometry: OverlayGeometry) => OverlayPlacement
+  layoutKey?: unknown
+}): PositionedOverlay | null {
+  const { open, anchorRef, panelRef, parentRef, placement, side = 'bottom', align = 'start', gap, margin,
     getAnchorRect, layoutKey, minWidthFromAnchor = false, frameClearance = true } = options
-  const [position, setPosition] = useState<CSSProperties | null>(null)
+  const [position, setPosition] = useState<PositionedOverlay | null>(null)
   useLayoutEffect(() => {
     if (!open) {
       setPosition(null)
@@ -52,14 +91,18 @@ export function useAnchoredPosition(options: AnchoredPositionOptions): CSSProper
     const viewport = win.visualViewport
     // WebKit client rects use the visual origin; viewport-fixed CSS uses the layout origin.
     const visualOrigin = typeof win.CSS !== 'undefined' && win.CSS.supports('-webkit-backdrop-filter', 'none')
-    const properties = ['--dsh-anchored-max-width', '--dsh-anchored-max-height', ...minWidthFromAnchor ? ['min-width'] : []]
+    const parent = parentRef?.current
+    const properties = ['--dsh-anchored-max-width', '--dsh-anchored-max-height',
+      ...placement === undefined ? [] : ['--dsh-anchored-width'], ...minWidthFromAnchor ? ['min-width'] : []]
     const previous = properties.map(name => [name, panel.style.getPropertyValue(name), panel.style.getPropertyPriority(name)] as const)
     let active = true
-    let lastRect: Pick<DOMRect, 'x' | 'y' | 'width' | 'height'> | null = null
+    let lastBoxes = ''
     const readRect = () => getAnchorRect === undefined ? anchor.getBoundingClientRect() : getAnchorRect()
-    const place = (rect: DOMRect | null): void => {
-      lastRect = rect === null ? null : { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
-      let next: CSSProperties | null = null
+    const boxes = (rect: DOMRect | null, parentRect: DOMRect | undefined) =>
+      [rect?.x, rect?.y, rect?.width, rect?.height, parentRect?.x, parentRect?.y, parentRect?.width, parentRect?.height].join(',')
+    const place = (rect: DOMRect | null, parentRect: DOMRect | undefined): void => {
+      lastBoxes = boxes(rect, parentRect)
+      let next: PositionedOverlay | null = null
       if (rect !== null) {
         const x = viewport?.offsetLeft ?? 0
         const y = viewport?.offsetTop ?? 0
@@ -70,22 +113,35 @@ export function useAnchoredPosition(options: AnchoredPositionOptions): CSSProper
         panel.style.setProperty('--dsh-anchored-max-width', `${maxWidth}px`)
         panel.style.setProperty('--dsh-anchored-max-height', `${Math.max(0, height - topMargin - margin)}px`)
         if (minWidthFromAnchor) panel.style.minWidth = `${Math.min(rect.width, maxWidth)}px`
+        if (placement !== undefined) panel.style.setProperty('--dsh-anchored-width', 'max-content')
         const panelWidth = panel.offsetWidth
         const panelHeight = panel.offsetHeight
-        const offsetX = visualOrigin ? x : 0
-        const offsetY = visualOrigin ? y : 0
-        const left = offsetX + (side === 'right' ? rect.right + gap : align === 'end' ? rect.right - panelWidth : rect.left)
-        const top = offsetY + (side === 'right' ? rect.top : side === 'top' ? rect.top - gap - panelHeight : rect.bottom + gap)
+        const normalize = (box: DOMRect) => new DOMRect(
+          box.x + (visualOrigin ? x : 0), box.y + (visualOrigin ? y : 0), box.width, box.height,
+        )
+        const normalized = normalize(rect)
+        const preferred: OverlayPlacement = placement === undefined ? {
+          left: side === 'right' ? normalized.right + gap : align === 'end' ? normalized.right - panelWidth : normalized.left,
+          top: side === 'right' ? normalized.top : side === 'top' ? normalized.top - gap - panelHeight : normalized.bottom + gap,
+          page: false,
+        } : placement({ anchor: normalized, parent: normalize(parentRect ?? rect), width: panelWidth, gap,
+          bounds: { left: x + margin, right: x + width - margin } })
+        if (preferred.width !== undefined) panel.style.setProperty('--dsh-anchored-width', `${preferred.width}px`)
+        const finalHeight = preferred.width === undefined ? panelHeight : panel.offsetHeight
         next = {
-          left: Math.max(x + margin, Math.min(left, x + width - margin - panelWidth)),
-          top: Math.max(y + topMargin, Math.min(top, y + height - margin - panelHeight)),
+          style: {
+            left: Math.max(x + margin, Math.min(preferred.left, x + width - margin - (preferred.width ?? panelWidth))),
+            top: Math.max(y + topMargin, Math.min(preferred.top, y + height - margin - finalHeight)),
+          },
+          page: preferred.page,
         }
       }
-      setPosition(current => current?.left === next?.left && current?.top === next?.top ? current : next)
+      setPosition(current => current?.style.left === next?.style.left && current?.style.top === next?.style.top
+        && current?.page === next?.page ? current : next)
     }
     const update = (): void => {
       if (!active) return
-      place(readRect())
+      place(readRect(), parent?.getBoundingClientRect())
     }
     update()
     win.addEventListener('scroll', update, true)
@@ -95,13 +151,14 @@ export function useAnchoredPosition(options: AnchoredPositionOptions): CSSProper
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
     observer?.observe(anchor)
     observer?.observe(panel)
+    if (parent != null) observer?.observe(parent)
     // Transforms and surrounding layout can move an anchor without resizing either element.
     let frame = 0
     const track = (): void => {
       if (!active) return
       const rect = readRect()
-      if (rect?.x !== lastRect?.x || rect?.y !== lastRect?.y
-        || rect?.width !== lastRect?.width || rect?.height !== lastRect?.height) place(rect)
+      const parentRect = parent?.getBoundingClientRect()
+      if (boxes(rect, parentRect) !== lastBoxes) place(rect, parentRect)
       frame = win.requestAnimationFrame(track)
     }
     frame = win.requestAnimationFrame(track)
@@ -115,6 +172,9 @@ export function useAnchoredPosition(options: AnchoredPositionOptions): CSSProper
       viewport?.removeEventListener('resize', update)
       for (const [name, value, priority] of previous) panel.style.setProperty(name, value, priority)
     }
-  }, [open, anchorRef, panelRef, side, align, gap, margin, getAnchorRect, layoutKey, minWidthFromAnchor, frameClearance])
+  }, [
+    open, anchorRef, panelRef, parentRef, placement, side, align, gap, margin,
+    getAnchorRect, layoutKey, minWidthFromAnchor, frameClearance,
+  ])
   return position
 }

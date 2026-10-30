@@ -3,8 +3,8 @@ import type { CSSProperties, ReactNode, SyntheticEvent } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import { IconCheckOutlineRegular, IconChevronLeftOutlineRegular, IconChevronRightOutlineRegular } from './icons/index.tsx'
-import { useMenuSubmenuPosition } from './menu-submenu-position.ts'
-import { useAnchoredPosition } from './useAnchoredPosition.ts'
+import { placeMenuSubmenu } from './menu-submenu-position.ts'
+import { useAnchoredPosition, usePositionedOverlay } from './useAnchoredPosition.ts'
 import { usePointerGrace } from './pointer-grace.ts'
 import { isBehindModal } from './useModalLayer.ts'
 import { observeComposition } from './keyboard-composition.ts'
@@ -327,9 +327,12 @@ export function Menu({ open, anchor, items = [], children, submenuBackLabel, sel
     first?.focus()
   }
   const returningFromSubmenu = useRef(false)
-  const submenuPosition = useMenuSubmenuPosition(
-    open && exiting === undefined ? openSubmenuId : null, listRef, submenuTrigger, submenuRef, contextual,
-  )
+  const submenuPosition = usePositionedOverlay({
+    open: open && exiting === undefined && openSubmenuId !== null,
+    anchorRef: submenuTrigger, parentRef: listRef, panelRef: submenuRef,
+    placement: placeMenuSubmenu, gap: 4, margin: 12, frameClearance: !contextual,
+    layoutKey: liveSubmenu,
+  })
   const submenuPage = openSubmenuId !== null && openSubmenu?.activated === true && submenuPosition?.page === true
   const submenuHidden = submenuPosition === null || (submenuPosition.page && !submenuPage)
   const submenuState = useRef({ id: openSubmenuId, page: submenuPage })
@@ -632,8 +635,7 @@ export function Menu({ open, anchor, items = [], children, submenuBackLabel, sel
           <MenuSurface ref={submenuRef} compact={compact}
             className={clsx(css.submenu, css.scrollable, dense && css.denseList, compact && css.compactList)}
             style={submenuPosition === null ? MEASURE_STYLE : {
-              left: submenuPosition.left, top: submenuPosition.top,
-              maxHeight: submenuPosition.maxHeight,
+              ...submenuPosition.style,
               visibility: submenuHidden ? 'hidden' : undefined,
             }} role="menu"
             onPointerEnter={cancelSubmenuClose}

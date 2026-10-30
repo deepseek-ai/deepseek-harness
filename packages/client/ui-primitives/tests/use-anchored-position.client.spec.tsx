@@ -3,7 +3,7 @@
 import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, renderHook } from '@testing-library/react'
-import { useAnchoredPosition } from '../src/useAnchoredPosition.ts'
+import { useAnchoredPosition, usePositionedOverlay, type OverlayGeometry } from '../src/useAnchoredPosition.ts'
 
 let frames: FrameRequestCallback[]
 beforeEach(() => {
@@ -39,6 +39,19 @@ function show(props: Parameters<typeof Host>[0]) {
 }
 
 describe('useAnchoredPosition', () => {
+  it('uses the anchor as the reference for a placement without a separate parent', () => {
+    const anchor = document.createElement('button')
+    const panel = document.createElement('div')
+    const placement = vi.fn((geometry: OverlayGeometry) => ({
+      left: geometry.anchor.left, top: geometry.anchor.bottom + geometry.gap, page: false,
+    }))
+    const { result } = renderHook(() => usePositionedOverlay({
+      open: true, anchorRef: { current: anchor }, panelRef: { current: panel }, gap: 4, margin: 12, placement,
+    }))
+    expect(placement.mock.calls[0]![0].parent).toEqual(placement.mock.calls[0]![0].anchor)
+    expect(result.current).toEqual({ style: { left: 100, top: 324 }, page: false })
+  })
+
   it.each(['anchor', 'panel'] as const)('does not measure or subscribe without the %s element', (missing) => {
     const anchor = document.createElement('button')
     const measure = vi.spyOn(anchor, 'getBoundingClientRect')

@@ -1,7 +1,7 @@
 /** Session menu opening over built plugins; only native application discovery and launch are simulated. */
 import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
+import { chromium, webkit, type Browser, type BrowserContext, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { launchWebScaffold, seedSession, type WebScaffold } from './scaffold.ts'
@@ -148,6 +148,82 @@ describe('Open in Session menus', () => {
     await expect.poll(() => page.getByRole('menuitem', { name: 'Open in', exact: true }).isEnabled()).toBe(true)
     expect(await page.getByRole('menuitem', { name: 'Show in Finder', exact: true }).count()).toBe(0)
   })
+
+  it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webkit }])(
+    'tracks real geometry and ignores unrelated portals in $name', async ({ engine }) => {
+      const isolated = await engine.launch()
+      onTestFinished(() => isolated.close())
+      const context = await isolated.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'en-US' })
+      await nativeRoutes(context, ['vscode', 'cursor', 'finder', 'windowsterminal'], async () => 200)
+      const page = await context.newPage()
+      await openSeed(page, scaffold.authenticatedUrl)
+      await page.getByRole('button', { name: 'More actions', exact: true }).click()
+      const parent = page.getByRole('menuitem', { name: 'Open in', exact: true })
+      await page.mouse.move(20, 750)
+      await parent.focus()
+      await page.keyboard.press('ArrowRight')
+      const root = page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: 'Copy Session as Markdown', exact: true }) })
+      const child = page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: 'Windows Terminal', exact: true }) })
+      await child.waitFor()
+      const rootElement = await root.elementHandle()
+      const childElement = await child.elementHandle()
+      const parentElement = await parent.elementHandle()
+      if (rootElement === null || childElement === null || parentElement === null) throw new Error('Both menu panels and the parent row must be mounted')
+      const alignment = async () => {
+        const [outer, nested, row] = await Promise.all([rootElement.boundingBox(), childElement.boundingBox(), parentElement.boundingBox()])
+        return outer === null || nested === null || row === null ? Infinity : Math.max(
+          Math.abs(outer.x - nested.x - nested.width - 4), Math.abs(nested.y - row.y),
+        )
+      }
+      // offsetWidth is integer-valued while browser rectangles retain fractional pixels.
+      await expect.poll(alignment).toBeLessThanOrEqual(1)
+
+      // Browser layout changes are real; no observer callback or rectangle is mocked.
+      await rootElement.evaluate((node) => { node.style.transform = 'translate(-80px, 20px)' })
+      await expect.poll(alignment).toBeLessThanOrEqual(1)
+      await parent.evaluate((node) => { node.style.marginTop = '24px' })
+      await expect.poll(alignment).toBeLessThanOrEqual(1)
+      const before = await child.boundingBox()
+      await page.getByRole('menuitem', { name: 'Windows Terminal', exact: true }).getByText('Windows Terminal', { exact: true })
+        .evaluate((node) => { node.style.fontSize = '30px' })
+      await expect.poll(async () => (await child.boundingBox())?.width ?? 0).toBeGreaterThan(before?.width ?? 0)
+      await expect.poll(alignment).toBeLessThanOrEqual(1)
+
+      await rootElement.evaluate((node) => {
+        node.style.maxHeight = '130px'
+        const viewport = node.querySelector<HTMLElement>(':scope > [role="presentation"]')
+        if (viewport === null || viewport.scrollHeight <= viewport.clientHeight) throw new Error('The parent must scroll')
+        viewport.scrollTop = viewport.scrollHeight
+      })
+      await expect.poll(alignment).toBeLessThanOrEqual(1)
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.getByRole('menuitem', { name: 'Back', exact: true }).waitFor()
+      await expectMenusInside(page)
+      expect(await childElement.evaluate(node => node.isConnected)).toBe(true)
+      await page.evaluate(() => new Promise<void>((resolve) => {
+        requestAnimationFrame(() => { requestAnimationFrame(() => { resolve() }) })
+      }))
+      const writes = await childElement.evaluate(async (node) => {
+        let count = 0
+        const observer = new MutationObserver((records) => { count += records.length })
+        observer.observe(node, { attributes: true, attributeFilter: ['style'] })
+        const unrelated = document.createElement('div')
+        unrelated.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;pointer-events:none'
+        try {
+          document.body.append(unrelated)
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => { requestAnimationFrame(() => { resolve() }) })
+          })
+          return count
+        } finally { observer.disconnect(); unrelated.remove() }
+      })
+      expect(writes).toBe(0)
+      await page.getByRole('menuitem', { name: 'Back', exact: true }).click()
+      await parent.waitFor()
+      await page.keyboard.press('Escape')
+      await expect.poll(() => page.getByRole('menu').count()).toBe(0)
+    },
+  )
 
   it.each([{ catalog: [] }, { catalog: ['unnameable'] }, { catalog: ['finder'] }])('keeps empty and single-application catalogs consistent: $catalog', async ({ catalog }) => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
