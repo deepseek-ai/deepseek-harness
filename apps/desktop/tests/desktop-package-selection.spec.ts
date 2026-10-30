@@ -47,8 +47,8 @@ it('selects an explicit old attempt without consulting the latest attempt', () =
 it.each(['failed', 'cancelled', 'running', 'workflow', 'repository', 'attempt', 'run', 'job', 'ambiguous', 'route', 'label'])(
   'rejects %s evidence without falling back to a different attempt', (kind) => {
     const f = fixture()
-    if (kind === 'failed') f.run.conclusion = 'failure'
-    if (kind === 'cancelled') f.run.conclusion = 'cancelled'
+    if (kind === 'failed') { f.run.conclusion = 'failure'; f.jobs[0]!.conclusion = 'failure' }
+    if (kind === 'cancelled') { f.run.conclusion = 'cancelled'; f.jobs[0]!.conclusion = 'cancelled' }
     if (kind === 'running') f.run.status = 'in_progress'
     if (kind === 'workflow') f.run.path = '.github/workflows/ci.yml'
     if (kind === 'repository') f.run.repository.full_name = 'other/repo'
@@ -134,4 +134,25 @@ it('routes both Mac architectures to one machine without authorizing an unlisted
   for (const target of [[], ['mac-x64', 'linux-x64']]) {
     expect(() => selectDesktopPackage('owner/repo', { package_run_id: '42' }, { mini: { label: 'dsh-mini', target } }, f.api)).toThrow()
   }
+})
+
+it('keeps the original successful build after an archival-only retry', () => {
+  const f = fixture()
+  const selected = selectDesktopPackage('owner/repo', { package_run_id: '42' }, f.routes, (path) => {
+    if (path.endsWith('/42')) return { run_attempt: 3 }
+    if (path.endsWith('/attempts/3')) return { ...f.run, run_attempt: 3 }
+    if (path.endsWith('/attempts/3/jobs?per_page=100')) return [{ jobs: [{ name: 'upload-artifact', runner_name: 'mini', conclusion: 'success' }] }]
+    if (path.includes('filter=all')) return [{ jobs: [{ ...f.jobs[0], run_attempt: 2 }] }]
+    if (path.endsWith('/attempts/2')) return { ...f.run, conclusion: 'failure' }
+    return [{ jobs: f.jobs }]
+  })
+  expect(selected.run.run_attempt).toBe(2)
+  expect(selected.runnerName).toBe('mini')
+})
+
+it('accepts a successful package when only archival failed', () => {
+  const f = fixture()
+  f.run.conclusion = 'failure'
+  f.jobs.push({ name: 'upload-artifact', runner_name: 'mini', conclusion: 'failure' })
+  expect(selectDesktopPackage('owner/repo', { package_run_id: '42' }, f.routes, f.api).run.run_attempt).toBe(2)
 })

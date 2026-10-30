@@ -72,13 +72,23 @@ Environment 审批限制此工作流，不限制同一机器账户运行的任�
 
 选择对应平台的 `Package Desktop` 工作流、preset、源码、通道和版本模式。test 的 `source_ref` 接受仓库内分支名（如 `feature/desktop-update`）或 `dsh-v*` tag；production 仅接受 `master` 或 `dsh-v*` tag。符合 `dsh-v` 后接数字、其余为字母、数字、点或连字符的名称按 tag 处理，即使存在同名分支。tag 必须与所选产品版本一致。建议从 `master` 启动打包工作流，再单独填写打包源码；不支持直接填写 commit SHA、PR ref 或 fork 仓库。源码必须包含 CI 适配脚本，旧源码会在安装依赖前失败。仅选择可信分支：其构建代码将在签名机器上执行。这是操作约定，不提供工作流来源强制限制或凭据隔离。发布使用记录的 commit，并要求该提交仍在所选分支历史中；正常追加提交不影响发布，删除分支或导致历史分叉的强推会拒绝。tag 发布要求 tag 仍指向记录的提交。从 `master` 发起发布；托管路由 job 会在派发到原机器前拒绝其他 ref。实际打包源码提交单独记录。`version_mode=default` 对 production 选择 product，对 test 选择 auto；product 保留所选源码版本，auto 追加日期/run/attempt，manual 要求填写 `build_version`。latest 包要求稳定版本，因此 test/latest 需选择 product 或稳定的手填版本。可选 `test_release_id` 是测试 URL 前缀：留空沿用机器默认值，同一平台连续升级测试需保持相同值，并应定期轮换默认值。它不是 GitHub run ID。格式校验和轮换限制见[打包配置](../../packaging/README.zh.md#configuration-and-local-builds)。
 
-打包只保留文件。成功后，在 `master` 上打开 **Publish Desktop · COS → Run workflow**，填写打包运行 URL 中的 `package_run_id`，并可填写 `package_run_attempt`。留空选择最新尝试，且该尝试必须成功，不会回退到较早的成功尝试；显式填写则选择对应的成功构建。Windows 必须完成签名，macOS 必须完成公证和 stapling。GitHub job 证据确定原 runner，本机清单在审批前提供 preset、版本、源码和通道。不会下载安装包或请求 artifact。旧清单的 `publishRequested=false` 不影响发布资格；本机文件缺失或变化会停止发布。
+打包只保留文件。成功后，在 `master` 上打开 **Publish Desktop · COS → Run workflow**，填写打包运行 URL 中的 `package_run_id`，并可填写 `package_run_attempt`。留空选择最新尝试及其成功的 package job；归档重跑继续使用原始构建 attempt，新的构建失败时不回退到较早成功构建。显式填写则选择对应构建，独立的 GitHub 归档失败不取消其资格。Windows 必须完成签名，macOS 必须完成公证和 stapling。GitHub job 证据确定原 runner，本机清单在审批前提供 preset、版本、源码和通道。不会下载安装包或请求 artifact。旧清单的 `publishRequested=false` 不影响发布资格；本机文件缺失或变化会停止发布。
 
 在原 runner 安装依赖前，准备阶段和审批后的发布 job 都会检查所选 `publishing/<preset>.json` 是否为可读取的 JSON。配置缺失时会报告路径；补齐后可使用同一个包重试发布。之后仍会执行完整配置与签名校验。上传前，发布器校验全部留存文件的哈希、版本及目标信息，再复核平台签名。macOS 校验 DMG，并解压 ZIP 校验 app 票据；Windows 校验 Authenticode、配置的签名证书指纹及时间戳。准备阶段生成中文审批摘要，分别展示版本、通道、平台和环境，以及留存的 test release ID、安装包与升级 YAML 的完整 URL、原打包尝试链接、源码 ref/SHA、平台校验结果及拟创建的 tag。折叠详情包含 COS 存储桶，以及实际上传字节的大小和 SHA-256（包括改写后的 YAML）。公开仓库的摘要会公开测试前缀和下载 URL；前缀不提供访问鉴权。两种发布 job 均等待 **Review deployments → Approve and deploy**，随后重新核对已批准的 manifest 与上传计划摘要。文件或目标变化会被拒绝。审批不能修改版本；应拒绝并重新打包。两种环境都上传缺失文件、校验远端字节，再更新 YAML。此工作流没有只上传文件的模式。production 最后为记录的打包提交创建 `desktop-v<version>`；已有 tag 必须指向同一提交。
 
 <a id="recovery-and-records"></a>
 
 ## 恢复与记录
+
+打包 workflow 将 `package` 与 `upload-artifact`（GitHub 产物归档）分开。两者使用 `DESKTOP_PUBLISH_RUNNERS` 将保留文件定位到原机器。归档失败后仅重跑 `upload-artifact`；它校验原始 manifest 和 hash，不重新构建、签名或公证。打包诊断归档尽力执行，不改变构建成功状态。
+
+生产 COS 发布默认勾选“同时上传官网安装包并刷新缓存”（`upload_website=true`）。取消后仅发布版本化资源及自动更新清单；test 发布不修改生产官网。`upload-website-installer` 上传固定安装包，`purge-website-installer` 刷新该 URL。官网安装包校验器只需要最终 DMG/EXE 和保留的 manifest，匹配生产资格、构建身份及平台，只计算一次安装包 hash，并通过同一打开的文件句柄上传。固定文件名包含 latest 不意味着要求稳定版本。原有版本与自动更新发布保留自身校验。
+
+将仓库变量 `DOWNLOAD_PROD_EO_ZONE_ID` 配置为生产 EdgeOne 站点。生产 COS 凭据还需要 `teo:CreatePurgeTask` 和 `teo:DescribePurgeTasks` 权限。官网上传在 Actions 中按 bucket/平台互斥，在原机器上按 bucket/对象互斥；缓存观察单独运行。生产官网 job 沿用现有部署审批 Environment。
+
+官网状态保存在 releases 根目录同级的 `upload-records/website-<发布 run ID>-<target>/state.json`。macOS 和 Windows 在各自本地磁盘使用相同记录格式。job 重跑不重复已确认完成的上传；结果未知的上传先核对远端字节。仅重跑刷新 job 即可查询已保存任务；人工重跑确认旧任务失败后可提交一次。提交响应丢失时查询匹配的历史记录，不重新提交。
+
+刷新观察每十秒查询一次，最长五分钟；结果未知或观察超时后额外查询一次。明确的 failed、timeout、canceled 结果使 job 失败。仍无法确认时成功退出，并输出 Actions warning 和醒目摘要；持久化状态保持 unknown，不标为完成。诊断 artifact 尽力归档，本地记录仍是恢复依据。模拟服务测试覆盖这些路径；生产 COS/EdgeOne 权限和实际 CDN 行为需要发布操作者验证。
 
 解决故障后重跑失败的发布 job，以保持准备阶段选定的打包尝试；也可显式填写原打包运行和尝试，发起新的发布。尝试留空时重跑所有 job 会重新解析最新打包尝试，并需要重新审批。不要仅为重试上传而重新打包。缺失对象会上传，相同对象跳过，同名但字节不同的对象会停止操作。写入结果不明时通过读取远端字节核对。频道已有更高版本时，旧上传不能替换它。每个包只更新自身内置通道：nightly 写入 `nightly.yml` / `nightly-mac.yml`，latest 写入 `latest.yml` / `latest-mac.yml`。latest 二进制位于目标二进制前缀下的 `latest/` 子目录，与已有 nightly 对象分离。同一源码和版本发布到两个通道需要分别打包；已有发布 tag 仅在源码提交相同时复用。
 

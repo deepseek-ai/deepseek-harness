@@ -78,3 +78,18 @@ it('rejects non-master dispatch before scheduling a self-hosted job', () => {
     if (result.status !== 0) expect(result.stderr).toContain('must be dispatched from master')
   }
 })
+
+it('defaults to production website upload and separates cache-only recovery', () => {
+  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { upload_website: { type: 'boolean', default: true } } })
+  const upload = workflow.jobs['upload-website-installer']!
+  const purge = workflow.jobs['purge-website-installer']!
+  expect(upload.if).toContain("inputs.upload_website && needs.prepare.outputs.preset == 'production'")
+  expect(purge.needs).toEqual(['route', 'prepare', 'upload-website-installer'])
+  for (const job of [upload, purge]) {
+    expect(job.environment).toBe('desktop-production')
+    expect(job.env?.DESKTOP_WEBSITE_APPROVAL).toBe('${{ needs.prepare.outputs.website-approval }}')
+  }
+  expect(upload.steps.find(step => step.id === 'website')?.run).toBe('node --import tsx apps/desktop/scripts/publish-website-ci.ts upload')
+  expect(purge.steps.find(step => step.id === 'website')?.run).toBe('node --import tsx apps/desktop/scripts/publish-website-ci.ts purge')
+  expect(purge.steps.some(step => step.run?.includes('publish-desktop-ci.ts'))).toBe(false)
+})

@@ -36,11 +36,14 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
     expect(steps.find(step => step.id === 'checkout')?.with).toMatchObject({ 'persist-credentials': false, clean: true })
     for (const step of steps) expect(step.run ?? '').not.toContain('${{ inputs.')
     const uploads = steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
-    expect(uploads).toHaveLength(2)
+    expect(uploads).toHaveLength(1)
+    const archive = workflow.jobs['upload-artifact']!
+    expect(archive['runs-on']).toEqual(['self-hosted', '${{ needs.package.outputs.runner }}'])
+    const installer = archive.steps.find(step => step.uses?.startsWith('actions/upload-artifact@'))!
     expect(uploads[0]?.if).toBe("always() && steps.checkout.outcome == 'success'")
-    expect(uploads[1]?.if).toBe('success()')
-    expect(uploads[1]?.with?.path).toBe('${{ steps.retained.outputs.directory }}/*')
-    expect(uploads[1]?.with?.['compression-level']).toBe(0)
+    expect(installer.if).toBe('success()')
+    expect(installer.with?.path).toBe('${{ needs.package.outputs.directory }}/*')
+    expect(installer.with?.['compression-level']).toBe(0)
   })
 
   it('defaults to notarization and labels the explicit debugging option', () => {
@@ -50,7 +53,7 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
     } } })
     const steps = workflow.jobs.package!.steps
     expect(steps.filter(step => step.run?.includes('args+=(--skip-notarization)'))).toHaveLength(2)
-    expect(steps.find(step => step.name === 'Retain installers for the selected mode')?.with?.name).toContain('${{ steps.settings.outputs.mode }}')
+    expect(workflow.jobs['upload-artifact']!.steps.find(step => step.name === 'Retain installers for the selected mode')?.with?.name).toContain('${{ needs.package.outputs.mode }}')
   })
 
   it('retains build inputs outside checkout and run-specific pnpm installations', () => {
@@ -78,7 +81,7 @@ describe.each(['arm64', 'x64'])('macOS %s packaging', (arch) => {
     const builds = job.steps.filter(step => step.run?.includes('pnpm run package:desktop:mac:'))
     expect(builds).toHaveLength(2)
     for (const step of builds) expect(step.run).toContain(`package:desktop:mac:${arch}`)
-    expect(job.steps.find(step => step.name === 'Retain installers for the selected mode')?.with?.name).toContain(`macos-${arch}-`)
+    expect(workflow.jobs['upload-artifact']!.steps.find(step => step.name === 'Retain installers for the selected mode')?.with?.name).toContain(`macos-${arch}-`)
     if (arch === 'x64') {
       const rosetta = job.steps.findIndex(step => step.run === 'arch -x86_64 /usr/bin/true')
       expect(rosetta).toBeGreaterThan(-1)

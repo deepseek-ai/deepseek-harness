@@ -105,15 +105,17 @@ it('validates before building and passes the same mode and version to checks and
 
 it('retains failure diagnostics and uploads only the selected successful installer', () => {
   const uploads = job.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
-  expect(uploads).toHaveLength(3)
+  expect(uploads).toHaveLength(1)
+  const archival = workflow.jobs['upload-artifact']!.steps.filter(step => step.uses?.startsWith('actions/upload-artifact@'))
+  expect(archival).toHaveLength(2)
   expect(uploads[0]!.if).toBe("always() && steps.checkout.outcome == 'success'")
   expect(uploads[0]!.with).toMatchObject({
     path: '${{ github.workspace }}/apps/desktop/.desktop-build/packaging-runs/',
     'include-hidden-files': true,
   })
   for (const mode of ['unsigned', 'signed']) {
-    const upload = uploads.find(step => step.if === `success() && inputs.signing == '${mode}'`)!
-    expect(upload.with).toMatchObject({ path: '${{ steps.retained.outputs.directory }}/*', 'if-no-files-found': 'error', 'compression-level': 0 })
+    const upload = archival.find(step => step.if === `success() && inputs.signing == '${mode}'`)!
+    expect(upload.with).toMatchObject({ path: '${{ needs.package.outputs.directory }}/*', 'if-no-files-found': 'error', 'compression-level': 0 })
   }
 })
 
