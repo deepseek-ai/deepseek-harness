@@ -34,9 +34,8 @@ function inboxFrame(value: InboxState): Extract<SessionControlFrame, { type: 'pr
   return {
     type: 'projection',
     sessionId: SID,
-    key: 'inbox',
+    changes: [{ key: 'inbox', val: value as never }],
     seq: nextSeq++,
-    value: value as never,
   }
 }
 

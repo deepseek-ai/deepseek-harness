@@ -1,6 +1,6 @@
 /** Schedule owns its record schema, so the creation-ordering integration runs here beside the storage it seeds. */
 import { setImmediate } from 'node:timers/promises'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,7 +15,7 @@ import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import { createAfterScheduleRecord, ScheduleId } from '../src/domain.ts'
 import ScheduleService from '../src/index.ts'
-import { scheduleDomain } from '../src/storage.ts'
+import { boundTask, seedTasks } from './harness.ts'
 
 const roots: string[] = []
 const contexts: Context[] = []
@@ -38,15 +38,14 @@ describe('due delivery during Agent creation', () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-serial-'))
     roots.push(root)
     const ctx = await core(join(root, 'sessions'))
+    const warnings = vi.spyOn(ctx.logger, 'warn')
     await ctx.plugin(Storage)
     await ctx.plugin(StorageJson, { root: join(root, 'schedule-storage') })
     await ctx.plugin(StorageDomain, { backend: 'json' })
     const sessionId = SessionId('serial-delivery')
     const id = ScheduleId('due')
     const record = createAfterScheduleRecord(id, 'Due reminder', 1, Date.now() - 2_000, 'Due reminder')
-    const seeded = await ctx.storageDomain.open(scheduleDomain)
-    await seeded.table('tasks').put(record.id, { sessionId, record, status: 'active' })
-    await seeded.close()
+    await seedTasks(ctx.storageDomain, [boundTask(sessionId, record)])
     const available = Promise.withResolvers<Agent>()
     // The resolver returns the Agent while its serial publication listeners are blocked.
     ctx.provide('sessionController', {
@@ -76,7 +75,7 @@ describe('due delivery during Agent creation', () => {
     })
     ctx.on('agent/created', () => { laterCreated = true })
     ctx.on('session/event', (_session, event) => { if (event.type === 'turn/start') { turns += 1; turn.resolve(undefined) } })
-    const creating = ctx.agents.create({ sessionId })
+    const creating = ctx.agentLoop.create(sessionId)
     try {
       await entered.promise
       await enqueued.promise
@@ -92,7 +91,8 @@ describe('due delivery during Agent creation', () => {
       expect(created).toBe(true)
       expect(laterCreated).toBe(true)
       // The receipt commits after the flush resolves, so the settled record is observed asynchronously.
-      await expect.poll(async () => (await ctx.schedule.catalog())[0]?.status).toBe('inactive')
+      await expect.poll(async () => ({ status: (await ctx.schedule.catalog())[0]?.status, warnings: warnings.mock.calls }))
+        .toEqual({ status: 'ended', warnings: [] })
       const [entry] = await ctx.schedule.catalog()
       expect(entry?.lastDelivery?.messageId).toBe(delivered[0]?.id)
     } finally {

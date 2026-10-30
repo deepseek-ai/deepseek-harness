@@ -120,6 +120,13 @@ export interface SidebarRightTabNavigation {
   readonly revision: number
 }
 
+/**
+ * The host a resource open settles in: `'sidebar'` is the default docked pane
+ * and expands the column; `'float'` is a floating panel and leaves the column
+ * as it is.
+ */
+export type SidebarRightDestination = 'sidebar' | 'float'
+
 /** Where an open from a tab lands. Without any of these it lands in the pane holding the tab at call time. */
 export interface SidebarRightTabPlacement {
   /** Land a new tab in this pane instead. */
@@ -128,7 +135,14 @@ export interface SidebarRightTabPlacement {
   readonly preferNewPane?: boolean
   /** Resource tabs reveal existing content by default; `false` permits duplicates. Pages always deduplicate within the target pane. */
   readonly revealIfOpened?: boolean
-  /** `true` opens in this tab's place — its pane and strip slot — and closes this tab in the same step. */
+  /**
+   * `true` lands new content in this tab's place and closes this tab: a docked
+   * tab lends its pane and strip slot; a floating tab is replaced in its panel,
+   * and the new tab keeps the panel's pane id, rectangle, and stacking order,
+   * takes focus, and leaves the column as it is. Content already open is
+   * revealed as any open reveals it, and this tab stays open. Where new
+   * content lands, it takes precedence over `paneId` and `preferNewPane`.
+   */
   readonly replaceTab?: boolean
 }
 
@@ -147,11 +161,16 @@ export interface SidebarRightTabActions {
    */
   bindCommands(commands: SidebarRightTabCommands): () => void
   /**
-   * Open a resource from this tab; see `ISidebarRight.openResource`.
+   * Open a resource from this tab; see `ISidebarRight.openResource`. With
+   * `destination`, the open ignores this tab's pane and every placement field,
+   * and never closes this tab.
    * @param address - a `dsh-resource://` address.
-   * @param options - placement and the resource's navigation parameters.
+   * @param options - placement, an explicit host, and the resource's navigation parameters.
    */
-  openResource(address: string, options?: SidebarRightTabPlacement & { readonly params?: SidebarRightResourceParams }): void
+  openResource(address: string, options?: SidebarRightTabPlacement & {
+    readonly params?: SidebarRightResourceParams
+    readonly destination?: SidebarRightDestination
+  }): void
   /**
    * Open a page type from this tab; see `ISidebarRight.openTab`.
    * @param kind - the page type's kind.
@@ -169,7 +188,11 @@ export interface SidebarRightTabInfo {
     /** Presentation selected by manual mode or viewport width; preserved while collapsed. */
     readonly fullscreen: boolean
   }
-  readonly panel: { readonly id: PaneId }
+  readonly panel: {
+    readonly id: PaneId
+    /** Whether this pane is hosted in a floating panel rather than the docked sidebar. */
+    readonly isFloating: boolean
+  }
   readonly tab: TabRecord & {
     /** Effective refresh binding for this page's controls. */
     readonly refreshShortcut?: ShortcutCatalogEntry | undefined

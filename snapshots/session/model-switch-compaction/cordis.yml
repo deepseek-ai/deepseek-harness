@@ -25,3 +25,8 @@
       name: '../../../packages/test-support/session-snapshot/tests/fixtures/compaction-working-directory.ts'
     - id: model-switch-compaction-driver
       name: './driver.mjs'
+
+# Fixed-budget compaction scenario: keep the recorded tool set, whose token counts the thresholds were tuned to.
+- id: tool-fs
+  config:
+    applyPatch: false

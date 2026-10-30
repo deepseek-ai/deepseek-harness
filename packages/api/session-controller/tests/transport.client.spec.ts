@@ -669,7 +669,7 @@ describe('Session Client stream adapters', () => {
       value: { projections: {} },
     }
     const update: SessionControlFrame = {
-      type: 'projection', sessionId: 'session-1' as never, key: 'title', value: 'updated', seq: 1,
+      type: 'projection', sessionId: 'session-1' as never, changes: [{ key: 'title', val: 'updated' }], seq: 1,
     }
     const remote = new ScriptedSessionRemote([], [], [baseline, update])
     const accept = vi.fn<(frame: SessionControlFrame) => void>()

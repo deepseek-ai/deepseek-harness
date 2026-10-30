@@ -1,16 +1,16 @@
 /** Host Schedule refuses to arm delivery for a Session a delegated child owns. */
 import type { Context } from '@deepseek-ai/cordis'
-import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createAfterScheduleRecord, ScheduleId } from '../src/domain.ts'
-import { scheduleDomain, type ScheduleTask } from '../src/storage.ts'
+import type { ScheduleTask } from '../src/storage.ts'
 import type { ScheduleRecord } from '../src/types.ts'
-import { agentFor, harness } from './harness.ts'
+import { agentFor, boundTask, harness, storedSession, seedTasks, taskTable } from './harness.ts'
 
 const contexts: Context[] = []
 const childId = SessionId('subagent-child')
 const parentId = SessionId('top-level-parent')
+const RRULE = 'DTSTART:20260917T000000Z\nRRULE:FREQ=DAILY'
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-16T00:00:00.000Z')) })
 afterEach(async () => {
@@ -21,23 +21,13 @@ afterEach(async () => {
 
 async function setup(task?: ScheduleTask) {
   return harness({
-    ...task === undefined ? {} : { beforeService: async (_ctx, facility) => {
-      const domain = await facility.open(scheduleDomain)
-      await domain.table('tasks').put(task.record.id, task)
-      await domain.close()
-    } },
     onContext: ctx => contexts.push(ctx),
+    ...(task === undefined ? {} : { beforeService: (_ctx, facility) => seedTasks(facility, [task]) }),
   })
 }
 
-function table(test: Awaited<ReturnType<typeof setup>>) {
-  const domain = test.ctx.storageDomain.get('schedule')
-  if (domain === undefined) throw new Error('Schedule domain not initialized')
-  return domain.table('tasks') as KvTable<ScheduleRecord['id'], ScheduleTask>
-}
-
 function childTask(record: ScheduleRecord): ScheduleTask {
-  return { sessionId: childId, record, status: 'active', deliveryHistory: { records: [], earlierRecordsUnavailable: false } }
+  return boundTask(childId, record)
 }
 
 it('refuses to create a reminder for a live subagent Session and stores nothing', async () => {
@@ -47,10 +37,10 @@ it('refuses to create a reminder for a live subagent Session and stores nothing'
   const changed = vi.fn()
   test.ctx.on('schedule/changed', changed)
 
-  await expect(test.service.create(child.session.id, { prompt: 'Check', title: 'Check', after_seconds: 60 }))
+  await expect(test.service.create({ prompt: 'Check', title: 'Check', timing: { kind: 'after', after_seconds: 60 }, target: { kind: 'session', sessionId: child.session.id } }, child.session.id))
     .rejects.toMatchObject({ code: 'subagent_session' })
 
-  expect([...table(test).entries()]).toEqual([])
+  expect([...taskTable(test.ctx).entries()]).toEqual([])
   expect(changed).not.toHaveBeenCalled()
   expect(test.resolve).not.toHaveBeenCalled()
 })
@@ -62,10 +52,10 @@ it('refuses to create for a Session whose live Agent a delegating parent owns', 
   const child = agentFor(test.ctx, childId, { parentSession: parentId, delegationDepth: 1 })
   test.ctx.agents.enter(child, parent)
 
-  await expect(test.service.create(childId, { prompt: 'Check', title: 'Check', after_seconds: 60 }))
+  await expect(test.service.create({ prompt: 'Check', title: 'Check', timing: { kind: 'after', after_seconds: 60 }, target: { kind: 'session', sessionId: childId } }, childId))
     .rejects.toMatchObject({ code: 'subagent_session' })
 
-  expect([...table(test).entries()]).toEqual([])
+  expect([...taskTable(test.ctx).entries()]).toEqual([])
 })
 
 it('refuses to update a stored reminder bound to a delegated child Session', async () => {
@@ -74,22 +64,18 @@ it('refuses to update a stored reminder bound to a delegated child Session', asy
   const test = await setup(task)
   const child = agentFor(test.ctx, childId, { origin: 'subagent', delegationDepth: 1 })
   await test.ctx.agents.register(child)
-  const put = vi.spyOn(table(test), 'put')
+  const put = vi.spyOn(taskTable(test.ctx), 'put')
   const changed = vi.fn()
   test.ctx.on('schedule/changed', changed)
 
   // The refusal travels the ordinary non-mutating result so the Web editor renders
   // `timing.subagentSession` instead of a generic Remote failure.
-  await expect(test.service.update({
-    sessionId: childId, id: record.id, expected: record, change: { kind: 'every', every_seconds: 600 },
-  })).resolves.toEqual({
-    code: 'subagent_session',
-    message: 'This Session belongs to subagent routing, which never receives reminder delivery.',
-  })
+  await expect(test.service.edit({ id: record.id, action: 'update', patch: { timing: { kind: 'every', every_seconds: 600 } } }))
+    .rejects.toMatchObject({ code: 'subagent_session' })
 
   expect(put).not.toHaveBeenCalled()
   expect(changed).not.toHaveBeenCalled()
-  expect(table(test).get(record.id)).toEqual(task)
+  expect(taskTable(test.ctx).get(record.id)).toEqual(task)
   expect(test.resolve).not.toHaveBeenCalled()
 })
 
@@ -100,10 +86,10 @@ it('refuses a delegated child recorded only by its delegation depth', async () =
   const child = agentFor(test.ctx, childId, { delegationDepth: 1 })
   await test.ctx.agents.register(child)
 
-  await expect(test.service.create(child.session.id, { prompt: 'Check', title: 'Check', after_seconds: 60 }))
+  await expect(test.service.create({ prompt: 'Check', title: 'Check', timing: { kind: 'after', after_seconds: 60 }, target: { kind: 'session', sessionId: child.session.id } }, child.session.id))
     .rejects.toMatchObject({ code: 'subagent_session' })
 
-  expect([...table(test).entries()]).toEqual([])
+  expect([...taskTable(test.ctx).entries()]).toEqual([])
 })
 
 it('still creates a reminder for a top-level Agent', async () => {
@@ -111,10 +97,10 @@ it('still creates a reminder for a top-level Agent', async () => {
   const owner = agentFor(test.ctx, parentId)
   await test.ctx.agents.register(owner)
 
-  const record = await test.service.create(parentId, { prompt: 'Check', title: 'Check', after_seconds: 60 })
+  const record = await test.service.create({ prompt: 'Check', title: 'Check', timing: { kind: 'after', after_seconds: 60 }, target: { kind: 'session', sessionId: parentId } }, parentId)
 
   expect(record.title).toBe('Check')
-  expect(await test.service.list({ sessionId: parentId })).toEqual([record])
+  expect((await test.service.list({ active: true })).items).toMatchObject([record])
 })
 
 it('still lists and deletes a stored reminder bound to a delegated child Session', async () => {
@@ -123,8 +109,67 @@ it('still lists and deletes a stored reminder bound to a delegated child Session
   const child = agentFor(test.ctx, childId, { origin: 'subagent', delegationDepth: 1 })
   await test.ctx.agents.register(child)
 
-  expect(await test.service.list({ sessionId: childId })).toEqual([record])
+  expect((await test.service.list({ active: true })).items).toMatchObject([record])
   expect((await test.service.catalog()).map(entry => entry.id)).toEqual([record.id])
-  expect(await test.service.delete({ sessionId: childId, id: record.id })).toEqual({ id: record.id, deleted: true })
-  expect(table(test).get(record.id)).toBeUndefined()
+  expect(await test.service.edit({ action: 'delete', id: record.id })).toEqual({ id: record.id, deleted: true })
+  expect(taskTable(test.ctx).get(record.id)).toBeUndefined()
+})
+
+it('refuses a task targeting a live subagent Session without reading its saved header', async () => {
+  const test = await setup()
+  await test.ctx.agents.register(agentFor(test.ctx, childId, { origin: 'subagent', delegationDepth: 1 }))
+  const changed = vi.fn()
+  test.ctx.on('schedule/changed', changed)
+
+  await expect(test.service.remoteCreate({
+    title: 'Check', prompt: 'Check', timing: { kind: 'rrule', rrule: RRULE }, target: { kind: 'session', sessionId: childId },
+  })).rejects.toMatchObject({ code: 'schedule/input-invalid', details: { code: 'subagent_session' } })
+
+  expect(test.stat).not.toHaveBeenCalled()
+  expect([...taskTable(test.ctx).entries()]).toEqual([])
+  expect(changed).not.toHaveBeenCalled()
+})
+
+it('refuses a task targeting a stored Session whose saved header records a delegated child', async () => {
+  const test = await setup()
+  test.stat.mockResolvedValueOnce(storedSession(childId, 1))
+
+  await expect(test.service.remoteCreate({
+    title: 'Check', prompt: 'Check', timing: { kind: 'rrule', rrule: RRULE }, target: { kind: 'session', sessionId: childId },
+  })).rejects.toMatchObject({ code: 'schedule/input-invalid', details: { code: 'subagent_session' } })
+
+  expect(test.stat).toHaveBeenCalledWith(childId, undefined)
+  expect(test.resolve).not.toHaveBeenCalled()
+  expect([...taskTable(test.ctx).entries()]).toEqual([])
+})
+
+it('refuses to retarget a task to a stored delegated child Session and keeps the stored target', async () => {
+  const test = await setup()
+  const created = await test.service.remoteCreate({
+    title: 'Check', prompt: 'Check', timing: { kind: 'rrule', rrule: RRULE }, target: { kind: 'session', sessionId: parentId },
+  })
+  const stored = taskTable(test.ctx).get(created.id)
+  test.stat.mockResolvedValueOnce(storedSession(childId, 1))
+  const changed = vi.fn()
+  test.ctx.on('schedule/changed', changed)
+
+  await expect(test.service.remoteEdit({
+    id: created.id, action: 'update', patch: { target: { kind: 'session', sessionId: childId } },
+  })).rejects.toMatchObject({ code: 'schedule/input-invalid', details: { code: 'subagent_session' } })
+
+  expect(taskTable(test.ctx).get(created.id)).toEqual(stored)
+  expect(changed).not.toHaveBeenCalled()
+  expect(test.resolve).not.toHaveBeenCalled()
+})
+
+it('still creates a task targeting a stored top-level Session without activating it', async () => {
+  const test = await setup()
+
+  const created = await test.service.remoteCreate({
+    title: 'Check', prompt: 'Check', timing: { kind: 'rrule', rrule: RRULE }, target: { kind: 'session', sessionId: parentId },
+  })
+
+  expect(created.target).toEqual({ kind: 'session', sessionId: parentId })
+  expect(test.stat).toHaveBeenCalledWith(parentId, undefined)
+  expect(test.resolve).not.toHaveBeenCalled()
 })

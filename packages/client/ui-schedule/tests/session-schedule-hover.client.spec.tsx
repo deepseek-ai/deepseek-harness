@@ -3,7 +3,7 @@ import { act, cleanup, render, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
-import type { ScheduleCatalogEntry, ScheduleDeleteResult } from '@deepseek-ai/dsh-schedule/client'
+import type { ScheduleDeleteResult, ScheduleCatalogEntry as ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
 import { ScheduleId } from '@deepseek-ai/dsh-schedule'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-ui-renderer/src/client/bind.ts'
@@ -14,6 +14,7 @@ import {
 import { SessionScheduleHover, type SessionScheduleHoverProps } from '../src/client/SessionScheduleHover.tsx'
 import { en, zh } from '../src/client/locales.ts'
 import css from '../src/client/SessionScheduleMark.module.css'
+import { pinSystemZone } from './zone-fixture.ts'
 
 const SESSION = 'hover-session' as SessionId
 const OTHER_SESSION = 'other-hover-session' as SessionId
@@ -21,16 +22,6 @@ const START = Date.parse('2026-08-25T12:00:00.000Z')
 
 /** Device zone the cases pin, so the card's absolute stamp is deterministic. */
 const DEVICE_ZONE = 'Asia/Shanghai'
-
-/**
- * Pin the browser-resolved zone the absolute next-run stamp reads.
- * @param timeZone - IANA zone the component must resolve as the device zone.
- */
-function pinSystemZone(timeZone: string): void {
-  vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
-    ...new Intl.DateTimeFormat().resolvedOptions(), timeZone,
-  })
-}
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -49,18 +40,20 @@ function record(
   prompt: string,
   scheduledAt: number,
   sessionId: SessionId = SESSION,
-  status: 'active' | 'inactive' = 'active',
+  status: ScheduleCatalogEntry['status'] = 'active',
   title?: string,
 ): ScheduleCatalogEntry {
-  return {
+  return { kind: 'rrule',
     id: ScheduleId(id),
-    sessionId,
-    status,
-    kind: 'every',
     title: title ?? prompt,
     prompt,
-    everySeconds: 300,
+    rrule: 'DTSTART;TZID=UTC:20260825T120000\nRRULE:FREQ=MINUTELY;INTERVAL=5',
     scheduledAt: new Date(scheduledAt).toISOString(),
+    target: { kind: 'session', sessionId },
+    involvedSessionIds: [sessionId],
+    status,
+    createdAt: '2026-08-25T12:00:00.000Z',
+    updatedAt: '2026-08-25T12:00:00.000Z',
   }
 }
 
@@ -203,7 +196,7 @@ describe('Session hover-card task section', () => {
     expect(within(tasks).queryByText('Other session task')).toBeNull()
   })
 
-  it('renders nothing while the read is unresolved, failed, empty, or holds only ended tasks', async () => {
+  it('renders nothing while the read is unresolved, failed, empty, or holds only paused or ended tasks', async () => {
     const pending = renderHover(sourceFor(() => new Promise(() => {})))
     expect(pending.container.querySelector('[data-session-schedule-tasks]')).toBeNull()
     pending.unmount()
@@ -220,7 +213,10 @@ describe('Session hover-card task section', () => {
 
     const ended = renderHover(sourceFor(async () => ({
       ok: true,
-      value: [record('ended', 'Finished task', START + 120_000, SESSION, 'inactive')],
+      value: [
+        record('paused', 'Paused task', START + 120_000, SESSION, 'paused'),
+        record('ended', 'Finished task', START + 120_000, SESSION, 'ended'),
+      ],
     })))
     await settle()
     expect(ended.container.querySelector('[data-session-schedule-tasks]')).toBeNull()

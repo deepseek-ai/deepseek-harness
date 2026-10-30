@@ -49,7 +49,7 @@ kind: "package-group"
 | [`ui-sidebar-documentpreview/`](ui-sidebar-documentpreview/README.zh.md) | 在右侧 Sidebar 的 tab 中显示文档 | `ctx.documentPreviews` |
 | [`ui-sidebar-browser/`](ui-sidebar-browser/README.zh.md) | 在右侧 Sidebar tab 中浏览 sandboxed HTTP(S) 页面，包括 loopback 服务 | — |
 | [`resources/`](resources/README.zh.md) | 统一资源模型：`useResource` 会话标准钩子背后的协议提供方 | `ctx.resources` |
-| [`ui-sidebar-files/`](ui-sidebar-files/README.zh.md) | 右侧 Sidebar 的工作区文件树 tab 类型 | — |
+| [`ui-sidebar-files/`](ui-sidebar-files/README.zh.md) | 工作区文件页，以及停靠与浮动文件预览旁每个分栏一棵的工作区目录树 | — |
 | [`ui-brand-official/`](ui-brand-official/README.zh.md) | 用官方名称与标记填充通用浏览器品牌 slot | — |
 | [`ui-workspace/`](ui-workspace/README.zh.md) | 提供工作区选择与创建界面 | — |
 | [`ui-conversation/`](ui-conversation/README.zh.md) | 展示当前对话及其输入界面 | — |
@@ -66,7 +66,7 @@ kind: "package-group"
 | [`ui-secret-mask/`](ui-secret-mask/README.zh.md) | 遮挡已发送用户文本中可识别的凭据 | — |
 | [`ui-subagent/`](ui-subagent/README.zh.md) | 提供 subagent 导航、子级 transcript（文本记录）状态与内联引用 | — |
 | [`ui-jobs/`](ui-jobs/README.zh.md) | 列出本会话的后台任务，并提供按需展开的流式输出面板 | — |
-| [`ui-schedule/`](ui-schedule/README.zh.md) | 在只读标题栏目录中列出当前会话中生效的提醒 | — |
+| [`ui-schedule/`](ui-schedule/README.zh.md) | 提供侧栏“自动化任务”页面与右侧栏任务页签，用于创建、编辑、立即运行、暂停、恢复和删除宿主的计划任务，并提供 Session 顶部时钟与行标记 | — |
 | [`ui-model-selection/`](ui-model-selection/README.zh.md) | 在对话界面中提供模型选择 | — |
 | [`ui-permission-presets/`](ui-permission-presets/README.zh.md) | 配置默认权限并切换当前会话的访问模式 | — |
 | [`ui-plan/`](ui-plan/README.zh.md) | 展示生效中的 plan mode 状态及其退出控件 | — |

@@ -1,6 +1,8 @@
 /** macOS native CUA provider using the shared application and window API. */
 import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import Schema from '@deepseek-ai/schemastery'
+import { createPermissionParameters } from './permission-guide.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { CuaConfig, installCua } from '@deepseek-ai/dsh-cua'
 import { nativeHostArchitecture, prepareNativeExecutable } from './native-build.ts'
@@ -13,9 +15,14 @@ export const name = 'experimental-cua-macos'
 /** Services required by the shared CUA executor and the native launcher. */
 export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'agents']
 /** Native preparation, operation bounds, and profile-local application grants. */
-export type Config = CuaConfig
-/** Validate the shared configuration before preparing the macOS helper. */
-export const Config: typeof CuaConfig = CuaConfig
+export interface Config extends CuaConfig {
+  /** Interval in milliseconds between permission and position checks while the native guide is open. */
+  permissionPollIntervalMs: number
+}
+/** Validate shared resource bounds and macOS guide configuration before preparing the helper. */
+export const Config = Schema.intersect([CuaConfig, Schema.object({
+  permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
+})]) satisfies Schema<Record<string, unknown>, Config>
 
 const description = 'Inspect macOS permissions, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.'
 
@@ -26,9 +33,11 @@ const description = 'Inspect macOS permissions, select an application and window
  * @returns Completion after native preparation and tool registration.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
+  const backend = { createChannel: createSharedNativeChannel, guidance: GUIDANCE, description,
+    permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
-    installCua(ctx, config, { helperPath: config.helperPath, createChannel: createSharedNativeChannel, guidance: GUIDANCE, description })
+    installCua(ctx, config, { helperPath: config.helperPath, ...backend })
     return
   }
   const architecture = nativeHostArchitecture(process.platform, process.arch)
@@ -45,5 +54,5 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }, 'dsh-cua.native-preparation')
   const helperPath = await prepared
   controller.signal.throwIfAborted()
-  installCua(ctx, config, { helperPath, createChannel: createSharedNativeChannel, guidance: GUIDANCE, description })
+  installCua(ctx, config, { helperPath, ...backend })
 }

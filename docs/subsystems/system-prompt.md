@@ -23,6 +23,8 @@ interface AssembleContext {
 }
 ```
 
+`TOOL_APPLY_PATCH` takes order 1350 between `TOOL_EDIT` (1300) and `TOOL_GLOB` (1400).
+
 ## Tool-provider result
 
 `ToolProviderResult.schemas` is the model-visible set for the current assembly. `knownNames` is the provider's pre-restriction name universe used to distinguish a configured-name typo from a known tool that is deliberately hidden in this scope.

@@ -234,6 +234,89 @@ describe('SessionProjectionRegistry drive', () => {
     expect(seen).toEqual([{ key: 'test/marks', value: { marks: ['a'] }, seq: event.seq, sessionId: String(session.id) }])
   })
 
+  it('notifies onEventChanged once per event with every changed key in registration order', async () => {
+    const { ctx, session } = await harness()
+    await ctx.sessionProjections.register(marksUnit())
+    await ctx.sessionProjections.register(countUnit())
+    // A distinct but reference-stable view, so the two entries carry different values.
+    const upper = new WeakMap<MarksView, MarksView>()
+    await ctx.sessionProjections.register(stableViewUnit((state) => {
+      const cached = upper.get(state.value)
+      if (cached !== undefined) return cached
+      const view = { marks: state.value.marks.map(item => item.toUpperCase()) }
+      upper.set(state.value, view)
+      return view
+    }))
+    const order: string[] = []
+    const events: { changes: readonly { key: string; val: unknown }[]; seq: SessionSeq; sessionId: string }[] = []
+    ctx.sessionProjections.onChanged((_session, key) => { order.push(`key:${key}`) })
+    ctx.sessionProjections.onEventChanged((changedSession, changes, seq) => {
+      order.push('event')
+      events.push({ changes, seq, sessionId: String(changedSession.id) })
+    })
+
+    const event = mark(session, ['a'])
+    // Host-only and same-reference view changes publish nothing.
+    session.append('turn/start', { turn: 1 })
+
+    expect(events).toEqual([{
+      changes: [{ key: 'test/marks', val: { marks: ['a'] } }, { key: 'test/stable-view', val: { marks: ['A'] } }],
+      seq: event.seq,
+      sessionId: String(session.id),
+    }])
+    expect(order).toEqual(['key:test/marks', 'key:test/stable-view', 'event'])
+  })
+
+  it('still delivers the changes made before a later unit throws', async () => {
+    const { ctx, session } = await harness()
+    await ctx.sessionProjections.register(marksUnit())
+    // A fresh invalid view on every change: its schema parse throws after test/marks was collected.
+    await ctx.sessionProjections.register(stableViewUnit(() => ({ marks: 1 }) as never))
+    const events: { changes: readonly { key: string; val: unknown }[]; seq: SessionSeq }[] = []
+    ctx.sessionProjections.onEventChanged((_session, changes, seq) => {
+      events.push({ changes, seq })
+    })
+
+    const event = mark(session, ['a'])
+
+    expect(events).toEqual([{ changes: [{ key: 'test/marks', val: { marks: ['a'] } }], seq: event.seq }])
+  })
+
+  it('computes views for an event listener alone and stops after its disposer runs', async () => {
+    const { ctx, session } = await harness()
+    const view = vi.fn((state: StableViewState) => state.value)
+    await ctx.sessionProjections.register(stableViewUnit(view))
+    const seen: { keys: readonly string[]; seq: SessionSeq }[] = []
+    const stop = ctx.sessionProjections.onEventChanged((_session, changes, seq) => {
+      seen.push({ keys: changes.map(change => change.key), seq })
+    })
+
+    const event = session.append('turn/start', { turn: 1 })
+    expect(view).toHaveBeenCalledOnce()
+    expect(seen).toEqual([{ keys: ['test/stable-view'], seq: event.seq }])
+
+    stop()
+    mark(session, ['after-stop'])
+    expect(seen).toHaveLength(1)
+    expect(view).toHaveBeenCalledOnce()
+  })
+
+  it('removes event-level change listeners when their owning fiber unloads (HMR safety)', async () => {
+    const { ctx, session } = await harness()
+    await ctx.sessionProjections.register(marksUnit())
+    const notifications: (readonly string[])[] = []
+    const fiber = await ctx.plugin(Object.assign((inner: Context) => {
+      inner.sessionProjections.onEventChanged((_session, changes) => {
+        notifications.push(changes.map(change => change.key))
+      })
+    }, { inject: ['sessionProjections'] }))
+    mark(session, ['live'])
+    await fiber.dispose()
+    mark(session, ['after-dispose'])
+    expect(notifications).toEqual([['test/marks']])
+    expect(ctx.sessionProjections.snapshot(session).values).toEqual({ 'test/marks': { marks: ['after-dispose'] } })
+  })
+
   it('does not compute a view while no change listener exists', async () => {
     const { ctx, session } = await harness()
     const view = vi.fn((state: StableViewState) => state.value)

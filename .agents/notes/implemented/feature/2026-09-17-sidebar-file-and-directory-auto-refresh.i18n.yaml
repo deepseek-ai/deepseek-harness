@@ -18,8 +18,8 @@
   en: ca63fb903b447c2d
   zh: 3014adbdb0a890ee
 /agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/implementation-and-responsibilities/client-and-sidebar:
-  en: 5cb8326d8a5b0407
-  zh: a31173f990276856
+  en: 5be003d933357fee
+  zh: 0aec7cea1b06a7ce
 /agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/watch-requests-and-notifications:
   en: 025ba83ae78824df
   zh: 264d74d2bdfe3d27
@@ -42,8 +42,8 @@
   en: d688642e5f272d48
   zh: 96088fbc0471aeae
 /agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/directory-node-tree-and-lifecycle:
-  en: 2ea8615be8d5229b
-  zh: 0c73fa4ebb06445e
+  en: eb011d181eeb83e3
+  zh: 7d2cb793fd1737b5
 /agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/user-flows:
   en: eb4005a334103895
   zh: e2c207faffa64e57
@@ -57,8 +57,8 @@
   en: 4f343f7a6c4d3ba4
   zh: a4390843a20f8dde
 /agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/readiness-races-and-refresh-coalescing:
-  en: caadd187479e9074
-  zh: 3deedd8093f60703
+  en: baff3282e8925728
+  zh: 2052ca0afadd7a1b
 /agent-note-on-demand-watching-and-automatic-refresh-for-sidebar-previews-and-file-trees/alternatives-considered:
   en: 8a8c19229647c760
   zh: 2de283fc2c815e65

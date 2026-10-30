@@ -460,7 +460,7 @@ function Browser({ state, listing, t, face, hooks, language, onInstall, openPack
   const busy = listing.status === 'loading' && value !== null
   return (
     <>
-      <div className={css.toolbar}>
+      <div className={css.toolbar} data-discover-toolbar>
         <Menu open={menu === 'market'} onClose={() => { setMenu(null) }} portal autoFocus selectedId={listing.url}
           items={state.indexes.map(index => ({ id: index.url, label: indexLabel(index, face.resolveText) }))}
           footer={[{ id: 'manage', label: t('manageSources'), icon: <IconSlidersTwoOutlineRegular size={14} /> }]}

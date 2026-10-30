@@ -1072,6 +1072,31 @@ describe('running and lock semantics', () => {
     }
   })
 
+  // The docked seat is the containing block for fixed descendants, so control
+  // tooltips render under the document body rather than inside the composer.
+  it('renders every control tooltip outside the composer subtree', () => {
+    vi.useFakeTimers()
+    try {
+      const { view } = bench({ running: true })
+      const shown: string[] = []
+      for (const control of view.container.querySelectorAll('button')) {
+        fireEvent.pointerEnter(control)
+        act(() => { vi.advanceTimersByTime(500) })
+        const tooltip = view.queryByRole('tooltip')
+        if (tooltip !== null) {
+          shown.push(control.getAttribute('aria-label') ?? '')
+          expect(view.container.contains(tooltip)).toBe(false)
+          expect(document.body.contains(tooltip)).toBe(true)
+        }
+        fireEvent.pointerLeave(control)
+        act(() => { vi.advanceTimersByTime(500) })
+      }
+      expect(shown).toEqual(expect.arrayContaining(['添加文件或调用指令', '停止生成']))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('dismisses the Stop tooltip when an empty composer becomes idle', () => {
     vi.useFakeTimers()
     try {

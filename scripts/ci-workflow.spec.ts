@@ -1313,6 +1313,30 @@ describe('Python release workflows', () => {
     expect(JSON.stringify(manylinuxSmoke)).toContain('-e DSH_TELEMETRY_DISABLED')
   })
 
+  it.each([
+    ['POSIX', 'posix', "runner.os != 'Windows'"],
+    ['Windows', 'windows', "runner.os == 'Windows'"],
+  ])('runs native command regressions through the installed %s wheels', (platform, suffix, condition) => {
+    const build = workflowJob(loadWorkflow('.github/workflows/build-exe-for-python-sdk.yml'), 'build')
+    if (!Array.isArray(build.steps)) throw new TypeError('Python wheel builder must define steps')
+    const steps = build.steps.filter(isRecord)
+    const installIndex = steps.findIndex(step => step.id === `smoke-venv-${suffix}`)
+    const testIndex = steps.findIndex(step => step.name === `Run installed-wheel native command tests (${platform})`)
+    expect(installIndex).toBeGreaterThanOrEqual(0)
+    expect(testIndex).toBeGreaterThan(installIndex)
+    const install = steps[installIndex]
+    const test = steps[testIndex]
+    expect(install?.run).toContain('pytest>=8.0')
+    expect(test).toMatchObject({ if: condition })
+    expect(test).not.toHaveProperty('continue-on-error')
+    expect(test?.run).toContain(`"\${{ steps.smoke-venv-${suffix}.outputs.python }}" -I`)
+    expect(test?.run).toContain('run_installed_commands.py')
+    if (platform === 'Windows') {
+      expect(test).toHaveProperty('shell', 'pwsh')
+      expect(test?.run).toContain('if ($LASTEXITCODE -ne 0) { throw')
+    }
+  })
+
   it('uses the shared macOS deployment-target check in GitLab', () => {
     const workflow = loadWorkflow('.gitlab-ci.yml')
     const runtimeWheel = workflow['.runtime-wheel']
@@ -1747,7 +1771,7 @@ describe('Policy workflow shells', () => {
 describe('Policy workflows', () => {
   const workflows = [
     ['pr-check-on-head-branch.yml', ['master']],
-    ['pr-check-after-approve.yml', ['approve', 'review']],
+    ['pr-check-after-approve.yml', ['approve']],
   ] as const
 
   function stepsOf(job: Record<string, unknown>): Record<string, unknown>[] {
@@ -1768,6 +1792,20 @@ describe('Policy workflows', () => {
       if (check === undefined || !isRecord(check.env)) throw new TypeError(`${file} ${job} must run the check action with env`)
       expect(String(check.env.CHECK_MODE)).toContain('vars.MERGE_POLICY_')
     }
+  })
+
+  it('decides the review verdict in one Approve Check job that can publish the check run', () => {
+    const workflow = loadWorkflow('.github/workflows/pr-check-after-approve.yml')
+    if (!isRecord(workflow.jobs)) throw new TypeError('the workflow must define jobs')
+    expect(Object.keys(workflow.jobs)).toEqual(['approve'])
+    const job = workflow.jobs.approve
+    if (!isRecord(job) || !isRecord(job.permissions)) throw new TypeError('the approve job must declare permissions')
+    expect(job.name).toBe('Approve Check')
+    expect(job.permissions.checks).toBe('write')
+    const check = stepsOf(job).find(step => typeof step.uses === 'string' && step.uses.startsWith('deepseek-harness/deepseek-harness-check@'))
+    if (check === undefined || !isRecord(check.env)) throw new TypeError('the job must run the check action with env')
+    expect(String(check.env.CHECK_MODE)).toContain('vars.MERGE_POLICY_HEAD_DIFF')
+    expect(JSON.stringify(workflow)).not.toContain('MERGE_POLICY_REVIEW')
   })
 
   it('keeps the pre-merge build behind the merge step, which honours the mode on its failures', () => {

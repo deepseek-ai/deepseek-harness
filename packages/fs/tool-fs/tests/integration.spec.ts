@@ -59,9 +59,9 @@ afterEach(async () => {
 })
 
 // --------------------------------------------------------------------------
-// DEFAULT deployment: the policy gate plugin is loaded.
+// GUARDED deployment: the policy gate plugin is loaded (shipped compositions leave it disabled).
 // --------------------------------------------------------------------------
-describe('default deployment (with dsh-fs-observation-policy)', () => {
+describe('guarded deployment (with dsh-fs-observation-policy)', () => {
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-'))
     ctx = new Context()
@@ -334,7 +334,7 @@ describe('default deployment (with dsh-fs-observation-policy)', () => {
 })
 
 // --------------------------------------------------------------------------
-// BARE deployment: the tool suite WITHOUT the policy gate.
+// BARE deployment: the tool suite WITHOUT the policy gate, as the shipped compositions run.
 // --------------------------------------------------------------------------
 describe('bare provider (no dsh-fs-observation-policy)', () => {
   beforeEach(async () => {

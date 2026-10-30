@@ -13,7 +13,7 @@ import {
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { inspectSystemPrompt } from '../../ui-conversation/src/client/contract/system-prompt.ts'
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
-import { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
+import { LlmAttemptId, ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { hasAssistantReplyContent } from '../src/client/contract/assistant-content.ts'
 import { assistantDefinition } from '../src/client/conversation-nodes/assistant.ts'
@@ -167,6 +167,17 @@ function snapshot(value: ConversationNodeAssembler): ChatSnapshot {
 
 function node(value: ChatSnapshot, kind: string): ChatConversationViewNode | undefined {
   return value.nodes.values().find(candidate => candidate.kind === kind)
+}
+
+function appendAssistantChunk(value: ConversationNodeAssembler, seq: number, chunk: StreamChunk): void {
+  value.append({
+    type: 'transient',
+    event: {
+      type: 'assistant/live-chunk', seq, time: 1_700_000_000_000 + seq,
+      data: { attemptId: LlmAttemptId('assistant-visibility'), turn: 1, step: 1, chunk },
+    },
+  })
+  value.flush()
 }
 
 function promptNodes(value: ChatSnapshot): ChatConversationViewNode[] {
@@ -1126,6 +1137,94 @@ describe('built-in conversation node Definitions', () => {
     expect(answer?.anchorSeq).toBe(52)
     expect(processData)
       .toMatchObject({ answerAnchorSeq: null, answerStep: null })
+  })
+
+  it.each(['text', 'reasoning'] as const)('retains %s whitespace and anchors the first visible delta', (kind) => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+    ])
+    const whitespace = '\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007'
+      + '\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff'
+    appendAssistantChunk(value, 3, { type: 'block-start', index: 0, blockType: kind })
+    appendAssistantChunk(value, 4, { type: `${kind}-delta`, index: 0, text: whitespace })
+    expect(node(snapshot(value), 'assistant-step')).toBeUndefined()
+
+    appendAssistantChunk(value, 5, { type: `${kind}-delta`, index: 0, text: '\u200b' })
+    const visible = node(snapshot(value), 'assistant-step')
+    expect(visible).toMatchObject({ anchorSeq: 5, visibility: 'visible', data: { time: 1_700_000_000_005 } })
+    appendAssistantChunk(value, 6, { type: `${kind}-delta`, index: 0, text: `${whitespace}answer` })
+    const content = `${whitespace}\u200b${whitespace}answer`
+    expect(node(snapshot(value), 'assistant-step')).toMatchObject({
+      key: visible?.key, anchorSeq: 5, visibility: 'visible',
+      data: { blocks: [{ kind, text: content }] },
+    })
+
+    value.append(at(7, 'assistant/message', {
+      turn: 1, step: 1,
+      message: { ...assistantMessage('whitespace-answer', ''), content: [{ type: kind, text: content }] },
+    }, { surfaceOp: 'append' }))
+    value.flush()
+    const settled = node(snapshot(value), 'assistant-step')?.data as AssistantChatData
+    expect(settled.finalNode?.timing?.firstTokenTime).toBe(1_700_000_000_004)
+    expect(settled.blocks).toEqual([{ kind, text: content }])
+  })
+
+  it.each(['text', 'reasoning'] as const)('updates visibility when a sparse Assistant block becomes %s', (kind) => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+    ])
+    appendAssistantChunk(value, 3, { type: 'text-delta', index: 0, text: 'answer' })
+    const first = node(snapshot(value), 'assistant-step')
+    const previousKind = kind === 'text' ? 'reasoning' : 'text'
+    appendAssistantChunk(value, 4, { type: `${previousKind}-delta`, index: 2, text: 'thinking' })
+    appendAssistantChunk(value, 5, { type: 'block-start', index: 0, blockType: 'text' })
+    expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('visible')
+    appendAssistantChunk(value, 6, { type: `${previousKind}-delta`, index: 2, text: ' ' })
+    expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('visible')
+    appendAssistantChunk(value, 7, { type: `${kind}-delta`, index: 2, text: ' ' })
+    expect(node(snapshot(value), 'assistant-step')).toMatchObject({
+      key: first?.key, anchorSeq: 3, visibility: 'hidden',
+      data: { blocks: [{ kind: 'text', text: '' }, { kind, text: ' ' }] },
+    })
+    appendAssistantChunk(value, 8, { type: 'block-end', index: 0, block: { type: 'text', text: 'replacement' } })
+    expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('visible')
+    appendAssistantChunk(value, 9, { type: 'block-end', index: 0, block: { type: 'text', text: ' ' } })
+    expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('hidden')
+    appendAssistantChunk(value, 10, { type: 'block-start', index: 0, blockType: 'image' })
+    expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('visible')
+    appendAssistantChunk(value, 11, {
+      type: 'tool-call-delta', index: 0, id: ToolCallId('visibility-tool'), name: 'read', argumentsDelta: '',
+    })
+    expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('hidden')
+    appendAssistantChunk(value, 12, { type: 'block-start', index: 0, blockType: 'image' })
+    expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('visible')
+    appendAssistantChunk(value, 13, { type: 'block-start', index: 0, blockType: 'tool-call' })
+    expect(node(snapshot(value), 'assistant-step')).toMatchObject({
+      key: first?.key, anchorSeq: 3, visibility: 'hidden',
+    })
+  })
+
+  it('waits for visible content again after an Assistant retry', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+    ])
+    appendAssistantChunk(value, 3, { type: 'text-delta', index: 0, text: 'first attempt' })
+    const first = node(snapshot(value), 'assistant-step')
+    value.append(at(4, 'llm/retry', {
+      retryId: 'visibility-retry', turn: 1, step: 1, provider: 'fake', mode: 'normal',
+      policyKey: 'fake-normal', retry: 1, maxRetries: 2, delayMs: 10,
+      failure: { code: 'TRANSPORT', message: 'temporary' },
+    }))
+    appendAssistantChunk(value, 5, { type: 'reasoning-delta', index: 0, text: '\u00a0 ' })
+    expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('hidden')
+    appendAssistantChunk(value, 6, { type: 'reasoning-delta', index: 0, text: 'replacement' })
+    expect(node(snapshot(value), 'assistant-step')).toMatchObject({
+      key: first?.key, anchorSeq: 6, visibility: 'visible',
+      data: { time: 1_700_000_000_006, blocks: [{ kind: 'reasoning', text: '\u00a0 replacement' }] },
+    })
   })
 
   it('keeps one keyed Assistant node while streaming settles and materializes interruption from Location', () => {
@@ -2153,6 +2252,18 @@ describe('built-in conversation node Definitions', () => {
     value.flush()
     expect(snapshot(value).nodes.values().filter(candidate => candidate.kind === 'system-prompt')
       .map(candidate => candidate.data)).toEqual([{ text: 'A' }, { text: 'B', update: true }, { text: 'C' }])
+  })
+
+  it('hides a published prompt node while a prepended replacement makes its prompt unknown', () => {
+    const value = assembler([systemAt(10, 'Shown')], true)
+    const { key } = node(snapshot(value), 'system-prompt')!
+    expect(snapshot(value).nodes.get(key)?.visibility).toBe('visible')
+    value.prepend([systemAt(5, 'Older', 2)], true)
+    value.flush()
+    expect(snapshot(value).nodes.get(key)).toMatchObject({ visibility: 'hidden', data: { text: 'Shown' } })
+    value.prepend([systemAt(1, 'First')], false)
+    value.flush()
+    expect(snapshot(value).nodes.get(key)).toMatchObject({ visibility: 'visible', data: { text: 'Shown', update: true } })
   })
 
   it('never renders a system/message as a transcript bubble', () => {

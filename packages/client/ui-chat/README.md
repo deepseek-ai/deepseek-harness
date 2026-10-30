@@ -58,6 +58,8 @@ Chat omits system-prompt, ordinary Context injection, and `permission` command r
 
 When an Assistant attempt retires without a visible message, Chat hides its already-published Node instead of removing its key. A retry in the same Step reuses that key when visible content returns. This also applies when the loaded window lacks the Step start.
 
+Text and reasoning contribute to Assistant visibility only when they contain a non-whitespace character. Streaming appends reuse each block's visibility; block replacement and finalized messages recalculate it while preserving the original text.
+
 <a id="command-and-failure-rows"></a>
 ## Command and failure rows
 
@@ -125,7 +127,7 @@ Scroll-edge fades initialize when `ResizeObserver` reports the open group's layo
 
 Each group owns local `useDisclosure` state that survives mode changes while its component stays mounted.
 
-The session-scoped `conversation.chat.reasoning.body` single Slot offers the original reasoning text and streaming state only when its body is expanded. Its official entry registers at priority 100 and calls the `conversation.chat.reasoning.content` Factory. A replacement uses a lower priority number and may call that same Factory with original or derived text. The root-scoped Factory requires no Session and fixes compact typography. Its optional `labels` accepts complete `MarkdownLabels` unchanged; omission uses Chat's localized defaults. The host supplies no inline fallback or plugin action state. Display extensions must preserve access to the original text and own their controls inside their Body wrapper. Extensions do not replace the reasoning preview or its disclosure policy. The [reasoning display rules](src/client/conversation-nodes/README.md#display-modes) define which blocks produce rows.
+The session-scoped `conversation.chat.reasoning.body` single Slot offers the original `rawText`, display-ready `text`, and streaming state only when its body is expanded. Its official entry registers at priority 100 and calls the `conversation.chat.reasoning.content` Factory. A replacement uses a lower priority number and may call that same Factory with original or derived text. The root-scoped Factory requires no Session and fixes compact typography. Its optional `labels` accepts complete `MarkdownLabels` unchanged; omission uses Chat's localized defaults. The host supplies no inline fallback or plugin action state. Display extensions must preserve access to the untranslated text and own their controls inside their Body wrapper. Extensions do not replace the reasoning preview or its disclosure policy. The [reasoning display rules](src/client/conversation-nodes/README.md#display-modes) define which blocks produce rows.
 
 The Chat-node slot injects a reset-bound `useDisclosure` Hook for reasoning and tools. Intermediate renderers forward it without subscribing; each invocation owns independent open state. Source callbacks retain their receiver and stable identity. When an enclosing Turn actually hides a process member, its seat resets those disclosures without replacing component keys or changing the Hook reference. Display-mode changes preserve their open state.
 

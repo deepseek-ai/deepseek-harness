@@ -6,24 +6,29 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { PaneId, SidebarRightTabActions, SidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import type { ScheduleCatalogEntry, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
+import type { ScheduleId, ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { CatalogSnapshot } from '../src/client/catalog-source.ts'
+import type { CatalogDeleteOutcome, CatalogSnapshot } from '../src/client/catalog-source.ts'
+import type { HostTaskActions } from '../src/client/TaskDetail.tsx'
+import { formatScheduleFrequency } from '../src/client/schedule-format.ts'
 import { ScheduleTaskTab, type ScheduleTaskTabProps } from '../src/client/ScheduleTaskTab.tsx'
 import { ScheduleTaskTabTitle, type ScheduleTaskTabTitleProps } from '../src/client/ScheduleTaskTabTitle.tsx'
 import { TaskTabBindings, type TaskTabPage } from '../src/client/task-tab-bindings.ts'
 import { en, zh } from '../src/client/task-manager-locales.ts'
 import css from '../src/client/TaskManagerPage.module.css'
 
+type Entry = ScheduleCatalogEntry
+
 const SESSION = 'session-alpha' as SessionId
 /** The persisted layout record of the tab under test: its id, kind, and content identity. */
 const TAB: TaskTabPage = { id: 'tab1', kind: 'scheduleTask', contentId: 'sidebar://scheduleTask' }
-const at: ScheduleCatalogEntry = {
-  id: 'task-detail' as ScheduleId, sessionId: SESSION, kind: 'every', status: 'active',
-  title: 'Check metrics', prompt: 'Check metrics\nSecond line of the instruction', everySeconds: 301,
-  scheduledAt: '2026-10-01T09:30:00.000Z',
+const at: Entry = { kind: 'rrule',
+  id: 'task-detail' as ScheduleId, title: 'Check metrics', prompt: 'Check metrics\nSecond line of the instruction',
+  rrule: 'DTSTART;TZID=UTC:20261001T093000\nRRULE:FREQ=MINUTELY;INTERVAL=5', scheduledAt: '2026-10-01T09:30:00.000Z',
+  target: { kind: 'session', sessionId: SESSION }, involvedSessionIds: [SESSION], status: 'active',
+  createdAt: '2026-09-30T00:00:00.000Z', updatedAt: '2026-09-30T00:00:00.000Z',
 }
-const other: ScheduleCatalogEntry = { ...at, id: 'task-other' as ScheduleId, title: 'Other metrics' }
+const other: Entry = { ...at, id: 'task-other' as ScheduleId, title: 'Other metrics' }
 const sessions: SessionListState = {
   ids: [SESSION],
   byId: { [SESSION]: { id: SESSION, displayTitle: SESSION, running: false, blank: false, updatedAt: 0, retainedBy: {} } },
@@ -40,7 +45,7 @@ function sessionsWithTitle(title: string): SessionListState {
   return {
     ...sessions,
     byId: Object.fromEntries(Object.entries(sessions.byId).map(([id, summary]) => [
-      id, id === SESSION ? { ...summary, title } : summary,
+      id, id === SESSION ? { ...summary, title, displayTitle: title } : summary,
     ] as const)),
   }
 }
@@ -65,7 +70,7 @@ function tabInfo(params: unknown, revision = 1): SidebarRightTabInfo {
   }
   return {
     sidebar: { expanded: true, fullscreen: false },
-    panel: { id: 'pane-1' as PaneId },
+    panel: { id: 'pane-1' as PaneId, isFloating: false },
     tab: {
       ...TAB,
       title: '',
@@ -76,7 +81,7 @@ function tabInfo(params: unknown, revision = 1): SidebarRightTabInfo {
 }
 
 function mount(
-  initial: Partial<CatalogSnapshot<ScheduleCatalogEntry>> = {},
+  initial: Partial<CatalogSnapshot<Entry>> = {},
   params: unknown = { sessionId: SESSION, id: at.id },
   dictionary: typeof en | typeof zh = en,
   sessionState: SessionListState = sessions,
@@ -86,15 +91,12 @@ function mount(
   // settles the snapshot and advances its revision. A refresh and a failure keep
   // both, which is what separates "no answer yet" from "the last answer stands".
   const initialStatus = initial.status ?? 'ready'
-  let snapshot: CatalogSnapshot<ScheduleCatalogEntry> = {
+  let snapshot: CatalogSnapshot<Entry> = {
     records: [at], status: initialStatus, deleting: [],
     settled: initialStatus === 'ready',
     readRequest: initialStatus === 'ready' ? 1 : 0, readSettled: initialStatus === 'ready' ? 1 : 0,
     ...initial,
   }
-  const updateTiming = vi.fn<NonNullable<ScheduleTaskTabProps['onUpdateTiming']>>(
-    async ({ expected }) => ({ ok: true, value: { id: expected.id, updated: false, record: expected } }),
-  )
   const info = params === RESTORED ? tabInfo(undefined, 0) : tabInfo(params)
   const props = {
     sessionId: SESSION,
@@ -103,7 +105,11 @@ function mount(
     useWorkspaces: <T,>(select: (value: WorkspaceSnapshot) => T): T => select(workspaces),
     onDelete: vi.fn(async () => 'deleted' as const),
     onRetry: vi.fn(async () => {}),
-    onUpdateTiming: updateTiming,
+    hostActions: {
+      edit: vi.fn<HostTaskActions['edit']>(async () => 'saved'),
+      run: vi.fn<HostTaskActions['run']>(async () => 'queued'),
+      loadNewSessionInterval: vi.fn<HostTaskActions['loadNewSessionInterval']>(async () => 7200),
+    },
     loadHistory: vi.fn(async ({ id }: { id: ScheduleId }) => ({
       ok: true, value: {
         id, records: [], earlierRecordsUnavailable: false,
@@ -116,9 +122,9 @@ function mount(
     ...overrides,
   } as ScheduleTaskTabProps
   /** Props whose catalog hook reads one snapshot. */
-  const withSnapshot = (value: CatalogSnapshot<ScheduleCatalogEntry>): ScheduleTaskTabProps => ({
+  const withSnapshot = (value: CatalogSnapshot<Entry>): ScheduleTaskTabProps => ({
     ...props,
-    useCatalog: <T,>(select: (current: CatalogSnapshot<ScheduleCatalogEntry>) => T): T => select(value),
+    useCatalog: <T,>(select: (current: CatalogSnapshot<Entry>) => T): T => select(value),
   })
   const view = render(<ScheduleTaskTab {...withSnapshot(initialStatus === 'ready'
     ? { ...snapshot, readRequest: 0, readSettled: 0 }
@@ -131,14 +137,14 @@ function mount(
   const mountRetries = vi.mocked(props.onRetry).mock.calls.map(call => call[0])
   vi.mocked(props.onRetry).mockClear()
   return {
-    props, view, updateTiming, mountRetries,
+    props, view, mountRetries,
     bindings: props.taskBindings,
     /** Render one catalog snapshot over the mounted tab. */
-    show(next: CatalogSnapshot<ScheduleCatalogEntry>) {
+    show(next: CatalogSnapshot<Entry>) {
       snapshot = next
       view.rerender(<ScheduleTaskTab {...withSnapshot(snapshot)} />)
     },
-    update(next: Partial<CatalogSnapshot<ScheduleCatalogEntry>>) {
+    update(next: Partial<CatalogSnapshot<Entry>>) {
       // A successful read settles the snapshot and advances its revision; a
       // refresh and a failure publish only the status they were given.
       const settled = next.status === 'ready'
@@ -162,50 +168,44 @@ function boundTo(id: ScheduleId): TaskTabBindings {
 }
 
 describe.each([['English', en], ['Chinese', zh]] as const)('task tab body in %s', (_name, dictionary) => {
-  it('renders the named task rule and its actions without a close control or the hosting Session link', () => {
+  it('renders the named task rule, its actions, and its target Session entry without a close control', () => {
     const h = mount({}, { sessionId: SESSION, id: at.id }, dictionary)
     const detail = screen.getByRole('complementary', { name: dictionary['detail.label'] })
-    // The strip heads the panel, the editable name follows it, then its next-run line.
+    // The strip heads the panel, the task name follows it, then its next-run line.
     const tabs = within(detail).getByRole('tablist', { name: dictionary['detail.tabs'] })
-    const nameControl = within(detail).getByRole<HTMLInputElement>('textbox', { name: dictionary['detail.name'] })
+    const name = within(detail).getByRole('heading', { level: 2, name: at.title })
     const nextRun = detail.querySelector<HTMLElement>(`.${css.nextRun}`)!
-    expect(nameControl.value).toBe('Check metrics')
-    expect(follows(tabs, nameControl)).toBe(true)
-    expect(follows(nameControl, nextRun)).toBe(true)
+    expect(follows(tabs, name)).toBe(true)
+    expect(follows(name, nextRun)).toBe(true)
     expect(nextRun.querySelector('time')?.dateTime).toBe(at.scheduledAt)
-    expect((within(detail).getByRole<HTMLTextAreaElement>('textbox', { name: dictionary['detail.instruction'] })).value)
-      .toContain(at.prompt)
-    const rule = within(detail).getByRole('region', { name: dictionary['rule.title'] })
-    expect(rule).toBeDefined()
-    expect(rule.textContent).toContain(dictionary['rule.everySeconds'])
+    expect(detail.querySelector(`.${css.readonlyPrompt}`)?.textContent).toBe(at.prompt)
+    const rule = detail.querySelector<HTMLElement>(`.${css.ruleCard}`)!
+    expect(rule.textContent).toContain(formatScheduleFrequency(at, makeTranslate(dictionary)))
+    expect(rule.textContent).toContain(dictionary['host.currentConversation'])
     expect(within(tabs).getAllByRole('tab')).toHaveLength(2)
     fireEvent.click(within(detail).getByRole('button', { name: dictionary['detail.more'] }))
     const menu = screen.getByRole('menu')
-    expect(within(menu).getAllByRole('menuitem')).toHaveLength(1)
-    expect(within(menu).getByRole('menuitem', { name: dictionary['delete.action'] })).toBeDefined()
+    expect(within(menu).getAllByRole('menuitem').map(item => item.textContent))
+      .toEqual([dictionary['host.run'], dictionary['delete.action']])
     fireEvent.keyDown(menu, { key: 'Escape' })
-    // The tab already sits in the task's own Session, so the linked-Session entry is redundant.
-    expect(within(detail).queryByRole('button', { name: dictionary['detail.openSession'] })).toBeNull()
-    expect(h.props.onOpenSession).not.toHaveBeenCalled()
+    // The footer opens the Session that the task delivers to, as it does on the Tasks page.
+    fireEvent.click(within(detail).getByRole('button', { name: dictionary['detail.openSession'] }))
+    expect(h.props.onOpenSession).toHaveBeenCalledExactlyOnceWith(SESSION)
     // The tab has its own close control in the Sidebar strip, so the detail carries none.
     expect(within(detail).queryByRole('button', { name: dictionary['detail.close'] })).toBeNull()
   })
 
-  it('names the shown task with its stored title and keeps the instruction control', () => {
+  it('names the shown task with its stored title and shows its instruction', () => {
     const named = { ...at, title: 'Metrics review' }
     mount({ records: [named] })
     const detail = screen.getByRole('complementary', { name: en['detail.label'] })
-    expect((within(detail).getByRole<HTMLInputElement>('textbox', { name: en['detail.name'] })).value).toBe('Metrics review')
-    expect((within(detail).getByRole<HTMLTextAreaElement>('textbox', { name: en['detail.instruction'] })).value)
-      .toContain(named.prompt)
+    expect(within(detail).getByRole('heading', { level: 2 }).textContent).toBe('Metrics review')
+    expect(detail.querySelector(`.${css.readonlyPrompt}`)?.textContent).toBe(named.prompt)
   })
 
-  it('labels another Session\'s task with that Session\'s catalog title instead of its id', () => {
+  it('labels the target Session with its catalog title instead of its id', () => {
     const title = 'Release review'
-    const h = mount({}, { sessionId: SESSION, id: at.id }, dictionary, sessionsWithTitle(title), {
-      // A tab hosted in a different Session keeps the linked-Session entry.
-      sessionId: 'session-beta' as SessionId,
-    })
+    const h = mount({}, { sessionId: SESSION, id: at.id }, dictionary, sessionsWithTitle(title))
     const detail = screen.getByRole('complementary', { name: dictionary['detail.label'] })
     const link = within(detail).getByRole('button', {
       name: dictionary['detail.openSessionTitle'].replace('{title}', title),
@@ -221,8 +221,8 @@ describe.each([['English', en], ['Chinese', zh]] as const)('task tab body in %s'
     fireEvent.click(screen.getByRole('button', { name: dictionary['detail.more'] }))
     fireEvent.click(screen.getByRole('menuitem', { name: dictionary['delete.action'] }))
     const dialog = screen.getByRole('dialog', { name: dictionary['delete.title'] })
-    expect(dialog.textContent).toContain(at.title)
-    expect(dialog.textContent).not.toContain(at.prompt)
+    expect(dialog.textContent).toContain(at.prompt)
+    expect(dialog.textContent).toContain(dictionary['delete.description'])
     expect(h.props.onDelete).not.toHaveBeenCalled()
     fireEvent.click(within(dialog).getByRole('button', { name: dictionary['delete.cancel'] }))
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -293,7 +293,7 @@ describe('task tab states', () => {
     expect(screen.getByRole('status', { name: en['list.loading'] })).toBeDefined()
     h.update({ records: [at], status: 'ready' })
     const detail = screen.getByRole('complementary', { name: en['detail.label'] })
-    expect((within(detail).getByRole<HTMLInputElement>('textbox', { name: en['detail.name'] })).value).toBe(at.title)
+    expect(within(detail).getByRole('heading', { level: 2 }).textContent).toBe(at.title)
     expect(screen.queryByText(en['detail.missing'])).toBeNull()
   })
 
@@ -307,7 +307,7 @@ describe('task tab states', () => {
       taskBindings: boundTo(at.id),
     })
     const detail = screen.getByRole('complementary', { name: en['detail.label'] })
-    expect((within(detail).getByRole<HTMLInputElement>('textbox', { name: en['detail.name'] })).value).toBe(other.title)
+    expect(within(detail).getByRole('heading', { level: 2 }).textContent).toBe(other.title)
     // The navigation rebinds the page to the task it named.
     expect(h.bindings.read(SESSION, TAB)).toEqual({ sessionId: SESSION, id: other.id })
   })
@@ -417,7 +417,7 @@ describe('task tab states', () => {
     })
     expect(vi.mocked(h.props.onRetry)).toHaveBeenCalledOnce()
     expect(within(screen.getByRole('complementary', { name: en['detail.label'] }))
-      .getByRole<HTMLInputElement>('textbox', { name: en['detail.name'] })).toHaveProperty('value', other.title)
+      .getByRole('heading', { level: 2 }).textContent).toBe(other.title)
   })
 
   it('keeps a restored binding until a read after the tab confirms the task is gone', () => {
@@ -470,40 +470,46 @@ describe('task tab states', () => {
 
   it('keeps a retained task rendered after its authoritative row disappears', async () => {
     const h = mount()
-    const pending = Promise.withResolvers<Awaited<ReturnType<typeof h.updateTiming>>>()
-    h.updateTiming.mockReturnValue(pending.promise)
-    fireEvent.click(within(screen.getByRole('region', { name: en['rule.title'] }))
-      .getByRole('button', { name: new RegExp(`^${en['rule.repeat']}`) }))
-    fireEvent.click(screen.getByRole('menuitem', { name: en['rule.daily'] }))
+    const pending = Promise.withResolvers<Awaited<ReturnType<HostTaskActions['edit']>>>()
+    vi.mocked(h.props.hostActions.edit).mockReturnValueOnce(pending.promise)
+    fireEvent.click(screen.getByRole('button', { name: en['host.edit'] }))
+    fireEvent.change(screen.getByRole('textbox', { name: en['detail.name'] }), { target: { value: 'Renamed' } })
     fireEvent.click(within(document.querySelector<HTMLElement>(`.${css.saveFooter}`)!)
       .getByRole('button', { name: en['rule.save'] }))
+    expect(h.props.hostActions.edit).toHaveBeenCalledOnce()
     h.update({ records: [] })
     const detail = screen.getByRole('complementary', { name: en['detail.label'] })
-    expect((within(detail).getByRole<HTMLInputElement>('textbox', { name: en['detail.name'] })).value).toBe('Check metrics')
+    expect((within(detail).getByRole<HTMLInputElement>('textbox', { name: en['detail.name'] })).value).toBe('Renamed')
     fireEvent.click(within(detail).getByRole('button', { name: en['detail.more'] }))
     expect(screen.getByRole('menuitem', { name: en['delete.action'] }).hasAttribute('disabled')).toBe(true)
     await act(async () => {
-      pending.resolve({ ok: true, value: { id: at.id, updated: true, record: {
-        id: at.id, title: at.title, prompt: at.prompt, kind: 'daily', time: '09:30:00.000', timeZone: 'UTC',
-        scheduledAt: at.scheduledAt,
-      } } })
+      pending.resolve('saved')
       await pending.promise
     })
     expect(screen.queryByRole('complementary')).toBeNull()
   })
 
-  it('closes the tab once a confirmed deletion leaves the refreshed catalog without the row', () => {
-    const h = mount({}, { sessionId: SESSION, id: at.id })
+  it('closes the tab once the Host applies a confirmed deletion', async () => {
+    const pending = Promise.withResolvers<CatalogDeleteOutcome>()
+    const h = mount({}, { sessionId: SESSION, id: at.id }, en, sessions, {
+      onDelete: vi.fn<ScheduleTaskTabProps['onDelete']>(() => pending.promise),
+    })
     const close = vi.spyOn(h.props.useTabInfo().tab.actions, 'close')
     fireEvent.click(screen.getByRole('button', { name: en['detail.more'] }))
     fireEvent.click(screen.getByRole('menuitem', { name: en['delete.action'] }))
     fireEvent.click(screen.getByRole('button', { name: en['delete.confirm'] }))
+    expect(h.props.onDelete).toHaveBeenCalledExactlyOnceWith(at.id)
     // The catalog still lists the row while the deletion is in flight, so the tab stays.
     h.update({ deleting: [at.id] })
-    expect(close).not.toHaveBeenCalled()
-    // The refreshed catalog reports the row gone; the tab closes itself and the
-    // app-wide toast, not this body, announces the outcome.
+    // The refresh after the deletion drops the row, and the tab keeps the task until the Host answers.
     h.update({ records: [], deleting: [] })
+    expect(close).not.toHaveBeenCalled()
+    expect(screen.getByRole('complementary', { name: en['detail.label'] })).toBeDefined()
+    await act(async () => {
+      pending.resolve('deleted')
+      await pending.promise
+    })
+    // The tab closes itself, and the app-wide toast, not this body, announces the outcome.
     expect(close).toHaveBeenCalledOnce()
   })
 
@@ -519,13 +525,13 @@ describe('task tab chip', () => {
     const named = { ...at, title: 'Metrics review' }
     const props = {
       useTabInfo: () => tabInfo({ sessionId: SESSION, id: at.id }),
-      useCatalog: <T,>(select: (value: CatalogSnapshot<ScheduleCatalogEntry>) => T): T =>
+      useCatalog: <T,>(select: (value: CatalogSnapshot<Entry>) => T): T =>
         select({ records: [named], status: 'ready', deleting: [], settled: true, readRequest: 0, readSettled: 0 }),
       t: makeTranslate(en),
     } as ScheduleTaskTabTitleProps
     const view = render(<ScheduleTaskTabTitle {...props} />)
     expect(view.container.textContent).toBe('Metrics review')
-    const missing = { ...props, useCatalog: <T,>(select: (value: CatalogSnapshot<ScheduleCatalogEntry>) => T): T =>
+    const missing = { ...props, useCatalog: <T,>(select: (value: CatalogSnapshot<Entry>) => T): T =>
       select({ records: [], status: 'ready', deleting: [], settled: true, readRequest: 0, readSettled: 0 }) }
     view.rerender(<ScheduleTaskTabTitle {...missing} />)
     expect(view.container.textContent).toBe(en['detail.label'])
@@ -535,7 +541,7 @@ describe('task tab chip', () => {
     const props = {
       sessionId: SESSION,
       useTabInfo: () => tabInfo(undefined, 0),
-      useCatalog: <T,>(select: (value: CatalogSnapshot<ScheduleCatalogEntry>) => T): T =>
+      useCatalog: <T,>(select: (value: CatalogSnapshot<Entry>) => T): T =>
         select({ records: [at], status: 'ready', deleting: [], settled: true, readRequest: 0, readSettled: 0 }),
       taskBindings: boundTo(at.id),
       t: makeTranslate(en),
