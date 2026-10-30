@@ -49,7 +49,7 @@ Shared dispatch events and the `ptc-mode` message-source declaration live in `@d
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The executor receives the entire raw call batch and owns parsing, scheduling, cancellation, and optional model-step logging. It reuses the shared invocation pipeline for policy, tool bodies, and result notifications. After abort, it waits for started work and returns ordered error results for skipped calls. Unloading the executor aborts active Agent-owned programs and waits for their nested calls to settle. Accepted batches still settle through that executor, potentially with cancellation errors.
+The executor receives the entire raw call batch and owns parsing, scheduling, cancellation, and optional model-step logging. It reuses the shared invocation pipeline for policy, tool bodies, and result notifications. After abort, it waits for started work and returns ordered error results for skipped calls. Unloading the executor aborts active Agent-owned programs whose runtime supports sandboxing or retains state, and waits for their nested calls to settle. Accepted batches still settle through that executor, potentially with cancellation errors.
 
 ### PTC mode
 
@@ -111,7 +111,7 @@ Program-only SDK bindings:
 
 #### Token effect
 
-Fixed per-request cost proportional to the visible definitions. PTC mode trades end-tool schemas for generated SDK text plus the program schema rather than promising a universal reduction.
+Fixed per-request cost proportional to the visible definitions. PTC mode trades end-tool schemas for generated SDK text plus one transport schema rather than promising a universal reduction.
 
 #### KV Cache effect
 

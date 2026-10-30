@@ -715,7 +715,7 @@ export function createRunCodeTool(
           callSignal.removeEventListener('abort', onOuterAbort)
         }
       }
-      return exec.agent === undefined ? run(exec.signal)
+      return exec.agent === undefined || (runtime.sandboxMode === undefined && !runtime.retainsState) ? run(exec.signal)
         : calls.run(exec.agent.session.id, exec.signal,
           () => runtime.sandboxMode === undefined ? undefined : resolveSandboxPolicy(ctx, exec).mode, run)
     },

@@ -452,12 +452,12 @@ describe('mode-aware wire contribution', () => {
     expect(result.content).toEqual([{ type: 'text', text: 'kept' }])
   })
 
-  it.each([RUN_CODE_NAME])('reserves %s against scoped shadows and explicit restrictions in mode ptc', async (name) => {
+  it('reserves run_code against scoped shadows and explicit restrictions in mode ptc', async () => {
     const mode = 'ptc'
     const { ctx, systemPrompt } = await setup({ mode })
     const { scope, agent } = await mintAgentScope(ctx)
     const impostor = defineContentToolFixture({
-      name,
+      name: RUN_CODE_NAME,
       description: 'Scoped impostor.',
       parameters: {},
       execute: () => Promise.resolve([{ type: 'text' as const, text: 'impostor' }]),
@@ -465,8 +465,8 @@ describe('mode-aware wire contribution', () => {
 
     expect(() => scope.ctx.tools.register(impostor)).toThrow(/reserved for the PTC mode presentation transport/)
     expect(() => ctx.tools.register(impostor)).toThrow(/reserved for the PTC mode presentation transport/)
-    expect(() => scope.ctx.tools.restrict({ allow: [name] })).toThrow(/cannot name reserved PTC mode presentation transport/)
-    expect(() => scope.ctx.tools.restrict({ deny: [name] })).toThrow(/cannot name reserved PTC mode presentation transport/)
+    expect(() => scope.ctx.tools.restrict({ allow: [RUN_CODE_NAME] })).toThrow(/cannot name reserved PTC mode presentation transport/)
+    expect(() => scope.ctx.tools.restrict({ deny: [RUN_CODE_NAME] })).toThrow(/cannot name reserved PTC mode presentation transport/)
     scope.ctx.systemPrompt.section({
       name: 'scoped-note',
       order: scope.ctx.systemPrompt.getSectionOrder('TOOLS_SDK') - 10,
@@ -2354,12 +2354,12 @@ describe('per-agent presentation', () => {
       .toThrow('Only one tool executor may be registered in each scope')
   })
 
-  it.each([RUN_CODE_NAME])('reserves %s even where no agent presents it', async (name) => {
+  it('reserves run_code even where no agent presents it', async () => {
     const { ctx } = await setup({ mode: 'native' })
 
     // The name must stay free under a native deployment too: an agent preset
     // mounting later would otherwise collide with whatever took it.
-    expect(() => registerEcho(ctx, name)).toThrow('is reserved')
+    expect(() => registerEcho(ctx, RUN_CODE_NAME)).toThrow('is reserved')
   })
 
   it('reports the missing runtime against the agent\'s own mode', async () => {
@@ -2803,17 +2803,12 @@ it.each([
   const pending = ctx.tools.execute(input)
   try {
     await entered.promise
-    const disposed = (unload === 'runtime' ? runtimeProvider : provider).dispose()
-    if (owned) {
-      await vi.waitFor(() => { expect(runtime.lastRequest?.signal?.aborted).toBe(true) })
-      release.resolve(undefined)
-    }
-    await disposed
+    await (unload === 'runtime' ? runtimeProvider : provider).dispose()
     await expect(ctx.tools.execute(input)).rejects.toThrow('selected tool executor is unavailable')
     release.resolve(undefined)
-    expect((await pending).results[0]?.result).toMatchObject(owned ? { isError: true } : { isError: false, value: { logs: [], result: 'settled' } })
+    expect((await pending).results[0]?.result).toMatchObject({ isError: false, value: { logs: [], result: 'settled' } })
     if (owned) expect(agent.session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch'))
-      .toEqual([])
+      .toMatchObject([{ data: { name: 'echo', isError: false, content: [{ type: 'text', text: 'settled' }] } }])
   } finally {
     release.resolve(undefined)
     await Promise.allSettled([pending])
