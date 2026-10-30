@@ -730,7 +730,7 @@
     - definition: "2"
     - term: Ready
     - definition: "Yes"
-    - term: Owner
+    - term: ownerName
     - definition: ui-review
     - group:
       - text: Write scopes
@@ -750,7 +750,7 @@
     - definition: "2"
     - term: Ready
     - definition: "Yes"
-    - term: Owner
+    - term: ownerName
     - definition: ui-review
     - group:
       - text: Write scopes

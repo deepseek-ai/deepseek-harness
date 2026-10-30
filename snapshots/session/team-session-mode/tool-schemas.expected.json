@@ -2,7 +2,7 @@
   "initial": [
     {
       "name": "list_agents",
-      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. Rows also include available names alongside Session ids. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
         "properties": {}
@@ -14,9 +14,9 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "name": {
+          "agent_id": {
             "type": "string",
-            "description": "The full agent path (such as lead/reviewer) or Session id of another member of your subagent tree."
+            "description": "The agent id of another member of your subagent tree, as shown by list_agents."
           },
           "message": {
             "type": "string",
@@ -24,7 +24,7 @@
           }
         },
         "required": [
-          "name",
+          "agent_id",
           "message"
         ]
       }
@@ -34,7 +34,7 @@
     [
       {
         "name": "list_agents",
-        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. Rows also include available names alongside Session ids. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
         "parameters": {
           "type": "object",
           "properties": {}
@@ -46,9 +46,9 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "name": {
+            "agent_id": {
               "type": "string",
-              "description": "The full agent path (such as lead/reviewer) or Session id of another member of your subagent tree."
+              "description": "The agent id of another member of your subagent tree, as shown by list_agents."
             },
             "message": {
               "type": "string",
@@ -56,7 +56,7 @@
             }
           },
           "required": [
-            "name",
+            "agent_id",
             "message"
           ]
         }
@@ -129,7 +129,7 @@
             },
             "owner": {
               "type": "string",
-              "description": "Optional exact ownerName filter; use unowned for tasks without an owner."
+              "description": "Optional exact ownerId filter; use unowned for tasks without an owner."
             },
             "ready": {
               "type": "boolean",
@@ -198,7 +198,7 @@
             },
             "owner": {
               "type": "string",
-              "description": "Agent name or Session id of the root or any continuable descendant for root-only reassign; omit to unassign."
+              "description": "Agent id of the root or any continuable descendant for root-only reassign; omit to unassign."
             }
           },
           "required": [
@@ -212,7 +212,7 @@
     [
       {
         "name": "list_agents",
-        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. Rows also include available names alongside Session ids. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
         "parameters": {
           "type": "object",
           "properties": {}
@@ -224,9 +224,9 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "name": {
+            "agent_id": {
               "type": "string",
-              "description": "The full agent path (such as lead/reviewer) or Session id of another member of your subagent tree."
+              "description": "The agent id of another member of your subagent tree, as shown by list_agents."
             },
             "message": {
               "type": "string",
@@ -234,7 +234,7 @@
             }
           },
           "required": [
-            "name",
+            "agent_id",
             "message"
           ]
         }

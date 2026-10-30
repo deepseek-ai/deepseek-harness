@@ -25,7 +25,7 @@ Historical records retain their recorded `provisioning`, `active`, or `failed` p
 
 ## Messages and historical mailbox
 
-Members exchange ordinary [subagent messages](subagent.md), retaining the real sender Session id. After flushing, task commits signal active waits in all resident Agents in the same tree, including the caller and root. These in-memory signals do not persist unread state, restore cold members, or start idle turns. A change outside an active wait cannot wake a future wait. The following historical mailbox types remain readable; Team never delivers their pending records.
+Members exchange ordinary [subagent messages](subagent.md), retaining the real sender Session id. Task changes do not end inbox waits, add inbox messages, or start idle agents. Send an explicit message when an agent needs to act on a task update. The following historical mailbox types remain readable; Team never delivers their pending records.
 
 ```ts type-equiv
 /** One peer message recorded by the historical Team mailbox. */
@@ -77,7 +77,7 @@ interface TeamTaskSnapshot {
 
 `agentTeam.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. The Web menu calls the same method through `remote.agentTeams.setEnabled`, with the root Session id resolved to its live Agent by the Gateway. Mode writes take effect before awaiting persistence. Tools resolve availability at step preparation; prompt providers read the selection when evaluated. Task mutations check the current mode when their queued operation starts; admitted mutations may finish. Mode changes do not end inbox waits. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
 
-The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted task or mode record beside the last valid state. Historical roster and mailbox records are not projected. The task panel labels the root as Lead and other owners from catalog labels, Session titles, or ids.
+The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted task or mode record beside the last valid state. Historical roster and mailbox records are not projected. The task panel identifies every owner by its Session id.
 
 ```ts type-equiv
 /** Runtime-enriched task view returned to tools and hosts. */

@@ -2,9 +2,9 @@
   - navigation "Session hierarchy":
     - button "Ask a research subagent to"
     - text: /
-    - 'button "Switch subagent: researcher"': researcher
+    - 'button "Switch subagent: {{uuid}}"': {{uuid}}
     - text: /
-    - 'button "Switch subagent: example editor"': example editor
+    - 'button "Switch subagent: recorded-grandchild"': recorded-grandchild
   - button "More actions"
   - button "Open right sidebar"
   - tablist:

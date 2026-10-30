@@ -130,7 +130,7 @@ describe('web e2e: Agent Teams panel', () => {
       taskId: task.id, expectedRevision: task.revision, action: 'claim',
     })
     await action.getByText('In progress', { exact: true }).waitFor()
-    await action.getByText('Owner: Lead', { exact: true }).waitFor()
+    await action.getByText(`Owner: ${agent.id}`, { exact: true }).waitFor()
     expect(await action.getByRole('button', { name: /^(New task|Edit|Complete|Reopen|Delete)$/u }).count()).toBe(0)
     expect(await action.locator('input, select, textarea').count()).toBe(0)
 

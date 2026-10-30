@@ -1,10 +1,12 @@
 - dialog "Subagent sessions":
   - tree "Subagent sessions":
-    - treeitem "researcher event-sourcing researcher · continuable · not running 15.7K tok · {{duration}}" [level=1]:
-      - button "Expand researcher descendants"
-      - text: researcher
-      - button "Expand description for researcher": event-sourcing researcher
+    - treeitem "{{uuid}} event-sourcing researcher · continuable · not running 15.7K tok · {{duration}}" [level=1]:
+      - button "Expand {{uuid}} descendants"
+      - text: {{uuid}}
+      - button "Expand description for {{uuid}}": event-sourcing researcher
       - text: 15.7K tok {{duration}}
-    - treeitem "event-sourcing reviewer one-shot · completed 0 tok · {{duration}}" [level=1]:
-      - text: event-sourcing reviewer 0 tok ~6mo 12d
-      - button "Open event-sourcing reviewer in sidebar"
+    - treeitem "recorded-one-shot event-sourcing reviewer · one-shot · completed 0 tok · {{duration}}" [level=1]:
+      - text: recorded-one-shot
+      - button "Expand description for recorded-one-shot": event-sourcing reviewer
+      - text: 0 tok ~6mo 12d
+      - button "Open recorded-one-shot in sidebar"

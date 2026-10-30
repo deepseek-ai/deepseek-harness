@@ -2,7 +2,7 @@
   - navigation "Session hierarchy":
     - button "Ask a research subagent to"
     - text: /
-    - 'button "Switch subagent: researcher"': researcher
+    - 'button "Switch subagent: {{uuid}}"': {{uuid}}
     - button "1 subagent"
   - text: Standard mode
   - button "More actions"
