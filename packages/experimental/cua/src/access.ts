@@ -16,12 +16,12 @@ export type * from './access-types.ts'
 interface ControlOptions extends AccessOptions {
   native: NativeClientConfig
   createChannel: NativeChannelFactory
-  guidancePolling: CuaSystemPermissionState['guidancePolling']
+  permissionPollIntervalMs: number
 }
 type Control = (method: string, params: Record<string, JsonValue>) => Promise<JsonValue>
 const permissionProcess = z.object({ pid: z.number().int().positive(), path: z.string().optional(), name: z.string().optional() })
 const systemPermissions = z.object({
-  accessibility: z.boolean(), screenRecording: z.boolean(), guideOpen: z.boolean(), helper: permissionProcess, parent: permissionProcess,
+  accessibility: z.boolean(), screenRecording: z.boolean(), helper: permissionProcess, parent: permissionProcess,
   launchApplication: z.object({ name: z.string().min(1), path: z.string().min(1),
     icon: ApplicationIcon.optional(), bundleId: z.string().optional() }).optional(),
 })
@@ -39,10 +39,10 @@ export class CuaAccess extends TypertRemoteService {
    * @param ctx Provider context.
    * @param policy Application decision owner.
    * @param control Serialized native permission dispatch.
-   * @param guidancePolling Browser observation limits while native guidance is open.
+   * @param permissionPollIntervalMs Interval between native guide permission and position checks.
    */
   constructor(ctx: Context, private readonly policy: ApplicationAccess,
-    private readonly control: Control, private readonly guidancePolling: CuaSystemPermissionState['guidancePolling']) {
+    private readonly control: Control, private readonly permissionPollIntervalMs: number) {
     super(ctx, 'cuaAccess')
   }
 
@@ -83,7 +83,7 @@ export class CuaAccess extends TypertRemoteService {
    */
   @Remote
   async systemStatus(): Promise<CuaSystemPermissionState> {
-    return { ...systemPermissions.parse(await this.control('permissionStatus', {})), guidancePolling: this.guidancePolling }
+    return systemPermissions.parse(await this.control('permissionStatus', {}))
   }
 
   /**
@@ -102,12 +102,12 @@ export class CuaAccess extends TypertRemoteService {
    * Open System Settings and a native application-drag guide for the privilege selected by the user.
    * @param permission macOS privilege to request.
    * @param text Localized guide copy; application identity comes from the native helper.
-   * @returns Current access and guide state; opening the guide does not grant permission.
+   * @returns Current permission observations; opening the guide does not grant permission.
    */
   @Remote
   async requestPermission(permission: CuaSystemPermission, text: CuaPermissionGuideText): Promise<CuaSystemPermissionState> {
-    return { ...systemPermissions.parse(await this.control('requestPermission',
-      { permission, ...text, pollIntervalMs: this.guidancePolling.intervalMs })), guidancePolling: this.guidancePolling }
+    return systemPermissions.parse(await this.control('requestPermission',
+      { permission, ...text, pollIntervalMs: this.permissionPollIntervalMs }))
   }
 
   /**
@@ -166,6 +166,6 @@ export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<Ap
     await Promise.allSettled([policy.dispose(), tail])
     await client?.dispose()
   }, 'cua-access.dispose')
-  new CuaAccess(ctx, policy, control, options.guidancePolling)
+  new CuaAccess(ctx, policy, control, options.permissionPollIntervalMs)
   return { select: policy.select.bind(policy), run: policy.run.bind(policy), forget: policy.forget.bind(policy), dispose }
 }
