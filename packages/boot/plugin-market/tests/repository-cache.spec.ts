@@ -1,4 +1,4 @@
-/** Partial clones of real local repositories: reads, README lookup, limits, eviction, and Git failures. */
+/** Partial clones of real local repositories: reads, README lookup, limits, eviction, and Git failures, including a stalled Git fixture. */
 import { execFileSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
@@ -17,6 +17,7 @@ async function expectRejection(promise: Promise<unknown>, fields: object, messag
 
 
 let root: string
+const caches: RepositoryCache[] = []
 const lifetime = new AbortController()
 const signal = new AbortController().signal
 const text = (bytes: Uint8Array | undefined): string => new TextDecoder().decode(bytes)
@@ -28,16 +29,20 @@ beforeEach(() => {
   vi.stubEnv('HOME', join(root, 'home'))
   vi.stubEnv('XDG_CONFIG_HOME', join(root, 'home'))
 })
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(caches.splice(0).map(repositories => repositories.settled()))
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   rmSync(root, { recursive: true, force: true })
 })
 
 function git(cwd: string, ...args: string[]): string {
-  // Fixture repositories ignore inherited Git overrides, such as a hook's `GIT_DIR`, and every user or system configuration.
+  // Fixture Git ignores inherited overrides and user configuration. Background maintenance stays disabled.
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')))
-  return execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args], {
+  return execFileSync('git', [
+    '-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false',
+    '-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args,
+  ], {
     cwd, encoding: 'utf8',
     env: { ...env, HOME: join(root, 'home'), XDG_CONFIG_HOME: join(root, 'home'), GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' },
   }).trim()
@@ -73,10 +78,12 @@ function repository(name: string, files: Record<string, string | Uint8Array>): {
 }
 
 function cache(options: Partial<RepositoryCacheOptions> = {}): RepositoryCache {
-  return new RepositoryCache({
+  const repositories = new RepositoryCache({
     dir: join(root, 'cache'), maxRepositoryBytes: 10 * 1024 * 1024, maxCacheBytes: 100 * 1024 * 1024,
     timeoutMs: 30_000, ttlMs: 60_000, transports: ['file', 'ssh'], lifetime: lifetime.signal, sizePollMs: 1, ...options,
   })
+  caches.push(repositories)
+  return repositories
 }
 
 it('reads files at a pinned commit and the default branch, fetching contents only when read', async () => {
@@ -132,7 +139,7 @@ it('asks the smart HTTP endpoint without credentials whether a repository is pub
   expect(fetch).toHaveBeenCalledTimes(5)
 })
 
-it('reports an unreachable host as a network failure, a failed local command as a plain error, and a Git that cannot run', async () => {
+it('reports an unreachable host as a network failure, a failed local command as a plain error, and a missing Git', async () => {
   vi.stubEnv('GIT_SSH_COMMAND', 'ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=5')
   await expectRejection(cache().read('ssh://127.0.0.1:1/owner/repo.git', undefined, 'README.md', 100, signal), { reason: 'network' }, 'git fetch')
   const source = repository('t', { 'README.md': 'x' })
@@ -149,12 +156,28 @@ it('reports an unreachable host as a network failure, a failed local command as 
   await expect(broken).rejects.toThrow('git update-ref')
   await expect(broken).rejects.not.toBeInstanceOf(DetailFailure)
   expect(readdirSync(join(root, 'cache'))).toEqual([])
-  // Git that cannot answer `git --version` within the deadline cannot run.
   const other = repository('t2', { 'README.md': 'x' })
-  await expectRejection(cache({ timeoutMs: 1 }).read(other.url, other.commit, 'README.md', 100, signal), { reason: 'git-unavailable' }, 'timed out')
   vi.stubEnv('PATH', join(root, 'no-git'))
   const missing = cache().read(other.url, other.commit, 'README.md', 100, signal)
   await expectRejection(missing, { reason: 'git-unavailable' }, 'git --version')
+  expect(readdirSync(join(root, 'cache'))).toEqual([])
+})
+
+it('reports a stalled Git version check as unavailable before initializing a clone', async () => {
+  const bin = join(root, 'stalled-git')
+  const script = join(bin, 'stall.cjs')
+  mkdirSync(bin)
+  writeFileSync(script, 'setInterval(() => {}, 1000)\n')
+  vi.stubEnv('PLUGIN_MARKET_TEST_NODE', process.execPath)
+  vi.stubEnv('PLUGIN_MARKET_TEST_GIT_SCRIPT', script)
+  writeFileSync(join(bin, process.platform === 'win32' ? 'git.cmd' : 'git'), process.platform === 'win32'
+    ? '@"%PLUGIN_MARKET_TEST_NODE%" "%PLUGIN_MARKET_TEST_GIT_SCRIPT%"\r\n'
+    : '#!/bin/sh\nexec "$PLUGIN_MARKET_TEST_NODE" "$PLUGIN_MARKET_TEST_GIT_SCRIPT"\n', { mode: 0o755 })
+  vi.stubEnv('PATH', bin)
+  const repositories = cache({ timeoutMs: 100 })
+  const stalled = repositories.read('https://git.example/stalled.git', undefined, 'README.md', 100, signal)
+  await expectRejection(stalled, { reason: 'git-unavailable' }, 'timed out')
+  await expect(stalled).rejects.toThrow('git --version')
   expect(readdirSync(join(root, 'cache'))).toEqual([])
 })
 
