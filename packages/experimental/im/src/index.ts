@@ -6,6 +6,7 @@
  * routing listener passed on.
  */
 import { Context, Service } from '@deepseek-ai/cordis'
+import { toText } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Bot, Fragment, MessageStream, StreamOptions } from '@deepseek-ai/cordis-plugin-im-core'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-agent'
@@ -23,7 +24,7 @@ import { ImActivityTracker } from './activity.ts'
 import { ImFormatter } from './format.ts'
 import { ImAgentHost } from './hosting.ts'
 import { ImDispatcher } from './dispatcher.ts'
-import { ImIntake, admit, draftOf } from './intake.ts'
+import { CARD_PLACEHOLDER, ImIntake, admit, draftOf } from './intake.ts'
 import { ImMediaStore } from './media.ts'
 import { ImOutputRegistry } from './outputs.ts'
 import { ImSender } from './send.ts'
@@ -213,19 +214,27 @@ export class ImService extends Service implements ImApi {
   /**
    * One message of one chat: the stored message when this deployment received it, and a platform read otherwise, so a
    * reference to a message that never reached this deployment still resolves. A platform read is admitted and stored
-   * like any other message, which gives it a sequence number and keeps later reads of it local.
+   * like any other message, which gives it a sequence number and keeps later reads of it local. A stored card stands
+   * as the placeholder the platform delivers, so it is read again: the card itself is what its sender pointed at.
    * @param chat - chat to read in; its bot serves the platform request.
    * @param id - platform message id.
-   * @returns the message as the store holds it.
+   * @returns the message, with a card's own content when the store only holds its placeholder.
    */
   async readMessage(chat: ImChatKey, id: string): Promise<ImMessage> {
     const bot = this.bot(chat)
     const known = this.store.get(ImMessageKey(bot.id, id))
-    if (known !== undefined) return known
+    if (known !== undefined && !CARD_PLACEHOLDER.test(known.text)) return known
     const record = this.chat(chat)
-    if (record === undefined) throw new ImError('access', `Chat ${chat} was never admitted, so message ${id} cannot be read.`)
-    if (bot.getMessage === undefined) throw new ImError('unavailable', `Bot ${bot.id} cannot read one message by id.`)
+    if (record === undefined) {
+      if (known !== undefined) return known
+      throw new ImError('access', `Chat ${chat} was never admitted, so message ${id} cannot be read.`)
+    }
+    if (bot.getMessage === undefined) {
+      if (known !== undefined) return known
+      throw new ImError('unavailable', `Bot ${bot.id} cannot read one message by id.`)
+    }
     const message = await bot.getMessage(record.ref, id)
+    if (known !== undefined) return { ...known, content: message.content, text: toText(message.content) }
     const source = admit([...this.sources.values()], bot.id, message)
     if (source === undefined) throw new ImError('access', `Message ${id} of chat ${chat} is admitted by no source.`)
     return await this.store.put(draftOf(bot, message, source, 'platform'), 'none')

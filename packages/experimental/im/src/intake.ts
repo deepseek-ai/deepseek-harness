@@ -24,6 +24,9 @@ export interface ImIntakeHost {
 
 const noop = () => {}
 
+/** What the platform hands an API client in place of a card it will not project. */
+export const CARD_PLACEHOLDER = /请升级至最新版本客户端/
+
 /** The innermost `im/message` listener without a dispatcher: a message nobody handled is ignored. */
 const ignore = (): Promise<ImOutcome> => Promise.resolve({ kind: 'ignored' })
 
@@ -172,6 +175,44 @@ export class ImIntake {
     }
   }
 
+  /**
+   * The draft of one inbound message, with the two things an event does not carry filled in: the text of the card it
+   * renders and the text of the message it quotes.
+   * @param bot - the bot that delivered the message.
+   * @param message - the inbound message.
+   * @param source - the admitting source.
+   * @returns the draft to store and dispatch.
+   */
+  private async readableDraft(bot: Bot, message: InboundMessage, source: ImSourceConfig): Promise<ImMessageDraft> {
+    const draft = draftOf(bot, message, source, 'platform')
+    if (!CARD_PLACEHOLDER.test(draft.text)) return await this.withQuoteText(bot, draft)
+    const card = await this.cardOf(bot, message)
+    // Only the content is taken from the read: the event owns the admission facts (mentions, addressed, thread,
+    // quote), and a card carries no mentions of its own.
+    const readable = card === undefined ? draft : { ...draft, content: card.content, text: toText(card.content) }
+    return await this.withQuoteText(bot, readable)
+  }
+
+  /**
+   * One message re-read as the card it was sent with. The platform hands a card it will not project to an API client
+   * as `请升级至最新版本客户端，以查看内容`, and a read with `card_msg_content_type=user_card_content` returns the card
+   * itself — the material the sender pointed at.
+   * @param bot - the bot that delivered the message.
+   * @param message - the inbound message whose text is that placeholder.
+   * @returns the re-read message, or undefined when the platform has nothing more to give.
+   */
+  private async cardOf(bot: Bot, message: InboundMessage): Promise<InboundMessage | undefined> {
+    if (bot.getMessage === undefined) return undefined
+    try {
+      return await bot.getMessage(message.chat, message.id)
+    } catch (error: unknown) {
+      // The placeholder is still a deliverable message: a card the platform will not hand back stays unreadable.
+      this.ctx.logger.warn('IM card %s could not be re-read: %s', message.id,
+        error instanceof Error ? error.message : String(error))
+      return undefined
+    }
+  }
+
   /** Dedupe, admit and store one inbound message; runs in the intake chain. */
   private async accept(bot: Bot, message: InboundMessage, key: string, digest: string): Promise<void> {
     const known = this.store.event(key)
@@ -191,7 +232,7 @@ export class ImIntake {
       await this.store.remember(key, { digest, receivedAt })
       return
     }
-    const draft = await this.withQuoteText(bot, draftOf(bot, message, source, 'platform'))
+    const draft = await this.readableDraft(bot, message, source)
     if (source.store === 'addressed' && !draft.addressed) {
       await this.store.remember(key, { digest, receivedAt })
       return

@@ -155,6 +155,21 @@ describe('ImIntake admission', () => {
     expect(store.after(CHAT, 0, 10)).toHaveLength(2)
   })
 
+  it('reads a card the platform would only describe with a placeholder', async () => {
+    const { bot, store, intake } = await boot()
+    // A card reaches an API client as the placeholder; a read with user_card_content returns the card itself.
+    bot.getMessage = async () => ({
+      ...inbound({ id: 'm-card' }),
+      content: h('message', h.text('balance-alerter 1 条 CRITICAL 用户的 C 余额低于阈值')),
+    })
+    await deliver(bot, 'evt-card', inbound({
+      id: 'm-card',
+      content: h('message', h.text('[image]\n请升级至最新版本客户端，以查看内容')),
+    }))
+    await intake.idle()
+    expect(store.get(ImMessageKey('fake:bot', 'm-card'))?.text).toContain('balance-alerter')
+  })
+
   it('ignores the bot\'s own echo and non-message sessions', async () => {
     const { bot, store, intake, dispatched } = await boot()
     await deliver(bot, 'evt-1', inbound({ sender: { id: 'bot-user' } }))
