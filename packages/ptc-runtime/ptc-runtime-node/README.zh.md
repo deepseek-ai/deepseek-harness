@@ -149,7 +149,7 @@ Host 通过 birpc 调用子进程的 `run()`；RPC 请求标识其完成结果�
 | [`src/config.ts`](src/config.ts) | 执行模式、限制校验与默认值 |
 | [`src/configuration.ts`](src/configuration.ts) | 供 profile 编辑器使用的持久执行设置 |
 | [`src/execution.ts`](src/execution.ts) | 模式选择、请求解析及临时或保留进程的所有权 |
-| [`src/worker.ts`](src/worker.ts) | 共用的进程启动、执行截止、绑定分派与清理 |
+| [`src/worker.ts`](src/worker.ts) | 共用的进程启动、执行截止与绑定分派；`interruptEvaluation()` 请求协作中断，`terminate()` 终止进程 |
 | [`src/persistent-process.ts`](src/persistent-process.ts) | 默认使用 REPL 的已安装入口，委托共用子进程循环 |
 | [`src/evaluators/index.ts`](src/evaluators/index.ts) | 三种求值器的统一选择入口 |
 | [`src/evaluators/async-function.ts`](src/evaluators/async-function.ts) | AsyncFunction：严格模式异步函数体 |

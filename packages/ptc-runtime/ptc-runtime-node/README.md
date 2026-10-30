@@ -149,7 +149,7 @@ Source containing `await` is checked for top-level await before native compilati
 | [`src/config.ts`](src/config.ts) | Execution mode, validated limits and defaults |
 | [`src/configuration.ts`](src/configuration.ts) | Retained-execution settings for profile editors |
 | [`src/execution.ts`](src/execution.ts) | Mode selection, request resolution and temporary or retained process ownership |
-| [`src/worker.ts`](src/worker.ts) | Shared process launch, evaluation deadlines, binding dispatch and cleanup |
+| [`src/worker.ts`](src/worker.ts) | Shared process launch, evaluation deadlines and binding dispatch; `interruptEvaluation()` requests cooperative interruption, `terminate()` ends the process |
 | [`src/persistent-process.ts`](src/persistent-process.ts) | Installed REPL-default entry delegating to the common child loop |
 | [`src/evaluators/index.ts`](src/evaluators/index.ts) | Shared selection entry for the three evaluators |
 | [`src/evaluators/async-function.ts`](src/evaluators/async-function.ts) | AsyncFunction: strict async function bodies |

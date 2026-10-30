@@ -49,7 +49,7 @@ export class ProgramWorker {
   private ready = false
   private stderr = ''
   private controlFailure: string | undefined
-  private stopped: Promise<boolean> | undefined
+  private termination: Promise<boolean> | undefined
   private starting?: Promise<void>
   private exitOutcome?: SubprocessOutcome
   private readonly controller = new AbortController()
@@ -123,7 +123,7 @@ export class ProgramWorker {
       const failure: PtcRunFailure = spec.signal?.aborted
         ? { kind: 'abort', message: this.message('execution canceled') }
         : { kind: 'worker-exit', message: this.message(this.exitMessage(this.exitOutcome)) }
-      try { await this.stop() } catch (error: unknown) {
+      try { await this.terminate() } catch (error: unknown) {
         return output.failure([], { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(error)}` })
       }
       return output.failure([], failure)
@@ -171,15 +171,16 @@ export class ProgramWorker {
         const outcome = complete()
         const cleanup = async (): Promise<PtcRunResult> => {
           const interrupted = error?.kind === 'timeout' || error?.kind === 'abort'
-          const stopRequired = discard || outcome.error?.kind === 'output-limit' || !this.retainsState
-          const stopped = stopRequired ? { drained: await this.stop(), preserved: false }
-            : interrupted ? await this.requestStop(evaluation) : { drained: true, preserved: true }
+          let preserved = this.retainsState && !discard && outcome.error?.kind !== 'output-limit'
+          if (preserved && interrupted) preserved = await this.interruptEvaluation(evaluation)
+          let drained = true
+          if (!preserved) drained = await this.terminate()
           if (interrupted && this.retainsState && error) {
-            error = { ...error, message: `${error.message}; retained variables were ${stopped.preserved ? 'preserved' : 'cleared'}` }
+            error = { ...error, message: `${error.message}; retained variables were ${preserved ? 'preserved' : 'cleared'}` }
           }
           const completed = complete()
-          // The final stop diagnostic also consumes output budget.
-          const drained = completed.error?.kind === 'output-limit' && stopped.preserved ? await this.stop() : stopped.drained
+          // The final interruption diagnostic also consumes output budget.
+          if (completed.error?.kind === 'output-limit' && preserved) drained = await this.terminate()
           return drained ? completed : output.failure(logs, { kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
         }
         void cleanup().then((completed) => {
@@ -208,9 +209,10 @@ export class ProgramWorker {
     return await result.promise
   }
 
-  private async requestStop(evaluation: Evaluation): Promise<{ drained: boolean; preserved: boolean }> {
+  /** True confirms evaluation settlement with the process still available for reuse. */
+  private async interruptEvaluation(evaluation: Evaluation): Promise<boolean> {
     const completion = evaluation.completion
-    if (!this.channel || this.channel.$closed || this.closed || !completion) return { drained: await this.stop(), preserved: false }
+    if (!this.channel || this.channel.$closed || this.closed || !completion) return false
     const deadline = Promise.withResolvers<never>()
     const timer = setTimeout(() => { deadline.reject(new Error(`execution did not settle within ${this.config.stopGraceMs}ms`)) }, this.config.stopGraceMs)
     const abort = (): void => { deadline.reject(new Error('environment disposed during interruption')) }
@@ -218,10 +220,10 @@ export class ProgramWorker {
     try {
       await Promise.race([this.channel.revoke(evaluation.id).then(() => completion), deadline.promise])
       this.controller.signal.throwIfAborted()
-      return { drained: true, preserved: true }
+      return true
     } catch (_error: unknown) {
-      // Only a validated run result confirms settlement; otherwise terminate the process.
-      return { drained: await this.stop(), preserved: false }
+      // Only a validated run result confirms settlement.
+      return false
     } finally {
       clearTimeout(timer)
       this.controller.signal.removeEventListener('abort', abort)
@@ -231,16 +233,17 @@ export class ProgramWorker {
   /** Cancel active work and await managed process termination and output drainage. */
   async dispose(): Promise<void> {
     this.active?.finish({ kind: 'abort', message: 'PTC environment disposed' }, undefined, true)
-    await this.stop()
+    await this.terminate()
   }
 
-  private stop(): Promise<boolean> {
-    if (this.stopped) return this.stopped
+  /** Terminate the process; resolve to whether its output pipes drained cleanly. */
+  private terminate(): Promise<boolean> {
+    if (this.termination) return this.termination
     this.closed = true
     this.cleanupPending = true
     this.controller.abort()
     this.channel?.$close()
-    this.stopped = (async () => {
+    this.termination = (async () => {
       await this.starting?.catch((_error: unknown) => {
         // Evaluation reports startup failure; cleanup still owns any process already created.
       })
@@ -251,15 +254,15 @@ export class ProgramWorker {
       this.cleanupPending = false
       if (!drained) this.ctx.logger.warn('Node process exited but its output did not drain cleanly')
       return drained
-    }, (error: unknown) => { this.stopped = undefined; throw error })
-    return this.stopped
+    }, (error: unknown) => { this.termination = undefined; throw error })
+    return this.termination
   }
 
   private fail(kind: PtcRunFailure['kind'], message: string): void {
     if (this.active) this.active.finish({ kind, message: this.message(message) }, undefined, true)
     else {
       if (!this.closed) this.ctx.logger.warn(message)
-      void this.stop().catch((error: unknown) => { this.ctx.logger.warn(messageOf(error)) })
+      void this.terminate().catch((error: unknown) => { this.ctx.logger.warn(messageOf(error)) })
     }
   }
 
