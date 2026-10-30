@@ -238,8 +238,6 @@ kind: "package-library"
 - **产品图标依赖 ui-theme 的 sprite**：每个图标只引用自己的 symbol，因此没有 ui-theme 时，或在 iframe 等另一个文档中，图标不渲染任何内容。
 - **`StateDot` 没有 `Active` 变体**：支持的状态为 done、warning、ongoing、error 和 idle。
 - **面向用户的文案必须由渲染点提供**：这些原子组件是 zero-Cordis 的，拿不到 `ctx.locale`；各功能必须通过原子组件的带类型 prop 提供完整本地化 label（见[决策](../../../.agents/notes/implemented/architecture/2026-08-23-locale-owned-client-ui-copy.zh.md)）。
-- **显示数学保留若干回退形状**：开围栏行上的 `$$x$$ trailing` 走上游行内数学，前后正文保持不变；同样形态出现在后续行时块被放弃，随后由上游把正文吞到下一个独占行 `$$` 或文件结尾；未闭合的块在下一个独占行 `$$` 或文件结尾结束；后续行的围栏若位于**含文本**的 `%` 注释之后则不闭合，若无其他围栏闭合，块走同一条回退；开围栏行含孤立 `$` 的多行块会留在段落内，除非与前文空一行；容器内续行若离开条目缩进，块交由上游 flow 处理并丢弃开围栏行。`$$` 围栏 meta 不再生效（见[决策](../../../.agents/notes/implemented/bug-fix/2026-09-17-multiline-display-dollar-math.zh.md)）。
-- **紧跟 `\verb` 分隔符的围栏属于内容**：解析器只读取围栏之前的六个字符，因此紧跟 `\verb` 或 `\verb*` 的 `$` 是该命令的分隔符而不是闭合围栏，内容以 `\verb` 结尾的区域（`\verb**\verb*$$`）同理。未闭合区域内部的围栏（`\verb|$$`）仍会在该处闭合块，因为区域内容不被解析。
 - **`TerminalBlock` 不是终端模拟器**：它渲染已结束或仍在运行的命令输出，而不是交互式会话：SGR 颜色、回车、退格、行内擦除、制表位与字符宽度会被遵循；绝对光标定位、清屏与备用屏幕序列会被剥离。
 
 <a id="dev-note"></a>
