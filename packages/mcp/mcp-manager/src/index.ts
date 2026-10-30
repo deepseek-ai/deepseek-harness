@@ -69,6 +69,8 @@ export interface McpManagedServerEntry {
   closeTimeoutMs?: number
   /** Reconnect policy; the schema fills the mcp-client defaults. */
   reconnect: ReconnectConfig
+  /** `on-demand` keeps the server's tools out of every tool list until an agent loads them; default `eager`. */
+  toolLoading: 'eager' | 'on-demand'
 }
 
 /** Manager configuration with live server entries. */
@@ -77,8 +79,8 @@ export interface Config {
   servers: Volatile<Record<string, McpManagedServerEntry>>
 }
 
-type EntryInput = Omit<McpManagedServerEntry, 'oauth' | 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'reconnect' | 'startupTimeoutMs'>
-  & Partial<Pick<McpManagedServerEntry, 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'reconnect' | 'startupTimeoutMs'>>
+type EntryInput = Omit<McpManagedServerEntry, 'oauth' | 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'reconnect' | 'startupTimeoutMs' | 'toolLoading'>
+  & Partial<Pick<McpManagedServerEntry, 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'reconnect' | 'startupTimeoutMs' | 'toolLoading'>>
   & { oauth?: McpOAuthConfigInput }
 interface ConfigInput {
   servers?: Record<string, EntryInput>
@@ -103,6 +105,7 @@ const ServerEntrySchema = z.object({
   startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(30_000),
   closeTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS),
   reconnect: ReconnectSchema,
+  toolLoading: z.union(['eager', 'on-demand']).default('eager'),
 }) as z<EntryInput, McpManagedServerEntry>
 
 
@@ -704,6 +707,7 @@ export default class McpServerManager extends TypertRemoteService {
       ...entry.toolCallTimeoutMs === undefined ? {} : { toolCallTimeoutMs: entry.toolCallTimeoutMs },
       startupTimeoutMs: entry.startupTimeoutMs,
       reconnect: entry.reconnect,
+      toolLoading: entry.toolLoading,
     }
     // Resolving through the client's own schema fills its defaults here (no
     // restatement) and returns a real Config with no type assertion; the

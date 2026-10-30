@@ -49,6 +49,12 @@
     },
     {
       "path": "../../util/values"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../util/output-retention"
     }
   ]
 }
