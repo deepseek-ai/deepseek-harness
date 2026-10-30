@@ -91,6 +91,18 @@ describe('website purge recovery', () => {
     expect(f.client.CreatePurgeTask).not.toHaveBeenCalled()
   })
 
+  it('reports a possibly absent submission without resubmitting it', async () => {
+    const f = fixture()
+    f.client.CreatePurgeTask.mockRejectedValue(new Error('lost response'))
+    f.client.DescribePurgeTasks.mockResolvedValue({ TotalCount: 0, Tasks: [] })
+    const result = await recoverDesktopPurge(config, undefined, f.client, f.options)
+    expect(result.status).toBe('unknown')
+    expect(result.diagnostic).toContain('may not have been submitted')
+    expect(result.jobId).toBeUndefined()
+    expect(f.client.CreatePurgeTask).toHaveBeenCalledOnce()
+    expect(f.client.DescribePurgeTasks).toHaveBeenCalledTimes(2)
+  })
+
   it('does not mistake multiple matching tasks for confirmed completion', async () => {
     const f = fixture()
     f.client.CreatePurgeTask.mockRejectedValue(new Error('lost response'))

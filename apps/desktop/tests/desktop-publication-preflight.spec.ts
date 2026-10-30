@@ -39,6 +39,7 @@ it.each(['mac-arm64', 'win-x64'] as const)('preflights a complete retained %s bu
     }))
     const env = {
       DSH_PACKAGING_CONFIG_DIR: configRoot, DSH_PACKAGING_PRESET: 'test',
+      DESKTOP_PUBLISH_RUNNERS: JSON.stringify({ 'fixture-runner': { label: 'dsh-fixture', target: [target] } }),
       DSH_DESKTOP_TARGET_PLATFORM: target === 'win-x64' ? 'win32' : 'darwin', DSH_DESKTOP_TARGET_ARCH: target === 'win-x64' ? 'x64' : 'arm64',
       PACKAGE_SOURCE_REF: 'master', PACKAGE_SOURCE_SHA: 'b'.repeat(40), PACKAGE_VERSION: '1.0.0', PACKAGE_SIGNING: 'signed', PACKAGE_SKIP_NOTARIZATION: 'false',
       GITHUB_RUN_ID: '10', GITHUB_RUN_ATTEMPT: '2', GITHUB_REPOSITORY: 'owner/repo', GITHUB_SHA: commit, RUNNER_NAME: 'fixture-runner',

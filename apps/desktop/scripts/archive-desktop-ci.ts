@@ -1,4 +1,5 @@
 /** Validate the original machine and immutable inventory before GitHub artifact archival. */
+import { desktopPublicationFailure } from './desktop-publication-failure.ts'
 import { resolve } from 'node:path'
 import { desktopReleasesRoot } from './retain-desktop-ci.ts'
 import { retainedDesktopPath, verifyRetainedDesktopRelease } from './desktop-release-store.ts'
@@ -21,4 +22,10 @@ export async function verifyDesktopArchive(env: NodeJS.ProcessEnv): Promise<void
   }
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) await verifyDesktopArchive(process.env)
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
+  try { await verifyDesktopArchive(process.env) }
+  catch (error) {
+    process.stderr.write(`${JSON.stringify(desktopPublicationFailure(error, 'artifact archival'))}\n`)
+    process.exitCode = 1
+  }
+}

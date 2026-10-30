@@ -66,7 +66,10 @@ async function observe(record: DesktopPurgeRecord, client: DesktopPurgeRecoveryC
       if (response.Tasks.length === 0 || offset >= 10_000) return unknown('task history could not be fully inspected')
     } while (true)
   } catch (error) { return unknown('task query failed; check EdgeOne history and DescribePurgeTasks permission') }
-  if (matches.length !== 1) return unknown('task history has no unique matching submission')
+  if (matches.length === 0) return unknown(record.jobId
+    ? 'accepted task not found in query history; execution result unconfirmed'
+    : 'no matching submission found; purge may not have been submitted; inspect EdgeOne history before manual recovery')
+  if (matches.length !== 1) return unknown('multiple matching submissions found; cannot identify this submission')
   const task = matches[0]!
   if (!task.JobId || !/^[\w.-]{1,128}$/u.test(task.JobId)
     || task.JobId.includes(config.secretId) || task.JobId.includes(config.secretKey)) return unknown('query returned no usable task ID')

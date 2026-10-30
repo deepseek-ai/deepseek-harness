@@ -211,10 +211,14 @@ jobs:
           retention-days: 14
 
   upload-artifact:
+    defaults:
+      run:
+        shell: pwsh
     needs: package
     runs-on: [self-hosted, '${{ needs.package.outputs.runner }}']
     timeout-minutes: 30
     env:
+      PACKAGE_CACHE_NAMESPACE: ${{ inputs.cache_namespace }}
       DESKTOP_RETAINED_DIRECTORY: ${{ needs.package.outputs.directory }}
       DESKTOP_PACKAGE_ATTEMPT: ${{ needs.package.outputs.attempt }}
       DESKTOP_PACKAGE_RUNNER: ${{ needs.package.outputs.runner-name }}
@@ -230,6 +234,21 @@ jobs:
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
+      - name: Configure persistent pnpm store
+        # PNPM_HOME belongs to this run; keep downloaded packages outside its temporary directory.
+        env:
+          DSH_DESKTOP_PACKAGE_CACHE_DIR: ${{ runner.tool_cache }}/dsh-desktop-package-cache
+        run: |
+          $storeRoot = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) '.pnpm-store'
+          $namespace = $env:PACKAGE_CACHE_NAMESPACE
+          if ($namespace) {
+            if ($namespace -cnotmatch '^[a-z0-9][a-z0-9-]{0,63}\z') { throw 'Cache namespace must contain 1-64 lowercase letters, digits or hyphens' }
+            if ($namespace -match '^(con|prn|aux|nul|com[1-9]|lpt[1-9])$') { throw 'Cache namespace cannot be a Windows device name' }
+            $storeRoot = Join-Path $storeRoot $namespace
+            $env:DSH_DESKTOP_PACKAGE_CACHE_DIR = Join-Path $env:DSH_DESKTOP_PACKAGE_CACHE_DIR $namespace
+          }
+          "DSH_DESKTOP_PACKAGE_CACHE_DIR=$env:DSH_DESKTOP_PACKAGE_CACHE_DIR" >> $env:GITHUB_ENV
+          "PNPM_CONFIG_STORE_DIR=$storeRoot" >> $env:GITHUB_ENV
       - run: pnpm install --frozen-lockfile
         working-directory: artifact-archiver
       - name: Verify original retained build before GitHub archival

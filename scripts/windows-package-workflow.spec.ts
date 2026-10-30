@@ -11,6 +11,7 @@ const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/windows
   permissions: Record<string, string>
   concurrency: { group: string; 'cancel-in-progress': boolean }
   jobs: Record<string, {
+    defaults?: { run: { shell: string } }
     'runs-on': string
     env: Record<string, string>
     steps: Array<{
@@ -212,4 +213,11 @@ it.skipIf(process.platform !== 'win32')('stages helpers that remain usable when 
   } finally {
     rmSync(directory, { recursive: true, force: true, maxRetries: 3 })
   }
+})
+
+it('archives with native PowerShell and the persistent packaging store', () => {
+  const archival = workflow.jobs['upload-artifact']!
+  expect(archival.defaults?.run.shell).toBe('pwsh')
+  expect(archival.steps.find(step => step.name === 'Configure persistent pnpm store')?.run)
+    .toBe(job.steps.find(step => step.name === 'Configure persistent pnpm store')?.run)
 })

@@ -4,7 +4,6 @@ import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises
 import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { z } from 'zod'
-import { teo } from 'tencentcloud-sdk-nodejs-teo'
 import { readDesktopPublishConfig, readDesktopUploadCredentials } from './desktop-publish-config.ts'
 import { desktopReleasesRoot } from './retain-desktop-ci.ts'
 import { readRetainedDesktopManifest, retainedDesktopPath } from './desktop-release-store.ts'
@@ -87,7 +86,8 @@ export async function publishWebsiteCi(mode: 'upload' | 'purge', env: NodeJS.Pro
   }
   if (state.upload !== 'uploaded') throw new Error('website publication: upload completion is not confirmed; recover the upload job first')
   const { desktopLatestInstallerFilename } = await import('./desktop-auto-update-environment.mjs')
-  const publicUrl = `https://download.deepseek.com/desktop/${desktopLatestInstallerFilename(route.target)}`
+  const publicUrl = `${config.origin}/desktop/${desktopLatestInstallerFilename(route.target)}`
+  const { teo } = await import('tencentcloud-sdk-nodejs-teo')
   const client = new teo.v20220901.Client({ credential: credentials, region: '',
     profile: { httpProfile: { endpoint: 'teo.tencentcloudapi.com', reqTimeout: 30 } } })
   const previousAttempt = state.purgeAttempt
@@ -104,12 +104,14 @@ export async function publishWebsiteCi(mode: 'upload' | 'purge', env: NodeJS.Pro
   })
   const details = `${publicUrl}\nTask: ${result.jobId ?? 'unknown'}\nObserved: ${result.observedAt}\n${result.diagnostic ?? ''}\n`
   if (result.status === 'unknown') {
-    process.stdout.write(`::warning title=官网缓存刷新结果未确认::官网资源已上传，缓存刷新结果未确认；请检查 EdgeOne 任务记录。\n${details}`)
+    const acceptance = result.jobId ? '刷新已提交，执行结果未确认' : '刷新提交未确认，可能尚未提交；请核对 EdgeOne 历史后人工恢复'
+
+    process.stdout.write(`::warning title=官网缓存刷新结果未确认::官网资源已上传；${acceptance}。请检查 EdgeOne 任务记录。\n${details}`)
     if (env.GITHUB_STEP_SUMMARY) {
       let existing = ''
       try { existing = await readFile(env.GITHUB_STEP_SUMMARY, 'utf8') }
       catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error }
-      await writeFile(env.GITHUB_STEP_SUMMARY, `# ⚠ 官网资源已上传，缓存刷新结果未确认\n\n${details}${existing ? `\n${existing}` : ''}`)
+      await writeFile(env.GITHUB_STEP_SUMMARY, `# ⚠ 官网资源已上传，缓存刷新结果未确认\n\n${acceptance}\n\n${details}${existing ? `\n${existing}` : ''}`)
     }
   } else {
     process.stdout.write(`Website cache purge completed\n${details}`)

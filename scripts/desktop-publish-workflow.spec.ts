@@ -9,6 +9,7 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
   permissions: Record<string, string>
   jobs: Record<string, {
     defaults?: unknown
+    concurrency?: { group: string; 'cancel-in-progress': boolean }
     needs?: string | string[]
     env?: Record<string, string>
     if?: string
@@ -85,6 +86,8 @@ it('defaults to production website upload and separates cache-only recovery', ()
   const purge = workflow.jobs['purge-website-installer']!
   expect(upload.if).toContain("inputs.upload_website && needs.prepare.outputs.preset == 'production'")
   expect(purge.needs).toEqual(['route', 'prepare', 'upload-website-installer'])
+  expect(upload.concurrency).toEqual({ group: 'desktop-website-upload-${{ needs.prepare.outputs.website-destination }}', 'cancel-in-progress': false })
+  expect(purge.concurrency).toEqual({ group: 'desktop-website-purge-${{ needs.prepare.outputs.website-destination }}', 'cancel-in-progress': false })
   for (const job of [upload, purge]) {
     expect(job.environment).toBe('desktop-production')
     expect(job.env?.DESKTOP_WEBSITE_APPROVAL).toBe('${{ needs.prepare.outputs.website-approval }}')

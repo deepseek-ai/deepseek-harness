@@ -80,15 +80,15 @@ Environment 审批限制此工作流，不限制同一机器账户运行的任�
 
 ## 恢复与记录
 
-打包 workflow 将 `package` 与 `upload-artifact`（GitHub 产物归档）分开。两者使用 `DESKTOP_PUBLISH_RUNNERS` 将保留文件定位到原机器。归档失败后仅重跑 `upload-artifact`；它校验原始 manifest 和 hash，不重新构建、签名或公证。打包诊断归档尽力执行，不改变构建成功状态。
+打包 workflow 将 `package` 与 `upload-artifact`（GitHub 产物归档）分开。所有打包模式（包括 test 和 unsigned）都要求在打包前配置 `DESKTOP_PUBLISH_RUNNERS`，用于将归档路由到原机器。归档失败后仅重跑 `upload-artifact`；它校验原始 manifest 和 hash，不重新构建、签名或公证。打包诊断归档尽力执行，不改变构建成功状态。
 
-生产 COS 发布默认勾选“同时上传官网安装包并刷新缓存”（`upload_website=true`）。取消后仅发布版本化资源及自动更新清单；test 发布不修改生产官网。`upload-website-installer` 上传固定安装包，`purge-website-installer` 刷新该 URL。官网安装包校验器只需要最终 DMG/EXE 和保留的 manifest，匹配生产资格、构建身份及平台，只计算一次安装包 hash，并通过同一打开的文件句柄上传。固定文件名包含 latest 不意味着要求稳定版本。原有版本与自动更新发布保留自身校验。
+生产 COS 发布默认勾选“同时上传官网安装包并刷新缓存”（`upload_website=true`）。取消后仅发布版本化资源及自动更新清单；test 发布不修改生产官网。`upload-website-installer` 上传固定安装包，`purge-website-installer` 刷新该 URL。官网安装包校验器只需要最终 DMG/EXE 和保留的 manifest，匹配生产资格、构建身份及平台，只计算一次安装包 hash，并通过同一打开的文件句柄上传。production nightly 和 latest 包都可以替换官网固定安装包。操作者负责选择预期版本；固定对象没有防降级保护，重跑旧发布可能覆盖新安装包。原有版本与自动更新发布保留自身校验。
 
-将仓库变量 `DOWNLOAD_PROD_EO_ZONE_ID` 配置为生产 EdgeOne 站点。生产 COS 凭据还需要 `teo:CreatePurgeTask` 和 `teo:DescribePurgeTasks` 权限。官网上传在 Actions 中按 bucket/平台互斥，在原机器上按 bucket/对象互斥；缓存观察单独运行。生产官网 job 沿用现有部署审批 Environment。
+将仓库变量 `DOWNLOAD_PROD_EO_ZONE_ID` 配置为生产 EdgeOne 站点。生产 COS 凭据还需要 `teo:CreatePurgeTask` 和 `teo:DescribePurgeTasks` 权限。官网上传在 Actions 中按 bucket/平台互斥，在原机器上按 bucket/对象互斥；缓存观察单独运行。版本发布、官网上传和缓存刷新分别使用生产审批 Environment，后续 job 和重跑可能需要再次审批。GitHub 每个并发组最多保留一个排队 job，新排队 job 可能取消旧排队 job；重跑前应检查取消记录。
 
-官网状态保存在 releases 根目录同级的 `upload-records/website-<发布 run ID>-<target>/state.json`。macOS 和 Windows 在各自本地磁盘使用相同记录格式。job 重跑不重复已确认完成的上传；结果未知的上传先核对远端字节。仅重跑刷新 job 即可查询已保存任务；人工重跑确认旧任务失败后可提交一次。提交响应丢失时查询匹配的历史记录，不重新提交。
+官网状态保存在 releases 根目录同级的 `upload-records/website-<发布 run ID>-<target>/state.json`。macOS 和 Windows 在各自本地磁盘使用相同记录格式。job 重跑不重复已确认完成的上传；结果未知的上传先核对远端字节。仅重跑刷新 job 即可查询已保存任务；人工重跑确认旧任务失败后可提交一次。提交响应丢失时查询匹配的历史记录，不重新提交。unknown 带任务 ID 表示提交已确认；没有 ID 则可能从未提交。人工恢复前应检查 EdgeOne 历史，需要重新提交时发起新的发布运行。
 
-刷新观察每十秒查询一次，最长五分钟；结果未知或观察超时后额外查询一次。明确的 failed、timeout、canceled 结果使 job 失败。仍无法确认时成功退出，并输出 Actions warning 和醒目摘要；持久化状态保持 unknown，不标为完成。诊断 artifact 尽力归档，本地记录仍是恢复依据。模拟服务测试覆盖这些路径；生产 COS/EdgeOne 权限和实际 CDN 行为需要发布操作者验证。
+刷新观察每十秒查询一次，最长五分钟；结果未知或观察超时后额外查询一次。明确的 failed、timeout、canceled 结果使 job 失败。仍无法确认时成功退出，并输出 Actions warning 和醒目摘要；持久化状态保持 unknown，不标为完成。诊断 artifact 尽力归档，本地记录仍是恢复依据。模拟服务测试覆盖这些路径；发布操作者必须在生产依赖恢复能力前验证 COS/EdgeOne 权限、job-id 筛选、时间范围查询、任务类型和时间戳格式、Actions 跨 attempt 恢复及实际 CDN 行为。
 
 解决故障后重跑失败的发布 job，以保持准备阶段选定的打包尝试；也可显式填写原打包运行和尝试，发起新的发布。尝试留空时重跑所有 job 会重新解析最新打包尝试，并需要重新审批。不要仅为重试上传而重新打包。缺失对象会上传，相同对象跳过，同名但字节不同的对象会停止操作。写入结果不明时通过读取远端字节核对。频道已有更高版本时，旧上传不能替换它。每个包只更新自身内置通道：nightly 写入 `nightly.yml` / `nightly-mac.yml`，latest 写入 `latest.yml` / `latest-mac.yml`。latest 二进制位于目标二进制前缀下的 `latest/` 子目录，与已有 nightly 对象分离。同一源码和版本发布到两个通道需要分别打包；已有发布 tag 仅在源码提交相同时复用。
 

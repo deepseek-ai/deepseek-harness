@@ -184,6 +184,12 @@ jobs:
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
+      - name: Configure persistent package caches
+        env:
+          DSH_DESKTOP_PACKAGE_CACHE_DIR: ${{ runner.tool_cache }}/dsh-desktop-package-cache
+        run: |
+          echo "DSH_DESKTOP_PACKAGE_CACHE_DIR=$DSH_DESKTOP_PACKAGE_CACHE_DIR" >> "$GITHUB_ENV"
+          echo "PNPM_CONFIG_STORE_DIR=$DSH_DESKTOP_PACKAGE_CACHE_DIR/workspace-pnpm-store" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
         working-directory: artifact-archiver
       - name: Verify original retained build before GitHub archival

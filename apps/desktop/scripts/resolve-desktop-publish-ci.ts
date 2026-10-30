@@ -12,7 +12,7 @@ const runSchema = z.object({ id: z.number().int().positive(), run_attempt: z.num
   event: z.literal('workflow_dispatch'), path: z.enum(Object.values(desktopPackageWorkflows)),
   repository: z.object({ full_name: z.string() }) })
 const jobsSchema = z.object({ jobs: z.array(z.object({
-  name: z.string(), runner_name: z.string().nullable(), conclusion: z.string().nullable(),
+  name: z.string(), run_attempt: z.number().int().positive(), runner_name: z.string().nullable(), conclusion: z.string().nullable(),
 })) })
 
 /**
@@ -35,7 +35,7 @@ export function selectDesktopPackage(repository: string, inputsValue: unknown, r
   }
   let jobs = z.array(jobsSchema).parse(api(`${base}/attempts/${attempt}/jobs?per_page=100`, true)).flatMap(page => page.jobs)
   let packages = jobs.filter(job => job.name === 'package')
-  if (packages.length === 0) {
+  if (packages.length === 0 || packages.every(job => job.run_attempt < Number(attempt))) {
     // An archival-only attempt owns no new build; select the latest actual package job, never a prior success over a failed build.
     const historySchema = z.array(z.object({ jobs: z.array(z.object({ name: z.string(), run_attempt: z.number().int().positive(),
       runner_name: z.string().nullable(), conclusion: z.string().nullable() })) }))
@@ -53,7 +53,7 @@ export function selectDesktopPackage(repository: string, inputsValue: unknown, r
     jobs = z.array(jobsSchema).parse(api(`${base}/attempts/${original.run_attempt}/jobs?per_page=100`, true)).flatMap(page => page.jobs)
     packages = jobs.filter(job => job.name === 'package')
   }
-  packages = packages.filter(job => job.conclusion === 'success' && job.runner_name)
+  packages = packages.filter(job => job.run_attempt === run.run_attempt && job.conclusion === 'success' && job.runner_name)
   if (packages.length !== 1) throw new Error('desktop publish: expected one successful package job')
   const runnerName = packages[0]!.runner_name!
   const routes = desktopPublishRunnersSchema.parse(routesValue)

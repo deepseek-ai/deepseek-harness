@@ -219,7 +219,7 @@ jobs:
     environment: desktop-production
     timeout-minutes: 60
     concurrency:
-      group: desktop-website-purge-${{ needs.prepare.outputs.target }}
+      group: desktop-website-purge-${{ needs.prepare.outputs.website-destination }}
       cancel-in-progress: false
     env:
       DESKTOP_PUBLISH_ROUTE: ${{ needs.prepare.outputs.route }}
