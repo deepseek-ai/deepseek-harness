@@ -398,7 +398,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     }
   })
 
-  it('shows the description above the name without tooltips for unclipped text or hover navigation', async () => {
+  it('shows the description above the ID and reveals clipped IDs without hover navigation', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-catalog-labels'))
     const trigger = page.getByRole('button', { name: '2 subagents', exact: true })
     await trigger.click()
@@ -413,15 +413,16 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     expect(primaryBounds).not.toBeNull()
     expect(secondaryBounds).not.toBeNull()
     expect(primaryBounds!.y + primaryBounds!.height).toBeLessThanOrEqual(secondaryBounds!.y)
-    expect(await row.getAttribute('aria-label')).toMatch(/^event-sourcing researcher researcher /u)
+    expect(await row.getAttribute('aria-label')).toContain(`${LABEL} ${childId} `)
     expect(await row.getByRole('button', { name: /description/u }).count()).toBe(0)
     expect(await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).count()).toBe(1)
-    expect(await row.getByRole('button', { name: 'Open researcher in sidebar', exact: true }).count()).toBe(1)
+    expect(await row.getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).count()).toBe(1)
     const beforeHover = page.url()
-    for (const label of [primary, secondary]) {
-      expect(await label.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+    for (const [label, clipped] of [[primary, false], [secondary, true]] as const) {
+      expect(await label.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(clipped)
       await label.hover()
-      expect(await page.getByRole('tooltip').count()).toBe(0)
+      if (clipped) await page.getByRole('tooltip', { name: childId, exact: true }).waitFor()
+      else expect(await page.getByRole('tooltip').count()).toBe(0)
       expect(page.url()).toBe(beforeHover)
       expect(await page.getByText(PARENT_PROMPT, { exact: true }).isVisible()).toBe(true)
       expect(await page.locator('[data-sidebar-chat]').count()).toBe(0)
@@ -452,7 +453,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     expect(await oneShotRow.getByText('~6mo 12d', { exact: true }).count()).toBe(1)
     expect(await oneShotRow.getAttribute('aria-label')).toContain('192d 00h 00m 00s')
     const childRow = page.getByRole('treeitem', { name: new RegExp(LABEL) })
-    const disclosure = childRow.getByRole('button', { name: /^(Expand|Collapse) researcher descendants$/u })
+    const disclosure = childRow.getByRole('button', { name: new RegExp(`^(Expand|Collapse) ${LABEL} descendants$`, 'u') })
     const beforeDisclosureUrl = page.url()
     const clickDisclosureGutter = async (offset: number): Promise<void> => {
       const geometry = await disclosure.evaluate((button, xOffset) => {
@@ -578,7 +579,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
   it('opens child history in the right Sidebar and releases it when closed', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-sidebar-chat'))
     await page.getByRole('button', { name: '2 subagents' }).hover()
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByRole('button', { name: `Open ${childId} in sidebar`, exact: true }).click()
+    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).click()
     const sidebarChat = page.locator('[data-sidebar-chat]')
     await sidebarChat.getByText(/^Explain event sourcing in one sentence\./).waitFor({ timeout: 15_000 })
     await compareOrRefreshGolden(
@@ -590,7 +591,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await sidebarChat.waitFor({ state: 'detached' })
 
     await page.getByRole('button', { name: '2 subagents' }).hover()
-    await page.getByRole('treeitem', { name: new RegExp(ONE_SHOT_LABEL) }).getByRole('button', { name: `Open ${oneShotId} in sidebar`, exact: true }).click()
+    await page.getByRole('treeitem', { name: new RegExp(ONE_SHOT_LABEL) }).getByRole('button', { name: `Open ${ONE_SHOT_LABEL} in sidebar`, exact: true }).click()
     await page.locator('[data-sidebar-chat]').getByText(
       'One-shot tasks do not accept follow-ups; review the full execution record here.',
     ).waitFor({ timeout: 15_000 })
@@ -880,7 +881,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     expect(await currentCheck.getAttribute('aria-hidden')).toBe('true')
     expect(await currentCheck.evaluate(element => element.tagName)).toBe('SPAN')
     expect(await currentCheck.locator('button, [role="button"], [tabindex]').count()).toBe(0)
-    expect(await currentRow.getByRole('button', { name: 'Open researcher in sidebar', exact: true }).count()).toBe(0)
+    expect(await currentRow.getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).count()).toBe(0)
     const otherRow = panel.getByRole('treeitem', { name: new RegExp(ONE_SHOT_LABEL) })
     expect(await otherRow.locator('[data-subagent-current]').count()).toBe(0)
     expect(await otherRow.getByRole('button', { name: `Open ${ONE_SHOT_LABEL} in sidebar`, exact: true }).isEnabled()).toBe(true)
@@ -989,11 +990,11 @@ describe('web e2e: migration-required subagent catalog', () => {
       const childRow = tree.getByRole('treeitem', { name: new RegExp(childLabel) })
       await childRow.waitFor()
       await expect.poll(() => childRow.textContent()).toContain('Migration required')
-      await expect.poll(() => childRow.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).count()).toBe(0)
+      await expect.poll(() => childRow.getByRole('button', { name: `Expand ${childLabel} descendants`, exact: true }).count()).toBe(0)
       expect(await childRow.getAttribute('aria-expanded')).toBeNull()
       expect(await childRow.textContent()).toContain('Migration required')
       expect(await childRow.textContent()).not.toContain('unknown mode')
-      expect(await childRow.getByRole('button', { name: `Open ${childId} in sidebar`, exact: true }).isEnabled()).toBe(true)
+      expect(await childRow.getByRole('button', { name: `Open ${childLabel} in sidebar`, exact: true }).isEnabled()).toBe(true)
       expect(await tree.getByRole('treeitem').count()).toBe(1)
       for (const { id, directory, path, source } of predecessors) {
         expect(scaffold.ctx.agents.get(id)).toBeUndefined()
@@ -1005,13 +1006,13 @@ describe('web e2e: migration-required subagent catalog', () => {
       expect(projections).not.toHaveBeenCalled()
 
       await childRow.getByText(childId, { exact: true }).click()
-      await page.getByRole('button', { name: `Switch subagent: ${childId}`, exact: true }).waitFor()
+      await page.getByRole('button', { name: `Switch subagent: ${childLabel}`, exact: true }).waitFor()
       await page.getByRole('button', { name: '1 subagent', exact: true }).hover()
       const grandchildRow = tree.getByRole('treeitem', { name: new RegExp(grandchildLabel) })
       await grandchildRow.waitFor()
       expect(await grandchildRow.textContent()).toContain('Migration required')
       expect(await grandchildRow.getAttribute('aria-expanded')).toBeNull()
-      expect(await grandchildRow.getByRole('button', { name: `Expand ${NESTED_LABEL} descendants`, exact: true }).count()).toBe(0)
+      expect(await grandchildRow.getByRole('button', { name: `Expand ${grandchildLabel} descendants`, exact: true }).count()).toBe(0)
       expect(projections).not.toHaveBeenCalled()
       expect(observe.mock.calls.some(([id]) => id === childId)).toBe(true)
       const after = await captureStableAria(page, '[role="tree"][aria-label="Subagent sessions"]', scaffold.workspaceCwd)

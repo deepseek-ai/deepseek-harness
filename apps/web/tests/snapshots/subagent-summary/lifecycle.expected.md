@@ -24,8 +24,8 @@
     - text: Started
     - term: Agent task description
     - definition: Review subagent task summaries Additional description context
-    - term: Agent name
-    - definition: lead/foo
+    - term: ID
+    - definition: child-foo
     - group:
       - text: Task
       - list:
@@ -42,8 +42,8 @@
     - text: Started
     - term: Agent task description
     - definition: Review subagent task summaries Additional description context
-    - term: Agent name
-    - definition: lead/foo
+    - term: ID
+    - definition: child-foo
     - group:
       - text: Task
       - list:

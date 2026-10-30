@@ -5,8 +5,8 @@
 - list:
   - listitem:
     - text: Started
-    - term: Agent name
-    - definition: lead/fallback
+    - term: ID
+    - definition: fallback-worker
     - group:
       - text: Task
       - list:

@@ -466,7 +466,7 @@
 - list:
   - listitem:
     - text: Started
-    - term: Agent ID
+    - term: ID
     - definition: agent-demo-review
     - group:
       - text: Task
