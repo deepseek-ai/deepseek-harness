@@ -18,3 +18,4 @@ description: "保留状态的 Node PTC 在超时或取消时协作式停止，�
 1. 检查报告的状态结果，不再假定超时或取消会清空变量。复用保留的绑定；兜底终止后重新创建。此前的效果不会回滚。
 2. 清理失败或保留资源不可信时，使用宿主的 `PtcExecutor.reset(agent)` 或运行时 `release(owner)`。模型不会获得重置工具。等待重置完成后再执行代码。
 3. 按需在 `@deepseek-ai/dsh-ptc-runtime-node` 配置中设置 `stopGraceMs`。它限制确认等待时间，与现有进程清理的 `graceMs` 独立。验证异步等待会保留此前变量，阻塞的死循环会清空变量。参阅[运行时参考](../../../../packages/ptc-runtime/ptc-runtime-node/README.zh.md)。
+4. 如果 `launch.bootstrapPath` 指向单独安装的 Node bootstrap，随宿主一起升级它。派发前的就绪握手会检查协议版本；旧 bootstrap 报告 `bootstrap protocol mismatch`，不会执行代码。

@@ -4,7 +4,7 @@ import type { BrandedNumber } from '@deepseek-ai/dsh-brand'
 import { decodePtcJsonWire, type PtcJsonWire } from './json-wire.ts'
 
 /** Wire revision required before the host dispatches program code. */
-export const PROGRAM_PROTOCOL_VERSION = 1
+export const PROGRAM_PROTOCOL_VERSION = 2
 
 /** Process-local identity of one evaluation; never reused within that process. */
 export type EvaluationId = BrandedNumber<'PtcEvaluationId'>
@@ -40,11 +40,6 @@ export interface ProgramBootData {
 export interface ProgramResult {
   value?: PtcJsonWire
   error?: { kind: 'exception' | 'invalid-output' | 'output-limit' | 'abort'; message: string }
-}
-
-/** Completion identified independently of the RPC request that carries it. */
-export interface EvaluationResult extends ProgramResult {
-  evaluationId: EvaluationId
 }
 
 /** Program-facing invocation after the child has checked evaluation ownership. */
@@ -97,13 +92,12 @@ export interface ProgramMethods {
    * @param data - Program and injected declarations.
    * @returns Completion or a bounded program failure, after captured output is sent.
    */
-  run(evaluationId: EvaluationId, cwd: string, data: ProgramBootData): Promise<EvaluationResult>
+  run(evaluationId: EvaluationId, cwd: string, data: ProgramBootData): Promise<ProgramResult>
   /**
-   * Revoke bindings and output when the program thread can process the request.
-   * @param evaluationId - Evaluation to revoke; older completed identities are ignored.
-   * @returns After the revoked evaluation settles.
+   * Notify the program thread to revoke bindings and output; run() still owns completion.
+   * @param evaluationId - Evaluation to revoke; identities other than the active evaluation are ignored.
    */
-  revoke(evaluationId: EvaluationId): Promise<void>
+  revoke(evaluationId: EvaluationId): void
 }
 
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -111,11 +105,10 @@ const record = (value: unknown): value is Record<string, unknown> => typeof valu
 /**
  * Decode a remote run result without trusting model-written control traffic.
  * @param result - Untrusted result returned by the program process.
- * @param evaluationId - Identity expected by the host.
  * @returns Decoded completion or failure; malformed envelopes throw a protocol error.
  */
-export function readProgramResult(result: unknown, evaluationId: EvaluationId): { value?: PtcJsonValue; error?: PtcRunFailure } {
-  if (!record(result) || result.evaluationId !== evaluationId) throw new Error('invalid program result')
+export function readProgramResult(result: unknown): { value?: PtcJsonValue; error?: PtcRunFailure } {
+  if (!record(result)) throw new Error('invalid program result')
   if (result.error !== undefined) {
     const error = result.error
     if (!record(error) || typeof error.message !== 'string'

@@ -41,7 +41,7 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
   const run = (code: string, maxOutputBytes = 1024, programFormat?: PtcProgramFormat) => peer.run(brandNumber<EvaluationId>(++sequence), '/', {
     code, ...programFormat === undefined ? {} : { programFormat },
     namespaces, maxOutputBytes, retainsState: false,
-  }).then(({ evaluationId: _id, ...result }) => result)
+  })
   return { child, host, state, nativeEnvironment, methods, peer, main, logs, run }
 }
 

@@ -28,14 +28,14 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}, prog
     log: (_id, text) => { seen.push({ type: 'log', text }) },
     outputLimit: () => { seen.push({ type: 'output-limit' }) },
   }
-  const peer = createProcessRpc<ProgramMethods, HostMethods>(host, limit, methods, [], () => {})
+  const peer = createProcessRpc<ProgramMethods, HostMethods>(host, limit, methods, ['revoke'], () => {})
   const main = runPersistentMain(child, limit, state)
   const close = async () => { peer.$close(); host.destroy(); child.destroy(); await main }
   onTestFinished(close)
   await ready.promise
   let sequence = 0
   const run = (code: string, namespaces: ProgramBootData['namespaces'] = [], maxOutputBytes = 1024) => {
-    return peer.run(brandNumber<EvaluationId>(++sequence), '/', { code, namespaces, maxOutputBytes, programFormat, retainsState: true }).then(({ evaluationId: _id, ...result }) => {
+    return peer.run(brandNumber<EvaluationId>(++sequence), '/', { code, namespaces, maxOutputBytes, programFormat, retainsState: true }).then((result) => {
       seen.push({ type: 'done', ...result })
       return result
     })
@@ -162,30 +162,31 @@ it.each([['resolve', 'repl'], ['reject', 'repl'], ['resolve', 'script'], ['rejec
   expect(decodePtcJsonWire((await h.run('kept + 1')).value)).toBe(43)
 })
 
-it.each(['repl', 'script'] as const)('waits for an arbitrary user Promise before acknowledging %s revocation', async (format) => {
+it.each(['repl', 'script'] as const)('keeps run pending until an arbitrary user Promise settles after %s revocation', async (format) => {
   const h = await setup(4096, undefined, format)
   const resume = Promise.withResolvers<undefined>()
+  onTestFinished(() => { resume.resolve(undefined) })
   const started = Promise.withResolvers<undefined>()
   // A host-controlled Promise models asynchronous work outside the managed binding wait.
   Object.defineProperty(h.state, 'wait', { value: () => { started.resolve(undefined); return resume.promise } })
   const first = h.run('var mutation = 0; var serialized = 0; await process.wait(); mutation++; console.log("late"); ({ get value() { serialized++; return 1 } })')
   await started.promise
-  const acknowledged = vi.fn()
-  const stopping = h.peer.revoke(brandNumber<EvaluationId>(1)).then(acknowledged)
+  const settled = vi.fn()
+  void first.then(settled)
+  await h.peer.revoke(brandNumber<EvaluationId>(1))
   await setImmediate()
-  expect(acknowledged).not.toHaveBeenCalled()
+  expect(settled).not.toHaveBeenCalled()
   await expect(h.peer.run(brandNumber<EvaluationId>(2), '/', { code: '1', namespaces: [], maxOutputBytes: 1024, retainsState: true })).rejects.toThrow('invalid or overlapping')
   resume.resolve(undefined)
-  await stopping
   expect(await first).toMatchObject({ error: { kind: 'abort' } })
   expect(decodePtcJsonWire((await h.run('({ mutation, serialized })')).value)).toEqual({ mutation: 1, serialized: 0 })
   expect(h.seen.filter(item => item.type === 'log')).toEqual([])
 })
 
-it('rejects reused, future, and overlapping evaluation identities', async () => {
+it('rejects reused or overlapping runs and ignores revocation of other identities', async () => {
   const h = await setup()
   const data: ProgramBootData = { code: '1', namespaces: [], maxOutputBytes: 1024, retainsState: true }
-  await expect(h.peer.revoke(brandNumber<EvaluationId>(1))).rejects.toThrow('invalid PTC revocation identity')
+  await h.peer.revoke(brandNumber<EvaluationId>(1))
   await h.run('1')
   await expect(h.peer.run(brandNumber<EvaluationId>(1), '/', data)).rejects.toThrow('invalid or overlapping')
   const started: PromiseWithResolvers<void> = Promise.withResolvers()
@@ -193,7 +194,9 @@ it('rejects reused, future, and overlapping evaluation identities', async () => 
   const first = h.run('await tools.echo({})', [{ global: 'tools', names: ['echo'] }])
   await started.promise
   await expect(h.peer.run(brandNumber<EvaluationId>(3), '/', data)).rejects.toThrow('invalid or overlapping')
-  await expect(h.peer.revoke(brandNumber<EvaluationId>(0))).rejects.toThrow('invalid PTC revocation identity')
+  await h.peer.revoke(brandNumber<EvaluationId>(0))
+  await h.peer.revoke(brandNumber<EvaluationId>(3))
+  await expect(h.peer.run(brandNumber<EvaluationId>(3), '/', data)).rejects.toThrow('invalid or overlapping')
   await h.peer.revoke(brandNumber<EvaluationId>(2))
   await first
 })

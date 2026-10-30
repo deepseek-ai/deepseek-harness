@@ -23,8 +23,8 @@ const messageOf = (error: unknown): string => error instanceof Error ? error.mes
 
 interface Evaluation {
   id: EvaluationId
-  controller: AbortController
-  dispatched: boolean
+  settled: boolean
+  completion: Promise<ReturnType<typeof readProgramResult>> | undefined
   data: ProgramBootData
   spec: PtcRunSpec
   bindings: Map<string, PtcBindingNamespace>
@@ -78,7 +78,7 @@ export class ProgramWorker {
   /** Direct service callers await interrupted runs, including final admission release. */
   async waitForInterruption(): Promise<void> {
     const evaluation = this.active
-    if (evaluation?.controller.signal.aborted) await this.running
+    if (evaluation?.settled) await this.running
   }
 
   /** Reject reuse until the previous evaluation and required cleanup settle. */
@@ -117,15 +117,11 @@ export class ProgramWorker {
     return this.retainsState ? `${message}; retained variables were cleared` : message
   }
 
-  private abortMessage(signal: AbortSignal | undefined): string {
-    return this.retainsState ? 'execution canceled; retained variables were cleared' : messageOf(signal?.reason)
-  }
-
   private async evaluate(spec: PtcRunSpec, bindings: Map<string, PtcBindingNamespace>): Promise<PtcRunResult> {
     if (this.exitOutcome !== undefined) {
       const output = this.output()
       const failure: PtcRunFailure = spec.signal?.aborted
-        ? { kind: 'abort', message: this.abortMessage(spec.signal) }
+        ? { kind: 'abort', message: this.message('execution canceled') }
         : { kind: 'worker-exit', message: this.message(this.exitMessage(this.exitOutcome)) }
       try { await this.stop() } catch (error: unknown) {
         return output.failure([], { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(error)}` })
@@ -138,17 +134,17 @@ export class ProgramWorker {
     let overflowed = false
     const result = Promise.withResolvers<PtcRunResult>()
     const timer = spec.timeoutMs === null ? undefined : setTimeout(() => {
-      const phase = evaluation.dispatched ? 'during execution' : 'before code started'
+      const phase = evaluation.completion !== undefined ? 'during execution' : 'before code started'
       const message = `execution timed out ${phase} (${spec.timeoutMs}ms)`
-      evaluation.finish({ kind: 'timeout', message }, undefined, !evaluation.dispatched)
+      evaluation.finish({ kind: 'timeout', message }, undefined, evaluation.completion === undefined)
     }, spec.timeoutMs)
     const onAbort = (): void => {
-      evaluation.finish({ kind: 'abort', message: this.retainsState ? 'execution canceled' : messageOf(spec.signal?.reason) }, undefined, !evaluation.dispatched)
+      evaluation.finish({ kind: 'abort', message: this.retainsState ? 'execution canceled' : messageOf(spec.signal?.reason) }, undefined, evaluation.completion === undefined)
     }
     const evaluation: Evaluation = {
       id: brandNumber<EvaluationId>(++this.sequence),
-      controller: new AbortController(),
-      dispatched: false,
+      settled: false,
+      completion: undefined,
       data: {
         code: '', programFormat: this.mode.format, retainsState: this.retainsState,
         maxOutputBytes: this.config.maxOutputBytes,
@@ -166,8 +162,8 @@ export class ProgramWorker {
         }
       },
       finish: (error, value, discard = false) => {
-        if (evaluation.controller.signal.aborted) return
-        evaluation.controller.abort()
+        if (evaluation.settled) return
+        evaluation.settled = true
         clearTimeout(timer)
         spec.signal?.removeEventListener('abort', onAbort)
         const complete = (): PtcRunResult => overflowed || error?.kind === 'output-limit' ? output.limit(logs)
@@ -177,7 +173,7 @@ export class ProgramWorker {
           const interrupted = error?.kind === 'timeout' || error?.kind === 'abort'
           const stopRequired = discard || outcome.error?.kind === 'output-limit' || !this.retainsState
           const stopped = stopRequired ? { drained: await this.stop(), preserved: false }
-            : interrupted ? await this.requestStop(evaluation.id) : { drained: true, preserved: true }
+            : interrupted ? await this.requestStop(evaluation) : { drained: true, preserved: true }
           if (interrupted && this.retainsState && error) {
             error = { ...error, message: `${error.message}; retained variables were ${stopped.preserved ? 'preserved' : 'cleared'}` }
           }
@@ -212,18 +208,19 @@ export class ProgramWorker {
     return await result.promise
   }
 
-  private async requestStop(id: EvaluationId): Promise<{ drained: boolean; preserved: boolean }> {
-    if (!this.channel || this.channel.$closed || this.closed) return { drained: await this.stop(), preserved: false }
+  private async requestStop(evaluation: Evaluation): Promise<{ drained: boolean; preserved: boolean }> {
+    const completion = evaluation.completion
+    if (!this.channel || this.channel.$closed || this.closed || !completion) return { drained: await this.stop(), preserved: false }
     const deadline = Promise.withResolvers<never>()
-    const timer = setTimeout(() => { deadline.reject(new Error(`stop acknowledgment exceeded ${this.config.stopGraceMs}ms`)) }, this.config.stopGraceMs)
+    const timer = setTimeout(() => { deadline.reject(new Error(`execution did not settle within ${this.config.stopGraceMs}ms`)) }, this.config.stopGraceMs)
     const abort = (): void => { deadline.reject(new Error('environment disposed during interruption')) }
     this.controller.signal.addEventListener('abort', abort, { once: true })
     try {
-      const acknowledgment = await Promise.race<unknown>([this.channel.revoke(id), deadline.promise])
-      if (acknowledgment !== undefined || this.controller.signal.aborted) throw new Error('runtime stop was not confirmed')
+      await Promise.race([this.channel.revoke(evaluation.id).then(() => completion), deadline.promise])
+      this.controller.signal.throwIfAborted()
       return { drained: true, preserved: true }
     } catch (_error: unknown) {
-      // Missing, rejected or malformed acknowledgment requires process termination.
+      // Only a validated run result confirms settlement; otherwise terminate the process.
       return { drained: await this.stop(), preserved: false }
     } finally {
       clearTimeout(timer)
@@ -267,14 +264,14 @@ export class ProgramWorker {
   }
 
   private dispatch(evaluation: Evaluation): void {
-    evaluation.dispatched = true
-    void this.channel?.run(evaluation.id, evaluation.spec.cwd, evaluation.data).then((raw) => {
-      if (evaluation.controller.signal.aborted) return
-      const { error, value } = readProgramResult(raw, evaluation.id)
+    const completion = this.channel?.run(evaluation.id, evaluation.spec.cwd, evaluation.data).then(readProgramResult)
+    evaluation.completion = completion
+    void completion?.then(({ error, value }) => {
+      if (evaluation.settled) return
       // Raw stdio can be queued beside the RPC result on separate pipes.
       setImmediate(() => { evaluation.finish(error, value) })
     }).catch((error: unknown) => {
-      if (this.active === evaluation && !evaluation.controller.signal.aborted && !this.channel?.$closed) this.fail('protocol', messageOf(error))
+      if (this.active === evaluation && !evaluation.settled && !this.channel?.$closed) this.fail('protocol', messageOf(error))
     })
   }
 
@@ -322,7 +319,7 @@ export class ProgramWorker {
     const evaluationFor = (id: unknown): Evaluation | undefined => {
       if (!isEvaluationId(id) || id > this.sequence) return refuse('invalid PTC evaluation identity')
       const evaluation = this.active
-      return evaluation?.id === id && !evaluation.controller.signal.aborted ? evaluation : undefined
+      return evaluation?.id === id && !evaluation.settled ? evaluation : undefined
     }
     this.channel = createProcessRpc<ProgramMethods, HostMethods>(handle.control, this.config.maxMessageBytes, {
       ready: (version) => {
@@ -360,16 +357,16 @@ export class ProgramWorker {
         try {
           const value = await evaluation.invoke(fn, args)
           // A late binding result must not fill the pipe shared with the next evaluation.
-          return evaluation.controller.signal.aborted ? null : value
+          return evaluation.settled ? null : value
         } catch (error) {
-          if (evaluation.controller.signal.aborted) return null
+          if (evaluation.settled) return null
           throw error
         } finally {
           evaluation.pending -= 1
           evaluation.pendingBytes -= bytes
         }
       },
-    }, [], (error, kind) => {
+    }, ['revoke'], (error, kind) => {
       if (kind === 'protocol') this.fail('protocol', error.message)
       else {
         if (kind === 'io') this.controlFailure = error.message

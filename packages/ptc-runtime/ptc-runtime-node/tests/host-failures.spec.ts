@@ -259,11 +259,24 @@ describe('Node runtime host failures', () => {
     expect((await h.start()).error?.kind).toBe('protocol')
   })
 
-  it.each([[], [0], [PROGRAM_PROTOCOL_VERSION + 1], ['1']])('refuses bootstrap readiness with incompatible version arguments %j before dispatch', async (...args) => {
+  it.each([[], [0], [PROGRAM_PROTOCOL_VERSION - 1], [PROGRAM_PROTOCOL_VERSION + 1], ['1']])('refuses bootstrap readiness with incompatible version arguments %j before dispatch', async (...args) => {
     const h = await setup()
     const result = await h.start(request, { t: 'q', m: 'ready', a: args })
     expect(result.error).toEqual({ kind: 'protocol', message: 'bootstrap protocol mismatch; upgrade launch.bootstrapPath with the host' })
     expect(h.messages).not.toContainEqual(expect.objectContaining({ m: 'run' }))
+    expect(h.terminate).toHaveBeenCalledOnce()
+  })
+
+  it.each<[unknown, string]>([
+    [{ t: 'q', m: 'outputLimit', a: [1] }, 'idle PTC output limit'],
+    [call(1), 'binding call arrived without an active PTC evaluation'],
+  ])('refuses program traffic before readiness %j', async (frame, message) => {
+    const h = await setup()
+    const binding = vi.fn(async () => null)
+    const result = await h.start(withBinding(binding), frame)
+    expect(result.error).toMatchObject({ kind: 'protocol', message })
+    expect(h.messages).not.toContainEqual(expect.objectContaining({ m: 'run' }))
+    expect(binding).not.toHaveBeenCalled()
     expect(h.terminate).toHaveBeenCalledOnce()
   })
 
@@ -366,7 +379,7 @@ describe('Node runtime host failures', () => {
     h.receive((message) => {
       const run = message as { m?: string; i?: string }
       if (run.m !== 'run') return
-      const result = { t: 's', i: run.i, r: { evaluationId: 1, error: { kind: 'exception', message: 'EACCES: blocked' } } }
+      const result = { t: 's', i: run.i, r: { error: { kind: 'exception', message: 'EACCES: blocked' } } }
       const log = { t: 'q', m: 'log', a: [1, 'x'.repeat(100)] }
       h.control.push(Buffer.from(`${JSON.stringify(result)}\n${JSON.stringify(log)}\n`))
     })

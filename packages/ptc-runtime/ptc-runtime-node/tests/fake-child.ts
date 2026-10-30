@@ -57,13 +57,11 @@ export function fakeChild(ctx: Context, runtime: NodeRuntime, request: PtcRunReq
   }
   const writes = new Set<Promise<void>>()
   let runId = ''
-  let evaluationId: unknown
   let receive: (message: unknown) => void = () => {}
   const peer = rawPeer(childControl, (message) => {
     if (typeof message === 'object' && message !== null && 't' in message && message.t === 'q'
       && 'm' in message && message.m === 'run' && 'i' in message && typeof message.i === 'string') {
       runId = message.i
-      evaluationId = 'a' in message && Array.isArray(message.a) ? message.a[0] : undefined
     }
     messages.push(message)
     receive(message)
@@ -95,7 +93,7 @@ export function fakeChild(ctx: Context, runtime: NodeRuntime, request: PtcRunReq
   return {
     handle, terminate, waitForExit, direct, stdout, stderr, control, peer, messages,
     spawn, resolveExecutable, emit, start, onBoot,
-    complete: (result: unknown) => { emit({ t: 's', i: runId, r: typeof result === 'object' && result !== null ? { evaluationId, ...result } : result }) },
+    complete: (result: unknown) => { emit({ t: 's', i: runId, r: result }) },
     receive: (callback: typeof receive) => { receive = callback },
   }
 }

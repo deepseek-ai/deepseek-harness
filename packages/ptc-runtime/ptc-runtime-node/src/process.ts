@@ -9,7 +9,7 @@ import { clearProgramEnvironment } from './environment.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
 import type { ProgramEvaluator } from './evaluators/types.ts'
 import { isEvaluationId, PROGRAM_PROTOCOL_VERSION } from './protocol.ts'
-import type { BindingMethods, EvaluationId, EvaluationResult, ProgramResult, HostMethods, ProgramMethods } from './protocol.ts'
+import type { BindingMethods, EvaluationId, ProgramResult, HostMethods, ProgramMethods } from './protocol.ts'
 
 /** Process-owned environment, output and directory control consumed by the child. */
 export interface ProgramProcess {
@@ -27,7 +27,6 @@ interface Evaluation {
   active: boolean
   retainsState: boolean
   revoked: boolean
-  finished: Promise<EvaluationResult>
   finish(result: ProgramResult): void
 }
 
@@ -79,19 +78,18 @@ export async function runNodeMain(
     async run(id, cwd, data) {
       if (!isEvaluationId(id) || id <= lastEvaluationId || current?.active) throw new Error('invalid or overlapping PTC evaluation')
       lastEvaluationId = id
-      const completion = Promise.withResolvers<EvaluationResult>()
+      const completion = Promise.withResolvers<ProgramResult>()
       const logs = new LogBuffer(data.maxOutputBytes,
         (text) => { void connection.log(id, text) }, () => { void connection.outputLimit(id) })
       const format = data.programFormat ?? defaultFormat
       const evaluation: Evaluation = {
         id, logs, maxOutputBytes: data.maxOutputBytes, active: true, retainsState: data.retainsState, revoked: false,
-        finished: completion.promise,
         finish(result) {
           evaluation.active = false
           if (evaluation.retainsState) {
             void connection.$rejectPendingCalls(({ reject }) => { reject(new Error('PTC evaluation ended')) })
           }
-          completion.resolve({ evaluationId: id, ...evaluation.revoked ? { error: { kind: 'abort', message: 'PTC evaluation revoked' } } : result })
+          completion.resolve(evaluation.revoked ? { error: { kind: 'abort', message: 'PTC evaluation revoked' } } : result)
         },
       }
       current = evaluation
@@ -136,13 +134,11 @@ export async function runNodeMain(
       })
       return await completion.promise
     },
-    async revoke(id) {
-      if (!isEvaluationId(id) || id > lastEvaluationId) throw new Error('invalid PTC revocation identity')
+    revoke(id) {
       const evaluation = current
       if (evaluation?.id !== id || !evaluation.active) return
       evaluation.revoked = true
       void connection.$rejectPendingCalls(({ reject }) => { reject(new Error('PTC evaluation canceled')) })
-      await evaluation.finished
     },
   }, ['ready', 'log', 'outputLimit'], (_error, kind) => {
     if (current?.active || kind === 'protocol') processState.exitCode = 1

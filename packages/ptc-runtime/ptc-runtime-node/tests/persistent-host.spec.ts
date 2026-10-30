@@ -490,6 +490,19 @@ it('does not log a launch failure after cancellation closed the environment', as
   } finally { reported.mockRestore() }
 })
 
+it('ignores late output-stream errors after owner release', async () => {
+  const h = await setup()
+  const warn = vi.spyOn(h.ctx.logger, 'warn').mockImplementation(() => {})
+  try {
+    h.onBoot(() => { h.complete({}) })
+    await h.start()
+    await h.runtime.release(request.stateOwner!)
+    h.stderr.emit('error', new Error('pipe closed after release'))
+    expect(warn).not.toHaveBeenCalled()
+    expect(h.terminate).toHaveBeenCalledOnce()
+  } finally { warn.mockRestore() }
+})
+
 it('logs an idle process failure with its bounded stderr tail', async () => {
   const h = await setup({ maxOutputBytes: 100 })
   const reported = vi.spyOn(h.fiber.ctx.logger, 'warn').mockImplementation(() => {})
@@ -636,11 +649,5 @@ it('ignores stale logs, output limits, and binding calls while the next evaluati
 it.each([0, 1.5, '1', 2])('rejects an invalid evaluation identity %j', async (id) => {
   const h = await setup()
   h.onBoot(() => { h.emit({ t: 'q', m: 'log', a: [id, 'forged'] }) })
-  expect((await h.start()).error?.kind).toBe('protocol')
-})
-
-it('rejects a completion belonging to another evaluation', async () => {
-  const h = await setup()
-  h.onBoot(() => { h.complete({ evaluationId: 2, value: encodePtcJsonWire(42) }) })
   expect((await h.start()).error?.kind).toBe('protocol')
 })
