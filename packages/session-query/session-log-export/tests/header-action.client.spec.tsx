@@ -27,7 +27,8 @@ const standard: GlobalStandardProps & SessionStandardProps = {
   useSessionAccess: () => true, useRemoteAccess: () => true, useWorkspaceAccess: () => true,
   useConversation: unused, useInput: unused, useChat: unused, useTrajectory: unused,
   usePanelInfo: unused, useContextMenu: contextMenuHook(), useResource: unused, useWorkspaces: unused,
-  inputActions: { insertQuote: () => false, captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
+  inputActions: { insertQuote: () => false, captureInsertion: unused, insertText: unused,
+    setDraft: unused, prefill: unused, persistDraft: unused,
     addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused },
 }
 

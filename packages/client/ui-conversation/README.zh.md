@@ -19,6 +19,7 @@ kind: "package-reference"
 - [已发送用户文本](#sent-user-text)
 - [Shell 与标准 props](#shell-and-standard-props)
 - [临时 composer entry](#temporary-composer-entries)
+- [插件预填 API](#plugin-prefill-api)
 - [模型体验](#model-experience)
 - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
@@ -185,6 +186,15 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 `conversation.input.activity` 在模型选择器与发送按钮之间承载一个控件。其 `onActiveChange` 回调将控件展开至整条工具栏并隐藏普通辅助控件和上下文用量按钮，同时保留编辑器与提交按钮。关闭活动后恢复这些控件，上下文详情保持关闭。首页输入框下方没有内容时，该区域保持收起。占用者在卸载时释放展开状态，并拥有活动专属反馈。
 
 会话标题右键使用共享[右键菜单](../ui-context-menu/README.zh.md)，目标是被点击面包屑所属会话。可复用图片库从其 Factory 注入的 `useContextMenu` hook 获取 `getTriggerProps`。
+
+<a id="plugin-prefill-api"></a>
+## 插件预填 API
+
+插件可以通过稳定的 `prefill` 操作把可检查的文本写入当前 Composer。Slot 组件收到的是 `inputActions.prefill(text, options)`；Session 作用域的插件通过 `ctx.conversation.input.for(actx).prefill(text, options)` 解析同一个操作。
+
+导出的 `ComposerPrefillOptions` 类型和 `InputActions.prefill` 签名定义在[输入接口](src/client/contract/input.ts)中。
+
+空字符串会被忽略并返回 `false`。草稿为空或只有空白，或者使用 `mode: 'replace'` 时，只有在 Composer 处于 plain 阶段且 Session 仍存活时才替换整个草稿；这次替换本身就是独立的撤销步骤。否则文本会替换当前选区，作为一次可撤销编辑；若选区前的编辑器文本末尾不是空白，则先插入 `separator`。`separator` 默认是换行，传空字符串时原样插入。非 plain 阶段的替换、草稿版本已变、提交阶段锁定或 Session 已释放时，写入会被拒绝并返回 `false`，草稿保持不变。`prefill` 不会发送草稿。
 
 <a id="model-experience"></a>
 ## 模型体验

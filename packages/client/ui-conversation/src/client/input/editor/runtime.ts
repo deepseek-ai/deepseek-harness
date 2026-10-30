@@ -206,6 +206,26 @@ export class DraftEditorRuntime {
   }
 
   /**
+   * Replace the whole draft as one independent undo step at the top level.
+   * Unlike the seed {@link setDraft}, this edit carries a history boundary so
+   * the user can undo the plugin prefill without undoing an earlier seed or
+   * edit. Nested calls join their enclosing editor transaction.
+   * @param text - the full next draft.
+   */
+  replaceDraft(text: string): void {
+    const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
+    if (clean === this.projection.clipboardText && this.projection.occurrences.length === 0 && this.projection.quotes.length === 0) return
+    // An empty editor has no earlier entry to undo to; seed one before the first prefill.
+    if (this.editor.getEditorState().isEmpty()) {
+      this.applyEdit(() => { $getRoot().append($createParagraphNode()) }, HISTORY_MERGE_TAG)
+    }
+    this.applyEdit(() => {
+      $getRoot().clear()
+      $appendParagraphs(clean)
+    }, PASTE_TAG)
+  }
+
+  /**
    * Add plain text after the current draft as new paragraphs, keeping its text
    * and references; an empty draft takes the text as its whole content.
    * Placeholder-sanitized; the caret lands at the end; merged into history
@@ -253,9 +273,15 @@ export class DraftEditorRuntime {
    * @returns the ordered [start, end) span in detect coordinates.
    */
   caretSpan(): { start: number; end: number } {
-    if (this.projection.selection !== null) return this.projection.selection
-    const at = this.projection.detectText.length
-    return { start: at, end: at }
+    let span = { start: 0, end: 0 }
+    // A snapshot read misses uncommitted native selection. A discrete update
+    // synchronizes it; nested calls read the enclosing update's pending state.
+    this.applyEdit(() => {
+      const projection = $projectComposer(key => this.occurrenceIdOf(key))
+      const at = projection.detectText.length
+      span = projection.selection ?? { start: at, end: at }
+    })
+    return span
   }
 
   /**

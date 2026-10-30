@@ -639,3 +639,120 @@ describe('scenario I: unknown /xyz + enter', () => {
     expect(b.sink).not.toHaveBeenCalled()
   })
 })
+
+describe('plugin composer prefill API', () => {
+  it('fills empty drafts, inserts at the caret, and honors replace and separator options', async () => {
+    const b = await bench()
+    expect(b.shell.prefill('')).toBe(false)
+    act(() => { expect(b.shell.prefill('Explain')).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('Explain')
+    act(() => { expect(b.shell.actions.prefill('tests')).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('Explain\ntests')
+    act(() => { expect(b.shell.prefill('next', { separator: ' ' })).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('Explain\ntests next')
+    act(() => { b.shell.setDraft('Keep ') })
+    act(() => { expect(b.shell.prefill('Next')).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('Keep Next')
+    act(() => { expect(b.shell.prefill('Only', { mode: 'replace' })).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('Only')
+    act(() => { expect(b.shell.prefill('Next', { separator: '' })).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('OnlyNext')
+    act(() => {
+      b.shell.editor.update(() => { $getRoot().selectStart() }, { discrete: true })
+    })
+    act(() => { expect(b.shell.prefill('Head')).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('HeadOnlyNext')
+  })
+
+  it('reports a rejected insertion without changing the draft', async () => {
+    const b = await bench()
+    act(() => { b.shell.setDraft('Busy') })
+    const insertText = vi.spyOn(b.shell.actions, 'insertText').mockReturnValue(false)
+    act(() => { expect(b.shell.prefill('Next')).toBe(false) })
+    expect(b.shell.snapshot.draft).toBe('Busy')
+    insertText.mockRestore()
+  })
+})
+
+describe('plugin composer prefill API guards and history', () => {
+  it('makes a replacement its own undo step', async () => {
+    const b = await bench()
+    act(() => { b.shell.setDraft('Old') })
+    act(() => { expect(b.shell.prefill('New', { mode: 'replace' })).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('New')
+    act(() => { b.shell.editor.dispatchCommand(UNDO_COMMAND, undefined) })
+    await act(async () => {})
+    expect(b.shell.snapshot.draft).toBe('Old')
+  })
+
+  it('refuses replacement while sending and after disposal', async () => {
+    const sending = await bench()
+    act(() => { sending.shell.setDraft('Sent') })
+    act(() => { sending.shell.submit() })
+    expect(sending.shell.snapshot.phase).toBe('sending')
+    act(() => { expect(sending.shell.prefill('New', { mode: 'replace' })).toBe(false) })
+
+    const disposed = await bench()
+    act(() => { disposed.shell.setDraft('Keep') })
+    disposed.shell.dispose()
+    act(() => { expect(disposed.shell.prefill('New', { mode: 'replace' })).toBe(false) })
+    act(() => { expect(disposed.shell.prefill('New')).toBe(false) })
+  })
+
+  it('checks the separator against detect coordinates around a reference chip', async () => {
+    const b = await bench()
+    act(() => { b.shell.setDraft('@res') })
+    const accepted = b.shell.insertReference({
+      source: 'reference',
+      ref: '@[Research](dsh-session:InNvdXJjZSI)',
+      label: 'Research',
+      clipboardText: '@[Research](dsh-session:InNvdXJjZSI)',
+    }, {
+      start: 0,
+      end: 4,
+      draftRev: b.shell.snapshot.draftRev,
+    })
+    expect(accepted).toBe(true)
+    const afterChip = b.shell.snapshot.draft
+    expect(afterChip.endsWith(' ')).toBe(true)
+    act(() => { expect(b.shell.prefill('Next')).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe(`${afterChip}Next`)
+  })
+
+  it('replaces a whitespace-only draft', async () => {
+    const b = await bench()
+    act(() => { b.shell.setDraft(' \n ') })
+    act(() => { expect(b.shell.prefill('Text')).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('Text')
+  })
+
+  it.each(['captureInsertion', 'prefill'] as const)('reads the native caret through %s before its selection is projected', async (entry) => {
+    const b = await bench()
+    act(() => { b.shell.setDraft('Keep text') })
+    b.textarea.focus()
+    const text = b.textarea.firstChild?.firstChild
+    const selection = document.getSelection()
+    if (text === undefined || text === null || selection === null) throw new Error('missing native draft selection')
+    selection.setBaseAndExtent(text, 0, text, 0)
+    const before = b.shell.draftSnapshot
+    if (entry === 'captureInsertion') {
+      const revision = b.shell.snapshot.draftRev
+      const track = vi.spyOn(b.controller, 'track')
+      const expected = { start: 0, end: 0, draftRev: revision }
+      expect(b.shell.actions.captureInsertion()).toEqual(expected)
+      expect(track).toHaveBeenCalledOnce()
+      expect(b.shell.actions.captureInsertion()).toEqual(expected)
+      expect(track).toHaveBeenCalledOnce()
+      expect(b.shell.draftSnapshot).toBe(before)
+      expect(b.shell.snapshot.draftRev).toBe(revision)
+      expect(b.sink).not.toHaveBeenCalled()
+      return
+    }
+    act(() => { expect(b.shell.prefill('Head', { separator: '' })).toBe(true) })
+    expect(b.shell.snapshot.draft).toBe('HeadKeep text')
+    act(() => { b.shell.editor.dispatchCommand(UNDO_COMMAND, undefined) })
+    await act(async () => {})
+    expect(b.shell.draftSnapshot).toEqual(before)
+    expect(b.sink).not.toHaveBeenCalled()
+  })
+})

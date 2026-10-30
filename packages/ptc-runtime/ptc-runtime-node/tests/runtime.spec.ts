@@ -182,11 +182,12 @@ describe('Node program process', () => {
   })
 
   it.each([{}, { timeoutMs: null }] as const)('cancels a live program and closes its managed process with %j', async (timing) => {
-    const { run } = await setup()
-    const entered = Promise.withResolvers<undefined>()
+    const { run, cwd } = await setup()
     const controller = new AbortController()
-    const active = run({ ...timing, program: 'void tools.enter({}); for (;;) {}', signal: controller.signal, bindings: bindings({ enter: async () => { entered.resolve(undefined); return null } }) })
-    await entered.promise
+    // Synchronous file readiness does not depend on the busy child's control pipe draining.
+    const active = run({ ...timing, program: 'const fs = await import("node:fs"); fs.writeFileSync("entered", "ready"); for (;;) {}', signal: controller.signal, bindings: [] })
+    onTestFinished(async () => { controller.abort('test finished'); await active })
+    await expect.poll(() => readFile(join(cwd, 'entered'), 'utf8')).toBe('ready')
     controller.abort('stop')
     expect((await active).error).toEqual({ kind: 'abort', message: 'stop' })
   })

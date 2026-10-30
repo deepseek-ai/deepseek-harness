@@ -242,6 +242,7 @@ const unusedFactoryProps = {
     captureInsertion: unusedFrameworkProp,
     insertText: unusedFrameworkProp,
     setDraft: unusedFrameworkProp,
+    prefill: unusedFrameworkProp,
     persistDraft: unusedFrameworkProp,
     addAttachments: unusedFrameworkProp,
     removeAttachment: unusedFrameworkProp,
