@@ -34,12 +34,13 @@ Use it in the Host row of a plugin whose vendor CLI signs the user in and keeps 
 A plugin states its CLI path in runtime context, subclasses the runtime, runs each command through its control, and serves the runtime's methods over its own Remote:
 
 ```ts
+import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { CliAccountRuntime, CliCommandExecutor, exitFailure, registerCliPathContext, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
+import { CliAccountRuntime, CliCommandExecutor, executableFileName, exitFailure, registerCliPathContext, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
 import type {} from '@deepseek-ai/dsh-subprocess'
 
 declare const ctx: Context
-const executable = '/opt/vendor/bin/vendor-cli'
+const executable = join('/opt/vendor/bin', executableFileName('vendor-cli'))
 
 class Account extends CliAccountRuntime<{ readonly state: 'unchecked' | 'out' | 'in' }, 'check', never> {
   protected async perform(_kind: 'check', control: CliOperationControl<never, 'status'>, signal: AbortSignal): Promise<void> {
@@ -61,7 +62,7 @@ const account = new Account({
 
 ### Runtime context
 
-`registerCliPathContext(ctx, cli)` registers one required runtime-context entry that tells the model to run `cli.program` by `cli.executable`, the path the executor runs. With `scripts`, it also tells the model to prefix only the commands that run the skill's scripts with `PATH="<executable directory>:$PATH"`, which changes PATH for that command only, and never to export PATH or run `cli.program` by name. With `ready`, the entry contributes nothing while `ready()` returns false. The text is never interpolated, and disposing the plugin removes the entry. [Model Experience](#model-experience) shows the text.
+`registerCliPathContext(ctx, cli)` registers one required runtime-context entry that tells the model to run `cli.program` by `cli.executable`, the path the executor runs. With `scripts`, it also tells the model to put the executable's directory first on PATH only in the commands that run the skill's scripts, and never to run `cli.program` by name. The text follows the shell that shipped compositions give the model on the Host platform. Outside Windows it uses POSIX shell syntax: the prefix is `PATH="<executable directory>:$PATH"`, which changes PATH for that command only, and the text also forbids exporting PATH. On Windows, where the model runs PowerShell, it names the executable with the call operator, `& '<executable>'`, and gives the prefix as `$env:PATH = '<executable directory>;' + $env:PATH`, which lasts only for that call because each PowerShell call runs in a fresh process. With `ready`, the entry contributes nothing while `ready()` returns false. The text is never interpolated, and disposing the plugin removes the entry. `executableFileName(program)` names the file a plugin locates: `program`, or `program.exe` on Windows. [Model Experience](#model-experience) shows the text.
 
 ### Commands, links, and failures
 
@@ -119,13 +120,20 @@ The runtime owns the operation lifecycle and the plugin owns the meaning of each
 
 #### What the model sees
 
-One required runtime-context entry, at context order 220, for each plugin that calls `registerCliPathContext` and whose `ready` is absent or returns true; it stays when optional runtime context is off. The second line appears only with `scripts`. The placeholders come from the call, and the quoted values are JSON strings.
+One required runtime-context entry, at context order 220, for each plugin that calls `registerCliPathContext` and whose `ready` is absent or returns true; it stays when optional runtime context is off. The second line appears only with `scripts`. The placeholders come from the call. Outside Windows the quoted values are JSON strings; on Windows they are PowerShell single-quoted strings, in which a single quote is doubled.
 
 ##### Runtime-context entry
 
 ```markdown
 <Product> CLI: run `<program>` by its absolute path "<executable>"; the bare name may resolve to another installation or to none.
 Scripts in the <Product> skill call `<program>` by name; prefix only the commands that run them with PATH="<executable directory>:$PATH", and never export PATH or run `<program>` by name yourself.
+```
+
+##### Runtime-context entry on Windows
+
+```markdown
+<Product> CLI: run `<program>` by its absolute path with the call operator, & '<executable>'; the bare name may resolve to another installation or to none.
+Scripts in the <Product> skill call `<program>` by name; start only the commands that run them with $env:PATH = '<executable directory>;' + $env:PATH, and never run `<program>` by name yourself.
 ```
 
 #### Token effect
@@ -144,6 +152,7 @@ The path is runtime context rather than system prompt, so the cached prompt pref
 - Authorization hosts match their subdomains too; a plugin cannot restrict links to one exact host.
 - `exitFailure` classifies by exit code alone; a plugin whose CLI reports structured errors writes its own allowlisting classifier.
 - The runtime context asks the model to run the CLI by its absolute path but cannot enforce it; a command that names the CLI by bare name runs whatever installation PATH resolves, or fails.
+- The text's shell dialect follows the Host platform, not the mounted shell tool: a composition that gives the model a POSIX shell on Windows, or PowerShell elsewhere, gets the other platform's syntax.
 
 <a id="dev-note"></a>
 ### Dev Note
