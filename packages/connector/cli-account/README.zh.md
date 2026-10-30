@@ -34,12 +34,13 @@ kind: "package-library"
 插件在运行时上下文中声明 CLI 路径，继承运行时，通过 control 运行每条命令，并在自己的 Remote 上提供运行时的方法：
 
 ```ts
+import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { CliAccountRuntime, CliCommandExecutor, exitFailure, registerCliPathContext, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
+import { CliAccountRuntime, CliCommandExecutor, executableFileName, exitFailure, registerCliPathContext, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
 import type {} from '@deepseek-ai/dsh-subprocess'
 
 declare const ctx: Context
-const executable = '/opt/vendor/bin/vendor-cli'
+const executable = join('/opt/vendor/bin', executableFileName('vendor-cli'))
 
 class Account extends CliAccountRuntime<{ readonly state: 'unchecked' | 'out' | 'in' }, 'check', never> {
   protected async perform(_kind: 'check', control: CliOperationControl<never, 'status'>, signal: AbortSignal): Promise<void> {
@@ -61,7 +62,7 @@ const account = new Account({
 
 ### 运行时上下文
 
-`registerCliPathContext(ctx, cli)` 注册一条必需的运行时上下文，让模型按 `cli.executable` 运行 `cli.program`，这正是执行器运行的路径。传入 `scripts` 时，它还让模型只在运行 skill 脚本的命令前加上 `PATH="<可执行文件所在目录>:$PATH"`，只改变这一条命令的 PATH，并且不要导出 PATH，也不要按名称运行 `cli.program`。传入 `ready` 时，`ready()` 返回 false 期间这条上下文不贡献任何内容。文本从不做变量插值，插件释放时这条上下文随之移除。文本见[模型体验](#model-experience)。
+`registerCliPathContext(ctx, cli)` 注册一条必需的运行时上下文，让模型按 `cli.executable` 运行 `cli.program`，这正是执行器运行的路径。传入 `scripts` 时，它还让模型只在运行 skill 脚本的命令中把可执行文件所在目录放到 PATH 最前面，并且不要按名称运行 `cli.program`。文本采用内置组合在 Host 平台上提供给模型的 shell 写法。在 Windows 以外的平台上使用 POSIX shell 语法：前缀是 `PATH="<可执行文件所在目录>:$PATH"`，只改变这一条命令的 PATH，文本还要求不要导出 PATH。在 Windows 上模型使用 PowerShell，文本用调用运算符写出可执行文件 `& '<可执行文件>'`，前缀写作 `$env:PATH = '<可执行文件所在目录>;' + $env:PATH`；PowerShell 每次调用都在新进程中运行，所以这个修改只在本次调用内有效。传入 `ready` 时，`ready()` 返回 false 期间这条上下文不贡献任何内容。文本从不做变量插值，插件释放时这条上下文随之移除。`executableFileName(program)` 给出插件要查找的文件名：`program`，在 Windows 上是 `program.exe`。文本见[模型体验](#model-experience)。
 
 ### 命令、链接与失败
 
@@ -119,13 +120,20 @@ const account = new Account({
 
 #### 模型看到什么
 
-每个调用 `registerCliPathContext` 且未传 `ready` 或 `ready` 返回 true 的插件，在上下文顺序 220 处有一条必需的运行时上下文；关闭可选运行时上下文时它仍然保留。第二行只在传入 `scripts` 时出现。占位符取自调用参数，引号内的值是 JSON 字符串。
+每个调用 `registerCliPathContext` 且未传 `ready` 或 `ready` 返回 true 的插件，在上下文顺序 220 处有一条必需的运行时上下文；关闭可选运行时上下文时它仍然保留。第二行只在传入 `scripts` 时出现。占位符取自调用参数。在 Windows 以外的平台上，引号内的值是 JSON 字符串；在 Windows 上是 PowerShell 单引号字符串，其中的单引号写成两个。
 
 ##### 运行时上下文条目
 
 ```markdown
 <Product> CLI: run `<program>` by its absolute path "<executable>"; the bare name may resolve to another installation or to none.
 Scripts in the <Product> skill call `<program>` by name; prefix only the commands that run them with PATH="<executable directory>:$PATH", and never export PATH or run `<program>` by name yourself.
+```
+
+##### Windows 上的运行时上下文条目
+
+```markdown
+<Product> CLI: run `<program>` by its absolute path with the call operator, & '<executable>'; the bare name may resolve to another installation or to none.
+Scripts in the <Product> skill call `<program>` by name; start only the commands that run them with $env:PATH = '<executable directory>;' + $env:PATH, and never run `<program>` by name yourself.
 ```
 
 #### Token 影响
@@ -144,6 +152,7 @@ Scripts in the <Product> skill call `<program>` by name; prefix only the command
 - 授权主机同时匹配其子域名；插件无法把链接限制在一个确切的主机上。
 - `exitFailure` 只按退出码分类；CLI 会输出结构化错误的插件，要自己编写按白名单取值的分类函数。
 - 运行时上下文要求模型按绝对路径运行 CLI，但无法强制；按名称运行 CLI 的命令会运行 PATH 解析到的任意安装，或者失败。
+- 文本的 shell 写法按 Host 平台而不是实际挂载的 shell 工具选择：在 Windows 上给模型 POSIX shell，或在其他平台上给模型 PowerShell 的组合，得到的是另一个平台的写法。
 
 <a id="dev-note"></a>
 ### 开发备注
