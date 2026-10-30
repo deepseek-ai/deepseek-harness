@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   desktopBuildRecordFilename,
+  desktopWebsiteInstallerUrl,
   desktopUpdateMetadataFilename,
   resolveDesktopAutoUpdateConfig,
   resolveDesktopAutoUpdateEnvironment,
@@ -118,4 +119,12 @@ describe('desktop auto-update environment', () => {
     expect(() => desktopUpdateMetadataFilename('not-semver', 'darwin')).toThrow(/invalid Desktop version/u)
     expect(() => desktopUpdateMetadataFilename('1.2.3', 'linux')).toThrow(/unsupported metadata platform/u)
   })
+})
+
+it.each([
+  ['mac-arm64', 'dsh-latest-macos-arm64.dmg'],
+  ['mac-x64', 'dsh-latest-macos-x64.dmg'],
+  ['win-x64', 'dsh-latest-windows-x64.exe'],
+] as const)('uses the production origin for website target %s', (target, filename) => {
+  expect(desktopWebsiteInstallerUrl(target)).toBe(`https://download.deepseek.com/desktop/${filename}`)
 })

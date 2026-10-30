@@ -4,7 +4,7 @@ import { open, lstat, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { DesktopRetainedManifest } from './desktop-release-store.ts'
 import type { DesktopPublishRoute } from './desktop-publish-route.ts'
-import { desktopLatestInstallerFilename } from './desktop-auto-update-environment.mjs'
+import { desktopLatestInstallerFilename, desktopWebsiteInstallerUrl } from './desktop-auto-update-environment.mjs'
 import { createDesktopCos, DESKTOP_COS_REGION, type DesktopCosCredentials } from './desktop-cos.ts'
 import { cosOperation } from './cos-operation.ts'
 import type { DesktopObjectDigest, DesktopPublishTransport } from './desktop-publish.ts'
@@ -61,7 +61,7 @@ export async function prepareWebsiteInstaller(directory: string, manifest: Deskt
     const key = `desktop/${desktopLatestInstallerFilename(route.target)}`
     return { handle, digest, md5: md5.digest('base64'), plan: {
       environment: 'production', target: route.target, version: source.version, commit: source.commit, dirty: false,
-      bucket, publicUrl: `https://download.deepseek.com/${key}`,
+      bucket, publicUrl: desktopWebsiteInstallerUrl(route.target),
       secretIdEnvName: 'DOWNLOAD_PROD_COS_SECRET_ID', secretKeyEnvName: 'DOWNLOAD_PROD_COS_SECRET_KEY',
       artifacts: [{ path, filename: file.name, key, channelMetadata: false,
         contentType: windows ? 'application/vnd.microsoft.portable-executable' : 'application/x-apple-diskimage' }],

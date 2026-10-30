@@ -4,14 +4,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import * as desktopCos from '../scripts/desktop-cos.ts'
-import { answer, startCosLoopback } from './cos-loopback.ts'
+import { answer, cosError, startCosLoopback } from './cos-loopback.ts'
 import { teo } from 'tencentcloud-sdk-nodejs-teo'
 import { publishWebsiteCi, websiteApproval } from '../scripts/publish-website-ci.ts'
 
 vi.mock('node:timers/promises', () => ({ setTimeout: async () => {} }))
 afterEach(() => vi.restoreAllMocks())
 
-it.each(['accepted', 'unconfirmed', 'upload', 'uploaded', 'approval'] as const)('preserves publication recovery for %s', async (scenario) => {
+it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'approval'] as const)('preserves publication recovery for %s', async (scenario) => {
   const root = await mkdtemp(join(tmpdir(), 'website-ci-'))
   try {
     const config = join(root, 'packaging')
@@ -37,10 +37,20 @@ it.each(['accepted', 'unconfirmed', 'upload', 'uploaded', 'approval'] as const)(
     const env = { RUNNER_NAME: 'mini', GITHUB_REPOSITORY: 'owner/repo', GITHUB_RUN_ID: '99',
       GITHUB_RUN_ATTEMPT: '1', DSH_PACKAGING_CONFIG_DIR: config, DESKTOP_PUBLISH_ROUTE: JSON.stringify(route),
       DESKTOP_WEBSITE_APPROVAL: approval, DOWNLOAD_PROD_EO_ZONE_ID: 'zone-fixture', GITHUB_OUTPUT: join(root, 'output') }
-    if (scenario === 'upload' || scenario === 'uploaded' || scenario === 'approval') {
+    if (scenario === 'upload' || scenario === 'put' || scenario === 'uploaded' || scenario === 'approval') {
       await writeFile(join(root, 'releases', '12', '1', manifest.files[0]!.name), 'x')
-      if (scenario === 'upload') await rm(join(records, 'state.json'))
-      const server = await startCosLoopback((_request, response) => { answer(response, 200, 'x') })
+      if (scenario === 'upload' || scenario === 'put') await rm(join(records, 'state.json'))
+      let stored = scenario !== 'put'
+      const server = await startCosLoopback((request, response) => {
+        if (request.method === 'PUT') {
+          expect(request.body.toString()).toBe('x')
+          stored = true
+          answer(response)
+          return
+        }
+        if (!stored) answer(response, 404, cosError('NoSuchKey'))
+        else answer(response, 200, 'x')
+      })
       const original = desktopCos.createDesktopCos
       vi.spyOn(desktopCos, 'createDesktopCos').mockImplementation((credentials) => {
         const client = original(credentials)
@@ -55,9 +65,9 @@ it.each(['accepted', 'unconfirmed', 'upload', 'uploaded', 'approval'] as const)(
           const output = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
           await publishWebsiteCi('upload', env)
           expect(output.mock.calls.map(call => String(call[0])).join('')).toContain(scenario === 'upload'
-            ? 'identical remote bytes confirmed; skipped' : 'previous upload confirmed by journal; skipped')
+            ? 'identical remote bytes confirmed; skipped' : scenario === 'put' ? 'Website installer uploaded:' : 'previous upload confirmed by journal; skipped')
           if (scenario === 'upload') expect(server.requests[0]!.path).toBe('/desktop/dsh-latest-macos-arm64.dmg')
-          expect(server.requests.map(request => request.method)).toEqual(scenario === 'upload' ? ['GET'] : [])
+          expect(server.requests.map(request => request.method)).toEqual(scenario === 'upload' ? ['GET'] : scenario === 'put' ? ['GET', 'PUT', 'GET'] : [])
           expect(JSON.parse(await readFile(join(records, 'state.json'), 'utf8'))).toMatchObject({ approval, upload: 'uploaded' })
           expect(await readFile(env.GITHUB_OUTPUT, 'utf8')).toContain(`record=${records}`)
         }

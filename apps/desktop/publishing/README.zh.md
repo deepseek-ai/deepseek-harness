@@ -73,7 +73,7 @@ Windows NSIS 上传要求安装包旁存在生成的非空 `.exe.blockmap`。blo
 
 生产固定下载要求在目标 dotenv 中配置 `DOWNLOAD_PROD_EO_ZONE_ID`，且既有 `DOWNLOAD_PROD_COS_SECRET_ID` / `DOWNLOAD_PROD_COS_SECRET_KEY` 身份具备对应站点的 `teo:CreatePurgeTask` 权限。发布操作人员须在使用前确认该权限；无需新增 CI Secret。上传前解析必需配置。提交请求超时为 30 秒，不自动重试。
 
-命令报告提交已接受，不代表缓存清除已完成。EO 结果输出到控制台，不另建刷新记录文件；既有上传审计仅记录 COS 写入。提交被拒绝或未确认时，命令以失败状态退出，已上传安装包保持发布。连接中断或未收到响应时，先检查 EO 任务历史再重新提交。使用 `pnpm run purge:latest <target>` 可只提交刷新，无需上传；需要生产配置和凭据，无需本地安装包。DPAPI 用户复用原凭据启动器，在 `-Upload -Latest` 命令上添加 `-PurgeOnly`。按目标串行执行上传和单独刷新。CI 发布器不发布固定下载，也不执行此刷新。
+命令报告提交已接受，不代表缓存清除已完成。EO 结果输出到控制台，不另建刷新记录文件；既有上传审计仅记录 COS 写入。提交被拒绝或未确认时，命令以失败状态退出，已上传安装包保持发布。连接中断或未收到响应时，先检查 EO 任务历史再重新提交。使用 `pnpm run purge:latest <target>` 可只提交刷新，无需上传；需要生产配置和凭据，无需本地安装包。DPAPI 用户复用原凭据启动器，在 `-Upload -Latest` 命令上添加 `-PurgeOnly`。按目标串行执行上传和单独刷新。[CI 发布工作流](ci/README.zh.md#recovery-and-records)使用独立的官网上传和刷新观察 job。
 
 <a id="credentials"></a>
 

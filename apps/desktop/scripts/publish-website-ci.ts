@@ -86,8 +86,8 @@ export async function publishWebsiteCi(mode: 'upload' | 'purge', env: NodeJS.Pro
     return
   }
   if (state.upload !== 'uploaded') throw new Error('website publication: upload completion is not confirmed; recover the upload job first')
-  const { desktopLatestInstallerFilename } = await import('./desktop-auto-update-environment.mjs')
-  const publicUrl = `${config.origin}/desktop/${desktopLatestInstallerFilename(route.target)}`
+  const { desktopWebsiteInstallerUrl } = await import('./desktop-auto-update-environment.mjs')
+  const publicUrl = desktopWebsiteInstallerUrl(route.target)
   const { teo } = await import('tencentcloud-sdk-nodejs-teo')
   const client = new teo.v20220901.Client({ credential: credentials, region: '',
     profile: { httpProfile: { endpoint: 'teo.tencentcloudapi.com', reqTimeout: 30 } } })

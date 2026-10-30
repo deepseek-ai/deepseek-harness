@@ -13,7 +13,7 @@
 | 升级 YAML | <a href="https&#58;//download.example.com/dsh-desk/feeds/win-x64/latest.yml">https&#58;//download.example.com/dsh-desk/feeds/win-x64/latest.yml</a><br>本次发布将更新此文件；审批前可能不存在或仍指向旧版本。 |
 | 打包来源 | <a href="https&#58;//github.com/owner/repo/actions/runs/20/attempts/3">查看打包运行 #20 · 第 3 次尝试</a><br>源码：<code>dsh-v1.0.0 @ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</code><br>打包机器：<code>windows-publisher</code> |
 | 签名与公证 | EXE 签名校验通过 |
-| 官网固定安装包 | <a href="https&#58;//download.deepseek.com/desktop/dsh-latest-windows-x64.exe">https&#58;//download.deepseek.com/desktop/dsh-latest-windows-x64.exe</a><br>替换为版本 <code>1.0.0</code>；已有安装包会被替换，无防降级保护；随后刷新缓存。 |
+| 官网固定安装包 | <a href="https&#58;//download.deepseek.com/desktop/dsh-latest-windows-x64.exe">https&#58;//download.deepseek.com/desktop/dsh-latest-windows-x64.exe</a><br>替换为版本 <code>1.0.0</code>；已有安装包会被替换，无防降级保护；官网上传与刷新在后续 job 中执行，可能需另行审批。 |
 | Git tag | <code>desktop-v1.0.0</code> |
 
 ### 批准后将执行
