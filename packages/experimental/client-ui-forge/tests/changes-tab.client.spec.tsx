@@ -261,7 +261,39 @@ function fileViewport(m: ReturnType<typeof mount>) {
 }
 
 describe('ChangesTab keyboard file navigation', () => {
-  it.each([{ kind: 'local' }, { kind: 'change', url: URL7 }] as const)('moves between $kind files, expands the destination and keeps focus in the diff', async (source) => {
+  it.each([{ kind: 'local' }, { kind: 'change', url: URL7 }] as const)('uses file-tree order for $kind diff sections and keyboard navigation', async (source) => {
+    const files = [
+      file('README.md'), file('packages/plugin/README.md'), file('packages/plugin/tests/index.spec.ts'),
+      file('packages/plugin/src/index.ts'), file('packages/plugin/src/adapter.ts'), file('docs/guide.md'),
+    ]
+    const expected = [
+      'docs/guide.md', 'packages/plugin/src/adapter.ts', 'packages/plugin/src/index.ts',
+      'packages/plugin/tests/index.spec.ts', 'packages/plugin/README.md', 'README.md',
+    ]
+    const m = mount({ source, setup: (faces) => {
+      faces.localDiff.mockResolvedValue(ok({ ...LOCAL, files }))
+      faces.changeRequestDiff.mockResolvedValue(ok({ ...CHANGE, files }))
+    } })
+    await settle()
+    const tree = within(m.view.getByRole('navigation'))
+    const paths = tree.getAllByRole('button').filter(button => !button.hasAttribute('aria-expanded'))
+      .map(button => button.getAttribute('aria-label'))
+    expect(paths).toEqual(expected)
+    expect(m.paths()).toEqual(paths)
+    const { viewport } = fileViewport(m)
+    for (const path of expected.slice(1)) {
+      fireEvent.keyDown(viewport, { key: 'ArrowRight' })
+      expect(scrolled.mock.contexts.at(-1)).toBe(m.section(path))
+      expect(tree.getByRole('button', { name: path }).getAttribute('aria-current')).toBe('true')
+    }
+    fireEvent.change(tree.getByRole('textbox'), { target: { value: 'README' } })
+    expect(m.paths()).toEqual(expected)
+  })
+
+  it.each([
+    { source: { kind: 'local' }, label: 'lib/a.txt → lib/b.txt' },
+    { source: { kind: 'change', url: URL7 }, label: 'src/app.ts' },
+  ] as const)('moves between $source.kind files, expands the destination and keeps focus in the diff', async ({ source, label }) => {
     const m = mount({ source })
     await settle()
     const { viewport, nodes } = fileViewport(m)
@@ -274,7 +306,7 @@ describe('ChangesTab keyboard file navigation', () => {
     expect(destination.hasAttribute('data-expanded')).toBe(true)
     expect(document.activeElement).toBe(viewport)
     const tree = within(m.view.getByRole('navigation'))
-    expect(tree.getByRole('button', { name: destination.dataset.forgeDiffFile! }).getAttribute('aria-current')).toBe('true')
+    expect(tree.getByRole('button', { current: true }).getAttribute('aria-label')).toBe(label)
     fireEvent.scroll(viewport)
     fireEvent.keyDown(viewport, { key: 'ArrowLeft' })
     expect(scrolled.mock.contexts.at(-1)).toBe(nodes[1])
@@ -367,7 +399,7 @@ describe('ChangesTab local reads', () => {
     expect(m.faces.localDiff).toHaveBeenCalledWith({ kind: 'branch' }, expect.any(AbortSignal))
     await settle()
 
-    expect(m.paths()).toEqual(['src/app.ts', 'src/new.ts', 'assets/logo.png', 'docs/gone.txt', 'lib/b.txt', 'logs/big.log'])
+    expect(m.paths()).toEqual(['assets/logo.png', 'docs/gone.txt', 'lib/b.txt', 'logs/big.log', 'src/app.ts', 'src/new.ts'])
     expect(m.view.getByText('Compared with origin/main, including uncommitted changes')).toBeTruthy()
     expect(m.view.getByRole('status').textContent).toBe('2 more untracked files are not listed')
     expect(m.view.getByRole('button', { name: 'All 6 files' })).toBeTruthy()
@@ -655,8 +687,9 @@ describe('ChangesTab layout', () => {
     const files = [APP, ...[1, 2, 3, 4, 5, 6].map(huge)]
     const m = mount({ setup: (faces) => { faces.localDiff.mockResolvedValue(ok({ base: BASE, files, omitted: 0 })) } })
     await settle()
-    expect(m.paths().map(path => path === null ? null : m.section(path).hasAttribute('data-expanded'))).toEqual([true, true, true, true, true, true, false])
+    expect(m.paths().map(path => path === null ? null : m.section(path).hasAttribute('data-expanded'))).toEqual([true, true, true, true, true, false, false])
 
+    fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: 'Expand app.ts' }))
     const toggle = within(m.section('src/app.ts')).getByRole('button', { name: 'Collapse app.ts' })
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
@@ -889,7 +922,7 @@ describe('ChangesTab change requests', () => {
     expect(m.faces.openLink).toHaveBeenLastCalledWith(URL7)
     await settle()
 
-    expect(m.paths()).toEqual(['src/app.ts', 'docs/notes.txt', 'docs/gone.txt'])
+    expect(m.paths()).toEqual(['docs/gone.txt', 'docs/notes.txt', 'src/app.ts'])
     expect(m.view.getByRole('status').textContent).toBe('The local branch has 1 unpushed commits; these are the changes on the change request')
     expect(m.section('src/app.ts').querySelector(`.${css.badge}`)).toBeNull()
     fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: '2 unchanged lines' }))
@@ -924,7 +957,7 @@ describe('ChangesTab change requests', () => {
     expect(m.faces.openLink).toHaveBeenLastCalledWith(URL7)
     fireEvent.click(m.view.getByRole('button', { name: en.retry }))
     await settle()
-    expect(m.paths()).toEqual(['src/app.ts', 'docs/notes.txt', 'docs/gone.txt'])
+    expect(m.paths()).toEqual(['docs/gone.txt', 'docs/notes.txt', 'src/app.ts'])
   })
 
   it('says a diff over a size limit is too large to show and offers only its web page', async () => {
