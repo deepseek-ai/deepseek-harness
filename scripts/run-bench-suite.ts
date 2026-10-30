@@ -1,11 +1,11 @@
-/** Run the benchmark suite in the two phases its measurements tolerate. */
+/** Run corpus and latency-sensitive benchmarks in separate reporting phases. */
 import { resolve } from 'node:path'
 import { runPnpmCommand } from './compile-referenced-projects.ts'
 
 /**
  * Cases whose wall-clock endpoints cannot absorb a sibling: they drive a
  * browser page, compare animation frames or paced streams, or spawn fresh
- * children and budget their startup. Corpus cases tolerate a sibling.
+ * children and budget their startup.
  */
 export const SERIAL_BENCH_FILES = [
   'benchmarks/long-session-browser/long-session.bench.ts',
@@ -25,8 +25,8 @@ const CONFIG = ['--config', 'vitest.bench.config.ts'] as const
 /**
  * Run one phase of the suite.
  * @param root - Repository root containing the Vitest configuration.
- * @param phase - `first` clears the report and runs the CPU cases two at a time;
- *   `last` runs the browser cases one at a time and renders the report.
+ * @param phase - `first` clears the report and runs corpus cases;
+ *   `last` runs latency-sensitive cases and renders the report.
  * @throws If the phase fails.
  */
 export function runBenchPhase(root: string, phase: 'first' | 'last'): void {
