@@ -19,7 +19,7 @@ description: "Agent Teams 使用标准 subagent 工具和 Session id；移除 Te
 - 运行时实例共享根所有权，不改变创建祖先关系。成员收尾不释放后代。消息仅恢复目标。根关闭时 host 关闭整棵树；成员显式获取所需结果。
 - 冷恢复使用已保存的 preset 和权限，而非创建者当前代次。缺失 preset 会导致恢复失败；历史目标没有保存 preset 时，使用 host 组合及描述符覆盖。生命周期分派使用根作用域，同时在 `parentSessionId` 中保留直接创建者。浏览器继续执行需要根在线；失败使用 `subagent/delivery-unavailable`。
 - 历史 Team 名册和邮箱记录仍可读取。其中的名字仅作为历史数据，不用于解析消息收件人或任务所有者。Subagent catalog 载荷不变。
-- Web Team 面板仅显示任务；普通 subagent 导航负责浏览成员。线上 `agentTeam.members` 字段与 `TeamMemberProjection` 被移除；持久化成员状态仍可解码。任务提交刷盘后结束同树所有驻留 Agent 的当前等待。信号不保留未读状态，也不启动 Agent；等待之外的变更不能唤醒后续等待。
+- Web Team 面板仅显示任务；subagent 导航负责浏览成员。线上 `agentTeam.members` 字段与 `TeamMemberProjection` 被移除；持久化成员状态仍可解码。任务提交不结束等待、不投递消息，也不启动空闲 Agent。需要另一个 Agent 处理任务变更时，应发送消息。
 
 ## 迁移
 
@@ -28,4 +28,4 @@ description: "Agent Teams 使用标准 subagent 工具和 Session id；移除 Te
 3. 使用 `send_message({ agent_id, message })` 和 `interrupt_agent({ agent_id })`。通过 `list_agents` 查询所有 Team 成员的 id。
 4. 任务的 `owner` 字段传入成员 Session id，结果读取 `ownerId`。以 Lead 的 Session id 取代 `lead` 别名。
 5. 将 `spawnTeammate`、`sendMessage` 和 `interrupt` 替换为 `ctx.subagents.startActivation`、`sendMessage` 和 `interrupt`。将 `membership`/`tryMembership` 替换为 `rootOf`，将 `listMembers` 替换为 `listDescendants`。将 `waitForChange` 替换为 `wait_agent`，随后重新读取任务。
-6. SDK `session/resume` 拒绝子代理会话。改为恢复根 Session。验证导航、嵌套任务分配与正在等待时的唤醒。
+6. SDK `session/resume` 拒绝子代理会话。改为恢复根 Session。验证导航、嵌套任务分配，以及消息结束收件箱等待而任务提交不会。
