@@ -46,6 +46,13 @@ enum PermissionGuidePlacement {
         return windows.max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
     }
 
+    /// Keep the guide adjacent to its parent without repeating an already satisfied WindowServer order.
+    static func needsOrdering(guide: CGWindowID, above target: CGWindowID, frontToBack: [CGWindowID]) -> Bool {
+        guard let targetIndex = frontToBack.firstIndex(of: target) else { return false }
+        guard let guideIndex = frontToBack.firstIndex(of: guide) else { return true }
+        return guideIndex + 1 != targetIndex
+    }
+
     /// AppKit coordinates; the guide overlays the settings window's lower margin and stays on screen.
     static func frame(settings: CGRect?, visible: CGRect, size: CGSize) -> CGRect {
         let width = min(size.width, max(1, visible.width - 24))
@@ -230,7 +237,8 @@ enum PermissionGuidePlacement {
 
     private func updatePosition() {
         guard let panel, !dragging, let primary = NSScreen.screens.first else { return }
-        let target = PermissionGuidePlacement.target(in: Self.settingsWindows(primaryHeight: primary.frame.height), pinned: settingsWindowID)
+        let snapshot = Self.settingsWindows(primaryHeight: primary.frame.height)
+        let target = PermissionGuidePlacement.target(in: snapshot.targets, pinned: settingsWindowID)
         if let target { settingsWindowID = target.id }
         else if settingsWindowID != nil { dismiss(activatePrevious: false); return }
         let settings = target?.frame
@@ -250,14 +258,21 @@ enum PermissionGuidePlacement {
             panel.setFrame(frame, display: true)
             panel.invalidateShadow()
         }
-        if let target { panel.order(.above, relativeTo: Int(target.id)) }
-        else if !panel.isVisible { panel.orderFrontRegardless() }
+        if let target {
+            if PermissionGuidePlacement.needsOrdering(guide: CGWindowID(panel.windowNumber), above: target.id, frontToBack: snapshot.order) {
+                panel.order(.above, relativeTo: Int(target.id))
+            }
+        } else if !panel.isVisible { panel.orderFrontRegardless() }
     }
 
-    private static func settingsWindows(primaryHeight: CGFloat) -> [PermissionGuideWindow] {
+    private static func settingsWindows(primaryHeight: CGFloat) -> (targets: [PermissionGuideWindow], order: [CGWindowID]) {
         guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.systempreferences").first,
-              let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] else { return [] }
-        return windows.compactMap { window in
+              let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] else { return ([], []) }
+        let order = windows.compactMap { window -> CGWindowID? in
+            guard (window[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 else { return nil }
+            return (window[kCGWindowNumber as String] as? NSNumber)?.uint32Value
+        }
+        let targets = windows.compactMap { window -> PermissionGuideWindow? in
             guard (window[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == app.processIdentifier,
                   (window[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
                   let id = window[kCGWindowNumber as String] as? NSNumber,
@@ -266,6 +281,7 @@ enum PermissionGuidePlacement {
             return PermissionGuideWindow(id: id.uint32Value,
                 frame: CGRect(x: frame.minX, y: primaryHeight - frame.maxY, width: frame.width, height: frame.height))
         }
+        return (targets, order)
     }
 }
 

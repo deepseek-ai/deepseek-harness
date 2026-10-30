@@ -157,3 +157,16 @@ func permissionGuideMaterialKeepsTransparentCornersWhenResized(size: NSSize) thr
     #expect(try #require(bitmap.colorAt(x: 25, y: 0)).alphaComponent == 1)
     #expect(try #require(bitmap.colorAt(x: 0, y: 25)).alphaComponent == 1)
 }
+
+@Test func permissionGuideLeavesStableWindowOrderUntouched() {
+    #expect(!PermissionGuidePlacement.needsOrdering(guide: 20, above: 10, frontToBack: [20, 10]))
+    #expect(!PermissionGuidePlacement.needsOrdering(guide: 20, above: 10, frontToBack: [30, 20, 10]))
+    #expect(!PermissionGuidePlacement.needsOrdering(guide: 20, above: 10, frontToBack: [20, 30]))
+}
+
+@Test func permissionGuideRestoresItsPositionBelowDialogsAndAboveSettings() {
+    #expect(PermissionGuidePlacement.needsOrdering(guide: 20, above: 10, frontToBack: [10, 20]))
+    #expect(PermissionGuidePlacement.needsOrdering(guide: 20, above: 10, frontToBack: [20, 30, 10]))
+    #expect(PermissionGuidePlacement.needsOrdering(guide: 20, above: 10, frontToBack: [30, 10]))
+    #expect(!PermissionGuidePlacement.needsOrdering(guide: 20, above: 10, frontToBack: [30, 20, 10]))
+}
