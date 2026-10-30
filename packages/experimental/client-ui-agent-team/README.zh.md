@@ -31,7 +31,7 @@ kind: "package-reference"
 
 可开始的 pending 任务使用 idle 灰点，被依赖阻塞的 pending 任务使用 warning 橙点，in-progress 任务使用 ongoing loading，completed 任务使用 done 绿点。
 
-只读任务板显示任务身份、所有者标签、阻塞项、就绪状态、建议写入范围和重叠警告。根负责人显示为“主代理”；其他负责人优先使用 subagent 目录标签，其次为 Session 标题，最后为 Session id。长描述可展开。标题显示任务数量，空任务板提供简短说明。Agent 通过工具修改任务；面板不提供修改控件。投影失败显示在最后有效任务上方。
+只读任务板显示任务身份、所有者 Session id、阻塞项、就绪状态、建议写入范围和重叠警告。长描述可展开。标题显示任务数量，空任务板提供简短说明。Agent 通过工具修改任务；面板不提供修改控件。投影失败显示在最后有效任务上方。
 
 -----
 
@@ -43,7 +43,7 @@ kind: "package-reference"
 
 Client export 通过 Cordis effect 注册 locale dictionary 与一个 conversation-header slot；它不挂载任何 Remote namespace。Dispose plugin fiber 会移除这两项 registration。
 
-面板渲染于对话容器之外，并保持在视口内。悬停 150ms 后打开；离开触发器和面板 120ms 后关闭。点击会固定面板并将焦点移入。外部点击和 Escape 关闭面板；焦点原在面板内时，Escape 将其送回。窄标题栏使用点击打开的图标触发器。面板通过 Session 祖先关系解析根并读取其 `agentTeam` 投影。祖先关系不完整或投影数据缺失时，任务板不可用；切换对话时关闭面板。
+面板渲染于对话容器之外。`useAnchoredPosition` 在浏览器缩放、Visual Viewport 平移及尺寸变化时跟随触发按钮，并保留视口边距。悬停 150ms 后打开；离开触发器和面板 120ms 后关闭。点击会固定面板，并在首次定位完成后将焦点移入。外部点击和 Escape 关闭面板；焦点原在面板内时，Escape 将其送回。窄标题栏使用点击打开的图标触发器。面板通过 Session 祖先关系解析根并读取其 `agentTeam` 投影。祖先关系不完整或投影数据缺失时，任务板不可用；切换对话时关闭面板。
 
 | 文件 | 职责 |
 |---|---|
@@ -81,7 +81,6 @@ Client export 通过 Cordis effect 注册 locale dictionary 与一个 conversati
 
 - **无邮箱时间线** — 面板显示任务，不显示消息。
 - **晚启用插件** — 在已经打开的会话中启用 Agent Teams 后，需要刷新页面才能接收其 Team 投影。
-- **所有者标签缺失** — Session 或目录元数据尚未读取时显示 id，直到普通加载提供描述。
 - **成员导航独立** — 使用普通 subagent 标题栏打开队友对话。
 - **没有 lifecycle 或 workspace control**——panel 不能 spawn、rename、delete 或 interrupt teammate，write scope 仍只是提示性 metadata。
 

@@ -53,13 +53,14 @@
   z-index: 100;
   box-sizing: border-box;
   width: min(500px, 100vw - 32px);
-  max-height: min(680px, calc(100vh - 32px));
+  max-height: min(680px, calc(100vh - 32px), var(--dsh-anchored-max-height, 100vh));
   padding: 8px 2px 0;
   overflow: hidden;
   border: 0;
   border-radius: 12px;
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
+  max-width: var(--dsh-anchored-max-width, none);
 }
 
 .panel::before {

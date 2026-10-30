@@ -31,7 +31,7 @@ Enable this package through [`@deepseek-ai/dsh-experimental-agent-team-profile`]
 
 Ready pending tasks use idle, blocked pending tasks use warning, in-progress tasks use ongoing, and completed tasks use done.
 
-The read-only board shows task identity, owner label, blockers, readiness, advisory write scopes, and overlap warnings. The root owner is labeled Lead; other owners use the subagent catalog label, then the Session title, then the Session id. Long descriptions can expand. The heading shows the task count and an empty board has a short explanation. Agents mutate tasks through tools; the panel provides no mutation controls. A projection failure appears above the last valid tasks.
+The read-only board shows task identity, owner Session id, blockers, readiness, advisory write scopes, and overlap warnings. Long descriptions can expand. The heading shows the task count and an empty board has a short explanation. Agents mutate tasks through tools; the panel provides no mutation controls. A projection failure appears above the last valid tasks.
 
 -----
 
@@ -43,7 +43,7 @@ The read-only board shows task identity, owner label, blockers, readiness, advis
 
 The Client export registers its locale dictionaries and one conversation-header slot through Cordis effects; it mounts no Remote namespace. Disposing the plugin fiber removes both registrations.
 
-The panel renders outside the conversation container and stays within the viewport. Hover opens it after 150ms; leaving the trigger and panel closes it after 120ms. Clicking pins the panel and moves focus into it. Outside clicks and Escape dismiss it; Escape returns focus when focus was inside. A narrow header uses an icon trigger that opens on click. The panel resolves the root through Session ancestry and reads its `agentTeam` projection. Incomplete ancestry or missing projection data leaves the board unavailable; conversation changes close the panel.
+The panel renders outside the conversation container. `useAnchoredPosition` follows its trigger through browser zoom, Visual Viewport panning, and resizing while keeping it within viewport margins. Hover opens it after 150ms; leaving the trigger and panel closes it after 120ms. Clicking pins the panel and moves focus into it after its first position resolves. Outside clicks and Escape dismiss it; Escape returns focus when focus was inside. A narrow header uses an icon trigger that opens on click. The panel resolves the root through Session ancestry and reads its `agentTeam` projection. Incomplete ancestry or missing projection data leaves the board unavailable; conversation changes close the panel.
 
 | File | Role |
 |---|---|
@@ -81,7 +81,6 @@ No direct effect; the Team tools and ordinary conversation submission own any la
 
 - **No mailbox timeline** — the panel displays tasks, not messages.
 - **Late plugin activation** — after enabling Agent Teams in an already-open conversation, reload the page to receive its Team projection.
-- **Missing owner labels** — unread Session or catalog metadata leaves an id label until ordinary loading supplies a description.
 - **Member navigation is separate** — use the ordinary subagent header to open teammate conversations.
 - **No lifecycle or workspace controls** — the panel cannot spawn, rename, delete, or interrupt teammates, and write scopes remain advisory metadata.
 

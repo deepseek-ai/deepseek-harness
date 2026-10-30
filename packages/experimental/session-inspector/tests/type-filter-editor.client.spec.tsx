@@ -19,6 +19,7 @@ it('discards out-of-order responses and confirms the typed fragment with Enter',
   const ui = render(<TypeFilter value="" suggest={suggest} apply={apply} t={t} />)
   await act(async () => { fireEvent.click(ui.getByRole('button', { name: 'Filter types' })) })
   const input = ui.getByRole('combobox', { name: 'Type keyword' })
+  expect(document.activeElement).toBe(input)
   expect(ui.getByRole('dialog').parentElement).toBe(document.body)
   await act(async () => { fireEvent.change(input, { target: { value: 'd' } }) })
   await act(async () => { fireEvent.change(input, { target: { value: 'delta' } }) })

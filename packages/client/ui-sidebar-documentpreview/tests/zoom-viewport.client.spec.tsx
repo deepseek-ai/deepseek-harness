@@ -16,8 +16,10 @@ beforeEach(() => {
   Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => null })
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => width)
   vi.stubGlobal('ResizeObserver', class {
-    constructor(callback: ResizeObserverCallback) { resize = callback }
-    observe(): void {}
+    constructor(private readonly callback: ResizeObserverCallback) {}
+    observe(target: Element): void {
+      if (target.hasAttribute('data-document-zoom-scrollport')) resize = this.callback
+    }
     disconnect(): void {}
   })
 })

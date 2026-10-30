@@ -115,7 +115,7 @@ describe('TeamAction', () => {
     render(<TeamAction {...b.props} />)
     openPanel()
     expect(screen.getByText(task.subject)).toBeTruthy()
-    expect(screen.getByText('负责人: 主代理')).toBeTruthy()
+    expect(screen.getByText(`负责人: ${SESSION}`)).toBeTruthy()
     expect(screen.getByRole('heading', { name: '共享任务1' })).toBeTruthy()
     expect(screen.queryByText('historical member')).toBeNull()
     expect(screen.queryByText('old failure')).toBeNull()
@@ -123,7 +123,7 @@ describe('TeamAction', () => {
     expect(screen.queryByRole('button', { name: /打开成员会话/u })).toBeNull()
   })
 
-  it('prefers direct-parent catalog labels and falls back to Session titles', () => {
+  it('keeps owner identity independent of catalog labels and Session titles', () => {
     const b = bench({
       byId: {
         [SESSION]: summary(SESSION),
@@ -141,25 +141,25 @@ describe('TeamAction', () => {
     })
     render(<TeamAction {...b.props} />)
     openPanel()
-    expect(screen.getByText('负责人: Nested implementer')).toBeTruthy()
+    expect(screen.getByText(`负责人: ${NESTED}`)).toBeTruthy()
     act(() => { b.sessions.update((draft) => { draft.byId[NESTED] = { ...draft.byId[NESTED]!, title: 'Runtime work' } }) })
-    expect(screen.getByText('负责人: Nested implementer')).toBeTruthy()
+    expect(screen.getByText(`负责人: ${NESTED}`)).toBeTruthy()
     act(() => { b.sessions.update((draft) => { draft.projectionsBySession = { [SESSION]: draft.projectionsBySession[SESSION]! } }) })
-    expect(screen.getByText('负责人: Runtime work')).toBeTruthy()
+    expect(screen.getByText(`负责人: ${NESTED}`)).toBeTruthy()
     act(() => { b.sessions.set({
       ...b.sessions.getSnapshot(), byId: { [SESSION]: summary(SESSION), [WORKER]: summary(WORKER) },
     }) })
     expect(screen.getByText(`负责人: ${NESTED}`)).toBeTruthy()
   })
 
-  it('uses a root catalog label when the owner has no Session summary', () => {
+  it('shows the owner id when the Session summary is unavailable', () => {
     const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: {
       agentTeam: { ...team, tasks: [{ ...task, ownerId: WORKER }] },
       subagentCatalog: [{ id: WORKER, createdAt: 0, mode: 'continuable', label: 'Current responsibility' }],
     } } } })
     render(<TeamAction {...b.props} />)
     openPanel()
-    expect(screen.getByText('负责人: Current responsibility')).toBeTruthy()
+    expect(screen.getByText(`负责人: ${WORKER}`)).toBeTruthy()
     setProjection(b.sessions, SESSION, { ...team, tasks: [{ ...task, ownerId: WORKER }] })
     expect(screen.getByText(`负责人: ${WORKER}`)).toBeTruthy()
   })

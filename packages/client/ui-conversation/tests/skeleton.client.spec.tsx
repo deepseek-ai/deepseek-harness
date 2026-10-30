@@ -779,16 +779,18 @@ describe('ConversationRoot resident composer', () => {
     expect(external()).toEqual(['Chat', 'Trajectory', 'Timeline'])
     expect(b.actionsOwner().entries.find(entry => entry.id === 'inspector')?.active).toBe(true)
     expect(b.view.getByRole('button', { name: zh['session.moreViews'] })).toBeTruthy()
-    const reads = readWidth.mock.calls.length
+    const row = b.view.getByRole('tablist').parentElement!
+    const rowReads = () => readWidth.mock.contexts.filter(element => element === row).length
+    const reads = rowReads()
     width = 1000
     fireEvent(window, new Event('resize'))
     act(() => { b.store.actions.setView('timeline') })
-    expect(readWidth).toHaveBeenCalledTimes(reads)
+    expect(rowReads()).toBe(reads)
     expect(external()).toEqual(['Chat', 'Trajectory', 'Timeline'])
     viewTabs.splice(1, 1)
     act(() => { b.store.actions.setView('chat') })
     expect(external()).toEqual(['Chat', 'Timeline', 'Inspector'])
-    expect(readWidth).toHaveBeenCalledTimes(reads)
+    expect(rowReads()).toBe(reads)
     expect(b.actionsOwner().entries).toEqual([])
     expect(b.setPinned).not.toHaveBeenCalled()
   })

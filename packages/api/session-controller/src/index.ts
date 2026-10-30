@@ -553,10 +553,10 @@ export class SessionController extends TypertRemoteService {
   }
 
   /**
-   * Subscribe to sparse Session projection changes.
+   * Subscribe to Session projection changes.
    * @param request - target Session.
    * @param signal - subscription cancellation.
-   * @returns readiness and sparse projection changes.
+   * @returns readiness followed by one projection change frame per committed event.
    */
   @Remote({ mode: 'stream' })
   observeProjections(request: SessionProjectionsRequest, signal: AbortSignal): AsyncIterable<SessionProjectionFrame> {

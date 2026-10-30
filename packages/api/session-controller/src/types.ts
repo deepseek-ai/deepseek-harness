@@ -569,12 +569,21 @@ export interface SessionControlBaseline {
   readonly projections: Readonly<Record<SessionId, SessionProjectionBaseline>>
 }
 
-/** One finished projection value and its durable watermark. */
+/**
+ * Projection changes caused by one committed Session event; the Host emits one
+ * update per event that changed at least one client-visible projection view.
+ */
 export interface SessionProjectionUpdate {
   readonly sessionId: SessionId
-  readonly key: string
-  readonly value: JsonValue
+  /** Seq of the committed event that caused every listed change. */
   readonly seq: number
+  /**
+   * One entry per client-visible key whose view the event changed, in
+   * registration order without duplicate keys, with the key's new value as
+   * `val`. A key absent from `changes` is unchanged; unlike a baseline, absence
+   * does not mean an absent capability.
+   */
+  readonly changes: readonly { readonly key: string; readonly val: SessionProjectionValue }[]
 }
 
 /** Host-wide live state stream. Each generation starts with exactly one baseline. */
@@ -652,10 +661,10 @@ export type SessionEventFrame =
   | { readonly type: 'ready' }
   | SessionEventEntry
 
-/** One sparse per-key replacement; different keys can share a seq. */
+/** Projection changes caused by one committed event of the observed Session. */
 export type SessionProjectionChange = { readonly type: 'projection' } & Omit<SessionProjectionUpdate, 'sessionId'>
 
-/** Subscription readiness without a baseline, followed by per-key changes. */
+/** Subscription readiness without a baseline, followed by one change frame per committed event. */
 export type SessionProjectionFrame =
   | { readonly type: 'ready' }
   | SessionProjectionChange

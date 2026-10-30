@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type {} from '@deepseek-ai/dsh-agent/types'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   TeamTaskView as TeamTask,
 } from '@deepseek-ai/dsh-experimental-agent-team/client'
@@ -43,20 +42,10 @@ function taskDotState(task: TeamTask): StateDotState {
 }
 
 /** Task card with a two-line description clamp expanded from a toggle in the meta row. */
-function TaskCard({ task, rootId, useSessions, t }: {
+function TaskCard({ task, t }: {
   task: TeamTask
-  rootId: SessionId
-  useSessions: TeamActionProps['useSessions']
   t: TranslateNS<typeof NS>
 }) {
-  const owner = useSessions((state) => {
-    if (task.ownerId === undefined) return undefined
-    if (task.ownerId === rootId) return t('lead')
-    const summary = state.byId[task.ownerId]
-    const parentId = summary?.parentId ?? rootId
-    const catalog = state.projectionsBySession[parentId]?.values.subagentCatalog
-    return catalog?.find(child => child.id === task.ownerId)?.label ?? summary?.title ?? summary?.displayTitle ?? task.ownerId
-  })
   const [expanded, setExpanded] = useState(false)
   const [clamped, setClamped] = useState(false)
   const textRef = useRef<HTMLParagraphElement>(null)
@@ -95,7 +84,7 @@ function TaskCard({ task, rootId, useSessions, t }: {
           </button>
         )}
         <span>{task.id}</span>
-        <span>{t('owner')}: {owner ?? t('unowned')}</span>
+        <span>{t('owner')}: {task.ownerId ?? t('unowned')}</span>
         {task.status === 'pending' && <span>{task.ready ? t('ready') : t('blocked')}</span>}
         {task.blockedBy.length > 0 && <span>{t('blockedBy')}: {task.blockedBy.join(', ')}</span>}
         {task.writeScopes.length > 0 && <span>{t('writeScopes')}: {task.writeScopes.join(', ')}</span>}
@@ -248,7 +237,7 @@ export function TeamAction({
                         <h3>{t('tasks')}<span className={css.count}>{team.tasks.length}</span></h3>
                         <div className={css.tasks}>
                           {team.tasks.map(task => (
-                            <TaskCard key={task.id} task={task} rootId={rootId as SessionId} useSessions={useSessions} t={t} />
+                            <TaskCard key={task.id} task={task} t={t} />
                           ))}
                         </div>
                       </>

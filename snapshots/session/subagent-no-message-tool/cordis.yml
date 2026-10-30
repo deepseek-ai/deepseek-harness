@@ -22,6 +22,8 @@
         id: parent
         plugins:
           - name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              applyPatch: true
           - name: '@deepseek-ai/dsh-tool-fs-search'
             config:
               sampleOverCapGlobResults: false

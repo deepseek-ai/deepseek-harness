@@ -105,7 +105,7 @@ describe('web e2e: Agent Teams panel', () => {
       taskId: task.id, expectedRevision: task.revision, action: 'claim',
     })
     await action.getByText('In progress', { exact: true }).waitFor()
-    await action.getByText('Owner: Lead', { exact: true }).waitFor()
+    await action.getByText(`Owner: ${agent.id}`, { exact: true }).waitFor()
     expect(await action.getByRole('button', { name: /^(New task|Edit|Complete|Reopen|Delete)$/u }).count()).toBe(0)
     expect(await action.locator('input, select, textarea').count()).toBe(0)
 
@@ -162,6 +162,10 @@ describe('web e2e: Agent Teams panel', () => {
   })
 
   it('keeps the hovered panel open when the pointer returns directly to its trigger', async () => {
+    onTestFailed(async () => {
+      await saveFailureShot(page, 'web-e2e-agent-team-hover')
+      console.error('Agent Team hover diagnostics', JSON.stringify({ errors: tripwire.pageErrors, warnings: tripwire.warnings }))
+    })
     const trigger = page.locator('[data-team-action]').getByRole('button', { name: 'Task board', exact: true })
     const panel = page.getByRole('dialog', { name: 'Task board', exact: true })
     await trigger.hover()

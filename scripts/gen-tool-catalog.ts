@@ -417,15 +417,15 @@ const TOOL_PACKAGES: ToolPackage[] = [
     dir: 'tool-fs',
     source: 'packages/fs/tool-fs/src/index.ts',
     requires: ['ctx.workingDirectory', 'ctx.tools', 'ctx.fs', 'ctx.systemPrompt', 'ctx.attachments (image-tool registration)', 'ctx.llm + an image-capable route (image-tool execution)'],
-    writes: ['tool/call', 'fs/write-intent or fs/edit-intent for mutations', 'fs/observed after read presence/absence or successful file operation', 'durable attachment (read_image)', 'tool/result'],
+    writes: ['tool/call', 'fs/write-intent, fs/edit-intent, or fs/delete-intent for mutations', 'fs/observed after read presence/absence or successful file operation', 'durable attachment (read_image)', 'tool/result'],
     async mount(ctx) {
       // The catalog seam marker opts into
       // the attachments-conditional image schema without attachment I/O.
       await ctx.plugin(CatalogAttachmentStore)
-      await ctx.plugin(ToolFs)
+      await ctx.plugin(ToolFs, { applyPatch: true })
     },
     note:
-      'The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); a deployment that loads these tools is expected to also load it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input.',
+      'The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); the shipped compositions leave its row disabled, so mutations are unconditional unless a deployment enables it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. `apply_patch` registers only with `applyPatch: true`; the catalog sets it so the schema is documented. `dsh-base` and the Web `standard` preset enable it; the Web `ptc` and `cordis` presets and the PTC overlay state `applyPatch: false`.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-fs-search',

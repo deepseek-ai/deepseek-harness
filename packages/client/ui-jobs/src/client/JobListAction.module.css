@@ -49,8 +49,8 @@
   display: flex;
   flex-direction: column;
   width: 500px;
-  max-width: min(560px, calc(100vw - 32px));
-  max-height: min(480px, calc(100vh - 140px));
+  max-width: min(560px, calc(100vw - 32px), var(--dsh-anchored-max-width, 100vw));
+  max-height: min(480px, calc(100vh - 140px), var(--dsh-anchored-max-height, 100vh));
   overflow: hidden;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);

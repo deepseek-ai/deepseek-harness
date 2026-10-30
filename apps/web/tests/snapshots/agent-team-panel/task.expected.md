@@ -4,4 +4,4 @@
     - strong: Agent task
     - text: In progress
     - paragraph: Created by the root agent
-    - text: "task-1Owner: LeadWrite scopes: src/web"
+    - text: "task-1Owner: session-{{uuid}}Write scopes: src/web"
