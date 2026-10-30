@@ -192,16 +192,21 @@ describe.skipIf(process.platform === 'win32')('terminal-bash real shell', () => 
       text: `bash -c 'exec </dev/tty; printf "%s" "$BASHPID" > "$1"; printf "WAITING\\n"; read -r answer; printf "ANSWER=%s\\n" "$answer"' dsh "${readerPidFile}"`,
       submit: true,
     })
-    await waitForOutput(waiting, 'WAITING')
     const result = await waiting.done
+    expect(result.waitReason).not.toBe('timeout')
+    expect(existsSync(readerPidFile), JSON.stringify(result)).toBe(true)
     const readerPid = Number(readFileSync(readerPidFile, 'utf8'))
     expect(readerPid).toBeGreaterThan(0)
     expect(result.waitReason).toBe(canReadLinuxProcessSyscall(readerPid) ? 'stdin_read' : 'inferred_idle')
+    // Kernel input-wait evidence can precede PTY output delivery; scrollback
+    // retains that output after the send settles. Match a line, not command echo.
+    const read = () => ctx.terminals.read(agent, created.sessionId, { offset: 0, count: 100 }).text
+    await expect.poll(read, { timeout: 2_000 }).toMatch(/(?:^|\n)WAITING\n/)
 
     const answer = ctx.terminals.startSend(agent, created.sessionId, { text: 'accepted', submit: true })
     const answered = await answer.done
     expect(answered.waitReason).toBe('stdin_read')
-    expect(answered.viewport).toContain('ANSWER=accepted')
+    await expect.poll(read, { timeout: 2_000 }).toMatch(/(?:^|\n)ANSWER=accepted\n/)
     await ctx.terminals.kill(agent, created.sessionId)
   }, 20_000)
 
