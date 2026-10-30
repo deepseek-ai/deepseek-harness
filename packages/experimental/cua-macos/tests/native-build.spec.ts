@@ -94,7 +94,7 @@ it('checks source builds on activation and maps Intel architecture to the compil
 
 it.each([undefined, '/keychains/custom.keychain-db'])('uses a configured certificate with keychain %s', async (keychain) => {
   const f = await fixture()
-  await buildNativeExecutable({ ...f.spec, sourceSigning: { identity: 'Apple Development: Example', keychain } })
+  await buildNativeExecutable({ ...f.spec, sourceSigning: { identity: 'Apple Development: Example', ...(keychain === undefined ? {} : { keychain }) } })
   const argv = f.spawn.mock.calls[0]![0].argv
   expect(argv.slice(argv.indexOf('--identity'))).toEqual([
     '--identity', 'Apple Development: Example', ...(keychain === undefined ? [] : ['--keychain', keychain]),

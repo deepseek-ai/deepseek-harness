@@ -131,7 +131,7 @@ class DevelopmentSigningTests(unittest.TestCase):
         before = record.read_bytes()
         self.keychain.unlink()
         with patch.object(signing, "create_certificate") as create:
-            with self.assertRaisesRegex(RuntimeError, "keychain is missing: .*; run .*remove, then .*setup"):
+            with self.assertRaisesRegex(RuntimeError, "keychain is missing: .*; run .*remove --dsh-home .*, then .*setup --dsh-home "):
                 signing.setup(self.directory)
         create.assert_not_called()
         self.assertEqual(record.read_bytes(), before)
@@ -178,7 +178,7 @@ with patch('subprocess.run', side_effect=AssertionError('unexpected native build
     def test_missing_certificate_requires_explicit_removal_instead_of_changing_identity(self):
         self.configure()
         (self.directory / "identity.json").write_text(json.dumps({"sha1": "MISSING", "password": "secret"}))
-        with self.assertRaisesRegex(RuntimeError, "certificate is missing; run .*remove, then .*setup"):
+        with self.assertRaisesRegex(RuntimeError, "certificate is missing; run .*remove --dsh-home .*, then .*setup --dsh-home "):
             signing.setup(self.directory)
         self.assertTrue(self.keychain.is_file())
 
