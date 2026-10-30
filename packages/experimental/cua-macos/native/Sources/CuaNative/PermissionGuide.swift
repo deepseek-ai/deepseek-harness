@@ -74,6 +74,7 @@ enum PermissionGuidePlacement {
     private var text: PermissionGuideText?
     private var settingsWindowID: CGWindowID?
     private var dragging = false
+    private var settingsOpenFailed = false
 
     func show(application: PermissionGuideApplication, text: PermissionGuideText, owner: UUID,
               interval: TimeInterval, granted: @escaping @MainActor () -> Bool) throws {
@@ -86,6 +87,7 @@ enum PermissionGuidePlacement {
         returnApplication = previousApplication?.bundleIdentifier == "com.apple.systempreferences" ? nil : previousApplication
         settingsWindowID = nil
         dragging = false
+        settingsOpenFailed = false
 
         let panel = PermissionGuidePanel(contentRect: NSRect(x: 0, y: 0, width: 620, height: 128),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -190,6 +192,7 @@ enum PermissionGuidePlacement {
     }
 
     func reportSettingsFailure() {
+        settingsOpenFailed = true
         if let text { showFailure(text.settingsMessage) }
     }
 
@@ -219,6 +222,7 @@ enum PermissionGuidePlacement {
         text = nil
         settingsWindowID = nil
         dragging = false
+        settingsOpenFailed = false
         window?.close()
         if activatePrevious, let previous, !previous.isTerminated { _ = previous.activate(options: []) }
     }
@@ -241,6 +245,7 @@ enum PermissionGuidePlacement {
         let target = PermissionGuidePlacement.target(in: snapshot.targets, pinned: settingsWindowID)
         if let target { settingsWindowID = target.id }
         else if settingsWindowID != nil { dismiss(activatePrevious: false); return }
+        else if !settingsOpenFailed { return }
         let settings = target?.frame
         let screen = NSScreen.screens.max { left, right in
             let target = settings ?? primary.frame
