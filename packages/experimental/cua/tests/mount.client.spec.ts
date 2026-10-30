@@ -14,7 +14,8 @@ import type { ApplicationApprovalProps } from '../src/client/ApplicationApproval
 
 const contribution: TypertRemoteContribution = { package: '@deepseek-ai/dsh-cua', descriptors: [] }
 const value: CuaApplicationState & { system: CuaSystemPermissionState } = {
-  system: { accessibility: false, screenRecording: false, helper: { pid: 2 }, parent: { pid: 1 } },
+  system: { guidancePolling: { intervalMs: 1000, timeoutMs: 120000 }, guideOpen: false,
+    accessibility: false, screenRecording: false, helper: { pid: 2 }, parent: { pid: 1 } },
   allowedApps: [], blockedApps: [], persistentAvailable: true }
 
 function actionsOf(value: Record<string, unknown>): asserts value is Record<string, unknown> & PermissionFace {

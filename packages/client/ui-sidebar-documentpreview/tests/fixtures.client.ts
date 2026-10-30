@@ -141,8 +141,7 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
   onTestFinished(() => { controller.abort() })
   const tabActions = { bindCommands: vi.fn(() => vi.fn()), openResource: vi.fn(), openTab: vi.fn(), close: vi.fn(), replace: vi.fn() }
   const definitions = [textBodyDefinition(() => t('viewer.text'))]
-  // The document seat renders the plain body; the file-handoff seats render a
-  // marker carrying what the owner handed them.
+  // The document slot renders the plain body; other positions mark their input.
   const renderSlot: TextPreviewProps['renderSlot'] = (key: string, owner: unknown, opts?: { hookContext?: unknown }) =>
     key === 'sidebar.right.tab.document'
       ? createElement(TextBody, {
@@ -155,7 +154,7 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
   const props = (navigation: { params?: unknown; revision: number } = { revision: 1 }) => ({
     useTabInfo: () => ({
       sidebar: { expanded: true, fullscreen: false },
-      panel: { id: 'pane-1' },
+      panel: { id: 'pane-1', isFloating: false },
       tab: {
         id: tabId, kind: 'text', contentId: ADDRESS, title: 'notes.md', visible: true,
         navigation: { address: ADDRESS, params: navigation.params, revision: navigation.revision },
@@ -175,6 +174,7 @@ export function harness(script: Record<number, RemoteResult<WorkspaceFileText>> 
     addResource: face.addResource, setResources: face.setResources,
     useDocumentPreviews: () => definitions,
     renderSlot,
+    renderFactorySlot: (key: string) => createElement('div', { 'data-navigator-factory': key }),
     t,
   }) as TextPreviewProps
   return {

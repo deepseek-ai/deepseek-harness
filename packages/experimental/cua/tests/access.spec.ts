@@ -11,6 +11,14 @@ import type { CuaAppHandle } from '../src/types.ts'
 import { NativeClient } from '../src/native-client.ts'
 import { permissionFixture } from './permission-fixture.ts'
 
+const guideText = {
+  instruction: 'Drag {application} to the list above to allow Accessibility',
+  backLabel: 'Back',
+  finderLabel: 'Show in Finder',
+  unavailableMessage: 'Application unavailable',
+  settingsMessage: 'Open System Settings manually',
+}
+
 const native = vi.hoisted(() => ({ instances: [] as Array<{
   disposed: boolean
   request: ReturnType<typeof vi.fn>
@@ -22,7 +30,7 @@ vi.mock('../src/native-client.ts', async original => ({
   NativeClient: class {
     disposed = false
     request = vi.fn(async (method: string) => method === 'openPermissionSettings' ? { opened: true }
-      : method === 'applicationIcons' ? {} : { accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+      : method === 'applicationIcons' ? {} : { accessibility: false, screenRecording: false, guideOpen: false, helper: { pid: 9 }, parent: { pid: 8 } })
     invalidate() { this.disposed = true }
     dispose = vi.fn(async () => { this.disposed = true })
     constructor() { native.instances.push(this) }
@@ -49,7 +57,8 @@ async function setup(choice = 'Allow for this session', options: { writable?: bo
   const answer = vi.fn<() => Promise<AskUserQuestionAnswer>>(async () => ({ answers: [{ id: 'cua-app-access', selected: [choice] }] }))
   ctx.on('user-questions/request', answer)
   const permissions = permissionFixture(ctx, options.initial, options.writable)
-  const access = installCuaAccess(ctx, { native: nativeConfig, createChannel: unusedConnector, store: permissions.store })
+  const access = installCuaAccess(ctx, { native: nativeConfig, createChannel: unusedConnector, store: permissions.store,
+    guidancePolling: { intervalMs: 1000, timeoutMs: 120000 } })
   const client = new NativeClient(ctx, nativeConfig, unusedConnector)
   return { ctx, owner, agent: owner.agent, answer, access, client, ...permissions }
 }
@@ -160,9 +169,11 @@ it('checks native permissions without converting an OS request into a grant', as
   const before = (await f.ctx.cuaAccess.applications())
   expect(before).toEqual({ allowedApps: [], blockedApps: [], persistentAvailable: true })
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ accessibility: false, screenRecording: false })
-  expect(await f.ctx.cuaAccess.requestPermission('accessibility')).toMatchObject({ accessibility: false })
+  expect(await f.ctx.cuaAccess.requestPermission('accessibility', guideText)).toMatchObject({ accessibility: false })
   await f.ctx.cuaAccess.openSettings('screenRecording')
   const transport = native.instances[1]!
+  expect(transport.request).toHaveBeenCalledWith('requestPermission',
+    { permission: 'accessibility', ...guideText, pollIntervalMs: 1000 }, expect.any(AbortSignal))
   expect(transport.request).toHaveBeenCalledWith('openPermissionSettings', { permission: 'screenRecording' }, expect.any(AbortSignal))
   transport.request.mockRejectedValueOnce(new Error('transport ended'))
   await expect(f.ctx.cuaAccess.systemStatus()).rejects.toThrow('transport ended')
@@ -394,7 +405,7 @@ it('preserves captured launch metadata separately from the current helper parent
   const control = native.instances.at(-1)!
   const launchApplication = { name: 'Visual Studio Code', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
   control.request.mockResolvedValueOnce({ accessibility: false, screenRecording: false,
-    helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
+    guideOpen: false, helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ parent: { pid: 1 }, launchApplication })
 })
 

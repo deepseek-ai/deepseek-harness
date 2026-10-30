@@ -2,6 +2,11 @@
 export const NS = 'cuaPermissions'
 /** English permission-page dictionary. */
 export const en = {
+  nativeInstruction: 'Drag {application} to the list above to allow {permission}',
+  nativeBack: 'Back',
+  nativeFinder: 'Show in Finder',
+  nativeUnavailable: 'Application unavailable. Enable Computer Use again and retry.',
+  nativeSettingsUnavailable: 'Open System Settings > Privacy & Security > {permission} manually.',
   title: 'Authorize computer use',
   applicationsTitle: 'Manage applications computer use can access',
   setupTitle: 'Set up computer use before use',
@@ -32,7 +37,7 @@ export const en = {
   blockedApps: 'Applications not allowed', retryApproval: 'Allow asking again',
   retryAllowed: 'The next application selection will ask again; access has not been granted',
   noApps: 'No always-allowed or blocked applications.',
-  revoke: 'Revoke', revoked: 'Application access revoked', requested: 'Review the macOS prompt, or open System Settings if no prompt appears', opened: 'System Settings opened',
+  revoke: 'Revoke', revoked: 'Application access revoked', requested: 'Follow the guide at the bottom of System Settings', opened: 'System Settings opened',
   applicationsFailed: 'Could not load application access: {message}', iconsFailed: 'Could not load application icons: {message}',
   failed: 'Could not update permissions: {message}', queryFailed: 'Could not check permissions: {message}',
 }
@@ -40,6 +45,11 @@ export const en = {
 export type CuaPermissionLocaleKey = keyof typeof en
 /** Chinese permission-page dictionary. */
 export const zh: Record<CuaPermissionLocaleKey, string> = {
+  nativeInstruction: '将 {application} 拖入上方列表以允许{permission}',
+  nativeBack: '返回',
+  nativeFinder: '在 Finder 中显示',
+  nativeUnavailable: '找不到此应用。请重新启用 Computer Use 后重试',
+  nativeSettingsUnavailable: '请手动打开系统设置 > 隐私与安全性 > {permission}',
   title: '给 Computer Use 授权', applicationsTitle: '管理 Computer Use 可访问的应用', setupTitle: '使用 Computer Use 前需要设置',
   setupBody: 'Computer Use 插件已开启。使用前请切换到 PTC 模式，并授予辅助功能和屏幕录制权限。请前往插件详情页完成设置。',
   setupQueryFailed: 'Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。',
@@ -68,13 +78,18 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
   blockedApps: '不允许访问的应用', retryApproval: '允许再次询问',
   retryAllowed: '下次选择此应用时将重新询问，当前尚未授权',
   noApps: '暂无始终允许或不允许访问的应用。',
-  revoke: '撤销', revoked: '已撤销应用访问权限', requested: '请查看 macOS 提示；若未出现，请打开系统设置', opened: '已打开系统设置',
+  revoke: '撤销', revoked: '已撤销应用访问权限', requested: '请按系统设置底部的引导完成授权', opened: '已打开系统设置',
   applicationsFailed: '无法读取应用授权：{message}', iconsFailed: '无法读取应用图标：{message}',
   failed: '无法更新权限：{message}', queryFailed: '无法检测权限：{message}',
 }
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  nativeInstruction: '{permission}を許可するには、{application}を上の一覧にドラッグしてください',
+  nativeBack: '戻る',
+  nativeFinder: 'Finder で表示',
+  nativeUnavailable: 'アプリが見つかりません。Computer Use を再度有効にしてください。',
+  nativeSettingsUnavailable: 'システム設定 > プライバシーとセキュリティ > {permission} を開いてください。',
   'title': 'コンピュータ操作を承認',
   'applicationsTitle': 'Computer Useがアクセスできるアプリを管理',
   'setupTitle': '使用前にComputer Useを設定',
@@ -118,7 +133,7 @@ export const ja = {
   'noApps': '常に許可またはブロックされたアプリケーションはありません。',
   'revoke': '取り消し',
   'revoked': 'アプリケーションのアクセスを取り消しました',
-  'requested': 'macOSのプロンプトを確認するか、プロンプトが表示されない場合はシステム設定を開いてください',
+  'requested': 'システム設定の下部にあるガイドに従ってください。',
   'opened': 'システム設定を開きました',
   'applicationsFailed': 'アプリケーションのアクセスを読み込めませんでした: {message}',
   'iconsFailed': 'アプリケーションのアイコンを読み込めませんでした: {message}',
@@ -128,6 +143,11 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  nativeInstruction: 'Arrastra {application} a la lista de arriba para permitir {permission}',
+  nativeBack: 'Volver',
+  nativeFinder: 'Mostrar en Finder',
+  nativeUnavailable: 'Aplicación no disponible. Vuelve a activar Computer Use e inténtalo de nuevo.',
+  nativeSettingsUnavailable: 'Abre Configuración del sistema > Privacidad y seguridad > {permission}.',
   title: 'Autorizar el uso de la computadora',
   applicationsTitle: 'Administrar aplicaciones a las que puede acceder el uso de la computadora',
   setupTitle: 'Configurar el uso de la computadora antes de usarla',
@@ -158,13 +178,18 @@ export const es = {
   blockedApps: 'Aplicaciones no permitidas', retryApproval: 'Permitir preguntar de nuevo',
   retryAllowed: 'La siguiente selección de aplicación le preguntará nuevamente; el acceso no ha sido concedido',
   noApps: 'No hay aplicaciones siempre permitidas o bloqueadas.',
-  revoke: 'Revocar', revoked: 'Acceso a la aplicación revocado', requested: 'Revise el mensaje macOS o abra Configuración del sistema si no aparece ningún mensaje', opened: 'Configuración del sistema abierta',
+  revoke: 'Revocar', revoked: 'Acceso a la aplicación revocado', requested: 'Siga la guía en la parte inferior de Configuración del sistema', opened: 'Configuración del sistema abierta',
   applicationsFailed: 'No se pudo cargar el acceso a la aplicación: {message}', iconsFailed: 'No se pudieron cargar los íconos de la aplicación: {message}',
   failed: 'No se pudieron actualizar los permisos: {message}', queryFailed: 'No se pudieron verificar los permisos: {message}',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  nativeInstruction: 'Glissez {application} dans la liste ci-dessus pour autoriser {permission}',
+  nativeBack: 'Retour',
+  nativeFinder: 'Afficher dans le Finder',
+  nativeUnavailable: 'Application introuvable. Réactivez Computer Use et réessayez.',
+  nativeSettingsUnavailable: 'Ouvrez Réglages Système > Confidentialité et sécurité > {permission}.',
   title: "Autoriser l'utilisation de l'ordinateur",
   applicationsTitle: "Gérer les applications auxquelles l'ordinateur peut accéder",
   setupTitle: "Configurer l'utilisation de l'ordinateur avant utilisation",
@@ -195,13 +220,18 @@ export const fr = {
   blockedApps: 'Applications non autorisées', retryApproval: 'Autoriser la demande à nouveau',
   retryAllowed: "La prochaine sélection de candidatures demandera à nouveau ; l'accès n'a pas été accordé",
   noApps: 'Aucune application toujours autorisée ou bloquée.',
-  revoke: 'Révoquer', revoked: "Accès à l'application révoqué", requested: "Consultez l'invite macOS ou ouvrez les paramètres système si aucune invite n'apparaît.", opened: 'Paramètres système ouverts',
+  revoke: 'Révoquer', revoked: "Accès à l'application révoqué", requested: 'Suivez le guide en bas des réglages système.', opened: 'Paramètres système ouverts',
   applicationsFailed: "Impossible de charger l'accès à l'application : {message}", iconsFailed: "Impossible de charger les icônes d'application : {message}",
   failed: 'Impossible de mettre à jour les autorisations : {message}', queryFailed: 'Impossible de vérifier les autorisations : {message}',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  nativeInstruction: 'Ziehe {application} in die Liste oben, um {permission} zu erlauben',
+  nativeBack: 'Zurück',
+  nativeFinder: 'Im Finder anzeigen',
+  nativeUnavailable: 'Anwendung nicht verfügbar. Aktiviere Computer Use erneut.',
+  nativeSettingsUnavailable: 'Öffne Systemeinstellungen > Datenschutz & Sicherheit > {permission}.',
   title: 'Autorisieren Sie die Computernutzung',
   applicationsTitle: 'Verwalten Sie Anwendungen, auf die der Computer zugreifen kann',
   setupTitle: 'Richten Sie die Computernutzung vor der Nutzung ein',
@@ -232,13 +262,18 @@ export const de = {
   blockedApps: 'Nicht erlaubte Anwendungen', retryApproval: 'Erlaube noch einmal nachzufragen',
   retryAllowed: 'Bei der nächsten Anwendungsauswahl werden Sie erneut gefragt; Der Zugriff wurde nicht gewährt',
   noApps: 'Keine immer erlaubten oder blockierten Anwendungen.',
-  revoke: 'Widerrufen', revoked: 'Anwendungszugriff widerrufen', requested: 'Überprüfen Sie die macOS-Eingabeaufforderung oder öffnen Sie die Systemeinstellungen, wenn keine Eingabeaufforderung angezeigt wird', opened: 'Systemeinstellungen geöffnet',
+  revoke: 'Widerrufen', revoked: 'Anwendungszugriff widerrufen', requested: 'Folgen Sie der Anleitung unten in den Systemeinstellungen', opened: 'Systemeinstellungen geöffnet',
   applicationsFailed: 'Anwendungszugriff konnte nicht geladen werden: {message}', iconsFailed: 'Anwendungssymbole konnten nicht geladen werden: {message}',
   failed: 'Berechtigungen konnten nicht aktualisiert werden: {message}', queryFailed: 'Berechtigungen konnten nicht überprüft werden: {message}',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  nativeInstruction: 'Перетащите {application} в список выше, чтобы разрешить {permission}',
+  nativeBack: 'Назад',
+  nativeFinder: 'Показать в Finder',
+  nativeUnavailable: 'Приложение недоступно. Снова включите Computer Use и повторите попытку.',
+  nativeSettingsUnavailable: 'Откройте Системные настройки > Конфиденциальность и безопасность > {permission}.',
   title: 'Разрешить использование компьютера',
   applicationsTitle: 'Управление приложениями, к которым может иметь доступ компьютер',
   setupTitle: 'Настройте использование компьютера перед использованием',
@@ -269,13 +304,18 @@ export const ru = {
   blockedApps: 'Приложения не разрешены', retryApproval: 'Разрешить спросить еще раз',
   retryAllowed: 'При следующем выборе приложения запрос будет повторен; доступ не предоставлен',
   noApps: 'Никаких всегда разрешенных или заблокированных приложений.',
-  revoke: 'Отозвать', revoked: 'Доступ к приложению отозван', requested: 'Просмотрите подсказку macOS или откройте «Системные настройки», если подсказка не появляется.', opened: 'Системные настройки открыты',
+  revoke: 'Отозвать', revoked: 'Доступ к приложению отозван', requested: 'Следуйте инструкциям внизу окна «Системные настройки».', opened: 'Системные настройки открыты',
   applicationsFailed: 'Не удалось загрузить доступ к приложению: {message}.', iconsFailed: 'Не удалось загрузить значки приложений: {message}.',
   failed: 'Не удалось обновить разрешения: {message}.', queryFailed: 'Не удалось проверить разрешения: {message}',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  nativeInstruction: 'Arraste {application} para a lista acima para permitir {permission}',
+  nativeBack: 'Voltar',
+  nativeFinder: 'Mostrar no Finder',
+  nativeUnavailable: 'Aplicativo indisponível. Ative Computer Use novamente e tente de novo.',
+  nativeSettingsUnavailable: 'Abra Ajustes do Sistema > Privacidade e Segurança > {permission}.',
   title: 'Autorizar o uso do computador',
   applicationsTitle: 'Gerenciar aplicativos que o computador pode acessar',
   setupTitle: 'Configure o uso do computador antes de usar',
@@ -306,7 +346,7 @@ export const pt = {
   blockedApps: 'Aplicativos não permitidos', retryApproval: 'Permitir perguntar novamente',
   retryAllowed: 'A próxima seleção de aplicativos perguntará novamente; o acesso não foi concedido',
   noApps: 'Nenhum aplicativo sempre permitido ou bloqueado.',
-  revoke: 'Revogar', revoked: 'Acesso ao aplicativo revogado', requested: 'Revise o prompt macOS ou abra as Configurações do sistema se nenhum prompt aparecer', opened: 'Configurações do sistema abertas',
+  revoke: 'Revogar', revoked: 'Acesso ao aplicativo revogado', requested: 'Siga o guia na parte inferior das Configurações do sistema', opened: 'Configurações do sistema abertas',
   applicationsFailed: 'Não foi possível carregar o acesso ao aplicativo: {message}', iconsFailed: 'Não foi possível carregar os ícones do aplicativo: {message}',
   failed: 'Não foi possível atualizar as permissões: {message}', queryFailed: 'Não foi possível verificar as permissões: {message}',
 } satisfies Record<keyof typeof en, string>

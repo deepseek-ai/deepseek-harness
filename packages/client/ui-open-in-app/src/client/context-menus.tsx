@@ -78,7 +78,7 @@ export function registerContextMenus(
   ctx.effect(() => ctx.contextMenus.register({
     id: 'open-in-app.file', target: 'file', order: 100,
     resolve: async (target, signal) => {
-      const { sessionId, path, line, paneId } = target
+      const { sessionId, path, line } = target
       await paths.load()
       const absolutePath = await resolvePath(sessionId, path, signal)
       const available = absolutePath !== undefined
@@ -86,14 +86,16 @@ export function registerContextMenus(
       const apps = desktop ? await paths.applications(absolutePath, signal) : []
       signal.throwIfAborted()
       const application = apps?.find(app => app.default)
+      // The menu names a host, not the pane it was raised in: a floating pane is never a docked landing place.
+      const openIn = (destination: 'sidebar' | 'float') => () => {
+        const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
+        ctx.sidebarRight.openResourceIn(sessionId, fileAddressFor(sessionId, cwd, path), {
+          destination, ...(line === undefined ? {} : { params: { line } }),
+        })
+      }
       return [
-        { id: 'sidebar', icon: { key: 'open-in-app.sidebar' }, label: t('menu.sidebar'), disabled: !available,
-          run: () => {
-            const cwd = ctx.sessions.list.getSnapshot().byId[sessionId]?.cwd
-            ctx.sidebarRight.openResourceIn(sessionId, fileAddressFor(sessionId, cwd, path), {
-              ...(paneId === undefined ? {} : { paneId }), ...(line === undefined ? {} : { params: { line } }),
-            })
-          } },
+        { id: 'sidebar', icon: { key: 'open-in-app.sidebar' }, label: t('menu.openInSidebar'), disabled: !available, run: openIn('sidebar') },
+        { id: 'float', icon: { key: 'open-in-app.float' }, label: t('menu.openInFloat'), disabled: !available, run: openIn('float') },
         { id: 'reveal', icon: { key: 'open-in-app.reveal' }, label: fileManager(), disabled: !desktop,
           ...absolutePath === undefined ? {} : { run: () => open(absolutePath, 'reveal') } },
         { id: 'open', label: application ? t('open.title', { app: application.name }) : t('menu.defaultApp'),
@@ -112,7 +114,7 @@ export function registerContextMenus(
   ctx.effect(() => ctx.contextMenus.register({
     id: 'open-in-app.url', target: 'url', order: 100,
     resolve: ({ sessionId, url }) => [
-      { id: 'sidebar', icon: { key: 'open-in-app.sidebar' }, label: t('menu.sidebar'), disabled: ctx.sidebarRightTabs.get('browser') === undefined,
+      { id: 'sidebar', icon: { key: 'open-in-app.sidebar' }, label: t('menu.openInSidebar'), disabled: ctx.sidebarRightTabs.get('browser') === undefined,
         run: () => { ctx.sidebarRight.openTabIn(sessionId, 'browser', { params: { url } }) } },
       { id: 'external', label: t('menu.external'),
         run: () => { window.open(url, '_blank', 'noopener,noreferrer') } },

@@ -33,6 +33,26 @@ Set `initialize.approvalRequests` to `true` to send internal approvals as server
 
 The plugin publishes the `sdkSessionActivation` readiness marker once its reminder activation handler is installed; an SDK composition injects this marker into Schedule instead of the Web Session controller. Scheduled delivery uses this same SDK Session owner. Due startup reminders wait for successful SDK initialization, then resume with its provider, model, reasoning effort, and output limit. The client can resume a reminder-restored Session once; concurrent reminder and client restoration share one handle. Shutdown releases reminders waiting for initialization and drains accepted restorations.
 
+<a id="command-input"></a>
+
+The supported commands below are existing Desktop native operations that can execute without a GUI. `/permission <preset>` uses that native path; the Desktop `/model` picker uses a separate model-selection API.
+
+`session/query` is the wire entry used by high-level SDK `run()` for strings and content-block arrays. Ordinary inputs retain their blocks and use the existing prompt queue. The full SDK recognizes bare `/compact`, `/permission <preset>` with a non-blank preset, `/plan [off|message]`, and `/goal [objective|clear|edit objective|pause|resume]` identified by their official definition IDs. Bare `/permission` or `/权限`, `/compact extra`, and all other input including `/model` remain ordinary prompts. A missing command also preserves the prompt path; a selected handler's failure never falls back. An unknown preset is a native command error. Encoded image blocks accompany recognized commands through native attachment admission. `session/prompt` remains the low-level queued-input entry without native slash-command routing.
+
+Host and Desktop adapters share `dsh-commands/builtin` for definition identity and English/Chinese aliases. The aliases `/压缩`, `/权限`, `/计划`, and `/目标` follow their official definitions after renaming; execution uses the current registered name. Exact names take precedence, but an unrelated same-name definition is not an SDK builtin and remains an ordinary prompt. Other builtin capabilities remain outside the SDK command set.
+
+The first text block supplies the complete command line; encoded images may precede or follow it. When that line matches a supported command, it must be the only text block and every other block must be an encoded image. Additional text blocks, durable image references, and other content types reject with a JSON-RPC error before execution or enqueue, without prompt fallback. Ordinary prompts preserve all block content and ordering. Empty arrays and arrays containing only blank text are rejected; image-only input is allowed.
+
+Recognized commands execute through the receiving Agent's native command registry. Handlers validate command arguments and attachments. Compaction owns its auxiliary model request, history replacement and checkpoint, and refuses a busy Agent. Permission changes retain their native state and notification behavior. Shutdown cancels pending commands and drains SDK command waiters before releasing Agents. Timeout is not rollback; clients must not retry automatically. See the [protocol](../protocol/README.md) for results and errors.
+
+Permission commands change only the receiving Session. Later queries and restored Sessions retain its persisted permission facts; other Sessions keep their own state and new Sessions use the configured defaults. Neither the caller's launch configuration nor saved user defaults are rewritten. Model selection is not an SDK slash command; its resume override remains the separate behavior described above.
+
+Without attachments, `/plan` and `/plan off` change only native plan state. `/plan` with images or a body submits through native steer, with images before the trimmed body; `/plan off` with images returns an error without changing state. High-level `run()` waits for submitted model activity, review and approved continuation, including input queued behind an earlier cancellation. The native response acknowledges handler settlement; the matching `session.query.completed` notification ends high-level activity. User-question answers preserve approval and feedback; `{ cancelled: true }` becomes native `ASK_CANCELLED`, ending the turn without leaving plan mode.
+
+`/goal` delegates grammar to the [native goal command](../../goal/command-goal/README.md). High-level `run()` waits across automatic rounds after creation or resume, until goal termination and closing activity, including reference input queued during compaction. Completion returns `completed`, pause or clear returns `aborted`, and blocking or nonterminal loss of activation reports failure. The first durable goal termination is retained while closing activity finishes; later clear or resume operations do not replace it. The completion notification carries the final assistant text, or an empty string when none is emitted; goal status remains in the finish reason and events. State-only controls return native handler text without waiting for unrelated activity. Low-level `session/wait` can still return between rounds. Restoration preserves goal state and waits for `/goal resume` to re-arm execution. Goal commands do not change permissions or SDK launch settings.
+
+Creation and edit accept images as reference material before the next round; show, pause, resume, and clear reject attachments without changing goal state. Compact and permission commands also reject attachments. Handler refusals never fall back to ordinary prompts; an image may already be stored before the handler refuses, as on Desktop. These SDK inputs accept raster images, not general file uploads or client-supplied attachment references.
+
 `session/working-directory/get` accepts `{ sessionId }`; `session/working-directory/set` accepts `{ sessionId, path }`. Both return `{ cwd }` and create an unknown Session without starting a model turn. Reads recover missing directories through the working-directory service; changes preserve origin metadata and permissions, and reach the model through logged user context.
 
 ### Wiring
@@ -120,7 +140,7 @@ Read these pages when the plugin contract is not enough. They move from the wire
 
 #### What the model sees
 
-For each accepted `session/prompt`, text and durable content references enter one user message verbatim. Inline `SdkEncodedImageBlock` values are validated and committed through the composition's attachment store first, so the session log retains content-addressed image references rather than base64 bytes. This package adds no system-prompt prose or tool schema; those come from the other plugins in the composition.
+Ordinary `session/query` input and accepted `session/prompt` content enter a user message with their original block order. Ordinary input enters the prompt queue without reapplying permission defaults. Inline `SdkEncodedImageBlock` values are validated and committed through the composition's attachment store first, so the session log retains content-addressed image references rather than base64 bytes. This package adds no system-prompt prose or tool schema; those come from the other plugins in the composition.
 
 #### Token effect
 
@@ -129,6 +149,62 @@ Data-dependent user-message tokens enter retained session history and are resent
 #### KV Cache effect
 
 Append-only; newly visible content follows the reusable request prefix and does not invalidate existing KV-cache entries.
+
+### Manual compaction
+
+#### What the model sees
+
+The command line and result stay outside model messages. The existing [compact command](../../compaction/command-compact/README.md#model-experience) issues the auxiliary summary request and replaces selected history with its logged checkpoint. It adds no ordinary turn.
+
+#### Token effect
+
+The compaction owner pays the summary request cost and reduces later history tokens; SDK framing adds none.
+
+#### KV Cache effect
+
+The replaced history changes the reusable prefix according to the native compactor. The SDK adds no separate invalidation.
+
+### Session permission changes
+
+#### What the model sees
+
+The command text and result stay outside model messages. The [permission preset owner](../../interaction/permission-presets/README.md#model-experience) updates the runtime-context user snapshot and may inject an approval-policy notice. A notice in a running turn can cause another step; the default presets do not change system text or tool schemas.
+
+#### Token effect
+
+Native policy snapshots and notices add their normal history tokens; SDK framing adds none.
+
+#### KV Cache effect
+
+The native context updates append after retained history without rewriting the system prefix.
+
+### Plan commands
+
+#### What the model sees
+
+The native [plan-mode](../../plan/plan-mode/README.md#model-experience) guidance applies without changing permission state. A command body becomes an ordinary user message through steer; bare commands and command result text stay outside model history. The exit tool is admitted on first entry and remains declared after exit. Approval, feedback, and dismissal retain their native tool results and next-step behavior.
+
+#### Token effect
+
+Plan guidance, its exit-tool declaration, submitted plan Markdown, and review results have their native token costs.
+
+#### KV Cache effect
+
+Native system and tool updates determine prefix reuse; the SDK adds no extra plan prompt or invalidation.
+
+### Goal commands
+
+#### What the model sees
+
+The native [goal driver](../../goal/goal-round-driver/README.md#model-experience) admits logged `<goal_round>` user messages. Goal tools retain their state and completion policy, including the `<goal_complete>` or `<goal_blocked>` closing context. Command text and results stay outside model history.
+
+#### Token effect
+
+Each admitted round and closing step has its native model cost; SDK routing adds no model input.
+
+#### KV Cache effect
+
+Goal-round messages and tool results append to retained history under the native driver.
 
 ## Known Limitations and Deferred Work
 

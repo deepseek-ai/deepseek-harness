@@ -44,6 +44,9 @@
 /llm-streaming/official-deepseek-request-extensions:
   en: 42bc50394b070e96
   zh: 007caa743ec3c790
+/llm-streaming/pi-ai-request-headers:
+  en: 8c140f9c5a799f01
+  zh: f66b895594247e92
 /llm-streaming/service-and-provider-contracts:
   en: 8dc79d4cc82824c2
   zh: 3ebabd3a117ad717

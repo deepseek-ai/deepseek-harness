@@ -71,6 +71,10 @@ export interface CuaConfig {
   textEventIntervalMs: number
   /** Native connection cleanup, socket-write and launcher termination budget in milliseconds. */
   graceMs: number
+  /** Interval between native guide updates and browser permission observations. */
+  permissionPollIntervalMs: number
+  /** Maximum duration of browser permission checks; the native guide observes until it closes. */
+  permissionPollTimeoutMs: number
   /** Maximum nodes admitted by a native accessibility snapshot. */
   maxElements: number
   /** Maximum depth traversed by a native accessibility snapshot. */
@@ -100,6 +104,8 @@ export const CuaConfig = Schema.object({
   maxResponseBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
   textEventIntervalMs: Schema.number().min(0).max(1000).default(0.25),
   graceMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
+  permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
+  permissionPollTimeoutMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(120_000),
   maxElements: Schema.number().step(1).min(1).max(10000).default(2000),
   maxDepth: Schema.number().step(1).min(1).max(100).default(25),
 }) satisfies Schema<Record<string, unknown>, CuaConfig>
@@ -167,6 +173,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   }
   const access = installCuaAccess(ctx, {
     native, createChannel: backend.createChannel,
+    guidancePolling: { intervalMs: config.permissionPollIntervalMs, timeoutMs: config.permissionPollTimeoutMs },
     store: new CuaPermissionStore(ctx, config.allowedApps.map(grant => ({ ...grant, id: grant.id as CuaApplicationId })), config.timeoutMs),
   })
   const clients = new Map<Agent, NativeClient>()

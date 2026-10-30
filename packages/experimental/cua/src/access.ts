@@ -9,19 +9,21 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { ApplicationIcon } from './protocol.ts'
 import { NativeClient, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
-import type { CuaApplicationId, CuaApplicationState, CuaSystemPermission, CuaSystemPermissionState } from './access-types.ts'
+import type { CuaApplicationId, CuaApplicationState, CuaPermissionGuideText, CuaSystemPermission, CuaSystemPermissionState } from './access-types.ts'
 export { ApplicationAuthorizationResult } from './application-access.ts'
 export type * from './access-types.ts'
 
 interface ControlOptions extends AccessOptions {
   native: NativeClientConfig
   createChannel: NativeChannelFactory
+  guidancePolling: CuaSystemPermissionState['guidancePolling']
 }
 type Control = (method: string, params: Record<string, JsonValue>) => Promise<JsonValue>
 const permissionProcess = z.object({ pid: z.number().int().positive(), path: z.string().optional(), name: z.string().optional() })
 const systemPermissions = z.object({
-  accessibility: z.boolean(), screenRecording: z.boolean(), helper: permissionProcess, parent: permissionProcess,
-  launchApplication: z.object({ name: z.string().min(1), path: z.string().min(1), icon: ApplicationIcon.optional() }).optional(),
+  accessibility: z.boolean(), screenRecording: z.boolean(), guideOpen: z.boolean(), helper: permissionProcess, parent: permissionProcess,
+  launchApplication: z.object({ name: z.string().min(1), path: z.string().min(1),
+    icon: ApplicationIcon.optional(), bundleId: z.string().optional() }).optional(),
 })
 
 declare module '@deepseek-ai/cordis' {
@@ -37,9 +39,12 @@ export class CuaAccess extends TypertRemoteService {
    * @param ctx Provider context.
    * @param policy Application decision owner.
    * @param control Serialized native permission dispatch.
+   * @param guidancePolling Browser observation limits while native guidance is open.
    */
   constructor(ctx: Context, private readonly policy: ApplicationAccess,
-    private readonly control: Control) { super(ctx, 'cuaAccess') }
+    private readonly control: Control, private readonly guidancePolling: CuaSystemPermissionState['guidancePolling']) {
+    super(ctx, 'cuaAccess')
+  }
 
   /** Read PTC execution state separately from native permission checks.
    * @returns Whether the shared runtime retains memory and has an editable profile entry.
@@ -78,7 +83,7 @@ export class CuaAccess extends TypertRemoteService {
    */
   @Remote
   async systemStatus(): Promise<CuaSystemPermissionState> {
-    return systemPermissions.parse(await this.control('permissionStatus', {}))
+    return { ...systemPermissions.parse(await this.control('permissionStatus', {})), guidancePolling: this.guidancePolling }
   }
 
   /**
@@ -94,13 +99,15 @@ export class CuaAccess extends TypertRemoteService {
   }
 
   /**
-   * Request a system privilege explicitly selected by the user.
+   * Open System Settings and a native application-drag guide for the privilege selected by the user.
    * @param permission macOS privilege to request.
-   * @returns Preflight state after requesting; a false value never implies consent.
+   * @param text Localized guide copy; application identity comes from the native helper.
+   * @returns Current access and guide state; opening the guide does not grant permission.
    */
   @Remote
-  async requestPermission(permission: CuaSystemPermission): Promise<CuaSystemPermissionState> {
-    return systemPermissions.parse(await this.control('requestPermission', { permission }))
+  async requestPermission(permission: CuaSystemPermission, text: CuaPermissionGuideText): Promise<CuaSystemPermissionState> {
+    return { ...systemPermissions.parse(await this.control('requestPermission',
+      { permission, ...text, pollIntervalMs: this.guidancePolling.intervalMs })), guidancePolling: this.guidancePolling }
   }
 
   /**
@@ -159,6 +166,6 @@ export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<Ap
     await Promise.allSettled([policy.dispose(), tail])
     await client?.dispose()
   }, 'cua-access.dispose')
-  new CuaAccess(ctx, policy, control)
+  new CuaAccess(ctx, policy, control, options.guidancePolling)
   return { select: policy.select.bind(policy), run: policy.run.bind(policy), forget: policy.forget.bind(policy), dispose }
 }

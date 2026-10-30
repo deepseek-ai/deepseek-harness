@@ -4,6 +4,14 @@ export type { CuaApplicationGrant, CuaApplicationId } from './application-types.
 
 /** macOS privileges used by the native provider. */
 export type CuaSystemPermission = 'accessibility' | 'screenRecording'
+/** Localized native guide copy; the helper replaces the literal {application} with its own bundle name. */
+export interface CuaPermissionGuideText {
+  instruction: string
+  backLabel: string
+  finderLabel: string
+  unavailableMessage: string
+  settingsMessage: string
+}
 /** Observed process; neither the helper nor its parent is assumed to be the TCC owner. */
 export interface CuaPermissionProcess {
   pid: number
@@ -14,10 +22,14 @@ export interface CuaPermissionProcess {
 export interface CuaSystemPermissionState {
   accessibility: boolean
   screenRecording: boolean
+  /** Whether the native permission guide remains open. */
+  guideOpen: boolean
+  /** Browser observation interval and duration; native guidance lives until dismissed or authorized. */
+  guidancePolling: { intervalMs: number; timeoutMs: number }
   helper: CuaPermissionProcess
   parent: CuaPermissionProcess
   /** Application macOS reports as responsible for the helper, captured at startup; absent when it cannot be identified. */
-  launchApplication?: { name: string; path: string; icon?: string | undefined } | undefined
+  launchApplication?: { name: string; path: string; icon?: string | undefined; bundleId?: string | undefined } | undefined
 }
 /** Saved grants and refused applications, independent of native permission checks and icons. */
 export interface CuaApplicationState {

@@ -131,7 +131,7 @@ function PermissionAction({ permission, granted, loading, busy, request, openSet
 
 /** @param props Host observation and explicit user actions. @returns Permission controls without automatic system prompts. */
 export function PermissionPanel(props: PermissionPanelProps) {
-  const { t, refresh } = props
+  const { t, refresh, stopWatchingPermissions } = props
   const state = props.useCuaPermissions(value => value)
   const observed = state.system.value
   const apps = state.applications.value
@@ -143,8 +143,8 @@ export function PermissionPanel(props: PermissionPanelProps) {
   useEffect(() => {
     refresh()
     window.addEventListener('focus', refresh)
-    return () => { window.removeEventListener('focus', refresh) }
-  }, [refresh])
+    return () => { window.removeEventListener('focus', refresh); stopWatchingPermissions() }
+  }, [refresh, stopWatchingPermissions])
   return <div className={css.panels} data-cua-settings aria-busy={transitioning || state.busy || loading}>
     <section className={css.panel} aria-label={t('title')}>
       <h3>{t('title')}</h3>

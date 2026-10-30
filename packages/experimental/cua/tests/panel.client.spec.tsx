@@ -11,7 +11,9 @@ import type { PermissionView } from '../src/client/controller.ts'
 import { en, zh } from '../src/client/locales.ts'
 
 afterEach(() => { cleanup(); vi.useRealTimers() })
-const value: CuaApplicationState & { system: CuaSystemPermissionState } = { system: { accessibility: false, screenRecording: true,
+const value: CuaApplicationState & { system: CuaSystemPermissionState } = { system: {
+  guidancePolling: { intervalMs: 1000, timeoutMs: 120000 }, guideOpen: false,
+  accessibility: false, screenRecording: true,
   helper: { pid: 9, path: '/native/helper' }, parent: { pid: 8, path: '/host/node' } },
 allowedApps: [], blockedApps: [], persistentAvailable: true }
 
@@ -34,7 +36,7 @@ function fixture() {
   const props = { useCuaPermissions: bindSnapshotSelector(state), t: makeTranslate(en),
     setPersistentPtc: vi.fn(async () => true),
     useCuaDefaultPreset: bindSnapshotSelector(preset), setPtcDefault: vi.fn(async () => true),
-    refresh, request: vi.fn(), openSettings: vi.fn(), revoke: vi.fn(),
+    refresh, stopWatchingPermissions: vi.fn(), request: vi.fn(), openSettings: vi.fn(), revoke: vi.fn(),
     retryApproval: vi.fn(), dismissToast: vi.fn(),
   } satisfies PermissionPanelProps
   return { state, preset, props,

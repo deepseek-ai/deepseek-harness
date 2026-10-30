@@ -33,6 +33,26 @@ kind: "package-reference"
 
 插件在注册提醒激活处理方后发布 `sdkSessionActivation` 就绪标记；SDK 组合让 Schedule 依赖此标记，而非 Web Session controller。定时提醒也通过同一个 SDK Session 所有者投递。启动时已到期的提醒等待 SDK 成功初始化，再使用初始化指定的提供方、模型、推理强度和输出上限恢复会话。客户端可以首次接管提醒恢复的 Session；并发的提醒与客户端恢复共用一个 handle。关闭时释放等待初始化的提醒，并等待已经接纳的恢复完成。
 
+<a id="command-input"></a>
+
+下列支持范围是桌面已有、无需图形界面即可执行的原生命令。`/permission <preset>` 使用这条原生调用路径；Desktop 的 `/model` 选择器使用独立的模型选择 API。
+
+`session/query` 是高层 SDK `run()` 发送字符串和内容块数组时使用的协议入口。普通输入保留内容块，使用既有的提示词队列。完整 SDK 识别裸 `/compact`、带非空 preset 的 `/permission <preset>`、`/plan [off|message]` 和 `/goal [objective|clear|edit objective|pause|resume]`，这些命令按官方定义 ID 识别。裸 `/permission` 或 `/权限`、`/compact extra` 以及 `/model` 等其余输入仍是普通提示词。命令缺失时也保留提示词路径；选中的 handler 失败后绝不回退。未知 preset 是原生命令错误。随已识别命令提交的编码图片块经过原生附件接纳。`session/prompt` 保留为低层排队输入入口，不经过原生 slash command 路由。
+
+Host 与桌面适配器共用 `dsh-commands/builtin` 的定义身份及中英文别名解析。`/压缩`、`/权限`、`/计划` 和 `/目标` 跟随重命名后的官方定义，执行使用当前注册名。精确名称优先，但无关的同名定义不是 SDK 内置命令，仍作为普通提示词。其他内置能力仍不属于 SDK 命令集合。
+
+第一个文本块提供完整命令行；编码图片可位于它之前或之后。该行匹配到受支持命令时，它必须是唯一的文本块，其余块必须为编码图片。额外文本块、持久图片引用及其他内容类型会在执行或入队前返回 JSON-RPC 错误，不回退为普通提示词。普通提示词保留全部内容块及其顺序。空数组和只包含空白文本的数组会被拒绝；允许仅图片输入。
+
+已识别的命令通过接收 Agent 的原生命令注册器执行。Handler 校验命令参数和附件。压缩负责其辅助模型请求、历史替换和 checkpoint，并拒绝忙碌 Agent。权限变更保留原生状态和通知行为。Shutdown 取消待决命令，在释放 Agent 前排空 SDK 命令等待者。超时不等于回滚，客户端不能自动重试。结果和错误见[协议](../protocol/README.zh.md)。
+
+权限命令只修改接收命令的 Session。后续输入和恢复的 Session 保留其持久化权限事实；其他 Session 保留各自状态，新 Session 使用配置的默认值。调用方的启动配置和已保存的用户默认值均不会被重写。模型选择不是 SDK slash 命令；恢复时的模型覆盖仍按上文描述的独立行为执行。
+
+不带附件时，`/plan` 和 `/plan off` 只改变原生计划状态。带图片或正文的 `/plan` 通过原生 steer 提交，图片位于去除首尾空白的正文前；`/plan off` 带图片时返回错误且不改变状态。高层 `run()` 等待提交的模型活动、审阅及获批后的后续执行，也包括等待先前取消收尾后才开始执行的输入。原生命令响应确认 handler 完成；对应的 `session.query.completed` 通知确认高层活动结束。问答响应保留批准和反馈语义；`{ cancelled: true }` 转为原生 `ASK_CANCELLED`，使关闭审阅结束 turn 而不退出计划模式。
+
+`/goal` 将语法委托给[原生目标命令](../../goal/command-goal/README.zh.md)。高层 `run()` 创建或恢复目标时跨越自动轮次等待，直到目标终止及收尾活动结束，也包括压缩期间排队的参考输入。完成返回 `completed`，暂停或清除返回 `aborted`，阻塞或非终态失去激活状态报告失败。等待收尾活动结束时保留首次持久化的目标终止状态，后续 clear 或 resume 操作不会替换它。完成通知携带最终助手文本，未输出助手文本时为空字符串；目标状态由结束原因和事件表达。仅改变状态的控制命令返回原生 handler 文本，不等待无关活动。底层 `session/wait` 仍可在轮次之间返回。恢复会话保留目标状态，直到 `/goal resume` 才重新激活。目标命令不改变权限或 SDK 启动设置。
+
+创建和编辑接受图片，作为下一轮前的参考材料；查看、暂停、恢复和清除拒绝附件，不修改目标状态。压缩和权限命令也拒绝附件。处理器拒绝后绝不回退为普通提示词；与 Desktop 相同，图片可能在处理器拒绝前已被存储。这些 SDK 输入接受栅格图片，不接受一般文件上传或客户端提供的附件引用。
+
 `session/working-directory/get` 接收 `{ sessionId }`；`session/working-directory/set` 接收 `{ sessionId, path }`。两者均返回 `{ cwd }`，并可创建未知 Session，而不启动模型轮次。读取通过工作目录服务恢复缺失目录；修改保留起始目录元数据与权限，并通过已记录的用户上下文告知模型。
 
 ### 组装
@@ -120,7 +140,7 @@ Stdout 只承载 JSON-RPC 帧，客户端可以逐字节解析；诊断信息应
 
 #### 模型看到什么
 
-对于每个已接受的 `session/prompt`，文本和持久内容引用会原样进入一条用户消息。内联 `SdkEncodedImageBlock` 会先通过组合中的附件存储完成校验与提交，因此会话日志保留内容寻址的图片引用而不是 base64 字节。此包不会添加系统提示词文本或工具 schema；这些内容来自组合中的其他插件。
+普通 `session/query` 输入和已接受的 `session/prompt` 内容按原始内容块顺序进入用户消息。普通输入进入提示队列，不会重新应用权限默认值。内联 `SdkEncodedImageBlock` 会先通过组合中的附件存储完成校验与提交，因此会话日志保留内容寻址的图片引用而不是 base64 字节。此包不会添加系统提示词文本或工具 schema；这些内容来自组合中的其他插件。
 
 #### Token 影响
 
@@ -129,6 +149,62 @@ Stdout 只承载 JSON-RPC 帧，客户端可以逐字节解析；诊断信息应
 #### KV Cache 影响
 
 仅追加；新可见内容位于可复用请求前缀之后，不会使现有 KV Cache 条目失效。
+
+### 手动压缩
+
+#### 模型看到什么
+
+命令行和结果不进入模型消息。现有[compact 命令](../../compaction/command-compact/README.zh.md#model-experience)发起辅助摘要请求，并将选定历史替换为已记录的 checkpoint，不增加普通 turn。
+
+#### Token 影响
+
+摘要请求成本和后续历史 token 减少由压缩所有者决定，SDK 分帧不增加模型 token。
+
+#### KV Cache 影响
+
+历史替换按原生压缩器规则改变可复用前缀，SDK 不增加独立失效。
+
+### Session 权限变更
+
+#### 模型看到什么
+
+命令文本和结果不进入模型消息。[权限预设所有者](../../interaction/permission-presets/README.zh.md#model-experience)更新 runtime-context 用户快照，并可能注入审批策略通知。运行中 turn 的通知可能触发额外 step；默认预设不会改变 system 文本或工具 schema。
+
+#### Token 影响
+
+原生策略快照和通知增加其正常历史 token；SDK 分帧不增加 token。
+
+#### KV Cache 影响
+
+原生上下文更新追加在保留历史之后，不重写 system 前缀。
+
+### 计划命令
+
+#### 模型看到什么
+
+原生 [plan-mode](../../plan/plan-mode/README.zh.md#model-experience) 指导生效，权限状态保持不变。命令正文通过 steer 成为普通用户消息；裸命令和命令结果文本不进入模型历史。退出工具在首次进入时加入，退出后仍保留声明。批准、反馈和关闭沿用原生工具结果与下一步行为。
+
+#### Token 影响
+
+计划指导、退出工具声明、提交的计划 Markdown 和审查结果具有各自的原生 token 成本。
+
+#### KV Cache 影响
+
+原生系统与工具更新决定前缀复用；SDK 不添加额外计划提示词或失效操作。
+
+### 目标命令
+
+#### 模型看到什么
+
+原生[目标驱动器](../../goal/goal-round-driver/README.zh.md#model-experience) 接纳已记录的 `<goal_round>` 用户消息。目标工具保留其状态与完成策略，包括 `<goal_complete>` 或 `<goal_blocked>` 收尾上下文。命令文本与结果不进入模型历史。
+
+#### Token 影响
+
+每个接纳的轮次和收尾步骤具有各自的原生模型成本；SDK 路由不增加模型输入。
+
+#### KV Cache 影响
+
+目标轮次消息和工具结果按原生驱动器的行为追加到保留历史。
 
 ## 已知限制与延期工作
 
