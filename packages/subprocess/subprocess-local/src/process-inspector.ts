@@ -196,18 +196,27 @@ function readLinuxTerminalDevice(
   }
 }
 
+function isLiveMember(stat: ProcStat | undefined, processGroupId: number): boolean {
+  return stat?.pgrp === processGroupId && !/^[ZXx]$/.test(stat.state)
+}
+
 /**
- * Report whether a Linux process group has an executing member. `false`
- * means the group contains only zombie/dead entries; `undefined` means the
- * process table could not prove either outcome.
+ * Find an executing member of a Linux process group. `false` means the group
+ * contains only zombie/dead entries; `undefined` means the process table could
+ * not prove either outcome. A still-executing `knownMember` is returned from
+ * its own stat entry without enumerating `/proc`, so repeated polls of a
+ * long-lived group cost one file read instead of one per host process.
  * @param processGroupId - POSIX process-group id to inspect.
+ * @param knownMember - member PID returned by an earlier call, if any.
  * @param internals - injectable process-table operations.
- * @returns Live-member presence, or `undefined` when unavailable/absent.
+ * @returns An executing member's PID, `false`, or `undefined` when unavailable/absent.
  */
-export function linuxProcessGroupHasLiveMembers(
+export function linuxProcessGroupLiveMember(
   processGroupId: number,
+  knownMember?: number,
   internals: ProcessInspectorInternals = DEFAULT_INTERNALS,
-): boolean | undefined {
+): number | false | undefined {
+  if (knownMember !== undefined && isLiveMember(readLinuxStat(internals, knownMember), processGroupId)) return knownMember
   let entries: string[]
   try {
     entries = internals.readDir('/proc')
@@ -220,7 +229,7 @@ export function linuxProcessGroupHasLiveMembers(
     const stat = readLinuxStat(internals, Number(entry))
     if (stat?.pgrp !== processGroupId) continue
     matched = true
-    if (!/^[ZXx]$/.test(stat.state)) return true
+    if (isLiveMember(stat, processGroupId)) return stat.pid
   }
   return matched ? false : undefined
 }

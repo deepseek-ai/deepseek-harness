@@ -390,7 +390,7 @@ describe('spawnSubprocess', () => {
     const pidFile = join(spillDir, `zombie-group-${Date.now()}.pid`)
     const running = spawnSubprocess(spec(`sleep 60 & echo $! > ${pidFile}; echo leader-done`, { graceMs: 100 }), {
       platform: 'linux',
-      linuxProcessGroupHasLiveMembers: () => false,
+      linuxProcessGroupLiveMember: () => false,
     })
     const descendant = await waitForPidFile(pidFile)
     try {
@@ -399,6 +399,27 @@ describe('spawnSubprocess', () => {
     } finally {
       // The confirmed-absent verdict is a permanent no-more-signals boundary,
       // so terminate() must stay inert here; reap the live survivor directly.
+      process.kill(descendant, 'SIGKILL')
+      await waitGone(descendant)
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')('passes the last live Linux group member back to the next probe', async () => {
+    const pidFile = join(spillDir, `known-member-${Date.now()}.pid`)
+    const known: Array<number | undefined> = []
+    const running = spawnSubprocess(spec(`sleep 60 & echo $! > ${pidFile}; echo leader-done`, { graceMs: 100 }), {
+      platform: 'linux',
+      linuxProcessGroupLiveMember: (_group, knownMember) => {
+        known.push(knownMember)
+        return known.length < 3 ? 4242 : false
+      },
+    })
+    const descendant = await waitForPidFile(pidFile)
+    try {
+      await running.done
+      await expect(running.waitForExit()).resolves.toBe(true)
+      expect(known).toEqual([undefined, 4242, 4242])
+    } finally {
       process.kill(descendant, 'SIGKILL')
       await waitGone(descendant)
     }
@@ -1170,7 +1191,7 @@ describe('coverage seams', () => {
     // terminates the direct child when the escalation tier delivers SIGKILL.
     const running = spawnSubprocess(spec('sleep 60', { graceMs: 100 }), {
       platform: 'linux',
-      linuxProcessGroupHasLiveMembers: () => false,
+      linuxProcessGroupLiveMember: () => false,
     })
     const realKill = process.kill.bind(process)
     let rootPid: number | undefined
