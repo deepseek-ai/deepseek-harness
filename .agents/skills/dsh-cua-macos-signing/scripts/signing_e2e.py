@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import plistlib
 import subprocess
+import sys
 import tempfile
 
 NATIVE = Path(__file__).resolve().parents[4] / "packages/experimental/cua-macos/native"
@@ -32,7 +33,10 @@ def main():
         root = Path(temporary)
         directory = root / "keys/dev"
         try:
+            command = [sys.executable, str(Path(__file__).with_name("signing_identity.py")), "setup", "--directory", str(directory)]
+            configuration = json.loads(subprocess.run(command, check=True, capture_output=True, text=True).stdout)
             identity = signing.setup(directory)
+            assert configuration == {"identity": identity.sha1, "keychain": str(identity.keychain.resolve())}
             assert signing.setup(directory) == identity
             sha1, keychain = identity.sha1, identity.keychain
             assert (directory / "identity.json").stat().st_mode & 0o777 == 0o600

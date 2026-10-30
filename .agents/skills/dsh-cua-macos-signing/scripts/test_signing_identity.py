@@ -38,7 +38,7 @@ class DevelopmentSigningTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="cua-dev-signing-")
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = Path(temporary.name).resolve()
         self.directory = self.root / "signing"
         self.keychain = self.directory / "signing.keychain-db"
         self.login = "/Users/example/Library/Keychains/login.keychain-db"
