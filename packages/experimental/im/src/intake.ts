@@ -24,8 +24,15 @@ export interface ImIntakeHost {
 
 const noop = () => {}
 
-/** What the platform hands an API client in place of a card it will not project. */
-export const CARD_PLACEHOLDER = /请升级至最新版本客户端/
+/**
+ * Whether the platform handed this message as a card. A card arrives as a projection of itself, which is only the part
+ * the platform is willing to describe: the card as it was sent is a platform read away.
+ * @param content - the decoded message content.
+ * @returns true for a card message.
+ */
+function isCard(content: Element<'message'>): boolean {
+  return content.children.some(child => child.type === 'raw' && child.attrs.type === 'interactive')
+}
 
 /** The innermost `im/message` listener without a dispatcher: a message nobody handled is ignored. */
 const ignore = (): Promise<ImOutcome> => Promise.resolve({ kind: 'ignored' })
@@ -185,8 +192,7 @@ export class ImIntake {
    */
   private async readableDraft(bot: Bot, message: InboundMessage, source: ImSourceConfig): Promise<ImMessageDraft> {
     const draft = draftOf(bot, message, source, 'platform')
-    if (!CARD_PLACEHOLDER.test(draft.text)) return await this.withQuoteText(bot, draft)
-    const card = await this.cardOf(bot, message)
+    const card = isCard(message.content) ? await this.cardOf(bot, message) : undefined
     // Only the content is taken from the read: the event owns the admission facts (mentions, addressed, thread,
     // quote), and a card carries no mentions of its own.
     const readable = card === undefined ? draft : { ...draft, content: card.content, text: toText(card.content) }

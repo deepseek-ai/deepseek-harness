@@ -164,7 +164,7 @@ describe('ImIntake admission', () => {
     })
     await deliver(bot, 'evt-card', inbound({
       id: 'm-card',
-      content: h('message', h.text('[image]\n请升级至最新版本客户端，以查看内容')),
+      content: h('message', h('raw', { platform: 'lark', type: 'interactive', data: {} }, h.text('[image]'))),
     }))
     await intake.idle()
     expect(store.get(ImMessageKey('fake:bot', 'm-card'))?.text).toContain('balance-alerter')
