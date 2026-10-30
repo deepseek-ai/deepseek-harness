@@ -106,11 +106,8 @@ describe('dsh run with Agent Teams enabled', () => {
         expect.objectContaining({ version: 0, label: 'Own deterministic implementation.' }),
         expect.objectContaining({ version: 0, label: 'Own deterministic research.' }),
       ]))
-      const names = root!.filter(record => record.type === 'subagent-name/bound').map(record => record.data)
-      expect(names).toEqual(expect.arrayContaining([
-        expect.objectContaining({ version: 1, name: 'lead/implementer' }),
-        expect.objectContaining({ version: 1, name: 'lead/researcher' }),
-      ]))
+      for (const entry of catalog) expect(entry).not.toHaveProperty('name')
+      expect(eventTypes).not.toContain('subagent-name/bound')
       expect(eventTypes).not.toContain('team/message/queued')
       expect(eventTypes).not.toContain('team/message/delivered')
       const peerMessages = parsed.flatMap(log => log.filter(record => record.type === 'user/message'
