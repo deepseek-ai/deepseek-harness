@@ -503,7 +503,7 @@
      the pinned compaction header (7, MessageItem.module.css) and turn rail (7,
      TurnNavigator.module.css) in ui-chat, and the back-to-bottom control (8,
      ChatView.module.css), so menus the composer opens upward cover that
-     control. The control sits above the seat and never overlaps the card. */
+     control. At rest the control sits 16px above the input card. */
   z-index: 9;
   /* A direct compositing reason: without it the seat is composited only while
      it overlaps other composited content, so its layer could come and go with
