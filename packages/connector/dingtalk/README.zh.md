@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-钉钉插件让对话通过钉钉官方 CLI（DingTalk Workspace CLI，命令 `dws`）使用钉钉。安装本 bundle 会加入两行：CLI 及其技能，以及插件页上的钉钉账号区块，用户不必开始对话就能在这里登录和退出。CLI 把登录保存在 `~/.dws` 和系统钥匙串中，与用户自己的终端共用。仅支持 macOS。
+钉钉插件让对话通过钉钉官方 CLI（DingTalk Workspace CLI，命令 `dws`）使用钉钉。安装本 bundle 会加入两行：CLI 及其技能，以及插件页上的钉钉账号区块，用户不必开始对话就能在这里登录和退出。CLI 把登录保存在 `~/.dws` 和系统钥匙串中，与用户自己的终端共用。仅支持 macOS 和 Windows x64。
 
 ## 目录
 
@@ -82,7 +82,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 仅支持 macOS；各行包列出了各自的限制。
+- 仅支持 macOS 和 Windows x64；各行包列出了各自的限制。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The DingTalk plugin lets conversations use DingTalk through the official DingTalk Workspace CLI, `dws`. Installing this bundle adds two rows: the CLI with its skill, and the DingTalk account section on the Plugins page, where the user signs in and out without starting a conversation. The CLI keeps the sign-in in `~/.dws` and the system keychain, which the user's own terminal shares. Only macOS is supported.
+The DingTalk plugin lets conversations use DingTalk through the official DingTalk Workspace CLI, `dws`. Installing this bundle adds two rows: the CLI with its skill, and the DingTalk account section on the Plugins page, where the user signs in and out without starting a conversation. The CLI keeps the sign-in in `~/.dws` and the system keychain, which the user's own terminal shares. Only macOS and Windows x64 are supported.
 
 ## Table of Contents
 
@@ -82,7 +82,7 @@ None beyond the `dingtalk` row's skill catalog; the bundle itself sends no provi
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only macOS is supported; the row packages list their own limitations.
+- Only macOS and Windows x64 are supported; the row packages list their own limitations.
 
 <a id="dev-note"></a>
 ### Dev Note

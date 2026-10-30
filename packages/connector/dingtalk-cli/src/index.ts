@@ -9,7 +9,7 @@
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { CliAccountConfig, CliCommandExecutor, registerCliPathContext, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
+import { CliAccountConfig, CliCommandExecutor, executableFileName, registerCliPathContext, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-skill'
@@ -62,7 +62,7 @@ export default class Dingtalk extends TypertRemoteService {
   constructor(ctx: Context, config: Config) {
     super(ctx, 'dingtalk')
     const release = new DwsRelease(config, ctx.logger)
-    const executable = join(release.directory, PROGRAM)
+    const executable = join(release.directory, executableFileName(PROGRAM))
     registerCliPathContext(ctx, {
       name: 'dingtalk:cli', product: 'DingTalk', program: PROGRAM, executable, scripts: true, ready: () => release.installed(),
     })

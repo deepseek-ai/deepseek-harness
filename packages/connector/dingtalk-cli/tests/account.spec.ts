@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
+import { CliCommandExecutor, executableFileName, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -230,7 +230,7 @@ describe('DingTalk Remote', () => {
     await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
     await vi.waitFor(() => { expect(ctx.dingtalk).toBeDefined() })
     await vi.waitFor(() => { expect(commands()).toEqual([STATUS]) })
-    expect(subprocess.lookups[0]?.command).toBe(join(binDir, 'dws'))
+    expect(subprocess.lookups[0]?.command).toBe(join(binDir, executableFileName('dws')))
 
     const states: DingtalkState[] = []
     const leave = new AbortController()

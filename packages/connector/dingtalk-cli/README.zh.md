@@ -27,7 +27,7 @@ kind: "package-reference"
 
 ### 加入 profile
 
-安装[钉钉插件 bundle](../dingtalk/README.zh.md)，它会把本包作为 `dingtalk` 行插入。本包没有安装脚本。该行加载时，会下载 dws release 1.0.64 的两个资产：当前平台的归档（16 到 18 MB）和 `dws-skills.zip`（3.3 MB）。每个资产都先从 GitHub Releases 下载，GitHub 失败时改用官方 Gitee 镜像；该行校验大小和 SHA-256 后，保存在 `$DSH_HOME/cache/dingtalk/`。下载完成之前，运行时上下文不给出 `dws` 的路径，技能目录中也没有 `dingtalk` skill。当前平台没有对应的归档时，该行加载失败并给出平台；如需使用其他 `dws`，请设置 `binDir`。同时设置 `binDir` 和 `skillsDir` 时，该行不下载任何内容。
+安装[钉钉插件 bundle](../dingtalk/README.zh.md)，它会把本包作为 `dingtalk` 行插入。本包没有安装脚本。该行加载时，会下载 dws release 1.0.64 的两个资产：当前平台的归档（16 到 20 MB）和 `dws-skills.zip`（3.3 MB）。每个资产都先从 GitHub Releases 下载，GitHub 失败时改用官方 Gitee 镜像；该行校验大小和 SHA-256 后，保存在 `$DSH_HOME/cache/dingtalk/`。下载完成之前，运行时上下文不给出 `dws` 的路径，技能目录中也没有 `dingtalk` skill。当前平台没有对应的归档时，该行加载失败并给出平台；如需使用其他 `dws`，请设置 `binDir`。同时设置 `binDir` 和 `skillsDir` 时，该行不下载任何内容。
 
 登录需要一个已加入组织的钉钉账号，并且组织管理员已在钉钉开发者后台开启 CLI 访问。未开启时，用户可以在授权页申请。
 
@@ -56,7 +56,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `binDir` | 保存已下载可执行文件的缓存目录 | 包含可执行 `dws` 的绝对目录；设置后不下载可执行文件 |
+| `binDir` | 保存已下载可执行文件的缓存目录 | 包含可执行 `dws`（Windows 上为 `dws.exe`）的绝对目录；设置后不下载可执行文件 |
 | `skillsDir` | 保存已下载技能的缓存目录 | 布局与 release 的 `dws-skills.zip` 中 `multi/` 目录相同的目录；设置后不下载技能 |
 | `releaseUrls` | `DingTalk-Real-AI/dingtalk-workspace-cli` 在 GitHub Releases 和 Gitee 镜像的下载前缀 | 按顺序尝试的 HTTPS 前缀，用于下载 `binDir` 和 `skillsDir` 未提供的内容；每个都在 `v<版本>/<资产名>` 下提供资产，且 `Content-Length` 等于资产大小 |
 | `commandTimeoutMs` | `30000` | 一次账号检查或退出登录的截止时间，包含可执行文件查找 |
@@ -75,7 +75,7 @@ kind: "package-reference"
 
 [`src/index.ts`](src/index.ts) 是注册为 `ctx.dingtalk` 的 Remote 服务。`dws` 和技能都已安装时，它在运行时上下文中把 `dws` 的路径告诉模型，在 `src/release.ts` 发布的 skill 根目录上挂载一个名为 `dingtalk` 的[文件系统 skill 提供方](../../skill/skill-filesystem/README.zh.md)，并启动一次检查，使没有浏览器的会话也能找到 `dws` 和该 skill。该提供方不包含默认根目录，并监听 skill 根目录，因为第一次下载发布它时，目录可能已经列出过。本包不使用 npm 包 `dingtalk-workspace-cli`：它的安装脚本会把官方技能复制到默认 skill 提供方扫描的 `~/.agents/skills`，以及其他 Agent 的 skill 目录，插件撤下后它们仍会留下。dws 内嵌了同样的技能，但 `dws skill setup` 只写入这类 Agent 目录。
 
-[`src/release.ts`](src/release.ts) 固定发布版本、各平台的归档和 `dws-skills.zip`，每项都记录 release 的 `checksums.txt` 中的名称、大小和 SHA-256。它只下载缺少的资产；响应的 `Content-Length` 不符时，在读取正文之前就拒绝，随后校验摘要。它用 `tar` 解压平台归档，用 `fflate` 解压技能归档中 `multi/` 下的条目及根目录的 `LICENSE`、`NOTICE`，都解压到同级的临时目录；技能条目的路径含空段、`.`、`..` 或反斜杠时拒绝。解压结果通过改名发布，另一个进程先发布的目录会被保留。每个失败的下载源记录一条警告。skill 根目录 `$DSH_HOME/cache/dingtalk/skill-<摘要>/` 包含包内总入口在 `dingtalk/SKILL.md` 的副本，以及指向技能目录的符号链接 `dingtalk/guides`。摘要覆盖总入口和链接目标，因此已发布的根目录不会再变；加载时技能目录已经存在，就同步发布根目录。
+[`src/release.ts`](src/release.ts) 固定发布版本、各平台的归档和 `dws-skills.zip`，每项都记录 release 的 `checksums.txt` 中的名称、大小和 SHA-256。它只下载缺少的资产；响应的 `Content-Length` 不符时，在读取正文之前就拒绝，随后校验摘要。它用 `tar` 解压 `.tar.gz` 平台归档，用 `fflate` 只取出 Windows `.zip` 归档根目录下的 `dws.exe`，并用 `fflate` 解压技能归档中 `multi/` 下的条目及根目录的 `LICENSE`、`NOTICE`，都解压到同级的临时目录；技能条目的路径含空段、`.`、`..` 或反斜杠时拒绝。解压结果通过改名发布，另一个进程先发布的目录会被保留。每个失败的下载源记录一条警告。skill 根目录 `$DSH_HOME/cache/dingtalk/skill-<摘要>/` 包含包内总入口在 `dingtalk/SKILL.md` 的副本，以及指向技能目录的符号链接 `dingtalk/guides`；在 Windows 上它是目录联接（junction），不需要创建符号链接的权限。摘要覆盖总入口和链接目标，因此已发布的根目录不会再变；加载时技能目录已经存在，就同步发布根目录。
 
 [CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现 dws 的命令，在检查的第一条命令之前准备好版本，从 `auth login` 的 stderr 行中读取授权链接，并解析 `auth status` 的 JSON。它把已登录账号的 id 留在 Host 上供退出登录使用；Remote 视图只包含名字。释放时取消进行中的操作，中止正在运行的命令和下载，并在这些进程退出后完成。
 
@@ -140,6 +140,13 @@ DingTalk CLI: run `dws` by its absolute path "<binDir>/dws"; the bare name may r
 Scripts in the DingTalk skill call `dws` by name; prefix only the commands that run them with PATH="<binDir>:$PATH", and never export PATH or run `dws` by name yourself.
 ```
 
+##### Windows 上的运行时上下文条目
+
+```markdown
+DingTalk CLI: run `dws` by its absolute path with the call operator, & '<binDir>\dws.exe'; the bare name may resolve to another installation or to none.
+Scripts in the DingTalk skill call `dws` by name; start only the commands that run them with $env:PATH = '<binDir>;' + $env:PATH, and never run `dws` by name yourself.
+```
+
 #### Token 影响
 
 每份运行时上下文快照中两行，约 270 个字符加上路径及其目录。
@@ -152,7 +159,7 @@ Scripts in the DingTalk skill call `dws` by name; prefix only the commands that 
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 仅支持 macOS。固定的 Linux 归档未经验证，Windows 没有固定的归档。
+- 仅支持 macOS 和 Windows x64。固定的 Linux 归档未经验证，release 中的 Windows arm64 归档没有固定。
 - 命令必须在本 Host 上运行。组合把命令放到别处运行（例如通过 SSH）时，插件仍会加载，但每条运行 `dws` 的命令都会因为那里没有这个路径而失败。
 - 插件使用 CLI 的默认配置。在 DSH 中登录或退出登录会影响用户自己的终端，以及这台电脑上其他运行 dws 的程序，没有 DSH 专用的账号，也没有账号选择。
 - 从插件页面登录需要运行 DSH 的这台电脑上的浏览器，因为 CLI 的授权回调监听 `127.0.0.1`。

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { strToU8, zipSync, type Zippable } from 'fflate'
 import { create } from 'tar'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { DWS_RELEASE, DwsRelease, type DwsArchive, type DwsReleaseManifest } from '../src/release.ts'
 import { createBinDir, createSkillsDir } from './harness.ts'
@@ -44,6 +45,8 @@ vi.mock('node:fs', async (importOriginal) => {
 })
 
 const PLATFORM = `${process.platform}-${process.arch}`
+/** The executable's file name in archives and directories: `dws`, or `dws.exe` on Windows. */
+const DWS = executableFileName('dws')
 const VERSION = '9.9.9'
 const ASSET = 'dws-fixture.tar.gz'
 const SKILLS = 'dws-skills.zip'
@@ -56,12 +59,12 @@ let fixtures: string
 /** Offline skills for the executable cases, so their installs download only the executable archive. */
 let skillsDir: string
 
-/** Pack the given files, executable when named `dws`, into a gzip tarball and return its bytes. */
+/** Pack the given files, executable when named {@link DWS}, into a gzip tarball and return its bytes. */
 async function pack(files: Record<string, string>): Promise<Buffer> {
   const source = await mkdtemp(join(fixtures, 'source-'))
   for (const [name, content] of Object.entries(files)) {
     await writeFile(join(source, name), content)
-    if (name === 'dws') await chmod(join(source, name), 0o755)
+    if (name === DWS) await chmod(join(source, name), 0o755)
   }
   const file = join(fixtures, `${randomUUID()}.tar.gz`)
   await create({ gzip: true, cwd: source, file }, Object.keys(files))
@@ -139,10 +142,10 @@ describe('the dws and skill locations', () => {
     expect(configured.directory).toBe(binDir)
     expect(configured.installed()).toBe(true)
     expect(() => new DwsRelease({ binDir: home, skillsDir, releaseUrls: [] }, ctx.logger))
-      .toThrow(`dingtalk: ${join(home, 'dws')} is not executable; set binDir to a directory containing an executable dws`)
+      .toThrow(`dingtalk: ${join(home, DWS)} is not executable; set binDir to a directory containing an executable ${DWS}`)
 
-    await rm(join(binDir, 'dws'))
-    await expect(configured.install(signal())).rejects.toThrow(`dingtalk: ${join(binDir, 'dws')} is not executable`)
+    await rm(join(binDir, DWS))
+    await expect(configured.install(signal())).rejects.toThrow(`dingtalk: ${join(binDir, DWS)} is not executable`)
   })
 
   it('names a platform the release has no archive for', () => {
@@ -154,7 +157,7 @@ describe('the dws and skill locations', () => {
   it.runIf(DWS_RELEASE.archives[PLATFORM] !== undefined)('writes nothing at load while the managed dws and skills are missing', async () => {
     const managed = new DwsRelease({ releaseUrls: [base] }, ctx.logger)
     expect(managed.directory).toBe(join(cache(), `dws-${DWS_RELEASE.version}-${PLATFORM}`))
-    expect(managed.skillRoot).toMatch(/\/cache\/dingtalk\/skill-[0-9a-f]{16}$/u)
+    expect(managed.skillRoot).toMatch(/[\\/]cache[\\/]dingtalk[\\/]skill-[0-9a-f]{16}$/u)
     expect(managed.installed()).toBe(false)
     expect(await readdir(home)).toEqual([])
   })
@@ -222,20 +225,20 @@ describe('the dws and skill locations', () => {
 
 describe('installing the pinned executable', () => {
   it('downloads from the next source after one fails, then publishes the verified archive', async () => {
-    const archive = await pack({ dws: '#!/bin/sh\necho fixture\n', NOTICE: 'notice' })
+    const archive = await pack({ [DWS]: '#!/bin/sh\necho fixture\n', NOTICE: 'notice' })
     routes[asset('mirror')] = serve(archive)
     const managed = executableRelease(archive, [`${base}/missing`, `${base}/mirror/`])
 
     await managed.install(signal())
 
     expect(managed.installed()).toBe(true)
-    expect(await readFile(join(managed.directory, 'dws'), 'utf8')).toBe('#!/bin/sh\necho fixture\n')
+    expect(await readFile(join(managed.directory, DWS), 'utf8')).toBe('#!/bin/sh\necho fixture\n')
     expect(await cached()).toEqual([`dws-${VERSION}-${PLATFORM}`, basename(managed.skillRoot)].toSorted())
     expect(warnings()).toEqual([`dingtalk: downloading ${ASSET} from ${base} failed`])
   })
 
   it('refuses responses whose length, digest, or body differ from the pinned archive', async () => {
-    const archive = await pack({ dws: 'fixture' })
+    const archive = await pack({ [DWS]: 'fixture' })
     const altered = Buffer.from(archive)
     altered[altered.length - 1] = altered.at(-1)! ^ 0xff
     routes[asset('longer')] = serve(Buffer.concat([archive, Buffer.from('x')]))
@@ -252,7 +255,7 @@ describe('installing the pinned executable', () => {
   })
 
   it('stops at an abort without trying the next source', async () => {
-    const archive = await pack({ dws: 'fixture' })
+    const archive = await pack({ [DWS]: 'fixture' })
     routes[asset('mirror')] = serve(archive)
     const managed = executableRelease(archive, [`${base}/mirror`, `${base}/other`])
     const abort = new AbortController()
@@ -263,48 +266,49 @@ describe('installing the pinned executable', () => {
   })
 
   it('keeps a directory another process published first', async () => {
-    const archive = await pack({ dws: 'downloaded' })
+    const archive = await pack({ [DWS]: 'downloaded' })
     const managed = executableRelease(archive, [`${base}/mirror`])
     routes[asset('mirror')] = async (response) => {
       await mkdir(managed.directory, { recursive: true })
-      await writeFile(join(managed.directory, 'dws'), 'published', { mode: 0o755 })
+      await writeFile(join(managed.directory, DWS), 'published', { mode: 0o755 })
       serve(archive)(response)
     }
 
     await managed.install(signal())
 
-    expect(await readFile(join(managed.directory, 'dws'), 'utf8')).toBe('published')
+    expect(await readFile(join(managed.directory, DWS), 'utf8')).toBe('published')
     expect(await cached()).toEqual([`dws-${VERSION}-${PLATFORM}`, basename(managed.skillRoot)].toSorted())
   })
 
   it('keeps the directory another process published while this one was renaming', async () => {
-    const archive = await pack({ dws: 'downloaded' })
+    const archive = await pack({ [DWS]: 'downloaded' })
     routes[asset('mirror')] = serve(archive)
     const managed = executableRelease(archive, [`${base}/mirror`])
     renameHook.before = async () => {
       await mkdir(managed.directory, { recursive: true })
-      await writeFile(join(managed.directory, 'dws'), 'published', { mode: 0o755 })
+      await writeFile(join(managed.directory, DWS), 'published', { mode: 0o755 })
     }
 
     await managed.install(signal())
 
-    expect(await readFile(join(managed.directory, 'dws'), 'utf8')).toBe('published')
+    expect(await readFile(join(managed.directory, DWS), 'utf8')).toBe('published')
   })
 
-  it('replaces a cache directory that holds no executable dws', async () => {
-    const archive = await pack({ dws: 'downloaded' })
+  // Windows has no execute permission bit: `access(X_OK)` only checks that the file exists.
+  it.skipIf(process.platform === 'win32')('replaces a cache directory that holds no executable dws', async () => {
+    const archive = await pack({ [DWS]: 'downloaded' })
     routes[asset('mirror')] = serve(archive)
     const managed = executableRelease(archive, [`${base}/mirror`])
     await mkdir(managed.directory, { recursive: true })
-    await writeFile(join(managed.directory, 'dws'), 'stale', { mode: 0o644 })
+    await writeFile(join(managed.directory, DWS), 'stale', { mode: 0o644 })
 
     await managed.install(signal())
 
-    expect(await readFile(join(managed.directory, 'dws'), 'utf8')).toBe('downloaded')
+    expect(await readFile(join(managed.directory, DWS), 'utf8')).toBe('downloaded')
   })
 
   it('reports a failed publish and an archive without dws', async () => {
-    const archive = await pack({ dws: 'downloaded' })
+    const archive = await pack({ [DWS]: 'downloaded' })
     routes[asset('mirror')] = serve(archive)
     const managed = executableRelease(archive, [`${base}/mirror`])
     renameHook.before = () => Promise.reject(new Error('rename failed'))
@@ -314,7 +318,32 @@ describe('installing the pinned executable', () => {
     const readme = await pack({ 'README.md': 'no binary' })
     routes[asset('readme')] = serve(readme)
     const empty = executableRelease(readme, [`${base}/readme`])
-    await expect(empty.install(signal())).rejects.toThrow(`dingtalk: ${ASSET} holds no executable dws`)
+    await expect(empty.install(signal())).rejects.toThrow(`dingtalk: ${ASSET} holds no executable ${DWS}`)
+  })
+})
+
+describe('installing a zip release archive, the Windows form', () => {
+  const ZIP = 'dws-fixture.zip'
+  const zipRelease = (archive: Buffer, releaseUrls: string[]) => new DwsRelease({ skillsDir, releaseUrls }, logger(), {
+    version: VERSION, archives: { [PLATFORM]: pinned(ZIP, archive) }, skills: pinned(SKILLS, Buffer.alloc(0)),
+  })
+
+  it('publishes the executable at the archive root and leaves the other files', async () => {
+    const archive = zip({ [DWS]: strToU8('zipped'), 'README.md': strToU8('readme') })
+    routes[asset('mirror', ZIP)] = serve(archive)
+    const managed = zipRelease(archive, [`${base}/mirror`])
+
+    await managed.install(signal())
+
+    expect(await readdir(managed.directory)).toEqual([DWS])
+    expect(await readFile(join(managed.directory, DWS), 'utf8')).toBe('zipped')
+  })
+
+  it('reports a zip archive without the executable', async () => {
+    const archive = zip({ 'README.md': strToU8('no binary') })
+    routes[asset('mirror', ZIP)] = serve(archive)
+
+    await expect(zipRelease(archive, [`${base}/mirror`]).install(signal())).rejects.toThrow(`dingtalk: ${ZIP} holds no executable ${DWS}`)
   })
 })
 
@@ -336,7 +365,7 @@ describe('installing the pinned skills', () => {
     expect(managed.installed()).toBe(true)
     const guides = join(cache(), `dws-skills-${VERSION}`)
     expect(await cached()).toEqual([`dws-skills-${VERSION}`, basename(managed.skillRoot)].toSorted())
-    expect((await readdir(guides, { recursive: true })).toSorted()).toEqual([
+    expect((await readdir(guides, { recursive: true })).map(path => path.replaceAll('\\', '/')).toSorted()).toEqual([
       'LICENSE', 'NOTICE', 'dingtalk-fixture', 'dingtalk-fixture/SKILL.md', 'dingtalk-fixture/scripts', 'dingtalk-fixture/scripts/run.py',
     ])
     expect(await readlink(join(managed.skillRoot, 'dingtalk', 'guides'))).toBe(guides)

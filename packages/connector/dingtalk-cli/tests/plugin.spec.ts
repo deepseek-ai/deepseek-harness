@@ -6,6 +6,8 @@ import { Context } from '@deepseek-ai/cordis'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
+import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
 import Dingtalk from '../src/index.ts'
 import { DWS_RELEASE } from '../src/release.ts'
 import { createBinDir, createSkillsDir, ScriptedSubprocess } from './harness.ts'
@@ -54,7 +56,7 @@ describe('DingTalk plugin', () => {
     expect(entry?.content).toContain('不要运行 `dws skill setup`')
     expect(entry?.resourceBase?.kind).toBe('directory')
     const base = entry?.resourceBase?.kind === 'directory' ? entry.resourceBase.path : ''
-    expect(base).toMatch(/\/cache\/dingtalk\/skill-[0-9a-f]{16}\/dingtalk$/u)
+    expect(base).toMatch(/[\\/]cache[\\/]dingtalk[\\/]skill-[0-9a-f]{16}[\\/]dingtalk$/u)
     expect(await readFile(join(base, 'guides', 'dingtalk-shared', 'SKILL.md'), 'utf8')).toContain('# Fixture guide')
     expect(await ctx.skills.get('dingtalk-shared')).toBeUndefined()
   })
@@ -81,8 +83,7 @@ describe('DingTalk plugin', () => {
     const fiber = await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
     expect(await runtimeContext()).toEqual([{
       name: 'dingtalk:cli',
-      text: `DingTalk CLI: run \`dws\` by its absolute path "${join(binDir, 'dws')}"; the bare name may resolve to another installation or to none.\n`
-        + `Scripts in the DingTalk skill call \`dws\` by name; prefix only the commands that run them with PATH="${binDir}:$PATH", and never export PATH or run \`dws\` by name yourself.`,
+      text: cliPathContextText({ name: 'dingtalk:cli', product: 'DingTalk', program: 'dws', executable: join(binDir, executableFileName('dws')), scripts: true }, process.platform),
     }])
     expect(await ctx.skills.list()).not.toEqual([])
 

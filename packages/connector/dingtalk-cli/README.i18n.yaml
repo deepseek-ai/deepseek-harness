@@ -18,8 +18,8 @@
   en: bbff250eba0f1b89
   zh: 0a618f05cc88ee2b
 /deepseek-ai-dsh-dingtalk-cli/use-this-package/add-it-to-a-profile:
-  en: d0199ed5963bf79d
-  zh: c940f649b69be193
+  en: a6f6a3e2926a31e6
+  zh: 52acae9140918f8c
 /deepseek-ai-dsh-dingtalk-cli/use-this-package/what-you-get:
   en: 1c32a59e60e6e673
   zh: 86390e9403ac7d58
@@ -27,11 +27,11 @@
   en: c6d1b758cacef5cc
   zh: b86656bb7bff5fef
 /deepseek-ai-dsh-dingtalk-cli/use-this-package/configure:
-  en: 6cf4b0c8b6364546
-  zh: 9d98a4f8fa3c754e
+  en: 4854f81d5388214e
+  zh: d79b69ba9e223e6b
 /deepseek-ai-dsh-dingtalk-cli/understand-the-implementation:
-  en: fe282faf12d10ee9
-  zh: 7673691d080af586
+  en: cafcd9b3b0f1add9
+  zh: 348a24e73ee7e345
 /deepseek-ai-dsh-dingtalk-cli/further-exploration:
   en: 88f1a701b5b6238e
   zh: 0eb3afc79cf9cea3
@@ -71,6 +71,9 @@
 /deepseek-ai-dsh-dingtalk-cli/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
   en: c91314832f78f460
   zh: aac156ea0b5b816a
+/deepseek-ai-dsh-dingtalk-cli/model-experience/cli-path/what-the-model-sees/runtime-context-entry-on-windows:
+  en: 54f899bbaf7ed198
+  zh: 31256473a192427b
 /deepseek-ai-dsh-dingtalk-cli/model-experience/cli-path/token-effect:
   en: 9f6cf4e3a33996fe
   zh: fb5f8830b63783d2
@@ -78,8 +81,8 @@
   en: 2cd0ec39868022b9
   zh: 21eaed1a363a3416
 /deepseek-ai-dsh-dingtalk-cli/known-limitations-and-deferred-work:
-  en: d8e771e02a720135
-  zh: 2ad6bd6df09b8628
+  en: 9f372cd16caa49b5
+  zh: 11eb1388d87fc06d
 /deepseek-ai-dsh-dingtalk-cli/known-limitations-and-deferred-work/dev-note:
   en: 7267122aef746a1c
   zh: a5f28e38bd85d44f

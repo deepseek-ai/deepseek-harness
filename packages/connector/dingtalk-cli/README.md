@@ -27,7 +27,7 @@ This package is the Host row of the [DingTalk plugin](../dingtalk/README.md). It
 
 ### Add it to a profile
 
-Install the [DingTalk plugin bundle](../dingtalk/README.md), which inserts this package as the `dingtalk` row. The package has no install script. When the row loads, it downloads two assets of dws release 1.0.64: the archive for the computer's platform, 16 to 18 MB, and `dws-skills.zip`, 3.3 MB. Each comes from GitHub Releases, or from the official Gitee mirror when GitHub fails; the row verifies its size and SHA-256 and keeps it in `$DSH_HOME/cache/dingtalk/`. The runtime context gives no `dws` path, and the catalog has no `dingtalk` skill, until those downloads finish. On a platform the release has no archive for, the row fails to load and names the platform; set `binDir` to use another `dws`. With both `binDir` and `skillsDir` set, the row downloads nothing.
+Install the [DingTalk plugin bundle](../dingtalk/README.md), which inserts this package as the `dingtalk` row. The package has no install script. When the row loads, it downloads two assets of dws release 1.0.64: the archive for the computer's platform, 16 to 20 MB, and `dws-skills.zip`, 3.3 MB. Each comes from GitHub Releases, or from the official Gitee mirror when GitHub fails; the row verifies its size and SHA-256 and keeps it in `$DSH_HOME/cache/dingtalk/`. The runtime context gives no `dws` path, and the catalog has no `dingtalk` skill, until those downloads finish. On a platform the release has no archive for, the row fails to load and names the platform; set `binDir` to use another `dws`. With both `binDir` and `skillsDir` set, the row downloads nothing.
 
 Signing in needs a DingTalk account that belongs to an organization whose administrator has turned on CLI access in the DingTalk developer console. Until then, the user can request access on the authorization page.
 
@@ -56,7 +56,7 @@ A check runs `auth status --format json`, which refreshes an expired access toke
 
 | Field | Default | Meaning |
 |---|---|---|
-| `binDir` | the cache directory holding the downloaded executable | Absolute directory containing an executable `dws`; when set, the executable is not downloaded |
+| `binDir` | the cache directory holding the downloaded executable | Absolute directory containing an executable `dws`, `dws.exe` on Windows; when set, the executable is not downloaded |
 | `skillsDir` | the cache directory holding the downloaded skills | Directory laid out as the `multi/` directory of the release's `dws-skills.zip`; when set, the skills are not downloaded |
 | `releaseUrls` | the GitHub Releases and Gitee mirror download prefixes of `DingTalk-Real-AI/dingtalk-workspace-cli` | HTTPS prefixes tried in order for what `binDir` and `skillsDir` do not provide; each serves `v<version>/<asset name>` with a `Content-Length` equal to the asset size |
 | `commandTimeoutMs` | `30000` | Deadline for one account check or sign-out, including executable lookup |
@@ -75,7 +75,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-di
 
 [`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.dingtalk`. It gives the path of `dws` to the model in runtime context while `dws` and the skills are installed, mounts a [filesystem skill provider](../../skill/skill-filesystem/README.md) named `dingtalk` over the skill root that `src/release.ts` publishes, and starts one check so that a session without a browser also finds `dws` and the skill. The provider omits the default roots and watches the skill root, because the first download publishes it after the catalog may already have been listed. The npm package `dingtalk-workspace-cli` is not used: its install script copies the official skills into `~/.agents/skills`, which the default skill provider scans, and into other agents' skill directories, so they would outlive the plugin. dws embeds the same skills, but `dws skill setup` writes only into such agent directories.
 
-[`src/release.ts`](src/release.ts) pins the release version, the archive for each platform, and `dws-skills.zip`, each with the name, size, and SHA-256 from the release's `checksums.txt`. It downloads whichever asset is missing, refuses a response whose `Content-Length` differs before reading the body, and verifies the digest. It extracts the platform archive with `tar`, and the `multi/` entries and root `LICENSE` and `NOTICE` of the skills archive with `fflate`, into a sibling staging directory, refusing a skills entry whose path has an empty, `.`, or `..` segment or a backslash; it publishes each result by rename, and a directory another process published first is kept. Each failed source logs a warning. The skill root `$DSH_HOME/cache/dingtalk/skill-<digest>/` holds a copy of the packaged entry at `dingtalk/SKILL.md` and a `dingtalk/guides` symbolic link to the skills directory. The digest covers the entry and the link target, so a published root never changes, and the root is published synchronously at load when the skills directory already exists.
+[`src/release.ts`](src/release.ts) pins the release version, the archive for each platform, and `dws-skills.zip`, each with the name, size, and SHA-256 from the release's `checksums.txt`. It downloads whichever asset is missing, refuses a response whose `Content-Length` differs before reading the body, and verifies the digest. It extracts a `.tar.gz` platform archive with `tar`, takes only `dws.exe` from the root of the Windows `.zip` archive with `fflate`, and extracts the `multi/` entries and root `LICENSE` and `NOTICE` of the skills archive with `fflate`, into a sibling staging directory, refusing a skills entry whose path has an empty, `.`, or `..` segment or a backslash; it publishes each result by rename, and a directory another process published first is kept. Each failed source logs a warning. The skill root `$DSH_HOME/cache/dingtalk/skill-<digest>/` holds a copy of the packaged entry at `dingtalk/SKILL.md` and a `dingtalk/guides` symbolic link to the skills directory, a junction on Windows, which needs no symlink privilege. The digest covers the entry and the link target, so a published root never changes, and the root is published synchronously at load when the skills directory already exists.
 
 The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the dws commands, prepares the release before a check's first command, reads the authorization link from the stderr lines of `auth login`, and parses the `auth status` JSON. It keeps the signed-in account's ids on the Host for sign-out; the Remote view carries only names. Disposal cancels the active operation, aborts running commands and downloads, and settles after their processes exit.
 
@@ -140,6 +140,13 @@ DingTalk CLI: run `dws` by its absolute path "<binDir>/dws"; the bare name may r
 Scripts in the DingTalk skill call `dws` by name; prefix only the commands that run them with PATH="<binDir>:$PATH", and never export PATH or run `dws` by name yourself.
 ```
 
+##### Runtime-context entry on Windows
+
+```markdown
+DingTalk CLI: run `dws` by its absolute path with the call operator, & '<binDir>\dws.exe'; the bare name may resolve to another installation or to none.
+Scripts in the DingTalk skill call `dws` by name; start only the commands that run them with $env:PATH = '<binDir>;' + $env:PATH, and never run `dws` by name yourself.
+```
+
 #### Token effect
 
 Two lines of about 270 characters plus the path and its directory in each runtime-context snapshot.
@@ -152,7 +159,7 @@ The system prompt does not change; finishing the installation, loading or unload
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only macOS is supported. The pinned Linux archives are unverified, and Windows has no pinned archive.
+- Only macOS and Windows x64 are supported. The pinned Linux archives are unverified, and the release's Windows arm64 archive is not pinned.
 - Commands must run on this Host. When a composition runs them elsewhere, such as over SSH, the plugin still loads, and each command that runs `dws` fails because the path does not exist there.
 - The plugin uses the CLI's default configuration. Signing in or out from DSH affects the user's own terminal and other programs that run dws on this computer, and there is no DSH-private account or account picker.
 - Sign-in from the plugin page needs a browser on the computer that runs DSH, because the CLI's authorization callback listens on `127.0.0.1`.

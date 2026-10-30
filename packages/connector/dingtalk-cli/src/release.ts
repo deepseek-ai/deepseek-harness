@@ -6,6 +6,7 @@ import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 import { dshCachePath } from '@deepseek-ai/dsh-home-paths'
 import { unzipSync } from 'fflate'
 import { x as extract } from 'tar'
@@ -18,8 +19,11 @@ const ENTRY = fileURLToPath(new URL('../skills/dingtalk/SKILL.md', import.meta.u
 /** `dws-skills.zip` entries the upstream skills directory keeps: the multi-mode skills and the root license files. */
 const SKILL_FILES = /^(?:multi\/.+|LICENSE|NOTICE)$/u
 
+/** The executable's file name: `dws`, or `dws.exe` on Windows. */
+const FILE = executableFileName(PROGRAM)
+
 const notExecutable = (binDir: string) =>
-  new Error(`dingtalk: ${join(binDir, PROGRAM)} is not executable; set binDir to a directory containing an executable dws`)
+  new Error(`dingtalk: ${join(binDir, FILE)} is not executable; set binDir to a directory containing an executable ${FILE}`)
 const notSkillsDir = (skillsDir: string) =>
   new Error(`dingtalk: skillsDir ${skillsDir} is not a directory; set it to the extracted multi directory of dws-skills.zip`)
 
@@ -49,13 +53,14 @@ export const DWS_RELEASE: DwsReleaseManifest = {
     'darwin-x64': { name: 'dws-darwin-amd64.tar.gz', bytes: 17_987_992, sha256: 'c3c7cde614012ef217debaeb80b42857b0f49e2227bfd8d88718c7aff8718e26' },
     'linux-arm64': { name: 'dws-linux-arm64.tar.gz', bytes: 17_654_096, sha256: '351504a475b60c51a7b4abeb1a79f4e8de8b2ce1f06f97e0a5791a996bfe29a9' },
     'linux-x64': { name: 'dws-linux-amd64.tar.gz', bytes: 18_807_746, sha256: '68fd68effdb05c4f7af5771dfc7bf6c10d97d219b3fb992dc99165b198fddb32' },
+    'win32-x64': { name: 'dws-windows-amd64.zip', bytes: 20_453_705, sha256: 'c037bd1a66d50d8427b446ae479e60b8548600f0b5296c0d90d97c8ab898bdd6' },
   },
   skills: { name: 'dws-skills.zip', bytes: 3_260_967, sha256: '106999fc60c713aabbcf67fc183553d62feae210bf650a148ed38670468389de' },
 }
 
 /** Where dws and its skills come from. */
 export interface DwsReleaseOptions {
-  /** Absolute directory holding an executable `dws`; when set, the executable is not downloaded. */
+  /** Absolute directory holding an executable `dws`, `dws.exe` on Windows; when set, the executable is not downloaded. */
   readonly binDir?: string | undefined
   /** Directory holding the upstream skills laid out as `multi/` in `dws-skills.zip`; when set, they are not downloaded. */
   readonly skillsDir?: string | undefined
@@ -65,7 +70,7 @@ export interface DwsReleaseOptions {
 
 /** Locates dws and the `dingtalk` skill, and installs from the pinned release whichever is missing. */
 export class DwsRelease {
-  /** The directory holding `dws`: `binDir`, or `$DSH_HOME/cache/dingtalk/dws-<version>-<platform>-<arch>`. */
+  /** The directory holding `dws` (`dws.exe` on Windows): `binDir`, or `$DSH_HOME/cache/dingtalk/dws-<version>-<platform>-<arch>`. */
   readonly directory: string
   /**
    * The skill root `$DSH_HOME/cache/dingtalk/skill-<digest>`: a copy of the packaged `dingtalk/SKILL.md` and a
@@ -135,11 +140,12 @@ export class DwsRelease {
       if (archive === undefined) throw notExecutable(this.directory)
       const data = await this.download(archive, signal)
       await this.publish(this.directory, () => this.executable(), signal, async (staging, into) => {
+        if (archive.name.endsWith('.zip')) return unpackExecutable(data, into)
         const file = join(staging, archive.name)
         await writeFile(file, data, { mode: 0o600 })
         await extract({ file, cwd: into })
       })
-      if (!this.executable()) throw new Error(`dingtalk: ${archive.name} holds no executable ${PROGRAM}`)
+      if (!this.executable()) throw new Error(`dingtalk: ${archive.name} holds no executable ${FILE}`)
     }
     if (!existsSync(this.guides)) {
       if (this.options.skillsDir !== undefined) throw notSkillsDir(this.options.skillsDir)
@@ -150,7 +156,7 @@ export class DwsRelease {
   }
 
   private executable(): boolean {
-    try { accessSync(join(this.directory, PROGRAM), constants.X_OK) } catch (_notExecutable) { return false }
+    try { accessSync(join(this.directory, FILE), constants.X_OK) } catch (_notExecutable) { return false }
     return true
   }
 
@@ -185,7 +191,8 @@ export class DwsRelease {
     mkdirSync(skill, { recursive: true })
     try {
       writeFileSync(join(skill, 'SKILL.md'), this.entry)
-      symlinkSync(this.guides, join(skill, 'guides'), 'dir')
+      // Windows creates a junction, which needs no symlink privilege; other platforms ignore the type.
+      symlinkSync(this.guides, join(skill, 'guides'), 'junction')
       rmSync(this.skillRoot, { recursive: true, force: true })
       try { renameSync(staging, this.skillRoot) } catch (error) { if (!this.published()) throw error }
     } finally {
@@ -221,6 +228,12 @@ export class DwsRelease {
     }
     return data
   }
+}
+
+/** Write the executable at the root of a zip release archive, the Windows form, into `into`. */
+async function unpackExecutable(data: Buffer, into: string): Promise<void> {
+  const content = unzipSync(data, { filter: file => file.name === FILE })[FILE]
+  if (content !== undefined) await writeFile(join(into, FILE), content, { mode: 0o755 })
 }
 
 /** Write the multi-mode skills of `dws-skills.zip` and its root `LICENSE` and `NOTICE` into `into`. */

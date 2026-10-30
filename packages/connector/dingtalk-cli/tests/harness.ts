@@ -4,6 +4,7 @@ import { chmod, mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type {
   SubprocessCollectedOutputs,
@@ -116,13 +117,13 @@ export function byArguments(replies: Record<string, CliReply>): (process: Script
 }
 
 /**
- * Create a temporary directory holding an executable `dws` placeholder.
+ * Create a temporary directory holding an executable `dws` placeholder, `dws.exe` on Windows.
  * @returns the absolute bin directory.
  */
 export async function createBinDir(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-dingtalk-bin-'))
-  await writeFile(join(directory, 'dws'), '')
-  await chmod(join(directory, 'dws'), 0o755)
+  await writeFile(join(directory, executableFileName('dws')), '')
+  await chmod(join(directory, executableFileName('dws')), 0o755)
   return directory
 }
 
