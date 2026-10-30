@@ -272,6 +272,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
       await observeFocus('Enter model pane')
       await devicePage.keyboard.press('ArrowDown')
       const search = devicePage.getByRole('searchbox', { name: '搜索模型…' })
+      expect(await search.evaluate(input => getComputedStyle(input).fontSize)).toBe('16px')
       await expect.poll(() => search.evaluate(element => document.activeElement === element)).toBe(true)
       await observeFocus('Navigate models')
       await devicePage.keyboard.press('Escape')

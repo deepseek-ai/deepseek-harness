@@ -30,8 +30,8 @@
   top: calc(100% + 4px);
   left: 0;
   z-index: 100;
-  min-width: 144px;
-  max-width: 360px;
+  min-width: min(144px, var(--dsh-anchored-max-width, 100vw));
+  max-width: min(360px, var(--dsh-anchored-max-width, 100vw));
 }
 
 /* Legacy slots can render no rows; keep empty context popups out of layout. */
@@ -63,12 +63,16 @@
 
 /* Viewport fit: the card stops 12px short of the viewport's top/bottom edges
  * (the portal MARGIN in Menu.tsx; the top side widens to the frame's published
- * overlay inset) and taller content scrolls inside
- * .viewport, so a pinned .footer stays visible. Menus with submenu rows skip
- * this class — the overflow clip would crop the side card, so they rely on
- * staying short. */
+ * overlay inset) and taller content scrolls inside .viewport, so a pinned
+ * .footer stays visible. The dynamic unit, not `vh`: mobile browser chrome
+ * shrinks the visible height while `vh` keeps the taller bars-hidden height, so
+ * a `vh` cap exceeds the viewport the placement clamps into and the card ends
+ * up taller than the screen showing it. Menus with submenu rows skip this
+ * class — the overflow clip would crop the side card, so they rely on staying
+ * short. */
 .scrollable {
-  max-height: calc(100vh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
+  max-height: min(calc(100vh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px))), var(--dsh-anchored-max-height, 100vh));
+  max-height: min(calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px))), var(--dsh-anchored-max-height, 100vh));
 }
 
 .viewport {
@@ -145,7 +149,7 @@
 
 .list.compactList,
 .submenu.compactList {
-  min-width: 156px;
+  min-width: min(156px, var(--dsh-anchored-max-width, 100vw));
   padding: 4px;
 }
 
@@ -313,4 +317,7 @@
 
 .list[data-menu-phase='dismiss'],
 .list[data-menu-phase='replace'] { pointer-events: none; }
-.list[data-context-menu].scrollable { max-height: calc(100vh - 24px); }
+.list[data-context-menu].scrollable {
+  max-height: min(calc(100vh - 24px), var(--dsh-anchored-max-height, 100vh));
+  max-height: min(calc(100dvh - 24px), var(--dsh-anchored-max-height, 100vh));
+}
