@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+`fs/delete-intent` 与 `fs/edit-intent` 要求相同的存在观察：未见源以 `FS_NOT_OBSERVED` 失败，确认缺失的源以 `FS_NOT_FOUND` 失败，存在源提供观察到的版本。补丁和移动源复用 `fs/edit-intent`；移动目标复用 `fs/write-intent`。
+
 当部署希望模型在覆盖或编辑文件之前先读取该文件时，把本插件与 `ctx.fs` 后端及 `dsh-tool-fs` 工具一起加载。插件无需配置，也不注入任何服务；它只监听工具分派的 `fs/*` 事件。
 
 ### 最小组合
@@ -66,12 +68,12 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 三个 `fs/*` 监听器与已观察状态门禁 |
+| [`src/index.ts`](src/index.ts) | 四个 `fs/*` 监听器与已观察状态门禁 |
 | [`src/types.ts`](src/types.ts) | 不透明事件参与者形态，从中派生所有者会话 |
 
 ### 决策流程
 
-`fs/write-intent` 把未见或确认缺失解析为 `{ kind: 'createIfAbsent' }`，把已观测存在解析为 `{ kind: 'replaceIfVersion', version: vObserved }`。`fs/edit-intent` 以 `FS_NOT_OBSERVED` 拒绝未见目标，以 `FS_NOT_FOUND` 拒绝确认缺失的目标，否则提供观察到的版本作为比较并交换的基础。`fs/observed` 为该所有者与目标记录 `{ kind: 'present', version }` 或 `{ kind: 'absent' }`——同步、只有副作用的 `WeakMap.set`，因为成功的变更已经提交。
+`fs/write-intent` 把未见或缺失状态映射为防护创建，把存在状态映射为防护替换。`fs/edit-intent` 与 `fs/delete-intent` 共享存在状态检查。`fs/observed` 为不透明所有者和目标同步记录存在/版本或缺失。四个监听器及记录状态都会在卸载时释放。
 
 ### 单 slot、先到者胜
 

@@ -11,6 +11,10 @@
   height: 15px;
 }
 
+.expanded {
+  visibility: hidden;
+}
+
 /* The left sidebar's panel icon, mirrored: the divider moves to the right side. */
 .icon {
   transform: scaleX(-1);

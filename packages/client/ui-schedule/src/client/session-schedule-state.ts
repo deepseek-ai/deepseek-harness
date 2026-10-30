@@ -1,44 +1,17 @@
 /**
- * One Session's scheduled-task state for the ambient surfaces: the Sidebar
- * row mark and the row hover-card task section.
+ * One Session's scheduled-task state for its header, Sidebar row mark, and hover card.
  *
- * Both project the ONE Host catalog the page already owns — `schedule/catalog()`
- * returns active and ended tasks with their originating `sessionId` — so N
+ * These views project the Host catalog the page already owns — `schedule/catalog()`
+ * returns every Host task with its target and involved Sessions — so N
  * visible rows share one Remote read and follow one `schedule/changed`
- * invalidation instead of issuing a query per row. The Session-header catalog
- * keeps its own per-Session `schedule/list` source because it also lists the
- * open Session's tasks.
+ * invalidation instead of issuing a query per row or header.
  */
 
-import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { HostObservable, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { createCatalogSource, type CatalogInjected, type CatalogSnapshot } from './catalog-source.ts'
-
-/** Per-Session source factory handed to the Session-header catalog occupant. */
-export type SessionScheduleSourceFactory = (sessionId: SessionId) => CatalogInjected
-
-/**
- * Create the durable reminder source for one Session.
- *
- * The stored read is `schedule/list`, which admits only tasks whose durable
- * status is active; loading and error reads carry no authoritative answer.
- * @param ctx - client context carrying the Remote schedule face.
- * @param sessionId - Session whose tasks are read; reading never activates it.
- * @returns observable catalog plus its mutation callbacks.
- */
-export function createSessionScheduleSource(
-  ctx: ClientContext,
-  sessionId: SessionId,
-): CatalogInjected {
-  return createCatalogSource({
-    list: () => ctx.remote.schedule.list({ sessionId }),
-    remove: id => ctx.remote.schedule.delete({ sessionId, id }),
-    subscribeChanged: listener => ctx.remote.$on('schedule/changed', listener),
-    subscribeReset: listener => ctx.on('connection/reset', listener),
-  })
-}
+import type { ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
+import { taskInvolvesSession } from './task-record.ts'
+import type { CatalogSnapshot } from './catalog-source.ts'
 
 /** Selector hook the renderer binds from a slot's `hooks.catalog` observable. */
 export type SessionScheduleCatalogHook = SnapshotSelectorHook<CatalogSnapshot<ScheduleCatalogEntry>>
@@ -59,13 +32,13 @@ const NO_RECORDS: readonly ScheduleCatalogEntry[] = []
 /**
  * Project the shared Host catalog onto one Session's active tasks.
  *
- * `schedule/catalog()` returns active and ended tasks for every Session, so
- * both facts come from this one snapshot filtered by `sessionId` and
- * `status === 'active'`. A read that never settled answers no active task; a
- * refresh republishes `loading` over the records of the last successful read, and
- * the Host emits `schedule/changed` after every delivery, so following `status`
- * here would blank a Session's mark for each roundtrip. An ended-only Session
- * lists nothing.
+ * `schedule/catalog()` returns every Host task in every lifecycle state, so
+ * both facts come from this one snapshot filtered to the tasks that target or
+ * involve the Session with `status === 'active'`. A read that never settled
+ * answers no active task; a refresh republishes `loading` over the records of
+ * the last successful read, and the Host emits `schedule/changed` after every
+ * delivery, so following `status` here would blank a Session's mark for each
+ * roundtrip. A Session whose tasks are all paused or ended lists nothing.
  * @param snapshot - shared Host catalog snapshot.
  * @param sessionId - Session whose facts are selected.
  * @returns this Session's active-task facts.
@@ -76,7 +49,7 @@ export function selectSessionScheduleFacts(
 ): SessionScheduleFacts {
   if (!snapshot.settled) return { hasActive: false, records: NO_RECORDS }
   const records = snapshot.records.filter(
-    record => record.sessionId === sessionId && record.status === 'active',
+    record => taskInvolvesSession(record, sessionId) && record.status === 'active',
   )
   return { hasActive: records.length > 0, records }
 }

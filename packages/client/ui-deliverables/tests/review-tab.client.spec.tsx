@@ -172,7 +172,7 @@ describe('ReviewTab', () => {
     const runtime = {
       renderSlot: renderFileActions,
       useTabInfo: () => ({
-        sidebar: { expanded: true, fullscreen: false }, panel: { id: 'pane-1' },
+        sidebar: { expanded: true, fullscreen: false }, panel: { id: 'pane-1', isFloating: false },
         tab: { id: TAB, kind: 'changes-review', contentId: options.address ?? ADDRESS, title: 'Review', visible: true, navigation, signal: aborter.signal, actions: tabActions },
       }),
       sessionId: SESSION,

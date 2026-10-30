@@ -1,4 +1,4 @@
-/** Compiled worker for Client history folding and live tool preparation. */
+/** Compiled worker for Client history folding, live Assistant text, and tool preparation. */
 
 import { performance } from 'node:perf_hooks'
 import { Context } from '@deepseek-ai/cordis'
@@ -55,6 +55,20 @@ export interface PreparingToolWorkerReport {
   readonly progressKb: number | undefined
   readonly filePath: string | undefined
   readonly detail: string | undefined
+}
+
+/** One live Assistant block folded and read through the published Chat snapshot. */
+export interface StreamingAssistantWorkerReport {
+  readonly blockType: 'text' | 'reasoning'
+  readonly pattern: 'ordinary' | 'leading-whitespace'
+  readonly characters: number
+  readonly fragments: number
+  readonly checksum: number
+  readonly elapsedMs: number
+  readonly cpuUserMs: number
+  readonly cpuSystemMs: number
+  readonly retainedMb: number
+  readonly maxRssMb: number
 }
 
 function registerEventDefinitions(ctx: Context): ConversationEventRegistry {
@@ -257,6 +271,74 @@ function preparingTool(tool: 'write' | 'bash', characters: number, definitions: 
   }
 }
 
+function streamingAssistant(
+  blockType: StreamingAssistantWorkerReport['blockType'],
+  pattern: StreamingAssistantWorkerReport['pattern'],
+  characters: number,
+  fragments: number,
+  definitions: ConversationEventRegistry,
+): StreamingAssistantWorkerReport {
+  if (globalThis.gc === undefined) throw new Error('streaming benchmark requires --expose-gc')
+  if (characters % fragments !== 0) throw new Error('streaming characters must divide evenly into fragments')
+  const chunkSize = characters / fragments
+  const payload = pattern === 'ordinary'
+    ? 'abcdefghijklmno '.repeat(Math.ceil(characters / 16)).slice(0, characters)
+    : ' '.repeat(characters / 2) + 'abcdefghijklmno '.repeat(Math.ceil(characters / 32)).slice(0, characters / 2)
+  const attemptId = LlmAttemptId('streaming-benchmark')
+  const live = (index: number, chunk: StreamChunk): SessionEventLikeEntry => ({
+    type: 'transient',
+    event: {
+      type: 'assistant/live-chunk', seq: 2 + index / (fragments + 1), time: TIME_ZERO + index,
+      data: { turn: 1, step: 1, attemptId, chunk },
+    },
+  })
+  const chunks: SessionEventLikeEntry[] = []
+  for (let index = 0; index < fragments; index++) {
+    chunks.push(live(index + 1, {
+      type: blockType === 'text' ? 'text-delta' : 'reasoning-delta', index: 0,
+      text: payload.slice(index * chunkSize, (index + 1) * chunkSize),
+    }))
+  }
+  const assembler = new ConversationNodeAssembler(definitions, new BenchViewDefinitions())
+  assembler.replaceWindow([
+    entry(0, 'turn/start', { turn: 1 }),
+    entry(1, 'step/start', { turn: 1, step: 1 }),
+    live(0, { type: 'block-start', index: 0, blockType }),
+  ], false)
+  assembler.activateTarget('chat')
+  globalThis.gc()
+  const before = process.memoryUsage().heapUsed
+  const start = performance.now()
+  const cpuStart = process.cpuUsage()
+  for (const chunk of chunks) assembler.append(chunk)
+  assembler.flush()
+  const text = streamingText(assembler, blockType)
+  // Consuming every character includes any deferred string materialization in the endpoint.
+  let checksum = 0
+  for (let index = 0; index < text.length; index++) checksum += text.charCodeAt(index)
+  const cpu = process.cpuUsage(cpuStart)
+  const elapsedMs = performance.now() - start
+  if (text !== payload) throw new Error('streaming benchmark did not publish the complete Assistant text')
+  globalThis.gc()
+  const retainedMb = (process.memoryUsage().heapUsed - before) / 1048576
+  // This read keeps the complete owner graph reachable across endpoint collection.
+  if (streamingText(assembler, blockType) !== text) throw new Error('streaming benchmark lost its published Assistant text')
+  return {
+    blockType, pattern, characters: text.length, fragments, checksum,
+    elapsedMs, cpuUserMs: cpu.user / 1000, cpuSystemMs: cpu.system / 1000,
+    retainedMb, maxRssMb: process.resourceUsage().maxRSS / 1024,
+  }
+}
+
+function streamingText(assembler: ConversationNodeAssembler, blockType: StreamingAssistantWorkerReport['blockType']): string {
+  const node = assembler.get('chat')?.nodes.values().find((candidate): candidate is ChatNode<'assistant-step'> => candidate.kind === 'assistant-step')
+  const block = node?.data.blocks[0]
+  if (block?.kind !== blockType || (block.kind !== 'text' && block.kind !== 'reasoning')) {
+    throw new Error('streaming benchmark did not create its Assistant block')
+  }
+  return block.text
+}
+
 assertBuiltBenchmarkRuntime(import.meta.url, {
   '@deepseek-ai/dsh-brand': import.meta.resolve('@deepseek-ai/dsh-brand'),
   '@deepseek-ai/dsh-client-store': import.meta.resolve('@deepseek-ai/dsh-client-store'),
@@ -272,6 +354,16 @@ try {
     const tool = process.argv[3]
     if (tool !== 'write' && tool !== 'bash') throw new Error('preparing benchmark tool must be write or bash')
     const report = preparingTool(tool, positiveInteger(process.argv[4], 'characters'), definitions)
+    process.stdout.write(`${JSON.stringify(report)}\n`)
+  } else if (process.argv[2] === 'streaming') {
+    const blockType = process.argv[3]
+    const pattern = process.argv[4]
+    if (blockType !== 'text' && blockType !== 'reasoning') throw new Error('streaming block type must be text or reasoning')
+    if (pattern !== 'ordinary' && pattern !== 'leading-whitespace') throw new Error('streaming pattern must be ordinary or leading-whitespace')
+    const report = streamingAssistant(
+      blockType, pattern, positiveInteger(process.argv[5], 'characters'),
+      positiveInteger(process.argv[6], 'fragments'), definitions,
+    )
     process.stdout.write(`${JSON.stringify(report)}\n`)
   } else {
     const [turnsValue, smallDeltasValue, largeDeltasValue, attemptsValue] = process.argv.slice(2)

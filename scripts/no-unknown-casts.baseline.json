@@ -643,7 +643,7 @@
     "1bbd18e22567ce0529d02b770533f9bda84ff379b161dda8b9548053a18a0e97": 1
   },
   "packages/client/ui-sidebar-files/tests/mount.client.tsx": {
-    "2caa9ae382deea09b4ac64586c1ab49bd935b1e689218e3d485bd7b918e22066": 2,
+    "2caa9ae382deea09b4ac64586c1ab49bd935b1e689218e3d485bd7b918e22066": 1,
     "684eae6dc3d4dbe526c5a5b11ebd84e35e335bebd519cf09c0f3a24ba9280fc1": 1
   },
   "packages/client/ui-sidebar-files/tests/watch.client.spec.ts": {
@@ -1138,9 +1138,6 @@
   },
   "packages/experimental/webworker-packer/tests/preview.spec.ts": {
     "cdd46c8ceda6d5707bc2abfba329351ba06bcc030b314a3c799d72a4971bd5a4": 1
-  },
-  "packages/experimental/webworker-runtime/src/compile/transform.ts": {
-    "48bb7e26a882fa7a44a4175f843d20846606976c7d6fdaf67c8a08dd8830b95e": 1
   },
   "packages/experimental/webworker-runtime/src/node/builtin_modules/implemented/stream.ts": {
     "8d4298961ca8095e069df7c940bd5082e0a90f76a24f517d5f547566e0631b6c": 1

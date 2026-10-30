@@ -10,6 +10,7 @@ import { observeComposition } from './keyboard-composition.ts'
 import { focusWithoutRing } from './focus.ts'
 import { ShortcutKeys } from './ShortcutKeys.tsx'
 import { MenuSurface } from './MenuSurface.tsx'
+import { Tooltip } from './Tooltip.tsx'
 import css from './Menu.module.css'
 
 /** Selectable row (optionally with a nested submenu). */
@@ -55,6 +56,12 @@ export interface MenuItemButtonProps {
   current?: boolean
   /** Whether the row cannot be activated. */
   disabled?: boolean
+  /**
+   * Why the disabled row cannot be activated. The row then stays hoverable and
+   * focusable, shows the reason in a tooltip, and exposes it as the row's
+   * description; an enabled row ignores it.
+   */
+  disabledReason?: string | undefined
   /** Destructive row: error-colored text/icon and danger hover fill. */
   danger?: boolean
   /**
@@ -79,30 +86,41 @@ export interface MenuItemButtonProps {
  * @param props.icon - optional leading icon.
  * @param props.current - whether the row identifies the currently displayed page or view.
  * @param props.disabled - whether the row cannot be activated.
+ * @param props.disabledReason - why a disabled row cannot be activated, shown in a tooltip and read as its description.
  * @param props.danger - whether to use the destructive row colors.
  * @param props.separatorBefore - whether this row starts a new group (hairline above it).
  * @param props.onSelect - row activation callback.
  * @returns one menu-item row.
  */
 export function MenuItemButton({
-  children, shortcut, icon, current, disabled = false, danger = false, separatorBefore = false, onSelect,
+  children, shortcut, icon, current, disabled = false, disabledReason, danger = false, separatorBefore = false, onSelect,
 }: MenuItemButtonProps) {
+  const reasonId = useId()
+  // Native disabled buttons do not deliver the hover/focus events Tooltip needs,
+  // so an explained row is only marked unavailable. The Tooltip wraps every row,
+  // so a reason that comes or goes never remounts the focused row.
+  const explained = disabled && disabledReason !== undefined
   return (
     <div className={css.itemWrap}>
       {separatorBefore && <div className={css.separator} role="separator" />}
-      <button
-        type="button"
-        role="menuitem"
-        className={clsx(css.item, danger && css.danger)}
-        disabled={disabled}
-        aria-keyshortcuts={shortcut?.aria}
-        aria-current={current === true ? 'page' : undefined}
-        onClick={onSelect}
-      >
-        {icon !== undefined && <span className={css.itemIcon}>{icon}</span>}
-        <span className={css.itemLabel}>{children}</span>
-        {shortcut !== undefined && <span aria-hidden="true" className={css.shortcut}><ShortcutKeys keys={shortcut.keys} className={css.shortcutKeys} /></span>}
-      </button>
+      <Tooltip label={disabledReason ?? ''} disabled={!explained} side="bottom" delayMs={500} maxWidth={300} portal>
+        <button
+          type="button"
+          role="menuitem"
+          className={clsx(css.item, danger && css.danger)}
+          disabled={disabled && !explained}
+          aria-disabled={explained || undefined}
+          aria-describedby={explained ? reasonId : undefined}
+          aria-keyshortcuts={shortcut?.aria}
+          aria-current={current === true ? 'page' : undefined}
+          onClick={explained ? undefined : onSelect}
+        >
+          {icon !== undefined && <span className={css.itemIcon}>{icon}</span>}
+          <span className={css.itemLabel}>{children}</span>
+          {shortcut !== undefined && <span aria-hidden="true" className={css.shortcut}><ShortcutKeys keys={shortcut.keys} className={css.shortcutKeys} /></span>}
+        </button>
+      </Tooltip>
+      {explained && <span id={reasonId} hidden>{disabledReason}</span>}
     </div>
   )
 }
@@ -425,6 +443,11 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
         if (insideList) {
           if (focused instanceof Element && focused.getAttribute('role') === 'menuitem') {
             e.preventDefault()
+            if (focused.getAttribute('aria-disabled') === 'true') {
+              onClose()
+              refocusAnchor(true)
+              return
+            }
             selectingWithTab.current = true
             try { (focused as HTMLElement).click() }
             finally { selectingWithTab.current = false }

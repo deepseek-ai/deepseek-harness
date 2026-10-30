@@ -1,0 +1,19 @@
+{
+  "format": 1,
+  "title": { "en": "Awesome DSH Plugin", "zh": "Awesome DSH Plugin 插件精选" },
+  "metadata": {
+    "categories": { "tools": { "title": { "en": "Tools", "zh": "工具与能力" } } },
+    "labels": { "featured": { "title": { "en": "Featured", "zh": "精选" } } }
+  },
+  "plugins": [
+    {
+      "name": "dsh-toolbar-layout-fixture",
+      "title": { "en": "Toolbar layout fixture", "zh": "工具栏布局示例" },
+      "description": { "en": "A local index for responsive toolbar checks.", "zh": "用于工具栏响应式检查的本地索引" },
+      "metadata": { "category": "tools", "labels": ["featured"] },
+      "versions": [
+        { "version": "1.0.0", "publishTimestamp": 1793145600, "source": { "type": "npm" } }
+      ]
+    }
+  ]
+}

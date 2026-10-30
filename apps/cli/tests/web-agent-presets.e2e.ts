@@ -302,7 +302,7 @@ describe('the shipped Web composition', () => {
       expect(toolNames(ctx, handle.agent).filter(name => name !== 'glob' && name !== 'grep')).toEqual([
         'ask_user_question', 'bash', 'create_goal', 'edit', 'exit_plan_mode',
         'get_goal', 'interrupt_agent', 'job_kill', 'job_list', 'job_output', 'list_agents', 'list_subagent_models', 'plugin_manager', 'present', 'read', 'read_image',
-        'schedule_create', 'schedule_delete', 'schedule_list', 'schedule_update',
+        'schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view',
         'send_message', 'skill',
         'subagent', 'subagent_fork', 'todo_write', 'update_goal', 'web_fetch', 'web_search',
         'workflow', 'working_directory', 'write',
@@ -1004,7 +1004,7 @@ describe('a forked session', () => {
 })
 
 describe('a delegated child', () => {
-  it.each([false, true])('inherits preset tools with seeded=%s and refuses child reminders', async (seeded) => {
+  it.each([false, true])('inherits preset tools with seeded=%s and refuses child scheduled tasks', async (seeded) => {
     const parent = await ctx.agents.create({
       sessionId: SessionId(`preset-child-parent-${seeded}`),
       meta: { agentPreset: 'standard' },
@@ -1026,10 +1026,12 @@ describe('a delegated child', () => {
       expect(toolNames(ctx, child.agent)).toContain('bash')
       expect(ctx.tools.schemas(child.agent)).toEqual(ctx.tools.schemas(parent.agent))
       const calls = [
-        ['schedule_create', { prompt: 'Check', after_seconds: 60, title: 'Check' }],
+        ['schedule_create', {
+          title: 'Check', prompt: 'Check', rrule: 'DTSTART:20990101T010000Z\nRRULE:FREQ=DAILY;COUNT=1', target: 'this_session',
+        }],
         ['schedule_list', {}],
-        ['schedule_delete', { id: 'task-1' }],
-        ['schedule_update', { id: 'task-1', title: 'Check' }],
+        ['schedule_view', { id: 'task-1' }],
+        ['schedule_edit', { id: 'task-1', action: 'update', title: 'Check' }],
       ] as const
       for (const [name, args] of calls) {
         expect(toolNames(ctx, child.agent)).toContain(name)
@@ -1037,7 +1039,7 @@ describe('a delegated child', () => {
           callId: ToolCallId(`child-${name}`), signal: new AbortController().signal,
           name, arguments: args, agent: child.agent,
         })
-        expect(result.value).toEqual({ code: 'subagent_session', message: 'A delegated subagent cannot use reminders.' })
+        expect(result.value).toEqual({ code: 'subagent_session', message: 'A delegated subagent cannot use scheduled tasks.' })
       }
       expect(child.agent.session.header.agentPreset).toBe('standard')
     } finally {

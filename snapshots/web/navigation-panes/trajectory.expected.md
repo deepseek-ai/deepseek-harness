@@ -2,6 +2,7 @@
   - button "Use actual duration": Duration
   - button "Collapse turns": Turns
   - button "Collapse calls": Calls
+  - button "Collapse subcalls": Subcalls
   - searchbox "Search trajectory"
 - region "Trajectory timeline"
 - table:
