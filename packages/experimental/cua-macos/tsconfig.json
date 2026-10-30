@@ -19,6 +19,9 @@
     },
     {
       "path": "../../util/atomic-write"
+    },
+    {
+      "path": "../../../vendor/schemastery"
     }
   ]
 }

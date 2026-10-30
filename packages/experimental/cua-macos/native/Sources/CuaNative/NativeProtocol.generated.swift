@@ -14,7 +14,7 @@ enum NativeProtocol {
         "launchApp": ["appHandle"],
         "listApps": [],
         "listWindows": ["appHandle"],
-        "openPermissionSettings": ["permission"],
+        "openPermissionSettings": ["permission", "settingsMessage"],
         "paste": ["appHandle", "format", "maxClipboardBytes", "maxDepth", "maxElements", "pasteReadTimeoutMs", "text"],
         "performSecondaryAction": ["action", "appHandle", "elementIndex", "snapshotId"],
         "permissionStatus": [],

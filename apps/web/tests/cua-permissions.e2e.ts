@@ -155,7 +155,8 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     unavailableMessage: 'Application unavailable. Enable Computer Use again and retry.',
     settingsMessage: 'Open System Settings > Privacy & Security > Accessibility manually.', pollIntervalMs: 1000 } })
   expect(events.filter(event => event.method === 'openPermissionSettings')).toEqual([
-    { method: 'openPermissionSettings', params: { permission: 'accessibility' } },
+    { method: 'openPermissionSettings', params: { permission: 'accessibility',
+      settingsMessage: 'Open System Settings > Privacy & Security > Accessibility manually.' } },
   ])
   expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
   const preview = plugins.locator('[data-detail-document] img')
