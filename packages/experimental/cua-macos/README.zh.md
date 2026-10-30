@@ -39,22 +39,23 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。helper 需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图；按系统提示给 helper 授权。源码构建的应用包名为 `DSH Computer Use Dev.app`，Info.plist 声明名称 `DSH Computer Use Dev`；授权时选择开发版条目。`getCapabilities` 查询权限和锁屏状态，不弹出系统授权窗口。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 和 `cua.getState` 列出运行中的应用。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。授权前从磁盘读取应用的 Bundle ID 和可执行路径，在启动前后重新读取并核对；没有 Bundle ID 的应用使用规范化的可执行路径复用授权。选择尚未运行的安装副本时，会请求为该副本创建新实例。helper 等待应用完成启动后才返回其 PID。启动后验证失败会使待启动句柄失效，但进程可能仍在运行；应先查看运行中的应用，再取得新句柄。返回的对象读取初始 AX，不自动激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏或最小化时，先尝试 `app.show()` 或 `window.show()`，再重新观察。它请求取消隐藏和恢复最小化，不主动激活、抬起窗口或切换桌面空间；应用级恢复选择焦点窗口、主窗口或唯一 AX 窗口。结果通过 `windowId` 指明选中的窗口，未选中时为 null；`foregroundChanged` 比较操作前后的前台应用和最上层窗口，无法取得完整观察时为 null，返回后仍可能发生焦点变化。恢复失败或窗口仍不可用时，说明需要前台的步骤，再调用 `app.activate()` 或窗口的 `raise` 动作并重新观察。必须使用前台时，以完成任务为先。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
 
-源码构建默认使用临时签名，即使本机已有开发证书也不会读取或修改钥匙串。需要在重新编译或切换 worktree 后保留签名身份时，在 profile 的 `cordis.patch.yml` 中为已加载的 `cua` 节点配置；该节点加载 `@deepseek-ai/dsh-experimental-cua-macos`，`cua` 是节点 ID：
+源码构建默认使用 `sourceSigning: local-identity`：首次构建在 `$DSH_HOME/computer-use-dev-signing` 中生成固定身份，后续构建和使用同一 DSH home 的 worktree 复用它。未设置 `DSH_HOME` 时使用 `~/.dsh`。临时签名可配置为 `sourceSigning: ad-hoc`；已有签名证书可在 profile 的 `cordis.patch.yml` 中这样选择，`cua` 是加载 `@deepseek-ai/dsh-experimental-cua-macos` 的节点 ID：
 
 ```yaml
 - id: cua
   config:
-    sourceSigning: local-identity
+    sourceSigning:
+      identity: "Apple Development: Your name (TEAMID)"
 ```
 
-首次启用会创建本机签名身份。不同 worktree 都需选择 `local-identity`；共享 profile 可复用这项配置。钥匙串访问范围、撤销方法和授权限制见[开发签名](native/README.zh.md#build-and-service)。
+将 `identity` 替换为已有证书的名称或 SHA-1 指纹。可选的 `keychain` 指定钥匙串绝对路径；省略时使用用户钥匙串搜索列表，解锁由用户负责。自定义证书模式不会创建、解锁或修改自动生成的身份。自动模式会保存私钥和密码，同一用户的进程可以读取并使用它们；详见[开发签名](native/README.zh.md#build-and-service)。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
 | `agentPreset` | `ptc` | 仅为绑定该 preset 的 Agent 注册工具和指引；`false` 表示全局注册。 |
 | `allowedApps` | `[]` | 旧路径和签名许可，只导入 profile 存储一次供撤销，不授予新 Bundle ID 身份访问权限。 |
 | `helperPath` | 包内可执行文件 | 已签名 helper `.app` 内可执行文件的绝对路径；裸二进制会触发 `NATIVE_APPLICATION_REQUIRED`。 |
-| `sourceSigning` | `ad-hoc` | 源码构建的签名方式；`local-identity` 自动创建或复用本机固定身份。安装版和 `helperPath` 忽略此项。 |
+| `sourceSigning` | `local-identity` | 源码签名：自动生成固定身份、`ad-hoc` 临时签名，或 `{ identity, keychain? }` 指定已有证书。安装版和 `helperPath` 忽略此项。 |
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
 | `connectTimeoutMs` | `5000` | 连接或启动共享 helper 的截止时间。 |
@@ -226,7 +227,7 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
 - 后台输入依赖私有 SkyLight 符号，macOS 升级可能使其不可用，需在目标系统版本验证。
 - 实测 Blender Unicode 输入曾出现分派成功但界面未显示文本，后台 AppKit 的 Command+A 曾未选中全文。输入后必须检查应用状态；工具返回成功只表示已分派。
-- 未配置[开发签名身份](native/README.zh.md#build-and-service)时，源码构建使用临时签名，源码变化后需要重新授权。正式分发应以固定 Developer ID 签名并完成公证；构建命令支持 `--identity` 指定签名身份，安装版保留分发时的签名。[权限页面](../cua/README.zh.md)提供 helper 授权入口和目标应用许可撤销。
+- 显式选择 `ad-hoc` 的源码构建在二进制变化后可能需要重新授权。删除 DSH home 会删除其中的[自动签名身份](native/README.zh.md#build-and-service)，下次自动构建会生成新证书并需要重新授权。正式分发应以固定 Developer ID 签名并完成公证；构建命令支持 `--identity` 指定签名身份，安装版保留分发时的签名。[权限页面](../cua/README.zh.md)提供 helper 授权入口和目标应用许可撤销。
 - 发布打包不自动验证 GUI 启动、helper 身份或退出清理。发布维护者可在发布前，在已登录桌面的 Mac 上执行[分发 smoke](native/README.zh.md#build-and-service)；打包成功不能证明这些运行行为已通过验收。
 - 已保存许可的条目显示一个已批准副本的名称、路径和图标，不枚举共享身份的所有安装副本。删除该副本后图标可能不可用，撤销仍作用于同一身份的所有副本。
 - macOS 无法提供运行中应用的 Bundle ID 时，helper 仅在其报告的 bundle 可执行路径与实际进程路径相同时读取该 bundle，仍无标识则使用路径。只有 Bundle ID 和实际可执行路径均不可用时才拒绝生成授权身份；进程实例验证仍可能独立失败。

@@ -1,4 +1,4 @@
-"""Own the per-user signing identity that keeps source-built Computer Use permissions across rebuilds.
+"""Own the signing identity retained in DSH home for source-built Computer Use applications.
 
 macOS keeps Accessibility and Screen Recording grants for a bundle identifier together with the
 designated requirement of the signature that was granted. An ad-hoc signature's requirement is the
@@ -19,12 +19,12 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
 
-DEFAULT_DIRECTORY = Path.home() / "Library/Application Support/DeepSeek Harness/computer-use-dev-signing"
 COMMON_NAME = "DSH Computer Use Dev (local)"
 SECURITY = "/usr/bin/security"
 OPENSSL = "/usr/bin/openssl"
@@ -94,12 +94,28 @@ def keychain_path(directory):
     return directory / "signing.keychain-db"
 
 
-def load(directory=DEFAULT_DIRECTORY):
+def default_directory(dsh_home=None):
+    """Use the Host-resolved home, or DSH_HOME / ~/.dsh for standalone Python commands."""
+    selected = dsh_home if dsh_home is not None else os.environ.get("DSH_HOME", "")
+    selected = str(selected)
+    if not selected.strip():
+        home = Path.home() / ".dsh"
+    elif selected == "~" or selected.startswith(("~/", "~\\")):
+        home = Path.home() / selected[2:]
+    else:
+        home = Path(selected)
+    return Path(os.path.abspath(home)) / "computer-use-dev-signing"
+
+
+def load(directory):
     """Unlock the configured identity before signing.
 
     Returns None when setup has not run. Raises when setup ran but its keychain is missing or no
     longer on the search list, because signing would otherwise fail or prompt for a password.
     """
+    home_argument = shlex.quote(str(directory.parent))
+    setup_command = f"{SETUP_COMMAND} --dsh-home {home_argument}"
+    remove_command = f"{REMOVE_COMMAND} --dsh-home {home_argument}"
     record = record_path(directory)
     if not record.exists():
         return None
@@ -109,16 +125,16 @@ def load(directory=DEFAULT_DIRECTORY):
     except (ValueError, OSError):
         valid = False
     if not valid:
-        raise RuntimeError(f"Computer Use development signing record is invalid; run {REMOVE_COMMAND}, then {SETUP_COMMAND}")
+        raise RuntimeError(f"Computer Use development signing record is invalid; run {remove_command}, then {setup_command}")
     keychain = keychain_path(directory)
     if not keychain.is_file():
-        raise RuntimeError(f"Computer Use development signing keychain is missing: {keychain}; run {REMOVE_COMMAND}, then {SETUP_COMMAND}")
+        raise RuntimeError(f"Computer Use development signing keychain is missing: {keychain}; run {remove_command}, then {setup_command}")
     if not listed(keychain, user_keychains()):
-        raise RuntimeError(f"Computer Use development signing keychain is not on the user keychain search list; run {SETUP_COMMAND}")
+        raise RuntimeError(f"Computer Use development signing keychain is not on the user keychain search list; run {setup_command}")
     # A locked keychain makes codesign show a password dialog, so unlock it explicitly every time.
     security("unlock-keychain", "-p", fields["password"], str(keychain))
     if fields["sha1"] not in security("find-identity", str(keychain)):
-        raise RuntimeError(f"Computer Use development signing certificate is missing; run {REMOVE_COMMAND}, then {SETUP_COMMAND}")
+        raise RuntimeError(f"Computer Use development signing certificate is missing; run {remove_command}, then {setup_command}")
     return SigningIdentity(sha1=fields["sha1"], keychain=keychain)
 
 
@@ -153,7 +169,7 @@ def create_certificate(directory, password):
     return sha1
 
 
-def setup(directory=DEFAULT_DIRECTORY):
+def setup(directory):
     """Create an identity only without a record; preserve recorded identities when their keychain is missing."""
     with identity_lock(directory):
         return setup_locked(directory)
@@ -180,7 +196,7 @@ def setup_locked(directory):
     return load(directory)
 
 
-def remove(directory=DEFAULT_DIRECTORY):
+def remove(directory):
     """Delete the keychain, its search-list entry and the stored password."""
     with identity_lock(directory):
         remove_locked(directory)
@@ -200,13 +216,15 @@ def remove_locked(directory):
 def main():
     parser = argparse.ArgumentParser(description="Manage the local signing identity for source-built Computer Use applications.")
     parser.add_argument("action", choices=["setup", "remove"])
+    parser.add_argument("--dsh-home", type=Path, help="DSH home; defaults to DSH_HOME or ~/.dsh")
     args = parser.parse_args()
+    directory = default_directory(args.dsh_home)
     if args.action == "setup":
-        identity = setup()
-        print(f"Prepared \"{COMMON_NAME}\" ({identity.sha1}); source builds use it when sourceSigning is local-identity")
+        identity = setup(directory)
+        print(f"Prepared \"{COMMON_NAME}\" ({identity.sha1}) in {directory}")
     else:
-        remove()
-        print("Removed the development signing identity; select sourceSigning: ad-hoc to prevent recreation")
+        remove(directory)
+        print("Removed the development signing identity; select ad-hoc or a user certificate to prevent recreation")
 
 
 if __name__ == "__main__":

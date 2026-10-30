@@ -68,10 +68,16 @@ const config = {
 
 const { helperPath: _helperPath, ...automaticConfig } = config
 
-it('defaults source builds to ad-hoc signatures and accepts only the two signing choices', () => {
-  expect(NativeProvider.Config({}).sourceSigning).toBe('ad-hoc')
+it('defaults to a generated identity and validates all three signing choices', () => {
+  expect(NativeProvider.Config({}).sourceSigning).toBe('local-identity')
+  expect(NativeProvider.Config({ sourceSigning: 'ad-hoc' }).sourceSigning).toBe('ad-hoc')
   expect(NativeProvider.Config({ sourceSigning: 'local-identity' }).sourceSigning).toBe('local-identity')
-  expect(() => NativeProvider.Config({ sourceSigning: 'developer-id' } as never)).toThrow()
+  for (const sourceSigning of [{ identity: 'Apple Development: Example' }, { identity: 'ABC123', keychain: '/keychains/custom.keychain-db' }]) {
+    expect(NativeProvider.Config({ sourceSigning }).sourceSigning).toEqual(sourceSigning)
+  }
+  for (const sourceSigning of ['developer-id', {}, { identity: '' }, { identity: ' ' }, { identity: 'Example', keychain: 'relative' }]) {
+    expect(() => NativeProvider.Config({ sourceSigning } as never)).toThrow()
+  }
 })
 
 it('projects shared controls and macOS signing without adding signing to the shared schema', async () => {

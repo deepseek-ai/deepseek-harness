@@ -123,11 +123,14 @@ def load_dev_signing():
     return module
 
 
-def signing_identity(variant, identity, signing):
-    """Resolve signing without accessing the keychain unless local-identity is explicitly selected."""
-    if identity is not None or variant == "release" or signing == "ad-hoc":
-        return identity or "-", None
-    local = load_dev_signing().setup()
+def signing_identity(variant, identity, signing, dsh_home=None, keychain=None):
+    """Select a user certificate, an ad-hoc signature, or an identity retained in DSH home."""
+    if identity is not None:
+        return identity, keychain
+    if variant == "release" or signing == "ad-hoc":
+        return "-", None
+    signing_module = load_dev_signing()
+    local = signing_module.setup(signing_module.default_directory(dsh_home))
     return local.sha1, local.keychain
 
 
@@ -139,14 +142,22 @@ def main():
     parser.add_argument("--output-directory", type=Path)
     parser.add_argument("--variant", choices=["release", "dev"], default="release",
                         help="dev uses a separate bundle identifier")
-    parser.add_argument("--signing", choices=["ad-hoc", "local-identity"], default="ad-hoc",
-                        help="dev signing mode; local-identity creates or reuses a per-user identity")
-    parser.add_argument("--identity", help="explicit codesign identity, overriding --signing")
+    signing_options = parser.add_mutually_exclusive_group()
+    signing_options.add_argument("--signing", choices=["ad-hoc", "local-identity"],
+                                 help="defaults to local-identity for dev and ad-hoc for release")
+    signing_options.add_argument("--identity", help="existing codesign certificate name or SHA-1 fingerprint")
+    parser.add_argument("--keychain", type=Path, help="absolute keychain path for --identity; the user owns unlocking it")
+    parser.add_argument("--dsh-home", type=Path, help="home for local-identity; defaults to DSH_HOME or ~/.dsh")
     args = parser.parse_args()
+    if args.identity is not None and not args.identity.strip():
+        parser.error("--identity must name an existing certificate")
+    if args.keychain is not None and (args.identity is None or not args.keychain.is_absolute()):
+        parser.error("--keychain requires --identity and an absolute path")
     architecture = "x64" if args.arch == "x86_64" else "arm64"
     scratch = args.scratch_path or root / ".build" / f"runtime-{architecture}"
     output = args.output_directory or root / "bin" / f"darwin-{architecture}"
-    identity, keychain = signing_identity(args.variant, args.identity, args.signing)
+    signing = args.signing or ("local-identity" if args.variant == "dev" else "ad-hoc")
+    identity, keychain = signing_identity(args.variant, args.identity, signing, args.dsh_home, args.keychain)
     subprocess.run(["/usr/bin/xcrun", "swift", "build", "--package-path", str(root),
                     "--scratch-path", str(scratch), "--configuration", "release",
                     "--product", "dsh-cua-native", "--arch", args.arch], check=True)

@@ -1115,17 +1115,22 @@ export interface Config {
 
 - `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
 - `refs`: [`CuaConfig`](../packages/experimental/cua/src/index.ts)
-- `source`: [`packages/experimental/cua-macos/src/index.ts:17`](../packages/experimental/cua-macos/src/index.ts)
+- `source`: [`packages/experimental/cua-macos/src/index.ts:18`](../packages/experimental/cua-macos/src/index.ts)
 
 ```ts config-catalog
 /** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
 export interface Config extends CuaConfig {
   /**
-   * Signature of a helper compiled from a DSH source checkout. `ad-hoc` binds macOS grants to the code hash, so changed or
-   * clean builds ask again. `local-identity` creates or reuses a per-user self-signed identity shared by
-   * builds that select it. Installed packages and `helperPath` keep their own signature.
+   * Source-build signing: `local-identity` (default) creates or reuses an identity in DSH home;
+   * `ad-hoc` binds grants to the code hash; an object selects an existing user-managed certificate.
+   * Installed packages and `helperPath` keep their own signature.
    */
-  sourceSigning: 'ad-hoc' | 'local-identity'
+  sourceSigning: 'ad-hoc' | 'local-identity' | {
+    /** Existing codesign certificate name or SHA-1 fingerprint. */
+    identity: string
+    /** Absolute keychain path; omission uses the user's keychain search list. The user owns unlocking it. */
+    keychain?: string
+  }
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-cua-macos -->

@@ -9,7 +9,6 @@ from pathlib import Path
 import plistlib
 import subprocess
 import tempfile
-from types import SimpleNamespace
 from unittest.mock import patch
 
 NATIVE = Path(__file__).resolve().parents[1]
@@ -32,12 +31,14 @@ def main():
     before = signing.user_keychains()
     with tempfile.TemporaryDirectory(prefix="cua-dev-signing-e2e-") as temporary:
         root = Path(temporary)
-        directory = root / "signing"
+        home = root / "home"
+        directory = signing.default_directory(home)
         try:
-            local_signing = SimpleNamespace(setup=lambda: signing.setup(directory))
-            with patch.object(builder, "load_dev_signing", return_value=local_signing):
-                sha1, keychain = builder.signing_identity("dev", None, "local-identity")
-                assert builder.signing_identity("dev", None, "local-identity") == (sha1, keychain)
+            with patch.object(builder, "load_dev_signing", return_value=signing):
+                sha1, keychain = builder.signing_identity("dev", None, "local-identity", home)
+                assert builder.signing_identity("dev", None, "local-identity", home) == (sha1, keychain)
+            assert keychain == home / "computer-use-dev-signing/signing.keychain-db"
+            assert (directory / "identity.json").stat().st_mode & 0o777 == 0o600
             with patch.object(builder, "load_dev_signing", side_effect=AssertionError("ad-hoc accessed keychain")):
                 assert builder.signing_identity("dev", None, "ad-hoc") == ("-", None)
             requirements = []
@@ -58,7 +59,12 @@ def main():
             subprocess.run(["/usr/bin/codesign", "--verify", f"-R={first_requirement}", str(second)], check=True)
             selected = json.loads((root / "checkout-1/current.json").read_text())["bundle"]
             assert second.parent.name == selected
-            print(f"PASS: changed development builds share {first_requirement}")
+            with patch.object(builder, "load_dev_signing", side_effect=AssertionError("custom signing accessed managed identity")):
+                for index, (certificate, selected_keychain) in enumerate(((sha1, None), (signing.COMMON_NAME, keychain))):
+                    custom_identity, custom_keychain = builder.signing_identity("dev", certificate, None, keychain=selected_keychain)
+                    custom = builder.publish(root / "helper", root / f"custom-{index}", custom_identity, NATIVE / "Info.plist", "dev", custom_keychain)
+                    assert requirement(custom.parents[2]) == first_requirement
+            print(f"PASS: DSH-home identity is reused across changed builds; user-supplied signatures share {first_requirement}")
         finally:
             signing.remove(directory)
     assert signing.user_keychains() == before, "the user keychain search list was not restored"

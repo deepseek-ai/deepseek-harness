@@ -57,7 +57,8 @@
     "@deepseek-ai/schemastery": "workspace:~",
     "zod": "^4.4.3",
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
-    "@deepseek-ai/dsh-cua": "workspace:*"
+    "@deepseek-ai/dsh-cua": "workspace:*",
+    "@deepseek-ai/dsh-home-paths": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-working-directory": "workspace:*",

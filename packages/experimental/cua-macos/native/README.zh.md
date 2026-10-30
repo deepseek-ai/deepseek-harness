@@ -25,11 +25,13 @@ kind: "package-reference"
 
 运行 `pnpm --dir packages/experimental/cua-macos run build:native`，在 `native/bin/darwin-<arch>` 下生成带签名的 `DSH Computer Use.app`，`current.json` 选择完整的内容摘要目录。默认使用临时签名；正式打包可传入 `--identity` 指定 Developer ID，并由发布流程完成公证。Host 运行应用内的 `--ensure-shared` 入口，经 LaunchServices 后台启动服务。最后一条连接完成清理后，服务退出。
 
-源码检出以 `--variant dev` 构建：应用声明的 Bundle ID 为 `com.deepseek.harness.computer-use.dev`，名称为 `DSH Computer Use Dev`，应用包文件名为 `DSH Computer Use Dev.app`。默认的 `--signing ad-hoc` 不访问开发钥匙串。临时签名的指定要求包含代码哈希，因此二进制变化时可能需要重新授权，干净重建也可能产生这种变化。
+源码检出以 `--variant dev` 构建，应用包为 `DSH Computer Use Dev.app`，Bundle ID 为 `com.deepseek.harness.computer-use.dev`。开发版默认使用 `local-identity`，首次构建自动生成固定身份；显式 `--signing ad-hoc` 使用临时签名，不访问自动身份。临时签名的指定要求包含代码哈希，二进制变化后可能需要重新授权。
 
-在 provider 配置中选择 `sourceSigning: local-identity`，或给 `build_app.py` 传入 `--variant dev --signing local-identity`，即可创建或复用 `DSH Computer Use Dev (local)` 证书。初始化会把证书存入 `~/Library/Application Support/DeepSeek Harness/computer-use-dev-signing` 下的专用钥匙串，并将该钥匙串加入用户搜索列表。文件锁让不同 worktree 的初始化和移除串行执行。每次构建都用旁边仅所有者可读的密码文件解锁钥匙串。同一用户的任何进程都能读取该密码并用开发身份签名。指定要求包含 Bundle ID 和证书，不包含代码哈希；重新编译和切换 worktree 后实际能否保留权限，仍需在 macOS 上手动授权验证。
+自动模式在 `$DSH_HOME/computer-use-dev-signing` 下的专用钥匙串中创建或复用 `DSH Computer Use Dev (local)` 证书，并把钥匙串加入用户搜索列表。Host 通过公共 home 路径解析器传入 `--dsh-home`；独立 Python 命令依次使用 `--dsh-home`、非空 `DSH_HOME`、`~/.dsh`。身份、密码和锁文件都在该 home 内，文件锁让同一 home 的初始化与移除串行执行。每次构建使用旁边权限为 `0600` 的身份记录解锁钥匙串。同一用户的进程可以读取密码并签名。指定要求包含 Bundle ID 和证书，重新编译和跨 worktree 后实际保留授权的效果仍需手动验证。
 
-`pnpm --dir packages/experimental/cua-macos run dev-signing:setup` 可以提前准备身份，但不会改变默认签名方式。移除时先选择 `sourceSigning: ad-hoc`，再运行 `pnpm --dir packages/experimental/cua-macos run dev-signing:remove`。移除命令删除钥匙串、搜索列表条目和密码，保留空锁文件以协调后续初始化。系统设置中的授权需单独删除。已有身份记录但钥匙串或证书缺失时，构建保留记录并报错；记录损坏也会报错。恢复时按提示先移除再初始化，更换身份需要重新授权。`--identity` 覆盖 `--signing`；正式版忽略 `--signing`，沿用原有签名行为。
+用户证书模式使用 `sourceSigning: { identity, keychain? }`，或命令行 `--identity <证书名称或 SHA-1 指纹>`。可选的 `--keychain <绝对路径>` 指定钥匙串，否则使用用户搜索列表。构建不创建证书，不读取自动身份，也不解锁用户钥匙串。`--identity` 与 `--signing` 不能同时指定；正式构建仍默认临时签名，并支持指定证书。
+
+`pnpm --dir packages/experimental/cua-macos run dev-signing:setup` 可提前生成自动身份；`dev-signing:remove` 删除当前 DSH home 中的身份、密码和钥匙串搜索条目，保留空锁文件。两条命令均接受 `--dsh-home <路径>`。停止使用自动身份时，先选择临时签名或用户证书，否则下次构建会重新生成身份。删除 DSH home 也会删除身份，新证书需要重新授权。已有记录但钥匙串或证书缺失时，构建保留记录并报错，提示使用该 home 明确移除后重新初始化；系统设置中的授权需单独移除。
 
 证书签名包含签名时间。开发构建在 `sources/` 中记录每个未签名应用与证书指纹对应的目录，内容不变时复用该目录。临时签名使用独立记录。显式传入证书名称时会重新签名，因为续期可能改变名称对应的证书。
 

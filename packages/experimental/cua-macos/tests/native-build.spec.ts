@@ -41,7 +41,7 @@ async function fixture(diagnostics = true) {
       return outcome
     })(), terminate, waitForExit,
   }))
-  const spec = { packageRoot, architecture: 'arm64' as const, sourceSigning: 'ad-hoc' as const, subprocess: { spawn }, signal: controller.signal, timeoutMs: 60_000, graceMs: 100 }
+  const spec = { packageRoot, architecture: 'arm64' as const, sourceSigning: 'ad-hoc' as const, dshHome: join(root, 'dsh-home'), subprocess: { spawn }, signal: controller.signal, timeoutMs: 60_000, graceMs: 100 }
   const directory = join(packageRoot, 'native/.build/prepared/arm64')
   return { root, spec, directory, spawn, output, controller, terminate, waitForExit,
     setOutput: (value: Buffer) => { output = value },
@@ -88,14 +88,25 @@ it('checks source builds on activation and maps Intel architecture to the compil
   await writeFile(join(f.root, 'package.json'), '{"name":"@deepseek-ai/dsh-root"}')
   const path = await prepareNativeExecutable({ ...f.spec, architecture: 'x64', sourceSigning: 'local-identity' })
   expect(f.spawn.mock.calls[0]![0].argv).toContain('x86_64')
-  expect(f.spawn.mock.calls[0]![0].argv.slice(-2)).toEqual(['--signing', 'local-identity'])
+  expect(f.spawn.mock.calls[0]![0].argv.slice(-4)).toEqual(['--signing', 'local-identity', '--dsh-home', f.spec.dshHome])
   expect(path).toContain(join('native', '.build', 'prepared', 'x64'))
 })
 
-it('ignores local-identity for an installed application without compiling or re-signing it', async () => {
+it.each([undefined, '/keychains/custom.keychain-db'])('uses a configured certificate with keychain %s', async (keychain) => {
+  const f = await fixture()
+  await buildNativeExecutable({ ...f.spec, sourceSigning: { identity: 'Apple Development: Example', keychain } })
+  const argv = f.spawn.mock.calls[0]![0].argv
+  expect(argv.slice(argv.indexOf('--identity'))).toEqual([
+    '--identity', 'Apple Development: Example', ...(keychain === undefined ? [] : ['--keychain', keychain]),
+  ])
+  expect(argv).not.toContain('--dsh-home')
+  expect(argv).not.toContain('--signing')
+})
+
+it.each(['local-identity', { identity: 'Apple Development: Example' }] as const)('ignores signing choice %j for an installed application', async (sourceSigning) => {
   const f = await fixture()
   const path = await publish(join(f.spec.packageRoot, 'native/bin/darwin-arm64'), f.output, 'release')
-  expect(await prepareNativeExecutable({ ...f.spec, sourceSigning: 'local-identity' })).toBe(path)
+  expect(await prepareNativeExecutable({ ...f.spec, sourceSigning })).toBe(path)
   expect(f.spawn).not.toHaveBeenCalled()
   f.controller.abort()
   await expect(prepareNativeExecutable(f.spec)).rejects.toThrow()

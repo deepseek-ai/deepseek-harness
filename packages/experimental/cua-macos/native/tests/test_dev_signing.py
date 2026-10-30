@@ -1,4 +1,6 @@
 """Development signing setup keeps one unlocked identity on the user keychain search list."""
+import contextlib
+import io
 import importlib.util
 import json
 from pathlib import Path
@@ -53,6 +55,29 @@ class DevelopmentSigningTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         return security
+
+    def test_signing_directory_follows_dsh_home_and_explicit_overrides(self):
+        home = self.root / "user"
+        with patch.object(Path, "home", return_value=home):
+            for value in ("", "   "):
+                with patch.dict(signing.os.environ, {"DSH_HOME": value}):
+                    self.assertEqual(signing.default_directory(), home / ".dsh/computer-use-dev-signing")
+            for value, expected in ((str(self.root / "custom"), self.root / "custom"),
+                                    ("~/custom", home / "custom"), ("~", home),
+                                    ("relative-home", Path(signing.os.path.abspath("relative-home")))):
+                with patch.dict(signing.os.environ, {"DSH_HOME": value}):
+                    self.assertEqual(signing.default_directory(), expected / "computer-use-dev-signing")
+                    self.assertEqual(signing.default_directory(self.root / "explicit"),
+                                     self.root / "explicit/computer-use-dev-signing")
+
+    def test_setup_and_remove_commands_target_the_selected_dsh_home(self):
+        directory = self.root / "home/computer-use-dev-signing"
+        identity = signing.SigningIdentity("ABC123", directory / "signing.keychain-db")
+        for action in ("setup", "remove"):
+            with patch.object(signing.sys, "argv", ["dev_signing.py", action, "--dsh-home", str(directory.parent)]), \
+                 patch.object(signing, action, return_value=identity) as operation, contextlib.redirect_stdout(io.StringIO()):
+                signing.main()
+            operation.assert_called_once_with(directory)
 
     def test_missing_setup_leaves_builds_unconfigured(self):
         self.fake([self.login])
@@ -115,7 +140,7 @@ class DevelopmentSigningTests(unittest.TestCase):
 
     def test_build_cli_stops_without_replacing_a_recorded_identity_missing_its_keychain(self):
         home = self.root / "home"
-        directory = home / "Library/Application Support/DeepSeek Harness/computer-use-dev-signing"
+        directory = home / "computer-use-dev-signing"
         directory.mkdir(parents=True)
         record = directory / "identity.json"
         before = json.dumps({"sha1": "ABC123", "password": "secret-password"}).encode()
@@ -126,7 +151,7 @@ from pathlib import Path
 from unittest.mock import patch
 test_home = Path(sys.argv[2])
 Path.home = lambda: test_home
-sys.argv = [sys.argv[1], '--variant', 'dev', '--signing', 'local-identity', '--output-directory', sys.argv[3]]
+sys.argv = [sys.argv[1], '--variant', 'dev', '--dsh-home', sys.argv[2], '--output-directory', sys.argv[3]]
 with patch('subprocess.run', side_effect=AssertionError('unexpected native build or signing command')):
     runpy.run_path(sys.argv[0], run_name='__main__')
 """
@@ -135,7 +160,7 @@ with patch('subprocess.run', side_effect=AssertionError('unexpected native build
         self.assertEqual(result.returncode, 1)
         self.assertEqual(len(result.stderr.splitlines()), 1)
         self.assertIn("keychain is missing", result.stderr)
-        self.assertIn(f"run {signing.REMOVE_COMMAND}, then {signing.SETUP_COMMAND}", result.stderr)
+        self.assertIn(f"run {signing.REMOVE_COMMAND} --dsh-home {home}, then {signing.SETUP_COMMAND} --dsh-home {home}", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
         self.assertNotIn("secret-password", result.stderr)
         self.assertEqual(record.read_bytes(), before)
@@ -208,7 +233,7 @@ from unittest.mock import patch
 from pathlib import Path
 test_home = Path(sys.argv[2])
 Path.home = lambda: test_home
-sys.argv = [sys.argv[1], '--variant', 'dev', '--signing', 'local-identity']
+sys.argv = [sys.argv[1], '--variant', 'dev', '--dsh-home', sys.argv[2]]
 with patch('subprocess.run', side_effect=subprocess.TimeoutExpired(['security', 'unlock-keychain', '-p', 'secret-password'], 60)):
     runpy.run_path(sys.argv[0], run_name='__main__')
 """

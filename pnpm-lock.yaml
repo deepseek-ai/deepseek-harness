@@ -9861,6 +9861,9 @@ importers:
       '@deepseek-ai/dsh-cua':
         specifier: workspace:*
         version: link:../cua
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:*
+        version: link:../../util/home-paths
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery

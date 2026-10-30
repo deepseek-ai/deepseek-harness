@@ -184,7 +184,7 @@ class DevelopmentPublicationTests(PublicationCases, unittest.TestCase):
 
 
 class SigningIdentityTests(unittest.TestCase):
-    def test_default_and_release_builds_never_load_a_local_identity(self):
+    def test_ad_hoc_and_release_builds_never_load_a_local_identity(self):
         with patch.object(builder, "load_dev_signing") as load:
             for variant, mode in (("dev", "ad-hoc"), ("release", "ad-hoc"), ("release", "local-identity")):
                 self.assertEqual(builder.signing_identity(variant, None, mode), ("-", None))
@@ -194,15 +194,17 @@ class SigningIdentityTests(unittest.TestCase):
         local = type("Identity", (), {"sha1": "ABC", "keychain": Path("/keychains/dev.keychain-db")})
         signing = Mock()
         signing.setup.return_value = local
+        signing.default_directory.return_value = Path("/dsh/computer-use-dev-signing")
         with patch.object(builder, "load_dev_signing", return_value=signing):
-            self.assertEqual(builder.signing_identity("dev", None, "local-identity"), ("ABC", local.keychain))
-        signing.setup.assert_called_once_with()
+            self.assertEqual(builder.signing_identity("dev", None, "local-identity", Path("/dsh")), ("ABC", local.keychain))
+        signing.default_directory.assert_called_once_with(Path("/dsh"))
+        signing.setup.assert_called_once_with(Path("/dsh/computer-use-dev-signing"))
 
-    def test_an_explicit_identity_overrides_either_signing_mode(self):
+    def test_user_certificates_do_not_load_or_modify_generated_identities(self):
         with patch.object(builder, "load_dev_signing") as load:
-            for mode in ("ad-hoc", "local-identity"):
-                self.assertEqual(builder.signing_identity("dev", "Apple Development: Example", mode),
-                                 ("Apple Development: Example", None))
+            for keychain in (None, Path("/keychains/custom.keychain-db")):
+                self.assertEqual(builder.signing_identity("dev", "Apple Development: Example", None, keychain=keychain),
+                                 ("Apple Development: Example", keychain))
             load.assert_not_called()
 
     def test_local_identity_failure_does_not_fall_back_to_ad_hoc(self):
@@ -212,14 +214,40 @@ class SigningIdentityTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "identity unavailable"):
                 builder.signing_identity("dev", None, "local-identity")
 
-    def test_command_line_defaults_to_ad_hoc_and_passes_the_selected_mode(self):
-        for flags, mode in (([], "ad-hoc"), (["--signing", "local-identity"], "local-identity")):
+    def test_command_line_defaults_to_local_identity_and_passes_the_selected_mode(self):
+        for flags, mode in (([], "local-identity"), (["--signing", "ad-hoc"], "ad-hoc"), (["--signing", "local-identity"], "local-identity")):
             with patch.object(builder.sys, "argv", ["build_app.py", "--variant", "dev", *flags]), \
                  patch.object(builder, "signing_identity", return_value=("-", None)) as identity, \
                  patch.object(builder.subprocess, "run"), patch.object(builder, "publish", return_value="helper"), \
                  contextlib.redirect_stdout(io.StringIO()):
                 builder.main()
-            identity.assert_called_once_with("dev", None, mode)
+            identity.assert_called_once_with("dev", None, mode, None, None)
+
+    def test_command_line_passes_a_custom_identity_and_keychain(self):
+        with patch.object(builder.sys, "argv", ["build_app.py", "--variant", "dev", "--identity", "Example", "--keychain", "/keychains/user.keychain-db"]), \
+             patch.object(builder, "signing_identity", return_value=("Example", Path("/keychains/user.keychain-db"))) as identity, \
+             patch.object(builder.subprocess, "run"), patch.object(builder, "publish", return_value="helper"), \
+             contextlib.redirect_stdout(io.StringIO()):
+            builder.main()
+        identity.assert_called_once_with("dev", "Example", "local-identity", None, Path("/keychains/user.keychain-db"))
+
+    def test_release_command_line_keeps_ad_hoc_signing_by_default(self):
+        with patch.object(builder.sys, "argv", ["build_app.py"]), \
+             patch.object(builder, "signing_identity", return_value=("-", None)) as identity, \
+             patch.object(builder.subprocess, "run"), patch.object(builder, "publish", return_value="helper"), \
+             contextlib.redirect_stdout(io.StringIO()):
+            builder.main()
+        identity.assert_called_once_with("release", None, "ad-hoc", None, None)
+
+    def test_invalid_user_signing_options_fail_before_building(self):
+        for flags in (["--identity", "Example", "--signing", "ad-hoc"], ["--keychain", "/keychains/user"],
+                      ["--identity", "Example", "--keychain", "relative"], ["--identity", " "]):
+            with self.subTest(flags=flags), patch.object(builder.sys, "argv", ["build_app.py", *flags]), \
+                 patch.object(builder.subprocess, "run") as run, contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as error:
+                    builder.main()
+                self.assertEqual(error.exception.code, 2)
+                run.assert_not_called()
 
 
 if __name__ == "__main__":
