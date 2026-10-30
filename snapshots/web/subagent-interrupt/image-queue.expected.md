@@ -2,7 +2,7 @@
   - navigation "Session hierarchy":
     - button "Ask a research subagent to"
     - text: /
-    - 'button "Switch subagent: interrupt-worker"': interrupt-worker
+    - 'button "Switch subagent: {{uuid}}"': {{uuid}}
   - text: Standard mode
   - button "More actions"
   - button "Open right sidebar"

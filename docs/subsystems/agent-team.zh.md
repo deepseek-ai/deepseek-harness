@@ -25,7 +25,7 @@ interface TeamMemberSnapshot {
 
 ## 消息与历史 mailbox
 
-成员交换普通 [subagent 消息](subagent.zh.md)，保留真实发送方 Session id。任务提交刷盘后，向同树所有驻留 Agent（包括调用者和根）的当前等待发出信号。这些内存信号不持久化未读状态，不恢复冷成员，也不启动空闲轮次。不在等待期间发生的变更不能唤醒后续等待。下列历史邮箱类型保持可读；Team 绝不投递其待处理记录。
+成员交换普通 [subagent 消息](subagent.zh.md)，保留真实发送方 Session id。任务变更不会结束收件箱等待、添加收件箱消息或启动空闲 agent。需要 agent 处理任务更新时，发送明确消息。下列历史邮箱类型保持可读；Team 绝不投递其待处理记录。
 
 ```ts type-equiv
 /** One peer message recorded by the historical Team mailbox. */
@@ -77,7 +77,7 @@ interface TeamTaskSnapshot {
 
 `agentTeam.enabled` 提供根 Session 保存的选择。新 Session 默认为 false；`team/mode` 记录显式选择。历史任务在显式选择前视为开启。仅根可调用 `setEnabled`；后代共享该模式。Web 菜单通过 `remote.agentTeams.setEnabled` 调用同一方法，Gateway 将根 Session id 解析为其存活 Agent。模式写入先立即生效，再等待刷盘。工具在步骤准备时确定可用性；提示词提供方在求值时读取选择。任务修改在排队操作开始时检查当前模式；已获准的修改可继续完成。模式变更不会结束收件箱等待。刷盘失败时已追加的选择仍然生效；重试相同选择会再次刷盘，不重复追加事件。
 
-根 Session 通过 `SessionProjectionMap.agentTeam` 发布未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久化任务或模式记录。历史名册与邮箱记录不参与投影。任务面板将根标记为主代理，其他负责人依次使用目录标签、Session 标题或 id。
+根 Session 通过 `SessionProjectionMap.agentTeam` 发布未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久化任务或模式记录。历史名册与邮箱记录不参与投影。任务面板以 Session id 标识每个负责人。
 
 ```ts type-equiv
 /** Runtime-enriched task view returned to tools and hosts. */

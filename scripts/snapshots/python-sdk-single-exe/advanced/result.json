@@ -919,6 +919,10 @@
           ],
           "isError": false,
           "id": "{{messageId}}"
+        },
+        "meta": {
+          "kind": "activation",
+          "subagentId": "{{child-1}}"
         }
       },
       "sourceEventSeqs": [
@@ -2809,6 +2813,10 @@
               ],
               "isError": false,
               "id": "{{messageId}}"
+            },
+            "meta": {
+              "kind": "activation",
+              "subagentId": "{{child-1}}"
             }
           },
           "sourceEventSeqs": [

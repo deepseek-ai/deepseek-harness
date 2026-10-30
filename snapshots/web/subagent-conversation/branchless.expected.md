@@ -1,4 +1,6 @@
 - tree "Subagent sessions":
-  - treeitem "example editor continuable · completed 0 tok · {{duration}}" [level=1]:
-    - text: example editor 0 tok {{duration}}
-    - button "Open example editor in sidebar"
+  - treeitem "recorded-grandchild example editor · continuable · completed 0 tok · {{duration}}" [level=1]:
+    - text: recorded-grandchild
+    - button "Expand description for recorded-grandchild": example editor
+    - text: 0 tok {{duration}}
+    - button "Open recorded-grandchild in sidebar"
