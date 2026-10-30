@@ -22,7 +22,7 @@ kind: "package-reference"
 
 helper 为授权提示和已授权应用列表提供 64 像素 PNG 图标。读取图标不会启动应用或检查窗口，图标不决定可复用授权。
 
-helper 通过 LaunchServices 以独立的 `DSH Computer Use.app` 后台运行，辅助功能和屏幕录制权限归属于这个应用。权限页使用系统返回的应用名称和图标；无法查询归属时，以系统授权提示为准。 helper 嵌套在另一个 `.app` 内时，启动器先把完整的已签名应用复制到 `~/Library/Application Support/DeepSeek Harness/Computer Use/<runtime-key>/`，再启动它。每个不可变目录都校验可执行文件哈希和应用签名，旧目录保留给仍在运行的安装版本使用，使两项 macOS 权限都归属于 helper。校验失败会中止启动；删除报错中指定的缓存目录后再重试。
+helper 通过 LaunchServices 以独立的 `DSH Computer Use.app` 后台运行，辅助功能和屏幕录制权限归属于这个应用。权限页使用系统返回的应用名称和图标；无法查询归属时，以系统授权提示为准。
 
 -----
 
