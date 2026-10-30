@@ -685,7 +685,7 @@ it.skipIf(MODE === 'record')('marks a draft change request ready for review and 
 })
 
 it.skipIf(MODE === 'record')('shows the local changes of the Session by scope and the changes of its change requests, expanding unchanged lines', async () => {
-  const { scaffold, page, root, project, tripwire } = await launchPanel('web-e2e-forge-panel-changes', 'follow-up')
+  const { scaffold, page, root, project, tripwire } = await launchPanel('web-e2e-forge-panel-changes', 'follow-up', { branch: 'feat' })
   // origin/main stops at the twelve-line README; the branch adds a commit, a staged file, an edit, and an untracked file.
   await writeFile(join(project, 'README.md'), Array.from({ length: 12 }, (_, index) => `line ${index + 1}\n`).join(''))
   await git(project, 'commit', '--quiet', '-am', 'readme')
@@ -778,6 +778,14 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await header.click()
   const change = page.locator(`[data-forge-change="${PULL}"]`)
   await change.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
+  await card.getByRole('button', { name: '查看本会话的变更：4 个文件，新增 4 行，删除 1 行', exact: true }).waitFor()
+  expect(await card.getByRole('button', { name: '创建变更请求', exact: true }).count()).toBe(0)
+  await compareOrRefreshGolden(join(EXPECTED, 'local-and-pr.expected.md'),
+    await captureStableAria(page, '[data-forge-panel]', scaffold.workspaceCwd), MODE)
+  await card.getByRole('button', { name: '查看本会话的变更：4 个文件，新增 4 行，删除 1 行', exact: true }).click()
+  await local.getByText('暂存区与 HEAD 比较', { exact: true }).waitFor()
+  await expect.poll(() => header.getAttribute('aria-pressed')).toBe('false')
+  await header.click()
   await change.getByRole('button', { name: '查看 #7 的变更：新增 128 行，删除 14 行', exact: true }).click()
   const view = page.locator('[data-forge-changes="change"]')
   const panelFile = view.locator('[data-forge-diff-file="src/panel.ts"]')
