@@ -311,8 +311,6 @@ export class SubagentRuntime extends TypertRemoteService {
    * A cold target resumes under its runtime subagent tree root without restoring
    * its creation ancestors. Sender identity is rechecked before inbox acceptance; cancellation
    * stops only pre-acceptance work and never retracts an accepted message.
-   * Display attribution uses the sender's bound name when the naming service is mounted,
-   * otherwise its Session id. Name lookup failures reject before inbox acceptance.
    * @param sender - exact live root or resident continuable Agent originating the message.
    * @param targetId - another root or continuable member's durable Session id.
    * @param content - model-authored content to deliver.

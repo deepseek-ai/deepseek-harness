@@ -96,15 +96,15 @@ describe('tool preparation', () => {
     const settled: ToolResultNode = {
       kind: 'tool-result', seq: 3, time: 3, callId: 'call', callTime: 2, name,
       args: started.args, call: { name, argsRaw }, isError: false, subCalls: [],
-      content: [{ type: 'text', text: 'started subagent child-1\nname: lead/researcher' }],
+      content: [{ type: 'text', text: 'started subagent child-1' }],
     }
     view.rerender(<DetailsRow {...props} phase="result" block={settled} />)
     expect(view.getByText('Research CLI products')).toBeTruthy()
     expect(view.queryByText('Agent response')).toBeNull()
     fireEvent.click(view.getByRole('button', { expanded: false }))
-    expect(view.getByText('Research CLI products')).toBeTruthy()
+    expect(view.getAllByText('Research CLI products')).toHaveLength(2)
     expect(view.getByText('Research products in detail.')).toBeTruthy()
-    expect(view.getByText('lead/researcher')).toBeTruthy()
+    expect(view.getByText('child-1')).toBeTruthy()
   })
 
   it('retains the file row through streamed arguments, dispatch, and result', () => {

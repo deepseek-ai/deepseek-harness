@@ -7,7 +7,6 @@ import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
-import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as mock from './scripted-provider.ts'
 import type { Config as toolConfig } from '../src/index.ts'
@@ -63,7 +62,6 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
-    await ctx.plugin(SubagentNames)
     const provider = await mock.mountScriptedProvider(ctx, { name: 'mock', ...mockConfig })
     setupProviders.set(ctx, provider)
     const handle = await ctx.agents.create({
@@ -82,7 +80,6 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
-  await ctx.plugin(SubagentNames)
   const provider = await mock.mountScriptedProvider(ctx, { name: 'mock', ...mockConfig })
   setupProviders.set(ctx, provider)
   await ctx.plugin(tool, config)

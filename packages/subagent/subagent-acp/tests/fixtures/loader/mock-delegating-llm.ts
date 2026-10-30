@@ -14,7 +14,7 @@ class MockDelegatingAdapter extends LlmAdapter {
       : ''
 
     if (!options.messages.some(message => message.role === 'tool')) {
-      const args = JSON.stringify({ name: 'cwd-probe', description: 'cwd probe', prompt: 'report your workspace' })
+      const args = JSON.stringify({ description: 'cwd probe', prompt: 'report your workspace' })
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'tool-call-delta', index: 0, id: ToolCallId('call-delegate'), name: 'subagent', argumentsDelta: args }
       yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId('call-delegate'), name: 'subagent', arguments: args } }

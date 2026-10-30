@@ -2,7 +2,7 @@
  * Model-facing delegation through one configured `ctx.subagents` provider.
  * Provider lifecycle controls tool registration and context-sensitive schema
  * wording. Every delegation starts a managed activation and returns its child
- * address; the subagent runtime owns result delivery and resource cleanup.
+ * id; the subagent runtime owns result delivery and resource cleanup.
  * @module @deepseek-ai/dsh-tool-subagent
  */
 
@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { AgentOptions } from '@deepseek-ai/dsh-agent'
-import { HarnessError, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
   assertSubagentMaxDepth,
@@ -20,7 +20,6 @@ import {
   parentAgentOptionsForDelegation,
 } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
-import type {} from '@deepseek-ai/dsh-subagent-names'
 import {
   assertAllowedModelSelection,
   hasConfiguredLlmSelection,
@@ -37,7 +36,7 @@ import {
 } from './model-selection-state.ts'
 
 export const name = 'tool-subagent'
-export const inject = ['tools', 'subagents', 'subagentNames', 'systemPrompt', 'sessionProjections']
+export const inject = ['tools', 'subagents', 'systemPrompt', 'sessionProjections']
 
 // Definition identity keeps shared guidance scoped to the actual visible tools,
 // including scoped overrides and independently loaded tool registries.
@@ -198,10 +197,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   // Load order and HMR replacement can change provider availability while
   // this fiber remains active.
-  let mounted: { definition: ToolDefinition; disposeTool: () => void } | undefined
+  let mounted: { subagentProvider: SubagentProvider; definition: ToolDefinition; disposeTool: () => void } | undefined
   const mount = (subagentProvider: SubagentProvider): void => {
     assertSubagentProviderConfiguration(subagentProvider)
-    const names = ctx.subagentNames
     const wording = providerWording(subagentProvider.inheritsParentContext)
     const providerRouteDefaults = subagentProvider.agentRouteDefaults
     const selectionDescription = providerRouteDefaults !== undefined
@@ -219,10 +217,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           ? ' Changing the route can prevent provider-side reuse of the inherited conversation prefix.'
           : ''),
       parameters: {
-        name: {
-          type: 'string',
-          description: 'Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer.',
-        },
         cwd: {
           type: 'string',
           description: 'Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.',
@@ -266,11 +260,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           properties: {
             kind: { type: 'string', required: true, const: 'activation' },
             subagentId: { type: 'string', required: true },
-            name: { type: 'string', required: true },
           },
         },
-        render: (_args, value) => [{ type: 'text', text: `started subagent ${value.subagentId}`
-          + `\nname: ${value.name}` }],
+        render: (_args, value) => [{ type: 'text', text: `started subagent ${value.subagentId}` }],
         presentationMeta: (_args, value) => ({ kind: value.kind, subagentId: value.subagentId }),
       },
       isConcurrencySafe: () => true,
@@ -330,30 +322,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           ...maxDepth !== undefined ? { maxDepth } : {},
         }
 
-        const spec = {
+        const started = await ctx.subagents.startActivation({
           provider: config.provider,
           label: args.description,
           ...request,
           signal: exec.signal,
-          delivery: 'parent' as const,
-        }
-        const rootSession = ctx.subagents.rootOf(parent).session
-        const reservation = names.reserve(rootSession, parent.id, args.name)
-        try {
-          const started = await ctx.subagents.startActivation(spec)
-          try {
-            names.bind(rootSession, started.childId, reservation.name)
-          } catch (cause: unknown) {
-            throw new HarnessError(
-              `Subagent ${started.childId} started, but its name ${reservation.name} could not be recorded. `
-              + 'Its execution is still managed by the subagent service. Check this child before retrying.',
-              'SUBAGENT_NAME_BIND_FAILED', { cause },
-            )
-          }
-          return { kind: 'activation' as const, subagentId: started.childId, name: reservation.name }
-        } finally {
-          reservation.dispose()
-        }
+          delivery: 'parent',
+        })
+        return { kind: 'activation' as const, subagentId: started.childId }
       },
     })
     const disposeTool = ctx.effect(() => {
@@ -365,7 +341,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       }
     })
     // oxlint-disable-next-line typescript/no-misused-promises -- Tool and guidance disposal are synchronous.
-    mounted = { definition, disposeTool }
+    mounted = { subagentProvider, definition, disposeTool }
   }
 
   // Register listeners before checking presence so no synchronous change is missed.

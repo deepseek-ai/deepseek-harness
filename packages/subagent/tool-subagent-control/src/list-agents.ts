@@ -5,33 +5,27 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SubagentDescendantListEntry } from '@deepseek-ai/dsh-subagent'
-import type {} from '@deepseek-ai/dsh-subagent-names'
 
 
 type ListAgentsEntry =
   | {
     readonly kind: 'root'
     readonly id: SessionId
-    readonly name?: string
     readonly status: 'running' | 'inactive'
   }
   | {
     readonly kind: 'child'
     readonly id: SessionId
-    readonly name?: string
     readonly label: string
     readonly status: 'running' | 'inactive'
     readonly parent?: SessionId
-    readonly parentName?: string
     readonly depth?: number
   }
   | {
     readonly kind: 'diagnostic'
     readonly id: SessionId
-    readonly name?: string
     readonly reason: 'corrupt' | 'unsupported' | 'unavailable'
     readonly parent?: SessionId
-    readonly parentName?: string
     readonly depth?: number
   }
 
@@ -44,13 +38,8 @@ function statusOf(agents: { get(id: SessionId): Agent | undefined }, id: Session
 function project(
   agents: { get(id: SessionId): Agent | undefined },
   entry: SubagentDescendantListEntry,
-  nameOf: (id: SessionId) => string | undefined,
 ): ListAgentsEntry | undefined {
-  const name = nameOf(entry.id)
-  const parentName = nameOf(entry.parentId)
-  const at = { parent: entry.parentId, depth: entry.depth,
-    ...name === undefined ? {} : { name },
-    ...parentName === undefined ? {} : { parentName } }
+  const at = { parent: entry.parentId, depth: entry.depth }
   if (entry.kind === 'diagnostic') {
     return { kind: 'diagnostic', id: entry.id, reason: entry.reason, ...at }
   }
@@ -69,16 +58,13 @@ function project(
 /**
  * Register the `list_agents` tool.
  * @param ctx - context carrying the tool registry, subagent service, and live Agent registry.
- * @returns the registration disposer.
  */
-export function registerListAgents(ctx: Context): () => void {
-  const names = ctx.subagentNames
-  return ctx.tools.register(defineTool({
+export function registerListAgents(ctx: Context): void {
+  ctx.tools.register(defineTool({
     name: 'list_agents',
     description:
       'List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. '
       + 'Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. '
-      + 'Rows also include available names alongside Session ids. '
       + 'You can message any other agent in the subagent tree listed as running or inactive. '
       + 'running means it is working; inactive means it is not currently working. '
       + 'While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. '
@@ -95,7 +81,6 @@ export function registerListAgents(ctx: Context): () => void {
               properties: {
                 kind: { type: 'string', required: true, enum: ['root'] },
                 id: { type: 'string', required: true },
-                name: { type: 'string' },
                 status: { type: 'string', required: true, enum: ['running', 'inactive'] },
               },
             },
@@ -105,11 +90,9 @@ export function registerListAgents(ctx: Context): () => void {
               properties: {
                 kind: { type: 'string', required: true, enum: ['child'] },
                 id: { type: 'string', required: true },
-                name: { type: 'string' },
                 label: { type: 'string', required: true },
                 status: { type: 'string', required: true, enum: ['running', 'inactive'] },
                 parent: { type: 'string' },
-                parentName: { type: 'string' },
                 depth: { type: 'number' },
               },
             },
@@ -119,10 +102,8 @@ export function registerListAgents(ctx: Context): () => void {
               properties: {
                 kind: { type: 'string', required: true, enum: ['diagnostic'] },
                 id: { type: 'string', required: true },
-                name: { type: 'string' },
                 reason: { type: 'string', required: true, enum: ['corrupt', 'unsupported', 'unavailable'] },
                 parent: { type: 'string' },
-                parentName: { type: 'string' },
                 depth: { type: 'number' },
               },
             },
@@ -133,12 +114,11 @@ export function registerListAgents(ctx: Context): () => void {
         return [{
           type: 'text',
           text: entries.map((entry) => {
-            const prefix = entry.name === undefined ? '' : `${entry.name}: `
-            if (entry.kind === 'root') return `${entry.id} [${entry.status}] — ${prefix}root agent`
+            if (entry.kind === 'root') return `${entry.id} [${entry.status}] — root agent`
             const at = ` parent=${String(entry.parent)} depth=${String(entry.depth)}`
             return entry.kind === 'diagnostic'
-              ? `${entry.id} [diagnostic: ${entry.reason}]${at}` + (entry.name === undefined ? '' : ` — ${entry.name}`)
-              : `${entry.id} [${entry.status}]${at} — ${prefix}${entry.label}`
+              ? `${entry.id} [diagnostic: ${entry.reason}]${at}`
+              : `${entry.id} [${entry.status}]${at} — ${entry.label}`
           }).join('\n'),
         }]
       },
@@ -151,15 +131,10 @@ export function registerListAgents(ctx: Context): () => void {
       }
       const root = ctx.subagents.rootOf(parent)
       const entries = await ctx.subagents.listDescendants(root.id, exec.signal)
-      const nameOf = (id: SessionId): string | undefined => {
-        const name = names.nameOf(root.session, id)
-        return name === id ? undefined : name
-      }
       return [
-        { kind: 'root' as const, id: root.id, status: statusOf(ctx.agents, root.id),
-          name: names.nameOf(root.session, root.id) },
+        { kind: 'root' as const, id: root.id, status: statusOf(ctx.agents, root.id) },
         ...entries
-          .map(entry => project(ctx.agents, entry, nameOf))
+          .map(entry => project(ctx.agents, entry))
           .filter(entry => entry !== undefined),
       ]
     },

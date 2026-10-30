@@ -68,7 +68,7 @@ kind: "package-reference"
 
 ### 消息、中断与发现
 
-`sendMessage()` 允许在线根和驻留的可继续子代理，按 Session id 联系同一棵树中的任意其他根或可继续成员。目标在下一步接收 Steer 输入，或在空闲时开始轮次。仅在 subagent 树根下恢复冷目标，其创建祖先保持离线；消息保留实际发送者。`rootOf()` 解析调用方的在线根。Agent 中断要求祖先权限。浏览器提示词和用户中断仅按子 Session 寻址；Gateway 在任何副作用之前检查该 Session 上对应操作的权限。父级或 global 授权不意味着子级访问权。提示词要求 subagent 树根在线；创建者可以离线。用户中断不恢复目标，目标缺席时接受为无操作。提示词选择 Queue 或 Steer，经附件存储接受图片批次；不兼容的目标模型拒绝图片。`listDescendants()` 通过父级拥有的 `subagentCatalog` 投影递归发现成员。它保留目录顺序，每个可达 Session 读取一次，跳过外部叶子，并报告不可读分支而不激活 Agent。 消息服务通过命名服务和树根 Session，从实际发送者自动解析消息中显示的名称；没有提供方时使用 Session id。持久归属始终保留 `senderSessionId`。
+`sendMessage()` 允许在线根和驻留的可继续子代理，按 Session id 联系同一棵树中的任意其他根或可继续成员。目标在下一步接收 Steer 输入，或在空闲时开始轮次。仅在 subagent 树根下恢复冷目标，其创建祖先保持离线；消息保留实际发送者。`rootOf()` 解析调用方的在线根。Agent 中断要求祖先权限。浏览器提示词和用户中断仅按子 Session 寻址；Gateway 在任何副作用之前检查该 Session 上对应操作的权限。父级或 global 授权不意味着子级访问权。提示词要求 subagent 树根在线；创建者可以离线。用户中断不恢复目标，目标缺席时接受为无操作。提示词选择 Queue 或 Steer，经附件存储接受图片批次；不兼容的目标模型拒绝图片。`listDescendants()` 通过父级拥有的 `subagentCatalog` 投影递归发现成员。它保留目录顺序，每个可达 Session 读取一次，跳过外部叶子，并报告不可读分支而不激活 Agent。
 
 ### 失败与恢复
 

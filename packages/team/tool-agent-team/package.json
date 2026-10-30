@@ -38,8 +38,7 @@
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-agent-team": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
-    "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-subagent-names": "workspace:*"
+    "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-agent": "workspace:*",
@@ -60,7 +59,6 @@
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-llm": "workspace:*",
-    "@deepseek-ai/dsh-llm-deepseek": "workspace:*",
-    "@deepseek-ai/dsh-subagent-names": "workspace:*"
+    "@deepseek-ai/dsh-llm-deepseek": "workspace:*"
   }
 }

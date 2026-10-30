@@ -10,16 +10,17 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-subagent'
-import type {} from '@deepseek-ai/dsh-subagent-names'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { registerListAgents } from './list-agents.ts'
 import { registerWaitAgent } from './wait-agent.ts'
 
 export const name = 'tool-subagent-control'
-export const inject = ['tools', 'subagents', 'subagentNames', 'agents', 'systemPrompt']
+export const inject = ['tools', 'subagents', 'agents', 'systemPrompt']
 
 /** Optional subagent control tools. */
 export interface Config {
@@ -38,33 +39,51 @@ export const Config: z<Config> = z.object({
  * @param config - optional tool registration settings.
  */
 export function apply(ctx: Context, config: Config = {}): void {
-  registerWaitAgent(ctx)
+  const interrupt = config.interrupt !== false
   registerListAgents(ctx)
+  registerWaitAgent(ctx)
   const sendMessage = defineTool({
     name: 'send_message',
     description:
       'Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. '
       + 'Returns delivery confirmation, not the agent\'s answer.',
     parameters: {
-      name: {
-        type: 'string', required: true,
-        description: 'The full agent path (such as lead/reviewer) or Session id of another member of your subagent tree.',
+      agent_id: {
+        type: 'string',
+        required: true,
+        description: 'The agent id of another member of your subagent tree, as shown by list_agents.',
       },
-      message: { type: 'string', required: true, description: 'The message to deliver to the agent.' },
+      message: {
+        type: 'string',
+        required: true,
+        description: 'The message to deliver to the agent.',
+      },
     },
     output: {
       schema: {
-        type: 'object', additionalProperties: false,
-        properties: { messageId: { type: 'string', required: true } },
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          messageId: { type: 'string', required: true },
+        },
       },
-      render: (args, _value) => [{ type: 'text', text: `message delivered to agent ${args.name}` }],
+      render: (args, _value) => [{
+        type: 'text',
+        text: `message delivered to agent ${args.agent_id}`,
+      }],
     },
     async execute(args, exec) {
       const sender = exec.agent
-      if (!sender) throw new Error('send_message requires a calling agent (exec.agent was undefined)')
+      if (!sender) {
+        throw new Error('send_message requires a calling agent (exec.agent was undefined)')
+      }
       const message: ContentBlock[] = [{ type: 'text', text: args.message }]
-      const target = ctx.subagentNames.resolveName(ctx.subagents.rootOf(sender).session, args.name)
-      const messageId = await ctx.subagents.sendMessage(sender, target, message, { signal: exec.signal })
+      const messageId = await ctx.subagents.sendMessage(
+        sender,
+        brandString<SessionId>(args.agent_id),
+        message,
+        { signal: exec.signal },
+      )
       return { messageId }
     },
   })
@@ -79,35 +98,47 @@ export function apply(ctx: Context, config: Config = {}): void {
         || ctx.tools.get(sendMessage.name, scope, toolSet) !== sendMessage) return ''
       const parentId = JSON.stringify(agent.session.header.parentSession)
       return `Your parent agent id is ${parentId}. Use `
-        + `send_message({ name: ${parentId}, message: "<finding>" }) when a finding changes what the `
+        + `send_message({ agent_id: ${parentId}, message: "<finding>" }) when a finding changes what the `
         + 'parent should do next; sending a message does not end your turn.'
     },
   })
-  if (config.interrupt !== false) ctx.tools.register(defineTool({
+
+  if (!interrupt) return
+  ctx.tools.register(defineTool({
     name: 'interrupt_agent',
     description:
       'Ask a subagent to stop its current work. This call returns without waiting for it to stop. '
       + 'You can continue a local subagent\'s conversation later with send_message. '
       + 'External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.',
     parameters: {
-      name: {
-        type: 'string', required: true,
-        description: 'The full agent path or Session id of an agent created under you: your direct child or a deeper descendant.',
+      agent_id: {
+        type: 'string',
+        required: true,
+        description: 'The id of an agent created under you: your direct child or a deeper descendant.',
       },
     },
     output: {
       schema: {
-        type: 'object', additionalProperties: false,
-        properties: { accepted: { type: 'boolean', required: true } },
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          accepted: { type: 'boolean', required: true },
+        },
       },
-      render: (args, _value) => [{ type: 'text', text: `interrupt requested for agent ${args.name}` }],
+      render: (args, _value) => [{
+        type: 'text',
+        text: `interrupt requested for agent ${args.agent_id}`,
+      }],
     },
     execute(args, exec) {
       const caller = exec.agent
-      if (!caller) throw new Error('interrupt_agent requires a calling agent (exec.agent was undefined)')
-      const target = ctx.subagentNames.resolveName(ctx.subagents.rootOf(caller).session, args.name)
-      exec.signal.throwIfAborted()
-      ctx.subagents.interrupt(target, { kind: 'ancestor', agent: caller })
+      if (!caller) {
+        // Ancestor authority requires an exact live calling agent.
+        throw new Error('interrupt_agent requires a calling agent (exec.agent was undefined)')
+      }
+      // The service authorizes the exact live caller against the target's
+      // recorded lineage; the tool adds no authority of its own.
+      ctx.subagents.interrupt(brandString<SessionId>(args.agent_id), { kind: 'ancestor', agent: caller })
       return Promise.resolve({ accepted: true })
     },
   }))

@@ -1254,12 +1254,8 @@ describe('headless stream-json snapshots', () => {
         "checkedAgents": true,
         "deliveredMessages": 0,
         "identities": [
-          "Your name is "lead/implementer". Your team lead is "lead".
-      Use list_agents({}) to find your teammates and their full names.
-      Use send_message({ name: "<full agent path>", message: "..." }) to message a teammate.",
-          "Your name is "lead/researcher". Your team lead is "lead".
-      Use list_agents({}) to find your teammates and their full names.
-      Use send_message({ name: "<full agent path>", message: "..." }) to message a teammate.",
+          "You are a teammate in the Team led by agent "<lead>".",
+          "You are a teammate in the Team led by agent "<lead>".",
         ],
         "queuedMessages": 0,
         "sessions": 4,

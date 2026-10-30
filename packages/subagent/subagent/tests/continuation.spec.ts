@@ -12,7 +12,6 @@ import { agentEvents } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import type { SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -2965,7 +2964,6 @@ describe('continuable settlement delivery', () => {
 
   it('includes the child answer when messaging is available', async () => {
     const { ctx, parent } = await setup([textResponse('the answer'), textResponse('parent ack')])
-    await ctx.plugin(SubagentNames)
     await ctx.plugin(SubagentControl)
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await waitNoActivation(ctx, started.childId)
@@ -3086,7 +3084,7 @@ describe('continuable settlement delivery', () => {
       const parentId = /Your parent agent id is \\"([^\\]+)\\"/.exec(history)![1]!
       const calls = order.map(name => name === 'noop'
         ? { id: ToolCallId('n1'), name, arguments: '{}' }
-        : { id: ToolCallId('s1'), name, arguments: JSON.stringify({ name: parentId, message: 'interim' }) })
+        : { id: ToolCallId('s1'), name, arguments: JSON.stringify({ agent_id: parentId, message: 'interim' }) })
       return [
         ...calls.flatMap((call, index): StreamChunk[] => [
           { type: 'block-start', index, blockType: 'tool-call' },
@@ -3098,7 +3096,6 @@ describe('continuable settlement delivery', () => {
       ]
     }
     const { ctx, parent } = await setup(Array.from({ length: 6 }, () => respond))
-    await ctx.plugin(SubagentNames)
     await ctx.plugin(SubagentControl)
     ctx.tools.register(defineTool({
       name: 'noop',

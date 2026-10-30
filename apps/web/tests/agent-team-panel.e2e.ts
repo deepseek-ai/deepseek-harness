@@ -273,7 +273,6 @@ describe('web e2e: agent teamwork panel', () => {
       version: 2, childId: memberId, childCreatedAt: Date.now(), mode: 'external',
       label: RESEARCHER_DESCRIPTION,
     })
-    scaffold.ctx.subagentNames.bind(agent.session, memberId, 'lead/researcher')
     const countAction = page.locator('[data-subagent-action]')
     await countAction.waitFor()
     await page.mouse.move(2, 2)
@@ -362,7 +361,7 @@ describe('web e2e: agent teamwork panel', () => {
     })))
     expect(primaryStyles.map(style => style.fontSize)).toEqual(['13px', '13px'])
     expect(primaryStyles[1]).toEqual(primaryStyles[0])
-    expect(await member.getByText('researcher', { exact: true })
+    expect(await member.getByText('team-panel-researcher', { exact: true })
       .evaluate(element => getComputedStyle(element).fontSize)).toBe('12px')
     const memberHover = member.locator(':scope > div')
     for (const target of [member, memberHover]) {
@@ -421,7 +420,7 @@ describe('web e2e: agent teamwork panel', () => {
       taskId: task.id, expectedRevision: task.revision, action: 'claim',
     })
     await row.getByRole('img', { name: 'In progress', exact: true }).waitFor()
-    await row.locator('[data-team-task-owner]').filter({ hasText: 'Lead' }).waitFor()
+    await row.locator('[data-team-task-owner]').filter({ hasText: agent.id }).waitFor()
     await action.getByRole('heading', { name: 'Shared tasks 1 in progress', exact: true }).waitFor()
     expect(await action.getByRole('button', { name: /^(New task|Edit|Complete|Reopen|Delete)$/u }).count()).toBe(0)
     expect(await action.locator('input, select, textarea').count()).toBe(0)
@@ -553,7 +552,7 @@ describe('web e2e: agent teamwork panel', () => {
       }
       const row = panel.getByRole('treeitem', { name: /Researcher/u })
       const primary = row.getByText(RESEARCHER_DESCRIPTION, { exact: true })
-      const secondary = row.getByText('researcher', { exact: true })
+      const secondary = row.getByText('team-panel-researcher', { exact: true })
       expect(await row.getByRole('button').count()).toBe(0)
       expect(await primary.evaluate((element) => {
         const style = getComputedStyle(element)
@@ -755,7 +754,7 @@ describe('web e2e: agent teamwork panel', () => {
       expect(await row.getAttribute('data-expanded')).toBe('false')
       expect(await row.locator('[data-team-task-details]').count()).toBe(0)
       expect(await board.locator('[data-team-task-details]').count()).toBe(1)
-      expect(await emptyRow.locator('[data-team-task-owner]').textContent()).toBe('Owner: Lead')
+      expect(await emptyRow.locator('[data-team-task-owner]').textContent()).toBe(`Owner: ${agent.id}`)
       expect(await emptyRow.locator('[data-team-task-details] p:not([data-team-task-owner])').textContent()).toBe(completed.description)
       expect(await emptyRow.locator('dl, dt, dd').count()).toBe(0)
       expect(await emptyRow.locator('[data-team-task-details]').textContent()).not.toContain(completed.id)

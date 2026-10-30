@@ -76,8 +76,7 @@
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-user-approval": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-subagent-names": "workspace:*"
+    "@deepseek-ai/dsh-working-directory": "workspace:*"
   },
   "publishConfig": {
     "access": "public"

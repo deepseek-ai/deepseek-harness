@@ -201,8 +201,8 @@ class GrepOutput(TypedDict):
     matches: list[GrepOutputMatches]
 
 class InterruptAgentArgs(TypedDict):
-    # The full agent path or Session id of an agent created under you: your direct child or a deeper descendant.
-    name: str
+    # The id of an agent created under you: your direct child or a deeper descendant.
+    agent_id: str
     # Additional keys beyond those declared are allowed.
 
 class InterruptAgentOutput(TypedDict):
@@ -262,26 +262,21 @@ class JobOutputOutput(TypedDict):
 class ListAgentsOutput1(TypedDict):
     kind: Literal["root"]
     id: str
-    name: NotRequired[str]
     status: Literal["running", "inactive"]
 
 class ListAgentsOutput2(TypedDict):
     kind: Literal["child"]
     id: str
-    name: NotRequired[str]
     label: str
     status: Literal["running", "inactive"]
     parent: NotRequired[str]
-    parentName: NotRequired[str]
     depth: NotRequired[float]
 
 class ListAgentsOutput3(TypedDict):
     kind: Literal["diagnostic"]
     id: str
-    name: NotRequired[str]
     reason: Literal["corrupt", "unsupported", "unavailable"]
     parent: NotRequired[str]
-    parentName: NotRequired[str]
     depth: NotRequired[float]
 
 class ReadArgs(TypedDict):
@@ -328,8 +323,8 @@ class ReadImageOutput(TypedDict):
     image: ReadImageOutputImage
 
 class SendMessageArgs(TypedDict):
-    # The full agent path (such as lead/reviewer) or Session id of another member of your subagent tree.
-    name: str
+    # The agent id of another member of your subagent tree, as shown by list_agents.
+    agent_id: str
     # The message to deliver to the agent.
     message: str
     # Additional keys beyond those declared are allowed.
@@ -361,8 +356,6 @@ class SkillOutput(TypedDict):
     content: str
 
 class SubagentArgs(TypedDict):
-    # Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer.
-    name: NotRequired[str]
     # Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.
     cwd: NotRequired[str]
     # A short (3-5 word) description of the delegated task, for display.
@@ -374,11 +367,8 @@ class SubagentArgs(TypedDict):
 class SubagentOutput(TypedDict):
     kind: Literal["activation"]
     subagentId: str
-    name: str
 
 class SubagentForkArgs(TypedDict):
-    # Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer.
-    name: NotRequired[str]
     # Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.
     cwd: NotRequired[str]
     # A short (3-5 word) description of the delegated task, for display.
@@ -390,7 +380,6 @@ class SubagentForkArgs(TypedDict):
 class SubagentForkOutput(TypedDict):
     kind: Literal["activation"]
     subagentId: str
-    name: str
 
 class TodoWriteArgsTodos(TypedDict):
     # What the task is — a short imperative line.
@@ -544,7 +533,7 @@ class Tools(Protocol):
     async def job_output(self, args: JobOutputArgs) -> JobOutputOutput:
         """Read a background job: output since the previous read for stream jobs, or the result of a finished final-output job."""
     async def list_agents(self, args: dict[str, Any]) -> list[ListAgentsOutput1 | ListAgentsOutput2 | ListAgentsOutput3]:
-        """List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. Rows also include available names alongside Session ids. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
+        """List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation."""
     async def read(self, args: ReadArgs) -> ReadOutput:
         """Read a UTF-8 text file and return line-numbered content."""
     async def read_image(self, args: ReadImageArgs) -> ReadImageOutput:

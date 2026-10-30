@@ -27,7 +27,7 @@ kind: "package-reference"
 
 仅当根 Session 开启 Team 模式时，各模型步骤才可使用 Team 工具。提示词提供方在求值时读取同一选择。普通 subagent 控制工具始终可用。
 
-模型需要共享任务板时，将此包与 `@deepseek-ai/dsh-agent-team` 和 `@deepseek-ai/dsh-subagent-names` 一起挂载。根和后代接收相同的任务 schema 和任务策略。
+模型需要共享任务板时，将此包与 `@deepseek-ai/dsh-agent-team` 一起挂载。根和后代接收相同的任务 schema 和任务策略。
 
 ### 何时选择
 
@@ -35,17 +35,16 @@ kind: "package-reference"
 
 ### 最小工作示例
 
-本插件不接受配置。在 [Team 领域包](../agent-team/README.zh.md#smallest-working-setup)和共享 subagent 服务可用后，在工具旁挂载一次命名服务：
+本插件不接受配置；按照 [agent-team 配置](../agent-team/README.zh.md#smallest-working-setup)，把它挂载在 Team 领域包旁边：
 
 ```yaml
-- name: '@deepseek-ai/dsh-subagent-names'
 - id: tool-agent-team
   name: '@deepseek-ai/dsh-tool-agent-team'
 ```
 
 设置 `interrupt`、`freshProvider` 或 `forkProvider` 的配置行不会激活，dsh 会在启动警告中指出该键。[升级指南](../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.zh.md)把已移除的工具与键对应到替代方式，生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-agent-team)记录空配置。
 
-让 Lead 启动子代理审查差异、创建审查任务并等待结果。`description` 说明子代理的工作；返回的名称或 Session id 用于寻址。
+让 Lead 启动子代理审查差异、创建审查任务并等待结果。`description` 说明子代理的工作；返回的 id 用于寻址。
 
 ### 模型能做什么
 
@@ -55,11 +54,11 @@ kind: "package-reference"
 - **等待收件箱输入** — `wait_agent` 属于 `@deepseek-ai/dsh-tool-subagent-control`，无需此包即可使用。
 - **创建和联系队友**——`subagent`、`subagent_fork`、`send_message`、`list_agents` 和 `interrupt_agent` 来自子代理工具包，本包不修改它们。
 
-任务负责人在 `owner` 参数和 `ownerName` 结果中使用已绑定名称或 Session id。根可将任务重新分配给自身或任意可达的可继续执行后代；历史名册记录不授予权限。其他 agent 自行认领就绪任务。更新会检查归属和修订。
+任务 `owner` 参数和 `ownerId` 结果使用 Session id。根可将任务重新分配给自身或任意可达的可继续执行后代；历史名册记录不授予权限。其他 agent 自行认领就绪任务。更新会检查归属和修订。
 
 ### 成功与失败的表现
 
-任务工具返回紧凑的 JSON 任务视图或分页。过期修订、未授权操作和未就绪任务返回错误。更新在修改前解析输入名称并保存结果中的负责人名称。未绑定名称的负责人显示原始 Session id；显示名称无需查询 Session 或遍历子级目录。名称解析不授予权限：Team 服务仍检查每个重新分配的目标。
+任务工具返回紧凑的 JSON 任务视图或分页。过期修订、未授权操作和未就绪任务返回错误。
 
 -----
 
@@ -75,12 +74,10 @@ kind: "package-reference"
 
 适配器建立在四项承诺之上：
 
-- **按 Agent 注册。** 每个在线 Agent 在自身 `ctx` 上接收任务工具和策略；服务在调用时解析树权限。
+- **按 Session 选择工具。** 共享工具注册项根据调用方根 Session 选择可用性；服务在调用时解析树权限。
 - **一个工具族。** Team 不注册消息、列表或中断工具；标准 subagent 工具同样服务 Lead 与 teammate。
 - **声明式结果，紧凑 JSON。** 每个工具都声明完整结果 schema，并把该值渲染为紧凑 JSON，因此编译器会对照向模型承诺的结果检查 `execute`，任何结果都不会在缩进上消耗 token。
 - **领域掌握裁决权。** 工具委托给 `ctx.agentTeams`，后者强制执行 Lead 权限与 revision 校验；适配器不添加更弱的路径。
-
-适配器通过 `ctx.subagentNames` 同步读取根 Session 中的名称与 id 映射；`ctx.agentTeams` 继续使用 Session id 处理任务归属和权限。任务列表先按状态、就绪情况和未分配条件筛选，再解析名称。没有精确负责人名称筛选时，只解析请求页中的名称；按精确负责人名称筛选时，在分页前解析剩余候选任务的负责人名称。
 
 [subagent teammate Agent Note](../../../.agents/notes/implemented/architecture/2026-10-15-agent-teams-as-subagents.zh.md)负责模型侧与 scoping 决策。
 
@@ -88,11 +85,11 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口、已移除键拒绝、Team 策略与身份，以及四个作用域内任务工具 |
+| [`src/index.ts`](src/index.ts) | 插件入口、已移除键拒绝、Team 策略与身份，以及四个条件任务工具 |
 
 ### 策略与工具
 
-插件注册一次动态 `team:policy` 段落、必需的 `team:identity` 上下文和四个条件任务工具。各提供方读取调用方根 Session 的选择；提示词可见性独立于工具限制。树权限从 `ctx.subagents.rootOf(agent)` 派生；`ctx.subagentNames` 提供已绑定的显示名称或原始 Session id。根不可用时禁用 Team 工具和提示词。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
+插件注册一次动态 `team:policy` 段落、必需的 `team:identity` 上下文和四个条件任务工具。各提供方读取调用方根 Session 的选择；提示词可见性独立于工具限制。树权限和根身份从 `ctx.subagents.rootOf(agent)` 派生。根不可用时禁用 Team 工具和提示词。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
 
 ### 按作用域注册与拆除
 
@@ -108,7 +105,6 @@ kind: "package-reference"
 当包级约定不够用时阅读以下页面。它们从领域服务逐步进入精确 schema 与设计背后的决策。
 
 - [agent-team 包](../agent-team/README.zh.md)——这些工具背后的 `ctx.agentTeams` 领域服务。
-- [Subagent 命名](../../subagent/subagent-names/README.zh.md)——名字分配与完整路径查询。
 - [Agent Teams 子系统](../../../docs/subsystems/agent-team.zh.md)——持久 Team 类型与服务 API。
 - [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md) — 通信、列表、中断和收件箱等待。
 - [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-agent-team)——模型接收的每个工具 schema。
@@ -128,7 +124,7 @@ kind: "package-reference"
 ##### Team 策略
 
 ```markdown
-A shared task board is available to every agent in your subagent tree. Task owners use agent names from list_agents, or Session ids when no name is bound. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+A shared task board is available to every agent in your subagent tree. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
@@ -147,14 +143,18 @@ Task changes do not end wait_agent calls, add inbox messages, or start idle agen
 
 #### 模型看到什么
 
-Team 已开启且根可用时，必需的 `team:identity` 上下文对根和队友使用以下文本，否则不贡献文本。可选上下文抑制不能移除已启用的身份；普通运行时上下文机制会在压缩后恢复它。身份使用当前 agent 的完整名称（根为 `lead`）；名称绑定前使用其 Session id。
+Team 已开启且根可用时，必需的 `team:identity` 上下文使用以下文本，将 `<agent-id>` 或 `<root-id>` 替换为从 subagent 树派生的 JSON 编码 Session id；否则不贡献文本。可选上下文抑制不能移除已启用的身份；普通运行时上下文机制会在压缩后恢复它。
+
+##### 根身份
+
+```markdown
+You are the Team Lead. Your agent id is <agent-id>.
+```
 
 ##### Agent 身份
 
 ```markdown
-Your name is "<full agent path>". Your team lead is "lead".
-Use list_agents({}) to find your teammates and their full names.
-Use send_message({ name: "<full agent path>", message: "..." }) to message a teammate.
+You are a teammate in the Team led by agent <root-id>.
 ```
 
 #### Token 影响

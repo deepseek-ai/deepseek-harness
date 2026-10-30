@@ -6,7 +6,6 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import * as Spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import * as Control from '@deepseek-ai/dsh-tool-subagent-control'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -20,7 +19,6 @@ it.each(['absent', 'unused'] as const)('returns the closing answer when send_mes
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
-  await ctx.plugin(SubagentNames)
   await ctx.plugin(Spawn, { providerName: 'spawn' })
   if (availability !== 'absent') await ctx.plugin(Control)
   const adapter = new MockAdapter([textResponse('CHILD_RESULT_42'), textResponse('Parent received the answer.')])
@@ -50,7 +48,6 @@ it('delivers structured output to the parent when the child has send_message', a
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
-  await ctx.plugin(SubagentNames)
   await ctx.plugin(Spawn, { providerName: 'spawn' })
   await ctx.plugin(Control)
   const adapter = new MockAdapter([

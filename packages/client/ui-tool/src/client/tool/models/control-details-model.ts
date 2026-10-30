@@ -114,12 +114,12 @@ export function subagentDetails(
   } else {
     if (text === undefined) return null
     // Historical results lack the structured receipt stored by current tools.
-    const started = /^started (background subagent job|subagent) (\S+)(?:\nname: (\S+))?$/u.exec(text)
+    const started = /^started (background subagent job|subagent) (\S+)$/u.exec(text)
     if (started === null) {
       return detailList([{ title: t('detail.agent.reply'), markdown: text, fields: [], groups: [{ label: t('detail.field.task'), items: [{ description: arg(args, 'prompt'), fields: [] }] }] }], t('detail.agent.reply'), t)
     }
     if (started[1] === 'background subagent job') fields.push({ label: t('detail.field.job'), value: started[2] ?? '' })
-    if (started[3] !== undefined) fields.push({ label: t('detail.field.agentName'), value: started[3] })
+    else fields.push({ label: t('detail.field.id'), value: started[2] ?? '' })
   }
   return detailList([{
     title: t('detail.receipt.started'), fields,
@@ -139,7 +139,7 @@ export function subagentDetails(
 export function controlDetails(
   name: string, args: Record<string, unknown>, text: string, json: unknown, t: DetailTranslate,
 ): ToolDetailsModel | null {
-  const target = arg(args, 'name') || arg(args, 'target') || arg(args, 'agent_id') || arg(args, 'sessionId') || arg(args, 'job_id')
+  const target = arg(args, 'target') || arg(args, 'agent_id') || arg(args, 'sessionId') || arg(args, 'job_id')
   switch (name) {
     case 'list_agents': return agentList(text, json, t)
     case 'job_list': return jobList(text, t)
@@ -161,12 +161,11 @@ export function controlDetails(
         ...(json.nextCursor === undefined ? {} : { caption: t('detail.tasks.nextPage', { cursor: String(json.nextCursor) }) }),
       }
     case 'send_message': {
-      const title = target.replace(/^lead\//u, '')
       const status = detailRecord(json) ? json.status : undefined
-      if (status === 'accepted' || status === 'queued') return receipt(title, {
+      if (status === 'accepted' || status === 'queued') return receipt(target, {
         label: t(status === 'queued' ? 'detail.status.queued' : 'detail.receipt.delivered'), tone: status === 'queued' ? 'warning' : 'success',
       }, t, [], arg(args, 'message'))
-      return text === `message delivered to agent ${target}` ? receipt(title, { label: t('detail.receipt.delivered'), tone: 'success' }, t, [], arg(args, 'message')) : null
+      return text === `message delivered to agent ${target}` ? receipt(target, { label: t('detail.receipt.delivered'), tone: 'success' }, t, [], arg(args, 'message')) : null
     }
     case 'interrupt_agent':
       if (detailRecord(json) && typeof json.previousStatus === 'string') return receipt(target, { label: t('detail.receipt.interrupt'), tone: 'warning' }, t, [{ label: t('detail.field.previousStatus'), value: detailBadge(json.previousStatus, t).label }])

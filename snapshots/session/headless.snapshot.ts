@@ -10,7 +10,6 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-subagent-names'
 import { releasedV0SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v0-to-v1'
 import type { SessionFormatEvent, SessionFormatMigrationContext } from '@deepseek-ai/dsh-session-format'
 import { assertWorkspaceOutsideTemp, outsideTempWorkspaceParent } from '../../scripts/snapshot-workspace-parent.ts'
@@ -758,9 +757,7 @@ function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   const textOf = (index: number) => results[index]!.content
     .flatMap(block => block.type === 'text' ? [block.text] : []).join('')
   expect(JSON.parse(textOf(1))).toEqual(['Service', 'Event', 'Config', 'Tool'])
-  expect(textOf(2)).toBe(`started subagent ${logs[1]!.header.id}\nname: lead/agent-1`)
-  expect(events.filter(event => event.type === 'subagent-name/bound').map(event => event.data))
-    .toEqual([{ version: 1, childId: logs[1]!.header.id, name: 'lead/agent-1' }])
+  expect(textOf(2)).toBe(`started subagent ${logs[1]!.header.id}`)
   const completions = events.flatMap(event => event.type === 'user/message'
     && event.data.source.kind === 'subagent-settled' ? [{
       sender: event.data.source.senderSessionId,
@@ -1461,15 +1458,6 @@ describe('headless recorded-session snapshots', () => {
               expect(results).toHaveLength(4)
               expect(results.every(result => result.isError === false)).toBe(true)
               expect(log).toContain('# Office task routing')
-            }
-            if (scenario.name === 'subagent-spawn-in-process') {
-              const parent = parseSessionLog(actualLogs[0]!.content)
-              expect(parent.filter(event => event.type === 'subagent-name/bound').map(event => event.data))
-                .toEqual([{ version: 1, childId: actualLogs[1]!.header.id, name: 'lead/reviewer' }])
-              const receipt = parent.find(event => event.type === 'tool/result')
-              expect(receipt).toMatchObject({ data: { message: { content: [{
-                type: 'text', text: `started subagent ${actualLogs[1]!.header.id}\nname: lead/reviewer`,
-              }] } } })
             }
             if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
             if (scenario.name === 'subagent-depth-two-rejection') {

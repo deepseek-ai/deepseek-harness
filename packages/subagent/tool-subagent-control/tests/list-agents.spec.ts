@@ -11,7 +11,6 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
-import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import type { SubagentCatalogEntry } from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -69,7 +68,6 @@ async function setupWith(adapter: MockAdapter | GatedAdapter) {
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
-  await ctx.plugin(SubagentNames)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(tool)
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -123,52 +121,7 @@ describe('list_agents', () => {
 
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    if (result.isError) throw new Error(text(result))
-    expect(result.value).toEqual([
-      { kind: 'root', id: parent.id, name: 'lead', status: 'inactive' },
-      { kind: 'child', id: started.childId, label: 'workflow child', parent: parent.id, parentName: 'lead', depth: 1, status: 'inactive' },
-    ])
-    expect(text(result)).toBe(`${parent.id} [inactive] — lead: root agent\n${started.childId} [inactive] parent=${parent.id} depth=1 — workflow child`)
-  })
-
-  it('annotates the original child rows with names while retaining Session ids and labels', async () => {
-    const { ctx, parent } = await setup([textResponse('named result'), textResponse('unnamed result')])
-    const reservation = ctx.subagentNames.reserve(parent.session, parent.id, 'reviewer')
-    const child = await ctx.subagents.startActivation({
-      delivery: 'parent', provider: 'spawn', label: 'review implementation',
-      prompt: [{ type: 'text', text: 'review' }], parent, signal: testToolSignal,
-    })
-    ctx.subagentNames.bind(parent.session, child.childId, reservation.name)
-    reservation.dispose()
-    await child.result
-    const unnamed = await ctx.subagents.startActivation({
-      delivery: 'parent', provider: 'spawn', label: 'unnamed task',
-      prompt: [{ type: 'text', text: 'check' }], parent, signal: testToolSignal,
-    })
-    await unnamed.result
-    const missing = SessionId('missing-child')
-    parent.session.append('subagent/catalog', {
-      version: 0, childId: missing, childCreatedAt: 1, mode: 'continuable', label: 'missing child',
-    })
-    const missingName = ctx.subagentNames.reserve(parent.session, parent.id, 'missing')
-    ctx.subagentNames.bind(parent.session, missing, missingName.name)
-    missingName.dispose()
-    const result = await callTool(ctx, 'list_agents', {}, parent)
-    expect(result.isError, text(result)).toBe(false)
-    if (result.isError) throw new Error(text(result))
-    expect(result.value).toEqual([
-      { kind: 'root', id: parent.id, name: 'lead', status: 'inactive' },
-      { kind: 'child', id: child.childId, name: 'lead/reviewer', label: 'review implementation',
-        parent: parent.id, parentName: 'lead', depth: 1, status: 'inactive' },
-      { kind: 'child', id: unnamed.childId, label: 'unnamed task',
-        parent: parent.id, parentName: 'lead', depth: 1, status: 'inactive' },
-      { kind: 'diagnostic', id: missing, name: 'lead/missing', reason: 'unavailable',
-        parent: parent.id, parentName: 'lead', depth: 1 },
-    ])
-    expect(text(result)).toBe('parent [inactive] — lead: root agent\n'
-      + `${child.childId} [inactive] parent=parent depth=1 — lead/reviewer: review implementation\n`
-      + `${unnamed.childId} [inactive] parent=parent depth=1 — unnamed task\n`
-      + 'missing-child [diagnostic: unavailable] parent=parent depth=1 — lead/missing')
+    expect(text(result)).toBe(`${parent.id} [inactive] — root agent\n${started.childId} [inactive] parent=${parent.id} depth=1 — workflow child`)
   })
 
   it('omits external leaves without diagnostics', async () => {
@@ -179,7 +132,7 @@ describe('list_agents', () => {
     })
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`${parent.id} [inactive] — lead: root agent`)
+    expect(text(result)).toBe(`${parent.id} [inactive] — root agent`)
   })
 
   it('registers list_agents once, globally, without parameters', async () => {
@@ -200,7 +153,7 @@ describe('list_agents', () => {
     await ctx.sessions.flush(parent.session)
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
-    expect(text(result)).toBe(`${parent.id} [inactive] — lead: root agent`)
+    expect(text(result)).toBe(`${parent.id} [inactive] — root agent`)
   })
 
   it('renders direct children in array order with registry statuses', async () => {
@@ -255,7 +208,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — lead: root agent\n`
+      `${parent.id} [inactive] — root agent\n`
       + `${started.childId} [inactive] parent=${parent.id} depth=1 — real child\n`
       + `running-child [running] parent=${parent.id} depth=1 — still working\n`
       + `waiting-child [inactive] parent=${parent.id} depth=1 — waiting on descendants`,
@@ -289,7 +242,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — lead: root agent\n`
+      `${parent.id} [inactive] — root agent\n`
       + `historical-one-shot [diagnostic: unavailable] parent=${parent.id} depth=1\n`
       + `${started.childId} [inactive] parent=${parent.id} depth=1 — summarize the doc`,
     )
@@ -323,7 +276,6 @@ describe('list_agents', () => {
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
-    await ctx.plugin(SubagentNames)
     const fiber = await ctx.plugin(tool)
     expect(ctx.tools.schemas().some(schema => schema.name === 'list_agents')).toBe(true)
     await fiber.dispose()
@@ -333,7 +285,7 @@ describe('list_agents', () => {
   it('has the namespace-plugin export shape', () => {
     expect('default' in tool).toBe(false)
     expect(tool.name).toBe('tool-subagent-control')
-    expect(tool.inject).toEqual(['tools', 'subagents', 'subagentNames', 'agents', 'systemPrompt'])
+    expect(tool.inject).toEqual(['tools', 'subagents', 'agents', 'systemPrompt'])
     expect(typeof tool.apply).toBe('function')
   })
 
@@ -369,7 +321,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — lead: root agent\n`
+      `${parent.id} [inactive] — root agent\n`
       + `${started.childId} [inactive] parent=${parent.id} depth=1 — waiting branch\n`
       + `${grandchild.childId} [running] parent=${started.childId} depth=2 — nested leaf`,
     )
@@ -417,7 +369,7 @@ describe('list_agents', () => {
     const result = await callTool(ctx, 'list_agents', {}, parent)
     expect(result.isError).toBe(false)
     expect(text(result)).toBe(
-      `${parent.id} [inactive] — lead: root agent\n`
+      `${parent.id} [inactive] — root agent\n`
       + 'deep-leaf [inactive] parent=one-shot-mid depth=2 — deep leaf\n'
       + `broken-node [diagnostic: unavailable] parent=${parent.id} depth=1`,
     )
@@ -447,7 +399,7 @@ describe('list_agents', () => {
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(4) })
 
     const expected = [
-      `${parent.id} [inactive] — lead: root agent`,
+      `${parent.id} [inactive] — root agent`,
       `${alpha} [running] parent=${parent.id} depth=1 — alpha task`,
       `${beta} [inactive] parent=${parent.id} depth=1 — beta task`,
       `${gamma} [inactive] parent=${parent.id} depth=1 — gamma task`,

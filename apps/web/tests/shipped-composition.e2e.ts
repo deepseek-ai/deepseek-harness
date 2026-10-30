@@ -279,7 +279,6 @@ class ShippedChildAutoAdapter extends LlmAdapter {
     this.parentPhase += 1
     if (phase === 0 && prompt.includes(AUTO_PARENT_AUTHORIZED)) {
       return toolChunks('parent-authorized', 'subagent', {
-        name: 'authorized',
         description: 'Auto authorized child',
         prompt: [
           AUTO_CHILD_AUTHORIZED,
@@ -292,7 +291,6 @@ class ShippedChildAutoAdapter extends LlmAdapter {
     if (phase === 1) return textChunks('PARENT_AUTHORIZED_SETTLED')
     if (phase === 2 && prompt.includes(AUTO_PARENT_CONTINUABLE)) {
       return toolChunks('parent-continuable', 'subagent', {
-        name: 'continuable',
         description: 'Auto continuable child',
         prompt: [
           AUTO_CHILD_CONTINUABLE,
@@ -307,7 +305,7 @@ class ShippedChildAutoAdapter extends LlmAdapter {
         throw new Error('continuable child id was not observed before parent adjustment')
       }
       return toolChunks('parent-adjust', 'send_message', {
-        name: 'lead/continuable',
+        agent_id: this.continuableChildId,
         message: [
           AUTO_CHILD_ADJUSTED,
           `Replace the earlier no-deletion restriction: permanently delete exactly ${this.continuableDeletePath}.`,

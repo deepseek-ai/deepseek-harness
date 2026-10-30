@@ -61,7 +61,6 @@ The [format references](persistence-changes/historical-formats/README.md) cover 
 | `event:session/title-llm-request` | event | `d95c624eddecdacf1ee74356196c09d2f3fcd625714be5e852a6b643fa12a7ca` | [`{ type: "session/title-llm-request" }`](#persistence-type-sha256-d95c624eddecdacf1ee74356196c09d2f3fcd625714be5e852a6b643fa12a7ca) |
 | `event:step/end` | event | `e0a787e6ec76c7c94fecbc501b489164ab0293db05bc947914077ad01e674f05` | [`{ type: "step/end" }`](#persistence-type-sha256-e0a787e6ec76c7c94fecbc501b489164ab0293db05bc947914077ad01e674f05) |
 | `event:step/start` | event | `4513e088d43e6c68425be30451b9f961cc264fe7318ca62681c41d4d78615986` | [`{ type: "step/start" }`](#persistence-type-sha256-4513e088d43e6c68425be30451b9f961cc264fe7318ca62681c41d4d78615986) |
-| `event:subagent-name/bound` | event | `2073e98f0c214cc431b1a9a027efe75d22190a8ed8fed2791b47c2b52dd32a57` | [`{ type: "subagent-name/bound" }`](#persistence-type-sha256-2073e98f0c214cc431b1a9a027efe75d22190a8ed8fed2791b47c2b52dd32a57) |
 | `event:subagent/catalog` | event | `53750b9abf61efb7992b0aadc3e247ec927449c63266df28230fd1139f5590ac` | [`{ type: "subagent/catalog" }`](#persistence-type-sha256-53750b9abf61efb7992b0aadc3e247ec927449c63266df28230fd1139f5590ac) |
 | `event:subagent/descriptor` | event | `b79ada42962cad0190a9d465805260567621fa3a4abd757eb31e6016b52d5ab5` | [`{ type: "subagent/descriptor" }`](#persistence-type-sha256-b79ada42962cad0190a9d465805260567621fa3a4abd757eb31e6016b52d5ab5) |
 | `event:subagent/model-selection-policy` | event | `a6567ccb2e530606b775371eb4fa31468d72084339968e8b0440a516a23b39dc` | [`{ type: "subagent/model-selection-policy" }`](#persistence-type-sha256-a6567ccb2e530606b775371eb4fa31468d72084339968e8b0440a516a23b39dc) |
@@ -976,22 +975,6 @@ Source: [`packages/subagent/subagent/src/descriptor.ts:38`](../packages/subagent
 ```
 
 Source: [`packages/subagent/tool-subagent/src/model-selection-state.ts:17`](../packages/subagent/tool-subagent/src/model-selection-state.ts)
-
-### `subagent-name/*`
-
-<a id="subagent-namebound--log-only"></a>
-
-#### `subagent-name/bound` — log-only
-
-```ts persistence-catalog
-/**
- * A root-owned alias for an accepted subagent identity.
- * @param data - versioned child identity and complete name.
- */
-'subagent-name/bound': SubagentNameBinding & { readonly version: 1 }
-```
-
-Source: [`packages/subagent/subagent-names/src/projection.ts:20`](../packages/subagent/subagent-names/src/projection.ts)
 
 ### `system/*`
 
@@ -2638,14 +2621,6 @@ SHA-256: `57f3f606ff8b6c84d9c443faace9d1dd10cca0354f37a4f515ef075f7c351b90`
 SHA-256: `aacda84a69739238aa782eea902d3073017d9d74b9808de2bf5a83c9738cbdc6`
 
 `"subagent"`
-
-<a id="persistence-type-sha256-5cc512378245b2dfad1cf88a732c05d86e41c91408421f2fff2b3b0a06557974"></a>
-
-### `"subagent-name/bound"`
-
-SHA-256: `5cc512378245b2dfad1cf88a732c05d86e41c91408421f2fff2b3b0a06557974`
-
-`"subagent-name/bound"`
 
 <a id="persistence-type-sha256-bf16d2e98a7f13894ded2cffe5ce857bf473954a0e3c0ed9bc7739e2e1c7b78a"></a>
 
@@ -6079,18 +6054,6 @@ SHA-256: `cbbe8377ee744964537dbafd83607219e58ba79a13f6db0d0645c7ad3d5e8a09`
 | `mode` | required | `"external"` |
 | `version` | required | `2` |
 
-<a id="persistence-type-sha256-671fc8cbd3a924961ccfeada2462f460120381a806c7dc97a2c01ba6a74ac960"></a>
-
-### `{ childId, name, version }`
-
-SHA-256: `671fc8cbd3a924961ccfeada2462f460120381a806c7dc97a2c01ba6a74ac960`
-
-| Property | Presence | Type |
-|---|---|---|
-| `childId` | required | `string` |
-| `name` | required | `string` |
-| `version` | required | `1` |
-
 <a id="persistence-type-sha256-a81059ca06999da1e712414520c2c65e491d052fcf9640fae20aa38f0a5dc735"></a>
 
 ### `{ code, name, reason? }`
@@ -8893,22 +8856,6 @@ SHA-256: `4513e088d43e6c68425be30451b9f961cc264fe7318ca62681c41d4d78615986`
 | `seq` | required | `number` |
 | `time` | required | `number` |
 | `type` | required | `"step/start"` |
-
-<a id="persistence-type-sha256-2073e98f0c214cc431b1a9a027efe75d22190a8ed8fed2791b47c2b52dd32a57"></a>
-
-<a id="persistence-type-eventsubagent-namebound"></a>
-
-### `{ type: "subagent-name/bound" }`
-
-SHA-256: `2073e98f0c214cc431b1a9a027efe75d22190a8ed8fed2791b47c2b52dd32a57`
-
-| Property | Presence | Type |
-|---|---|---|
-| `data` | required | [`{ childId, name, version }`](#persistence-type-sha256-671fc8cbd3a924961ccfeada2462f460120381a806c7dc97a2c01ba6a74ac960) |
-| `ignorable` | optional | `true` |
-| `seq` | required | `number` |
-| `time` | required | `number` |
-| `type` | required | `"subagent-name/bound"` |
 
 <a id="persistence-type-sha256-53750b9abf61efb7992b0aadc3e247ec927449c63266df28230fd1139f5590ac"></a>
 

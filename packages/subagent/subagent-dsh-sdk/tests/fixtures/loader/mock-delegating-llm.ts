@@ -33,7 +33,6 @@ class MockDelegatingAdapter extends LlmAdapter {
         ? { reasoning_effort: 'max' }
         : { provider: 'mock', model: 'mock-routed', reasoning_effort: 'max' }
       const args = JSON.stringify({
-        name: 'route-probe',
         description: 'route probe',
         prompt: 'report your route and workspace',
         ...selectedRoute,

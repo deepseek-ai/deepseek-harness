@@ -227,10 +227,6 @@ type SubagentInterruptAuthority =
 
 The parent-owned `subagentCatalog` projection lists all local children and parent-delivery external children. Caller-delivery external executions leave membership and result collection to their caller; local workflow children remain discoverable after completion. External entries carry `mode: 'external'` and cannot open a child Session or accept follow-ups. Catalog entries record membership at creation without execution status. `list_agents` exposes the root and reachable continuable descendants with `running` or `inactive` activity; see the [control tool](../../packages/subagent/tool-subagent-control/README.md#list_agents).
 
-## Tool names
-
-Model-facing subagent tools require the [naming plugin](../../packages/subagent/subagent-names/README.md), which owns name allocation and path lookup. It stores name-to-id bindings in the root Session; execution, authorization, provider requests and runtime notifications continue to use Session ids. Direct service callers do not acquire names automatically.
-
 ## Results and backend handles
 
 SubagentResult is available to program consumers. The activation registry retains the external backend handle until disposal completes. A cleanup failure does not replace a captured execution result: the activation result and parent notice retain it, while dispose rejects and the live subagent/end event reports error. Backend-owned diagnostics must satisfy the safe-detail requirements below.
@@ -411,52 +407,6 @@ Host settings owner that records Session authorization before the first model re
 
 Source: [`packages/subagent/tool-subagent/src/model-selection-settings.ts`](../../packages/subagent/tool-subagent/src/model-selection-settings.ts)
 
-<a id="ctxsubagentnames--subagentnames"></a>
-
-### `ctx.subagentNames` — `SubagentNames`
-
-Root-Session aliases shared by named creation, discovery, and control tools.
-
-```ts cordis-catalog
-/**
- * Reserve a complete name without starting an agent or writing a Session event.
- * @param rootSession - root Session selected by the caller through the subagent service.
- * @param parentId - parent identity whose name prefixes the child name.
- * @param requested - optional sibling segment; omission selects the first free agent-N.
- * @returns a reservation the caller must dispose after startup and binding.
- */
-reserve(rootSession: Session, parentId: SessionId, requested?: string): SubagentNameReservation
-
-/**
- * Record an accepted child's full name in the caller's root Session.
- * Binding failure does not cancel or dispose the child; callers report its id.
- * @param rootSession - root Session selected by the caller through the subagent service.
- * @param childId - identity returned by the subagent service.
- * @param name - complete name returned by reserve.
- */
-bind(rootSession: Session, childId: SessionId, name: string): void
-
-/**
- * Read a bound name from the root projection without loading ancestors.
- * @param rootSession - root Session selected by the caller through the subagent service.
- * @param targetId - identity whose name is requested.
- * @returns lead for the root, a bound full name, or the unchanged id.
- */
-nameOf(rootSession: Session, targetId: SessionId): string
-
-/**
- * Resolve an alias or pass through an id for the subagent service to authorize.
- * @param rootSession - root Session selected by the caller through the subagent service.
- * @param name - lead, a bound full name, or a raw Session id.
- * @returns the target identity; an unknown lead/... name throws.
- */
-resolveName(rootSession: Session, name: string): SessionId
-```
-
-Types: [Session](session.md) · [SessionId](core.md)
-
-Source: [`packages/subagent/subagent-names/src/index.ts`](../../packages/subagent/subagent-names/src/index.ts)
-
 <a id="ctxsubagents--subagentruntime"></a>
 
 ### `ctx.subagents` — `SubagentRuntime`
@@ -507,8 +457,6 @@ async waitForTreeWork(root: Agent): Promise<boolean>
  * A cold target resumes under its runtime subagent tree root without restoring
  * its creation ancestors. Sender identity is rechecked before inbox acceptance; cancellation
  * stops only pre-acceptance work and never retracts an accepted message.
- * Display attribution uses the sender's bound name when the naming service is mounted,
- * otherwise its Session id. Name lookup failures reject before inbox acceptance.
  * @param sender - exact live root or resident continuable Agent originating the message.
  * @param targetId - another root or continuable member's durable Session id.
  * @param content - model-authored content to deliver.

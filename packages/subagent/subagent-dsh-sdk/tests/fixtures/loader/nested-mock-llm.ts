@@ -20,7 +20,7 @@ class NestedAdapter extends LlmAdapter {
       }
       answer = 'nested child result'
     } else if (!options.messages.some(message => message.role === 'tool')) {
-      const args = JSON.stringify({ name: 'nested-fork', description: 'nested fork', prompt: 'nested-child-task' })
+      const args = JSON.stringify({ description: 'nested fork', prompt: 'nested-child-task' })
       const id = ToolCallId('nested-fork')
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'tool-call-delta', index: 0, id, name: 'subagent_fork', argumentsDelta: args }

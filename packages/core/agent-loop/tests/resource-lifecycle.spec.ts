@@ -1,4 +1,3 @@
-import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { setImmediate } from 'node:timers/promises'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -91,7 +90,6 @@ it.each(['loop', 'root'] as const)('unloads %s while a background child is stopp
   await ctx.plugin(JsonlSessionPersistence, { root })
   const loop = await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentRuntime)
-  await ctx.plugin(SubagentNames)
   await ctx.plugin(LocalJobRegistry)
   await ctx.plugin(SubagentSpawn)
   await ctx.plugin(ToolSubagent, { provider: 'spawn' })

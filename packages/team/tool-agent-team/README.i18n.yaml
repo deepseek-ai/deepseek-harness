@@ -15,38 +15,38 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-tool-agent-team/use-this-package:
-  en: 42584bc98cb1d0bf
-  zh: af5a4d2e7aa2f876
+  en: a91291c96142c3d4
+  zh: db8e14f2359659c0
 /deepseek-ai-dsh-tool-agent-team/use-this-package/when-to-choose-it:
   en: c27d5457e1183675
   zh: 3c36d513e6400446
 /deepseek-ai-dsh-tool-agent-team/use-this-package/smallest-working-example:
-  en: b6194a6256aedb12
-  zh: dd2cf9ba58a2e389
+  en: 4df140a03006896c
+  zh: 705f10a798e58898
 /deepseek-ai-dsh-tool-agent-team/use-this-package/what-the-model-can-do:
-  en: d8294e282ee26b0d
-  zh: f6579be994043294
+  en: 4aee48f5debcc7d1
+  zh: 4eb148aa5e42398b
 /deepseek-ai-dsh-tool-agent-team/use-this-package/what-success-and-failure-look-like:
-  en: f83d223649e1470d
-  zh: 071db9c5986383ed
+  en: bf1eb0e693610f5b
+  zh: 2b29e5cf63623909
 /deepseek-ai-dsh-tool-agent-team/understand-the-implementation:
   en: 3952eb1d9de1f988
   zh: 789d51b88f41b710
 /deepseek-ai-dsh-tool-agent-team/understand-the-implementation/design-philosophy:
-  en: 236b044c249412f6
-  zh: b4886ad8eff97b8b
+  en: c66b02cbc0636122
+  zh: a000a4c8c30427f1
 /deepseek-ai-dsh-tool-agent-team/understand-the-implementation/source-map:
-  en: 29ff96b23b25b13e
-  zh: 7d2cdf9be86d1ed4
+  en: 204bfccd132d8624
+  zh: 45dcc49bbdc60867
 /deepseek-ai-dsh-tool-agent-team/understand-the-implementation/policy-and-tools:
-  en: 96cc025675e18be2
-  zh: c0cabbecec9090fa
+  en: 158ae900e0b84d65
+  zh: b4678cba3fb85dda
 /deepseek-ai-dsh-tool-agent-team/understand-the-implementation/scoped-registration-and-teardown:
   en: b2a5584bdf075644
   zh: c4e9eb5ac0809833
 /deepseek-ai-dsh-tool-agent-team/further-exploration:
-  en: 855e3e7a0f9162e3
-  zh: 04adc19e419e3655
+  en: bcd5d6faf995a0fb
+  zh: edf20792aa9eadcb
 /deepseek-ai-dsh-tool-agent-team/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -69,10 +69,13 @@
   en: ed8642015d306d6d
   zh: 31496981d115ba40
 /deepseek-ai-dsh-tool-agent-team/model-experience/team-identity-runtime-context/what-the-model-sees:
-  en: 38287bddc98fad61
-  zh: 97641df400e74315
-/deepseek-ai-dsh-tool-agent-team/model-experience/team-identity-runtime-context/what-the-model-sees/agent-identity:
-  en: d3393ec1daa12ada
+  en: 593189f8ddbcb548
+  zh: 416a3865a3c96eb0
+/deepseek-ai-dsh-tool-agent-team/model-experience/team-identity-runtime-context/what-the-model-sees/root-identity:
+  en: 58d2b04f507baa5f
+  zh: 773786c59605a154
+/deepseek-ai-dsh-tool-agent-team/model-experience/team-identity-runtime-context/what-the-model-sees/teammate-identity:
+  en: f0d12764966d3005
   zh: fba882f6aa274017
 /deepseek-ai-dsh-tool-agent-team/model-experience/team-identity-runtime-context/token-effect:
   en: b9c8f7524fbe3204

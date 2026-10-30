@@ -172,7 +172,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-The model reads task views through task-tool results. Model-facing views identify owners by `ownerName`; host views retain `ownerId`; stale updates report the current revision. Task updates do not end `wait_agent`; send an explicit message when a member needs to act on an update.
+The model reads task views through task-tool results. Model-facing and host views identify owners by `ownerId`; stale updates report the current revision. Task updates do not end `wait_agent`; send an explicit message when a member needs to act on an update.
 
 #### Token effect
 

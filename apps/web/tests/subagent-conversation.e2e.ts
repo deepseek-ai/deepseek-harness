@@ -157,7 +157,6 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       prompt: [{ type: 'text', text: INITIAL_PROMPT }],
       parent,
     })
-    scaffold.ctx.subagentNames.bind(parent.session, started.childId, 'lead/researcher')
     childId = started.childId
     await waitForAgentToSettle(scaffold, childId)
     const liveInput = page.locator('[data-composer-input][contenteditable="true"]').first()

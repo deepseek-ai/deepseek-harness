@@ -165,13 +165,13 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "name": {
+          "agent_id": {
             "type": "string",
-            "description": "The full agent path or Session id of an agent created under you: your direct child or a deeper descendant."
+            "description": "The id of an agent created under you: your direct child or a deeper descendant."
           }
         },
         "required": [
-          "name"
+          "agent_id"
         ]
       }
     },
@@ -229,7 +229,7 @@
     },
     {
       "name": "list_agents",
-      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. Rows also include available names alongside Session ids. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
         "properties": {}
@@ -300,9 +300,9 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "name": {
+          "agent_id": {
             "type": "string",
-            "description": "The full agent path (such as lead/reviewer) or Session id of another member of your subagent tree."
+            "description": "The agent id of another member of your subagent tree, as shown by list_agents."
           },
           "message": {
             "type": "string",
@@ -310,7 +310,7 @@
           }
         },
         "required": [
-          "name",
+          "agent_id",
           "message"
         ]
       }
@@ -337,10 +337,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "name": {
-            "type": "string",
-            "description": "Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer."
-          },
           "cwd": {
             "type": "string",
             "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
@@ -366,10 +362,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "name": {
-            "type": "string",
-            "description": "Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer."
-          },
           "cwd": {
             "type": "string",
             "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."

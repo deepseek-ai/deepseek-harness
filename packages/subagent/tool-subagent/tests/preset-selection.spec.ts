@@ -11,7 +11,6 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import SubagentRuntime, { applyChildComposition } from '@deepseek-ai/dsh-subagent'
-import SubagentNames from '@deepseek-ai/dsh-subagent-names'
 import { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -54,7 +53,6 @@ async function setup(config: Omit<tool.Config, 'provider'>, providerConfig: Part
   }
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
-  await ctx.plugin(SubagentNames)
   const onStart = vi.fn()
   const provider = await mountScriptedProvider(ctx, {
     name: 'custom-spawn', capabilities: { agentPreset: true }, onStart, ...providerConfig,

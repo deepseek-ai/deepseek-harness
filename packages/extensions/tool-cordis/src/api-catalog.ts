@@ -3596,36 +3596,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [],
   },
   {
-    key: 'subagentNames',
-    summary: 'Root-Session aliases shared by named creation, discovery, and control tools.',
-    description: 'Root-Session aliases shared by named creation, discovery, and control tools.',
-    methods: [
-      {
-        signature: 'reserve(rootSession: Session, parentId: SessionId, requested?: string): SubagentNameReservation',
-        description: 'Reserve a complete name without starting an agent or writing a Session event.',
-        parameters: [{ name: 'rootSession', description: 'root Session selected by the caller through the subagent service.' }, { name: 'parentId', description: 'parent identity whose name prefixes the child name.' }, { name: 'requested', description: 'optional sibling segment; omission selects the first free agent-N.' }],
-        returns: 'a reservation the caller must dispose after startup and binding.',
-      },
-      {
-        signature: 'bind(rootSession: Session, childId: SessionId, name: string): void',
-        description: 'Record an accepted child\'s full name in the caller\'s root Session. Binding failure does not cancel or dispose the child; callers report its id.',
-        parameters: [{ name: 'rootSession', description: 'root Session selected by the caller through the subagent service.' }, { name: 'childId', description: 'identity returned by the subagent service.' }, { name: 'name', description: 'complete name returned by reserve.' }],
-      },
-      {
-        signature: 'nameOf(rootSession: Session, targetId: SessionId): string',
-        description: 'Read a bound name from the root projection without loading ancestors.',
-        parameters: [{ name: 'rootSession', description: 'root Session selected by the caller through the subagent service.' }, { name: 'targetId', description: 'identity whose name is requested.' }],
-        returns: 'lead for the root, a bound full name, or the unchanged id.',
-      },
-      {
-        signature: 'resolveName(rootSession: Session, name: string): SessionId',
-        description: 'Resolve an alias or pass through an id for the subagent service to authorize.',
-        parameters: [{ name: 'rootSession', description: 'root Session selected by the caller through the subagent service.' }, { name: 'name', description: 'lead, a bound full name, or a raw Session id.' }],
-        returns: 'the target identity; an unknown lead/... name throws.',
-      },
-    ],
-  },
-  {
     key: 'subagents',
     summary: 'Named provider registry with managed activations, durable discovery, and local child messaging.',
     description: 'Named provider registry with managed activations, durable discovery, and local child messaging.',
@@ -3663,7 +3633,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async sendMessage( sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions, ): Promise<MessageId>',
-        description: 'Steer one model-authored message to another member of the same subagent tree. A running target receives it at its next step; an idle target starts a turn. A cold target resumes under its runtime subagent tree root without restoring its creation ancestors. Sender identity is rechecked before inbox acceptance; cancellation stops only pre-acceptance work and never retracts an accepted message. Display attribution uses the sender\'s bound name when the naming service is mounted, otherwise its Session id. Name lookup failures reject before inbox acceptance.',
+        description: 'Steer one model-authored message to another member of the same subagent tree. A running target receives it at its next step; an idle target starts a turn. A cold target resumes under its runtime subagent tree root without restoring its creation ancestors. Sender identity is rechecked before inbox acceptance; cancellation stops only pre-acceptance work and never retracts an accepted message.',
         parameters: [{ name: 'sender', description: 'exact live root or resident continuable Agent originating the message.' }, { name: 'targetId', description: 'another root or continuable member\'s durable Session id.' }, { name: 'content', description: 'model-authored content to deliver.' }, { name: 'options', description: 'caller cancellation before inbox acceptance.' }],
         returns: 'the accepted message\'s inbox id.',
         throws: ['when the target is outside the tree, cannot resume, or rejects input.'],
@@ -9094,10 +9064,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SubagentListEntry',
     declaration: 'export type SubagentListEntry = SubagentCatalogRow & {\n    readonly kind: \'child\';\n    readonly hasChildren: boolean;\n} | {\n    readonly kind: \'diagnostic\';\n    readonly id: SessionId;\n    readonly reason: \'corrupt\' | \'unsupported\' | \'unavailable\';\n};',
-  },
-  {
-    name: 'SubagentNameReservation',
-    declaration: 'export interface SubagentNameReservation {\n    readonly name: string;\n    dispose(): void;\n}',
   },
   {
     name: 'SubagentPromptReceipt',

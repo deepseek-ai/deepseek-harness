@@ -172,7 +172,7 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 
 #### 模型看到什么
 
-模型通过任务工具结果读取任务视图。面向模型的视图以 `ownerName` 标识所有者，host 视图保留 `ownerId`；过期更新报告当前修订。任务更新不会结束 `wait_agent`；需要成员处理更新时，发送明确消息。
+模型通过任务工具结果读取任务视图。面向模型和 host 的视图均以 `ownerId` 标识所有者；过期更新报告当前修订。任务更新不会结束 `wait_agent`；需要成员处理更新时，发送明确消息。
 
 #### Token 影响
 

@@ -39,11 +39,11 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`, `ctx.workflowEngine`, `ctx.subagents`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents every fresh round)` | `tool/call`, `tool/result`, `workflow and child session events during execution` | - | A fixed foreground workflow starts one fresh structured child per round; the model selects only the immutable objective and an optional round cap. |
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.workingDirectory`, `ctx.tools`, `ctx.agents`, `ctx.skills` | `tool/call`, `tool/result`, `user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`, `session_event_search`, `session_event_trace`, `session_search`, `session_trace` | `ctx.tools`, `ctx.systemPrompt`, `ctx.sessionQuery`, `ctx.agents`, `a calling Agent for workspace authority` | `tool/call`, `tool/result` | - | The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies. |
-| `@deepseek-ai/dsh-experimental-tool-subagent-oar` | `subagent_oar` | `ctx.tools`, `ctx.subagents`, `ctx.subagentNames` | `tool/call`, `tool/result`, `parent subagent catalog and completion notices` | - | The subagent_oar tool selects among configured aliases for external providers. This catalog shows Codex and Claude Code aliases; each deployment chooses its providers. Native model and permission settings belong to the selected provider configuration. |
-| `@deepseek-ai/dsh-tool-subagent` | `list_subagent_models`, `subagent` | `ctx.tools`, `ctx.subagents`, `ctx.systemPrompt`, `ctx.sessionProjections`, `ctx.subagentNames`, `ctx.llm for model discovery and selected-route validation` | `tool/call`, `tool/result`, `child session events through the chosen provider` | `subagent`, `subagent_fork` | The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. `modelDiscovery` defaults off and registers shared discovery on one instance per scope. Web and Desktop presets enable spawn discovery and route fields and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. The required naming plugin lets delegation accept a sibling name and return its full path alongside the child Session id. Local children accept follow-ups, while external backends report their single execution automatically. |
-| `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`, `list_agents`, `send_message`, `wait_agent` | `ctx.tools`, `ctx.subagents`, `ctx.agents`, `ctx.systemPrompt`, `ctx.subagentNames` | `tool/call`, `tool/result`, `child session events through ctx.subagents` | - | The shared control tools discover and contact agents in the subagent tree, interrupt owned descendants, and wait for input in the caller’s inbox. Provider-bound `tool-subagent` instances supply delegation tools. Controls require the naming plugin and accept a name path or Session id through `name`; discovery adds available names while retaining Session ids. |
+| `@deepseek-ai/dsh-experimental-tool-subagent-oar` | `subagent_oar` | `ctx.tools`, `ctx.subagents` | `tool/call`, `tool/result`, `parent subagent catalog and completion notices` | - | The subagent_oar tool selects among configured aliases for external providers. This catalog shows Codex and Claude Code aliases; each deployment chooses its providers. Native model and permission settings belong to the selected provider configuration. |
+| `@deepseek-ai/dsh-tool-subagent` | `list_subagent_models`, `subagent` | `ctx.tools`, `ctx.subagents`, `ctx.systemPrompt`, `ctx.sessionProjections`, `ctx.llm for model discovery and selected-route validation` | `tool/call`, `tool/result`, `child session events through the chosen provider` | `subagent`, `subagent_fork` | The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. `modelDiscovery` defaults off and registers shared discovery on one instance per scope. Web and Desktop presets enable spawn discovery and route fields and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. Every delegation returns a child id promptly; local children accept follow-ups, while external backends report their single execution automatically. |
+| `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`, `list_agents`, `send_message`, `wait_agent` | `ctx.tools`, `ctx.subagents`, `ctx.agents` | `tool/call`, `tool/result`, `child session events through ctx.subagents` | - | The shared control tools discover and contact agents in the subagent tree, interrupt owned descendants, and wait for input in the caller’s inbox. Provider-bound `tool-subagent` instances supply delegation tools. |
 | `@deepseek-ai/dsh-tool-jobs` | `job_kill`, `job_list`, `job_output` | `ctx.tools`, `ctx.jobs`, `ctx.systemPrompt` | `tool/call`, `tool/result`, `user/message via agent.inject() for background completion notices` | - | The kind-agnostic background-job controller: background bash commands and PTY sends are read, listed, and killed through the same three tools. Loading the plugin attaches the controller that arms producers' `ctx.jobs.start()`. |
-| `@deepseek-ai/dsh-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `ctx.subagentNames`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | Four task-board tools share the subagent tree’s root Session. Enabling Team mode on the root Session adds task-board guidance and required Team identity alongside standard subagent delegation and control tools. |
+| `@deepseek-ai/dsh-experimental-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | Four task-board tools share the subagent tree’s root Session. The optional Agent Teams profile adds task-board guidance and required Team identity derived from the subagent root, alongside standard subagent delegation and control tools. |
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`, `owning Agent session` | `tool/call`, `todo/write`, `tool/result` | - | todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task. |
 | `@deepseek-ai/dsh-tool-working-directory` | `working_directory` | `ctx.tools`, `ctx.workingDirectory` | `tool/call`, `working-directory/change`, `user context for directory changes`, `tool/result` | - | Reads or changes the calling Session directory. Existing shells and processes retain their own directories; origin metadata and permission roots stay fixed. |
 | `@deepseek-ai/dsh-experimental-tool-worktree` | `create_worktree` | `ctx.tools`, `ctx.worktrees`, `a calling Agent` | `tool/call`, `Git branch and checkout`, `working-directory/change`, `tool/result` | - | Explicit experimental composition only. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout. |
@@ -1973,16 +1973,12 @@ The five read-only tools hide provider cursors and authorize every result from t
 
 ### `subagent_oar`
 
-Delegate a self-contained task to a configured external agent. Choose its runtime for each call. The child works in its own context and does not see this conversation. This tool returns the child id and full agent path; a later completion notice includes its final answer. The child does not accept follow-up messages. Start independent tasks together and continue useful work while they run. When only waiting for their results remains, end your turn instead of polling.
+Delegate a self-contained task to a configured external agent. Choose its runtime for each call. The child works in its own context and does not see this conversation. This tool returns a child id; a later completion notice includes its final answer. The child does not accept follow-up messages. Start independent tasks together and continue useful work while they run. When only waiting for their results remains, end your turn instead of polling.
 
 ```json
 {
   "type": "object",
   "properties": {
-    "name": {
-      "type": "string",
-      "description": "Optional sibling-unique name; omission selects the first unused agent-N, starting at agent-1. Explicit names: start with a lower-case letter and use lower-case letters, digits, underscores, or hyphens."
-    },
     "runtime": {
       "type": "string",
       "description": "Configured external runtime for this task.",
@@ -2050,10 +2046,6 @@ Delegate a self-contained task to a subagent (a separate agent that works in its
 {
   "type": "object",
   "properties": {
-    "name": {
-      "type": "string",
-      "description": "Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer."
-    },
     "cwd": {
       "type": "string",
       "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
@@ -2076,7 +2068,7 @@ Delegate a self-contained task to a subagent (a separate agent that works in its
 
 Source: [`packages/subagent/tool-subagent/src/index.ts`](../packages/subagent/tool-subagent/src/index.ts)
 
-The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. `modelDiscovery` defaults off and registers shared discovery on one instance per scope. Web and Desktop presets enable spawn discovery and route fields and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. The required naming plugin lets delegation accept a sibling name and return its full path alongside the child Session id. Local children accept follow-ups, while external backends report their single execution automatically.
+The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. `modelDiscovery` defaults off and registers shared discovery on one instance per scope. Web and Desktop presets enable spawn discovery and route fields and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. Every delegation returns a child id promptly; local children accept follow-ups, while external backends report their single execution automatically.
 
 <a id="deepseek-aidsh-tool-subagent-control"></a>
 
@@ -2090,13 +2082,13 @@ Ask a subagent to stop its current work. This call returns without waiting for i
 {
   "type": "object",
   "properties": {
-    "name": {
+    "agent_id": {
       "type": "string",
-      "description": "The full agent path or Session id of an agent created under you: your direct child or a deeper descendant."
+      "description": "The id of an agent created under you: your direct child or a deeper descendant."
     }
   },
   "required": [
-    "name"
+    "agent_id"
   ]
 }
 ```
@@ -2105,7 +2097,7 @@ Source: [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/sub
 
 ### `list_agents`
 
-List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. Rows also include available names alongside Session ids. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.
+List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.
 
 ```json
 {
@@ -2124,9 +2116,9 @@ Send a message to an agent. A working agent receives it at its next step; an idl
 {
   "type": "object",
   "properties": {
-    "name": {
+    "agent_id": {
       "type": "string",
-      "description": "The full agent path (such as lead/reviewer) or Session id of another member of your subagent tree."
+      "description": "The agent id of another member of your subagent tree, as shown by list_agents."
     },
     "message": {
       "type": "string",
@@ -2134,7 +2126,7 @@ Send a message to an agent. A working agent receives it at its next step; an idl
     }
   },
   "required": [
-    "name",
+    "agent_id",
     "message"
   ]
 }
@@ -2160,7 +2152,7 @@ Wait for input at your next step, including agent messages, completion notificat
 
 Source: [`packages/subagent/tool-subagent-control/src/wait-agent.ts`](../packages/subagent/tool-subagent-control/src/wait-agent.ts)
 
-The shared control tools discover and contact agents in the subagent tree, interrupt owned descendants, and wait for input in the caller’s inbox. Provider-bound `tool-subagent` instances supply delegation tools. Controls require the naming plugin and accept a name path or Session id through `name`; discovery adds available names while retaining Session ids.
+The shared control tools discover and contact agents in the subagent tree, interrupt owned descendants, and wait for input in the caller’s inbox. Provider-bound `tool-subagent` instances supply delegation tools.
 
 <a id="deepseek-aidsh-tool-jobs"></a>
 
@@ -2319,7 +2311,7 @@ List shared tasks, including readiness, owner, revision, blockers, and write-sco
     },
     "owner": {
       "type": "string",
-      "description": "Optional exact ownerName filter; use unowned for tasks without an owner."
+      "description": "Optional exact ownerId filter; use unowned for tasks without an owner."
     },
     "ready": {
       "type": "boolean",
@@ -2393,7 +2385,7 @@ Compare-and-set a shared task action using the latest revision from team_task_ge
     },
     "owner": {
       "type": "string",
-      "description": "Agent name or Session id of the root or any continuable descendant for root-only reassign; omit to unassign."
+      "description": "Agent id of the root or any continuable descendant for root-only reassign; omit to unassign."
     }
   },
   "required": [

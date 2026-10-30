@@ -88,35 +88,21 @@ describe('control detail adapters', () => {
     expect(details('lsp', 'hover text', { file_path: 'src/main.ts', line: 2, character: 3, operation: 'hover' })?.items[0]?.markdown).toBe('hover text')
   })
 
-  it('shows named agent targets in recorded messaging and interruption receipts', () => {
-    expect(details('send_message', 'message delivered to agent lead/reviewer', {
-      name: 'lead/reviewer', message: 'Review the change.',
-    })).toMatchObject({
-      summary: 'reviewer · Message delivered', expandedSummary: 'reviewer',
-      items: [{ title: 'reviewer', description: 'Review the change.' }],
-    })
-    expect(details('interrupt_agent', '{"previousStatus":"running"}', {
-      name: 'lead/reviewer',
-    })?.items[0]).toMatchObject({
-      title: 'lead/reviewer', fields: [{ label: 'Previous status', value: 'Running' }],
-    })
-  })
-
-  it.each(['subagent', 'subagent_fork'])('%s recognizes named creation receipts and retains the complete task', (name) => {
+  it.each(['subagent', 'subagent_fork'])('%s recognizes ID creation receipts and retains the complete task', (name) => {
     const prompt = 'Research CLI agent products.\nCompare business models and write a report.'
-    const model = details(name, 'started subagent child-1\nname: lead/researcher', { description: 'Research CLI agent products', prompt })
+    const model = details(name, 'started subagent child-1', { description: 'Research CLI agent products', prompt })
     expect(model?.summary).toBe('Research CLI agent products')
     expect(model?.items[0]).toEqual({
       title: 'Started',
-      fields: [{ label: 'Agent task description', value: 'Research CLI agent products' }, { label: 'Agent name', value: 'lead/researcher' }],
+      fields: [{ label: 'Agent task description', value: 'Research CLI agent products' }, { label: 'ID', value: 'child-1' }],
       groups: [{ label: 'Task', items: [{ description: prompt, fields: [] }] }],
     })
     expect(details(name, 'started subagent child-1', { prompt })?.items[0]?.title).toBe('Started')
-    expect(details(name, 'started subagent child-1\nname: lead/researcher\nAdditional reply', { prompt })?.items[0]?.title).toBe('Agent response')
+    expect(details(name, 'started subagent child-1\nAdditional reply', { prompt })?.items[0]?.title).toBe('Agent response')
   })
 
   it.each(['subagent', 'subagent_fork'])('%s renders persisted creation metadata independently of result wording', (name) => {
-    const args = { description: 'Review the changes', prompt: 'Read the diff and report defects.', name: 'requested-name' }
+    const args = { description: 'Review the changes', prompt: 'Read the diff and report defects.' }
     const block = { ...output(name, 'Delegation accepted.', args), meta: { kind: 'activation', subagentId: 'child-1' } }
     const model = detailsCardModel(block, t, 'en')
     expect(model?.items[0]).toEqual({
@@ -132,7 +118,7 @@ describe('control detail adapters', () => {
 
   it.each([null, [], {}, { kind: 'other', subagentId: 'child-1' }, { kind: 'activation' }, { kind: 'activation', subagentId: 1 }, { kind: 'activation', subagentId: ' ' }])(
     'keeps malformed metadata on the generic result path (%j)', (meta) => {
-      const block = { ...output('subagent', 'started subagent child-1\nname: lead/reviewer'), meta }
+      const block = { ...output('subagent', 'started subagent child-1'), meta }
       expect(detailsCardModel(block, t, 'en')).toBeNull()
     },
   )
@@ -142,7 +128,7 @@ describe('control detail adapters', () => {
     expect(details('team_task_create', '{"id":"task-1","subject":"Review","status":"pending"}')?.summary).toBe('Review')
     expect(details('team_task_list', '{"tasks":[{"id":"task-1","subject":"Review"}],"nextCursor":3}')?.caption).toBe('More tasks available; next cursor is 3')
     expect(details('send_message', '{"status":"queued"}', { agent_id: 'a1', message: 'hello' })?.items[0]?.badge?.label).toBe('Queued')
-    expect(details('send_message', 'message delivered to agent reviewer', { name: 'reviewer', message: 'hello' })?.summary).toBe('reviewer · Message delivered')
+    expect(details('send_message', 'message delivered to agent reviewer', { agent_id: 'reviewer', message: 'hello' })?.summary).toBe('reviewer · Message delivered')
     expect(details('interrupt_agent', '{"previousStatus":"running"}', { agent_id: 'a1' })?.items[0]?.fields).toContainEqual({ label: 'Previous status', value: 'Running' })
     expect(details('wait_agent', '{"timedOut":true}')?.summary).toBe('Wait timed out')
     expect(details('wait_agent', '{"timedOut":false,"noProgress":{"message":"No peer"}}')?.items[0]?.description).toBe('No peer')
@@ -163,7 +149,7 @@ describe('control detail adapters', () => {
     expect(details('unknown', 'x')).toBeNull()
     expect(details('team_task_list', '{"tasks":[],"nextCursor":"bad"}')).toBeNull()
     expect(details('terminal_read', 'bad', { sessionId: 'pty-1' })).toBeNull()
-    expect(details('interrupt_agent', 'interrupt requested for agent reviewer', { name: 'reviewer' })?.summary).toContain('Interrupt')
+    expect(details('interrupt_agent', 'interrupt requested for agent reviewer', { agent_id: 'reviewer' })?.summary).toContain('Interrupt')
     expect(details('interrupt_agent', 'unexpected', { agent_id: 'a1' })).toBeNull()
     expect(details('job_kill', 'unexpected', { job_id: 'j1' })).toBeNull()
     expect(details('terminal_close', 'unexpected', { sessionId: 'pty-1' })).toBeNull()

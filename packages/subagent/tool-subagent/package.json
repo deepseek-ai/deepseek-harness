@@ -44,8 +44,7 @@
     "@deepseek-ai/dsh-subagent": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
-    "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-subagent-names": "workspace:*"
+    "@deepseek-ai/cordis": "workspace:~"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-agent-preset-registry": {
@@ -71,7 +70,6 @@
     "@deepseek-ai/dsh-tool-testkit": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
-    "@deepseek-ai/dsh-session-projection": "workspace:*",
-    "@deepseek-ai/dsh-subagent-names": "workspace:*"
+    "@deepseek-ai/dsh-session-projection": "workspace:*"
   }
 }

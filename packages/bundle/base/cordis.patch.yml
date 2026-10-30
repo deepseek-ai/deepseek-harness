@@ -359,8 +359,6 @@
     - id: subagent
       name: '@deepseek-ai/dsh-subagent'
 
-    - id: subagent-names
-      name: '@deepseek-ai/dsh-subagent-names'
     - id: agent-team
       name: '@deepseek-ai/dsh-agent-team'
       config:

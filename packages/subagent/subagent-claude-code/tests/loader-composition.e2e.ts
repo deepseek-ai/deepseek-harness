@@ -79,22 +79,22 @@ describe('product-provider public Loader composition', () => {
       tools: [
         {
           name: 'subagent_codex',
-          parameterNames: ['cwd', 'description', 'name', 'prompt'],
+          parameterNames: ['cwd', 'description', 'prompt'],
           required: ['description', 'prompt'],
         },
         {
           name: 'subagent_claude_code',
-          parameterNames: ['cwd', 'description', 'name', 'prompt'],
+          parameterNames: ['cwd', 'description', 'prompt'],
           required: ['description', 'prompt'],
         },
         {
           name: 'subagent_claude_primary',
-          parameterNames: ['cwd', 'description', 'name', 'prompt'],
+          parameterNames: ['cwd', 'description', 'prompt'],
           required: ['description', 'prompt'],
         },
         {
           name: 'subagent_claude_secondary',
-          parameterNames: ['cwd', 'description', 'name', 'prompt'],
+          parameterNames: ['cwd', 'description', 'prompt'],
           required: ['description', 'prompt'],
         },
       ],

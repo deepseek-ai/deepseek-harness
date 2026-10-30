@@ -152,7 +152,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagent task summary', () => {
     await expectSummary(card, DESCRIPTION)
     await capture('Running')
 
-    finishCall(agent, call, 'Delegation accepted.', false, { kind: 'activation', name: 'lead/foo' })
+    finishCall(agent, call, 'Delegation accepted.', false, { kind: 'activation', subagentId: 'child-foo' })
     await scaffold.ctx.sessions.flush(agent.session)
     await expect.poll(() => card.getAttribute('data-state')).toBe('ok')
     await expectSummary(card, DESCRIPTION)
@@ -161,8 +161,8 @@ describe.skipIf(MODE === 'record')('web e2e: subagent task summary', () => {
     await expectSummary(card, DESCRIPTION)
     expect(await card.getByText('Agent response', { exact: true }).count()).toBe(0)
     await card.getByText('Started', { exact: true }).waitFor()
-    expect(await card.locator('dt').allTextContents()).toEqual(['Agent task description', 'Agent name'])
-    expect(await card.locator('dd').allTextContents()).toEqual([`${DESCRIPTION}\nAdditional description context`, 'lead/foo'])
+    expect(await card.locator('dt').allTextContents()).toEqual(['Agent task description', 'ID'])
+    expect(await card.locator('dd').allTextContents()).toEqual([`${DESCRIPTION}\nAdditional description context`, 'child-foo'])
     await capture('Creation receipt and complete task')
 
     const beforeReload = tripwire.warnings.length
@@ -182,9 +182,9 @@ describe.skipIf(MODE === 'record')('web e2e: subagent task summary', () => {
 
   it('falls back to the prompt, keeps synchronous replies in details, and preserves errors', async () => {
     const cases = [
-      { id: 'fallback', args: { prompt: 'Review the fallback summary.\nKeep the complete task in details.' }, summary: 'Review the fallback summary.', result: 'started subagent fallback-worker\nname: lead/fallback' },
+      { id: 'fallback', args: { prompt: 'Review the fallback summary.\nKeep the complete task in details.' }, summary: 'Review the fallback summary.', result: 'started subagent fallback-worker' },
       { id: 'reply', args: { description: 'Check synchronous agent reply', prompt: 'Review the synchronous report.\nKeep every instruction available.' }, summary: 'Check synchronous agent reply', result: 'The synchronous agent found two issues.\nBoth are documented in the report.' },
-      { id: 'title-only', args: {}, summary: '', result: 'started subagent empty-worker\nname: lead/empty' },
+      { id: 'title-only', args: {}, summary: '', result: 'started subagent empty-worker' },
       { id: 'error', args: { description: 'Delegate a failing task', prompt: 'Attempt the requested delegation.' }, summary: 'Subagent capacity exceeded', result: 'Subagent capacity exceeded\nWait for an active agent to finish.', error: true },
     ]
     const snapshots: string[] = []
@@ -244,13 +244,13 @@ describe.skipIf(MODE === 'record')('web e2e: subagent task summary', () => {
     await expect.poll(() => card.getAttribute('data-state')).toBe('running')
     await expectForkSummary()
     await capture('Running')
-    finishCall(agent, call, 'started subagent fork-worker\nname: lead/context-reviewer')
+    finishCall(agent, call, 'started subagent fork-worker')
     await scaffold.ctx.sessions.flush(agent.session)
     await expect.poll(() => card.getAttribute('data-state')).toBe('ok')
     await expandTask(card, prompt)
     await expectForkSummary()
-    expect(await card.locator('dt').allTextContents()).toEqual(['Agent task description', 'Agent name'])
-    expect(await card.locator('dd').allTextContents()).toEqual([description, 'lead/context-reviewer'])
+    expect(await card.locator('dt').allTextContents()).toEqual(['Agent task description', 'ID'])
+    expect(await card.locator('dd').allTextContents()).toEqual([description, 'fork-worker'])
     expect(await card.getByText('Agent response', { exact: true }).count()).toBe(0)
     await capture('Creation receipt and complete task')
     const beforeReload = tripwire.warnings.length

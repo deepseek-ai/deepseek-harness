@@ -3,17 +3,16 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
-import type {} from '@deepseek-ai/dsh-subagent-names'
-import { TeamTaskId, type TeamTaskView } from '@deepseek-ai/dsh-agent-team'
+import { TeamTaskId } from '@deepseek-ai/dsh-agent-team'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 
 /** Cordis plugin name. */
 export const name = 'tool-agent-team'
 /** Services required by the Team tool plugin. */
-export const inject = ['agentTeams', 'subagents', 'subagentNames', 'tools', 'systemPrompt']
+export const inject = ['agentTeams', 'subagents', 'tools', 'systemPrompt']
 
 /** The Team tool plugin takes no configuration. */
 export type Config = Record<never, never>
@@ -25,7 +24,7 @@ export const Config: z<Config> = z.object({})
 const REMOVED_CONFIG_KEYS = ['interrupt', 'freshProvider', 'forkProvider'] as const
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
-const TEAM_POLICY = `A shared task board is available to every agent in your subagent tree. Task owners use agent names from list_agents, or Session ids when no name is bound. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+const TEAM_POLICY = `A shared task board is available to every agent in your subagent tree. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
@@ -41,7 +40,7 @@ const TASK_VIEW_SCHEMA = {
     subject: { type: 'string', required: true },
     description: { type: 'string', required: true },
     status: { type: 'string', required: true, enum: ['pending', 'in_progress', 'completed', 'deleted'] },
-    ownerName: { type: 'string' },
+    ownerId: { type: 'string' },
     blockedBy: { type: 'array', required: true, items: { type: 'string' } },
     writeScopes: { type: 'array', required: true, items: { type: 'string' } },
     ready: { type: 'boolean', required: true },
@@ -75,31 +74,9 @@ function jsonOutput<const S extends ValueSchemaSpec>(schema: S): {
   }
 }
 
-type NamedTaskView = Omit<TeamTaskView, 'ownerId'> & { readonly ownerName?: string }
-
-/** Capture owner display names before a mutation or for the requested result rows. */
-function taskOwnerNames(
-  ctx: Context, caller: Agent, owners: readonly (SessionId | undefined)[],
-): ReadonlyMap<SessionId, string> {
-  const rootSession = ctx.subagents.rootOf(caller).session
-  const names = new Map<SessionId, string>()
-  for (const ownerId of owners) {
-    if (ownerId !== undefined && !names.has(ownerId)) names.set(ownerId, ctx.subagentNames.nameOf(rootSession, ownerId))
-  }
-  return names
-}
-
-/** Format a task from names captured for each possible result owner before its commit. */
-function namedTask({ ownerId, ...view }: TeamTaskView, names: ReadonlyMap<SessionId, string>): NamedTaskView {
-  return {
-    ...view,
-    ...ownerId === undefined ? {} : { ownerName: names.get(ownerId) as string },
-  }
-}
-
-/** Recover the exact caller guaranteed by Agent-scoped tool discovery. */
+/** Recover the exact caller guaranteed by conditional Team-tool discovery. */
 function callingAgent(agent: Agent | undefined, toolName: string): Agent {
-  /* v8 ignore next 2 -- Team tools are registered only in an exact Agent scope, so discovery supplies this carrier. */
+  /* v8 ignore next 2 -- The Team condition rejects callers without an Agent before execution. */
   if (agent === undefined) throw new Error(`${toolName} requires a calling Agent`)
   return agent
 }
@@ -137,9 +114,10 @@ export function apply(ctx: Context, config: Config = {}): void {
     interpolate: false,
     text: ({ agent }) => {
       if (agent === undefined || !enabled(agent)) return ''
-      return `Your name is ${JSON.stringify(ctx.subagentNames.nameOf(ctx.subagents.rootOf(agent).session, agent.id))}. Your team lead is "lead".
-Use list_agents({}) to find your teammates and their full names.
-Use send_message({ name: "<full agent path>", message: "..." }) to message a teammate.`
+      const root = ctx.subagents.rootOf(agent)
+      return root === agent
+        ? `You are the Team Lead. Your agent id is ${JSON.stringify(agent.id)}.`
+        : `You are a teammate in the Team led by agent ${JSON.stringify(root.id)}.`
     },
   })
   ctx.tools.register(defineTool({
@@ -164,7 +142,7 @@ Use send_message({ name: "<full agent path>", message: "..." }) to message a tea
         ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
         ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
       }, exec.signal)
-      return namedTask(task, new Map())
+      return task
     },
   }), { when: ({ agent }) => enabled(agent) })
 
@@ -177,7 +155,7 @@ Use send_message({ name: "<full agent path>", message: "..." }) to message a tea
         enum: ['pending', 'in_progress', 'completed'],
         description: 'Optional exact status filter.',
       },
-      owner: { type: 'string', description: 'Optional exact ownerName filter; use unowned for tasks without an owner.' },
+      owner: { type: 'string', description: 'Optional exact ownerId filter; use unowned for tasks without an owner.' },
       ready: { type: 'boolean', description: 'Optional readiness filter.' },
       cursor: { type: 'integer', description: 'Zero-based result offset. Defaults to 0.' },
       limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
@@ -189,16 +167,12 @@ Use send_message({ name: "<full agent path>", message: "..." }) to message a tea
       if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error('cursor must be a non-negative safe integer')
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('limit must be an integer from 1 through 100')
       const caller = callingAgent(exec.agent, 'team_task_list')
-      let filtered = ctx.agentTeams.listTasks(caller).filter(task =>
+      const filtered = ctx.agentTeams.listTasks(caller).filter(task =>
         (args.status === undefined || task.status === args.status)
-        && (args.owner !== 'unowned' || task.ownerId === undefined)
+        && (args.owner === undefined || (args.owner === 'unowned' ? task.ownerId === undefined : task.ownerId === args.owner))
         && (args.ready === undefined || task.ready === args.ready))
-      const filterOwner = args.owner !== undefined && args.owner !== 'unowned'
-      const candidates = filterOwner ? filtered : filtered.slice(cursor, cursor + limit)
-      const names = taskOwnerNames(ctx, caller, candidates.map(task => task.ownerId))
-      if (filterOwner) filtered = filtered.filter(task => namedTask(task, names).ownerName === args.owner)
       return Promise.resolve({
-        tasks: filtered.slice(cursor, cursor + limit).map(task => namedTask(task, names)),
+        tasks: filtered.slice(cursor, cursor + limit),
         ...(cursor + limit < filtered.length ? { nextCursor: cursor + limit } : {}),
       })
     },
@@ -214,8 +188,7 @@ Use send_message({ name: "<full agent path>", message: "..." }) to message a tea
     execute(args, exec) {
       const caller = callingAgent(exec.agent, 'team_task_get')
       const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))
-      const names = taskOwnerNames(ctx, caller, [task.ownerId])
-      return Promise.resolve(namedTask(task, names))
+      return Promise.resolve(task)
     },
   }), { when: ({ agent }) => enabled(agent) })
 
@@ -235,20 +208,12 @@ Use send_message({ name: "<full agent path>", message: "..." }) to message a tea
       description: { type: 'string', description: 'Replacement details for edit.' },
       blocked_by: { type: 'array', items: { type: 'string' }, description: 'Complete blocker list for set_dependencies.' },
       write_scopes: { type: 'array', items: { type: 'string' }, description: 'Replacement advisory write scopes for edit.' },
-      owner: { type: 'string', description: 'Agent name or Session id of the root or any continuable descendant for root-only reassign; omit to unassign.' },
+      owner: { type: 'string', description: 'Agent id of the root or any continuable descendant for root-only reassign; omit to unassign.' },
     },
     output: jsonOutput(TASK_VIEW_SCHEMA),
     async execute(args, exec) {
       const caller = callingAgent(exec.agent, 'team_task_update')
       const taskId = TeamTaskId(args.task_id)
-      const current = ctx.agentTeams.getTask(caller, taskId)
-      const owner = args.owner === undefined ? undefined
-        : ctx.subagentNames.resolveName(ctx.subagents.rootOf(caller).session, args.owner)
-      const keepsOwner = !['claim', 'release', 'reopen', 'reassign'].includes(args.action)
-      // Names are immutable; the service still checks the revision and authority after these reads.
-      const names = taskOwnerNames(ctx, caller, [
-        caller.id, owner, keepsOwner ? current.ownerId : undefined,
-      ])
       const task = await ctx.agentTeams.updateTask(caller, {
         taskId,
         expectedRevision: args.expected_revision,
@@ -257,9 +222,9 @@ Use send_message({ name: "<full agent path>", message: "..." }) to message a tea
         ...args.description === undefined ? {} : { description: args.description },
         ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
         ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
-        ...owner === undefined ? {} : { owner },
+        ...args.owner === undefined ? {} : { owner: SessionId(args.owner) },
       }, exec.signal)
-      return namedTask(task, names)
+      return task
     },
   }), { when: ({ agent }) => enabled(agent) })
 }

@@ -129,8 +129,8 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running. */
   interrupt_agent: {
-    /** The full agent path or Session id of an agent created under you: your direct child or a deeper descendant. */
-    name: string;
+    /** The id of an agent created under you: your direct child or a deeper descendant. */
+    agent_id: string;
   } & Record<string, JsonValue>;
   /** Request cancellation of a running background job. */
   job_kill: {
@@ -150,7 +150,7 @@ interface ToolArgsMap {
     /** Max wait in milliseconds with wait: true. Defaults to and is capped by configuration. */
     timeout_ms?: number;
   } & Record<string, JsonValue>;
-  /** List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. Rows also include available names alongside Session ids. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
+  /** List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
   list_agents: Record<string, JsonValue>;
   /** Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation. */
   list_subagent_models: {
@@ -229,8 +229,8 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer. */
   send_message: {
-    /** The full agent path (such as lead/reviewer) or Session id of another member of your subagent tree. */
-    name: string;
+    /** The agent id of another member of your subagent tree, as shown by list_agents. */
+    agent_id: string;
     /** The message to deliver to the agent. */
     message: string;
   } & Record<string, JsonValue>;
@@ -241,8 +241,6 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. Supply `provider` and `model` together. Omitted values use child defaults, falling back to compatible parent values. When the effective route changes, an omitted `reasoning_effort` uses the model's default. */
   subagent: {
-    /** Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer. */
-    name?: string;
     /** Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent. */
     cwd?: string;
     /** A short (3-5 word) description of the delegated task, for display. */
@@ -258,8 +256,6 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. */
   subagent_fork: {
-    /** Optional name unique among your direct children. Use a short role name, such as reviewer or researcher. Put the task in description. Add a specialty or numeric suffix when needed for uniqueness. Defaults to the first unused agent-N. Returns the full path, e.g. lead/reviewer. */
-    name?: string;
     /** Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent. */
     cwd?: string;
     /** A short (3-5 word) description of the delegated task, for display. */
@@ -459,24 +455,19 @@ interface ToolOutputMap {
   list_agents: ({
     kind: "root";
     id: string;
-    name?: string;
     status: "running" | "inactive";
   } | {
     kind: "child";
     id: string;
-    name?: string;
     label: string;
     status: "running" | "inactive";
     parent?: string;
-    parentName?: string;
     depth?: number;
   } | {
     kind: "diagnostic";
     id: string;
-    name?: string;
     reason: "corrupt" | "unsupported" | "unavailable";
     parent?: string;
-    parentName?: string;
     depth?: number;
   })[];
   list_subagent_models: string;
@@ -1476,12 +1467,10 @@ interface ToolOutputMap {
   subagent: {
     kind: "activation";
     subagentId: string;
-    name: string;
   };
   subagent_fork: {
     kind: "activation";
     subagentId: string;
-    name: string;
   };
   todo_write: {
     todos: ({
