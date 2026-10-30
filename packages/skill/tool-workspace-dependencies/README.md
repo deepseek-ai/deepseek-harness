@@ -25,7 +25,7 @@ Deployments that ship their own script runtimes (Desktop's primary runtime, or a
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the plugin beside the tool registry with the payload directory. Configuration validation requires a nonempty `source` and rejects empty `root` values before activation; both paths must be absolute. The bundled Office skills (`@deepseek-ai/dsh-skill-office`) reference this tool by name for their default interpreter.
+Mount the plugin beside the tool registry with the payload directory. Configuration validation requires a nonempty `source` and rejects empty `root` values before activation; both paths must be absolute. With `pythonEnvironment: 'workspace-dependencies'`, the bundled Office skills (`@deepseek-ai/dsh-skill-office`) reference this tool by name for their default interpreter.
 
 ### Minimal configuration
 

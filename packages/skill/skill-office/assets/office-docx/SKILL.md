@@ -5,7 +5,7 @@ description: Create, read, edit, and validate Word documents (.docx).
 
 # Word documents
 
-Use `python-docx` for DOCX creation and ordinary edits. Follow an explicit user or applicable AGENTS.md requirement for a project environment or another library. Otherwise call `load_workspace_dependencies` and execute the returned Python path with its bundled libraries. Do not install packages or discover a system Python for the default workflow. If the tool is unavailable, use an already configured environment and report a missing dependency only when it prevents the requested operation.
+Use `python-docx` for DOCX creation and ordinary edits unless an explicit user or applicable AGENTS.md requirement names another library. Run Python as described in the Python environment section below.
 
 Keep source scripts, intermediate files, and final documents in the task workspace; the runtime and this skill directory are read-only resources. Use the user's requested language and preserve an existing document's design unless a redesign is requested.
 

@@ -28,6 +28,12 @@
 
 # The packaged carrier supplies a default; DSH_PRIMARY_RUNTIME overrides it,
 # including an empty-string opt-out. Each row can be patched independently.
+# Office skills always load. With a primary runtime they use its Office assets,
+# Node executable, and Python environment; without one each path expression
+# evaluates to `undefined`, which the skill-office schema treats as unset, so
+# the packaged assets, the current Node executable, the package's Kit CLI, and
+# the user's Python apply. DSH_BUNDLED_OFFICE_SKILLS, DSH_BUNDLED_OFFICE_NODE,
+# and DSH_BUNDLED_OFFICE_CLI override the paths; an empty CLI disables it.
 - insert:
     - id: workspace-dependencies
       name: '@deepseek-ai/dsh-tool-workspace-dependencies'
@@ -37,11 +43,11 @@
 
     - id: skill-office
       name: '@deepseek-ai/dsh-skill-office'
-      disabled: !!js "!(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME) && !process.env.DSH_BUNDLED_OFFICE_CLI"
       config:
-        assetRoot: !!js "process.env.DSH_BUNDLED_OFFICE_SKILLS ?? process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '', '..', 'office-skills')"
+        assetRoot: !!js "process.env.DSH_BUNDLED_OFFICE_SKILLS ?? ((process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME) ? process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME, '..', 'office-skills') : undefined)"
         cli: !!js "process.env.DSH_BUNDLED_OFFICE_CLI === '' ? false : process.env.DSH_BUNDLED_OFFICE_CLI"
-        node: !!js "process.env.DSH_BUNDLED_OFFICE_NODE ?? process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '', 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node')"
+        node: !!js "process.env.DSH_BUNDLED_OFFICE_NODE ?? ((process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME) ? process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME, 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node') : undefined)"
+        pythonEnvironment: !!js "(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME) ? 'workspace-dependencies' : 'user'"
 
 # Share native desktop tools and model context without starting a Web server.
 - insert:

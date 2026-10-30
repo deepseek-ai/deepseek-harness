@@ -3,7 +3,6 @@
 import { statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, sep } from 'node:path'
-import { isSea } from 'node:sea'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -11,22 +10,44 @@ import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 import { parse as parseYaml } from 'yaml'
 
 const SKILL_NAMES = ['office', 'office-docx', 'office-pptx', 'office-xlsx', 'office-render', 'office-recalculate', 'office-export-pdf'] as const
+const PYTHON_SKILLS: readonly string[] = ['office-docx', 'office-pptx', 'office-xlsx', 'office-recalculate']
+const KIT_SKILLS: readonly string[] = ['office-render', 'office-recalculate', 'office-export-pdf']
 
-/** Office skill resource location. */
+/**
+ * Python source for Office scripts: `'workspace-dependencies'` directs the model to the bundled interpreter and libraries
+ * returned by `load_workspace_dependencies`; `'user'` directs it to an existing project or user Python.
+ */
+export type PythonEnvironment = 'workspace-dependencies' | 'user'
+
+const PYTHON_ENVIRONMENT_SECTIONS: Readonly<Record<PythonEnvironment, string>> = {
+  'workspace-dependencies': 'Follow an explicit user or applicable AGENTS.md requirement for a Python environment. Otherwise call `load_workspace_dependencies` and run scripts with its Python executable and bundled libraries. Do not install packages or search for a system Python for the default workflow. If the tool is unavailable, use an already configured environment and report a missing dependency only when it prevents the requested operation.',
+  user: 'Follow an explicit user or applicable AGENTS.md requirement for a Python environment. Otherwise use the project\'s or user\'s existing Python, such as `python3` or `python` on PATH. Before the first script, check that this Python can import the libraries the workflow needs. If Python or a library is missing, tell the user which packages to install; do not install packages into a global environment without the user\'s agreement.',
+}
+
+/** Office skill resources and Python environment. */
 export interface Config {
   /** Absolute assets directory containing skill folders; defaults to packaged assets. */
   assetRoot?: string
-  /** Standalone Node executable; defaults to the current executable outside Electron and SEA. */
+  /** Standalone Node executable; defaults to the current executable outside Electron. */
   node?: string
   /** Absolute LibreOffice Kit CLI entry; false explicitly disables CLI access. */
   cli?: string | false
+  /** Python environment named in the Python authoring and verification skills. @default 'user' */
+  pythonEnvironment?: PythonEnvironment
+}
+
+/** Configuration after schema defaults apply. */
+export interface ResolvedConfig extends Config {
+  /** Python environment named in the Python authoring and verification skills. */
+  pythonEnvironment: PythonEnvironment
 }
 
 /** Validated resource configuration. */
-export const Config: z<Config> = z.object({
+export const Config: z<Config, ResolvedConfig> = z.object({
   assetRoot: z.string().min(1),
   node: z.string().min(1),
   cli: z.union([z.string().min(1), z.const(false)]),
+  pythonEnvironment: z.union([z.const('workspace-dependencies'), z.const('user')]).default('user'),
 })
 
 /** Cordis plugin identity. */
@@ -46,7 +67,7 @@ function parseSkill(raw: string, path: string): { description: string; content: 
 
 function officeRuntime(config: Config): string {
   if (config.cli === false) return '\n\nLibreOffice Kit is disabled in this deployment.'
-  if (config.node === undefined && (isSea() || process.versions.electron !== undefined)) {
+  if (config.node === undefined && process.versions.electron !== undefined) {
     throw new Error('skill-office: packaged applications must supply a standalone Node executable')
   }
   const node = config.node ?? process.execPath
@@ -78,10 +99,10 @@ function persistentReadFailure(error: unknown): boolean {
  * or invalid skill is omitted from a complete catalog, and its failed load returns `undefined` and invalidates the
  * catalog. Any other read error leaves discovery incomplete, so the registry retries it, and rejects a load.
  * @param ctx - Context carrying the skill registry.
- * @param config - Optional external assets directory for packaged applications.
+ * @param config - Resolved configuration; resource paths fall back to the packaged assets, Node, and Kit CLI.
  * @throws When `assetRoot` is not absolute.
  */
-export function apply(ctx: Context, config: Config = {}): void {
+export function apply(ctx: Context, config: ResolvedConfig): void {
   const assetRoot = config.assetRoot ?? fileURLToPath(new URL('../assets/', import.meta.url))
   if (!isAbsolute(assetRoot)) throw new Error('skill-office: assetRoot must be an absolute directory')
   const reportedFailures = new Map<string, string>()
@@ -138,7 +159,8 @@ export function apply(ctx: Context, config: Config = {}): void {
         return undefined
       }
       const content = read.content
-        + (['office-render', 'office-recalculate', 'office-export-pdf'].includes(candidate.name) ? officeRuntime(config) : '')
+        + (PYTHON_SKILLS.includes(candidate.name) ? `\n\n## Python environment\n\n${PYTHON_ENVIRONMENT_SECTIONS[config.pythonEnvironment]}` : '')
+        + (KIT_SKILLS.includes(candidate.name) ? officeRuntime(config) : '')
       return { ...summary, content }
     },
   }))

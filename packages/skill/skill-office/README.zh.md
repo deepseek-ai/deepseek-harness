@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-目录列出 Office 路由及六个创作或操作技能，完整说明按需加载。创作技能使用选定的 Python 库；操作技能提供配置的 Node 与 LibreOffice Kit CLI 路径。SDK 和 Desktop 分别挂载技能提供者和依赖查询。
+目录列出 Office 路由及六个创作或操作技能，完整说明按需加载。Python 创作与校验技能追加配置的 Python 环境说明；操作技能提供配置的 Node 与 LibreOffice Kit CLI 路径。Web 应用和 SDK profile 挂载该提供者；只有 Desktop 或带主运行时的 SDK 还挂载内置依赖查询。
 
 ## 目录
 
@@ -26,7 +26,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者。提供者负责技能说明；操作技能在加载时附加解释器和 CLI 的绝对路径。
+在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者。提供者负责技能说明；加载时，Python 技能追加 Python 环境说明，操作技能附加解释器和 CLI 的绝对路径。
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'
@@ -38,6 +38,9 @@ kind: "package-reference"
 | `assetRoot` | 载体资源或包内 `assets/` | 包含七个技能目录的绝对路径。 |
 | `node` | 宿主 Node.js | 操作技能使用的独立 Node 可执行程序；打包载体显式提供。 |
 | `cli` | 已安装 Kit CLI | CLI 入口的绝对路径；`false` 禁用操作执行。 |
+| `pythonEnvironment` | `'user'` | `office-docx`、`office-pptx`、`office-xlsx` 和 `office-recalculate` 指引模型使用的 Python；见下文。 |
+
+`pythonEnvironment` 选择追加到这四个技能末尾的一段固定说明。两个取值都先遵守用户或适用 AGENTS.md 明确要求的环境。`'workspace-dependencies'` 指引模型调用 `load_workspace_dependencies`，使用其返回的内置 Python 与库；仅在同时挂载 `dsh-tool-workspace-dependencies` 时使用。`'user'` 指引模型使用项目或用户已有的 PATH 上的 Python，先检查所需库能否 import，缺少时说明需要安装的包，未经用户同意不向全局环境安装。
 
 相对路径的 `assetRoot` 会阻止注册。目录发现时读取每个 `SKILL.md`。缺失或无效的技能会从目录中省略并记录警告；发现之后文件消失的技能加载失败，并从目录中移除。其他读取错误（例如文件被锁）会使本次发现不完整，由注册表重试。创作说明不解析渲染器路径；操作说明加载时校验现有解释器和 CLI 文件，不准备引擎。Bash 或 PowerShell 负责审批、沙箱、取消和输出管理。资源与执行工具必须位于同一主机。
 
@@ -93,7 +96,7 @@ flowchart TD
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 注册提供者、逐个读取技能资源并返回原始技能正文。 |
+| [`src/index.ts`](src/index.ts) | 注册提供者、逐个读取技能资源，并追加 Python 环境与 Kit 说明。 |
 
 | [`assets/`](assets/) | 路由与六个子技能。 |
 
@@ -113,11 +116,11 @@ flowchart TD
 <a id="model-experience"></a>
 ## 模型体验
 
-间接影响：`dsh-tool-skill` 渲染初始 Office 摘要，并返回 `skill(name)` 选择的路由或子技能说明。
+间接影响：`dsh-tool-skill` 渲染初始 Office 摘要，并返回 `skill(name)` 选择的路由或子技能说明。Python 技能末尾的 Python 环境说明按 `pythonEnvironment` 指向 `load_workspace_dependencies` 或用户已有的 Python。
 
 #### KV Cache 影响
 
-技能结果追加到历史中且不改变工具声明，操作完成后已加载文本或图片仍保留在历史中。因资源不可读而省略或移除的技能会改变目录，后续步骤会将其作为目录更新发布。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，路由正文最多 200 token；创作正文比合并后的创作与操作指南至少减少 35%。技能包装、通用目录、shell 声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
+技能结果追加到历史中且不改变工具声明，操作完成后已加载文本或图片仍保留在历史中。因资源不可读而省略或移除的技能会改变目录，后续步骤会将其作为目录更新发布。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，路由正文最多 200 token；创作正文比合并后的创作与操作指南至少减少 35%。追加的 Python 环境说明对同一部署固定，计入各 Python 技能正文。技能包装、通用目录、shell 声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
 
 ## 已知限制与后续工作
 

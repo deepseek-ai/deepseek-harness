@@ -5,7 +5,7 @@ description: Read, create, edit, and validate Excel workbooks, data, and formula
 
 # Excel workbooks
 
-Follow an explicit user or applicable AGENTS.md requirement for an environment or library. Otherwise call `load_workspace_dependencies` and run its Python executable with bundled `openpyxl` and `pandas`. Do not install packages or search for a system Python for the default workflow. If the tool is unavailable, use an already configured environment and report a missing dependency only when it prevents the requested operation.
+Use `openpyxl` and `pandas` unless an explicit user or applicable AGENTS.md requirement names another library. Run Python as described in the Python environment section below.
 
 Keep scripts, working files, and outputs in the task workspace. The runtime and skill directory are shared read-only resources. Save to a new workbook unless the user requests an in-place edit.
 

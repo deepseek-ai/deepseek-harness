@@ -102,7 +102,7 @@ Each browser session selects a shipped preset (`standard` by default). The Agent
 
 The bundle is one patch layer of five files plus one runtime glue plugin: `cordis.patch.yml` carries the host rows and the preset registry, and each `presets/<id>.patch.yml` inserts one shipped preset declaration, applied in the order `dsh.bundle.patch` lists them. The storage stack and projection cache come from `dsh-base`; the web overlay's workspace and message-feedback rows consume that shared `storageDomain` service. The patch restates the surface-specific values the base deliberately omits, inserts the web-only host rows and browser roster, then moves the agent plane behind presets. The glue plugin owns dist serving, the advertised application URL, the plain-HTTP exposure warning, the bash variable, and the readiness announcements. The `office-to-pdf` row mounts one lazy [Office conversion provider](../../document/office-to-pdf/README.md) for Host consumers, including Desktop compositions using this bundle. The conversion service's Remote methods authorize preview reads, while Document Preview owns the Office viewer and Client cache.
 
-Desktop also mounts the Office skills and bundled dependency-query rows; other profiles leave them disabled. An absent `DSH_BUNDLED_OFFICE_CLI` selects `cli: false`, retaining readable skills without automatically resolving another Kit installation. The [Desktop application](../../../apps/desktop/README.md#bundled-workspace-dependencies) owns resource resolution and its diagnostics.
+The `skill-office` row mounts the [Office skills](../../skill/skill-office/README.md) in every profile. Outside Desktop it uses the packaged assets, the current Node executable, the package's Kit CLI, and `pythonEnvironment: 'user'`. Desktop also mounts the bundled dependency-query row, configures the skills from the carrier's paths, and selects `pythonEnvironment: 'workspace-dependencies'`; other profiles leave the dependency-query row disabled. On Desktop an absent `DSH_BUNDLED_OFFICE_CLI` selects `cli: false`, retaining readable skills without automatically resolving another Kit installation. The [Desktop application](../../../apps/desktop/README.md#bundled-workspace-dependencies) owns resource resolution and its diagnostics.
 
 ### Patch semantics
 
@@ -163,6 +163,20 @@ Two managed-environment variable lines; constant per process.
 #### KV Cache effect
 
 None; the plugin contributes no system-prompt text.
+
+### Office skills
+
+#### What the model sees
+
+The skill catalog lists the Office router and six Office skills in every profile. The loaded Python skills end with a Python environment section: on Desktop it directs the model to `load_workspace_dependencies`; elsewhere it directs the model to the project's or user's existing Python.
+
+#### Token effect
+
+The seven catalog summaries in each initial catalog; loaded skill bodies only when the model requests them.
+
+#### KV Cache effect
+
+The catalog and each Python environment section are fixed for a profile and do not vary between requests.
 
 ## Known Limitations and Deferred Work
 

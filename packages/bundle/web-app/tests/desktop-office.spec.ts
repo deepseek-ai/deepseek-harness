@@ -1,8 +1,8 @@
-/** Desktop Office rows over a real Loader tree: carrier paths, profile gating, and per-row failure containment. */
+/** Web application Office rows over a real Loader tree: carrier paths, profile gating, Python environments, and failure containment. */
 
 import { cp, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -52,22 +52,24 @@ async function boot(profile: string, primaryRuntime: (root: string) => string | 
 
 it('mounts Office skills and workspace dependencies from the Desktop carrier paths', async () => {
   const { ctx, root } = await boot('desktop', root => join(root, 'primary-runtime'))
-  expect(ctx.loader.resolve('skill-office').fiber?.config).toEqual({
+  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toEqual({
     assetRoot: join(root, 'office-skills'),
     node: join(root, 'primary-runtime', 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),
     cli: join(root, 'office-cli.js'),
+    pythonEnvironment: 'workspace-dependencies',
   })
-  expect(ctx.loader.resolve('workspace-dependencies').fiber?.config).toEqual({
+  expect(ctx.loader.resolve('workspace-dependencies').fiber?.effectiveConfig).toEqual({
     source: join(root, 'primary-runtime'), root: join(root, 'home', 'dsh-runtimes', 'dsh-primary-runtime'),
   })
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
   expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['load_workspace_dependencies'])
+  expect((await ctx.skills.get('office-docx'))?.content).toMatch(/## Python environment\n\n.*`load_workspace_dependencies`/u)
 })
 
 it('keeps Office skills without CLI paths when the Desktop shell supplies no Kit CLI', async () => {
   const { ctx, root } = await boot('desktop', root => join(root, 'primary-runtime'), () => undefined)
-  expect(ctx.loader.resolve('skill-office').fiber?.config).toMatchObject({ assetRoot: join(root, 'office-skills'), cli: false })
-  expect(ctx.loader.resolve('workspace-dependencies').fiber?.config).toEqual({
+  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toMatchObject({ assetRoot: join(root, 'office-skills'), cli: false, pythonEnvironment: 'workspace-dependencies' })
+  expect(ctx.loader.resolve('workspace-dependencies').fiber?.effectiveConfig).toEqual({
     source: join(root, 'primary-runtime'), root: join(root, 'home', 'dsh-runtimes', 'dsh-primary-runtime'),
   })
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
@@ -79,11 +81,20 @@ it('keeps Office skills without CLI paths when the Desktop shell supplies no Kit
   expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['load_workspace_dependencies'])
 })
 
-it('keeps both rows disabled outside the Desktop profile', async () => {
-  const { ctx } = await boot('web', () => undefined)
-  expect(ctx.loader.resolve('skill-office').disabled).toBe(true)
+it('mounts Office skills with packaged defaults and the user Python outside the Desktop profile', async () => {
+  const { ctx } = await boot('web', () => undefined, () => undefined)
+  expect(ctx.loader.resolve('skill-office').disabled).toBe(false)
+  // Each path expression evaluates to `undefined`; the schema leaves it unset so skill-office applies its packaged default.
+  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({
+    assetRoot: undefined, node: undefined, cli: undefined, pythonEnvironment: 'user',
+  })
   expect(ctx.loader.resolve('workspace-dependencies').disabled).toBe(true)
-  expect(await ctx.skills.list()).toEqual([])
+  expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
+  expect((await ctx.skills.get('office-docx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-docx').split(sep).join('/') })
+  const docx = (await ctx.skills.get('office-docx'))?.content
+  expect(docx).toMatch(/## Python environment\n\n.*`python3` or `python` on PATH/u)
+  expect(docx).not.toContain('load_workspace_dependencies')
+  expect((await ctx.skills.get('office-render'))?.content).toContain(JSON.stringify(process.execPath))
   expect(ctx.tools.schemas()).toEqual([])
 })
 

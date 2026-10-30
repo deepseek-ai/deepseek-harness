@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The catalog lists the Office router and six authoring or operation skills. Full instructions load on demand. Authoring skills use the selected Python libraries; operation skills supply the configured Node and LibreOffice Kit CLI paths. SDK and Desktop mount the skill provider and dependency query separately.
+The catalog lists the Office router and six authoring or operation skills. Full instructions load on demand. Python authoring and verification skills append the configured Python environment; operation skills supply the configured Node and LibreOffice Kit CLI paths. The Web application and SDK profiles mount the provider; only Desktop, or an SDK with a primary runtime, also mounts the bundled dependency query.
 
 ## Table of Contents
 
@@ -26,7 +26,7 @@ The catalog lists the Office router and six authoring or operation skills. Full 
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the skill provider beside the skill registry and `dsh-tool-skill`. The provider supplies skill instructions; operation skills append absolute interpreter and CLI paths when loaded.
+Mount the skill provider beside the skill registry and `dsh-tool-skill`. The provider supplies skill instructions; Python skills append a Python environment section, and operation skills append absolute interpreter and CLI paths when loaded.
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'
@@ -38,6 +38,9 @@ Mount the skill provider beside the skill registry and `dsh-tool-skill`. The pro
 | `assetRoot` | Carrier resources or packaged `assets/` | Absolute directory containing the seven skill folders. |
 | `node` | Host Node.js | Standalone Node executable for operation skills; packaged carriers supply it explicitly. |
 | `cli` | Installed Kit CLI | Absolute CLI entry; `false` disables operation execution. |
+| `pythonEnvironment` | `'user'` | Python that `office-docx`, `office-pptx`, `office-xlsx`, and `office-recalculate` direct the model to; see below. |
+
+`pythonEnvironment` selects one fixed section appended to those four skills. Both values first defer to an explicit user or applicable AGENTS.md environment requirement. `'workspace-dependencies'` directs the model to call `load_workspace_dependencies` and use the bundled Python and libraries it returns; mount it only with `dsh-tool-workspace-dependencies`. `'user'` directs the model to the project's or user's existing Python on PATH, to check that the required libraries import, and to name missing packages instead of installing them globally without the user's agreement.
 
 A relative `assetRoot` rejects registration. Catalog discovery reads each `SKILL.md`. A missing or invalid skill is omitted from the catalog with a warning, and a skill whose file disappears after discovery fails to load and leaves the catalog. Other read errors, such as a locked file, leave discovery incomplete so the registry retries it. Authoring instructions do not resolve renderer paths; loading operation instructions validates existing interpreter and CLI files without preparing engines. Bash or PowerShell owns approvals, sandboxing, cancellation, and output management. Resources and execution tools must refer to the same host.
 
@@ -93,7 +96,7 @@ The provider registers no tools or activation projection. Loaded skill results r
 
 | File | Responsibility |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Provider registration, per-skill resource reads, and unchanged skill bodies. |
+| [`src/index.ts`](src/index.ts) | Provider registration, per-skill resource reads, and appended Python environment and Kit sections. |
 
 | [`assets/`](assets/) | Router and six subskills. |
 
@@ -113,11 +116,11 @@ The provider registers no tools or activation projection. Loaded skill results r
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through `dsh-tool-skill`, which renders the initial Office summary and returns routing or selected subskill instructions from `skill(name)`.
+Indirectly, through `dsh-tool-skill`, which renders the initial Office summary and returns routing or selected subskill instructions from `skill(name)`. The Python skills end with a Python environment section that names either `load_workspace_dependencies` or the user's existing Python, according to `pythonEnvironment`.
 
 #### KV Cache effect
 
-Skill results append to history without changing tool declarations, and loaded text or images remain after an operation finishes. A skill omitted or removed for unreadable resources changes the catalog, which a later step publishes as a catalog update. Character estimates use `ceil(characters / 4)`: the summary is at most 50 tokens and the router body at most 200; authoring bodies are at least 35% smaller than the combined authoring and operation guides. Skill wrappers, the generic catalog, shell declarations, and `load_workspace_dependencies` are separate costs, and these estimates are not server usage.
+Skill results append to history without changing tool declarations, and loaded text or images remain after an operation finishes. A skill omitted or removed for unreadable resources changes the catalog, which a later step publishes as a catalog update. Character estimates use `ceil(characters / 4)`: the summary is at most 50 tokens and the router body at most 200; authoring bodies are at least 35% smaller than the combined authoring and operation guides. The appended Python environment section is fixed per deployment and counts toward each Python skill body. Skill wrappers, the generic catalog, shell declarations, and `load_workspace_dependencies` are separate costs, and these estimates are not server usage.
 
 ## Known Limitations and Deferred Work
 

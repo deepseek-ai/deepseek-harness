@@ -13,6 +13,6 @@ Keep the original workbook and write a new file in the task workspace. Quote eac
 "<node>" "<cli>" recalculate --input <workbook.xlsx> --output <recalculated.xlsx>
 ```
 
-Verify the saved result with openpyxl, using `load_workspace_dependencies` for the Python path unless a project environment is required. Open it with both `data_only=False` and `data_only=True`. Check that formulas survive and cached results match the requested logic, expected totals, and cell types. Check required unchanged sheets, styles, and data. Recalculation does not validate business logic or guarantee Excel-specific feature compatibility.
+Verify the saved result with openpyxl, running Python as described in the Python environment section below. Open it with both `data_only=False` and `data_only=True`. Check that formulas survive and cached results match the requested logic, expected totals, and cell types. Check required unchanged sheets, styles, and data. Recalculation does not validate business logic or guarantee Excel-specific feature compatibility.
 
 If no supported recalculation engine is available or the command fails, preserve the workbook and explain that calculated values could not be refreshed. Do not replace requested formulas with constants or present stale/absent caches as fresh results. Deliver the verified output through `present` when available, keeping the file in place.

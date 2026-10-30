@@ -5,6 +5,7 @@
         assetRoot: !!js process.cwd() + '/office-skills'
         node: !!js process.cwd() + '/office-node'
         cli: !!js process.cwd() + '/render-cli.cjs'
+        pythonEnvironment: workspace-dependencies
 
 - id: llm-deepseek
   config:
