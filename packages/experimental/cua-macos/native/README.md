@@ -37,7 +37,7 @@ If npm publication fails after uploading some packages, rerun only the **Publish
 
 Startup errors retain their code and message through an owner-only, per-attempt failure file and the launcher’s JSON error frame. Launch-lock and readiness waits share one deadline; operating-system launch time consumes that budget. Readiness must name the newly launched PID. A failed new instance is force-terminated and awaited before the launcher reports failure; this cleanup has a separate bound equal to the startup timeout. Existing shared services are not terminated by a failed attaching launcher.
 
-The application icon is generated from the [Computer Use artwork](../../cua-bundle/icon.svg) with `pnpm --dir packages/experimental/cua-macos run build:icon`. System permission prompts and the DSH permission page use this application icon.
+The application icon is generated from the [Computer Use artwork](../../cua-bundle/icon.svg) with `pnpm --dir packages/experimental/cua-macos run build:icon`. The native icon adds an opaque white rounded tile beneath the artwork and keeps its outer corners transparent. System permission prompts and the DSH permission page use this application icon.
 
 The shared service uses an owner-only Unix socket under `/tmp/dsh-cua-<uid>`, keyed by the executable SHA-256. A version lock elects one process; an additional real-executable-path lock excludes a different build at the same path. The first frame is protocol-1 `hello` with the runtime key and this connection’s byte, AX, operation, screenshot, event-spacing and cleanup limits. `ready` reports the verified runtime key, PID and instance ID. Every connection owns an independent AXWorker. The stdin/stdout entry is a diagnostic proxy to this service.
 
