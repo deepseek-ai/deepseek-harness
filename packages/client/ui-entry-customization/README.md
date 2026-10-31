@@ -65,7 +65,7 @@ None; the package neither assembles nor sends model requests.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only the sidebar More menu provides pin controls. Pin choices remain in memory in the region owner; plugin reload restores defaults.
+- Only the left sidebar provides pin controls: its rows unpin, and its More menu pins. Pin choices remain in memory in the region owner; plugin reload restores defaults.
 - Legacy pin values in localStorage are neither read nor written.
 - **Create your plugin** does not check whether the Creator preset exists. Without it, Session creation fails, the Workspace shows its creation-failure notice, and no draft is prepared. Draft preparation also requires a resolvable Workspace; without one, the existing flow reports that a Workspace is required.
 - Conversation owns the estimated tab split; these menus provide no sorting.

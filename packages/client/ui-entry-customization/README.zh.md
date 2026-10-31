@@ -65,7 +65,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 只有侧栏更多菜单提供 Pin 控件。固定选择仅保存在所属区域的内存中；插件重新加载后恢复默认值。
+- 只有左侧栏提供 Pin 控件：侧栏行取消固定，侧栏更多菜单重新固定。固定选择仅保存在所属区域的内存中；插件重新加载后恢复默认值。
 - 不读取或写入 localStorage 中的旧 Pin 值。
 - **创建你的插件**不检查 Creator 预设是否存在。预设缺失时 Session 创建失败，Workspace 显示创建失败提示，不准备草稿。草稿准备还要求可确定目标 Workspace；没有目标时，现有流程提示需要 Workspace。
 - 会话区域负责按估算值分组；菜单不提供排序。

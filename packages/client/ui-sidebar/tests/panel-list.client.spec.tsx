@@ -358,7 +358,7 @@ describe('sidebar launcher pins', () => {
     expect(within(navigation).getAllByRole('button').map(row => row.textContent)).toEqual(['Beta panel', 'Alpha panel'])
   })
 
-  it('shows More after the rows only while the actions list has registrations', async () => {
+  it('shows More and hides unpinned rows only while the actions list has registrations', async () => {
     const { runtime, locale, view } = await bench()
     const probe = await mountProbeActions(runtime)
     expect(view.queryByRole('navigation')).toBeNull()
@@ -371,6 +371,10 @@ describe('sidebar launcher pins', () => {
     expect(document.activeElement).toBe(within(navigation).getByRole('button', { name: 'More' }))
     await probe.dispose()
     await waitFor(() => { expect(within(navigation).queryByRole('button', { name: 'More' })).toBeNull() })
+    expect(within(navigation).getAllByRole('button').map(row => row.getAttribute('aria-label'))).toEqual(['Beta panel', 'Alpha panel'])
+    await mountProbeActions(runtime)
+    await waitFor(() => { expect(within(navigation).queryByRole('button', { name: 'Alpha panel' })).toBeNull() })
+    expect(within(navigation).getByRole('button', { name: 'More' })).toBeTruthy()
   })
 
   it.each([false, true])('opens, pins, and dismisses through the More menu with collapsed=%s', async (collapsed) => {
