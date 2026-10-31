@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package is the Host row of the [Feishu plugin](../feishu/README.md). It installs a pinned `@larksuite/cli`, gives the model the absolute path of its `lark-cli` executable in runtime context, and registers one `feishu` skill that indexes the guides embedded in that CLI. Its `feishu` Remote checks the CLI's default account, links an app and signs in through the CLI's browser flows, signs out, and cancels, for the [Feishu plugin page](../../client/ui-feishu/README.md). The CLI keeps credentials in its default configuration, which the user's own terminal shares. Only macOS is supported.
+This package is the Host row of the [Feishu plugin](../feishu/README.md). It installs a pinned `@larksuite/cli`, gives the model the absolute path of its `lark-cli` executable in runtime context, and registers one `feishu` skill that indexes the guides embedded in that CLI. It registers the account with the [CLI account registry](../../client/ui-cli-account/README.md), whose Plugins page section checks the default account, links an app and signs in through the CLI's browser flows, signs out, and cancels. The CLI keeps credentials in its default configuration, which the user's own terminal shares. Only macOS is supported.
 
 ## Table of Contents
 
@@ -38,18 +38,17 @@ Turning the row off in Plugin Manager withdraws the `feishu` skill and the path 
 <a id="account-operations"></a>
 ### Account operations
 
-The `feishu` Remote serves the Plugins page. It runs at most one account operation at a time, owned by the Host, so leaving the page does not cancel it. Linking an app and signing in are separate operations, so the page starts each one from its own click.
+The Plugins page drives these operations through the CLI account registry, which the Web app loads; a headless profile loads the plugin without it. The Host runs at most one account operation at a time and owns it, so leaving the page does not cancel it. Linking an app and signing in are separate operations, so the page starts each one from its own click.
 
-| Method | Effect |
+| Operation | Effect |
 |---|---|
-| `follow(signal)` | Streams the account, the operation in progress, and the last result; each new follower starts a check when no operation runs |
-| `check()` | Checks the account again; returns the operation id |
-| `linkApp()` | Runs `config init --new`, which replaces the CLI's default configuration, including its sign-ins and any other app, with the app the user creates or chooses; it does not sign in |
-| `signIn()` | Runs `auth login --json` for the linked app and checks that the same user is signed in |
-| `signOut()` | Runs `auth logout --json`, which also signs out the user's own terminal, then checks again |
-| `cancel(id)` | Cancels that operation during app setup or sign-in and waits for its command to exit; other steps and a finished id are ignored |
+| `check` | Checks the account again; each browser that opens the Web app starts one when no operation runs |
+| `link-app` | Runs `config init --new`, which replaces the CLI's default configuration, including its sign-ins and any other app, with the app the user creates or chooses; it does not sign in. Replacing a linked app asks first |
+| `sign-in` | Runs `auth login --json` for the linked app and checks that the same user is signed in |
+| `sign-out` | After the user confirms, runs `auth logout --json`, which also signs out the user's own terminal, then checks again |
+| Cancel | Cancels the operation during app setup or sign-in and waits for its command to exit; other steps are ignored |
 
-A check runs `auth status --verify --json`. The account reads `connected` only when the CLI reports an available user that its server verified, `signed-out` when the user is missing, not configured, or needs a refresh, `unconfigured` when no app exists, and `unverified` otherwise, for example when verification cannot reach the server. Every state except `unconfigured` carries the configured `appId`. Each link that `config init` prints and each device-authorization link that `auth login` reports is offered only when it is an HTTPS address on `feishu.cn` or `larksuite.com`. A sign-in that leaves requested permissions ungranted (`auth login` exits with code 3 and lists them as missing) still succeeds; a command that later needs a missing permission reports it. Results report succeeded, cancelled, or failed. Failures include the command, observed exit code, and recognized CLI error categories in the Remote result and Host log; native messages, paths, and authorization data are omitted. A successful Feishu webpage does not confirm that local credentials were saved. The process running DSH needs access to the CLI configuration and system credential storage; `DSH_HOME` does not relocate either.
+A check runs `auth status --verify --json`. The account reads `connected` only when the CLI reports an available user that its server verified, `signed-out` when the user is missing, not configured, or needs a refresh, `unconfigured` when no app exists, and `unverified` otherwise, for example when verification cannot reach the server. Every state except `unconfigured` carries the configured `appId`. Each link that `config init` prints and each device-authorization link that `auth login` reports is offered only when it is an HTTPS address on `feishu.cn` or `larksuite.com`. A sign-in that leaves requested permissions ungranted (`auth login` exits with code 3 and lists them as missing) still succeeds; a command that later needs a missing permission reports it. Results report succeeded, cancelled, or failed. Failures show the command, observed exit code, and recognized CLI error categories on the page and in the Host log; native messages, paths, and authorization data are omitted. A successful Feishu webpage does not confirm that local credentials were saved. The process running DSH needs access to the CLI configuration and system credential storage; `DSH_HOME` does not relocate either.
 
 ### Configure
 
@@ -70,7 +69,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-fe
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.feishu`. It checks that `binDir/lark-cli` (`lark-cli.exe` on Windows) is executable, gives that path to the model in runtime context, and registers the skill provider. [`src/cli.ts`](src/cli.ts) locates `lark-cli` and parses the JSON output of its commands. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one account operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the Feishu commands, reads setup and sign-in links from their output lines, and classifies failures through [`src/diagnostic.ts`](src/diagnostic.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
+[`src/index.ts`](src/index.ts) is a function plugin. It checks that `binDir/lark-cli` (`lark-cli.exe` on Windows) is executable, gives that path to the model in runtime context, and registers the skill provider. [`src/cli.ts`](src/cli.ts) locates `lark-cli` and parses the JSON output of its commands. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one account operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the Feishu commands, reads setup and sign-in links from their output lines, and classifies failures through [`src/diagnostic.ts`](src/diagnostic.ts). [`src/presentation.ts`](src/presentation.ts) maps each view to the section the registry serves, in the text of [`src/locales.ts`](src/locales.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
 
 [`src/skills.ts`](src/skills.ts) lists the `feishu` skill without running the CLI. Each load runs `lark-cli skills list --json` and places the DSH guidance, an index of each guide's name and description, and the instructions for opening a guide and the files it references; a failed catalog read fails that load, and the next load reads the catalog again. Guides are embedded in the binary, so the skill's resource base is opaque.
 
@@ -85,7 +84,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-fe
 - [CLI account library](../cli-account/README.md) — command execution, the CLI path context, and account operations shared by CLI app plugins.
 - [Skills](../../../docs/subsystems/skills.md) — catalog publication, loading, and precedence.
 - [Feishu plugin](../feishu/README.md) — the bundle that inserts this row and the page row.
-- [Feishu plugin page](../../client/ui-feishu/README.md) — the Plugins page that drives the account operations.
+- [CLI account surfaces](../../client/ui-cli-account/README.md) — the registry and the Plugins page section that drive the account operations.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation, build-script approval, and enablement.
 
 -----

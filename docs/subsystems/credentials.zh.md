@@ -367,58 +367,6 @@ abstract getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserI
 
 Source: [`packages/credentials/deepseek-account/src/index.ts`](../../packages/credentials/deepseek-account/src/index.ts)
 
-<a id="ctxfeishu--feishu"></a>
-
-### `ctx.feishu` — `Feishu`
-
-Registers the CLI and skills, and owns the account operations the Plugins page drives.
-
-```ts cordis-catalog
-/**
- * Check the account again without changing it.
- * @returns the operation identity.
- * @throws while another account operation runs.
- */
-@Remote check(): CliOperationId
-
-/**
- * Link an app through the CLI's setup page, replacing a configured app and its sign-ins.
- * @returns the operation identity.
- * @throws while another account operation runs.
- */
-@Remote linkApp(): CliOperationId
-
-/**
- * Sign the linked app's user in through the CLI's authorization page.
- * @returns the operation identity.
- * @throws while another account operation runs.
- */
-@Remote signIn(): CliOperationId
-
-/**
- * Sign the default account out, which also signs out the user's own terminal.
- * @returns the operation identity.
- * @throws while another account operation runs.
- */
-@Remote signOut(): CliOperationId
-
-/**
- * Cancel one operation and wait for its command to exit.
- * @param id - the operation to cancel; a finished one is ignored.
- * @returns after the operation settles.
- */
-@Remote cancel(id: CliOperationId): Promise<void>
-
-/**
- * Follow the account and its operations independently of any page; each new subscriber starts a check when none runs.
- * @param signal - the Client's observation lifetime.
- * @returns the current view, then each changed view.
- */
-@Remote({ mode: 'stream' }) async *follow(signal: AbortSignal): AsyncIterable<FeishuState>
-```
-
-Source: [`packages/connector/feishu-cli/src/index.ts`](../../packages/connector/feishu-cli/src/index.ts)
-
 <a id="authorization-events"></a>
 
 ### `authorization/*` events

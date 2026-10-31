@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The Feishu plugin lets conversations use Feishu through the official `lark-cli`. Installing this bundle adds two rows: the CLI with its embedded skills, and the Feishu account section on the Plugins page, where the user links an app and signs in without starting a conversation. The CLI keeps the account in its default configuration, which the user's own terminal shares. Only macOS and Windows x64 are supported.
+The Feishu plugin lets conversations use Feishu through the official `lark-cli`. Installing this bundle adds one row: the CLI with its embedded skills, which also shows the Feishu account section on the Plugins page, where the user links an app and signs in without starting a conversation. The CLI keeps the account in its default configuration, which the user's own terminal shares. Only macOS and Windows x64 are supported.
 
 ## Table of Contents
 
@@ -40,8 +40,7 @@ pnpm blocks the `@larksuite/cli` install script, which downloads and verifies th
 
 | Row | Package | Behavior |
 |---|---|---|
-| `feishu` | [`@deepseek-ai/dsh-feishu-cli`](../feishu-cli/README.md) | Gives the model the absolute path of `lark-cli`, registers its embedded skills, and runs account checks, connection, and sign-out on the Host |
-| `ui-feishu` | [`@deepseek-ai/dsh-client-ui-feishu`](../../client/ui-feishu/README.md) | Shows the Feishu account section, a connection tag, guidance after the bundle is switched on, and connection notices on the Plugins page |
+| `feishu` | [`@deepseek-ai/dsh-feishu-cli`](../feishu-cli/README.md) | Gives the model the absolute path of `lark-cli`, registers its embedded skills, runs account checks, connection, and sign-out on the Host, and shows the account section, a connection tag, guidance after the bundle is switched on, and connection notices on the Plugins page through the [CLI account registry](../../client/ui-cli-account/README.md) |
 
 Switching the bundle off withdraws the skills, the path in runtime context, and the page. The CLI configuration and sign-in stay in place.
 
@@ -53,7 +52,7 @@ Switching the bundle off withdraws the skills, the path in runtime context, and 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) inserts the `feishu` and `ui-feishu` rows after the profile's other layers. The package depends on both row packages so that the rows resolve from this bundle, and [`src/index.ts`](src/index.ts) exports nothing. The Plugins page keys the account section by this package name.
+[`cordis.patch.yml`](cordis.patch.yml) inserts the `feishu` row after the profile's other layers. The package depends on that row package so that the row resolves from this bundle, and [`src/index.ts`](src/index.ts) exports nothing. The Plugins page keys the account section by this package name.
 
 </details>
 
@@ -64,7 +63,7 @@ Switching the bundle off withdraws the skills, the path in runtime context, and 
 
 - [Connector packages](../README.md) — the group this application plugin belongs to.
 - [Feishu CLI and skills](../feishu-cli/README.md) — the Host row, its account operations, and its model guidance.
-- [Feishu plugin page](../../client/ui-feishu/README.md) — the Plugins page row.
+- [CLI account surfaces](../../client/ui-cli-account/README.md) — the registry that shows the account on the Plugins page.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation, build-script approval, and enablement.
 
 -----
@@ -72,7 +71,7 @@ Switching the bundle off withdraws the skills, the path in runtime context, and 
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the `feishu` row, whose package owns the skill catalog entries and loaded skill bodies described in its [Model Experience](../feishu-cli/README.md#model-experience); the `ui-feishu` row adds nothing model-facing.
+Indirectly, through the `feishu` row, whose package owns the skill catalog entries and loaded skill bodies described in its [Model Experience](../feishu-cli/README.md#model-experience).
 
 #### KV Cache effect
 

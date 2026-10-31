@@ -4619,39 +4619,6 @@ importers:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
 
-  packages/client/ui-feishu:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-api-remotes':
-        specifier: workspace:*
-        version: link:../../api/remotes
-      '@deepseek-ai/dsh-cli-account':
-        specifier: workspace:*
-        version: link:../../connector/cli-account
-      '@deepseek-ai/dsh-client-locale':
-        specifier: workspace:*
-        version: link:../locale
-      '@deepseek-ai/dsh-client-test-runtime':
-        specifier: workspace:*
-        version: link:../../test-support/client-runtime
-      '@deepseek-ai/dsh-client-ui-cli-account':
-        specifier: workspace:*
-        version: link:../ui-cli-account
-      '@deepseek-ai/dsh-client-ui-slots':
-        specifier: workspace:*
-        version: link:../ui-slots
-      '@deepseek-ai/dsh-feishu-cli':
-        specifier: workspace:*
-        version: link:../../connector/feishu-cli
-      '@deepseek-ai/dsh-typert-protocol':
-        specifier: workspace:*
-        version: link:../../typert/protocol
-      '@deepseek-ai/dsh-util-values':
-        specifier: workspace:*
-        version: link:../../util/values
-
   packages/client/ui-file-actions:
     devDependencies:
       '@deepseek-ai/cordis':
@@ -7555,9 +7522,6 @@ importers:
 
   packages/connector/feishu:
     dependencies:
-      '@deepseek-ai/dsh-client-ui-feishu':
-        specifier: workspace:*
-        version: link:../../client/ui-feishu
       '@deepseek-ai/dsh-feishu-cli':
         specifier: workspace:*
         version: link:../feishu-cli
@@ -7590,6 +7554,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-client-ui-cli-account':
+        specifier: workspace:*
+        version: link:../../client/ui-cli-account
       '@deepseek-ai/dsh-skill':
         specifier: workspace:*
         version: link:../../skill/skill
@@ -7599,9 +7566,6 @@ importers:
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:*
         version: link:../../core/system-prompt
-      '@deepseek-ai/dsh-typert-protocol':
-        specifier: workspace:*
-        version: link:../../typert/protocol
 
   packages/context/agent-instructions:
     dependencies:

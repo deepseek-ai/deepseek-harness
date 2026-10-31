@@ -161,7 +161,6 @@
     { "path": "./packages/client/ui-settings-general/tsconfig.client.json" },
     { "path": "./packages/client/ui-settings-models" },
     { "path": "./packages/client/ui-plugin-manager/tsconfig.client.json" },
-    { "path": "./packages/client/ui-feishu" },
     { "path": "./packages/client/ui-cli-account/tsconfig.client.json" },
     { "path": "./packages/client/ui-plugin-market" },
     { "path": "./packages/client/ui-settings-plugin-inventory" },

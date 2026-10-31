@@ -31,8 +31,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/dsh-feishu-cli": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-feishu": "workspace:*"
+    "@deepseek-ai/dsh-feishu-cli": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

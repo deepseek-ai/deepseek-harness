@@ -27,7 +27,7 @@ type Control = CliOperationControl<FeishuPhase, FeishuOperationFailure['command'
 
 interface Check { account: FeishuAccountState; openId?: string | undefined }
 
-/** Runs at most one account operation at a time; subscribers observe it without owning it. */
+/** Runs at most one account operation at a time; observers see it without owning it. */
 export class FeishuAccount extends CliAccountRuntime<FeishuAccountState, FeishuOperationKind, FeishuPhase, FeishuOperationFailure> {
   /**
    * @param cli - the lark-cli executor the account runs commands with and disposes.
@@ -114,7 +114,7 @@ export class FeishuAccount extends CliAccountRuntime<FeishuAccountState, FeishuO
     const result = await control.run('auth-status', args, signal)
     if (result.exitCode !== 0) {
       if (!NotConfigured.safeParse(parseJson(args, result.stderr)).success) throw new Error('feishu: auth status failed')
-      return this.observe({ state: 'unconfigured' })
+      return this.record({ state: 'unconfigured' })
     }
     const status = Status.parse(parseJson(args, result.stdout))
     const appId = brandString<FeishuAppId>(status.appId)
@@ -122,10 +122,10 @@ export class FeishuAccount extends CliAccountRuntime<FeishuAccountState, FeishuO
     const account: FeishuAccountState = user.available && user.verified === true
       ? { state: 'connected', appId, ...user.userName === undefined ? {} : { userName: user.userName } }
       : { state: SIGNED_OUT.has(user.status) ? 'signed-out' : 'unverified', appId }
-    return this.observe(account, user.openId)
+    return this.record(account, user.openId)
   }
 
-  private observe(account: FeishuAccountState, openId?: string): Check {
+  private record(account: FeishuAccountState, openId?: string): Check {
     this.publish(account)
     return { account, openId }
   }

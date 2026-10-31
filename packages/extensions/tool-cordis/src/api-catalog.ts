@@ -1153,53 +1153,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
-    key: 'feishu',
-    summary: 'Registers the CLI and skills, and owns the account operations the Plugins page drives.',
-    description: 'Registers the CLI and skills, and owns the account operations the Plugins page drives.',
-    methods: [
-      {
-        signature: '@Remote check(): CliOperationId',
-        description: 'Check the account again without changing it.',
-        parameters: [],
-        returns: 'the operation identity.',
-        throws: ['while another account operation runs.'],
-      },
-      {
-        signature: '@Remote linkApp(): CliOperationId',
-        description: 'Link an app through the CLI\'s setup page, replacing a configured app and its sign-ins.',
-        parameters: [],
-        returns: 'the operation identity.',
-        throws: ['while another account operation runs.'],
-      },
-      {
-        signature: '@Remote signIn(): CliOperationId',
-        description: 'Sign the linked app\'s user in through the CLI\'s authorization page.',
-        parameters: [],
-        returns: 'the operation identity.',
-        throws: ['while another account operation runs.'],
-      },
-      {
-        signature: '@Remote signOut(): CliOperationId',
-        description: 'Sign the default account out, which also signs out the user\'s own terminal.',
-        parameters: [],
-        returns: 'the operation identity.',
-        throws: ['while another account operation runs.'],
-      },
-      {
-        signature: '@Remote cancel(id: CliOperationId): Promise<void>',
-        description: 'Cancel one operation and wait for its command to exit.',
-        parameters: [{ name: 'id', description: 'the operation to cancel; a finished one is ignored.' }],
-        returns: 'after the operation settles.',
-      },
-      {
-        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<FeishuState>',
-        description: 'Follow the account and its operations independently of any page; each new subscriber starts a check when none runs.',
-        parameters: [{ name: 'signal', description: 'the Client\'s observation lifetime.' }],
-        returns: 'the current view, then each changed view.',
-      },
-    ],
-  },
-  {
     key: 'fileReferences',
     summary: 'Host capability for cancellable file-reference discovery.',
     description: 'Host capability for cancellable file-reference discovery.',
@@ -6457,30 +6410,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'FeedbackCategory',
     declaration: 'export type FeedbackCategory = \'task-result\' | \'instruction-following\' | \'product-interaction\' | \'service-stability\' | \'resource-cost\' | \'security-privacy-permission\' | \'other\';',
-  },
-  {
-    name: 'FeishuAccountState',
-    declaration: 'export type FeishuAccountState = {\n    readonly state: \'unchecked\' | \'unconfigured\';\n} | {\n    readonly state: \'signed-out\' | \'unverified\';\n    readonly appId: FeishuAppId;\n} | {\n    readonly state: \'connected\';\n    readonly appId: FeishuAppId;\n    readonly userName?: string;\n};',
-  },
-  {
-    name: 'FeishuAppId',
-    declaration: 'export type FeishuAppId = Branded<\'FeishuAppId\'>;',
-  },
-  {
-    name: 'FeishuOperationFailure',
-    declaration: 'export interface FeishuOperationFailure extends CliCommandFailure<\'config-init\' | \'auth-status\' | \'auth-login\' | \'auth-logout\'> {\n    readonly type?: \'validation\' | \'authentication\' | \'authorization\' | \'config\' | \'network\' | \'api\' | \'policy\' | \'internal\' | \'confirmation\';\n    readonly subtype?: \'sdk_error\' | \'storage\' | \'file_io\' | \'not_configured\' | \'invalid_config\' | \'invalid_client\';\n}',
-  },
-  {
-    name: 'FeishuOperationKind',
-    declaration: 'export type FeishuOperationKind = \'check\' | \'link-app\' | \'sign-in\' | \'sign-out\';',
-  },
-  {
-    name: 'FeishuPhase',
-    declaration: 'export type FeishuPhase = \'configuring\' | \'authorizing\' | \'verifying\' | \'signing-out\';',
-  },
-  {
-    name: 'FeishuState',
-    declaration: 'export type FeishuState = CliAccountView<FeishuAccountState, FeishuOperationKind, FeishuPhase, FeishuOperationFailure>;',
   },
   {
     name: 'FiberState',

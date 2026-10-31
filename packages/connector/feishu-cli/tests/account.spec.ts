@@ -1,14 +1,16 @@
-/** Account operations over a scripted lark-cli: checks, app linking, sign-in, sign-out, cancellation, and the Remote wiring. */
+/** Account operations over a scripted lark-cli: checks, app linking, sign-in, sign-out, cancellation, and the Plugins page wiring. */
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { CliCommandExecutor, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
+import type { CliAccountRegistration, CliAccountSource } from '@deepseek-ai/dsh-cli-account/types'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FeishuAccount } from '../src/account.ts'
 import { PROGRAM } from '../src/cli.ts'
-import Feishu, { type FeishuAppId, type FeishuState } from '../src/index.ts'
+import * as Feishu from '../src/index.ts'
+import type { FeishuAppId, FeishuState } from '../src/types.ts'
 import { createBinDir, ScriptedSubprocess, type CliReply, type ScriptedProcess } from './harness.ts'
 
 const APP = 'cli_a' as FeishuAppId
@@ -187,61 +189,57 @@ describe('FeishuAccount', () => {
   })
 })
 
-describe('Feishu Remote', () => {
+describe('Feishu on the Plugins page', () => {
+  let account!: CliAccountSource<FeishuState>
+
   beforeEach(async () => {
+    ctx.provide('cliAccounts', {
+      register: (registration: CliAccountRegistration<FeishuState>) => {
+        account = registration.source
+        return () => {}
+      },
+    })
     await ctx.plugin(Feishu, { commandTimeoutMs: 5_000, binDir })
   })
 
-  it('checks for a new follower, streams each change, and starts checks, app links, sign-ins, and sign-outs', async () => {
+  const finished = async (id: CliOperationId): Promise<FeishuState['result']> => {
+    await vi.waitFor(() => { expect(account.snapshot().result?.id).toBe(id) })
+    return account.snapshot().result
+  }
+
+  it('checks on refresh, then starts checks, app links, sign-ins, and sign-outs one at a time and cancels them', async () => {
     script[STATUS] = [SIGNED_OUT]
-    const states: FeishuState[] = []
-    const leave = new AbortController()
-    const following = (async () => {
-      for await (const state of ctx.feishu.follow(leave.signal)) states.push(state)
-    })()
-    const finished = async (id?: CliOperationId): Promise<FeishuState['result']> => {
-      await vi.waitFor(() => {
-        expect(states.at(-1)?.result).toBeDefined()
-        if (id !== undefined) expect(states.at(-1)?.result?.id).toBe(id)
-      })
-      return states.at(-1)?.result
-    }
-    expect(await finished()).toMatchObject({ kind: 'check', outcome: 'succeeded' })
-    expect(states[0]).toMatchObject({ account: { state: 'unchecked' }, operation: { kind: 'check' } })
-    expect(states.at(-1)?.account).toEqual({ state: 'signed-out', appId: APP })
+    account.refresh()
+    const check = account.snapshot().operation
+    expect(account.snapshot()).toMatchObject({ account: { state: 'unchecked' }, operation: { kind: 'check' } })
+    expect(await finished(check!.id)).toMatchObject({ kind: 'check', outcome: 'succeeded' })
+    expect(account.snapshot().account).toEqual({ state: 'signed-out', appId: APP })
 
     script['auth logout --json'] = [{ stdout: '{"ok":true}' }]
-    const signingOut = ctx.feishu.signOut()
-    expect(() => ctx.feishu.signIn()).toThrow('another account operation is in progress')
-    await ctx.feishu.cancel(signingOut)
+    const signingOut = account.start('sign-out')
+    expect(() => account.start('sign-in')).toThrow('another account operation is in progress')
+    await account.cancel(signingOut)
     expect(await finished(signingOut)).toMatchObject({ kind: 'sign-out', outcome: 'succeeded' })
-    expect(await finished(ctx.feishu.check())).toMatchObject({ kind: 'check', outcome: 'succeeded' })
+    expect(await finished(account.start('check'))).toMatchObject({ kind: 'check', outcome: 'succeeded' })
 
     script['config init --new'] = () => {}
-    const linking = ctx.feishu.linkApp()
+    const linking = account.start('link-app')
     await vi.waitFor(() => { expect(commands().at(-1)).toBe('config init --new') })
-    await ctx.feishu.cancel(linking)
+    await account.cancel(linking)
     expect(await finished(linking)).toMatchObject({ kind: 'link-app', outcome: 'cancelled' })
     script['auth login --json'] = () => {}
-    const signingIn = ctx.feishu.signIn()
+    const signingIn = account.start('sign-in')
     await vi.waitFor(() => { expect(commands().at(-1)).toBe('auth login --json') })
-    await ctx.feishu.cancel(signingIn)
+    await account.cancel(signingIn)
     expect(await finished(signingIn)).toMatchObject({ kind: 'sign-in', outcome: 'cancelled' })
     expect(subprocess.processes.at(-1)?.terminated).toBe(true)
-    leave.abort()
-    await following
   })
 
-  it('ends its streams and stops account work on disposal', async () => {
+  it('stops account work on disposal', async () => {
     script[STATUS] = () => {}
-    const states: FeishuState[] = []
-    const following = (async () => {
-      for await (const state of ctx.feishu.follow(new AbortController().signal)) states.push(state)
-    })()
+    account.refresh()
     await vi.waitFor(() => { expect(subprocess.processes).toHaveLength(1) })
     await ctx.fiber.dispose()
-    await following
-    expect(states.length).toBeGreaterThan(0)
     expect(subprocess.processes[0]?.terminated).toBe(true)
   })
 })

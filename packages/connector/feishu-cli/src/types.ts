@@ -1,4 +1,4 @@
-/** Credential-free Feishu account and operation views for Remote clients. */
+/** Credential-free Feishu account and operation views the Plugins page presenter reads. */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { CliAccountView, CliCommandFailure } from '@deepseek-ai/dsh-cli-account/types'
@@ -26,5 +26,5 @@ export interface FeishuOperationFailure extends CliCommandFailure<'config-init' 
   readonly subtype?: 'sdk_error' | 'storage' | 'file_io' | 'not_configured' | 'invalid_config' | 'invalid_client'
 }
 
-/** The complete Feishu view a Remote client replaces on every change. */
+/** The complete Feishu view the presenter reads after each change. */
 export type FeishuState = CliAccountView<FeishuAccountState, FeishuOperationKind, FeishuPhase, FeishuOperationFailure>

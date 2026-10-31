@@ -5,8 +5,11 @@ import SkillRegistry, { renderSkillContent } from '@deepseek-ai/dsh-skill'
 import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { executableFileName } from '@deepseek-ai/dsh-cli-account'
+import type { CliAccountRegistration } from '@deepseek-ai/dsh-cli-account/types'
 import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
-import Feishu from '../src/index.ts'
+import * as Feishu from '../src/index.ts'
+import { COPY, FEISHU_PACKAGE, OPERATIONS, presentAccount } from '../src/presentation.ts'
+import type { FeishuState } from '../src/types.ts'
 import { byArguments, CATALOG, createBinDir, ScriptedSubprocess } from './harness.ts'
 
 const CONFIG = { commandTimeoutMs: 5_000 }
@@ -135,5 +138,24 @@ describe('Feishu plugin', () => {
     expect(await runtimeContext()).toEqual([])
     expect(await ctx.skills.list()).toEqual([])
     expect(warnings).toEqual([])
+  })
+
+  it('shows the account on the Plugins page while the registry runs, and withdraws it with the plugin', async () => {
+    const registered: CliAccountRegistration<FeishuState>[] = []
+    const withdrawn = vi.fn()
+    ctx.provide('cliAccounts', {
+      register: (registration: CliAccountRegistration<FeishuState>) => {
+        registered.push(registration)
+        return withdrawn
+      },
+    })
+    const fiber = await ctx.plugin(Feishu, { ...CONFIG, binDir })
+    expect(registered).toHaveLength(1)
+    expect(registered[0]).toMatchObject({ packageName: FEISHU_PACKAGE, operations: OPERATIONS, copy: COPY, present: presentAccount })
+    expect(registered[0]!.source.snapshot().account.state).toBe('unchecked')
+
+    await fiber.dispose()
+
+    expect(withdrawn).toHaveBeenCalledOnce()
   })
 })

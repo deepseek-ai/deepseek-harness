@@ -1,8 +1,5 @@
-/** Locale-owned copy for the Feishu plugin's connection on the Plugins page. */
-import type {} from '@deepseek-ai/dsh-client-ui-slots'
-
-/** Dictionary namespace for every Feishu connection surface. */
-export const NS = 'feishu'
+/** The Feishu text the Plugins page shows; the browser resolves it in its active language. */
+import { accountText } from '@deepseek-ai/dsh-cli-account'
 
 /** Chinese dictionary and key source. */
 export const zh = {
@@ -11,7 +8,6 @@ export const zh = {
   'status.disconnected': '未连接',
   'status.unavailable': '暂时无法确认登录状态',
   'status.connected': '已连接',
-  'status.stopped': '飞书组件未运行',
   'step.configuring': '第 1 步：关联飞书应用',
   'step.authorizing': '第 2 步：登录飞书账号',
   'step.connecting': '正在连接',
@@ -19,7 +15,6 @@ export const zh = {
   'detail.no-app': '先关联一个飞书应用（可以新建，也可以选择已有应用），再登录飞书账号。连接后，可以在对话中使用飞书文档、消息及其他你授权的功能。',
   'detail.signed-out': '已关联飞书应用。登录飞书账号后，就可以在对话中使用飞书。',
   'detail.unavailable': '已保留现有配置和登录，可以稍后重试。',
-  'detail.stopped': '“飞书 CLI 与技能”组件没有运行，可以在下方组件列表查看原因，处理后重试。',
   'detail.connected': '可以在对话中直接请 Agent 使用飞书。',
   'detail.connectedAs': '已登录为 {name}。可以在对话中直接请 Agent 使用飞书。',
   'detail.configuring': '在打开的飞书页面中新建或选择应用，完成后回到这里登录。页面没有打开时，点击“打开飞书页面”。',
@@ -28,8 +23,6 @@ export const zh = {
   'app.linked': '飞书应用：{id}',
   failed: '操作未完成，请重试',
   'failed.linkApp': '飞书应用关联未完成。若飞书页面已显示成功，请检查 DSH 对本机配置与系统凭据的访问权限，再次关联时请选择已有应用',
-  'failure.details': '排障信息：{details}',
-  'failure.exitCode': '退出码 {code}',
   'action.connect': '连接飞书',
   'action.linkApp': '关联飞书应用',
   'action.signIn': '登录飞书账号',
@@ -42,32 +35,27 @@ export const zh = {
   'badge.disconnected': '未连接',
   'badge.connecting': '连接中',
   'badge.unavailable': '待确认',
-  'badge.stopped': '未运行',
   'signOut.title': '退出飞书登录？',
   'signOut.body': '将退出飞书 CLI 的默认账号，这台电脑终端里的 lark-cli 也会一起退出。已关联的飞书应用会保留。',
   'replaceApp.title': '更换飞书应用？',
   'replaceApp.body': '将打开飞书页面，新建或选择一个应用。这台电脑上飞书 CLI 的配置会替换为这个应用，终端里的 lark-cli 也一样；更换后需要重新登录飞书账号。',
   'activation.title': '连接飞书账号',
   'activation.body': '飞书插件已开启。连接你的飞书账号后，就可以在对话中使用它。',
-  'activation.later': '稍后',
   'notice.app-linked': '飞书应用已关联，下一步登录飞书账号',
   'notice.connected': '飞书已连接',
   'notice.signed-out': '已退出飞书登录',
-  'notice.action-failed': '操作未完成，请重试',
-  close: '关闭',
 }
 
-/** Every key the Feishu connection surfaces translate. */
-export type FeishuKey = keyof typeof zh
+/** Every key of the Feishu text. */
+export type FeishuTextKey = keyof typeof zh
 
 /** English dictionary. */
-export const en: Record<FeishuKey, string> = {
+export const en: Record<FeishuTextKey, string> = {
   'section.title': 'Feishu account',
   'status.checking': 'Checking connection',
   'status.disconnected': 'Not connected',
   'status.unavailable': 'Cannot confirm sign-in right now',
   'status.connected': 'Connected',
-  'status.stopped': 'Feishu component not running',
   'step.configuring': 'Step 1: Link a Feishu app',
   'step.authorizing': 'Step 2: Sign in to Feishu',
   'step.connecting': 'Connecting',
@@ -75,7 +63,6 @@ export const en: Record<FeishuKey, string> = {
   'detail.no-app': 'Link a Feishu app first, either a new one or one you already have, then sign in to Feishu. After that, you can use Feishu docs, messages, and other features you authorize in conversations.',
   'detail.signed-out': 'A Feishu app is linked. Sign in to Feishu to use it in conversations.',
   'detail.unavailable': 'The existing setup and sign-in are kept. Try again later.',
-  'detail.stopped': 'The Feishu CLI and skills component is not running. See the component list below for the reason, then retry.',
   'detail.connected': 'Ask the agent to use Feishu directly in a conversation.',
   'detail.connectedAs': 'Signed in as {name}. Ask the agent to use Feishu directly in a conversation.',
   'detail.configuring': 'Create or choose an app on the Feishu page, then come back here to sign in. If the page did not open, select Open Feishu page.',
@@ -84,8 +71,6 @@ export const en: Record<FeishuKey, string> = {
   'app.linked': 'Feishu app: {id}',
   failed: 'The action did not finish. Try again.',
   'failed.linkApp': 'Feishu app linking did not finish. If the Feishu page reported success, check DSH access to local configuration and system credentials, then choose the existing app when linking again.',
-  'failure.details': 'Diagnostic: {details}',
-  'failure.exitCode': 'Exit code {code}',
   'action.connect': 'Connect Feishu',
   'action.linkApp': 'Link Feishu app',
   'action.signIn': 'Sign in to Feishu',
@@ -98,29 +83,24 @@ export const en: Record<FeishuKey, string> = {
   'badge.disconnected': 'Not connected',
   'badge.connecting': 'Connecting',
   'badge.unavailable': 'Unconfirmed',
-  'badge.stopped': 'Not running',
   'signOut.title': 'Sign out of Feishu?',
   'signOut.body': 'This signs out the Feishu CLI\'s default account, including lark-cli in this computer\'s terminal. The linked Feishu app is kept.',
   'replaceApp.title': 'Change the Feishu app?',
   'replaceApp.body': 'A Feishu page opens where you create or choose an app. The Feishu CLI on this computer, including lark-cli in its terminal, is then configured with that app only, and you sign in to Feishu again.',
   'activation.title': 'Connect your Feishu account',
   'activation.body': 'The Feishu plugin is on. Connect your Feishu account to use it in conversations.',
-  'activation.later': 'Later',
   'notice.app-linked': 'Feishu app linked. Next, sign in to Feishu.',
   'notice.connected': 'Feishu connected',
   'notice.signed-out': 'Signed out of Feishu',
-  'notice.action-failed': 'The action did not finish. Try again.',
-  close: 'Close',
 }
 
 /** Japanese dictionary. */
-export const ja: Record<FeishuKey, string> = {
+export const ja: Record<FeishuTextKey, string> = {
   'section.title': 'Feishu アカウント',
   'status.checking': '接続を確認中',
   'status.disconnected': '未接続',
   'status.unavailable': '現在サインイン状態を確認できません',
   'status.connected': '接続済み',
-  'status.stopped': 'Feishu コンポーネントが稼働していません',
   'step.configuring': 'ステップ 1：Feishu アプリを関連付ける',
   'step.authorizing': 'ステップ 2：Feishu にサインイン',
   'step.connecting': '接続中',
@@ -128,7 +108,6 @@ export const ja: Record<FeishuKey, string> = {
   'detail.no-app': 'まず Feishu アプリを関連付け（新規作成または既存のアプリを選択）、次に Feishu にサインインしてください。その後、会話の中で Feishu のドキュメント、メッセージ、その他の承認した機能を使用できます。',
   'detail.signed-out': 'Feishu アプリは関連付け済みです。Feishu にサインインすると、会話の中で使用できます。',
   'detail.unavailable': '現在の設定とサインイン状態は保持されています。しばらくしてから再試行してください。',
-  'detail.stopped': '「Feishu CLI とスキル」コンポーネントが稼働していません。下のコンポーネント一覧で理由を確認し、対処してから再試行してください。',
   'detail.connected': '会話の中でエージェントに Feishu の使用を直接依頼できます。',
   'detail.connectedAs': '{name} としてサインインしています。会話の中でエージェントに Feishu の使用を直接依頼できます。',
   'detail.configuring': '開いた Feishu ページでアプリを作成または選択し、完了したらここに戻ってサインインしてください。ページが開かない場合は、「Feishu ページを開く」を選択してください。',
@@ -137,8 +116,6 @@ export const ja: Record<FeishuKey, string> = {
   'app.linked': 'Feishu アプリ：{id}',
   failed: '操作が完了しませんでした。もう一度お試しください。',
   'failed.linkApp': 'Feishu アプリの関連付けが完了しませんでした。Feishu ページに成功と表示された場合は、DSH がローカル設定とシステムの認証情報にアクセスできるか確認し、再度関連付けるときは既存のアプリを選択してください。',
-  'failure.details': '診断情報：{details}',
-  'failure.exitCode': '終了コード {code}',
   'action.connect': 'Feishu を接続',
   'action.linkApp': 'Feishu アプリを関連付ける',
   'action.signIn': 'Feishu にサインイン',
@@ -151,29 +128,24 @@ export const ja: Record<FeishuKey, string> = {
   'badge.disconnected': '未接続',
   'badge.connecting': '接続中',
   'badge.unavailable': '未確認',
-  'badge.stopped': '未稼働',
   'signOut.title': 'Feishu からサインアウトしますか？',
   'signOut.body': 'Feishu CLI の既定のアカウントからサインアウトします。このコンピューターのターミナルにある lark-cli もサインアウトされます。関連付けた Feishu アプリは保持されます。',
   'replaceApp.title': 'Feishu アプリを変更しますか？',
   'replaceApp.body': 'Feishu ページが開くので、アプリを作成または選択します。このコンピューターの Feishu CLI（ターミナルの lark-cli を含む）の設定はそのアプリに置き換わり、Feishu に再度サインインする必要があります。',
   'activation.title': 'Feishu アカウントを接続',
   'activation.body': 'Feishu プラグインがオンになりました。Feishu アカウントを接続すると、会話の中で使用できます。',
-  'activation.later': '後で',
   'notice.app-linked': 'Feishu アプリを関連付けました。次に Feishu にサインインしてください。',
   'notice.connected': 'Feishu を接続しました',
   'notice.signed-out': 'Feishu からサインアウトしました',
-  'notice.action-failed': '操作が完了しませんでした。もう一度お試しください。',
-  close: '閉じる',
 }
 
 /** Spanish dictionary. */
-export const es: Record<FeishuKey, string> = {
+export const es: Record<FeishuTextKey, string> = {
   'section.title': 'Cuenta de Feishu',
   'status.checking': 'Comprobando la conexión',
   'status.disconnected': 'No conectado',
   'status.unavailable': 'No se puede confirmar el inicio de sesión en este momento',
   'status.connected': 'Conectado',
-  'status.stopped': 'El componente de Feishu no está en ejecución',
   'step.configuring': 'Paso 1: vincule una aplicación de Feishu',
   'step.authorizing': 'Paso 2: inicie sesión en Feishu',
   'step.connecting': 'Conectando',
@@ -181,7 +153,6 @@ export const es: Record<FeishuKey, string> = {
   'detail.no-app': 'Primero vincule una aplicación de Feishu, ya sea nueva o una que ya tenga, y luego inicie sesión en Feishu. Después, podrá usar en las conversaciones los documentos, los mensajes y otras funciones de Feishu que autorice.',
   'detail.signed-out': 'Hay una aplicación de Feishu vinculada. Inicie sesión en Feishu para usarlo en las conversaciones.',
   'detail.unavailable': 'Se conservan la configuración y el inicio de sesión actuales. Inténtelo de nuevo más tarde.',
-  'detail.stopped': 'El componente “CLI y habilidades de Feishu” no está en ejecución. Consulte el motivo en la lista de componentes de abajo y vuelva a intentarlo.',
   'detail.connected': 'Pida al agente que use Feishu directamente en una conversación.',
   'detail.connectedAs': 'Sesión iniciada como {name}. Pida al agente que use Feishu directamente en una conversación.',
   'detail.configuring': 'Cree o elija una aplicación en la página de Feishu y luego vuelva aquí para iniciar sesión. Si la página no se abrió, seleccione “Abrir página de Feishu”.',
@@ -190,8 +161,6 @@ export const es: Record<FeishuKey, string> = {
   'app.linked': 'Aplicación de Feishu: {id}',
   failed: 'La acción no se completó. Inténtelo de nuevo.',
   'failed.linkApp': 'La vinculación de la aplicación de Feishu no se completó. Si la página de Feishu indicó que se realizó correctamente, compruebe el acceso de DSH a la configuración local y a las credenciales del sistema y, al volver a vincular, elija la aplicación existente.',
-  'failure.details': 'Diagnóstico: {details}',
-  'failure.exitCode': 'Código de salida {code}',
   'action.connect': 'Conectar Feishu',
   'action.linkApp': 'Vincular aplicación de Feishu',
   'action.signIn': 'Iniciar sesión en Feishu',
@@ -204,29 +173,24 @@ export const es: Record<FeishuKey, string> = {
   'badge.disconnected': 'No conectado',
   'badge.connecting': 'Conectando',
   'badge.unavailable': 'Sin confirmar',
-  'badge.stopped': 'No está en ejecución',
   'signOut.title': '¿Cerrar sesión en Feishu?',
   'signOut.body': 'Se cerrará la sesión de la cuenta predeterminada de la CLI de Feishu, incluido lark-cli en la terminal de esta computadora. La aplicación de Feishu vinculada se conserva.',
   'replaceApp.title': '¿Cambiar la aplicación de Feishu?',
   'replaceApp.body': 'Se abrirá una página de Feishu donde podrá crear o elegir una aplicación. Después, la CLI de Feishu de esta computadora, incluido lark-cli en su terminal, quedará configurada solo con esa aplicación y deberá volver a iniciar sesión en Feishu.',
   'activation.title': 'Conecte su cuenta de Feishu',
   'activation.body': 'El complemento de Feishu está activado. Conecte su cuenta de Feishu para usarlo en las conversaciones.',
-  'activation.later': 'Más tarde',
   'notice.app-linked': 'Aplicación de Feishu vinculada. Ahora inicie sesión en Feishu.',
   'notice.connected': 'Feishu conectado',
   'notice.signed-out': 'Sesión de Feishu cerrada',
-  'notice.action-failed': 'La acción no se completó. Inténtelo de nuevo.',
-  close: 'Cerrar',
 }
 
 /** French dictionary. */
-export const fr: Record<FeishuKey, string> = {
+export const fr: Record<FeishuTextKey, string> = {
   'section.title': 'Compte Feishu',
   'status.checking': 'Vérification de la connexion',
   'status.disconnected': 'Non connecté',
   'status.unavailable': 'Impossible de confirmer la connexion pour le moment',
   'status.connected': 'Connecté',
-  'status.stopped': 'Le composant Feishu ne fonctionne pas',
   'step.configuring': 'Étape 1 : associez une application Feishu',
   'step.authorizing': 'Étape 2 : connectez-vous à Feishu',
   'step.connecting': 'Connexion en cours',
@@ -234,7 +198,6 @@ export const fr: Record<FeishuKey, string> = {
   'detail.no-app': 'Associez d’abord une application Feishu, nouvelle ou existante, puis connectez-vous à Feishu. Vous pourrez ensuite utiliser dans les conversations les documents, les messages et les autres fonctionnalités de Feishu que vous autorisez.',
   'detail.signed-out': 'Une application Feishu est associée. Connectez-vous à Feishu pour l’utiliser dans les conversations.',
   'detail.unavailable': 'La configuration et la connexion existantes sont conservées. Réessayez plus tard.',
-  'detail.stopped': 'Le composant « CLI et compétences Feishu » ne fonctionne pas. Consultez la raison dans la liste des composants ci-dessous, puis réessayez.',
   'detail.connected': 'Demandez à l’agent d’utiliser Feishu directement dans une conversation.',
   'detail.connectedAs': 'Connecté en tant que {name}. Demandez à l’agent d’utiliser Feishu directement dans une conversation.',
   'detail.configuring': 'Créez ou choisissez une application sur la page Feishu, puis revenez ici pour vous connecter. Si la page ne s’est pas ouverte, sélectionnez « Ouvrir la page Feishu ».',
@@ -243,8 +206,6 @@ export const fr: Record<FeishuKey, string> = {
   'app.linked': 'Application Feishu : {id}',
   failed: 'L’action n’a pas abouti. Réessayez.',
   'failed.linkApp': 'L’association de l’application Feishu n’a pas abouti. Si la page Feishu a indiqué une réussite, vérifiez l’accès de DSH à la configuration locale et aux identifiants système, puis choisissez l’application existante lors de la nouvelle association.',
-  'failure.details': 'Diagnostic : {details}',
-  'failure.exitCode': 'Code de sortie {code}',
   'action.connect': 'Connecter Feishu',
   'action.linkApp': 'Associer une application Feishu',
   'action.signIn': 'Se connecter à Feishu',
@@ -257,29 +218,24 @@ export const fr: Record<FeishuKey, string> = {
   'badge.disconnected': 'Non connecté',
   'badge.connecting': 'Connexion en cours',
   'badge.unavailable': 'Non confirmé',
-  'badge.stopped': 'Ne fonctionne pas',
   'signOut.title': 'Se déconnecter de Feishu ?',
   'signOut.body': 'Cela déconnecte le compte par défaut de la CLI Feishu, y compris lark-cli dans le terminal de cet ordinateur. L’application Feishu associée est conservée.',
   'replaceApp.title': 'Changer l’application Feishu ?',
   'replaceApp.body': 'Une page Feishu s’ouvre pour créer ou choisir une application. La CLI Feishu de cet ordinateur, y compris lark-cli dans son terminal, est ensuite configurée avec cette seule application, et vous devez vous reconnecter à Feishu.',
   'activation.title': 'Connectez votre compte Feishu',
   'activation.body': 'Le plugin Feishu est activé. Connectez votre compte Feishu pour l’utiliser dans les conversations.',
-  'activation.later': 'Plus tard',
   'notice.app-linked': 'Application Feishu associée. Connectez-vous maintenant à Feishu.',
   'notice.connected': 'Feishu connecté',
   'notice.signed-out': 'Déconnecté de Feishu',
-  'notice.action-failed': 'L’action n’a pas abouti. Réessayez.',
-  close: 'Fermer',
 }
 
 /** German dictionary. */
-export const de: Record<FeishuKey, string> = {
+export const de: Record<FeishuTextKey, string> = {
   'section.title': 'Feishu-Konto',
   'status.checking': 'Verbindung wird geprüft',
   'status.disconnected': 'Nicht verbunden',
   'status.unavailable': 'Anmeldung kann gerade nicht bestätigt werden',
   'status.connected': 'Verbunden',
-  'status.stopped': 'Feishu-Komponente läuft nicht',
   'step.configuring': 'Schritt 1: Feishu-App verknüpfen',
   'step.authorizing': 'Schritt 2: Bei Feishu anmelden',
   'step.connecting': 'Wird verbunden',
@@ -287,7 +243,6 @@ export const de: Record<FeishuKey, string> = {
   'detail.no-app': 'Verknüpfen Sie zuerst eine Feishu-App, entweder eine neue oder eine vorhandene, und melden Sie sich dann bei Feishu an. Danach können Sie Dokumente, Nachrichten und weitere von Ihnen autorisierte Funktionen von Feishu in Unterhaltungen verwenden.',
   'detail.signed-out': 'Eine Feishu-App ist verknüpft. Melden Sie sich bei Feishu an, um es in Unterhaltungen zu verwenden.',
   'detail.unavailable': 'Die bestehende Einrichtung und Anmeldung bleiben erhalten. Versuchen Sie es später erneut.',
-  'detail.stopped': 'Die Komponente „Feishu-CLI und Fertigkeiten“ läuft nicht. Den Grund sehen Sie in der Komponentenliste unten; versuchen Sie es danach erneut.',
   'detail.connected': 'Bitten Sie den Agenten, Feishu direkt in einer Unterhaltung zu verwenden.',
   'detail.connectedAs': 'Angemeldet als {name}. Bitten Sie den Agenten, Feishu direkt in einer Unterhaltung zu verwenden.',
   'detail.configuring': 'Erstellen oder wählen Sie auf der Feishu-Seite eine App und kehren Sie dann hierher zurück, um sich anzumelden. Falls sich die Seite nicht geöffnet hat, wählen Sie „Feishu-Seite öffnen“.',
@@ -296,8 +251,6 @@ export const de: Record<FeishuKey, string> = {
   'app.linked': 'Feishu-App: {id}',
   failed: 'Die Aktion wurde nicht abgeschlossen. Versuchen Sie es erneut.',
   'failed.linkApp': 'Die Verknüpfung der Feishu-App wurde nicht abgeschlossen. Wenn die Feishu-Seite einen Erfolg gemeldet hat, prüfen Sie den Zugriff von DSH auf die lokale Konfiguration und die Systemanmeldedaten und wählen Sie beim erneuten Verknüpfen die vorhandene App.',
-  'failure.details': 'Diagnose: {details}',
-  'failure.exitCode': 'Exit-Code {code}',
   'action.connect': 'Feishu verbinden',
   'action.linkApp': 'Feishu-App verknüpfen',
   'action.signIn': 'Bei Feishu anmelden',
@@ -310,29 +263,24 @@ export const de: Record<FeishuKey, string> = {
   'badge.disconnected': 'Nicht verbunden',
   'badge.connecting': 'Wird verbunden',
   'badge.unavailable': 'Unbestätigt',
-  'badge.stopped': 'Läuft nicht',
   'signOut.title': 'Von Feishu abmelden?',
   'signOut.body': 'Dadurch wird das Standardkonto der Feishu-CLI abgemeldet, auch für lark-cli im Terminal dieses Computers. Die verknüpfte Feishu-App bleibt erhalten.',
   'replaceApp.title': 'Feishu-App wechseln?',
   'replaceApp.body': 'Es öffnet sich eine Feishu-Seite, auf der Sie eine App erstellen oder wählen. Anschließend ist die Feishu-CLI auf diesem Computer, einschließlich lark-cli im Terminal, nur noch mit dieser App konfiguriert, und Sie melden sich erneut bei Feishu an.',
   'activation.title': 'Feishu-Konto verbinden',
   'activation.body': 'Das Feishu-Plugin ist aktiviert. Verbinden Sie Ihr Feishu-Konto, um es in Unterhaltungen zu verwenden.',
-  'activation.later': 'Später',
   'notice.app-linked': 'Feishu-App verknüpft. Melden Sie sich als Nächstes bei Feishu an.',
   'notice.connected': 'Feishu verbunden',
   'notice.signed-out': 'Von Feishu abgemeldet',
-  'notice.action-failed': 'Die Aktion wurde nicht abgeschlossen. Versuchen Sie es erneut.',
-  close: 'Schließen',
 }
 
 /** Russian dictionary. */
-export const ru: Record<FeishuKey, string> = {
+export const ru: Record<FeishuTextKey, string> = {
   'section.title': 'Аккаунт Feishu',
   'status.checking': 'Проверка подключения',
   'status.disconnected': 'Не подключено',
   'status.unavailable': 'Сейчас не удаётся подтвердить вход',
   'status.connected': 'Подключено',
-  'status.stopped': 'Компонент Feishu не работает',
   'step.configuring': 'Шаг 1. Привяжите приложение Feishu',
   'step.authorizing': 'Шаг 2. Войдите в Feishu',
   'step.connecting': 'Подключение',
@@ -340,7 +288,6 @@ export const ru: Record<FeishuKey, string> = {
   'detail.no-app': 'Сначала привяжите приложение Feishu — новое или уже существующее, — затем войдите в Feishu. После этого в беседах можно будет использовать документы, сообщения и другие разрешённые вами функции Feishu.',
   'detail.signed-out': 'Приложение Feishu привязано. Войдите в Feishu, чтобы использовать его в беседах.',
   'detail.unavailable': 'Текущие настройки и вход сохранены. Повторите попытку позже.',
-  'detail.stopped': 'Компонент «CLI и навыки Feishu» не работает. Причину можно посмотреть в списке компонентов ниже; затем повторите попытку.',
   'detail.connected': 'Попросите агента использовать Feishu прямо в беседе.',
   'detail.connectedAs': 'Выполнен вход как {name}. Попросите агента использовать Feishu прямо в беседе.',
   'detail.configuring': 'Создайте или выберите приложение на странице Feishu, затем вернитесь сюда, чтобы войти. Если страница не открылась, нажмите «Открыть страницу Feishu».',
@@ -349,8 +296,6 @@ export const ru: Record<FeishuKey, string> = {
   'app.linked': 'Приложение Feishu: {id}',
   failed: 'Действие не завершено. Повторите попытку.',
   'failed.linkApp': 'Привязка приложения Feishu не завершена. Если страница Feishu сообщила об успехе, проверьте доступ DSH к локальной конфигурации и системным учётным данным, а при повторной привязке выберите уже существующее приложение.',
-  'failure.details': 'Диагностика: {details}',
-  'failure.exitCode': 'Код выхода {code}',
   'action.connect': 'Подключить Feishu',
   'action.linkApp': 'Привязать приложение Feishu',
   'action.signIn': 'Войти в Feishu',
@@ -363,29 +308,24 @@ export const ru: Record<FeishuKey, string> = {
   'badge.disconnected': 'Не подключено',
   'badge.connecting': 'Подключение',
   'badge.unavailable': 'Не подтверждено',
-  'badge.stopped': 'Не работает',
   'signOut.title': 'Выйти из Feishu?',
   'signOut.body': 'Будет выполнен выход из аккаунта Feishu CLI по умолчанию, в том числе для lark-cli в терминале этого компьютера. Привязанное приложение Feishu сохранится.',
   'replaceApp.title': 'Сменить приложение Feishu?',
   'replaceApp.body': 'Откроется страница Feishu, где можно создать или выбрать приложение. После этого Feishu CLI на этом компьютере, включая lark-cli в терминале, будет настроен только на это приложение, и потребуется снова войти в Feishu.',
   'activation.title': 'Подключите аккаунт Feishu',
   'activation.body': 'Плагин Feishu включён. Подключите аккаунт Feishu, чтобы использовать его в беседах.',
-  'activation.later': 'Позже',
   'notice.app-linked': 'Приложение Feishu привязано. Теперь войдите в Feishu.',
   'notice.connected': 'Feishu подключён',
   'notice.signed-out': 'Выполнен выход из Feishu',
-  'notice.action-failed': 'Действие не завершено. Повторите попытку.',
-  close: 'Закрыть',
 }
 
 /** Portuguese dictionary. */
-export const pt: Record<FeishuKey, string> = {
+export const pt: Record<FeishuTextKey, string> = {
   'section.title': 'Conta do Feishu',
   'status.checking': 'Verificando a conexão',
   'status.disconnected': 'Não conectado',
   'status.unavailable': 'Não é possível confirmar o login no momento',
   'status.connected': 'Conectado',
-  'status.stopped': 'O componente do Feishu não está em execução',
   'step.configuring': 'Etapa 1: vincule um app do Feishu',
   'step.authorizing': 'Etapa 2: entre no Feishu',
   'step.connecting': 'Conectando',
@@ -393,7 +333,6 @@ export const pt: Record<FeishuKey, string> = {
   'detail.no-app': 'Primeiro vincule um app do Feishu, novo ou já existente, e depois entre no Feishu. Em seguida, você poderá usar nas conversas os documentos, as mensagens e outros recursos do Feishu que autorizar.',
   'detail.signed-out': 'Há um app do Feishu vinculado. Entre no Feishu para usá-lo nas conversas.',
   'detail.unavailable': 'A configuração e o login atuais foram mantidos. Tente novamente mais tarde.',
-  'detail.stopped': 'O componente “CLI e habilidades do Feishu” não está em execução. Veja o motivo na lista de componentes abaixo e tente novamente.',
   'detail.connected': 'Peça ao agente que use o Feishu diretamente em uma conversa.',
   'detail.connectedAs': 'Conectado como {name}. Peça ao agente que use o Feishu diretamente em uma conversa.',
   'detail.configuring': 'Crie ou escolha um app na página do Feishu e depois volte aqui para entrar. Se a página não abriu, selecione “Abrir página do Feishu”.',
@@ -402,8 +341,6 @@ export const pt: Record<FeishuKey, string> = {
   'app.linked': 'App do Feishu: {id}',
   failed: 'A ação não foi concluída. Tente novamente.',
   'failed.linkApp': 'A vinculação do app do Feishu não foi concluída. Se a página do Feishu informou sucesso, verifique o acesso do DSH à configuração local e às credenciais do sistema e, ao vincular novamente, escolha o app existente.',
-  'failure.details': 'Diagnóstico: {details}',
-  'failure.exitCode': 'Código de saída {code}',
   'action.connect': 'Conectar Feishu',
   'action.linkApp': 'Vincular app do Feishu',
   'action.signIn': 'Entrar no Feishu',
@@ -416,24 +353,16 @@ export const pt: Record<FeishuKey, string> = {
   'badge.disconnected': 'Não conectado',
   'badge.connecting': 'Conectando',
   'badge.unavailable': 'Não confirmado',
-  'badge.stopped': 'Não está em execução',
   'signOut.title': 'Sair do Feishu?',
   'signOut.body': 'Isso encerra a sessão da conta padrão da CLI do Feishu, incluindo o lark-cli no terminal deste computador. O app do Feishu vinculado é mantido.',
   'replaceApp.title': 'Trocar o app do Feishu?',
   'replaceApp.body': 'Uma página do Feishu será aberta para você criar ou escolher um app. Em seguida, a CLI do Feishu neste computador, incluindo o lark-cli no terminal, passa a usar apenas esse app, e você precisa entrar no Feishu novamente.',
   'activation.title': 'Conecte sua conta do Feishu',
   'activation.body': 'O plugin do Feishu está ativado. Conecte sua conta do Feishu para usá-lo nas conversas.',
-  'activation.later': 'Mais tarde',
   'notice.app-linked': 'App do Feishu vinculado. Agora entre no Feishu.',
   'notice.connected': 'Feishu conectado',
   'notice.signed-out': 'Você saiu do Feishu',
-  'notice.action-failed': 'A ação não foi concluída. Tente novamente.',
-  close: 'Fechar',
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface LocaleNamespaceMap {
-    /** Feishu connection section, tag, guidance, and notices on the Plugins page. */
-    'feishu': FeishuKey
-  }
-}
+/** Render one key of the Feishu text in every shipped language. */
+export const text = accountText({ zh, en, ja, es, fr, de, ru, pt })
