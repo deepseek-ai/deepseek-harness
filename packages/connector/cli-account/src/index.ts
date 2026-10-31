@@ -9,7 +9,7 @@ import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 
 export { registerCliPathContext, type CliPathContext } from './context.ts'
-export { CliCommandExecutor, type CliCommandExecutorOptions, type CliCommandResult, type CliRunOptions } from './executor.ts'
+export { CliCommandExecutor, executableFileName, type CliCommandExecutorOptions, type CliCommandResult, type CliRunOptions } from './executor.ts'
 export { CliAccountRuntime, exitFailure, type CliAccountRuntimeOptions, type CliOperationControl } from './runtime.ts'
 export type * from './types.ts'
 
