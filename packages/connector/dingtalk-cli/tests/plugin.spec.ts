@@ -7,8 +7,11 @@ import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { executableFileName } from '@deepseek-ai/dsh-cli-account'
+import type { CliAccountRegistration } from '@deepseek-ai/dsh-cli-account/types'
 import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
-import Dingtalk from '../src/index.ts'
+import * as Dingtalk from '../src/index.ts'
+import { COPY, DINGTALK_PACKAGE, OPERATIONS, presentAccount } from '../src/presentation.ts'
+import type { DingtalkState } from '../src/types.ts'
 import { DWS_RELEASE } from '../src/release.ts'
 import { createBinDir, createSkillsDir, ScriptedSubprocess } from './harness.ts'
 
@@ -45,6 +48,19 @@ describe('DingTalk plugin', () => {
 
   const runtimeContext = async () => renderContextSections(await ctx.systemPrompt.assemble())
 
+  /** Stand in for the CLI account registry the Web app provides, and keep what the plugin registers with it. */
+  function provideRegistry() {
+    const registered: CliAccountRegistration<DingtalkState>[] = []
+    const withdrawn = vi.fn()
+    ctx.provide('cliAccounts', {
+      register: (registration: CliAccountRegistration<DingtalkState>) => {
+        registered.push(registration)
+        return withdrawn
+      },
+    })
+    return { registered, withdrawn }
+  }
+
   it('publishes one dingtalk entry skill whose guides resolve from its base directory', async () => {
     await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
 
@@ -63,12 +79,13 @@ describe('DingTalk plugin', () => {
 
   it('lists the skill and gives the dws path once a check publishes the skill root after the catalog was read', async () => {
     // The load-time check fails at once: nothing listens on this loopback port.
+    const registry = provideRegistry()
     await ctx.plugin(Dingtalk, { ...CONFIG, binDir, releaseUrls: ['https://127.0.0.1:1/download'] })
     expect(await ctx.skills.list()).toEqual([])
     expect(await runtimeContext()).toEqual([])
 
     await mkdir(join(home, 'cache', 'dingtalk', `dws-skills-${DWS_RELEASE.version}`, 'dingtalk-shared'), { recursive: true })
-    await vi.waitFor(() => { ctx.dingtalk.check() })
+    await vi.waitFor(() => { registry.registered[0]!.source.start('check') })
 
     await vi.waitFor(async () => {
       expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['dingtalk'])
@@ -91,5 +108,18 @@ describe('DingTalk plugin', () => {
 
     expect(await runtimeContext()).toEqual([])
     expect(await ctx.skills.list()).toEqual([])
+  })
+
+  it('shows the account on the Plugins page while the registry runs, and withdraws it with the plugin', async () => {
+    const registry = provideRegistry()
+    const fiber = await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
+    expect(registry.registered).toHaveLength(1)
+    expect(registry.registered[0]).toMatchObject({
+      packageName: DINGTALK_PACKAGE, operations: OPERATIONS, copy: COPY, present: presentAccount,
+    })
+
+    await fiber.dispose()
+
+    expect(registry.withdrawn).toHaveBeenCalledOnce()
   })
 })

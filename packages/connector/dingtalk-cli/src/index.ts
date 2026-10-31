@@ -1,33 +1,32 @@
 /**
  * DingTalk plugin: installs dws and its upstream skills from the pinned release into the DSH cache, tells the model
- * dws's absolute path once both are installed, registers the `dingtalk` skill once its root is published, and serves
- * the Plugins page's account operations over Remote. The CLI's sign-in is shared with the user's own terminal.
+ * dws's absolute path once both are installed, registers the `dingtalk` skill once its root is published, and shows the
+ * account on the Plugins page through the CLI account registry. The CLI's sign-in is shared with the user's own terminal.
  * @module @deepseek-ai/dsh-dingtalk-cli
  */
 
-/* jscpd:ignore-start -- CLI app plugins compose the same kit, Remote, and skill-loading imports. */
+/* jscpd:ignore-start -- CLI app plugins compose the same kit, registry, and skill-loading imports. */
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { CliAccountConfig, CliCommandExecutor, executableFileName, registerCliPathContext, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
+import { CliAccountConfig, CliCommandExecutor, executableFileName, registerCliPathContext } from '@deepseek-ai/dsh-cli-account'
 import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem'
-import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import type {} from '@deepseek-ai/dsh-client-ui-cli-account'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { DingtalkAccount } from './account.ts'
+import { COPY, DINGTALK_PACKAGE, OPERATIONS, presentAccount } from './presentation.ts'
 import { DwsRelease, PROGRAM } from './release.ts'
-import type { DingtalkState } from './types.ts'
 /* jscpd:ignore-end */
 
 export type * from './types.ts'
 
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    /** DingTalk account operations for the Plugins page. */
-    dingtalk: Dingtalk
-  }
-}
+/** Plugin name. */
+export const name = 'dingtalk'
+
+/** Services the CLI, its skill, and its runtime context need. */
+export const inject = ['skills', 'subprocess', 'systemPrompt']
 
 /** Where dws and its skills come from and how long a command that does not wait for the user may run. */
 export interface Config extends CliAccountConfig {
@@ -37,98 +36,46 @@ export interface Config extends CliAccountConfig {
   releaseUrls: string[]
 }
 
-/** Registers the CLI and its skill, and owns the account operations the Plugins page drives. */
-export default class Dingtalk extends TypertRemoteService {
-  static inject = ['skills', 'subprocess', 'systemPrompt']
-  static Config: z<Config> = z.intersect([
-    CliAccountConfig,
-    z.object({
-      skillsDir: z.string().min(1),
-      releaseUrls: z.array(z.string().pattern(/^https:\/\/[^\s?#@]+$/)).min(1).default([
-        'https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download',
-        'https://gitee.com/dingtalk-real-ai/dingtalk-workspace-cli/releases/download',
-      ]),
-    }),
-  ])
+/** Validates {@link Config}. */
+export const Config: z<Config> = z.intersect([
+  CliAccountConfig,
+  z.object({
+    skillsDir: z.string().min(1),
+    releaseUrls: z.array(z.string().pattern(/^https:\/\/[^\s?#@]+$/)).min(1).default([
+      'https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download',
+      'https://gitee.com/dingtalk-real-ai/dingtalk-workspace-cli/releases/download',
+    ]),
+  }),
+])
 
-  private readonly account: DingtalkAccount
-
-  /**
-   * @param ctx - Context carrying the skill registry, subprocess runtime, and system prompt.
-   * @param config - dws and skills locations, download prefixes, and command deadline.
-   * @throws when `binDir` holds no executable `dws`, `skillsDir` is not a directory, the pinned release has no archive for
-   *   this platform, or the skill root cannot be written.
-   */
-  constructor(ctx: Context, config: Config) {
-    super(ctx, 'dingtalk')
-    const release = new DwsRelease(config, ctx.logger)
-    const executable = join(release.directory, executableFileName(PROGRAM))
-    registerCliPathContext(ctx, {
-      name: 'dingtalk:cli', product: 'DingTalk', program: PROGRAM, executable, scripts: true, ready: () => release.installed(),
-    })
-    const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable, commandTimeoutMs: config.commandTimeoutMs })
-    this.account = new DingtalkAccount(cli, ctx.logger, release)
-    ctx.effect(() => () => this.account.dispose())
-    // Watched: the first download publishes the root after the catalog may have been listed.
-    ctx.plugin(SkillFilesystem, {
-      providerName: 'dingtalk',
-      includeDefaultRoots: false,
-      watch: true,
-      bundledSkillDir: release.skillRoot,
-    })
-    // Prepare dws and its skills without waiting for the Plugins page, so a session without a browser finds them.
-    this.account.refresh()
-  }
-
-  /* jscpd:ignore-start -- CLI app plugins declare the same Remote methods, each delegating to its own account runtime. */
-  /**
-   * Check the account again without changing it; installs dws and its skills first while either is missing.
-   * @returns the operation identity.
-   * @throws while another operation runs.
-   */
-  @Remote
-  check(): CliOperationId {
-    return this.account.start('check')
-  }
-
-  /**
-   * Sign in through the browser authorization page that dws serves to this computer.
-   * @returns the operation identity.
-   * @throws while another operation runs.
-   */
-  @Remote
-  signIn(): CliOperationId {
-    return this.account.start('sign-in')
-  }
-
-  /**
-   * Sign the current account out, which also signs it out of the user's own terminal.
-   * @returns the operation identity.
-   * @throws while another operation runs.
-   */
-  @Remote
-  signOut(): CliOperationId {
-    return this.account.start('sign-out')
-  }
-
-  /**
-   * Cancel a sign-in while it waits for the user's authorization, and wait for its command to exit.
-   * @param id - the operation to cancel; a finished one or another step is ignored.
-   * @returns after the operation settles, or at once when nothing is cancelled.
-   */
-  @Remote
-  cancel(id: CliOperationId): Promise<void> {
-    return this.account.cancel(id)
-  }
-
-  /**
-   * Follow the account and its operations independently of any page; each new subscriber starts a check when none runs.
-   * @param signal - the Client's observation lifetime.
-   * @returns the current view, then each changed view.
-   */
-  @Remote({ mode: 'stream' })
-  async *follow(signal: AbortSignal): AsyncIterable<DingtalkState> {
-    yield* this.account.follow(signal)
-  }
-  /* jscpd:ignore-end */
+/**
+ * Prepare dws and its skill, and show the account on the Plugins page while the CLI account registry runs.
+ * @param ctx - Context carrying the skill registry, subprocess runtime, and system prompt.
+ * @param config - dws and skills locations, download prefixes, and command deadline.
+ * @throws when `binDir` holds no executable `dws`, `skillsDir` is not a directory, the pinned release has no archive for
+ *   this platform, or the skill root cannot be written.
+ */
+export function apply(ctx: Context, config: Config): void {
+  const release = new DwsRelease(config, ctx.logger)
+  const executable = join(release.directory, executableFileName(PROGRAM))
+  registerCliPathContext(ctx, {
+    name: 'dingtalk:cli', product: 'DingTalk', program: PROGRAM, executable, scripts: true, ready: () => release.installed(),
+  })
+  const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable, commandTimeoutMs: config.commandTimeoutMs })
+  const account = new DingtalkAccount(cli, ctx.logger, release)
+  ctx.effect(() => () => account.dispose(), 'dingtalk: account')
+  // Watched: the first download publishes the root after the catalog may have been listed.
+  ctx.plugin(SkillFilesystem, {
+    providerName: 'dingtalk',
+    includeDefaultRoots: false,
+    watch: true,
+    bundledSkillDir: release.skillRoot,
+  })
+  // Prepare dws and its skills without waiting for the Plugins page, so a session without a browser finds them.
+  account.refresh()
+  ctx.inject(['cliAccounts'], (scope) => {
+    scope.effect(() => scope.cliAccounts.register({
+      packageName: DINGTALK_PACKAGE, source: account, operations: OPERATIONS, copy: COPY, present: presentAccount,
+    }), 'dingtalk: Plugins page account')
+  })
 }

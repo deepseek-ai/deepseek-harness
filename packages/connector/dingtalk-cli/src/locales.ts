@@ -1,8 +1,5 @@
-/** Locale-owned copy for the DingTalk plugin's account on the Plugins page. */
-import type {} from '@deepseek-ai/dsh-client-ui-slots'
-
-/** Dictionary namespace for every DingTalk account surface. */
-export const NS = 'dingtalk'
+/** The DingTalk text the Plugins page shows; the browser resolves it in its active language. */
+import { accountText } from '@deepseek-ai/dsh-cli-account'
 
 /** Chinese dictionary and key source. */
 export const zh = {
@@ -11,7 +8,6 @@ export const zh = {
   'status.disconnected': '未连接',
   'status.unavailable': '暂时无法确认登录状态',
   'status.connected': '已连接',
-  'status.stopped': '钉钉组件未运行',
   'step.downloading': '正在下载 dws 及其技能',
   'step.authorizing': '等待在钉钉页面授权',
   'step.connecting': '正在连接',
@@ -19,7 +15,6 @@ export const zh = {
   'detail.disconnected': '登录已加入组织的钉钉账号后，就可以在对话中使用日程、待办、文档、AI 表格、群聊和通讯录等功能。组织管理员需要先在钉钉开发者后台开启 CLI 访问；未开启时，可以在授权页向管理员申请。',
   'detail.unavailable': '已保留现有登录，可以稍后重试。',
   'detail.missing': '没能下载 dws 或它的技能，请检查网络或代理后重试。',
-  'detail.stopped': '“钉钉 CLI 与技能”组件没有运行，可以在下方组件列表查看原因，处理后重试。',
   'detail.connected': '可以在对话中直接请 Agent 使用钉钉。',
   'detail.connectedAs': '已登录为 {name}。可以在对话中直接请 Agent 使用钉钉。',
   'detail.connectedIn': '已登录为 {org} 的 {name}。可以在对话中直接请 Agent 使用钉钉。',
@@ -27,8 +22,6 @@ export const zh = {
   hint: '钉钉账号与这台电脑终端里的 dws 共用；关闭插件不会退出登录。',
   failed: '操作未完成，请重试',
   'failed.signIn': '登录未完成，请重试。如果组织还没有开启 CLI 访问，请联系组织管理员开启，或在授权页申请。',
-  'failure.details': '排障信息：{details}',
-  'failure.exitCode': '退出码 {code}',
   'action.connect': '连接钉钉',
   'action.open': '打开授权页面',
   'action.cancel': '取消',
@@ -38,29 +31,24 @@ export const zh = {
   'badge.disconnected': '未连接',
   'badge.connecting': '连接中',
   'badge.unavailable': '待确认',
-  'badge.stopped': '未运行',
   'signOut.title': '退出钉钉登录？',
   'signOut.body': '将退出当前钉钉账号，这台电脑终端里的 dws 也会退出这个账号；本机登录的其他组织账号不受影响。',
   'activation.title': '连接钉钉账号',
   'activation.body': '钉钉插件已开启。连接你的钉钉账号后，就可以在对话中使用它。',
-  'activation.later': '稍后',
   'notice.connected': '钉钉已连接',
   'notice.signed-out': '已退出钉钉登录',
-  'notice.action-failed': '操作未完成，请重试',
-  close: '关闭',
 }
 
-/** Every key the DingTalk account surfaces translate. */
-export type DingtalkKey = keyof typeof zh
+/** Every key of the DingTalk text. */
+export type DingtalkTextKey = keyof typeof zh
 
 /** English dictionary. */
-export const en: Record<DingtalkKey, string> = {
+export const en: Record<DingtalkTextKey, string> = {
   'section.title': 'DingTalk account',
   'status.checking': 'Checking connection',
   'status.disconnected': 'Not connected',
   'status.unavailable': 'Cannot confirm sign-in right now',
   'status.connected': 'Connected',
-  'status.stopped': 'DingTalk component not running',
   'step.downloading': 'Downloading dws and its skills',
   'step.authorizing': 'Waiting for authorization on the DingTalk page',
   'step.connecting': 'Connecting',
@@ -68,7 +56,6 @@ export const en: Record<DingtalkKey, string> = {
   'detail.disconnected': 'Sign in with a DingTalk account that belongs to an organization to use calendar, to-dos, docs, AI tables, group chats, contacts, and more in conversations. An organization admin must first turn on CLI access in the DingTalk developer console; until then, you can request it on the authorization page.',
   'detail.unavailable': 'The existing sign-in is kept. Try again later.',
   'detail.missing': 'dws or its skills could not be downloaded. Check the network or proxy, then retry.',
-  'detail.stopped': 'The DingTalk CLI and skills component is not running. See the component list below for the reason, then retry.',
   'detail.connected': 'Ask the agent to use DingTalk directly in a conversation.',
   'detail.connectedAs': 'Signed in as {name}. Ask the agent to use DingTalk directly in a conversation.',
   'detail.connectedIn': 'Signed in as {name} at {org}. Ask the agent to use DingTalk directly in a conversation.',
@@ -76,8 +63,6 @@ export const en: Record<DingtalkKey, string> = {
   hint: 'The DingTalk account is shared with dws in this computer\'s terminal. Turning the plugin off does not sign out.',
   failed: 'The action did not finish. Try again.',
   'failed.signIn': 'Sign-in did not finish. Try again. If your organization has not turned on CLI access, ask an organization admin to turn it on, or request it on the authorization page.',
-  'failure.details': 'Diagnostic: {details}',
-  'failure.exitCode': 'Exit code {code}',
   'action.connect': 'Connect DingTalk',
   'action.open': 'Open authorization page',
   'action.cancel': 'Cancel',
@@ -87,26 +72,21 @@ export const en: Record<DingtalkKey, string> = {
   'badge.disconnected': 'Not connected',
   'badge.connecting': 'Connecting',
   'badge.unavailable': 'Unconfirmed',
-  'badge.stopped': 'Not running',
   'signOut.title': 'Sign out of DingTalk?',
   'signOut.body': 'This signs out the current DingTalk account, including in dws in this computer\'s terminal. Accounts of other organizations signed in on this computer stay signed in.',
   'activation.title': 'Connect your DingTalk account',
   'activation.body': 'The DingTalk plugin is on. Connect your DingTalk account to use it in conversations.',
-  'activation.later': 'Later',
   'notice.connected': 'DingTalk connected',
   'notice.signed-out': 'Signed out of DingTalk',
-  'notice.action-failed': 'The action did not finish. Try again.',
-  close: 'Close',
 }
 
 /** Japanese dictionary. */
-export const ja: Record<DingtalkKey, string> = {
+export const ja: Record<DingtalkTextKey, string> = {
   'section.title': 'DingTalk アカウント',
   'status.checking': '接続を確認中',
   'status.disconnected': '未接続',
   'status.unavailable': '現在サインイン状態を確認できません',
   'status.connected': '接続済み',
-  'status.stopped': 'DingTalk コンポーネントが稼働していません',
   'step.downloading': 'dws とそのスキルをダウンロード中',
   'step.authorizing': 'DingTalk ページでの認可を待っています',
   'step.connecting': '接続中',
@@ -114,7 +94,6 @@ export const ja: Record<DingtalkKey, string> = {
   'detail.disconnected': '組織に所属する DingTalk アカウントでサインインすると、会話の中でカレンダー、ToDo、ドキュメント、AI テーブル、グループチャット、連絡先などを使用できます。先に組織の管理者が DingTalk 開発者コンソールで CLI アクセスを有効にする必要があります。有効になるまでは、認可ページで申請できます。',
   'detail.unavailable': '現在のサインイン状態は保持されています。しばらくしてから再試行してください。',
   'detail.missing': 'dws またはそのスキルをダウンロードできませんでした。ネットワークまたはプロキシを確認してから再試行してください。',
-  'detail.stopped': '「DingTalk CLI とスキル」コンポーネントが稼働していません。下のコンポーネント一覧で理由を確認し、対処してから再試行してください。',
   'detail.connected': '会話の中でエージェントに DingTalk の使用を直接依頼できます。',
   'detail.connectedAs': '{name} としてサインインしています。会話の中でエージェントに DingTalk の使用を直接依頼できます。',
   'detail.connectedIn': '{org} の {name} としてサインインしています。会話の中でエージェントに DingTalk の使用を直接依頼できます。',
@@ -122,8 +101,6 @@ export const ja: Record<DingtalkKey, string> = {
   hint: 'DingTalk アカウントは、このコンピューターのターミナルにある dws と共有されます。プラグインをオフにしてもサインアウトはされません。',
   failed: '操作が完了しませんでした。もう一度お試しください。',
   'failed.signIn': 'サインインが完了しませんでした。もう一度お試しください。組織で CLI アクセスが有効になっていない場合は、組織の管理者に有効化を依頼するか、認可ページで申請してください。',
-  'failure.details': '診断情報：{details}',
-  'failure.exitCode': '終了コード {code}',
   'action.connect': 'DingTalk を接続',
   'action.open': '認可ページを開く',
   'action.cancel': 'キャンセル',
@@ -133,26 +110,21 @@ export const ja: Record<DingtalkKey, string> = {
   'badge.disconnected': '未接続',
   'badge.connecting': '接続中',
   'badge.unavailable': '未確認',
-  'badge.stopped': '未稼働',
   'signOut.title': 'DingTalk からサインアウトしますか？',
   'signOut.body': '現在の DingTalk アカウントからサインアウトします。このコンピューターのターミナルにある dws でもこのアカウントからサインアウトされます。このコンピューターでサインインしている他の組織のアカウントには影響しません。',
   'activation.title': 'DingTalk アカウントを接続',
   'activation.body': 'DingTalk プラグインがオンになりました。DingTalk アカウントを接続すると、会話の中で使用できます。',
-  'activation.later': '後で',
   'notice.connected': 'DingTalk を接続しました',
   'notice.signed-out': 'DingTalk からサインアウトしました',
-  'notice.action-failed': '操作が完了しませんでした。もう一度お試しください。',
-  close: '閉じる',
 }
 
 /** Spanish dictionary. */
-export const es: Record<DingtalkKey, string> = {
+export const es: Record<DingtalkTextKey, string> = {
   'section.title': 'Cuenta de DingTalk',
   'status.checking': 'Comprobando la conexión',
   'status.disconnected': 'No conectado',
   'status.unavailable': 'No se puede confirmar el inicio de sesión en este momento',
   'status.connected': 'Conectado',
-  'status.stopped': 'El componente de DingTalk no está en ejecución',
   'step.downloading': 'Descargando dws y sus habilidades',
   'step.authorizing': 'Esperando la autorización en la página de DingTalk',
   'step.connecting': 'Conectando',
@@ -160,7 +132,6 @@ export const es: Record<DingtalkKey, string> = {
   'detail.disconnected': 'Inicie sesión con una cuenta de DingTalk que pertenezca a una organización para usar el calendario, las tareas pendientes, los documentos, las tablas de IA, los chats de grupo, los contactos y más en las conversaciones. Primero, un administrador de la organización debe activar el acceso de CLI en la consola de desarrolladores de DingTalk; mientras tanto, puede solicitarlo en la página de autorización.',
   'detail.unavailable': 'Se conserva el inicio de sesión actual. Inténtelo de nuevo más tarde.',
   'detail.missing': 'No se pudo descargar dws o sus habilidades. Compruebe la red o el proxy y vuelva a intentarlo.',
-  'detail.stopped': 'El componente “CLI y habilidades de DingTalk” no está en ejecución. Consulte el motivo en la lista de componentes de abajo y vuelva a intentarlo.',
   'detail.connected': 'Pida al agente que use DingTalk directamente en una conversación.',
   'detail.connectedAs': 'Sesión iniciada como {name}. Pida al agente que use DingTalk directamente en una conversación.',
   'detail.connectedIn': 'Sesión iniciada como {name} en {org}. Pida al agente que use DingTalk directamente en una conversación.',
@@ -168,8 +139,6 @@ export const es: Record<DingtalkKey, string> = {
   hint: 'La cuenta de DingTalk se comparte con dws en la terminal de esta computadora. Desactivar el complemento no cierra la sesión.',
   failed: 'La acción no se completó. Inténtelo de nuevo.',
   'failed.signIn': 'El inicio de sesión no se completó. Inténtelo de nuevo. Si su organización no ha activado el acceso de CLI, pida a un administrador de la organización que lo active o solicítelo en la página de autorización.',
-  'failure.details': 'Diagnóstico: {details}',
-  'failure.exitCode': 'Código de salida {code}',
   'action.connect': 'Conectar DingTalk',
   'action.open': 'Abrir página de autorización',
   'action.cancel': 'Cancelar',
@@ -179,26 +148,21 @@ export const es: Record<DingtalkKey, string> = {
   'badge.disconnected': 'No conectado',
   'badge.connecting': 'Conectando',
   'badge.unavailable': 'Sin confirmar',
-  'badge.stopped': 'No está en ejecución',
   'signOut.title': '¿Cerrar sesión en DingTalk?',
   'signOut.body': 'Se cerrará la sesión de la cuenta actual de DingTalk, también en dws en la terminal de esta computadora. Las cuentas de otras organizaciones con sesión iniciada en esta computadora la mantienen.',
   'activation.title': 'Conecte su cuenta de DingTalk',
   'activation.body': 'El complemento de DingTalk está activado. Conecte su cuenta de DingTalk para usarlo en las conversaciones.',
-  'activation.later': 'Más tarde',
   'notice.connected': 'DingTalk conectado',
   'notice.signed-out': 'Sesión de DingTalk cerrada',
-  'notice.action-failed': 'La acción no se completó. Inténtelo de nuevo.',
-  close: 'Cerrar',
 }
 
 /** French dictionary. */
-export const fr: Record<DingtalkKey, string> = {
+export const fr: Record<DingtalkTextKey, string> = {
   'section.title': 'Compte DingTalk',
   'status.checking': 'Vérification de la connexion',
   'status.disconnected': 'Non connecté',
   'status.unavailable': 'Impossible de confirmer la connexion pour le moment',
   'status.connected': 'Connecté',
-  'status.stopped': 'Le composant DingTalk ne fonctionne pas',
   'step.downloading': 'Téléchargement de dws et de ses compétences',
   'step.authorizing': 'En attente de l’autorisation sur la page DingTalk',
   'step.connecting': 'Connexion en cours',
@@ -206,7 +170,6 @@ export const fr: Record<DingtalkKey, string> = {
   'detail.disconnected': 'Connectez-vous avec un compte DingTalk rattaché à une organisation pour utiliser le calendrier, les tâches, les documents, les tableaux IA, les discussions de groupe, les contacts et plus encore dans les conversations. Un administrateur de l’organisation doit d’abord activer l’accès CLI dans la console développeur DingTalk ; en attendant, vous pouvez en faire la demande sur la page d’autorisation.',
   'detail.unavailable': 'La connexion existante est conservée. Réessayez plus tard.',
   'detail.missing': 'Impossible de télécharger dws ou ses compétences. Vérifiez le réseau ou le proxy, puis réessayez.',
-  'detail.stopped': 'Le composant « CLI et compétences DingTalk » ne fonctionne pas. Consultez la raison dans la liste des composants ci-dessous, puis réessayez.',
   'detail.connected': 'Demandez à l’agent d’utiliser DingTalk directement dans une conversation.',
   'detail.connectedAs': 'Connecté en tant que {name}. Demandez à l’agent d’utiliser DingTalk directement dans une conversation.',
   'detail.connectedIn': 'Connecté en tant que {name} chez {org}. Demandez à l’agent d’utiliser DingTalk directement dans une conversation.',
@@ -214,8 +177,6 @@ export const fr: Record<DingtalkKey, string> = {
   hint: 'Le compte DingTalk est partagé avec dws dans le terminal de cet ordinateur. Désactiver le plugin ne vous déconnecte pas.',
   failed: 'L’action n’a pas abouti. Réessayez.',
   'failed.signIn': 'La connexion n’a pas abouti. Réessayez. Si votre organisation n’a pas activé l’accès CLI, demandez à un administrateur de l’organisation de l’activer, ou faites-en la demande sur la page d’autorisation.',
-  'failure.details': 'Diagnostic : {details}',
-  'failure.exitCode': 'Code de sortie {code}',
   'action.connect': 'Connecter DingTalk',
   'action.open': 'Ouvrir la page d’autorisation',
   'action.cancel': 'Annuler',
@@ -225,26 +186,21 @@ export const fr: Record<DingtalkKey, string> = {
   'badge.disconnected': 'Non connecté',
   'badge.connecting': 'Connexion en cours',
   'badge.unavailable': 'Non confirmé',
-  'badge.stopped': 'Ne fonctionne pas',
   'signOut.title': 'Se déconnecter de DingTalk ?',
   'signOut.body': 'Cela déconnecte le compte DingTalk actuel, y compris dans dws dans le terminal de cet ordinateur. Les comptes d’autres organisations connectés sur cet ordinateur restent connectés.',
   'activation.title': 'Connectez votre compte DingTalk',
   'activation.body': 'Le plugin DingTalk est activé. Connectez votre compte DingTalk pour l’utiliser dans les conversations.',
-  'activation.later': 'Plus tard',
   'notice.connected': 'DingTalk connecté',
   'notice.signed-out': 'Déconnecté de DingTalk',
-  'notice.action-failed': 'L’action n’a pas abouti. Réessayez.',
-  close: 'Fermer',
 }
 
 /** German dictionary. */
-export const de: Record<DingtalkKey, string> = {
+export const de: Record<DingtalkTextKey, string> = {
   'section.title': 'DingTalk-Konto',
   'status.checking': 'Verbindung wird geprüft',
   'status.disconnected': 'Nicht verbunden',
   'status.unavailable': 'Anmeldung kann gerade nicht bestätigt werden',
   'status.connected': 'Verbunden',
-  'status.stopped': 'DingTalk-Komponente läuft nicht',
   'step.downloading': 'dws und seine Fertigkeiten werden heruntergeladen',
   'step.authorizing': 'Warten auf die Autorisierung auf der DingTalk-Seite',
   'step.connecting': 'Wird verbunden',
@@ -252,7 +208,6 @@ export const de: Record<DingtalkKey, string> = {
   'detail.disconnected': 'Melden Sie sich mit einem DingTalk-Konto an, das zu einer Organisation gehört, um Kalender, Aufgaben, Dokumente, KI-Tabellen, Gruppenchats, Kontakte und mehr in Unterhaltungen zu verwenden. Ein Administrator der Organisation muss zuerst den CLI-Zugriff in der DingTalk-Entwicklerkonsole aktivieren; bis dahin können Sie ihn auf der Autorisierungsseite anfordern.',
   'detail.unavailable': 'Die bestehende Anmeldung bleibt erhalten. Versuchen Sie es später erneut.',
   'detail.missing': 'dws oder seine Fertigkeiten konnten nicht heruntergeladen werden. Prüfen Sie das Netzwerk oder den Proxy und versuchen Sie es dann erneut.',
-  'detail.stopped': 'Die Komponente „DingTalk-CLI und Fertigkeiten“ läuft nicht. Den Grund sehen Sie in der Komponentenliste unten; versuchen Sie es danach erneut.',
   'detail.connected': 'Bitten Sie den Agenten, DingTalk direkt in einer Unterhaltung zu verwenden.',
   'detail.connectedAs': 'Angemeldet als {name}. Bitten Sie den Agenten, DingTalk direkt in einer Unterhaltung zu verwenden.',
   'detail.connectedIn': 'Angemeldet als {name} bei {org}. Bitten Sie den Agenten, DingTalk direkt in einer Unterhaltung zu verwenden.',
@@ -260,8 +215,6 @@ export const de: Record<DingtalkKey, string> = {
   hint: 'Das DingTalk-Konto wird mit dws im Terminal dieses Computers geteilt. Wenn Sie das Plugin deaktivieren, bleiben Sie angemeldet.',
   failed: 'Die Aktion wurde nicht abgeschlossen. Versuchen Sie es erneut.',
   'failed.signIn': 'Die Anmeldung wurde nicht abgeschlossen. Versuchen Sie es erneut. Wenn Ihre Organisation den CLI-Zugriff nicht aktiviert hat, bitten Sie einen Administrator der Organisation, ihn zu aktivieren, oder fordern Sie ihn auf der Autorisierungsseite an.',
-  'failure.details': 'Diagnose: {details}',
-  'failure.exitCode': 'Exit-Code {code}',
   'action.connect': 'DingTalk verbinden',
   'action.open': 'Autorisierungsseite öffnen',
   'action.cancel': 'Abbrechen',
@@ -271,26 +224,21 @@ export const de: Record<DingtalkKey, string> = {
   'badge.disconnected': 'Nicht verbunden',
   'badge.connecting': 'Wird verbunden',
   'badge.unavailable': 'Unbestätigt',
-  'badge.stopped': 'Läuft nicht',
   'signOut.title': 'Von DingTalk abmelden?',
   'signOut.body': 'Dadurch wird das aktuelle DingTalk-Konto abgemeldet, auch in dws im Terminal dieses Computers. Konten anderer Organisationen, die auf diesem Computer angemeldet sind, bleiben angemeldet.',
   'activation.title': 'DingTalk-Konto verbinden',
   'activation.body': 'Das DingTalk-Plugin ist aktiviert. Verbinden Sie Ihr DingTalk-Konto, um es in Unterhaltungen zu verwenden.',
-  'activation.later': 'Später',
   'notice.connected': 'DingTalk verbunden',
   'notice.signed-out': 'Von DingTalk abgemeldet',
-  'notice.action-failed': 'Die Aktion wurde nicht abgeschlossen. Versuchen Sie es erneut.',
-  close: 'Schließen',
 }
 
 /** Russian dictionary. */
-export const ru: Record<DingtalkKey, string> = {
+export const ru: Record<DingtalkTextKey, string> = {
   'section.title': 'Аккаунт DingTalk',
   'status.checking': 'Проверка подключения',
   'status.disconnected': 'Не подключено',
   'status.unavailable': 'Сейчас не удаётся подтвердить вход',
   'status.connected': 'Подключено',
-  'status.stopped': 'Компонент DingTalk не работает',
   'step.downloading': 'Загрузка dws и его навыков',
   'step.authorizing': 'Ожидание авторизации на странице DingTalk',
   'step.connecting': 'Подключение',
@@ -298,7 +246,6 @@ export const ru: Record<DingtalkKey, string> = {
   'detail.disconnected': 'Войдите в аккаунт DingTalk, состоящий в организации, чтобы использовать в беседах календарь, задачи, документы, ИИ-таблицы, групповые чаты, контакты и многое другое. Сначала администратор организации должен включить доступ CLI в консоли разработчика DingTalk; до этого запросить его можно на странице авторизации.',
   'detail.unavailable': 'Текущий вход сохранён. Повторите попытку позже.',
   'detail.missing': 'Не удалось загрузить dws или его навыки. Проверьте сеть или прокси, затем повторите попытку.',
-  'detail.stopped': 'Компонент «CLI и навыки DingTalk» не работает. Причину можно посмотреть в списке компонентов ниже; затем повторите попытку.',
   'detail.connected': 'Попросите агента использовать DingTalk прямо в беседе.',
   'detail.connectedAs': 'Выполнен вход как {name}. Попросите агента использовать DingTalk прямо в беседе.',
   'detail.connectedIn': 'Выполнен вход как {name} в {org}. Попросите агента использовать DingTalk прямо в беседе.',
@@ -306,8 +253,6 @@ export const ru: Record<DingtalkKey, string> = {
   hint: 'Аккаунт DingTalk общий с dws в терминале этого компьютера. Отключение плагина не приводит к выходу из аккаунта.',
   failed: 'Действие не завершено. Повторите попытку.',
   'failed.signIn': 'Вход не завершён. Повторите попытку. Если в вашей организации не включён доступ CLI, попросите администратора организации включить его или запросите доступ на странице авторизации.',
-  'failure.details': 'Диагностика: {details}',
-  'failure.exitCode': 'Код выхода {code}',
   'action.connect': 'Подключить DingTalk',
   'action.open': 'Открыть страницу авторизации',
   'action.cancel': 'Отмена',
@@ -317,26 +262,21 @@ export const ru: Record<DingtalkKey, string> = {
   'badge.disconnected': 'Не подключено',
   'badge.connecting': 'Подключение',
   'badge.unavailable': 'Не подтверждено',
-  'badge.stopped': 'Не работает',
   'signOut.title': 'Выйти из DingTalk?',
   'signOut.body': 'Будет выполнен выход из текущего аккаунта DingTalk, в том числе в dws в терминале этого компьютера. Аккаунты других организаций, в которые выполнен вход на этом компьютере, останутся активными.',
   'activation.title': 'Подключите аккаунт DingTalk',
   'activation.body': 'Плагин DingTalk включён. Подключите аккаунт DingTalk, чтобы использовать его в беседах.',
-  'activation.later': 'Позже',
   'notice.connected': 'DingTalk подключён',
   'notice.signed-out': 'Выполнен выход из DingTalk',
-  'notice.action-failed': 'Действие не завершено. Повторите попытку.',
-  close: 'Закрыть',
 }
 
 /** Portuguese dictionary. */
-export const pt: Record<DingtalkKey, string> = {
+export const pt: Record<DingtalkTextKey, string> = {
   'section.title': 'Conta do DingTalk',
   'status.checking': 'Verificando a conexão',
   'status.disconnected': 'Não conectado',
   'status.unavailable': 'Não é possível confirmar o login no momento',
   'status.connected': 'Conectado',
-  'status.stopped': 'O componente do DingTalk não está em execução',
   'step.downloading': 'Baixando o dws e suas habilidades',
   'step.authorizing': 'Aguardando a autorização na página do DingTalk',
   'step.connecting': 'Conectando',
@@ -344,7 +284,6 @@ export const pt: Record<DingtalkKey, string> = {
   'detail.disconnected': 'Entre com uma conta do DingTalk que pertença a uma organização para usar agenda, tarefas, documentos, tabelas de IA, chats em grupo, contatos e mais nas conversas. Antes, um administrador da organização precisa ativar o acesso à CLI no console de desenvolvedor do DingTalk; até lá, você pode solicitá-lo na página de autorização.',
   'detail.unavailable': 'O login atual foi mantido. Tente novamente mais tarde.',
   'detail.missing': 'Não foi possível baixar o dws ou suas habilidades. Verifique a rede ou o proxy e tente novamente.',
-  'detail.stopped': 'O componente “CLI e habilidades do DingTalk” não está em execução. Veja o motivo na lista de componentes abaixo e tente novamente.',
   'detail.connected': 'Peça ao agente que use o DingTalk diretamente em uma conversa.',
   'detail.connectedAs': 'Conectado como {name}. Peça ao agente que use o DingTalk diretamente em uma conversa.',
   'detail.connectedIn': 'Conectado como {name} em {org}. Peça ao agente que use o DingTalk diretamente em uma conversa.',
@@ -352,8 +291,6 @@ export const pt: Record<DingtalkKey, string> = {
   hint: 'A conta do DingTalk é compartilhada com o dws no terminal deste computador. Desativar o plugin não encerra a sessão.',
   failed: 'A ação não foi concluída. Tente novamente.',
   'failed.signIn': 'O login não foi concluído. Tente novamente. Se sua organização não ativou o acesso à CLI, peça a um administrador da organização para ativá-lo ou solicite-o na página de autorização.',
-  'failure.details': 'Diagnóstico: {details}',
-  'failure.exitCode': 'Código de saída {code}',
   'action.connect': 'Conectar DingTalk',
   'action.open': 'Abrir página de autorização',
   'action.cancel': 'Cancelar',
@@ -363,20 +300,13 @@ export const pt: Record<DingtalkKey, string> = {
   'badge.disconnected': 'Não conectado',
   'badge.connecting': 'Conectando',
   'badge.unavailable': 'Não confirmado',
-  'badge.stopped': 'Não está em execução',
   'signOut.title': 'Sair do DingTalk?',
   'signOut.body': 'Isso encerra a sessão da conta atual do DingTalk, inclusive no dws no terminal deste computador. As contas de outras organizações conectadas neste computador continuam conectadas.',
   'activation.title': 'Conecte sua conta do DingTalk',
   'activation.body': 'O plugin do DingTalk está ativado. Conecte sua conta do DingTalk para usá-lo nas conversas.',
-  'activation.later': 'Mais tarde',
   'notice.connected': 'DingTalk conectado',
   'notice.signed-out': 'Você saiu do DingTalk',
-  'notice.action-failed': 'A ação não foi concluída. Tente novamente.',
-  close: 'Fechar',
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface LocaleNamespaceMap {
-    'dingtalk': DingtalkKey
-  }
-}
+/** Render one key of the DingTalk text in every shipped language. */
+export const text = accountText({ zh, en, ja, es, fr, de, ru, pt })

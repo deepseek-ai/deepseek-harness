@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-钉钉插件让对话通过钉钉官方 CLI（DingTalk Workspace CLI，命令 `dws`）使用钉钉。安装本 bundle 会加入两行：CLI 及其技能，以及插件页上的钉钉账号区块，用户不必开始对话就能在这里登录和退出。CLI 把登录保存在 `~/.dws` 和系统钥匙串中，与用户自己的终端共用。仅支持 macOS 和 Windows x64。
+钉钉插件让对话通过钉钉官方 CLI（DingTalk Workspace CLI，命令 `dws`）使用钉钉。安装本 bundle 会加入一行：CLI 及其技能，它同时在插件页显示钉钉账号区块，用户不必开始对话就能在这里登录和退出。CLI 把登录保存在 `~/.dws` 和系统钥匙串中，与用户自己的终端共用。仅支持 macOS 和 Windows x64。
 
 ## 目录
 
@@ -40,8 +40,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 
 | 行 | 包 | 行为 |
 |---|---|---|
-| `dingtalk` | [`@deepseek-ai/dsh-dingtalk-cli`](../dingtalk-cli/README.zh.md) | 下载 `dws` 及其技能，把 `dws` 的绝对路径告诉模型，注册其技能，并在 Host 上执行账号检查、登录和退出登录 |
-| `ui-dingtalk` | [`@deepseek-ai/dsh-client-ui-dingtalk`](../../client/ui-dingtalk/README.zh.md) | 在插件页上显示钉钉账号区块、连接标签、开启 bundle 后的引导和提示 |
+| `dingtalk` | [`@deepseek-ai/dsh-dingtalk-cli`](../dingtalk-cli/README.zh.md) | 下载 `dws` 及其技能，把 `dws` 的绝对路径告诉模型，注册其技能，在 Host 上执行账号检查、登录和退出登录，并通过 [CLI 账号注册表](../../client/ui-cli-account/README.zh.md)在插件页显示账号区块、连接标签、开启 bundle 后的引导和提示 |
 
 关闭 bundle 会撤下技能、运行时上下文中的路径和页面。CLI 的登录和已下载的资产会保留。
 
@@ -53,7 +52,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 在 profile 的其他层之后插入 `dingtalk` 和 `ui-dingtalk` 两行。本包依赖这两个行包，使这两行从本 bundle 解析；[`src/index.ts`](src/index.ts) 不导出任何内容。插件页按本包名定位账号区块。
+[`cordis.patch.yml`](cordis.patch.yml) 在 profile 的其他层之后插入 `dingtalk` 行。本包依赖这个行包，使该行从本 bundle 解析；[`src/index.ts`](src/index.ts) 不导出任何内容。插件页按本包名定位账号区块。
 
 </details>
 
@@ -64,7 +63,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 
 - [Connector 包](../README.zh.md) — 本应用插件所属的分组。
 - [钉钉 CLI 与技能](../dingtalk-cli/README.zh.md) — Host 行、它的下载、账号操作和模型指引。
-- [钉钉插件页面](../../client/ui-dingtalk/README.zh.md) — 插件页行。
+- [CLI 账号界面](../../client/ui-cli-account/README.zh.md) — 在插件页显示账号的注册表。
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md) — 安装与启用。
 
 -----
@@ -72,7 +71,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 <a id="model-experience"></a>
 ## 模型体验
 
-间接通过 `dingtalk` 行，其包拥有技能目录条目和加载后的技能正文，见其[模型体验](../dingtalk-cli/README.zh.md#model-experience)；`ui-dingtalk` 行不增加任何面向模型的内容。
+间接通过 `dingtalk` 行，其包拥有技能目录条目和加载后的技能正文，见其[模型体验](../dingtalk-cli/README.zh.md#model-experience)。
 
 #### KV Cache 影响
 

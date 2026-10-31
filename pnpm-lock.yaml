@@ -4475,39 +4475,6 @@ importers:
         specifier: ^18.2.0
         version: 18.3.1
 
-  packages/client/ui-dingtalk:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-api-remotes':
-        specifier: workspace:*
-        version: link:../../api/remotes
-      '@deepseek-ai/dsh-cli-account':
-        specifier: workspace:*
-        version: link:../../connector/cli-account
-      '@deepseek-ai/dsh-client-locale':
-        specifier: workspace:*
-        version: link:../locale
-      '@deepseek-ai/dsh-client-test-runtime':
-        specifier: workspace:*
-        version: link:../../test-support/client-runtime
-      '@deepseek-ai/dsh-client-ui-cli-account':
-        specifier: workspace:*
-        version: link:../ui-cli-account
-      '@deepseek-ai/dsh-client-ui-slots':
-        specifier: workspace:*
-        version: link:../ui-slots
-      '@deepseek-ai/dsh-dingtalk-cli':
-        specifier: workspace:*
-        version: link:../../connector/dingtalk-cli
-      '@deepseek-ai/dsh-typert-protocol':
-        specifier: workspace:*
-        version: link:../../typert/protocol
-      '@deepseek-ai/dsh-util-values':
-        specifier: workspace:*
-        version: link:../../util/values
-
   packages/client/ui-directory-picker-browse:
     devDependencies:
       '@deepseek-ai/cordis':
@@ -7555,9 +7522,6 @@ importers:
 
   packages/connector/dingtalk:
     dependencies:
-      '@deepseek-ai/dsh-client-ui-dingtalk':
-        specifier: workspace:*
-        version: link:../../client/ui-dingtalk
       '@deepseek-ai/dsh-dingtalk-cli':
         specifier: workspace:*
         version: link:../dingtalk-cli
@@ -7596,6 +7560,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-client-ui-cli-account':
+        specifier: workspace:*
+        version: link:../../client/ui-cli-account
       '@deepseek-ai/dsh-skill':
         specifier: workspace:*
         version: link:../../skill/skill
@@ -7605,9 +7572,6 @@ importers:
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:*
         version: link:../../core/system-prompt
-      '@deepseek-ai/dsh-typert-protocol':
-        specifier: workspace:*
-        version: link:../../typert/protocol
 
   packages/context/agent-instructions:
     dependencies:

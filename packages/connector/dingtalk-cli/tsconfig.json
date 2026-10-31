@@ -21,9 +21,6 @@
       "path": "../../util/values"
     },
     {
-      "path": "../../typert/protocol"
-    },
-    {
       "path": "../../skill/skill"
     },
     {
@@ -37,6 +34,9 @@
     },
     {
       "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../client/ui-cli-account/tsconfig.host.json"
     }
   ]
 }

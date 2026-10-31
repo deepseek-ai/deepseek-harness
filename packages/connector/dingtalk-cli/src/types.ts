@@ -1,4 +1,4 @@
-/** Credential-free DingTalk account and operation views for Remote clients. */
+/** Credential-free DingTalk account and operation views the Plugins page presenter reads. */
 
 import type { CliAccountView, CliCommandFailure } from '@deepseek-ai/dsh-cli-account/types'
 
@@ -25,5 +25,5 @@ export type DingtalkPhase = 'downloading' | 'authorizing' | 'signing-out'
 /** The command and exit code of a failed operation's last command. */
 export type DingtalkOperationFailure = CliCommandFailure<'auth-status' | 'auth-login' | 'auth-logout'>
 
-/** The complete DingTalk view a Remote client replaces on every change. */
+/** The complete DingTalk view the presenter reads after each change. */
 export type DingtalkState = CliAccountView<DingtalkAccountState, DingtalkOperationKind, DingtalkPhase, DingtalkOperationFailure>

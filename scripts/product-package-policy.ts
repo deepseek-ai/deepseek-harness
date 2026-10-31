@@ -34,7 +34,6 @@ export const PRODUCT_PACKAGE_POLICY: Readonly<Record<string, ProductPackagePolic
   'packages/subagent/subagent-dsh-sdk': { category: 'optional', reason: 'Requires an explicitly configured external DSH home.' },
   'packages/connector/dingtalk': { category: 'optional', reason: 'Separately installed app plugin that downloads dws and requires a DingTalk account in an organization with CLI access.' },
   'packages/connector/dingtalk-cli': { category: 'optional', reason: 'DingTalk CLI, skills, and sign-in mounted by the separately installed DingTalk bundle.' },
-  'packages/client/ui-dingtalk': { category: 'optional', reason: 'Plugins page sign-in mounted by the separately installed DingTalk bundle.' },
   'packages/web/web-search-exa': { category: 'optional', reason: 'Alternative search provider requiring its own API credentials.' },
   'packages/web/web-search-perplexity': { category: 'optional', reason: 'Alternative search provider requiring its own API credentials.' },
   'packages/connector/cli-account': { category: 'optional', reason: 'Host library imported by separately installed CLI app plugins.' },

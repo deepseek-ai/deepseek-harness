@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包是[钉钉插件](../dingtalk/README.zh.md)的 Host 行。它从同一个固定版本的 release 下载钉钉官方 CLI（DingTalk Workspace CLI，命令 `dws`）和钉钉官方技能到 DSH 缓存目录，在运行时上下文中把 `dws` 的绝对路径告诉模型，并注册一个 `dingtalk` skill，其子指南就是这些技能。它的 `dingtalk` Remote 为[钉钉插件页面](../../client/ui-dingtalk/README.zh.md)检查 CLI 的登录、通过 CLI 的浏览器授权页面登录、退出当前账号，以及取消操作。CLI 把登录保存在 `~/.dws` 和系统钥匙串中，与用户自己的终端共用。仅支持 macOS。
+本包是[钉钉插件](../dingtalk/README.zh.md)的 Host 行。它从同一个固定版本的 release 下载钉钉官方 CLI（DingTalk Workspace CLI，命令 `dws`）和钉钉官方技能到 DSH 缓存目录，在运行时上下文中把 `dws` 的绝对路径告诉模型，并注册一个 `dingtalk` skill，其子指南就是这些技能。它把账号注册到 [CLI 账号注册表](../../client/ui-cli-account/README.zh.md)，其插件页区块负责检查登录、通过浏览器授权页面登录、退出登录和取消操作。CLI 把登录保存在 `~/.dws` 和系统钥匙串中，与用户自己的终端共用。仅支持 macOS。
 
 ## 目录
 
@@ -40,17 +40,16 @@ kind: "package-reference"
 <a id="account-operations"></a>
 ### 账号操作
 
-`dingtalk` Remote 为插件页提供服务。它同一时间最多执行一个操作，操作归 Host 所有，因此离开页面不会取消它。该行加载时会启动一次检查，dws 或其技能缺失时这次检查也会下载。
+插件页通过 CLI 账号注册表发起这些操作，注册表由 Web 应用加载；headless profile 加载插件时没有它。Host 同一时间最多执行一个操作并持有它，因此离开页面不会取消它。该行加载时会启动一次检查，dws 或其技能缺失时这次检查也会下载。
 
-| 方法 | 效果 |
+| 操作 | 效果 |
 |---|---|
-| `follow(signal)` | 推送账号、进行中的操作和最近一次结果；没有操作时，每个新订阅者会触发一次检查 |
-| `check()` | dws 或其技能缺失时先下载，再重新检查账号；返回操作 id |
-| `signIn()` | 运行 `auth login --no-browser --format json`，等待用户在这台电脑的浏览器中授权，然后检查 dws 是否报告该账号已登录 |
-| `signOut()` | 对最近一次检查发现的账号运行 `auth logout --profile <corpId>:<userId>`，这也会让用户自己的终端退出该账号，然后重新检查 |
-| `cancel(id)` | 在登录等待授权时取消该操作，并等待其命令退出；其他步骤和已结束的 id 会被忽略 |
+| `check` | dws 或其技能缺失时先下载，再重新检查账号；没有操作运行时，每个打开 Web 应用的浏览器会触发一次 |
+| `sign-in` | 运行 `auth login --no-browser --format json`，等待用户在这台电脑的浏览器中授权，然后检查 dws 是否报告该账号已登录 |
+| `sign-out` | 用户确认后，对最近一次检查发现的账号运行 `auth logout --profile <corpId>:<userId>`，这也会让用户自己的终端退出该账号，然后重新检查 |
+| 取消 | 在登录等待授权时取消它，并等待其命令退出；其他步骤会被忽略 |
 
-检查运行 `auth status --format json`，它会向服务端刷新已过期的访问令牌，无论是否有用户登录，退出码都是 0。`authenticated` 为 true 时，账号为 `connected`，并带上 dws 报告的用户名和组织名；为 false 且原因属于 dws 报告为无法判断的几种（`local_state_requires_repair`、`local_state_unreadable`、`ciphertext_key_mismatch`、`dek_missing`、`keychain_unavailable`）时为 `unverified`；其余为 `signed-out`。退出码非零，或输出不是状态 JSON，会使检查失败并保留之前的账号状态；下载没有完成时为 `not-installed`。退出登录要求两个 id 都存在，因此不会选中一个组织的全部账号；其他组织的账号保持登录，下一次检查显示 dws 届时报告的当前账号。`auth login` 在 stderr 中单独一行、带缩进打印的链接，只有是 `login.dingtalk.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，Remote 结果和 Host 日志包含命令和观察到的退出码；CLI 的输出会被省略。运行 DSH 的进程需要能访问 `~/.dws` 和该 CLI 的 macOS 钥匙串项；`DSH_HOME` 不会改变它们的位置。
+检查运行 `auth status --format json`，它会向服务端刷新已过期的访问令牌，无论是否有用户登录，退出码都是 0。`authenticated` 为 true 时，账号为 `connected`，并带上 dws 报告的用户名和组织名；为 false 且原因属于 dws 报告为无法判断的几种（`local_state_requires_repair`、`local_state_unreadable`、`ciphertext_key_mismatch`、`dek_missing`、`keychain_unavailable`）时为 `unverified`；其余为 `signed-out`。退出码非零，或输出不是状态 JSON，会使检查失败并保留之前的账号状态；下载没有完成时为 `not-installed`。退出登录要求两个 id 都存在，因此不会选中一个组织的全部账号；其他组织的账号保持登录，下一次检查显示 dws 届时报告的当前账号。`auth login` 在 stderr 中单独一行、带缩进打印的链接，只有是 `login.dingtalk.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出会被省略。运行 DSH 的进程需要能访问 `~/.dws` 和该 CLI 的 macOS 钥匙串项；`DSH_HOME` 不会改变它们的位置。
 
 ### 配置
 
@@ -73,11 +72,11 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 是注册为 `ctx.dingtalk` 的 Remote 服务。`dws` 和技能都已安装时，它在运行时上下文中把 `dws` 的路径告诉模型，在 `src/release.ts` 发布的 skill 根目录上挂载一个名为 `dingtalk` 的[文件系统 skill 提供方](../../skill/skill-filesystem/README.zh.md)，并启动一次检查，使没有浏览器的会话也能找到 `dws` 和该 skill。该提供方不包含默认根目录，并监听 skill 根目录，因为第一次下载发布它时，目录可能已经列出过。本包不使用 npm 包 `dingtalk-workspace-cli`：它的安装脚本会把官方技能复制到默认 skill 提供方扫描的 `~/.agents/skills`，以及其他 Agent 的 skill 目录，插件撤下后它们仍会留下。dws 内嵌了同样的技能，但 `dws skill setup` 只写入这类 Agent 目录。
+[`src/index.ts`](src/index.ts) 是一个函数插件。`dws` 和技能都已安装时，它在运行时上下文中把 `dws` 的路径告诉模型，在 `src/release.ts` 发布的 skill 根目录上挂载一个名为 `dingtalk` 的[文件系统 skill 提供方](../../skill/skill-filesystem/README.zh.md)，并启动一次检查，使没有浏览器的会话也能找到 `dws` 和该 skill。该提供方不包含默认根目录，并监听 skill 根目录，因为第一次下载发布它时，目录可能已经列出过。本包不使用 npm 包 `dingtalk-workspace-cli`：它的安装脚本会把官方技能复制到默认 skill 提供方扫描的 `~/.agents/skills`，以及其他 Agent 的 skill 目录，插件撤下后它们仍会留下。dws 内嵌了同样的技能，但 `dws skill setup` 只写入这类 Agent 目录。
 
 [`src/release.ts`](src/release.ts) 固定发布版本、各平台的归档和 `dws-skills.zip`，每项都记录 release 的 `checksums.txt` 中的名称、大小和 SHA-256。它只下载缺少的资产；响应的 `Content-Length` 不符时，在读取正文之前就拒绝，随后校验摘要。它用 `tar` 解压 `.tar.gz` 平台归档，用 `fflate` 只取出 Windows `.zip` 归档根目录下的 `dws.exe`，并用 `fflate` 解压技能归档中 `multi/` 下的条目及根目录的 `LICENSE`、`NOTICE`，都解压到同级的临时目录；技能条目的路径含空段、`.`、`..` 或反斜杠时拒绝。解压结果通过改名发布，另一个进程先发布的目录会被保留。每个失败的下载源记录一条警告。skill 根目录 `$DSH_HOME/cache/dingtalk/skill-<摘要>/` 包含包内总入口在 `dingtalk/SKILL.md` 的副本，以及指向技能目录的符号链接 `dingtalk/guides`；在 Windows 上它是目录联接（junction），不需要创建符号链接的权限。摘要覆盖总入口和链接目标，因此已发布的根目录不会再变；加载时技能目录已经存在，就同步发布根目录。
 
-[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现 dws 的命令，在检查的第一条命令之前准备好版本，从 `auth login` 的 stderr 行中读取授权链接，并解析 `auth status` 的 JSON。它把已登录账号的 id 留在 Host 上供退出登录使用；Remote 视图只包含名字。释放时取消进行中的操作，中止正在运行的命令和下载，并在这些进程退出后完成。
+[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现 dws 的命令，在检查的第一条命令之前准备好版本，从 `auth login` 的 stderr 行中读取授权链接，并解析 `auth status` 的 JSON。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。它把已登录账号的 id 留在 Host 上供退出登录使用；Remote 视图只包含名字。释放时取消进行中的操作，中止正在运行的命令和下载，并在这些进程退出后完成。
 
 [`skills/dingtalk/SKILL.md`](skills/dingtalk/SKILL.md) 是唯一的 skill：DSH 指引、16 个子指南的索引，以及打开方式。子指南是 release `v1.0.64` 的 `dws-skills.zip` 中的 `multi/` 目录树，上游安装程序默认使用它；另一种 `mono/` 是重复同样内容的单一入口。文件系统提供方只发现 `<root>/<name>/SKILL.md`，因此子指南不是独立的 skill。子指南之间用 `../dingtalk-shared/SKILL.md` 这样的相对路径互相引用，由于子指南保持同级布局，这些路径可以解析；它们的辅助脚本也从各自的 `scripts/` 目录运行。DSH 指引与子指南不一致时，总入口要求 Agent 以 DSH 指引为准：使用插件提供的 `dws`，不另装或升级，不运行 `dws skill setup`，并把登录交给插件页面。
 
@@ -92,7 +91,7 @@ kind: "package-reference"
 - [CLI 账号库](../cli-account/README.zh.md) — CLI 应用插件共用的命令执行与账号操作。
 - [Skills](../../../docs/subsystems/skills.zh.md) — 目录发布、加载与优先级。
 - [钉钉插件](../dingtalk/README.zh.md) — 插入本行和页面行的 bundle。
-- [钉钉插件页面](../../client/ui-dingtalk/README.zh.md) — 发起账号操作的插件页。
+- [CLI 账号界面](../../client/ui-cli-account/README.zh.md) — 发起账号操作的注册表和插件页区块。
 
 -----
 

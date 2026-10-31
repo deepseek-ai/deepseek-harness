@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The DingTalk plugin lets conversations use DingTalk through the official DingTalk Workspace CLI, `dws`. Installing this bundle adds two rows: the CLI with its skill, and the DingTalk account section on the Plugins page, where the user signs in and out without starting a conversation. The CLI keeps the sign-in in `~/.dws` and the system keychain, which the user's own terminal shares. Only macOS and Windows x64 are supported.
+The DingTalk plugin lets conversations use DingTalk through the official DingTalk Workspace CLI, `dws`. Installing this bundle adds one row: the CLI with its skill, which also shows the DingTalk account section on the Plugins page, where the user signs in and out without starting a conversation. The CLI keeps the sign-in in `~/.dws` and the system keychain, which the user's own terminal shares. Only macOS and Windows x64 are supported.
 
 ## Table of Contents
 
@@ -40,8 +40,7 @@ The bundle has no install script to approve. When the plugin loads, the `dingtal
 
 | Row | Package | Behavior |
 |---|---|---|
-| `dingtalk` | [`@deepseek-ai/dsh-dingtalk-cli`](../dingtalk-cli/README.md) | Downloads `dws` and its skills, gives the model the absolute path of `dws`, registers its skill, and runs account checks, sign-in, and sign-out on the Host |
-| `ui-dingtalk` | [`@deepseek-ai/dsh-client-ui-dingtalk`](../../client/ui-dingtalk/README.md) | Shows the DingTalk account section, a connection tag, guidance after the bundle is switched on, and notices on the Plugins page |
+| `dingtalk` | [`@deepseek-ai/dsh-dingtalk-cli`](../dingtalk-cli/README.md) | Downloads `dws` and its skills, gives the model the absolute path of `dws`, registers its skill, runs account checks, sign-in, and sign-out on the Host, and shows the account section, a connection tag, guidance after the bundle is switched on, and notices on the Plugins page through the [CLI account registry](../../client/ui-cli-account/README.md) |
 
 Switching the bundle off withdraws the skill, the path in runtime context, and the page. The CLI sign-in and the downloaded assets stay in place.
 
@@ -53,7 +52,7 @@ Switching the bundle off withdraws the skill, the path in runtime context, and t
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) inserts the `dingtalk` and `ui-dingtalk` rows after the profile's other layers. The package depends on both row packages so that the rows resolve from this bundle, and [`src/index.ts`](src/index.ts) exports nothing. The Plugins page keys the account section by this package name.
+[`cordis.patch.yml`](cordis.patch.yml) inserts the `dingtalk` row after the profile's other layers. The package depends on that row package so that the row resolves from this bundle, and [`src/index.ts`](src/index.ts) exports nothing. The Plugins page keys the account section by this package name.
 
 </details>
 
@@ -64,7 +63,7 @@ Switching the bundle off withdraws the skill, the path in runtime context, and t
 
 - [Connector packages](../README.md) — the group this application plugin belongs to.
 - [DingTalk CLI and skills](../dingtalk-cli/README.md) — the Host row, its download, account operations, and model guidance.
-- [DingTalk plugin page](../../client/ui-dingtalk/README.md) — the Plugins page row.
+- [CLI account surfaces](../../client/ui-cli-account/README.md) — the registry that shows the account on the Plugins page.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation and enablement.
 
 -----
@@ -72,7 +71,7 @@ Switching the bundle off withdraws the skill, the path in runtime context, and t
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the `dingtalk` row, whose package owns the skill catalog entry and loaded skill body described in its [Model Experience](../dingtalk-cli/README.md#model-experience); the `ui-dingtalk` row adds nothing model-facing.
+Indirectly, through the `dingtalk` row, whose package owns the skill catalog entry and loaded skill body described in its [Model Experience](../dingtalk-cli/README.md#model-experience).
 
 #### KV Cache effect
 

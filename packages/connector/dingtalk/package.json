@@ -31,8 +31,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/dsh-dingtalk-cli": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-dingtalk": "workspace:*"
+    "@deepseek-ai/dsh-dingtalk-cli": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

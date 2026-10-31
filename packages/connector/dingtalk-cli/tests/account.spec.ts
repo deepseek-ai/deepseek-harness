@@ -1,15 +1,17 @@
-/** Account operations over a scripted dws: status JSON, the download step, sign-in, sign-out, and the Remote wiring. */
+/** Account operations over a scripted dws: status JSON, the download step, sign-in, sign-out, and the Plugins page wiring. */
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { CliCommandExecutor, executableFileName, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
+import type { CliAccountRegistration, CliAccountSource } from '@deepseek-ai/dsh-cli-account/types'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DingtalkAccount } from '../src/account.ts'
 import { PROGRAM } from '../src/release.ts'
-import Dingtalk, { type DingtalkState } from '../src/index.ts'
+import * as Dingtalk from '../src/index.ts'
+import type { DingtalkState } from '../src/types.ts'
 import { createBinDir, createSkillsDir, ScriptedSubprocess, type CliReply, type ScriptedProcess } from './harness.ts'
 
 const STATUS = 'auth status --format json'
@@ -224,50 +226,47 @@ describe('DingtalkAccount', () => {
   })
 })
 
-describe('DingTalk Remote', () => {
-  it('checks once on load and for a new follower, streams each change, and starts checks, sign-ins, and sign-outs', async () => {
+describe('DingTalk on the Plugins page', () => {
+  let account!: CliAccountSource<DingtalkState>
+
+  beforeEach(() => {
+    ctx.provide('cliAccounts', {
+      register: (registration: CliAccountRegistration<DingtalkState>) => {
+        account = registration.source
+        return () => {}
+      },
+    })
+  })
+
+  const finished = async (id: CliOperationId): Promise<DingtalkState['result']> => {
+    await vi.waitFor(() => { expect(account.snapshot().result?.id).toBe(id) })
+    return account.snapshot().result
+  }
+
+  it('checks once on load, then starts checks, sign-ins, and sign-outs one at a time and cancels a sign-in', async () => {
     script[STATUS] = [SIGNED_OUT]
     await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
-    await vi.waitFor(() => { expect(ctx.dingtalk).toBeDefined() })
     await vi.waitFor(() => { expect(commands()).toEqual([STATUS]) })
     expect(subprocess.lookups[0]?.command).toBe(join(binDir, executableFileName('dws')))
-
-    const states: DingtalkState[] = []
-    const leave = new AbortController()
-    const following = (async () => {
-      for await (const state of ctx.dingtalk.follow(leave.signal)) states.push(state)
-    })()
-    const finished = async (id: CliOperationId): Promise<DingtalkState['result']> => {
-      await vi.waitFor(() => { expect(states.at(-1)?.result?.id).toBe(id) })
-      return states.at(-1)?.result
-    }
-    await vi.waitFor(() => { expect(states.at(-1)?.account).toEqual({ state: 'signed-out' }) })
-    expect(await finished(ctx.dingtalk.check())).toMatchObject({ kind: 'check', outcome: 'succeeded' })
+    await vi.waitFor(() => { expect(account.snapshot().account).toEqual({ state: 'signed-out' }) })
+    expect(await finished(account.start('check'))).toMatchObject({ kind: 'check', outcome: 'succeeded' })
 
     script[LOGIN] = () => {}
-    const signingIn = ctx.dingtalk.signIn()
-    expect(() => ctx.dingtalk.check()).toThrow('another account operation is in progress')
+    const signingIn = account.start('sign-in')
+    expect(() => account.start('check')).toThrow('another account operation is in progress')
     await vi.waitFor(() => { expect(commands().at(-1)).toBe(LOGIN) })
-    await ctx.dingtalk.cancel(signingIn)
+    await account.cancel(signingIn)
     expect(await finished(signingIn)).toMatchObject({ kind: 'sign-in', outcome: 'cancelled' })
     expect(subprocess.processes.at(-1)?.terminated).toBe(true)
 
-    expect(await finished(ctx.dingtalk.signOut())).toMatchObject({ kind: 'sign-out', outcome: 'failed' })
-    leave.abort()
-    await following
+    expect(await finished(account.start('sign-out'))).toMatchObject({ kind: 'sign-out', outcome: 'failed' })
   })
 
-  it('ends its streams and stops account work on disposal', async () => {
+  it('stops account work on disposal', async () => {
     script[STATUS] = () => {}
     await ctx.plugin(Dingtalk, { ...CONFIG, binDir, skillsDir })
-    const states: DingtalkState[] = []
-    const following = (async () => {
-      for await (const state of ctx.dingtalk.follow(new AbortController().signal)) states.push(state)
-    })()
     await vi.waitFor(() => { expect(subprocess.processes).toHaveLength(1) })
     await ctx.fiber.dispose()
-    await following
-    expect(states.length).toBeGreaterThan(0)
     expect(subprocess.processes[0]?.terminated).toBe(true)
   })
 })

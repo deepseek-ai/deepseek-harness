@@ -117,7 +117,7 @@ describe.skipIf(process.platform === 'win32')('web e2e: DingTalk plugin account'
     await section.getByRole('button', { name: '连接钉钉', exact: true }).click()
     await section.getByRole('alert').waitFor({ timeout: 20_000 })
     expect(await section.getAttribute('data-cli-account')).toBe('disconnected')
-    expect(await section.getByRole('alert').innerText()).toContain('auth-login · 退出码 2')
+    expect(await section.getByRole('alert').innerText()).toContain('auth-login · exit 2')
     expect(await section.innerText()).not.toContain('fixture-state')
 
     await rm(join(binDir, 'login-fails'))
