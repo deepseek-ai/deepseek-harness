@@ -26,12 +26,10 @@ it.each(['absent', 'unused'] as const)('returns the closing answer when send_mes
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
   const activation = await ctx.subagents.startActivation({
     provider: 'spawn', label: 'Compute the answer', delivery: 'parent', signal: new AbortController().signal,
-    request: {
-      parent, prompt: [{ type: 'text', text: 'Find the answer.' }],
-    },
+    parent, prompt: [{ type: 'text', text: 'Find the answer.' }],
   })
   try {
-    await ctx.subagents.waitForChildren(parent)
+    await ctx.subagents.waitForTreeWork(parent)
     await parent.whenIdle()
     expect(adapter.requests).toHaveLength(2)
     expect(adapter.requests[0]!.tools?.some(tool => tool.name === 'send_message') ?? false).toBe(availability === 'unused')
@@ -60,10 +58,8 @@ it('delivers structured output to the parent when the child has send_message', a
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
   const activation = await ctx.subagents.startActivation({
     provider: 'spawn', label: 'Compute the answer', delivery: 'parent', signal: new AbortController().signal,
-    request: {
-      parent, prompt: [{ type: 'text', text: 'Find the answer.' }],
-      outputSchema: { type: 'object', properties: { answer: { type: 'number' } }, required: ['answer'] },
-    },
+    parent, prompt: [{ type: 'text', text: 'Find the answer.' }],
+    outputSchema: { type: 'object', properties: { answer: { type: 'number' } }, required: ['answer'] },
   })
   try {
     await activation.result

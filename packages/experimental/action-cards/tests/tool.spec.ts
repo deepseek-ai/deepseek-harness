@@ -133,7 +133,7 @@ it('activates nothing for a skill load dispatched from code, so a PTC preset nev
 
 it('offers cards in the main conversation only: subagent skill loads activate nothing and non-root calls are refused', async () => {
   const f = await fixture()
-  const child = (await f.ctx.agents.create({ sessionId: SessionId('cards-child'), parentAgent: f.agent,
+  const child = (await f.ctx.agents.create({ sessionId: SessionId('cards-child'),
     meta: { parentSession: f.agent.id, origin: 'subagent' } })).agent
   child.session.append('turn/start', { turn: 1 })
   expect((await call(f, 'skill', { name: SKILL }, 'child-load', child)).isError).toBe(false)
@@ -143,7 +143,7 @@ it('offers cards in the main conversation only: subagent skill loads activate no
   await call(f, 'skill', { name: SKILL }, 'load')
   // Admission is fixed when the step starts; the call still checks that its agent is a live root.
   const toolSet = await f.ctx.tools.resolve({ agent: f.agent, modelSelection, signal })
-  vi.spyOn(f.ctx.agents, 'roots').mockReturnValue([])
+  vi.spyOn(f.ctx.agents, 'get').mockReturnValue(undefined)
   const refused = await executeModelToolFixture(f.ctx, { callId: ToolCallId('detached-root'), name: 'propose_action', arguments: proposal,
     agent: f.agent, signal, toolSet })
   toolSet.dispose()

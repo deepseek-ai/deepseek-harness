@@ -465,31 +465,27 @@
 - text: Recorded result
 - list:
   - listitem:
-    - text: 检查工具卡片布局，并列出三个最值得改进的地方。 Started
-    - term: Agent ID
+    - text: Started
+    - term: ID
     - definition: agent-demo-review
+    - group:
+      - text: Task
+      - list:
+        - listitem:
+          - paragraph: 检查工具卡片布局，并列出三个最值得改进的地方。
 - button "Inspect"
 - button "List subagents 3 agents" [expanded]
 - text: Recorded result
 - list:
   - listitem:
-    - text: 检查工具卡片布局 Running agent-demo-review
-    - term: Parent
-    - definition: todo-diff-demo
-    - term: Depth
-    - definition: "1"
+    - text: agent-demo-review Running
+    - button "Expand description for agent-demo-review": 检查工具卡片布局
   - listitem:
-    - text: 整理工具展示清单 Idle agent-demo-docs
-    - term: Parent
-    - definition: todo-diff-demo
-    - term: Depth
-    - definition: "1"
+    - text: agent-demo-docs Idle
+    - button "Expand description for agent-demo-docs": 整理工具展示清单
   - listitem:
-    - text: 检查状态图标 Ready agent-demo-icons
-    - term: Parent
-    - definition: agent-demo-review
-    - term: Depth
-    - definition: "2"
+    - text: agent-demo-icons Ready
+    - button "Expand description for agent-demo-icons": 检查状态图标
 - button "Inspect"
 - button "Send message agent-demo-review" [expanded]
 - text: Recorded result
@@ -739,7 +735,7 @@
     - definition: "2"
     - term: Ready
     - definition: "Yes"
-    - term: Owner
+    - term: ownerName
     - definition: ui-review
     - group:
       - text: Write scopes
@@ -759,7 +755,7 @@
     - definition: "2"
     - term: Ready
     - definition: "Yes"
-    - term: Owner
+    - term: ownerName
     - definition: ui-review
     - group:
       - text: Write scopes
@@ -781,10 +777,10 @@
         - listitem:
           - paragraph: task-demo-1
 - button "Inspect"
-- button "Wait for subagent Subagent activity" [expanded]
+- button "Wait ended" [expanded]
 - text: Recorded result
 - list:
-  - listitem: Subagent activity Change detected
+  - listitem: Wait result Wait ended
 - button "Inspect"
 - button "Interrupt agent ui-review" [expanded]
 - text: Recorded result

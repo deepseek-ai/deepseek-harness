@@ -1,5 +1,6 @@
 /** Lossless guided and Custom editor projections for typed Schedule timing. */
 import type { ScheduleCatalogEntry, ScheduleTiming } from '@deepseek-ai/dsh-schedule/client'
+import { Cron, RRule } from '@deepseek-ai/dsh-util-time'
 import { hostFrequencyKind, ruleFields } from './task-record.ts'
 
 /** Periods represented by guided controls, plus a lossless advanced editor. */
@@ -144,8 +145,14 @@ export function timingFromDraft(draft: TimingDraft, intervalFromNow = false): Sc
   if (draft.frequency === 'advanced') {
     if (draft.rrule.trim() === '' && draft.retainedTiming !== undefined) return draft.retainedTiming
     if (!draft.rrule.trimStart().startsWith('DTSTART')) {
-      return { kind: 'cron', cron: { expression: draft.rrule.trim(), time_zone: draft.timeZone } }
+      const expression = draft.rrule.trim()
+      const parsed = Cron.parse(expression, draft.timeZone)
+      return { kind: 'cron', cron: {
+        expression: parsed.kind === 'accepted' ? parsed.rule.expression : expression, time_zone: draft.timeZone,
+      } }
     }
   }
-  return { kind: 'rrule', rrule: rruleFromDraft(draft, intervalFromNow) }
+  const rrule = rruleFromDraft(draft, intervalFromNow)
+  const parsed = draft.frequency === 'advanced' ? RRule.parse(rrule) : undefined
+  return { kind: 'rrule', rrule: parsed?.kind === 'accepted' ? parsed.rule.expression : rrule }
 }

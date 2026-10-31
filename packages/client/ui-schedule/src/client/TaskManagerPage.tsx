@@ -9,8 +9,8 @@ import {
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { ScheduleId, ScheduleCatalogEntry, ScheduleCreateRequest } from '@deepseek-ai/dsh-schedule/client'
-import { TaskCreateDialog, type TaskCreateOutcome } from './TaskCreateDialog.tsx'
-import { projectChoices } from './TaskEditorFields.tsx'
+import type { TaskCreateOutcome } from './TaskDetail.tsx'
+import type { TaskEditorStoreProps } from './editor-store.ts'
 import { taskNextRunAt, taskSessionId } from './task-record.ts'
 import type { CatalogSnapshot } from './catalog-source.ts'
 import { CatalogFeedback } from './CatalogFeedback.tsx'
@@ -47,6 +47,7 @@ export interface TaskManagerInjected extends TaskDetailInjected {
 /** Root-scoped task catalog props derived from the framework and injected actions. */
 export type TaskManagerPageProps = PropsRuntime<'main'>
   & InjectFace<TaskManagerInjected>
+  & TaskEditorStoreProps
   & PropsLocale<'schedule.manager'>
 
 type StatusFilter = 'all' | ScheduleCatalogEntry['status']
@@ -57,8 +58,7 @@ type StatusFilter = 'all' | ScheduleCatalogEntry['status']
  * @returns the searchable task list beside the selected task's detail.
  */
 export function TaskManagerPage(props: TaskManagerPageProps) {
-  const { useCatalog, onNewTask, onClearEnded, onRetry, onCreateTask, useWorkspaces, t } = props
-  const workspaces = useWorkspaces(snapshot => snapshot)
+  const { useCatalog, onNewTask, onClearEnded, onRetry, onCreateTask, t } = props
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
   const catalog = useCatalog(snapshot => snapshot)
@@ -77,6 +77,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
   const { record: catalogRecord, task: selected,
     props: { id: detailId, confirmId, onConfirm: setConfirmId, onTabChange: setTab } } = detail
   const rowRef = useRef<HTMLButtonElement | null>(null)
+  const createTriggerRef = useRef<HTMLButtonElement>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const clearTriggerRef = useRef<HTMLButtonElement | null>(null)
   // Set when the confirmation opens: its settled removal can hide the trigger
@@ -107,23 +108,22 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
     : statusFilter === 'paused' ? 'list.emptyPaused'
       : statusFilter === 'ended' ? 'list.emptyInactive'
         : statusFilter === 'active' ? 'list.emptyActive' : 'list.empty'
-  // The list's frequency line omits a rule zone equal to the host's and otherwise
-  // names it, the same way the detail's Repeat row does.
+  // The list's frequency line omits a rule zone equal to the host's and otherwise names it.
   const systemZone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const frequencyZone: FrequencyZone = { system: systemZone, label: zone => zoneLabel(zone, t) }
 
   useEffect(() => {
     // The detail focuses its own panel; with nothing selected, focus returns
-    // to the row that opened it, or to the page heading once that row is gone.
+    // to the control that opened it, or to the page heading once that control is gone.
     // An open confirmation owns the focus until it closes, even when a refresh
     // drops the selected task behind it.
-    if (selectedId !== null || clearConfirm) return
+    if (selectedId !== null || manualOpen || clearConfirm) return
     if (rowRef.current !== null) {
       const target = rowRef.current.isConnected ? rowRef.current : headingRef.current
       target?.focus()
       rowRef.current = null
     }
-  }, [selectedId, clearConfirm])
+  }, [selectedId, manualOpen, clearConfirm])
 
   useEffect(() => {
     if (status !== 'ready') return
@@ -133,6 +133,11 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
 
   const closeDetails = (): void => {
     setSelectedId(null)
+    setManualOpen(false)
+  }
+  const createManually = (trigger: HTMLButtonElement | null): void => {
+    rowRef.current = trigger
+    setSelectedId(null); setManualOpen(true); setTab('rule')
   }
 
   // The Modal restores focus to the element it captured when it opened; the
@@ -173,7 +178,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
 
   return (
     <section
-      className={clsx(css.page, selected !== undefined && css.hasDetails)}
+      className={clsx(css.page, (selected !== undefined || manualOpen) && css.hasDetails)}
       aria-label={t('title')}
       data-testid="task-manager-page"
       onKeyDown={(event) => {
@@ -182,20 +187,13 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
         // Modal's document bubble listener, which runs after this React handler,
         // so the `clearConfirm` guard is what keeps this page from also closing
         // the detail while the dialog closes.
-        if (event.key !== 'Escape' || event.defaultPrevented || confirmId !== null || clearConfirm || manualOpen
-          || selectedId === null) return
+        if (event.key !== 'Escape' || event.defaultPrevented || confirmId !== null || clearConfirm
+          || selectedId === null && !manualOpen) return
         event.preventDefault()
         event.stopPropagation()
         closeDetails()
       }}
     >
-      {manualOpen && <TaskCreateDialog
-        loadNewSessionInterval={props.hostActions.loadNewSessionInterval}
-        projects={projectChoices(workspaces.items, t('host.defaultProject'))}
-        onCreate={onCreateTask} onClose={() => { setManualOpen(false) }}
-        onCreated={(task) => {
-          setManualOpen(false); setSearch(''); setStatusFilter('all'); setSelectedId(task.id); setTab('rule')
-        }} t={t} />}
       <div className={css.listPane}>
         <div className={css.pageScroll}>
           <div className={css.pageContent}>
@@ -207,14 +205,14 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
                     onClick={onNewTask}>{t('new.action')}</Button>
                   <Menu open={createMenuOpen} onClose={() => { setCreateMenuOpen(false) }} align="end" portal autoFocus
                     listClassName={css.createMenu}
-                    anchor={<Button variant="primary" size="sm" className={css.createMore} aria-label={t('host.createMethod')}
+                    anchor={<Button ref={createTriggerRef} variant="primary" size="sm" className={css.createMore} aria-label={t('host.createMethod')}
                       aria-haspopup="menu" aria-expanded={createMenuOpen} onClick={() => { setCreateMenuOpen(value => !value) }}>
                       <IconChevronDownOutlineRegular size={12} />
                     </Button>}>
                     <MenuItemButton icon={<ReferenceIconRegular kind="session" size={14} />}
                       onSelect={() => { setCreateMenuOpen(false); onNewTask() }}>{t('host.chatCreate')}</MenuItemButton>
                     <MenuItemButton icon={<IconEditOutlineRegular size={14} />}
-                      onSelect={() => { setCreateMenuOpen(false); setManualOpen(true) }}>
+                      onSelect={() => { setCreateMenuOpen(false); createManually(createTriggerRef.current) }}>
                       {t('host.manualCreate')}
                     </MenuItemButton>
                   </Menu>
@@ -286,7 +284,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
               {status === 'ready' && rows.length === 0 && <div className={css.empty} role="status">
                 <ScheduleEmptyIllustration className={css.emptyIllustration} />
                 <h2>{t(emptyTitle)}</h2>
-                <Button variant="outline" className={css.emptyAction} onClick={() => { setManualOpen(true) }}>
+                <Button variant="outline" className={css.emptyAction} onClick={(event) => { createManually(event.currentTarget) }}>
                   {t('empty.action')}
                 </Button>
               </div>}
@@ -307,6 +305,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
                         aria-controls={selectedId === record.id ? detailId : undefined}
                         onClick={(event) => {
                           rowRef.current = event.currentTarget
+                          setManualOpen(false)
                           setSelectedId(record.id)
                           setTab('rule')
                         }}
@@ -335,7 +334,10 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
           </div>
         </div>
       </div>
-      {selected !== undefined && <TaskDetail
+      {manualOpen ? <TaskDetail {...detail.props} onCreateTask={onCreateTask} onClose={closeDetails} onDeleted={closeDetails}
+        onCreated={(task) => {
+          setManualOpen(false); setSearch(''); setStatusFilter('all'); setSelectedId(task.id); setTab('rule')
+        }} /> : selected !== undefined && <TaskDetail
         {...detail.props}
         task={selected}
         authoritative={catalogRecord !== undefined}

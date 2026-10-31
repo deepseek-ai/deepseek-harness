@@ -9,7 +9,7 @@ export const inject = ['tools', 'subagents']
 export function apply(ctx) {
   ctx.on('tools/execute', async (exec, next) => {
     const result = await next()
-    if (exec.name === 'subagent_acp') await ctx.subagents.waitForChildren(exec.agent)
+    if (exec.name === 'subagent_acp') await ctx.subagents.waitForTreeWork(exec.agent)
     return result
   })
 }

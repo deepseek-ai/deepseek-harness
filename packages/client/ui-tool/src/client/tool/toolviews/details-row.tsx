@@ -23,11 +23,11 @@ const LSP_TITLE_KEYS = {
   hover: 'tool.title.hoverSymbol',
 } as const
 
-/** Teammate-coordination tools presented with the two-person team icon. */
-const TEAMMATE_TOOLS = new Set(['spawn_teammate', 'list_agents', 'send_message', 'interrupt_agent', 'wait_agent'])
+/** Agent delegation, discovery, and coordination share the two-person icon. */
+const AGENT_TOOLS = new Set(['subagent', 'subagent_fork', 'list_subagent_models', 'spawn_teammate', 'list_agents', 'send_message', 'interrupt_agent', 'wait_agent'])
 
 function detailIcon(toolName: string) {
-  if (TEAMMATE_TOOLS.has(toolName)) return <IconUsersOutlineRegular size={14} />
+  if (AGENT_TOOLS.has(toolName)) return <IconUsersOutlineRegular size={14} />
   if (toolName.startsWith('schedule_')) return <IconClockOutlineRegular size={14} />
   if (toolName.endsWith('_goal')) return <IconGoalOutlineRegular size={14} />
   if (toolName.startsWith('cordis_')) return <IconCordisPluginOutlineRegular />
@@ -38,6 +38,14 @@ function detailIcon(toolName: string) {
   return <IconAgentPresetOutlineRegular size={14} />
 }
 
+/** Read the streamed description directly; old complete calls may use their prompt instead. */
+function subagentSummary(block: ToolCallViewProps['block']): string {
+  const description = block.args.text('description')?.trimStart()
+  if (description) return description.split(/\r?\n/u, 1)[0] ?? ''
+  if (!('kind' in block) && block.phase === 'preparing') return ''
+  return block.args.text('prompt')?.trimStart().split(/\r?\n/u, 1)[0] ?? ''
+}
+
 /**
  * Present recorded entities, receipts, and report fields in the existing expandable row.
  * @param props - Tool call, row actions, and locale supplied by the keyed slot.
@@ -46,11 +54,18 @@ function detailIcon(toolName: string) {
 export function DetailsRow({ toolName, block, cwd, home, openFile, inspect, useDisclosure, t }: DetailsRowProps) {
   const model = toolRowModel(toolName, block, cwd, home)
   const locale = document.documentElement.lang
-  const details = useMemo(() => detailsCardModel(block, t, locale), [block, t, locale])
+  const taskSummary = toolName === 'subagent' || toolName === 'subagent_fork' ? subagentSummary(block) : undefined
+  const details = useMemo(() => {
+    const result = detailsCardModel(block, t, locale)
+    return result !== null && taskSummary !== undefined
+      ? { ...result, summary: taskSummary, expandedSummary: taskSummary }
+      : result
+  }, [block, t, locale, taskSummary])
   const operation = toolName === 'lsp' ? parsedToolCall(block)?.args.operation : undefined
   const titleKey = typeof operation === 'string' && Object.hasOwn(LSP_TITLE_KEYS, operation)
     ? LSP_TITLE_KEYS[operation as keyof typeof LSP_TITLE_KEYS]
     : model.titleKey
+  const isWait = toolName === 'wait_agent'
   return (
     <ToolRow
       useDisclosure={useDisclosure}
@@ -58,8 +73,8 @@ export function DetailsRow({ toolName, block, cwd, home, openFile, inspect, useD
       variant={model.variant}
       toolName={toolName}
       icon={detailIcon(toolName)}
-      title={t(titleKey)}
-      summary={details?.summary ?? details?.items[0]?.title ?? details?.empty ?? model.summary}
+      title={isWait ? details?.summary ?? t(titleKey) : t(titleKey)}
+      summary={isWait ? '' : taskSummary ?? details?.summary ?? details?.items[0]?.title ?? details?.empty ?? model.summary}
       details={details}
       bodyRaw={model.bodyRaw}
       output={model.output}
@@ -98,6 +113,7 @@ export const detailsToolview = {
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'session_trace', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'list_subagent_models', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'subagent', locale: NS }, DetailsRow)
+      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'subagent_fork', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'list_agents', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'send_message', locale: NS }, DetailsRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'interrupt_agent', locale: NS }, DetailsRow)

@@ -64,6 +64,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-skill/`](ui-skill/README.md) | Adds skill references to inline suggestions | — |
 | [`ui-reference/`](ui-reference/README.md) | Unified Web `@file` / `@session` reference source | — |
 | [`ui-secret-mask/`](ui-secret-mask/README.md) | Masks recognized credentials in sent user text | — |
+| [`ui-agent-team/`](ui-agent-team/README.md) | Session Team switch and shared tasks below the Subagent tree | — |
 | [`ui-subagent/`](ui-subagent/README.md) | Provides subagent navigation, child transcript states, and inline references | — |
 | [`ui-jobs/`](ui-jobs/README.md) | Lists this session's background jobs with on-demand streaming record panels | — |
 | [`ui-schedule/`](ui-schedule/README.md) | Provides the sidebar Automation tasks page and right Sidebar task tab, which create, edit, run, pause, resume, and delete Host scheduled tasks, plus the Session header clock and row mark | — |

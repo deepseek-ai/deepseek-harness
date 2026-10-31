@@ -7,7 +7,7 @@
  * offer identical fields, Host edits and runs, saved deliveries, confirmed
  * deletion, and the linked Session entry. A record restored by a reload carries
  * no parameters, so the body falls back to the provider-owned binding that the
- * navigation wrote; a task that an open edit or a confirmed deletion retained
+ * navigation wrote; a task that an unsaved draft or a confirmed deletion retained
  * keeps the detail on screen after the catalog row disappears, and an applied
  * deletion closes this tab once the catalog refresh after it settles; without a
  * retained task, the body reports that the task is gone.
@@ -23,6 +23,7 @@ import type { CatalogSnapshot } from './catalog-source.ts'
 import { CatalogFeedback } from './CatalogFeedback.tsx'
 import { TaskDetail, useTaskDetail, type TaskDetailInjected } from './TaskDetail.tsx'
 import type { TaskTabBindings } from './task-tab-bindings.ts'
+import type { TaskEditorStoreProps } from './editor-store.ts'
 import { useTaskTabTarget } from './task-tab-target.ts'
 import css from './TaskManagerPage.module.css'
 
@@ -43,6 +44,7 @@ export interface ScheduleTaskTabInjected extends TaskDetailInjected, ScheduleTas
 
 /** Props of the task tab's body: the tab it draws, localized copy, and its catalog face. */
 export type ScheduleTaskTabProps = PropsRuntime<'sidebar.right.pane.tab'>
+  & TaskEditorStoreProps
   & PropsLocale<'schedule.manager'>
   & InjectFace<ScheduleTaskTabInjected>
 

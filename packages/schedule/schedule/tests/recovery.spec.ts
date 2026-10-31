@@ -81,7 +81,7 @@ it.each([
     backend: new JsonStorageBackend(root), onContext: ctx => contexts.push(ctx),
     beforeService: async (ctx, facility) => {
       const agent = agentFor(ctx)
-      ctx.effect(() => ctx.agents.enter(agent, undefined))
+      ctx.effect(() => ctx.agents.enter(agent))
       ctx.on('schedule/changed', changed)
       const resolve = vi.spyOn(ctx.sessionController, 'resolveAgent')
       observed = { ctx, facility, agent, resolveCalls: () => resolve.mock.calls.length }

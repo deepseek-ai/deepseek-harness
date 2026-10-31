@@ -7,12 +7,13 @@ import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { startMockLlmServer, type MockLlmServer } from '@deepseek-ai/dsh-llm-mock-server'
+import { parseSessionHeader } from '@deepseek-ai/dsh-llm-replay'
 import type {} from '@deepseek-ai/dsh-plugin-manager'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-subagent'
 import {
   assertFinalWorkspaceSnapshot, assertFixtureInventory, captureExpandedTurnProcessAria, compareOrRefreshGolden,
-  fixtureUserPrompts, launchWebScaffold, selectedSessionFixture, watchConsole, webSnapshotMode, type WebScaffold,
+  fixtureUserPrompts, launchWebScaffold, seedSession, selectedSessionFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
@@ -137,6 +138,14 @@ describe.skipIf(MODE === 'record')('web snapshot: Official native subagent bundl
     const sessionId = await settled
     const agent = scaffold.ctx.agents.get(sessionId)
     if (agent === undefined) throw new Error('Native delegation Session has no live Agent')
+    const firstTurnEvents = agent.session.snapshotEvents()
+    const toolResults = firstTurnEvents.filter(event => event.type === 'tool/result').map(event => event.data)
+    expect(toolResults, `PTC execution must start the native child before waiting for its result: ${JSON.stringify(toolResults)}`)
+      .toMatchObject([{ message: { isError: false } }])
+    const dispatches = firstTurnEvents.filter(event => event.type === 'tool/ptc-dispatch').map(event => event.data)
+    expect(dispatches).toMatchObject([{ name: 'subagent_claude_code', isError: false }])
+    const catalog = firstTurnEvents.filter(event => event.type === 'subagent/catalog').map(event => event.data)
+    expect(catalog).toMatchObject([{ mode: 'external', label: 'Read the fixture response' }])
     expect(server.requests).toHaveLength(0)
     const completed = scaffold.whenTurnSettled(120_000)
     nativeEndpoint.release()
@@ -148,10 +157,6 @@ describe.skipIf(MODE === 'record')('web snapshot: Official native subagent bundl
     expect(system).toContain('subagent_claude_code')
     const events = agent.session.snapshotEvents()
     expect(events.filter(event => event.type === 'tool/call').map(event => event.data.name)).toEqual(['run_code'])
-    const dispatches = events.filter(event => event.type === 'tool/ptc-dispatch').map(event => event.data)
-    expect(dispatches).toMatchObject([{ name: 'subagent_claude_code', isError: false }])
-    const catalog = events.filter(event => event.type === 'subagent/catalog').map(event => event.data)
-    expect(catalog).toMatchObject([{ mode: 'external', label: 'Read the fixture response' }])
     const notice = events.filter(event => event.type === 'user/message').find(event => event.data.source.kind === 'subagent-settled')
     if (notice?.data.source.kind !== 'subagent-settled') throw new Error('Native completion was not delivered to the parent')
     expect(notice.data.source.senderSessionId).toBe(catalog[0]?.childId)
@@ -177,4 +182,32 @@ describe.skipIf(MODE === 'record')('web snapshot: Official native subagent bundl
       'session.v4.jsonl', 'system-prompt.expected.md', 'tool-schemas.expected.json', 'ui.expected.md', 'workspace.expected',
     ])
   })
+})
+
+it.skipIf(MODE === 'record')('renders recorded official notice titles after reopening the Session', async () => {
+  const scaffold = await launchWebScaffold({ developerTools: true })
+  let browser: Browser | undefined
+  try {
+    const fixture = await readFile(await selectedSessionFixture(FIXTURE), 'utf8')
+    await seedSession(scaffold, fixture, 'official-subagent-recorded-ui')
+    browser = await chromium.launch()
+    const page = await newEnglishPage(browser)
+    await page.clock.setFixedTime(parseSessionHeader(fixture).createdAt)
+    const tripwire = watchConsole(page)
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    const workspace = page.locator('[role="treeitem"]').first()
+    await workspace.waitFor()
+    await workspace.click()
+    const session = page.locator('[role="treeitem"]').nth(1)
+    await session.waitFor()
+    await session.click()
+    const heading = page.locator('[data-turn-trigger] > button > span').nth(1)
+    await expect.poll(() => heading.textContent()).toBe('Subagent run completed')
+    await compareOrRefreshGolden(join(DIR, 'ui.expected.md'),
+      await captureExpandedTurnProcessAria(page, '[data-chat-flow]', scaffold.workspaceCwd), MODE)
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  } finally {
+    try { await browser?.close() } finally { await scaffold.close() }
+  }
 })
