@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `fs/` group gives agents durable, policy-governed access to files: the `ctx.fs` service contract in `fs/`, the host-filesystem and sandbox-enforcing backends in `fs-local/` and `fs-sandbox/`, the read-before-edit policy in `fs-observation-policy/`, and the model-facing tools in `tool-fs/` (`read`, `read_image`, `write`, `edit`, `apply_patch`) and `tool-fs-search/` (`glob`, `grep`). A deployment mounts one backend, loads the policy for freshness-guarded mutations, and registers the tool packages the model should see; backends swap without touching the tools or the policy. File I/O takes no timeout by design: a deadline would kill work the OS still finishes, so cancellation is a best-effort signal at syscall boundaries.
+The `fs/` group gives agents durable, policy-governed access to files: the `ctx.fs` service contract in `fs/`, the host-filesystem and sandbox-enforcing backends in `fs-local/` and `fs-sandbox/`, the read-before-edit policy in `fs-observation-policy/`, and the model-facing tools in `tool-fs/` (`read`, `read_image`, `write`, `edit`, `apply_patch`) and `tool-fs-search/` (`glob`, `grep`). A deployment mounts one backend, optionally loads the policy for freshness-guarded mutations, and registers the tool packages the model should see; backends swap without touching the tools or the policy. File I/O takes no timeout by design: a deadline would kill work the OS still finishes, so cancellation is a best-effort signal at syscall boundaries.
 
 ## Table of Contents
 

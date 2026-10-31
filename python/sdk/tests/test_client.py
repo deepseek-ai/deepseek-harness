@@ -641,6 +641,22 @@ def test_session_subscription_keeps_descendant_relationships_across_subscription
     assert client._notifications.qsize() == 0
 
 
+def test_subtree_keeps_descendant_completion_after_creator_finishes() -> None:
+    client = HarnessClient()
+    with client.subscribe_session_notifications("child") as subtree:
+        for method, parent, child in [
+            ("subagent.started", "root", "child"),
+            ("subagent.started", "child", "leaf"),
+            ("subagent.finished", "root", "child"),
+            ("subagent.finished", "child", "leaf"),
+        ]:
+            client._handle_message({"jsonrpc": "2.0", "method": method,
+                                   "params": {"parentSessionId": parent, "childSessionId": child}})
+            received: list[Notification] = []
+            subtree.drain(received.append)
+            assert [item.payload for item in received] == [{"parentSessionId": parent, "childSessionId": child}]
+
+
 def test_session_subscription_preserves_reused_child_ancestry_after_late_finish() -> None:
     client = HarnessClient()
     old_seen: list[Notification] = []

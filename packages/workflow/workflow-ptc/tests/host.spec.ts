@@ -118,7 +118,7 @@ describe('workflow host callback validation', () => {
       expect(childStart).toHaveBeenCalledOnce()
       const selected = childStart.mock.calls[0]![0]
       expect(selected.provider).toBe('stub')
-      expect(selected.request.cwd).toBe(initial)
+      expect(selected.cwd).toBe(initial)
       expect(ensureDirectory).toHaveBeenCalledOnce()
     } finally {
       release.resolve(undefined)
@@ -207,16 +207,13 @@ describe('workflow runtime outcomes', () => {
       await disposing.promise
       expect(settled).toBe(false)
       expect(activation).toHaveBeenCalledOnce()
-      const { signal, ...delegation } = activation.mock.calls[0]![0]
+      const { signal, parent: delegatedParent, ...delegation } = activation.mock.calls[0]![0]
       expect(signal).toBeInstanceOf(AbortSignal)
-      const { parent: delegatedParent, ...request } = delegation.request
       expect(delegatedParent).toBe(parent)
-      expect({ ...delegation, request }).toEqual({
+      expect(delegation).toEqual({
         provider: 'stub', label: 'host-test child 1', delivery: 'caller',
-        request: {
-          cwd: ctx.workingDirectory.get(parent.session),
-          prompt: [{ type: 'text', text: 'answer' }], outputSchema: schema, agentOptions: { model: 'selected' },
-        },
+        cwd: ctx.workingDirectory.get(parent.session),
+        prompt: [{ type: 'text', text: 'answer' }], outputSchema: schema, agentOptions: { model: 'selected' },
       })
       released.resolve(undefined)
       await expect(run.result).resolves.toMatchObject({ stopReason: 'completed' })

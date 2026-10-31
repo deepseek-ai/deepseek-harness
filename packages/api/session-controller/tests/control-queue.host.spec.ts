@@ -52,8 +52,13 @@ describe('Session control Inbox projection', () => {
     for (;;) {
       const next = await iterator.next()
       if (next.done) throw new Error('stream ended before an Inbox value')
-      if (next.value.type === 'projection' && next.value.key === 'inbox') return next.value
+      if (next.value.type === 'projection' && next.value.changes.some(change => change.key === 'inbox')) return next.value
     }
+  }
+
+  /** The Inbox value one projection frame carries. */
+  function inboxValue(frame: Extract<SessionControlFrame, { type: 'projection' }>): unknown {
+    return frame.changes.find(change => change.key === 'inbox')?.val
   }
 
   it('projects both pending lists in baselines and live replacement frames', async () => {
@@ -82,10 +87,10 @@ describe('Session control Inbox projection', () => {
     const replacement = message('replacement')
     inbox.append('next-turn', replacement)
     const replaced = await nextInboxFrame(iterator)
-    expect(replaced.value).toMatchObject({ 'next-turn': [queued, replacement] })
+    expect(inboxValue(replaced)).toMatchObject({ 'next-turn': [queued, replacement] })
     inbox.remove(steering.id)
     const removed = await nextInboxFrame(iterator)
-    expect(removed.value).toMatchObject({ 'next-step': [context] })
+    expect(inboxValue(removed)).toMatchObject({ 'next-step': [context] })
 
     abort.abort()
     await iterator.next()
@@ -109,8 +114,7 @@ describe('Session control Inbox projection', () => {
     await expect(iterator.next()).resolves.toMatchObject({
       value: {
         type: 'projection',
-        key: 'inbox',
-        value: { 'next-turn': [{ id: pending.id }], 'next-step': [] },
+        changes: [{ key: 'inbox', val: { 'next-turn': [{ id: pending.id }], 'next-step': [] } }],
       },
     })
 
@@ -167,9 +171,9 @@ describe('Session control Inbox projection', () => {
       target: 'next-turn', start: 0, inserted: [pending],
     })
     expect(ctx.agents.get(session.id)).toBeUndefined()
-    await expect(nextInboxFrame(iterator)).resolves.toMatchObject({
-      sessionId: session.id, value: { 'next-turn': [pending], 'next-step': [] },
-    })
+    const frame = await nextInboxFrame(iterator)
+    expect(frame.sessionId).toBe(session.id)
+    expect(inboxValue(frame)).toMatchObject({ 'next-turn': [pending], 'next-step': [] })
     abort.abort()
     await iterator.next()
   })
@@ -197,14 +201,14 @@ describe('Session control Inbox projection', () => {
     inbox.append('next-turn', first)
     inbox.append('next-turn', second)
 
-    const values: InboxState[] = []
+    const values: unknown[] = []
     ownedContexts.delete(ctx)
     await ctx.fiber.dispose()
     for (;;) {
       const next = await iterator.next()
       if (next.done) break
-      if (next.value.type === 'projection' && next.value.key === 'inbox') values.push(next.value.value as unknown as InboxState)
+      if (next.value.type === 'projection' && next.value.changes.some(change => change.key === 'inbox')) values.push(inboxValue(next.value))
     }
-    expect(values.map(value => value['next-turn'].map(item => item.id))).toEqual([[first.id], [first.id, second.id]])
+    expect(values).toMatchObject([{ 'next-turn': [{ id: first.id }] }, { 'next-turn': [{ id: first.id }, { id: second.id }] }])
   })
 })

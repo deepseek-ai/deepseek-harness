@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-`fs/` 组为 agent（智能体）提供持久、受策略约束的文件访问：`fs/` 定义 `ctx.fs` 服务约定，`fs-local/` 与 `fs-sandbox/` 提供宿主文件系统与沙箱强制后端，`fs-observation-policy/` 提供编辑前读取策略，`tool-fs/`（`read`、`read_image`、`write`、`edit`、`apply_patch`）与 `tool-fs-search/`（`glob`、`grep`）提供面向模型的工具。部署挂载一个后端，加载策略以获得新鲜度防护的变更，并注册模型应看到的工具包；后端可以更换，无需改动工具或策略。文件 I/O 有意不设超时：deadline 只会杀掉操作系统仍会完成的工作，因此取消只是系统调用边界的尽力而为信号。
+`fs/` 组为 agent（智能体）提供持久、受策略约束的文件访问：`fs/` 定义 `ctx.fs` 服务约定，`fs-local/` 与 `fs-sandbox/` 提供宿主文件系统与沙箱强制后端，`fs-observation-policy/` 提供编辑前读取策略，`tool-fs/`（`read`、`read_image`、`write`、`edit`、`apply_patch`）与 `tool-fs-search/`（`glob`、`grep`）提供面向模型的工具。部署挂载一个后端，可选地加载策略以获得新鲜度防护的变更，并注册模型应看到的工具包；后端可以更换，无需改动工具或策略。文件 I/O 有意不设超时：deadline 只会杀掉操作系统仍会完成的工作，因此取消只是系统调用边界的尽力而为信号。
 
 ## 目录
 

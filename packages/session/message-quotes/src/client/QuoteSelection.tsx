@@ -11,7 +11,7 @@ import css from './QuoteSelection.module.css'
 export function QuoteSelectionAction({ dismiss, readText, clearSelection, inputActions, useSession, t }:
 PropsRuntime<'conversation.chat.text-interaction'> & PropsLocale<'messageQuotes'>) {
   const enabled = useSession(s => !s.removed && (s.subagent === null
-    || (s.subagent.address.mode === 'continuable' && s.subagent.parentAvailable === true)))
+    || s.subagent.address.mode === 'continuable'))
   useEffect(() => {
     if (!enabled) dismiss()
   }, [enabled, dismiss])

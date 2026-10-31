@@ -304,38 +304,33 @@
     },
     {
       "doc": "docs/subsystems/agent-team.md",
-      "symbol": "TeamMemberProjection",
-      "source": "packages/experimental/agent-team/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamTaskView",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamProjection",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamMemberSnapshot",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamMessageSnapshot",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamMessageSource",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamTaskSnapshot",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/commands.md",
@@ -2134,6 +2129,11 @@
     {
       "doc": "docs/subsystems/session-projection.md",
       "symbol": "ProjectionChangeListener",
+      "source": "packages/session/session-projection/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-projection.md",
+      "symbol": "ProjectionEventChangeListener",
       "source": "packages/session/session-projection/src/index.ts"
     },
     {

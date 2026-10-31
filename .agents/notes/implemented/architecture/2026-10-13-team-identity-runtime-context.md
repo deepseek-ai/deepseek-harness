@@ -6,15 +6,15 @@ English | [中文](2026-10-13-team-identity-runtime-context.zh.md)
 
 ## Problem
 
-A teammate identity embedded in its initial task depends on ordinary history retention. Compaction can remove it, and an ordinary fork from that teammate can retain the old role even though the fork is an independent Lead. Identity must reflect current membership while keeping shared system instructions uniform.
+A teammate identity embedded in its initial task depends on ordinary history retention. Compaction can remove it, and an ordinary fork from that teammate can retain the old role even though the fork is an independent Lead. Identity must reflect the current subagent tree while keeping shared system instructions uniform.
 
 ## Decision
 
-`tool-agent-team` contributes `team:identity` through the Agent-scoped `systemPrompt.context()` registry with `required: true`. Its provider reads the existing Team membership and renders the member's role, name, and addressing instructions. Optional-context suppression cannot remove it. Fixed collaboration policy stays in the system prompt; roster and task state remain tool queries. Initial tasks contain only their supplied content.
+`tool-agent-team` contributes required `team:identity` through `systemPrompt.context()` only in Team compositions. It derives the role from `ctx.subagents.rootOf(agent)`: the root sees its own agent id, and a teammate sees the root id. An unavailable root is reported explicitly. Optional-context suppression cannot remove identity. Task policy stays in the shared system prompt; task state remains a tool query. Ordinary subagent controls contribute neither collaboration policy nor identity context.
 
 The loop owns logging, retained-snapshot comparison, and re-admission after compaction. A changed role appends the current full runtime-context snapshot after inherited history; unchanged retained context adds no message. No Team-specific retention state, event type, or log migration is introduced. Existing recorded reminders remain historical messages.
 
-This supersedes only the initial-task identity decision in [Agent Teams](../feature/2026-08-05-agent-teams.md#team-identity); its roster, mailbox, and task decisions remain active.
+This supersedes only the initial-task identity decision in [Agent Teams](../feature/2026-08-05-agent-teams.md#team-identity). [Task-board wait coordination](2026-10-19-team-task-board-inbox.md) keeps ordinary inbox waiting independent of Team-only model guidance.
 
 ## Alternatives considered
 
@@ -28,4 +28,4 @@ This supersedes only the initial-task identity decision in [Agent Teams](../feat
 
 Members pay for identity within the full runtime-context snapshot. Other context changes repeat it, while stable retained context adds no new message. Forks preserve inherited history and append current identity; actual provider cache hits remain best-effort. Existing Team authorization remains in tool execution.
 
-Verification covers fresh and fork teammates, an independent fork from a teammate, optional-context suppression, compaction restoration, cold resume, and registration disposal. The recorded `team-targets` scenario pins Lead context; the keyless headless Team workflow pins teammate context through the shipped profile.
+Verification covers fresh and fork children, an independent Session fork, optional-context suppression, compaction restoration, unavailable roots, cold resume, and registration disposal. Recorded Team workflows pin identity through their shipped composition; ordinary subagent workflows retain final-result return guidance.

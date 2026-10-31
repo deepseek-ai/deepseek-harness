@@ -27,7 +27,7 @@ English | [中文](README.zh.md)
 
 `fs/delete-intent` requires the same present observation as `fs/edit-intent`: unseen sources fail with `FS_NOT_OBSERVED`, confirmed-absent sources fail with `FS_NOT_FOUND`, and present sources supply their observed version. Patches and move sources reuse `fs/edit-intent`; move destinations reuse `fs/write-intent`.
 
-Load this plugin alongside a `ctx.fs` backend and the `dsh-tool-fs` tools when a deployment wants the model to read a file before it can overwrite or edit it. The plugin needs no configuration and injects no service; it only listens for the `fs/*` events the tools dispatch.
+Load this plugin alongside a `ctx.fs` backend and the `dsh-tool-fs` tools when a deployment wants the model to read a file before it can overwrite or edit it. The plugin needs no configuration and injects no service; it only listens for the `fs/*` events the tools dispatch. The shipped compositions leave it off: [`dsh-base`](../../bundle/base/cordis.patch.yml) lists its `fs-observation-policy` row `disabled: true`; set that row to `disabled: false` to restore the guard for every mutating tool. The [defaults Agent Note](../../../.agents/notes/implemented/feature/2026-10-29-shipped-fs-mutation-defaults.md) records why.
 
 ### Minimal composition
 

@@ -27,7 +27,7 @@ async function setup(start: (request: SubagentStartRequest) => Promise<SubagentR
     ctx, parent,
     start: (owner: Agent = parent) => ctx.subagents.startActivation({
       provider: 'external', label: 'External work', signal: new AbortController().signal, delivery,
-      request: { parent: owner, prompt: [{ type: 'text', text: 'work' }] },
+      parent: owner, prompt: [{ type: 'text', text: 'work' }],
     }),
   }
 }
@@ -41,10 +41,10 @@ describe('external activation ownership', () => {
     const entered = Promise.withResolvers<undefined>()
     const published = Promise.withResolvers<SubagentRun>()
     const fixture = await setup(() => { entered.resolve(undefined); return published.promise })
-    await expect(fixture.ctx.subagents.waitForChildren(fixture.parent)).resolves.toBe(false)
+    await expect(fixture.ctx.subagents.waitForTreeWork(fixture.parent)).resolves.toBe(false)
     const starting = fixture.start()
     await entered.promise
-    const waiting = fixture.ctx.subagents.waitForChildren(fixture.parent)
+    const waiting = fixture.ctx.subagents.waitForTreeWork(fixture.parent)
     let released = false
     void waiting.then(() => { released = true })
     await Promise.resolve()
@@ -53,7 +53,7 @@ describe('external activation ownership', () => {
     const activation = await starting
     await waiting
     await activation.dispose()
-    await expect(fixture.ctx.subagents.waitForChildren(fixture.parent)).resolves.toBe(false)
+    await expect(fixture.ctx.subagents.waitForTreeWork(fixture.parent)).resolves.toBe(false)
   })
 
   it('drains one parent’s external child without cancelling another parent’s pending startup', async () => {
@@ -109,7 +109,7 @@ describe('external activation ownership', () => {
       expect(fixture.ctx.sessionProjections.snapshot(otherParent.session, ['subagentCatalog']).values.subagentCatalog).toEqual([])
       expect(fixture.ctx.sessionProjections.snapshot(fixture.parent.session, ['subagentCatalog']).values.subagentCatalog)
         .toMatchObject([{ id: first.childId, mode: 'external' }])
-      await expect(fixture.ctx.subagents.waitForChildren(otherParent)).resolves.toBe(false)
+      await expect(fixture.ctx.subagents.waitForTreeWork(otherParent)).resolves.toBe(false)
     } finally {
       firstResult.resolve(complete)
       await first.dispose()
@@ -141,7 +141,7 @@ describe('external activation ownership', () => {
       expect(dispose).toHaveBeenCalledOnce()
       expect(warning).toHaveBeenCalledWith(expect.stringContaining('admission rollback failed:'))
       expect(warning).toHaveBeenCalledWith(expect.stringContaining('unknown teardown failure'))
-      await expect(fixture.ctx.subagents.waitForChildren(fixture.parent)).resolves.toBe(false)
+      await expect(fixture.ctx.subagents.waitForTreeWork(fixture.parent)).resolves.toBe(false)
     } finally {
       append.mockRestore()
       warning.mockRestore()

@@ -170,7 +170,8 @@ describe('web e2e: the composer model switch is the default for later sessions',
       expect(popupBounds!.width).toBeCloseTo(commandMenuBounds!.width)
       expect(popupBounds!.x).toBeCloseTo(commandMenuBounds!.x)
       expect(await search.getAttribute('placeholder')).toBe('搜索模型…')
-      await page.getByRole('option').first().waitFor()
+      // Command menu height changes where the pointer lands in the model popup.
+      await page.getByRole('option', { name: 'Acme Large', exact: true }).hover()
       await compareOrRefreshGolden(
         fileURLToPath(new URL('./expected/default-model/command-picker.expected.md', import.meta.url)),
         await captureStableAria(page, '[aria-label="/model 选项"]', scaffold.workspaceCwd),
@@ -272,6 +273,7 @@ describe('web e2e: the composer model switch is the default for later sessions',
       await observeFocus('Enter model pane')
       await devicePage.keyboard.press('ArrowDown')
       const search = devicePage.getByRole('searchbox', { name: '搜索模型…' })
+      expect(await search.evaluate(input => getComputedStyle(input).fontSize)).toBe('16px')
       await expect.poll(() => search.evaluate(element => document.activeElement === element)).toBe(true)
       await observeFocus('Navigate models')
       await devicePage.keyboard.press('Escape')

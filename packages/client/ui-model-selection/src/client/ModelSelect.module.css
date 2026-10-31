@@ -92,16 +92,16 @@
    Menu primitive's portal rules), so the sidebar and the columns' overflow
    clips cannot crop it; z matches the primitive's .portal layer. */
 .menu {
+  box-sizing: border-box;
   position: fixed;
   z-index: 1100;
   display: flex;
   flex-direction: column;
-  /* Let the visible pane's rows set the card width, but keep pathological ids
-     and narrow screens inside a bounded card where ellipsis remains. */
+  /* Rows size the card up to its visible bounds; longer names ellipsize. */
   width: max-content;
-  min-width: min(240px, calc(100vw - 32px));
-  max-width: min(420px, calc(100vw - 32px));
-  max-height: min(360px, calc(100vh - 96px));
+  min-width: min(240px, calc(100vw - 32px), var(--dsh-anchored-max-width, 100vw));
+  max-width: min(420px, calc(100vw - 32px), var(--dsh-anchored-max-width, 100vw));
+  max-height: min(360px, calc(100vh - 96px), var(--dsh-anchored-max-height, 100vh));
   overflow: hidden;
   padding: 4px;
   /* Surface tokens match the Menu primitive card (ui-primitives
@@ -218,12 +218,19 @@
   line-height: normal;
 }
 
+@media (pointer: coarse) {
+  .searchRow .search input {
+    font-size: 16px;
+  }
+}
+
 .searchRow .search input::placeholder {
   color: var(--dsw-alias-label-caption);
 }
 
-.groups {
+.groups:not([hidden]) {
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 

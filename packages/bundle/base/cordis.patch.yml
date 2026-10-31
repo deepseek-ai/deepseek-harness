@@ -291,12 +291,13 @@
 
     - id: fs-observation-policy
       name: '@deepseek-ai/dsh-fs-observation-policy'
+      disabled: true
 
     - id: tool-fs
       name: '@deepseek-ai/dsh-tool-fs'
       config:
-        # Set true to add the apply_patch tool beside edit.
-        applyPatch: false
+        # Set false to drop the apply_patch tool beside edit.
+        applyPatch: true
 
     - id: tool-fs-search
       name: '@deepseek-ai/dsh-tool-fs-search'
@@ -361,6 +362,14 @@
 
     - id: subagent
       name: '@deepseek-ai/dsh-subagent'
+
+    - id: agent-team
+      name: '@deepseek-ai/dsh-agent-team'
+      config:
+        maxTasks: 256
+
+    - id: tool-agent-team
+      name: '@deepseek-ai/dsh-tool-agent-team'
 
     - id: subagent-spawn-in-process
       name: '@deepseek-ai/dsh-subagent-spawn-in-process'
