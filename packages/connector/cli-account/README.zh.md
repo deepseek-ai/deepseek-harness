@@ -27,11 +27,11 @@ kind: "package-library"
 
 ### 何时使用
 
-在厂商 CLI 负责让用户登录并保管凭据的插件的 Host 行中使用它，DSH 只负责启动命令、展示结果和持有进程。插件的插件页用 [`@deepseek-ai/dsh-client-ui-cli-account`](../../client/ui-cli-account/README.zh.md) 镜像这个视图。通过 MCP 接入托管服务的插件改用 MCP 管理器，由它自己负责 OAuth。
+在厂商 CLI 负责让用户登录并保管凭据的插件的 Host 行中使用它，DSH 只负责启动命令、展示结果和持有进程。插件把运行时注册到 [`@deepseek-ai/dsh-client-ui-cli-account`](../../client/ui-cli-account/README.zh.md)，在插件页显示账号。通过 MCP 接入托管服务的插件改用 MCP 管理器，由它自己负责 OAuth。
 
 ### 入口
 
-插件在运行时上下文中声明 CLI 路径，继承运行时，通过 control 运行每条命令，并在自己的 Remote 上提供运行时的方法：
+插件在运行时上下文中声明 CLI 路径，继承运行时，并通过 control 运行每条命令：
 
 ```ts
 import { join } from 'node:path'
@@ -58,7 +58,7 @@ const account = new Account({
 })
 ```
 
-`account.start(kind)` 返回操作 id；已有操作在运行时抛出异常。`account.follow(signal)` 先产出当前的 `CliAccountView`，没有操作在运行时启动一次检查，之后产出每次变化后的视图。`account.cancel(id)` 只在声明为可取消的阶段停止指定操作。`account.dispose()` 取消进行中的操作，等待其进程退出，并释放执行器。以 [`src/runtime.ts`](src/runtime.ts)、[`src/executor.ts`](src/executor.ts) 和 [`src/context.ts`](src/context.ts) 中的契约为准。
+`account.start(kind)` 返回操作 id；已有操作在运行时抛出异常。`account.snapshot()` 返回当前的 `CliAccountView`，`account.observe(listener)` 在每次变化后调用 listener，`account.refresh()` 在没有操作运行时启动一次检查。`account.cancel(id)` 只在声明为可取消的阶段停止指定操作。`account.dispose()` 取消进行中的操作，等待其进程退出，并释放执行器。以 [`src/runtime.ts`](src/runtime.ts)、[`src/executor.ts`](src/executor.ts) 和 [`src/context.ts`](src/context.ts) 中的契约为准。
 
 ### 运行时上下文
 
@@ -70,7 +70,7 @@ const account = new Account({
 
 `offer(url)` 只接受 HTTPS、不含用户信息、主机属于插件 `authorizationHosts` 或其子域名的 URL，并返回是否接受了该链接。每个主机都要写成小写 ASCII，国际化域名写成 punycode，因为运行时拿它与 URL 规范化后的主机名比较。
 
-失败的操作只记录并返回插件对其最后一条命令的分类，即 `{ command, exitCode }` 加上白名单字段；异常信息和 CLI 原始输出既不写日志也不返回，因为其中可能含有凭据。
+失败的操作只记录并返回插件对其最后一条命令的分类，即 `{ command, exitCode }` 加上白名单字段；异常信息和 CLI 原始输出既不写日志也不返回，因为其中可能含有凭据。`failureDetails(failure)` 把命令和退出码（如 `login` 和 `exit 3`）列为插件页失败信息在插件文案之后显示的诊断项，不翻译。
 
 ### 共用配置
 
@@ -89,14 +89,14 @@ const account = new Account({
 <details>
 <summary>实现内部细节——点击展开</summary>
 
-运行时负责操作的生命周期，插件负责每条命令的含义。进行中的操作持有自己的中止控制器、阶段和链接；运行时据此生成视图，并在每次变化时通知订阅者，读取较慢的订阅者只会看到最新的视图。执行器通过 subprocess runtime 校验配置的绝对路径，启动时不添加环境变量；运行时上下文给出同一路径，因此插件和模型的 Shell 命令运行同一个可执行文件。
+运行时负责操作的生命周期，插件负责每条命令的含义。进行中的操作持有自己的中止控制器、阶段和链接；运行时据此生成视图，并在每次变化后调用每个观察者。执行器通过 subprocess runtime 校验配置的绝对路径，启动时不添加环境变量；运行时上下文给出同一路径，因此插件和模型的 Shell 命令运行同一个可执行文件。
 
 | 文件 | 职责 |
 |---|---|
 | [`src/executor.ts`](src/executor.ts) | 有上限的命令执行与进程归属 |
-| [`src/runtime.ts`](src/runtime.ts) | 一次一个操作、取消、链接过滤、失败分类与订阅流 |
+| [`src/runtime.ts`](src/runtime.ts) | 一次一个操作、取消、链接过滤、失败分类与观察者 |
 | [`src/context.ts`](src/context.ts) | 给出可执行文件路径的运行时上下文 |
-| [`src/types.ts`](src/types.ts) | 泛型 Remote 视图类型 |
+| [`src/types.ts`](src/types.ts) | 泛型账号视图类型，以及插件页的注册和显示类型 |
 | [`src/index.ts`](src/index.ts) | 入口模块与共用配置字段 |
 
 </details>
@@ -107,7 +107,7 @@ const account = new Account({
 ## 延伸阅读
 
 - [Connector 包](../README.zh.md)——这个库和 CLI 应用插件所属的分组。
-- [CLI 账号界面](../../client/ui-cli-account/README.zh.md)——镜像这个视图的插件页注册表。
+- [CLI 账号界面](../../client/ui-cli-account/README.zh.md)——运行时所注册的插件页注册表。
 - [System prompt](../../core/system-prompt/README.zh.md)——排序并渲染运行时上下文的注册表。
 - [Subprocess](../../subprocess/subprocess/README.zh.md)——查找并启动 CLI 的运行时。
 

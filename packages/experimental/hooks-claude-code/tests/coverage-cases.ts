@@ -253,7 +253,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
         session: { id: SessionId('child-x'), header: { id: 'child-x' } },
       } as unknown as Parameters<typeof ctx.agents.register>[0]
       await ctx.agents.register(child)
-      ctx.emit(subagentCarrier(ctx), 'subagent/start', { runId: SubagentRunId('run-x'), provider: 'p', id: SessionId('child-x'), local: true })
+      ctx.emit(subagentCarrier(ctx), 'subagent/start', { parentSessionId: SessionId('parent'), runId: SubagentRunId('run-x'), provider: 'p', id: SessionId('child-x'), local: true })
       await waitFor(() => injected.includes('child guidance'))
       expect(injected).toContain('child guidance')
     })
@@ -269,7 +269,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       const warn = vi.fn(); ctx.logger.warn = warn as never
       const child = { id: SessionId('child-y'), inject: () => { throw new Error('inject boom') }, session: { id: SessionId('child-y'), header: { id: 'child-y' } } } as unknown as Parameters<typeof ctx.agents.register>[0]
       await ctx.agents.register(child)
-      ctx.emit(subagentCarrier(ctx), 'subagent/start', { runId: SubagentRunId('run-y'), provider: 'p', id: SessionId('child-y'), local: true })
+      ctx.emit(subagentCarrier(ctx), 'subagent/start', { parentSessionId: SessionId('parent'), runId: SubagentRunId('run-y'), provider: 'p', id: SessionId('child-y'), local: true })
       await waitFor(() => warn.mock.calls.some(c => String(c[0]).includes('SubagentStart hook failed')))
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('SubagentStart hook failed'))
     })
@@ -313,7 +313,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       const s = sh(d, 'stop.sh', `#!/usr/bin/env bash\ntouch "${marker}"\n`)
       const path = hooks(d, { SubagentStop: [{ hooks: [{ type: 'command', command: s }] }] })
       const ctx = await harness(path, new MockAdapter([]))
-      ctx.emit(subagentCarrier(ctx), 'subagent/end', { runId: SubagentRunId('run-z'), provider: 'p', id: SessionId('child-z'), local: false, stopReason: 'completed' })
+      ctx.emit(subagentCarrier(ctx), 'subagent/end', { parentSessionId: SessionId('parent'), runId: SubagentRunId('run-z'), provider: 'p', id: SessionId('child-z'), local: false, stopReason: 'completed' })
       await waitFor(() => existsSync(marker))
       expect(existsSync(marker)).toBe(true)
     })
@@ -723,7 +723,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       const { SessionId } = await import('@deepseek-ai/dsh-session')
       const childHandle = await ctx.agents.create({ sessionId: SessionId('child-stop-session'), meta: { cwd: childDir }, agentOptions: { provider: 'mock', model: 'mock' } })
       const runId = SubagentRunId('run-stop')
-      const identity = { runId, provider: 'inproc', id: childHandle.agent.id, local: true }
+      const identity = { runId, parentSessionId: SessionId('parent'), provider: 'inproc', id: childHandle.agent.id, local: true }
       // Start is the registry-backed capture edge; end deliberately follows
       // handle disposal, matching continuable Activation settlement.
       ctx.emit(subagentCarrier(ctx), 'subagent/start', identity)

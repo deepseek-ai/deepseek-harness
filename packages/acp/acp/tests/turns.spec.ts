@@ -50,7 +50,7 @@ async function installDelegationTool(ctx: BridgeHarness['ctx']): Promise<() => b
       if (exec.agent === undefined) throw new Error('delegation fixture requires an Agent')
       const child = await ctx.subagents.startActivation({
         provider: 'local-test', label: 'later child', delivery: 'caller', signal: exec.signal,
-        request: { parent: exec.agent, prompt: [{ type: 'text', text: 'later child task' }] },
+        parent: exec.agent, prompt: [{ type: 'text', text: 'later child task' }],
       })
       const result = await child.result
       delegated = result.stopReason === 'completed'
@@ -215,7 +215,7 @@ describe('ACP prompt lifecycle', () => {
     const appendSpy = vi.spyOn(parent.session, 'append')
     const failures: number[] = []
     harness.ctx.on('agent/error', ({ turn }) => { failures.push(turn) })
-    const waitForChildren = vi.fn().mockImplementationOnce(() => {
+    const waitForTreeWork = vi.fn().mockImplementationOnce(() => {
       appendSpy.mockImplementation(((type: string, ...rest: never[]) => {
         if (type === failedEvent) throw new Error(`summary ${failedEvent} unavailable`)
         return (append as (...args: never[]) => unknown)(type as never, ...rest)
@@ -223,7 +223,7 @@ describe('ACP prompt lifecycle', () => {
       parent.followup(createUserMessage({ content: [{ type: 'text', text: 'child result' }], source: { kind: 'test' } }))
       return Promise.resolve(true)
     }).mockResolvedValue(false)
-    harness.ctx.provide('subagents', { waitForChildren, drainDescendants: vi.fn() } as never)
+    harness.ctx.provide('subagents', { waitForTreeWork, drainDescendants: vi.fn() } as never)
     try {
       await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'delegate' }] }))
         .rejects.toThrow(`summary ${failedEvent} unavailable`)
@@ -594,10 +594,10 @@ describe('ACP prompt lifecycle', () => {
     const parent = harness.ctx.agents.get(SessionId(sessionId))!
     const waiting = Promise.withResolvers<undefined>()
     const children = Promise.withResolvers<boolean>()
-    const waitForChildren = vi.fn()
+    const waitForTreeWork = vi.fn()
       .mockImplementationOnce(() => { waiting.resolve(undefined); return children.promise })
       .mockResolvedValue(false)
-    harness.ctx.provide('subagents', { waitForChildren, drainDescendants: vi.fn() } as never)
+    harness.ctx.provide('subagents', { waitForTreeWork, drainDescendants: vi.fn() } as never)
     let settled = false
     const prompt = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'delegate' }] })
     const observed = prompt.then(() => { settled = true }, () => { settled = true })
@@ -619,11 +619,11 @@ describe('ACP prompt lifecycle', () => {
     const sessionId = await newSession(harness)
     const waiting = Promise.withResolvers<undefined>()
     const children = Promise.withResolvers<boolean>()
-    const waitForChildren = vi.fn()
+    const waitForTreeWork = vi.fn()
       .mockImplementationOnce(() => { waiting.resolve(undefined); return children.promise })
       .mockResolvedValue(false)
     const drainDescendants = vi.fn()
-    harness.ctx.provide('subagents', { waitForChildren, drainDescendants } as never)
+    harness.ctx.provide('subagents', { waitForTreeWork, drainDescendants } as never)
     const first = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'delegate' }] })
     await waiting.promise
     await harness.client.cancel({ sessionId })
@@ -647,7 +647,7 @@ describe('ACP prompt lifecycle', () => {
     const parent = ctx.agents.get(SessionId(sessionId))!
     const waiting = Promise.withResolvers<undefined>()
     const children = Promise.withResolvers<boolean>()
-    vi.spyOn(ctx.subagents, 'waitForChildren').mockImplementationOnce(() => {
+    vi.spyOn(ctx.subagents, 'waitForTreeWork').mockImplementationOnce(() => {
       waiting.resolve(undefined)
       return children.promise
     })
@@ -873,11 +873,11 @@ describe('ACP prompt lifecycle', () => {
       await delivery.promise
       if (fail) throw new Error('summary image unavailable')
     }
-    const waitForChildren = vi.fn().mockImplementationOnce(() => {
+    const waitForTreeWork = vi.fn().mockImplementationOnce(() => {
       parent.followup(createUserMessage({ content: [{ type: 'text', text: 'child result' }], source: { kind: 'test' } }))
       return Promise.resolve(true)
     }).mockResolvedValue(false)
-    harness.ctx.provide('subagents', { waitForChildren, drainDescendants: vi.fn() } as never)
+    harness.ctx.provide('subagents', { waitForTreeWork, drainDescendants: vi.fn() } as never)
     let settled = false
     const prompt = harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'delegate' }] })
     const observed = prompt.then(() => { settled = true }, () => { settled = true })
@@ -910,7 +910,7 @@ describe('ACP prompt lifecycle', () => {
     const sessionId = await newSession(harness)
     const parent = ctx.agents.get(SessionId(sessionId))!
     const noChildren = Promise.withResolvers<undefined>()
-    vi.spyOn(ctx.subagents, 'waitForChildren').mockImplementationOnce(() => {
+    vi.spyOn(ctx.subagents, 'waitForTreeWork').mockImplementationOnce(() => {
       noChildren.resolve(undefined)
       return Promise.resolve(false)
     })

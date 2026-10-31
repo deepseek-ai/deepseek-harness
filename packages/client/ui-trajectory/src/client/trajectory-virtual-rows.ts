@@ -10,7 +10,7 @@ const TERMINAL_BOUNDARY_HEIGHT = 9
 /** Minimal record shape required by the trajectory virtual-row projection. */
 export interface VirtualizableTrajectoryRecord {
   cell: TrajectoryCellProps
-  collapsedSummaryKind?: 'turn' | 'assistant'
+  collapsedSummaryKind?: 'turn' | 'assistant' | 'tool'
 }
 
 /** One logical record retained inside a measurable virtual row. */

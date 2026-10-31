@@ -14,7 +14,7 @@ import {
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, saveFailureShot, writeComposerDraft,
+  ZH_BROWSER_LOCALE, assertWarningDialogLayout, connectFreshWorkspaceZh, saveFailureShot, writeComposerDraft,
 } from './support.ts'
 
 import { AUTO_REVIEW_FIXTURE, captureAutoReviewState } from './auto-review-fixture.ts'
@@ -154,6 +154,7 @@ describe('web e2e: experimental Auto and Full access confirmation', () => {
     await page.getByRole('menuitem', { name: '完全权限' }).click()
     const dialog = page.getByRole('dialog', { name: '确认启用完全权限？' })
     await dialog.waitFor({ timeout: 10_000 })
+    await assertWarningDialogLayout(dialog)
     const enable = dialog.getByRole('button', { name: '启用完全权限' })
     expect(await enable.isDisabled()).toBe(true)
 
@@ -163,7 +164,18 @@ describe('web e2e: experimental Auto and Full access confirmation', () => {
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
 
-    await dialog.getByRole('checkbox', { name: '我已了解风险，并愿意继续' }).check()
+    const acknowledgement = dialog.getByRole('checkbox', { name: '我已了解风险，并愿意继续' })
+    expect(await acknowledgement.evaluate((input) => {
+      const label = input.closest('label')!
+      const textStyle = getComputedStyle(label)
+      const inputStyle = getComputedStyle(input)
+      return {
+        focused: document.activeElement === input,
+        fontSize: textStyle.fontSize, lineHeight: textStyle.lineHeight, weight: textStyle.fontWeight,
+        gap: textStyle.gap, width: inputStyle.width, height: inputStyle.height,
+      }
+    })).toEqual({ focused: true, fontSize: '14px', lineHeight: '20px', weight: '400', gap: '6px', width: '14px', height: '14px' })
+    await dialog.getByText('我已了解风险，并愿意继续', { exact: true }).click()
     expect(await enable.isEnabled()).toBe(true)
     await enable.click()
     await expect.poll(() => access.getAttribute('aria-label'), { timeout: 10_000 })

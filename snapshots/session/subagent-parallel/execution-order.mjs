@@ -55,7 +55,7 @@ export function apply(ctx) {
     const result = await next()
     if (second) {
       if (!overlapping) throw new Error('parallel fixture requires two simultaneous resident children')
-      await ctx.subagents.waitForChildren(exec.agent)
+      await ctx.subagents.waitForTreeWork(exec.agent)
     }
     return result
   })

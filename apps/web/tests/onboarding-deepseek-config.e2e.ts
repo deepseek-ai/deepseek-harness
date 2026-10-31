@@ -305,6 +305,7 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     await picker.getByText('暂无可用模型', { exact: true }).waitFor()
     expect(await picker.getByRole('menuitemradio').count()).toBe(0)
     expect(scaffold.ctx.agentDefaultModel.currentSelection()).toEqual(selection)
+    expect(await picker.getByRole('menu', { name: '模型', exact: true }).count()).toBe(0)
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'empty.expected.md'), await picker.ariaSnapshot(), MODE)
     await seat.press('Escape')
     await picker.waitFor({ state: 'hidden' })

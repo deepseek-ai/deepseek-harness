@@ -17,9 +17,9 @@ it('refuses unknown cards, closed owners, verbs of removed kinds and undeclared 
   for (const verb of ['toString', 'missing']) {
     expect(await f.ctx.actionCards.act(f.agent, callId, verb)).toEqual({ status: 'refused', reason: 'unavailable' })
   }
-  const roots = vi.spyOn(f.ctx.agents, 'roots').mockReturnValue([])
+  const liveAgent = vi.spyOn(f.ctx.agents, 'get').mockReturnValue(undefined)
   expect(await f.ctx.actionCards.act(f.agent, callId, 'start')).toEqual({ status: 'refused', reason: 'not-live-root' })
-  roots.mockRestore()
+  liveAgent.mockRestore()
   await f.kindFiber.dispose()
   expect(await f.ctx.actionCards.act(f.agent, callId, 'start')).toEqual({ status: 'refused', reason: 'unavailable' })
   const service = f.ctx.actionCards

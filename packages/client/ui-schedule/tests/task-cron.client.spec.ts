@@ -1,8 +1,7 @@
 /** Client-side cron parsing and the localized sentence the Run time card derives from it. */
 import { describe, expect, it } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { cronPreview, cronShapeExpression, parseCronExpression, recognizeCronShape } from '../src/client/task-cron.ts'
-import type { CronBuilderState } from '../src/client/task-cron.ts'
+import { cronPreview, parseCronExpression } from '../src/client/task-cron.ts'
 import { en, zh } from '../src/client/task-manager-locales.ts'
 
 const tEn = makeTranslate(en)
@@ -189,89 +188,5 @@ describe('cronPreview', () => {
     // and would read as two stacked titles.
     expect(hourly).not.toContain(tEn('cron.time.everyHour'))
     expect(stepped).not.toContain(tEn('cron.time.everyNHours', { count: 2 }))
-  })
-})
-
-describe('recognizeCronShape', () => {
-  it.each([
-    ['* * * * *', { kind: 'minutely', step: 1 }],
-    ['*/5 * * * *', { kind: 'minutely', step: 5 }],
-    // Written-out equivalents of a step carry no star semantics on the clock.
-    ['0,30 * * * *', { kind: 'minutely', step: 30 }],
-    ['0 * * * *', { kind: 'hourly', step: 1, minute: 0 }],
-    ['15 */2 * * *', { kind: 'hourly', step: 2, minute: 15 }],
-    ['30 9 * * *', { kind: 'daily', hour: 9, minute: 30 }],
-    ['0 23 * * *', { kind: 'daily', hour: 23, minute: 0 }],
-    ['0 9 * * 1-5', { kind: 'weekly', weekdays: [1, 2, 3, 4, 5], hour: 9, minute: 0 }],
-    // Sunday reads as ISO 7 whichever cron spelling stored it.
-    ['0 9 * * 0', { kind: 'weekly', weekdays: [7], hour: 9, minute: 0 }],
-    ['0 9 * * 7', { kind: 'weekly', weekdays: [7], hour: 9, minute: 0 }],
-    ['30 18 * * 6,0', { kind: 'weekly', weekdays: [6, 7], hour: 18, minute: 30 }],
-    // A written-out full weekday set stays weekly; only a star weekday states
-    // the day-free shapes, so the all-days pill row never collapses.
-    ['0 9 * * 0-6', { kind: 'weekly', weekdays: [1, 2, 3, 4, 5, 6, 7], hour: 9, minute: 0 }],
-    ['0 9 15 * *', { kind: 'monthly', days: [15], hour: 9, minute: 0 }],
-    ['30 8 1,15 * *', { kind: 'monthly', days: [1, 15], hour: 8, minute: 30 }],
-    // A stepped star restricts (DOM_STAR), so it reads as the dates it matches.
-    ['0 9 */2 * *', {
-      kind: 'monthly', days: Array.from({ length: 16 }, (_value, index) => index * 2 + 1), hour: 9, minute: 0,
-    }],
-    // The written-out full date set stays monthly, mirroring the weekday rule,
-    // so the all-dates grid never collapses either.
-    ['0 9 1-31 * *', {
-      kind: 'monthly', days: Array.from({ length: 31 }, (_value, index) => index + 1), hour: 9, minute: 0,
-    }],
-  ] satisfies readonly [string, CronBuilderState][])('recognizes %s', (expression, state) => {
-    expect(recognizeCronShape(parsed(expression))).toEqual(state)
-  })
-
-  it.each([
-    ['a restricted day of month beside weekdays', '0 9 15 * 1'],
-    ['an unrestricted minute under a monthly date', '* * 15 * *'],
-    ['several hours under a monthly date', '0 9,15 15 * *'],
-    ['an unrestricted minute under a fixed hour', '* 9 * * *'],
-    ['several hours', '0 9,15 * * *'],
-    ['a stepped minute under restricted weekdays', '*/5 * * * 1-5'],
-    ['a restricted month', '0 9 * 3 *'],
-    ['a non-uniform minute list', '0,15,40 * * * *'],
-    ['a non-uniform hour list', '0 1,2,4 * * *'],
-    ['a stepped hour without one minute', '* */2 * * *'],
-    // A written-out full day-of-month field beside restricted weekdays matches
-    // every day under the Host's union rule, so it is not a weekly rule.
-    ['a written-out day-of-month union', '0 9 1-31 * 1'],
-    ['a starred day of month beside weekdays', '0 9 */2 * 1'],
-  ])('rejects %s', (_case, expression) => {
-    expect(recognizeCronShape(parsed(expression))).toBeUndefined()
-  })
-})
-
-describe('cronShapeExpression', () => {
-  it.each([
-    [{ kind: 'minutely', step: 1 }, '* * * * *'],
-    [{ kind: 'minutely', step: 5 }, '*/5 * * * *'],
-    [{ kind: 'hourly', step: 1, minute: 0 }, '0 * * * *'],
-    [{ kind: 'hourly', step: 3, minute: 15 }, '15 */3 * * *'],
-    [{ kind: 'daily', hour: 9, minute: 30 }, '30 9 * * *'],
-    // Runs of three or more weekdays compress into a range; shorter runs list.
-    [{ kind: 'weekly', weekdays: [1, 2, 3, 4, 5], hour: 9, minute: 0 }, '0 9 * * 1-5'],
-    [{ kind: 'weekly', weekdays: [1, 3], hour: 9, minute: 0 }, '0 9 * * 1,3'],
-    // ISO Sunday 7 writes cron 0, which sorts ahead of Saturday.
-    [{ kind: 'weekly', weekdays: [6, 7], hour: 18, minute: 30 }, '30 18 * * 0,6'],
-    [{ kind: 'weekly', weekdays: [5, 6, 7], hour: 8, minute: 0 }, '0 8 * * 0,5,6'],
-    [{ kind: 'weekly', weekdays: [1, 2, 3, 4, 5, 6, 7], hour: 7, minute: 0 }, '0 7 * * 0-6'],
-    [{ kind: 'monthly', days: [15], hour: 9, minute: 0 }, '0 9 15 * *'],
-    [{ kind: 'monthly', days: [1, 15], hour: 8, minute: 30 }, '30 8 1,15 * *'],
-    // Date runs compress like weekday runs, and the full set written out still
-    // recognizes as monthly, so the all-dates grid round-trips.
-    [{ kind: 'monthly', days: [1, 2, 3, 10], hour: 7, minute: 0 }, '0 7 1-3,10 * *'],
-    [{
-      kind: 'monthly', days: Array.from({ length: 31 }, (_value, index) => index + 1), hour: 9, minute: 0,
-    }, '0 9 1-31 * *'],
-  ] satisfies readonly [CronBuilderState, string][])('writes %j', (state, expression) => {
-    expect(cronShapeExpression(state)).toBe(expression)
-    // Every generated expression parses back to the shape family it was
-    // written from, so the builder never locks itself out of its own edit.
-    const roundTrip = recognizeCronShape(parsed(expression))
-    expect(roundTrip?.kind).toBe(state.kind)
   })
 })

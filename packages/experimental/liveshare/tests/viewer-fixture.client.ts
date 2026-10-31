@@ -407,9 +407,8 @@ function parseFixtureRemoteEventResult(value: unknown): FixtureRemoteEventResult
 interface FixtureProjectionFrame {
   readonly type: 'projection'
   readonly sessionId: SessionId
-  readonly key: string
-  readonly value: unknown
   readonly seq: number
+  readonly changes: readonly { readonly key: string; readonly val: unknown }[]
 }
 
 interface FixtureQuestionItem {
@@ -1608,107 +1607,62 @@ function sameModelSelection(left: ModelSelection | null, right: ModelSelection |
     && left.reasoningEffort === right.reasoningEffort)
 }
 
-/** Host parallel: emit one Session control projection frame per key advanced by the event. */
+/** Host parallel: emit one Session control projection frame listing every key advanced by the event. */
 function projectionFramesOf(
   id: SessionId,
   log: readonly SessionEvent[],
   event: SessionEvent,
 ): FixtureProjectionFrame[] {
+  const changes = projectionChangesOf(log, event)
+  const keys = Object.keys(changes)
+  if (keys.length === 0) return []
+  return [{ type: 'projection', sessionId: id, seq: event.seq, changes: keys.map(key => ({ key, val: changes[key] })) }]
+}
+
+/**
+ * The new value of each projection key the event advances, in the order this
+ * fixture lists them; the Host lists keys in registration order.
+ */
+function projectionChangesOf(log: readonly SessionEvent[], event: SessionEvent): Record<string, unknown> {
   const type = event.type
-  const frames: FixtureProjectionFrame[] = []
-  if (type === 'model/selection' || type === 'request/header') {
-    frames.push({
-      type: 'projection',
-      sessionId: id,
-      key: 'modelSelection',
-      value: modelSelectionProjectionOf(log),
-      seq: event.seq,
-    })
-  }
+  const changes: Record<string, unknown> = {}
+  if (type === 'model/selection' || type === 'request/header') changes['modelSelection'] = modelSelectionProjectionOf(log)
   // One usage sample advances both token-meter units.
   if (usageSampleOf(event) !== undefined) {
-    frames.push(
-      { type: 'projection', sessionId: id, key: 'tokenUsage', value: tokenUsageOf(log), seq: event.seq },
-      { type: 'projection', sessionId: id, key: 'contextPressure', value: contextPressureOf(log), seq: event.seq },
-    )
+    changes['tokenUsage'] = tokenUsageOf(log)
+    changes['contextPressure'] = contextPressureOf(log)
   }
-  if (type === 'request/context') {
-    frames.push({
-      type: 'projection',
-      sessionId: id,
-      key: 'contextPressure',
-      value: contextPressureOf(log),
-      seq: event.seq,
-    })
-  }
+  if (type === 'request/context') changes['contextPressure'] = contextPressureOf(log)
   if (type === 'request/header'
     || type === 'system/message'
     || type === 'user/message'
     || type === 'assistant/message'
     || type === 'tool/result') {
-    frames.push({
-      type: 'projection',
-      sessionId: id,
-      key: 'contextBreakdown',
-      value: contextBreakdownOf(log),
-      seq: event.seq,
-    })
+    changes['contextBreakdown'] = contextBreakdownOf(log)
   }
   // The stats fold's view advances on message assembly and tool settlement
   // (wall times) and on step close (counts).
-  if (type === 'assistant/message' || type === 'tool/result' || type === 'step/end') {
-    frames.push({
-      type: 'projection',
-      sessionId: id,
-      key: 'sessionStats',
-      value: sessionStatsOf(log),
-      seq: event.seq,
-    })
-  }
-  if (frames.length > 0) return frames
+  if (type === 'assistant/message' || type === 'tool/result' || type === 'step/end') changes['sessionStats'] = sessionStatsOf(log)
+  if (Object.keys(changes).length > 0) return changes
   if (type === 'session/title') {
     const values = projectionValuesOf(log)
     /* v8 ignore next -- the advancing title event is in the log, so the key is present. */
-    if (!Object.hasOwn(values, 'title')) return []
-    return [{ type: 'projection', sessionId: id, key: 'title', value: values['title'], seq: event.seq }]
+    if (!Object.hasOwn(values, 'title')) return {}
+    return { title: values['title'] }
   }
   // The goal domain's own durable change advances its projection.
-  if (type === 'goal/change') {
-    return [{ type: 'projection', sessionId: id, key: 'goal', value: backscanGoal(log), seq: event.seq }]
-  }
+  if (type === 'goal/change') return { goal: backscanGoal(log) }
   // Standing-plan fold: writes replace the list; turn/start clears it (null).
-  if (type === 'todo/write' || type === 'turn/start') {
-    return [{
-      type: 'projection',
-      sessionId: id,
-      key: 'todos',
-      value: backscanTodos(log) ?? null,
-      seq: event.seq,
-    }]
-  }
+  if (type === 'todo/write' || type === 'turn/start') return { todos: backscanTodos(log) ?? null }
   // Knob fold: any of the three whole-value knob events advances the select.
-  if (type === 'permission/preset' || type === 'sandbox/mode' || type === 'approval/policy') {
-    return [{
-      type: 'projection',
-      sessionId: id,
-      key: 'permissions',
-      value: permissionSelectOf(log),
-      seq: event.seq,
-    }]
-  }
+  if (type === 'permission/preset' || type === 'sandbox/mode' || type === 'approval/policy') return { permissions: permissionSelectOf(log) }
   // The plan unit advances on its two folded event kinds when the command
   // lifecycle contains the input that represents a plan selection.
   if (type === 'plan/mode' || (event.type === 'command/run'
     && event.data.name === 'plan' && typeof event.data.args === 'string')) {
-    return [{
-      type: 'projection',
-      sessionId: id,
-      key: 'plan',
-      value: planViewOf(log),
-      seq: event.seq,
-    }]
+    return { plan: planViewOf(log) }
   }
-  return []
+  return {}
 }
 
 /**
@@ -4312,7 +4266,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
             messageId: `fixture-message-${(request as { childSessionId: SessionId }).childSessionId}`,
           },
         })
-        case 'subagents/interruptByParent': return Promise.resolve({ ok: true, value: { accepted: true } })
+        case 'subagents/interruptByUser': return Promise.resolve({ ok: true, value: { accepted: true } })
         case 'credentials/describe': return Promise.resolve(credentialRemotes.describe(args.refs ?? []))
         case 'credentials/set': return Promise.resolve(credentialRemotes.set(args.ref as string))
         case 'credentials/unset': return Promise.resolve(credentialRemotes.unset(args.ref as string))

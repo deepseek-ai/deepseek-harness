@@ -196,12 +196,15 @@ export function TaskMenu({ open, anchor, items = [], selectedId, onSelect, onClo
     }
     /* jscpd:ignore-start -- schedule-local copy of the shared ui-primitives Menu; the two owners change independently. */
     const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.defaultPrevented) return
       // Where the keyboard is, computed once: the menu owns it when it holds a
       // row or sits on its anchor region.
       const focused = document.activeElement
       const insideList = listRef.current?.contains(focused) === true
       const anchored = rootRef.current?.contains(focused) === true || insideList
       if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
         // Closing hands the keyboard back when the menu had it.
         dismiss()
         if (anchored) refocusAnchor()
@@ -272,10 +275,10 @@ export function TaskMenu({ open, anchor, items = [], selectedId, onSelect, onClo
     const onWindowBlur = (): void => {
       if (document.activeElement instanceof HTMLIFrameElement) dismiss()
     }
-    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('keydown', onKeyDown, true)
     window.addEventListener('blur', onWindowBlur)
     return () => {
-      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('blur', onWindowBlur)
     }
   }, [open, dismiss])

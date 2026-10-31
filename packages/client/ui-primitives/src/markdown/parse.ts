@@ -43,10 +43,7 @@ export function parseGfm(text: string): Root {
  */
 export function parseGfmWithMath(text: string): Root {
   return recoverLocalImages(fromMarkdown(text, {
-    // `mathCompatibility()` MUST stay last: micromark dispatches the extension
-    // registered last first, so its dollar flow takes precedence over `math()`
-    // and keeps the opening line's text as math instead of upstream's fence meta.
-    extensions: [gfm(gfmOptions), cjkFriendlyStrong(), math(), mathCompatibility()],
+    extensions: [gfm(gfmOptions), cjkFriendlyStrong(), mathCompatibility(), math()],
     mdastExtensions: [gfmFromMarkdown(), mathFromMarkdown(), windowsPathDestinations()],
   }), text)
 }

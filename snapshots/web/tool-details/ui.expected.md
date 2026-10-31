@@ -20,7 +20,7 @@
     - img "Added": +
     - text: Review the narrow layout Pending
 - button "Inspect"
-- button "Create reminder Review the build and open the demo" [expanded]
+- button "Create automation task Review the build and open the demo" [expanded]
 - list:
   - listitem:
     - text: Review the build and open the demo
@@ -31,7 +31,7 @@
     - term: Status
     - definition: Scheduled
 - button "Inspect"
-- button "Update reminder Review the build and open the demo" [expanded]
+- button "Update automation task Review the build and open the demo" [expanded]
 - list:
   - listitem:
     - text: Review the build and open the demo
@@ -41,6 +41,73 @@
     - definition: Every day at {{clock}} (Asia/Shanghai)
     - term: Status
     - definition: Scheduled
+- button "Inspect"
+- button "Create automation task Weekly release review" [expanded]
+- list:
+  - listitem:
+    - text: Weekly release review
+    - term: Scheduled for
+    - definition: Sep 14, 2099, {{clock}} GMT+8
+    - term: Repeat
+    - definition: Custom
+    - term: Status
+    - definition: Enabled
+- button "Inspect"
+- button "View automation task Weekly release review" [expanded]
+- list:
+  - listitem:
+    - text: Weekly release review
+    - term: Scheduled for
+    - definition: Sep 14, 2099, {{clock}} GMT+8
+    - term: Repeat
+    - definition: Custom
+    - term: Status
+    - definition: Enabled
+- button "Inspect"
+- button "Edit automation task Weekly release review" [expanded]
+- list:
+  - listitem:
+    - text: Weekly release review
+    - term: Scheduled for
+    - definition: Sep 14, 2099, {{clock}} GMT+8
+    - term: Repeat
+    - definition: Custom
+    - term: Status
+    - definition: Paused
+- button "Inspect"
+- button "List automation tasks 3 automation tasks" [expanded]
+- list:
+  - listitem:
+    - text: Review the build and open the demo
+    - term: Scheduled for
+    - definition: Sep 11, 2099, {{clock}} GMT+8
+    - term: Repeat
+    - definition: Every day at {{clock}} (Asia/Shanghai)
+    - term: Status
+    - definition: Enabled
+  - listitem:
+    - text: Weekly release review
+    - term: Scheduled for
+    - definition: Sep 14, 2099, {{clock}} GMT+8
+    - term: Repeat
+    - definition: Custom
+    - term: Status
+    - definition: Paused
+  - listitem:
+    - text: Share the demo link
+    - term: Scheduled for
+    - definition: Sep 10, 2026, {{clock}} GMT+8
+    - term: Repeat
+    - definition: Custom
+    - term: Status
+    - definition: Ended
+- button "Inspect"
+- button "Edit automation task details-task" [expanded]
+- list:
+  - listitem:
+    - text: details-task
+    - term: Status
+    - definition: Deleted
 - button "Inspect"
 - button "View goal Ship compact tool cards" [expanded]
 - list:
@@ -60,7 +127,7 @@
     - term: Rounds
     - definition: 0 / 8
 - button "Inspect"
-- button "List reminders 4 reminders" [expanded]
+- button "List automation tasks 4 automation tasks" [expanded]
 - list:
   - listitem:
     - text: Review the build and open the demo
@@ -95,7 +162,7 @@
     - term: Status
     - definition: Scheduled
 - button "Inspect"
-- button "Delete reminder details-reminder" [expanded]
+- button "Delete automation task details-reminder" [expanded]
 - list:
   - listitem:
     - text: details-reminder
@@ -398,31 +465,27 @@
 - text: Recorded result
 - list:
   - listitem:
-    - text: 检查工具卡片布局，并列出三个最值得改进的地方。 Started
-    - term: Agent ID
+    - text: Started
+    - term: ID
     - definition: agent-demo-review
+    - group:
+      - text: Task
+      - list:
+        - listitem:
+          - paragraph: 检查工具卡片布局，并列出三个最值得改进的地方。
 - button "Inspect"
 - button "List subagents 3 agents" [expanded]
 - text: Recorded result
 - list:
   - listitem:
-    - text: 检查工具卡片布局 Running agent-demo-review
-    - term: Parent
-    - definition: todo-diff-demo
-    - term: Depth
-    - definition: "1"
+    - text: agent-demo-review Running
+    - button "Expand description for agent-demo-review": 检查工具卡片布局
   - listitem:
-    - text: 整理工具展示清单 Idle agent-demo-docs
-    - term: Parent
-    - definition: todo-diff-demo
-    - term: Depth
-    - definition: "1"
+    - text: agent-demo-docs Idle
+    - button "Expand description for agent-demo-docs": 整理工具展示清单
   - listitem:
-    - text: 检查状态图标 Ready agent-demo-icons
-    - term: Parent
-    - definition: agent-demo-review
-    - term: Depth
-    - definition: "2"
+    - text: agent-demo-icons Ready
+    - button "Expand description for agent-demo-icons": 检查状态图标
 - button "Inspect"
 - button "Send message agent-demo-review" [expanded]
 - text: Recorded result
@@ -672,7 +735,7 @@
     - definition: "2"
     - term: Ready
     - definition: "Yes"
-    - term: Owner
+    - term: ownerName
     - definition: ui-review
     - group:
       - text: Write scopes
@@ -692,7 +755,7 @@
     - definition: "2"
     - term: Ready
     - definition: "Yes"
-    - term: Owner
+    - term: ownerName
     - definition: ui-review
     - group:
       - text: Write scopes
@@ -714,10 +777,10 @@
         - listitem:
           - paragraph: task-demo-1
 - button "Inspect"
-- button "Wait for subagent Subagent activity" [expanded]
+- button "Wait ended" [expanded]
 - text: Recorded result
 - list:
-  - listitem: Subagent activity Change detected
+  - listitem: Wait result Wait ended
 - button "Inspect"
 - button "Interrupt agent ui-review" [expanded]
 - text: Recorded result

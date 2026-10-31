@@ -179,6 +179,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Fetches and validates the index sources the user configures; installation goes through the plugin manager.',
   },
   {
+    key: 'cliAccounts',
+    pkg: 'client-ui-cli-account',
+    title: 'CLI app accounts on the Plugins page',
+    mode: 'service',
+    note: 'Holds the accounts CLI app plugins register and serves them to the Plugins page through one Remote; links and notices stay in the browser that started the operation.',
+  },
+  {
     key: 'profileContext',
     pkg: 'app-boot',
     title: 'Launcher-owned profile data',
@@ -710,7 +717,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'schedule',
     title: 'Host scheduled messages',
     mode: 'core',
-    note: 'Stores tasks independently of Session activation and queues due messages in the original Session.',
+    note: 'Stores tasks independently of Session activation and queues due messages in each task\'s target Session.',
   },
   {
     key: 'goals',
@@ -845,11 +852,11 @@ const SERVICE_ROLES: ServiceRole[] = [
   },
   {
     key: 'agentTeams',
-    pkg: 'experimental-agent-team',
+    pkg: 'agent-team',
     title: 'Agent Teams coordination domain',
     mode: 'core',
-    consumers: ['experimental-tool-agent-team'],
-    note: 'Owns the implicit-root roster, direct peer inbox delivery, shared task DAG, and continuable-child lifecycle; tool-agent-team contributes model controls.',
+    consumers: ['tool-agent-team'],
+    note: 'Owns the shared task DAG for a subagent tree; tool-agent-team contributes task controls.',
   },
   {
     key: 'claudeCodeMods',

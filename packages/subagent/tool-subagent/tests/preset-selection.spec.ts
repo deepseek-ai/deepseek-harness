@@ -365,7 +365,7 @@ describe('spawn preset selection', () => {
     const retried = await callSubagent(ctx, args, { agent: handle.agent })
     expect(retried.isError).not.toBe(true)
     expect(text(retried)).toContain('started subagent')
-    await ctx.subagents.waitForChildren(handle.agent)
+    await ctx.subagents.waitForTreeWork(handle.agent)
     expect(ctx.tools.get('subagent', handle.agent)).toBe(definition)
   })
 })

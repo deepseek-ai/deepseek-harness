@@ -136,10 +136,7 @@ export function ConversationSlotPanel({
     || session.running
   const shellPhase = active ? 'active' : session.promptAttempted ? 'engaging' : 'blank'
   const summaryBlank = useSessions(state => state.byId[sessionId]?.blank)
-  const parentAvailabilityPending = session.subagent?.address.mode === 'continuable'
-    && session.subagent.parentAvailable === undefined
   const settling = (shellPhase === 'blank' && session.openState === 'loading' && summaryBlank !== true)
-    || parentAvailabilityPending
   const hero = shellPhase === 'blank' && (session.openState === 'open' || summaryBlank === true)
   const phase = settling ? 'settling' : hero ? 'hero' : 'active'
   return renderFactorySlot('conversation.content', { variant: 'embedded', phase, hero }, {

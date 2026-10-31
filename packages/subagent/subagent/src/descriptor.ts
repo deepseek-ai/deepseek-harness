@@ -14,7 +14,7 @@
  * to one activation's result contract rather than durable child composition.
  * Per-activation knobs such as `maxTokens` are omitted for the same reason as
  * `outputSchema`: they budget one activation. Cold resume requires the exact
- * live parent for authorization but reconstructs child options only from the
+ * live subagent tree root for authorization but reconstructs child options only from the
  * durable descriptor, so it neither restores the prior budget nor inherits
  * the parent's current one; the resumed route's defaults apply instead.
  *

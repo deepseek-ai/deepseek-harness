@@ -18,7 +18,7 @@ export const ReasoningContent = memo(function ReasoningContent({ text, running, 
 
 /**
  * Render the default Body through the same Factory available to third-party wrappers.
- * @param props - original reasoning and the framework's Factory renderer.
+ * @param props - display-ready reasoning and the framework's Factory renderer.
  * @returns an occurrence of the official reasoning Content Factory.
  */
 export function DefaultReasoningBody({ text, running, renderFactorySlot }: ReasoningBodyProps) {
