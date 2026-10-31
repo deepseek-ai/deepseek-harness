@@ -143,28 +143,6 @@ function harness() {
 }
 
 describe('files navigator target navigation', () => {
-  it('scopes covered-content styling to each current navigator parent and releases old drawings', () => {
-    const h = harness()
-    const first = h.draw(LEFT, h.tab(A), 399)
-    const second = h.draw(RIGHT, h.tab(B), 399)
-    const marked = (row: Element): boolean => row.hasAttribute('data-files-navigator-row')
-    expect(marked(first.row)).toBe(true)
-    expect(marked(second.row)).toBe(true)
-    h.face.navigatorDrawn(LEFT, first.navigator, true)
-    expect(marked(first.row)).toBe(true)
-    const parent = document.createElement('div')
-    first.row.append(parent)
-    parent.append(first.navigator)
-    h.face.navigatorDrawn(LEFT, first.navigator, true)
-    expect(marked(first.row)).toBe(false)
-    expect(marked(parent)).toBe(true)
-    first.remove()
-    expect(marked(parent)).toBe(false)
-    expect(marked(second.row)).toBe(true)
-    second.remove()
-    expect(marked(second.row)).toBe(false)
-  })
-
   it.each([
     ['restored revision zero', 0, true],
     ['newly opened revision one', 1, false],
@@ -358,17 +336,12 @@ describe('files navigator target navigation', () => {
     await Promise.resolve()
     expect(document.activeElement).toBe(drawing.file)
   })
-  it.each([false, true])('waits for a navigator without a containing row with a contents wrapper %j', (wrapped) => {
+  it('waits for a navigator without a containing row before answering navigation', () => {
     const h = harness()
     const tab = h.tab(B)
     h.attach(RIGHT, tab)
     h.shown(RIGHT, true)
     const navigator = document.createElement('aside')
-    if (wrapped) {
-      const parent = document.createElement('div')
-      parent.style.display = 'contents'
-      parent.append(navigator)
-    }
     const body = navigator.appendChild(document.createElement('div'))
     h.face.bodyDrawn(RIGHT, tab.address, body)
     h.face.navigatorDrawn(RIGHT, navigator, true)

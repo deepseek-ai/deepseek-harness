@@ -70,24 +70,6 @@ The upper observed run median is 5,432.567 ms; the slowest single sample is 5,94
 
 This calibration accepts the measured cost of the stronger durability policy; it is not a performance improvement. Local on/off diagnosis attributes most additional persistence time to frequent file synchronization. The browser input-overlap failures in attempts 1 and 4 are separate failures and receive no exemption from this budget. Deterministic controls use the measured-verdict assertion: the recorded upper-median sample group fails the old 4,250 ms ceiling and passes 7,000 ms, while a synthetic 7,800 ms median remains rejected.
 
-### Unchanged request projection
-
-Developer-message filtering and foreign replay-state removal inspect every request, allocating output arrays only after a message changes. Unchanged histories retain their array identity, and retained messages keep their identities. This removes discarded full-history arrays and a final equality scan without caching mutable inputs or adapter ownership.
-
-On macOS arm64 with Node 24.22.2, the compiled continuation worker uses five fresh processes per variant, each copying the same seeded history into a private temporary root. Every sample completes 40 requests and 13,925 events over 800 historical turns. The table reports total elapsed milliseconds, rounded to three decimal places; fixture setup, library builds and a separate CPU profile are outside these measurements.
-
-| Implementation | Five request-history totals (ms) | Median (ms) |
-|---|---|---:|
-| Original | 55.750, 52.999, 54.812, 53.478, 55.106 | 54.812 |
-| Developer filtering only | 49.431, 49.826, 51.421, 50.679, 49.494 | 49.826 |
-| Replay-state stripping only | 54.444, 53.043, 52.007, 52.776, 53.101 | 53.043 |
-| Combined | 47.814, 47.326, 49.925, 47.867, 48.722 | 47.867 |
-| Original restored | 55.670, 55.497, 56.265, 54.353, 58.718 | 55.670 |
-| Combined restored | 48.423, 48.717, 48.199, 48.534, 50.129 | 48.534 |
-| Combined, for-of traversal | 48.280, 48.631, 51.909, 48.966, 54.301 | 48.966 |
-
-The final total median is 12.0% below the restored original. Median process CPU time falls from 79.751 to 72.009 ms, while post-GC retained heap remains about 1.35 MiB. Whole-process maximum RSS is 201.61/202.52 MiB for the restored original/final samples. Source restoration and rebuilding isolate the removed cost; both local implementations remain below the unchanged 297 ms CI budget, so this comparison is not a budget-rejection control or proof of hosted-runner stability. Functional tests cover unchanged-array identity, leading/trailing developer removal, mixed replay-state ownership, retained message identity and frozen projection output.
-
 ## Alternatives considered
 
 **Repeat existing migration and first-open variants.** Rejected: those twelve cases already distinguish read-only preparation from writable publication. These cases use the current generation and begin or continue actual model work, or enumerate a corpus rather than open one Session.

@@ -41,7 +41,6 @@ describe('Python runtime executable builder CLI', () => {
     expect(commands[0]).toMatch(/ run verify-runtime-closure$/)
     expect(commands[1]?.endsWith(' ' + command)).toBe(true)
     expect(commands[2]).toContain(' --filter dsh-python-runtime-closure deploy ')
-    expect(commands[3]).toMatch(/ install --prefer-offline --frozen-lockfile --prod=false --ignore-scripts$/)
   })
 
   it('rejects simultaneous build modes before invoking pnpm', () => {

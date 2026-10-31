@@ -102,32 +102,22 @@ These local runs both failed the independent open budget: their open medians wer
 
 Post-GC browser heap was 80.70/80.71 MiB. GNU time reported maximum RSS of 535.78/561.80 MiB for each benchmark command and its children; this is not input-phase memory or an aggregate browser-memory measurement. Moving the composer's selection reveal into an animation frame was rejected: profiling showed the style flush moved to another geometry read, without improving typing. The product fix removes the invalidation source instead.
 
-### Navigator stylesheet scope
-
-The files navigator marks its actual DOM parent during the existing drawing lifetime. Covered-content selectors require that marker before evaluating `:has(> .navigator…)`; replacement and disposal remove it from the previous parent. An unconstrained `:has()` subject made Chromium invalidate unrelated Chat flow subtrees even while no file navigator was mounted. A temporary invalidation trace attributes 1,893 flow-subtree invalidations to these two rules, with three style recalculations covering about 17,700 elements each. Tracing used 3× CPU throttling and adds observer overhead; these counts identify the cause, not endpoint latency.
-
-Separate unchanged three-sample runs on macOS arm64, Node 26.8.2 and Chromium 149.0.7827.55 measure the following original/scoped medians: first reply 690.56/460.95 ms, draft typing 161.97/115.71 ms, and stream main-thread task 1403.75/1174.59 ms. Before the source fix, a CSSOM-only scoped-selector control on the same built artifacts measures 480.46/121.68/1181.03 ms respectively, supporting the selector diagnosis. All samples retain 23,980 DOM nodes, preserve trusted input overlap, reject post-DONE input, and pass the unchanged endpoint budgets. Post-GC heap remains approximately 80.8 MiB. These local measurements do not establish a hosted CI verdict.
-
-The navigator lifetime regression covers repeated registration, parent replacement, independent panes and removal; removing the parent mark makes that regression fail. Browser file-navigation coverage retains the filled and fullscreen layouts, covered-content focus handoff, Escape and pane moves. Replay pacing, workload, input scheduling and benchmark assertions remain unchanged.
-
 ### Streaming Assistant visibility
 
 Chat retains visibility per Assistant block. Same-kind text and reasoning appends inspect only the incoming delta until the block becomes visible, then reuse that result. This avoids repeated `trim()` calls on accumulated strings without changing whitespace, first-token timing, or visible anchors. Replacements recalculate visibility, retry resets it, and final messages rebuild it. Copying the block array remains proportional to its length; this does not make every Assembler operation constant-time.
 
 The [conversation-fold worker](../../../../benchmarks/conversation-fold/conversation-fold.worker.client.ts) measures a single 256 KiB block split into 4,096 or 16,384 deltas, using ordinary text or reasoning whose first half is whitespace. Five fresh compiled Node children per case reuse the existing benchmark registrations, production Assembler and Chat builder. Timing includes every append, one final flush, and reading every output character. Fixture preparation and GC are excluded; retained heap is the post-GC increment with the Assembler, live entries and published state still reachable.
 
-The reference allowances remain 12/32 ms, but this endpoint has its own hosted expectations of 34/104 ms. Five-process medians on Node 24.22.1, Linux x64, four-vCPU Blacksmith runners ranged from 25.13 to 32.48 ms for 4,096 deltas and 65.56 to 101.90 ms for 16,384 deltas across run 41083633701 (jobs 124158958438 and 124166293761) and run 41088281578 (job 124175117777). These measurements execute the same streaming implementation; the latency-sensitive phase is serial in each run. Applying only the existing 1.25 variance headroom to the hosted expectations gives 43/130 ms limits. The global machine scale, five fresh children, workload, median verdict and heap limit are unchanged; these numbers are calibration, not a product speedup.
-
-Local macOS arm64 measurements on Node 24.22.2 use five fresh compiled children per case. The negative control replaces delta-local visibility checks with accumulated-string trimming while retaining every append, final publication and complete text read:
+Local macOS arm64 measurements on Node 26.8.2 give these elapsed medians. The time limits use reference allowances of 12/32 ms and the existing shared scale and headroom; they are not new hosted-runner calibration.
 
 | Workload | Deltas | Repeated accumulated trim | Cached visibility | Time limit |
 |---|---:|---:|---:|---:|
-| Ordinary text | 4,096 | 51.61 ms | 7.33 ms | 43 ms |
-| Half-leading-whitespace reasoning | 4,096 | 151.14 ms | 7.62 ms | 43 ms |
-| Ordinary text | 16,384 | 207.85 ms | 21.77 ms | 130 ms |
-| Half-leading-whitespace reasoning | 16,384 | 573.18 ms | 22.06 ms | 130 ms |
+| Ordinary text | 4,096 | 42.25 ms | 7.32 ms | 30 ms |
+| Half-leading-whitespace reasoning | 4,096 | 252.75 ms | 7.96 ms | 30 ms |
+| Ordinary text | 16,384 | 206.71 ms | 23.06 ms | 80 ms |
+| Half-leading-whitespace reasoning | 16,384 | 1114.18 ms | 23.08 ms | 80 ms |
 
-All four measured negative controls exceed the calibrated limits. Deterministic gate controls also reject the measured 32.48/101.90 ms hosted medians at the historical 30/80 ms limits, accept them at the calibrated limits, and reject a duration above either limit. Retained heap remains approximately 2.8/9.9 MiB for the two fragment counts, below the 20 MiB limit derived from a 16 MiB allowance. Maximum worker RSS across the negative/current samples is 163.78/99.88 MiB; it is a whole-process diagnostic, not aggregate application memory. This endpoint measures local assembly with one final publication, excluding network, browser rendering and Trajectory. Separate browser regressions cover settlement, cancellation, retry, reload, reopening and blank reasoning without asserting a browser speedup.
+All four cases reject accumulated trimming and pass with cached visibility. Retained heap remains approximately 2.8/9.9 MiB for the two fragment counts, below the 20 MiB limit derived from a 16 MiB allowance. Maximum worker RSS across these samples falls from 185.70 to 89.36 MiB; it is a whole-process diagnostic, not aggregate application memory. This endpoint measures local assembly with one final publication, excluding network, browser rendering and Trajectory. Separate browser regressions cover settlement, cancellation, retry, reload, reopening and blank reasoning without asserting a browser speedup.
 
 ## Alternatives considered
 

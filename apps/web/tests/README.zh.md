@@ -14,7 +14,7 @@ pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps 
 
 普通场景以没有已登记 Workspace 或 Session、但持久化标记记录默认 Workspace 已被删除的状态启动，使显式文件夹选择场景自行决定 cwd。`launchWebScaffold({ firstUse: true })` 保留初始化资格，供启动场景使用。
 
-当天消息的 golden 使用共享的 `WEB_FIXTURE_TIME`：预置会话将它传为 `createdAt`，并通过 `pinBrowserClock` 固定浏览器日期；提交实时消息的场景（包括自主 Goal 回合）还使用 `pinHostClock`，在清理后恢复。固定后的时钟随真实耗时前进，保留原生定时器，因此跨午夜不会改变场景的日期标签。
+当天消息的 golden 使用共享的 `WEB_FIXTURE_TIME`：预置会话将它传为 `createdAt`，并通过 `pinBrowserClock` 固定浏览器日期；提交实时消息的场景还使用 `pinHostClock`，在清理后恢复。固定后的时钟随真实耗时前进，保留原生定时器，因此跨午夜不会改变场景的日期标签。
 
 ## 完成状态观察
 

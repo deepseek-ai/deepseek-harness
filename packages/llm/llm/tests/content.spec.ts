@@ -410,23 +410,12 @@ describe('projectToolUpdates', () => {
   const roles = (messages: readonly RequestMessage[]) => messages.filter(message => message.role === 'developer').map(message => message.content)
 
   it('returns the input history and tools by identity when nothing is projected', () => {
-    const messages = Object.freeze([prompt])
+    const messages = [prompt]
     const tools = [search]
     const projected = projectToolUpdates(messages, tools, 'in-history', { tools, updates: [] })
     expect(projected.messages).toBe(messages)
     expect(projected.tools).toEqual(tools)
     expect(projectToolUpdates(messages, tools, undefined).messages).toBe(messages)
-  })
-
-  it.each(['first', 'last', 'all'] as const)('filters developer messages at %s positions without replacing retained messages', (position) => {
-    const added = developer([{ type: 'tool-addition', toolName: 'fetch' }])
-    const messages = Object.freeze(position === 'first' ? [added, prompt]
-      : position === 'last' ? [prompt, added] : [added, added])
-    const projected = projectToolUpdates(messages, [search], undefined)
-    expect(projected.messages).toEqual(position === 'all' ? [] : [prompt])
-    expect(projected.messages).not.toBe(messages)
-    if (position !== 'all') expect(projected.messages[0]).toBe(prompt)
-    expect(messages).toHaveLength(2)
   })
 
   it('strips deferred loading and developer updates when the route declares no mode', () => {
