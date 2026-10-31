@@ -1132,7 +1132,7 @@ describe('desktop main startup', () => {
     } finally { harness.app.name = originalName }
   })
 
-  it.each(['http:', 'https:'] as const)('attaches %s Host socket credentials only to the owned application origin and window', async (protocol) => {
+  it.each(['http:', 'https:'] as const)('passes the %s Host cookie explicitly and attaches socket credentials only to the owned application origin and window', async (protocol) => {
     await import('../src/main.ts')
     await harness.preparing.promise
     harness.prepared.resolve()
@@ -1161,6 +1161,19 @@ describe('desktop main startup', () => {
     expect(callback).toHaveBeenLastCalledWith({})
     handler({ ...details, url: `${socketProtocol === 'wss:' ? 'ws:' : 'wss:'}//127.0.0.1:3080/api/remote.mux` }, callback)
     expect(callback).toHaveBeenLastCalledWith({})
+  })
+
+  it('logs a legacy Host cookie cleanup failure without blocking boot', async () => {
+    const failure = new Error('cookie store unavailable')
+    harness.removeLegacyHostCookies.mockRejectedValueOnce(failure)
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    harness.prepared.resolve()
+    await harness.hostStarted.promise
+    harness.hosts[0]!.ready.resolve()
+    await Promise.resolve(invoke(DESKTOP_IPC.boot))
+    await vi.waitFor(() => { expect(console.error).toHaveBeenCalledWith('desktop: legacy Host cookie cleanup failed', failure) })
+    expect(harness.connectWelcome).toHaveBeenCalled()
   })
 
   it('shares login key discovery with onboarding and rejects foreign renderers', async () => {
