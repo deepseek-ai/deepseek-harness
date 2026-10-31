@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包是[企业微信插件](../wecom/README.zh.md)的 Host 行。它安装固定版本的 `@wecom/cli`，在运行时上下文中把其 `wecom-cli` 可执行文件的绝对路径告诉模型，并注册一个 `wecom` skill，其子指南是官方企业微信技能，从 GitHub 上的企业微信 CLI 仓库下载。它的 `wecom` Remote 为[企业微信插件页面](../../client/ui-wecom/README.zh.md)检查 CLI 的授权、通过 CLI 的扫码页面绑定机器人，以及取消操作。CLI 把机器人凭据保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
+本包是[企业微信插件](../wecom/README.zh.md)的 Host 行。它安装固定版本的 `@wecom/cli`，在运行时上下文中把其 `wecom-cli` 可执行文件的绝对路径告诉模型，并注册一个 `wecom` skill，其子指南是官方企业微信技能，从 GitHub 上的企业微信 CLI 仓库下载。它把授权注册到 [CLI 账号注册表](../../client/ui-cli-account/README.zh.md)，插件页因此能显示授权，并检查授权、通过 CLI 的扫码页面绑定机器人，或取消操作。CLI 把机器人凭据保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
 
 ## 目录
 
@@ -40,16 +40,15 @@ kind: "package-reference"
 <a id="account-operations"></a>
 ### 授权操作
 
-`wecom` Remote 为插件页服务。它同一时间最多运行一个由 Host 持有的操作，因此离开页面不会取消操作。
+插件页通过 CLI 账号注册表发起这些操作，注册表由 Web 应用加载；headless profile 加载插件时没有它。Host 同一时间最多运行一个操作并持有它，因此离开页面不会取消操作。
 
-| 方法 | 作用 |
+| 操作 | 作用 |
 |---|---|
-| `follow(signal)` | 推送授权状态、进行中的操作和最近一次结果；没有操作运行时，每个新订阅者会触发一次检查 |
-| `check()` | 重新检查授权；返回操作 id |
-| `connect()` | 运行 `auth init --noninteractive --no-browser`，等待用户扫码，然后确认 CLI 报告机器人已授权 |
-| `cancel(id)` | 在等待扫码期间取消该操作并等待其命令退出；其他步骤和已结束的 id 会被忽略 |
+| `check` | 重新检查授权；没有操作运行时，每个打开 Web 应用的浏览器会触发一次 |
+| `connect` | 运行 `auth init --noninteractive --no-browser`，等待用户扫码，然后确认 CLI 报告机器人已授权 |
+| 取消 | 在等待扫码期间取消连接并等待其命令退出；其他步骤会被忽略 |
 
-检查运行 `auth show --status`。授权状态按 CLI 的输出原样读作 `authorized` 或 `unauthorized`；其他输出或非零退出码会使检查失败，并保留之前的状态。`auth init` 在 stdout 中单独一行打印的链接，只有是 `work.weixin.qq.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，Remote 结果和 Host 日志包含命令和观察到的退出码；CLI 的输出可能带有扫码会话，因此不保留。`wecom-cli` 没有撤销授权的命令，因此插件不提供断开连接。运行 DSH 的进程需要能访问 CLI 配置；`DSH_HOME` 不会迁移它。
+检查运行 `auth show --status`。授权状态按 CLI 的输出原样读作 `authorized` 或 `unauthorized`；其他输出或非零退出码会使检查失败，并保留之前的状态。`auth init` 在 stdout 中单独一行打印的链接，只有是 `work.weixin.qq.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出可能带有扫码会话，因此不保留。`wecom-cli` 没有撤销授权的命令，因此插件不提供断开连接。运行 DSH 的进程需要能访问 CLI 配置；`DSH_HOME` 不会迁移它。
 
 ### 配置
 
@@ -73,7 +72,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 是注册为 `ctx.wecom` 的 Remote 服务。它检查 `binDir/wecom-cli`（Windows 上为 `wecom-cli.exe`）是否可执行，在运行时上下文中把这个路径告诉模型，并通过[上游技能库](../upstream-skills/README.zh.md)按 [`src/skills.ts`](src/skills.ts) 中的固定信息注册 `wecom` skill。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。[`src/directory.ts`](src/directory.ts) 定位 `@wecom/cli` 作为可选依赖安装的平台包。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现企业微信的命令，并从 `auth init` 的输出行中读取扫码链接。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
+[`src/index.ts`](src/index.ts) 是一个函数插件。它检查 `binDir/wecom-cli`（Windows 上为 `wecom-cli.exe`）是否可执行，在运行时上下文中把这个路径告诉模型，并通过[上游技能库](../upstream-skills/README.zh.md)按 [`src/skills.ts`](src/skills.ts) 中的固定信息注册 `wecom` skill。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。[`src/directory.ts`](src/directory.ts) 定位 `@wecom/cli` 作为可选依赖安装的平台包。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现企业微信的命令，并从 `auth init` 的输出行中读取扫码链接。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
 
 [`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) 是本包携带的唯一 skill：DSH 指引、子指南索引和打开方式。上游只在其仓库发布这些子指南，没有放进 npm 包，因此由该库下载；它们是 skill 基础目录下的文件，不是独立的 skill。DSH 指引与 `wecomcli-shared` 不一致时，总入口要求 agent 以 DSH 指引为准：使用插件提供的 `wecom-cli`，不再自行安装，并把授权引导到插件页。引用文件是每个子指南目录中的普通文件。
 
@@ -88,7 +87,7 @@ kind: "package-reference"
 - [CLI 账号库](../cli-account/README.zh.md)——CLI 应用插件共用的命令执行与账号操作。
 - [Skill](../../../docs/subsystems/skills.zh.md)——目录发布、加载与优先级。
 - [企业微信插件](../wecom/README.zh.md)——插入本行与页面行的 bundle。
-- [企业微信插件页面](../../client/ui-wecom/README.zh.md)——发起授权操作的插件页。
+- [CLI 账号界面](../../client/ui-cli-account/README.zh.md)——发起授权操作的注册表和插件页区块。
 
 -----
 

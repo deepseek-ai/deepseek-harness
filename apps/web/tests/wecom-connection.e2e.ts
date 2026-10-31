@@ -99,7 +99,7 @@ describe.skipIf(process.platform === 'win32')('web e2e: WeCom plugin authorizati
     await section.getByRole('button', { name: '连接企业微信', exact: true }).click()
     await section.getByRole('alert').waitFor({ timeout: 20_000 })
     expect(await section.getAttribute('data-cli-account')).toBe('disconnected')
-    expect(await section.getByRole('alert').innerText()).toContain('auth-init · 退出码 4')
+    expect(await section.getByRole('alert').innerText()).toContain('auth-init · exit 4')
     expect(await section.innerText()).not.toContain('fixture-scode')
 
     await rm(join(binDir, 'init-fails'))

@@ -31,8 +31,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/dsh-wecom-cli": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-wecom": "workspace:*"
+    "@deepseek-ai/dsh-wecom-cli": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

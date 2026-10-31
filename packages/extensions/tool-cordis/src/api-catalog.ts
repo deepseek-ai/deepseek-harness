@@ -4408,39 +4408,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
-    key: 'wecom',
-    summary: 'Registers the CLI and skills, and owns the authorization operations the Plugins page drives.',
-    description: 'Registers the CLI and skills, and owns the authorization operations the Plugins page drives.',
-    methods: [
-      {
-        signature: '@Remote check(): CliOperationId',
-        description: 'Check the authorization again without changing it.',
-        parameters: [],
-        returns: 'the operation identity.',
-        throws: ['while another operation runs.'],
-      },
-      {
-        signature: '@Remote connect(): CliOperationId',
-        description: 'Bind a bot through the CLI\'s QR-code page.',
-        parameters: [],
-        returns: 'the operation identity.',
-        throws: ['while another operation runs.'],
-      },
-      {
-        signature: '@Remote cancel(id: CliOperationId): Promise<void>',
-        description: 'Cancel one operation while it waits for the QR-code scan, and wait for its command to exit.',
-        parameters: [{ name: 'id', description: 'the operation to cancel; a finished one or another step is ignored.' }],
-        returns: 'after the operation settles, or at once when nothing is cancelled.',
-      },
-      {
-        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<WecomState>',
-        description: 'Follow the authorization and its operations independently of any page; each new subscriber starts a check when none runs.',
-        parameters: [{ name: 'signal', description: 'the Client\'s observation lifetime.' }],
-        returns: 'the current view, then each changed view.',
-      },
-    ],
-  },
-  {
     key: 'workflowEngine',
     summary: 'Workflow Service Definition contract.',
     description: 'Workflow Service Definition contract. Invalid requests throw before publication; a live run is holder-owned, its result never rejects, and disposal waits for script and child cleanup. Lifecycle listener failures are contained, and `workflow/end` fires exactly once as the result settles.',
@@ -9965,10 +9932,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface UpdateTeamTaskRequest {\n    readonly taskId: TeamTaskId;\n    readonly expectedRevision: number;\n    readonly action: TeamTaskAction;\n    readonly subject?: string;\n    readonly description?: string;\n    readonly blockedBy?: readonly TeamTaskId[];\n    readonly writeScopes?: readonly string[];\n    readonly owner?: SessionId;\n}',
   },
   {
-    name: 'UpstreamSkillsState',
-    declaration: 'export type UpstreamSkillsState = \'installed\' | \'downloading\' | \'failed\';',
-  },
-  {
     name: 'UserMessage',
     declaration: 'export interface UserMessage extends MessageBase {\n    readonly role: \'user\';\n}',
   },
@@ -10103,26 +10066,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WebUpgradeRoute',
     declaration: 'export interface WebUpgradeRoute {\n    path: string;\n    handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void | Promise<void>;\n}',
-  },
-  {
-    name: 'WecomAccountState',
-    declaration: 'export interface WecomAccountState {\n    readonly state: \'unchecked\' | \'unauthorized\' | \'authorized\';\n    readonly skills: UpstreamSkillsState;\n}',
-  },
-  {
-    name: 'WecomOperationFailure',
-    declaration: 'export type WecomOperationFailure = CliCommandFailure<\'auth-init\' | \'auth-status\'>;',
-  },
-  {
-    name: 'WecomOperationKind',
-    declaration: 'export type WecomOperationKind = \'check\' | \'connect\';',
-  },
-  {
-    name: 'WecomPhase',
-    declaration: 'export type WecomPhase = \'authorizing\';',
-  },
-  {
-    name: 'WecomState',
-    declaration: 'export type WecomState = CliAccountView<WecomAccountState, WecomOperationKind, WecomPhase, WecomOperationFailure>;',
   },
   {
     name: 'WeeklyInput',

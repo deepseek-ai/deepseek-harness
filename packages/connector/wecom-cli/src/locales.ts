@@ -1,8 +1,5 @@
-/** Locale-owned copy for the WeCom plugin's authorization on the Plugins page. */
-import type {} from '@deepseek-ai/dsh-client-ui-slots'
-
-/** Dictionary namespace for every WeCom authorization surface. */
-export const NS = 'wecom'
+/** The WeCom text the Plugins page shows; the browser resolves it in its active language. */
+import { accountText } from '@deepseek-ai/dsh-cli-account'
 
 /** Chinese dictionary and key source. */
 export const zh = {
@@ -11,20 +8,16 @@ export const zh = {
   'status.disconnected': '未授权',
   'status.unavailable': '暂时无法读取授权状态',
   'status.connected': '已授权',
-  'status.stopped': '企业微信组件未运行',
   'step.authorizing': '等待扫码授权',
   'step.connecting': '正在确认授权',
   'detail.disconnected': '用企业微信扫码绑定一个智能机器人。授权后，可以在对话中通过这个机器人使用企业微信的文档、日程、会议、待办和消息等功能。',
   'detail.unavailable': '没能读取 wecom-cli 的授权状态，可以稍后重试。',
-  'detail.stopped': '“企业微信 CLI 与技能”组件没有运行，可以在下方组件列表查看原因，处理后重试。',
   'detail.connected': '可以在对话中直接请 Agent 使用企业微信。',
   'detail.authorizing': '在打开的页面中用企业微信扫码并确认，完成后回到这里查看结果。页面没有打开时，点击“打开扫码页面”。',
   'skills.downloading': '正在从 GitHub 下载企业微信技能，下载完成后即可在对话中使用。',
   'skills.failed': '企业微信技能没能下载，Agent 暂时用不了企业微信的子指南。请确认这台电脑能访问 GitHub，然后重试。',
   hint: '授权与这台电脑终端里的 wecom-cli 共用；关闭插件不会解除授权。',
   failed: '操作未完成，请重试',
-  'failure.details': '排障信息：{details}',
-  'failure.exitCode': '退出码 {code}',
   'action.connect': '连接企业微信',
   'action.open': '打开扫码页面',
   'action.cancel': '取消',
@@ -33,39 +26,31 @@ export const zh = {
   'badge.disconnected': '未授权',
   'badge.connecting': '授权中',
   'badge.unavailable': '待确认',
-  'badge.stopped': '未运行',
   'activation.title': '连接企业微信',
   'activation.body': '企业微信插件已开启。扫码授权后，就可以在对话中使用它。',
-  'activation.later': '稍后',
   'notice.connected': '企业微信已授权',
-  'notice.action-failed': '操作未完成，请重试',
-  close: '关闭',
 }
 
-/** Every key the WeCom authorization surfaces translate. */
-export type WecomKey = keyof typeof zh
+/** Every key of the WeCom text. */
+export type WecomTextKey = keyof typeof zh
 
 /** English dictionary. */
-export const en: Record<WecomKey, string> = {
+export const en: Record<WecomTextKey, string> = {
   'section.title': 'WeCom authorization',
   'status.checking': 'Checking authorization',
   'status.disconnected': 'Not authorized',
   'status.unavailable': 'Cannot read authorization right now',
   'status.connected': 'Authorized',
-  'status.stopped': 'WeCom component not running',
   'step.authorizing': 'Waiting for the QR code scan',
   'step.connecting': 'Confirming authorization',
   'detail.disconnected': 'Scan a QR code with WeCom to bind a smart bot. After that, you can use WeCom docs, calendar, meetings, to-dos, messages, and other features through this bot in conversations.',
   'detail.unavailable': 'The wecom-cli authorization could not be read. Try again later.',
-  'detail.stopped': 'The WeCom CLI and skills component is not running. See the component list below for the reason, then retry.',
   'detail.connected': 'Ask the agent to use WeCom directly in a conversation.',
   'detail.authorizing': 'Scan the QR code with WeCom on the page that opened and confirm, then come back here to see the result. If the page did not open, select Open QR code page.',
   'skills.downloading': 'Downloading the WeCom skills from GitHub. They become available in conversations when the download finishes.',
   'skills.failed': 'The WeCom skills could not be downloaded, so the agent cannot use the WeCom guides yet. Check that this computer can reach GitHub, then retry.',
   hint: 'The authorization is shared with wecom-cli in this computer\'s terminal. Turning the plugin off does not revoke it.',
   failed: 'The action did not finish. Try again.',
-  'failure.details': 'Diagnostic: {details}',
-  'failure.exitCode': 'Exit code {code}',
   'action.connect': 'Connect WeCom',
   'action.open': 'Open QR code page',
   'action.cancel': 'Cancel',
@@ -74,36 +59,28 @@ export const en: Record<WecomKey, string> = {
   'badge.disconnected': 'Not authorized',
   'badge.connecting': 'Authorizing',
   'badge.unavailable': 'Unconfirmed',
-  'badge.stopped': 'Not running',
   'activation.title': 'Connect WeCom',
   'activation.body': 'The WeCom plugin is on. Scan a QR code to authorize it, then use it in conversations.',
-  'activation.later': 'Later',
   'notice.connected': 'WeCom authorized',
-  'notice.action-failed': 'The action did not finish. Try again.',
-  close: 'Close',
 }
 
 /** Japanese dictionary. */
-export const ja: Record<WecomKey, string> = {
+export const ja: Record<WecomTextKey, string> = {
   'section.title': 'WeCom の認可',
   'status.checking': '認可を確認中',
   'status.disconnected': '未認可',
   'status.unavailable': '現在認可状態を読み取れません',
   'status.connected': '認可済み',
-  'status.stopped': 'WeCom コンポーネントが稼働していません',
   'step.authorizing': 'QR コードのスキャン待ち',
   'step.connecting': '認可を確定中',
   'detail.disconnected': 'WeCom で QR コードをスキャンしてスマートボットを紐付けます。その後、会話の中でこのボットを通じて WeCom のドキュメント、カレンダー、会議、ToDo、メッセージなどの機能を使用できます。',
   'detail.unavailable': 'wecom-cli の認可状態を読み取れませんでした。しばらくしてから再試行してください。',
-  'detail.stopped': '「WeCom CLI とスキル」コンポーネントが稼働していません。下のコンポーネント一覧で理由を確認し、対処してから再試行してください。',
   'detail.connected': '会話の中でエージェントに WeCom の使用を直接依頼できます。',
   'detail.authorizing': '開いたページで WeCom を使って QR コードをスキャンして確定し、完了したらここに戻って結果を確認してください。ページが開かない場合は、「QR コードページを開く」を選択してください。',
   'skills.downloading': 'GitHub から WeCom のスキルをダウンロードしています。ダウンロードが完了すると、会話の中で使用できます。',
   'skills.failed': 'WeCom のスキルをダウンロードできなかったため、エージェントはまだ WeCom のガイドを使用できません。このコンピューターから GitHub にアクセスできることを確認してから、再試行してください。',
   hint: '認可は、このコンピューターのターミナルにある wecom-cli と共有されます。プラグインをオフにしても認可は解除されません。',
   failed: '操作が完了しませんでした。もう一度お試しください。',
-  'failure.details': '診断情報：{details}',
-  'failure.exitCode': '終了コード {code}',
   'action.connect': 'WeCom を接続',
   'action.open': 'QR コードページを開く',
   'action.cancel': 'キャンセル',
@@ -112,36 +89,28 @@ export const ja: Record<WecomKey, string> = {
   'badge.disconnected': '未認可',
   'badge.connecting': '認可中',
   'badge.unavailable': '未確認',
-  'badge.stopped': '未稼働',
   'activation.title': 'WeCom を接続',
   'activation.body': 'WeCom プラグインがオンになりました。QR コードをスキャンして認可すると、会話の中で使用できます。',
-  'activation.later': '後で',
   'notice.connected': 'WeCom を認可しました',
-  'notice.action-failed': '操作が完了しませんでした。もう一度お試しください。',
-  close: '閉じる',
 }
 
 /** Spanish dictionary. */
-export const es: Record<WecomKey, string> = {
+export const es: Record<WecomTextKey, string> = {
   'section.title': 'Autorización de WeCom',
   'status.checking': 'Comprobando la autorización',
   'status.disconnected': 'Sin autorizar',
   'status.unavailable': 'No se puede leer la autorización en este momento',
   'status.connected': 'Autorizado',
-  'status.stopped': 'El componente de WeCom no está en ejecución',
   'step.authorizing': 'Esperando el escaneo del código QR',
   'step.connecting': 'Confirmando la autorización',
   'detail.disconnected': 'Escanee un código QR con WeCom para vincular un bot inteligente. Después, podrá usar en las conversaciones, a través de este bot, los documentos, el calendario, las reuniones, las tareas pendientes, los mensajes y otras funciones de WeCom.',
   'detail.unavailable': 'No se pudo leer la autorización de wecom-cli. Inténtelo de nuevo más tarde.',
-  'detail.stopped': 'El componente “CLI y habilidades de WeCom” no está en ejecución. Consulte el motivo en la lista de componentes de abajo y vuelva a intentarlo.',
   'detail.connected': 'Pida al agente que use WeCom directamente en una conversación.',
   'detail.authorizing': 'Escanee el código QR con WeCom en la página que se abrió y confirme; luego vuelva aquí para ver el resultado. Si la página no se abrió, seleccione “Abrir página del código QR”.',
   'skills.downloading': 'Descargando las habilidades de WeCom desde GitHub. Estarán disponibles en las conversaciones cuando termine la descarga.',
   'skills.failed': 'No se pudieron descargar las habilidades de WeCom, por lo que el agente aún no puede usar las guías de WeCom. Compruebe que esta computadora puede acceder a GitHub y vuelva a intentarlo.',
   hint: 'La autorización se comparte con wecom-cli en la terminal de esta computadora. Desactivar el complemento no la revoca.',
   failed: 'La acción no se completó. Inténtelo de nuevo.',
-  'failure.details': 'Diagnóstico: {details}',
-  'failure.exitCode': 'Código de salida {code}',
   'action.connect': 'Conectar WeCom',
   'action.open': 'Abrir página del código QR',
   'action.cancel': 'Cancelar',
@@ -150,36 +119,28 @@ export const es: Record<WecomKey, string> = {
   'badge.disconnected': 'Sin autorizar',
   'badge.connecting': 'Autorizando',
   'badge.unavailable': 'Sin confirmar',
-  'badge.stopped': 'No está en ejecución',
   'activation.title': 'Conectar WeCom',
   'activation.body': 'El complemento de WeCom está activado. Escanee un código QR para autorizarlo y luego úselo en las conversaciones.',
-  'activation.later': 'Más tarde',
   'notice.connected': 'WeCom autorizado',
-  'notice.action-failed': 'La acción no se completó. Inténtelo de nuevo.',
-  close: 'Cerrar',
 }
 
 /** French dictionary. */
-export const fr: Record<WecomKey, string> = {
+export const fr: Record<WecomTextKey, string> = {
   'section.title': 'Autorisation WeCom',
   'status.checking': 'Vérification de l’autorisation',
   'status.disconnected': 'Non autorisé',
   'status.unavailable': 'Impossible de lire l’autorisation pour le moment',
   'status.connected': 'Autorisé',
-  'status.stopped': 'Le composant WeCom ne fonctionne pas',
   'step.authorizing': 'En attente du scan du code QR',
   'step.connecting': 'Confirmation de l’autorisation',
   'detail.disconnected': 'Scannez un code QR avec WeCom pour lier un bot intelligent. Vous pourrez ensuite utiliser dans les conversations, via ce bot, les documents, le calendrier, les réunions, les tâches, les messages et les autres fonctionnalités de WeCom.',
   'detail.unavailable': 'Impossible de lire l’autorisation de wecom-cli. Réessayez plus tard.',
-  'detail.stopped': 'Le composant « CLI et compétences WeCom » ne fonctionne pas. Consultez la raison dans la liste des composants ci-dessous, puis réessayez.',
   'detail.connected': 'Demandez à l’agent d’utiliser WeCom directement dans une conversation.',
   'detail.authorizing': 'Scannez le code QR avec WeCom sur la page qui s’est ouverte et confirmez, puis revenez ici pour voir le résultat. Si la page ne s’est pas ouverte, sélectionnez « Ouvrir la page du code QR ».',
   'skills.downloading': 'Téléchargement des compétences WeCom depuis GitHub. Elles seront disponibles dans les conversations une fois le téléchargement terminé.',
   'skills.failed': 'Les compétences WeCom n’ont pas pu être téléchargées : l’agent ne peut donc pas encore utiliser les guides WeCom. Vérifiez que cet ordinateur peut accéder à GitHub, puis réessayez.',
   hint: 'L’autorisation est partagée avec wecom-cli dans le terminal de cet ordinateur. Désactiver le plugin ne la révoque pas.',
   failed: 'L’action n’a pas abouti. Réessayez.',
-  'failure.details': 'Diagnostic : {details}',
-  'failure.exitCode': 'Code de sortie {code}',
   'action.connect': 'Connecter WeCom',
   'action.open': 'Ouvrir la page du code QR',
   'action.cancel': 'Annuler',
@@ -188,36 +149,28 @@ export const fr: Record<WecomKey, string> = {
   'badge.disconnected': 'Non autorisé',
   'badge.connecting': 'Autorisation en cours',
   'badge.unavailable': 'Non confirmé',
-  'badge.stopped': 'Ne fonctionne pas',
   'activation.title': 'Connecter WeCom',
   'activation.body': 'Le plugin WeCom est activé. Scannez un code QR pour l’autoriser, puis utilisez-le dans les conversations.',
-  'activation.later': 'Plus tard',
   'notice.connected': 'WeCom autorisé',
-  'notice.action-failed': 'L’action n’a pas abouti. Réessayez.',
-  close: 'Fermer',
 }
 
 /** German dictionary. */
-export const de: Record<WecomKey, string> = {
+export const de: Record<WecomTextKey, string> = {
   'section.title': 'WeCom-Autorisierung',
   'status.checking': 'Autorisierung wird geprüft',
   'status.disconnected': 'Nicht autorisiert',
   'status.unavailable': 'Autorisierung kann gerade nicht gelesen werden',
   'status.connected': 'Autorisiert',
-  'status.stopped': 'WeCom-Komponente läuft nicht',
   'step.authorizing': 'Warten auf das Scannen des QR-Codes',
   'step.connecting': 'Autorisierung wird bestätigt',
   'detail.disconnected': 'Scannen Sie mit WeCom einen QR-Code, um einen smarten Bot zu verknüpfen. Danach können Sie über diesen Bot Dokumente, Kalender, Besprechungen, Aufgaben, Nachrichten und weitere Funktionen von WeCom in Unterhaltungen verwenden.',
   'detail.unavailable': 'Die Autorisierung von wecom-cli konnte nicht gelesen werden. Versuchen Sie es später erneut.',
-  'detail.stopped': 'Die Komponente „WeCom-CLI und Fertigkeiten“ läuft nicht. Den Grund sehen Sie in der Komponentenliste unten; versuchen Sie es danach erneut.',
   'detail.connected': 'Bitten Sie den Agenten, WeCom direkt in einer Unterhaltung zu verwenden.',
   'detail.authorizing': 'Scannen Sie auf der geöffneten Seite den QR-Code mit WeCom, bestätigen Sie und kehren Sie dann hierher zurück, um das Ergebnis zu sehen. Falls sich die Seite nicht geöffnet hat, wählen Sie „QR-Code-Seite öffnen“.',
   'skills.downloading': 'Die Fertigkeiten von WeCom werden von GitHub heruntergeladen. Sie stehen in Unterhaltungen zur Verfügung, sobald der Download abgeschlossen ist.',
   'skills.failed': 'Die Fertigkeiten von WeCom konnten nicht heruntergeladen werden, daher kann der Agent die WeCom-Anleitungen noch nicht verwenden. Prüfen Sie, ob dieser Computer GitHub erreichen kann, und versuchen Sie es dann erneut.',
   hint: 'Die Autorisierung wird mit wecom-cli im Terminal dieses Computers geteilt. Wenn Sie das Plugin deaktivieren, wird sie nicht widerrufen.',
   failed: 'Die Aktion wurde nicht abgeschlossen. Versuchen Sie es erneut.',
-  'failure.details': 'Diagnose: {details}',
-  'failure.exitCode': 'Exit-Code {code}',
   'action.connect': 'WeCom verbinden',
   'action.open': 'QR-Code-Seite öffnen',
   'action.cancel': 'Abbrechen',
@@ -226,36 +179,28 @@ export const de: Record<WecomKey, string> = {
   'badge.disconnected': 'Nicht autorisiert',
   'badge.connecting': 'Wird autorisiert',
   'badge.unavailable': 'Unbestätigt',
-  'badge.stopped': 'Läuft nicht',
   'activation.title': 'WeCom verbinden',
   'activation.body': 'Das WeCom-Plugin ist aktiviert. Scannen Sie einen QR-Code, um es zu autorisieren, und verwenden Sie es dann in Unterhaltungen.',
-  'activation.later': 'Später',
   'notice.connected': 'WeCom autorisiert',
-  'notice.action-failed': 'Die Aktion wurde nicht abgeschlossen. Versuchen Sie es erneut.',
-  close: 'Schließen',
 }
 
 /** Russian dictionary. */
-export const ru: Record<WecomKey, string> = {
+export const ru: Record<WecomTextKey, string> = {
   'section.title': 'Авторизация WeCom',
   'status.checking': 'Проверка авторизации',
   'status.disconnected': 'Не авторизовано',
   'status.unavailable': 'Сейчас не удаётся прочитать состояние авторизации',
   'status.connected': 'Авторизовано',
-  'status.stopped': 'Компонент WeCom не работает',
   'step.authorizing': 'Ожидание сканирования QR-кода',
   'step.connecting': 'Подтверждение авторизации',
   'detail.disconnected': 'Отсканируйте QR-код в WeCom, чтобы привязать умного бота. После этого в беседах через этого бота можно будет использовать документы, календарь, встречи, задачи, сообщения и другие функции WeCom.',
   'detail.unavailable': 'Не удалось прочитать авторизацию wecom-cli. Повторите попытку позже.',
-  'detail.stopped': 'Компонент «CLI и навыки WeCom» не работает. Причину можно посмотреть в списке компонентов ниже; затем повторите попытку.',
   'detail.connected': 'Попросите агента использовать WeCom прямо в беседе.',
   'detail.authorizing': 'Отсканируйте QR-код в WeCom на открывшейся странице и подтвердите, затем вернитесь сюда, чтобы увидеть результат. Если страница не открылась, нажмите «Открыть страницу с QR-кодом».',
   'skills.downloading': 'Навыки WeCom загружаются с GitHub. Они станут доступны в беседах, когда загрузка завершится.',
   'skills.failed': 'Не удалось загрузить навыки WeCom, поэтому агент пока не может использовать руководства WeCom. Убедитесь, что этот компьютер может подключиться к GitHub, затем повторите попытку.',
   hint: 'Авторизация общая с wecom-cli в терминале этого компьютера. Отключение плагина её не отменяет.',
   failed: 'Действие не завершено. Повторите попытку.',
-  'failure.details': 'Диагностика: {details}',
-  'failure.exitCode': 'Код выхода {code}',
   'action.connect': 'Подключить WeCom',
   'action.open': 'Открыть страницу с QR-кодом',
   'action.cancel': 'Отмена',
@@ -264,36 +209,28 @@ export const ru: Record<WecomKey, string> = {
   'badge.disconnected': 'Не авторизовано',
   'badge.connecting': 'Авторизация',
   'badge.unavailable': 'Не подтверждено',
-  'badge.stopped': 'Не работает',
   'activation.title': 'Подключить WeCom',
   'activation.body': 'Плагин WeCom включён. Отсканируйте QR-код, чтобы авторизовать его, и используйте его в беседах.',
-  'activation.later': 'Позже',
   'notice.connected': 'WeCom авторизован',
-  'notice.action-failed': 'Действие не завершено. Повторите попытку.',
-  close: 'Закрыть',
 }
 
 /** Portuguese dictionary. */
-export const pt: Record<WecomKey, string> = {
+export const pt: Record<WecomTextKey, string> = {
   'section.title': 'Autorização do WeCom',
   'status.checking': 'Verificando a autorização',
   'status.disconnected': 'Não autorizado',
   'status.unavailable': 'Não é possível ler a autorização no momento',
   'status.connected': 'Autorizado',
-  'status.stopped': 'O componente do WeCom não está em execução',
   'step.authorizing': 'Aguardando a leitura do código QR',
   'step.connecting': 'Confirmando a autorização',
   'detail.disconnected': 'Leia um código QR com o WeCom para vincular um bot inteligente. Depois disso, você poderá usar nas conversas, por meio desse bot, os documentos, a agenda, as reuniões, as tarefas, as mensagens e outros recursos do WeCom.',
   'detail.unavailable': 'Não foi possível ler a autorização do wecom-cli. Tente novamente mais tarde.',
-  'detail.stopped': 'O componente “CLI e habilidades do WeCom” não está em execução. Veja o motivo na lista de componentes abaixo e tente novamente.',
   'detail.connected': 'Peça ao agente que use o WeCom diretamente em uma conversa.',
   'detail.authorizing': 'Leia o código QR com o WeCom na página que foi aberta e confirme; depois volte aqui para ver o resultado. Se a página não abriu, selecione “Abrir página do código QR”.',
   'skills.downloading': 'Baixando as habilidades do WeCom do GitHub. Elas ficarão disponíveis nas conversas quando o download terminar.',
   'skills.failed': 'Não foi possível baixar as habilidades do WeCom, então o agente ainda não pode usar os guias do WeCom. Verifique se este computador consegue acessar o GitHub e tente novamente.',
   hint: 'A autorização é compartilhada com o wecom-cli no terminal deste computador. Desativar o plugin não a revoga.',
   failed: 'A ação não foi concluída. Tente novamente.',
-  'failure.details': 'Diagnóstico: {details}',
-  'failure.exitCode': 'Código de saída {code}',
   'action.connect': 'Conectar WeCom',
   'action.open': 'Abrir página do código QR',
   'action.cancel': 'Cancelar',
@@ -302,17 +239,10 @@ export const pt: Record<WecomKey, string> = {
   'badge.disconnected': 'Não autorizado',
   'badge.connecting': 'Autorizando',
   'badge.unavailable': 'Não confirmado',
-  'badge.stopped': 'Não está em execução',
   'activation.title': 'Conectar WeCom',
   'activation.body': 'O plugin do WeCom está ativado. Leia um código QR para autorizá-lo e depois use-o nas conversas.',
-  'activation.later': 'Mais tarde',
   'notice.connected': 'WeCom autorizado',
-  'notice.action-failed': 'A ação não foi concluída. Tente novamente.',
-  close: 'Fechar',
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface LocaleNamespaceMap {
-    'wecom': WecomKey
-  }
-}
+/** Render one key of the WeCom text in every shipped language. */
+export const text = accountText({ zh, en, ja, es, fr, de, ru, pt })

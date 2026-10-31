@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package is the Host row of the [WeCom plugin](../wecom/README.md). It installs a pinned `@wecom/cli`, gives the model the absolute path of its `wecom-cli` executable in runtime context, and registers one `wecom` skill whose guides are the official WeCom skills, which it downloads from the WeCom CLI repository on GitHub. Its `wecom` Remote checks the CLI's authorization, binds a bot through the CLI's QR-code page, and cancels, for the [WeCom plugin page](../../client/ui-wecom/README.md). The CLI keeps the bot credentials in its default configuration, which the user's own terminal shares. Only macOS is supported.
+This package is the Host row of the [WeCom plugin](../wecom/README.md). It installs a pinned `@wecom/cli`, gives the model the absolute path of its `wecom-cli` executable in runtime context, and registers one `wecom` skill whose guides are the official WeCom skills, which it downloads from the WeCom CLI repository on GitHub. It registers the authorization with the [CLI account registry](../../client/ui-cli-account/README.md), so the Plugins page shows it and can check it, bind a bot through the CLI's QR-code page, or cancel. The CLI keeps the bot credentials in its default configuration, which the user's own terminal shares. Only macOS is supported.
 
 ## Table of Contents
 
@@ -40,16 +40,15 @@ Turning the row off in Plugin Manager withdraws the skills and the path from run
 <a id="account-operations"></a>
 ### Authorization operations
 
-The `wecom` Remote serves the Plugins page. It runs at most one operation at a time, owned by the Host, so leaving the page does not cancel it.
+The Plugins page drives these operations through the CLI account registry, which the Web app loads; a headless profile loads the plugin without it. The Host runs at most one operation at a time and owns it, so leaving the page does not cancel it.
 
-| Method | Effect |
+| Operation | Effect |
 |---|---|
-| `follow(signal)` | Streams the authorization, the operation in progress, and the last result; each new follower starts a check when no operation runs |
-| `check()` | Checks the authorization again; returns the operation id |
-| `connect()` | Runs `auth init --noninteractive --no-browser`, waits for the user to scan the QR code, then checks that the CLI reports the bot authorized |
-| `cancel(id)` | Cancels that operation while it waits for the scan and waits for its command to exit; other steps and a finished id are ignored |
+| `check` | Checks the authorization again; each browser that opens the Web app starts one when no operation runs |
+| `connect` | Runs `auth init --noninteractive --no-browser`, waits for the user to scan the QR code, then checks that the CLI reports the bot authorized |
+| Cancel | Cancels the connection while it waits for the scan and waits for its command to exit; other steps are ignored |
 
-A check runs `auth show --status`. The authorization reads `authorized` or `unauthorized` exactly as the CLI prints it; any other output or a nonzero exit fails the check and keeps the previous state. Each link that `auth init` prints alone on a stdout line is offered only when it is an HTTPS address on `work.weixin.qq.com`. Results report succeeded, cancelled, or failed. Failures include the command and the observed exit code in the Remote result and Host log; the CLI's output, which can carry the QR-code session, is omitted. `wecom-cli` has no command that revokes the authorization, so the plugin offers no disconnect. The process running DSH needs access to the CLI configuration; `DSH_HOME` does not relocate it.
+A check runs `auth show --status`. The authorization reads `authorized` or `unauthorized` exactly as the CLI prints it; any other output or a nonzero exit fails the check and keeps the previous state. Each link that `auth init` prints alone on a stdout line is offered only when it is an HTTPS address on `work.weixin.qq.com`. Results report succeeded, cancelled, or failed. Failures show the command and the observed exit code on the page and in the Host log; the CLI's output, which can carry the QR-code session, is omitted. `wecom-cli` has no command that revokes the authorization, so the plugin offers no disconnect. The process running DSH needs access to the CLI configuration; `DSH_HOME` does not relocate it.
 
 ### Configure
 
@@ -73,7 +72,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-we
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.wecom`. It checks that `binDir/wecom-cli` (`wecom-cli.exe` on Windows) is executable, gives that path to the model in runtime context, and registers the `wecom` skill through the [upstream skills library](../upstream-skills/README.md) with the pin in [`src/skills.ts`](src/skills.ts). The account view carries the download state, and each check restarts a failed download without waiting for it. [`src/directory.ts`](src/directory.ts) resolves the platform package that `@wecom/cli` installs as an optional dependency. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the WeCom commands and reads the QR-code link from the output lines of `auth init`. Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
+[`src/index.ts`](src/index.ts) is a function plugin. It checks that `binDir/wecom-cli` (`wecom-cli.exe` on Windows) is executable, gives that path to the model in runtime context, and registers the `wecom` skill through the [upstream skills library](../upstream-skills/README.md) with the pin in [`src/skills.ts`](src/skills.ts). The account view carries the download state, and each check restarts a failed download without waiting for it. [`src/directory.ts`](src/directory.ts) resolves the platform package that `@wecom/cli` installs as an optional dependency. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the WeCom commands and reads the QR-code link from the output lines of `auth init`. [`src/presentation.ts`](src/presentation.ts) maps each view to the section the registry serves, in the text of [`src/locales.ts`](src/locales.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
 
 [`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) is the only skill this package carries: the DSH guidance, an index of the guides, and how to open them. Upstream publishes the guides only in its repository and not in the npm package, so the library downloads them; they are files under the skill's base directory, not separate skills. Where the DSH guidance and `wecomcli-shared` disagree, the entry tells the agent to follow the DSH guidance: it uses the plugin's `wecom-cli` instead of installing one, and sends authorization to the plugin page. References are ordinary files in each guide's directory.
 
@@ -88,7 +87,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-we
 - [CLI account library](../cli-account/README.md) — command execution and account operations shared by CLI app plugins.
 - [Skills](../../../docs/subsystems/skills.md) — catalog publication, loading, and precedence.
 - [WeCom plugin](../wecom/README.md) — the bundle that inserts this row and the page row.
-- [WeCom plugin page](../../client/ui-wecom/README.md) — the Plugins page that drives the authorization operations.
+- [CLI account surfaces](../../client/ui-cli-account/README.md) — the registry and the Plugins page section that drive the authorization operations.
 
 -----
 

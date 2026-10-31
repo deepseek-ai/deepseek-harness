@@ -34,7 +34,6 @@ export const PRODUCT_PACKAGE_POLICY: Readonly<Record<string, ProductPackagePolic
   'packages/subagent/subagent-dsh-sdk': { category: 'optional', reason: 'Requires an explicitly configured external DSH home.' },
   'packages/connector/wecom': { category: 'optional', reason: 'Separately installed app plugin that requires wecom-cli and a user-authorized WeCom bot.' },
   'packages/connector/wecom-cli': { category: 'optional', reason: 'WeCom CLI, skills, and authorization mounted by the separately installed WeCom bundle.' },
-  'packages/client/ui-wecom': { category: 'optional', reason: 'Plugins page authorization mounted by the separately installed WeCom bundle.' },
   'packages/web/web-search-exa': { category: 'optional', reason: 'Alternative search provider requiring its own API credentials.' },
   'packages/web/web-search-perplexity': { category: 'optional', reason: 'Alternative search provider requiring its own API credentials.' },
   'packages/connector/cli-account': { category: 'optional', reason: 'Host library imported by separately installed CLI app plugins.' },

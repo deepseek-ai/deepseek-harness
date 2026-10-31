@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The WeCom plugin lets conversations use WeCom through the official `wecom-cli`. Installing this bundle adds two rows: the CLI with its skills, and the WeCom authorization section on the Plugins page, where the user binds a bot by scanning a QR code without starting a conversation. The CLI keeps the authorization in its default configuration, which the user's own terminal shares. Only macOS and Windows x64 are supported.
+The WeCom plugin lets conversations use WeCom through the official `wecom-cli`. Installing this bundle adds one row: the CLI with its skills, which also shows the WeCom authorization section on the Plugins page, where the user binds a bot by scanning a QR code without starting a conversation. The CLI keeps the authorization in its default configuration, which the user's own terminal shares. Only macOS and Windows x64 are supported.
 
 ## Table of Contents
 
@@ -40,8 +40,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 
 | Row | Package | Behavior |
 |---|---|---|
-| `wecom` | [`@deepseek-ai/dsh-wecom-cli`](../wecom-cli/README.md) | Gives the model the absolute path of `wecom-cli`, registers its skills, and runs authorization checks and QR-code connection on the Host |
-| `ui-wecom` | [`@deepseek-ai/dsh-client-ui-wecom`](../../client/ui-wecom/README.md) | Shows the WeCom authorization section, an authorization tag, guidance after the bundle is switched on, and notices on the Plugins page |
+| `wecom` | [`@deepseek-ai/dsh-wecom-cli`](../wecom-cli/README.md) | Gives the model the absolute path of `wecom-cli`, registers its skills, runs authorization checks and QR-code connection on the Host, and shows the authorization section, an authorization tag, guidance after the bundle is switched on, and notices on the Plugins page through the [CLI account registry](../../client/ui-cli-account/README.md) |
 
 Switching the bundle off withdraws the skills, the path in runtime context, and the page. The CLI authorization stays in place.
 
@@ -53,7 +52,7 @@ Switching the bundle off withdraws the skills, the path in runtime context, and 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) inserts the `wecom` and `ui-wecom` rows after the profile's other layers. The package depends on both row packages so that the rows resolve from this bundle, and [`src/index.ts`](src/index.ts) exports nothing. The Plugins page keys the authorization section by this package name.
+[`cordis.patch.yml`](cordis.patch.yml) inserts the `wecom` row after the profile's other layers. The package depends on that row package so that the row resolves from this bundle, and [`src/index.ts`](src/index.ts) exports nothing. The Plugins page keys the authorization section by this package name.
 
 </details>
 
@@ -64,7 +63,7 @@ Switching the bundle off withdraws the skills, the path in runtime context, and 
 
 - [Connector packages](../README.md) — the group this application plugin belongs to.
 - [WeCom CLI and skills](../wecom-cli/README.md) — the Host row, its authorization operations, and its model guidance.
-- [WeCom plugin page](../../client/ui-wecom/README.md) — the Plugins page row.
+- [CLI account surfaces](../../client/ui-cli-account/README.md) — the registry that shows the authorization on the Plugins page.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation and enablement.
 
 -----
@@ -72,7 +71,7 @@ Switching the bundle off withdraws the skills, the path in runtime context, and 
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the `wecom` row, whose package owns the skill catalog entries and loaded skill bodies described in its [Model Experience](../wecom-cli/README.md#model-experience); the `ui-wecom` row adds nothing model-facing.
+Indirectly, through the `wecom` row, whose package owns the skill catalog entries and loaded skill bodies described in its [Model Experience](../wecom-cli/README.md#model-experience).
 
 #### KV Cache effect
 

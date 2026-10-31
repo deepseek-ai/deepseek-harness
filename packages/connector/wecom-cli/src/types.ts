@@ -1,4 +1,4 @@
-/** Credential-free WeCom authorization and operation views for Remote clients. */
+/** Credential-free WeCom authorization and operation views the Plugins page presenter reads. */
 
 import type { CliAccountView, CliCommandFailure } from '@deepseek-ai/dsh-cli-account/types'
 import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills/types'
@@ -19,5 +19,5 @@ export type WecomPhase = 'authorizing'
 /** The command and exit code of a failed operation's last command. */
 export type WecomOperationFailure = CliCommandFailure<'auth-init' | 'auth-status'>
 
-/** The complete WeCom view a Remote client replaces on every change. */
+/** The complete WeCom view the presenter reads after each change. */
 export type WecomState = CliAccountView<WecomAccountState, WecomOperationKind, WecomPhase, WecomOperationFailure>
