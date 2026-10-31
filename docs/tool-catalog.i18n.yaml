@@ -9,8 +9,8 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 1ce42b8c5af75d81
-  zh: 1e11bf487e7eaf35
+  en: 6e8419f195bc96a1
+  zh: 564c4f04420d329a
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:
   en: e0143916bb634762
   zh: e0143916bb634762
@@ -258,11 +258,11 @@
   en: a622b15cc2598d51
   zh: 48e1b05956d63e26
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control/list-agents:
-  en: 6ff6254e604397d2
-  zh: 32b2f1ba4052b19e
+  en: a56168133c21c6a0
+  zh: f9df1c0fe49fa225
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control/send-message:
-  en: aaccc4f194398018
-  zh: d918c1346a87a4b1
+  en: b53326fedeab850d
+  zh: ecb75b6ce31da009
 /tool-schema-catalog/deepseek-ai-dsh-tool-subagent-control/wait-agent:
   en: f3cf5a0c56ddc07a
   zh: 7f6754d71e1b4ae4
@@ -291,8 +291,8 @@
   en: 8001eda7e9ff6a25
   zh: 2414761029f21404
 /tool-schema-catalog/deepseek-ai-dsh-tool-agent-team/team-task-update:
-  en: 7363eeff5e5e1a56
-  zh: 97a8fd0100c5de0f
+  en: 9acd1c5b2fac9853
+  zh: 3bd81e9cd1f1c28d
 /tool-schema-catalog/deepseek-ai-dsh-tool-todo:
   en: dea62d26fb18ff68
   zh: dea62d26fb18ff68

@@ -1191,8 +1191,8 @@ describe('headless stream-json snapshots', () => {
             if (typeof value !== 'string') throw new Error(`Teammate runtime context has no ${name}`)
             return value.replaceAll(log.header.id as string, '<self>').replaceAll(leadId, '<lead>')
           }
-          expect(sections?.some(section => section.name === 'subagent:identity')).toBe(false)
-          return [text('team:identity')]
+          expect(sections?.some(section => section.name === 'team:identity')).toBe(false)
+          return [text('subagent:identity')]
         }).sort()
         const allRows = logs.flatMap(log => parseJsonl(log.content))
         const messageSources = allRows.flatMap((row) => {
@@ -1254,8 +1254,18 @@ describe('headless stream-json snapshots', () => {
         "checkedAgents": true,
         "deliveredMessages": 0,
         "identities": [
-          "You are a teammate in the Team led by agent "<lead>".",
-          "You are a teammate in the Team led by agent "<lead>".",
+          "You are a subagent delegated by agent "<lead>".
+      Your agent id is "<self>".
+      The root agent of your collaboration tree is "<lead>".
+
+      To message other agents, use send_message({ agent_id: "<agent-id>", message: "..." }).
+      Use list_agents({}) to find your collaborator agents and their ids.",
+          "You are a subagent delegated by agent "<lead>".
+      Your agent id is "<self>".
+      The root agent of your collaboration tree is "<lead>".
+
+      To message other agents, use send_message({ agent_id: "<agent-id>", message: "..." }).
+      Use list_agents({}) to find your collaborator agents and their ids.",
         ],
         "queuedMessages": 0,
         "sessions": 4,

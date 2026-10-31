@@ -76,7 +76,7 @@ Publication requires `apply` to return a new state per applied event and replace
 
 Package tests cover task transitions, tree-based assignment, historical roster and mailbox decoding, and task commits that leave inbox waits pending. Ordinary subagent tests cover inbox waiting; recorded Team compositions cover identity, task policy, and tools.
 
-Inbox waiting follows [subagent controls](../../../../packages/subagent/tool-subagent-control/README.md); Team identity and task policy follow the [Team tool reference](../../../../packages/team/tool-agent-team/README.md).
+Identity and inbox waiting follow [subagent controls](../../../../packages/subagent/tool-subagent-control/README.md); task policy follows the [Team tool reference](../../../../packages/team/tool-agent-team/README.md).
 
 ## Consequences
 

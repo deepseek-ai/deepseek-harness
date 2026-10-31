@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-此包让 subagent（子智能体）树中的每个 agent 创建、认领并完成共享任务。它添加四个任务 schema、共享任务板指导和必需的 Team 身份。普通 subagent 控制工具负责发现、通信、中断和收件箱等待。基础 bundle 加载服务与工具；新 Session 默认关闭 Team 模式。
+此包让 subagent（子智能体）树中的每个 agent 创建、认领并完成共享任务。它添加四个任务 schema 和共享任务板指导。普通 subagent 控制工具负责发现、通信、中断和收件箱等待。基础 bundle 加载服务与工具；新 Session 默认关闭 Team 模式。
 
 ## 目录
 
@@ -85,15 +85,15 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口、已移除键拒绝、Team 策略与身份，以及四个条件任务工具 |
+| [`src/index.ts`](src/index.ts) | 插件入口、已移除键拒绝、Team 策略，以及四个条件任务工具 |
 
 ### 策略与工具
 
-插件注册一次动态 `team:policy` 段落、必需的 `team:identity` 上下文和四个条件任务工具。各提供方读取调用方根 Session 的选择；提示词可见性独立于工具限制。树权限和根身份从 `ctx.subagents.rootOf(agent)` 派生。根不可用时禁用 Team 工具和提示词。通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)；subagent 运行时负责投递最终结果。
+一次插件注册提供动态的 `team:policy` 段落和四个条件任务工具。各提供方读取调用者根 Session 的选择，包括 fork 子级。根不可用时禁用 Team 工具与指导。树权限从 `ctx.subagents.rootOf(agent)` 派生；任务负责人保留为 Session id。身份、发现、通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)，在切换 Team 模式时保持不变。subagent 运行时负责投递最终结果。
 
 ### 按作用域注册与拆除
 
-工具的 `when` 条件在步骤准备时求值，包括新建、分叉和恢复的 Agent 的首个步骤。策略文本在提示词组装时求值；身份还会在请求准入时刷新。已经准备好的步骤保留其工具选择，但任务操作在开始前检查当前模式。插件释放时由各注册所属的 effect 移除全部注册。
+工具的 `when` 条件在步骤准备时求值，包括新建、分叉和恢复的 Agent 的首个步骤。策略文本在提示词组装时求值。已经准备好的步骤保留其工具选择，但任务操作在开始前检查当前模式。插件释放时由各注册所属的 effect 移除全部注册。
 
 </details>
 
@@ -124,11 +124,11 @@ kind: "package-reference"
 ##### Team 策略
 
 ```markdown
-A shared task board is available to every agent in your subagent tree. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+A shared task board is available in this session. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
-Task changes do not end wait_agent calls, add inbox messages, or start idle agents. Use send_message when an agent needs to act on a task update.
+Task changes do not end wait_agent calls, add inbox messages, or start idle agents. Use send_message when another agent needs to act on a task.
 ```
 
 #### Token 影响
@@ -138,32 +138,6 @@ Task changes do not end wait_agent calls, add inbox messages, or start idle agen
 #### KV Cache 影响
 
 该文本对 Lead 与每个后代都相同，并且在插件保持加载期间不会变化，因此它保持稳定的 system prompt 前缀，包括父级与其 `subagent_fork` 子级之间。加载或卸载插件会改变每个成员的 system prompt，并使其已缓存前缀失效。
-
-### Team 身份运行时上下文
-
-#### 模型看到什么
-
-Team 已开启且根可用时，必需的 `team:identity` 上下文使用以下文本，将 `<agent-id>` 或 `<root-id>` 替换为从 subagent 树派生的 JSON 编码 Session id；否则不贡献文本。可选上下文抑制不能移除已启用的身份；普通运行时上下文机制会在压缩后恢复它。
-
-##### 根身份
-
-```markdown
-You are the Team Lead. Your agent id is <agent-id>.
-```
-
-##### Agent 身份
-
-```markdown
-You are a teammate in the Team led by agent <root-id>.
-```
-
-#### Token 影响
-
-身份属于完整运行时上下文快照。已保留的稳定上下文不会新增消息。
-
-#### KV Cache 影响
-
-身份通过运行时上下文追加，成员共享的系统文本保持一致。Team 模式中的普通 Session fork 获得自身的根身份；实际提供方的缓存复用仍为尽力而为。
 
 ### 任务工具 schema
 

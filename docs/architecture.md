@@ -139,7 +139,7 @@ A **seam** is a swappable capability with three roles: a **Service Definition** 
 
 Seams are why one provider swap changes the whole product. Filesystem and subprocess providers share one execution world, so pointing them at a remote sandbox moves Bash, PTY, and LSP with them, with no provider forks. [Subagent providers](subsystems/subagent.md) vary just as widely behind one interface, from a fresh child agent to a delegated turn in another product.
 
-[Agent Teams](subsystems/agent-team.md) adds task policy, identity, and a shared task board when enabled for a root Session. Ordinary subagent controls own messaging, discovery, interruption, and inbox waiting.
+[Agent Teams](subsystems/agent-team.md) adds task policy and a shared task board when enabled for a root Session. Ordinary subagent controls own identity, messaging, discovery, interruption, and inbox waiting.
 
 ## Where new behavior goes
 

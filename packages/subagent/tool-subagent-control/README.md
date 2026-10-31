@@ -121,19 +121,19 @@ Fixed schema cost per request, independent of the number or descriptions of chil
 
 Prefix-stable; the schemas do not change at runtime, and a parent and its continuable children, including fork children, receive identical definitions.
 
-### Communication context
+### Identity and communication context
 
 #### What the model sees
 
-The logged `subagent:communication` runtime context tells delegated children their direct creator’s JSON-encoded id and how to send findings that change the parent’s next action. Sending a message does not end the turn. Root Agents and ordinary Session forks receive no communication context; delegated children receive it only when the standard messaging definition is admitted in the current scope and step. Automatic result delivery remains owned by the subagent service.
+Required `subagent:identity` runtime context identifies each agent by its Session id. Delegated children are identified as subagents and receive their direct parent and root ids. It is independent of Team mode and tool filtering; a missing live root is reported without preventing independent work. When the live root is available, identity context includes messaging and discovery instructions independently for each admitted standard tool. Automatic result delivery remains owned by the subagent service.
 
 #### Token effect
 
-One short context entry per delegated child, independent of tree size.
+One short context entry per agent, independent of tree size.
 
 #### KV Cache effect
 
-Communication guidance is retained as runtime context after inherited history, leaving the shared system prompt and tool definitions unchanged between parent and child. Cold resume derives the parent id again from the target Session.
+Identity and communication guidance follow inherited history as logged runtime context, leaving the shared system prompt and tool definitions unchanged. This required context remains available with `includeRuntimeContext: false` and is restored after compaction. Team mode does not change it.
 
 ### Interrupt result
 
@@ -167,7 +167,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-The first row is `<id> [<status>] — root agent`. Each continuable descendant follows as `<id> [<status>] parent=<id> depth=<n> — <label>`. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<id> [diagnostic: <reason>] parent=<id> depth=<n>`. Status describes turn activity, not task completion.
+The first row is `<id> [<status>] — root agent`. Each continuable descendant follows as `<id> [<status>] parent=<id> depth=<n> — <label>`. The root has `kind: root`; descendants have `kind: child` relative to that root. Diagnostics render `<id> [diagnostic: <reason>] parent=<id> depth=<n>`. Status describes turn activity, not task completion, success, or failure.
 
 #### Token effect
 

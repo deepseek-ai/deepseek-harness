@@ -76,7 +76,7 @@ Web panel 读取 Lead Session 的 `agentTeam` 传输投影，因为现有投影�
 
 包测试覆盖任务转换、基于树的分配、历史名册和邮箱解码，以及任务提交后收件箱等待保持未完成。普通 subagent 测试覆盖收件箱等待；录制 Team 组合覆盖身份、任务策略和工具。
 
-收件箱等待遵循 [subagent 控制工具](../../../../packages/subagent/tool-subagent-control/README.zh.md)；Team 身份和任务策略遵循 [Team 工具参考](../../../../packages/team/tool-agent-team/README.zh.md)。
+身份和收件箱等待遵循 [subagent 控制工具](../../../../packages/subagent/tool-subagent-control/README.zh.md)；任务策略遵循 [Team 工具参考](../../../../packages/team/tool-agent-team/README.zh.md)。
 
 ## Consequences
 

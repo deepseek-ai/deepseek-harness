@@ -167,17 +167,19 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-可见的委派工具共享一段指导，列出按名称排序的工具，指示模型一起启动相互独立的委派，并在它们运行时继续工作；当只剩等待它们的结果时，结束本轮，而不是休眠或轮询。结束本轮之所以可行，是因为子代理结束后会通知父级，而通知到达空闲父级会起一次独立的模型请求；在子代理继续推进期间，宿主交替等待 `agent.whenIdle()` 与 `waitForChildren(agent)`（[`dsh-subagent`](../subagent/README.zh.md)、[`session.ts`](../../acp/acp/src/session.ts)）。隐藏或不可用的工具不列入其中；没有可见工具时，不输出指导。`subagent` 和 `subagent_fork` 都可见时，文本为：
+可见的委派工具共享委派与协作指导，列出按名称排序的工具，指示模型一起启动相互独立的委派，并在它们运行时继续工作；当只剩等待它们的结果时，结束本轮，而不是休眠或轮询。结束本轮之所以可行，是因为子代理结束后会通知父级，而通知到达空闲父级会起一次独立的模型请求；在子代理继续推进期间，宿主交替等待 `agent.whenIdle()` 与 `waitForChildren(agent)`（[`dsh-subagent`](../subagent/README.zh.md)、[`session.ts`](../../acp/acp/src/session.ts)）。隐藏或不可用的工具不列入其中；没有可见工具时，不输出指导。`subagent` 和 `subagent_fork` 都可见时，文本为：
 
 ##### 工具指导 section
 
 ```markdown
-Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.
+Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn. Collect the subagent results required to complete the task before giving the user a final answer.
+
+Agents may use different working directories; changes to shared files affect other agents. Split parallel write work into disjoint file or directory scopes. Bash, formatters, code generators, and scripts can overwrite concurrent edits without conflict detection; coordinate their changes explicitly. The agent integrating the work must review the final diff and run relevant tests.
 ```
 
 #### Token 影响
 
-每个父级请求最多包含一段简短的委派指导，列出该请求可见的工具名。
+有可见委派工具时，每个父级请求包含两段指导，列出可见工具名和共享文件协作规则。
 
 #### KV Cache 影响
 
@@ -207,7 +209,7 @@ Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do no
 
 #### 模型看到什么
 
-调用保留任务描述与提示词。成功返回 `started subagent <childId>`；启动被拒绝则返回错误。子任务执行详情独立于这条确认交付。
+`description` 提示要求使用用户当前请求的语言，用 3–5 个词描述任务。调用保留任务描述与提示词。成功返回 `started subagent <childId>`；启动被拒绝则返回错误。子任务执行详情独立于这条确认交付。
 
 #### Token 影响
 

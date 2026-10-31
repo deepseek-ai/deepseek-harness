@@ -2,6 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SubagentDescendantListEntry } from '@deepseek-ai/dsh-subagent'
@@ -58,15 +59,16 @@ function project(
 /**
  * Register the `list_agents` tool.
  * @param ctx - context carrying the tool registry, subagent service, and live Agent registry.
+ * @returns the registered definition for scoped availability checks.
  */
-export function registerListAgents(ctx: Context): void {
-  ctx.tools.register(defineTool({
+export function registerListAgents(ctx: Context): ToolDefinition {
+  const definition = defineTool({
     name: 'list_agents',
     description:
       'List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. '
       + 'Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. '
       + 'You can message any other agent in the subagent tree listed as running or inactive. '
-      + 'running means it is working; inactive means it is not currently working. '
+      + 'running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. '
       + 'While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. '
       + 'Use send_message to continue the conversation.',
     parameters: {},
@@ -138,5 +140,7 @@ export function registerListAgents(ctx: Context): void {
           .filter(entry => entry !== undefined),
       ]
     },
-  }))
+  })
+  ctx.tools.register(definition)
+  return definition
 }

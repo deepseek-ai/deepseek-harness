@@ -320,7 +320,7 @@
     },
     {
       "name": "list_agents",
-      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
         "properties": {}
@@ -589,7 +589,7 @@
     },
     {
       "name": "send_message",
-      "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer.",
+      "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -636,7 +636,7 @@
           },
           "description": {
             "type": "string",
-            "description": "A short (3-5 word) description of the delegated task, for display."
+            "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
           },
           "prompt": {
             "type": "string",
@@ -661,7 +661,7 @@
           },
           "description": {
             "type": "string",
-            "description": "A short (3-5 word) description of the delegated task, for display."
+            "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
           },
           "prompt": {
             "type": "string",
@@ -1269,7 +1269,7 @@
       },
       {
         "name": "list_agents",
-        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
         "parameters": {
           "type": "object",
           "properties": {}
@@ -1538,7 +1538,7 @@
       },
       {
         "name": "send_message",
-        "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer.",
+        "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -1585,7 +1585,7 @@
             },
             "description": {
               "type": "string",
-              "description": "A short (3-5 word) description of the delegated task, for display."
+              "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
             },
             "prompt": {
               "type": "string",
@@ -1610,7 +1610,7 @@
             },
             "description": {
               "type": "string",
-              "description": "A short (3-5 word) description of the delegated task, for display."
+              "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
             },
             "prompt": {
               "type": "string",
@@ -2217,7 +2217,7 @@
       },
       {
         "name": "list_agents",
-        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
         "parameters": {
           "type": "object",
           "properties": {}
@@ -2486,7 +2486,7 @@
       },
       {
         "name": "send_message",
-        "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer.",
+        "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -2533,7 +2533,7 @@
             },
             "description": {
               "type": "string",
-              "description": "A short (3-5 word) description of the delegated task, for display."
+              "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
             },
             "prompt": {
               "type": "string",
@@ -2558,7 +2558,7 @@
             },
             "description": {
               "type": "string",
-              "description": "A short (3-5 word) description of the delegated task, for display."
+              "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
             },
             "prompt": {
               "type": "string",
@@ -3165,7 +3165,7 @@
       },
       {
         "name": "list_agents",
-        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
         "parameters": {
           "type": "object",
           "properties": {}
@@ -3434,7 +3434,7 @@
       },
       {
         "name": "send_message",
-        "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer.",
+        "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -3481,7 +3481,7 @@
             },
             "description": {
               "type": "string",
-              "description": "A short (3-5 word) description of the delegated task, for display."
+              "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
             },
             "prompt": {
               "type": "string",
@@ -3506,7 +3506,7 @@
             },
             "description": {
               "type": "string",
-              "description": "A short (3-5 word) description of the delegated task, for display."
+              "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
             },
             "prompt": {
               "type": "string",
@@ -4113,7 +4113,7 @@
       },
       {
         "name": "list_agents",
-        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means it is not currently working. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+        "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
         "parameters": {
           "type": "object",
           "properties": {}
@@ -4382,7 +4382,7 @@
       },
       {
         "name": "send_message",
-        "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer.",
+        "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -4429,7 +4429,7 @@
             },
             "description": {
               "type": "string",
-              "description": "A short (3-5 word) description of the delegated task, for display."
+              "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
             },
             "prompt": {
               "type": "string",
@@ -4454,7 +4454,7 @@
             },
             "description": {
               "type": "string",
-              "description": "A short (3-5 word) description of the delegated task, for display."
+              "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
             },
             "prompt": {
               "type": "string",

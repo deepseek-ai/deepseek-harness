@@ -50,12 +50,13 @@ async function startWait(ctx: Context, agent: Agent, args: unknown = {}, signal 
 }
 
 describe('wait_agent', () => {
-  it('registers without Team policy or root communication context', async () => {
+  it('registers with shared root identity and no Team policy', async () => {
     const { ctx, agent } = await setup()
     const assembled = await ctx.systemPrompt.assemble({ agent, scope: agent })
     expect(assembled.sections.some(section => section.name === 'subagent:policy')).toBe(false)
-    expect(assembled.contexts.some(context => context.name === 'subagent:identity' || context.name === 'team:identity')).toBe(false)
-    expect(renderContextSnapshot(assembled)).not.toContain('Your parent agent id')
+    expect(assembled.contexts.some(context => context.name === 'team:identity')).toBe(false)
+    expect(renderContextSnapshot(assembled)).toContain(`You are the root agent. Your agent id is ${JSON.stringify(agent.id)}.`)
+    expect(renderContextSnapshot(assembled)).not.toContain('You are a subagent delegated by agent')
     expect(ctx.tools.get('wait_agent', agent)).toBeDefined()
     expect(JSON.stringify(ctx.tools.schemas(agent))).not.toMatch(/\b(?:Team|teammate|Lead)\b/)
   })
@@ -114,21 +115,6 @@ describe('wait_agent', () => {
     const later = await startWait(ctx, agent, { timeout_ms: 10_000 })
     await vi.advanceTimersByTimeAsync(10_000)
     expect(await later.result).toMatchObject({ isError: false, value: { timedOut: true } })
-  })
-
-  it('waits for its own inbox without resolving a subagent tree root', async () => {
-    const { ctx, agent } = await setup()
-    const child = (await ctx.agents.create({
-      sessionId: SessionId('unmanaged'), meta: { origin: 'subagent', parentSession: agent.id },
-    })).agent
-    vi.useFakeTimers()
-    const lookup = vi.spyOn(ctx.subagents, 'rootOf')
-    const { result } = await startWait(ctx, child, { timeout_ms: 10_000 })
-    expect(lookup).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(1)
-    child.inject(input())
-    expect(await result).toMatchObject({ isError: false, value: { timedOut: false } })
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it.each(['input', 'timeout', 'cancel', 'dispose', 'unload'] as const)(

@@ -47,7 +47,7 @@
 | `@deepseek-ai/dsh-tool-subagent` | `list_subagent_models`、`subagent` | `ctx.tools`、`ctx.subagents`、`ctx.systemPrompt`、`ctx.sessionProjections`、`用于模型发现和所选路由校验的 ctx.llm` | `tool/call`、`tool/result`、`child session events through the chosen provider` | `subagent`、`subagent_fork` | 加载时的 `toolName` 选择委派名称（默认为 `subagent`）；`modelSelection` 增加可选路由字段。`modelDiscovery` 默认关闭，每个作用域由一个实例注册共享发现工具。Web 与 Desktop preset 启用 spawn 发现和路由字段，并为 `subagent_fork` 保持路由字段关闭。Host 设置服务为每个新顶层 Session 记录授权；子 Session 继承该授权。没有已记录策略时，发现和显式选择只允许当前父级路由。每次委派都会立即返回子代理 id；本地子代理接受后续消息，外部后端自动汇报单次执行结果。 |
 | `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`、`list_agents`、`send_message`、`wait_agent` | `ctx.tools`、`ctx.subagents`、`ctx.agents` | `tool/call`、`tool/result`、`child session events through ctx.subagents` | - | 共享控制工具发现并联系 subagent 树中的 Agent，中断有权控制的后代，并等待调用者收件箱中的输入。绑定提供方的 `tool-subagent` 实例提供委派工具。 |
 | `@deepseek-ai/dsh-tool-jobs` | `job_kill`、`job_list`、`job_output` | `ctx.tools`、`ctx.jobs`、`ctx.systemPrompt` | `tool/call`、`tool/result`、`user/message via agent.inject() for background completion notices` | - | 与任务种类无关的后台任务控制器：后台 bash 命令与 PTY 发送 都通过相同的 3 个工具读取、列出和终止。加载该插件会挂接控制器，从而启用生产方的 `ctx.jobs.start()`。 |
-| `@deepseek-ai/dsh-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | 四个任务板工具共享 subagent 树的根 Session。在根 Session 开启 Team 模式，会在标准 subagent 委派和控制工具之外增加任务板指导与必需 Team 身份。 |
+| `@deepseek-ai/dsh-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | 四个任务板工具共享 subagent 树的根 Session。在根 Session 开启 Team 模式，会在标准 subagent 委派和控制工具之外增加任务板指导。标准 subagent 控制工具提供必需身份，不受 Team 模式影响。 |
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`、`owning Agent session` | `tool/call`、`todo/write`、`tool/result` | - | todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为检查清单。`allowParallelInProgress` 是没有默认值的必填项，因此本目录明确选择 `true`，对应描述允许同时存在多个 `in_progress` 项。选择 `false` 的部署会获得同一工具，但描述会要求只能有 1 个活动任务。 |
 | `@deepseek-ai/dsh-tool-working-directory` | `working_directory` | `ctx.tools`, `ctx.workingDirectory` | `tool/call`, `working-directory/change`, `user context for directory changes`, `tool/result` | - | 读取或改变调用方 Session 的目录。已有 shell 和进程保留自己的目录；原始元数据和权限根目录保持不变。 |
 | `@deepseek-ai/dsh-experimental-tool-worktree` | `create_worktree` | `ctx.tools`, `ctx.worktrees`, `a calling Agent` | `tool/call`, `Git branch and checkout`, `working-directory/change`, `tool/result` | - | 仅通过显式实验组合加载。在现有写权限下从固定的本地提交创建新分支与检出目录，再改变 Session 工作目录。离开时保留分支与检出目录。 |
@@ -2079,7 +2079,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "description": {
       "type": "string",
-      "description": "A short (3-5 word) description of the delegated task, for display."
+      "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
     },
     "prompt": {
       "type": "string",
@@ -2124,7 +2124,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `list_agents`
 
-列出整棵 subagent 树：根代理和所有可达的可继续后代，包括调用方自身。行包含 id、描述和状态；后代行包含父级 id 和相对根的深度。可以向树中列为 running 或 inactive 的任意其他代理发送消息。running 表示正在工作；inactive 表示当前没有工作。自身仍在线时，直属子代理结束会收到通知，无需反复查询其状态。使用 send_message 继续对话。
+列出整棵 subagent 树：根代理和所有可达的可继续后代，包括调用方自身。行包含 id、描述和状态；后代行包含父级 id 和相对根的深度。可以向树中列为 running 或 inactive 的任意其他代理发送消息。running 表示正在工作；inactive 表示当前没有轮次在执行，不表示任务完成、成功或失败。自身仍在线时，直属子代理结束会收到通知，无需反复查询其状态。使用 send_message 继续对话。
 
 ```json
 {
@@ -2137,7 +2137,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `send_message`
 
-向代理发消息。工作中的代理在下一步骤接收消息，空闲代理用消息启动新轮次。返回投递确认，不返回代理答案。
+向代理发消息。工作中的代理在下一步骤接收消息，空闲代理用消息启动新轮次。返回投递确认。
 
 ```json
 {
@@ -2425,7 +2425,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 来源：[`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
-四个任务板工具共享 subagent 树的根 Session。在根 Session 开启 Team 模式后，会在标准子代理委派和控制工具之外增加任务板指导与必需的 Team 身份。
+四个任务板工具共享 subagent 树的根 Session。在根 Session 开启 Team 模式，会在标准子代理委派和控制工具之外增加任务板指导。标准子代理控制工具提供必需身份，不受 Team 模式影响。
 
 <a id="deepseek-aidsh-tool-todo"></a>
 

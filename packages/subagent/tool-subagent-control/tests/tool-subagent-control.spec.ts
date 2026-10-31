@@ -13,7 +13,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, { SubagentError } from '@deepseek-ai/dsh-subagent'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -169,13 +169,13 @@ describe('dsh-tool-subagent-control', () => {
     expect(texts[0]).toBe('fork task')
     expect(texts[1]).toContain('Your final answer is delivered automatically')
     expect(texts[1]).not.toContain('send_message')
-    expect(JSON.stringify(adapter.requests[1]!.messages)).toContain('Your parent agent id is')
+    expect(JSON.stringify(adapter.requests[1]!.messages)).toContain('You are a subagent delegated by agent')
     expect(loaded.events.some(event => event.type === 'user/message' && event.data.source.kind === 'runtime-context'
-      && JSON.stringify(event.data.content).includes('Your parent agent id is'))).toBe(true)
+      && JSON.stringify(event.data.content).includes('You are a subagent delegated by agent'))).toBe(true)
     expect(adapter.requests[1]!.messages[0]).toEqual(adapter.requests[0]!.messages[0])
   })
 
-  it('JSON-encodes communication ids in logged runtime context', async () => {
+  it('JSON-encodes identity ids in logged runtime context', async () => {
     const { ctx } = await setup([textResponse('child done')])
     const parent = await ctx.agentLoop.create(SessionId('parent"\nagent'), { provider: 'mock', model: 'mock' })
     parkParent(ctx, parent)
@@ -189,42 +189,117 @@ describe('dsh-tool-subagent-control', () => {
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const prompt = loaded.events.find(event => event.type === 'user/message' && event.data.source.kind === 'runtime-context'
-      && event.data.content.some(block => block.type === 'text' && block.text.includes('Your parent agent id is')))
+      && event.data.content.some(block => block.type === 'text' && block.text.includes('You are a subagent delegated by agent')))
     if (prompt?.type !== 'user/message') throw new Error('expected logged communication context')
     const guidance = text(prompt.data)
 
-    expect(guidance).toContain(`Your parent agent id is ${JSON.stringify(parent.id)}`)
+    expect(guidance).toContain(`Your agent id is ${JSON.stringify(started.childId)}`)
+    expect(guidance).toContain(`You are a subagent delegated by agent ${JSON.stringify(parent.id)}`)
+    expect(guidance).toContain(`The root agent of your collaboration tree is ${JSON.stringify(parent.id)}`)
     expect(guidance).not.toContain(parent.id)
   })
 
-  it('limits communication context to delegated children with the admitted standard tool', async () => {
+  it.each([
+    { name: 'send_message', instruction: 'To message other agents', other: 'Use list_agents' },
+    { name: 'list_agents', instruction: 'Use list_agents', other: 'To message other agents' },
+  ])('gates $name guidance independently in an agent scope', async ({ name, instruction, other }) => {
     const { ctx, parent } = await setup([])
     const { agent: child } = await ctx.agents.create({
       sessionId: SessionId('communication-child'),
       meta: { origin: 'subagent', parentSession: parent.id },
       setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, parent) },
     })
-    const { agent: fork } = await ctx.agents.create({
-      sessionId: SessionId('ordinary-fork'), meta: { parentSession: parent.id },
-    })
     const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
-    expect(await communication()).toContain(`Your parent agent id is ${JSON.stringify(parent.id)}`)
-    for (const agent of [undefined, parent, fork]) {
-      expect(renderContextSnapshot(await ctx.systemPrompt.assemble(agent === undefined ? {} : { agent, scope: agent })))
-        .not.toContain('Your parent agent id')
-    }
+    expect(await communication()).toContain(instruction)
+    expect(await communication()).toContain(other)
     const off = child.ctx.tools.register(defineTool({
-      name: 'send_message', description: 'A different tool.', parameters: {},
+      name, description: 'A different tool.', parameters: {},
       output: { schema: { type: 'object', additionalProperties: false, properties: {} }, render: () => [] },
       execute: () => Promise.resolve({}),
     }))
-    expect(await communication()).not.toContain('Your parent agent id')
+    expect(await communication()).not.toContain(instruction)
+    expect(await communication()).toContain(other)
+    expect(await communication()).toContain('Your agent id is \"communication-child\"')
     off()
-    expect(await communication()).toContain('Your parent agent id')
-    child.ctx.tools.restrict({ deny: ['send_message'] })
+    expect(await communication()).toContain(instruction)
+    child.ctx.tools.restrict({ deny: [name] })
     const toolSet = await ctx.tools.resolve({ agent: child, modelSelection: { provider: 'mock', model: 'mock' }, signal: testToolSignal })
-    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child, toolSet })))
-      .not.toContain('Your parent agent id')
+    const filtered = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child, toolSet }))
+    expect(filtered).not.toContain(instruction)
+    expect(filtered).toContain(other)
+    toolSet.dispose()
+  })
+
+  it('keeps collaboration instructions when controls are mounted in an agent scope', async () => {
+    const { ctx, parent, controlFiber } = await setup([])
+    await controlFiber.dispose()
+    await parent.ctx.plugin(tool)
+    const context = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: parent, scope: parent }))
+    expect(context).toContain('To message other agents')
+    expect(context).toContain('Use list_agents')
+  })
+
+  it('identifies independent roots and forks before their collaboration instructions', async () => {
+    const { ctx, parent } = await setup([])
+    const { agent: fork } = await ctx.agents.create({
+      sessionId: SessionId('ordinary-fork'), meta: { parentSession: parent.id },
+    })
+    for (const agent of [parent, fork]) {
+      const built = await ctx.systemPrompt.assemble({ agent, scope: agent })
+      expect(built.contexts.find(context => context.name === 'subagent:identity')?.text).toBe(
+        `You are the root agent. Your agent id is ${JSON.stringify(agent.id)}.\n\n`
+        + 'To message other agents, use send_message({ agent_id: "<agent-id>", message: "..." }).\n'
+        + 'Use list_agents({}) to find your collaborator agents and their ids.',
+      )
+    }
+    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({}))).not.toContain('To message other agents')
+  })
+
+  it.each([
+    new Error('root lookup failed'),
+    new SubagentError('root data is unreadable', 'CORRUPT'),
+  ])('propagates identity lookup errors other than an unavailable root: $message', async (error) => {
+    const { ctx, parent } = await setup([])
+    const lookup = vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw error })
+    try {
+      await expect(ctx.systemPrompt.assemble({ agent: parent, scope: parent })).rejects.toBe(error)
+    } finally {
+      lookup.mockRestore()
+    }
+  })
+
+  it('retains the caller id when its subagent tree root is unavailable', async () => {
+    const { ctx, parent } = await setup([])
+    const lookup = vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => {
+      throw new SubagentError('root is unavailable', 'UNAUTHORIZED')
+    })
+    try {
+      const context = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: parent, scope: parent }))
+      expect(context).toContain(`Your agent id is ${JSON.stringify(parent.id)}.`)
+      expect(context).toContain('Your subagent tree root is unavailable. Continue independent work;')
+      expect(context).not.toContain('To message other agents')
+      expect(context).not.toContain('Use list_agents')
+    } finally {
+      lookup.mockRestore()
+    }
+  })
+
+  it('keeps required identity while both discovery and messaging are filtered', async () => {
+    const { ctx, parent } = await setup([])
+    ctx.systemPrompt.suppressRuntimeContext()
+    const available = await ctx.systemPrompt.assemble({ agent: parent, scope: parent })
+    expect(available.tools.find(tool => tool.name === 'list_agents')?.description)
+      .toContain('List your entire subagent tree')
+    expect(renderContextSnapshot(available)).toContain('Use list_agents')
+    expect(renderContextSnapshot(available)).toContain('To message other agents')
+    parent.ctx.tools.restrict({ deny: ['send_message', 'list_agents'] })
+    const toolSet = await ctx.tools.resolve({ agent: parent, modelSelection: { provider: 'mock', model: 'mock' }, signal: testToolSignal })
+    const filtered = await ctx.systemPrompt.assemble({ agent: parent, scope: parent, toolSet })
+    expect(filtered.tools.some(tool => tool.name === 'list_agents')).toBe(false)
+    const context = renderContextSnapshot(filtered)
+    expect(context).toContain(`You are the root agent. Your agent id is ${JSON.stringify(parent.id)}.`)
+    expect(context).not.toContain('Use list_agents')
+    expect(context).not.toContain('To message other agents')
     toolSet.dispose()
   })
 
@@ -240,7 +315,7 @@ describe('dsh-tool-subagent-control', () => {
     const childRequest = JSON.stringify(adapter.requests[0]!.messages)
     expect(childRequest.includes('Your final answer is delivered automatically')).toBe(delivery === 'parent')
     expect(childRequest).not.toContain('send_message')
-    expect(childRequest).not.toContain('Your parent agent id')
+    expect(childRequest).not.toContain('You are a subagent delegated by agent')
     expect(followup.mock.calls.some(([message]) => message.source.kind === 'subagent-settled')).toBe(delivery === 'parent')
   })
 
@@ -404,7 +479,7 @@ describe('dsh-tool-subagent-control', () => {
       setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, parent) },
     })
     const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
-    expect(await communication()).toContain('Your parent agent id')
+    expect(await communication()).toContain('You are a subagent delegated by agent')
     const names = ['send_message', 'list_agents', 'wait_agent']
     if (config.interrupt !== false) names.push('interrupt_agent')
     for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
@@ -416,9 +491,9 @@ describe('dsh-tool-subagent-control', () => {
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
     await fiber.dispose()
     for (const name of names) expect(ctx.tools.get(name)).toBeUndefined()
-    expect(await communication()).not.toContain('Your parent agent id')
+    expect(await communication()).not.toContain('You are a subagent delegated by agent')
     const reloaded = await ctx.plugin(tool)
-    expect(await communication()).toContain('Your parent agent id')
+    expect(await communication()).toContain('You are a subagent delegated by agent')
     for (const name of ['send_message', 'interrupt_agent', 'list_agents', 'wait_agent']) {
       expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
     }

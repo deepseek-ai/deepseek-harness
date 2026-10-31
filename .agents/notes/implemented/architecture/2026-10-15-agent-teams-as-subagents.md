@@ -16,7 +16,7 @@ Use one subagent identity: the Session id. The existing `description` tool argum
 
 [Tree-wide communication](2026-10-16-tree-wide-agent-communication.md) authorizes an exact live sender within one root tree and preserves the actual sender’s id. Interruption retains ancestor authority and id addressing.
 
-Every root Agent and its descendants form the Team identified by the root Session id. Team creates no agents and contributes task tools, task policy, and required Team identity. Ordinary subagent controls supply discovery, messaging, interruption, and inbox waiting. Parent and fork children receive identical tool schemas and shared policies.
+Every root Agent and its descendants form the Team identified by the root Session id. Team creates no agents and contributes task tools and task policy. Ordinary subagent controls supply required identity, discovery, messaging, interruption, and inbox waiting. Parent and fork children receive identical tool schemas and shared policies.
 
 Task ownership uses `ownerId`; root reassignment accepts itself or any reachable continuable descendant. Historical roster records remain decode-only. Team persists task changes without ending inbox waits or starting idle turns; [inbox-only waiting](../simplification/2026-10-29-inbox-only-agent-wait.md) owns wake behavior. Historical `team/message/*` records remain readable but are never delivered or acknowledged.
 

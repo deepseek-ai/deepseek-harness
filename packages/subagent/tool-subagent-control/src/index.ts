@@ -40,13 +40,13 @@ export const Config: z<Config> = z.object({
  */
 export function apply(ctx: Context, config: Config = {}): void {
   const interrupt = config.interrupt !== false
-  registerListAgents(ctx)
+  const listAgents = registerListAgents(ctx)
   registerWaitAgent(ctx)
   const sendMessage = defineTool({
     name: 'send_message',
     description:
       'Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. '
-      + 'Returns delivery confirmation, not the agent\'s answer.',
+      + 'Returns delivery confirmation.',
     parameters: {
       agent_id: {
         type: 'string',
@@ -89,20 +89,38 @@ export function apply(ctx: Context, config: Config = {}): void {
   })
   ctx.tools.register(sendMessage)
   ctx.systemPrompt.context({
-    name: 'subagent:communication',
+    name: 'subagent:identity',
     order: ctx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),
     required: true,
     interpolate: false,
     text: ({ agent, scope, toolSet }) => {
-      if (agent === undefined || agent.session.header.origin !== 'subagent'
-        || ctx.tools.get(sendMessage.name, scope, toolSet) !== sendMessage) return ''
-      const parentId = JSON.stringify(agent.session.header.parentSession)
-      return `Your parent agent id is ${parentId}. Use `
-        + `send_message({ agent_id: ${parentId}, message: "<finding>" }) when a finding changes what the `
-        + 'parent should do next; sending a message does not end your turn.'
+      if (agent === undefined) return ''
+      try {
+        const root = ctx.subagents.rootOf(agent)
+        let identity = root === agent
+          ? `You are the root agent. Your agent id is ${JSON.stringify(agent.id)}.`
+          : `You are a subagent delegated by agent ${JSON.stringify(agent.session.header.parentSession)}.\n`
+            + `Your agent id is ${JSON.stringify(agent.id)}.\n`
+            + `The root agent of your collaboration tree is ${JSON.stringify(root.id)}.`
+        const guidance: string[] = []
+        if (ctx.tools.get(sendMessage.name, scope, toolSet) === sendMessage) {
+          guidance.push('To message other agents, use send_message({ agent_id: "<agent-id>", message: "..." }).')
+        }
+        if (ctx.tools.get(listAgents.name, scope, toolSet) === listAgents) {
+          guidance.push('Use list_agents({}) to find your collaborator agents and their ids.')
+        }
+        if (guidance.length > 0) identity += '\n\n' + guidance.join('\n')
+        return identity
+      } catch (error: unknown) {
+        const rootUnavailable = typeof error === 'object' && error !== null
+          && 'name' in error && error.name === 'SubagentError'
+          && 'code' in error && error.code === 'UNAUTHORIZED'
+        if (!rootUnavailable) throw error
+        return `Your agent id is ${JSON.stringify(agent.id)}. Your subagent tree root is unavailable. `
+          + 'Continue independent work; subagent discovery and messaging require an active root.'
+      }
     },
   })
-
   if (!interrupt) return
   ctx.tools.register(defineTool({
     name: 'interrupt_agent',

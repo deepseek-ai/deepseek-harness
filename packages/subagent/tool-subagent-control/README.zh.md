@@ -121,19 +121,19 @@ kind: "package-reference"
 
 前缀保持稳定；schema 不会在运行时改变，父级与其可继续子级（包括 fork 子级）收到相同的定义。
 
-### 通信上下文
+### 身份与通信上下文
 
 #### 模型看到什么
 
-持久记录的 `subagent:communication` 运行时上下文向委派子级提供直接创建者的 JSON 编码 id，并说明如何发送会改变父级下一步行动的发现。发送消息不会结束轮次。根 Agent 和普通 Session fork 不接收通信上下文；委派子级仅在标准通信定义于当前作用域和 step 中可用时接收。自动结果交付仍由 subagent 服务负责。
+必需的 `subagent:identity` 运行时上下文通过 Session id 标识每个 agent。委派子级会被明确标识为 subagent，并收到直接父级和根级 id。该上下文独立于 Team 模式和工具过滤；活动根缺失时会明确报告，但不阻止独立工作。活动根可用时，身份上下文会分别根据标准工具的获准情况提供通信与发现指引。自动结果交付仍由 subagent 服务负责。
 
 #### Token 影响
 
-每个委派子级接收一条简短上下文，长度与树规模无关。
+每个 agent 接收一条简短上下文，长度与树规模无关。
 
 #### KV Cache 影响
 
-通信指导作为运行时上下文保留在继承历史之后，父子级共享的系统提示词和工具定义不变。冷恢复会再次从目标 Session 推导父级 id。
+身份与通信指引作为持久记录的运行时上下文位于继承历史之后，共享系统提示词和工具定义不变。设置 `includeRuntimeContext: false` 后，该必需上下文仍会提供，并会在压缩后恢复。Team 模式不会改变它。
 
 ### 中断结果
 
@@ -167,7 +167,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-首行为 `<id> [<status>] — root agent`。各可继续后代随后显示为 `<id> [<status>] parent=<id> depth=<n> — <label>`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断显示为 `<id> [diagnostic: <reason>] parent=<id> depth=<n>`。状态描述轮次活动，不表示任务完成。
+首行为 `<id> [<status>] — root agent`。各可继续后代随后显示为 `<id> [<status>] parent=<id> depth=<n> — <label>`。根使用 `kind: root`；后代相对该根使用 `kind: child`。诊断显示为 `<id> [diagnostic: <reason>] parent=<id> depth=<n>`。状态描述轮次活动，不表示任务完成、成功或失败。
 
 #### Token 影响
 

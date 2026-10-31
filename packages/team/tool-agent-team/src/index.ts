@@ -24,11 +24,11 @@ export const Config: z<Config> = z.object({})
 const REMOVED_CONFIG_KEYS = ['interrupt', 'freshProvider', 'forkProvider'] as const
 
 /** Model-facing collaboration guidance shared by Lead and teammates. */
-const TEAM_POLICY = `A shared task board is available to every agent in your subagent tree. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+const TEAM_POLICY = `A shared task board is available in this session. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
-Task changes do not end wait_agent calls, add inbox messages, or start idle agents. Use send_message when an agent needs to act on a task update.`
+Task changes do not end wait_agent calls, add inbox messages, or start idle agents. Use send_message when another agent needs to act on a task.`
 
 /** One shared task, matching the public `TeamTaskView`. */
 const TASK_VIEW_SCHEMA = {
@@ -106,19 +106,6 @@ export function apply(ctx: Context, config: Config = {}): void {
     name: 'team:policy',
     order: ctx.systemPrompt.getSectionOrder('TEAM_POLICY'),
     text: ({ agent }) => enabled(agent) ? TEAM_POLICY : '',
-  })
-  ctx.systemPrompt.context({
-    name: 'team:identity',
-    order: ctx.systemPrompt.getContextOrder('TEAM_IDENTITY'),
-    required: true,
-    interpolate: false,
-    text: ({ agent }) => {
-      if (agent === undefined || !enabled(agent)) return ''
-      const root = ctx.subagents.rootOf(agent)
-      return root === agent
-        ? `You are the Team Lead. Your agent id is ${JSON.stringify(agent.id)}.`
-        : `You are a teammate in the Team led by agent ${JSON.stringify(root.id)}.`
-    },
   })
   ctx.tools.register(defineTool({
     name: 'team_task_create',
