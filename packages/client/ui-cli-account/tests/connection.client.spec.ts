@@ -8,7 +8,6 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import { CliAccountsConnection } from '../src/client/connection.ts'
 
 const OP = 'op-1' as CliOperationId
-const SECOND = 'op-2' as CliOperationId
 const FIXTURE = '@acme/fixture'
 const OTHER = '@acme/other'
 const COPY = { title: 'Fixture account', hint: 'Shared.', activation: { title: 'Connect', body: 'On.', connect: 'Connect' } }
@@ -19,8 +18,8 @@ function entry(packageName: string, extra: Partial<CliAccountEntry> = {}): CliAc
   return { packageName, copy: COPY, display: { phase: 'disconnected', status: 'Not connected', buttons: [], notes: [] }, ...extra }
 }
 
-const waiting = (url?: string, id = OP, cancellable = true): Partial<CliAccountEntry> =>
-  ({ operation: { id, cancellable, ...url === undefined ? {} : { authorizationUrl: url } } })
+const waiting = (url?: string, id = OP): Partial<CliAccountEntry> =>
+  ({ operation: { id, ...url === undefined ? {} : { authorizationUrl: url } } })
 
 function fixture() {
   const queue: CliAccountsView[] = []
@@ -115,26 +114,23 @@ it('opens each new link of an operation this browser started once and reports th
   expect(b.open.mock.calls).toEqual([['https://example.com/a', '_blank', 'noopener,noreferrer']])
   b.act().run({ kind: 'open' })
   expect(b.open).toHaveBeenCalledTimes(2)
-  await b.publish(entry(FIXTURE, { result: { id: OP, outcome: 'succeeded', notice: 'Connected' } }), entry(OTHER))
+  await b.publish(entry(FIXTURE, { result: { id: OP, notice: 'Connected' } }), entry(OTHER))
   expect(b.snapshot()?.notice).toEqual({ seq: 1, kind: 'succeeded', text: 'Connected' })
   expect(b.snapshot(OTHER)?.notice).toBeUndefined()
-  await b.publish(entry(FIXTURE, { result: { id: OP, outcome: 'succeeded', notice: 'Connected' } }), entry(OTHER))
+  await b.publish(entry(FIXTURE, { result: { id: OP, notice: 'Connected' } }), entry(OTHER))
   expect(b.snapshot()?.notice?.seq).toBe(1)
   b.act().dismissNotice()
   expect(b.snapshot()?.notice).toBeUndefined()
 })
 
-it('reports nothing for a result without a notice, another operation, or an unsuccessful outcome', async () => {
+it('reports nothing for a result without a notice or for another operation', async () => {
   const b = fixture()
   await b.publish(entry(FIXTURE))
   b.act().run({ kind: 'start', operation: 'check' })
   await settle(b)
-  await b.publish(entry(FIXTURE, { result: { id: 'other' as CliOperationId, outcome: 'succeeded', notice: 'Other' } }))
-  await b.publish(entry(FIXTURE, { result: { id: OP, outcome: 'succeeded' } }))
-  b.remote.start.mockResolvedValueOnce(ok(SECOND))
-  b.act().run({ kind: 'start', operation: 'connect' })
-  await settle(b)
-  await b.publish(entry(FIXTURE, { result: { id: SECOND, outcome: 'failed', notice: 'Unused' } }))
+  await b.publish(entry(FIXTURE, { result: { id: 'other' as CliOperationId, notice: 'Other' } }))
+  await b.publish(entry(FIXTURE, { result: { id: OP } }))
+  await b.publish(entry(FIXTURE, { result: { id: OP, notice: 'Late' } }))
   expect(b.snapshot()?.notice).toBeUndefined()
 })
 
@@ -165,16 +161,14 @@ it('follows no operation after a rejected start and reports the failed action on
   await settle(b)
   expect(b.snapshot()?.notice).toEqual({ seq: 1, kind: 'action-failed' })
   await b.publish(entry(FIXTURE, waiting('https://example.com/b')))
-  await b.publish(entry(FIXTURE, { result: { id: OP, outcome: 'succeeded', notice: 'Connected' } }))
+  await b.publish(entry(FIXTURE, { result: { id: OP, notice: 'Connected' } }))
   expect(b.open).not.toHaveBeenCalled()
   expect(b.snapshot()?.notice).toEqual({ seq: 1, kind: 'action-failed' })
 })
 
-it('cancels only an operation the Host marks cancellable, and ignores clicks while one action is pending', async () => {
+it('asks the Host to cancel the operation in progress, and ignores clicks while one action is pending', async () => {
   const b = fixture()
   await b.publish(entry(FIXTURE))
-  b.act().run({ kind: 'cancel' })
-  await b.publish(entry(FIXTURE, waiting(undefined, OP, false)))
   b.act().run({ kind: 'cancel' })
   expect(b.remote.cancel).not.toHaveBeenCalled()
   await b.publish(entry(FIXTURE, waiting()))
@@ -185,7 +179,7 @@ it('cancels only an operation the Host marks cancellable, and ignores clicks whi
   expect(b.snapshot()?.busy).toBe(true)
   answer.resolve(ok(undefined))
   await settle(b)
-  expect(b.remote.cancel).toHaveBeenCalledWith(FIXTURE, OP)
+  expect(b.remote.cancel).toHaveBeenCalledExactlyOnceWith(FIXTURE, OP)
   expect(b.remote.start).not.toHaveBeenCalled()
 })
 

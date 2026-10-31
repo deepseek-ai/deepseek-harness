@@ -69,7 +69,7 @@ A command that does not wait for the user gets the plugin's `commandTimeoutMs`, 
 
 `offer(url)` accepts only an HTTPS URL without credentials on one of the plugin's `authorizationHosts` or their subdomains, and returns whether it accepted the link. Write each host in lowercase ASCII, with an internationalized domain name in punycode, because the runtime compares it with the URL's normalized host name.
 
-A failed operation logs and returns only the plugin's classification of its last command, `{ command, exitCode }` plus allowlisted fields; exception messages and native output are neither logged nor returned, because they may contain credentials.
+A failed operation logs and returns only the plugin's classification of its last command, `{ command, exitCode }` plus allowlisted fields; exception messages and native output are neither logged nor returned, because they may contain credentials. `failureDetails(failure)` lists the command and its exit code, such as `login` and `exit 3`, as the untranslated diagnostic items a Plugins page failure shows after the plugin's text.
 
 ### Shared config
 

@@ -55,13 +55,13 @@ export function apply(ctx: Context): void {
 
 ### Present the section
 
-`present(view)` maps the account view to a `CliAccountDisplay`: the phase, the status line, the optional title tag, buttons, detail, notes, and failure. The registry calls it for every stream on each change, so it only maps the view. Every string is `LocalizedText`, which each browser resolves in its active language. A button carries a command: `start` with one of the registered operation kinds, `cancel` for the operation in progress while the Host marks it cancellable, or `open` to reopen its authorization link. A button with `confirm` asks first and runs only after the user accepts.
+`present(view)` maps the account view to a `CliAccountDisplay`: the phase, the status line, the optional title tag, buttons, the operation Connect starts in the activation prompt, detail, notes, and failure with its untranslated diagnostic items. The registry calls it for every stream on each change, so it only maps the view. Every string is `LocalizedText`, which each browser resolves in its active language. A button carries a command: `start` with one of the registered operation kinds, `cancel` for the operation in progress, which the Host ignores in a phase that is not cancellable, or `open` to reopen its authorization link. A button with `confirm` asks first and runs only after the user accepts.
 
 | Surface | Behavior |
 |---|---|
-| Section | Title, status, buttons, detail, notes, failure, and hint. Buttons are disabled while an action this browser started is pending or the Host stream is down. A failure shows the plugin's text, then the classified command, exit code, and the plugin's details |
+| Section | Title, status, buttons, detail, notes, failure, and hint. Buttons are disabled while an action this browser started is pending or the Host stream is down. A failure shows the plugin's text, then its diagnostic items |
 | Title tag | The display's `badge`, shown only on the enabled bundle's page or one of its row pages, and only while the display has one |
-| Activation prompt | Open while the phase is `disconnected` after the bundle is switched on; Connect opens the bundle page and runs the section's first primary button that asks no confirmation. It dismisses itself once the phase settles elsewhere |
+| Activation prompt | Open while the phase is `disconnected` after the bundle is switched on; Connect opens the bundle page and starts the display's `connect` operation, if it names one. It dismisses itself once the phase settles elsewhere |
 | Notice | The latest outcome in this browser, outside the Plugins panel's lifetime: the operation's success text, or the shared failure copy with a warning icon |
 
 ### Following operations
@@ -70,7 +70,7 @@ Each browser opens one stream when the Web app loads, and the Host checks every 
 
 ### Shared copy
 
-The `cliAccount` dictionary holds the copy every account shares: Close, Cancel, Retry, Later, the diagnostic templates, the failure notice, and the not-running status, tag, and detail. Every other string comes from the plugin.
+The `cliAccount` dictionary holds the copy every account shares: Close, Cancel, Retry, Later, the diagnostic label, the failure notice, and the not-running status, tag, and detail. Every other string comes from the plugin.
 
 -----
 

@@ -35,11 +35,10 @@ function registeredOf<View extends AnyCliAccountView>(registration: CliAccountRe
         packageName, copy, display: present(view),
         ...operation === undefined ? {} : {
           operation: {
-            id: operation.id, cancellable: operation.cancellable,
-            ...operation.authorizationUrl === undefined ? {} : { authorizationUrl: operation.authorizationUrl },
+            id: operation.id, ...operation.authorizationUrl === undefined ? {} : { authorizationUrl: operation.authorizationUrl },
           },
         },
-        ...result === undefined ? {} : { result: { id: result.id, outcome: result.outcome, ...notice === undefined ? {} : { notice } } },
+        ...result === undefined ? {} : { result: { id: result.id, ...notice === undefined ? {} : { notice } } },
       }
     },
     refresh: () => { source.refresh() },

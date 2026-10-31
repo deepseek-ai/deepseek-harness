@@ -5881,15 +5881,15 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CliAccountDisplay',
-    declaration: 'export interface CliAccountDisplay {\n    readonly phase: CliAccountPhase;\n    readonly status: LocalizedText;\n    readonly badge?: LocalizedText;\n    readonly buttons: readonly CliAccountButton[];\n    readonly detail?: LocalizedText;\n    readonly notes: readonly CliAccountNote[];\n    readonly failure?: CliAccountFailure;\n}',
+    declaration: 'export interface CliAccountDisplay {\n    readonly phase: CliAccountPhase;\n    readonly status: LocalizedText;\n    readonly badge?: LocalizedText;\n    readonly buttons: readonly CliAccountButton[];\n    readonly connect?: Extract<CliAccountCommand, {\n        readonly kind: \'start\';\n    }>;\n    readonly detail?: LocalizedText;\n    readonly notes: readonly CliAccountNote[];\n    readonly failure?: CliAccountFailure;\n}',
   },
   {
     name: 'CliAccountEntry',
-    declaration: 'export interface CliAccountEntry {\n    readonly packageName: string;\n    readonly copy: CliAccountCopy;\n    readonly display: CliAccountDisplay;\n    readonly operation?: {\n        readonly id: CliOperationId;\n        readonly authorizationUrl?: string;\n        readonly cancellable: boolean;\n    };\n    readonly result?: {\n        readonly id: CliOperationId;\n        readonly outcome: CliOperationResult<string>[\'outcome\'];\n        readonly notice?: LocalizedText;\n    };\n}',
+    declaration: 'export interface CliAccountEntry {\n    readonly packageName: string;\n    readonly copy: CliAccountCopy;\n    readonly display: CliAccountDisplay;\n    readonly operation?: {\n        readonly id: CliOperationId;\n        readonly authorizationUrl?: string;\n    };\n    readonly result?: {\n        readonly id: CliOperationId;\n        readonly notice?: LocalizedText;\n    };\n}',
   },
   {
     name: 'CliAccountFailure',
-    declaration: 'export interface CliAccountFailure {\n    readonly text: LocalizedText;\n    readonly command?: CliCommandFailure;\n    readonly details?: readonly string[];\n}',
+    declaration: 'export interface CliAccountFailure {\n    readonly text: LocalizedText;\n    readonly details?: readonly string[];\n}',
   },
   {
     name: 'CliAccountNote',

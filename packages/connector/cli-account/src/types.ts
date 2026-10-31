@@ -96,9 +96,7 @@ export interface CliAccountNote {
 export interface CliAccountFailure {
   /** The plugin's recovery guidance. */
   readonly text: LocalizedText
-  /** The classified command, shown as a diagnostic after the guidance. */
-  readonly command?: CliCommandFailure
-  /** The plugin's allowlisted classification fields, appended in order. */
+  /** Untranslated diagnostic items shown after the guidance in order, such as the ones `failureDetails` lists. */
   readonly details?: readonly string[]
 }
 
@@ -108,8 +106,9 @@ export interface CliAccountDisplay {
   readonly status: LocalizedText
   /** The tag beside the bundle title; absent while nothing is settled. */
   readonly badge?: LocalizedText
-  /** The first `primary` button that asks no confirmation also answers Connect in the activation prompt. */
   readonly buttons: readonly CliAccountButton[]
+  /** What Connect in the activation prompt starts after opening the bundle page; absent, Connect only opens the page. */
+  readonly connect?: Extract<CliAccountCommand, { readonly kind: 'start' }>
   readonly detail?: LocalizedText
   readonly notes: readonly CliAccountNote[]
   readonly failure?: CliAccountFailure
@@ -131,13 +130,9 @@ export interface CliAccountEntry {
   readonly copy: CliAccountCopy
   readonly display: CliAccountDisplay
   /** The operation in progress, which a browser follows when it started it. */
-  readonly operation?: { readonly id: CliOperationId; readonly authorizationUrl?: string; readonly cancellable: boolean }
-  /** The most recent finished operation; `notice` is the plugin's text for a success. */
-  readonly result?: {
-    readonly id: CliOperationId
-    readonly outcome: CliOperationResult<string>['outcome']
-    readonly notice?: LocalizedText
-  }
+  readonly operation?: { readonly id: CliOperationId; readonly authorizationUrl?: string }
+  /** The most recent finished operation, with the plugin's text when it succeeded. */
+  readonly result?: { readonly id: CliOperationId; readonly notice?: LocalizedText }
 }
 
 /** Every registered account, as each change publishes it. */

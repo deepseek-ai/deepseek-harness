@@ -39,14 +39,8 @@ export interface CliAccountSectionProps {
 }
 
 function describe(t: Translate<CliAccountKey>, failure: CliAccountFailure): string | undefined {
-  const command = failure.command
-  if (command === undefined) return undefined
-  const details = [
-    command.command,
-    ...command.exitCode === null ? [] : [t('failure.exitCode', { code: String(command.exitCode) })],
-    ...failure.details ?? [],
-  ].join(' · ')
-  return t('failure.details', { details })
+  const details = failure.details ?? []
+  return details.length === 0 ? undefined : t('failure.details', { details: details.join(' · ') })
 }
 
 /**
@@ -236,8 +230,7 @@ export function CliAccountBadgeEntry(props: FaceProps & PropsRuntime<'plugins.de
 }
 
 /**
- * The `plugins.bundle.activation` entry; Connect opens the bundle page and runs the section's first primary button that
- * asks no confirmation.
+ * The `plugins.bundle.activation` entry; Connect opens the bundle page and starts the display's `connect` command.
  * @param props - activation callbacks, the account's face, and the kit translator.
  * @returns the prompt for the current snapshot.
  */
@@ -245,10 +238,10 @@ export function CliAccountActivationEntry(props: FaceProps & PropsRuntime<'plugi
   const { useCliAccount, resolveText, run, onDismiss, onOpenDetails, t } = props
   const snapshot = useCliAccount(value => value)
   const { activation } = snapshot.entry.copy
-  const connect = snapshot.entry.display.buttons.find(item => item.variant === 'primary' && item.confirm === undefined)
+  const { connect } = snapshot.entry.display
   const onConnect = (): void => {
     onOpenDetails()
-    if (connect !== undefined) run(connect.command)
+    if (connect !== undefined) run(connect)
   }
   return (
     <CliAccountActivation t={t} phase={shownPhase(snapshot)} title={resolveText(activation.title)} body={resolveText(activation.body)}

@@ -90,7 +90,7 @@ export class CliAccountsConnection {
         return
       case 'cancel': {
         const operation = entry.operation
-        if (operation === undefined || !operation.cancellable) return
+        if (operation === undefined) return
         void this.act(packageName, async () => { await settle(this.remote.cancel(packageName, operation.id)) })
         return
       }
@@ -163,7 +163,7 @@ export class CliAccountsConnection {
     if (changed) this.accounts.set(new Map(this.stores))
   }
 
-  /** Open each new link of the account's followed operation once, and report how it ended when the entry carries its result. */
+  /** Open each new link of the account's followed operation once, and show the Host's notice once the entry carries its result. */
   private follow(entry: CliAccountEntry): void {
     const started = this.started.get(entry.packageName)
     if (started === undefined) return
@@ -175,7 +175,7 @@ export class CliAccountsConnection {
     const result = entry.result
     if (result?.id !== started.id) return
     this.started.delete(entry.packageName)
-    if (result.outcome === 'succeeded' && result.notice !== undefined) this.notify(entry.packageName, { kind: 'succeeded', text: result.notice })
+    if (result.notice !== undefined) this.notify(entry.packageName, { kind: 'succeeded', text: result.notice })
   }
 
   private async act(packageName: string, operation: () => Promise<void>): Promise<void> {

@@ -69,7 +69,7 @@ const account = new Account({
 
 `offer(url)` 只接受 HTTPS、不含用户信息、主机属于插件 `authorizationHosts` 或其子域名的 URL，并返回是否接受了该链接。每个主机都要写成小写 ASCII，国际化域名写成 punycode，因为运行时拿它与 URL 规范化后的主机名比较。
 
-失败的操作只记录并返回插件对其最后一条命令的分类，即 `{ command, exitCode }` 加上白名单字段；异常信息和 CLI 原始输出既不写日志也不返回，因为其中可能含有凭据。
+失败的操作只记录并返回插件对其最后一条命令的分类，即 `{ command, exitCode }` 加上白名单字段；异常信息和 CLI 原始输出既不写日志也不返回，因为其中可能含有凭据。`failureDetails(failure)` 把命令和退出码（如 `login` 和 `exit 3`）列为插件页失败信息在插件文案之后显示的诊断项，不翻译。
 
 ### 共用配置
 

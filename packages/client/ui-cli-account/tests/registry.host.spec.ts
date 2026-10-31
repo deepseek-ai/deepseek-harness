@@ -70,22 +70,26 @@ it('publishes each account with its copy, display, operation, and result, and ch
 
   account.publish({ account: { state: 'out' }, operation: { id: OP, kind: 'connect', phase: 'authorizing', cancellable: true, authorizationUrl: 'https://example.com/a' } })
   const waiting = await until(stream, view => view.accounts[0]?.operation !== undefined)
-  expect(waiting.accounts[0]?.operation).toEqual({ id: OP, cancellable: true, authorizationUrl: 'https://example.com/a' })
+  expect(waiting.accounts[0]?.operation).toEqual({ id: OP, authorizationUrl: 'https://example.com/a' })
 
   account.publish({ account: { state: 'out' }, operation: { id: OP, kind: 'connect', phase: 'checking', cancellable: false } })
-  const checking = await until(stream, view => view.accounts[0]?.operation?.cancellable === false)
-  expect(checking.accounts[0]?.operation).toEqual({ id: OP, cancellable: false })
+  const checking = await until(stream, (view) => {
+    const operation = view.accounts[0]?.operation
+    return operation !== undefined && operation.authorizationUrl === undefined
+  })
+  expect(checking.accounts[0]?.operation).toEqual({ id: OP })
 
   account.publish({ account: { state: 'in' }, result: { id: OP, kind: 'connect', outcome: 'succeeded' } })
   const connected = await until(stream, view => view.accounts[0]?.result !== undefined)
   expect(connected.accounts[0]).toMatchObject({
-    display: { phase: 'connected' }, result: { id: OP, outcome: 'succeeded', notice: { en: 'Fixture connected', zh: '演示已连接' } },
+    display: { phase: 'connected' }, result: { id: OP, notice: { en: 'Fixture connected', zh: '演示已连接' } },
   })
 
-  account.publish({ account: { state: 'in' }, result: { id: OP, kind: 'check', outcome: 'succeeded' } })
-  expect((await until(stream, view => view.accounts[0]?.result?.notice === undefined)).accounts[0]?.result).toEqual({ id: OP, outcome: 'succeeded' })
+  // Only a success reports a notice, and only for an operation that registered one.
   account.publish({ account: { state: 'out' }, result: { id: OP, kind: 'connect', outcome: 'failed' } })
-  expect((await until(stream, view => view.accounts[0]?.result?.outcome === 'failed')).accounts[0]?.result).toEqual({ id: OP, outcome: 'failed' })
+  expect((await until(stream, view => view.accounts[0]?.display.phase === 'disconnected')).accounts[0]?.result).toEqual({ id: OP })
+  account.publish({ account: { state: 'in' }, result: { id: OP, kind: 'check', outcome: 'succeeded' } })
+  expect((await until(stream, view => view.accounts[0]?.display.phase === 'connected')).accounts[0]?.result).toEqual({ id: OP })
 
   withdraw()
   expect((await until(stream, view => view.accounts.length === 0)).accounts).toEqual([])

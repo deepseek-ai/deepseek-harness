@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CliCommandExecutor } from '../src/executor.ts'
-import { CliAccountRuntime, exitFailure, type CliOperationControl } from '../src/runtime.ts'
+import { CliAccountRuntime, exitFailure, failureDetails, type CliOperationControl } from '../src/runtime.ts'
 import type { CliAccountView, CliCommandFailure, CliOperationId } from '../src/types.ts'
 import { EXECUTABLE, PROGRAM, ScriptedSubprocess, type ScriptedProcess } from './harness.ts'
 
@@ -242,4 +242,9 @@ describe('CliAccountRuntime', () => {
 
 it('classifies a command by its exit code alone', () => {
   expect(exitFailure('status', { exitCode: 3, stdout: 'out', stderr: 'token' })).toEqual({ command: 'status', exitCode: 3 })
+})
+
+it('lists a classified command as diagnostic items, with its exit code when it has one', () => {
+  expect(failureDetails({ command: 'login', exitCode: 3 })).toEqual(['login', 'exit 3'])
+  expect(failureDetails({ command: 'status', exitCode: null })).toEqual(['status'])
 })

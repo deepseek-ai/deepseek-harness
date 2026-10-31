@@ -90,9 +90,9 @@ it('asks before a button that changes the account outside DSH and runs it only a
 })
 
 it.each<[string, CliAccountDisplay['failure'], string]>([
-  ['the failed command, exit code, and plugin details', { text: '失败。', command: { command: 'login', exitCode: 3 }, details: ['internal', 'sdk_error'] }, '失败。 排障信息：login · 退出码 3 · internal · sdk_error'],
-  ['a command that produced no exit', { text: '失败。', command: { command: 'status', exitCode: null } }, '失败。 排障信息：status'],
-  ['a failure without a command', { text: '失败。' }, '失败。'],
+  ['the guidance, then its diagnostic items', { text: '失败。', details: ['login', 'exit 3', 'internal'] }, '失败。 排障信息：login · exit 3 · internal'],
+  ['the guidance alone without diagnostic items', { text: '失败。' }, '失败。'],
+  ['the guidance alone for an empty diagnostic list', { text: '失败。', details: [] }, '失败。'],
 ])('reports %s', (_name, failure, expected) => {
   section({}, { ...DISCONNECTED, ...failure === undefined ? {} : { failure } })
   expect(screen.getByRole('alert').textContent).toBe(expected)
@@ -183,22 +183,16 @@ it('tags the bundle with the Host text, or with the shared copy once the stream 
   expect(document.body.textContent).toBe('')
 })
 
-it('connects from the prompt through the first primary button that asks nothing', () => {
+it('connects from the prompt through the operation the display names, or only opens the page', () => {
   const onOpenDetails = vi.fn()
   const prompt = (props: ReturnType<typeof face>) =>
     <CliAccountActivationEntry {...{ ...props, onDismiss: vi.fn(), onOpenDetails } as ComponentProps<typeof CliAccountActivationEntry>} />
-  const asking = face({}, {
-    ...DISCONNECTED,
-    buttons: [
-      { label: '重置', command: { kind: 'start', operation: 'reset' }, variant: 'primary', confirm: { title: '重置？', body: '会重置。', label: '重置' } },
-      { label: '关联应用', command: { kind: 'start', operation: 'link-app' }, variant: 'primary' },
-    ],
-  })
-  const { rerender } = render(prompt(asking))
+  const named = face({}, { ...DISCONNECTED, connect: { kind: 'start', operation: 'link-app' } })
+  const { rerender } = render(prompt(named))
   fireEvent.click(button('连接演示'))
   expect(onOpenDetails).toHaveBeenCalledOnce()
-  expect(asking.run.mock.calls).toEqual([[{ kind: 'start', operation: 'link-app' }]])
-  const bare = face({}, { ...DISCONNECTED, buttons: [] })
+  expect(named.run.mock.calls).toEqual([[{ kind: 'start', operation: 'link-app' }]])
+  const bare = face()
   rerender(prompt(bare))
   fireEvent.click(button('连接演示'))
   expect(onOpenDetails).toHaveBeenCalledTimes(2)

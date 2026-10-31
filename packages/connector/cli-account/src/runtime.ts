@@ -67,6 +67,15 @@ export function exitFailure<Command extends string>(command: Command, result: Cl
   return { command, exitCode: result.exitCode }
 }
 
+/**
+ * List a classified command as the diagnostic items a Plugins page failure shows after the plugin's guidance.
+ * @param failure - the classification of the last command a failed operation ran.
+ * @returns the command, then its exit code when it has one, such as `login` and `exit 3`; untranslated.
+ */
+export function failureDetails(failure: CliCommandFailure): string[] {
+  return failure.exitCode === null ? [failure.command] : [failure.command, `exit ${failure.exitCode}`]
+}
+
 class Operation<Kind extends string, Phase extends string, Failure extends CliCommandFailure> {
   readonly id = brandString<CliOperationId>(randomUUID())
   readonly controller = new AbortController()
