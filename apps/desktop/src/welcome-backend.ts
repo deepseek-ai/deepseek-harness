@@ -35,8 +35,7 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Connect the native HTTP client to the Desktop Host with its explicit authentication cookie.
- * No cookie jar retains the Host cookie, so launches on new ports do not accumulate cookies.
+ * Connect the native HTTP client to the Desktop Host; every request sends `cookie` explicitly and uses no cookie jar.
  * @param hostUrl - URL of the running Desktop Host; only its origin is used.
  * @param cookie - Cookie header returned by `authenticateWebHost` for this Host.
  * @param send - HTTP client for Host requests.
