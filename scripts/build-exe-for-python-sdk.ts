@@ -319,7 +319,7 @@ class SingleExeBuild {
       this.staging,
     ]) } finally {
       // Legacy deploy records production-only workspace state; restore the development installation before exec.
-      await this.runPnpm('restore development dependencies', ['install', '--prefer-offline', '--frozen-lockfile', '--prod=false', '--ignore-scripts'])
+      await this.runPnpm('restore development dependencies', ['install', '--offline', '--frozen-lockfile', '--prod=false', '--ignore-scripts'])
     }
     await this.restoreLegacyHoists()
     await this.materializeStagedLinks()

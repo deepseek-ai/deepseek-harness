@@ -1023,25 +1023,19 @@ export class LlmRuntime extends TypertRemoteService {
     return registration
   }
 
-  /** Remove replay state owned by another adapter, retaining unchanged requests and message identities. */
+  /** Remove replay state whose historical route is owned by another adapter. */
   private forAdapter(options: GenerateOptions, adapter: LlmAdapter): GenerateOptions {
-    let messages: RequestMessage[] | undefined
-    let index = 0
-    for (const message of options.messages) {
-      if (message.role === 'assistant' && message.source.replayState !== undefined
-        && this.adapters.get(message.source.provider)?.adapter !== adapter) {
-        const source = message.source
-        messages ??= options.messages.slice(0, index)
-        messages.push(freezeMessage({
-          ...message,
-          source: { kind: 'model', provider: source.provider, model: source.model },
-        }))
-      } else {
-        messages?.push(message)
-      }
-      index++
-    }
-    if (messages === undefined) return options
+    const messages: RequestMessage[] = options.messages.map((message) => {
+      if (message.role !== 'assistant') return message
+      const source = message.source
+      if (source.replayState === undefined) return message
+      if (this.adapters.get(source.provider)?.adapter === adapter) return message
+      return freezeMessage({
+        ...message,
+        source: { kind: 'model', provider: source.provider, model: source.model },
+      })
+    })
+    if (messages.every((message, index) => message === options.messages[index])) return options
     const filtered = { ...options, messages }
     return Object.isFrozen(options) ? deepFreeze(filtered) : filtered
   }

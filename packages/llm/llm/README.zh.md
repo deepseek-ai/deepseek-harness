@@ -130,8 +130,6 @@ const configure = (maxTokens: number): ConfigureCall =>
 
 文件检测在每次请求时读取当前内容，包括 tool-role 结果内容，不缓存消息身份或冻结状态。[已归档的文件扫描决策](../../../.agents/notes/archived/simplification/2026-09-07-file-content-scan.md)记录了实测遍历成本。
 
-Developer 消息过滤和 replay-state 移除复用未改变的请求历史。只有删除或替换消息时才分配新的历史数组；保留的消息维持对象身份，已冻结请求的投影仍保持冻结。每次分发都读取当前消息和适配器归属。
-
 ### 不变式
 
 - **模型可见 ⟺ 已记录**——调用方必须确保每个提供方请求中的模型可见输入都可以从会话日志重建；loop 构建的请求以深度冻结状态到达，不可改写。
