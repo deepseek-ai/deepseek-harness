@@ -70,7 +70,7 @@ A command that does not wait for the user gets the plugin's `commandTimeoutMs`, 
 
 `offer(url)` accepts only an HTTPS URL without credentials on one of the plugin's `authorizationHosts` or their subdomains, and returns whether it accepted the link. Write each host in lowercase ASCII, with an internationalized domain name in punycode, because the runtime compares it with the URL's normalized host name.
 
-A failed operation logs and returns only the plugin's classification of its last command, `{ command, exitCode }` plus allowlisted fields; exception messages and native output are neither logged nor returned, because they may contain credentials. `failureDetails(failure)` lists the command and its exit code, such as `login` and `exit 3`, as the untranslated diagnostic items a Plugins page failure shows after the plugin's text.
+A failed operation logs and returns only the plugin's classification of its last command, `{ command, exitCode }` plus allowlisted fields; exception messages and native output are neither logged nor returned, because they may contain credentials. `failureDetails(failure)` lists the command and its exit code, such as `login` and `exit 3`, as the untranslated diagnostic items a Plugins page failure shows after the plugin's text. `accountText(dictionaries)` turns the plugin's dictionaries by language into the function its Plugins page presenter writes `LocalizedText` with, filling each `{name}` placeholder from the values it passes.
 
 ### Shared config
 
@@ -96,6 +96,7 @@ The runtime owns the operation lifecycle and the plugin owns the meaning of each
 | [`src/executor.ts`](src/executor.ts) | Bounded command execution and process ownership |
 | [`src/runtime.ts`](src/runtime.ts) | One-at-a-time operations, cancellation, link filtering, failure classification, and observers |
 | [`src/context.ts`](src/context.ts) | The runtime-context entry that names the executable path |
+| [`src/text.ts`](src/text.ts) | The `LocalizedText` a plugin's presenter writes from its dictionaries |
 | [`src/types.ts`](src/types.ts) | The generic account view types and the Plugins page registration and display types |
 | [`src/index.ts`](src/index.ts) | The entry module and the shared config fields |
 

@@ -11,6 +11,7 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 export { registerCliPathContext, type CliPathContext } from './context.ts'
 export { CliCommandExecutor, executableFileName, type CliCommandExecutorOptions, type CliCommandResult, type CliRunOptions } from './executor.ts'
 export { CliAccountRuntime, exitFailure, failureDetails, type CliAccountRuntimeOptions, type CliOperationControl } from './runtime.ts'
+export { accountText } from './text.ts'
 export type * from './types.ts'
 
 /** Where a plugin's CLI is and how long commands that do not wait for the user may run. */

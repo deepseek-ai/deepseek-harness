@@ -70,7 +70,7 @@ const account = new Account({
 
 `offer(url)` 只接受 HTTPS、不含用户信息、主机属于插件 `authorizationHosts` 或其子域名的 URL，并返回是否接受了该链接。每个主机都要写成小写 ASCII，国际化域名写成 punycode，因为运行时拿它与 URL 规范化后的主机名比较。
 
-失败的操作只记录并返回插件对其最后一条命令的分类，即 `{ command, exitCode }` 加上白名单字段；异常信息和 CLI 原始输出既不写日志也不返回，因为其中可能含有凭据。`failureDetails(failure)` 把命令和退出码（如 `login` 和 `exit 3`）列为插件页失败信息在插件文案之后显示的诊断项，不翻译。
+失败的操作只记录并返回插件对其最后一条命令的分类，即 `{ command, exitCode }` 加上白名单字段；异常信息和 CLI 原始输出既不写日志也不返回，因为其中可能含有凭据。`failureDetails(failure)` 把命令和退出码（如 `login` 和 `exit 3`）列为插件页失败信息在插件文案之后显示的诊断项，不翻译。`accountText(dictionaries)` 把插件按语言划分的字典变成插件页展示函数生成 `LocalizedText` 用的函数，并用传入的值填充每个 `{name}` 占位符。
 
 ### 共用配置
 
@@ -96,6 +96,7 @@ const account = new Account({
 | [`src/executor.ts`](src/executor.ts) | 有上限的命令执行与进程归属 |
 | [`src/runtime.ts`](src/runtime.ts) | 一次一个操作、取消、链接过滤、失败分类与观察者 |
 | [`src/context.ts`](src/context.ts) | 给出可执行文件路径的运行时上下文 |
+| [`src/text.ts`](src/text.ts) | 插件展示函数根据字典生成的 `LocalizedText` |
 | [`src/types.ts`](src/types.ts) | 泛型账号视图类型，以及插件页的注册和显示类型 |
 | [`src/index.ts`](src/index.ts) | 入口模块与共用配置字段 |
 
