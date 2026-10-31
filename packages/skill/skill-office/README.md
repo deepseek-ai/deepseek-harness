@@ -128,7 +128,7 @@ Skill results append to history without changing tool declarations, and loaded t
 - The provider does not install authoring libraries.
 - LibreOffice output can differ from native Office applications.
 - Legacy, encrypted, and macro-enabled files need an appropriate separate workflow.
-- An omitted skill is reported only through `ctx.logger`; no product UI tells the user that installed resources are missing.
+- An omitted skill is reported only through `ctx.logger`; no product UI tells the user that installed resources are missing (tracking issue #7677).
 - The `office` router body names every subskill, so it still points to a subskill omitted for missing resources; the `skill` tool reports that subskill as unavailable.
 - A skill whose file is missing or whose metadata is invalid counts as a persistent failure, so the skill catalog is cached without it; restoring the file does not list the skill until the application restarts or the plugin reloads.
 

@@ -185,7 +185,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 
 | Package | Config | Description |
 |---|---|---|
-| `@deepseek-ai/dsh-office-kit` | yes | LibreOffice Kit location and shared Office-to-PDF conversion with bounded queues and caching |
+| `@deepseek-ai/dsh-office-kit` | yes | LibreOffice Kit location and shared Office rendering, conversion, and recalculation with bounded queues and caching |
 | `@deepseek-ai/dsh-tool-office` | yes | Model-facing office tool that renders, converts, and recalculates documents through the shared Office kit |
 
 ## experimental

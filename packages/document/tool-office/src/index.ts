@@ -1,9 +1,10 @@
 /**
  * The model-facing `office` tool: render document pages as images the model sees, convert documents between formats,
  * and recalculate workbooks through the shared `officeKit` service. The tool stays registered while that service is
- * absent, and each call then fails as `unavailable`. Reads use the filesystem backend's read authority. Converted
- * files stay in the Office kit's private output store; the model copies them into the workspace with the shell, so
- * this tool writes no workspace file.
+ * absent, and each call then fails as `unavailable`. Reads use the filesystem backend's read authority; each call reads
+ * one source byte before the service runs, so a cached result never answers a call that cannot read the source.
+ * Converted files stay in the Office kit's private output store; the model copies them into the workspace with the
+ * shell, so this tool writes no workspace file.
  * @module @deepseek-ai/dsh-tool-office
  */
 
@@ -139,6 +140,9 @@ export function apply(ctx: Context, config: Config): void {
       checkArguments(args, family)
       const resolveOptions = await sessionResolveOptions(ctx, exec)
       const { target, info } = await readableInput(ctx, args.input, resolveOptions)
+      try {
+        await authorizeContent(ctx, target, info, exec.signal)
+      } catch (error) { throw officeFailure(args.operation, target.displayPath, error) }
       const kit = ctx.get('officeKit')
       if (kit === undefined) {
         throw officeFailure(args.operation, target.displayPath, new OfficeKitError('unavailable', 'The document converter is unavailable.'))
@@ -177,24 +181,34 @@ async function readableInput(
   return { target, info }
 }
 
+/** Refuse a source whose type or version differs from its authorizing stat. */
+async function assertUnchanged(ctx: Context, target: FsTarget, info: FsInfo, signal: AbortSignal): Promise<void> {
+  const current = await ctx.fs.stat(target, signal)
+  if (current?.type !== 'file' || current.version !== info.version) throw new OfficeKitError('source-changed', 'The source changed.')
+}
+
+/**
+ * Confirm this call may read the source content before the Office service can answer from its cache, which skips the
+ * deferred read. Reads one byte, then refuses a source changed since its authorizing stat.
+ */
+async function authorizeContent(ctx: Context, target: FsTarget, info: FsInfo, signal: AbortSignal): Promise<void> {
+  await ctx.fs.readByteRange(target, { offset: 0, length: 1 }, signal)
+  await assertUnchanged(ctx, target, info, signal)
+}
+
 /** A deferred bounded read that refuses a source changed since its authorizing stat. */
 function officeSource(ctx: Context, exec: ToolExecution, target: FsTarget, info: FsInfo): OfficeKitSource {
-  const changed = (): Error => new OfficeKitError('source-changed', 'The source changed.')
-  const unchanged = async (signal: AbortSignal): Promise<void> => {
-    const current = await ctx.fs.stat(target, signal)
-    if (current?.type !== 'file' || current.version !== info.version) throw changed()
-  }
   return {
     key: OfficeSourceKey(JSON.stringify([exec.agent?.session.id ?? null, ctx.fs.processPath(target)])),
     version: info.version,
     ...info.size === undefined ? {} : { bytes: info.size },
     async read(signal, maxBytes) {
-      await unchanged(signal)
+      await assertUnchanged(ctx, target, info, signal)
       const bytes = await ctx.fs.readBytes(target, signal, maxBytes).catch((cause: unknown) => {
         if (codeOf(cause) !== 'FS_TOO_LARGE') throw cause
         throw new OfficeKitError('input-too-large', 'The source exceeds the reserved byte capacity.', { cause })
       })
-      await unchanged(signal)
+      await assertUnchanged(ctx, target, info, signal)
       return { bytes, version: info.version }
     },
   }

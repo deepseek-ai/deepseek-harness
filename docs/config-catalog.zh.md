@@ -2570,7 +2570,7 @@ export interface Config {
   maxInputBytes: number
   /** Maximum complete PDF, converted, or recalculated file bytes. */
   maxOutputBytes: number
-  /** Exported raster-image DPI. */
+  /** Image resolution in DPI of PDF exports; `renderImages()` takes its resolution from each request's `dpi`. */
   maxImageResolution: number
   /** Maximum OOXML ZIP entries. */
   maxArchiveEntries: number
@@ -4261,7 +4261,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-office`
 
 - `inject`: `tools` · `fs` · `workingDirectory`
-- `source`: [`packages/document/tool-office/src/index.ts:33`](../packages/document/tool-office/src/index.ts)
+- `source`: [`packages/document/tool-office/src/index.ts:34`](../packages/document/tool-office/src/index.ts)
 
 ```ts config-catalog
 /** Bounds on one render result; deployment attachment limits apply when they are lower. */

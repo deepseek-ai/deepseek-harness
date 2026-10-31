@@ -55,7 +55,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-工具通过 `ctx.fs` 解析输入并要求其为普通文件，再向 Office 套件提交已授权的源；其延迟读取在有界的 `fs.readBytes` 前后各 stat 一次，版本变化时拒绝。渲染结果在返回前通过 `attachments.saveImages()` 提交，因此 `tool/result` 事件携带持久的图片引用；恢复、分叉和回放会还原相同的图片，图片卸载也像对待其他工具结果图片一样适用于它们。规范值携带附件引用和图片位置；`output.render` 先生成一条摘要文本，再为每个渲染的页面或区域生成位置标签和图片块。`presentationMeta` 记录规范化的输入路径，转换时还记录临时文件路径。输出存储中的文件归调用方 subagent 树的根 Session 所有：挂载 `subagents` 服务时通过 `subagents.rootOf()` 读取，否则为调用方 Session；文件以输入文件名加新扩展名命名。
+工具通过 `ctx.fs` 解析输入并要求其为普通文件，用 `fs.readByteRange` 读取其第一个字节后再 stat 一次，因此没有内容读取权限的调用，或文件在 stat 之后被替换的调用，会在 Office 套件可能从缓存应答之前失败。随后工具向 Office 套件提交已授权的源；其延迟读取在有界的 `fs.readBytes` 前后各 stat 一次，版本变化时拒绝。渲染结果在返回前通过 `attachments.saveImages()` 提交，因此 `tool/result` 事件携带持久的图片引用；恢复、分叉和回放会还原相同的图片，图片卸载也像对待其他工具结果图片一样适用于它们。规范值携带附件引用和图片位置；`output.render` 先生成一条摘要文本，再为每个渲染的页面或区域生成位置标签和图片块。`presentationMeta` 记录规范化的输入路径，转换时还记录临时文件路径。输出存储中的文件归调用方 subagent 树的根 Session 所有：挂载 `subagents` 服务时通过 `subagents.rootOf()` 读取，否则为调用方 Session；文件以输入文件名加新扩展名命名。
 
 schema 无法表达的参数规则——各操作专用的参数、互不重复的从 1 开始的页码、dpi 范围以及各操作的输入输出格式——在访问任何文件之前检查。Office 套件的错误报告为 `cannot <operation> "<path>": <message>`，`busy` 附带重试提示，渲染过大时附带缩小选择的提示。PTC 嵌套调用重新进入同一执行管线，因此策略和日志同样适用；嵌套渲染的图片在程序运行结束后附加。
 
@@ -93,6 +93,8 @@ schema 在挂载期间保持不变，且不依赖已加载的技能，因此工�
 
 - **转换后的文件需要 shell 复制** — 文件系统服务不创建二进制文件，因此模型用 shell 复制每个临时文件。没有 shell 工具的部署无法交付转换后的文件；临时文件在 Office 套件的保留期满或调用方 subagent 树的根 Session 卸载后删除；subagent 产出的文件在该 subagent 结束后仍然保留。
 - **远程工作区不支持转换** — Office 套件运行在 Host 上，远程 shell 读不到其输出存储。
+- **渲染不保存图片文件** — `render` 只返回供模型查看的图片，不写出 PNG 或其他图片文件。需要以文件形式获得页面的用户，通过 `convert` 并设置 `format: "pdf"` 获得 PDF。
+- **原生引擎在 Host 进程内运行** — 由模型发起的渲染、转换和重算通过 `ctx.officeKit` 在 Host 进程内运行原生 LibreOffice Kit 引擎，因此不受 shell 沙箱和 PTC 权限约束。输入仍受文件系统后端读取权限的约束。原生解析器以 Host 用户的权限处理不可信的文档。
 - 渲染保真度、字体和分页取决于 LibreOffice Kit，可能与 Microsoft Office 不同。
 
 <a id="dev-note"></a>

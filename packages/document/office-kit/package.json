@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-office-kit",
-  "description": "LibreOffice Kit location and shared Office-to-PDF conversion with bounded queues and caching",
+  "description": "LibreOffice Kit location and shared Office rendering, conversion, and recalculation with bounded queues and caching",
   "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"

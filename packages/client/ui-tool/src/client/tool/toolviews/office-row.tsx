@@ -3,9 +3,11 @@
 // and rendered results. A successful render shows its images through the Tool-owned
 // `tool.call.office.images` slot; every other state keeps the flattened text output.
 
+import { useCallback } from 'react'
 import { IconBrowseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context } from '@deepseek-ai/cordis'
 import { toolFileInject } from '../file-menu.ts'
+import type { ToolImagesOwnerProps } from '../../contract/slots.ts'
 import { officeRowModel } from '../models/office-card-model.ts'
 import { toolRowModel } from '../models/tool-call-model.ts'
 import { ToolRow } from '../components/ToolRow.tsx'
@@ -23,6 +25,7 @@ export function OfficeRow(props: OfficeRowProps) {
   const row = toolRowModel(toolName, block, cwd, home)
   const office = officeRowModel(block, cwd, home)
   const path = office.filePath
+  const renderImages = useCallback((owner: ToolImagesOwnerProps) => renderSlot('tool.call.office.images', owner), [renderSlot])
   return (
     <ToolRow
       fileContextMenuProps={getTriggerProps(path === undefined ? undefined : () => ({
@@ -39,7 +42,7 @@ export function OfficeRow(props: OfficeRowProps) {
       output={row.output}
       errorSummary={row.errorSummary}
       image={office.image}
-      renderImages={owner => renderSlot('tool.call.office.images', owner)}
+      renderImages={renderImages}
       loadImage={loadImage}
       state={row.state}
       filePath={path}

@@ -1,5 +1,5 @@
 /** The output store keeps bounded, owner-scoped files and deletes only what it saved, apart from expired leftovers. */
-import { access, mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { access, lstat, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
@@ -7,12 +7,15 @@ import { OutputStore, type OutputStoreOptions } from '../src/outputs.ts'
 
 const io = vi.hoisted(() => ({
   rmFailure: undefined as Error | undefined, statFailure: undefined as Error | undefined, writeFailures: [] as Error[],
+  rmGate: undefined as Promise<void> | undefined, rmBlocked: 0,
 }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
   return {
     ...actual,
     async rm(...args: Parameters<typeof actual.rm>) {
+      const gate = io.rmGate
+      if (gate !== undefined) { io.rmBlocked++; await gate }
       if (io.rmFailure !== undefined) throw io.rmFailure
       return actual.rm(...args)
     },
@@ -25,6 +28,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       if (io.statFailure !== undefined) throw io.statFailure
       return actual.stat(...args)
     },
+    async lstat(...args: Parameters<typeof actual.lstat>) {
+      if (io.statFailure !== undefined) throw io.statFailure
+      return actual.lstat(...args)
+    },
   }
 })
 
@@ -36,6 +43,8 @@ afterEach(async () => {
   io.rmFailure = undefined
   io.statFailure = undefined
   io.writeFailures = []
+  io.rmGate = undefined
+  io.rmBlocked = 0
   vi.useRealTimers()
   await rm(root, { recursive: true, force: true })
 })
@@ -106,22 +115,79 @@ it('removes the private directory of a failed write and continues later saves', 
   expect(await outputs.save('a', 'ok.pdf', Uint8Array.of(1))).toMatch(/ok\.pdf$/u)
 })
 
+const OWNER = `session-${'0'.repeat(24)}`
+const OUTPUT = '00000000-0000-4000-8000-000000000000'
+const FRESH_OUTPUT = '00000000-0000-4000-8000-000000000001'
+const past = new Date(Date.now() - 120_000)
+
+/** Create a directory whose modification time precedes the 60-second test retention. */
+async function expiredDirectory(path: string): Promise<string> {
+  await mkdir(path, { recursive: true })
+  await writeFile(join(path, 'file.pdf'), 'kept')
+  await utimes(path, past, past)
+  return path
+}
+
+/** Link `path` to the directory `target`; Windows uses a junction, which needs no symlink privilege. */
+async function linkDirectory(target: string, path: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true })
+  await symlink(target, path, process.platform === 'win32' ? 'junction' : 'dir')
+}
+
 it('sweeps expired leftovers of earlier processes and keeps fresh ones', async () => {
-  const leftover = join(root, 'outputs', 'session-old', 'expired')
-  const fresh = join(root, 'outputs', 'session-old', 'fresh')
-  await mkdir(leftover, { recursive: true })
+  const leftover = await expiredDirectory(join(root, 'outputs', OWNER, OUTPUT))
+  const fresh = join(root, 'outputs', OWNER, FRESH_OUTPUT)
   await mkdir(fresh, { recursive: true })
   await writeFile(join(root, 'outputs', 'stray-file'), '')
-  const past = new Date(Date.now() - 120_000)
-  await utimes(leftover, past, past)
   const { outputs } = store()
   await outputs.save('a', 'a.pdf', Uint8Array.of(1))
   expect(await exists(leftover)).toBe(false)
   expect(await exists(fresh)).toBe(true)
 })
 
+it('removes an expired owner directory left empty by the sweep', async () => {
+  await expiredDirectory(join(root, 'outputs', OWNER, OUTPUT))
+  const { outputs } = store()
+  await outputs.save('a', 'a.pdf', Uint8Array.of(1))
+  expect(await exists(join(root, 'outputs', OWNER))).toBe(false)
+})
+
+it('does not follow an owner-position link out of the store root', async () => {
+  const external = await expiredDirectory(join(root, 'external', OUTPUT))
+  const link = join(root, 'outputs', OWNER)
+  await linkDirectory(join(root, 'external'), link)
+  const { outputs } = store()
+  await outputs.save('a', 'a.pdf', Uint8Array.of(1))
+  expect(await readFile(join(external, 'file.pdf'), 'utf8')).toBe('kept')
+  expect((await lstat(link)).isSymbolicLink()).toBe(true)
+})
+
+it('does not follow or delete an output-position link', async () => {
+  const external = await expiredDirectory(join(root, 'external'))
+  const link = join(root, 'outputs', OWNER, OUTPUT)
+  await linkDirectory(external, link)
+  await utimes(dirname(link), past, past)
+  const { outputs } = store()
+  await outputs.save('a', 'a.pdf', Uint8Array.of(1))
+  expect(await readFile(join(external, 'file.pdf'), 'utf8')).toBe('kept')
+  expect((await lstat(link)).isSymbolicLink()).toBe(true)
+})
+
+it('leaves expired directories whose names the store does not generate', async () => {
+  const unrelated = [
+    await expiredDirectory(join(root, 'outputs', 'sessions', 'project', 'session')),
+    await expiredDirectory(join(root, 'outputs', `session-${'0'.repeat(23)}`, OUTPUT)),
+    await expiredDirectory(join(root, 'outputs', `session-${'A'.repeat(24)}`, OUTPUT)),
+    await expiredDirectory(join(root, 'outputs', OWNER, 'not-an-output')),
+    await expiredDirectory(join(root, 'outputs', OWNER, 'ABCDEF00-0000-4000-A000-000000000000')),
+  ]
+  const { outputs } = store()
+  await outputs.save('a', 'a.pdf', Uint8Array.of(1))
+  for (const directory of unrelated) expect(await readFile(join(directory, 'file.pdf'), 'utf8')).toBe('kept')
+})
+
 it('reports cleanup failures without failing saves or disposal', async () => {
-  await mkdir(join(root, 'outputs', 'session-old', 'entry'), { recursive: true })
+  await mkdir(join(root, 'outputs', OWNER, OUTPUT), { recursive: true })
   io.statFailure = new Error('stat failed')
   const { outputs, warn } = store()
   const path = await outputs.save('a', 'a.pdf', Uint8Array.of(1))
@@ -131,6 +197,84 @@ it('reports cleanup failures without failing saves or disposal', async () => {
   await outputs.release('a')
   io.rmFailure = undefined
   expect(warn).toHaveBeenCalledWith(expect.stringContaining(`could not delete output ${path}`))
+})
+
+function busy(): Error {
+  return Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+}
+
+/** Bytes of every regular file under `directory`. */
+async function storedBytes(directory: string): Promise<number> {
+  let total = 0
+  for (const entry of await readdir(directory, { recursive: true, withFileTypes: true })) {
+    if (entry.isFile()) total += (await stat(join(entry.parentPath, entry.name))).size
+  }
+  return total
+}
+
+it('keeps a file whose deletion failed in the byte budget and retries it on eviction and disposal', async () => {
+  const { outputs, warn } = store()
+  const first = await outputs.save('a', 'one.pdf', new Uint8Array(4))
+  await outputs.save('a', 'two.pdf', new Uint8Array(4))
+  io.rmFailure = busy()
+  await expect(outputs.save('b', 'three.pdf', new Uint8Array(4))).rejects.toMatchObject({ code: 'unavailable' })
+  expect(warn).toHaveBeenCalledWith(expect.stringContaining(`could not delete output ${first}`))
+  expect(await storedBytes(join(root, 'outputs'))).toBeLessThanOrEqual(8)
+  io.rmFailure = undefined
+  const third = await outputs.save('b', 'three.pdf', new Uint8Array(4))
+  expect(await exists(first)).toBe(false)
+  expect(await storedBytes(join(root, 'outputs'))).toBe(8)
+  io.rmFailure = busy()
+  await outputs.release('b')
+  expect(await exists(third)).toBe(true)
+  io.rmFailure = undefined
+  await outputs.dispose()
+  expect(await exists(third)).toBe(false)
+  expect(await storedBytes(join(root, 'outputs'))).toBe(0)
+})
+
+it('waits for a release in progress before disposal completes', async () => {
+  const { outputs } = store()
+  const path = await outputs.save('a', 'a.pdf', Uint8Array.of(1))
+  const gate = Promise.withResolvers<undefined>()
+  io.rmGate = gate.promise
+  const releasing = outputs.release('a')
+  let disposed = false
+  const disposing = outputs.dispose().then(() => { disposed = true })
+  await new Promise(resolve => setImmediate(resolve))
+  expect(disposed).toBe(false)
+  io.rmGate = undefined
+  gate.resolve(undefined)
+  await disposing
+  expect(await exists(path)).toBe(false)
+  await releasing
+})
+
+it('counts a file deleted by a concurrent release once while eviction continues', async () => {
+  const { outputs } = store()
+  await outputs.save('x', 'x.pdf', new Uint8Array(2))
+  await outputs.save('y', 'y.pdf', new Uint8Array(3))
+  await outputs.save('z', 'z.pdf', new Uint8Array(3))
+  const gate = Promise.withResolvers<undefined>()
+  io.rmGate = gate.promise
+  const saving = outputs.save('w', 'w.pdf', new Uint8Array(8))
+  await vi.waitFor(() => { expect(io.rmBlocked).toBe(1) })
+  io.rmGate = undefined
+  await outputs.release('y')
+  gate.resolve(undefined)
+  await saving
+  await outputs.save('v', 'v.pdf', new Uint8Array(3))
+  expect(await storedBytes(join(root, 'outputs'))).toBe(3)
+})
+
+it('reports a deletion that still fails during disposal', async () => {
+  const { outputs, warn } = store()
+  const path = await outputs.save('a', 'a.pdf', Uint8Array.of(1))
+  io.rmFailure = busy()
+  await outputs.dispose()
+  io.rmFailure = undefined
+  expect(warn).toHaveBeenCalledWith(expect.stringContaining(`could not delete output ${path}`))
+  expect(await exists(path)).toBe(true)
 })
 
 function missing(): Error {

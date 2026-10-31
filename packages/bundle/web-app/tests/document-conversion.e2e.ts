@@ -13,16 +13,20 @@ import { expect, it, onTestFinished } from 'vitest'
 
 it('loads one shared conversion row and retains caller-owned PDFs after disposal', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-conversion-loader-'))
+  const outputDirectory = await mkdtemp(join(tmpdir(), 'dsh-conversion-outputs-'))
   const ctx = new Context()
   onTestFinished(async () => {
     try { await ctx.fiber.dispose() }
-    finally { await rm(directory, { recursive: true, force: true }) }
+    finally {
+      await rm(directory, { recursive: true, force: true })
+      await rm(outputDirectory, { recursive: true, force: true })
+    }
   })
   const rows = loadOverlayPatches('conversion-test', fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)))
     .flatMap(patch => patch.insert ?? [])
     .filter(row => row.name === '@deepseek-ai/dsh-office-kit')
   expect(rows.map(row => row.id)).toEqual(['office-kit'])
-  const configured = applyEntryPatches(rows, [{ id: 'office-kit', config: { maxConcurrentConversions: 1 } }],
+  const configured = applyEntryPatches(rows, [{ id: 'office-kit', config: { maxConcurrentConversions: 1, outputDirectory } }],
     (message) => { throw new Error(message) })
   const configPath = join(directory, 'cordis.yml')
   await writeFile(configPath, JSON.stringify(configured))
@@ -57,6 +61,7 @@ it('loads one shared conversion row and retains caller-owned PDFs after disposal
     },
   })
   const provider = ctx.officeKit
+  expect(provider.outputDirectory).toBe(outputDirectory)
   const [first, second] = await Promise.all([provider.convert(request('first')), provider.convert(request('second'))])
   expect(reads).toBe(2)
   expect(Buffer.from(first.pdf).subarray(0, 5).toString()).toBe('%PDF-')

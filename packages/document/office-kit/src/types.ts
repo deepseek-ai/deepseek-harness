@@ -4,7 +4,7 @@ import type {} from '@deepseek-ai/dsh-typert-protocol'
 import type { OfficeSourceKey, OfficeKitGeneration, OfficeKitKey } from './identity.ts'
 export type { OfficeSourceKey, OfficeKitGeneration, OfficeKitKey } from './identity.ts'
 
-/** Binary Office and Office Open XML formats supported by Office-to-PDF conversion. */
+/** Binary Office and Office Open XML formats accepted by PDF previews, image rendering, and format conversion. */
 export type OfficeExtension = 'doc' | 'docx' | 'xls' | 'xlsx' | 'ppt' | 'pptx'
 
 /** Foreground previews and explicit QA precede speculative background conversion. */

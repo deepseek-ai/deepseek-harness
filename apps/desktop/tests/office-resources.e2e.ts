@@ -4,6 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { DesktopHostProcess } from '../src/host-process.ts'
 import { builtHost, prepareDesktopHome, repository } from './harness.ts'
 
@@ -13,7 +14,7 @@ const SKILL_PROBE = 'desktop-office-skill-probe'
 const OFFICE_SKILLS = ['office', 'office-docx', 'office-export-pdf', 'office-pptx', 'office-recalculate', 'office-render', 'office-xlsx']
 
 /** Add a test-only profile bundle whose route reports the Host registry's Office skills through the real Loader. */
-function installSkillProbe(root: string, profile: string): void {
+function installSkillProbe(profile: string): void {
   const plugin = join(profile, 'node_modules', SKILL_PROBE)
   mkdirSync(plugin, { recursive: true })
   writeFileSync(join(plugin, 'package.json'), JSON.stringify({
@@ -39,7 +40,7 @@ export function apply(ctx) {
     dependencies?: Record<string, string>
     dsh: { profile: { bundles: string[] } }
   }
-  manifest.dependencies = { ...manifest.dependencies, [SKILL_PROBE]: `file:${join(root, SKILL_PROBE)}` }
+  manifest.dependencies = { ...manifest.dependencies, [SKILL_PROBE]: `file:${plugin}` }
   manifest.dsh.profile.bundles.push(SKILL_PROBE)
   writeFileSync(join(profile, 'package.json'), JSON.stringify(manifest))
 }
@@ -63,7 +64,7 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
         if (mode === 'missing-skill') rmSync(join(runtime, 'office-skills', 'office-docx', 'SKILL.md'))
       }
       writeFileSync(join(paths.profile, 'cordis.patch.yml'), '- id: webserver\n  config:\n    host: 127.0.0.1\n    port: 0\n')
-      installSkillProbe(root, paths.profile)
+      installSkillProbe(paths.profile)
       const primaryRuntime = mode === 'relative-source' ? 'runtime/primary-runtime' : join(runtime, 'primary-runtime')
       host = new DesktopHostProcess(process.execPath, project, paths.profile, undefined,
         { ...process.env, DSH_BUNDLED_PRIMARY_RUNTIME: primaryRuntime }, (error) => { failures.push(error) })
@@ -95,6 +96,8 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
         case 'relative-source':
           expect(skills).toMatchObject({ names: [], content: { 'office-docx': null, 'office-export-pdf': null } })
           break
+        default:
+          assertNever(mode)
       }
       expect(failures).toEqual([])
     } finally {

@@ -10,6 +10,20 @@ import OfficeKit, { Config, OfficeSourceKey, type OfficeKitSource, type OfficeIm
 const kit = vi.hoisted(() => ({ create: vi.fn<() => Promise<Converter>>() }))
 vi.mock('@deepseek-ai/libreoffice-kit', () => ({ createConverter: kit.create }))
 
+/** Holds output-store deletions under `root` until `gate` settles. */
+const outputDeletion = vi.hoisted(() => ({ root: undefined as string | undefined, gate: undefined as Promise<void> | undefined }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    async rm(...args: Parameters<typeof actual.rm>) {
+      const [path] = args
+      if (outputDeletion.root !== undefined && typeof path === 'string' && path.startsWith(outputDeletion.root)) await outputDeletion.gate
+      return actual.rm(...args)
+    },
+  }
+})
+
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2])
 const PDF = Buffer.from('%PDF-1.7\nconverted\n%%EOF\n')
 const XLSX = Buffer.from([80, 75, 3, 4, 9])
@@ -59,7 +73,11 @@ beforeEach(() => {
   }
   kit.create.mockReset().mockImplementation(async () => converter)
 })
-afterEach(async () => { await ctx.fiber.dispose() })
+afterEach(async () => {
+  outputDeletion.root = undefined
+  outputDeletion.gate = undefined
+  await ctx.fiber.dispose()
+})
 
 async function mount(config: Partial<Config> = {}): Promise<OfficeKit> {
   const outputDirectory = await mkdtemp(join(tmpdir(), 'dsh-office-kit-outputs-'))
@@ -225,6 +243,23 @@ it('deletes the outputs of a disposed Session when the Session is disposed and e
   await access(second.path)
   await ctx.fiber.dispose()
   await expect(access(second.path)).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it('waits for the deletion of a disposed Session\'s outputs before the provider finishes unloading', async () => {
+  const provider = await mount()
+  const output = await provider.convertTo({ extension: 'docx', format: 'pdf', priority: 'foreground', source: source(),
+    output: { owner: 'first', name: 'doc.pdf' } })
+  const gate = Promise.withResolvers<undefined>()
+  outputDeletion.root = provider.outputDirectory
+  outputDeletion.gate = gate.promise
+  ctx.emit('session/disposed', { id: 'first' } as never)
+  let unloaded = false
+  const unloading = ctx.fiber.dispose().then(() => { unloaded = true })
+  await new Promise(resolve => setImmediate(resolve))
+  expect(unloaded).toBe(false)
+  gate.resolve(undefined)
+  await unloading
+  await expect(access(output.path)).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
 it('rejects a saved output after cancellation and a relative output directory', async () => {

@@ -28,10 +28,15 @@ vi.mock('@deepseek-ai/libreoffice-kit', () => ({ createConverter: kit.create }))
 
 it('loads the shipped Office rows with separately patched settings and authorized PDF output', async () => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'dsh-web-office-')))
+  const outputDirectory = await mkdtemp(join(tmpdir(), 'dsh-web-office-outputs-'))
   const ctx = new Context()
   onTestFinished(async () => {
     try { await ctx.fiber.dispose() }
-    finally { vi.restoreAllMocks(); await rm(directory, { recursive: true, force: true }) }
+    finally {
+      vi.restoreAllMocks()
+      await rm(directory, { recursive: true, force: true })
+      await rm(outputDirectory, { recursive: true, force: true })
+    }
   })
   const configPath = join(directory, 'cordis.yml')
   const expectedRows = {
@@ -41,7 +46,7 @@ it('loads the shipped Office rows with separately patched settings and authorize
   const rows = loadOverlayPatches('web-office-test', fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)))
     .flatMap(patch => patch.insert ?? []).filter(row => row.id !== undefined && Object.hasOwn(expectedRows, row.id))
   expect(rows.map(row => [row.id, row.name])).toEqual(Object.entries(expectedRows))
-  const providerConfig = { maxInputBytes: 4096, maxConcurrentConversions: 1, fontFallbacks: [['Missing Serif', 'Available Serif']] }
+  const providerConfig = { maxInputBytes: 4096, maxConcurrentConversions: 1, fontFallbacks: [['Missing Serif', 'Available Serif']], outputDirectory }
   const clientConfig = DocumentPreview.Config({ office: { maxCachedEntries: 3, maxCachedBytes: 8192 } })
   const configured = applyEntryPatches(rows, [
     { id: 'office-kit', config: providerConfig },
@@ -94,6 +99,7 @@ it('loads the shipped Office rows with separately patched settings and authorize
   await ctx.loader.await()
   const entries = new Map([...ctx.loader.entries()].map(entry => [entry.options.id, entry]))
   for (const row of configured) await entries.get(row.id)!.fiber!.await()
+  expect(ctx.officeKit.outputDirectory).toBe(outputDirectory)
   const injections: IndexInjection[] = []
   ctx.emit('webserver/index-inject', injections, PAGE_PEER)
   expect(injections).toEqual([
@@ -120,7 +126,7 @@ it('loads the shipped Office rows with separately patched settings and authorize
   expect(await readFile(sourcePath, 'utf8')).toBe('authorized OOXML')
   expect(session.seq).toBe(before)
   expect(ctx.get('agents')).toBeUndefined()
-  const { maxConcurrentConversions: _count, ...kitOptions } = providerConfig
+  const { maxConcurrentConversions: _count, outputDirectory: _outputs, ...kitOptions } = providerConfig
   expect(kit.create).toHaveBeenCalledWith(expect.objectContaining(kitOptions))
   await expect(ctx.officeKit.render(scope, 'missing.docx', 'foreground', signal))
     .rejects.toMatchObject({ code: 'workspace-file/not-found' })

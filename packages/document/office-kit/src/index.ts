@@ -64,7 +64,7 @@ export interface Config {
   maxInputBytes: number
   /** Maximum complete PDF, converted, or recalculated file bytes. */
   maxOutputBytes: number
-  /** Exported raster-image DPI. */
+  /** Image resolution in DPI of PDF exports; `renderImages()` takes its resolution from each request's `dpi`. */
   maxImageResolution: number
   /** Maximum OOXML ZIP entries. */
   maxArchiveEntries: number
@@ -159,6 +159,7 @@ export class OfficeKit extends TypertRemoteService {
     this.outputDirectory = config.outputDirectory
     this.outputs = new OutputStore({ root: config.outputDirectory, retentionMs: config.outputRetentionMs,
       maxBytes: config.maxOutputStoreBytes }, ctx.logger.warn.bind(ctx.logger))
+    // The output store records this release, and its disposal below waits for the release to settle.
     ctx.on('session/disposed', (session) => { void this.outputs.release(session.id) })
     ctx.effect(() => async () => {
       this.remoteLifetime.abort()

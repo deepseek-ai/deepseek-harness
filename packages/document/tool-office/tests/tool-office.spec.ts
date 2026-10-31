@@ -444,8 +444,35 @@ describe('arguments and paths', () => {
     const result = await office(ctx, { operation: 'convert', input: 'locked.docx', format: 'pdf' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('permission denied')
-    expect(kit.convertTo).toHaveBeenCalledTimes(1)
-    await expect(kit.convertTo.mock.results[0]!.value).rejects.toThrow('permission denied')
+    expect(kit.convertTo).not.toHaveBeenCalled()
+  })
+
+  it('refuses a source replaced while confirming read access', async () => {
+    const { ctx, kit } = await setup()
+    const readByteRange = ctx.fs.readByteRange.bind(ctx.fs)
+    vi.spyOn(ctx.fs, 'readByteRange').mockImplementationOnce(async (target, range, readSignal) => {
+      const bytes = await readByteRange(target, range, readSignal)
+      await writeFile(join(dir, 'deck.pptx'), 'replaced pptx bytes')
+      return bytes
+    })
+    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' })))
+      .toBe(`Error: cannot render "${join(dir, 'deck.pptx')}": The source changed.`)
+    expect(kit.renderImages).not.toHaveBeenCalled()
+  })
+
+  it('refuses a cached result once content reads are denied while metadata stays readable', async () => {
+    const { ctx } = await setup({ kit: false })
+    await ctx.plugin(OfficeKit, { outputDirectory: join(home, 'office-outputs') })
+    const agent = agentOn('vision')
+    const args = { operation: 'convert', input: 'deck.pptx', format: 'pdf' }
+    expect((await office(ctx, args, agent)).isError).toBe(false)
+    const denied = Object.assign(new Error('permission denied'), { code: 'FS_PERMISSION_DENIED' })
+    vi.spyOn(ctx.fs, 'readBytes').mockRejectedValue(denied)
+    vi.spyOn(ctx.fs, 'readByteRange').mockRejectedValue(denied)
+    const refused = await office(ctx, args, agent)
+    expect(refused.isError).toBe(true)
+    expect(text(refused)).toContain('permission denied')
+    expect(text(refused)).not.toContain('Converted')
   })
 
   it('refuses conversions when the execution world cannot read Host files', async () => {

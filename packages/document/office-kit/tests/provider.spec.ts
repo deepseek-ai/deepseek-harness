@@ -1,11 +1,24 @@
 /** Disk output, resource bounds, and cancellation around the external kit. */
-import { access, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import type { Converter, ConverterOptions } from '@deepseek-ai/libreoffice-kit'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
 import OfficeKit, { Config, OfficeSourceKey, type OfficeKitRequest } from '../src/index.ts'
 import { resolveKitModule, type KitModuleResolution } from '../src/locate.ts'
+import { expectDefaultOutputsUntouched } from './default-outputs.ts'
+
+const home = await vi.hoisted(async () => {
+  const { mkdtemp } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  return mkdtemp(`${tmpdir()}/dsh-office-kit-home-`)
+})
+vi.mock('@deepseek-ai/dsh-home-paths', async (original) => {
+  const path = await import('node:path')
+  return { ...await original<typeof import('@deepseek-ai/dsh-home-paths')>(), dshHomePath: (...segments: string[]) => path.join(home, ...segments) }
+})
+expectDefaultOutputsUntouched(home)
 
 vi.mock('../src/locate.ts', async (original) => {
   const actual = await original<typeof import('../src/locate.ts')>()
@@ -50,7 +63,10 @@ beforeEach(() => {
 afterEach(async () => { await ctx.fiber.dispose() })
 
 async function mount(config: Partial<Config> = {}): Promise<OfficeKit> {
-  await ctx.plugin(OfficeKit, config)
+  const outputDirectory = await mkdtemp(join(tmpdir(), 'dsh-office-kit-outputs-'))
+  // Runs after the afterEach provider disposal, which deletes the provider's own outputs first.
+  onTestFinished(() => rm(outputDirectory, { recursive: true, force: true }))
+  await ctx.plugin(OfficeKit, { ...config, outputDirectory })
   return ctx.officeKit
 }
 

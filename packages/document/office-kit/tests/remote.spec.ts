@@ -1,4 +1,7 @@
 /** Authorized source identity and cancellation survive Host rendering. */
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceFiles } from '@deepseek-ai/dsh-api-workspace-files'
@@ -7,6 +10,18 @@ import { OfficeKitError, OfficeKitKey, type OfficeKitResult } from '../src/index
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import OfficeKit from '../src/index.ts'
+import { expectDefaultOutputsUntouched } from './default-outputs.ts'
+
+const home = await vi.hoisted(async () => {
+  const { mkdtemp } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  return mkdtemp(`${tmpdir()}/dsh-office-kit-home-`)
+})
+vi.mock('@deepseek-ai/dsh-home-paths', async (original) => {
+  const path = await import('node:path')
+  return { ...await original<typeof import('@deepseek-ai/dsh-home-paths')>(), dshHomePath: (...segments: string[]) => path.join(home, ...segments) }
+})
+expectDefaultOutputsUntouched(home)
 
 const scope = { sessionId: SessionId('document-test'), workspaceRoot: '/workspace' }
 const source = { absolutePath: '/workspace/report.DOCX', version: 'source-v1', bytes: 4 }
@@ -24,8 +39,10 @@ let processPath: ReturnType<typeof vi.fn<FileSystem['processPath']>>
 let authorize: ReturnType<typeof vi.fn<WorkspaceFiles['readBytes']>>
 let metadata: ReturnType<typeof vi.fn<WorkspaceFiles['stat']>>
 let render: ReturnType<typeof vi.fn<OfficeKit['convert']>>
+let outputDirectory: string
 
 beforeEach(async () => {
+  outputDirectory = await mkdtemp(join(tmpdir(), 'dsh-office-kit-outputs-'))
   ctx = new Context()
   read = vi.fn<FileSystem['readBytes']>().mockResolvedValue(rawSource.data)
   fileInfo = vi.fn<FileSystem['stat']>().mockResolvedValue(sourceInfo)
@@ -33,7 +50,7 @@ beforeEach(async () => {
   ctx.provide('fs', { resolve: vi.fn().mockResolvedValue(target), stat: fileInfo, processPath, readBytes: read } as never)
   authorize = vi.fn<WorkspaceFiles['readBytes']>().mockResolvedValue({ ...wireSource, eof: false, data: rawSource.data.subarray(0, 1) })
   metadata = vi.fn<WorkspaceFiles['stat']>().mockResolvedValue(source)
-  await ctx.plugin(OfficeKit)
+  await ctx.plugin(OfficeKit, { outputDirectory })
   generation = ctx.officeKit.generation
   render = vi.spyOn(ctx.officeKit, 'convert').mockImplementation(async (request, signal) => {
     const loaded = await request.source.read(signal!, 4)
@@ -42,7 +59,10 @@ beforeEach(async () => {
   })
   ctx.provide('workspaceFiles', { stat: metadata, readBytes: authorize } as never)
 })
-afterEach(async () => { await ctx.fiber.dispose() })
+afterEach(async () => {
+  try { await ctx.fiber.dispose() }
+  finally { await rm(outputDirectory, { recursive: true, force: true }) }
+})
 
 it.each(['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'])('converts authorized %s bytes and returns the PDF under source identity', async (extension) => {
   const path = `report.${extension.toUpperCase()}`
@@ -197,7 +217,7 @@ it.each([{ absolutePath: '/workspace/replaced.docx' }, { version: 'v2' }])('refu
 it.each(['workspaceFiles', 'fs'] as const)('reports unavailable file access when %s is absent', async (missing) => {
   const independent = new Context()
   try {
-    await independent.plugin(OfficeKit)
+    await independent.plugin(OfficeKit, { outputDirectory })
     if (missing === 'workspaceFiles') independent.provide('fs', {} as never)
     else independent.provide('workspaceFiles', {} as never)
     expect(independent.get(missing)).toBeUndefined()
