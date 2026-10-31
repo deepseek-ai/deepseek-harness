@@ -72,7 +72,7 @@ describe('OAR provider composition', () => {
       expect(ctx.subagents.getProvider('codex-test')).toBeUndefined()
       expect(ctx.subagents.getProvider('claude-test')).toBeDefined()
       await second.dispose()
-      expect(ctx.subagents.list()).toEqual([])
+      expect(ctx.subagents.getProvider('claude-test')).toBeUndefined()
     } finally {
       await ctx.fiber.dispose()
     }

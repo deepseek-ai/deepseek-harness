@@ -74,6 +74,7 @@ describe('dsh-tool-subagent', () => {
     if (result.isError) throw new Error('expected subagent success')
     expect(result.value).toHaveProperty('kind', 'activation')
     expect(result.value).toHaveProperty('subagentId', expect.any(String))
+    expect(result.meta).toEqual(result.value)
     expect(text(result)).toMatch(/^started subagent /)
   })
 
@@ -768,10 +769,10 @@ describe('dsh-tool-subagent local activation', () => {
       start: async () => { throw new Error('continuable policy must not start a one-shot child') },
       prepareContinuable: async (request) => {
         preparationCount += 1
-        if (request.signal === cancelled.signal) cancelledChildId = request.sessionId
-        else survivingChildId = request.sessionId
         if (preparationCount === 2) bothPreparing.resolve(undefined)
         await releasePreparations.promise
+        if (request.signal.aborted) cancelledChildId = request.sessionId
+        else survivingChildId = request.sessionId
         return {}
       },
     })

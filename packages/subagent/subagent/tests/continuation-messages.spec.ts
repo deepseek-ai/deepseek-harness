@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ToolCallId, type ContentBlock } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ToolCallId, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createSettlementMessage } from '../src/continuation-messages.ts'
 
@@ -7,6 +7,33 @@ const childId = SessionId('settled-child')
 const summary = { type: 'text', text: `Background subagent ${childId} finished and will do no further work unless you send it more.` }
 const reasoning: ContentBlock = { type: 'reasoning', text: 'private child reasoning' }
 const toolCall: ContentBlock = { type: 'tool-call', id: ToolCallId('child-call'), name: 'read', arguments: '{}' }
+
+describe('settlement attribution', () => {
+  it.each(['completed', 'aborted', 'max-tokens', 'refusal', 'error'] as const)(
+    'records the exact %s stop reason without changing model content', (stopReason) => {
+      const terminal = { stopReason, output: [{ type: 'text' as const, text: '  answer\n' }] }
+      const message = createSettlementMessage(childId, terminal)
+      expect(message.source).toMatchObject({
+        kind: 'subagent-settled', form: 'notice',
+        senderSessionId: childId, stopReason,
+      })
+      expect(message.content.slice(1)).toEqual([
+        { type: 'text', text: 'Its closing message:' },
+        ...terminal.output,
+      ])
+    },
+  )
+
+  it('preserves historical notices without inferring missing attribution from English', () => {
+    const source = { kind: 'subagent-settled' as const, form: 'notice' as const,
+      summary: 'Historical runtime summary', senderSessionId: childId }
+    const content = [{ type: 'text' as const, text: 'Background subagent settled-child finished.' }]
+    const message = createUserMessage({ source, content })
+    expect(message.source).toEqual(source)
+    expect(message.source).not.toHaveProperty('stopReason')
+    expect(message.content).toEqual(content)
+  })
+})
 
 describe('continuable settlement content', () => {
   it.each([

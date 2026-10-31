@@ -117,6 +117,7 @@ it('pins Messages Files offload and inline fallback in assembled requests', asyn
       },
     })
     expect(result.stderr).toBe('')
+    if (result.sessionId === undefined) throw new Error('image-offload scenario did not create a session')
     expect(requests).toHaveLength(2)
     expect(fileRequests).toEqual([{ method: 'POST', path: filesPath, bytes: 69 }])
     const attachmentDigest = 'b1ff9c8ea3a780bad09b346c423d2d0e46815926879b18e841d928376a946640'
@@ -188,6 +189,7 @@ it('pins Messages Files offload and inline fallback in assembled requests', asyn
       },
     })
     expect(fallback.stderr).toBe('')
+    if (fallback.sessionId === undefined) throw new Error('image-offload fallback scenario did not create a session')
     expect(fileRequests).toEqual([
       { method: 'POST', path: filesPath, bytes: 69 },
       { method: 'POST', path: filesPath, bytes: 69 },

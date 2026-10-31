@@ -5,6 +5,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -21,6 +23,7 @@ import * as tool from '../src/index.ts'
 import { parkParent } from './park-parent.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { loadStoredSession } from '../../subagent/tests/persistence-helpers.ts'
+import { bindSubagentActivation } from '../../subagent/tests/manager-internals.ts'
 
 /** One scripted response that may wait on a caller-released gate before streaming. */
 interface GatedEntry {
@@ -70,11 +73,11 @@ async function setupWith(adapter: MockAdapter | GatedAdapter, park = true) {
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
-  await ctx.plugin(tool)
+  const controlFiber = await ctx.plugin(tool)
   ctx.llm.registerAdapter(['mock'], adapter)
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
   if (park) parkParent(ctx, parent)
-  return { ctx, parent, adapter }
+  return { ctx, parent, adapter, controlFiber }
 }
 
 async function setup(script: ConstructorParameters<typeof MockAdapter>[0]) {
@@ -121,7 +124,7 @@ describe('dsh-tool-subagent-control', () => {
     expect(schemas[0]!.description).not.toContain('job id')
     expect(schemas[0]!.description).toContain('receives it at its next step')
     expect(props.agent_id).toMatchObject({
-      description: 'The agent id of your direct continuable child, or your direct parent when you are a resident continuable child.',
+      description: 'The agent id of another member of your subagent tree, as shown by list_agents.',
     })
   })
 
@@ -141,7 +144,7 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'fork',
       label: 'fork child',
-      request: { prompt: [{ type: 'text', text: 'fork task' }], parent },
+      prompt: [{ type: 'text', text: 'fork task' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
@@ -164,12 +167,15 @@ describe('dsh-tool-subagent-control', () => {
     if (prompt?.type !== 'user/message') throw new Error('expected the initial fork task')
     const texts = prompt.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
     expect(texts[0]).toBe('fork task')
-    expect(texts[1]).toContain(`Your parent agent id is ${JSON.stringify(parent.id)}`)
-    expect(texts[1]).toContain(`send_message({ agent_id: ${JSON.stringify(parent.id)}`)
-    expect(texts[1]).not.toContain('report tool')
+    expect(texts[1]).toContain('Your final answer is delivered automatically')
+    expect(texts[1]).not.toContain('send_message')
+    expect(JSON.stringify(adapter.requests[1]!.messages)).toContain('Your parent agent id is')
+    expect(loaded.events.some(event => event.type === 'user/message' && event.data.source.kind === 'runtime-context'
+      && JSON.stringify(event.data.content).includes('Your parent agent id is'))).toBe(true)
+    expect(adapter.requests[1]!.messages[0]).toEqual(adapter.requests[0]!.messages[0])
   })
 
-  it('JSON-encodes a caller-supplied parent id in the initial return instruction', async () => {
+  it('JSON-encodes communication ids in logged runtime context', async () => {
     const { ctx } = await setup([textResponse('child done')])
     const parent = await ctx.agentLoop.create(SessionId('parent"\nagent'), { provider: 'mock', model: 'mock' })
     parkParent(ctx, parent)
@@ -177,19 +183,65 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'encoded parent',
-      request: { prompt: [{ type: 'text', text: 'encoded task' }], parent },
+      prompt: [{ type: 'text', text: 'encoded task' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
-    const prompt = loaded.events.find(event => event.type === 'user/message'
-      && event.data.content.some(block => block.type === 'text' && block.text === 'encoded task'))
-    if (prompt?.type !== 'user/message') throw new Error('expected the encoded initial task')
-    const guidance = prompt.data.content.findLast(block => block.type === 'text')?.text ?? ''
+    const prompt = loaded.events.find(event => event.type === 'user/message' && event.data.source.kind === 'runtime-context'
+      && event.data.content.some(block => block.type === 'text' && block.text.includes('Your parent agent id is')))
+    if (prompt?.type !== 'user/message') throw new Error('expected logged communication context')
+    const guidance = text(prompt.data)
 
     expect(guidance).toContain(`Your parent agent id is ${JSON.stringify(parent.id)}`)
-    expect(guidance).toContain(`agent_id: ${JSON.stringify(parent.id)}`)
     expect(guidance).not.toContain(parent.id)
+  })
+
+  it('limits communication context to delegated children with the admitted standard tool', async () => {
+    const { ctx, parent } = await setup([])
+    const { agent: child } = await ctx.agents.create({
+      sessionId: SessionId('communication-child'),
+      meta: { origin: 'subagent', parentSession: parent.id },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, parent) },
+    })
+    const { agent: fork } = await ctx.agents.create({
+      sessionId: SessionId('ordinary-fork'), meta: { parentSession: parent.id },
+    })
+    const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
+    expect(await communication()).toContain(`Your parent agent id is ${JSON.stringify(parent.id)}`)
+    for (const agent of [undefined, parent, fork]) {
+      expect(renderContextSnapshot(await ctx.systemPrompt.assemble(agent === undefined ? {} : { agent, scope: agent })))
+        .not.toContain('Your parent agent id')
+    }
+    const off = child.ctx.tools.register(defineTool({
+      name: 'send_message', description: 'A different tool.', parameters: {},
+      output: { schema: { type: 'object', additionalProperties: false, properties: {} }, render: () => [] },
+      execute: () => Promise.resolve({}),
+    }))
+    expect(await communication()).not.toContain('Your parent agent id')
+    off()
+    expect(await communication()).toContain('Your parent agent id')
+    child.ctx.tools.restrict({ deny: ['send_message'] })
+    const toolSet = await ctx.tools.resolve({ agent: child, modelSelection: { provider: 'mock', model: 'mock' }, signal: testToolSignal })
+    expect(renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child, toolSet })))
+      .not.toContain('Your parent agent id')
+    toolSet.dispose()
+  })
+
+  it.each(['parent', 'caller'] as const)('keeps %s result delivery independent of messaging tools', async (delivery) => {
+    const { ctx, parent, adapter, controlFiber } = await setup([textResponse('child result')])
+    await controlFiber.dispose()
+    const followup = vi.spyOn(parent, 'followup')
+    const started = await ctx.subagents.startActivation({
+      delivery, provider: 'spawn', label: 'child task',
+      prompt: [{ type: 'text', text: 'child task' }], parent, signal: testToolSignal,
+    })
+    expect(await started.result).toMatchObject({ output: [{ type: 'text', text: 'child result' }] })
+    const childRequest = JSON.stringify(adapter.requests[0]!.messages)
+    expect(childRequest.includes('Your final answer is delivered automatically')).toBe(delivery === 'parent')
+    expect(childRequest).not.toContain('send_message')
+    expect(childRequest).not.toContain('Your parent agent id')
+    expect(followup.mock.calls.some(([message]) => message.source.kind === 'subagent-settled')).toBe(delivery === 'parent')
   })
 
   it('lets a continuable child steer its direct parent with send_message', async () => {
@@ -201,7 +253,7 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'child task',
-      request: { prompt: [{ type: 'text', text: 'child task' }], parent },
+      prompt: [{ type: 'text', text: 'child task' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -240,7 +292,7 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'child task',
-      request: { prompt: [{ type: 'text', text: 'child task' }], parent },
+      prompt: [{ type: 'text', text: 'child task' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
@@ -274,7 +326,7 @@ describe('dsh-tool-subagent-control', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'long work',
-      request: { prompt: [{ type: 'text', text: 'long work' }], parent },
+      prompt: [{ type: 'text', text: 'long work' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -289,7 +341,7 @@ describe('dsh-tool-subagent-control', () => {
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'runtime-context'
       ? event.data.content.flatMap(block => block.type === 'text'
-        && !block.text.startsWith('Your parent agent id is ')
+        && !block.text.startsWith('Your final answer is delivered automatically ')
         ? [block.text]
         : [])
       : [])
@@ -310,13 +362,13 @@ describe('dsh-tool-subagent-control', () => {
     expect(text(result)).toContain('unavailable')
   })
 
-  it('rejects a caller that is not the child\'s durable direct parent', async () => {
+  it('rejects a caller outside the child\'s subagent tree', async () => {
     const { ctx, parent } = await setup([textResponse('first')])
     const started = await ctx.subagents.startActivation({
       delivery: 'parent',
       provider: 'spawn',
       label: 'child task',
-      request: { prompt: [{ type: 'text', text: 'child task' }], parent },
+      prompt: [{ type: 'text', text: 'child task' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
@@ -327,7 +379,7 @@ describe('dsh-tool-subagent-control', () => {
       message: 'mine now',
     }, stranger)
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('another parent session')
+    expect(text(result)).toContain('not a member of this subagent tree')
   })
 
   it('fails loud when invoked without a calling agent', async () => {
@@ -337,28 +389,52 @@ describe('dsh-tool-subagent-control', () => {
     expect(text(result)).toContain('requires a calling agent')
   })
 
-  it('unregisters with its plugin fiber (HMR safety)', async () => {
+  it.each([{}, { interrupt: true }, { interrupt: false }])('unregisters and reloads with config %j (HMR safety)', async (config) => {
     const ctx = new Context()
     contexts.push(ctx)
     await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(AgentLoop, { agents: [] })
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
-    const fiber = await ctx.plugin(tool)
-    const names = ['send_message', 'interrupt_agent', 'list_agents']
+    const fiber = await ctx.plugin(tool, config)
+    const parent = await ctx.agentLoop.create(SessionId('hmr-parent'), { provider: 'mock', model: 'mock' })
+    const { agent: child } = await ctx.agents.create({
+      sessionId: SessionId('hmr-child'),
+      meta: { origin: 'subagent', parentSession: parent.id },
+      setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, parent) },
+    })
+    const communication = async () => renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child }))
+    expect(await communication()).toContain('Your parent agent id')
+    const names = ['send_message', 'list_agents', 'wait_agent']
+    if (config.interrupt !== false) names.push('interrupt_agent')
     for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+    expect(ctx.tools.get('list_agents')?.description).not.toContain('interrupt')
+    if (config.interrupt === false) {
+      expect(ctx.tools.get('interrupt_agent')).toBeUndefined()
+      expect(typeof ctx.subagents.interrupt).toBe('function')
+    }
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
     await fiber.dispose()
     for (const name of names) expect(ctx.tools.get(name)).toBeUndefined()
+    expect(await communication()).not.toContain('Your parent agent id')
     const reloaded = await ctx.plugin(tool)
-    for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+    expect(await communication()).toContain('Your parent agent id')
+    for (const name of ['send_message', 'interrupt_agent', 'list_agents', 'wait_agent']) {
+      expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+    }
     await reloaded.dispose()
+  })
+
+  it('defaults interruption on and rejects non-boolean configuration', () => {
+    expect(tool.Config({})).toEqual({ interrupt: true })
+    expect(tool.Config({ interrupt: false })).toEqual({ interrupt: false })
+    expect(() => tool.Config({ interrupt: 'false' } as never)).toThrow()
   })
 
   it('has the namespace-plugin export shape (no stray default)', () => {
     expect('default' in tool).toBe(false)
     expect(tool.name).toBe('tool-subagent-control')
-    expect(tool.inject).toEqual(['tools', 'subagents', 'agents'])
+    expect(tool.inject).toEqual(['tools', 'subagents', 'agents', 'systemPrompt'])
     expect(typeof tool.apply).toBe('function')
   })
 })
@@ -386,7 +462,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'long work',
-      request: { prompt: [{ type: 'text', text: 'long work' }], parent },
+      prompt: [{ type: 'text', text: 'long work' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -418,7 +494,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'runtime-context'
       ? event.data.content.flatMap(block => block.type === 'text'
-        && !block.text.startsWith('Your parent agent id is ')
+        && !block.text.startsWith('Your final answer is delivered automatically ')
         ? [block.text]
         : [])
       : [])
@@ -443,7 +519,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'child',
-      request: { prompt: [{ type: 'text', text: 'child work' }], parent },
+      prompt: [{ type: 'text', text: 'child work' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -452,7 +528,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'grandchild',
-      request: { prompt: [{ type: 'text', text: 'grandchild work' }], parent: child },
+      prompt: [{ type: 'text', text: 'grandchild work' }], parent: child,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
@@ -481,7 +557,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'target',
-      request: { prompt: [{ type: 'text', text: 'a' }], parent },
+      prompt: [{ type: 'text', text: 'a' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
@@ -489,7 +565,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'sibling',
-      request: { prompt: [{ type: 'text', text: 'b' }], parent },
+      prompt: [{ type: 'text', text: 'b' }], parent,
       signal: testToolSignal,
     })
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
@@ -521,7 +597,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       delivery: 'parent',
       provider: 'spawn',
       label: 'settled child',
-      request: { prompt: [{ type: 'text', text: 'child work' }], parent },
+      prompt: [{ type: 'text', text: 'child work' }], parent,
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)

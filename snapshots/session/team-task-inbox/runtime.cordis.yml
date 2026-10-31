@@ -1,0 +1,3 @@
+- insert:
+    - id: team-task-wait-order
+      name: './wait-order.mjs'

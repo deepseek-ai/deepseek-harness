@@ -51,6 +51,8 @@ kind: "package-bundle"
 
 `subagent` 与 `subagent_fork` 都创建受管理的子任务，并立即返回 child id。使用 `send_message` 可引导活跃子任务，或在完成后继续其对话。[委派工具行为](../../subagent/tool-subagent/README.zh.md)说明了结果交付和后端能力。
 
+此 bundle 还挂载 [Agent Teams](../../team/agent-team/README.zh.md) 及其任务工具。每个根 Session 的 Team 模式默认关闭；根会话菜单中的**使用智能体团队**开关为当前树开启协作，无需修改 profile。
+
 内置 `working_directory` 工具改变后续操作使用的目录，已有进程与写权限保持独立。当前目录信息出现在用户上下文中。默认文件编辑使用 `read`、`write` 和 `edit`。`str_replace_editor` 工具仍可显式启用。要将它加入基于 base 的 profile，请在 profile、home 或逐次调用 patch 中添加以下条目：
 
 ```yaml
