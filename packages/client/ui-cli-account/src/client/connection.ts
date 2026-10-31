@@ -1,16 +1,18 @@
-/** Browser mirror of one CLI plugin's Host account view and the Plugins page's account actions. */
+/** Browser mirror of the registered CLI accounts and the Plugins page's account actions. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteStream } from '@deepseek-ai/dsh-api-gateway/client'
-import type { CliOperationId } from '@deepseek-ai/dsh-cli-account/types'
+import type { CliAccountCommand, CliAccountEntry, CliAccountsView, CliOperationId } from '@deepseek-ai/dsh-cli-account/types'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type {
-  AnyCliAccountView, CliAccountNotice, CliAccountPage, CliAccountRegistration, CliAccountSnapshot, CliOperationKindOf,
-} from './types.ts'
+import type { CliAccountFace, CliAccountNotice, CliAccountSnapshot } from './types.ts'
 
-/** The registration's Remote operations and notices, with the Host stream's diagnostic name. */
-export type CliAccountConnectionOptions<View extends AnyCliAccountView> =
-  Pick<CliAccountRegistration<View>, 'follow' | 'cancel' | 'notices'> & { readonly name: string }
+/** The `cliAccounts` Remote methods the mirror uses. */
+export interface CliAccountsRemote {
+  watch(signal: AbortSignal): AsyncIterable<CliAccountsView>
+  start(packageName: string, operation: string): Promise<RemoteResult<CliOperationId>>
+  cancel(packageName: string, id: CliOperationId): Promise<RemoteResult<void>>
+}
 
 function openAuthorizationPage(url: string | undefined): void {
   if (url !== undefined && URL.canParse(url) && new URL(url).protocol === 'https:') window.open(url, '_blank', 'noopener,noreferrer')
@@ -22,77 +24,43 @@ async function settle<T>(call: Promise<RemoteResult<T>>): Promise<T> {
   return result.value
 }
 
-/** One Host subscription per registered account, shared by every surface of that account on the Plugins page. */
-export class CliAccountConnection<View extends AnyCliAccountView> {
-  /** The page's whole view, published after each stream item or page action settles. */
-  readonly state: SnapshotStore<CliAccountSnapshot<View>> = createSnapshotStore<CliAccountSnapshot<View>>({
-    view: undefined, linked: false, stopped: false, busy: false, notice: undefined,
-  })
+/** One Host subscription per browser, shared by every account surface on the Plugins page. */
+export class CliAccountsConnection {
+  /** Each registered account's snapshot source by bundle package, republished when the Host adds or removes an account. */
+  readonly accounts: SnapshotStore<ReadonlyMap<string, SnapshotStore<CliAccountSnapshot>>> =
+    createSnapshotStore<ReadonlyMap<string, SnapshotStore<CliAccountSnapshot>>>(new Map())
 
+  private readonly stores = new Map<string, SnapshotStore<CliAccountSnapshot>>()
   /**
-   * The operation the page's latest start returned, with the links already opened for it; only its links open a window
-   * here. It lasts until the stream delivers its result; each start attempt drops it first.
+   * The operation each account's latest start in this browser returned, with the links already opened for it; only its
+   * links open a window here. It lasts until the stream delivers its result; each start attempt drops it first.
    */
-  private started: { readonly id: CliOperationId; readonly opened: Set<string> } | undefined
+  private readonly started = new Map<string, { readonly id: CliOperationId; readonly opened: Set<string> }>()
+  private stopped = false
   private seq = 0
   private disposed = false
-  private stream!: RemoteStream<View>
+  private stream!: RemoteStream<CliAccountsView>
   private observing!: Promise<void>
-
-  /** The page actions, bound so a plugin's buttons can call them directly. */
-  readonly page: CliAccountPage = {
-    start: (call) => { this.start(call) },
-    cancel: () => { this.cancel() },
-    openAuthorization: () => { this.openAuthorization() },
-    retry: () => { this.retry() },
-  }
-
-  /** Clear the current notice; bound for the notice's dismissal. */
-  readonly dismissNotice = (): void => { this.patch({ notice: undefined }) }
 
   /**
    * @param ctx - the browser context carrying the Remote client.
-   * @param options - the plugin's Remote operations and success notices, and the stream's diagnostic name.
+   * @param remote - the `cliAccounts` Remote.
    */
-  constructor(private readonly ctx: Context, private readonly options: CliAccountConnectionOptions<View>) {
+  constructor(private readonly ctx: Context, private readonly remote: CliAccountsRemote) {
     this.subscribe()
   }
 
   /**
-   * Start an operation through the plugin's Remote; a click while another action is pending is ignored.
-   * The page then follows the returned operation in place of any earlier one; a rejected start leaves it following
-   * none and reports the `action-failed` notice.
-   * @param call - the plugin's Remote start method.
+   * Bind one account's page actions.
+   * @param packageName - the account's bundle package.
+   * @returns the actions a surface entry injects.
    */
-  start(call: () => Promise<RemoteResult<CliOperationId>>): void {
-    void this.run(async () => {
-      this.started = undefined
-      const id = await settle(call())
-      if (this.disposed) return
-      this.started = { id, opened: new Set() }
-      const current = this.state.getSnapshot().view
-      if (current !== undefined) this.follow(current)
-    })
-  }
-
-  /** Cancel the current operation when the Host marks it cancellable. */
-  cancel(): void {
-    const operation = this.state.getSnapshot().view?.operation
-    if (operation === undefined || !operation.cancellable) return
-    void this.run(async () => { await settle(this.options.cancel(operation.id)) })
-  }
-
-  /** Open the current operation's authorization link again, over HTTPS only. */
-  openAuthorization(): void {
-    openAuthorizationPage(this.state.getSnapshot().view?.operation?.authorizationUrl)
-  }
-
-  /** Reopen the Host stream after it stopped; ignored while it runs, while a reopen is pending, or after disposal. */
-  retry(): void {
-    if (this.disposed || !this.state.getSnapshot().stopped) return
-    // Clearing `stopped` before the reopen awaits claims it, so a second retry finds nothing to reopen.
-    this.patch({ view: undefined, stopped: false })
-    void this.reopen()
+  actions(packageName: string): Pick<CliAccountFace, 'run' | 'retry' | 'dismissNotice'> {
+    return {
+      run: (command) => { this.run(packageName, command) },
+      retry: () => { this.retry() },
+      dismissNotice: () => { this.patch(packageName, { notice: undefined }) },
+    }
   }
 
   /**
@@ -106,27 +74,62 @@ export class CliAccountConnection<View extends AnyCliAccountView> {
     await this.observing
   }
 
+  private run(packageName: string, command: CliAccountCommand): void {
+    const entry = this.stores.get(packageName)?.getSnapshot().entry
+    if (entry === undefined) return
+    switch (command.kind) {
+      case 'start':
+        void this.act(packageName, async () => {
+          this.started.delete(packageName)
+          const id = await settle(this.remote.start(packageName, command.operation))
+          if (this.disposed) return
+          this.started.set(packageName, { id, opened: new Set() })
+          const current = this.stores.get(packageName)?.getSnapshot().entry
+          if (current !== undefined) this.follow(current)
+        })
+        return
+      case 'cancel': {
+        const operation = entry.operation
+        if (operation === undefined) return
+        void this.act(packageName, async () => { await settle(this.remote.cancel(packageName, operation.id)) })
+        return
+      }
+      case 'open': openAuthorizationPage(entry.operation?.authorizationUrl); return
+    }
+  }
+
+  /** Reopen the Host stream after it stopped; ignored while it runs, while a reopen is pending, or after disposal. */
+  private retry(): void {
+    if (this.disposed || !this.stopped) return
+    // Clearing `stopped` before the reopen awaits claims it, so a second retry finds nothing to reopen.
+    this.stopped = false
+    for (const packageName of this.stores.keys()) this.patch(packageName, { stopped: false })
+    void this.reopen()
+  }
+
   private subscribe(): void {
-    this.stream = this.ctx.remote.$stream<View>({
-      name: this.options.name, open: this.options.follow,
-      ended: () => new Error(`${this.options.name} stream ended`),
-      carrierFailed: () => { this.patch({ linked: false }) },
+    this.stream = this.ctx.remote.$stream<CliAccountsView>({
+      name: 'CLI accounts', open: signal => this.remote.watch(signal),
+      ended: () => new Error('CLI accounts stream ended'),
+      carrierFailed: () => { this.setLinked(false) },
     })
     this.observing = this.observe(this.stream)
   }
 
-  private async observe(stream: RemoteStream<View>): Promise<void> {
+  private async observe(stream: RemoteStream<CliAccountsView>): Promise<void> {
     try {
       for await (const item of stream) {
         // An item the stream yielded just before disposal must not reach the disposed page.
         if (this.disposed) return
-        this.patch({ view: item.value, linked: true })
-        this.follow(item.value)
+        this.show(item.value.accounts)
         item.accept()
       }
     } catch {
-      // A terminal failure, such as a Host without the plugin's service, ends the stream; a disposed page shows nothing.
-      if (!this.disposed) this.patch({ linked: false, stopped: true })
+      // A terminal failure, such as a Host without the registry, ends the stream; a disposed page shows nothing.
+      if (this.disposed) return
+      this.stopped = true
+      this.setLinked(false)
+      for (const packageName of this.stores.keys()) this.patch(packageName, { stopped: true })
     }
   }
 
@@ -136,47 +139,73 @@ export class CliAccountConnection<View extends AnyCliAccountView> {
     if (!this.disposed) this.subscribe()
   }
 
-  /** Open each new link of the followed operation once, and report how it ended when the view carries its result. */
-  private follow(view: View): void {
-    const started = this.started
+  private show(entries: readonly CliAccountEntry[]): void {
+    const names = new Set(entries.map(entry => entry.packageName))
+    let changed = false
+    for (const packageName of [...this.stores.keys()]) {
+      if (names.has(packageName)) continue
+      this.stores.delete(packageName)
+      this.started.delete(packageName)
+      changed = true
+    }
+    for (const entry of entries) {
+      const store = this.stores.get(entry.packageName)
+      if (store === undefined) {
+        this.stores.set(entry.packageName, createSnapshotStore<CliAccountSnapshot>({
+          entry, linked: true, stopped: false, busy: false, notice: undefined,
+        }))
+        changed = true
+      } else {
+        store.set({ ...store.getSnapshot(), entry, linked: true, stopped: false })
+      }
+      this.follow(entry)
+    }
+    if (changed) this.accounts.set(new Map(this.stores))
+  }
+
+  /** Open each new link of the account's followed operation once, and show the Host's notice once the entry carries its result. */
+  private follow(entry: CliAccountEntry): void {
+    const started = this.started.get(entry.packageName)
     if (started === undefined) return
-    const url = view.operation?.id === started.id ? view.operation.authorizationUrl : undefined
+    const url = entry.operation?.id === started.id ? entry.operation.authorizationUrl : undefined
     if (url !== undefined && !started.opened.has(url)) {
       started.opened.add(url)
       openAuthorizationPage(url)
     }
-    const result = view.result
+    const result = entry.result
     if (result?.id !== started.id) return
-    this.started = undefined
-    const operation = result.kind as CliOperationKindOf<View>
-    if (result.outcome === 'succeeded' && this.options.notices[operation] !== undefined) {
-      this.notify({ kind: 'succeeded', operation })
-    }
+    this.started.delete(entry.packageName)
+    if (result.notice !== undefined) this.notify(entry.packageName, { kind: 'succeeded', text: result.notice })
   }
 
-  private async run(operation: () => Promise<void>): Promise<void> {
-    if (this.state.getSnapshot().busy) return
-    this.patch({ busy: true })
+  private async act(packageName: string, operation: () => Promise<void>): Promise<void> {
+    if (this.stores.get(packageName)?.getSnapshot().busy !== false) return
+    this.patch(packageName, { busy: true })
     try {
       await operation()
     } catch {
       // The Host keeps the diagnostic; the page reports one retryable outcome.
-      this.notify({ kind: 'action-failed' })
+      this.notify(packageName, { kind: 'action-failed' })
     } finally {
-      this.patch({ busy: false })
+      this.patch(packageName, { busy: false })
     }
   }
 
-  private patch(change: Partial<CliAccountSnapshot<View>>): void {
-    this.state.set({ ...this.state.getSnapshot(), ...change })
+  private setLinked(linked: boolean): void {
+    for (const packageName of this.stores.keys()) this.patch(packageName, { linked })
+  }
+
+  private patch(packageName: string, change: Partial<CliAccountSnapshot>): void {
+    const store = this.stores.get(packageName)
+    if (store !== undefined) store.set({ ...store.getSnapshot(), ...change })
   }
 
   private notify(
-    notice: { readonly kind: 'succeeded'; readonly operation: CliOperationKindOf<View> } | { readonly kind: 'action-failed' },
+    packageName: string, notice: { readonly kind: 'succeeded'; readonly text: LocalizedText } | { readonly kind: 'action-failed' },
   ): void {
     if (this.disposed) return
     this.seq += 1
-    const next: CliAccountNotice<CliOperationKindOf<View>> = { ...notice, seq: this.seq }
-    this.patch({ notice: next })
+    const next: CliAccountNotice = { ...notice, seq: this.seq }
+    this.patch(packageName, { notice: next })
   }
 }

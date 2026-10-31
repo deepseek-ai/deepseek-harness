@@ -563,7 +563,7 @@ export function createViewerFork(input: ViewerForkDeps): ViewerFork {
         continue
       }
       // `session/control` carries one baseline block per Session the controller let this reader see. A later
-      // frame replaces one projection key, and this one is never replaced by the owner's own registry.
+      // frame replaces only the projection keys it lists, and the owner's own registry never lists this one.
       const value = isRecord(frame.value) ? frame.value : undefined
       const projections = value !== undefined && isRecord(value.projections) ? value.projections : undefined
       if (frame.type !== 'baseline' || value === undefined || projections === undefined) {

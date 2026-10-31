@@ -1,23 +1,29 @@
 /**
- * Model-facing `schedule_create`, `schedule_list`, `schedule_update`, and
- * `schedule_delete` tools over the Host `ctx.schedule` service. Mounting the
+ * Model-facing `schedule_create`, `schedule_list`, `schedule_view`, and
+ * `schedule_edit` tools over the Host `ctx.schedule` service. Mounting the
  * plugin registers them in the mounting scope, so a preset decides which
- * agents receive them; every call acts on the calling Agent's Session.
+ * agents receive them. Tasks belong to the Host, not to a Session: the tools
+ * read and change any task by id, and only the delivery target names a Session.
  * @module @deepseek-ai/dsh-tool-schedule
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+// Type-only: make `ctx.get('agentPresets')` resolve to the preset roster when
+// composed. A rosterless deployment records no preset for a created Session.
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { delegationDepthOf } from '@deepseek-ai/dsh-subagent'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { GenericCallView } from '@deepseek-ai/dsh-tools'
+import type { GenericCallView, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import {
-  MAX_TITLE_LENGTH, MIN_EVERY_INTERVAL_SECONDS, REQUIRED_TITLE_MESSAGE, ScheduleId, ScheduleInputError, scheduleView,
+  DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, MAX_TITLE_LENGTH, MIN_EVERY_INTERVAL_SECONDS, ScheduleId, ScheduleInputError,
+  formatScheduleLocalTime,
 } from '@deepseek-ai/dsh-schedule'
 import type {
-  AtInput, CronInput, DailyInput, WeeklyInput, InternalScheduleError, ScheduleCreateValue, ScheduleDeleteValue,
-  ScheduleListValue, ScheduleTimingChange, ScheduleToolError, ScheduleUpdateValue,
+  InternalScheduleError, ScheduleEditRequest, ScheduleTargetRequest, ScheduleToolError,
+  ScheduleCatalogEntry, ScheduleDeliveryReceipt, ScheduleRecord, SubagentSessionError,
 } from '@deepseek-ai/dsh-schedule'
 
 /** Plugin name registered with the Loader. */
@@ -26,188 +32,248 @@ export const name = 'tool-schedule'
 /** Host services this plugin consumes. The Schedule service is resolved per
  * scope, so a preset that declares this plugin stays inert while the shipped
  * composition keeps that service off. */
-export const inject = ['tools']
+export const inject = ['tools', 'systemPrompt']
 
-const SHARED_VIEW_PROPERTIES = {
-  id: { type: 'string', required: true },
-  title: { type: 'string', required: true },
-  prompt: { type: 'string', required: true },
-  scheduledAt: { type: 'string', required: true },
-  state: { type: 'string', required: true, enum: ['scheduled', 'overdue'] },
-  deliveryMode: { type: 'string', required: true, const: 'host' },
-} as const
-
-const AFTER_VIEW_SCHEMA = {
+const SESSION_CREATE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    ...SHARED_VIEW_PROPERTIES,
-    kind: { type: 'string', required: true, const: 'after' },
-    afterSeconds: { type: 'integer', required: true },
+    cwd: { type: 'string' },
+    agentPreset: { type: 'string' },
   },
 } as const
 
-const AT_VIEW_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    ...SHARED_VIEW_PROPERTIES,
-    kind: { type: 'string', required: true, const: 'at' },
-  },
-} as const
-
-const EVERY_VIEW_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    ...SHARED_VIEW_PROPERTIES,
-    kind: { type: 'string', required: true, const: 'every' },
-    everySeconds: { type: 'integer', required: true },
-  },
-} as const
-
-const DAILY_VIEW_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    ...SHARED_VIEW_PROPERTIES,
-    kind: { type: 'string', required: true, const: 'daily' },
-    time: { type: 'string', required: true },
-    timeZone: { type: 'string', required: true },
-  },
-} as const
-
-const WEEKLY_VIEW_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    ...SHARED_VIEW_PROPERTIES,
-    kind: { type: 'string', required: true, const: 'weekly' },
-    time: { type: 'string', required: true },
-    timeZone: { type: 'string', required: true },
-    weekdays: { type: 'array', required: true, items: { type: 'integer' } },
-  },
-} as const
-
-const CRON_VIEW_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    ...SHARED_VIEW_PROPERTIES,
-    kind: { type: 'string', required: true, const: 'cron' },
-    expression: { type: 'string', required: true },
-    timeZone: { type: 'string', required: true },
-  },
-} as const
-
-const VIEW_SCHEMA = {
+const TARGET_SCHEMA = {
   oneOf: [
-    AFTER_VIEW_SCHEMA, AT_VIEW_SCHEMA, EVERY_VIEW_SCHEMA, DAILY_VIEW_SCHEMA, WEEKLY_VIEW_SCHEMA, CRON_VIEW_SCHEMA,
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', required: true, const: 'session' },
+        sessionId: { type: 'string', required: true },
+      },
+    },
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', required: true, const: 'new_once' },
+        sessionId: { type: 'string', required: true },
+        create: { ...SESSION_CREATE_SCHEMA, required: true },
+      },
+    },
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', required: true, const: 'new' },
+        create: { ...SESSION_CREATE_SCHEMA, required: true },
+      },
+    },
   ],
 } as const
 
-/** Build one exact two-field error schema while preserving its literal code. */
-function basicErrorSchema<const C extends string>(code: C) {
+const DELIVERY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    scheduledAt: { type: 'string', required: true },
+    deliveredAt: { type: 'string', required: true },
+    targetSessionId: { type: 'string', required: true },
+  },
+} as const
+
+const TASK_PROPERTIES = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: { type: 'string', required: true },
+    title: { type: 'string', required: true },
+    prompt: { type: 'string', required: true },
+    scheduledAt: { type: 'string', required: true },
+    scheduledAtLocal: { type: 'string', required: true },
+    target: { ...TARGET_SCHEMA, required: true },
+    status: { type: 'string', required: true, enum: ['active', 'paused', 'ended'] },
+    updatedAt: { type: 'string' },
+    lastDelivery: DELIVERY_SCHEMA,
+  },
+} as const
+
+const TASK_SCHEMA = {
+  oneOf: [
+    { ...TASK_PROPERTIES, properties: { ...TASK_PROPERTIES.properties, kind: { type: 'string', required: true, const: 'rrule' }, rrule: { type: 'string', required: true } } },
+    { ...TASK_PROPERTIES, properties: { ...TASK_PROPERTIES.properties, kind: { type: 'string', required: true, const: 'cron' }, expression: { type: 'string', required: true }, timeZone: { type: 'string', required: true } } },
+    { ...TASK_PROPERTIES, properties: { ...TASK_PROPERTIES.properties, kind: { type: 'string', required: true, const: 'every' }, everySeconds: { type: 'integer', required: true } } },
+    { ...TASK_PROPERTIES, properties: { ...TASK_PROPERTIES.properties, kind: { type: 'string', required: true, const: 'after' }, afterSeconds: { type: 'integer', required: true } } },
+    { ...TASK_PROPERTIES, properties: { ...TASK_PROPERTIES.properties, kind: { type: 'string', required: true, const: 'at' } } },
+    { ...TASK_PROPERTIES, properties: { ...TASK_PROPERTIES.properties, kind: { type: 'string', required: true, const: 'daily' }, time: { type: 'string', required: true }, timeZone: { type: 'string', required: true } } },
+    { ...TASK_PROPERTIES, properties: { ...TASK_PROPERTIES.properties, kind: { type: 'string', required: true, const: 'weekly' }, time: { type: 'string', required: true }, timeZone: { type: 'string', required: true }, weekdays: { type: 'array', required: true, items: { type: 'integer' } } } },
+  ],
+} as const
+
+const LIST_PAGE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    items: { type: 'array', required: true, items: TASK_SCHEMA },
+    shown: { type: 'integer', required: true },
+    total: { type: 'integer', required: true },
+    limit: { type: 'integer', required: true },
+    offset: { type: 'integer', required: true },
+  },
+} as const
+
+const NOT_FOUND_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: { type: 'string', required: true },
+    code: { type: 'string', required: true, const: 'schedule_not_found' },
+  },
+} as const
+
+const DELETED_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: { type: 'string', required: true },
+    deleted: { type: 'boolean', required: true, const: true },
+  },
+} as const
+
+const CONFLICT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: { type: 'string', required: true },
+    code: { type: 'string', required: true, const: 'schedule_conflict' },
+  },
+} as const
+
+/** Errors every tool can return: a delegated caller and a withheld failure. */
+const CALLER_ERRORS = ['subagent_session', 'internal_error'] as const
+
+/** Errors of a new title, prompt, or recurrence. */
+const CREATE_ERRORS = [
+  'invalid_prompt', 'invalid_rule', 'invalid_time_zone', 'not_future', 'frequency_too_high', ...CALLER_ERRORS,
+] as const
+
+/** Errors of an invalid page request. */
+const LIST_ERRORS = ['invalid_rule', ...CALLER_ERRORS] as const
+
+/** Errors of a changed field or an invalid field combination. */
+const EDIT_ERRORS = ['invalid_selector', ...CREATE_ERRORS] as const
+
+/** Error result of one tool, limited to the codes that its output schema declares. */
+interface DeclaredError<C extends ScheduleToolError['code']> {
+  readonly code: C
+  readonly message: string
+}
+
+/** Build the exact two-field error schema of one tool from the codes it can return. */
+function errorSchema<const C extends ScheduleToolError['code']>(codes: readonly C[]) {
   return {
     type: 'object',
     additionalProperties: false,
     properties: {
-      code: { type: 'string', required: true, const: code },
+      code: { type: 'string', required: true, enum: codes },
       message: { type: 'string', required: true },
     },
   } as const
 }
 
-const ERROR_SCHEMAS = [
-  basicErrorSchema('invalid_prompt'),
-  basicErrorSchema('invalid_selector'),
-  basicErrorSchema('invalid_rule'),
-  basicErrorSchema('invalid_time_zone'),
-  basicErrorSchema('not_future'),
-  basicErrorSchema('time_out_of_range'),
-  basicErrorSchema('frequency_too_high'),
-  basicErrorSchema('subagent_session'),
-  basicErrorSchema('internal_error'),
-] as const
-
-const CREATE_OUTPUT_SCHEMA = { oneOf: [VIEW_SCHEMA, ...ERROR_SCHEMAS] } as const
-const LIST_OUTPUT_SCHEMA = {
-  oneOf: [
-    { type: 'array', items: VIEW_SCHEMA },
-    ...ERROR_SCHEMAS,
-  ],
-} as const
-const DELETE_OUTPUT_SCHEMA = {
-  oneOf: [
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        id: { type: 'string', required: true },
-        deleted: { type: 'boolean', required: true, const: true },
-      },
-    },
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        id: { type: 'string', required: true },
-        deleted: { type: 'boolean', required: true, const: false },
-        code: { type: 'string', required: true, const: 'schedule_not_found' },
-      },
-    },
-    ...ERROR_SCHEMAS,
-  ],
+const CREATE_OUTPUT_SCHEMA = { oneOf: [TASK_SCHEMA, errorSchema(CREATE_ERRORS)] } as const
+const LIST_OUTPUT_SCHEMA = { oneOf: [LIST_PAGE_SCHEMA, errorSchema(LIST_ERRORS)] } as const
+const VIEW_OUTPUT_SCHEMA = { oneOf: [TASK_SCHEMA, NOT_FOUND_SCHEMA, errorSchema(CALLER_ERRORS)] } as const
+const EDIT_OUTPUT_SCHEMA = {
+  oneOf: [TASK_SCHEMA, DELETED_SCHEMA, NOT_FOUND_SCHEMA, CONFLICT_SCHEMA, errorSchema(EDIT_ERRORS)],
 } as const
 
-const UPDATE_OUTPUT_SCHEMA = {
-  oneOf: [
-    VIEW_SCHEMA,
-    {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        id: { type: 'string', required: true },
-        updated: { type: 'boolean', required: true, const: false },
-        code: {
-          type: 'string',
-          required: true,
-          enum: ['schedule_not_found', 'schedule_ended', 'schedule_conflict'],
-        },
-      },
-    },
-    ...ERROR_SCHEMAS,
-  ],
-} as const
+const MANAGEMENT_AUTHORIZATION =
+  'Only create or modify scheduled tasks at the user\'s explicit request; '
+  + 'prior explicit user authorization for the running scheduled task remains valid.'
 
 const CREATE_DESCRIPTION =
-  'Create a reminder in the current session that delivers prompt when it becomes due. '
-  + 'Supply exactly one timing parameter: after_seconds, at, every_seconds, daily, weekly, or cron. '
-  + 'Local times that do not exist in the zone are skipped; repeated local times fire once, at the earlier instant. '
-  + 'After downtime, a recurring reminder delivers only its latest missed occurrence. Delivery can repeat after a crash.'
+  'Create a scheduled task. At each occurrence of rrule, prompt is delivered to the target session '
+  + 'as a scheduled message from the user. The result includes the task id and the next occurrence as scheduledAt in UTC '
+  + 'and scheduledAtLocal in the zone of rrule. '
+  + 'After downtime, only the latest missed occurrence is delivered. Delivery can repeat after a crash.'
 
-const LIST_DESCRIPTION = 'List the active reminders in the current session.'
+const LIST_DESCRIPTION =
+  'List scheduled tasks, including tasks created from other sessions. Active tasks come first, ordered by scheduledAt.'
 
-const DELETE_DESCRIPTION =
-  'Delete a reminder in the current session, active or inactive. Deletion does not retract a reminder message that is already queued.'
+const VIEW_DESCRIPTION = 'View one scheduled task by id.'
 
-const UPDATE_DESCRIPTION =
-  'Change a reminder in place, keeping its id. Supply a new title, prompt, or at most one timing parameter; '
-  + 'omitted fields keep their stored values. To change a relative delay, create a new reminder.'
+const EDIT_DESCRIPTION = 'Update, pause, resume, or delete one scheduled task by id. Deleting does not retract queued messages.'
 
-const CREATE_TITLE_DESCRIPTION =
-  `Concise task name in the user's language, at most ${MAX_TITLE_LENGTH} characters. `
-  + 'Name only the core action and subject; keep essential target identifiers such as PR numbers and branch names. '
-  + 'Do not include execution frequency (e.g. daily, hourly), scheduled dates/times, time zones, task status, '
-  + 'or configuration and execution details (e.g. read-only mode, profile-tag filters), even when embedded in the requested or existing title. '
-  + 'Do not append parenthetical notes. '
-  + 'Put scheduling information in the timing parameters and execution instructions in prompt.'
+const TITLE_HELP = `Task name of at most ${MAX_TITLE_LENGTH} characters in the user's language: action plus object. `
+  + 'Omit timing, status, ids, and bracketed suffixes.'
+
+const RRULE_HELP =
+  'Supported RFC 5545 subset: one DTSTART line, a newline, and one RRULE line. '
+  + 'DTSTART ends in Z for UTC or carries TZID with an IANA time zone; '
+  + 'a fixed offset such as UTC+5 is Etc/GMT-5, with the sign reversed. '
+  + 'DTSTART must name an existing local time. A TZID rule keeps local clock time across daylight-saving changes; '
+  + 'generated nonexistent local times are skipped, and repeated ones occur once, at the earlier instant. '
+  + 'DTSTART may be in the past; delivery starts with the first occurrence after creation. '
+  + 'A one-time delivery is RRULE:FREQ=DAILY;COUNT=1. '
+  + 'No SECONDLY; BYSECOND takes one value. COUNT is at most 1000; use UNTIL for longer rules. '
+  + 'MINUTELY and HOURLY accept no BY parts, so select clock times with DAILY or WEEKLY plus BYHOUR and BYMINUTE. '
+  + 'BYMONTHDAY and ordinal BYDAY require MONTHLY or YEARLY; BYYEARDAY and BYWEEKNO require YEARLY. '
+  + 'Ordinal BYDAY cannot combine with BYWEEKNO. Each FREQ period allows at most 10080 candidates before BYSETPOS, '
+  + 'which accepts at most 31 values. '
+  + 'UNTIL is a UTC instant ending in Z. '
+  + 'Example: "DTSTART;TZID=Asia/Singapore:20260901T080000\\nRRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1"'
+
+const TARGET_CHOICES = ['this_session', 'new_once', 'new'] as const
+
+/**
+ * Describe the target choices, naming the configured spacing of `new` deliveries when it exceeds the one-minute
+ * spacing of every task.
+ * @param newSessionIntervalSeconds - Effective `newSessionIntervalSeconds` of the Host Schedule service.
+ * @returns The `target` parameter description.
+ */
+function targetHelp(newSessionIntervalSeconds: number): string {
+  const spacing = newSessionIntervalSeconds <= MIN_EVERY_INTERVAL_SECONDS
+    ? ''
+    : newSessionIntervalSeconds % 60 === 0
+      ? `, at most once every ${newSessionIntervalSeconds / 60} minutes`
+      : `, at most once every ${newSessionIntervalSeconds} seconds`
+  return 'this_session delivers to this session; '
+    + 'new_once delivers to the same new session every time, opened at the first delivery; new opens a different '
+    + `new session for every delivery${spacing}. New sessions use this session's working directory and preset. `
+    + 'With this_session or new_once, a delivery waits until the previous one finishes, and only the latest occurrence '
+    + 'that passed meanwhile is delivered. '
+    + 'Use this_session for reminders and for follow-ups to this conversation; use new_once or new for independent work, '
+    + 'such as a recurring report, and whenever the user asks for a new conversation.'
+}
+
+/** Edit parameters that only an update accepts. */
+const PATCH_FIELDS = ['title', 'prompt', 'rrule', 'target', 'active'] as const
 
 /** Deterministic model content for every canonical Schedule value. */
 function renderValue(_args: unknown, value: unknown): ContentBlock[] {
   // The ToolRuntime has already validated the value against the lossless-JSON output schema.
   const text = JSON.stringify(value)
   return [{ type: 'text', text }]
+}
+
+/** Authoritative timing and management fields, without Host delivery bookkeeping. */
+type ModelTask = ScheduleRecord & Pick<ScheduleCatalogEntry, 'target' | 'status' | 'updatedAt'> & {
+  readonly scheduledAtLocal: string
+  readonly lastDelivery?: Pick<ScheduleDeliveryReceipt, 'scheduledAt' | 'deliveredAt' | 'targetSessionId'>
+}
+
+/** Preserve timing, destination, and edit revision while withholding Host bookkeeping. */
+function modelTask(task: ScheduleCatalogEntry): ModelTask {
+  const { involvedSessionIds: _involved, createdAt: _created, executionActive: _execution,
+    deliveryFloorEndsAt: _floor, lastDelivery, ...record } = task
+  return {
+    ...record, scheduledAtLocal: formatScheduleLocalTime(task, task.scheduledAt),
+    ...lastDelivery === undefined ? {} : { lastDelivery: {
+      scheduledAt: lastDelivery.scheduledAt, deliveredAt: lastDelivery.deliveredAt, targetSessionId: lastDelivery.targetSessionId,
+    } },
+  }
 }
 
 /** Pure generic pending card. */
@@ -220,371 +286,200 @@ function internalError(): InternalScheduleError {
   return { code: 'internal_error', message: 'The schedule operation failed.' }
 }
 
-/** Translate invalid input while withholding internal storage failures. */
-function operationError(error: unknown): ScheduleToolError {
-  return error instanceof ScheduleInputError ? { code: error.code, message: error.message } : internalError()
-}
-
 /**
- * Refuse a caller that is a delegated child. A subagent cannot use reminders at
- * all, so every tool rejects before dispatch instead of relying on the mounting
- * preset's tool filter alone.
- * @param agent - the calling agent, when the outer call has one.
- * @returns the stable refusal, or undefined for a top-level caller.
- */
-function subagentCallerRefusal(agent: Agent | undefined): ScheduleToolError | undefined {
-  if (agent === undefined || delegationDepthOf(agent) === 0) return undefined
-  return { code: 'subagent_session', message: 'A delegated subagent cannot use reminders.' }
-}
-
-/** One supplied fixed-rate interval: a safe integer at or above the Host floor, or undefined. */
-function invalidInterval(everySeconds: number | undefined): ScheduleToolError | undefined {
-  if (everySeconds === undefined) return undefined
-  if (!Number.isSafeInteger(everySeconds)) {
-    return { code: 'invalid_rule', message: 'every_seconds must be a safe integer.' }
-  }
-  if (everySeconds < MIN_EVERY_INTERVAL_SECONDS) {
-    return {
-      code: 'frequency_too_high',
-      message: `every_seconds must be at least ${MIN_EVERY_INTERVAL_SECONDS}.`,
-    }
-  }
-  return undefined
-}
-
-/** Validate selector constraints that the open parameter root cannot express. */
-function validateCreateArgs(args: {
-  prompt: string
-  title: string
-  after_seconds?: number
-  at?: AtInput
-  every_seconds?: number
-  daily?: DailyInput
-  weekly?: WeeklyInput
-  cron?: CronInput
-}): ScheduleToolError | undefined {
-  const keys = Object.keys(args)
-  if (keys.some(key => key !== 'prompt'
-    && key !== 'title'
-    && key !== 'after_seconds'
-    && key !== 'at'
-    && key !== 'every_seconds'
-    && key !== 'daily'
-    && key !== 'weekly'
-    && key !== 'cron')
-    || Number(args.after_seconds !== undefined)
-    + Number(args.at !== undefined)
-    + Number(args.every_seconds !== undefined)
-    + Number(args.daily !== undefined)
-    + Number(args.weekly !== undefined)
-    + Number(args.cron !== undefined) !== 1) {
-    return {
-      code: 'invalid_selector',
-      message: 'schedule_create accepts exactly one of after_seconds, at, every_seconds, daily, weekly, or cron.',
-    }
-  }
-  if (args.prompt.trim().length === 0) {
-    return { code: 'invalid_prompt', message: 'prompt must be non-empty after trimming.' }
-  }
-  if (args.title.trim().length === 0) {
-    return { code: 'invalid_prompt', message: REQUIRED_TITLE_MESSAGE }
-  }
-  if (args.title.trim().length > MAX_TITLE_LENGTH) {
-    return { code: 'invalid_prompt', message: `title must be at most ${MAX_TITLE_LENGTH} characters.` }
-  }
-  if (args.after_seconds !== undefined
-    && (!Number.isSafeInteger(args.after_seconds) || args.after_seconds <= 0)) {
-    return { code: 'invalid_rule', message: 'after_seconds must be a positive safe integer.' }
-  }
-  return invalidInterval(args.every_seconds)
-}
-
-/** Validate the in-place update's selector count, id, and any supplied name, instruction, or interval. */
-function validateUpdateArgs(args: {
-  id: string
-  title?: string
-  prompt?: string
-  at?: AtInput
-  every_seconds?: number
-  daily?: DailyInput
-  weekly?: WeeklyInput
-  cron?: CronInput
-}): ScheduleToolError | undefined {
-  const selectors = [
-    args.at !== undefined,
-    args.every_seconds !== undefined,
-    args.daily !== undefined,
-    args.weekly !== undefined,
-    args.cron !== undefined,
-  ].filter(Boolean).length
-  if (Object.keys(args).some(key => key !== 'id'
-    && key !== 'title'
-    && key !== 'prompt'
-    && key !== 'at'
-    && key !== 'every_seconds'
-    && key !== 'daily'
-    && key !== 'weekly'
-    && key !== 'cron')
-    || selectors > 1) {
-    return {
-      code: 'invalid_selector',
-      message: 'schedule_update accepts at most one of at, every_seconds, daily, weekly, or cron.',
-    }
-  }
-  if (args.id.length === 0 || args.id.trim() !== args.id) {
-    return { code: 'invalid_rule', message: 'schedule_update id must be non-empty without surrounding whitespace.' }
-  }
-  if (selectors === 0 && args.title === undefined && args.prompt === undefined) {
-    return {
-      code: 'invalid_selector',
-      message: 'schedule_update needs a new title, prompt, or one of at, every_seconds, daily, weekly, or cron.',
-    }
-  }
-  if (args.title !== undefined && args.title.trim().length === 0) {
-    return { code: 'invalid_prompt', message: REQUIRED_TITLE_MESSAGE }
-  }
-  if (args.title !== undefined && args.title.trim().length > MAX_TITLE_LENGTH) {
-    return { code: 'invalid_prompt', message: `title must be at most ${MAX_TITLE_LENGTH} characters.` }
-  }
-  if (args.prompt !== undefined && args.prompt.trim().length === 0) {
-    return { code: 'invalid_prompt', message: 'prompt must be non-empty after trimming.' }
-  }
-  return invalidInterval(args.every_seconds)
-}
-
-/** The one timing replacement the update carries, or undefined when the request keeps the committed target. */
-function timingChangeFrom(args: {
-  at?: AtInput
-  every_seconds?: number
-  daily?: DailyInput
-  weekly?: WeeklyInput
-  cron?: CronInput
-}): ScheduleTimingChange | undefined {
-  if (args.at !== undefined) return { kind: 'at', at: args.at }
-  if (args.every_seconds !== undefined) return { kind: 'every', every_seconds: args.every_seconds }
-  if (args.daily !== undefined) return { kind: 'daily', daily: args.daily }
-  if (args.weekly !== undefined) return { kind: 'weekly', weekly: args.weekly }
-  if (args.cron !== undefined) return { kind: 'cron', cron: args.cron }
-  return undefined
-}
-
-/**
- * Selector parameters shared by `schedule_create` and `schedule_update`, in the order the
- * generated tool catalog states them.
- */
-const SELECTOR_PARAMETERS = {
-  every_seconds: {
-    type: 'number',
-    description: `Fixed-rate interval in whole seconds, at least ${MIN_EVERY_INTERVAL_SECONDS}, aligned to the creation time; changing it with schedule_update re-aligns it to the save time.`,
-  },
-  daily: {
-    type: 'object',
-    additionalProperties: false,
-    description: 'Every day at a local time.',
-    properties: {
-      time: { type: 'string', required: true, description: 'HH:mm:ss with optional 1-3 fractional digits, for example 23:00:00.' },
-      time_zone: { type: 'string', required: true, description: 'UTC or IANA Area/Location, for example Asia/Shanghai.' },
-    },
-  },
-  weekly: {
-    type: 'object',
-    additionalProperties: false,
-    description: 'On the given weekdays at a local time.',
-    properties: {
-      time: { type: 'string', required: true, description: 'HH:mm:ss with optional 1-3 fractional digits, for example 09:00:00.' },
-      time_zone: { type: 'string', required: true, description: 'UTC or IANA Area/Location, for example Asia/Shanghai.' },
-      weekdays: {
-        type: 'array',
-        required: true,
-        description: 'ISO weekdays, Monday 1 through Sunday 7, without repetitions.',
-        items: { type: 'integer' },
-      },
-    },
-  },
-  cron: {
-    type: 'object',
-    additionalProperties: false,
-    description: 'Five-field Vixie cron expression in a time zone.',
-    properties: {
-      expression: {
-        type: 'string',
-        required: true,
-        description: 'minute hour day-of-month month day-of-week, for example "*/15 9-17 * * 1-5". '
-          + 'When both day fields are restricted, a date matches if either one matches.',
-      },
-      time_zone: { type: 'string', required: true, description: 'UTC or IANA Area/Location, for example Asia/Shanghai.' },
-    },
-  },
-  at: {
-    description: 'Absolute target: an RFC 3339 date-time with offset, or a local date, time, and IANA time_zone.',
-    oneOf: [
-      { type: 'string' },
-      {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          date: { type: 'string', required: true },
-          time: { type: 'string', required: true },
-          time_zone: { type: 'string', required: true },
-        },
-      },
-    ],
-  },
-} as const
-
-/**
- * Register the four Schedule tools in the mounting scope.
+ * Run one Schedule operation for the root Agent that dispatched the call.
  *
- * Each call mutates the Session of the Agent that dispatched it, so a mount
- * outside an agent scope still registers the tools but every call without a
- * caller Agent is refused as an internal failure.
- * @param ctx - Context owning the `tools` registry and the Host `schedule` service.
+ * A delegated subagent cannot use scheduled tasks, so every tool refuses it here even when its preset exposes the
+ * tool. An input error keeps its code when the tool declares that code; every other failure becomes `internal_error`.
+ * @param exec - Run context of the call.
+ * @param codes - Error codes of the tool.
+ * @param operation - Service call for the calling Agent.
+ * @returns The operation result, or an error with a declared code.
+ */
+async function runForCaller<T, const C extends ScheduleToolError['code']>(
+  exec: ToolRunContext,
+  codes: readonly C[],
+  operation: (agent: Agent) => Promise<T>,
+): Promise<T | DeclaredError<C> | SubagentSessionError | InternalScheduleError> {
+  const agent = exec.agent
+  if (agent === undefined) return internalError()
+  if (delegationDepthOf(agent) > 0) {
+    return { code: 'subagent_session', message: 'A delegated subagent cannot use scheduled tasks.' }
+  }
+  try {
+    return await operation(agent)
+  } catch (error: unknown) {
+    if (error instanceof ScheduleInputError) {
+      const code = codes.find(code => code === error.code)
+      if (code !== undefined) return { code, message: error.message }
+    }
+    return internalError()
+  }
+}
+
+/**
+ * Resolve one model target choice to a delivery destination.
+ *
+ * A created Session uses the caller's working directory and current composed preset; a preset selection in an
+ * empty Session changes that composition without rewriting the Session header.
+ * @param agent - Calling root Agent.
+ * @param target - Model target choice.
+ * @returns Destination request for the Schedule service.
+ */
+function targetFor(agent: Agent, target: typeof TARGET_CHOICES[number]): ScheduleTargetRequest {
+  if (target === 'this_session') return { kind: 'session', sessionId: agent.session.id }
+  const cwd = agent.session.header.cwd
+  const agentPreset = agent.ctx.get('agentPresets')?.composedPreset(agent.ctx)
+  return {
+    kind: target,
+    create: {
+      ...(cwd === undefined ? {} : { cwd }),
+      ...(agentPreset === undefined ? {} : { agentPreset }),
+    },
+  }
+}
+
+/**
+ * Register the four Schedule tools and shared guidance in the mounting scope.
+ *
+ * Each call acts for the Agent that dispatched it, so a mount outside an
+ * agent scope still registers the tools but every call without a caller Agent
+ * is refused as an internal failure.
+ * @param ctx - Context owning the tool and system-prompt registries and the Host Schedule service.
  */
 export function apply(ctx: Context): void {
-  ctx.inject(['schedule'], (scheduleCtx) => { registerScheduleTools(scheduleCtx) })
+  ctx.inject(['schedule'], registerScheduleTools)
 }
 
 /**
- * Register the four reminder tools in the scope that resolved the Schedule
- * service.
+ * Register the tools and shared guidance in the scope that resolved Schedule.
  * @param ctx - Scope whose `schedule` service the tools act through.
  */
 function registerScheduleTools(ctx: Context): void {
+  ctx.systemPrompt.section({
+    name: 'tool:schedule',
+    order: ctx.systemPrompt.getSectionOrder('TOOL_SCHEDULE'),
+    text: ({ scope }) => ctx.tools.get('schedule_create', scope) !== undefined
+      || ctx.tools.get('schedule_edit', scope) !== undefined
+      ? MANAGEMENT_AUTHORIZATION
+      : '',
+  })
+
+  // Plugin configuration is fixed for the life of the Host service, so the description is read once.
+  const targetDescription = targetHelp(ctx.schedule.deliveryLimits().newSessionIntervalSeconds)
+
   ctx.tools.register(defineTool({
     name: 'schedule_create',
     description: CREATE_DESCRIPTION,
     parameters: {
-      prompt: {
-        type: 'string',
-        required: true,
-        description: 'Reminder content to present when the target becomes due.',
-      },
       title: {
         type: 'string',
         required: true,
-        description: CREATE_TITLE_DESCRIPTION,
+        description: TITLE_HELP,
       },
-      after_seconds: {
-        type: 'number',
-        description: 'Delay in whole seconds.',
-      },
-      ...SELECTOR_PARAMETERS,
+      prompt: { type: 'string', required: true, description: 'Instruction delivered at each occurrence.' },
+      rrule: { type: 'string', required: true, description: RRULE_HELP },
+      target: { type: 'string', required: true, enum: TARGET_CHOICES, description: targetDescription },
     },
     output: { schema: CREATE_OUTPUT_SCHEMA, render: renderValue },
-    async execute(args, exec): Promise<ScheduleCreateValue> {
-      const agent = exec.agent
-      if (agent === undefined) return internalError()
-      const refusal = subagentCallerRefusal(agent)
-      if (refusal !== undefined) return refusal
-      const invalid = validateCreateArgs(args)
-      if (invalid !== undefined) return invalid
-      if (exec.signal.aborted) return internalError()
-      try {
-        return scheduleView(await ctx.schedule.create(agent.session.id, args, exec.signal), Date.now())
-      } catch (error: unknown) {
-        return operationError(error)
-      }
+    execute(args, exec) {
+      return runForCaller(exec, CREATE_ERRORS, agent => ctx.schedule.create({
+        title: args.title, prompt: args.prompt, timing: { kind: 'rrule', rrule: args.rrule }, target: targetFor(agent, args.target),
+      }, agent.session.id, exec.signal).then(modelTask))
     },
-    presentCall: args => present('Create reminder', 'other', args.prompt),
+    presentCall: args => present('Create scheduled task', 'other', args.title),
   }))
 
   ctx.tools.register(defineTool({
     name: 'schedule_list',
     description: LIST_DESCRIPTION,
-    parameters: {},
+    parameters: {
+      active: {
+        type: 'boolean',
+        description: 'true for active tasks only; false for paused and ended tasks only; omitted for all tasks.',
+      },
+      limit: { type: 'integer', description: `Page size from 1 to ${MAX_LIST_LIMIT}; defaults to ${DEFAULT_LIST_LIMIT}.` },
+      offset: { type: 'integer', description: 'Number of tasks to skip; defaults to 0.' },
+    },
     output: { schema: LIST_OUTPUT_SCHEMA, render: renderValue },
-    async execute(_args, exec): Promise<ScheduleListValue> {
-      const agent = exec.agent
-      if (agent === undefined) return internalError()
-      const refusal = subagentCallerRefusal(agent)
-      if (refusal !== undefined) return refusal
-      if (exec.signal.aborted) return internalError()
-      try {
-        const records = await ctx.schedule.list({ sessionId: agent.session.id })
-        return records.map(record => scheduleView(record, Date.now()))
-      } catch (error: unknown) {
-        return operationError(error)
-      }
+    execute({ active, limit, offset }, exec) {
+      // The open parameter root admits unknown keys; only the declared page fields select the Host-wide list.
+      return runForCaller(exec, LIST_ERRORS, () => ctx.schedule.list({
+        ...(active === undefined ? {} : { active }),
+        ...(limit === undefined ? {} : { limit }),
+        ...(offset === undefined ? {} : { offset }),
+      }).then(page => ({ ...page, items: page.items.map(modelTask) })))
     },
-    presentCall: () => present('List reminders', 'read'),
+    presentCall: () => present('List scheduled tasks', 'read'),
   }))
 
   ctx.tools.register(defineTool({
-    name: 'schedule_delete',
-    description: DELETE_DESCRIPTION,
+    name: 'schedule_view',
+    description: VIEW_DESCRIPTION,
     parameters: {
-      id: { type: 'string', required: true, description: 'Exact schedule id.' },
+      id: { type: 'string', required: true, description: 'Task id.' },
     },
-    output: { schema: DELETE_OUTPUT_SCHEMA, render: renderValue },
-    async execute(args, exec): Promise<ScheduleDeleteValue> {
-      if (args.id.length === 0 || args.id.trim() !== args.id) {
-        return { code: 'invalid_rule', message: 'schedule_delete id must be non-empty without surrounding whitespace.' }
-      }
-      const id = ScheduleId(args.id)
-      const agent = exec.agent
-      if (agent === undefined) return internalError()
-      const refusal = subagentCallerRefusal(agent)
-      if (refusal !== undefined) return refusal
-      if (exec.signal.aborted) return internalError()
-      try {
-        return await ctx.schedule.delete({ sessionId: agent.session.id, id }, exec.signal)
-      } catch (error: unknown) {
-        return operationError(error)
-      }
+    output: { schema: VIEW_OUTPUT_SCHEMA, render: renderValue },
+    execute(args, exec) {
+      return runForCaller(exec, CALLER_ERRORS, () => ctx.schedule.view({ id: ScheduleId(args.id) })
+        .then(result => 'kind' in result ? modelTask(result) : result))
     },
-    presentCall: args => present('Delete reminder', 'other', args.id),
+    presentCall: args => present('View scheduled task', 'read', args.id),
   }))
 
   ctx.tools.register(defineTool({
-    name: 'schedule_update',
-    description: UPDATE_DESCRIPTION,
+    name: 'schedule_edit',
+    description: EDIT_DESCRIPTION,
     parameters: {
-      id: { type: 'string', required: true, description: 'Schedule id returned by schedule_list.' },
-      title: {
+      id: { type: 'string', required: true, description: 'Task id.' },
+      action: {
         type: 'string',
-        description: 'New task name; follow the schedule_create title rules.',
+        required: true,
+        enum: ['update', 'delete'],
+        description: 'update applies the provided fields, at least one; delete removes the task.',
       },
-      prompt: {
+      title: { type: 'string', description: TITLE_HELP },
+      prompt: { type: 'string', description: 'New instruction delivered at each occurrence.' },
+      rrule: { type: 'string', description: 'New recurrence in the schedule_create rrule format.' },
+      target: { type: 'string', enum: TARGET_CHOICES, description: 'Omit to retain the destination and its creation settings. '
+        + 'Providing target replaces them; new_once reserves a different Session. New targets capture this Session\'s '
+        + 'working directory and preset. Choices are the same as schedule_create.' },
+      active: { type: 'boolean', description: 'false pauses the task; true resumes only if its timing has a future occurrence. '
+        + 'Otherwise provide a new rrule.' },
+      expectedUpdatedAt: {
         type: 'string',
-        description: 'New reminder content.',
+        description: 'updatedAt from the latest result that returned this task; '
+          + 'if the task changed after that result, the result is schedule_conflict and nothing changes.',
       },
-      ...SELECTOR_PARAMETERS,
     },
-    output: { schema: UPDATE_OUTPUT_SCHEMA, render: renderValue },
-    async execute(args, exec): Promise<ScheduleUpdateValue> {
-      const agent = exec.agent
-      if (agent === undefined) return internalError()
-      const refusal = subagentCallerRefusal(agent)
-      if (refusal !== undefined) return refusal
-      const invalid = validateUpdateArgs(args)
-      if (invalid !== undefined) return invalid
-      if (exec.signal.aborted) return internalError()
-      const id = ScheduleId(args.id)
-      try {
-        const sessionId = agent.session.id
-        const expected = (await ctx.schedule.list({ sessionId }))
-          .find(record => record.id === id)
-        if (expected === undefined) {
-          // The catalog also holds inactive reminders, which is the one not-found
-          // case the model can act on: it has to create a new reminder instead.
-          const ended = (await ctx.schedule.catalog())
-            .some(entry => entry.sessionId === sessionId && entry.id === id)
-          return { id, updated: false, code: ended ? 'schedule_ended' : 'schedule_not_found' }
+    output: { schema: EDIT_OUTPUT_SCHEMA, render: renderValue },
+    execute(args, exec) {
+      return runForCaller(exec, EDIT_ERRORS, (agent) => {
+        const id = ScheduleId(args.id)
+        const expected = args.expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt: args.expectedUpdatedAt }
+        let request: ScheduleEditRequest
+        if (args.action === 'delete') {
+          if (PATCH_FIELDS.some(field => args[field] !== undefined)) {
+            throw new ScheduleInputError('invalid_selector', 'delete accepts only id, action, and expectedUpdatedAt.')
+          }
+          request = { id, action: 'delete', ...expected }
+        } else {
+          const patch = {
+            ...(args.title === undefined ? {} : { title: args.title }),
+            ...(args.prompt === undefined ? {} : { prompt: args.prompt }),
+            ...(args.rrule === undefined ? {} : { timing: { kind: 'rrule' as const, rrule: args.rrule } }),
+            ...(args.target === undefined ? {} : { target: targetFor(agent, args.target) }),
+            ...(args.active === undefined ? {} : { active: args.active }),
+          }
+          if (Object.keys(patch).length === 0) {
+            throw new ScheduleInputError('invalid_selector', 'update requires at least one of title, prompt, rrule, target, or active.')
+          }
+          request = { id, action: 'update', patch, ...expected }
         }
-        const change = timingChangeFrom(args)
-        const result = await ctx.schedule.update({
-          sessionId,
-          id,
-          expected,
-          ...(change === undefined ? {} : { change }),
-          ...(args.title === undefined ? {} : { title: args.title }),
-          ...(args.prompt === undefined ? {} : { prompt: args.prompt }),
-        }, exec.signal)
-        return 'record' in result ? scheduleView(result.record, Date.now()) : result
-      } catch (error: unknown) {
-        return operationError(error)
-      }
+        return ctx.schedule.edit(request, agent.session.id, exec.signal)
+          .then(result => 'kind' in result ? modelTask(result) : result)
+      })
     },
-    presentCall: args => present('Update reminder', 'other', args.id),
+    presentCall: args => present(args.action === 'delete' ? 'Delete scheduled task' : 'Edit scheduled task', 'other', args.id),
   }))
 }

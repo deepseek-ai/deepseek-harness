@@ -980,12 +980,12 @@ function preserveNormalizedVolatiles(
   return Object.is(normalizedFresh, normalizedExisting) ? existing : fresh
 }
 
-/** Normalize one aligned record with the same contract used by fixture comparison. */
-function normalizedRefreshRecord(
-  record: Record<string, unknown>,
+/** Normalize the full log so job identities also map references in later records. */
+function normalizedRefreshRecords(
+  records: Record<string, unknown>[],
   context: NormalizeContext,
-): Record<string, unknown> {
-  return JSON.parse(normalizeSessionLog(`${JSON.stringify(record)}\n`, context)) as Record<string, unknown>
+): Record<string, unknown>[] {
+  return parseJsonlRecords(normalizeSessionLog(records.map(record => JSON.stringify(record)).join('\n') + '\n', context))
 }
 
 /**
@@ -1072,8 +1072,8 @@ function normalizedStringMappings(
   records: Record<string, unknown>[],
   freshRecords: Record<string, unknown>[],
   existingRecords: Record<string, unknown>[],
-  freshContext: NormalizeContext,
-  existingContext: NormalizeContext,
+  normalizedFresh: Record<string, unknown>[],
+  normalizedExisting: Record<string, unknown>[],
 ): Map<string, string> | undefined {
   const excludedStrings = new Set<string>()
   for (const record of [...freshRecords, ...existingRecords]) {
@@ -1098,8 +1098,8 @@ function normalizedStringMappings(
       if (!collectNormalizedStringMappings(
         record,
         existingRecord,
-        normalizedRefreshRecord(freshRecords[recordIndex] as Record<string, unknown>, freshContext),
-        normalizedRefreshRecord(existingRecord, existingContext),
+        normalizedFresh[recordIndex],
+        normalizedExisting[existingIndex],
         excludedStrings,
         forward,
         reverse,
@@ -1139,12 +1139,14 @@ export function stabilizeRefreshLog(
   const existingRecords = logicalRecords(parseJsonlRecords(existing))
   const records = parseJsonlRecords(stable)
   const existingContext = fixtureContext(existing)
+  const normalizedFresh = normalizedRefreshRecords(freshRecords, freshContext)
+  const normalizedExisting = normalizedRefreshRecords(existingRecords, existingContext)
   const stringMappings = normalizedStringMappings(
     records,
     freshRecords,
     existingRecords,
-    freshContext,
-    existingContext,
+    normalizedFresh,
+    normalizedExisting,
   )
   let existingIndex = 0
   let previousEventTime: unknown
@@ -1167,8 +1169,8 @@ export function stabilizeRefreshLog(
         record = preserveNormalizedVolatiles(
           record,
           existingRecord,
-          normalizedRefreshRecord(freshRecords[i] as Record<string, unknown>, freshContext),
-          normalizedRefreshRecord(existingRecord, existingContext),
+          normalizedFresh[i],
+          normalizedExisting[existingIndex],
           stringMappings,
         ) as Record<string, unknown>
         records[i] = record

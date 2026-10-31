@@ -1,0 +1,11 @@
+version: 1
+scenario: apply-patch-partial
+profile: headless
+composition: apply-patch
+recording: live
+header:
+  class: apply-patch
+platform: posix
+workspace:
+  final: true
+  setup: readonly-patch-directory

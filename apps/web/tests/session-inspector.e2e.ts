@@ -3,7 +3,7 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import { chromium, type Browser } from 'playwright'
+import { chromium, webkit, type Browser } from 'playwright'
 import { expect, it, onTestFinished } from 'vitest'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts, launchWebScaffold,
@@ -16,7 +16,9 @@ const fixture = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/s
 const bundle = fileURLToPath(new URL('../../../packages/experimental/inspector-profile', import.meta.url))
 const picker = fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url))
 
-it.skipIf(webSnapshotMode() === 'record')('inspects a replayed Session log and Chat groups through the optional bundle', async () => {
+it.skipIf(webSnapshotMode() === 'record').each([
+  { name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webkit },
+])('inspects a replayed Session log and Chat groups through the optional bundle ($name)', async ({ engine }) => {
   const resources: { browser?: Browser; scaffold?: WebScaffold } = {}
   onTestFinished(async () => {
     try { await resources.browser?.close() } finally { await resources.scaffold?.close() }
@@ -29,7 +31,7 @@ it.skipIf(webSnapshotMode() === 'record')('inspects a replayed Session log and C
     extraOverlayPath: picker, replayFixture, compareReplaySession: 'read-only', paceMs: 5,
   })
   resources.scaffold = scaffold
-  const browser = await chromium.launch()
+  const browser = await engine.launch()
   resources.browser = browser
   const page = await newEnglishPage(browser)
   await page.setViewportSize({ width: 1680, height: 1000 })
@@ -48,6 +50,18 @@ it.skipIf(webSnapshotMode() === 'record')('inspects a replayed Session log and C
   expect(await mode.inputValue()).toBe('session-log')
   const raw = page.getByRole('table', { name: 'Raw log', exact: true })
   await raw.getByRole('button', { name: 'Filter types', exact: true }).click()
+  const filter = page.getByRole('dialog', { name: 'Filter types', exact: true })
+  const keyword = page.getByRole('combobox', { name: 'Type keyword', exact: true })
+  await filter.waitFor()
+  await expect.poll(() => keyword.evaluate(element => element === document.activeElement)).toBe(true)
+  for (const width of [1680, 800, 390, 1680]) {
+    await page.setViewportSize({ width, height: 1000 })
+    await expect.poll(async () => {
+      const rect = await filter.boundingBox()
+      return rect !== null && rect.x >= 11 && rect.x + rect.width <= width - 11
+        && rect.y >= 11 && rect.y + rect.height <= 989
+    }).toBe(true)
+  }
   await page.getByRole('combobox', { name: 'Type keyword', exact: true }).fill('user/message')
   await page.getByRole('option', { name: 'user/message', exact: true }).click()
   await raw.getByRole('button', { name: 'user/message', exact: true }).first().click()

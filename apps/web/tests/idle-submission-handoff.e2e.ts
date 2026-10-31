@@ -45,9 +45,9 @@ class HistoryDeliveryGate {
           return
         }
         const control = endpoint === 'session/control' && frame.type === 'item'
-          ? frame.value as { type: string; sessionId?: string; key?: string; value?: InboxState } : undefined
-        const inbox = control?.type === 'projection' && control.sessionId === SESSION_ID && control.key === 'inbox'
-          ? control.value : undefined
+          ? frame.value as { type: string; sessionId?: string; changes?: readonly { key: string; val: unknown }[] } : undefined
+        const inbox = control?.type === 'projection' && control.sessionId === SESSION_ID
+          ? control.changes?.find(change => change.key === 'inbox')?.val as InboxState | undefined : undefined
         const follow = endpoint === 'session/follow' && frame.type === 'item'
           ? frame.value as { type: string; event?: SessionEvent } : undefined
         this.buffered.push({ stream: frame.streamId, send: () => { socket.send(message) },

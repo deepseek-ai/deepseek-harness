@@ -191,15 +191,15 @@ describe('Sidebar chat components', () => {
       expected: { phase: 'settling', hero: false },
     },
     {
-      name: 'continuable parent discovery',
+      name: 'continuable child without parent availability',
       session: {
         blank: false,
         awaitingFirstTurn: false,
         running: false,
-        subagent: { address: ADDRESS, parentAvailable: undefined },
+        subagent: { address: ADDRESS },
       },
       summaryBlank: false,
-      expected: { phase: 'settling', hero: false },
+      expected: { phase: 'active', hero: false },
     },
   ])('derives the $name embedded phase and fixes the local view to Chat', ({ session: patch, summaryBlank, expected }) => {
     const snapshot = { ...sessionSnapshot(CHILD), ...patch } as SessionSnapshot

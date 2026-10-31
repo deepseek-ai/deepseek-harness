@@ -31,6 +31,10 @@ async function writeFlatSkill(root: string, name: string, description: string, b
 }
 
 class TestFileSystem extends FileSystem {
+  override async patchText(): Promise<never> { throw new FsError('patch unsupported by test provider', 'FS_IO_ERROR') }
+  override async deleteFile(): Promise<never> { throw new FsError('delete unsupported by test provider', 'FS_IO_ERROR') }
+  override async moveFile(): Promise<never> { throw new FsError('move unsupported by test provider', 'FS_IO_ERROR') }
+
   override watch(): never { throw new Error('Fixture does not support watching') }
   listDirCalls = 0
   failResolvePaths = new Set<string>()

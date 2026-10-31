@@ -2,7 +2,7 @@
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Context } from '@deepseek-ai/cordis'
 import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type {
   SessionListState, SessionSnapshot, SessionSummary,
 } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -12,7 +12,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import {
-  SubagentHeaderLineage, type SubagentCatalogInjected,
+  SubagentHeaderLineage, type SubagentCatalogInjected, type SubagentCatalogActionInjected,
 } from '../src/client/SubagentHeaderLineage.tsx'
 import {
   SubagentReadOnlyComposer, type SubagentReadOnlyMatch,
@@ -108,6 +108,19 @@ describe('apply', () => {
     expect(inject).toEqual(['sessions', 'uiWorkspace', 'slots', 'locale', 'sidebarRight'])
   })
 
+  it('keeps the root catalog extension available when optional Sidebar services arrive', async () => {
+    const { ctx } = await fullBench(FAMILY)
+    onTestFinished(() => ctx.fiber.dispose())
+    ctx.slots.register({ name: 'conversation.session.header.actions.subagent.footer', id: 'test-content' }, () => null)
+    const registerResource = vi.fn(() => () => {})
+    const registerTab = vi.fn(() => () => {})
+    ctx.provide('resources', { register: registerResource } as never)
+    ctx.provide('sidebarRightTabs', { register: registerTab } as never)
+    await vi.waitFor(() => { expect(registerResource).toHaveBeenCalledOnce() })
+    expect(registerTab).toHaveBeenCalledOnce()
+    expect(ctx.slots.entries('conversation.session.header.actions.subagent.footer')).toHaveLength(1)
+  })
+
   it('registers catalog actions and selects read-only subagent composers from session facts', async () => {
     const { ctx, face } = await fullBench(FAMILY)
     const catalogEntry = ctx.slots.entries('conversation.session.header.lineage')
@@ -139,7 +152,20 @@ describe('apply', () => {
     const actionEntry = ctx.slots.entries('conversation.session.header.actions')
       .find(entry => entry.options.id === 'subagent-catalog')!
     expect(actionEntry.options.order).toBe(10)
-    expect(actionEntry.inject).toBe(catalogEntry.inject)
+    const actionProps = (actionEntry.inject as (id: SessionId) => SubagentCatalogActionInjected)(sid('parent'))
+    const source = actionProps.hooks.footerAvailable
+    const changed = vi.fn()
+    const unsubscribe = source.subscribe(changed)
+    expect(source.getSnapshot()).toBe(false)
+    const remove = ctx.slots.register({
+      name: 'conversation.session.header.actions.subagent.footer', id: 'test-footer',
+    }, () => null)
+    expect(source.getSnapshot()).toBe(true)
+    await vi.waitFor(() => { expect(changed).toHaveBeenCalledOnce() })
+    remove()
+    expect(source.getSnapshot()).toBe(false)
+    await vi.waitFor(() => { expect(changed).toHaveBeenCalledTimes(2) })
+    unsubscribe()
 
     const composerEntry = ctx.slots.entries('conversation.composer')
       .find(entry => entry.component === SubagentReadOnlyComposer)!
@@ -156,19 +182,14 @@ describe('apply', () => {
     })
     expect(select(owner(undefined))).toBeNull()
     expect(select(owner(null))).toBeNull()
-    expect(select(owner({ address: { ...address, mode: 'one-shot' }, parentAvailable: true })))
+    expect(select(owner({ address: { ...address, mode: 'one-shot' } })))
       .toEqual({ reason: 'one-shot' })
     // One-shot stays read-only even while running: it has no stop action.
-    expect(select(owner({ address: { ...address, mode: 'one-shot' }, parentAvailable: true }, true)))
+    expect(select(owner({ address: { ...address, mode: 'one-shot' } }, true)))
       .toEqual({ reason: 'one-shot' })
-    expect(select(owner({ address: { ...address, mode: 'unknown' }, parentAvailable: true })))
+    expect(select(owner({ address: { ...address, mode: 'unknown' } })))
       .toEqual({ reason: 'unknown' })
     expect(select(owner({ address }))).toBeNull()
-    expect(select(owner({ address, parentAvailable: true }))).toBeNull()
-    expect(select(owner({ address, parentAvailable: false })))
-      .toEqual({ reason: 'parent-unavailable' })
-    // A RUNNING parent-offline continuable yields the default composer, whose
-    // disabled input still carries the primary Stop; stopped, it takes back over.
-    expect(select(owner({ address, parentAvailable: false }, true))).toBeNull()
+    expect(select(owner({ address }, true))).toBeNull()
   })
 })

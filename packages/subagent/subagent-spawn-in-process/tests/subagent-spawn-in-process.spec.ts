@@ -281,9 +281,9 @@ describe('dsh-subagent-spawn-in-process', () => {
     await ctx.plugin(SubagentRuntime)
     await ctx.plugin(AgentRegistry)
     const fiber = await ctx.plugin(spawn, { providerName: 'spawn' })
-    expect(ctx.subagents.list()).toEqual(['spawn'])
+    expect(ctx.subagents.getProvider('spawn')).toBeDefined()
     await fiber.dispose()
-    expect(ctx.subagents.list()).toEqual([])
+    expect(ctx.subagents.getProvider('spawn')).toBeUndefined()
   })
 
   it('captures structured output through the shipped plugin (driver runtime, plugin wiring)', async () => {

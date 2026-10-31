@@ -603,6 +603,32 @@ describe('run_code sub-dispatch cells', () => {
     expect(cells[3]).toMatchObject({ timeSeconds: 0.5 })
   })
 
+  it.each([true, false])('retains every failed sub-call text block with structured error present: %s', (withError) => {
+    const sub = {
+      ...settledSub(1, 'read', 6_300, 7_300),
+      isError: true,
+      ...(withError ? { error: { name: 'ToolError', code: 'ENOENT' } } : {}),
+      content: [{ type: 'text' as const, text: 'missing.txt does not exist' }, { type: 'text' as const, text: 'Check the file path.\n' }],
+    }
+    const turns = deriveTrajectoryLayout({ nodes: withSubCalls([sub]), partial: null, runningCalls: [] })
+    const cell = turns[0]!.groups.flatMap(group => group.cells).find(cell => cell.kind === 'subtool')
+    expect(cell).toMatchObject({
+      isError: true, resultPreviewMarkdown: 'missing.txt does not exist',
+      outputDetail: 'missing.txt does not exist\nCheck the file path.\n',
+      outputBlocks: sub.content.map(block => ({ type: 'text', content: block.text })),
+    })
+  })
+
+  it('keeps structured failure details when an interrupted tool has no output', () => {
+    const sub = {
+      ...settledSub(1, 'read', 6_300, 7_300),
+      isError: true, error: { name: 'Interrupted', code: 'interrupted' }, content: [],
+    }
+    const turns = deriveTrajectoryLayout({ nodes: withSubCalls([sub]), partial: null, runningCalls: [] })
+    expect(turns[0]!.groups.flatMap(group => group.cells).find(cell => cell.kind === 'subtool'))
+      .toMatchObject({ isError: true, result: 'interrupted', outputDetail: 'Interrupted: interrupted' })
+  })
+
   it('a running (unsettled) sub-call renders a subtool cell with blank time', () => {
     const running = {
       phase: 'start' as const, args: PartialArguments.fromText('{"pattern":"x"}'), callId: 'p1:code:1', name: 'grep', argsRaw: '{"pattern":"x"}',

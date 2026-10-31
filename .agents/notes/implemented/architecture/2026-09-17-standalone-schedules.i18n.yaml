@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-09-17-standalone-schedules.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-17-standalone-schedules.md
+/agent-note-standalone-schedules-and-session-targets:
+  en: ce8ed282ec843da0
+  zh: a5ca78422ea009ec
+/agent-note-standalone-schedules-and-session-targets/problem:
+  en: 2a6769cd378455bb
+  zh: 84cfb0f2e1fde8e1
+/agent-note-standalone-schedules-and-session-targets/decision:
+  en: 73ed15d2219f2898
+  zh: db8ea6ae79a95241
+/agent-note-standalone-schedules-and-session-targets/alternatives-considered:
+  en: 1def5c19511fc59e
+  zh: 84f0f5d568272c39
+/agent-note-standalone-schedules-and-session-targets/consequences:
+  en: bda079e488b5374b
+  zh: d5ffe96b33e8e65d
