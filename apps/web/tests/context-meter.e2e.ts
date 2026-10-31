@@ -1,7 +1,7 @@
 /** Context details stay inside the viewport with and without Chat's statistics contribution. */
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { chromium } from 'playwright'
+import { chromium, webkit } from 'playwright'
 import { describe, expect, it } from 'vitest'
 import { fixtureUserPrompts, launchWebScaffold, selectedSessionFixture, watchConsole, webSnapshotMode } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage } from './support.ts'
@@ -9,8 +9,11 @@ import { connectFreshWorkspace, newEnglishPage } from './support.ts'
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.v3.jsonl', import.meta.url))
 const NO_CHAT = fileURLToPath(new URL('./fixtures/context-meter-no-chat.patch.yml', import.meta.url))
 
-describe.skipIf(webSnapshotMode() === 'record')('web e2e: context details placement', () => {
-  it.each([true, false])('keeps details visible across viewport changes (Chat statistics: %s)', async (withStats) => {
+describe.skipIf(webSnapshotMode() === 'record').each([
+  { name: 'Chromium', engine: chromium },
+  { name: 'WebKit', engine: webkit },
+])('web e2e: context details placement ($name)', ({ engine }) => {
+  it.each([true, false])('keeps details visible while resizing the window (Chat statistics: %s)', async (withStats) => {
     const fixture = await selectedSessionFixture(FIXTURE, false)
     const scaffold = await launchWebScaffold({
       replayFixture: fixture,
@@ -19,7 +22,7 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: context details placem
       ...withStats ? {} : { extraOverlayPath: NO_CHAT },
     })
     try {
-      const browser = await chromium.launch()
+      const browser = await engine.launch()
       try {
         const page = await newEnglishPage(browser)
         const tripwire = watchConsole(page)
@@ -74,6 +77,31 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: context details placem
         await panel.waitFor()
         await page.mouse.click(1260, 400)
         await panel.waitFor({ state: 'hidden' })
+        const panels = [
+          { trigger, name: 'of context used' },
+          ...withStats ? [
+            { trigger: page.locator('[data-composer-stat="activity"] button'), name: 'Session statistics' },
+            { trigger: page.locator('[data-composer-stat="usage"] button'), name: 'Token usage' },
+          ] : [],
+        ]
+        for (const details of panels) {
+          await details.trigger.click()
+          const dialog = page.getByRole('dialog', { name: details.name, exact: true })
+          await dialog.waitFor()
+          for (const width of [1280, 800, 390]) {
+            await page.setViewportSize({ width, height: 900 })
+            await expect.poll(async () => {
+              const rect = await dialog.boundingBox()
+              const anchor = await details.trigger.boundingBox()
+              return rect !== null && anchor !== null
+                && rect.x >= 11 && rect.x + rect.width <= width - 11
+                && rect.y >= 11 && rect.y + rect.height <= 889
+                && Math.abs(anchor.y - rect.y - rect.height - 8) <= 1
+            }).toBe(true)
+          }
+          await page.keyboard.press('Escape')
+          await dialog.waitFor({ state: 'hidden' })
+        }
         expect(tripwire.pageErrors).toEqual([])
         expect(tripwire.warnings).toEqual([])
       } finally {

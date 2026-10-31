@@ -1,0 +1,1 @@
+- tooltip "Coordinate work and progress across agents with a shared task board for better results on complex tasks, with correspondingly higher token costs."

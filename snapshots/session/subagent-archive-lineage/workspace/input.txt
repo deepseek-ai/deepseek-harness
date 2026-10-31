@@ -1,0 +1,1 @@
+Archive descendant lifecycle fixture.

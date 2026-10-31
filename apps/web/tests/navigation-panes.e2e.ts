@@ -319,6 +319,44 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await details.getByRole('button', { name: 'Close details' }).click()
   }, 60_000)
 
+  it.skipIf(MODE === 'record')('keeps trajectory folding and search usable at 390px in every locale', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-trajectory-toolbar-narrow'))
+    await ensureSeedOpen(page)
+    await page.getByRole('tab', { name: 'Trajectory' }).click()
+    const toolbar = page.getByRole('toolbar')
+    const search = toolbar.getByRole('searchbox')
+    try {
+      for (const locale of ['en', 'zh', 'ja', 'es', 'fr', 'de', 'ru', 'pt']) {
+        await scaffold.ctx.settings.update('locale', { preference: locale })
+        await expect.poll(() => page.evaluate(() => document.documentElement.lang))
+          .toBe(locale === 'zh' ? 'zh-CN' : locale)
+        await search.fill('NAVIGATION_OK')
+        await page.setViewportSize({ width: 390, height: 844 })
+        await expect.poll(() => toolbar.evaluate((element) => {
+          const bounds = element.getBoundingClientRect()
+          return {
+            fits: element.scrollWidth <= element.clientWidth + 1,
+            controlsFit: [...element.querySelectorAll('button:not([hidden]), input')].every((control) => {
+              const rect = control.getBoundingClientRect()
+              return rect.width > 0 && rect.height > 0
+                && rect.left >= bounds.left && rect.right <= bounds.right
+                && rect.top >= bounds.top && rect.bottom <= bounds.bottom
+            }),
+          }
+        }), { message: `${locale} toolbar at 390px` }).toEqual({ fits: true, controlsFit: true })
+        expect(await search.evaluate(element => element === document.activeElement)).toBe(true)
+        expect(await search.inputValue()).toBe('NAVIGATION_OK')
+        await search.fill('')
+        const subcalls = toolbar.getByRole('button').last()
+        await subcalls.click()
+        expect(await subcalls.isVisible()).toBe(true)
+        await page.setViewportSize({ width: 1680, height: 1_000 })
+      }
+    } finally {
+      await scaffold.ctx.settings.update('locale', { preference: 'en' })
+    }
+  }, 90_000)
+
   it.skipIf(MODE === 'record')('restores Assistant timing from recorded history', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-navigation-timing'))
     await ensureSeedOpen(page)

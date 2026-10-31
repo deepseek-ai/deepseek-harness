@@ -173,6 +173,10 @@ describe('MenuItemButton', () => {
 })
 
 describe('Menu', () => {
+  beforeEach(() => {
+    vi.stubGlobal('CSS', { supports: (property: string) => property === '-webkit-backdrop-filter' })
+  })
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
   const items = [
     { id: 'a', label: 'Alpha' },
     { id: 'b', label: 'Beta', disabled: true },
@@ -223,6 +227,68 @@ describe('Menu', () => {
     expect(onAction).toHaveBeenCalledOnce()
     expect(screen.queryByRole('menu')).toBeNull()
     await act(async () => { await Promise.resolve() })
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('explains an unavailable component row on hover and focus without activating it', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    try {
+      const onSelect = vi.fn()
+      const reason = 'Available at 15:51:37.'
+      const menu = (explanation: string | undefined) => (
+        <Menu open anchor={<button type="button">trigger</button>} onClose={() => {}}>
+          <MenuItemButton disabled={explanation !== undefined} disabledReason={explanation} onSelect={onSelect}>Run now</MenuItemButton>
+        </Menu>
+      )
+      const { rerender } = render(menu(reason))
+      const row = screen.getByRole('menuitem', { name: 'Run now', description: reason })
+      expect(row.hasAttribute('disabled')).toBe(false)
+      expect(row.getAttribute('aria-disabled')).toBe('true')
+      fireEvent.click(row)
+      expect(onSelect).not.toHaveBeenCalled()
+      fireEvent.pointerEnter(row, { pointerType: 'mouse' })
+      act(() => { vi.advanceTimersByTime(499) })
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(screen.getByRole('tooltip').textContent).toBe(reason)
+      fireEvent.pointerLeave(row, { pointerType: 'mouse' })
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      // The arrow walk reaches the row, and keyboard focus shows the reason at once.
+      const trigger = screen.getByRole('button', { name: 'trigger' })
+      fireEvent.keyDown(document.body, { key: 'Tab' })
+      trigger.focus()
+      fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+      expect(document.activeElement).toBe(row)
+      expect(screen.getByRole('tooltip').textContent).toBe(reason)
+      // A reason that goes away keeps the focused row mounted and makes it an ordinary row.
+      rerender(menu(undefined))
+      expect(document.activeElement).toBe(row)
+      expect(row.hasAttribute('aria-disabled')).toBe(false)
+      expect(row.hasAttribute('aria-describedby')).toBe(false)
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      fireEvent.click(row)
+      expect(onSelect).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('closes an explained unavailable row on Tab and returns focus to the trigger', () => {
+    const onClose = vi.fn()
+    const onSelect = vi.fn()
+    render(<Menu open anchor={<button type="button">trigger</button>} onClose={onClose}>
+      <MenuItemButton disabled disabledReason="Wait for the next run interval" onSelect={onSelect}>Run now</MenuItemButton>
+    </Menu>)
+    const trigger = screen.getByRole('button', { name: 'trigger' })
+    trigger.focus()
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+    const row = screen.getByRole('menuitem', { name: 'Run now' })
+    expect(document.activeElement).toBe(row)
+    fireEvent.keyDown(row, { key: 'Tab' })
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(onSelect).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(trigger)
   })
 
@@ -610,6 +676,59 @@ describe('Menu', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  it('shows and focuses a portal menu when its host anchor becomes available', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame'] })
+    let rect: DOMRect | null = null
+    try {
+      render(<Menu portal open autoFocus getAnchorRect={() => rect} anchor={null}
+        items={[...items, { id: 'c', label: 'Gamma' }]} onClose={() => {}} />)
+      expect(screen.queryByRole('menu')).toBeNull()
+      rect = new DOMRect(40, 100, 32, 28)
+      act(() => { vi.advanceTimersToNextFrame() })
+      expect(screen.getByRole('menu').style.left).toBe('40px')
+      expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Alpha' }))
+      screen.getByRole('menuitem', { name: 'Gamma' }).focus()
+      rect = new DOMRect(80, 100, 32, 28)
+      act(() => { vi.advanceTimersToNextFrame() })
+      expect(screen.getByRole('menu').style.left).toBe('80px')
+      expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Gamma' }))
+    } finally {
+      cleanup()
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a portal menu aligned through WebKit zoom and visual-viewport panning', () => {
+    const viewport = Object.assign(new EventTarget(), { width: 500, height: 400, offsetLeft: 40, offsetTop: 60 })
+    vi.stubGlobal('visualViewport', viewport)
+    vi.stubGlobal('CSS', { supports: (property: string) => property === '-webkit-backdrop-filter' })
+    vi.spyOn(HTMLDivElement.prototype, 'offsetWidth', 'get').mockReturnValue(120)
+    vi.spyOn(HTMLDivElement.prototype, 'offsetHeight', 'get').mockReturnValue(80)
+    const remove = vi.spyOn(viewport, 'removeEventListener')
+    const ui = render(<Menu portal open align="end" getAnchorRect={() => new DOMRect(100, 200, 200, 20)}
+      anchor={null} items={items} onClose={() => {}} />)
+    const menu = screen.getByRole('menu')
+    expect(menu.style.left).toBe('220px')
+    expect(menu.style.top).toBe('284px')
+    act(() => { viewport.dispatchEvent(new Event('resize')) })
+    expect(menu.style.left).toBe('220px')
+    expect(menu.style.top).toBe('284px')
+    act(() => {
+      viewport.offsetLeft = 100
+      viewport.offsetTop = 120
+      viewport.dispatchEvent(new Event('scroll'))
+    })
+    expect(menu.style.left).toBe('280px')
+    expect(menu.style.top).toBe('344px')
+    act(() => {
+      viewport.height = 200
+      viewport.dispatchEvent(new Event('resize'))
+    })
+    expect(menu.style.top).toBe('228px')
+    ui.unmount()
+    expect(remove.mock.calls.map(([type]) => type)).toEqual(expect.arrayContaining(['scroll', 'resize']))
+  })
+
   it('follows an anchor moving without scroll or resize and stops tracking when closed or unmounted', () => {
     vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame'] })
     let rect = new DOMRect(40, 100, 32, 28)
@@ -703,6 +822,52 @@ describe('Menu', () => {
       />)
     expect(screen.getByRole('menu').className).not.toMatch(/scrollable/)
   })
+
+  it('keeps the near viewport margin when the list cannot fit the visible viewport', () => {
+    // jsdom lays nothing out, so the list's own size and the viewport it has to
+    // fit inside are stubbed: this is the tall workspace list on a phone, where
+    // the browser chrome leaves less height than the list needs.
+    const height = vi.spyOn(HTMLDivElement.prototype, 'offsetHeight', 'get').mockReturnValue(900)
+    const width = vi.spyOn(HTMLDivElement.prototype, 'offsetWidth', 'get').mockReturnValue(900)
+    vi.stubGlobal('innerHeight', 600)
+    vi.stubGlobal('innerWidth', 600)
+    try {
+      render(<Menu portal open anchor={null} items={items} onSelect={() => {}} onClose={() => {}} />)
+      const menu = screen.getByRole('menu')
+      expect(menu.style.top).toBe('12px')
+      expect(menu.style.left).toBe('12px')
+    } finally {
+      height.mockRestore()
+      width.mockRestore()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('clamps inside the visual viewport where the browser reports a smaller one', () => {
+    // Mobile browser chrome: the visual viewport is what the user sees, while
+    // window.innerHeight keeps the taller layout viewport.
+    const height = vi.spyOn(HTMLDivElement.prototype, 'offsetHeight', 'get').mockReturnValue(400)
+    vi.stubGlobal('innerHeight', 900)
+    vi.stubGlobal('innerWidth', 900)
+    vi.stubGlobal('visualViewport', Object.assign(new EventTarget(), { width: 500, height: 500, offsetLeft: 0, offsetTop: 0 }))
+    try {
+      render(
+        <Menu
+          portal
+          open
+          getAnchorRect={() => new DOMRect(10, 700, 40, 20)}
+          anchor={null}
+          items={items}
+          onSelect={() => {}}
+          onClose={() => {}}
+        />)
+      // 500 - 400 - 12, not the layout viewport's 900.
+      expect(screen.getByRole('menu').style.top).toBe('88px')
+    } finally {
+      height.mockRestore()
+      vi.unstubAllGlobals()
+    }
+  })
 })
 
 describe('Modal', () => {
@@ -731,6 +896,22 @@ describe('Modal', () => {
     const mask = document.querySelector('[aria-hidden="true"]') as HTMLElement
     fireEvent.click(mask)
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('places a decorative warning icon in the title only for warning dialogs', () => {
+    const view = render(<Modal open tone="warning" title="Confirm change" closeLabel="Close" onClose={() => {}}>
+      <p>Review the consequences.</p>
+    </Modal>)
+    const heading = screen.getByRole('heading', { name: 'Confirm change' })
+    const icon = heading.querySelector('svg')
+    expect(icon).not.toBeNull()
+    expect(icon?.getAttribute('aria-hidden')).toBe('true')
+    expect(screen.getByText('Review the consequences.').querySelector('svg')).toBeNull()
+    view.rerender(<Modal open title="Confirm change" closeLabel="Close" onClose={() => {}}>Body</Modal>)
+    expect(screen.getByRole('heading', { name: 'Confirm change' }).querySelector('svg')).toBeNull()
+    view.rerender(<Modal open headless tone="warning" title="Confirm change" onClose={() => {}}>Body</Modal>)
+    expect(screen.queryByRole('heading')).toBeNull()
+    expect(screen.getByRole('dialog').querySelector('svg')).toBeNull()
   })
 
   it('renders headless content without the default close chrome', () => {

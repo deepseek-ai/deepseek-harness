@@ -1,5 +1,6 @@
 # The summary output cap inherits the 1,800-token headroom. A 1,000-token
-# request output reservation lowers the proactive trigger to 5,822 tokens.
+# request output reservation lowers the proactive trigger to 5,980 tokens.
+
 
 - id: agent-instructions
   disabled: true
@@ -30,7 +31,12 @@
             name: DeepSeek
             models:
               - id: deepseek-v4-flash
-                contextWindow: 8622
+                contextWindow: 8780
                 defaultMaxTokens: 1000
     - id: compaction-working-directory
       name: '../../../packages/test-support/session-snapshot/tests/fixtures/compaction-working-directory.ts'
+
+# Fixed-budget compaction scenario: keep the recorded tool set, whose token counts the thresholds were tuned to.
+- id: tool-fs
+  config:
+    applyPatch: false

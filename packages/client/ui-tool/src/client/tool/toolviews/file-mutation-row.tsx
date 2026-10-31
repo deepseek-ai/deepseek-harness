@@ -64,12 +64,13 @@ export function FileMutationRow({
   )
 }
 
-/** Registers the edit and write conversation rows. */
+/** Registers file-mutation conversation rows. */
 export const fileMutationToolview = {
   name: 'file-mutation-toolview',
   inject: ['slots', 'sessions'],
   apply(ctx: Context): void {
     ctx.slots.inject('tool.call.toolview', function* () {
+      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'apply_patch', locale: NS, inject: toolFileInject(ctx) }, FileMutationRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'edit', locale: NS, inject: toolFileInject(ctx) }, FileMutationRow)
       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'write', locale: NS, inject: toolFileInject(ctx) }, FileMutationRow)
     })

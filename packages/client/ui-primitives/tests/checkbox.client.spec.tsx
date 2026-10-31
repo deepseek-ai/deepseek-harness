@@ -25,6 +25,14 @@ it('refuses label activation while disabled', () => {
   expect(screen.getByRole<HTMLInputElement>('checkbox').checked).toBe(true)
 })
 
+it('marks initial modal focus only when requested', () => {
+  const view = render(<Checkbox label="Acknowledge" checked={false} onChange={() => {}} />)
+  expect(screen.getByRole('checkbox').hasAttribute('data-modal-autofocus')).toBe(false)
+  view.rerender(<Checkbox label="Acknowledge" checked={false} onChange={() => {}} modalAutofocus />)
+  expect(screen.getByRole('checkbox').hasAttribute('data-modal-autofocus')).toBe(true)
+  expect(document.activeElement).not.toBe(screen.getByRole('checkbox'))
+})
+
 it('preserves caller hover text', () => {
   const onChange = vi.fn()
   render(<Checkbox label="Office" checked={false} onChange={onChange} title="Office tools" />)

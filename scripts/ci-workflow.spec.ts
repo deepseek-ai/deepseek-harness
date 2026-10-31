@@ -1771,7 +1771,7 @@ describe('Policy workflow shells', () => {
 describe('Policy workflows', () => {
   const workflows = [
     ['pr-check-on-head-branch.yml', ['master']],
-    ['pr-check-after-approve.yml', ['approve', 'review']],
+    ['pr-check-after-approve.yml', ['approve']],
   ] as const
 
   function stepsOf(job: Record<string, unknown>): Record<string, unknown>[] {
@@ -1792,6 +1792,20 @@ describe('Policy workflows', () => {
       if (check === undefined || !isRecord(check.env)) throw new TypeError(`${file} ${job} must run the check action with env`)
       expect(String(check.env.CHECK_MODE)).toContain('vars.MERGE_POLICY_')
     }
+  })
+
+  it('decides the review verdict in one Approve Check job that can publish the check run', () => {
+    const workflow = loadWorkflow('.github/workflows/pr-check-after-approve.yml')
+    if (!isRecord(workflow.jobs)) throw new TypeError('the workflow must define jobs')
+    expect(Object.keys(workflow.jobs)).toEqual(['approve'])
+    const job = workflow.jobs.approve
+    if (!isRecord(job) || !isRecord(job.permissions)) throw new TypeError('the approve job must declare permissions')
+    expect(job.name).toBe('Approve Check')
+    expect(job.permissions.checks).toBe('write')
+    const check = stepsOf(job).find(step => typeof step.uses === 'string' && step.uses.startsWith('deepseek-harness/deepseek-harness-check@'))
+    if (check === undefined || !isRecord(check.env)) throw new TypeError('the job must run the check action with env')
+    expect(String(check.env.CHECK_MODE)).toContain('vars.MERGE_POLICY_HEAD_DIFF')
+    expect(JSON.stringify(workflow)).not.toContain('MERGE_POLICY_REVIEW')
   })
 
   it('keeps the pre-merge build behind the merge step, which honours the mode on its failures', () => {

@@ -751,7 +751,8 @@
 }
 
 .table tbody tr[data-collapsed-summary='turn'] td,
-.table tbody tr[data-collapsed-summary='assistant'] td {
+.table tbody tr[data-collapsed-summary='assistant'] td,
+.table tbody tr[data-collapsed-summary='tool'] td {
   height: 20px;
 }
 

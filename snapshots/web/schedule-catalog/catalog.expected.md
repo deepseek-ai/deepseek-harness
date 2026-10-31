@@ -1,19 +1,19 @@
-- list "Active reminders":
+- list "Enabled automation tasks":
   - listitem:
-    - 'button "Open reminder details: Review overdue deployment"': Review overdue deployment
+    - 'button "Open automation task details: Review overdue deployment"': Review overdue deployment
     - text: Once Next run
     - time: Aug 25, 2099, {{clock}}
     - text: (1 minute overdue)
-    - 'button "Delete reminder: Review overdue deployment"'
+    - 'button "Delete automation task: Review overdue deployment"'
   - listitem:
-    - 'button "Open reminder details: Join release review"': Join release review
+    - 'button "Open automation task details: Join release review"': Join release review
     - text: Once Next run
     - time: Aug 25, 2099, {{clock}}
     - text: (in 6 minutes)
-    - 'button "Delete reminder: Join release review"'
+    - 'button "Delete automation task: Join release review"'
   - listitem:
-    - 'button "Open reminder details: Check exact cadence"': Check exact cadence
+    - 'button "Open automation task details: Check exact cadence"': Check exact cadence
     - text: Every 301 seconds Next run
     - time: Aug 25, 2099, {{clock}}
     - text: (in 6 minutes)
-    - 'button "Delete reminder: Check exact cadence"'
+    - 'button "Delete automation task: Check exact cadence"'
