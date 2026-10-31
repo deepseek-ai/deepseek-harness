@@ -56,6 +56,11 @@ export type AnyCliAccountView = CliAccountView<unknown, string, string>
 /** The operation kinds a plugin's view reports. */
 export type CliOperationKindOf<View extends AnyCliAccountView> = NonNullable<View['result']>['kind']
 
+/** A plugin's Plugins page dictionaries by language; English is required, as `LocalizedText` falls back to it. */
+export type CliAccountDictionaries<Key extends string> =
+  & { readonly en: Readonly<Record<Key, string>> }
+  & { readonly [language: string]: Readonly<Record<Key, string>> }
+
 /** What the Plugins page shows about an account; each plugin maps its own account states onto these phases. */
 export type CliAccountPhase = 'checking' | 'connecting' | 'connected' | 'disconnected' | 'unavailable'
 
