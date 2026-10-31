@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包是[腾讯会议插件](../tencent-meeting/README.zh.md)的 Host 行。它安装固定版本的 `@tencentcloud/tmeet`，在运行时上下文中把其平台可执行文件的绝对路径告诉模型，并注册一个 `tencent-meeting` skill，其子指南是官方 `tmeet-skill`，从 GitHub 上的腾讯会议 CLI 仓库下载。它的 `tencentMeeting` Remote 为[腾讯会议插件页面](../../client/ui-tencent-meeting/README.zh.md)检查 CLI 的登录、通过 CLI 的授权页面登录、退出登录，以及取消操作。CLI 把登录保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
+本包是[腾讯会议插件](../tencent-meeting/README.zh.md)的 Host 行。它安装固定版本的 `@tencentcloud/tmeet`，在运行时上下文中把其平台可执行文件的绝对路径告诉模型，并注册一个 `tencent-meeting` skill，其子指南是官方 `tmeet-skill`，从 GitHub 上的腾讯会议 CLI 仓库下载。它把账号注册到 [CLI 账号注册表](../../client/ui-cli-account/README.zh.md)，其插件页区块负责检查登录、通过 CLI 的授权页面登录、退出登录和取消操作。CLI 把登录保存在默认配置中，与用户自己的终端共用。仅支持 macOS。
 
 ## 目录
 
@@ -40,17 +40,16 @@ kind: "package-reference"
 <a id="account-operations"></a>
 ### 账号操作
 
-`tencentMeeting` Remote 为插件页服务。它同一时间最多运行一个由 Host 持有的操作，因此离开页面不会取消它。
+插件页通过 CLI 账号注册表发起这些操作，注册表由 Web 应用加载；headless profile 加载插件时没有它。Host 同一时间最多运行一个操作并持有它，因此离开页面不会取消它。
 
-| 方法 | 效果 |
+| 操作 | 效果 |
 |---|---|
-| `follow(signal)` | 推送账号、进行中的操作和最近一次结果；没有操作时，每个新订阅者会触发一次检查 |
-| `check()` | 重新检查账号；返回操作 id |
-| `signIn()` | 运行 `auth login --no-browser`，等待用户在腾讯会议页面授权，然后检查服务端是否接受新的登录 |
-| `signOut()` | 运行 `auth logout`，这也会退出用户自己终端里的登录，然后重新检查 |
-| `cancel(id)` | 在登录等待授权时取消该操作，并等待其命令退出；其他步骤和已结束的 id 会被忽略 |
+| `check` | 重新检查账号；没有操作运行时，每个打开 Web 应用的浏览器会触发一次 |
+| `sign-in` | 运行 `auth login --no-browser`，等待用户在腾讯会议页面授权，然后检查服务端是否接受新的登录 |
+| `sign-out` | 用户确认后运行 `auth logout`，这也会退出用户自己终端里的登录，然后重新检查 |
+| 取消 | 在登录等待授权时取消它，并等待其命令退出；其他步骤会被忽略 |
 
-检查运行 `auth status`。在 tmeet 1.0.18 中，它只输出纯文本，无论是否有用户登录，退出码都是 0。输出 `Not logged in.` 或 `Session has expired.`，或 `Logged in` 伴随已过期的 refresh token 时，账号为 `signed-out`；`Logged in` 伴随 `UserName:` 行时为 `connected` 并带用户名，CLI 只有在向服务端请求用户信息成功后才会打印这一行；其他 `Logged in` 为 `unverified`，例如该请求连不上服务端。退出码非零或其他输出会使检查失败，并保留之前的账号状态。`auth login` 在 stdout 的 `authorize url:` 行打印的链接，只有是 `meeting.tencent.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，Remote 结果和 Host 日志包含命令和观察到的退出码；CLI 的输出可能带有一次性授权码，因此会被省略。运行 DSH 的进程需要能访问 `~/.tmeet` 中的 CLI 配置、`~/Library/Application Support/tmeet` 中的加密凭据，以及保存其密钥的 macOS 钥匙串项；`DSH_HOME` 不会改变它们的位置。
+检查运行 `auth status`。在 tmeet 1.0.18 中，它只输出纯文本，无论是否有用户登录，退出码都是 0。输出 `Not logged in.` 或 `Session has expired.`，或 `Logged in` 伴随已过期的 refresh token 时，账号为 `signed-out`；`Logged in` 伴随 `UserName:` 行时为 `connected` 并带用户名，CLI 只有在向服务端请求用户信息成功后才会打印这一行；其他 `Logged in` 为 `unverified`，例如该请求连不上服务端。退出码非零或其他输出会使检查失败，并保留之前的账号状态。`auth login` 在 stdout 的 `authorize url:` 行打印的链接，只有是 `meeting.tencent.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出可能带有一次性授权码，因此会被省略。运行 DSH 的进程需要能访问 `~/.tmeet` 中的 CLI 配置、`~/Library/Application Support/tmeet` 中的加密凭据，以及保存其密钥的 macOS 钥匙串项；`DSH_HOME` 不会改变它们的位置。
 
 ### 配置
 
@@ -74,7 +73,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 是注册为 `ctx.tencentMeeting` 的 Remote 服务。它解析 `tmeet` 可执行文件，在运行时上下文中把它的路径告诉模型，并通过[上游技能库](../upstream-skills/README.zh.md)按 [`src/skills.ts`](src/skills.ts) 中的固定信息注册 `tencent-meeting` skill。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。`@tencentcloud/tmeet` 在 `dist/` 下为每个平台提供一个按平台命名的可执行文件，其 `bin` 是一个 Node 启动器。因此 [`src/directory.ts`](src/directory.ts) 按 `process.platform` 和 `process.arch`，用与该启动器相同的文件名选出可执行文件，运行时上下文和插件自己的命令都使用这个路径。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并且同一时间只运行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现 tmeet 命令，从 `auth login` 的输出行读取授权链接，并解析 `auth status` 的文本。释放时会取消进行中的操作、中止正在运行的命令，并在其进程退出后结束。
+[`src/index.ts`](src/index.ts) 是一个函数插件。它解析 `tmeet` 可执行文件，在运行时上下文中把它的路径告诉模型，并通过[上游技能库](../upstream-skills/README.zh.md)按 [`src/skills.ts`](src/skills.ts) 中的固定信息注册 `tencent-meeting` skill。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。`@tencentcloud/tmeet` 在 `dist/` 下为每个平台提供一个按平台命名的可执行文件，其 `bin` 是一个 Node 启动器。因此 [`src/directory.ts`](src/directory.ts) 按 `process.platform` 和 `process.arch`，用与该启动器相同的文件名选出可执行文件，运行时上下文和插件自己的命令都使用这个路径。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并且同一时间只运行一个操作。[`src/account.ts`](src/account.ts) 在该运行时上实现 tmeet 命令，从 `auth login` 的输出行读取授权链接，并解析 `auth status` 的文本。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时会取消进行中的操作、中止正在运行的命令，并在其进程退出后结束。
 
 [`skills/tencent-meeting/SKILL.md`](skills/tencent-meeting/SKILL.md) 是本包携带的唯一 skill：DSH 指引、子指南索引，以及打开子指南的方式。上游只在其仓库中发布这个子指南，npm 包里没有，因此由该库下载；它是 skill 基础目录下的一组文件，不是独立的 skill。固定信息排除了 `scripts/agent_init.py`，它用于把调用方 Agent 和模型记录到 CLI 配置中供上游统计。DSH 指引与子指南不一致时，入口要求 Agent 以 DSH 指引为准：使用插件提供的 `tmeet` 而不是自行安装，跳过 `agent_init.py`，并把登录交给插件页面。参考文件是子指南目录中的普通文件。
 
@@ -89,7 +88,7 @@ kind: "package-reference"
 - [CLI 账号库](../cli-account/README.zh.md) — CLI 应用插件共用的命令执行与账号操作。
 - [Skills](../../../docs/subsystems/skills.zh.md) — 目录发布、加载与优先级。
 - [腾讯会议插件](../tencent-meeting/README.zh.md) — 插入本行和页面行的 bundle。
-- [腾讯会议插件页面](../../client/ui-tencent-meeting/README.zh.md) — 发起账号操作的插件页。
+- [CLI 账号界面](../../client/ui-cli-account/README.zh.md) — 发起账号操作的注册表和插件页区块。
 
 -----
 

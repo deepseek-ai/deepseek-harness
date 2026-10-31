@@ -1,0 +1,103 @@
+/** The Tencent Meeting account section the Plugins page shows for each Host view. */
+import { failureDetails } from '@deepseek-ai/dsh-cli-account'
+import type {
+  CliAccountButton, CliAccountCopy, CliAccountDisplay, CliAccountFailure, CliAccountNote, CliAccountOperation,
+} from '@deepseek-ai/dsh-cli-account/types'
+import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills/types'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
+import { text } from './locales.ts'
+import type { TencentMeetingOperationKind, TencentMeetingState } from './types.ts'
+
+/** The npm package whose bundle page carries the account section. */
+export const TENCENT_MEETING_PACKAGE = '@deepseek-ai/dsh-tencent-meeting'
+
+/** The operations the section's buttons start; signing in and out report a notice in the browser that started them. */
+export const OPERATIONS: readonly CliAccountOperation<TencentMeetingOperationKind>[] = [
+  { kind: 'check' },
+  { kind: 'sign-in', notice: text('notice.connected') },
+  { kind: 'sign-out', notice: text('notice.signed-out') },
+]
+
+/** The section's title and hint, and the prompt after the bundle is switched on while signed out. */
+export const COPY: CliAccountCopy = {
+  title: text('section.title'),
+  hint: text('hint'),
+  activation: { title: text('activation.title'), body: text('activation.body'), connect: text('action.connect') },
+}
+
+const CHECK = { kind: 'start', operation: 'check' } as const
+const SIGN_IN = { kind: 'start', operation: 'sign-in' } as const
+const SIGN_OUT = { kind: 'start', operation: 'sign-out' } as const
+
+/* jscpd:ignore-start -- CLI app plugins whose guides download report the same states, each in its own text. */
+/** The row that reports a guide that is not in place yet; a failed download offers a check, which restarts it. */
+function skillsNotes(skills: UpstreamSkillsState): CliAccountNote[] {
+  switch (skills) {
+    case 'installed': return []
+    case 'downloading': return [{ text: text('skills.downloading') }]
+    case 'failed': return [{ text: text('skills.failed'), button: { label: text('action.retry'), command: CHECK } }]
+    /* v8 ignore next -- closed skills state union */
+    default: return assertNever(skills)
+  }
+}
+/* jscpd:ignore-end */
+
+type Operation = NonNullable<TencentMeetingState['operation']>
+
+function step(operation: Operation): 'step.authorizing' | 'step.connecting' | 'step.signing-out' {
+  if (operation.kind === 'sign-out') return 'step.signing-out'
+  return operation.phase === 'authorizing' ? 'step.authorizing' : 'step.connecting'
+}
+
+/** The section while a sign-in or sign-out runs: its step, the authorization page while waiting there, and cancel. */
+function presentOperation(operation: Operation, notes: CliAccountNote[]): CliAccountDisplay {
+  const authorizing = step(operation) === 'step.authorizing' && operation.authorizationUrl !== undefined
+  const buttons: CliAccountButton[] = []
+  if (authorizing) buttons.push({ label: text('action.open'), command: { kind: 'open' }, variant: 'primary' })
+  if (operation.cancellable) buttons.push({ label: text('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' })
+  return {
+    phase: 'connecting', status: text(step(operation)), badge: text('badge.connecting'), buttons, notes,
+    ...authorizing ? { detail: text('detail.authorizing') } : {},
+  }
+}
+
+/**
+ * The account section for one Host view.
+ * @param view - the default tmeet account, the operation in progress, and the last result.
+ * @returns the phase, status, tag, buttons, detail, guide download row, and failure.
+ */
+export function presentAccount(view: TencentMeetingState): CliAccountDisplay {
+  const notes = skillsNotes(view.account.skills)
+  const { account, operation } = view
+  if (operation?.kind === 'check') return { phase: 'checking', status: text('status.checking'), buttons: [], notes }
+  if (operation !== undefined) return presentOperation(operation, notes)
+  const failed = view.result?.outcome === 'failed' ? view.result : undefined
+  const failure: { failure?: CliAccountFailure } = failed === undefined ? {} : {
+    failure: { text: text('failed'), ...failed.failure === undefined ? {} : { details: failureDetails(failed.failure) } },
+  }
+  const unavailable: CliAccountDisplay = {
+    phase: 'unavailable', status: text('status.unavailable'), badge: text('badge.unavailable'),
+    buttons: [{ label: text('action.retry'), command: CHECK }], detail: text('detail.unavailable'), notes, ...failure,
+  }
+  switch (account.state) {
+    case 'unchecked': return failed === undefined ? { phase: 'checking', status: text('status.checking'), buttons: [], notes } : unavailable
+    case 'unverified': return unavailable
+    case 'signed-out':
+      return {
+        phase: 'disconnected', status: text('status.disconnected'), badge: text('badge.disconnected'),
+        buttons: [{ label: text('action.connect'), command: SIGN_IN, variant: 'primary' }], connect: SIGN_IN,
+        detail: text('detail.disconnected'), notes, ...failure,
+      }
+    case 'connected':
+      return {
+        phase: 'connected', status: text('status.connected'), badge: text('badge.connected'),
+        buttons: [{
+          label: text('action.signOut'), command: SIGN_OUT,
+          confirm: { title: text('signOut.title'), body: text('signOut.body'), label: text('action.signOut') },
+        }],
+        detail: text('detail.connected', { name: account.userName }), notes, ...failure,
+      }
+    /* v8 ignore next -- closed account state union */
+    default: return assertNever(account)
+  }
+}

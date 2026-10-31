@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The Tencent Meeting plugin lets conversations use Tencent Meeting through the official `tmeet` CLI. Installing this bundle adds two rows: the CLI with its skill, and the Tencent Meeting account section on the Plugins page, where the user signs in and out without starting a conversation. The CLI keeps the sign-in in its default configuration, which the user's own terminal shares. Only macOS and Windows x64 are supported.
+The Tencent Meeting plugin lets conversations use Tencent Meeting through the official `tmeet` CLI. Installing this bundle adds one row: the CLI with its skill, which also shows the Tencent Meeting account section on the Plugins page, where the user signs in and out without starting a conversation. The CLI keeps the sign-in in its default configuration, which the user's own terminal shares. Only macOS and Windows x64 are supported.
 
 ## Table of Contents
 
@@ -40,8 +40,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 | Row | Package | Behavior |
 |---|---|---|
-| `tencent-meeting` | [`@deepseek-ai/dsh-tencent-meeting-cli`](../tencent-meeting-cli/README.md) | Gives the model the absolute path of `tmeet`, registers its skill, and runs account checks, sign-in, and sign-out on the Host |
-| `ui-tencent-meeting` | [`@deepseek-ai/dsh-client-ui-tencent-meeting`](../../client/ui-tencent-meeting/README.md) | Shows the Tencent Meeting account section, a connection tag, guidance after the bundle is switched on, and notices on the Plugins page |
+| `tencent-meeting` | [`@deepseek-ai/dsh-tencent-meeting-cli`](../tencent-meeting-cli/README.md) | Gives the model the absolute path of `tmeet`, registers its skill, runs account checks, sign-in, and sign-out on the Host, and shows the account section, a connection tag, guidance after the bundle is switched on, and notices on the Plugins page through the [CLI account registry](../../client/ui-cli-account/README.md) |
 
 Switching the bundle off withdraws the skill, the path in runtime context, and the page. The CLI sign-in stays in place.
 
@@ -53,7 +52,7 @@ Switching the bundle off withdraws the skill, the path in runtime context, and t
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) inserts the `tencent-meeting` and `ui-tencent-meeting` rows after the profile's other layers. The package depends on both row packages so that the rows resolve from this bundle, and [`src/index.ts`](src/index.ts) exports nothing. The Plugins page keys the account section by this package name.
+[`cordis.patch.yml`](cordis.patch.yml) inserts the `tencent-meeting` row after the profile's other layers. The package depends on that row package so that the row resolves from this bundle, and [`src/index.ts`](src/index.ts) exports nothing. The Plugins page keys the account section by this package name.
 
 </details>
 
@@ -64,7 +63,7 @@ Switching the bundle off withdraws the skill, the path in runtime context, and t
 
 - [Connector packages](../README.md) — the group this application plugin belongs to.
 - [Tencent Meeting CLI and skills](../tencent-meeting-cli/README.md) — the Host row, its account operations, and its model guidance.
-- [Tencent Meeting plugin page](../../client/ui-tencent-meeting/README.md) — the Plugins page row.
+- [CLI account surfaces](../../client/ui-cli-account/README.md) — the registry that shows the account on the Plugins page.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation, build-script approval, and enablement.
 
 -----
@@ -72,7 +71,7 @@ Switching the bundle off withdraws the skill, the path in runtime context, and t
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the `tencent-meeting` row, whose package owns the skill catalog entry and loaded skill body described in its [Model Experience](../tencent-meeting-cli/README.md#model-experience); the `ui-tencent-meeting` row adds nothing model-facing.
+Indirectly, through the `tencent-meeting` row, whose package owns the skill catalog entry and loaded skill body described in its [Model Experience](../tencent-meeting-cli/README.md#model-experience).
 
 #### KV Cache effect
 

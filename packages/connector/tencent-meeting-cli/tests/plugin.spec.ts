@@ -6,8 +6,11 @@ import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { executableFileName } from '@deepseek-ai/dsh-cli-account'
+import type { CliAccountRegistration } from '@deepseek-ai/dsh-cli-account/types'
 import { cliPathContextText } from '@deepseek-ai/dsh-cli-account/src/context.ts'
-import TencentMeeting from '../src/index.ts'
+import * as TencentMeeting from '../src/index.ts'
+import { COPY, OPERATIONS, presentAccount, TENCENT_MEETING_PACKAGE } from '../src/presentation.ts'
+import type { TencentMeetingState } from '../src/types.ts'
 import { createBinDir, ScriptedSubprocess } from './harness.ts'
 
 const CONFIG = { commandTimeoutMs: 5_000, skillsUrls: ['https://codeload.github.com'], skillsTimeoutMs: 120_000 }
@@ -38,6 +41,19 @@ describe('Tencent Meeting plugin', () => {
 
   const runtimeContext = async () => renderContextSections(await ctx.systemPrompt.assemble())
 
+  /** Stand in for the CLI account registry the Web app provides, and keep what the plugin registers with it. */
+  function provideRegistry() {
+    const registered: CliAccountRegistration<TencentMeetingState>[] = []
+    const withdrawn = vi.fn()
+    ctx.provide('cliAccounts', {
+      register: (registration: CliAccountRegistration<TencentMeetingState>) => {
+        registered.push(registration)
+        return withdrawn
+      },
+    })
+    return { registered, withdrawn }
+  }
+
   it('publishes one tencent-meeting entry skill whose body carries the DSH guidance', async () => {
     await ctx.plugin(TencentMeeting, { ...CONFIG, binDir, skillsDir })
 
@@ -55,13 +71,11 @@ describe('Tencent Meeting plugin', () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-tencent-meeting-home-'))
     vi.stubEnv('DSH_HOME', home)
     try {
+      const registry = provideRegistry()
       await ctx.plugin(TencentMeeting, { ...CONFIG, binDir, skillsUrls: ['https://127.0.0.1:9'], skillsTimeoutMs: 5_000 })
-      const seen: string[] = []
-      for await (const view of ctx.tencentMeeting.follow(new AbortController().signal)) {
-        seen.push(view.account.skills)
-        if (view.account.skills === 'failed') break
-      }
-      expect(seen[0]).toBe('downloading')
+      const account = registry.registered[0]!.source
+      expect(account.snapshot().account.skills).toBe('downloading')
+      await vi.waitFor(() => { expect(account.snapshot().account.skills).toBe('failed') }, { timeout: 10_000 })
       expect(await ctx.skills.list()).toEqual([])
     } finally {
       await rm(home, { recursive: true, force: true })
@@ -80,5 +94,19 @@ describe('Tencent Meeting plugin', () => {
 
     expect(await runtimeContext()).toEqual([])
     expect(await ctx.skills.list()).toEqual([])
+  })
+
+  it('shows the account on the Plugins page while the registry runs, and withdraws it with the plugin', async () => {
+    const registry = provideRegistry()
+    const fiber = await ctx.plugin(TencentMeeting, { ...CONFIG, binDir, skillsDir })
+    expect(registry.registered).toHaveLength(1)
+    expect(registry.registered[0]).toMatchObject({
+      packageName: TENCENT_MEETING_PACKAGE, operations: OPERATIONS, copy: COPY, present: presentAccount,
+    })
+    expect(registry.registered[0]!.source.snapshot().account.state).toBe('unchecked')
+
+    await fiber.dispose()
+
+    expect(registry.withdrawn).toHaveBeenCalledOnce()
   })
 })

@@ -1,16 +1,18 @@
-/** Account operations over a scripted tmeet: status text, sign-in, sign-out, cancellation, and the Remote wiring. */
+/** Account operations over a scripted tmeet: status text, sign-in, sign-out, cancellation, and the Plugins page wiring. */
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { CliCommandExecutor, executableFileName, type CliOperationId } from '@deepseek-ai/dsh-cli-account'
+import type { CliAccountRegistration, CliAccountSource } from '@deepseek-ai/dsh-cli-account/types'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TencentMeetingAccount } from '../src/account.ts'
 import { PROGRAM } from '../src/directory.ts'
-import TencentMeeting, { type TencentMeetingState } from '../src/index.ts'
+import * as TencentMeeting from '../src/index.ts'
+import type { TencentMeetingState } from '../src/types.ts'
 import { createBinDir, ScriptedSubprocess, type CliReply, type ScriptedProcess } from './harness.ts'
 
 const STATUS = 'auth status'
@@ -197,55 +199,51 @@ describe('TencentMeetingAccount', () => {
   })
 })
 
-describe('Tencent Meeting Remote', () => {
+describe('Tencent Meeting on the Plugins page', () => {
+  let account!: CliAccountSource<TencentMeetingState>
+
   beforeEach(async () => {
+    ctx.provide('cliAccounts', {
+      register: (registration: CliAccountRegistration<TencentMeetingState>) => {
+        account = registration.source
+        return () => {}
+      },
+    })
     await ctx.plugin(TencentMeeting, { commandTimeoutMs: 5_000, binDir, skillsDir, skillsUrls: ['https://codeload.github.com'], skillsTimeoutMs: 120_000 })
   })
 
-  it('checks for a new follower, streams each change, and starts checks, sign-ins, and sign-outs', async () => {
+  const finished = async (id: CliOperationId): Promise<TencentMeetingState['result']> => {
+    await vi.waitFor(() => { expect(account.snapshot().result?.id).toBe(id) })
+    return account.snapshot().result
+  }
+
+  it('checks on refresh, then starts checks, sign-ins, and sign-outs one at a time and cancels a sign-in', async () => {
     script[STATUS] = [NOT_LOGGED_IN]
-    const states: TencentMeetingState[] = []
-    const leave = new AbortController()
-    const following = (async () => {
-      for await (const state of ctx.tencentMeeting.follow(leave.signal)) states.push(state)
-    })()
-    const finished = async (id?: CliOperationId): Promise<TencentMeetingState['result']> => {
-      await vi.waitFor(() => {
-        expect(states.at(-1)?.result).toBeDefined()
-        if (id !== undefined) expect(states.at(-1)?.result?.id).toBe(id)
-      })
-      return states.at(-1)?.result
-    }
-    expect(await finished()).toMatchObject({ kind: 'check', outcome: 'succeeded' })
-    expect(states[0]).toMatchObject({ account: { state: 'unchecked', skills: 'installed' }, operation: { kind: 'check' } })
-    expect(states.at(-1)?.account).toEqual({ state: 'signed-out', skills: 'installed' })
+    account.refresh()
+    const check = account.snapshot().operation
+    expect(account.snapshot()).toMatchObject({ account: { state: 'unchecked', skills: 'installed' }, operation: { kind: 'check' } })
+    expect(await finished(check!.id)).toMatchObject({ kind: 'check', outcome: 'succeeded' })
+    expect(account.snapshot().account).toEqual({ state: 'signed-out', skills: 'installed' })
     expect(subprocess.lookups[0]?.command).toBe(join(binDir, executableFileName('tmeet')))
-    expect(await finished(ctx.tencentMeeting.check())).toMatchObject({ kind: 'check', outcome: 'succeeded' })
+    expect(await finished(account.start('check'))).toMatchObject({ kind: 'check', outcome: 'succeeded' })
 
     script[LOGIN] = () => {}
-    const signingIn = ctx.tencentMeeting.signIn()
-    expect(() => ctx.tencentMeeting.check()).toThrow('another account operation is in progress')
+    const signingIn = account.start('sign-in')
+    expect(() => account.start('check')).toThrow('another account operation is in progress')
     await vi.waitFor(() => { expect(commands().at(-1)).toBe(LOGIN) })
-    await ctx.tencentMeeting.cancel(signingIn)
+    await account.cancel(signingIn)
     expect(await finished(signingIn)).toMatchObject({ kind: 'sign-in', outcome: 'cancelled' })
     expect(subprocess.processes.at(-1)?.terminated).toBe(true)
 
     script[LOGOUT] = [{}]
-    expect(await finished(ctx.tencentMeeting.signOut())).toMatchObject({ kind: 'sign-out', outcome: 'succeeded' })
-    leave.abort()
-    await following
+    expect(await finished(account.start('sign-out'))).toMatchObject({ kind: 'sign-out', outcome: 'succeeded' })
   })
 
-  it('ends its streams and stops account work on disposal', async () => {
+  it('stops account work on disposal', async () => {
     script[STATUS] = () => {}
-    const states: TencentMeetingState[] = []
-    const following = (async () => {
-      for await (const state of ctx.tencentMeeting.follow(new AbortController().signal)) states.push(state)
-    })()
+    account.refresh()
     await vi.waitFor(() => { expect(subprocess.processes).toHaveLength(1) })
     await ctx.fiber.dispose()
-    await following
-    expect(states.length).toBeGreaterThan(0)
     expect(subprocess.processes[0]?.terminated).toBe(true)
   })
 })

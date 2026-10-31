@@ -31,8 +31,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/dsh-tencent-meeting-cli": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-tencent-meeting": "workspace:*"
+    "@deepseek-ai/dsh-tencent-meeting-cli": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"

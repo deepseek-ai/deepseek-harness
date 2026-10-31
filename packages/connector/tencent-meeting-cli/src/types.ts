@@ -1,4 +1,4 @@
-/** Credential-free Tencent Meeting account and operation views for Remote clients. */
+/** Credential-free Tencent Meeting account and operation views the Plugins page presenter reads. */
 
 import type { CliAccountView, CliCommandFailure } from '@deepseek-ai/dsh-cli-account/types'
 import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills/types'
@@ -23,7 +23,7 @@ export type TencentMeetingPhase = 'authorizing' | 'signing-out'
 /** The command and exit code of a failed operation's last command. */
 export type TencentMeetingOperationFailure = CliCommandFailure<'auth-status' | 'auth-login' | 'auth-logout'>
 
-/** The complete Tencent Meeting view a Remote client replaces on every change. */
+/** The complete Tencent Meeting view the presenter reads after each change. */
 export type TencentMeetingState = CliAccountView<
   TencentMeetingAccountState, TencentMeetingOperationKind, TencentMeetingPhase, TencentMeetingOperationFailure
 >

@@ -108,7 +108,7 @@ describe.skipIf(process.platform === 'win32')('web e2e: Tencent Meeting plugin a
     await section.getByRole('button', { name: '连接腾讯会议', exact: true }).click()
     await section.getByRole('alert').waitFor({ timeout: 20_000 })
     expect(await section.getAttribute('data-cli-account')).toBe('disconnected')
-    expect(await section.getByRole('alert').innerText()).toContain('auth-login · 退出码 1')
+    expect(await section.getByRole('alert').innerText()).toContain('auth-login · exit 1')
     expect(await section.innerText()).not.toContain('fixture-code')
 
     await rm(join(binDir, 'login-fails'))

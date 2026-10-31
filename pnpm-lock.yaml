@@ -6782,42 +6782,6 @@ importers:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
 
-  packages/client/ui-tencent-meeting:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-api-remotes':
-        specifier: workspace:*
-        version: link:../../api/remotes
-      '@deepseek-ai/dsh-cli-account':
-        specifier: workspace:*
-        version: link:../../connector/cli-account
-      '@deepseek-ai/dsh-client-locale':
-        specifier: workspace:*
-        version: link:../locale
-      '@deepseek-ai/dsh-client-test-runtime':
-        specifier: workspace:*
-        version: link:../../test-support/client-runtime
-      '@deepseek-ai/dsh-client-ui-cli-account':
-        specifier: workspace:*
-        version: link:../ui-cli-account
-      '@deepseek-ai/dsh-client-ui-slots':
-        specifier: workspace:*
-        version: link:../ui-slots
-      '@deepseek-ai/dsh-tencent-meeting-cli':
-        specifier: workspace:*
-        version: link:../../connector/tencent-meeting-cli
-      '@deepseek-ai/dsh-typert-protocol':
-        specifier: workspace:*
-        version: link:../../typert/protocol
-      '@deepseek-ai/dsh-upstream-skills':
-        specifier: workspace:*
-        version: link:../../connector/upstream-skills
-      '@deepseek-ai/dsh-util-values':
-        specifier: workspace:*
-        version: link:../../util/values
-
   packages/client/ui-theme:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -7558,9 +7522,6 @@ importers:
 
   packages/connector/tencent-meeting:
     dependencies:
-      '@deepseek-ai/dsh-client-ui-tencent-meeting':
-        specifier: workspace:*
-        version: link:../../client/ui-tencent-meeting
       '@deepseek-ai/dsh-tencent-meeting-cli':
         specifier: workspace:*
         version: link:../tencent-meeting-cli
@@ -7590,6 +7551,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:~
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-client-ui-cli-account':
+        specifier: workspace:*
+        version: link:../../client/ui-cli-account
       '@deepseek-ai/dsh-skill':
         specifier: workspace:*
         version: link:../../skill/skill
@@ -7599,9 +7563,6 @@ importers:
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:*
         version: link:../../core/system-prompt
-      '@deepseek-ai/dsh-typert-protocol':
-        specifier: workspace:*
-        version: link:../../typert/protocol
 
   packages/connector/upstream-skills:
     dependencies:

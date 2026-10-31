@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package is the Host row of the [Tencent Meeting plugin](../tencent-meeting/README.md). It installs a pinned `@tencentcloud/tmeet`, gives the model the absolute path of its platform executable in runtime context, and registers one `tencent-meeting` skill whose guide is the official `tmeet-skill`, which it downloads from the Tencent Meeting CLI repository on GitHub. Its `tencentMeeting` Remote checks the CLI's sign-in, signs in through the CLI's authorization page, signs out, and cancels, for the [Tencent Meeting plugin page](../../client/ui-tencent-meeting/README.md). The CLI keeps the sign-in in its default configuration, which the user's own terminal shares. Only macOS is supported.
+This package is the Host row of the [Tencent Meeting plugin](../tencent-meeting/README.md). It installs a pinned `@tencentcloud/tmeet`, gives the model the absolute path of its platform executable in runtime context, and registers one `tencent-meeting` skill whose guide is the official `tmeet-skill`, which it downloads from the Tencent Meeting CLI repository on GitHub. It registers the account with the [CLI account registry](../../client/ui-cli-account/README.md), whose Plugins page section checks the sign-in, signs in through the CLI's authorization page, signs out, and cancels. The CLI keeps the sign-in in its default configuration, which the user's own terminal shares. Only macOS is supported.
 
 ## Table of Contents
 
@@ -40,17 +40,16 @@ Turning the row off in Plugin Manager withdraws the skill and the path from runt
 <a id="account-operations"></a>
 ### Account operations
 
-The `tencentMeeting` Remote serves the Plugins page. It runs at most one operation at a time, owned by the Host, so leaving the page does not cancel it.
+The Plugins page drives these operations through the CLI account registry, which the Web app loads; a headless profile loads the plugin without it. The Host runs at most one operation at a time and owns it, so leaving the page does not cancel it.
 
-| Method | Effect |
+| Operation | Effect |
 |---|---|
-| `follow(signal)` | Streams the account, the operation in progress, and the last result; each new follower starts a check when no operation runs |
-| `check()` | Checks the account again; returns the operation id |
-| `signIn()` | Runs `auth login --no-browser`, waits for the user to authorize on the Tencent Meeting page, then checks that the server accepts the new sign-in |
-| `signOut()` | Runs `auth logout`, which also signs out the user's own terminal, then checks again |
-| `cancel(id)` | Cancels a sign-in while it waits for authorization and waits for its command to exit; other steps and a finished id are ignored |
+| `check` | Checks the account again; each browser that opens the Web app starts one when no operation runs |
+| `sign-in` | Runs `auth login --no-browser`, waits for the user to authorize on the Tencent Meeting page, then checks that the server accepts the new sign-in |
+| `sign-out` | After the user confirms, runs `auth logout`, which also signs out the user's own terminal, then checks again |
+| Cancel | Cancels a sign-in while it waits for authorization and waits for its command to exit; other steps are ignored |
 
-A check runs `auth status`, which in tmeet 1.0.18 prints plain text and exits with code 0 whether or not a user is signed in. The account reads `signed-out` for `Not logged in.`, for `Session has expired.`, or when `Logged in` comes with an expired refresh token; `connected`, with the user name, when `Logged in` comes with a `UserName:` line, which the CLI prints only after its user-info request to the server succeeds; and `unverified` for any other `Logged in`, for example when that request cannot reach the server. A nonzero exit or other output fails the check and keeps the previous account. The link that `auth login` prints on its `authorize url:` stdout line is offered only when it is an HTTPS address on `meeting.tencent.com`. Results report succeeded, cancelled, or failed. Failures include the command and the observed exit code in the Remote result and Host log; the CLI's output, which can carry the one-time authorization code, is omitted. The process running DSH needs access to the CLI configuration in `~/.tmeet`, the encrypted credentials in `~/Library/Application Support/tmeet`, and the macOS Keychain item that holds their key; `DSH_HOME` does not relocate them.
+A check runs `auth status`, which in tmeet 1.0.18 prints plain text and exits with code 0 whether or not a user is signed in. The account reads `signed-out` for `Not logged in.`, for `Session has expired.`, or when `Logged in` comes with an expired refresh token; `connected`, with the user name, when `Logged in` comes with a `UserName:` line, which the CLI prints only after its user-info request to the server succeeds; and `unverified` for any other `Logged in`, for example when that request cannot reach the server. A nonzero exit or other output fails the check and keeps the previous account. The link that `auth login` prints on its `authorize url:` stdout line is offered only when it is an HTTPS address on `meeting.tencent.com`. Results report succeeded, cancelled, or failed. Failures show the command and the observed exit code on the page and in the Host log; the CLI's output, which can carry the one-time authorization code, is omitted. The process running DSH needs access to the CLI configuration in `~/.tmeet`, the encrypted credentials in `~/Library/Application Support/tmeet`, and the macOS Keychain item that holds their key; `DSH_HOME` does not relocate them.
 
 ### Configure
 
@@ -74,7 +73,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-te
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) is a Remote service registered as `ctx.tencentMeeting`. It resolves the `tmeet` executable, gives its path to the model in runtime context, and registers the `tencent-meeting` skill through the [upstream skills library](../upstream-skills/README.md) with the pin in [`src/skills.ts`](src/skills.ts). The account view carries the download state, and each check restarts a failed download without waiting for it. `@tencentcloud/tmeet` ships one executable per platform under `dist/`, each named for its platform, and its `bin` is a Node launcher. [`src/directory.ts`](src/directory.ts) therefore picks the executable for `process.platform` and `process.arch` with the same names the launcher uses, and both the runtime context and the plugin's own commands use that path. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the tmeet commands, reads the authorization link from the output lines of `auth login`, and parses the `auth status` text. Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
+[`src/index.ts`](src/index.ts) is a function plugin. It resolves the `tmeet` executable, gives its path to the model in runtime context, and registers the `tencent-meeting` skill through the [upstream skills library](../upstream-skills/README.md) with the pin in [`src/skills.ts`](src/skills.ts). The account view carries the download state, and each check restarts a failed download without waiting for it. `@tencentcloud/tmeet` ships one executable per platform under `dist/`, each named for its platform, and its `bin` is a Node launcher. [`src/directory.ts`](src/directory.ts) therefore picks the executable for `process.platform` and `process.arch` with the same names the launcher uses, and both the runtime context and the plugin's own commands use that path. The [CLI account library](../cli-account/README.md) registers that runtime context, runs each command by the same path, and runs one operation at a time. [`src/account.ts`](src/account.ts) extends that runtime with the tmeet commands, reads the authorization link from the output lines of `auth login`, and parses the `auth status` text. [`src/presentation.ts`](src/presentation.ts) maps each view to the section the registry serves, in the text of [`src/locales.ts`](src/locales.ts). Disposal cancels the active operation, aborts running commands, and settles after their processes exit.
 
 [`skills/tencent-meeting/SKILL.md`](skills/tencent-meeting/SKILL.md) is the only skill this package carries: the DSH guidance, an index of the guide, and how to open it. Upstream publishes the guide only in its repository and not in the npm package, so the library downloads it; it is a set of files under the skill's base directory, not a separate skill. The pin excludes `scripts/agent_init.py`, which records the calling agent and model in the CLI configuration for upstream telemetry. Where the DSH guidance and the guide disagree, the entry tells the agent to follow the DSH guidance: it uses the plugin's `tmeet` instead of installing one, skips `agent_init.py`, and sends sign-in to the plugin page. References are ordinary files in the guide's directory.
 
@@ -89,7 +88,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-te
 - [CLI account library](../cli-account/README.md) — command execution and account operations shared by CLI app plugins.
 - [Skills](../../../docs/subsystems/skills.md) — catalog publication, loading, and precedence.
 - [Tencent Meeting plugin](../tencent-meeting/README.md) — the bundle that inserts this row and the page row.
-- [Tencent Meeting plugin page](../../client/ui-tencent-meeting/README.md) — the Plugins page that drives the account operations.
+- [CLI account surfaces](../../client/ui-cli-account/README.md) — the registry and the Plugins page section that drive the account operations.
 
 -----
 

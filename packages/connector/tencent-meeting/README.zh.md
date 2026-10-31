@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-腾讯会议插件让对话通过官方 `tmeet` CLI 使用腾讯会议。安装本 bundle 会添加两行：CLI 及其技能，以及插件页上的腾讯会议账号区块，用户无需先发起对话就能在那里登录和退出登录。CLI 把登录保存在默认配置中，与用户自己的终端共用。仅支持 macOS 和 Windows x64。
+腾讯会议插件让对话通过官方 `tmeet` CLI 使用腾讯会议。安装本 bundle 会添加一行：CLI 及其技能，它同时在插件页显示腾讯会议账号区块，用户无需先发起对话就能在那里登录和退出登录。CLI 把登录保存在默认配置中，与用户自己的终端共用。仅支持 macOS 和 Windows x64。
 
 ## 目录
 
@@ -40,8 +40,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 | 行 | 包 | 行为 |
 |---|---|---|
-| `tencent-meeting` | [`@deepseek-ai/dsh-tencent-meeting-cli`](../tencent-meeting-cli/README.zh.md) | 把 `tmeet` 的绝对路径告诉模型，注册其技能，并在 Host 上运行账号检查、登录和退出登录 |
-| `ui-tencent-meeting` | [`@deepseek-ai/dsh-client-ui-tencent-meeting`](../../client/ui-tencent-meeting/README.zh.md) | 在插件页显示腾讯会议账号区块、连接标签、开启 bundle 后的引导以及提示 |
+| `tencent-meeting` | [`@deepseek-ai/dsh-tencent-meeting-cli`](../tencent-meeting-cli/README.zh.md) | 把 `tmeet` 的绝对路径告诉模型，注册其技能，在 Host 上运行账号检查、登录和退出登录，并通过 [CLI 账号注册表](../../client/ui-cli-account/README.zh.md)在插件页显示账号区块、连接标签、开启 bundle 后的引导以及提示 |
 
 关闭本 bundle 会撤回技能、运行时上下文中的路径和页面。CLI 的登录会保留。
 
@@ -53,7 +52,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 在 profile 的其他层之后插入 `tencent-meeting` 和 `ui-tencent-meeting` 两行。本包依赖这两个行包，使它们从本 bundle 解析，[`src/index.ts`](src/index.ts) 不导出任何内容。插件页以本包名为账号区块的键。
+[`cordis.patch.yml`](cordis.patch.yml) 在 profile 的其他层之后插入 `tencent-meeting` 行。本包依赖这个行包，使该行从本 bundle 解析，[`src/index.ts`](src/index.ts) 不导出任何内容。插件页以本包名为账号区块的键。
 
 </details>
 
@@ -64,7 +63,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 - [Connector 包](../README.zh.md) — 本应用插件所属的分组。
 - [腾讯会议 CLI 与技能](../tencent-meeting-cli/README.zh.md) — Host 行、它的账号操作和模型指引。
-- [腾讯会议插件页面](../../client/ui-tencent-meeting/README.zh.md) — 插件页行。
+- [CLI 账号界面](../../client/ui-cli-account/README.zh.md) — 在插件页显示账号的注册表。
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md) — 安装、构建脚本审批与启用。
 
 -----
@@ -72,7 +71,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 <a id="model-experience"></a>
 ## 模型体验
 
-间接通过 `tencent-meeting` 行体现：该行的包负责其[模型体验](../tencent-meeting-cli/README.zh.md#model-experience)中描述的技能目录条目和加载后的技能正文；`ui-tencent-meeting` 行不增加任何面向模型的内容。
+间接通过 `tencent-meeting` 行体现：该行的包负责其[模型体验](../tencent-meeting-cli/README.zh.md#model-experience)中描述的技能目录条目和加载后的技能正文。
 
 #### KV Cache 影响
 

@@ -3797,7 +3797,7 @@ export interface Config {
 
 - `inject`: `skills` · `subprocess` · `systemPrompt`
 - `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts) · [`UpstreamSkillsConfig`](../packages/connector/upstream-skills/src/index.ts)
-- `source`: [`packages/connector/tencent-meeting-cli/src/index.ts:33`](../packages/connector/tencent-meeting-cli/src/index.ts)
+- `source`: [`packages/connector/tencent-meeting-cli/src/index.ts:32`](../packages/connector/tencent-meeting-cli/src/index.ts)
 
 ```ts config-catalog
 /** Where tmeet and the upstream guide come from, a command's deadline, and a download's time limit. */
@@ -4918,7 +4918,6 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-sidebar-terminal` | — | [`packages/client/ui-sidebar-terminal/src/index.ts`](../packages/client/ui-sidebar-terminal/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-skill` | — | [`packages/client/ui-skill/src/index.ts`](../packages/client/ui-skill/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-subagent` | — | [`packages/client/ui-subagent/src/index.ts`](../packages/client/ui-subagent/src/index.ts) |
-| `@deepseek-ai/dsh-client-ui-tencent-meeting` | — | [`packages/client/ui-tencent-meeting/src/index.ts`](../packages/client/ui-tencent-meeting/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-tool` | — | [`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-user-questions` | — | [`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-workflow-run` | — | [`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts) |

@@ -217,7 +217,6 @@ flowchart TD
     pkg_client_ui_skill["client-ui-skill"]
     pkg_client_ui_slots["client-ui-slots"]
     pkg_client_ui_subagent["client-ui-subagent"]
-    pkg_client_ui_tencent_meeting["client-ui-tencent-meeting"]
     pkg_client_ui_theme["client-ui-theme"]
     pkg_client_ui_tool["client-ui-tool"]
     pkg_client_ui_trajectory["client-ui-trajectory"]
@@ -544,7 +543,6 @@ flowchart TD
   pkg_tencent_meeting_cli --> pkg_skill
   pkg_tencent_meeting_cli --> pkg_subprocess
   pkg_tencent_meeting_cli --> pkg_system_prompt
-  pkg_tencent_meeting_cli --> pkg_typert_protocol
   pkg_upstream_skills --> pkg_skill
   pkg_deliverable_file_references --> pkg_system_prompt
   pkg_experimental_computer_use_cua_driver_mcp --> pkg_computer_use
@@ -1624,7 +1622,6 @@ flowchart TD
 | [`client-ui-skill`](../packages/client/ui-skill) | `client` | — |
 | [`client-ui-slots`](../packages/client/ui-slots) | `client` | — |
 | [`client-ui-subagent`](../packages/client/ui-subagent) | `client` | — |
-| [`client-ui-tencent-meeting`](../packages/client/ui-tencent-meeting) | `client` | — |
 | [`client-ui-theme`](../packages/client/ui-theme) | `client` | — |
 | [`client-ui-tool`](../packages/client/ui-tool) | `client` | — |
 | [`client-ui-trajectory`](../packages/client/ui-trajectory) | `client` | — |
@@ -1708,7 +1705,7 @@ flowchart TD
 | [`attachment-local`](../packages/attachment/attachment-local) | `attachment` | [`attachment`](../packages/attachment/attachment), [`home-paths`](../packages/util/home-paths) |
 | [`hmr`](../packages/boot/hmr) | `boot` | [`app-boot`](../packages/boot/app-boot), [`cmdline`](../packages/boot/cmdline) |
 | [`cli-account`](../packages/connector/cli-account) | `connector` | [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt) |
-| [`tencent-meeting-cli`](../packages/connector/tencent-meeting-cli) | `connector` | [`skill`](../packages/skill/skill), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`typert-protocol`](../packages/typert/protocol) |
+| [`tencent-meeting-cli`](../packages/connector/tencent-meeting-cli) | `connector` | [`skill`](../packages/skill/skill), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt) |
 | [`upstream-skills`](../packages/connector/upstream-skills) | `connector` | [`skill`](../packages/skill/skill) |
 | [`deliverable-file-references`](../packages/deliverables/deliverable-file-references) | `deliverables` | [`system-prompt`](../packages/core/system-prompt) |
 | [`experimental-computer-use-cua-driver-mcp`](../packages/experimental/computer-use-cua-driver-mcp) | `experimental` | [`computer-use`](../packages/computer-use/computer-use) |
