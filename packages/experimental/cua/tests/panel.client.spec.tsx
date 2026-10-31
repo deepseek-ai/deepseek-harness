@@ -11,7 +11,8 @@ import type { PermissionView } from '../src/client/controller.ts'
 import { en, zh } from '../src/client/locales.ts'
 
 afterEach(() => { cleanup(); vi.useRealTimers() })
-const value: CuaApplicationState & { system: CuaSystemPermissionState } = { system: { accessibility: false, screenRecording: true,
+const value: CuaApplicationState & { system: CuaSystemPermissionState } = { system: {
+  accessibility: false, screenRecording: true,
   helper: { pid: 9, path: '/native/helper' }, parent: { pid: 8, path: '/host/node' } },
 allowedApps: [], blockedApps: [], persistentAvailable: true }
 

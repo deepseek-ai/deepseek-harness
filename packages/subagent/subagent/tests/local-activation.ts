@@ -36,7 +36,7 @@ export async function startTestActivation(
   request: Omit<SubagentStartRequest, 'signal'> & { signal?: AbortSignal },
 ) {
   const { signal = new AbortController().signal, label = provider, ...task } = request
-  const activation = await ctx.get('subagents')!.startActivation({ provider, label, request: task, signal, delivery: 'caller' })
+  const activation = await ctx.get('subagents')!.startActivation({ provider, label, ...task, signal, delivery: 'caller' })
   return { ...activation, id: activation.childId, localAgent: ctx.get('agents')!.get(activation.childId)! }
 }
 

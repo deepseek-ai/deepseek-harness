@@ -1,0 +1,7 @@
+- dialog "Disable agent teamwork?":
+  - heading "Disable agent teamwork?" [level=2]
+  - button "Close"
+  - paragraph: Disabling agent teamwork during a conversation stops the use of shared task tools and team coordination instructions.
+  - paragraph: Disabling it may affect cache reuse, increase subsequent token usage and costs, and affect collaboration on the current task.
+  - button "Cancel"
+  - button "Disable"

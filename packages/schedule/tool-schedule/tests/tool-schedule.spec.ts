@@ -1,33 +1,81 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Context } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import { createScope } from '@deepseek-ai/dsh-scope'
+import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import type { ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import ScheduleService, {
+  DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, MAX_TITLE_LENGTH, REQUIRED_TITLE_MESSAGE, ScheduleId, ScheduleInputError,
+  createAfterScheduleRecord, formatScheduleLocalTime,
+} from '@deepseek-ai/dsh-schedule'
+import type { ScheduleCatalogEntry, ScheduleRecord } from '@deepseek-ai/dsh-schedule'
 import * as ToolSchedule from '../src/index.ts'
-import { MAX_TITLE_LENGTH, REQUIRED_TITLE_MESSAGE, ScheduleId, createAfterScheduleRecord, scheduleDomain } from '@deepseek-ai/dsh-schedule'
-import { agentFor, harness, mountToolSchedule } from './harness.ts'
+import { agentFor, boundTask, harness, mountToolSchedule, PromptRuntime, seedTasks } from './harness.ts'
+
+const TOOL_NAMES = ['schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view']
+const AUTHORIZATION = 'Only create or modify scheduled tasks at the user\'s explicit request; '
+  + 'prior explicit user authorization for the running scheduled task remains valid.'
+const NOW = '2026-09-16T00:00:00.000Z'
+const DAILY = 'DTSTART:20260916T010000Z\nRRULE:FREQ=DAILY'
+const TASK = { title: 'Queue check', prompt: 'Check the queue', rrule: DAILY, target: 'this_session' }
+const RECORD_FIELDS = {
+  id: ScheduleId('typed-task'), title: 'Typed task', prompt: 'Do the task', scheduledAt: '2026-09-16T01:00:00.000Z',
+}
+const CALLS = [
+  ['schedule_create', TASK],
+  ['schedule_list', {}],
+  ['schedule_view', { id: 'task-1' }],
+  ['schedule_edit', { id: 'task-1', action: 'delete' }],
+] as const
+const INTERNAL_ERROR = { code: 'internal_error', message: 'The schedule operation failed.' }
+const TWO_LINES = { code: 'invalid_rule', message: 'rrule must contain one DTSTART line followed by one RRULE line.' }
+const DELETE_ONLY = { code: 'invalid_selector', message: 'delete accepts only id, action, and expectedUpdatedAt.' }
+const UPDATE_FIELD = {
+  code: 'invalid_selector', message: 'update requires at least one of title, prompt, rrule, target, or active.',
+}
 
 const tests: Awaited<ReturnType<typeof harness>>[] = []
-beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-16T00:00:00Z')) })
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date(NOW)) })
 afterEach(async () => {
   await Promise.all(tests.splice(0).map(test => test.ctx.fiber.dispose()))
   vi.restoreAllMocks()
   vi.useRealTimers()
 })
-async function setup(options: Parameters<typeof harness>[0] = {}) {
+
+async function setup(options: Parameters<typeof harness>[0] = {}, meta?: Parameters<typeof agentFor>[2]) {
   const test = await harness(options); tests.push(test)
-  const agent = agentFor(test.ctx)
+  const agent = agentFor(test.ctx, 'original', meta)
   const scope = await mountToolSchedule(test.ctx, agent)
   return { ...test, agent, scope }
 }
-async function execute(test: Awaited<ReturnType<typeof setup>>, name: string, args: unknown, agent: Agent = test.agent) {
+type Setup = Awaited<ReturnType<typeof setup>>
+
+/** Set up with a preset roster whose composed preset is `research` and a caller Session in `/work`. */
+async function setupWithPreset() {
+  const composedPreset = vi.fn((_ctx: Context) => 'research')
+  const test = await setup({ onContext: ctx => ctx.provide('agentPresets', { composedPreset } as never) }, { cwd: '/work' })
+  return { ...test, composedPreset }
+}
+
+async function execute(test: Setup, name: string, args: unknown, agent: Agent = test.agent) {
   return await executeToolFixture(test.ctx, {
     callId: ToolCallId('schedule-call'), signal: new AbortController().signal, name, arguments: args, agent,
   })
 }
 
-async function executeBody(test: Awaited<ReturnType<typeof setup>>, name: string, args: unknown, signal: AbortSignal) {
+/** Execute one successful dispatch and return its value after checking the model content. */
+async function call(test: Setup, name: string, args: unknown) {
+  const result = await execute(test, name, args)
+  expect(result.isError).toBe(false)
+  expect(result.content).toEqual([{ type: 'text', text: JSON.stringify(result.value) }])
+  return result.value
+}
+
+async function executeBody(test: Setup, name: string, args: unknown, signal: AbortSignal) {
   const definition = test.ctx.tools.get(name, test.agent)
   if (definition === undefined) throw new Error('missing Schedule tool')
   return await definition.execute(args, {
@@ -36,557 +84,519 @@ async function executeBody(test: Awaited<ReturnType<typeof setup>>, name: string
   })
 }
 
+/** Expected management fields and the next occurrence in the rule's zone. */
+function reported<T extends ScheduleCatalogEntry>(task: T) {
+  const { involvedSessionIds: _involved, createdAt: _created, executionActive: _execution,
+    deliveryFloorEndsAt: _floor, lastDelivery, ...record } = task
+  return {
+    ...record, scheduledAtLocal: formatScheduleLocalTime(task, task.scheduledAt),
+    ...lastDelivery === undefined ? {} : { lastDelivery: {
+      scheduledAt: lastDelivery.scheduledAt, deliveredAt: lastDelivery.deliveredAt, targetSessionId: lastDelivery.targetSessionId,
+    } },
+  }
+}
+
+/** Read one stored task as the tools report it. */
+async function stored(test: Setup, id: string) {
+  const task = await test.service.view({ id: ScheduleId(id) })
+  if ('code' in task) throw new Error('the task is not stored')
+  return reported(task)
+}
+
+/** Create one task through `schedule_create` and return the stored task as reported, which the tool result must equal. */
+async function createTask(test: Setup, args: Record<string, unknown> = {}) {
+  const value = await call(test, 'schedule_create', { ...TASK, ...args })
+  const task = await stored(test, (value as { id: string }).id)
+  expect(value).toEqual(task)
+  return task
+}
+
+/** Create one task from another Session through the service and return it as the tools report it. */
+async function createOther(test: Setup) {
+  return reported(await test.service.create({
+    title: 'Other session', prompt: 'Check from elsewhere', timing: { kind: 'rrule', rrule: 'DTSTART:20260916T003000Z\nRRULE:FREQ=DAILY' },
+    target: { kind: 'session', sessionId: SessionId('other-session') },
+  }, SessionId('other-session')))
+}
+
 describe('Schedule model tools', () => {
   it('registers the four tools only in the mounting Agent scope', async () => {
     const test = await setup()
-    for (const name of ['schedule_create', 'schedule_list', 'schedule_delete', 'schedule_update']) {
-      expect(test.ctx.tools.get(name, test.agent)).toBeDefined()
+    expect(test.ctx.tools.schemas(test.agent).map(schema => schema.name).sort()).toEqual(TOOL_NAMES)
+    const unrelated = agentFor(test.ctx, 'unrelated')
+    for (const name of TOOL_NAMES) {
       expect(test.ctx.tools.get(name)).toBeUndefined()
-      expect(test.ctx.tools.get(name, agentFor(test.ctx, `unrelated-${name}`))).toBeUndefined()
+      expect(test.ctx.tools.get(name, unrelated)).toBeUndefined()
+    }
+    expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: test.agent }))).toContain(AUTHORIZATION)
+    expect(renderPrompt(await test.ctx.systemPrompt.assemble())).not.toContain(AUTHORIZATION)
+    expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: unrelated }))).not.toContain(AUTHORIZATION)
+  })
+
+  it('removes tools and guidance while Schedule is unavailable and restores both with the service', async () => {
+    const test = await setup()
+    expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: test.agent }))).toContain(AUTHORIZATION)
+    await test.fiber.dispose()
+    for (const name of TOOL_NAMES) expect(test.ctx.tools.get(name, test.agent)).toBeUndefined()
+    expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: test.agent }))).not.toContain(AUTHORIZATION)
+    const later = agentFor(test.ctx, 'later')
+    await mountToolSchedule(test.ctx, later)
+    expect(test.ctx.tools.schemas(later)).toEqual([])
+    expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: later }))).not.toContain(AUTHORIZATION)
+    await test.ctx.plugin(ScheduleService)
+    for (const agent of [test.agent, later]) {
+      expect(test.ctx.tools.schemas(agent).map(schema => schema.name).sort()).toEqual(TOOL_NAMES)
+      expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: agent })).split(AUTHORIZATION)).toHaveLength(2)
     }
   })
 
-  it('refuses a call dispatched without a caller Agent in every tool', async () => {
+  it('removes scoped guidance with its plugin and registers it once after remounting', async () => {
+    const test = await setup()
+    await test.scope.dispose()
+    expect(test.ctx.tools.schemas(test.agent)).toEqual([])
+    expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: test.agent }))).not.toContain(AUTHORIZATION)
+    await mountToolSchedule(test.ctx, test.agent)
+    expect(test.ctx.tools.schemas(test.agent).map(schema => schema.name).sort()).toEqual(TOOL_NAMES)
+    expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: test.agent })).split(AUTHORIZATION)).toHaveLength(2)
+  })
+
+  it.each(['native', 'ptc'] as const)('renders one shared authorization instruction in %s mode', async (mode) => {
+    const test = await setup()
+    if (mode === 'ptc') {
+      await test.ctx.plugin(PromptRuntime)
+      await test.scope.ctx.plugin(PtcToolExecutor)
+    }
+    const assembly = await test.ctx.systemPrompt.assemble({ scope: test.agent })
+    expect(renderPrompt(assembly).split(AUTHORIZATION)).toHaveLength(2)
+    expect(assembly.tools.map(tool => tool.name).sort()).toEqual(mode === 'ptc' ? ['run_code'] : TOOL_NAMES)
+    for (const tool of test.ctx.tools.schemas(test.agent)) expect(tool.description).not.toContain(AUTHORIZATION)
+    if (mode === 'ptc') {
+      const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text
+      expect(sdk).toContain('schedule_create')
+      expect(sdk).toContain('schedule_edit')
+      expect(sdk).not.toContain(AUTHORIZATION)
+    }
+  })
+
+  it.each([
+    { allow: ['schedule_create', 'schedule_list', 'schedule_view'], visible: true },
+    { allow: ['schedule_edit', 'schedule_list', 'schedule_view'], visible: true },
+    { allow: ['schedule_list', 'schedule_view'], visible: false },
+  ])('shows shared guidance only with a visible mutation tool: $allow', async ({ allow, visible }) => {
+    const test = await setup()
+    const agent = agentFor(test.ctx, 'restricted')
+    const scope = createScope(test.ctx, agent, { parent: test.agent })
+    try {
+      const restriction = await scope.ctx.plugin(Object.assign((ctx: Context) => { ctx.tools.restrict({ allow }) },
+        { inject: ['tools'] }))
+      const assembly = await test.ctx.systemPrompt.assemble({ scope: agent })
+      expect(assembly.tools.map(tool => tool.name)).toEqual(allow)
+      expect(renderPrompt(assembly).split(AUTHORIZATION)).toHaveLength(visible ? 2 : 1)
+      expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: test.agent }))).toContain(AUTHORIZATION)
+      await restriction.dispose()
+      expect(test.ctx.tools.schemas(agent).map(tool => tool.name).sort()).toEqual(TOOL_NAMES)
+      expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: agent })).split(AUTHORIZATION)).toHaveLength(2)
+    } finally {
+      await scope.dispose()
+    }
+  })
+
+  it('refuses every call dispatched without a caller Agent', async () => {
     const test = await harness(); tests.push(test)
     await test.ctx.plugin(ToolSchedule)
-    const cases = [
-      ['schedule_create', { prompt: 'Check', after_seconds: 60, title: 'Check' }],
-      ['schedule_list', {}],
-      ['schedule_delete', { id: 'task-1' }],
-      ['schedule_update', { id: 'task-1', title: 'Check' }],
-    ] as const
-    for (const [name, args] of cases) {
+    for (const [name, args] of CALLS) {
       const result = await executeToolFixture(test.ctx, {
         callId: ToolCallId('agentless-call'), signal: new AbortController().signal, name, arguments: args,
       })
       expect(result.isError).toBe(false)
-      expect(result.value).toEqual({ code: 'internal_error', message: 'The schedule operation failed.' })
+      expect(result.value).toEqual(INTERNAL_ERROR)
     }
+    expect((await test.service.list({})).total).toBe(0)
   })
 
-  it('refuses every tool for a delegated child caller', async () => {
+  it('refuses every call from a registered delegated child whose scope mounts the tools', async () => {
     const test = await harness(); tests.push(test)
     const child = agentFor(test.ctx, 'delegated-child', { delegationDepth: 1 })
     await test.ctx.agents.register(child)
-    await test.ctx.plugin(ToolSchedule)
-    const cases = [
-      ['schedule_create', { prompt: 'Check', after_seconds: 60, title: 'Check' }],
-      ['schedule_list', {}],
-      ['schedule_delete', { id: 'task-1' }],
-      ['schedule_update', { id: 'task-1', title: 'Check' }],
-    ] as const
-    for (const [name, args] of cases) {
+    await mountToolSchedule(test.ctx, child)
+    for (const [name, args] of CALLS) {
       const result = await executeToolFixture(test.ctx, {
         callId: ToolCallId('child-call'), signal: new AbortController().signal, name, arguments: args, agent: child,
       })
       expect(result.isError).toBe(false)
-      expect(result.value).toEqual({ code: 'subagent_session', message: 'A delegated subagent cannot use reminders.' })
+      expect(result.value).toEqual({ code: 'subagent_session', message: 'A delegated subagent cannot use scheduled tasks.' })
     }
+    expect((await test.service.list({})).total).toBe(0)
   })
 
-  it('creates and lists a lossless daily JSON rule rather than a one-shot', async () => {
+  it('describes the create parameters for the model', async () => {
     const test = await setup()
-    const created = await execute(test, 'schedule_create', {
-      prompt: '  Daily\n"quoted"  ', title: 'Daily', daily: { time: '23:00:00.12', time_zone: 'Asia/Shanghai' },
-    })
-    expect(created.isError).toBe(false)
-    const records = await test.service.list({ sessionId: test.agent.session.id })
-    expect(records).toHaveLength(1)
-    expect(created.value).toEqual({
-      id: records[0]!.id, kind: 'daily', title: 'Daily', prompt: 'Daily\n"quoted"', time: '23:00:00.120',
-      timeZone: 'Asia/Shanghai', scheduledAt: '2026-09-16T15:00:00.120Z', state: 'scheduled', deliveryMode: 'host',
-    })
-    expect(created.content).toEqual([{ type: 'text', text: JSON.stringify(created.value) }])
-    const listed = await execute(test, 'schedule_list', {})
-    expect(listed.isError).toBe(false)
-    expect(listed.value).toEqual([created.value])
-    expect(listed.content).toEqual([{ type: 'text', text: JSON.stringify([created.value]) }])
-    expect(await test.service.catalog()).toEqual([{ ...records[0], sessionId: test.agent.session.id, status: 'active' }])
-    expect(test.resolve).not.toHaveBeenCalled()
-  })
-
-  it('creates a weekly JSON rule with normalized weekdays and a distinct next target', async () => {
-    const test = await setup()
-    const created = await execute(test, 'schedule_create', {
-      prompt: '  Weekly\n"quoted"  ', title: 'Weekly',
-      weekly: { time: '09:00:00.12', time_zone: 'Asia/Shanghai', weekdays: [3, 1] },
-    })
-    expect(created.isError).toBe(false)
-    const records = await test.service.list({ sessionId: test.agent.session.id })
-    expect(records).toHaveLength(1)
-    expect(created.value).toEqual({
-      id: records[0]!.id, kind: 'weekly', title: 'Weekly', prompt: 'Weekly\n"quoted"', time: '09:00:00.120',
-      timeZone: 'Asia/Shanghai', weekdays: [1, 3], scheduledAt: '2026-09-16T01:00:00.120Z',
-      state: 'scheduled', deliveryMode: 'host',
-    })
-    expect(created.content).toEqual([{ type: 'text', text: JSON.stringify(created.value) }])
-    const listed = await execute(test, 'schedule_list', {})
-    expect(listed.value).toEqual([created.value])
-    expect(await test.service.catalog()).toEqual([{ ...records[0], sessionId: test.agent.session.id, status: 'active' }])
-    expect(test.resolve).not.toHaveBeenCalled()
-  })
-
-  it('accepts a supplied title in the tool schema and returns it in the create and list views', async () => {
-    const test = await setup()
-    const schema = test.ctx.tools.schemas(test.agent).find(item => item.name === 'schedule_create')
-    const parameters = schema?.parameters as { properties: Record<string, { type?: string; description?: string }>; required: string[] }
-    expect(parameters.properties.title?.type).toBe('string')
-    expect(parameters.properties.title?.description).toContain('Concise task name')
-    expect(parameters.required).toEqual(expect.arrayContaining(['prompt', 'title']))
-    const created = await execute(test, 'schedule_create', {
-      prompt: 'Check the queue\nand the backlog', title: '  Queue check  ', every_seconds: 300,
-    })
-    expect(created.isError).toBe(false)
-    expect(created.value).toMatchObject({ title: 'Queue check', prompt: 'Check the queue\nand the backlog' })
-    expect((await execute(test, 'schedule_list', {})).value).toMatchObject([{ title: 'Queue check' }])
-  })
-
-  it('rejects a missing title in the create tool before storing a task', async () => {
-    const test = await setup()
-    const result = await execute(test, 'schedule_create', { prompt: 'Keep', after_seconds: 60 })
-    expect(result.isError).toBe(true)
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
-  })
-
-  it.each([
-    ['   ', REQUIRED_TITLE_MESSAGE],
-    ['x'.repeat(MAX_TITLE_LENGTH + 1), `title must be at most ${MAX_TITLE_LENGTH} characters.`],
-  ])('refuses the invalid title %j before storing a task', async (title, message) => {
-    const test = await setup()
-    const result = await execute(test, 'schedule_create', { prompt: 'Keep', after_seconds: 60, title })
-    expect(result.value).toEqual({ code: 'invalid_prompt', message })
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
-  })
-
-  it.each([
-    [undefined, REQUIRED_TITLE_MESSAGE],
-    ['   ', REQUIRED_TITLE_MESSAGE],
-    [`${'x'.repeat(MAX_TITLE_LENGTH)}y`, `title must be at most ${MAX_TITLE_LENGTH} characters.`],
-  ])('rejects a missing, blank, or over-long title at the shared service', async (title, message) => {
-    const test = await setup()
-    await expect(test.service.create(test.agent.session.id, {
-      prompt: 'Keep', after_seconds: 60, title: title as string,
-    })).rejects.toMatchObject({ code: 'invalid_prompt', message })
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
-  })
-
-  it.each([
-    ['empty set', []], ['out-of-range weekday', [0]], ['weekday above Sunday', [8]], ['duplicate weekday', [2, 2]],
-  ])('refuses a %s before storing a weekly task', async (_label, weekdays) => {
-    const test = await setup()
-    const result = await execute(test, 'schedule_create', {
-      prompt: 'Invalid weekdays', title: 'Invalid weekdays',
-      weekly: { time: '09:00:00', time_zone: 'UTC', weekdays },
-    })
-    expect(result.value).toMatchObject({ code: 'invalid_rule' })
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
-  })
-
-  it.each([
-    ['non-integer weekday', [1.5]], ['string weekday', ['1']], ['null weekday', [null]],
-  ])('rejects a %s at the tool parameter schema', async (_label, weekdays) => {
-    const test = await setup()
-    const result = await execute(test, 'schedule_create', {
-      prompt: 'Invalid weekdays', title: 'Invalid weekdays',
-      weekly: { time: '09:00:00', time_zone: 'UTC', weekdays },
-    })
-    expect(result.isError).toBe(true)
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
-  })
-
-  it.each([
-    null, '09:00:00', {}, { time: '09:00:00' }, { time: '09:00:00', time_zone: 'UTC' },
-    { time: '09:00:00', weekdays: [1] }, { time: 9, time_zone: 'UTC', weekdays: [1] },
-    { time: '09:00:00', time_zone: 8, weekdays: [1] },
-    { time: '09:00:00', time_zone: 'UTC', weekdays: [1], date: '2026-09-16' },
-  ])('rejects malformed weekly JSON arguments %# before creation', async (weekly) => {
-    const test = await setup()
-    expect((await execute(test, 'schedule_create', { prompt: 'Malformed', title: 'Malformed', weekly })).isError).toBe(true)
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
-  })
-
-  it('creates a cron JSON rule with a canonical expression and a distinct next target', async () => {
-    const test = await setup()
-    const created = await execute(test, 'schedule_create', {
-      prompt: '  Cron\n"quoted"  ', title: 'Cron',
-      cron: { expression: '00 09 * * 5,4,3,2,1', time_zone: 'Asia/Shanghai' },
-    })
-    expect(created.isError).toBe(false)
-    const records = await test.service.list({ sessionId: test.agent.session.id })
-    expect(records).toHaveLength(1)
-    expect(created.value).toEqual({
-      id: records[0]!.id, kind: 'cron', title: 'Cron', prompt: 'Cron\n"quoted"', expression: '0 9 * * 1-5',
-      timeZone: 'Asia/Shanghai', scheduledAt: '2026-09-16T01:00:00.000Z', state: 'scheduled', deliveryMode: 'host',
-    })
-    expect(created.content).toEqual([{ type: 'text', text: JSON.stringify(created.value) }])
-    expect((await execute(test, 'schedule_list', {})).value).toEqual([created.value])
-    expect(await test.service.catalog()).toEqual([{ ...records[0], sessionId: test.agent.session.id, status: 'active' }])
-    expect(test.resolve).not.toHaveBeenCalled()
-  })
-
-  it('exposes the cron selector in the create tool schema', async () => {
-    const test = await setup()
-    const schema = test.ctx.tools.schemas(test.agent).find(item => item.name === 'schedule_create')
-    expect(schema?.description).toContain('cron')
+    const schema = test.ctx.tools.schemas(test.agent).find(candidate => candidate.name === 'schedule_create')
     expect(schema?.parameters).toMatchObject({
+      required: ['title', 'prompt', 'rrule', 'target'],
       properties: {
-        cron: {
-          type: 'object',
-          additionalProperties: false,
-          properties: { expression: { type: 'string' }, time_zone: { type: 'string' } },
+        title: { type: 'string', description: expect.stringContaining(`Task name of at most ${MAX_TITLE_LENGTH} characters`) as string },
+        rrule: {
+          type: 'string',
+          description: expect.stringContaining('"DTSTART;TZID=Asia/Singapore:20260901T080000\\nRRULE:FREQ=MONTHLY') as string,
+        },
+        target: {
+          type: 'string',
+          enum: ['this_session', 'new_once', 'new'],
+          description: expect.stringContaining(
+            'new_once delivers to the same new session every time, opened at the first delivery; new opens a different '
+            + 'new session for every delivery. New sessions use this session\'s working directory and preset.',
+          ) as string,
         },
       },
     })
   })
 
-  it.each<[unknown, string]>([
-    [{ expression: '0 0 L * *', time_zone: 'UTC' }, 'invalid_rule'],
-    [{ expression: '0 0 20-10 * *', time_zone: 'UTC' }, 'invalid_rule'],
-    [{ expression: '0 0 * * *', time_zone: '+08:00' }, 'invalid_time_zone'],
-    [{ expression: '0 0 30 2 *', time_zone: 'UTC' }, 'time_out_of_range'],
-  ])('refuses the invalid cron rule %# before storing a task', async (cron, code) => {
+  it.each(['schedule_create', 'schedule_edit'])('keeps %s authoring guidance RRULE-only', async (name) => {
     const test = await setup()
-    expect((await execute(test, 'schedule_create', { prompt: 'Invalid cron', title: 'Invalid cron', cron })).value)
-      .toMatchObject({ code })
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
+    const schema = test.ctx.tools.schemas(test.agent).find(candidate => candidate.name === name)
+    expect(schema).toBeDefined()
+    const authoring = JSON.stringify({ description: schema?.description, parameters: schema?.parameters })
+    expect(authoring).toMatch(/\brrule\b/i)
+    expect(authoring).not.toMatch(/\bcron\b/i)
+    expect(schema?.parameters).toMatchObject({ properties: { rrule: { type: 'string' } } })
+  })
+
+  it('keeps the RRULE example copyable as a quoted string in the PTC SDK', async () => {
+    const test = await setup()
+    await test.ctx.plugin(PromptRuntime)
+    await test.scope.ctx.plugin(PtcToolExecutor)
+    const assembly = await test.ctx.systemPrompt.assemble({ scope: test.agent })
+    const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
+    const example = /Example: ("[^"\n]+")/.exec(sdk)?.[1]
+    expect(example).toContain('\\nRRULE:')
+    const rrule: unknown = JSON.parse(example ?? 'null')
+    expect(typeof rrule).toBe('string')
+    if (typeof rrule !== 'string') throw new Error('missing RRULE string example')
+    expect(rrule).toContain('\nRRULE:')
+    expect(await call(test, 'schedule_create', { ...TASK, rrule })).toMatchObject({ kind: 'rrule' })
   })
 
   it.each([
-    null, '0 0 * * *', {}, { expression: '0 0 * * *' }, { time_zone: 'UTC' },
-    { expression: 7, time_zone: 'UTC' }, { expression: '0 0 * * *', time_zone: 8 },
-    { expression: '0 0 * * *', time_zone: 'UTC', extra: true },
-  ])('rejects malformed cron JSON arguments %# before creation', async (cron) => {
-    const test = await setup()
-    expect((await execute(test, 'schedule_create', { prompt: 'Malformed', title: 'Malformed', cron })).isError).toBe(true)
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
-  })
-
-  it('requires exactly one of all six selectors for every selector combination', async () => {
-    const test = await setup()
-    const selectors = [
-      { after_seconds: 60 }, { at: '2026-09-17T00:00:00Z' }, { every_seconds: 300 },
-      { daily: { time: '23:00:00', time_zone: 'Asia/Shanghai' } },
-      { weekly: { time: '09:00:00', time_zone: 'Asia/Shanghai', weekdays: [1, 3] } },
-      { cron: { expression: '0 9 * * 1-5', time_zone: 'Asia/Shanghai' } },
-    ]
-    for (let mask = 0; mask < 64; mask += 1) {
-      if (mask !== 0 && (mask & (mask - 1)) === 0) continue
-      const args = selectors.filter((_selector, index) => mask & (1 << index))
-        .reduce<Record<string, unknown>>((input, selector) => ({ ...input, ...selector }), {
-          prompt: 'Invalid selection', title: 'Invalid selection',
-        })
-      expect((await execute(test, 'schedule_create', args)).value).toEqual({
-        code: 'invalid_selector',
-        message: 'schedule_create accepts exactly one of after_seconds, at, every_seconds, daily, weekly, or cron.',
+    { newSessionIntervalSeconds: 900, spacing: ', at most once every 15 minutes' },
+    { newSessionIntervalSeconds: 90, spacing: ', at most once every 90 seconds' },
+  ])('names the configured spacing of new deliveries in the target description: $newSessionIntervalSeconds s',
+    async ({ newSessionIntervalSeconds, spacing }) => {
+      const test = await setup({ config: { newSessionIntervalSeconds } })
+      const schema = test.ctx.tools.schemas(test.agent).find(candidate => candidate.name === 'schedule_create')
+      expect(schema?.parameters).toMatchObject({
+        properties: {
+          target: {
+            description: expect.stringContaining(`new opens a different new session for every delivery${spacing}. New sessions`) as string,
+          },
+        },
       })
-    }
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
-  })
-
-  it.each([
-    ['24:00:00', 'UTC', 'invalid_rule'], ['23:59:60', 'UTC', 'invalid_rule'],
-    ['23:00', 'UTC', 'invalid_rule'], ['23:00:00.1234', 'UTC', 'invalid_rule'],
-    ['23:00:00', 'Unknown/Zone', 'invalid_time_zone'], ['23:00:00', '+08:00', 'invalid_time_zone'],
-  ])('rejects invalid daily rule values (%s, %s)', async (time, time_zone, code) => {
-    const test = await setup()
-    expect((await execute(test, 'schedule_create', {
-      prompt: 'Invalid rule', title: 'Invalid rule', daily: { time, time_zone },
-    })).value)
-      .toMatchObject({ code })
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
-  })
-
-  it.each([
-    null, '23:00:00', {}, { time: '23:00:00' }, { time: 23, time_zone: 'UTC' },
-    { time: '23:00:00', time_zone: 8 }, { time: '23:00:00', time_zone: 'UTC', date: '2026-09-16' },
-  ])('rejects malformed daily JSON arguments %# before creation', async (daily) => {
-    const test = await setup()
-    expect((await execute(test, 'schedule_create', { prompt: 'Malformed', title: 'Malformed', daily })).isError).toBe(true)
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
-  })
-
-  it('creates through the shared service and exposes the same list and delete values', async () => {
-    const test = await setup()
-    const created = await execute(test, 'schedule_create', { prompt: 'Check', every_seconds: 300, title: 'Check' })
-    const records = await test.service.list({ sessionId: test.agent.session.id })
-    expect(records).toHaveLength(1)
-    expect(created.value).toMatchObject({ id: records[0]?.id, kind: 'every', deliveryMode: 'host' })
-    const listed = await execute(test, 'schedule_list', {})
-    expect(listed.value).toEqual([created.value])
-    const deleted = await execute(test, 'schedule_delete', { id: records[0]?.id })
-    expect(deleted.value).toEqual({ id: records[0]?.id, deleted: true })
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
-  })
-
-  it.each([
-    { prompt: 'Missing selector', title: 'Missing selector' },
-    { prompt: 'Conflicting', after_seconds: 1, every_seconds: 300, title: 'Conflicting' },
-    { prompt: 'Too frequent', every_seconds: 1, title: 'Too frequent' },
-    { prompt: ' ', after_seconds: 1, title: 'Blank prompt' },
-    { prompt: 'Past', at: '2026-09-15T00:00:00Z', title: 'Past' },
-    { prompt: 'Unknown selector', after_seconds: 60, extra: true, title: 'Unknown selector' },
-    { prompt: 'Fractional delay', after_seconds: 1.5, title: 'Fractional delay' },
-    { prompt: 'Zero delay', after_seconds: 0, title: 'Zero delay' },
-    { prompt: 'Negative delay', after_seconds: -1, title: 'Negative delay' },
-    { prompt: 'Fractional interval', every_seconds: 300.5, title: 'Fractional interval' },
-  ])('refuses invalid creation input %j without storing a task', async (args) => {
-    const test = await setup()
-    const result = await execute(test, 'schedule_create', args)
-    expect(result.value).toHaveProperty('code')
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
-  })
-
-  it('cannot reach the tools from another Agent or delete another Session task', async () => {
-    const test = await setup()
-    const foreign = agentFor(test.ctx, 'foreign')
-    const record = await test.service.create(SessionId('foreign'), {
-      prompt: 'Keep', after_seconds: 60, title: 'Keep',
     })
-    expect((await execute(test, 'schedule_list', {}, foreign)).isError).toBe(true)
-    expect((await execute(test, 'schedule_delete', { id: record.id })).value)
-      .toMatchObject({ deleted: false, code: 'schedule_not_found' })
-    expect(await test.service.list({ sessionId: foreign.session.id })).toEqual([record])
+
+  it('creates a task for this Session from trimmed text', async () => {
+    const test = await setup()
+    expect(await createTask(test, { title: '  Queue check  ', prompt: ' Check the queue\n' })).toEqual({ kind: 'rrule',
+      id: expect.stringMatching(/^schedule-/) as string, title: 'Queue check', prompt: 'Check the queue', rrule: DAILY,
+      scheduledAt: '2026-09-16T01:00:00.000Z', scheduledAtLocal: '2026-09-16T01:00:00+00:00',
+      target: { kind: 'session', sessionId: 'original' },
+      status: 'active', updatedAt: NOW,
+    })
+    expect(test.createSession).not.toHaveBeenCalled()
   })
 
-  it('contains storage failure and unregisters all tools on scope disposal', async () => {
-    const test = await setup()
-    test.pool.failNextWrites = 1
-    expect((await execute(test, 'schedule_create', { prompt: 'Failed', after_seconds: 60, title: 'Failed' })).value)
-      .toMatchObject({ code: 'internal_error' })
-    await test.scope.dispose()
-    for (const name of ['schedule_create', 'schedule_list', 'schedule_delete', 'schedule_update']) {
-      expect(test.ctx.tools.get(name, test.agent)).toBeUndefined()
-    }
-    expect((await execute(test, 'schedule_list', {})).isError).toBe(true)
+  it('reserves one new Session with the caller directory and composed preset for new_once', async () => {
+    const test = await setupWithPreset()
+    const task = await createTask(test, { target: 'new_once' })
+    expect(task).toMatchObject({
+      target: { kind: 'new_once', sessionId: expect.stringMatching(/^session-/) as string, create: { cwd: '/work', agentPreset: 'research' } },
+    })
+    expect(test.composedPreset).toHaveBeenCalledOnce()
+    expect(test.composedPreset.mock.calls[0]?.[0]).toBe(test.agent.ctx)
+    expect(test.createSession).not.toHaveBeenCalled()
   })
 
-  it('presents management calls and renders lossless model results', async () => {
-    const test = await setup()
-    const cases = [
-      ['schedule_create', { prompt: 'Check', after_seconds: 60, title: 'Check' },
-        { card: 'generic', title: 'Create reminder', kind: 'other', rawInput: 'Check' }],
-      ['schedule_list', {}, { card: 'generic', title: 'List reminders', kind: 'read' }],
-      ['schedule_delete', { id: 'missing' },
-        { card: 'generic', title: 'Delete reminder', kind: 'other', rawInput: 'missing' }],
-      ['schedule_update', { id: 'missing', title: 'Check' },
-        { card: 'generic', title: 'Update reminder', kind: 'other', rawInput: 'missing' }],
-    ] as const
-    for (const [name, args, presentation] of cases) {
-      const definition = test.ctx.tools.get(name, test.agent)
-      expect(definition?.presentCall?.(args)).toEqual(presentation)
-      const result = await execute(test, name, args)
-      expect(result.isError).toBe(false)
-      expect(result.content).toEqual([{ type: 'text', text: JSON.stringify(result.value) }])
-    }
-    expect(test.ctx.tools.get('schedule_create', test.agent)?.presentCall?.({ prompt: 42 })).toBeUndefined()
+  it('preserves an omitted target and replaces an explicit target with the editing Session context', async () => {
+    const test = await setupWithPreset()
+    const task = await createTask(test, { target: 'new_once' })
+    if (task.target.kind !== 'new_once') throw new Error('expected a reserved Session target')
+    const editor = agentFor(test.ctx, 'editor', { cwd: '/other' })
+    await mountToolSchedule(test.ctx, editor)
+    test.composedPreset.mockReturnValue('editor-preset')
+    const renamed = await execute(test, 'schedule_edit', { id: task.id, action: 'update', title: 'Renamed' }, editor)
+    expect(renamed.value).toMatchObject({ target: task.target })
+    const replaced = await execute(test, 'schedule_edit', { id: task.id, action: 'update', target: 'new_once' }, editor)
+    expect(replaced.value).toMatchObject({
+      target: { kind: 'new_once', create: { cwd: '/other', agentPreset: 'editor-preset' } },
+    })
+    expect(replaced.value).not.toHaveProperty('target.sessionId', task.target.sessionId)
+    expect(test.createSession).not.toHaveBeenCalled()
   })
 
-  it.each(['', ' padded', 'padded '])('rejects a malformed delete identity %j', async (id) => {
-    const test = await setup()
-    expect((await execute(test, 'schedule_delete', { id })).value)
-      .toMatchObject({ code: 'invalid_rule' })
+  it('targets a new Session per delivery for new, omitting creation values the caller lacks', async () => {
+    const test = await setupWithPreset()
+    const task = await createTask(test, { target: 'new' })
+    expect(task.target).toEqual({ kind: 'new', create: { cwd: '/work', agentPreset: 'research' } })
+    const bare = await createTask(await setup(), { target: 'new' })
+    expect(bare.target).toEqual({ kind: 'new', create: {} })
   })
 
   it.each([
-    ['schedule_create', { prompt: 'Foreign', after_seconds: 60, title: 'Foreign' }],
-    ['schedule_delete', { id: 'foreign-task' }],
-  ])('rejects another Agent using %s', async (name, args) => {
+    { input: 'a blank title', args: { title: ' ' }, error: { code: 'invalid_prompt', message: REQUIRED_TITLE_MESSAGE } },
+    {
+      input: 'a long title', args: { title: 'x'.repeat(MAX_TITLE_LENGTH + 1) },
+      error: { code: 'invalid_prompt', message: `title must be at most ${MAX_TITLE_LENGTH} characters.` },
+    },
+    {
+      input: 'a blank prompt', args: { prompt: '\n' },
+      error: { code: 'invalid_prompt', message: 'prompt must be non-empty after trimming.' },
+    },
+    { input: 'a rule without DTSTART', args: { rrule: 'RRULE:FREQ=DAILY' }, error: TWO_LINES },
+    { input: 'an escaped newline', args: { rrule: 'DTSTART:20260916T010000Z\\nRRULE:FREQ=DAILY' }, error: TWO_LINES },
+    {
+      input: 'an unknown time zone', args: { rrule: 'DTSTART;TZID=Mars/Olympus:20260916T080000\nRRULE:FREQ=DAILY' },
+      error: { code: 'invalid_time_zone', message: 'TZID must be UTC or a valid IANA Area/Location name.' },
+    },
+    {
+      input: 'FREQ=SECONDLY', args: { rrule: 'DTSTART:20260916T010000Z\nRRULE:FREQ=SECONDLY' },
+      error: {
+        code: 'frequency_too_high', message: 'FREQ=SECONDLY is not supported; occurrences must be at least 60 seconds apart.',
+      },
+    },
+    {
+      input: 'a rule that ended', args: { rrule: 'DTSTART:20260901T010000Z\nRRULE:FREQ=DAILY;UNTIL=20260910T000000Z' },
+      error: { code: 'not_future', message: 'rrule must contain an occurrence strictly in the future.' },
+    },
+  ])('returns the input error for $input and stores nothing', async ({ args, error }) => {
     const test = await setup()
-    const foreign = agentFor(test.ctx, 'other-tool-caller')
-    expect((await execute(test, name, args, foreign)).isError).toBe(true)
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([])
+    expect(await call(test, 'schedule_create', { ...TASK, ...args })).toEqual(error)
+    expect((await test.service.list({})).total).toBe(0)
   })
 
-  it.each([
-    ['schedule_create', { prompt: 'Canceled', after_seconds: 60, title: 'Canceled' }],
-    ['schedule_list', {}],
-    ['schedule_delete', { id: 'canceled-task' }],
-  ])('refuses cancellation at the %s body before calling the service', async (name, args) => {
+  it('rejects a target outside the model choices before the service runs', async () => {
     const test = await setup()
     const create = vi.spyOn(test.service, 'create')
-    const list = vi.spyOn(test.service, 'list')
-    const remove = vi.spyOn(test.service, 'delete')
-    // The runtime rejects an already-aborted caller before invoking its registered body.
-    const value = await executeBody(test, name, args, AbortSignal.abort())
-    expect(value).toMatchObject({ code: 'internal_error' })
+    expect((await execute(test, 'schedule_create', { ...TASK, target: 'session' })).isError).toBe(true)
     expect(create).not.toHaveBeenCalled()
-    expect(list).not.toHaveBeenCalled()
-    expect(remove).not.toHaveBeenCalled()
   })
 
-  it.each(['schedule_create', 'schedule_delete'])('does not mutate tasks when %s is canceled in the FIFO', async (name) => {
+  it('lists one page of tasks from every Session', async () => {
     const test = await setup()
-    const sessionId = test.agent.session.id
-    const target = await test.service.create(sessionId, { prompt: 'Keep target', after_seconds: 300, title: 'Keep target' })
-    await test.service.create(sessionId, { prompt: 'Queue blocker', after_seconds: 1, title: 'Queue blocker' })
-    const entered = Promise.withResolvers<undefined>()
-    const restored = Promise.withResolvers<{ agent: Agent }>()
-    test.resolve.mockImplementationOnce(() => { entered.resolve(undefined); return restored.promise })
-    const controller = new AbortController()
-    try {
-      await vi.advanceTimersByTimeAsync(1000)
-      await entered.promise
-      const args = name === 'schedule_create'
-        ? { prompt: 'Canceled in queue', after_seconds: 60, title: 'Canceled in queue' }
-        : { id: target.id }
-      const pending = executeBody(test, name, args, controller.signal)
-      controller.abort()
-      restored.resolve({ agent: test.agent })
-      const result = await pending
-      expect(await test.service.list({ sessionId })).toEqual([target])
-      expect(result).toMatchObject({ code: 'internal_error' })
-    } finally {
-      restored.resolve({ agent: test.agent })
+    const other = await createOther(test)
+    const first = await createTask(test)
+    const second = await createTask(test, { rrule: 'DTSTART:20260916T020000Z\nRRULE:FREQ=DAILY' })
+    const paused = await call(test, 'schedule_edit', { id: (await createTask(test)).id, action: 'update', active: false })
+    expect(await call(test, 'schedule_list', {})).toEqual({
+      items: [other, first, second, paused], shown: 4, total: 4, limit: DEFAULT_LIST_LIMIT, offset: 0,
+    })
+    expect(await call(test, 'schedule_list', { limit: 1, offset: 1 }))
+      .toEqual({ items: [first], shown: 1, total: 4, limit: 1, offset: 1 })
+    expect(await call(test, 'schedule_list', { active: true })).toMatchObject({ items: [other, first, second], total: 3 })
+    expect(await call(test, 'schedule_list', { active: false })).toMatchObject({ items: [paused], total: 1 })
+    // An undeclared argument does not select a narrower list.
+    expect(await call(test, 'schedule_list', { sessionId: 'original' })).toMatchObject({ total: 4 })
+  })
+
+  it.each([{ limit: 0 }, { limit: MAX_LIST_LIMIT + 1 }, { offset: -1 }])('rejects the page bounds %j', async (bounds) => {
+    const test = await setup()
+    expect(await call(test, 'schedule_list', bounds)).toEqual({
+      code: 'invalid_rule', message: `limit must be 1-${MAX_LIST_LIMIT} and offset must be a non-negative integer.`,
+    })
+  })
+
+  it('views one task by id and reports a missing id', async () => {
+    const test = await setup()
+    const task = await createTask(test)
+    expect(await call(test, 'schedule_view', { id: task.id })).toEqual(task)
+    expect(await call(test, 'schedule_view', { id: 'missing' })).toEqual({ id: 'missing', code: 'schedule_not_found' })
+  })
+
+  it('views the latest delivery of a task', async () => {
+    const test = await setup()
+    test.resolve.mockResolvedValue({ agent: test.agent })
+    const task = await createTask(test)
+    await test.service.run({ id: task.id })
+    const viewed = await call(test, 'schedule_view', { id: task.id })
+    expect(viewed).toEqual(await stored(test, task.id))
+    expect(viewed).toMatchObject({ lastDelivery: { targetSessionId: 'original', deliveredAt: NOW } })
+    for (const key of ['involvedSessionIds', 'createdAt', 'executionActive', 'deliveryFloorEndsAt', 'lastDelivery.messageId']) {
+      expect(viewed).not.toHaveProperty(key)
     }
   })
 
-  it('withholds storage details from list and delete failures and retains the task', async () => {
+  it('updates every field in one change', async () => {
     const test = await setup()
-    const record = await test.service.create(test.agent.session.id, {
-      prompt: 'Keep', after_seconds: 60, title: 'Keep',
+    const task = await createTask(test)
+    const rrule = 'DTSTART;TZID=Asia/Singapore:20260921T080000\nRRULE:FREQ=WEEKLY;BYDAY=MO'
+    const updated = await call(test, 'schedule_edit', { kind: 'rrule',
+      id: task.id, action: 'update', title: 'Weekly check', prompt: 'Check the weekly queue', rrule, target: 'new',
+      active: false, expectedUpdatedAt: task.updatedAt,
     })
-    vi.spyOn(test.service, 'list').mockRejectedValueOnce(new Error('private backend location'))
-    expect((await execute(test, 'schedule_list', {})).value)
-      .toEqual({ code: 'internal_error', message: 'The schedule operation failed.' })
-    test.pool.failNextWrites = 1
-    expect((await execute(test, 'schedule_delete', { id: record.id })).value)
-      .toEqual({ code: 'internal_error', message: 'The schedule operation failed.' })
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([record])
+    expect(updated).toEqual({ ...task, title: 'Weekly check', prompt: 'Check the weekly queue', rrule, scheduledAt: '2026-09-21T00:00:00.000Z',
+      scheduledAtLocal: '2026-09-21T08:00:00+08:00', target: { kind: 'new', create: {} }, status: 'paused',
+      updatedAt: '2026-09-16T00:00:00.001Z',
+    })
+    expect(await stored(test, task.id)).toEqual(updated)
+  })
+
+  it('pauses a task and resumes it at the next future occurrence', async () => {
+    const test = await setup()
+    const task = await createTask(test)
+    expect(await call(test, 'schedule_edit', { id: task.id, action: 'update', active: false }))
+      .toMatchObject({ status: 'paused', scheduledAt: '2026-09-16T01:00:00.000Z' })
+    vi.setSystemTime(new Date('2026-09-17T12:00:00Z'))
+    expect(await call(test, 'schedule_edit', { id: task.id, action: 'update', active: true })).toMatchObject({
+      status: 'active', scheduledAt: '2026-09-18T01:00:00.000Z', updatedAt: '2026-09-17T12:00:00.000Z',
+    })
+  })
+
+  it('applies a change based on the latest read and refuses a change based on an earlier read', async () => {
+    const test = await setup()
+    const task = await createTask(test)
+    const renamed = await call(test, 'schedule_edit', {
+      id: task.id, action: 'update', title: 'Renamed', expectedUpdatedAt: task.updatedAt,
+    })
+    expect(renamed).toMatchObject({ title: 'Renamed', updatedAt: '2026-09-16T00:00:00.001Z' })
+    expect(await call(test, 'schedule_edit', {
+      id: task.id, action: 'update', title: 'Stale', expectedUpdatedAt: task.updatedAt,
+    })).toEqual({ id: task.id, code: 'schedule_conflict' })
+    expect(await stored(test, task.id)).toEqual(renamed)
+  })
+
+  it('deletes a task only when it is unchanged since the read named by expectedUpdatedAt', async () => {
+    const test = await setup()
+    const task = await createTask(test)
+    const renamed = await call(test, 'schedule_edit', { id: task.id, action: 'update', title: 'Renamed' })
+    expect(renamed).toMatchObject({ updatedAt: '2026-09-16T00:00:00.001Z' })
+    expect(await call(test, 'schedule_edit', { id: task.id, action: 'delete', expectedUpdatedAt: task.updatedAt }))
+      .toEqual({ id: task.id, code: 'schedule_conflict' })
+    expect(await stored(test, task.id)).toEqual(renamed)
+    expect(await call(test, 'schedule_edit', {
+      id: task.id, action: 'delete', expectedUpdatedAt: '2026-09-16T00:00:00.001Z',
+    })).toEqual({ id: task.id, deleted: true })
+  })
+
+  it('deletes a task, after which its id is missing', async () => {
+    const test = await setup()
+    const task = await createTask(test)
+    expect(await call(test, 'schedule_edit', { id: task.id, action: 'delete' })).toEqual({ id: task.id, deleted: true })
+    const missing = { id: task.id, code: 'schedule_not_found' }
+    expect(await call(test, 'schedule_edit', { id: task.id, action: 'delete' })).toEqual(missing)
+    expect(await call(test, 'schedule_edit', { id: task.id, action: 'update', title: 'Gone' })).toEqual(missing)
+    expect(await call(test, 'schedule_view', { id: task.id })).toEqual(missing)
   })
 
   it.each([
-    ['at', { at: '2026-09-16T01:00:00Z' }, 'at'],
-    ['every_seconds', { every_seconds: 600 }, 'every'],
-    ['daily', { daily: { time: '23:00:00', time_zone: 'Asia/Shanghai' } }, 'daily'],
-    ['weekly', { weekly: { time: '09:00:00', time_zone: 'Asia/Shanghai', weekdays: [1, 3] } }, 'weekly'],
-    ['cron', { cron: { expression: '*/15 * * * *', time_zone: 'UTC' } }, 'cron'],
-  ])('retimes one reminder through %s in place', async (_label, selector, kind) => {
+    { input: 'delete with a title', args: { action: 'delete', title: 'Renamed' }, error: DELETE_ONLY },
+    { input: 'delete with a pause', args: { action: 'delete', active: false }, error: DELETE_ONLY },
+    { input: 'an empty update', args: { action: 'update' }, error: UPDATE_FIELD },
+    { input: 'an update with only a read time', args: { action: 'update', expectedUpdatedAt: NOW }, error: UPDATE_FIELD },
+    {
+      input: 'a blank title', args: { action: 'update', title: ' ' },
+      error: { code: 'invalid_prompt', message: REQUIRED_TITLE_MESSAGE },
+    },
+    { input: 'a one-line rrule', args: { action: 'update', rrule: 'RRULE:FREQ=DAILY' }, error: TWO_LINES },
+  ])('returns the input error for $input and keeps the task', async ({ args, error }) => {
     const test = await setup()
-    const record = await test.service.create(test.agent.session.id, {
-      prompt: 'Keep', every_seconds: 300, title: 'Keep',
-    })
-    const updated = await execute(test, 'schedule_update', { id: record.id, ...selector })
-    expect(updated.isError).toBe(false)
-    expect(updated.value).toMatchObject({ id: record.id, kind, title: 'Keep' })
-    const records = await test.service.list({ sessionId: test.agent.session.id })
-    expect(records).toHaveLength(1)
-    expect(records[0]!.id).toBe(record.id)
-    expect(records[0]!.scheduledAt).toBe((updated.value as { scheduledAt: string }).scheduledAt)
+    const task = await createTask(test)
+    expect(await call(test, 'schedule_edit', { id: task.id, ...args })).toEqual(error)
+    expect(await stored(test, task.id)).toEqual(task)
   })
 
-  it('renames and re-instructs a reminder without moving its committed target', async () => {
-    const test = await setup()
-    const record = await test.service.create(test.agent.session.id, {
-      prompt: 'Original', every_seconds: 300, title: 'Original',
-    })
-    const updated = await execute(test, 'schedule_update', { id: record.id, title: ' Renamed ', prompt: 'New body' })
-    expect(updated.value).toMatchObject({
-      id: record.id, title: 'Renamed', prompt: 'New body', scheduledAt: record.scheduledAt, kind: 'every',
-    })
-    expect((await test.service.list({ sessionId: test.agent.session.id }))[0])
-      .toMatchObject({ title: 'Renamed', prompt: 'New body', scheduledAt: record.scheduledAt })
-  })
-
-  it('returns the unchanged view for an update that changes nothing', async () => {
-    const test = await setup()
-    const record = await test.service.create(test.agent.session.id, {
-      prompt: 'Keep', every_seconds: 300, title: 'Keep',
-    })
-    expect((await execute(test, 'schedule_update', { id: record.id, title: 'Keep' })).value)
-      .toMatchObject({ id: record.id, title: 'Keep', scheduledAt: record.scheduledAt })
-  })
-
-  it('reports an ended reminder as ended instead of unknown', async () => {
+  it('requires a future RRULE to resume an ended one-shot task', async () => {
     const id = ScheduleId('ended-task')
-    const test = await setup({ beforeService: async (_ctx, facility) => {
-      const domain = await facility.open(scheduleDomain)
-      await domain.table('tasks').put(id, {
-        sessionId: SessionId('original'), status: 'inactive',
-        record: createAfterScheduleRecord(id, 'Ended prompt', 1, Date.parse('2026-09-15T00:00:00.000Z'), 'Ended'),
-      })
-      await domain.close()
-    } })
-    expect((await execute(test, 'schedule_update', { id, title: 'Revive' })).value)
-      .toEqual({ id, updated: false, code: 'schedule_ended' })
-  })
-
-  it('reports an unknown id without mutating the task table', async () => {
-    const test = await setup()
-    const record = await test.service.create(test.agent.session.id, {
-      prompt: 'Keep', every_seconds: 300, title: 'Keep',
+    const rule = createAfterScheduleRecord(id, 'Ended prompt', 1, Date.parse('2026-09-15T00:00:00.000Z'), 'Ended')
+    const test = await setup({
+      beforeService: (_ctx, facility) => seedTasks(facility, [boundTask(SessionId('original'), rule, { status: 'ended' })]),
     })
-    expect((await execute(test, 'schedule_update', { id: 'missing', title: 'Nope' })).value)
-      .toEqual({ id: 'missing', updated: false, code: 'schedule_not_found' })
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([record])
+    expect(await call(test, 'schedule_view', { id })).toMatchObject({
+      status: 'ended', kind: 'after', scheduledAt: '2026-09-15T00:00:01.000Z',
+    })
+    expect(await call(test, 'schedule_edit', { id, action: 'update', active: true })).toEqual({
+      code: 'not_future', message: 'This task has no future occurrence. Set a future schedule before resuming it.',
+    })
+    const resumed = await call(test, 'schedule_edit', { id, action: 'update', rrule: DAILY, active: true })
+    expect(resumed).toMatchObject({ kind: 'rrule', status: 'active', rrule: DAILY, scheduledAt: '2026-09-16T01:00:00.000Z' })
   })
 
   it.each([
-    ['an unknown argument', { id: 'task-1', bogus: true }, 'invalid_selector'],
-    ['two selectors', { id: 'task-1', at: '2026-09-16T01:00:00Z', every_seconds: 600 }, 'invalid_selector'],
-    ['no replacement at all', { id: 'task-1' }, 'invalid_selector'],
-    ['an empty id', { id: '', title: 'Nope' }, 'invalid_rule'],
-    ['an id with surrounding whitespace', { id: ' task-1 ', title: 'Nope' }, 'invalid_rule'],
-    ['a blank title', { id: 'task-1', title: '   ' }, 'invalid_prompt'],
-    ['an over-long title', { id: 'task-1', title: 'x'.repeat(MAX_TITLE_LENGTH + 1) }, 'invalid_prompt'],
-    ['a blank prompt', { id: 'task-1', prompt: '  ' }, 'invalid_prompt'],
-    ['a fractional interval', { id: 'task-1', every_seconds: 300.5 }, 'invalid_rule'],
-    ['an interval below the floor', { id: 'task-1', every_seconds: 59 }, 'frequency_too_high'],
-  ])('rejects %s', async (_label, args, code) => {
-    const test = await setup()
-    expect((await execute(test, 'schedule_update', args)).value).toMatchObject({ code })
-  })
-
-  it('reports a missing required title with the shared message', async () => {
-    const test = await setup()
-    expect((await execute(test, 'schedule_update', { id: 'task-1', title: '' })).value)
-      .toEqual({ code: 'invalid_prompt', message: REQUIRED_TITLE_MESSAGE })
-  })
-
-  it('surfaces one invalid timing value from the domain rather than a generic failure', async () => {
-    const test = await setup()
-    const record = await test.service.create(test.agent.session.id, {
-      prompt: 'Keep', every_seconds: 300, title: 'Keep',
+    { ...RECORD_FIELDS, kind: 'rrule', rrule: DAILY },
+    { ...RECORD_FIELDS, kind: 'cron', expression: '0 1 * * *', timeZone: 'UTC' },
+    { ...RECORD_FIELDS, kind: 'every', everySeconds: 60 },
+    { ...RECORD_FIELDS, kind: 'after', afterSeconds: 3600 },
+    { ...RECORD_FIELDS, kind: 'at' },
+    { ...RECORD_FIELDS, kind: 'daily', time: '01:00:00.000', timeZone: 'UTC' },
+    { ...RECORD_FIELDS, kind: 'weekly', time: '01:00:00.000', timeZone: 'UTC', weekdays: [3] },
+  ] satisfies ScheduleRecord[])(
+    'returns authoritative $kind timing fields in view, list, and edit', async (rule) => {
+      const { id } = rule
+      const test = await setup({ beforeService: (_ctx, facility) => seedTasks(facility, [boundTask(SessionId('original'), rule)]) })
+      expect(await test.service.view({ id })).toMatchObject(rule)
+      expect(await call(test, 'schedule_view', { id })).toMatchObject(rule)
+      expect(await call(test, 'schedule_list', {})).toMatchObject({ items: [rule] })
+      expect(await call(test, 'schedule_edit', { id, action: 'update', title: 'Renamed' })).toMatchObject({ ...rule, title: 'Renamed' })
     })
-    expect((await execute(test, 'schedule_update', {
-      id: record.id, daily: { time: '09:00:00', time_zone: 'Mars/Olympus' },
-    })).value).toMatchObject({ code: 'invalid_time_zone' })
-  })
 
-  it('rejects another Agent updating a reminder', async () => {
+  it('changes another Session task and keeps notification bookkeeping out of the model result', async () => {
     const test = await setup()
-    const record = await test.service.create(test.agent.session.id, {
-      prompt: 'Keep', every_seconds: 300, title: 'Keep',
+    const other = await createOther(test)
+    const edited = await call(test, 'schedule_edit', { id: other.id, action: 'update', title: 'Renamed here' })
+    expect(edited).toMatchObject({
+      title: 'Renamed here', target: { kind: 'session', sessionId: 'other-session' },
     })
-    const foreign = agentFor(test.ctx, 'other-update-caller')
-    expect((await execute(test, 'schedule_update', { id: record.id, title: 'Foreign' }, foreign)).isError).toBe(true)
-    expect((await test.service.list({ sessionId: test.agent.session.id }))[0])
-      .toMatchObject({ title: 'Keep' })
-  })
-
-  it('refuses cancellation at the schedule_update body before reading the catalog', async () => {
-    const test = await setup()
-    const catalog = vi.spyOn(test.service, 'catalog')
-    const value = await executeBody(test, 'schedule_update', { id: 'task-1', title: 'Canceled' }, AbortSignal.abort())
-    expect(value).toMatchObject({ code: 'internal_error' })
-    expect(catalog).not.toHaveBeenCalled()
-  })
-
-  it('withholds storage details from an update read failure', async () => {
-    const test = await setup()
-    vi.spyOn(test.service, 'list').mockRejectedValueOnce(new Error('private backend location'))
-    expect((await execute(test, 'schedule_update', { id: 'task-1', title: 'Nope' })).value)
-      .toEqual({ code: 'internal_error', message: 'The schedule operation failed.' })
-  })
-
-  it('withholds storage details from an update write failure and keeps the stored fields', async () => {
-    const test = await setup()
-    const record = await test.service.create(test.agent.session.id, {
-      prompt: 'Keep', every_seconds: 300, title: 'Keep',
+    expect(edited).not.toHaveProperty('involvedSessionIds')
+    expect(await test.service.view({ id: other.id })).toMatchObject({
+      involvedSessionIds: ['other-session', 'original'],
     })
+  })
+
+  it('withholds failures that the tool does not declare', async () => {
+    const test = await setup()
+    vi.spyOn(test.service, 'list').mockRejectedValueOnce(new ScheduleInputError('not_future', 'private detail'))
+    expect(await call(test, 'schedule_list', {})).toEqual(INTERNAL_ERROR)
+    vi.spyOn(test.service, 'view').mockRejectedValueOnce(new Error('private backend location'))
+    expect(await call(test, 'schedule_view', { id: 'task-1' })).toEqual(INTERNAL_ERROR)
+  })
+
+  it('withholds storage failures and keeps the stored tasks', async () => {
+    const test = await setup()
+    const task = await createTask(test)
     test.pool.failNextWrites = 1
-    expect((await execute(test, 'schedule_update', { id: record.id, title: 'Renamed' })).value)
-      .toEqual({ code: 'internal_error', message: 'The schedule operation failed.' })
-    expect(await test.service.list({ sessionId: test.agent.session.id })).toEqual([record])
+    expect(await call(test, 'schedule_create', { ...TASK, title: 'Lost' })).toEqual(INTERNAL_ERROR)
+    test.pool.failNextWrites = 1
+    expect(await call(test, 'schedule_edit', { id: task.id, action: 'update', title: 'Renamed' })).toEqual(INTERNAL_ERROR)
+    expect((await test.service.list({})).items.map(reported)).toEqual([task])
   })
 
+  it('changes nothing when the call is already canceled', async () => {
+    const test = await setup()
+    const task = await createTask(test)
+    expect(await executeBody(test, 'schedule_create', TASK, AbortSignal.abort())).toEqual(INTERNAL_ERROR)
+    expect(await executeBody(test, 'schedule_edit', { id: task.id, action: 'update', title: 'Canceled' }, AbortSignal.abort()))
+      .toEqual(INTERNAL_ERROR)
+    expect((await test.service.list({})).items.map(reported)).toEqual([task])
+  })
+
+  it('presents each call as a generic card', async () => {
+    const test = await setup()
+    const cases = [
+      ['schedule_create', TASK, { card: 'generic', title: 'Create scheduled task', kind: 'other', rawInput: 'Queue check' }],
+      ['schedule_list', {}, { card: 'generic', title: 'List scheduled tasks', kind: 'read' }],
+      ['schedule_view', { id: 'task-1' }, { card: 'generic', title: 'View scheduled task', kind: 'read', rawInput: 'task-1' }],
+      ['schedule_edit', { id: 'task-1', action: 'update', title: 'Renamed' },
+        { card: 'generic', title: 'Edit scheduled task', kind: 'other', rawInput: 'task-1' }],
+      ['schedule_edit', { id: 'task-1', action: 'delete' },
+        { card: 'generic', title: 'Delete scheduled task', kind: 'other', rawInput: 'task-1' }],
+    ] as const
+    for (const [name, args, presentation] of cases) {
+      expect(test.ctx.tools.get(name, test.agent)?.presentCall?.(args)).toEqual(presentation)
+    }
+    expect(test.ctx.tools.get('schedule_create', test.agent)?.presentCall?.({ ...TASK, title: 42 })).toBeUndefined()
+  })
+
+  it('unregisters every tool when the mounting scope is disposed', async () => {
+    const test = await setup()
+    await test.scope.dispose()
+    for (const name of TOOL_NAMES) expect(test.ctx.tools.get(name, test.agent)).toBeUndefined()
+    expect((await execute(test, 'schedule_list', {})).isError).toBe(true)
+  })
 })

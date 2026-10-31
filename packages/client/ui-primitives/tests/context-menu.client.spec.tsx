@@ -14,6 +14,7 @@ it('places pointer menus at the cursor above the frame inset and focuses after p
     getAnchorRect={() => new DOMRect(200, 20, 0, 0)} items={[{ id: 'copy', label: 'Copy' }]} />)
   const menu = view.getByRole('menu')
   expect(menu.style.top).toBe('24px')
+  expect(menu.style.getPropertyValue('--dsh-anchored-max-height')).toBe(`${window.innerHeight - 24}px`)
   await waitFor(() => { expect(document.activeElement).toBe(view.getByRole('menuitem')) })
   fireEvent.pointerDown(document.body, { button: 2 })
   expect(close).not.toHaveBeenCalled()
