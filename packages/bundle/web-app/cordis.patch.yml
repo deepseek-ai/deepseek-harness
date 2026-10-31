@@ -129,7 +129,7 @@
       name: '@deepseek-ai/dsh-api-workspace-files'
 
     # The Schedule service owns the task store and delivers each due occurrence
-    # as a follow-up in its original Session. The clock reading and the four
+    # as a follow-up to the task's target Session. The clock reading and the four
     # reminder tools belong to the `standard`, `cordis`, and `ptc` presets,
     # which declare them in their own scope.
     - id: schedule
@@ -314,8 +314,9 @@
     - id: ui-plugin-manager
       name: '@deepseek-ai/dsh-client-ui-plugin-manager'
 
-    # Account section, title tag, activation prompt, and notices that CLI app
-    # plugins register on the Plugins page over their own account Remotes.
+    # CLI app plugins register their accounts with the `cliAccounts` registry;
+    # the Plugins page shows each account's section, title tag, activation
+    # prompt, and notices through the `cliAccounts` Remote.
     - id: ui-cli-account
       name: '@deepseek-ai/dsh-client-ui-cli-account'
 
@@ -386,6 +387,9 @@
 
     - id: ui-skill
       name: '@deepseek-ai/dsh-client-ui-skill'
+
+    - id: ui-agent-team
+      name: '@deepseek-ai/dsh-client-ui-agent-team'
 
     - id: ui-subagent
       name: '@deepseek-ai/dsh-client-ui-subagent'
@@ -557,12 +561,9 @@
 - id: tool-result-pruner
   disabled: true
 
-# The subagent registry and its backends STAY in the host plane. `subagents` is
-# a process singleton with a cross-session query surface (`listChildren`,
-# `followup`) that the host api-proxy serves to the browser, and a provider
-# registers under a globally unique name, so a per-session copy would both
-# starve that host row and collide on the second session. What a preset
-# chooses is which delegation TOOLS its agent sees, below.
+# The subagent registry and its backends belong in the host composition: browser
+# prompt and interrupt requests share its runtime, and provider names are unique
+# within the registry. Presets select the delegation tools visible to each Agent.
 
 - id: tool-subagent-control
   disabled: true

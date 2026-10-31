@@ -443,4 +443,17 @@ describe('TaskMenu', () => {
     }
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'trigger' }))
   })
+
+  it('leaves an Escape that an outer layer already handled', () => {
+    // A window capture listener runs before the menu's document listener.
+    const consume = (event: KeyboardEvent): void => { if (event.key === 'Escape') event.preventDefault() }
+    window.addEventListener('keydown', consume, true)
+    try {
+      render(<OpenMenu onSelect={() => {}} />)
+      fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Alpha' }), { key: 'Escape' })
+      expect(screen.getByRole('menu')).toBeDefined()
+    } finally {
+      window.removeEventListener('keydown', consume, true)
+    }
+  })
 })

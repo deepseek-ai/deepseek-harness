@@ -1,4 +1,4 @@
-/** One CLI plugin's account operations: one at a time, Host-owned, observable by any number of Remote subscribers. */
+/** One CLI plugin's account operations: one at a time, Host-owned, with a credential-free view that observers reread after each change. */
 
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
@@ -67,6 +67,15 @@ export function exitFailure<Command extends string>(command: Command, result: Cl
   return { command, exitCode: result.exitCode }
 }
 
+/**
+ * List a classified command as the diagnostic items a Plugins page failure shows after the plugin's guidance.
+ * @param failure - the classification of the last command a failed operation ran.
+ * @returns the command, then its exit code when it has one, such as `login` and `exit 3`; untranslated.
+ */
+export function failureDetails(failure: CliCommandFailure): string[] {
+  return failure.exitCode === null ? [failure.command] : [failure.command, `exit ${failure.exitCode}`]
+}
+
 class Operation<Kind extends string, Phase extends string, Failure extends CliCommandFailure> {
   readonly id = brandString<CliOperationId>(randomUUID())
   readonly controller = new AbortController()
@@ -88,7 +97,7 @@ class Operation<Kind extends string, Phase extends string, Failure extends CliCo
 }
 
 /**
- * Runs at most one account operation at a time; subscribers observe it without owning it. A failed operation logs and
+ * Runs at most one account operation at a time; observers see it without owning it. A failed operation logs and
  * returns only its last command's classification, because exceptions and native output may contain credentials.
  */
 export abstract class CliAccountRuntime<
@@ -172,30 +181,13 @@ export abstract class CliAccountRuntime<
   }
 
   /**
-   * Follow the account and its operations; each new subscriber starts a check when no operation runs.
-   * @param signal - the subscriber's lifetime; disposal also ends the stream.
-   * @returns the current view, then each changed view, coalescing changes that arrive before the next read.
+   * Call `listener` after each change of the view, without starting a check.
+   * @param listener - called synchronously after the account, operation, or result changes.
+   * @returns a disposer that stops the calls.
    */
-  async *follow(signal: AbortSignal): AsyncIterable<CliAccountView<Account, Kind, Phase, Failure>> {
-    this.refresh()
-    const combined = AbortSignal.any([signal, this.lifetime.signal])
-    let wake = Promise.withResolvers<void>()
-    let changed = true
-    const notify = (): void => { changed = true; wake.resolve() }
-    this.listeners.add(notify)
-    combined.addEventListener('abort', notify, { once: true })
-    try {
-      for (;;) {
-        if (!changed) await wake.promise
-        if (combined.aborted) break
-        wake = Promise.withResolvers<void>()
-        changed = false
-        yield this.snapshot()
-      }
-    } finally {
-      this.listeners.delete(notify)
-      combined.removeEventListener('abort', notify)
-    }
+  observe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => { this.listeners.delete(listener) }
   }
 
   /**

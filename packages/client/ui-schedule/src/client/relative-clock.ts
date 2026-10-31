@@ -10,6 +10,9 @@ import { useEffect, useState } from 'react'
  */
 export const RELATIVE_CLOCK_PERIOD_MS = 30_000
 
+/** Longest delay a timer holds, about 24.8 days; a longer delay fires at once. */
+const TIMER_LIMIT_MS = 2 ** 31 - 1
+
 /**
  * Current epoch milliseconds, re-sampled on a fixed period.
  *
@@ -23,14 +26,26 @@ export const RELATIVE_CLOCK_PERIOD_MS = 30_000
  * `Date.now()` and then a one-second interval while its popover is open, and the
  * Sidebar Session-row hover card samples `Date.now()` once per mount, because
  * that preview must not drift while the pointer rests on it.
+ *
+ * A state that ends between two periods, such as the delivery floor that holds
+ * Run now, passes its end as `wakeAt` so the clock samples it then instead of
+ * up to one period late.
  * @param periodMs - refresh period; defaults to {@link RELATIVE_CLOCK_PERIOD_MS}.
- * @returns epoch milliseconds, updated once per period.
+ * @param wakeAt - epoch milliseconds of one extra sample; an instant already past samples at once.
+ *   An instant beyond the timer limit, about 24.8 days ahead, is left to the period.
+ * @returns epoch milliseconds, updated once per period and at `wakeAt`.
  */
-export function useRelativeClock(periodMs: number = RELATIVE_CLOCK_PERIOD_MS): number {
+export function useRelativeClock(periodMs: number = RELATIVE_CLOCK_PERIOD_MS, wakeAt?: number): number {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const timer = setInterval(() => { setNow(Date.now()) }, periodMs)
     return () => { clearInterval(timer) }
   }, [periodMs])
+  useEffect(() => {
+    if (wakeAt === undefined || wakeAt - Date.now() > TIMER_LIMIT_MS) return
+    // Date.now() can read slightly behind the timer's own clock, so the sample is never earlier than `wakeAt`.
+    const timer = setTimeout(() => { setNow(Math.max(Date.now(), wakeAt)) }, Math.max(0, wakeAt - Date.now()))
+    return () => { clearTimeout(timer) }
+  }, [wakeAt])
   return now
 }

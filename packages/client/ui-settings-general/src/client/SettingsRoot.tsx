@@ -33,12 +33,12 @@ const CONNECTING_MIN_VISIBLE_MS = 800
 
 /** Nav glyph by section id; unknown ids fall back to the settings gear. */
 function navIcon(id: string) {
-  if (id === 'account') return <IconUserOutlineMedium className={css.navIcon} size={16} />
-  if (id === 'models') return <IconDataOutlineMedium className={css.navIcon} size={16} />
-  if (id === 'agent-presets') return <IconAgentPresetOutlineMedium className={css.navIcon} size={16} />
-  if (id === 'plugins') return <IconPersonalizationOutlineMedium className={css.navIcon} size={16} />
-  if (id === 'archived-sessions') return <IconArchiveOutlineMedium className={css.navIcon} size={16} />
-  return <IconSettingsOutlineMedium className={css.navIcon} size={16} />
+  if (id === 'account') return <IconUserOutlineMedium size={16} />
+  if (id === 'models') return <IconDataOutlineMedium size={16} />
+  if (id === 'agent-presets') return <IconAgentPresetOutlineMedium size={16} />
+  if (id === 'plugins') return <IconPersonalizationOutlineMedium size={16} />
+  if (id === 'archived-sessions') return <IconArchiveOutlineMedium size={16} />
+  return <IconSettingsOutlineMedium size={16} />
 }
 
 type PanelProps = {
@@ -88,7 +88,11 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
                 onFocus={(event) => { event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }}
                 onClick={() => { onSelect(row.id) }}
               >
-                {navIcon(row.id)}
+                <span className={css.navIcon} aria-hidden="true">
+                  {renderSlot('settings.section.icon', { size: 16, active: row.id === active }, {
+                    only: row.id, fallback: navIcon(row.id),
+                  })}
+                </span>
                 <span className={css.navLabel}>{row.label}</span>
               </button>
             ))}

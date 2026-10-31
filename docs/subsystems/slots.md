@@ -14,6 +14,8 @@ The root-scoped lists `sidebar.panellist.actions`, `conversation.session.header.
 
 [ui-workspace](../../packages/client/ui-workspace/README.md#understand-the-implementation) documents Session-row extension positions, visibility, and keyboard behavior.
 
+[ui-settings](../../packages/client/ui-settings/README.md#filling-the-settings-slots) documents the settings page and navigation-icon extension points.
+
 ## Declaration and lifecycle
 
 `SlotMap` is the compile-time registry. A package declaration-merges the key, cardinality, scope, owner props, keyed props, and optional slot-level inject face. The runtime declaration is the matching `children` entry on the component that owns the render location.

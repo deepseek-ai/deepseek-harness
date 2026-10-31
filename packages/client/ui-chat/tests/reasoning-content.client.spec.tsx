@@ -67,7 +67,9 @@ describe('reasoning Content Factory', () => {
 
   it('restores the registered default after a wrapping plugin unloads and removes the Factory with its owner', async () => {
     const b = await createReasoningRenderFixture('en')
-    const view = b.render(b.renderSlot('conversation.chat.reasoning.body', { text: 'Original thought', running: false }))
+    const view = b.render(b.renderSlot('conversation.chat.reasoning.body', {
+      rawText: 'Original model thought', text: 'Original thought', running: false,
+    }))
     expect(view.getByText('Original thought')).toBeTruthy()
     expect(b.runtime.slots.entries('conversation.chat.reasoning.body')[0]?.options.priority).toBe(100)
     const plugin = await b.runtime.mount({ inject: ['slots'], apply: (ctx) => {

@@ -4,7 +4,7 @@ import {
   IconAgentPresetOutlineRegular, IconClockOutlineRegular, IconBranchOutlineRegular,
   IconChevronDownOutlineRegular, IconContextInjectionOutlineRegular, IconCordisPluginOutlineRegular,
   IconGoalOutlineRegular, IconGlobeOutlineRegular, IconPaperPlaneOutlineRegular, IconQueueOutlineRegular,
-  type IconProps,
+  IconUsersOutlineRegular, type IconProps,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeViewProps } from '../contract/slots.ts'
 import { formatMessageClock } from './message-chrome.ts'
@@ -17,7 +17,7 @@ const TRIGGER_ICONS: Record<TurnTriggerIcon, ComponentType<IconProps>> = {
   goal: IconGoalOutlineRegular,
   agent: IconPaperPlaneOutlineRegular,
   team: IconAgentPresetOutlineRegular,
-  subagent: IconAgentPresetOutlineRegular,
+  subagent: IconUsersOutlineRegular,
   github: IconBranchOutlineRegular,
   webhook: IconGlobeOutlineRegular,
   schedule: IconClockOutlineRegular,
