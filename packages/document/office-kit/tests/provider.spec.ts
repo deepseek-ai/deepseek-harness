@@ -164,7 +164,8 @@ it('passes configured limits to the kit, reuses the converter, and removes all s
   await provider.convert(request)
   const { maxConcurrentConversions: _count, maxQueuedJobs: _queued, maxReaders: _readers, maxSourceBytes: _source,
     maxBackgroundConversions: _background, maxCachedEntries: _entries, maxCachedBytes: _cached,
-    maxSourceEntries: _aliases, ...options } = config
+    maxSourceEntries: _aliases, outputDirectory: _outputs, outputRetentionMs: _retention, maxOutputStoreBytes: _stored,
+    ...options } = config
   expect(kit.create).toHaveBeenCalledExactlyOnceWith({ ...options, resolveEnginePackage: resolvedKit().resolveEnginePackage })
   await ctx.fiber.dispose()
   expect(dispose).toHaveBeenCalledOnce()

@@ -24,10 +24,10 @@ export type ReadImageRowProps = ReadFamilyRowProps & PropsRenderSlots<'tool.call
 /**
  * The card material one read-family row contributes: exactly the ToolRow card
  * props that row owns. `read` supplies `read` and the line its call named;
- * `read_image` supplies `image` together with the slot dispatcher and loader
+ * `read_image` supplies `image` together with the gallery renderer and loader
  * that draw it.
  */
-export type ReadFamilyCard = Pick<ToolRowProps, 'read' | 'image' | 'renderSlot' | 'loadImage' | 'filePathLine'>
+export type ReadFamilyCard = Pick<ToolRowProps, 'read' | 'image' | 'renderImages' | 'loadImage' | 'filePathLine'>
 
 /**
  * Compose a read-family row: the shared chrome and model-derived fields, plus the

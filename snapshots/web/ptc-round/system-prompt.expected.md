@@ -161,6 +161,23 @@ interface ToolArgsMap {
     /** Exact model id; requires provider. */
     model?: string;
   } & Record<string, JsonValue>;
+  /** Render document pages as images you can view, convert a document to another format, or recalculate spreadsheet formulas. Accepts Word (doc, docx, odt), Excel (xls, xlsx, ods), and PowerPoint (ppt, pptx, odp) files; render also accepts PDF. */
+  office: {
+    /** render returns page images; convert and recalculate return a temporary file to copy to its destination. */
+    operation: "render" | "convert" | "recalculate";
+    /** Path of the document to read; it is not modified. */
+    input: string;
+    /** convert and recalculate: output format. Word converts to pdf, docx, odt, or txt; Excel to pdf, xlsx, ods, or csv; PowerPoint to pdf, pptx, or odp. recalculate writes xlsx or ods. */
+    format?: "pdf" | "docx" | "odt" | "txt" | "xlsx" | "ods" | "csv" | "pptx" | "odp";
+    /** render: one-based pages or slides; omit for all. Spreadsheets use sheet and range instead. */
+    pages?: number[];
+    /** Exact worksheet name. render: omit to render every visible sheet. convert: required for CSV from a workbook with several sheets. */
+    sheet?: string;
+    /** render: A1 range in sheet, such as A1:H40; omit for the used area. */
+    range?: string;
+    /** render: resolution from 24 to 600; default 144. */
+    dpi?: number;
+  } & Record<string, JsonValue>;
   /** Declare existing files as final deliverables for the user. Hosts may show presented files only after your turn ends, so call it once the files are final. If the user needs to review files earlier, such as before a tool call that waits for their answer, link them in your message instead. Use it when the user needs a separate file, especially Office documents, spreadsheets, and slide decks; prefer your final response when that suffices. The user opens the current files; their contents are not copied. */
   present: {
     /** Usually the 1-2 most important deliverables; at most 4 per call. */
@@ -464,6 +481,40 @@ interface ToolOutputMap {
     description?: string;
   })[];
   list_subagent_models: string;
+  office: {
+    operation: "render";
+    /** Canonical absolute input path. */
+    path: string;
+    /** Pages or slides of a document, or visible worksheets. */
+    pageCount: number;
+    dpi: number;
+    images: {
+      page?: number;
+      sheet?: string;
+      range?: string;
+      attachmentId: string;
+      mediaType: "image/png";
+      bytes: number;
+      width: number;
+      height: number;
+      originalDimensions?: {
+        width: number;
+        height: number;
+      };
+    }[];
+    missingFonts: string[];
+  } | {
+    operation: "convert" | "recalculate";
+    /** Canonical absolute input path. */
+    path: string;
+    /** Absolute path of the temporary output file. */
+    file: string;
+    format: string;
+    bytes: number;
+    /** Pages of a PDF output. */
+    pageCount?: number;
+    missingFonts: string[];
+  };
   present: {
     turn: number;
     files: {

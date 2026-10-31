@@ -290,17 +290,18 @@
 
     - id: office-kit
       name: '@deepseek-ai/dsh-office-kit'
+      config:
+        outputDirectory: !!js dshHomePath('office-kit', 'outputs')
 
-    # Desktop supplies standalone Node through its primary runtime. Production
-    # shells set DSH_BUNDLED_RUNTIME_ROOT to confine automatic Kit discovery;
-    # development leaves it unset so workspace links can resolve outside the runtime.
-    # An unavailable Kit leaves readable skills registered; skill-office owns its warning.
-    # Outside Desktop, Python SDK launcher variables select resources and an
-    # empty DSH_BUNDLED_OFFICE_CLI disables CLI access. Unset variables preserve
-    # packaged defaults; these profiles direct the model to the user's Python.
+    # Desktop supplies its Office skills and Python environment through the primary
+    # runtime named by DSH_BUNDLED_PRIMARY_RUNTIME. A Desktop profile launched without
+    # that variable disables workspace-dependencies and, like the other profiles, uses
+    # the packaged skills and directs the model to the user's Python. Outside Desktop,
+    # DSH_BUNDLED_OFFICE_SKILLS selects the skill directory; an unset variable
+    # preserves the packaged skills.
     - id: workspace-dependencies
       name: '@deepseek-ai/dsh-tool-workspace-dependencies'
-      disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"
+      disabled: !!js "ctx.get('profileContext')?.name !== 'desktop' || process.env.DSH_BUNDLED_PRIMARY_RUNTIME === undefined"
       config:
         source: !!js process.env.DSH_BUNDLED_PRIMARY_RUNTIME
         root: !!js dshHomePath('dsh-runtimes', 'dsh-primary-runtime')
@@ -308,11 +309,8 @@
     - id: skill-office
       name: '@deepseek-ai/dsh-skill-office'
       config:
-        assetRoot: !!js "ctx.get('profileContext')?.name === 'desktop' ? process.getBuiltinModule('node:path').join(process.env.DSH_BUNDLED_PRIMARY_RUNTIME, '..', 'office-skills') : process.env.DSH_BUNDLED_OFFICE_SKILLS"
-        node: !!js "ctx.get('profileContext')?.name === 'desktop' ? process.getBuiltinModule('node:path').join(process.env.DSH_BUNDLED_PRIMARY_RUNTIME, 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node') : process.env.DSH_BUNDLED_OFFICE_NODE"
-        kitRoot: !!js "ctx.get('profileContext')?.name === 'desktop' ? process.env.DSH_BUNDLED_RUNTIME_ROOT : undefined"
-        cli: !!js "ctx.get('profileContext')?.name === 'desktop' ? undefined : process.env.DSH_BUNDLED_OFFICE_CLI === '' ? false : process.env.DSH_BUNDLED_OFFICE_CLI"
-        pythonEnvironment: !!js "ctx.get('profileContext')?.name === 'desktop' ? undefined : 'user'"
+        assetRoot: !!js "ctx.get('profileContext')?.name !== 'desktop' ? process.env.DSH_BUNDLED_OFFICE_SKILLS : process.env.DSH_BUNDLED_PRIMARY_RUNTIME === undefined ? undefined : process.getBuiltinModule('node:path').join(process.env.DSH_BUNDLED_PRIMARY_RUNTIME, '..', 'office-skills')"
+        pythonEnvironment: !!js "ctx.get('profileContext')?.name === 'desktop' && process.env.DSH_BUNDLED_PRIMARY_RUNTIME !== undefined ? undefined : 'user'"
 
     # The right Sidebar's document tab: bounded file reads with selectable
     # Markdown, code, HTML, PDF, Office, and plain-text renderers.

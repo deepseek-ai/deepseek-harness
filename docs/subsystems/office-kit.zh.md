@@ -2,19 +2,20 @@
 
 [English](office-kit.md) | 中文
 
-[document 包族](../../packages/document/README.zh.md) 在 Node 宿主上将 Office 文件转换为 PDF。消费者负责源文件读取授权与展示；共享提供方负责转换、有界准入和临时 PDF 复用。此子系统不创建面向模型的工具或 Session 事件。
+[document 包族](../../packages/document/README.zh.md) 在 Node 宿主上渲染、转换 Office 文件并重算工作簿。消费者负责源文件读取授权与展示；共享提供方负责引擎、有界准入、临时输出复用和私有输出存储。[`office` 工具](../../packages/document/tool-office/README.zh.md)是面向模型的消费者；提供方本身不创建 Session 事件。
 
 ## 所有权
 
 | 所有者 | 职责 |
 |---|---|
-| [office-kit](../../packages/document/office-kit/README.zh.md) | `ctx.officeKit`：共享 LibreOffice 转换、有界准入和 PDF 缓存；`/locate`：调用方的 Kit 入口和 CLI、从该安装定位的引擎清单，以及映射到 ASAR 解包目录的原生路径 |
-| [Web bundle](../../packages/bundle/web-app/README.zh.md) | 由宿主消费者共享的单个可配置转换提供方 |
+| [office-kit](../../packages/document/office-kit/README.zh.md) | `ctx.officeKit`：共享 LibreOffice 渲染、转换与重算，有界准入、输出缓存和按 Session 划分的输出存储；`/locate`（契约由包 README 拥有）：调用方的 Kit 入口、从该安装定位的引擎清单，以及映射到 ASAR 解包目录的原生路径 |
+| [tool-office](../../packages/document/tool-office/README.zh.md) | 常驻的 `office` 工具：工具结果中的渲染图片，以及供 shell 复制的转换文件 |
+| [Web bundle](../../packages/bundle/web-app/README.zh.md)与 [SDK bundle](../../packages/bundle/sdk-app/README.zh.md) | 由宿主消费者共享的单个可配置提供方及 `office` 工具 |
 | [Office 预览 Client](../../packages/client/ui-sidebar-documentpreview/README.zh.md#office-preview) | Office 扩展名选择、PDF 复用和缺失字体提示 |
 
 ## 请求和结果
 
-[`OfficeKitRequest`](../../packages/document/office-kit/src/types.ts)包含已授权的源键与版本、可选 stat 大小、延迟的 `read(signal, maxBytes)` 回调、前台或后台优先级以及 `OfficeExtension`：`doc`、`docx`、`xls`、`xlsx`、`ppt` 或 `pptx`。`OfficeKit.convert(request, signal?)` 返回一个完整 PDF 结果。取消遵循调用方和提供方生命周期；校验、输出和引擎失败以分类的 `OfficeKitError` 拒绝。
+[`OfficeKitRequest`](../../packages/document/office-kit/src/types.ts)包含已授权的源键与版本、可选 stat 大小、延迟的 `read(signal, maxBytes)` 回调、前台或后台优先级以及 `OfficeExtension`：`doc`、`docx`、`xls`、`xlsx`、`ppt` 或 `pptx`。`OfficeKit.convert(request, signal?)` 返回一个完整 PDF 结果。`renderImages()` 返回选定页、幻灯片或工作表区域的有界 PNG 图片；`convertTo()` 与 `recalculate()` 把输出按请求的属主保存在提供方的 `outputDirectory` 下并返回其 Host 路径。它们的请求类型接受 OpenDocument 输入，图片渲染还接受 PDF。所有方法共用准入和缓存。取消遵循调用方和提供方生命周期；校验、输出和引擎失败以分类的 `OfficeKitError` 拒绝。
 
 `OfficeKitPriority` 对请求的预览或 QA 使用 `foreground`，对推测工作使用 `background`。`OfficeSourceKey` 为调用方拥有的已授权源定位符增加品牌类型。`OfficeKitGeneration` 表示提供方生命周期，`OfficeKitKey` 表示其内容身份；消费者不解析这两种不透明值。
 
@@ -39,7 +40,7 @@
 
 外部 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) Node API 选择其预编译引擎。kit 独立维护版本和发布流程，具体归属由[发布归属决策](../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义。应用构建时安装已发布的 npm 包。应用打包要求目标已声明的原生引擎；kit 未为该目标声明原生引擎时使用 Node WASM。[平台引擎参考](../../packages/document/office-kit/README.zh.md)定义安装和打包规则。元数据无效、必需资源缺失和转换错误都会拒绝请求，不切换引擎。提供方的 Kit 缺失或导入失败时，提供方仍会注册，并以 `unavailable` 拒绝转换。转换在 Host 使用磁盘输入输出路径，不使用浏览器转换引擎或字体 RPC。
 
-[Host 提供方配置](../../packages/document/office-kit/README.zh.md#use-this-package)负责并发、期限、输入输出上限、归档上限、图像分辨率和字体访问。原生/WASM 实现和资产分发属于 kit 工作区。系统 LibreOffice 探测、运行时引擎下载、持久 PDF 缓存和面向模型的渲染不属于此提供方。
+[Host 提供方配置](../../packages/document/office-kit/README.zh.md#use-this-package)负责并发、期限、输入输出上限、归档上限、图像分辨率和字体访问。原生/WASM 实现和资产分发属于 kit 工作区。系统 LibreOffice 探测、运行时引擎下载、持久输出缓存、写入工作区和面向模型的展示不属于此提供方。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -57,13 +58,47 @@ A provider lifetime owns all converters, queued calls, and temporary files.
 
 ```ts cordis-catalog
 /**
- * Convert Office bytes without modifying the source or writing Session events.
+ * Convert Office bytes to PDF without modifying the source or writing Session events.
  * @param request - authorized metadata and deferred bounded source read.
  * @param signal - caller cancellation; provider disposal also stops active work.
  * @returns caller-owned PDF bytes after conversion and scratch cleanup settle; canceled readers reject independently.
  * @throws {OfficeKitError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.
  */
-convert(request: OfficeKitRequest, signal?: AbortSignal): Promise<OfficeKitResult>
+async convert(request: OfficeKitRequest, signal?: AbortSignal): Promise<OfficeKitResult>
+
+/**
+ * Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission
+ * queue, concurrency, source-byte reservation, and cache with previews; `priority` orders them against other work.
+ * @param request - authorized metadata, deferred bounded source read, selection, and complete-result limits.
+ * @param signal - caller cancellation; provider disposal also stops active work.
+ * @returns caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits.
+ * @throws {OfficeKitError} `invalid-request` for a selection the engine rejects, `output-too-large` when the
+ * selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.
+ */
+async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<OfficeImagesResult>
+
+/**
+ * Convert one document to another format, sharing admission, concurrency, and cache with previews, and save the
+ * result in the provider's output store.
+ * @param request - authorized metadata, deferred bounded source read, target format, and output owner and name.
+ * @param signal - caller cancellation; provider disposal also stops active work.
+ * @returns the saved file's absolute Host path and size; the file is deleted after `outputRetentionMs`, when older
+ * outputs need `maxOutputStoreBytes`, when the Session whose id is `output.owner` is disposed, or when the provider is disposed.
+ * @throws {OfficeKitError} `invalid-request` for a format or sheet the engine rejects and the other conversion
+ * codes; cancellation rejects with its reason.
+ */
+async convertTo(request: OfficeConversionRequest, signal?: AbortSignal): Promise<OfficeFileResult>
+
+/**
+ * Recalculate every formula of one workbook and save formulas with refreshed cached results, sharing admission,
+ * concurrency, and cache with previews, and save the workbook in the provider's output store. This does not validate
+ * formulas or business data.
+ * @param request - authorized workbook metadata, deferred bounded source read, output format, and output owner and name.
+ * @param signal - caller cancellation; provider disposal also stops active work.
+ * @returns the saved workbook's absolute Host path and size, retained like {@link convertTo} outputs.
+ * @throws {OfficeKitError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.
+ */
+async recalculate(request: OfficeRecalculationRequest, signal?: AbortSignal): Promise<OfficeFileResult>
 
 /**
  * Read and convert one Office file using the Session's ordinary filesystem authorization.

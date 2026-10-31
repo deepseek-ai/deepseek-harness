@@ -1,15 +1,15 @@
 ---
-description: "Package map for Host Office conversion and reusable PDF results."
+description: "Package map for Host Office rendering, conversion, and the model-facing office tool."
 kind: "package-group"
 ---
 
-# document/ — Office conversion
+# document/ — Office documents
 
 English | [中文](README.zh.md)
 
 ## Summary
 
-Convert authorized Office files to reusable PDFs on the Host. The shared service converts through LibreOffice kit. Targets with a declared native engine use it; other targets use Node WASM.
+Render, convert, and recalculate authorized Office files on the Host, for previews and for the model's `office` tool. The shared service runs LibreOffice kit. Targets with a declared native engine use it; other targets use Node WASM.
 
 ## Table of Contents
 
@@ -26,7 +26,8 @@ Each package owns its configuration and lifetime rules; the subsystem reference 
 
 | Package | Role | ctx key |
 |---|---|---|
-| [office-kit](office-kit/README.md) | Authorized Office bytes to complete PDFs with bounded queues and caching; consumer-anchored Kit entry, CLI, and engine manifests through `/locate` | `ctx.officeKit` |
+| [office-kit](office-kit/README.md) | Authorized Office bytes to complete PDFs, PNG images, converted files, and recalculated workbooks with bounded queues and caching; consumer-anchored Kit entry and engine manifests through `/locate` | `ctx.officeKit` |
+| [tool-office](tool-office/README.md) | The resident `office` tool: render pages as images in the tool result, convert documents, and recalculate workbooks | — |
 
 -----
 

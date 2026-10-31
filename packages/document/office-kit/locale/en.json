@@ -1,5 +1,6 @@
 {
   "meta": {
-    "title": "office-kit"
+    "title": "Office kit",
+    "description": "Renders, converts, and recalculates Word, Excel, and PowerPoint documents for previews and the office tool."
   }
 }

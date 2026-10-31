@@ -59,7 +59,6 @@
     "@deepseek-ai/dsh-client-ui-settings-general": "workspace:*",
     "@deepseek-ai/dsh-client-ui-sidebar-browser": "workspace:*",
     "@deepseek-ai/dsh-home-paths": "workspace:*",
-    "@deepseek-ai/dsh-office-kit": "workspace:*",
     "@deepseek-ai/dsh-official-bundles": "workspace:*",
     "@deepseek-ai/node-addon-system": "workspace:~",
     "@electron/get": "^5.1.0",

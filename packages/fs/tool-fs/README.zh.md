@@ -105,7 +105,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config`、工具组合、`read_image` 附件门禁 |
 | [`src/read.ts`](src/read.ts) | `read` 执行器：一次 stat、流式决策、窗口构建、观察 |
-| [`src/read-image.ts`](src/read-image.ts) | `read_image` 执行器：路由与媒体类型门禁、有界字节、附件保存 |
+| [`src/read-image.ts`](src/read-image.ts) | `read_image` 执行器：通过 `dsh-tools` 的 `assertImageInputRoute` 检查路由、媒体类型门禁、有界字节、附件保存 |
 | [`src/write.ts`](src/write.ts) | `write` 执行器：意图 waterfall、原子写入、观察 |
 | [`src/apply-patch.ts`](src/apply-patch.ts)、[`apply-patch-output.ts`](src/apply-patch-output.ts) | `apply_patch` 注册、严格提交值与精简诊断 |
 | [`src/apply-patch-presentation.ts`](src/apply-patch-presentation.ts) | 纯调用预览与已知结果 diff |

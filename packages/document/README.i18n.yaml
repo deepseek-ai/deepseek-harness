@@ -3,23 +3,23 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/document/README.md
 /:
-  en: a1540c1a1a7faf3e
-  zh: 7642847c581f1165
-/document-office-conversion:
-  en: 402ecdc5d078d548
-  zh: 36d74233639f5f4c
-/document-office-conversion/summary:
-  en: 09e0b17633a85188
-  zh: 1244a5d30ac503ba
-/document-office-conversion/table-of-contents:
+  en: af5a48d0437be195
+  zh: ebfa0348be528b01
+/document-office-documents:
+  en: 3e516b9627deabcd
+  zh: 0f42f57278733204
+/document-office-documents/summary:
+  en: 63d586f950af4ff3
+  zh: f1366c7e85fea7fc
+/document-office-documents/table-of-contents:
   en: 1eb35b015a6c423f
   zh: a8a3dceee2c9e943
-/document-office-conversion/packages:
-  en: a7732e63cb3a127e
-  zh: 4640139660f35f57
-/document-office-conversion/related-documentation:
+/document-office-documents/packages:
+  en: b310efe9569867c7
+  zh: 9247d29e13d3e36e
+/document-office-documents/related-documentation:
   en: b9691c6ee2c4db99
   zh: 133970f11bfb85ee
-/document-office-conversion/dev-note:
+/document-office-documents/dev-note:
   en: 5de1d6304e00c58f
   zh: e58fc8dda0bea8d5

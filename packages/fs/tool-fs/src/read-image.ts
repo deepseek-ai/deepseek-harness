@@ -16,8 +16,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { AttachmentStore, ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { GenericCallView, ToolExecution } from '@deepseek-ai/dsh-tools'
+import { assertImageInputRoute, defineTool } from '@deepseek-ai/dsh-tools'
+import type { GenericCallView } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-fs'
 import { resolveRegularReadTarget } from './read-target.ts'
 
@@ -107,28 +107,6 @@ export interface ImageReadValue {
  */
 export function imageMediaTypeForPath(filePath: string): ImageMediaType | undefined {
   return IMAGE_EXTENSIONS[extname(filePath).toLowerCase()]
-}
-
-/**
- * Enforce the strict image-capability gate for the calling route. Resolves the
- * session's latest routed provider/model (request header config, then agent
- * options) and requires the exact resolved route to declare `image` input explicitly.
- * @param ctx - the plugin context used to resolve the optional `llm` service.
- * @param exec - the tool-execution context supplying the calling agent.
- * @param requestedPath - the raw, not-yet-resolved path rendered in refusal messages.
- */
-export async function assertImageCapableRoute(ctx: Context, exec: ToolExecution, requestedPath: string): Promise<void> {
-  const routed = exec.agent?.session.requestHeader()?.config
-  const provider = routed?.provider ?? exec.agent?.options.provider
-  const model = routed?.model ?? exec.agent?.options.model
-  const llm = ctx.get('llm')
-  if (provider === undefined || model === undefined || llm === undefined) {
-    throw new Error(`cannot read "${requestedPath}" as an image: the current model route could not be resolved`)
-  }
-  const active = await llm.resolveModelInfo(provider, model, exec.signal)
-  if (active.inputModalities === undefined || !active.inputModalities.includes('image')) {
-    throw new Error(`cannot read "${requestedPath}" as an image: model "${model}" does not declare image input; switch to an image-capable model to read images`)
-  }
 }
 
 /** Refuse a media type outside the deployment's accepted set, naming the offending path. */
@@ -254,7 +232,10 @@ export function applyReadImageTool(ctx: Context): void {
         throw new Error(`cannot read "${args.file_path}" as an image: no attachment service is mounted`)
       }
       if (declared !== undefined) assertDeploymentAccepts(attachments, declared, args.file_path)
-      await assertImageCapableRoute(ctx, exec, args.file_path)
+      await assertImageInputRoute(ctx, exec, {
+        unresolved: `cannot read "${args.file_path}" as an image: the current model route could not be resolved`,
+        unsupported: model => `cannot read "${args.file_path}" as an image: model "${model}" does not declare image input; switch to an image-capable model to read images`,
+      })
 
       const { target, info } = await resolveRegularReadTarget(ctx, exec, args.file_path)
 

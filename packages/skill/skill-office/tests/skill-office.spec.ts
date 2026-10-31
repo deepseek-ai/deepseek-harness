@@ -7,14 +7,8 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillOffice from '@deepseek-ai/dsh-skill-office'
-import { resolveKitCli as resolveKitCliMock } from '@deepseek-ai/dsh-office-kit/locate'
-import { execa } from 'execa'
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@deepseek-ai/dsh-office-kit/locate', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@deepseek-ai/dsh-office-kit/locate')>()
-  return { ...actual, resolveKitCli: vi.fn(actual.resolveKitCli) }
-})
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
   return { ...actual, readFile: vi.fn(actual.readFile) }
@@ -61,8 +55,7 @@ describe('bundled Office skills', () => {
         const raw = await readFile(join(assets, skill.name, 'SKILL.md'), 'utf8')
         const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/u, '').trim()
         const expected = ['office', 'office-render', 'office-export-pdf'].includes(skill.name) ? body : `${body}\n\n## Python environment\n\n${workspacePython}`
-        expect(loaded?.content.startsWith(expected)).toBe(true)
-        if (!['office-render', 'office-recalculate', 'office-export-pdf'].includes(skill.name)) expect(loaded?.content).toBe(expected)
+        expect(loaded?.content).toBe(expected)
       }
       await fiber.dispose()
       expect(await ctx.skills.list()).toEqual([])
@@ -135,7 +128,6 @@ describe('bundled Office skills', () => {
       for (const name of ['office', 'office-render', 'office-export-pdf']) {
         expect((await ctx.skills.get(name))!.content).not.toContain('## Python environment')
       }
-      expect((await ctx.skills.get('office-recalculate'))!.content).toMatch(/## Python environment[\s\S]+## Installed LibreOffice Kit/u)
     } finally { await ctx.fiber.dispose() }
   })
 
@@ -165,11 +157,11 @@ describe('bundled Office skills', () => {
     }
   })
 
-  it.each([{ assetRoot: 'assets' }, { kitRoot: 'runtime' }])('rejects relative resource paths before registration: %s', async (paths) => {
+  it('rejects a relative asset root before registration', async () => {
     const ctx = new Context()
     try {
       await ctx.plugin(SkillRegistry)
-      expect(() => { SkillOffice.apply(ctx, { ...paths, pythonEnvironment: 'user' }) }).toThrow('absolute directory')
+      expect(() => { SkillOffice.apply(ctx, { assetRoot: 'assets', pythonEnvironment: 'user' }) }).toThrow('absolute directory')
       expect(await ctx.skills.list()).toEqual([])
     } finally {
       await ctx.fiber.dispose()
@@ -316,103 +308,18 @@ describe('bundled Office skills', () => {
   })
 })
 
-it('executes capabilities using only paths returned by the loaded skill from a separate workspace', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'office CLI 工作目录 '))
+it('directs operation skills to the office tool without executable paths', async () => {
   const ctx = new Context()
   try {
     await ctx.plugin(SkillRegistry)
     await ctx.plugin(SkillOffice)
-    const skill = await ctx.skills.get('office-render')
-    const json = skill?.content.match(/\n(\{\n[\s\S]+)$/u)?.[1]
-    expect(json).toBeDefined()
-    const { libreofficeKit } = JSON.parse(json!) as { libreofficeKit: { node: string; cli: string } }
-    const result = await execa(libreofficeKit.node, [libreofficeKit.cli, 'capabilities'], {
-      cwd: root, env: { PATH: '' }, timeout: 20_000, killSignal: 'SIGKILL', reject: false,
-    })
-    expect(result.timedOut, result.stderr).toBe(false)
-    expect(result.signal, result.stderr).toBeUndefined()
-    expect(result.exitCode, result.stderr).toBe(0)
-    expect(JSON.parse(result.stdout)).toMatchObject({ runtime: { version: '0.2.3', cliPath: libreofficeKit.cli } })
-  } finally {
-    await ctx.fiber.dispose()
-    await rm(root, { recursive: true, force: true })
-  }
-})
-
-
-it('validates operation paths on loading while authoring remains available', async () => {
-  const ctx = new Context()
-  const original = Object.getOwnPropertyDescriptor(process.versions, 'electron')
-  try {
-    await ctx.plugin(SkillRegistry)
-    for (const config of [{ node: 'node' }, { cli: 'cli.js' }, { node: assets }, { cli: assets }, { cli: join(assets, 'missing.js') }]) {
-      const fiber = await ctx.plugin(SkillOffice, config)
-      expect((await ctx.skills.get('office-docx'))?.content).toContain('python-docx')
-      await expect(ctx.skills.get('office-render')).rejects.toThrow()
-      await fiber.dispose()
-    }
-    const carrier = await ctx.plugin(SkillOffice)
-    Object.defineProperty(process.versions, 'electron', { value: '44.0.0', configurable: true })
-    await expect(ctx.skills.get('office-render')).rejects.toThrow('standalone Node')
-    await carrier.dispose()
-    const disabled = await ctx.plugin(SkillOffice, { cli: false })
-    expect((await ctx.skills.get('office-render'))?.content).toContain('disabled in this deployment')
-    await disabled.dispose()
-    await ctx.plugin(SkillOffice, { node: process.execPath })
-    expect((await ctx.skills.get('office-render'))?.content).toContain(JSON.stringify(process.execPath))
-  } finally {
-    if (original === undefined) Reflect.deleteProperty(process.versions, 'electron')
-    else Object.defineProperty(process.versions, 'electron', original)
-    await ctx.fiber.dispose()
-  }
-})
-
-it('reports an absent LibreOffice Kit in operation skills instead of failing to load them, logging each distinct cause once', async () => {
-  const { resolveKitCli } = await vi.importActual<typeof import('@deepseek-ai/dsh-office-kit/locate')>('@deepseek-ai/dsh-office-kit/locate')
-  const lookups: Array<() => string | URL> = []
-  const causes = ['absent', 'absent', 'absent', 'unreadable']
-  vi.mocked(resolveKitCliMock).mockImplementation((options) => {
-    lookups.push(options.lookupKitEntry)
-    const cause = causes[lookups.length - 1] ?? 'absent'
-    return resolveKitCli({ ...options, lookupKitEntry: () => { throw Object.assign(new Error(cause), { code: 'ERR_MODULE_NOT_FOUND' }) } })
-  })
-  const ctx = new Context()
-  const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
-  try {
-    await ctx.plugin(SkillRegistry)
-    await ctx.plugin(SkillOffice)
-    for (const name of ['office-render', 'office-recalculate', 'office-export-pdf', 'office-render']) {
+    for (const name of ['office-render', 'office-export-pdf', 'office-recalculate']) {
       const content = (await ctx.skills.get(name))!.content
-      expect(content).toMatch(/\n\nLibreOffice Kit is not available in this deployment\.$/u)
-      expect(content).not.toContain('## Installed LibreOffice Kit')
+      expect(content).toContain('`office`')
+      expect(content).not.toMatch(/LibreOffice Kit CLI|--output-dir|read_image|"<node>"/u)
     }
-    expect(lookups[0]?.()).toBe(import.meta.resolve('@deepseek-ai/libreoffice-kit'))
-    expect(warn.mock.calls).toEqual([
-      ['skill-office: LibreOffice Kit is not available: Error: absent'],
-      ['skill-office: LibreOffice Kit is not available: Error: unreadable'],
-    ])
-  } finally {
-    vi.mocked(resolveKitCliMock).mockImplementation(resolveKitCli)
-    await ctx.fiber.dispose()
-  }
-})
-
-
-it('passes kitRoot to automatic discovery and warns once when the Kit lies outside it', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'dsh-office-root-'))
-  const ctx = new Context()
-  const warnings: string[] = []
-  try {
-    ctx.logger.exporter({ levels: { default: 2 }, export: ({ type, args }) => { if (type === 'warn') warnings.push(String(args[0])) } })
-    await ctx.plugin(SkillRegistry)
-    await ctx.plugin(SkillOffice, { kitRoot: root })
-    for (const name of ['office-render', 'office-recalculate', 'office-export-pdf']) {
-      expect((await ctx.skills.get(name))?.content).toMatch(/LibreOffice Kit is not available in this deployment\.$/u)
+    for (const name of ['office-export-pdf', 'office-recalculate']) {
+      expect((await ctx.skills.get(name))!.content).toMatch(/`cp [\s\S]*`Copy-Item /u)
     }
-    expect(resolveKitCliMock).toHaveBeenLastCalledWith(expect.objectContaining({ root }))
-    expect(warnings).toEqual([expect.stringContaining('outside root')])
-  } finally {
-    await ctx.fiber.dispose()
-    await rm(root, { recursive: true, force: true })
-  }
+  } finally { await ctx.fiber.dispose() }
 })

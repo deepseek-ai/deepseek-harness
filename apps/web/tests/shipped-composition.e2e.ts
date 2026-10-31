@@ -485,6 +485,7 @@ const EXPECTED_TOOLS = [
   'job_output',
   'list_agents',
   'list_subagent_models',
+  'office',
   'plugin_manager',
   'present',
   'read',

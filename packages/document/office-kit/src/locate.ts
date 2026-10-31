@@ -1,8 +1,7 @@
-/** Locate LibreOffice Kit, its CLI, and its engine packages from the consumer's Kit installation without module hooks. */
-import { lstatSync, realpathSync, statSync } from 'node:fs'
+/** Locate LibreOffice Kit and its engine packages from the consumer's Kit installation without module hooks. */
+import { lstatSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { isAbsolute, join, relative, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 
 /**
  * Locate an engine package manifest for Kit.
@@ -29,32 +28,6 @@ export type KitModuleResolution =
   | { readonly kind: 'available'; readonly entry: string; readonly resolveEnginePackage: EnginePackageResolver }
   | { readonly kind: 'missing'; readonly error: unknown }
 
-/** Kit CLI configuration; an omitted path uses the current process or the consumer's Kit installation. */
-export interface KitCliOptions {
-  /** Absolute standalone Node executable; defaults to `process.execPath` outside Electron. */
-  readonly node?: string
-  /** Absolute Kit CLI entry; `false` disables CLI access, and omission uses the `./cli` export of the Kit found by `lookupKitEntry`. */
-  readonly cli?: string | false
-  /**
-   * Absolute directory restricting automatic Kit discovery; omission leaves discovery unrestricted.
-   * Both the Kit entry and CLI must resolve inside this directory after realpath. The first `.asar` segment
-   * in each path, including a root ending in `.asar`, maps to `.asar.unpacked` before realpath.
-   * An unavailable directory or an escaping path returns `missing`. Explicit `cli` paths bypass this check.
-   */
-  readonly root?: string
-  /** Consumer's Kit lookup, called only when `cli` is omitted. */
-  readonly lookupKitEntry: KitEntryLookup
-}
-
-/**
- * Kit CLI availability. `disabled` follows `cli: false`; `missing` means automatic discovery failed or violated `root`,
- * carrying the failure; `available` carries absolute existing files for Node and the CLI entry.
- */
-export type KitCliResolution =
-  | { readonly kind: 'disabled' }
-  | { readonly kind: 'missing'; readonly error: unknown }
-  | { readonly kind: 'available'; readonly node: string; readonly cli: string }
-
 /**
  * Locate Kit for a consumer that loads it with a dynamic `import()`.
  * @param lookupKitEntry - Consumer's Kit lookup; anchoring at the consumer, not this library, selects the installation the consumer uses.
@@ -66,42 +39,6 @@ export function resolveKitModule(lookupKitEntry: KitEntryLookup): KitModuleResol
   const located = lookupEntry(lookupKitEntry)
   if (located.kind === 'missing') return located
   return { kind: 'available', entry: located.entry, resolveEnginePackage: createEnginePackageResolver(located.entry) }
-}
-
-/**
- * Resolve the Node executable and Kit CLI entry used for Kit commands.
- * Automatic CLI paths map to the physical ASAR-unpacked copy; explicit `cli` paths stay unchanged.
- * Every call reads the filesystem, so a later call observes installed or removed files.
- * @param options - Configured paths, optional discovery root, and the consumer's Kit lookup.
- * @returns `disabled` for `cli: false`, `missing` when automatic discovery fails or violates `root`, otherwise `available`.
- * @throws When `root` is relative; in Electron when `node` is omitted, because `process.execPath` is the application binary;
- * when `node`, a configured `cli`, or the CLI entry of a found Kit is not an absolute existing file;
- * and Node's error if the found Kit has no `./cli` export.
- */
-export function resolveKitCli(options: KitCliOptions): KitCliResolution {
-  if (options.root !== undefined && !isAbsolute(options.root)) throw new Error('LibreOffice Kit: root must be an absolute directory')
-  if (options.cli === false) return { kind: 'disabled' }
-  if (options.node === undefined && process.versions.electron !== undefined) {
-    throw new Error('LibreOffice Kit: packaged applications must supply a standalone Node executable')
-  }
-  const node = assertFile(options.node ?? process.execPath)
-  if (options.cli !== undefined) return { kind: 'available', node, cli: assertFile(options.cli) }
-  const located = lookupEntry(options.lookupKitEntry)
-  if (located.kind === 'missing') return located
-  let root: string | undefined
-  if (options.root !== undefined) {
-    try {
-      root = realpathSync(unpackedPath(options.root))
-      assertWithinRoot(unpackedPath(fileURLToPath(located.entry)), root)
-    } catch (error) {
-      return { kind: 'missing', error }
-    }
-  }
-  const cli = unpackedPath(createRequire(located.entry).resolve('@deepseek-ai/libreoffice-kit/cli'))
-  if (root !== undefined) {
-    try { assertWithinRoot(cli, root) } catch (error) { return { kind: 'missing', error } }
-  }
-  return { kind: 'available', node, cli: assertFile(cli) }
 }
 
 /**
@@ -146,23 +83,8 @@ function lookupEntry(lookupKitEntry: KitEntryLookup): EntryLookup {
   return { kind: 'found', entry: typeof entry === 'string' ? entry : entry.href }
 }
 
-function assertFile(path: string): string {
-  if (!isAbsolute(path) || statSync(path, { throwIfNoEntry: false })?.isFile() !== true) {
-    throw new Error(`LibreOffice Kit: expected an absolute executable file: ${path}`)
-  }
-  return path
-}
-
-function assertWithinRoot(path: string, root: string): void {
-  const resolved = realpathSync(path)
-  const fromRoot = relative(root, resolved)
-  if (isAbsolute(fromRoot) || fromRoot === '..' || fromRoot.startsWith(`..${sep}`)) {
-    throw new Error(`LibreOffice Kit: resolved path is outside root ${root}: ${resolved}`)
-  }
-}
-
 /**
- * Map an ASAR path to its physical unpacked copy for standalone processes.
+ * Map an ASAR path to its physical unpacked copy for native files read outside Electron's archive support.
  * @param path - Filesystem path, including paths with Windows separators.
  * @returns The path with its first `.asar` segment replaced by `.asar.unpacked`; already-unpacked paths stay unchanged.
  */

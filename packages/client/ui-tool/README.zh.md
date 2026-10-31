@@ -85,7 +85,7 @@ Tool Definition 拥有[懒计算参数视图](../../util/values/README.zh.md)。
 ### 卡片
 
 
-每张卡片都直接在调用树中查看；选中调用后不会再显示第二个全高视图。行 renderer 为 terminal、read、diff、search 和 web 卡片各复用同一个纯 card model，image 卡片的图库经由工具自有 `tool.call.images` slot 渲染，其下显示完整的记录路径以及每张附件图片的像素尺寸（缩小时附原图尺寸）和字节数。这些 model 校验原始调用参数、结果内容、失败状态、持久 metadata、PTC dispatch 的 `parentCallId` 与会话路径信息。不受支持或格式错误的输入使用压平的工具结果文本。文件路径摘要经属主的 `openFile` 打开文件，chat 视图把它路由到右侧 Sidebar 的文本预览；`inspect` 打开轨迹视图；该视图不可用时不提供此回调，卡片随之隐藏 Inspect。terminal、diff、read、search 与 web 卡片的上限与 fallback 规则仍由 [ui-primitives README](../ui-primitives/README.zh.md) 负责；image 卡片的 fallback 规则由本包内的 card model 自行承载。
+每张卡片都直接在调用树中查看；选中调用后不会再显示第二个全高视图。行 renderer 为 terminal、read、diff、search 和 web 卡片各复用同一个纯 card model，image 卡片的图库经由工具自有 `tool.call.images` slot（`office` 渲染使用 `tool.call.office.images`）渲染，其下显示完整的记录路径以及每张附件图片的像素尺寸（缩小时附原图尺寸）和字节数。这些 model 校验原始调用参数、结果内容、失败状态、持久 metadata、PTC dispatch 的 `parentCallId` 与会话路径信息。不受支持或格式错误的输入使用压平的工具结果文本。文件路径摘要经属主的 `openFile` 打开文件，chat 视图把它路由到右侧 Sidebar 的文本预览；`inspect` 打开轨迹视图；该视图不可用时不提供此回调，卡片随之隐藏 Inspect。terminal、diff、read、search 与 web 卡片的上限与 fallback 规则仍由 [ui-primitives README](../ui-primitives/README.zh.md) 负责；image 卡片的 fallback 规则由本包内的 card model 自行承载。
 
 搜索卡片将值恰好为空字符串的 `include` 视为省略；类型错误、仅含空白的值、否定过滤器和逗号分隔列表仍使用通用显示。
 

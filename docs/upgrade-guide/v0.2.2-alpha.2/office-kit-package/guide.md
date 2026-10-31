@@ -25,8 +25,6 @@ The `document-render/failed` Remote error, `RenderedDocumentBytes`, `OfficeSourc
 
 The provider previously failed to load when LibreOffice Kit was absent. It now registers without Kit; each conversion that needs a converter rejects with `OfficeKitError` code `unavailable` and locates Kit again, so installing Kit later takes effect without reloading the provider.
 
-Desktop resolves its Kit CLI inside the Host and does not set or read `DSH_BUNDLED_OFFICE_CLI`. Operation skills report an unavailable Kit through their instructions and a warning, without a separate diagnostic file. Custom Desktop patches can constrain automatic discovery with the absolute `kitRoot` directory; explicit `cli` paths bypass that restriction.
-
 ## Migration
 
 1. In `cordis.yml`, patches, and overlays, change the row `id: office-to-pdf` to `id: office-kit` and its `name` to `'@deepseek-ai/dsh-office-kit'`. Keep its `config` block unchanged.
@@ -34,4 +32,3 @@ Desktop resolves its Kit CLI inside the Host and does not set or read `DSH_BUNDL
 3. Rename `ctx.officeToPdf`, Remote method names, and the exported symbols listed above.
 4. Code that treated a load failure of the conversion row as "Kit absent" now checks for `OfficeKitError` with code `unavailable` from conversion instead.
 5. Confirm the migration by searching the project for `office-to-pdf`, `officeToPdf`, and `OfficeToPdf`, then opening a DOCX file in the Web document preview.
-6. Remove Desktop patches that read `DSH_BUNDLED_OFFICE_CLI`; use the shipped automatic discovery, or set an absolute `cli` explicitly. Load `office-export-pdf` to confirm it supplies the expected CLI paths or reports that Kit is unavailable.

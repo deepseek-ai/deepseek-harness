@@ -1,5 +1,5 @@
 ---
-description: "定位 LibreOffice Kit，并通过独立发布的 kit 在 Host 转换 Office 文档。"
+description: "定位 LibreOffice Kit，并通过独立发布的 kit 在 Host 渲染、转换 Office 文档和重算工作簿。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-在宿主计算机上将 Office 文档转换为 PDF。声明了原生 LibreOffice 引擎的目标使用原生引擎，其余目标使用 Node WASM。提供方支持 DOC、DOCX、XLS、XLSX、PPT 和 PPTX。OOXML 转换返回缺失字体名称；二进制 Office 转换返回空列表。`/locate` 入口定位消费方使用的 Kit 安装、其 CLI 和引擎包，不加载 Cordis 或 Kit。
+在宿主计算机上将 Office 文档渲染为 PDF 或 PNG 图片、在格式之间转换，以及重算工作簿。声明了原生 LibreOffice 引擎的目标使用原生引擎，其余目标使用 Node WASM。预览支持 DOC、DOCX、XLS、XLSX、PPT 和 PPTX；操作还支持 OpenDocument 格式，图片渲染还支持 PDF。OOXML 操作返回缺失字体名称；二进制 Office 操作返回空列表。`/locate` 入口定位消费方使用的 Kit 安装及其引擎包，不加载 Cordis 或 Kit。
 
 ## 目录
 
@@ -26,9 +26,18 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-[Web bundle](../../bundle/web-app/README.zh.md)以 `office-kit` 条目挂载此提供方。独立组合通过 `cordis.yml` 条目挂载 `@deepseek-ai/dsh-office-kit`。
+[Web bundle](../../bundle/web-app/README.zh.md)和 [SDK bundle](../../bundle/sdk-app/README.zh.md)以 `office-kit` 条目挂载此提供方；[`office` 工具](../tool-office/README.zh.md)是其面向模型的消费方。独立组合通过 `cordis.yml` 条目挂载 `@deepseek-ai/dsh-office-kit`。
 
-调用方通过 `ctx.officeKit.convert()` 提交已授权源的标识、版本、可选字节数、延迟的有界读取、Office 扩展名和调度优先级。源版本变化会拒绝转换。结果包含调用方拥有的 PDF 字节、缺失字体、缓存键和转换 generation；配置替换后 generation 随之改变。取消以原因为拒绝值，转换失败使用 `OfficeKitError`。
+调用方提交已授权源的标识、版本、可选字节数、延迟的有界读取、输入扩展名和调度优先级。源版本变化会拒绝操作。取消以原因为拒绝值，失败使用 `OfficeKitError`。每个结果都携带转换 generation（配置替换后随之改变）和缺失字体。
+
+| 方法 | 操作 | 结果 |
+|---|---|---|
+| `convert()` | 为预览把 Office 转为 PDF | 调用方拥有的 PDF 字节和缓存键 |
+| `renderImages()` | 把选定的页、幻灯片或工作表区域渲染为 PNG | 按文档顺序排列的图片及其页码、工作表或区域，以及文档页数和 DPI |
+| `convertTo()` | 转换为 `format` 指定的格式；CSV 需要 `sheet` | 已保存文件的 Host 路径、大小和 PDF 页数 |
+| `recalculate()` | 把 XLS、XLSX 或 ODS 重算为 XLSX 或 ODS | 已保存工作簿的 Host 路径和大小 |
+
+`renderImages()` 要求提供 `maxImages`、`maxPixels`、`maxDimension` 和 `maxBytes`。图片数超过 `maxImages`，或单张图片超过像素或尺寸上限时，引擎拒绝该选择；图片 PNG 总字节数超过 `maxBytes` 时，提供方在读取前和读取过程中以 `output-too-large` 拒绝。引擎拒绝的页、工作表、区域、分辨率或格式选择以 `invalid-request` 失败，并附带引擎的说明。转换和重算的文件受 `maxOutputBytes` 限制。提供方从不写入工作区：它把每个输出保存在 `outputDirectory` 下各自仅属主可访问的目录中，按请求的 `output.owner`（`office` 工具传入调用方 subagent 树的根 Session）分组，并返回绝对 Host 路径。文件在 `outputRetentionMs` 到期、较新的输出需要 `maxOutputStoreBytes` 内的空间（最旧的先删）、id 等于 owner 的 Session 卸载或提供方卸载时删除；单个文件超过 `maxOutputStoreBytes` 时以 `output-too-large` 失败。启动时还会删除超过保留期的输出目录，包括之前进程留下的。服务公开 `outputDirectory`，供消费方检查其执行环境能否读取。
 
 此 provider 依赖独立发布的 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) npm API，kit 版本为 `0.2.3`。应用打包选择 kit 的 `optionalDependencies` 中声明的匹配原生包；目标没有声明原生包时选择 WASM。已声明的原生引擎缺失时拒绝打包，不会选择 WASM。[发布归属决策](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义独立 kit 与 Harness 各自的职责。
 
@@ -41,7 +50,10 @@ Kit 缺失时提供方照常注册，例如未下载 Office sidecar 就启动的
 | `maxConcurrentConversions` | `2` | 最大活跃转换器数量；排队调用仍可取消。 |
 | `timeoutMs` | `60000` | 获取转换器后的转换期限。 |
 | `maxInputBytes` | `52428800` | 最大源字节数。 |
-| `maxOutputBytes` | `104857600` | 最大完整 PDF 字节数。 |
+| `maxOutputBytes` | `104857600` | 最大完整 PDF、转换或重算文件字节数。 |
+| `outputDirectory` | `$DSH_HOME/office-kit/outputs` | 转换和重算文件的绝对目录。 |
+| `outputRetentionMs` | `86400000` | 输出保留的毫秒数。 |
+| `maxOutputStoreBytes` | `536870912` | 保留输出的最大总字节数。 |
 | `maxImageResolution` | `192` | 最大光栅图像 DPI；覆盖 kit 的默认值 `144`。 |
 | `fontFallbacks` | kit 默认值 | 有序字体族优先组；每组至少包含两个含非空白字符的名称。 |
 
@@ -49,30 +61,24 @@ Kit 缺失时提供方照常注册，例如未下载 Office sidecar 就启动的
 
 [有界转换决策](../../../.agents/notes/implemented/architecture/2026-09-15-bounded-office-conversion.zh.md)说明队列准入、缓存限额与共享取消的设计依据。
 
-提供方按转换 generation、Office 扩展名和精确源字节的 SHA-256 保留成功 PDF。有界的源版本索引在授权 stat 后避免重读已知内容；内容标识也会在不同源路径之间共享转换。达到任一保留上限时，最近最少使用的 PDF 及其别名一同移除。不保留失败或超过缓存上限的结果。每个结果具有独立的 PDF 与字体缓冲区。已就绪别名命中不占用读取方名额；同一源的最后一个读取方离开时，立即释放其在途定位信息。源的最后一个读取方取消后，再次打开该源会重新读取字节，再按内容摘要共享转换，即使其他源仍保持该转换运行或其 PDF 已就绪。
+四个方法共用一个准入队列，因此工具操作与预览竞争同一组转换器、预留容量和缓存。提供方按转换 generation、输入扩展名、操作及其参数和精确源字节的 SHA-256 保留成功输出。有界的源版本索引在授权 stat 后避免重读已知内容；内容标识也会在不同源路径之间共享转换。达到任一保留上限时，最近最少使用的输出及其别名一同移除。不保留失败或超过缓存上限的结果。每个结果具有独立的字节与字体缓冲区。已就绪别名命中不占用读取方名额；同一源的最后一个读取方离开时，立即释放其在途定位信息。源的最后一个读取方取消后，再次打开该源会重新读取字节，再按内容摘要共享转换，即使其他源仍保持该转换运行或其 PDF 已就绪。
 
 准入在调用源读取前限制排队元数据、未完成读取方、活动源字节预留和转换。未知源大小预留 `maxInputBytes`；已知大小预留 stat 字节数。读取收到该容量，最多额外读取一个超限哨兵字节。`maxSourceBytes` 必须覆盖 `maxInputBytes`。最后一个读取方额度预留给前台。`maxBackgroundConversions` 设为零时，拒绝后台读取方加入排队或运行中的工作；仍可命中已完成的别名缓存。只要仍有前台任务排队，后台任务就继续等待，包括前台正在等待源容量的情况。前台加入会提升排队预热；最后一个前台读取方离开后，排队任务恢复后台优先级，符合条件的工作可立即开始。前台准入也可移除排队推测工作。总并发大于一时，后台并发为前台保留一个槽位。正在运行的预热即使被提权，也保留后台准入槽位直至结束。最后一个读取方取消共享工作。移除排队的前台阻塞任务后，其他符合条件的工作立即准入；实际读取、转换和清理完成前仍保留活动预留容量。
 
-默认保留 8 个 PDF、128 MiB 和 64 个源别名，准入 32 个读取方与 8 个排队任务，最多预留 100 MiB 源字节，并允许一个后台转换。这些限制约束拥有的请求和二进制载荷，不约束引擎 RSS、multipart 封装、调用方保留的结果或 PDF.js 页面渲染。
+默认保留 8 个输出、128 MiB 和 64 个源别名，准入 32 个读取方与 8 个排队任务，最多预留 100 MiB 源字节，并允许一个后台转换。这些限制约束拥有的请求和二进制载荷，不约束引擎 RSS、multipart 封装、调用方保留的结果或 PDF.js 页面渲染。
 
 <a id="locate-kit"></a>
 ## 定位 Kit
 
-加载 Kit 或运行 Kit CLI 的 Node 消费方导入 `@deepseek-ai/dsh-office-kit/locate`。此入口只以值的形式导入 Node 内置模块，不读取环境变量，也没有 `cordis.yml` 配置。消费方负责声明自己的 Kit 依赖。模块与 CLI 解析器接收在消费模块中编写的查找函数：在那里调用 `import.meta.resolve` 会选中消费方的安装，且 Kit 缺失时会抛出：
+加载 Kit 的 Node 消费方导入 `@deepseek-ai/dsh-office-kit/locate`。此入口只以值的形式导入 Node 内置模块，不读取环境变量，也没有 `cordis.yml` 配置。消费方负责声明自己的 Kit 依赖。模块解析器接收在消费模块中编写的查找函数：在那里调用 `import.meta.resolve` 会选中消费方的安装，且 Kit 缺失时会抛出：
 
 ```ts
-import { resolveKitCli, resolveKitModule } from '@deepseek-ai/dsh-office-kit/locate'
+import { resolveKitModule } from '@deepseek-ai/dsh-office-kit/locate'
 
-const lookupKitEntry = () => import.meta.resolve('@deepseek-ai/libreoffice-kit')
-const kit = resolveKitModule(lookupKitEntry)
-const cli = resolveKitCli({ lookupKitEntry })
+const kit = resolveKitModule(() => import.meta.resolve('@deepseek-ai/libreoffice-kit'))
 ```
 
 `resolveKitModule` 返回 `{ kind: 'available', entry, resolveEnginePackage }` 或 `{ kind: 'missing', error }`。将 `entry` 传给动态 `import()`，将 `resolveEnginePackage` 传给 Kit 的 `createConverter` 或 `discoverRuntime`，或作为编辑器 `openDocument` 请求的 `options` 字段。查找函数抛出的值成为 `error`。
-
-`resolveKitCli` 接受可选的 `node` 和 `cli` 路径：`cli: false` 时返回 `{ kind: 'disabled' }`；未配置 `cli` 且查找函数抛出时返回 `{ kind: 'missing', error }`；否则返回 `{ kind: 'available', node, cli }`。未配置 `node` 时使用 `process.execPath`；在 Electron 中会抛出，因为该路径是应用程序本身。未配置 `cli` 时使用找到的 Kit 的 `./cli` 导出，并把 ASAR 路径映射到解包副本。显式 CLI 路径保持不变。配置或找到的路径不是存在的绝对路径文件时抛出。每次调用都会重新读取文件系统。
-
-`root` 可将自动 CLI 查找限制在一个绝对目录内；省略时不限制，显式 `cli` 不受此限制。Kit 入口和 CLI 在 realpath 后必须都位于该根目录内。比较前，根目录和两个路径中的第一个 `.asar` 段都会映射为 `.asar.unpacked`，包括以 `.asar` 结尾的根目录。根目录不可用或路径越界时返回携带错误的 `missing`；相对根目录会抛出。
 
 `unpackedPath(path)` 为需要在 ASAR 外锚定查找的独立调用方（例如打包冒烟检查）提供相同映射。它不访问文件系统。
 
@@ -88,11 +94,11 @@ const cli = resolveKitCli({ lookupKitEntry })
 
 在 Kit 导入成功之前，每次需要转换器时，提供方都把返回自身 `import.meta.resolve('@deepseek-ai/libreoffice-kit')` 的查找函数传给 [`resolveKitModule`](src/locate.ts)，它返回 Kit 入口和以其为起点的引擎包解析器，或返回 `missing`。随后提供方动态导入该入口；提供方没有静态导入 Kit 的值。这使引擎查找以提供方实际使用的 Kit 安装为起点。
 
-`/locate` 的函数每次解析调用一次消费方的查找函数，并把任何抛出的值视为 Kit 缺失。CLI 通过 `createRequire(entry)` 解析为 Kit 包自身的 `./cli` 导出。自动 CLI 路径和原生引擎路径共用同一映射，只将第一个 `.asar` 归档段替换为 `.asar.unpacked`，不论进程是否运行在 Electron 中。已解包路径及归档外路径保持不变。`@deepseek-ai/libreoffice-kit-wasm` 始终保留 Node 逻辑路径，供支持归档的文件系统访问。这些函数不导入 Kit、不加载引擎代码、不注册服务、不修改模块解析，也不保留模块级状态；[Desktop 打包](../../../apps/desktop/packaging/README.zh.md#runtime-file-selection)负责决定解包哪些包。
+`/locate` 的函数每次解析调用一次消费方的查找函数，并把任何抛出的值视为 Kit 缺失。原生引擎路径使用同一映射，只将第一个 `.asar` 归档段替换为 `.asar.unpacked`，不论进程是否运行在 Electron 中。已解包路径及归档外路径保持不变。`@deepseek-ai/libreoffice-kit-wasm` 始终保留 Node 逻辑路径，供支持归档的文件系统访问。这些函数不导入 Kit、不加载引擎代码、不注册服务、不修改模块解析，也不保留模块级状态；[Desktop 打包](../../../apps/desktop/packaging/README.zh.md#runtime-file-selection)负责决定解包哪些包。
 
 引擎元数据无效、必需资源缺失和转换错误会拒绝请求，不会切换引擎。共享的 WASM 引擎使用 LibreOffice 的 CPU 图像过滤器。原生转换使用独立的平台引擎。
 
-每个并发槽按需创建并复用一个 kit 转换器。提供方将已授权输入写入私有临时目录，读取有大小上限的普通 PDF 文件，并在完成前删除目录。取消已准入的读取方不会阻塞后续排队工作。读取方取消只会释放该读取方；最后一个读取方和提供方卸载会取消共享工作。卸载向未完成读取方报告 `unavailable`，并等待转换及转换器清理结束。
+每个并发槽按需创建并复用一个 kit 转换器。提供方将已授权输入写入私有临时目录，从中读取有大小上限的普通输出文件，拒绝位于图片目录之外的图片路径，并在完成前删除目录。取消已准入的读取方不会阻塞后续排队工作。读取方取消只会释放该读取方；最后一个读取方和提供方卸载会取消共享工作。卸载向未完成读取方报告 `unavailable`，并等待转换及转换器清理结束。
 
 Remote 文件读取在查询转换缓存前重新检查内容读取授权和源版本。延迟读取在取得转换容量后执行，并在读取后验证源版本。源读取失败直接传递；转换失败返回 `document-render/failed` 及分类原因，不暴露引擎诊断。卸载会取消并等待授权读取、Remote 请求和转换工作全部结束。
 
@@ -104,7 +110,7 @@ Remote 文件读取在查询转换缓存前重新检查内容读取授权和源�
 ## 延伸阅读
 
 - [Office Kit](../../../docs/subsystems/office-kit.zh.md) — 组合与输入、结果所有权。
-- [Office 技能](../../skill/skill-office/README.zh.md) — 操作技能中的 Kit CLI 路径。
+- [Office 工具](../tool-office/README.zh.md) — 面向模型的渲染、转换和重算工具。
 - [工作区文件](../../api/workspace-files/README.zh.md) — Session 文件授权与有界读取。
 
 -----
@@ -112,11 +118,11 @@ Remote 文件读取在查询转换缓存前重新检查内容读取授权和源�
 <a id="model-experience"></a>
 ## 模型体验
 
-无，因为此包仅转换字节，不提供面向模型的工具、消息或 Session 事件。
+间接地，通过 [`office` 工具](../tool-office/README.zh.md#model-experience)，该工具返回此服务渲染的图片和转换的文件。
 
 #### KV Cache effect
 
-无；转换不会构造或修改模型请求。
+无；此服务不会构造或修改模型请求。
 
 ## 已知限制与延后工作
 
@@ -125,6 +131,7 @@ Remote 文件读取在查询转换缓存前重新检查内容读取授权和源�
 - 转换保真度和已安装的原生/WASM 资产由 `@deepseek-ai/libreoffice-kit` 负责；此提供方不查找系统 LibreOffice，也不在运行时下载引擎。
 - `timeoutMs` 仅在 kit 开始转换时计时，不限制队列等待时间。
 - `/locate` 的消费方必须为自己使用的 Kit 安装提供查找函数；这些函数不搜索其他位置，也不安装 Kit 或引擎。
+- 渲染的图片和转换的文件以字节返回；此服务没有工作区输出路径，由各消费方负责发布。
 - 映射原生路径时不验证解包副本是否存在。Kit 会拒绝缺失的清单或资源，而不会将其视为原生包缺失。
 
 <a id="dev-note"></a>

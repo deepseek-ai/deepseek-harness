@@ -84,8 +84,14 @@
   en: 408ff0a5189bd7ec
   zh: 408ff0a5189bd7ec
 /tool-schema-catalog/deepseek-ai-dsh-tool-bash/bash:
-  en: 5efe055aae48993c
-  zh: e0653e51ef1344ce
+  en: bd3559b76dead1ea
+  zh: 7ec2604f73b23a31
+/tool-schema-catalog/deepseek-ai-dsh-tool-office:
+  en: 8b0373f31520efe7
+  zh: 8b0373f31520efe7
+/tool-schema-catalog/deepseek-ai-dsh-tool-office/office:
+  en: 039621e749cd26c2
+  zh: 5fadd41137e921d9
 /tool-schema-catalog/deepseek-ai-dsh-tool-present:
   en: f656575e6df094f6
   zh: f656575e6df094f6

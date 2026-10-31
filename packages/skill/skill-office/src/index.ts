@@ -5,14 +5,11 @@ import { isAbsolute, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { resolveKitCli } from '@deepseek-ai/dsh-office-kit/locate'
-import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 import { parse as parseYaml } from 'yaml'
 
 const SKILL_NAMES = ['office', 'office-docx', 'office-pptx', 'office-xlsx', 'office-render', 'office-recalculate', 'office-export-pdf'] as const
 const PYTHON_SKILLS: readonly string[] = ['office-docx', 'office-pptx', 'office-xlsx', 'office-recalculate']
-const KIT_SKILLS: readonly string[] = ['office-render', 'office-recalculate', 'office-export-pdf']
 
 /**
  * Python source for Office scripts: `'workspace-dependencies'` directs the model to the bundled interpreter and libraries
@@ -29,15 +26,6 @@ const PYTHON_ENVIRONMENT_SECTIONS: Readonly<Record<PythonEnvironment, string>> =
 export interface Config {
   /** Absolute assets directory containing skill folders; defaults to packaged assets. */
   assetRoot?: string
-  /** Standalone Node executable; defaults to the current executable outside Electron. */
-  node?: string
-  /** Absolute LibreOffice Kit CLI entry; false explicitly disables CLI access, and omission uses the CLI of this package's Kit. */
-  cli?: string | false
-  /**
-   * Absolute directory restricting automatic Kit entry and CLI discovery after realpath and ASAR-unpacked mapping.
-   * Omission leaves discovery unrestricted; explicit `cli` bypasses the restriction.
-   */
-  kitRoot?: string
   /** Python environment named in the Python authoring and verification skills. @default 'workspace-dependencies' */
   pythonEnvironment?: PythonEnvironment
 }
@@ -51,9 +39,6 @@ export interface ResolvedConfig extends Config {
 /** Validated resource configuration. */
 export const Config: z<Config, ResolvedConfig> = z.object({
   assetRoot: z.string().min(1),
-  node: z.string().min(1),
-  kitRoot: z.string().min(1),
-  cli: z.union([z.string().min(1), z.const(false)]),
   pythonEnvironment: z.union([z.const('workspace-dependencies'), z.const('user')]).default('workspace-dependencies'),
 })
 
@@ -70,33 +55,6 @@ function parseSkill(raw: string, path: string): { description: string; content: 
     ? metadata.description : undefined
   if (typeof description !== 'string' || description.length === 0) throw new Error(`skill-office: ${path} has no description`)
   return { description, content: raw.slice(frontmatter[0].length).trim() }
-}
-
-/**
- * Describe the Kit CLI paths operation skills use.
- * @param config - Configured Node and CLI paths.
- * @param reportMissing - Receives the lookup failure when `cli` is omitted and Kit cannot be resolved.
- * @returns Instructions appended to an operation skill.
- */
-function officeRuntime(config: Config, reportMissing: (error: unknown) => void): string {
-  const runtime = resolveKitCli({
-    ...(config.node === undefined ? {} : { node: config.node }),
-    ...(config.cli === undefined ? {} : { cli: config.cli }),
-    ...(config.kitRoot === undefined ? {} : { root: config.kitRoot }),
-    lookupKitEntry: () => import.meta.resolve('@deepseek-ai/libreoffice-kit'),
-  })
-  switch (runtime.kind) {
-    case 'disabled': return '\n\nLibreOffice Kit is disabled in this deployment.'
-    case 'missing':
-      reportMissing(runtime.error)
-      return '\n\nLibreOffice Kit is not available in this deployment.'
-    case 'available': {
-      const { node, cli } = runtime
-      return `\n\n## Installed LibreOffice Kit\n\nUse these absolute paths for every LibreOffice Kit command. Pass the CLI entry as the first argument to Node.\n\n${JSON.stringify({ libreofficeKit: { node, cli } }, undefined, 2)}`
-    }
-    /* v8 ignore next -- KitCliResolution is a closed union */
-    default: return assertNever(runtime)
-  }
 }
 
 /** Outcome of reading one skill file: parsed metadata, or a failure that may clear on a later read. */
@@ -116,21 +74,13 @@ function persistentReadFailure(error: unknown): boolean {
  * or invalid skill is omitted from a complete catalog, and its failed load returns `undefined` and invalidates the
  * catalog. Any other read error leaves discovery incomplete, so the registry retries it, and rejects a load.
  * @param ctx - Context carrying the skill registry.
- * @param config - Resolved configuration; resource paths fall back to the packaged assets, Node, and Kit CLI.
- * @throws When `assetRoot` or `kitRoot` is not absolute.
+ * @param config - Resolved configuration; `assetRoot` falls back to the packaged assets.
+ * @throws When `assetRoot` is not absolute.
  */
 export function apply(ctx: Context, config: ResolvedConfig): void {
   const assetRoot = config.assetRoot ?? fileURLToPath(new URL('../assets/', import.meta.url))
   if (!isAbsolute(assetRoot)) throw new Error('skill-office: assetRoot must be an absolute directory')
-  if (config.kitRoot !== undefined && !isAbsolute(config.kitRoot)) throw new Error('skill-office: kitRoot must be an absolute directory')
   const reportedFailures = new Map<string, string>()
-  const reportedKitFailures = new Set<string>()
-  function reportMissingKit(error: unknown): void {
-    const failure = String(error)
-    if (reportedKitFailures.has(failure)) return
-    reportedKitFailures.add(failure)
-    ctx.logger.warn(`skill-office: LibreOffice Kit is not available: ${failure}`)
-  }
   async function readSkill(skillName: string, signal: AbortSignal | undefined): Promise<SkillRead> {
     const path = join(assetRoot, skillName, 'SKILL.md')
     let raw: string
@@ -185,7 +135,6 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
       }
       const content = read.content
         + (PYTHON_SKILLS.includes(candidate.name) ? `\n\n## Python environment\n\n${PYTHON_ENVIRONMENT_SECTIONS[config.pythonEnvironment]}` : '')
-        + (KIT_SKILLS.includes(candidate.name) ? officeRuntime(config, reportMissingKit) : '')
       return { ...summary, content }
     },
   }))

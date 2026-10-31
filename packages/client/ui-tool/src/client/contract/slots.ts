@@ -39,6 +39,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * slot.
      */
     'tool.call.images': { kind: 'single'; scope: 'session'; owner: ToolImagesOwnerProps }
+    /** Rendered page images of a settled `office` render; the attachment presentation plugin fills it like `tool.call.images`. */
+    'tool.call.office.images': { kind: 'single'; scope: 'session'; owner: ToolImagesOwnerProps }
   }
 }
 

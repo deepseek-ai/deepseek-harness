@@ -1,5 +1,5 @@
 ---
-description: "LibreOffice Kit location and Host Office conversion with the independently published kit."
+description: "LibreOffice Kit location and Host Office rendering, conversion, and recalculation with the independently published kit."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Convert Office documents to PDFs on the Host computer. Targets with a declared native LibreOffice engine use it; other targets use Node WASM. The provider accepts DOC, DOCX, XLS, XLSX, PPT, and PPTX. OOXML conversion returns missing-font names; binary Office conversion returns an empty list. The `/locate` entry finds the Kit installation a consumer uses, its CLI, and its engine packages without loading Cordis or Kit.
+Render Office documents as PDFs or PNG images, convert them between formats, and recalculate workbooks on the Host computer. Targets with a declared native LibreOffice engine use it; other targets use Node WASM. Previews accept DOC, DOCX, XLS, XLSX, PPT, and PPTX; operations also accept the OpenDocument formats, and image rendering accepts PDF. OOXML operations return missing-font names; binary Office operations return an empty list. The `/locate` entry finds the Kit installation a consumer uses and its engine packages without loading Cordis or Kit.
 
 ## Table of Contents
 
@@ -26,9 +26,18 @@ Convert Office documents to PDFs on the Host computer. Targets with a declared n
 <a id="use-this-package"></a>
 ## Use this package
 
-The [Web bundle](../../bundle/web-app/README.md) mounts this provider as `office-kit`. Independent compositions mount `@deepseek-ai/dsh-office-kit` as a `cordis.yml` row.
+The [Web bundle](../../bundle/web-app/README.md) and the [SDK bundle](../../bundle/sdk-app/README.md) mount this provider as `office-kit`; the [`office` tool](../tool-office/README.md) is its model-facing consumer. Independent compositions mount `@deepseek-ai/dsh-office-kit` as a `cordis.yml` row.
 
-Callers submit authorized source identity, version, optional byte size, a deferred bounded read, Office extension, and scheduling priority through `ctx.officeKit.convert()`. A changed source version rejects conversion. Results contain caller-owned PDF bytes, missing fonts, a cache key, and a conversion generation that changes on configuration replacement. Cancellation rejects with its reason; conversion failures use `OfficeKitError`.
+Callers submit authorized source identity, version, optional byte size, a deferred bounded read, input extension, and scheduling priority. A changed source version rejects the operation. Cancellation rejects with its reason; failures use `OfficeKitError`. Every result carries the conversion generation, which changes on configuration replacement, and the missing fonts.
+
+| Method | Operation | Result |
+|---|---|---|
+| `convert()` | Office to PDF for previews | caller-owned PDF bytes and a cache key |
+| `renderImages()` | selected pages, slides, or worksheet areas to PNG | images in document order with their page, sheet, or range, plus the document page count and DPI |
+| `convertTo()` | conversion to the format of `format`; CSV takes a `sheet` | the saved file's Host path, size, and PDF page count |
+| `recalculate()` | XLS, XLSX, or ODS recalculation to XLSX or ODS | the saved workbook's Host path and size |
+
+`renderImages()` requires `maxImages`, `maxPixels`, `maxDimension`, and `maxBytes`. The engine rejects a selection with more images than `maxImages` or an image above the pixel or dimension limit; the provider rejects images whose total PNG bytes exceed `maxBytes` with `output-too-large`, before and while reading them. A page, sheet, range, resolution, or format selection the engine rejects fails with `invalid-request` and the engine's description. Converted and recalculated files obey `maxOutputBytes`. The provider never writes into a workspace: it saves each output in its own owner-only directory under `outputDirectory`, grouped by the request's `output.owner` (the `office` tool passes the root Session of the caller's subagent tree), and returns the absolute Host path. A file is deleted after `outputRetentionMs`, when newer outputs need room within `maxOutputStoreBytes` (oldest first), when the Session whose id equals the owner is disposed, or when the provider unloads; a file larger than `maxOutputStoreBytes` fails with `output-too-large`. Startup also removes output directories older than the retention, including those of earlier processes. `outputDirectory` is exposed on the service so consumers can check that their execution world reads it.
 
 The provider depends on the independently published [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) npm API at kit version `0.2.3`. Application packaging selects the matching native package declared in the kit’s `optionalDependencies`, or WASM when no native package is declared for that target. A missing declared native engine rejects packaging without selecting WASM. The [release ownership decision](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.md) defines the independent kit and Harness responsibilities.
 
@@ -41,7 +50,10 @@ Browsers request PDFs through the `officeKit.render` Remote method with a Sessio
 | `maxConcurrentConversions` | `2` | Maximum active converters; queued calls remain cancellable. |
 | `timeoutMs` | `60000` | Conversion deadline after a converter is acquired. |
 | `maxInputBytes` | `52428800` | Maximum source bytes. |
-| `maxOutputBytes` | `104857600` | Maximum complete PDF bytes. |
+| `maxOutputBytes` | `104857600` | Maximum complete PDF, converted, or recalculated file bytes. |
+| `outputDirectory` | `$DSH_HOME/office-kit/outputs` | Absolute directory for converted and recalculated files. |
+| `outputRetentionMs` | `86400000` | Milliseconds an output is kept. |
+| `maxOutputStoreBytes` | `536870912` | Maximum bytes across retained outputs. |
 | `maxImageResolution` | `192` | Maximum raster-image DPI; overrides the kit default of `144`. |
 | `fontFallbacks` | Kit defaults | Ordered font-family preference groups; each group requires at least two names containing non-whitespace characters. |
 
@@ -49,30 +61,24 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-offic
 
 The [bounded conversion decision](../../../.agents/notes/implemented/architecture/2026-09-15-bounded-office-conversion.md) explains queue admission, cache limits, and shared cancellation.
 
-The provider retains successful PDFs by converter generation, Office extension, and SHA-256 of the exact source bytes. A bounded source-version index avoids rereading known content after an authorized stat; content identity also shares conversion across different source paths. Least-recently-used PDFs leave at either retention limit, together with their aliases. Failures and oversized cache entries are not retained. Every result has independent PDF/font buffers. Ready alias hits consume no reader slot; active source locators are released when their last reader leaves. Reopening a source after its final reader cancels rereads its bytes before sharing by digest, even if another source kept the conversion alive or its PDF is ready.
+All four methods share one admission queue, so tool operations and previews compete for the same converters, reservations, and cache. The provider retains successful outputs by converter generation, input extension, the operation and its parameters, and SHA-256 of the exact source bytes. A bounded source-version index avoids rereading known content after an authorized stat; content identity also shares conversion across different source paths. Least-recently-used outputs leave at either retention limit, together with their aliases. Failures and oversized cache entries are not retained. Every result has independent byte and font buffers. Ready alias hits consume no reader slot; active source locators are released when their last reader leaves. Reopening a source after its final reader cancels rereads its bytes before sharing by digest, even if another source kept the conversion alive or its PDF is ready.
 
 Admission bounds queued metadata, outstanding readers, active source-byte reservations, and conversions before invoking a source read. Unknown source sizes reserve `maxInputBytes`; known sizes reserve their stat size. Reads receive that capacity and may read one overflow sentinel byte. `maxSourceBytes` must cover `maxInputBytes`. The final reader allowance is reserved for foreground work. Setting `maxBackgroundConversions` to zero rejects background joins to queued and running work; completed alias hits remain available. Background jobs wait while any foreground job is queued, including when it awaits source capacity. Foreground joins promote queued prewarming; when its last foreground reader leaves, the queued job returns to background priority and eligible work can start immediately. Foreground admission can evict queued speculation. Background concurrency leaves a foreground slot when total concurrency exceeds one. A running prewarm keeps its background admission slot until settlement, even after promotion. The final reader cancels shared work. Removing a queued foreground blocker immediately admits other eligible work; active reservations remain held until actual read/conversion cleanup settles.
 
-The defaults retain 8 PDFs/128 MiB and 64 source aliases, admit 32 readers and 8 queued jobs, reserve at most 100 MiB of source bytes, and allow one background conversion. These limits bound owned requests and binary payloads, not engine RSS, multipart framing, caller-retained results, or PDF.js page rendering.
+The defaults retain 8 outputs/128 MiB and 64 source aliases, admit 32 readers and 8 queued jobs, reserve at most 100 MiB of source bytes, and allow one background conversion. These limits bound owned requests and binary payloads, not engine RSS, multipart framing, caller-retained results, or PDF.js page rendering.
 
 <a id="locate-kit"></a>
 ## Locate Kit
 
-Node consumers that load Kit or run its CLI import `@deepseek-ai/dsh-office-kit/locate`. This entry imports only Node built-in modules as values, reads no environment variables, and has no `cordis.yml` configuration. The consumer owns its Kit dependency. The module and CLI resolvers take a lookup written in the consuming module, because `import.meta.resolve` there selects the consumer's installation and throws when Kit is absent:
+Node consumers that load Kit import `@deepseek-ai/dsh-office-kit/locate`. This entry imports only Node built-in modules as values, reads no environment variables, and has no `cordis.yml` configuration. The consumer owns its Kit dependency. The module resolver takes a lookup written in the consuming module, because `import.meta.resolve` there selects the consumer's installation and throws when Kit is absent:
 
 ```ts
-import { resolveKitCli, resolveKitModule } from '@deepseek-ai/dsh-office-kit/locate'
+import { resolveKitModule } from '@deepseek-ai/dsh-office-kit/locate'
 
-const lookupKitEntry = () => import.meta.resolve('@deepseek-ai/libreoffice-kit')
-const kit = resolveKitModule(lookupKitEntry)
-const cli = resolveKitCli({ lookupKitEntry })
+const kit = resolveKitModule(() => import.meta.resolve('@deepseek-ai/libreoffice-kit'))
 ```
 
 `resolveKitModule` returns `{ kind: 'available', entry, resolveEnginePackage }` or `{ kind: 'missing', error }`. Pass `entry` to a dynamic `import()` and `resolveEnginePackage` to Kit's `createConverter` or `discoverRuntime`, or as `options` in the editor's `openDocument` request. The lookup's thrown value becomes `error`.
-
-`resolveKitCli` accepts optional `node` and `cli` paths and returns `{ kind: 'disabled' }` for `cli: false`, `{ kind: 'missing', error }` when `cli` is omitted and the lookup throws, or `{ kind: 'available', node, cli }`. An omitted `node` uses `process.execPath`; in Electron it throws, because that path is the application binary. An omitted `cli` uses the `./cli` export of the found Kit and maps ASAR paths to their unpacked copies. Explicit CLI paths stay unchanged. A configured or found path that is not an absolute existing file throws. Each call reads the filesystem again.
-
-`root` optionally restricts automatic CLI discovery to an absolute directory; omission leaves it unrestricted, and explicit `cli` bypasses it. The Kit entry and CLI must both lie inside the root after realpath. The root and both paths map their first `.asar` segment, including a root ending in `.asar`, to `.asar.unpacked` before comparison. An unavailable root or an escaping path returns `missing` with its error; a relative root throws.
 
 `unpackedPath(path)` exposes the same mapping for standalone callers that must anchor a lookup outside ASAR, such as packaging smoke checks. It does not access the filesystem.
 
@@ -88,11 +94,11 @@ const cli = resolveKitCli({ lookupKitEntry })
 
 Until a Kit import succeeds, each converter request passes a lookup that returns the provider's own `import.meta.resolve('@deepseek-ai/libreoffice-kit')` to [`resolveKitModule`](src/locate.ts), which returns the Kit entry with an engine-package resolver anchored there, or `missing`. The provider then dynamically imports that entry; it has no static Kit value import. This anchors engine lookup to the Kit installation used by the provider.
 
-The `/locate` functions call the consumer's lookup once per resolution and treat any thrown value as an absent Kit. The CLI resolves through `createRequire(entry)` as the Kit package's own `./cli` export. Automatic CLI and native engine paths share one mapping that replaces only the first `.asar` archive segment with `.asar.unpacked`, regardless of whether the process runs in Electron. Already-unpacked paths and paths outside an archive remain unchanged. `@deepseek-ai/libreoffice-kit-wasm` always keeps Node's logical path for archive-aware filesystem access. These functions do not import Kit, load engine code, register services, mutate module resolution, or retain module-level state; [Desktop packaging](../../../apps/desktop/packaging/README.md#runtime-file-selection) owns which packages are unpacked.
+The `/locate` functions call the consumer's lookup once per resolution and treat any thrown value as an absent Kit. Native engine paths use one mapping that replaces only the first `.asar` archive segment with `.asar.unpacked`, regardless of whether the process runs in Electron. Already-unpacked paths and paths outside an archive remain unchanged. `@deepseek-ai/libreoffice-kit-wasm` always keeps Node's logical path for archive-aware filesystem access. These functions do not import Kit, load engine code, register services, mutate module resolution, or retain module-level state; [Desktop packaging](../../../apps/desktop/packaging/README.md#runtime-file-selection) owns which packages are unpacked.
 
 Invalid engine metadata, missing required assets, and conversion errors reject the request instead of switching engines. The shared WASM engine uses LibreOffice's CPU image filter. Native conversion uses its separate platform engine.
 
-Each concurrent slot lazily creates and reuses one kit converter. The provider writes authorized input into a private temporary directory, reads a bounded regular PDF, and removes the directory before settling. Canceling an admitted reader does not block later queued work. Reader cancellation releases only that reader; the final reader and provider disposal cancel shared work. Disposal reports `unavailable` to outstanding readers and joins conversions and converter teardown.
+Each concurrent slot lazily creates and reuses one kit converter. The provider writes authorized input into a private temporary directory, reads bounded regular output files from it, refuses image paths outside its image directory, and removes the directory before settling. Canceling an admitted reader does not block later queued work. Reader cancellation releases only that reader; the final reader and provider disposal cancel shared work. Disposal reports `unavailable` to outstanding readers and joins conversions and converter teardown.
 
 Remote file reads recheck content authorization and source version before consulting the conversion cache. Deferred reads run after conversion admission and verify the source version after reading. Source-read failures pass through; conversion failures return `document-render/failed` with a classified reason and no engine diagnostics. Unload cancels and joins authorization reads, Remote requests, and conversion work.
 
@@ -104,7 +110,7 @@ Remote file reads recheck content authorization and source version before consul
 ## Further Exploration
 
 - [Office Kit](../../../docs/subsystems/office-kit.md) — composition and input/result ownership.
-- [Office skills](../../skill/skill-office/README.md) — Kit CLI paths in operation skills.
+- [Office tool](../tool-office/README.md) — the model-facing render, convert, and recalculate tool.
 - [Workspace Files](../../api/workspace-files/README.md) — Session file authorization and bounded reads.
 
 -----
@@ -112,11 +118,11 @@ Remote file reads recheck content authorization and source version before consul
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as this package converts bytes without model-facing tools, messages, or Session events.
+Indirectly, through [the `office` tool](../tool-office/README.md#model-experience), which returns rendered images and converted files from this service.
 
 #### KV Cache effect
 
-None; conversion does not construct or modify model requests.
+None; this service does not construct or modify model requests.
 
 ## Known Limitations and Deferred Work
 
@@ -125,6 +131,7 @@ None; conversion does not construct or modify model requests.
 - Conversion fidelity and installed native/WASM assets belong to `@deepseek-ai/libreoffice-kit`; this provider neither searches for system LibreOffice nor downloads an engine at runtime.
 - Queue waiting time is not bounded by `timeoutMs`, which starts only when kit conversion begins.
 - `/locate` consumers must supply a lookup for the Kit installation they use; the functions do not search other locations or install Kit or engines.
+- Rendered images and converted files are returned as bytes; this service has no workspace output path, so each consumer owns publication.
 - Mapping a native path does not verify that the unpacked copy exists. Kit rejects missing manifests or assets instead of treating them as an absent native package.
 
 <a id="dev-note"></a>

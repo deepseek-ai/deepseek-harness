@@ -124,6 +124,25 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
   list_agents: Record<string, JsonValue>;
+  /** Get absolute paths to bundled Python and library directories, plus bundled Python distribution versions. Node.js and pnpm paths are included when the payload provides them. Python includes numpy, pandas, python-docx, python-pptx, openpyxl, Pillow, lxml, and XlsxWriter. Use these libraries for Office files unless the user or workspace instructions select another environment. When Node.js and pnpm paths are returned, run pnpm with that Node executable and pnpm script path. This does not change PATH or package-manager settings. */
+  load_workspace_dependencies: Record<string, JsonValue>;
+  /** Render document pages as images you can view, convert a document to another format, or recalculate spreadsheet formulas. Accepts Word (doc, docx, odt), Excel (xls, xlsx, ods), and PowerPoint (ppt, pptx, odp) files; render also accepts PDF. */
+  office: {
+    /** render returns page images; convert and recalculate return a temporary file to copy to its destination. */
+    operation: "render" | "convert" | "recalculate";
+    /** Path of the document to read; it is not modified. */
+    input: string;
+    /** convert and recalculate: output format. Word converts to pdf, docx, odt, or txt; Excel to pdf, xlsx, ods, or csv; PowerPoint to pdf, pptx, or odp. recalculate writes xlsx or ods. */
+    format?: "pdf" | "docx" | "odt" | "txt" | "xlsx" | "ods" | "csv" | "pptx" | "odp";
+    /** render: one-based pages or slides; omit for all. Spreadsheets use sheet and range instead. */
+    pages?: number[];
+    /** Exact worksheet name. render: omit to render every visible sheet. convert: required for CSV from a workbook with several sheets. */
+    sheet?: string;
+    /** render: A1 range in sheet, such as A1:H40; omit for the used area. */
+    range?: string;
+    /** render: resolution from 24 to 600; default 144. */
+    dpi?: number;
+  } & Record<string, JsonValue>;
   /** Read a UTF-8 text file and return line-numbered content. */
   read: {
     /** Path to read, resolved by the filesystem backend. */
@@ -373,6 +392,52 @@ interface ToolOutputMap {
     status: "running" | "inactive" | "corrupt" | "unsupported" | "unavailable";
     description?: string;
   })[];
+  load_workspace_dependencies: {
+    python: string;
+    /** Absent when the payload ships no Node.js. */
+    node?: string;
+    /** Absent when the payload ships no pnpm. */
+    pnpm?: string;
+    pythonPackages: string;
+    /** Absent when the payload ships no Node.js. */
+    nodePackages?: string;
+    /** Bundled distribution names and versions recorded in runtime.json; excludes user-installed additions. */
+    pythonDistributions: Record<string, JsonValue>;
+  };
+  office: {
+    operation: "render";
+    /** Canonical absolute input path. */
+    path: string;
+    /** Pages or slides of a document, or visible worksheets. */
+    pageCount: number;
+    dpi: number;
+    images: {
+      page?: number;
+      sheet?: string;
+      range?: string;
+      attachmentId: string;
+      mediaType: "image/png";
+      bytes: number;
+      width: number;
+      height: number;
+      originalDimensions?: {
+        width: number;
+        height: number;
+      };
+    }[];
+    missingFonts: string[];
+  } | {
+    operation: "convert" | "recalculate";
+    /** Canonical absolute input path. */
+    path: string;
+    /** Absolute path of the temporary output file. */
+    file: string;
+    format: string;
+    bytes: number;
+    /** Pages of a PDF output. */
+    pageCount?: number;
+    missingFonts: string[];
+  };
   read: {
     /** Canonical absolute path in the filesystem execution world. */
     path: string;

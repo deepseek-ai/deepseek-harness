@@ -1,15 +1,15 @@
 ---
-description: "Host Office 转换和可复用 PDF 结果的包索引。"
+description: "Host Office 渲染、转换以及面向模型的 office 工具的包索引。"
 kind: "package-group"
 ---
 
-# document/ — Office 转换
+# document/ — Office 文档
 
 [English](README.md) | 中文
 
 ## 摘要
 
-在宿主上将已授权的 Office 文件转换为可复用的 PDF。共享服务使用 LibreOffice kit 执行转换。声明了原生引擎的目标使用原生引擎，其余目标使用 Node WASM。
+在宿主上为预览和模型的 `office` 工具渲染、转换已授权的 Office 文件并重算工作簿。共享服务运行 LibreOffice kit。声明了原生引擎的目标使用原生引擎，其余目标使用 Node WASM。
 
 ## 目录
 
@@ -26,7 +26,8 @@ kind: "package-group"
 
 | 包 | 职责 | ctx 键 |
 |---|---|---|
-| [office-kit](office-kit/README.zh.md) | 将已授权 Office 字节转换为完整 PDF，并提供有界队列和缓存；通过 `/locate` 以消费方 Kit 为起点定位 Kit 入口、CLI 和引擎清单 | `ctx.officeKit` |
+| [office-kit](office-kit/README.zh.md) | 将已授权 Office 字节转换为完整 PDF、PNG 图片、转换后的文件和重算后的工作簿，并提供有界队列和缓存；通过 `/locate` 以消费方 Kit 为起点定位 Kit 入口和引擎清单 | `ctx.officeKit` |
+| [tool-office](tool-office/README.zh.md) | 常驻的 `office` 工具：在工具结果中把页面渲染为图片、转换文档、重算工作簿 | — |
 
 -----
 

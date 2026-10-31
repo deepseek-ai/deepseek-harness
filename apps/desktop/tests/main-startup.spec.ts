@@ -472,8 +472,6 @@ beforeEach(() => {
   vi.stubEnv('DSH_DESKTOP_DSH_DIR', 'test-runtime')
   vi.stubEnv('DSH_DESKTOP_PRIMARY_RUNTIME_DIR', 'test-primary-runtime')
   vi.stubGlobal('process', { ...process, platform: 'win32', arch: 'x64', resourcesPath: 'desktop-test-resources' })
-  vi.stubEnv('DSH_BUNDLED_OFFICE_CLI', undefined)
-  vi.stubEnv('DSH_BUNDLED_RUNTIME_ROOT', undefined)
   vi.stubEnv('DSH_DESKTOP_HOST_INSPECT_PORT', undefined)
   vi.stubEnv('DSH_DESKTOP_DEV_PROJECT_DIR', undefined)
   vi.stubEnv('DSH_DESKTOP_MANDATORY_UPDATE_CONFIG', undefined)
@@ -505,9 +503,7 @@ describe('desktop main startup', () => {
     expect(host.node).toBe(process.execPath)
     expect(host.environment).toMatchObject({
       DSH_BUNDLED_PRIMARY_RUNTIME: packaged ? join('desktop-test-resources', 'runtime', 'primary-runtime') : 'test-primary-runtime',
-      DSH_BUNDLED_RUNTIME_ROOT: packaged ? join('desktop-test-app', 'dsh') : undefined,
     })
-    expect(host.environment).not.toHaveProperty('DSH_BUNDLED_OFFICE_CLI')
     expect(host.packageManager).toMatchObject({
       pnpm: packaged
         ? join('desktop-test-resources', 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs')
@@ -729,13 +725,6 @@ describe('desktop main startup', () => {
     expect(await invoke(DESKTOP_IPC.updatesStatus, 'app')).toMatchObject({ configurationError: 'channel' })
   })
 
-  it.each([true, false])('overrides an inherited Kit root before Host startup (packaged=%s)', async (packaged) => {
-    harness.app.isPackaged = packaged
-    vi.stubEnv('DSH_BUNDLED_RUNTIME_ROOT', 'stale-runtime')
-    const host = await readyForUpdate()
-    expect(host.environment).toHaveProperty('DSH_BUNDLED_RUNTIME_ROOT', packaged ? host.runtime : undefined)
-  })
-
   it('starts the Host without resolving Kit or writing a diagnostic file', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-main-office-'))
     onTestFinished(() => { rmSync(root, { recursive: true, force: true }) })
@@ -745,7 +734,6 @@ describe('desktop main startup', () => {
     const host = await readyForUpdate()
     await vi.waitFor(() => { expect(harness.analytics.mock.calls.some(([event]) => (event as { eventName: string }).eventName === 'desktop_app_launch')).toBe(true) })
     expect(host.environment).toHaveProperty('DSH_BUNDLED_PRIMARY_RUNTIME', 'test-primary-runtime')
-    expect(host.environment).not.toHaveProperty('DSH_BUNDLED_OFFICE_CLI')
     expect(existsSync(harness.app.getPath('logs'))).toBe(false)
     expect(writeCrashReport).not.toHaveBeenCalled()
     expect(harness.dialog.showMessageBox).not.toHaveBeenCalledWith(expect.objectContaining({ title: en.startupFailed }))

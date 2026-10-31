@@ -62,3 +62,14 @@ it('rejects output that grows past the limit after opened-file metadata is read'
   expect(handles).toHaveLength(1)
   expect(handles[0]!.fd).toBe(-1)
 })
+
+it('rejects output that shrinks after opened-file metadata is read', async () => {
+  const { path, handles } = await output()
+  io.opened = async (file) => {
+    handles.push(file)
+    const inspect = file.stat.bind(file)
+    vi.spyOn(file, 'stat').mockImplementationOnce(async () => Object.assign(await inspect(), { size: pdf.length + 4 }))
+  }
+  await expect(readPdf(path, pdf.length + 4, new AbortController().signal)).rejects.toMatchObject({ code: 'invalid-output' })
+  expect(handles[0]!.fd).toBe(-1)
+})

@@ -1,4 +1,4 @@
-/** Actual skill discovery and CLI rendering through the shipped headless composition. */
+/** Actual skill discovery and `office` tool operations through the shipped headless composition. */
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -6,7 +6,7 @@ import { execa } from 'execa'
 import { expect, it } from 'vitest'
 import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import { expectNoRenderContext, officeModelPatches } from './fixtures/real-office.ts'
+import { expectNoRenderContext, officeCalls, officeModelPatches, officeToolPatches } from './fixtures/real-office.ts'
 
 const repo = fileURLToPath(new URL('../../../../', import.meta.url))
 const runtime = process.env.DSH_PRIMARY_RUNTIME
@@ -23,6 +23,7 @@ async function prepareOffice(cwd: string) {
   await writeFile(join(cwd, 'office.patch.json'), JSON.stringify([
     ...officeModelPatches(),
     { insert: [{ id: 'skill-office', name: '@deepseek-ai/dsh-skill-office', config: { assetRoot: join(repo, 'packages/skill/skill-office/assets') } }] },
+    ...officeToolPatches(),
     { insert: [{ id: 'workspace-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime! } }] },
     { id: 'session-persistence-jsonl', config: { root: join(cwd, '.sessions'), compression: 'none' } },
   ]))
@@ -36,15 +37,15 @@ async function sessionEvents(cwd: string) {
   return events
 }
 
-it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mode: 'native' }, { format: 'pdf', mode: 'native' }, { format: 'docx', mode: 'ptc' }])('loads the operation skill and renders $format through the shell in $mode mode', async ({ format, mode }) => {
+it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mode: 'native' }, { format: 'pdf', mode: 'native' }, { format: 'docx', mode: 'ptc' }])('loads the operation skill and renders $format with the office tool in $mode mode', async ({ format, mode }) => {
   let original: Buffer | undefined
   await runLoaderSmoke({
-    label: 'Office CLI rendering', tempDirPrefix: 'dsh-office-render-',
+    label: 'Office rendering', tempDirPrefix: 'dsh-office-render-',
     ...launch,
     binArgs: ['--profile', 'headless', '--patch', 'office.patch.json',
       ...mode === 'ptc' ? ['--patch', join(repo, 'apps/cli/config/examples/ptc.yml')] : [],
       // Source-content verification can require an authoring skill; this case covers image-only inspection.
-      `Export page 1 of input.${format} as PNG into preview. Check only that the exported image is readable; `
+      `Render page 1 of input.${format} and check only that the page image is readable; `
       + 'do not inspect the source document content or metadata, and keep the source file unchanged. Report briefly in English.'],
     async prepare(cwd) {
       await execa(python!, ['-c', "from docx import Document\nd=Document()\nd.add_heading('Quarterly revenue',0)\nd.add_paragraph('Q1: 12; Q2: 18; Total: 30')\nd.save('input.docx')"], { cwd })
@@ -62,31 +63,12 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mod
       })
       const skills = calls.filter(call => call.name === 'skill').map(call => JSON.parse(call.arguments) as { name: string })
       expect(skills.some(skill => skill.name === 'office-render'), JSON.stringify(skills)).toBe(true)
-      const commands = calls.filter(call => call.name === 'bash' || call.name === 'pwsh').map(call => (JSON.parse(call.arguments) as { command: string }).command).join('\n')
-      expect(commands).toMatch(/\srender\b/u)
-      expect(commands).toContain('--pages')
-      expect(commands).toContain('--output-dir')
-      const pixels = await execa(python!, ['-c', "from pathlib import Path\nfrom PIL import Image\nfiles=list(Path('preview').glob('*.png'))\nassert files\nfor f in files:\n im=Image.open(f).convert('RGBA')\n visible=Image.alpha_composite(Image.new('RGBA',im.size,'white'),im).convert('RGB')\n print('content' if any(a!=b for a,b in visible.getextrema()) else 'blank')"], { cwd })
-      expect(pixels.exitCode).toBe(0)
-      if (format === 'pdf') expect(pixels.stdout.trim()).toBe('content')
-      const final = events.filter(e => e.type === 'assistant/message').at(-1)?.data.message.content
-        .filter(b => b.type === 'text').map(b => b.text).join(' ')
-      const diagnostic = JSON.stringify({
-        format, mode, callOrder: calls.map(call => call.name), skills, commands, pixels: pixels.stdout, final,
-      }, null, 2)
-      const authoring = calls.findIndex(call => call.name === 'skill' && /office-(docx|pptx|xlsx)/u.test(call.arguments))
-      if (pixels.stdout.includes('blank')) {
-        if (authoring !== -1) {
-          const rendered = calls.findIndex(call => (call.name === 'bash' || call.name === 'pwsh') && /\srender\b/u.test(call.arguments))
-          expect(authoring, 'content checks after a blank preview may need the format skill').toBeGreaterThan(rendered)
-        }
-        expect(final, diagnostic).toMatch(
-          /visual (?:inspection|check)[^.!?]{0,100}(?:not completed|incomplete|could not be completed|unverified)/iu,
-        )
-      } else {
-        expect(authoring, diagnostic).toBe(-1)
-      }
-      expect(calls.some(e => e.name === 'read_image')).toBe(true)
+      const renders = officeCalls(events).filter(call => call.args.operation === 'render')
+      expect(renders.length, JSON.stringify(calls)).toBeGreaterThan(0)
+      const images = events.some(event => (event.type === 'tool/result' && event.data.message.content.some(block => block.type === 'image'))
+        || (event.type === 'user/message' && event.data.source.kind === 'ptc-mode' && event.data.content.some(block => block.type === 'image')))
+      expect(images, JSON.stringify(calls)).toBe(true)
+      expect(calls.some(call => call.name === 'read_image')).toBe(false)
     },
   })
 })
@@ -132,8 +114,9 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF through the op
       expect(skills.some(name => ['office-docx', 'office-pptx', 'office-xlsx'].includes(name))).toBe(false)
       const commands = calls.filter(call => call.name === 'bash' || call.name === 'pwsh')
         .map(call => (JSON.parse(call.arguments) as { command: string }).command).join('\n')
-      expect(commands).toMatch(/\sconvert\b/u)
-      expect(commands).not.toMatch(/\srender\b/u)
+      const office = officeCalls(events)
+      expect(office.some(call => call.args.operation === 'convert' && call.args.format === 'pdf'), JSON.stringify(calls)).toBe(true)
+      expect(office.some(call => call.args.operation === 'render')).toBe(false)
       expect(commands).not.toMatch(/pypdf|PyPDF2|\bfitz\b|pdfminer|pdfplumber|pdfinfo|pdftotext/iu)
       expect((await readFile(join(cwd, 'result.pdf'))).subarray(0, 5).toString()).toBe('%PDF-')
       expect(await readFile(join(cwd, 'input.docx'))).toEqual(original)

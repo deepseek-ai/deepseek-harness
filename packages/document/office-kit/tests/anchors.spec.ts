@@ -13,12 +13,12 @@ it.each(['URL object', 'file URL string'])('resolves engines independently from 
   const name = `@deepseek-ai/libreoffice-kit-${basename(root)}`
   const installs = ['first', 'second'].map((installation) => {
     const consumer = join(root, installation, 'consumer.js')
-    const kitRoot = join(dirname(consumer), 'node_modules', '@deepseek-ai', 'libreoffice-kit')
-    const kitEntry = join(kitRoot, 'lib', 'index.js')
-    const manifest = join(kitRoot, 'node_modules', name, 'package.json')
+    const kitDirectory = join(dirname(consumer), 'node_modules', '@deepseek-ai', 'libreoffice-kit')
+    const kitEntry = join(kitDirectory, 'lib', 'index.js')
+    const manifest = join(kitDirectory, 'node_modules', name, 'package.json')
     mkdirSync(dirname(kitEntry), { recursive: true })
     mkdirSync(dirname(manifest), { recursive: true })
-    writeFileSync(join(kitRoot, 'package.json'), JSON.stringify({ main: 'lib/index.js' }))
+    writeFileSync(join(kitDirectory, 'package.json'), JSON.stringify({ main: 'lib/index.js' }))
     writeFileSync(kitEntry, '')
     writeFileSync(manifest, JSON.stringify({ name }))
     return { kitEntry: createRequire(consumer).resolve('@deepseek-ai/libreoffice-kit'), manifest }

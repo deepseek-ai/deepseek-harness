@@ -2,19 +2,20 @@
 
 English | [中文](office-kit.zh.md)
 
-The [document package family](../../packages/document/README.md) converts Office files to PDFs on the Node Host. Consumers authorize source reads and own presentation; the shared provider owns conversion, bounded admission, and transient PDF reuse. This subsystem creates no model-facing tool or Session event.
+The [document package family](../../packages/document/README.md) renders, converts, and recalculates Office files on the Node Host. Consumers authorize source reads and own presentation; the shared provider owns the engine, bounded admission, transient output reuse, and the private output store. The [`office` tool](../../packages/document/tool-office/README.md) is the model-facing consumer; the provider itself creates no Session event.
 
 ## Ownership
 
 | Owner | Responsibility |
 |---|---|
-| [office-kit](../../packages/document/office-kit/README.md) | `ctx.officeKit`: shared LibreOffice conversion, bounded admission, and PDF caching; `/locate`: the caller's Kit entry and CLI, engine manifests from that installation, and native paths mapped to ASAR unpacked directories |
-| [Web bundle](../../packages/bundle/web-app/README.md) | One configurable conversion provider shared by Host consumers |
+| [office-kit](../../packages/document/office-kit/README.md) | `ctx.officeKit`: shared LibreOffice rendering, conversion, and recalculation, bounded admission, output caching, and the per-Session output store; `/locate`, whose contract the package README owns: the caller's Kit entry, engine manifests from that installation, and native paths mapped to ASAR unpacked directories |
+| [tool-office](../../packages/document/tool-office/README.md) | The resident `office` tool: rendered images in tool results and converted files returned for a shell copy |
+| [Web bundle](../../packages/bundle/web-app/README.md) and [SDK bundle](../../packages/bundle/sdk-app/README.md) | One configurable provider and the `office` tool shared by Host consumers |
 | [Office preview Client](../../packages/client/ui-sidebar-documentpreview/README.md#office-preview) | Office extension selection, PDF reuse, and missing-font notices |
 
 ## Requests and results
 
-[`OfficeKitRequest`](../../packages/document/office-kit/src/types.ts) contains an already-authorized source key/version, optional stat size, a deferred `read(signal, maxBytes)` callback, foreground/background priority, and a `OfficeExtension`: `doc`, `docx`, `xls`, `xlsx`, `ppt`, or `pptx`. `OfficeKit.convert(request, signal?)` returns one complete PDF result. Cancellation follows the caller and provider lifetimes; validation, output, and engine failures reject with a classified `OfficeKitError`.
+[`OfficeKitRequest`](../../packages/document/office-kit/src/types.ts) contains an already-authorized source key/version, optional stat size, a deferred `read(signal, maxBytes)` callback, foreground/background priority, and a `OfficeExtension`: `doc`, `docx`, `xls`, `xlsx`, `ppt`, or `pptx`. `OfficeKit.convert(request, signal?)` returns one complete PDF result. `renderImages()` returns bounded PNG images of selected pages, slides, or worksheet areas; `convertTo()` and `recalculate()` save the output under the provider's `outputDirectory` for the request's owner and return its Host path. Their request types accept OpenDocument inputs, and image rendering accepts PDF. All methods share admission and caching. Cancellation follows the caller and provider lifetimes; validation, output, and engine failures reject with a classified `OfficeKitError`.
 
 `OfficeKitPriority` is `foreground` for requested preview/QA and `background` for speculation. `OfficeSourceKey` brands the caller-owned authorized source locator. `OfficeKitGeneration` brands a provider lifetime, and `OfficeKitKey` brands its content identity; neither opaque value is parsed by consumers.
 
@@ -39,7 +40,7 @@ The `api/remotes` assembly mounts the conversion service's generated Remote desc
 
 The external [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) Node API selects its precompiled engines. The kit has an independent version and release workflow, defined by the [release ownership decision](../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.md). Application builds install the published npm packages. Application packaging requires the target’s declared native engine, or Node WASM when the kit declares no native engine for that target. The [platform engine reference](../../packages/document/office-kit/README.md) defines installation and packaging. Invalid metadata, missing required assets, and conversion errors reject without switching engines. When the provider's Kit is absent or fails to import, the provider still registers and rejects conversions as `unavailable`. Conversion uses disk input and output paths on the Host, with no browser conversion engine or font RPC.
 
-The [Host provider configuration](../../packages/document/office-kit/README.md#use-this-package) owns concurrency, deadlines, input/output limits, archive limits, image resolution, and font access. Native/WASM implementation and asset distribution belong to the kit workspace. System LibreOffice discovery, runtime engine downloads, persistent PDF caching, and model-facing rendering are outside this provider.
+The [Host provider configuration](../../packages/document/office-kit/README.md#use-this-package) owns concurrency, deadlines, input/output limits, archive limits, image resolution, and font access. Native/WASM implementation and asset distribution belong to the kit workspace. System LibreOffice discovery, runtime engine downloads, persistent output caching, workspace writes, and model-facing presentation are outside this provider.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -57,13 +58,47 @@ A provider lifetime owns all converters, queued calls, and temporary files.
 
 ```ts cordis-catalog
 /**
- * Convert Office bytes without modifying the source or writing Session events.
+ * Convert Office bytes to PDF without modifying the source or writing Session events.
  * @param request - authorized metadata and deferred bounded source read.
  * @param signal - caller cancellation; provider disposal also stops active work.
  * @returns caller-owned PDF bytes after conversion and scratch cleanup settle; canceled readers reject independently.
  * @throws {OfficeKitError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.
  */
-convert(request: OfficeKitRequest, signal?: AbortSignal): Promise<OfficeKitResult>
+async convert(request: OfficeKitRequest, signal?: AbortSignal): Promise<OfficeKitResult>
+
+/**
+ * Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission
+ * queue, concurrency, source-byte reservation, and cache with previews; `priority` orders them against other work.
+ * @param request - authorized metadata, deferred bounded source read, selection, and complete-result limits.
+ * @param signal - caller cancellation; provider disposal also stops active work.
+ * @returns caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits.
+ * @throws {OfficeKitError} `invalid-request` for a selection the engine rejects, `output-too-large` when the
+ * selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.
+ */
+async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<OfficeImagesResult>
+
+/**
+ * Convert one document to another format, sharing admission, concurrency, and cache with previews, and save the
+ * result in the provider's output store.
+ * @param request - authorized metadata, deferred bounded source read, target format, and output owner and name.
+ * @param signal - caller cancellation; provider disposal also stops active work.
+ * @returns the saved file's absolute Host path and size; the file is deleted after `outputRetentionMs`, when older
+ * outputs need `maxOutputStoreBytes`, when the Session whose id is `output.owner` is disposed, or when the provider is disposed.
+ * @throws {OfficeKitError} `invalid-request` for a format or sheet the engine rejects and the other conversion
+ * codes; cancellation rejects with its reason.
+ */
+async convertTo(request: OfficeConversionRequest, signal?: AbortSignal): Promise<OfficeFileResult>
+
+/**
+ * Recalculate every formula of one workbook and save formulas with refreshed cached results, sharing admission,
+ * concurrency, and cache with previews, and save the workbook in the provider's output store. This does not validate
+ * formulas or business data.
+ * @param request - authorized workbook metadata, deferred bounded source read, output format, and output owner and name.
+ * @param signal - caller cancellation; provider disposal also stops active work.
+ * @returns the saved workbook's absolute Host path and size, retained like {@link convertTo} outputs.
+ * @throws {OfficeKitError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.
+ */
+async recalculate(request: OfficeRecalculationRequest, signal?: AbortSignal): Promise<OfficeFileResult>
 
 /**
  * Read and convert one Office file using the Session's ordinary filesystem authorization.

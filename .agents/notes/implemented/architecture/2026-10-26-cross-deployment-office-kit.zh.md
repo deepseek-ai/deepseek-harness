@@ -10,15 +10,15 @@ Status: implemented
 
 ## 决策
 
-[Web bundle](../../../../packages/bundle/web-app/cordis.patch.yml) 和 [SDK bundle](../../../../packages/bundle/sdk-app/cordis.patch.yml) 在 Desktop、普通 `dsh web` 和 SDK 中都挂载 [`skill-office`](../../../../packages/skill/skill-office/README.zh.md)。这取代了[渐进式 Office 技能](2026-09-27-progressive-office-skills.zh.md)中的挂载决策；其技能结构和 shell 执行方式仍然有效。
+[Web bundle](../../../../packages/bundle/web-app/cordis.patch.yml) 和 [SDK bundle](../../../../packages/bundle/sdk-app/cordis.patch.yml) 在 Desktop、普通 `dsh web` 和 SDK 中都挂载 [`skill-office`](../../../../packages/skill/skill-office/README.zh.md)。这取代了[渐进式 Office 技能](2026-09-27-progressive-office-skills.zh.md)中的挂载决策；其技能结构仍然有效，[常驻 office 工具](2026-10-31-native-office-tool.zh.md)取代了其 shell 执行方式。
 
 内置 Python 环境（[`tool-workspace-dependencies`](../../../../packages/skill/tool-workspace-dependencies/README.zh.md)）只在 Desktop 以及有主运行时的 SDK 中挂载。`skill-office` 显式声明 `pythonEnvironment: 'workspace-dependencies' | 'user'`，由各 bundle 的配置行按部署选择取值。默认值为 `'workspace-dependencies'`，因为旧 SDK patch 会整体替换 `skill-office` 行的 `config`；这样的 patch 不含新键，仍保留它所针对的内置环境说明。
 
-[`@deepseek-ai/dsh-office-kit`](../../../../packages/document/office-kit/README.zh.md) 负责 Kit 定位和共享转换服务。其 `/locate` 入口只接收显式参数：消费方自己的 `import.meta.resolve` 查找函数，配置的 `node` 和 `cli` 路径，以及可选的自动查找 `root`。自动 CLI 路径与原生引擎路径共用 ASAR 解包映射。Desktop 壳仅为生产运行时设置 `DSH_BUNDLED_RUNTIME_ROOT`，值为 dsh 运行时目录，包括 ASAR 和真实复制的 release 树；Web bundle 将其作为 `kitRoot` 传入，由 Host 查找 CLI。提供 root 时，解析器拒绝 realpath 后位于实体运行时外的路径，防止查找到 Electron 壳自己的 Kit。开发运行时显式清除继承的变量，与 Web 一样不限制查找范围，因为工作区依赖链接会解析到一次性运行时外。它不读取环境变量；部署专有路径通过各 bundle 中的 `cordis.yml` 表达式传入。该入口只以值的形式导入 Node 内置模块，因此 `skill-office` 依赖它时不会加载 Cordis 服务、Schemastery 或 Kit。
+[`@deepseek-ai/dsh-office-kit`](../../../../packages/document/office-kit/README.zh.md) 负责 Kit 定位和共享转换服务。其 `/locate` 入口只接收显式参数：消费方自己的 `import.meta.resolve` 查找函数。原生引擎路径使用 ASAR 解包映射。它不读取环境变量，且入口只以值的形式导入 Node 内置模块，因此消费方可以依赖它而不加载 Cordis 服务、Schemastery 或 Kit。[常驻 office 工具](2026-10-31-native-office-tool.zh.md)在 Host 内执行 Kit 操作，因此任何部署都不发布 Kit CLI 路径或 Office 可执行文件变量。
 
-Kit 缺失时降级，而不是加载失败。转换服务照常注册，以代码 `unavailable` 拒绝转换，只保留成功的 Kit 导入，并对每种不同的失败只报告一次。操作技能说明 Kit 不可用，并只记录一次查找失败。配置的 `node` 或 `cli` 不是存在的绝对路径文件时，技能加载仍然失败，因为该值来自组合配置。
+Kit 缺失时降级，而不是加载失败。转换服务照常注册，以代码 `unavailable` 拒绝转换，只保留成功的 Kit 导入，并对每种不同的失败只报告一次；`office` 工具保持注册并返回该消息。
 
-`office-to-pdf` 改为 `office-kit`，使后续的 Kit 消费方（例如面向更多部署的 CLI 路径和原生渲染，PR #5374）都从同一个包获取 Kit。LibreOffice Kit 依赖在每个清单中声明同一个精确版本，使转换器、CLI 和打包的引擎来自同一个 Kit 版本。
+`office-to-pdf` 改为 `office-kit`，使后续的 Kit 消费方（例如原生渲染（PR #5374）和 `office` 工具）从同一个包获取 Kit。LibreOffice Kit 依赖在每个清单中声明同一个精确版本，因此转换器和打包的引擎来自同一个 Kit 发行版。
 
 ## 考虑过的替代方案
 
@@ -36,6 +36,6 @@ Kit 缺失时降级，而不是加载失败。转换服务照常注册，以代�
 
 没有内置环境的普通 Web 和 SDK 会话会列出七个 Office 技能，首个上下文因此增加它们的摘要。没有 Kit 的部署看到的是 `unavailable` 预览和报告 Kit 缺失的技能，而不是启动失败；之后安装的 Kit 无需重新加载提供方即可用于转换。外部组合按[升级指南](../../../../docs/upgrade-guide/v0.2.2-alpha.2/office-kit-package/guide.zh.md)从 `office-to-pdf` 配置行、`ctx.officeToPdf` 和 `officeToPdf/*` Remote 方法迁移。
 
-从 Desktop 内置终端启动的进程会继承 `DSH_BUNDLED_PRIMARY_RUNTIME`，因此 SDK 使用其内置环境。生产版子进程还会继承 `DSH_BUNDLED_RUNTIME_ROOT`，但只有 Desktop profile 使用它。壳不发布 Kit CLI 变量；子应用解析自己的 Kit，除非其启动器显式配置。
+从 Desktop 内置终端启动的进程会继承 `DSH_BUNDLED_PRIMARY_RUNTIME`，因此 SDK 使用其内置环境。Desktop 壳不发布 Kit 位置；子应用自行解析自己的 Kit。
 
-验证覆盖 `/locate` 的导入限制、Kit 查找与引擎解析、Kit 缺失或无法加载后的转换重试、去重后的警告、Kit 缺失时的操作技能、列出 Office 技能的 Web 和 SDK 录制会话，以及 Office profile 端到端测试。
+验证覆盖 `/locate` 的导入限制、Kit 查找与引擎解析、Kit 缺失或无法加载后的转换重试、去重后的警告、Kit 缺失时 `office` 工具的 `unavailable` 结果、列出 Office 技能的录制 Web 与 SDK 会话，以及 Office profile 端到端测试。

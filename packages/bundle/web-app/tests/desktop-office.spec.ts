@@ -1,201 +1,203 @@
-/** Web application Office rows over a real Loader tree: carrier paths, profile gating, Python environments, and failure containment. */
+/** Web application Office rows over a real Loader tree: skills, profile gating, Python, the preset office tool, and failure containment. */
 
-import { cp, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { createRequire } from 'node:module'
 import { dirname, join, sep } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
+import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
+import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
-import { resolveKitCli } from '@deepseek-ai/dsh-office-kit/locate'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import OfficeKit from '@deepseek-ai/dsh-office-kit'
+import { resolveKitModule } from '@deepseek-ai/dsh-office-kit/locate'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillOffice from '@deepseek-ai/dsh-skill-office'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as ToolOffice from '@deepseek-ai/dsh-tool-office'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as WorkspaceDependencies from '@deepseek-ai/dsh-tool-workspace-dependencies'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 
-// Only the consumer module location differs from a deployed runtime; keep resolution and containment real.
+// Kit presence is the deployment fact under test; every other row runs unmodified.
 vi.mock('@deepseek-ai/dsh-office-kit/locate', async (original) => {
   const actual = await original<typeof import('@deepseek-ai/dsh-office-kit/locate')>()
-  return { ...actual, resolveKitCli: vi.fn(actual.resolveKitCli) }
+  return { ...actual, resolveKitModule: vi.fn(() => ({ kind: 'missing', error: new Error('Cannot find package') })) }
 })
 
 const assets = fileURLToPath(new URL('../../../skill/skill-office/assets/', import.meta.url))
 const names = ['office', 'office-docx', 'office-export-pdf', 'office-pptx', 'office-recalculate', 'office-render', 'office-xlsx']
+const ROWS = ['office-kit', 'tool-office', 'workspace-dependencies', 'skill-office']
 
-afterEach(() => { vi.unstubAllEnvs(); vi.mocked(resolveKitCli).mockReset() })
+afterEach(() => { vi.unstubAllEnvs() })
 
-async function boot(profile: string, primaryRuntime: (root: string) => string | undefined,
-  officeCli: (root: string) => string | undefined = root => join(root, 'office-cli.js'),
-  launcher: (root: string) => { skills?: string; node?: string } = () => ({}),
-  layout: 'plain' | 'asar' | 'missing' | 'development' = 'plain',
-  runtimeRoot: (runtime: string) => string | undefined = runtime => runtime) {
+/** Plugin rows of one shipped agent preset. */
+function presetPlugins(preset: string): { id: string; name: string }[] {
+  const [row] = loadOverlayPatches(preset, fileURLToPath(new URL(`../presets/${preset}.patch.yml`, import.meta.url)))
+    .flatMap(patch => patch.insert ?? [])
+  return (row!.config as { plugins: { id: string; name: string }[] }).plugins
+}
+
+it('mounts the office tool in the standard and PTC presets and omits it from the minimal preset', () => {
+  const office = (preset: string) => presetPlugins(preset).filter(row => row.id === 'tool-office').map(row => row.name)
+  expect(office('standard')).toEqual(['@deepseek-ai/dsh-tool-office'])
+  expect(office('ptc')).toEqual(['@deepseek-ai/dsh-tool-office'])
+  expect(office('minimal')).toEqual([])
+  const host = loadOverlayPatches('desktop-office', fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)))
+    .flatMap(patch => patch.insert ?? []).map(row => row.id)
+  expect(host).not.toContain('tool-office')
+})
+
+async function boot(
+  profile: string, primaryRuntime: (root: string) => string | undefined, skills: (root: string) => string | undefined = () => undefined,
+  mounted: readonly string[] = ROWS,
+) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-desktop-office-rows-')))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   vi.stubEnv('DSH_HOME', join(root, 'home'))
   vi.stubEnv('DSH_BUNDLED_PRIMARY_RUNTIME', primaryRuntime(root))
-  vi.stubEnv('DSH_BUNDLED_OFFICE_CLI', officeCli(root))
-  const { skills, node } = launcher(root)
-  vi.stubEnv('DSH_BUNDLED_OFFICE_SKILLS', skills)
-  vi.stubEnv('DSH_BUNDLED_OFFICE_NODE', node)
+  vi.stubEnv('DSH_BUNDLED_OFFICE_SKILLS', skills(root))
   await cp(assets, join(root, 'office-skills'), { recursive: true })
-  const runtime = join(root, layout === 'asar' ? 'app.asar/dsh' : 'dsh')
-  await mkdir(runtime, { recursive: true })
-  vi.stubEnv('DSH_BUNDLED_RUNTIME_ROOT', runtimeRoot(runtime))
-  const physical = join(root, layout === 'asar' ? 'app.asar.unpacked/dsh' : layout === 'development' ? 'node_modules/.pnpm/kit' : 'dsh')
-  const cli = join(physical, 'node_modules', '@deepseek-ai', 'libreoffice-kit', 'lib', 'cli.js')
-  if (layout !== 'missing') {
-    for (const directory of new Set(layout === 'development' ? [physical] : [runtime, physical])) {
-      const kit = join(directory, 'node_modules', '@deepseek-ai', 'libreoffice-kit')
-      await mkdir(join(kit, 'lib'), { recursive: true })
-      await writeFile(join(kit, 'package.json'), JSON.stringify({ name: '@deepseek-ai/libreoffice-kit',
-        exports: { '.': './lib/index.js', './cli': './lib/cli.js' } }))
-      await writeFile(join(kit, 'lib', 'index.js'), '')
-      await writeFile(join(kit, 'lib', 'cli.js'), '')
-    }
-  }
-  if (layout === 'development') {
-    const scope = join(runtime, 'node_modules', '@deepseek-ai')
-    await mkdir(scope, { recursive: true })
-    await symlink(join(physical, 'node_modules', '@deepseek-ai', 'libreoffice-kit'), join(scope, 'libreoffice-kit'), 'junction')
-  }
-  const actual = await vi.importActual<typeof import('@deepseek-ai/dsh-office-kit/locate')>('@deepseek-ai/dsh-office-kit/locate')
-  vi.mocked(resolveKitCli).mockImplementation(options => actual.resolveKitCli({
-    ...options,
-    lookupKitEntry: () => pathToFileURL(createRequire(join(runtime, 'node_modules', '@deepseek-ai', 'dsh-skill-office', 'package.json'))
-      .resolve('@deepseek-ai/libreoffice-kit')),
-  }))
   const nodePath = join(root, 'primary-runtime', 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node')
   await mkdir(dirname(nodePath), { recursive: true })
   await writeFile(nodePath, '')
+  const workspace = join(root, 'workspace')
+  await mkdir(workspace)
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   ctx.provide('profileContext', {
-    name: profile, dir: '/profile', patchPath: '/profile/cordis.patch.yml', installAnchor: join(runtime, 'node_modules', '@deepseek-ai', 'dsh', 'package.json'),
-    cwd: '/workspace', home: '/home', startedBundles: [], overlays: [], telemetryDisabledEnv: undefined,
+    name: profile, dir: '/profile', patchPath: '/profile/cordis.patch.yml', installAnchor: join(root, 'package.json'),
+    cwd: workspace, home: '/home', startedBundles: [], overlays: [], telemetryDisabledEnv: undefined,
   })
   ctx.provide('dshHomePath', dshHomePath)
+  provideWorkingDirectoryFixture(ctx, workspace)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(SkillRegistry)
+  await ctx.plugin(LocalFileSystem, { cwd: workspace })
   ctx.baseUrl = 'file:///'
   await ctx.plugin(Loader).await()
   ctx.loader.builtins.dependencies = WorkspaceDependencies
   ctx.loader.builtins.office = SkillOffice
-  const rows = loadOverlayPatches('desktop-office', fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)))
-    .flatMap(patch => patch.insert ?? []).filter(row => row.id === 'workspace-dependencies' || row.id === 'skill-office')
-  expect(rows.map(row => row.id)).toEqual(['workspace-dependencies', 'skill-office'])
-  await ctx.loader.root.update(rows.map(row => ({ ...row, name: row.id === 'skill-office' ? 'cordis:office' : 'cordis:dependencies' })))
+  ctx.loader.builtins.officeKit = OfficeKit
+  ctx.loader.builtins.toolOffice = ToolOffice
+  const builtin: Record<string, string> = {
+    'office-kit': 'cordis:officeKit', 'tool-office': 'cordis:toolOffice', 'workspace-dependencies': 'cordis:dependencies', 'skill-office': 'cordis:office',
+  }
+  const hostRows = loadOverlayPatches('desktop-office', fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)))
+    .flatMap(patch => patch.insert ?? []).filter(row => ROWS.includes(row.id))
+  const rows = [...hostRows.slice(0, 1), presetPlugins('standard').find(row => row.id === 'tool-office')!, ...hostRows.slice(1)]
+  expect(rows.map(row => row.id)).toEqual(ROWS)
+  const entries = rows.map(row => ({ ...row, name: builtin[row.id]! }))
+  await ctx.loader.root.update(entries.filter(row => mounted.includes(row.id)))
   await ctx.loader.await()
-  return { ctx, root, runtime, cli }
+  return { ctx, root, workspace, entries }
 }
 
-it.each(['plain', 'asar'] as const)('resolves Desktop Office CLI paths inside a %s runtime', async (layout) => {
-  const { ctx, root, runtime, cli } = await boot('desktop', root => join(root, 'primary-runtime'), undefined, undefined, layout)
+it('mounts Desktop skills from the primary runtime beside the resident office tool', async () => {
+  const { ctx, root } = await boot('desktop', root => join(root, 'primary-runtime'))
   // Desktop omits pythonEnvironment; the skill-office default selects the bundled environment.
   expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toEqual({
-    assetRoot: join(root, 'office-skills'),
-    node: join(root, 'primary-runtime', 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node'),
-    kitRoot: runtime,
-    cli: undefined,
-    pythonEnvironment: 'workspace-dependencies',
+    assetRoot: join(root, 'office-skills'), pythonEnvironment: 'workspace-dependencies',
   })
-  expect((await ctx.skills.get('office-render'))?.content).toContain(JSON.stringify(cli))
   expect(ctx.loader.resolve('workspace-dependencies').fiber?.effectiveConfig).toEqual({
     source: join(root, 'primary-runtime'), root: join(root, 'home', 'dsh-runtimes', 'dsh-primary-runtime'),
   })
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
-  expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['load_workspace_dependencies'])
+  expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(['load_workspace_dependencies', 'office'])
+  expect(ctx.officeKit.outputDirectory).toBe(join(root, 'home', 'office-kit', 'outputs'))
   expect((await ctx.skills.get('office-docx'))?.content).toMatch(/## Python environment\n\n.*`load_workspace_dependencies`/u)
+  expect((await ctx.skills.get('office-render'))?.content).toContain('`office` tool')
 })
 
-it.each(['plain', 'development'] as const)('leaves Desktop Kit discovery unrestricted without a runtime root (%s)', async (layout) => {
-  const { ctx, runtime, cli } = await boot('desktop', root => join(root, 'primary-runtime'), undefined, undefined, layout, () => undefined)
-  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toHaveProperty('kitRoot', undefined)
-  if (layout === 'development') {
-    expect(await realpath(join(runtime, 'node_modules', '@deepseek-ai', 'libreoffice-kit', 'lib', 'cli.js'))).toBe(cli)
-    expect(cli.startsWith(`${runtime}${sep}`)).toBe(false)
-  }
-  expect((await ctx.skills.get('office-render'))?.content).toContain(JSON.stringify(cli))
-  expect(resolveKitCli).toHaveLastReturnedWith(expect.objectContaining({ kind: 'available', cli }))
-})
-
-it('keeps Office skills and warns once when no Kit is available inside the Desktop runtime', async () => {
-  const { ctx, root } = await boot('desktop', root => join(root, 'primary-runtime'), root => join(root, 'stale-cli.js'), undefined, 'missing')
-  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toMatchObject({ assetRoot: join(root, 'office-skills'), kitRoot: join(root, 'dsh'), cli: undefined, pythonEnvironment: 'workspace-dependencies' })
-  expect(ctx.loader.resolve('workspace-dependencies').fiber?.effectiveConfig).toEqual({
-    source: join(root, 'primary-runtime'), root: join(root, 'home', 'dsh-runtimes', 'dsh-primary-runtime'),
-  })
-  expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
+it('keeps the office tool and returns the unavailable Kit error to the model when Kit is absent', async () => {
+  const { ctx, workspace } = await boot('web', () => undefined)
+  await writeFile(join(workspace, 'report.docx'), 'docx bytes')
   const warnings: string[] = []
   ctx.logger.exporter({ levels: { default: 2 }, export: ({ type, args }) => { if (type === 'warn') warnings.push(String(args[0])) } })
-  for (const name of ['office-render', 'office-recalculate', 'office-export-pdf']) {
-    const content = (await ctx.skills.get(name))?.content
-    expect(content).toMatch(/\n\nLibreOffice Kit is not available in this deployment\.$/u)
-    expect(content).not.toContain('libreofficeKit')
-  }
-  expect(warnings).toHaveLength(1)
-  expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['load_workspace_dependencies'])
+  const result = await executeToolFixture(ctx, {
+    signal: new AbortController().signal, callId: ToolCallId('office-missing-kit'), name: 'office',
+    arguments: { operation: 'convert', input: 'report.docx', format: 'pdf' },
+  })
+  expect(result.isError).toBe(true)
+  expect(result.content).toEqual([{ type: 'text', text: `Error: cannot convert "${join(workspace, 'report.docx')}": LibreOffice Kit is not installed. `
+    + 'This deployment does not provide LibreOffice Kit; install or enable it as this deployment requires, then retry.' }])
+  expect(resolveKitModule).toHaveBeenCalled()
+  expect(warnings.filter(warning => warning.startsWith('OfficeKitError: LibreOffice Kit is not installed.'))).toHaveLength(1)
+})
+
+it('mounts the preset office tool without the Office kit row and reaches the service after the row loads', async () => {
+  const { ctx, workspace, entries } = await boot('web', () => undefined, () => undefined, ROWS.filter(id => id !== 'office-kit'))
+  vi.mocked(resolveKitModule).mockClear()
+  await writeFile(join(workspace, 'report.docx'), 'docx bytes')
+  await ctx.loader.resolve('tool-office').fiber!.await()
+  expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['office'])
+  const convert = () => executeToolFixture(ctx, {
+    signal: new AbortController().signal, callId: ToolCallId('office-without-service'), name: 'office',
+    arguments: { operation: 'convert', input: 'report.docx', format: 'pdf' },
+  })
+  expect((await convert()).content).toEqual([{ type: 'text', text: `Error: cannot convert "${join(workspace, 'report.docx')}": The document converter is unavailable.` }])
+  expect(resolveKitModule).not.toHaveBeenCalled()
+  await ctx.loader.root.update(entries)
+  await ctx.loader.await()
+  expect((await convert()).content).toEqual([{ type: 'text', text: expect.stringContaining('LibreOffice Kit is not installed.') as string }])
+  expect(resolveKitModule).toHaveBeenCalled()
 })
 
 it('mounts Office skills with packaged defaults and the user Python outside the Desktop profile without launcher variables', async () => {
-  const { ctx } = await boot('web', () => undefined, () => undefined)
+  const { ctx } = await boot('web', () => undefined)
   expect(ctx.loader.resolve('skill-office').disabled).toBe(false)
-  // Each path expression evaluates to `undefined`; the schema leaves it unset so skill-office applies its packaged default.
-  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({
-    kitRoot: undefined, assetRoot: undefined, node: undefined, cli: undefined, pythonEnvironment: 'user',
-  })
+  // The path expression evaluates to `undefined`; the schema leaves it unset so skill-office applies its packaged default.
+  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ assetRoot: undefined, pythonEnvironment: 'user' })
   expect(ctx.loader.resolve('workspace-dependencies').disabled).toBe(true)
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
   expect((await ctx.skills.get('office-docx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-docx').split(sep).join('/') })
   const docx = (await ctx.skills.get('office-docx'))?.content
   expect(docx).toMatch(/## Python environment\n\n.*`python3` or `python` on PATH/u)
   expect(docx).not.toContain('load_workspace_dependencies')
-  expect((await ctx.skills.get('office-render'))?.content).toContain(JSON.stringify(process.execPath))
-  expect(ctx.tools.schemas()).toEqual([])
+  expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['office'])
 })
 
-it('disables the Kit CLI outside the Desktop profile when the launcher sets an empty CLI', async () => {
-  const { ctx } = await boot('web', () => undefined, () => '')
-  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({
-    kitRoot: undefined, assetRoot: undefined, node: undefined, cli: false, pythonEnvironment: 'user',
-  })
+it('mounts packaged Office skills with the user Python in a Desktop profile launched without a primary runtime', async () => {
+  const { ctx } = await boot('desktop', () => undefined)
+  // Both rows evaluate their expressions without a TypeError and validate their configuration.
+  await ctx.loader.resolve('skill-office').fiber!.await()
+  expect(ctx.loader.resolve('workspace-dependencies').disabled).toBe(true)
+  expect(ctx.loader.resolve('workspace-dependencies').fiber).toBeUndefined()
+  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ assetRoot: undefined, pythonEnvironment: 'user' })
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
-  for (const name of ['office-render', 'office-recalculate', 'office-export-pdf']) {
-    const content = (await ctx.skills.get(name))?.content
-    expect(content).toMatch(/\n\nLibreOffice Kit is disabled in this deployment\.$/u)
-    expect(content).not.toContain('libreofficeKit')
-  }
-})
-
-it('uses the launcher Node and Kit CLI outside the Desktop profile', async () => {
-  const { ctx, root } = await boot('web', () => undefined, root => join(root, 'sidecar-cli.js'), root => ({ node: join(root, 'sidecar-node') }))
-  for (const file of ['sidecar-cli.js', 'sidecar-node']) await writeFile(join(root, file), '')
-  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({
-    kitRoot: undefined, assetRoot: undefined, node: join(root, 'sidecar-node'), cli: join(root, 'sidecar-cli.js'), pythonEnvironment: 'user',
-  })
-  expect((await ctx.skills.get('office-render'))?.content)
-    .toContain(JSON.stringify({ libreofficeKit: { node: join(root, 'sidecar-node'), cli: join(root, 'sidecar-cli.js') } }, undefined, 2))
+  expect((await ctx.skills.get('office-docx'))?.resourceBase).toEqual({ kind: 'directory', path: join(assets, 'office-docx').split(sep).join('/') })
+  const docx = (await ctx.skills.get('office-docx'))?.content
+  expect(docx).toMatch(/## Python environment\n\n.*`python3` or `python` on PATH/u)
+  expect(docx).not.toContain('load_workspace_dependencies')
+  expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['office'])
 })
 
 it('reads Office skills from the launcher skill directory outside the Desktop profile', async () => {
-  const { ctx, root } = await boot('web', () => undefined, () => undefined, root => ({ skills: join(root, 'office-skills') }))
-  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({
-    kitRoot: undefined, assetRoot: join(root, 'office-skills'), node: undefined, cli: undefined, pythonEnvironment: 'user',
-  })
+  const { ctx, root } = await boot('web', () => undefined, root => join(root, 'office-skills'))
+  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ assetRoot: join(root, 'office-skills'), pythonEnvironment: 'user' })
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
   expect((await ctx.skills.get('office-docx'))?.resourceBase)
     .toEqual({ kind: 'directory', path: join(root, 'office-skills', 'office-docx').split(sep).join('/') })
 })
 
-it('fails only the Office rows when the carrier supplies an unusable primary runtime path', async () => {
+it('fails only the Office skill rows when the carrier supplies an unusable primary runtime path', async () => {
   const { ctx } = await boot('desktop', () => 'primary-runtime')
   for (const id of ['skill-office', 'workspace-dependencies']) {
     await expect(ctx.loader.resolve(id).fiber!.await()).rejects.toThrow('absolute')
   }
   expect(await ctx.skills.list()).toEqual([])
-  expect(ctx.tools.schemas()).toEqual([])
+  expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['office'])
+})
+
+it('removes the office tool when its row is disposed', async () => {
+  const { ctx } = await boot('web', () => undefined)
+  expect(ctx.tools.get('office')).toBeDefined()
+  await ctx.loader.resolve('tool-office').fiber!.dispose()
+  expect(ctx.tools.get('office')).toBeUndefined()
 })

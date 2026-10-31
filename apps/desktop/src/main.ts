@@ -528,8 +528,6 @@ async function main(): Promise<void> {
       hostInspectPort, {
         ...hostEnvironment,
         DSH_BUNDLED_PRIMARY_RUNTIME: primaryRuntime,
-        // Development dependencies resolve through links outside the disposable runtime.
-        DSH_BUNDLED_RUNTIME_ROOT: development ? undefined : resources.dsh,
         DSH_CLIENT_VERSION: desktopClientVersion(),
       }, onFailure,
       resources, (next) => { platformView.setSession(next) }, (record) => {

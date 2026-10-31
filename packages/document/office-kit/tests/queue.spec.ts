@@ -1,12 +1,13 @@
 /** Controlled source and engine completions exercise admission and shared content ownership. */
 import { expect, it, onTestFinished, vi } from 'vitest'
-import { ConversionQueue } from '../src/queue.ts'
+import { ConversionQueue, type QueueRequest } from '../src/queue.ts'
 import { Config, OfficeSourceKey, OfficeKitGeneration, type OfficeKitRequest } from '../src/index.ts'
 
-const output = { pdf: new Uint8Array([37, 80, 68, 70]), missingFonts: ['Font'] }
+const output = { kind: 'pdf' as const, pdf: new Uint8Array([37, 80, 68, 70]), missingFonts: ['Font'] }
 function source(key: string, byte = 1, priority: OfficeKitRequest['priority'] = 'foreground') {
   const read = vi.fn<OfficeKitRequest['source']['read']>().mockResolvedValue({ bytes: new Uint8Array([byte]), version: 'v1' })
-  const request: OfficeKitRequest = { extension: 'docx', priority, source: { key: OfficeSourceKey(key), version: 'v1', bytes: 1, read } }
+  const request = { extension: 'docx', priority, operation: { kind: 'pdf' as const },
+    source: { key: OfficeSourceKey(key), version: 'v1', bytes: 1, read } } satisfies QueueRequest
   return { read, request }
 }
 function harness(config: Partial<Config> = {}) {

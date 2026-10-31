@@ -1,18 +1,12 @@
 ---
 name: office-export-pdf
-description: Convert an Office document to a requested PDF with LibreOffice Kit.
+description: Convert an Office document to a requested PDF with the office tool.
 ---
 
 # Export an Office document to PDF
 
-Use the installed LibreOffice Kit CLI through the shell with the absolute Node and CLI paths supplied below. In Bash, invoke `"<node>" "<cli>"`; in PowerShell, invoke `& "<node>" "<cli>"`. Prefer bundled LibreOffice unless the user requests another installation. If the Office sidecar is missing, follow [sidecar setup](../office/references/sidecar.md): ask whether the user wants to download it and install only after they agree. Do not invoke system soffice, use npx, or install a replacement to work around a failed conversion with an installed sidecar.
+Call the `office` tool with `operation: "convert"`, the final saved Office file as `input`, and `format: "pdf"`. It leaves the source unchanged and returns a temporary PDF path. Copy that file to the requested destination in the task workspace with the shell: `cp "<temporary file>" "<destination.pdf>"` (POSIX) or `Copy-Item -LiteralPath "<temporary file>" -Destination "<destination.pdf>"` (PowerShell). Do not overwrite an existing file unless the user asked for it.
 
-Convert the final saved Office file to a new PDF in the task workspace. Preserve the source. Quote each input and output path.
+After copying, check that the destination is nonempty and starts with the `%PDF-` signature, then report that extent of validation. Unless the user requests deeper checks, do not search for PDF readers, render images, or install tools to validate a conversion. Spreadsheet PDF pages follow workbook print settings; change those settings only when requested. Conversion may differ from the native application's pagination or fonts.
 
-```text
-"<node>" "<cli>" convert --input <final-office-file> --output <new-file.pdf>
-```
-
-Check the command result, nonempty output, and `%PDF-` file signature, then report that extent of validation. Unless the user requests deeper checks, do not search for PDF readers, generate images, or install tools to validate a conversion. Spreadsheet PDF pages follow workbook print settings; change those settings only when requested. Conversion may differ from the native application's pagination or fonts.
-
-If export fails, preserve the usable source and report the export limitation. Do not repeatedly convert an unchanged source or use conversion to investigate a failed preview. For PDF export alone, stop after these checks. Only a request for images or visual inspection calls for `office-render`; load it before that separate operation. Deliver the requested PDF through `present` when available, keeping the file in place.
+If export fails, including when LibreOffice Kit is unavailable, preserve the usable source and report the export limitation; do not invoke system soffice, use npx, or install a replacement. Do not repeatedly convert an unchanged source or use conversion to investigate a failed preview. For PDF export alone, stop after these checks. Only a request for images or visual inspection calls for `office-render`; load it before that separate operation. Deliver the requested PDF through `present` when available, keeping the file in place.

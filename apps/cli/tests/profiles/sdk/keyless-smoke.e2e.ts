@@ -541,7 +541,7 @@ async function officeFixture(root: string, pythonOnly: boolean) {
   return { source, paths }
 }
 
-it.each(['unset', 'empty', 'bundled', 'full', 'python-only', 'python-only-no-cli', 'missing-assets', 'wrong-type'] as const)('composes Office resources through the SDK profile (%s)', async (mode) => {
+it.each(['unset', 'empty', 'bundled', 'full', 'python-only', 'python-only-patched', 'missing-assets', 'wrong-type'] as const)('composes Office resources through the SDK profile (%s)', async (mode) => {
   const root = await mkdtemp(join(tmpdir(), 'sdk-office-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const enabled = mode !== 'unset' && mode !== 'empty'
@@ -574,7 +574,7 @@ it.each(['unset', 'empty', 'bundled', 'full', 'python-only', 'python-only-no-cli
   const cliPatch = join(root, 'cli.patch.yml')
   // This patch replaces the row's config without pythonEnvironment, as patches written before that option did;
   // the skill-office default keeps directing the model to the bundled environment.
-  await writeFile(cliPatch, JSON.stringify(mode === 'python-only-no-cli' ? [{ id: 'skill-office', config: { assetRoot: join(root, 'resources', 'office-skills'), cli: false } }] : []))
+  await writeFile(cliPatch, JSON.stringify(mode === 'python-only-patched' ? [{ id: 'skill-office', config: { assetRoot: join(root, 'resources', 'office-skills') } }] : []))
   const officeLaunch = resolveExampleLaunch({
     srcBin: fileURLToPath(new URL('../../../src/bin.ts', import.meta.url)), mode: 'lib',
     configArgs: ['--profile', 'sdk', '--patch', cliPatch],
@@ -607,6 +607,7 @@ it.each(['unset', 'empty', 'bundled', 'full', 'python-only', 'python-only-no-cli
   const names = (requests[0]!.tools as { name: string }[]).map(value => value.name)
   expect(names.includes('load_workspace_dependencies')).toBe(enabled)
   expect(JSON.stringify(requests[0]!.messages).includes('`office`')).toBe(mode !== 'missing-assets')
+  expect(names).toContain('office')
   expect(names).not.toContain('office_tools')
   expect(names).not.toContain('render_document')
   for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {

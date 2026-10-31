@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
-import { createEnginePackageResolver, resolveKitCli } from '../src/locate.ts'
+import { createEnginePackageResolver } from '../src/locate.ts'
 
 vi.mock('node:module', async (original) => {
   const actual = await original<typeof import('node:module')>()
@@ -22,10 +22,10 @@ afterEach(() => { vi.resetAllMocks() })
 function engineTree() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-engine-package-')))
   onTestFinished(() => { rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 10 }) })
-  const kitRoot = join(root, 'node_modules', '@deepseek-ai', 'libreoffice-kit')
-  const kitSource = join(kitRoot, 'lib', 'index.js')
+  const kitDirectory = join(root, 'node_modules', '@deepseek-ai', 'libreoffice-kit')
+  const kitSource = join(kitDirectory, 'lib', 'index.js')
   mkdirSync(dirname(kitSource), { recursive: true })
-  writeFileSync(join(kitRoot, 'package.json'), JSON.stringify({ main: 'lib/index.js' }))
+  writeFileSync(join(kitDirectory, 'package.json'), JSON.stringify({ main: 'lib/index.js' }))
   writeFileSync(kitSource, '')
   const host = nodeCreateRequire(join(root, 'caller.cjs'))
   const kitEntry = host.resolve('@deepseek-ai/libreoffice-kit')
@@ -38,7 +38,7 @@ function engineTree() {
   })
   // A private name prevents globally installed packages from satisfying an absent fixture.
   const name = `@deepseek-ai/libreoffice-kit-${basename(root)}`
-  const directory = join(kitRoot, 'node_modules', name)
+  const directory = join(kitDirectory, 'node_modules', name)
   return { root, name, directory, resolve, kit, kitEntry, resolveEnginePackage: createEnginePackageResolver(kitEntry) }
 }
 
@@ -131,21 +131,4 @@ it('propagates permission errors while checking the kit installation', () => {
     throw denied
   })
   expect(thrownBy(() => fixture.resolveEnginePackage(fixture.name))).toBe(denied)
-})
-
-
-it.each(['/', String.fromCharCode(92)])('maps automatically resolved CLI paths with %s separators', (separator) => {
-  const fixture = engineTree()
-  const suffix = ['app.asar', 'kit', 'cli.js'].join(separator)
-  const logical = join(fixture.root, suffix)
-  const physical = join(fixture.root, suffix.replace('app.asar', 'app.asar.unpacked'))
-  mkdirSync(dirname(physical), { recursive: true })
-  writeFileSync(physical, '')
-  fixture.resolve.mockReturnValue(logical)
-  expect(resolveKitCli({ lookupKitEntry: () => pathToFileURL(fixture.kitEntry) }))
-    .toEqual({ kind: 'available', node: process.execPath, cli: physical })
-  mkdirSync(dirname(logical), { recursive: true })
-  writeFileSync(logical, '')
-  expect(resolveKitCli({ cli: logical, lookupKitEntry: () => pathToFileURL(fixture.kitEntry) }))
-    .toEqual({ kind: 'available', node: process.execPath, cli: logical })
 })

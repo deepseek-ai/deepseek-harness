@@ -1,32 +1,109 @@
-/** Bounded source admission, shared content conversion, and caller-owned PDF delivery. */
+/** Bounded source admission, shared content conversion, and caller-owned output delivery. */
 import { createHash } from 'node:crypto'
 import { OfficeKitError } from './errors.ts'
 import { OfficeKitKey, type OfficeKitGeneration } from './identity.ts'
-import type { OfficeExtension, OfficeKitRequest, OfficeKitResult } from './types.ts'
+import type {
+  OfficeConversionFormat, OfficeImage, OfficeKitPriority, OfficeKitSource, OfficeRecalculationFormat,
+} from './types.ts'
 import type { Config } from './index.ts'
 
-type Converted = Pick<OfficeKitResult, 'pdf' | 'missingFonts'>
-type Convert = (bytes: Uint8Array, extension: OfficeExtension, signal: AbortSignal) => Promise<Converted>
+/** Engine operation applied to one admitted source; its JSON form distinguishes cached outputs. */
+export type OfficeOperation =
+  | { readonly kind: 'pdf' }
+  | {
+    readonly kind: 'images'
+    readonly pages?: readonly number[]
+    readonly sheet?: string
+    readonly range?: string
+    readonly dpi?: number
+    readonly maxImages: number
+    readonly maxPixels: number
+    readonly maxDimension: number
+    readonly maxBytes: number
+  }
+  | { readonly kind: 'convert'; readonly format: OfficeConversionFormat; readonly sheet?: string }
+  | { readonly kind: 'recalculate'; readonly format: OfficeRecalculationFormat }
+
+/** Complete engine output for one operation kind. */
+export type OfficeOperationOutput =
+  | { readonly kind: 'pdf'; readonly pdf: Uint8Array; readonly missingFonts: string[] }
+  | {
+    readonly kind: 'images'
+    readonly images: readonly OfficeImage[]
+    readonly pageCount: number
+    readonly dpi: number
+    readonly missingFonts: string[]
+  }
+  | { readonly kind: 'file'; readonly data: Uint8Array; readonly pageCount?: number; readonly missingFonts: string[] }
+
+/** Output kind produced by each operation. */
+export type OutputOf<O extends OfficeOperation> = Extract<OfficeOperationOutput, { kind: O['kind'] extends 'convert' | 'recalculate' ? 'file' : O['kind'] }>
+
+/** One admitted operation on an authorized source. */
+export interface QueueRequest<O extends OfficeOperation = OfficeOperation> {
+  readonly extension: string
+  readonly priority: OfficeKitPriority
+  readonly source: OfficeKitSource
+  readonly operation: O
+}
+
+/** Caller-owned output with its converter-owned identity. */
+export type QueueResult<O extends OfficeOperation = OfficeOperation> = OutputOf<O> & {
+  readonly cacheKey: OfficeKitKey
+  readonly generation: OfficeKitGeneration
+}
+
+type Stored = OfficeOperationOutput & { readonly cacheKey: OfficeKitKey; readonly generation: OfficeKitGeneration }
+type Convert = (bytes: Uint8Array, request: Pick<QueueRequest, 'extension' | 'operation'>, signal: AbortSignal) => Promise<OfficeOperationOutput>
 interface Reader {
   job: Job
   readonly source: string
-  readonly priority: OfficeKitRequest['priority']
-  readonly resolve: (value: OfficeKitResult) => void
+  readonly priority: OfficeKitPriority
+  readonly resolve: (value: Stored) => void
   readonly reject: (error: unknown) => void
   readonly cleanup: () => void
 }
 interface Job {
-  readonly request: OfficeKitRequest
+  readonly request: QueueRequest
+  readonly operation: string
   readonly controller: AbortController
   readonly readers: Set<Reader>
   readonly sources: Set<string>
-  priority: OfficeKitRequest['priority']
+  priority: OfficeKitPriority
   state: 'queued' | 'running' | 'finished'
+}
+
+/** Bytes a retained output occupies. */
+function outputBytes(output: OfficeOperationOutput): number {
+  switch (output.kind) {
+    case 'pdf': return output.pdf.byteLength
+    case 'file': return output.data.byteLength
+    case 'images': return output.images.reduce((sum, image) => sum + image.png.byteLength, 0)
+    /* v8 ignore next -- OfficeOperationOutput is a closed union */
+    default: return exhausted(output)
+  }
+}
+
+/** Independent copy of every byte array and list in an output. */
+function copyOutput(result: Stored): Stored {
+  switch (result.kind) {
+    case 'pdf': return { ...result, pdf: Uint8Array.from(result.pdf), missingFonts: [...result.missingFonts] }
+    case 'file': return { ...result, data: Uint8Array.from(result.data), missingFonts: [...result.missingFonts] }
+    case 'images': return { ...result, missingFonts: [...result.missingFonts],
+      images: result.images.map(image => ({ ...image, png: Uint8Array.from(image.png) })) }
+    /* v8 ignore next -- OfficeOperationOutput is a closed union */
+    default: return exhausted(result)
+  }
+}
+
+/* v8 ignore next 3 -- reached only through an unchecked closed-union member */
+function exhausted(value: never): never {
+  throw new Error(`Unexpected Office output: ${JSON.stringify(value)}`)
 }
 
 /** One converter generation owns every queued source, conversion, reader, and retained PDF. */
 export class ConversionQueue {
-  private readonly ready = new Map<OfficeKitKey, OfficeKitResult>()
+  private readonly ready = new Map<OfficeKitKey, Stored>()
   private readonly aliases = new Map<string, OfficeKitKey>()
   private readonly sources = new Map<string, Job>()
   private readonly digests = new Map<OfficeKitKey, Job>()
@@ -52,15 +129,21 @@ export class ConversionQueue {
    * Admit metadata before loading source bytes and share conversion across authorized readers.
    * @param request - already-authorized metadata and deferred bounded source read.
    * @param signal - this reader's cancellation; the final reader cancels shared work.
-   * @returns independent PDF bytes; busy or canceled readers reject without releasing active engine capacity early.
+   * @returns independent output bytes; busy or canceled readers reject without releasing active engine capacity early.
    */
-  async read(request: OfficeKitRequest, signal?: AbortSignal): Promise<OfficeKitResult> {
+  async read<O extends OfficeOperation>(request: QueueRequest<O>, signal?: AbortSignal): Promise<QueueResult<O>> {
+    // The stored output was produced for this request's operation kind.
+    return await this.readStored(request, signal) as QueueResult<O>
+  }
+
+  private async readStored(request: QueueRequest, signal?: AbortSignal): Promise<Stored> {
     signal?.throwIfAborted()
     if (this.disposed) throw this.unavailable()
     if (request.source.bytes !== undefined && request.source.bytes > this.config.maxInputBytes) {
       throw new OfficeKitError('input-too-large', 'The Office source exceeds maxInputBytes.')
     }
-    const source = JSON.stringify([request.source.key, request.source.version, request.extension])
+    const operation = JSON.stringify(request.operation)
+    const source = JSON.stringify([request.source.key, request.source.version, request.extension, operation])
     const alias = this.aliases.get(source)
     const cached = alias === undefined ? undefined : this.ready.get(alias)
     if (cached !== undefined) {
@@ -80,7 +163,7 @@ export class ConversionQueue {
         if (obsolete === undefined) throw this.busy()
         this.fail(obsolete, this.busy())
       }
-      job = { request, priority: request.priority, controller: new AbortController(), readers: new Set(), sources: new Set([source]), state: 'queued' }
+      job = { request, operation, priority: request.priority, controller: new AbortController(), readers: new Set(), sources: new Set([source]), state: 'queued' }
       this.sources.set(source, job)
       this.jobs.add(job)
       this.queue.push(job)
@@ -88,7 +171,7 @@ export class ConversionQueue {
     const shared = job
     if (request.priority === 'foreground') shared.priority = 'foreground'
     this.readers++
-    const promise = new Promise<OfficeKitResult>((resolve, reject) => {
+    const promise = new Promise<Stored>((resolve, reject) => {
       const abort = (): void => {
         this.release(reader)
         const reason: unknown = signal?.reason
@@ -117,9 +200,7 @@ export class ConversionQueue {
 
   private busy(): OfficeKitError { return new OfficeKitError('busy', 'The document converter has reached its admission limit.') }
   private unavailable(): OfficeKitError { return new OfficeKitError('unavailable', 'The document converter is unavailable.') }
-  private copy(result: OfficeKitResult): OfficeKitResult {
-    return { ...result, pdf: Uint8Array.from(result.pdf), missingFonts: [...result.missingFonts] }
-  }
+  private copy(result: Stored): Stored { return copyOutput(result) }
   private release(reader: Reader): void {
     reader.job.readers.delete(reader)
     if (reader.job.state === 'queued') {
@@ -180,7 +261,8 @@ export class ConversionQueue {
     signal.throwIfAborted()
     if (input.version !== job.request.source.version) throw new OfficeKitError('source-changed', 'The source changed while waiting for conversion.')
     if (input.bytes.byteLength > reserved) throw new OfficeKitError('input-too-large', 'The source exceeds its reserved read capacity.')
-    const digest = createHash('sha256').update(job.request.extension).update('\0').update(input.bytes).digest('hex')
+    const digest = createHash('sha256').update(job.request.extension).update('\0').update(job.operation).update('\0')
+      .update(input.bytes).digest('hex')
     const key = OfficeKitKey(`${this.generation}:${digest}`)
     const cached = this.ready.get(key)
     if (cached !== undefined) {
@@ -200,15 +282,15 @@ export class ConversionQueue {
     }
     this.digests.set(key, job)
     try {
-      const converted = await this.convert(input.bytes, job.request.extension, signal)
+      const converted = await this.convert(input.bytes, job.request, signal)
       signal.throwIfAborted()
-      const result = { ...converted, cacheKey: key, generation: this.generation }
+      const result: Stored = { ...converted, cacheKey: key, generation: this.generation }
       this.retain(result)
       this.finish(job, result)
     } finally { if (this.digests.get(key) === job) this.digests.delete(key) }
   }
 
-  private finish(job: Job, result: OfficeKitResult): void {
+  private finish(job: Job, result: Stored): void {
     for (const source of job.sources) this.sources.delete(source)
     if (this.ready.has(result.cacheKey)) {
       for (const source of job.sources) {
@@ -219,15 +301,16 @@ export class ConversionQueue {
     }
     for (const reader of job.readers) { this.release(reader); reader.resolve(this.copy(result)) }
   }
-  private retain(result: OfficeKitResult): void {
-    if (result.pdf.byteLength > this.config.maxCachedBytes) return
-    while (this.ready.size >= this.config.maxCachedEntries || this.cachedBytes + result.pdf.byteLength > this.config.maxCachedBytes) {
-      const [key, oldest] = this.ready.entries().next().value as [OfficeKitKey, OfficeKitResult]
+  private retain(result: Stored): void {
+    const bytes = outputBytes(result)
+    if (bytes > this.config.maxCachedBytes) return
+    while (this.ready.size >= this.config.maxCachedEntries || this.cachedBytes + bytes > this.config.maxCachedBytes) {
+      const [key, oldest] = this.ready.entries().next().value as [OfficeKitKey, Stored]
       this.ready.delete(key)
-      this.cachedBytes -= oldest.pdf.byteLength
+      this.cachedBytes -= outputBytes(oldest)
       for (const [source, digest] of this.aliases) if (digest === key) this.aliases.delete(source)
     }
     this.ready.set(result.cacheKey, result)
-    this.cachedBytes += result.pdf.byteLength
+    this.cachedBytes += bytes
   }
 }

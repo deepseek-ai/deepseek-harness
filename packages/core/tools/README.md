@@ -93,6 +93,10 @@ Agent-step concurrency uses the [agent-loop configuration](../agent-loop/README.
 
 A tool’s `projectContent` installs execution-prepared content before post-execute policies. Policies may still replace or block it; `finalizeContent` remains the final content transform after those policies.
 
+### Check image input
+
+`assertImageInputRoute(ctx, exec, refusals)` lets a tool whose result shows images to the model refuse the call before any file or attachment work. It reads the calling Session's latest request-header route, then the agent options, and requires `ctx.llm.resolveModelInfo()` to declare `image` input; an unknown capability, a missing agent, provider, model, or `llm` service is refused. The tool passes its own `unresolved` message and `unsupported(model)` builder, so each refusal names that tool's operation and argument.
+
 ### Host presentation descriptors
 
 A tool can retain pure `presentCall()` and `presentResult()` methods for Host-local consumers. The built-in Web Client does not consume those values. It selects a renderer through `tool.call.toolview` and derives card props from raw call arguments, result content, failure state, and persisted metadata. The [Client-derived presentation decision](../../../.agents/notes/implemented/architecture/2026-08-23-client-derived-tool-presentation.md) owns this transport split.
@@ -122,6 +126,7 @@ The registry holds typed `ToolDefinition`s in scoped layers and projects them on
 - [`src/schema.ts`](src/schema.ts) — Typed tool definitions and model-facing schema projection.
 - [`src/json-schema.ts`](src/json-schema.ts) — Supported JSON Schema validation.
 - [`src/presentation.ts`](src/presentation.ts) — Tool-card render intents.
+- [`src/image-route.ts`](src/image-route.ts) — Image-input check for the calling model route.
 
 ### Execution and cancellation
 

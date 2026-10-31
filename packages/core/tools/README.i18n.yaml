@@ -32,6 +32,9 @@
 /deepseek-ai-dsh-tools/use-this-package/enforce-policy-on-calls:
   en: cbfe8317565ac62d
   zh: 1e71c66941e50881
+/deepseek-ai-dsh-tools/use-this-package/check-image-input:
+  en: f31cd4927bcffd46
+  zh: b39caf5cefb85417
 /deepseek-ai-dsh-tools/use-this-package/host-presentation-descriptors:
   en: 258e16bb367229e5
   zh: 7c1eb91062b4e4ad
@@ -42,8 +45,8 @@
   en: 516a6195a21e742b
   zh: 33c7b99b42c5acac
 /deepseek-ai-dsh-tools/understand-the-implementation/source-map:
-  en: 2dee0a37e0c1fa38
-  zh: 0963cba32685612e
+  en: 4adef0ebd3e125e4
+  zh: af307d853c22f12d
 /deepseek-ai-dsh-tools/understand-the-implementation/execution-and-cancellation:
   en: dc44a88997777988
   zh: 56454aeace1c8b77

@@ -26,7 +26,7 @@ export function apply(ctx) {
       const names = (await ctx.skills.list()).map(skill => skill.name).filter(name => name.startsWith('office'))
       const content = {}
       for (const name of ['office-docx', 'office-export-pdf']) content[name] = (await ctx.skills.get(name))?.content ?? null
-      response.end(JSON.stringify({ names, content }))
+      response.end(JSON.stringify({ names, content, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name === 'office') }))
     } catch (error) {
       response.statusCode = 500
       response.end(String(error?.stack ?? error))
@@ -34,7 +34,7 @@ export function apply(ctx) {
   } }))
 }
 `)
-  writeFileSync(join(plugin, 'bundle.yml'), `- insert:\n    - id: ${SKILL_PROBE}\n      name: ${SKILL_PROBE}\n      inject: [webServer, skills]\n`)
+  writeFileSync(join(plugin, 'bundle.yml'), `- insert:\n    - id: ${SKILL_PROBE}\n      name: ${SKILL_PROBE}\n      inject: [webServer, skills, tools]\n`)
   const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')) as {
     dependencies?: Record<string, string>
     dsh: { profile: { bundles: string[] } }
@@ -49,7 +49,7 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
     ['one missing Office skill file', 'missing-skill'],
     ['an empty runtime directory', 'empty-runtime'],
     ['an unusable primary runtime path', 'relative-source'],
-    ['no locatable LibreOffice Kit', 'missing-kit'],
+    ['complete Office resources', 'complete'],
   ] as const)('starts the Host with %s', async (_label, mode) => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-desktop-office-'))
     let host: DesktopHostProcess | undefined
@@ -63,33 +63,38 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
         if (mode === 'missing-skill') rmSync(join(runtime, 'office-skills', 'office-docx', 'SKILL.md'))
       }
       writeFileSync(join(paths.profile, 'cordis.patch.yml'), '- id: webserver\n  config:\n    host: 127.0.0.1\n    port: 0\n')
-      if (mode === 'missing-kit') installSkillProbe(root, paths.profile)
+      installSkillProbe(root, paths.profile)
       const primaryRuntime = mode === 'relative-source' ? 'runtime/primary-runtime' : join(runtime, 'primary-runtime')
-      if (mode === 'missing-kit') {
-        const nodeBin = join(primaryRuntime, 'dependencies', 'node', 'bin')
-        mkdirSync(nodeBin, { recursive: true })
-        writeFileSync(join(nodeBin, process.platform === 'win32' ? 'node.exe' : 'node'), '')
-      }
-      const inherited: NodeJS.ProcessEnv = { ...process.env, DSH_BUNDLED_OFFICE_CLI: join(root, 'stale-cli.js') }
       host = new DesktopHostProcess(process.execPath, project, paths.profile, undefined,
-        { ...inherited, DSH_BUNDLED_PRIMARY_RUNTIME: primaryRuntime,
-          DSH_BUNDLED_RUNTIME_ROOT: mode === 'missing-kit' ? project : undefined }, (error) => { failures.push(error) })
+        { ...process.env, DSH_BUNDLED_PRIMARY_RUNTIME: primaryRuntime }, (error) => { failures.push(error) })
       const { url } = await host.start()
       // The authenticated URL exchanges its token for a session cookie by redirecting.
       const response = await fetch(url, { redirect: 'manual' })
       await response.body?.cancel()
       expect(response.status).toBe(303)
-      if (mode === 'missing-kit') {
-        const cookie = response.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
-        const probe = await fetch(new URL(`/${SKILL_PROBE}`, url), { headers: { cookie } })
-        const body = await probe.text()
-        expect(probe.status, body).toBe(200)
-        const skills = JSON.parse(body) as { names: string[]; content: Record<string, string | null> }
-        expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS)
-        expect(skills.content['office-docx']).toEqual(expect.any(String))
-        expect(skills.content['office-docx']).not.toContain('LibreOffice Kit is disabled')
-        expect(skills.content['office-export-pdf']).toMatch(/\n\nLibreOffice Kit is not available in this deployment\.$/u)
-        expect(skills.content['office-export-pdf']).not.toContain('libreofficeKit')
+      const cookie = response.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
+      const probe = await fetch(new URL(`/${SKILL_PROBE}`, url), { headers: { cookie } })
+      const body = await probe.text()
+      expect(probe.status, body).toBe(200)
+      const skills = JSON.parse(body) as { names: string[]; content: Record<string, string | null>; officeKit: boolean; tools: string[] }
+      expect(skills.officeKit).toBe(true)
+      // Agent presets, not the Host root, mount the office tool.
+      expect(skills.tools).toEqual([])
+      switch (mode) {
+        case 'complete':
+          expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS)
+          expect(skills.content['office-docx']).toEqual(expect.any(String))
+          expect(skills.content['office-export-pdf']).toContain('`office` tool')
+          break
+        case 'missing-skill':
+          expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS.filter(name => name !== 'office-docx'))
+          expect(skills.content['office-docx']).toBeNull()
+          expect(skills.content['office-export-pdf']).toContain('`office` tool')
+          break
+        case 'empty-runtime':
+        case 'relative-source':
+          expect(skills).toMatchObject({ names: [], content: { 'office-docx': null, 'office-export-pdf': null } })
+          break
       }
       expect(failures).toEqual([])
     } finally {

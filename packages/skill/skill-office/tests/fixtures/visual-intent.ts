@@ -1,14 +1,13 @@
 /** Register real Office authoring visual-intent e2e cases for the selected document formats. */
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
 import { expect, it } from 'vitest'
 import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import { officeModelPatches } from './real-office.ts'
-import { renderCliFixture } from './render-cli.ts'
+import { officeCalls, officeModelPatches, officeToolPatches } from './real-office.ts'
 
 const repo = fileURLToPath(new URL('../../../../../', import.meta.url))
 const assetRoot = fileURLToPath(new URL('../../assets/', import.meta.url))
@@ -47,23 +46,16 @@ const intents = [
   { intent: 'implicit', suffix: '' },
 ] as const
 
-function within(parent: string, path: string): boolean {
-  const part = relative(parent, path)
-  return part === '' || part !== '..' && !part.startsWith(`..${sep}`) && !isAbsolute(part)
-}
-
 /**
  * Register the visual-intent e2e cases for the selected document formats.
  * @param selected - Document formats whose cases this spec file registers.
- * @param options - `blank` also registers the pptx case whose preview fixture produces blank pixels.
  */
-export function registerVisualIntentCases(selected: readonly DocumentFormat[], options: { blank?: boolean } = {}): void {
+export function registerVisualIntentCases(selected: readonly DocumentFormat[]): void {
   const cases = [
     ...formats.filter(format => selected.includes(format.format)).flatMap(format => intents.flatMap(intent => [
       { ...format, ...intent, kind: 'format' },
       { ...format, ...intent, kind: 'content', task: format.contentTask, verify: format.verifyContent },
     ])),
-    ...options.blank === true ? [{ ...formats[0], kind: 'format', intent: 'blank', suffix: intents[0].suffix }] : [],
   ]
 
   it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(cases)('$format $kind $intent visual intent', async ({ format, kind, task, seed, verify, intent, suffix }) => {
@@ -73,15 +65,12 @@ export function registerVisualIntentCases(selected: readonly DocumentFormat[], o
       await mkdir(previewRoot)
       const configPath = join(controlRoot, 'office.patch.json')
       const sessionRoot = join(controlRoot, 'sessions')
-      // The model can remove its entire preview directory during cleanup.
-      const callLogPath = join(controlRoot, 'cli-calls.jsonl')
       await runLoaderSmoke({
         label: `Office ${format} ${kind} ${intent} visual intent`, tempDirPrefix: `dsh-office-${format}-${kind}-${intent}-`,
         binScript: join(repo, 'apps/cli/src/bin.ts'), sourceImport: 'tsx/esm', tsconfigPath: join(repo, 'tsconfig.base.json'),
         configPath, processTimeoutMs: 110_000,
         binArgs: ['--profile', 'headless', '--patch', configPath,
           `In input.${format}, ${task}; save result.${format}. ${suffix} Respond briefly in English.`],
-        // The CLI fixture and its log live outside the workspace; bwrap's private /tmp hides both.
         env: { DSH_PRIMARY_RUNTIME: runtime, DSH_PERMISSION_MODE: 'danger-full-access',
           DSH_HOME: join(controlRoot, 'home'), DSH_AGENTS_HOME: join(controlRoot, 'agents'),
           DSH_TELEMETRY_DISABLED: '1',
@@ -89,10 +78,10 @@ export function registerVisualIntentCases(selected: readonly DocumentFormat[], o
           HTTP_PROXY: process.env.DSH_OFFICE_TEST_PROXY, HTTPS_PROXY: process.env.DSH_OFFICE_TEST_PROXY },
         async prepare(cwd) {
           await execa(python!, ['-c', seed], { cwd })
-          const fixture = await renderCliFixture(controlRoot, python!, intent === 'blank', callLogPath)
           const testAssetRoot = process.env.DSH_OFFICE_TEST_ASSET_ROOT ?? assetRoot
           await writeFile(configPath, JSON.stringify([
-            { insert: [{ id: 'skill-office', name: '@deepseek-ai/dsh-skill-office', config: { assetRoot: testAssetRoot, node: process.execPath, cli: fixture.cli } }] },
+            { insert: [{ id: 'skill-office', name: '@deepseek-ai/dsh-skill-office', config: { assetRoot: testAssetRoot } }] },
+            ...officeToolPatches(),
             { insert: [{ id: 'workspace-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime! } }] },
             ...officeModelPatches(),
             { id: 'session-persistence-jsonl', config: { root: sessionRoot, compression: 'none' } },
@@ -111,22 +100,18 @@ export function registerVisualIntentCases(selected: readonly DocumentFormat[], o
           const events = parseSessionLog(bytes.toString('utf8'))
           const calls = events.filter(event => event.type === 'tool/call').map(event => event.data)
           const loaded = calls.filter(call => call.name === 'skill').map(call => (JSON.parse(call.arguments) as { name: string }).name)
-          const imageReads = calls.filter(call => call.name === 'read_image')
+          const renderCalls = officeCalls(events).filter(call => call.args.operation === 'render')
+          const rendered = events.filter(event => event.type === 'tool/result' && renderCalls.some(call => call.callId === event.data.message.toolCallId)
+            && !event.data.message.isError && event.data.message.content.some(block => block.type === 'image')).length
           const shellCommands = calls.filter(call => call.name === 'bash' || call.name === 'pwsh')
             .map(call => (JSON.parse(call.arguments) as { command: string }).command)
           const answer = events.findLast(event => event.type === 'assistant/message')
           const text = answer?.type === 'assistant/message'
             ? answer.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('') : undefined
-          const callLog = await readFile(callLogPath, 'utf8').catch((error: unknown) => {
-            if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return ''
-            throw error
-          })
-          const renderCalls = callLog.trim().split('\n').filter(Boolean).map(line => JSON.parse(line) as { args: string[]; status: number | null; pixelsBlank: boolean | null })
-            .filter(call => call.args[0] === 'render')
           const diagnostic = JSON.stringify({
             scenario: `${format} ${kind} ${intent}`, loadedSkills: loaded,
             shellCommands: shellCommands.map(command => command.slice(0, 600)),
-            renderCalls, imageReads: imageReads.length,
+            renderCalls, renderedImages: rendered,
             answer: text?.slice(0, 800) ?? '(missing)',
           }, null, 2)
           if (text === undefined) throw new Error(`Agent did not finish with an answer: ${diagnostic}`)
@@ -136,18 +121,10 @@ export function registerVisualIntentCases(selected: readonly DocumentFormat[], o
           if (intent === 'excluded' || kind === 'content' && intent !== 'explicit') {
             expect(loaded, diagnostic).not.toContain('office-render')
             expect(renderCalls, diagnostic).toEqual([])
-            expect(imageReads, diagnostic).toEqual([])
           } else {
             expect(loaded, diagnostic).toContain('office-render')
             expect(renderCalls, diagnostic).toHaveLength(1)
-            expect(imageReads.length, diagnostic).toBeLessThanOrEqual(1)
-            for (const call of renderCalls) {
-              const output = call.args[call.args.indexOf('--output-dir') + 1]
-              expect(output, diagnostic).toBeDefined()
-              expect(within(cwd, resolve(cwd, output!)), diagnostic).toBe(true)
-              expect(call.status, diagnostic).toBe(0)
-            }
-            if (renderCalls[0]?.pixelsBlank || imageReads.length === 0) {
+            if (rendered === 0) {
               expect(text.match(/Content and structure checks passed; visual inspection was not completed\./gu), diagnostic).toHaveLength(1)
               expect(text, diagnostic).not.toMatch(/all checks passed|visually (?:verified|validated|confirmed)/iu)
             }

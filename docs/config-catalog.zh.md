@@ -2537,7 +2537,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-office-kit`
 
-- `source`: [`packages/document/office-kit/src/index.ts:32`](../packages/document/office-kit/src/index.ts)
+- `source`: [`packages/document/office-kit/src/index.ts:38`](../packages/document/office-kit/src/index.ts)
 
 ```ts config-catalog
 /** Provider concurrency and kit rendering/font configuration. */
@@ -2552,17 +2552,23 @@ export interface Config {
   maxSourceBytes: number
   /** Maximum concurrent background jobs; zero refuses speculative work. */
   maxBackgroundConversions: number
-  /** Maximum retained content-addressed PDFs. */
+  /** Maximum retained content-addressed outputs. */
   maxCachedEntries: number
-  /** Maximum retained PDF bytes. */
+  /** Maximum retained output bytes. */
   maxCachedBytes: number
   /** Maximum retained source-version aliases to cached content. */
   maxSourceEntries: number
+  /** Absolute directory for converted and recalculated files, with one subdirectory per Session. */
+  outputDirectory: string
+  /** Milliseconds a converted or recalculated file is kept. */
+  outputRetentionMs: number
+  /** Maximum bytes across retained converted and recalculated files; the oldest leave first. */
+  maxOutputStoreBytes: number
   /** Conversion deadline in milliseconds; excludes the DSH queue. */
   timeoutMs: number
   /** Maximum authorized source bytes. */
   maxInputBytes: number
-  /** Maximum complete PDF bytes. */
+  /** Maximum complete PDF, converted, or recalculated file bytes. */
   maxOutputBytes: number
   /** Exported raster-image DPI. */
   maxImageResolution: number
@@ -3424,7 +3430,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-skill-office`
 
 - `inject`: `skills`
-- `source`: [`packages/skill/skill-office/src/index.ts:46`](../packages/skill/skill-office/src/index.ts)
+- `source`: [`packages/skill/skill-office/src/index.ts:34`](../packages/skill/skill-office/src/index.ts)
 
 ```ts config-catalog
 /** Configuration after schema defaults apply. */
@@ -3437,15 +3443,6 @@ export interface ResolvedConfig extends Config {
 export interface Config {
   /** Absolute assets directory containing skill folders; defaults to packaged assets. */
   assetRoot?: string
-  /** Standalone Node executable; defaults to the current executable outside Electron. */
-  node?: string
-  /** Absolute LibreOffice Kit CLI entry; false explicitly disables CLI access, and omission uses the CLI of this package's Kit. */
-  cli?: string | false
-  /**
-   * Absolute directory restricting automatic Kit entry and CLI discovery after realpath and ASAR-unpacked mapping.
-   * Omission leaves discovery unrestricted; explicit `cli` bypasses the restriction.
-   */
-  kitRoot?: string
   /** Python environment named in the Python authoring and verification skills. @default 'workspace-dependencies' */
   pythonEnvironment?: PythonEnvironment
 }
@@ -4257,6 +4254,29 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-lsp -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-office -->
+<a id="deepseek-aidsh-tool-office"></a>
+
+## `@deepseek-ai/dsh-tool-office`
+
+- `inject`: `tools` · `fs` · `workingDirectory`
+- `source`: [`packages/document/tool-office/src/index.ts:33`](../packages/document/tool-office/src/index.ts)
+
+```ts config-catalog
+/** Bounds on one render result; deployment attachment limits apply when they are lower. */
+export interface Config {
+  /** Maximum images one render returns, including worksheet fragments. */
+  maxImages: number
+  /** Maximum pixels of each image. */
+  maxImagePixels: number
+  /** Maximum width and height of each image in pixels. */
+  maxImageDimension: number
+  /** Maximum PNG bytes across all images of one render. */
+  maxImageBytes: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-office -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-present -->
 <a id="deepseek-aidsh-tool-present"></a>

@@ -100,12 +100,12 @@ it.each(['office-render', 'office-recalculate', 'office-export-pdf'])('loads %s 
   const { agent, adapter } = await setup('native', [name])
   await send(agent)
   const loaded = JSON.stringify(adapter.requests.at(-1))
-  expect(loaded).toContain('libreofficeKit')
+  expect(loaded).toContain('`office` tool')
   expect(loaded).not.toContain('Office task routing')
   expect(loaded).not.toContain('# Word documents')
-  if (name !== 'office-render') expect(loaded).not.toMatch(/render --input|uniformly blank|fragment rectangles|DPI/)
-  if (name !== 'office-recalculate') expect(loaded).not.toContain('recalculate --input')
-  if (name !== 'office-export-pdf') expect(loaded).not.toContain('convert --input')
+  if (name !== 'office-render') expect(loaded).not.toMatch(/operation: \\"render\\"|uniformly blank|DPI/)
+  if (name !== 'office-recalculate') expect(loaded).not.toContain('operation: \\"recalculate\\"')
+  if (name !== 'office-export-pdf') expect(loaded).not.toContain('operation: \\"convert\\"')
 })
 
 it('loads an explicitly invoked authoring skill without the router', async () => {

@@ -25,8 +25,6 @@ Remote 错误 `document-render/failed`、`RenderedDocumentBytes`、`OfficeSource
 
 原先 LibreOffice Kit 缺失时提供方加载失败。现在没有 Kit 时提供方照常注册；每次需要转换器的转换都以代码为 `unavailable` 的 `OfficeKitError` 拒绝，并重新定位 Kit，因此之后安装的 Kit 无需重新加载提供方即可生效。
 
-Desktop 在 Host 内解析 Kit CLI，不设置也不读取 `DSH_BUNDLED_OFFICE_CLI`。操作技能通过说明和警告报告 Kit 不可用，不写独立诊断文件。自定义 Desktop patch 可使用绝对目录 `kitRoot` 限制自动查找；显式 `cli` 路径不受此限制。
-
 ## 迁移
 
 1. 在 `cordis.yml`、patch 和 overlay 中，把 `id: office-to-pdf` 行改为 `id: office-kit`，并把其 `name` 改为 `'@deepseek-ai/dsh-office-kit'`。`config` 块保持不变。
@@ -34,4 +32,3 @@ Desktop 在 Host 内解析 Kit CLI，不设置也不读取 `DSH_BUNDLED_OFFICE_C
 3. 按上表重命名 `ctx.officeToPdf`、Remote 方法名和导出符号。
 4. 原先把转换行加载失败视为“Kit 缺失”的代码，改为检查转换返回的、代码为 `unavailable` 的 `OfficeKitError`。
 5. 在项目中搜索 `office-to-pdf`、`officeToPdf` 和 `OfficeToPdf` 确认已无残留，然后在 Web 文档预览中打开一个 DOCX 文件，确认迁移完成。
-6. 移除读取 `DSH_BUNDLED_OFFICE_CLI` 的 Desktop patch；使用随包提供的自动查找，或显式设置绝对 `cli`。加载 `office-export-pdf`，确认其提供预期 CLI 路径或报告 Kit 不可用。

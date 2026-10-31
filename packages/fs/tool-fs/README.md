@@ -105,7 +105,7 @@ The tools are the executor; policy is an event gate. The tools inject no policy 
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config`, tool composition, `read_image` attachments gate |
 | [`src/read.ts`](src/read.ts) | `read` executor: one stat, streaming decision, window build, observation |
-| [`src/read-image.ts`](src/read-image.ts) | `read_image` executor: route and media-type gates, bounded bytes, attachment save |
+| [`src/read-image.ts`](src/read-image.ts) | `read_image` executor: route gate through `dsh-tools` `assertImageInputRoute`, media-type gates, bounded bytes, attachment save |
 | [`src/write.ts`](src/write.ts) | `write` executor: intent waterfall, atomic write, observation |
 | [`src/apply-patch.ts`](src/apply-patch.ts), [`apply-patch-output.ts`](src/apply-patch-output.ts) | `apply_patch` registration, strict commit values and compact diagnostics |
 | [`src/apply-patch-presentation.ts`](src/apply-patch-presentation.ts) | Pure call previews and known result diffs |

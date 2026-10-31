@@ -219,6 +219,74 @@
       }
     },
     {
+      "name": "load_workspace_dependencies",
+      "description": "Get absolute paths to bundled Python and library directories, plus bundled Python distribution versions. Node.js and pnpm paths are included when the payload provides them. Python includes numpy, pandas, python-docx, python-pptx, openpyxl, Pillow, lxml, and XlsxWriter. Use these libraries for Office files unless the user or workspace instructions select another environment. When Node.js and pnpm paths are returned, run pnpm with that Node executable and pnpm script path. This does not change PATH or package-manager settings.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "office",
+      "description": "Render document pages as images you can view, convert a document to another format, or recalculate spreadsheet formulas. Accepts Word (doc, docx, odt), Excel (xls, xlsx, ods), and PowerPoint (ppt, pptx, odp) files; render also accepts PDF.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string",
+            "description": "render returns page images; convert and recalculate return a temporary file to copy to its destination.",
+            "enum": [
+              "render",
+              "convert",
+              "recalculate"
+            ]
+          },
+          "input": {
+            "type": "string",
+            "description": "Path of the document to read; it is not modified."
+          },
+          "format": {
+            "type": "string",
+            "description": "convert and recalculate: output format. Word converts to pdf, docx, odt, or txt; Excel to pdf, xlsx, ods, or csv; PowerPoint to pdf, pptx, or odp. recalculate writes xlsx or ods.",
+            "enum": [
+              "pdf",
+              "docx",
+              "odt",
+              "txt",
+              "xlsx",
+              "ods",
+              "csv",
+              "pptx",
+              "odp"
+            ]
+          },
+          "pages": {
+            "type": "array",
+            "description": "render: one-based pages or slides; omit for all. Spreadsheets use sheet and range instead.",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "sheet": {
+            "type": "string",
+            "description": "Exact worksheet name. render: omit to render every visible sheet. convert: required for CSV from a workbook with several sheets."
+          },
+          "range": {
+            "type": "string",
+            "description": "render: A1 range in sheet, such as A1:H40; omit for the used area."
+          },
+          "dpi": {
+            "type": "integer",
+            "description": "render: resolution from 24 to 600; default 144."
+          }
+        },
+        "required": [
+          "operation",
+          "input"
+        ]
+      }
+    },
+    {
       "name": "read",
       "description": "Read a UTF-8 text file and return line-numbered content.",
       "parameters": {

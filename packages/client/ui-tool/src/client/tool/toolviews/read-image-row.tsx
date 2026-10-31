@@ -33,7 +33,7 @@ export function ReadImageRow(props: ReadImageRowProps) {
   const { getTriggerProps } = props.useContextMenu()
   return readFamilyRow(props, {
     image: imageCardModel(block),
-    renderSlot,
+    renderImages: owner => renderSlot('tool.call.images', owner),
     loadImage,
   }, getTriggerProps)
 }

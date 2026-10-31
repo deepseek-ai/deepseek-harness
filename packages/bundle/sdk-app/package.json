@@ -40,6 +40,8 @@
     "@deepseek-ai/dsh-sdk-jsonrpc-server": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "commander": "^15.0.0",
+    "@deepseek-ai/dsh-office-kit": "workspace:*",
+    "@deepseek-ai/dsh-tool-office": "workspace:*",
     "@deepseek-ai/dsh-skill-office": "workspace:*",
     "@deepseek-ai/dsh-tool-workspace-dependencies": "workspace:*",
     "@deepseek-ai/dsh-client-connection": "workspace:*",

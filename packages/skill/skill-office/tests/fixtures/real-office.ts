@@ -21,11 +21,42 @@ export function officeModelPatches() {
   ]
 }
 
+/** @returns Patches mounting the Office kit and the `office` tool, which the headless profile does not compose. */
+export function officeToolPatches() {
+  return [{ insert: [
+    { id: 'office-kit', name: '@deepseek-ai/dsh-office-kit' },
+    { id: 'tool-office', name: '@deepseek-ai/dsh-tool-office' },
+  ] }]
+}
+
+/** One `office` call from a native tool call or a PTC dispatch. */
+export interface OfficeCall {
+  readonly callId: string
+  readonly args: { readonly operation?: string; readonly input?: string; readonly format?: string; readonly pages?: number[] }
+}
+
+/**
+ * Collect the `office` calls of a recorded task.
+ * @param events - Recorded task events.
+ * @returns Native and PTC `office` calls in log order.
+ */
+export function officeCalls(events: SessionEvent[]): OfficeCall[] {
+  return events.flatMap((event) => {
+    if (event.type === 'tool/call' && event.data.name === 'office') {
+      return [{ callId: event.data.callId, args: JSON.parse(event.data.arguments) as OfficeCall['args'] }]
+    }
+    if (event.type === 'tool/ptc-dispatch' && event.data.name === 'office') {
+      return [{ callId: event.data.subCallId, args: event.data.arguments as OfficeCall['args'] }]
+    }
+    return []
+  })
+}
+
 /**
  * Assert that a non-rendering task has received no rendering commands or detailed guidance.
  * @param events - Recorded task events, including nested skill and shell results.
  */
 export function expectNoRenderContext(events: SessionEvent[]): void {
   const messages = Session.create(SessionId('office-context'), events).deriveMessages()
-  expect(JSON.stringify(messages)).not.toMatch(/imageRendering|maxPixels|fragment rectangles|render --input|--output-dir|uniformly blank/)
+  expect(JSON.stringify(messages)).not.toMatch(/uniformly blank|Render the saved deliverable|"operation":"render"/)
 }

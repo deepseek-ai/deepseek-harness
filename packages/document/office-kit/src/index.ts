@@ -1,21 +1,27 @@
-/** Host LibreOffice kit provider with reusable converters and private disk input/output. */
+/** Host LibreOffice Kit provider with reusable converters, shared admission, and private disk input/output. */
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { extname, isAbsolute, join } from 'node:path'
+import { extname, isAbsolute, join, relative, sep } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import type { Converter, ConverterOptions } from '@deepseek-ai/libreoffice-kit'
 import z from '@deepseek-ai/schemastery'
 import type { WorkspaceFileScope, WorkspaceFileStat } from '@deepseek-ai/dsh-api-workspace-files'
 import type {} from '@deepseek-ai/dsh-fs'
+import type {} from '@deepseek-ai/dsh-session'
+import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { resolveKitModule } from './locate.ts'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { OfficeKitError } from './errors.ts'
 import { OfficeKitGeneration, type OfficeSourceKey } from './identity.ts'
-import type { OfficeExtension, OfficeKitRequest, OfficeKitResult, OfficeKitPriority, RenderedDocumentBytes } from './types.ts'
-import { readPdf } from './output.ts'
-import { ConversionQueue } from './queue.ts'
+import type {
+  OfficeConversionRequest, OfficeFileResult, OfficeImagesRequest, OfficeImagesResult, OfficeKitRequest, OfficeKitResult,
+  OfficeKitPriority, OfficeOutputTarget, OfficeRecalculationRequest, RenderedDocumentBytes,
+} from './types.ts'
+import { readOutput, readPdf, readPng } from './output.ts'
+import { OutputStore } from './outputs.ts'
+import { ConversionQueue, type OfficeOperation, type OfficeOperationOutput, type QueueRequest } from './queue.ts'
 
 export * from './errors.ts'
 export * from './identity.ts'
@@ -23,7 +29,7 @@ export * from './types.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** Shared Office conversion and authorized workspace-file rendering. */
+    /** Shared Office rendering, conversion, recalculation, and authorized workspace-file previews. */
     officeKit: OfficeKit
   }
 }
@@ -40,17 +46,23 @@ export interface Config {
   maxSourceBytes: number
   /** Maximum concurrent background jobs; zero refuses speculative work. */
   maxBackgroundConversions: number
-  /** Maximum retained content-addressed PDFs. */
+  /** Maximum retained content-addressed outputs. */
   maxCachedEntries: number
-  /** Maximum retained PDF bytes. */
+  /** Maximum retained output bytes. */
   maxCachedBytes: number
   /** Maximum retained source-version aliases to cached content. */
   maxSourceEntries: number
+  /** Absolute directory for converted and recalculated files, with one subdirectory per Session. */
+  outputDirectory: string
+  /** Milliseconds a converted or recalculated file is kept. */
+  outputRetentionMs: number
+  /** Maximum bytes across retained converted and recalculated files; the oldest leave first. */
+  maxOutputStoreBytes: number
   /** Conversion deadline in milliseconds; excludes the DSH queue. */
   timeoutMs: number
   /** Maximum authorized source bytes. */
   maxInputBytes: number
-  /** Maximum complete PDF bytes. */
+  /** Maximum complete PDF, converted, or recalculated file bytes. */
   maxOutputBytes: number
   /** Exported raster-image DPI. */
   maxImageResolution: number
@@ -80,6 +92,9 @@ export const Config: z<Partial<Config>, Config> = z.object({
   maxCachedEntries: z.natural().min(1).max(Number.MAX_SAFE_INTEGER).default(8),
   maxCachedBytes: z.natural().min(1).max(Number.MAX_SAFE_INTEGER).default(134217728),
   maxSourceEntries: z.natural().min(1).max(Number.MAX_SAFE_INTEGER).default(64),
+  outputDirectory: z.string().min(1).default(dshHomePath('office-kit', 'outputs')),
+  outputRetentionMs: z.natural().min(1).max(2_147_483_647).default(24 * 60 * 60 * 1000),
+  maxOutputStoreBytes: z.natural().min(1).max(Number.MAX_SAFE_INTEGER).default(512 * 1024 * 1024),
   timeoutMs: z.natural().min(1).max(2_147_483_647).default(60_000),
   maxInputBytes: z.natural().min(1).max(Number.MAX_SAFE_INTEGER - 1).default(50 * 1024 * 1024),
   maxOutputBytes: z.natural().min(1).max(Number.MAX_SAFE_INTEGER - 1).default(100 * 1024 * 1024),
@@ -113,10 +128,13 @@ export class OfficeKit extends TypertRemoteService {
   static Config = Config
   /** Changes whenever engine, font, or conversion configuration is replaced. */
   readonly generation: OfficeKitGeneration = OfficeKitGeneration(randomUUID())
+  /** Absolute Host directory holding converted and recalculated files; consumers check that their execution world reads it. */
+  readonly outputDirectory: string
   private readonly remoteLifetime = new AbortController()
   private readonly remoteRequests = new Set<Promise<RenderedDocumentBytes>>()
   private readonly slots: Slot[] = []
   private readonly queue: ConversionQueue
+  private readonly outputs: OutputStore
   private readonly options: Omit<ConverterOptions, 'resolveEnginePackage'>
   private loadedKit?: Promise<LoadedKit>
   private readonly reportedKitFailures = new Set<string>()
@@ -129,6 +147,7 @@ export class OfficeKit extends TypertRemoteService {
     super(ctx, 'officeKit')
     if (config.fontDirectories?.some(path => !isAbsolute(path))) throw new Error('fontDirectories must contain absolute paths.')
     if (config.maxSourceBytes < config.maxInputBytes) throw new Error('maxSourceBytes must be at least maxInputBytes.')
+    if (!isAbsolute(config.outputDirectory)) throw new Error('outputDirectory must be an absolute path.')
     const { fontDirectories, fontFallbacks, timeoutMs, maxInputBytes, maxOutputBytes, maxImageResolution,
       maxArchiveEntries, maxUncompressedBytes, maxFontFiles, maxFontFileBytes, maxLoadedFontBytes } = config
     this.options = { timeoutMs, maxInputBytes, maxOutputBytes, maxImageResolution,
@@ -136,10 +155,15 @@ export class OfficeKit extends TypertRemoteService {
       ...(fontDirectories === undefined ? {} : { fontDirectories }),
       ...(fontFallbacks === undefined ? {} : { fontFallbacks }),
     }
-    this.queue = new ConversionQueue(config, this.generation, (bytes, extension, signal) => this.convertBytes(bytes, extension, signal))
+    this.queue = new ConversionQueue(config, this.generation, (bytes, request, signal) => this.runOperation(bytes, request, signal))
+    this.outputDirectory = config.outputDirectory
+    this.outputs = new OutputStore({ root: config.outputDirectory, retentionMs: config.outputRetentionMs,
+      maxBytes: config.maxOutputStoreBytes }, ctx.logger.warn.bind(ctx.logger))
+    ctx.on('session/disposed', (session) => { void this.outputs.release(session.id) })
     ctx.effect(() => async () => {
       this.remoteLifetime.abort()
       await this.queue.dispose()
+      await this.outputs.dispose()
       await Promise.allSettled(this.remoteRequests)
       const results = await Promise.allSettled(this.slots.map(async (slot) => {
         const converter = await slot.converter
@@ -151,14 +175,78 @@ export class OfficeKit extends TypertRemoteService {
   }
 
   /**
-   * Convert Office bytes without modifying the source or writing Session events.
+   * Convert Office bytes to PDF without modifying the source or writing Session events.
    * @param request - authorized metadata and deferred bounded source read.
    * @param signal - caller cancellation; provider disposal also stops active work.
    * @returns caller-owned PDF bytes after conversion and scratch cleanup settle; canceled readers reject independently.
    * @throws {OfficeKitError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.
    */
-  convert(request: OfficeKitRequest, signal?: AbortSignal): Promise<OfficeKitResult> {
-    return this.queue.read(request, signal)
+  async convert(request: OfficeKitRequest, signal?: AbortSignal): Promise<OfficeKitResult> {
+    const { kind: _kind, ...result } = await this.queue.read({ ...request, operation: { kind: 'pdf' } }, signal)
+    return result
+  }
+
+  /**
+   * Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission
+   * queue, concurrency, source-byte reservation, and cache with previews; `priority` orders them against other work.
+   * @param request - authorized metadata, deferred bounded source read, selection, and complete-result limits.
+   * @param signal - caller cancellation; provider disposal also stops active work.
+   * @returns caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits.
+   * @throws {OfficeKitError} `invalid-request` for a selection the engine rejects, `output-too-large` when the
+   * selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.
+   */
+  async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<OfficeImagesResult> {
+    const { extension, priority, source, pages, sheet, range, dpi, maxImages, maxPixels, maxDimension, maxBytes } = request
+    const result = await this.queue.read({ extension, priority, source, operation: {
+      kind: 'images',
+      ...(pages === undefined ? {} : { pages: [...pages] }),
+      ...(sheet === undefined ? {} : { sheet }),
+      ...(range === undefined ? {} : { range }),
+      ...(dpi === undefined ? {} : { dpi }),
+      maxImages, maxPixels, maxDimension, maxBytes,
+    } }, signal)
+    return { images: result.images, pageCount: result.pageCount, dpi: result.dpi, missingFonts: result.missingFonts,
+      generation: result.generation }
+  }
+
+  /**
+   * Convert one document to another format, sharing admission, concurrency, and cache with previews, and save the
+   * result in the provider's output store.
+   * @param request - authorized metadata, deferred bounded source read, target format, and output owner and name.
+   * @param signal - caller cancellation; provider disposal also stops active work.
+   * @returns the saved file's absolute Host path and size; the file is deleted after `outputRetentionMs`, when older
+   * outputs need `maxOutputStoreBytes`, when the Session whose id is `output.owner` is disposed, or when the provider is disposed.
+   * @throws {OfficeKitError} `invalid-request` for a format or sheet the engine rejects and the other conversion
+   * codes; cancellation rejects with its reason.
+   */
+  async convertTo(request: OfficeConversionRequest, signal?: AbortSignal): Promise<OfficeFileResult> {
+    const { extension, priority, source, format, sheet, output } = request
+    return this.saveFile(output, await this.queue.read({ extension, priority, source,
+      operation: { kind: 'convert', format, ...(sheet === undefined ? {} : { sheet }) } }, signal), signal)
+  }
+
+  /**
+   * Recalculate every formula of one workbook and save formulas with refreshed cached results, sharing admission,
+   * concurrency, and cache with previews, and save the workbook in the provider's output store. This does not validate
+   * formulas or business data.
+   * @param request - authorized workbook metadata, deferred bounded source read, output format, and output owner and name.
+   * @param signal - caller cancellation; provider disposal also stops active work.
+   * @returns the saved workbook's absolute Host path and size, retained like {@link convertTo} outputs.
+   * @throws {OfficeKitError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.
+   */
+  async recalculate(request: OfficeRecalculationRequest, signal?: AbortSignal): Promise<OfficeFileResult> {
+    const { extension, priority, source, format, output } = request
+    return this.saveFile(output, await this.queue.read({ extension, priority, source, operation: { kind: 'recalculate', format } }, signal), signal)
+  }
+
+  private async saveFile(
+    output: OfficeOutputTarget, result: Extract<OfficeOperationOutput, { kind: 'file' }> & Pick<OfficeFileResult, 'generation'>,
+    signal: AbortSignal | undefined,
+  ): Promise<OfficeFileResult> {
+    signal?.throwIfAborted()
+    const path = await this.outputs.save(output.owner, output.name, result.data)
+    return { path, bytes: result.data.byteLength, ...(result.pageCount === undefined ? {} : { pageCount: result.pageCount }),
+      missingFonts: result.missingFonts, generation: result.generation }
   }
 
   /**
@@ -257,12 +345,12 @@ export class OfficeKit extends TypertRemoteService {
 
   private async importKit(): Promise<LoadedKit> {
     const kit = resolveKitModule(() => import.meta.resolve('@deepseek-ai/libreoffice-kit'))
-    if (kit.kind === 'missing') throw this.unavailableKit('LibreOffice Kit is not installed for Office-to-PDF conversion.', kit.error)
+    if (kit.kind === 'missing') throw this.unavailableKit('LibreOffice Kit is not installed.', kit.error)
     let createConverter: KitModule['createConverter']
     try {
       ({ createConverter } = await import(kit.entry) as KitModule)
     } catch (cause) {
-      throw this.unavailableKit('LibreOffice Kit could not be loaded for Office-to-PDF conversion.', cause)
+      throw this.unavailableKit('LibreOffice Kit could not be loaded.', cause)
     }
     return { createConverter, resolveEnginePackage: kit.resolveEnginePackage }
   }
@@ -278,7 +366,9 @@ export class OfficeKit extends TypertRemoteService {
     return error
   }
 
-  private async convertBytes(bytes: Uint8Array, extension: OfficeExtension, signal: AbortSignal): Promise<Pick<OfficeKitResult, 'pdf' | 'missingFonts'>> {
+  private async runOperation(
+    bytes: Uint8Array, request: Pick<QueueRequest, 'extension' | 'operation'>, signal: AbortSignal,
+  ): Promise<OfficeOperationOutput> {
     signal.throwIfAborted()
     let slot = this.slots.find(candidate => !candidate.busy)
     if (slot === undefined) { slot = { busy: false }; this.slots.push(slot) }
@@ -295,34 +385,99 @@ export class OfficeKit extends TypertRemoteService {
       const converter = await slot.converter
       signal.throwIfAborted()
       directory = await mkdtemp(join(tmpdir(), 'dsh-office-kit-'))
-      const inputPath = join(directory, `source.${extension}`)
-      const outputPath = join(directory, 'converted.pdf')
+      const inputPath = join(directory, `source.${request.extension}`)
       await writeFile(inputPath, bytes, { flag: 'wx', mode: 0o600, signal })
       signal.throwIfAborted()
-      const result = await converter.render({ inputPath, outputPath }, signal)
+      const output = await this.runEngine(converter, inputPath, directory, request.operation, signal)
       signal.throwIfAborted()
-      let pdf: Uint8Array
-      try { pdf = await readPdf(outputPath, this.config.maxOutputBytes, signal) }
-      catch (cause) {
-        if (cause instanceof OfficeKitError) throw cause
-        throw new OfficeKitError('invalid-output', 'The converter PDF could not be read.', { cause })
-      }
-      signal.throwIfAborted()
-      return { pdf, missingFonts: result.missingFonts }
+      return output
     } catch (cause) {
       signal.throwIfAborted()
       if (cause instanceof OfficeKitError) throw cause
+      if (cause instanceof TypeError || cause instanceof RangeError) throw new OfficeKitError('invalid-request', cause.message, { cause })
       const code = typeof cause === 'object' && cause !== null && 'code' in cause ? cause.code : undefined
       switch (code) {
         case 'input-too-large': case 'output-too-large': case 'invalid-document': case 'unsupported-format':
         case 'invalid-output': case 'timeout': case 'unavailable':
-          throw new OfficeKitError(code, 'LibreOffice conversion failed.', { cause })
+          throw new OfficeKitError(code, cause instanceof Error ? cause.message : 'LibreOffice conversion failed.', { cause })
         default: throw new OfficeKitError('failed', 'LibreOffice conversion failed.', { cause })
       }
     } finally {
       try { if (directory !== undefined) await rm(directory, { recursive: true, force: true }) }
       finally { slot.busy = false }
     }
+  }
+
+  /** Run one engine operation in a private scratch directory and read its complete, bounded output. */
+  private async runEngine(
+    converter: Converter, inputPath: string, directory: string, operation: OfficeOperation, signal: AbortSignal,
+  ): Promise<OfficeOperationOutput> {
+    switch (operation.kind) {
+      case 'pdf': {
+        const outputPath = join(directory, 'converted.pdf')
+        const result = await converter.render({ inputPath, outputPath }, signal)
+        return { kind: 'pdf', pdf: await this.readFile(outputPath, 'pdf', signal), missingFonts: result.missingFonts }
+      }
+      case 'convert': case 'recalculate': {
+        const outputPath = join(directory, `output.${operation.format}`)
+        const result = operation.kind === 'convert'
+          ? await converter.convert({ inputPath, outputPath, ...(operation.sheet === undefined ? {} : { sheet: operation.sheet }) }, signal)
+          : await converter.recalculate({ inputPath, outputPath }, signal)
+        return { kind: 'file', data: await this.readFile(outputPath, operation.format, signal),
+          ...(result.pageCount === undefined ? {} : { pageCount: result.pageCount }), missingFonts: result.missingFonts }
+      }
+      case 'images': return this.renderPng(converter, inputPath, directory, operation, signal)
+      /* v8 ignore next -- OfficeOperation is a closed union */
+      default: throw new Error(`Unexpected Office operation: ${JSON.stringify(operation satisfies never)}`)
+    }
+  }
+
+  private async readFile(path: string, format: string, signal: AbortSignal): Promise<Uint8Array> {
+    try {
+      return format === 'pdf' ? await readPdf(path, this.config.maxOutputBytes, signal) : await readOutput(path, this.config.maxOutputBytes, signal)
+    } catch (cause) {
+      if (cause instanceof OfficeKitError) throw cause
+      throw new OfficeKitError('invalid-output', 'The converter output could not be read.', { cause })
+    }
+  }
+
+  private async renderPng(
+    converter: Converter, inputPath: string, directory: string, operation: Extract<OfficeOperation, { kind: 'images' }>,
+    signal: AbortSignal,
+  ): Promise<OfficeOperationOutput> {
+    const outputDir = join(directory, 'images')
+    const result = await converter.renderImages({
+      inputPath, outputDir,
+      ...(operation.pages === undefined ? {} : { pages: operation.pages }),
+      ...(operation.sheet === undefined ? {} : { sheet: operation.sheet }),
+      ...(operation.range === undefined ? {} : { range: operation.range }),
+      ...(operation.dpi === undefined ? {} : { dpi: operation.dpi }),
+      maxPages: operation.maxImages, maxPixels: operation.maxPixels, maxDimension: operation.maxDimension,
+    }, signal)
+    const declared = result.images.reduce((sum, image) => sum + image.byteLength, 0)
+    if (declared > operation.maxBytes) {
+      throw new OfficeKitError('output-too-large', `The rendered images total ${declared} bytes, above the ${operation.maxBytes}-byte limit.`)
+    }
+    const images = []
+    let remaining = operation.maxBytes
+    for (const image of [...result.images].sort((left, right) => left.index - right.index)) {
+      const within = relative(outputDir, image.path)
+      if (within === '' || within === '..' || within.startsWith(`..${sep}`) || isAbsolute(within)) {
+        throw new OfficeKitError('invalid-output', 'The converter reported an image outside its output directory.')
+      }
+      let png: Uint8Array
+      try { png = await readPng(image.path, remaining, signal) }
+      catch (cause) {
+        if (cause instanceof OfficeKitError) throw cause
+        throw new OfficeKitError('invalid-output', 'The rendered image could not be read.', { cause })
+      }
+      remaining -= png.byteLength
+      images.push({ png, width: image.width, height: image.height,
+        ...(image.page === undefined ? {} : { page: image.page }),
+        ...(image.sheet === undefined ? {} : { sheet: image.sheet }),
+        ...(image.range === undefined ? {} : { range: image.range }) })
+    }
+    return { kind: 'images', images, pageCount: result.pageCount, dpi: result.dpi, missingFonts: result.missingFonts }
   }
 }
 

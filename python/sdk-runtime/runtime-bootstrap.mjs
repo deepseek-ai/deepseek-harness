@@ -67,10 +67,6 @@ if (office !== undefined) {
       return nextResolve(specifier, kit ? { ...context, parentURL } : context)
     },
   })
-  process.env.DSH_BUNDLED_OFFICE_NODE = join(office, 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node')
-  process.env.DSH_BUNDLED_OFFICE_CLI = join(office, 'node_modules', '@deepseek-ai', 'libreoffice-kit', 'lib', 'cli.js')
-} else if (isSea()) {
-  process.env.DSH_BUNDLED_OFFICE_CLI = ''
 }
 if (downloads !== undefined) process.env.DSH_BUNDLED_OFFICE_SKILLS = join(resourceDirectory, 'office-skills')
 
