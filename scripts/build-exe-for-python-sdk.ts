@@ -9,7 +9,7 @@
 import { createHash } from 'node:crypto'
 import { build as bundle } from 'tsdown'
 import { spawn } from 'node:child_process'
-import { pnpmInvocation } from './executable-packaging.ts'
+import { pnpmInvocation, verifyStagedDependencies } from './executable-packaging.ts'
 import { existsSync, statSync } from 'node:fs'
 import { chmod, copyFile, cp, glob, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve, sep } from 'node:path'
@@ -334,6 +334,7 @@ class SingleExeBuild {
     }
     await materializeStagedLinks(this.staging)
     await deduplicateStagedWorkspacePackages(this.staging, this.staging)
+    await verifyStagedDependencies(this.staging)
   }
 
   /** Add the executable entry and pkg assets to the staged manifest. */
