@@ -180,8 +180,9 @@ class StreamingRenderer {
  * including `#L24` / `#L24-L30` fragments and `:24` / `:24-30` / `:24:5` suffixes
  * (ranges open at their first line, columns are ignored, and invalid locations
  * open only the file; see the README for URL/path classification).
- * @returns A GFM document with TeX math rendered through KaTeX, whose
- * selected formulas copy as `$…$` / `$$…$$` TeX source; raw HTML never
+ * Copying a selection inside the document writes selected formulas as
+ * `$…$` / `$$…$$` TeX source.
+ * @returns A GFM document with TeX math rendered through KaTeX; raw HTML never
  * renders as markup, and unsafe protocols are disabled. Local links without an opener remain text;
  * absolute HTTP(S) images render directly.
  */
@@ -213,5 +214,5 @@ export const MarkdownText = memo(function MarkdownText({
   return <div className={clsx(css.markdown, variant === 'compact' && css.compact)}
     data-text-interaction-source={textInteractionSource ? '' : undefined}
     data-markdown-variant={variant === 'compact' ? variant : undefined}
-    onCopy={(event) => { copyKatexAsTex(event.nativeEvent, event.currentTarget.ownerDocument) }}>{children}</div>
+    onCopy={(event) => { copyKatexAsTex(event.nativeEvent, event.currentTarget) }}>{children}</div>
 })

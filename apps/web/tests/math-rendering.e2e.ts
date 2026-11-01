@@ -102,6 +102,13 @@ describe('web e2e: settled Markdown math rendering', () => {
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    const groupRow = page.locator('[role="treeitem"]').first()
+    await groupRow.waitFor({ timeout: 15_000 })
+    await groupRow.click()
+    const sessionRow = page.locator('[role="treeitem"]').nth(1)
+    await sessionRow.waitFor({ timeout: 10_000 })
+    await sessionRow.click()
+    await page.getByText(DONE, { exact: true }).waitFor({ timeout: 15_000 })
   }, 120_000)
 
   afterAll(async () => {
@@ -111,14 +118,6 @@ describe('web e2e: settled Markdown math rendering', () => {
 
   it.skipIf(MODE === 'record')('renders the settled reply without KaTeX errors', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-math-rendering'))
-    const groupRow = page.locator('[role="treeitem"]').first()
-    await groupRow.waitFor({ timeout: 15_000 })
-    await groupRow.click()
-    const sessionRow = page.locator('[role="treeitem"]').nth(1)
-    await sessionRow.waitFor({ timeout: 10_000 })
-    await sessionRow.click()
-    await expect.poll(() => page.getByText(DONE, { exact: true }).count(), { timeout: 15_000 }).toBe(1)
-
     await expect.poll(() => page.locator('.katex').count(), { timeout: 10_000 }).toBe(6)
     await expect.poll(() => page.locator('.katex-display').count(), { timeout: 10_000 }).toBe(2)
     expect(await page.locator('.katex-error').count()).toBe(0)
@@ -144,6 +143,10 @@ describe('web e2e: settled Markdown math rendering', () => {
 
   it.skipIf(MODE === 'record')('copies a selection with formulas as TeX source', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-math-copy'))
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(page.url()).origin })
+    const sentinel = 'clipboard-before-copy'
+    await page.evaluate(value => navigator.clipboard.writeText(value), sentinel)
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(sentinel)
     await page.evaluate(() => {
       const paragraph = [...document.querySelectorAll('p')].find(item => item.textContent.startsWith('Inline dollar'))!
       const visual = paragraph.parentElement!.querySelector('.katex-display .katex-html')!
@@ -152,13 +155,12 @@ describe('web e2e: settled Markdown math rendering', () => {
       range.setEnd(visual.firstChild!, 1)
       document.getSelection()!.removeAllRanges()
       document.getSelection()!.addRange(range)
-      window.addEventListener('copy', (event) => {
-        document.documentElement.dataset['copied'] = event.clipboardData!.getData('text/plain')
-      }, { once: true })
     })
-    await page.keyboard.press('ControlOrMeta+c')
-    expect(await page.locator('html').getAttribute('data-copied')).toBe(
+    await page.keyboard.press('ControlOrMeta+C')
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
       'Inline dollar $\\theta$ and backslash $\\frac{1}{5}$.\n\n$$\\frac{\\pi}{4} < \\theta < \\frac{\\pi}{2}$$',
     )
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
   }, 30_000)
 })
