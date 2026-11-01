@@ -1919,6 +1919,25 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-jobs-local -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-linear -->
+<a id="deepseek-aidsh-linear"></a>
+
+## `@deepseek-ai/dsh-linear`
+
+- `inject`: `mcpServers` · `systemPrompt`
+- `source`: [`packages/connector/linear/src/index.ts:27`](../packages/connector/linear/src/index.ts)
+
+```ts config-catalog
+/** Linear MCP endpoint and tool loading for the managed server entry. */
+export interface Config {
+  /** Streamable HTTP MCP endpoint; defaults to Linear's hosted server. */
+  url: string
+  /** `on-demand` (default) keeps Linear's tools hidden from each agent until it loads them; `eager` sends all of them. */
+  toolLoading: 'eager' | 'on-demand'
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-linear -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-deepseek-account -->
 <a id="deepseek-aidsh-llm-deepseek-account"></a>
 

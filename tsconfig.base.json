@@ -473,6 +473,7 @@
       "@deepseek-ai/dsh-jobs-local": ["./packages/jobs/jobs-local/src"],
       "@deepseek-ai/dsh-launch-environment": ["./packages/util/launch-environment/src"],
       "@deepseek-ai/dsh-lazy-require": ["./packages/util/lazy-require/src"],
+      "@deepseek-ai/dsh-linear": ["./packages/connector/linear/src"],
       "@deepseek-ai/dsh-llm": ["./packages/llm/llm/src"],
       "@deepseek-ai/dsh-llm-deepseek": ["./packages/llm/llm-deepseek/src"],
       "@deepseek-ai/dsh-llm-deepseek-account": ["./packages/llm/llm-deepseek-account/src"],
