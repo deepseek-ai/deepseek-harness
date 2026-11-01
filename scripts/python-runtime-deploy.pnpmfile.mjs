@@ -1,11 +1,14 @@
-/** Preserve workspace build approvals when pnpm deploy converts local dependencies to file URLs. */
+/**
+ * Preserve workspace build approvals when pnpm deploy records local dependencies as file:// URLs.
+ * This hook lives in the workspace root's scripts/ directory; relative file: approvals use that root.
+ */
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 /**
  * Translate local build identities without changing their approved or denied status.
- * @param {Record<string, unknown> & { allowBuilds?: Record<string, boolean | string> }} config - Source workspace configuration.
- * @returns {Record<string, unknown>} Deployment configuration with exact file URL approvals.
+ * @param {import('./python-runtime-deploy.pnpmfile.mjs').RuntimeDeployConfig} config - Source workspace configuration.
+ * @returns {import('./python-runtime-deploy.pnpmfile.mjs').RuntimeDeployConfig} Deployment configuration with exact file URL approvals.
  */
 function updateConfig(config) {
   if (config.allowBuilds === undefined) return config
