@@ -62,7 +62,7 @@ External profile management uses `dsh plugin --profile <name> ...`. After explic
 
 ## Build and distribution
 
-Production deployment permits unused workspace patches for packages outside the runtime closure; patches for included packages must still apply successfully. This exception is confined to the deploy command; repository installation still rejects unused patches.
+Production deployment installs the workspace lockfile’s pinned dependency graph without re-resolving versions. It permits unused workspace patches for packages outside the runtime closure; patches for included packages must still apply successfully. This exception is confined to the deploy command; repository installation still rejects unused patches.
 
 From the repository root, `pnpm exec tsx scripts/build-exe-for-python-sdk.ts` verifies the closure, builds packages, deploys a symlink-free tree, packages the selected target, and syncs the executable and sidecars into this module. The executable stores embedded files with Brotli compression. Only the target platform’s PTY prebuilds are packaged. Package README, CHANGELOG, HISTORY Markdown, source maps, and TypeScript declarations outside runtime assets are omitted. Deployment disables workspace hoisting, and packaging excludes checkout dependencies and workspace source trees outside the deployment so dependency scans cannot add development packages to the payload. Staging shares root workspace packages with nested consumers of the same pnpm dependency identity, preserving singleton services while retaining different peer resolutions. `scripts/build-python-release.py` stages release-shaped wheels at the root repository version and pins `deepseek-harness-sdk` to the exact runtime version.
 
