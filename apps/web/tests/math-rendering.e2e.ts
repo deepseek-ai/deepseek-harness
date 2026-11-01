@@ -141,4 +141,24 @@ describe('web e2e: settled Markdown math rendering', () => {
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, ['ui.expected.md'])
   }, 60_000)
+
+  it.skipIf(MODE === 'record')('copies a selection with formulas as TeX source', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-math-copy'))
+    await page.evaluate(() => {
+      const paragraph = [...document.querySelectorAll('p')].find(item => item.textContent.startsWith('Inline dollar'))!
+      const visual = paragraph.parentElement!.querySelector('.katex-display .katex-html')!
+      const range = document.createRange()
+      range.setStart(paragraph.firstChild!, 0)
+      range.setEnd(visual.firstChild!, 1)
+      document.getSelection()!.removeAllRanges()
+      document.getSelection()!.addRange(range)
+      window.addEventListener('copy', (event) => {
+        document.documentElement.dataset['copied'] = event.clipboardData!.getData('text/plain')
+      }, { once: true })
+    })
+    await page.keyboard.press('ControlOrMeta+c')
+    expect(await page.locator('html').getAttribute('data-copied')).toBe(
+      'Inline dollar $\\theta$ and backslash $\\frac{1}{5}$.\n\n$$\\frac{\\pi}{4} < \\theta < \\frac{\\pi}{2}$$',
+    )
+  }, 30_000)
 })
