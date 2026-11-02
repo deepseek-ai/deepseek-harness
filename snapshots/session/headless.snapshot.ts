@@ -696,6 +696,65 @@ async function verifySessionQuerySpill(log: string, spillRoot: string, locatorRo
   expect(full).toContain('session_event_search')
 }
 
+/** Require cross-tree communication and target-only restoration with an offline creator. */
+function verifyTeamTreeMessage(logs: readonly SessionLog[]): void {
+  expect(logs).toHaveLength(3)
+  const leaf = parseSessionLog(logs[2]!.content)
+  const results = leaf.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+  expect(results).toHaveLength(2)
+  expect(results.every(result => result.isError === false)).toBe(true)
+  const rootResults = parseSessionLog(logs[0]!.content).flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+  expect(rootResults.map(result => ({ id: result.toolCallId, error: result.isError, content: result.content })))
+    .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'root-resume-leaf', error: false })]))
+  const branch = parseSessionLog(logs[1]!.content)
+  expect(branch.filter(event => event.type === 'turn/start')).toHaveLength(1)
+  expect(branch.some(event => event.type === 'session/end-seed')).toBe(false)
+  expect(leaf.filter(event => event.type === 'turn/start')).toHaveLength(2)
+  expect(leaf.some(event => event.type === 'assistant/message'
+    && event.data.message.content.some(block => block.type === 'text' && block.text === 'LEAF_RESUMED'))).toBe(true)
+  const deliveries = parseSessionLog(logs[0]!.content).flatMap(event => event.type === 'user/message'
+    && event.data.source.kind === 'agent-message' ? [{
+      sender: event.data.source.senderSessionId,
+      text: event.data.content.flatMap(block => block.type === 'text' ? [block.text] : []).join(''),
+    }] : [])
+  expect(deliveries).toEqual([{
+    sender: logs[2]!.header.id,
+    text: expect.stringContaining('The nested reviewer can see and contact the Lead.'),
+  }])
+}
+
+/** Task commits leave inbox waits pending until timeout without inserting input. */
+function verifyTeamTaskInbox(logs: readonly SessionLog[]): void {
+  expect(logs).toHaveLength(2)
+  const root = parseSessionLog(logs[0]!.content)
+  const child = parseSessionLog(logs[1]!.content)
+  const tasks = root.flatMap(event => event.type === 'team/task' ? [event.data.task] : [])
+  expect(tasks).toMatchObject([
+    { id: 'task-1', revision: 1, status: 'pending' },
+    { id: 'task-1', revision: 2, status: 'in_progress', ownerId: logs[1]!.header.id },
+    { id: 'task-1', revision: 3, status: 'completed', ownerId: logs[1]!.header.id },
+  ])
+  const sources = [...root, ...child].flatMap(event => event.type === 'user/message'
+    ? [event.data.source.kind]
+    : event.type === 'agent/inbox/spliced' ? event.data.inserted.map(message => message.source.kind) : [])
+  expect(sources).not.toContain('team-task-change')
+  for (const id of ['wait-past-change', 'wait-current-change']) {
+    const start = root.findIndex(event => event.type === 'tool/call' && event.data.callId === id)
+    const end = root.findIndex(event => event.type === 'tool/result' && event.data.message.toolCallId === id)
+    expect(start).toBeGreaterThan(0)
+    expect(end).toBeGreaterThan(start)
+    expect(root.slice(start, end).some(event => event.type === 'user/message'
+      || event.type === 'agent/inbox/spliced' && event.data.inserted.length > 0)).toBe(false)
+  }
+  const results = [...root, ...child].flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+  expect(results).toHaveLength(7)
+  expect(results.every(result => result.isError === false)).toBe(true)
+  expect(results.find(result => result.toolCallId === 'wait-past-change')?.content)
+    .toEqual([{ type: 'text', text: '{"timedOut":true}' }])
+  expect(results.find(result => result.toolCallId === 'wait-current-change')?.content)
+    .toEqual([{ type: 'text', text: '{"timedOut":true}' }])
+}
+
 /** Preserve successful native, program, direct-child, and workflow execution in one flow. */
 function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   expect(logs).toHaveLength(3)
@@ -1435,6 +1494,18 @@ describe('headless recorded-session snapshots', () => {
               expect(log).toContain('# Office task routing')
             }
             if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
+            if (scenario.name === 'subagent-depth-two-rejection') {
+              expect(actualLogs).toHaveLength(3)
+              const leaf = actualLogs[2]!
+              expect(leaf.content).toContain('DEPTH_REJECTED')
+              for (const ancestor of actualLogs.slice(0, 2)) {
+                const notices = parseSessionLog(ancestor.content).filter(event => event.type === 'user/message'
+                  && event.data.source.kind === 'subagent-settled' && event.data.source.senderSessionId === leaf.header.id)
+                expect(notices).toEqual([])
+              }
+            }
+            if (scenario.name === 'team-tree-messages') verifyTeamTreeMessage(actualLogs)
+            if (scenario.name === 'team-task-inbox') verifyTeamTaskInbox(actualLogs)
             if (scenario.name === 'session-query-spill') {
               await verifySessionQuerySpill(actualLogs[0]!.content, spillRoot, locatorRoot)
             }

@@ -214,6 +214,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'agentPresets/list': 'owner-only', // owner agent presets
   'agentPresets/read': 'owner-only', // owner agent presets
   'agentPresets/select': 'owner-only', // owner agent presets
+  'agentTeams/setEnabled': 'owner-only', // owner Team mode
   'schedule/catalog': 'owner-only', // owner schedules
   'schedule/create': 'owner-only', // owner schedules
   'schedule/deliveryLimits': 'owner-only', // owner schedules
@@ -223,7 +224,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'schedule/list': 'owner-only', // owner schedules
   'schedule/run': 'owner-only', // owner schedules
   'schedule/view': 'owner-only', // owner schedules
-  'subagents/interruptByParent': 'owner-only', // owner subagents
+  'subagents/interruptByUser': 'owner-only', // owner subagents
   'subagents/prompt': 'owner-only', // owner subagents
 
   // Owner share management stays on the owner's own page; a `share-viewer` Peer is refused first.

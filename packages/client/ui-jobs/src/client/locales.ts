@@ -5,8 +5,6 @@ export const NS = 'job'
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'count.live.one': '{count} 个后台任务运行中',
-  'count.live.other': '{count} 个后台任务运行中',
   'count.idle.one': '{count} 个后台任务',
   'count.idle.other': '{count} 个后台任务',
   'list.aria': '后台任务',
@@ -49,8 +47,6 @@ export const zh = {
 
 /** English dictionary, key-identical to the Chinese source of truth. */
 export const en: Record<JobKey, string> = {
-  'count.live.one': '{count} background job running',
-  'count.live.other': '{count} background jobs running',
   'count.idle.one': '{count} background job',
   'count.idle.other': '{count} background jobs',
   'list.aria': 'Background jobs',
@@ -96,8 +92,6 @@ export type JobKey = keyof typeof zh
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
-  'count.live.one': 'バックグラウンドジョブ {count} 件が実行中',
-  'count.live.other': 'バックグラウンドジョブ {count} 件が実行中',
   'count.idle.one': 'バックグラウンドジョブ {count} 件',
   'count.idle.other': 'バックグラウンドジョブ {count} 件',
   'list.aria': 'バックグラウンドジョブ',
@@ -140,8 +134,6 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  'count.live.one': 'Tareas en segundo plano en ejecución: {count}',
-  'count.live.other': 'Tareas en segundo plano en ejecución: {count}',
   'count.idle.one': 'Tareas en segundo plano: {count}',
   'count.idle.other': 'Tareas en segundo plano: {count}',
   'list.aria': 'Trabajos en segundo plano',
@@ -184,8 +176,6 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  'count.live.one': 'Tâches en arrière-plan en cours : {count}',
-  'count.live.other': 'Tâches en arrière-plan en cours : {count}',
   'count.idle.one': 'Tâches en arrière-plan : {count}',
   'count.idle.other': 'Tâches en arrière-plan : {count}',
   'list.aria': 'Travaux en arrière-plan',
@@ -228,8 +218,6 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  'count.live.one': 'Laufende Hintergrundaufgaben: {count}',
-  'count.live.other': 'Laufende Hintergrundaufgaben: {count}',
   'count.idle.one': 'Hintergrundaufgaben: {count}',
   'count.idle.other': 'Hintergrundaufgaben: {count}',
   'list.aria': 'Hintergrundjobs',
@@ -272,8 +260,6 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  'count.live.one': 'Фоновые задачи выполняются: {count}',
-  'count.live.other': 'Фоновые задачи выполняются: {count}',
   'count.idle.one': 'Фоновые задачи: {count}',
   'count.idle.other': 'Фоновые задачи: {count}',
   'list.aria': 'Фоновые задания',
@@ -316,8 +302,6 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  'count.live.one': 'Tarefas em segundo plano em execução: {count}',
-  'count.live.other': 'Tarefas em segundo plano em execução: {count}',
   'count.idle.one': 'Tarefas em segundo plano: {count}',
   'count.idle.other': 'Tarefas em segundo plano: {count}',
   'list.aria': 'Trabalhos em segundo plano',
