@@ -5,7 +5,7 @@ import { defineConfig } from 'tsdown'
  * Declarations come from `tsc -b` (dts: false), matching every package.
  */
 export default defineConfig({
-  entry: { bin: 'lib/types/installed-bin.js', cli: 'lib/types/bin.js', 'profile-boot': 'lib/types/profile-boot.js' },
+  entry: { bin: 'lib/types/installed-bin.js', 'profile-boot': 'lib/types/profile-boot.js' },
   outDir: 'lib',
   format: ['esm'],
   platform: 'node',

@@ -351,7 +351,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       symlinkSync(join(repoRoot, 'apps/cli/lib'), alias, 'junction')
       const { stdout } = await execa(process.execPath, [
         '--preserve-symlinks-main', join(alias, 'bin.js'), '--version',
-      ], { timeout: SPAWN_TIMEOUT_MS })
+      ], { timeout: SPAWN_TIMEOUT_MS, env: { DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1' } })
       expect(stdout).toBe(cliVersion)
     } finally {
       rmSync(home, { recursive: true, force: true })
