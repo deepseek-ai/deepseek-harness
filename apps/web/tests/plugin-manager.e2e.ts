@@ -9,7 +9,6 @@ import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { FiberState } from '@deepseek-ai/cordis'
 import { readProfileManifest } from '@deepseek-ai/dsh-app-boot'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import { join } from 'node:path'
 import {
@@ -872,7 +871,6 @@ describe('web e2e: plugin manager', () => {
       await card.getAttribute('data-plugin-package'),
       await card.getByText('实验性', { exact: true }).count(),
     ]))).toEqual([
-      ['@deepseek-ai/dsh-experimental-agent-team-profile', 1],
       ['@deepseek-ai/dsh-experimental-voice-input-bundle', 1],
       ['@deepseek-ai/dsh-experimental-plugin-market-bundle', 1],
       ['@deepseek-ai/dsh-experimental-auto-review', 1],
@@ -977,7 +975,7 @@ describe('web e2e: plugin manager', () => {
     onTestFinished(closeSettings)
     const fixtureIcon = `data:image/svg+xml;base64,${(await readFile(join(FIXTURE_PLUGINS, 'fixture-bundle/icon.svg'))).toString('base64')}`
     const fallbackIcon = `data:image/svg+xml;base64,${(await readFile(join(FIXTURE_PLUGINS, 'fixture-bundle/fallback-icon.svg'))).toString('base64')}`
-    const teamIcon = `data:image/svg+xml;base64,${(await readFile(fileURLToPath(new URL('../../../packages/experimental/agent-team-profile/icon.svg', import.meta.url)))).toString('base64')}`
+    const voiceIcon = `data:image/svg+xml;base64,${(await readFile(fileURLToPath(new URL('../../../packages/experimental/voice-input-bundle/icon.svg', import.meta.url)))).toString('base64')}`
     const images: string[] = []
     const checkImage = async (selector: string, source: string, label: string) => {
       const image = panel.locator(`${selector} img`).first()
@@ -991,9 +989,9 @@ describe('web e2e: plugin manager', () => {
       images.push(`${label}: image, ${size.width}×${size.height}, decoded`)
     }
     await checkImage('[data-plugin-package="@fixture/bundle"]', fixtureIcon, 'Third-party bundle card')
-    const team = panel.locator('[data-plugin-package="@deepseek-ai/dsh-experimental-agent-team-profile"]')
+    const team = panel.locator('[data-plugin-package="@deepseek-ai/dsh-experimental-voice-input-bundle"]')
     expect(await team.getByRole('switch').getAttribute('aria-checked')).toBe('false')
-    await checkImage('[data-plugin-package="@deepseek-ai/dsh-experimental-agent-team-profile"]', teamIcon, 'Disabled Agent Teams card')
+    await checkImage('[data-plugin-package="@deepseek-ai/dsh-experimental-voice-input-bundle"]', voiceIcon, 'Disabled Voice Input card')
     try {
       for (const colorScheme of ['light', 'dark'] as const) {
         await page.emulateMedia({ colorScheme })
@@ -1007,8 +1005,8 @@ describe('web e2e: plugin manager', () => {
     } finally {
       await page.emulateMedia({ colorScheme: null })
     }
-    await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
-    await checkImage('[data-plugin-detail]', teamIcon, 'Agent Teams detail')
+    await panel.getByRole('button', { name: '查看 语音输入', exact: true }).click()
+    await checkImage('[data-plugin-detail]', voiceIcon, 'Voice Input detail')
     await panel.getByRole('button', { name: '返回插件' }).click()
     await panel.getByRole('button', { name: '查看 @fixture/bundle', exact: true }).click()
     await checkImage('[data-plugin-detail]', fixtureIcon, 'Third-party bundle detail')
@@ -1108,23 +1106,18 @@ describe('web e2e: plugin manager', () => {
     onTestFinished(closeSettings)
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-locale'))
     const panel = await openPluginsPanel()
-    await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
+    await panel.getByRole('button', { name: '查看 语音输入', exact: true }).click()
     const packageName = panel.locator('[data-plugin-name]')
-    expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-agent-team-profile')
-    expect(await panel.getByText(experimentalBundleDescription('agent-team-profile', 'zh')).count()).toBe(1)
-    const child = panel.locator('[data-plugin-row]', { hasText: 'tool-agent-team' })
-    await child.getByText('团队工具', { exact: true }).waitFor()
-    expect(await child.getByText('为智能体提供成员协调、消息通信和共享任务管理工具。', { exact: true }).count()).toBe(1)
+    expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-voice-input-bundle')
+    expect(await panel.getByText('在本机使用 SenseVoice 转写录音，首次使用需安装依赖。').count()).toBe(1)
     try {
       await setLanguage('en')
-      await panel.getByRole('heading', { name: 'Agent teams', exact: true }).waitFor()
-      expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-agent-team-profile')
-      expect(await panel.getByText(experimentalBundleDescription('agent-team-profile', 'en')).count()).toBe(1)
-      await child.getByText('Team tools', { exact: true }).waitFor()
-      expect(await child.getByText('Give agents tools to coordinate members, exchange messages, and manage shared tasks.', { exact: true }).count()).toBe(1)
+      await panel.getByRole('heading', { name: 'Voice input', exact: true }).waitFor()
+      expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-voice-input-bundle')
+      expect(await panel.getByText('Transcribe recordings locally with SenseVoice; first use requires installing dependencies').count()).toBe(1)
       await panel.getByRole('button', { name: 'Back to plugins' }).click()
-      await panel.getByRole('button', { name: 'View Agent teams', exact: true }).waitFor()
-      expect(await panel.getByRole('switch', { name: 'Enable Agent teams', exact: true }).count()).toBe(1)
+      await panel.getByRole('button', { name: 'View Voice input', exact: true }).waitFor()
+      expect(await panel.getByRole('switch', { name: 'Enable Voice input', exact: true }).count()).toBe(1)
       // Schedule ships in the delivered composition, so no bundle card carries it in either language.
       expect(await panel.getByRole('button', { name: 'View Automation tasks', exact: true }).count()).toBe(0)
       // The official configuration pages follow the language too, from their own dictionary.
@@ -1134,69 +1127,35 @@ describe('web e2e: plugin manager', () => {
     } finally {
       await setLanguage('zh')
     }
-    await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).waitFor()
+    await panel.getByRole('button', { name: '查看 语音输入', exact: true }).waitFor()
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('enables the Team tools and browser plugin with one bundle switch', async () => {
+  it('provides Team mode per Session without an experimental plugin switch', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-team'))
+    onTestFinished(closeSettings)
     const panel = await openPluginsPanel()
-    const toggle = panel.getByRole('switch', { name: '启用 智能体团队', exact: true })
-    const teamRows = () => [...scaffold.ctx.loader.entries()]
-      .filter(entry => ['agent-team', 'tool-agent-team', 'ui-agent-team'].includes(entry.options.id))
+    expect(await panel.getByRole('switch', { name: '启用 智能体团队', exact: true }).count()).toBe(0)
+    expect(await panel.locator('[data-plugin-package="@deepseek-ai/dsh-experimental-agent-team-profile"]').count()).toBe(0)
+    expect([...scaffold.ctx.loader.entries()].filter(entry =>
+      ['agent-team', 'tool-agent-team', 'ui-agent-team'].includes(entry.options.id)
+        && entry.fiber?.state === FiberState.ACTIVE)).toHaveLength(3)
     const teamPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
     const teamTripwire = watchConsole(teamPage)
     try {
       await teamPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await connectFreshWorkspaceZh(teamPage, scaffold.workspaceCwd)
-      const agent = scaffold.ctx.agents.list()[0]
-      if (agent === undefined) throw new Error('connected Team workspace did not create an Agent')
-      // Session actions render only after the conversation leaves its blank state.
-      agent.session.append('turn/start', { turn: 1 })
-      agent.session.append('user/message', createUserMessage({
-        content: [{ type: 'text', text: 'Team UI lifecycle' }], source: { kind: 'user' },
-      }), { surfaceOp: 'append' })
-      agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-      await scaffold.ctx.sessions.flush(agent.session)
-      // The current crumb renders as plain text inside the zh-labeled hierarchy nav.
-      await teamPage.getByRole('navigation', { name: '会话层级' })
-        .getByText('Team UI lifecycle', { exact: true }).waitFor()
-      const action = teamPage.locator('[data-team-action]')
-      expect(await action.count()).toBe(0)
-      await toggle.click()
-      try {
-        await expect.poll(() => teamRows().filter(entry => entry.fiber?.state === FiberState.ACTIVE).length, { timeout: 20_000 }).toBe(3)
-        await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
-        await action.waitFor({ timeout: 20_000 })
-        await action.getByRole('button', { name: '智能体团队', exact: true }).click()
-        const teamPanel = teamPage.getByRole('dialog', { name: '智能体团队', exact: true })
-        await teamPanel.getByText('Team 暂不可用', { exact: true }).waitFor()
-        await teamPage.reload({ waitUntil: 'load' })
-        await action.getByRole('button', { name: '智能体团队', exact: true }).click()
-        await teamPanel.getByText('暂无共享任务，可以通过对话创建').waitFor()
-        await teamPanel.getByText('lead', { exact: true }).waitFor()
-        const manifest = JSON.parse(await homeFile('profiles', 'scaffold', 'package.json')) as {
-          dsh: { profile: { bundles: string[] } }
-        }
-        expect(manifest.dsh.profile.bundles).toEqual([...SCAFFOLD_BUNDLES, '@deepseek-ai/dsh-experimental-agent-team-profile'])
-        await panel.getByRole('button', { name: '查看 智能体团队', exact: true }).click()
-        for (const id of ['agent-team', 'tool-agent-team', 'ui-agent-team']) {
-          await panel.locator('[data-plugin-row]', { hasText: id }).first().waitFor()
-        }
-        await panel.getByRole('button', { name: '返回插件' }).click()
-      } finally {
-        const back = panel.getByRole('button', { name: '返回插件' })
-        if (await back.count() > 0) await back.click()
-        if (await toggle.getAttribute('aria-checked') === 'true') await toggle.click()
-        await expect.poll(() => teamRows().filter(entry => entry.fiber?.state === FiberState.ACTIVE).length, { timeout: 20_000 }).toBe(0)
-        await expect.poll(() => action.count(), { timeout: 20_000 }).toBe(0)
-      }
+      await teamPage.getByRole('button', { name: /^选择模型/u }).click()
+      const mode = teamPage.getByRole('switch', { name: '启用智能体团队协作', exact: true })
+      await mode.waitFor()
+      expect(await mode.getAttribute('aria-checked')).toBe('false')
+      await mode.click()
+      await expect.poll(() => mode.getAttribute('aria-checked')).toBe('true')
       expect(teamTripwire.pageErrors).toEqual([])
       expect(teamTripwire.warnings).toEqual([])
     } finally {
       await teamPage.close()
     }
-    expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
   it('mounts the delivered Automation tasks rows without a bundle switch', async () => {

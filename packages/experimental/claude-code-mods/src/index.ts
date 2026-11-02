@@ -291,7 +291,7 @@ export class ClaudeCodeMods extends TypertRemoteService {
     // Read at each use: the registry may mount after this plugin in a composition.
     const isRoot = (agent: Agent): boolean => {
       const agents = ctx.get('agents')
-      return agents === undefined || agents.roots().includes(agent)
+      return agent.session.header.origin !== 'subagent' && (agents === undefined || agents.get(agent.id) === agent)
     }
     /** Root agents that received `session.start`; the registry no longer lists an agent once it is disposed. */
     const startedRoots = new Set<string>()

@@ -1,3 +1,7 @@
+- id: tool-subagent-control
+  config:
+    interrupt: false
+
 - insert:
     - id: subagent-structured-parent
       name: '../../../packages/test-support/session-snapshot/tests/fixtures/subagent-structured-parent.ts'

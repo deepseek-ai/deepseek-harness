@@ -31,6 +31,8 @@ kind: "package-bundle"
 
 启动 GUI、打开浏览器，然后开始与 agent（智能体）对话。flag 用于微调本次调用。
 
+[Agent Teams UI](../../client/ui-agent-team/README.zh.md) 随本 bundle 加载。在模型与推理等级菜单中按 Session 开启；通过 Subagent 控件打开成员树，下方显示共享任务。
+
 ### 启动 Web GUI
 
 ```sh

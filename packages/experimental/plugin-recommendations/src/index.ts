@@ -87,7 +87,7 @@ export class PluginRecommendations extends TypertRemoteService {
   @Remote
   async describe(agent: Agent, callId: ToolCallId): Promise<RecommendationDetails> {
     if (this.isStopping()) return { status: 'refused', reason: 'closing' }
-    if (!this.ctx.agents.roots().includes(agent)) return { status: 'refused', reason: 'not-live-root' }
+    if (this.ctx.agents.get(agent.id) !== agent || agent.session.header.origin === 'subagent') return { status: 'refused', reason: 'not-live-root' }
     const proposal = ownEntry(this.ctx.actionCards.view(agent.session).proposals, callId)
     const details = proposal?.action === ACTION ? detailsSchema.safeParse(proposal.details) : undefined
     if (details?.success !== true) return { status: 'refused', reason: 'unknown' }
@@ -133,7 +133,7 @@ export class PluginRecommendations extends TypertRemoteService {
     const bundle = (await this.ctx.pluginManager.listBundles()).find(item => item.name === proposal.details.name)
     if (bundle === undefined || !eligible(bundle)) return refused('unavailable')
     if (this.isStopping()) return refused('closing')
-    if (!this.ctx.agents.roots().includes(agent)) return refused('not-live-root')
+    if (this.ctx.agents.get(agent.id) !== agent || agent.session.header.origin === 'subagent') return refused('not-live-root')
     // An unconfirmed card's plugin that reconciliation still found off and is on now was turned on by its own enable.
     if (bundle.enabled) return record(previous?.phase === 'unconfirmed' ? 'enabled' : 'already-enabled')
     let result: ChangeResult | undefined

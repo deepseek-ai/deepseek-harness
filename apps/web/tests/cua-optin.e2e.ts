@@ -133,7 +133,7 @@ it.skipIf(process.platform !== 'darwin').each([
       expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua')).toBe(preset === 'ptc')
     }
     const child = await scaffold.ctx.agents.create({
-      sessionId: SessionId('cua-child'), parentAgent: ptcAgent,
+      sessionId: SessionId('cua-child'),
       setup: (ctx) => { scaffold.ctx.agentPresets.composeFrom(ctx, ptcAgent.ctx) },
     })
     expect(scaffold.ctx.tools.schemas(child.agent).some(tool => tool.name === 'cua')).toBe(true)

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { IconClockOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconClockOutlineRegular, IconUsersOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNode } from '../src/client/contract/chat-nodes.ts'
 import { TurnTriggerNodeView } from '../src/client/chat/TurnTriggerNodeView.tsx'
 import { turnTriggerDetails } from '../src/client/chat/turn-trigger.ts'
@@ -70,6 +70,37 @@ describe('Turn trigger notices', () => {
     expect(view.getByRole('button').querySelector('svg')?.outerHTML)
       .toBe(reference.container.querySelector('svg')?.outerHTML)
     expect(node.data.source).toEqual({ kind: 'schedule' })
+  })
+
+  it.each([
+    ['completed', 'Subagent run completed', '子智能体已完成任务'],
+    ['aborted', 'Subagent run stopped', '子智能体任务已停止'],
+    ['error', 'Subagent run failed', '子智能体执行失败'],
+    ['max-tokens', 'Subagent reached the token limit', '子智能体已达 token 上限'],
+    ['refusal', 'Subagent declined the task', '子智能体拒绝执行'],
+    ['backend-specific', 'Subagent run ended unexpectedly', '子智能体异常结束'],
+  ])('presents only the recorded %s outcome in both locales', (stopReason, english, chinese) => {
+    const source = { kind: 'subagent-settled', stopReason, senderSessionId: 'child-1' }
+    const node = trigger(source)
+    const view = render(<TurnTriggerNodeView node={node} t={makeTranslate(en)} />)
+    expect(view.getByRole('button').textContent).toContain(english)
+    expect(view.getByRole('button').textContent).not.toContain(' · ')
+    const reference = render(<IconUsersOutlineRegular size={14} />)
+    expect(view.getByRole('button').querySelector('svg')?.outerHTML)
+      .toBe(reference.container.querySelector('svg')?.outerHTML)
+    view.rerender(<TurnTriggerNodeView node={node} t={makeTranslate(zh)} />)
+    expect(view.getByRole('button').textContent).toContain(chinese)
+    expect(view.getByRole('button').textContent).not.toContain(' · ')
+    fireEvent.click(view.getByRole('button'))
+    expect(view.container.querySelector('[data-context-text]')?.textContent)
+      .toBe('Recorded notification\nwith its original body.')
+    expect(node.data.source).toEqual(source)
+  })
+
+  it.each([undefined, null, false, 12, {}, '', []])('does not infer an absent or malformed outcome %j from English text', (stopReason) => {
+    const node = trigger({ kind: 'subagent-settled', stopReason, summary: 'Background subagent child-1 finished.' })
+    node.data.content = [{ type: 'text', text: 'Background subagent child-1 finished.' }]
+    expect(turnTriggerDetails(node.data)).toEqual({ title: 'message.trigger.subagent', icon: 'subagent' })
   })
 
   it('opens the recorded notice body and closes it independently of the Turn', () => {

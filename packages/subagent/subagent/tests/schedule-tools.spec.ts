@@ -99,7 +99,7 @@ describe('a delegated child under a preset that mounts the Schedule tools', () =
       label: 'child task',
       delivery: 'caller',
       signal: new AbortController().signal,
-      request: { parent, prompt: [{ type: 'text', text: 'child task' }] },
+      parent, prompt: [{ type: 'text', text: 'child task' }],
     })
 
     const child = ctx.agents.get(run.childId)

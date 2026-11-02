@@ -4,20 +4,20 @@ import { useId, useRef, useState } from 'react'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { ScheduleCatalogEntry, ScheduleTargetRequest } from '@deepseek-ai/dsh-schedule/client'
+import type { ScheduleCatalogEntry, SchedulePatch, ScheduleTargetRequest } from '@deepseek-ai/dsh-schedule/client'
+import { Cron, RRule } from '@deepseek-ai/dsh-util-time'
 import clsx from 'clsx'
 import { DEFAULT_WORKSPACE_DIRECTORY, workspaceDisplayTitle } from '@deepseek-ai/dsh-api-workspace-controller/default-workspace'
 import { IconClockOutlineRegular, Input, PathLabel } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ClockPicker } from './ClockPicker.tsx'
 import { DatePicker } from './DatePicker.tsx'
-import { defaultTiming, rruleFromDraft, timingFromRecord } from './editor-timing.ts'
+import { defaultTiming, rruleFromDraft, timingFromDraft, timingFromRecord } from './editor-timing.ts'
 import type { FrequencyPreset, TimingDraft } from './editor-timing.ts'
 import { RuleSelectRow, RuleZoneRow } from './RuleSelectRow.tsx'
 import { formatScheduleFrequency, zoneLabel } from './schedule-format.ts'
 import type { FrequencyZone } from './schedule-format.ts'
 import { RuleStepper, RuleWeekdayRow } from './TaskRuleControls.tsx'
 import { IconCalendarOutlineRegular } from './CalendarIcon.tsx'
-import type { TaskManagerKey } from './task-manager-locales.ts'
 import css from './TaskManagerPage.module.css'
 
 /** Local form values; only Save writes a task. */
@@ -29,12 +29,9 @@ export interface TaskEditorDraft extends TimingDraft {
   readonly cwd: string
 }
 
-/** A Session or project label supplied by the owning framework readers. */
-export interface EditorChoice { readonly value: string; readonly label: string }
-
 /** Registered Workspaces offered as the directory of a created Session. */
-export interface ProjectChoices {
-  readonly items: readonly EditorChoice[]
+interface ProjectChoices {
+  readonly items: readonly { readonly value: string; readonly label: string }[]
   /** Directory a new destination starts with: the default Workspace, else the first listed one, else empty. */
   readonly defaultCwd: string
 }
@@ -45,11 +42,6 @@ export function projectChoices(workspaces: WorkspaceSnapshot['items'], defaultNa
     items: workspaces.map(workspace => ({ value: workspace.path, label: workspaceDisplayTitle(workspace.title, defaultName) })),
     defaultCwd: (workspaces.find(workspace => workspace.title === DEFAULT_WORKSPACE_DIRECTORY) ?? workspaces[0])?.path ?? '',
   }
-}
-
-/** Name a destination strategy; a Session target is the conversation that the task already uses. */
-export function targetLabelKey(target: TaskEditorDraft['target']): TaskManagerKey {
-  return target === 'session' ? 'host.currentConversation' : target === 'new_once' ? 'host.targetNewOnce' : 'host.targetNew'
 }
 
 /** Initialize a new task without creating or activating a Session. */
@@ -67,8 +59,8 @@ export function taskDraft(task: ScheduleCatalogEntry): TaskEditorDraft {
 }
 
 /** Required fields and guided selections that the form can validate locally. */
-export function taskDraftValid(draft: TaskEditorDraft): boolean {
-  return draft.title.trim() !== '' && draft.prompt.trim() !== ''
+export function taskDraftValid(draft: TaskEditorDraft, changes?: SchedulePatch): boolean {
+  const fieldsValid = draft.title.trim() !== '' && draft.prompt.trim() !== ''
     && draft.title.trim().length <= 120
     && (draft.target !== 'session' || draft.sessionId !== '')
     && (draft.frequency === 'once' || draft.frequency === 'advanced'
@@ -76,6 +68,40 @@ export function taskDraftValid(draft: TaskEditorDraft): boolean {
     && (draft.frequency !== 'weekly' || draft.weekdays.length > 0)
     && (draft.frequency !== 'monthly' || Number.isInteger(draft.monthDay) && draft.monthDay >= 1 && draft.monthDay <= 31)
     && (draft.frequency !== 'daily' || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(draft.dailyTime))
+  if (!fieldsValid) return false
+  // An untouched stored rule remains authoritative for a content-only edit.
+  if (changes !== undefined && changes.timing === undefined) return true
+  const timing = timingFromDraft(draft, true)
+  if (timing.kind === 'cron') return Cron.parse(timing.cron.expression, timing.cron.time_zone).kind === 'accepted'
+  if (timing.kind !== 'rrule') return true
+  const parsed = RRule.parse(timing.rrule, { rejectIneffectiveSetPositions: true })
+  return parsed.kind === 'accepted'
+}
+
+/** Only meaningful field changes enter the CAS edit; untouched timing is never rewritten. */
+export function taskDraftPatch(draft: TaskEditorDraft, original: ScheduleCatalogEntry, intervalFromNow = false): SchedulePatch {
+  const seeded = taskDraft(original)
+  const timingChanged = JSON.stringify(timingFromDraft(draft)) !== JSON.stringify(timingFromDraft(seeded))
+  const targetChanged = draft.target !== seeded.target || draft.sessionId !== seeded.sessionId || draft.cwd !== seeded.cwd
+  return {
+    ...(draft.title.trim() === seeded.title.trim() ? {} : { title: draft.title.trim() }),
+    ...(draft.prompt.trim() === seeded.prompt.trim() ? {} : { prompt: draft.prompt.trim() }),
+    ...(timingChanged ? { timing: timingFromDraft(draft, intervalFromNow) } : {}),
+    ...(targetChanged ? { target: draftTarget(draft, original) } : {}),
+  }
+}
+
+/** Reapply changed field groups only after the user chooses to review a newer revision. */
+export function reapplyTaskDraft(draft: TaskEditorDraft, latest: ScheduleCatalogEntry, changes: SchedulePatch): TaskEditorDraft {
+  const { title, prompt, target, sessionId, cwd, ...timing } = draft
+  const { title: latestTitle, prompt: latestPrompt, target: latestTarget,
+    sessionId: latestSessionId, cwd: latestCwd, ...latestTiming } = taskDraft(latest)
+  return {
+    ...(changes.timing === undefined ? latestTiming : timing),
+    title: changes.title === undefined ? latestTitle : title,
+    prompt: changes.prompt === undefined ? latestPrompt : prompt,
+    ...(changes.target === undefined ? { target: latestTarget, sessionId: latestSessionId, cwd: latestCwd } : { target, sessionId, cwd }),
+  }
 }
 
 /** Resolve the explicit destination, preserving an existing preset when the project is unchanged. */
@@ -95,7 +121,7 @@ export function TaskEditorFields({ draft, onChange, projects, disabled, original
   readonly onChange: (draft: TaskEditorDraft) => void
   readonly projects: ProjectChoices
   readonly disabled: boolean
-  readonly original?: ScheduleCatalogEntry
+  readonly original?: ScheduleCatalogEntry | undefined
   readonly t: PropsLocale<'schedule.manager'>['t']
 }): ReactNode {
   const [dateOpen, setDateOpen] = useState(false)
@@ -107,7 +133,9 @@ export function TaskEditorFields({ draft, onChange, projects, disabled, original
   const change = (patch: Partial<TaskEditorDraft>): void => { onChange({ ...draft, ...patch }) }
   const clock = draft.frequency === 'daily' ? `${draft.dailyTime}:00` : draft.start.slice(11)
   const frequencyZone: FrequencyZone = { system: Intl.DateTimeFormat().resolvedOptions().timeZone, label: zone => zoneLabel(zone, t) }
-  const targetLabel = (target: TaskEditorDraft['target']): string => t(targetLabelKey(target))
+  const targetLabel = (target: TaskEditorDraft['target']): string =>
+    t(target === 'session' ? 'host.currentConversation' : target === 'new_once' ? 'host.targetNewOnce' : 'host.targetNew')
+  const currentSessionId = original?.target.kind === 'session' ? original.target.sessionId : ''
   const weekdays = draft.frequency === 'weekly' && draft.weekdays.length === 5 && [1, 2, 3, 4, 5].every(day => draft.weekdays.includes(day))
   const frequencyItems = [
     { id: 'weekly', label: t('rule.weekly') }, { id: 'weekdays', label: t('rule.weekdays') },
@@ -127,18 +155,22 @@ export function TaskEditorFields({ draft, onChange, projects, disabled, original
     if (dateOpen) { setDateOpen(false); dateAnchor.current?.focus() }
     else { setClockOpen(false); clockAnchor.current?.focus() }
   }}>
-    <label className={css.editorField}>{t('detail.name')}<Input value={draft.title} maxLength={120}
+    <label className={css.editorField}>{t('detail.name')}<Input value={draft.title} maxLength={120} aria-required placeholder={t('detail.namePlaceholder')}
       onChange={(event) => { change({ title: event.target.value }) }} /></label>
-    <label className={css.editorField}>{t('detail.instruction')}<textarea className={css.instruction}
+    <label className={css.editorField}>{t('detail.instruction')}<textarea className={css.instruction} aria-required placeholder={t('detail.instructionPlaceholder')}
       value={draft.prompt} onChange={(event) => { change({ prompt: event.target.value }) }} /></label>
     <div className={css.ruleRows}>
       <RuleSelectRow label={t('host.target')} value={draft.target} current={targetLabel(draft.target)} disabled={disabled}
-        listClassName={css.targetMenu} items={(['new_once', 'new'] as const).map(value => ({
-          id: value, label: <span className={css.targetMenuItem}><span>{targetLabel(value)}</span>
-            <span className={css.targetMenuDescription}>{t(value === 'new_once' ? 'host.targetNewOnceHelp' : 'host.targetNewHelp')}</span></span>,
-        }))}
+        listClassName={css.targetMenu} items={[
+          ...(currentSessionId === '' ? [] : [{ id: 'session', label: targetLabel('session') }]),
+          ...(['new_once', 'new'] as const).map(value => ({
+            id: value, label: <span className={css.targetMenuItem}><span>{targetLabel(value)}</span>
+              <span className={css.targetMenuDescription}>{t(value === 'new_once' ? 'host.targetNewOnceHelp' : 'host.targetNewHelp')}</span></span>,
+          })),
+        ]}
         onChange={(value) => { change({ target: value as TaskEditorDraft['target'],
-          ...(draft.target === 'session' ? { cwd: projects.defaultCwd } : {}) }) }} />
+          sessionId: value === 'session' ? currentSessionId : draft.sessionId,
+          cwd: value === 'session' ? '' : draft.target === 'session' ? projects.defaultCwd : draft.cwd }) }} />
       {draft.target !== 'session' && <RuleSelectRow label={t('host.project')} value={draft.cwd} disabled={disabled}
         current={projects.items.find(choice => choice.value === draft.cwd)?.label ?? (draft.cwd || t('host.ungrouped'))}
         listClassName={css.workspaceMenu} items={workspaceItems.length === 0 ? [{ id: '', label: t('host.ungrouped'), disabled: true }]
@@ -149,7 +181,7 @@ export function TaskEditorFields({ draft, onChange, projects, disabled, original
         current={(frequencyItems.find(item => item.id === frequencyValue) as { label: string }).label} onChange={(value) => {
           const frequency = value === 'weekdays' ? 'weekly' : value as FrequencyPreset
           change({ frequency, ...(value === 'weekdays' ? { weekdays: [1, 2, 3, 4, 5] } : {}),
-            ...(frequency === 'advanced' ? { rrule: rruleFromDraft(draft, true) } : {}) })
+            ...(frequency === 'advanced' ? { rrule: rruleFromDraft(draft, original === undefined) } : {}) })
         }} />
       {draft.frequency !== 'once' && draft.frequency !== 'advanced' && <div className={css.ruleRow}>
         <label className={css.ruleLabel} htmlFor={rowId('interval')}>{t('host.interval')}</label>
