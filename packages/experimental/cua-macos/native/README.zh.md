@@ -23,7 +23,7 @@ kind: "package-reference"
 <a id="build-and-service"></a>
 ## 构建与服务
 
-运行 `pnpm --dir packages/experimental/cua-macos run build:native`，在 `native/bin/darwin-<arch>` 下生成带签名的 `DSH Computer Use.app`，`current.json` 选择完整的内容摘要目录。默认使用临时签名；正式打包可传入 `--identity` 指定 Developer ID，并由发布流程完成公证。Host 运行应用内的 `--ensure-shared` 入口，经 LaunchServices 后台启动服务。最后一条连接完成清理后，服务退出。
+运行 `pnpm --dir packages/experimental/cua-macos run build:native`，在 `native/bin/darwin-<arch>` 下生成带签名的 `DSH Computer Use.app`，`current.json` 选择完整的内容摘要目录。默认使用临时签名；正式打包可传入 `--identity` 指定 Developer ID，并由发布流程完成公证。Host 运行应用内的 `--ensure-shared` 入口，经 LaunchServices 后台启动服务。最后一条连接完成清理后，服务退出。 helper 嵌套在另一个 `.app` 内时，启动器先把完整的已签名应用复制到 `~/Library/Application Support/DeepSeek Harness/Computer Use/<runtime-key>/`，再启动它。每个不可变目录都校验可执行文件哈希和应用签名，旧目录保留给仍在运行的安装版本使用，使两项 macOS 权限都归属于 helper。校验失败会中止启动；删除报错中指定的缓存目录后再重试。
 
 源码检出以 `--variant dev` 构建，应用包为 `DSH Computer Use Dev.app`，Bundle ID 为 `com.deepseek.harness.computer-use.dev`。开发版和正式版默认临时签名。临时签名的指定要求包含代码哈希，二进制变化后可能需要重新授权。
 
@@ -37,7 +37,7 @@ kind: "package-reference"
 
 `native/.build/prepared/<arch>` 和 `native/bin/darwin-<arch>` 中的各代应用不会自动清理。正式打包时使用全新的 `--output-directory`，或确认没有客户端使用后清理打包输出再构建，避免旧应用进入 tarball。安全签名时间戳可能让相同源码生成不同代应用。
 
-手动工作流 **Package CUA helper · macOS** 的[配置](../../../../.github/workflows/cua-helper-package.yml)在 `dsh-mac-package-trial` 构建两种架构。选择可信的 `source_ref` 和机器 `preset`；凭据沿用[macOS 打包配置](../../../../apps/desktop/packaging/README.zh.md#macos-actions)。打包无需 macOS 桌面登录或 Rosetta。在仓库根目录运行 `pnpm exec tsx scripts/cua-helper/package.ts --out <new-directory>` 可执行相同准备。完整应用签名、公证和贴票后才确定最终内容摘要，再从解包后的 `cua-helper.tgz` 验证架构、签名、票据、Gatekeeper 和文件完整性。打包不启动 helper。在已登录的桌面会话中单独运行 `python3 scripts/cua-helper/smoke.py <helper-executable>` 检查能力、helper 身份和退出清理；Apple Silicon 上执行 x64 版本需要 Rosetta。该检查不申请权限或观察应用。命令失败、超时或启动回复无法解析时，会输出捕获的 stdout 和 stderr；无效编码只在诊断文本中替换，协议解析仍严格校验。打包成功不代表运行验收通过。
+手动工作流 **Package CUA helper · macOS** 的[配置](../../../../.github/workflows/cua-helper-package.yml)在 `dsh-mac-package-trial` 构建两种架构。选择可信的 `source_ref` 和机器 `preset`；凭据沿用[macOS 打包配置](../../../../apps/desktop/packaging/README.zh.md#macos-actions)。打包无需 macOS 桌面登录或 Rosetta。在仓库根目录运行 `pnpm exec tsx scripts/cua-helper/package.ts --out <new-directory>` 可执行相同准备。完整应用签名、公证和贴票后才确定最终内容摘要，再从解包后的 `cua-helper.tgz` 验证架构、签名、票据、Gatekeeper 和文件完整性。打包不启动 helper。在已登录的桌面会话中单独运行 `python3 scripts/cua-helper/smoke.py <helper-executable>` 检查能力、helper 身份和退出清理；Apple Silicon 上执行 x64 版本需要 Rosetta。该检查不申请权限或观察应用。命令失败、超时或启动回复无法解析时，会输出捕获的 stdout 和 stderr；无效编码只在诊断文本中替换，协议解析仍严格校验。打包成功不代表运行验收通过。 helper 打包保留独立的[诊断记录](../../../../apps/desktop/packaging/README.zh.md#macos-release-signing)，包括桌面安装包开始构建前发生的失败。
 
 工作流保留 `cua-helper.tgz` 和 `cua-helper.json`，后者记录产品版本、源码 commit、Team ID 和两份应用摘要。[Release publish](../../../../.github/workflows/release-publish.yml)在生成 provider 的 npm 包前接入该产物；普通 PR 发布检查不使用签名凭据。准备步骤拒绝源码或版本不匹配、架构不全、旧应用目录、链接、字节变化和执行权限缺失。npm 发布在写入注册表前重新检查实际 provider tarball。重新签名会改变产物字节，重试部分发布的版本时需保留原产物。
 
@@ -135,7 +135,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 在已解锁的 macOS GUI 会话中运行 `python3 packages/experimental/cua-macos/native/tests/application_consent_e2e.py --helper /absolute/helper`，需要可用的 Apple Swift 编译器。它创建并清理自己的 AppKit 应用和独立 GUI 进程，检查元数据替换、冷启动与直接启动、共用 Bundle ID、独立程序重启后的持久路径身份，以及删除运行中可执行文件后的选择行为。默认身份检查不需要辅助功能或屏幕录制权限。添加 `--desktop` 可读取完整测试应用的控件，通过状态文件验证 AX 按钮点击，截取窗口，并记录删除可执行文件后的观察结果；此模式要求已有两项系统权限。
 
-在 GUI 登录会话中运行 `python3 packages/experimental/cua-macos/native/tests/launcher_identity_e2e.py`，验证两个嵌套 GUI 启动器启动 helper 后，授权归属仍为 helper 自己，多条连接得到相同名称和图标。检查自行创建应用并清理 LaunchServices 注册，不申请辅助功能或屏幕录制权限。
+在 GUI 登录会话中运行 `python3 packages/experimental/cua-macos/native/tests/launcher_identity_e2e.py`，验证两个嵌套 GUI 启动器启动 helper 后，授权归属仍为 helper 自己，多条连接得到相同名称和图标。检查自行创建应用并清理 LaunchServices 注册，不申请辅助功能或屏幕录制权限。 运行 `python3 packages/experimental/cua-macos/native/tests/nested_application_e2e.py`，用独立签名的测试应用验证 helper 在外层 `.app` 之外保留签名发布、并发发布和服务退出。
 
 构建并解锁 Mac 后运行 `python3 packages/experimental/cua-macos/native/tests/axless_e2e.py`，验证应用移除并恢复 AX 根节点的窗口。检查需要已有辅助功能/屏幕录制权限，会拒绝过期元素索引，捕获无 AX 窗口，通过 fixture 状态文件核实坐标点击，并检查恢复。不会修改系统权限设置。
 
