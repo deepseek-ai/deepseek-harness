@@ -68,6 +68,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   connectorAccounts: 'boot.md',
   cliAccounts: 'boot.md',
   pluginRegistryProbe: 'boot.md',
+  connectors: 'boot.md',
   configEditor: 'boot.md',
   profileContext: 'boot.md',
   hmr: 'boot.md',

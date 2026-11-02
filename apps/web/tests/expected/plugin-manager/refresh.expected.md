@@ -6,7 +6,7 @@ Focus at 500ms:
 - tooltip "刷新"
 failure: pending
 - button "刷新" [disabled]
-{"busy":"true","spinners":1,"cards":11,"skeletons":0,"alerts":[],"retry":0,"toasts":[]}
+{"busy":"true","spinners":1,"cards":12,"skeletons":0,"alerts":[],"retry":0,"toasts":[]}
 failure: settled
 - button "刷新"
-{"busy":"false","spinners":0,"cards":11,"skeletons":0,"alerts":[],"retry":0,"toasts":["刷新失败，请重试"]}
+{"busy":"false","spinners":0,"cards":12,"skeletons":0,"alerts":[],"retry":0,"toasts":["刷新失败，请重试"]}

@@ -1,0 +1,3 @@
+- insert:
+    - id: ui-connectors
+      name: '@deepseek-ai/dsh-experimental-client-ui-connectors'

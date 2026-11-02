@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/connectors-bundle/README.md
+/:
+  en: da9d2bebf430d8a0
+  zh: 42ffa75346e3079a
+/deepseek-ai-dsh-experimental-connectors-bundle:
+  en: f310e0770fe1a799
+  zh: ff0d24a9fbed7e42
+/deepseek-ai-dsh-experimental-connectors-bundle/summary:
+  en: 042bdb58aefecd9e
+  zh: 4800fed3aacc261f
+/deepseek-ai-dsh-experimental-connectors-bundle/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: ce40cab8e7534137
+/deepseek-ai-dsh-experimental-connectors-bundle/use-this-package:
+  en: f1043893d6110a77
+  zh: 8e502b0a1fe19ccd
+/deepseek-ai-dsh-experimental-connectors-bundle/understand-the-implementation:
+  en: 341525733a0dea60
+  zh: 0c4ab5a584a994a5
+/deepseek-ai-dsh-experimental-connectors-bundle/further-exploration:
+  en: ea246540b5905635
+  zh: 98c3d31d24a693ff
+/deepseek-ai-dsh-experimental-connectors-bundle/model-experience:
+  en: 614f25d79b8ac8fc
+  zh: 9b14db3c58b0608d
+/deepseek-ai-dsh-experimental-connectors-bundle/model-experience/kv-cache-effect:
+  en: afebf4bb5fabf8b9
+  zh: 6e1b9f5b27a5a9b8
+/deepseek-ai-dsh-experimental-connectors-bundle/known-limitations-and-deferred-work:
+  en: 883582823a1fea10
+  zh: b6ad6c4dcdf1d739
+/deepseek-ai-dsh-experimental-connectors-bundle/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

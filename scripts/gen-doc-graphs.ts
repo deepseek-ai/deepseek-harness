@@ -264,6 +264,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Streams one panel state per followed Session: Git inspection using Session permissions, the recognized code host and its sign-in, and the bound change requests with polled status.',
   },
   {
+    key: 'connectors',
+    pkg: 'experimental-client-ui-connectors',
+    title: 'Connectors bundle switch',
+    mode: 'service',
+    note: 'Present while the Connectors bundle is enabled; each official connector row injects it, so the Loader stops and resumes the connectors with the bundle.',
+  },
+  {
     key: 'worktrees',
     pkg: 'experimental-worktree',
     title: 'Git worktree creation',
