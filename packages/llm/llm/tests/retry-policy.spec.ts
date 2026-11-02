@@ -96,4 +96,20 @@ describe('provider retry policy', () => {
       resolveRetryPolicy(config as unknown as RetryPolicyConfig, 'provider.retryPolicy')
     }).toThrow(message)
   })
+
+  it.each<[string, RetryPolicyConfig]>([
+    ['a zero delay', { mode: 'always', backoff: { initialDelayMs: 0 } }],
+    ['an empty code list', { mode: 'normal', retryableCodes: [] }],
+    ['a blank code', { mode: 'normal', retryableCodes: [''] }],
+  ])('declares the resolver bound on %s in the schema', (_name, config) => {
+    expect(() => RetryPolicySchema(config)).toThrow()
+  })
+
+  it('accepts the smallest values inside the schema bounds and still defaults the codes', () => {
+    expect(RetryPolicySchema({ mode: 'normal', retryableCodes: ['X'], backoff: { initialDelayMs: Number.MIN_VALUE } }))
+      .toMatchObject({ retryableCodes: ['X'], backoff: { initialDelayMs: Number.MIN_VALUE } })
+    expect(RetryPolicySchema({ mode: 'normal' })).toMatchObject({
+      retryableCodes: ['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT'],
+    })
+  })
 })

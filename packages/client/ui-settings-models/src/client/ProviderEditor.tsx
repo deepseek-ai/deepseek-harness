@@ -193,7 +193,11 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     // A stored retry policy without a mode edits under the mode it inherits;
     // the draft names it so a saved policy always carries one.
     if (!isRecord(policy) || policy['mode'] !== undefined) return loaded
-    const mode = schema.getPath(namespace.base, [...settingsPath, 'retryPolicy', 'mode']) ?? 'normal'
+    const path = [...settingsPath, 'retryPolicy']
+    const node = schema.nodeAtPath(schema.rehydrate(namespace.schema), path)
+    /* v8 ignore next -- a stored retryPolicy implies the schema declares one */
+    if (node === undefined) return loaded
+    const { mode } = retryPolicyDefaults(schema, node, schema.getPath(namespace.base, path))
     return { ...loaded, retryPolicy: { ...policy, mode } }
   })
   const [keyDraft, setKeyDraft] = useState(props.initialCredential ?? '')

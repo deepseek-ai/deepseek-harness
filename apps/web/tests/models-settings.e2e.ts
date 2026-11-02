@@ -641,8 +641,10 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       await toggle.click()
       expect(await name.inputValue()).toBe('手机上的完整显示名称')
       const expandedName = await name.boundingBox()
-      if (expandedName === null) throw new Error('Expanded model name is not visible')
-      expect(expandedName.y).toBeGreaterThanOrEqual(compactId.y + compactId.height)
+      // Expanding can scroll the dialog, so the ID is measured again in the same frame.
+      const expandedId = await id.boundingBox()
+      if (expandedName === null || expandedId === null) throw new Error('Expanded model fields are not visible')
+      expect(expandedName.y).toBeGreaterThanOrEqual(expandedId.y + expandedId.height)
       expect(expandedName.width).toBeGreaterThan(compactId.width)
       expect(await dialog.getByRole('region', { name: '模型目录', exact: true })
         .evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)

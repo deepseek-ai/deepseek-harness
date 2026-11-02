@@ -1,9 +1,11 @@
 /**
- * The provider retry-policy fields of an editor card. Both adapter families
- * embed the same `retryPolicy` schema in a provider profile, so the card reads
- * its modes, defaults, and bounds from that schema instead of copying them.
- * An absent `retryPolicy` keeps the inherited policy; choosing a mode writes a
- * user-layer policy whose empty fields keep the inherited values.
+ * The provider retry-policy fields of an editor card, built from the
+ * `retryPolicy` schema the owning namespace publishes: its union branches are
+ * the modes, each branch's fields are the inputs, and the field bounds and
+ * defaults come from the schema. Number fields render as inputs, string lists
+ * as a code picker, and nested objects as a fold. An absent `retryPolicy`
+ * keeps the inherited policy; choosing a mode writes a user-layer policy whose
+ * empty fields keep the inherited values.
  */
 
 import { useState } from 'react'
@@ -16,25 +18,25 @@ import styles from './ModelsSection.module.css'
 /** One schema node of the provider's settings form. */
 type SchemaNode = NonNullable<ReturnType<SettingsSchemaOperations['nodeAtPath']>>
 
-const CODES = ['retryableCodes'] as const
-const MAX_RETRIES = ['maxRetries'] as const
-const INITIAL_DELAY = ['backoff', 'initialDelayMs'] as const
-const MAX_DELAY = ['backoff', 'maxDelayMs'] as const
-const JITTER = ['backoff', 'jitterRatio'] as const
+/** Labels of known modes and fields by schema key; any other key shows verbatim. */
+const LABELS: ReadonlyMap<string, ModelsKey> = new Map([
+  ['normal', 'retryModeNormal'],
+  ['always', 'retryModeAlways'],
+  ['maxRetries', 'retryMaxRetries'],
+  ['retryableCodes', 'retryCodes'],
+  ['backoff', 'retryBackoff'],
+  ['initialDelayMs', 'retryInitialDelay'],
+  ['maxDelayMs', 'retryMaxDelay'],
+  ['jitterRatio', 'retryJitter'],
+])
 
-type FieldPath = typeof MAX_RETRIES | typeof INITIAL_DELAY | typeof MAX_DELAY | typeof JITTER
-
-/** Backoff fields of both modes, as `[policy path, label]`. */
-const BACKOFF_FIELDS: readonly (readonly [FieldPath, ModelsKey])[] = [
-  [INITIAL_DELAY, 'retryInitialDelay'],
-  [MAX_DELAY, 'retryMaxDelay'],
-  [JITTER, 'retryJitter'],
-]
+/** Hints shown under the mode select, by mode. */
+const MODE_HINTS: ReadonlyMap<string, ModelsKey> = new Map([['always', 'retryAlwaysHint']])
 
 /**
- * Stable `LlmFailure` codes offered as retryable choices, with their labels: the
+ * Stable `LlmFailure` codes offered in a code picker, with their labels: the
  * transient defaults of `dsh-llm`, then the other request failures a retry can
- * plausibly recover. A stored code outside this list stays listed after them.
+ * plausibly recover. Inherited and stored codes outside this list stay listed after them.
  */
 const CODE_CHOICES: ReadonlyMap<string, ModelsKey> = new Map([
   ['EMPTY_RESPONSE', 'retryCodeEmptyResponse'],
@@ -50,41 +52,70 @@ const CODE_CHOICES: ReadonlyMap<string, ModelsKey> = new Map([
 /** Plain decimal text; prefixed forms such as `0x10` stay invalid text. */
 const DECIMAL = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/iu
 
-/** The inherited policy beneath the user layer, plus the schema bounds of its fields. */
+/** The pair `resolveRetryPolicy` orders beyond any single field bound: initial delay at most the maximum. */
+const DELAY_ORDER = [['backoff', 'initialDelayMs'], ['backoff', 'maxDelayMs']] as const
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Read a nested field of a plain policy object. */
+function fieldAt(value: Record<string, unknown>, path: readonly string[]): unknown {
+  return path.reduce<unknown>((node, key) => isRecord(node) ? node[key] : undefined, value)
+}
+
+/** The mode a union branch selects, read from its `mode` constant. */
+function modeOf(branch: SchemaNode): string | undefined {
+  const mode: unknown = branch.dict?.['mode']?.value
+  return typeof mode === 'string' ? mode : undefined
+}
+
+/** The editable fields of one object node, in schema order, without the `mode` discriminant. */
+function fieldsOf(node: SchemaNode): [string, SchemaNode][] {
+  /* v8 ignore next -- object schema nodes always carry `dict` */
+  return Object.entries(node.dict ?? {}).filter(([key]) => key !== 'mode')
+}
+
+/** The inherited policy beneath the user layer, and the schema branch of each mode. */
 export interface RetryPolicyDefaults {
+  /** Modes in schema order. */
+  modes: readonly string[]
   /** Mode in effect when the user layer names none. */
-  mode: 'normal' | 'always'
-  /** Read the inherited value of one policy field: the composition layer, then the schema default. */
-  value: (path: readonly string[]) => unknown
-  /** Read the schema maximum of one numeric policy field. */
-  max: (path: readonly string[]) => number | undefined
+  mode: string
+  /** Schema branch of a stored `mode` value, or undefined when no branch declares it. */
+  branch: (mode: unknown) => SchemaNode | undefined
+  /** Inherited value of one field of a branch: the composition layer, then the branch default. */
+  value: (branch: SchemaNode, path: readonly string[]) => unknown
 }
 
 /**
- * Resolve the inherited policy beneath the user layer.
+ * Resolve the modes and inherited policy beneath the user layer.
  * @param schema - settings schema operations.
  * @param node - the `retryPolicy` schema union.
  * @param inherited - the policy the composition layer sets, if any.
- * @returns the inherited mode, field values, and field bounds.
+ * @returns the modes and the inherited mode and field values.
  */
 export function retryPolicyDefaults(
   schema: SettingsSchemaOperations,
   node: SchemaNode,
   inherited: unknown,
 ): RetryPolicyDefaults {
-  const normal = node.list?.find(branch => branch.dict?.['mode']?.value === 'normal')
-  const field = (path: readonly string[]) => normal === undefined ? undefined : schema.nodeAtPath(normal, path)
+  // A schema that is not a union of mode branches has no `list` and offers no mode.
+  const branches = new Map((node.list ?? []).flatMap((branch) => {
+    const mode = modeOf(branch)
+    return mode === undefined ? [] : [[mode, branch] as const]
+  }))
+  const modes = [...branches.keys()]
+  const stored = schema.getPath(inherited, ['mode'])
   return {
-    mode: schema.getPath(inherited, ['mode']) === 'always' ? 'always' : 'normal',
-    value: (path) => {
+    modes,
+    mode: typeof stored === 'string' && branches.has(stored) ? stored : modes[0] ?? '',
+    branch: mode => typeof mode === 'string' ? branches.get(mode) : undefined,
+    value: (branch, path) => {
       const value = schema.getPath(inherited, path)
       if (value !== undefined) return value
-      const fallback: unknown = field(path)?.meta.default
+      const fallback: unknown = schema.nodeAtPath(branch, path)?.meta.default
       return fallback
-    },
-    max: (path) => {
-      const max: unknown = field(path)?.meta.max
-      return typeof max === 'number' ? max : undefined
     },
   }
 }
@@ -95,11 +126,25 @@ export interface RetryPolicyFailure {
   path?: readonly string[]
 }
 
+/** The first bound of a number field's schema that `value` breaks, as copy. */
+function numberFailure(node: SchemaNode, value: unknown, t: (key: ModelsKey) => string): string | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return t('retryValueNumber')
+  const { min, max, step } = node.meta
+  if (step === 1 && !Number.isInteger(value)) return t('retryValueInteger')
+  // `Number.MIN_VALUE` is the schema idiom for a positive bound.
+  if (min === Number.MIN_VALUE && value <= 0) return t('retryValuePositive')
+  if (typeof min === 'number' && value < min) return t('retryValueMin').replace('{min}', () => String(min))
+  if (typeof max === 'number' && value > max) return t('retryValueMax').replace('{max}', () => String(max))
+  return undefined
+}
+
 /**
- * The first refused field of a drafted policy, checked as `resolveRetryPolicy`
- * checks the merged policy: fields the draft leaves empty inherit.
+ * The first refused field of a drafted policy, checked against the selected
+ * branch's field bounds with empty fields inherited, then against the
+ * cross-field rules `resolveRetryPolicy` enforces beyond the schema, then
+ * against the whole schema.
  * @param schema - settings schema operations.
- * @param node - the `retryPolicy` schema union, which bounds every field.
+ * @param node - the `retryPolicy` schema union.
  * @param policy - the drafted user-layer policy; undefined inherits.
  * @param defaults - the inherited policy beneath the draft.
  * @param t - section copy.
@@ -113,43 +158,50 @@ export function retryPolicyFailure(
   t: (key: ModelsKey) => string,
 ): RetryPolicyFailure | undefined {
   if (policy === undefined) return undefined
-  if (typeof policy !== 'object' || policy === null || Array.isArray(policy)) {
+  const whole = (): RetryPolicyFailure | undefined => {
     const message = schema.validate(node, policy)
     return message === undefined ? undefined : { message }
   }
-  const fail = (key: ModelsKey, path: readonly string[]): RetryPolicyFailure => ({ message: t(key), path })
-  const number = (path: readonly string[]): number => {
-    const value = schema.getPath(policy, path) ?? defaults.value(path)
-    return typeof value === 'number' ? value : NaN
-  }
-  if (schema.getPath(policy, ['mode']) === 'normal') {
-    const retries = number(MAX_RETRIES)
-    if (!Number.isSafeInteger(retries) || retries < 0) return fail('retryMaxRetriesInvalid', MAX_RETRIES)
-    const codes = schema.getPath(policy, CODES)
-    if (Array.isArray(codes)) {
-      if (codes.length === 0 || codes.some(code => typeof code !== 'string' || code.length === 0)) {
-        return fail('retryCodesInvalid', CODES)
+  if (!isRecord(policy)) return whole()
+  const branch = defaults.branch(policy['mode'])
+  if (branch === undefined) return whole()
+  const read = (path: readonly string[]): unknown => schema.getPath(policy, path) ?? defaults.value(branch, path)
+  const check = (owner: SchemaNode, base: readonly string[]): RetryPolicyFailure | undefined => {
+    for (const [key, field] of fieldsOf(owner)) {
+      const path = [...base, key]
+      if (field.type === 'object') {
+        const nested = check(field, path)
+        if (nested !== undefined) return nested
+      } else if (field.type === 'number') {
+        const value = read(path)
+        // A field with neither a value nor a default is left to the schema check below.
+        const message = value === undefined ? undefined : numberFailure(field, value, t)
+        if (message !== undefined) return { message, path }
+      } else if (field.type === 'array') {
+        const stored = schema.getPath(policy, path)
+        if (stored === undefined) continue
+        if (schema.validate(field, stored) !== undefined) return { message: t('retryCodesInvalid'), path }
+        if (Array.isArray(stored) && new Set(stored).size !== stored.length) return { message: t('retryCodesDuplicate'), path }
       }
-      if (new Set(codes).size !== codes.length) return fail('retryCodesDuplicate', CODES)
     }
+    return undefined
   }
-  for (const path of [INITIAL_DELAY, MAX_DELAY]) {
-    const delay = number(path)
-    const max = defaults.max(path) ?? Infinity
-    if (!(delay > 0 && delay <= max)) return { message: t('retryDelayInvalid').replace('{max}', () => String(max)), path }
+  const failure = check(branch, [])
+  if (failure !== undefined) return failure
+  const [lowerPath, upperPath] = DELAY_ORDER
+  const lower = read(lowerPath)
+  const upper = read(upperPath)
+  if (typeof lower === 'number' && typeof upper === 'number' && lower > upper) {
+    return { message: t('retryDelayOrder'), path: lowerPath }
   }
-  if (number(INITIAL_DELAY) > number(MAX_DELAY)) return fail('retryDelayOrder', INITIAL_DELAY)
-  const jitter = number(JITTER)
-  if (!(jitter >= 0 && jitter <= 1)) return fail('retryJitterInvalid', JITTER)
-  const message = schema.validate(node, policy)
-  return message === undefined ? undefined : { message }
+  return whole()
 }
 
 /** Props of {@link RetryPolicyEditor}. */
 export interface RetryPolicyEditorProps {
   /** Drafted user-layer policy; undefined inherits. */
   policy: unknown
-  /** Inherited policy beneath the draft. */
+  /** Inherited policy and schema branches beneath the draft. */
   defaults: RetryPolicyDefaults
   /** Failure from {@link retryPolicyFailure}. */
   failure: RetryPolicyFailure | undefined
@@ -169,22 +221,16 @@ function textOf(value: unknown): string {
   return typeof value === 'number' || typeof value === 'string' ? String(value) : ''
 }
 
-/** Set or remove one field of a plain policy object, dropping an emptied `backoff`. */
-function withField(policy: Record<string, unknown>, path: FieldPath | typeof CODES, value: unknown): Record<string, unknown> {
-  const assign = (target: Record<string, unknown>, key: string, next: unknown): void => {
-    if (next === undefined) Reflect.deleteProperty(target, key)
-    else target[key] = next
-  }
+/** Set or remove one nested field of a plain policy object, dropping emptied parents. */
+function withField(policy: Record<string, unknown>, path: readonly string[], value: unknown): Record<string, unknown> {
+  const [key, ...rest] = path
+  /* v8 ignore next -- paths come from schema fields and are never empty */
+  if (key === undefined) return policy
   const result = { ...policy }
-  if (path.length === 1) {
-    assign(result, path[0], value)
-    return result
-  }
-  const [parent, key] = path
-  const prior = result[parent]
-  const child = typeof prior === 'object' && prior !== null ? { ...prior as Record<string, unknown> } : {}
-  assign(child, key, value)
-  assign(result, parent, Object.keys(child).length === 0 ? undefined : child)
+  const prior = result[key]
+  const next = rest.length === 0 ? value : withField(isRecord(prior) ? prior : {}, rest, value)
+  if (next === undefined || (isRecord(next) && Object.keys(next).length === 0)) Reflect.deleteProperty(result, key)
+  else result[key] = next
   return result
 }
 
@@ -195,64 +241,66 @@ function withField(policy: Record<string, unknown>, path: FieldPath | typeof COD
  */
 export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
   const { t, disabled, defaults, failure } = props
-  const policy = typeof props.policy === 'object' && props.policy !== null
-    ? props.policy as Record<string, unknown>
-    : undefined
-  const current = policy ?? {}
-  const mode = current['mode']
+  const current = isRecord(props.policy) ? props.policy : {}
+  const branch = defaults.branch(current['mode'])
+  const mode = branch === undefined ? undefined : String(current['mode'])
   // Raw text keeps partial input such as `0.` visible while it is typed.
   const [texts, setTexts] = useState<Record<string, string>>({})
-  // Backoff starts folded unless the draft already customizes it.
-  const [backoffOpen] = useState(() => current['backoff'] !== undefined)
-  const textAt = (path: FieldPath): string => texts[path.join('.')] ?? textOf(path.reduce<unknown>(
-    (value, key) => typeof value === 'object' && value !== null ? (value as Record<string, unknown>)[key] : undefined, current,
-  ))
-  const edit = (path: FieldPath, text: string): void => {
-    const trimmed = text.trim()
-    setTexts(previous => ({ ...previous, [path.join('.')]: trimmed.length === 0 ? '' : text }))
-    const value = DECIMAL.test(trimmed) ? Number(trimmed) : trimmed
-    props.onChange(withField(current, path, value === '' ? undefined : value))
+  // A nested fold starts open only when the draft already customizes it.
+  const [openFolds] = useState(() => new Set(Object.keys(current).filter(key => isRecord(current[key]))))
+  const label = (key: string): string => {
+    const labelKey = LABELS.get(key)
+    return labelKey === undefined ? key : t(labelKey)
   }
-  const field = (path: FieldPath, label: ModelsKey, className = styles['modelField']): ReactNode => {
-    const invalid = failure?.path?.join('.') === path.join('.')
+  const invalidAt = (path: readonly string[]): boolean => failure?.path?.join('.') === path.join('.')
+  const numberField = (root: SchemaNode, path: readonly string[], node: SchemaNode, className: string | undefined): ReactNode => {
+    const id = path.join('.')
+    const invalid = invalidAt(path)
+    const storedValue = fieldAt(current, path)
     return (
-      <label key={path.join('.')} className={className}>
-        <span className={styles['modelFieldLabel']}>{t(label)}</span>
+      <label key={id} className={className}>
+        <span className={styles['modelFieldLabel']}>{label(path[path.length - 1] as string)}</span>
         <input
           className={styles['input']}
           type="text"
-          inputMode={path === MAX_RETRIES ? 'numeric' : 'decimal'}
-          value={textAt(path)}
-          placeholder={textOf(defaults.value(path))}
+          inputMode={node.meta.step === 1 ? 'numeric' : 'decimal'}
+          value={texts[id] ?? textOf(storedValue)}
+          placeholder={textOf(defaults.value(root, path))}
           aria-invalid={invalid}
           aria-describedby={invalid ? props.failureId : undefined}
           disabled={disabled}
-          onChange={(event) => { edit(path, event.target.value) }}
+          onChange={(event) => {
+            const trimmed = event.target.value.trim()
+            setTexts(previous => ({ ...previous, [id]: trimmed.length === 0 ? '' : event.target.value }))
+            const value = DECIMAL.test(trimmed) ? Number(trimmed) : trimmed
+            props.onChange(withField(current, path, value === '' ? undefined : value))
+          }}
         />
       </label>
     )
   }
-  const codesField = (): ReactNode => {
+  const codesField = (root: SchemaNode, path: readonly string[]): ReactNode => {
     const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter(code => typeof code === 'string') : []
-    const inherited = strings(defaults.value(CODES))
-    const stored = current['retryableCodes']
-    const selected = Array.isArray(stored) ? strings(stored) : inherited
+    const inherited = strings(defaults.value(root, path))
+    const storedCodes = fieldAt(current, path)
+    const selected = Array.isArray(storedCodes) ? strings(storedCodes) : inherited
     const choices = [...new Set([...CODE_CHOICES.keys(), ...inherited, ...selected])]
-    const invalid = failure?.path?.join('.') === CODES.join('.')
+    const invalid = invalidAt(path)
     return (
       <fieldset
+        key={path.join('.')}
         className={styles['modelInputTypes']}
         aria-invalid={invalid}
         aria-describedby={invalid ? props.failureId : undefined}
       >
-        <legend className={styles['modelFieldLabel']}>{t('retryCodes')}</legend>
+        <legend className={styles['modelFieldLabel']}>{label(path[path.length - 1] as string)}</legend>
         <div className={styles['retryCodeChoices']}>
           {choices.map((code) => {
             const labelKey = CODE_CHOICES.get(code)
             return (
               <Checkbox
                 key={code}
-                // A stored code the list does not name shows verbatim.
+                // A code the list does not name shows verbatim.
                 label={labelKey === undefined ? code : t(labelKey)}
                 checked={selected.includes(code)}
                 disabled={disabled || (selected.length === 1 && selected.includes(code))}
@@ -260,7 +308,7 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
                   const next = choices.filter(value => value === code ? checked : selected.includes(value))
                   // Selecting exactly the inherited codes keeps the field inherited.
                   const inherits = next.length === inherited.length && next.every(value => inherited.includes(value))
-                  props.onChange(withField(current, CODES, inherits ? undefined : next))
+                  props.onChange(withField(current, path, inherits ? undefined : next))
                 }}
               />
             )
@@ -269,53 +317,52 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
       </fieldset>
     )
   }
+  // Top-level number fields share the width of one nested column so they line up with it.
+  const fields = (root: SchemaNode, owner: SchemaNode, base: readonly string[]): ReactNode[] => fieldsOf(owner).map(([key, node]) => {
+    const path = [...base, key]
+    if (node.type === 'number') {
+      return numberField(root, path, node, base.length === 0 ? `${styles['modelField']} ${styles['retryCount']}` : styles['modelField'])
+    }
+    if (node.type === 'array') return codesField(root, path)
+    if (node.type === 'object') {
+      return (
+        <details key={key} className={styles['retryFold']} open={openFolds.has(key)}>
+          <summary className={styles['customizedSummary']}>{label(key)}</summary>
+          <div className={styles['retryBackoff']}>{fields(root, node, path)}</div>
+        </details>
+      )
+    }
+    return null
+  })
   const labelId = `${props.failureId}-label`
-  const modeLabel = (value: 'normal' | 'always'): string => t(value === 'normal' ? 'retryModeNormal' : 'retryModeAlways')
+  const hint = mode === undefined ? undefined : MODE_HINTS.get(mode)
   return (
     <div className={styles['field']} role="group" aria-labelledby={labelId}>
       <span id={labelId} className={styles['fieldLabel']}>{t('retryPolicy')}</span>
       <select
         className={`${styles['input']} ${styles['selectInput']}`}
-        value={typeof mode === 'string' ? mode : ''}
+        value={mode ?? ''}
         aria-labelledby={labelId}
         aria-describedby={failure !== undefined && failure.path === undefined ? props.failureId : undefined}
         disabled={disabled}
         onChange={(event) => {
-          const next = event.target.value
+          const next = defaults.branch(event.target.value)
           setTexts({})
-          if (next === '') {
+          if (next === undefined) {
             props.onChange(undefined)
             return
           }
-          // Fields of the other mode stay, as the adapter accepts them; a hidden
-          // retry count that is not a number could no longer be corrected.
-          const kept = next === 'always' && typeof current['maxRetries'] !== 'number'
-            ? withField(current, MAX_RETRIES, undefined)
-            : current
-          props.onChange({ ...kept, mode: next })
+          // A switched policy keeps only the fields its new mode declares.
+          const declared = new Set(fieldsOf(next).map(([key]) => key))
+          const kept = Object.fromEntries(Object.entries(current).filter(([key]) => declared.has(key)))
+          props.onChange({ ...kept, mode: event.target.value })
         }}
       >
-        <option value="">{t('retryModeDefault').replace('{mode}', () => modeLabel(defaults.mode))}</option>
-        <option value="normal">{modeLabel('normal')}</option>
-        <option value="always">{modeLabel('always')}</option>
+        <option value="">{t('retryModeDefault').replace('{mode}', () => label(defaults.mode))}</option>
+        {defaults.modes.map(value => <option key={value} value={value}>{label(value)}</option>)}
       </select>
-      {mode === 'always' ? <span className={styles['advancedHint']}>{t('retryAlwaysHint')}</span> : null}
-      {mode === 'normal' || mode === 'always'
-        ? (
-          <div className={styles['retryBody']}>
-            {mode === 'normal'
-              ? <>
-                {field(MAX_RETRIES, 'retryMaxRetries', `${styles['modelField']} ${styles['retryCount']}`)}
-                {codesField()}
-              </>
-              : null}
-            <details className={styles['retryFold']} open={backoffOpen}>
-              <summary className={styles['customizedSummary']}>{t('retryBackoff')}</summary>
-              <div className={styles['retryBackoff']}>{BACKOFF_FIELDS.map(([path, label]) => field(path, label))}</div>
-            </details>
-          </div>
-        )
-        : null}
+      {hint === undefined ? null : <span className={styles['advancedHint']}>{t(hint)}</span>}
+      {branch === undefined ? null : <div className={styles['retryBody']}>{fields(branch, branch, [])}</div>}
       {failure === undefined || !props.showFailure
         ? null
         : <p id={props.failureId} className={styles['error']}>{failure.message}</p>}

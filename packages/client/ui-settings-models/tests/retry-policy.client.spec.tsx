@@ -14,15 +14,15 @@ afterEach(cleanup)
 
 // The `retryPolicy` schema both adapters embed (`RetryPolicySchema` in dsh-llm).
 const backoff = Schema.object({
-  initialDelayMs: Schema.number().max(2_147_483_647).default(500),
-  maxDelayMs: Schema.number().max(2_147_483_647).default(10_000),
+  initialDelayMs: Schema.number().min(Number.MIN_VALUE).max(2_147_483_647).default(500),
+  maxDelayMs: Schema.number().min(Number.MIN_VALUE).max(2_147_483_647).default(10_000),
   jitterRatio: Schema.number().min(0).max(1).default(0.1),
 })
 const RetryPolicy = Schema.union([
   Schema.object({
     mode: Schema.const('normal').required(),
     maxRetries: Schema.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(5),
-    retryableCodes: Schema.array(Schema.string()).default(['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT']),
+    retryableCodes: Schema.array(Schema.string().min(1)).min(1).default(['EMPTY_RESPONSE', 'RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT']),
     backoff,
   }),
   Schema.object({ mode: Schema.const('always').required(), backoff }),
@@ -58,6 +58,7 @@ function piAiNamespace(): SettingsNamespaceView {
 function setup(namespace: SettingsNamespaceView, settingsPath: string[] = []) {
   const writeSettings = vi.fn<ModelsOperations['writeSettings']>(() => Promise.resolve({ kind: 'written', view: namespace }))
   const operations: ModelsOperations = {
+    readCredential: vi.fn<ModelsOperations['readCredential']>(() => Promise.resolve({ kind: 'refused', message: '' })),
     storeCredential: vi.fn(() => Promise.resolve(undefined)),
     removeCredential: vi.fn(() => Promise.resolve(undefined)),
     writeSettings,
@@ -113,16 +114,15 @@ describe('retry policy fields', () => {
     ], 3)
   })
 
-  const delayInvalid = en.retryDelayInvalid.replace('{max}', '2147483647')
   it.each([
-    [en.retryMaxRetries, '-1', en.retryMaxRetriesInvalid],
-    [en.retryMaxRetries, '1.5', en.retryMaxRetriesInvalid],
-    [en.retryMaxRetries, 'many', en.retryMaxRetriesInvalid],
-    [en.retryInitialDelay, '0', delayInvalid],
-    [en.retryInitialDelay, '0x10', delayInvalid],
-    [en.retryMaxDelay, '3000000000', delayInvalid],
+    [en.retryMaxRetries, '-1', en.retryValueMin.replace('{min}', '0')],
+    [en.retryMaxRetries, '1.5', en.retryValueInteger],
+    [en.retryMaxRetries, 'many', en.retryValueNumber],
+    [en.retryInitialDelay, '0', en.retryValuePositive],
+    [en.retryInitialDelay, '0x10', en.retryValueNumber],
+    [en.retryMaxDelay, '3000000000', en.retryValueMax.replace('{max}', '2147483647')],
     [en.retryInitialDelay, '20000', en.retryDelayOrder],
-    [en.retryJitter, '2', en.retryJitterInvalid],
+    [en.retryJitter, '2', en.retryValueMax.replace('{max}', '1')],
   ])('refuses %s = %s', (label, value, message) => {
     setup(deepSeekNamespace())
     fireEvent.change(mode(), { target: { value: 'normal' } })
@@ -280,14 +280,74 @@ describe('retry policy fields', () => {
     ])
   })
 
-  it('leaves placeholders empty when the schema declares no normal mode', () => {
+  it('builds modes and fields from the schema the namespace publishes', async () => {
     const namespace = deepSeekNamespace()
-    const always = Schema.union([Schema.object({ mode: Schema.const('always').required() })])
-    setup({ ...namespace, schema: json(Schema.object({ retryPolicy: always })) })
-    fireEvent.change(mode(), { target: { value: 'always' } })
+    const policy = Schema.union([
+      Schema.object({
+        mode: Schema.const('patient').required(),
+        attempts: Schema.number().step(1).min(1),
+        codes: Schema.array(Schema.string()),
+        note: Schema.string(),
+        backoff: Schema.object({ maxDelayMs: Schema.number().max(100) }),
+      }),
+      Schema.object({ mode: Schema.const('always').required() }),
+    ])
+    const { writeSettings } = setup({ ...namespace, schema: json(Schema.object({ retryPolicy: policy })) })
+    expect(mode().selectedOptions[0]?.textContent).toBe('Default (patient)')
+    expect(screen.getByRole('option', { name: en.retryModeAlways })).toBeTruthy()
+    fireEvent.change(mode(), { target: { value: 'patient' } })
+    expect(input('attempts').inputMode).toBe('numeric')
+    expect(input(en.retryMaxDelay).inputMode).toBe('decimal')
     expect(input(en.retryMaxDelay).placeholder).toBe('')
+    expect(code_('SERVER').checked).toBe(false)
+    expect(screen.queryByText('note')).toBeNull()
+    expect(screen.queryByLabelText(en.retryInitialDelay)).toBeNull()
+    fireEvent.change(input('attempts'), { target: { value: '0' } })
+    expect(screen.getByText(en.retryValueMin.replace('{min}', '1'))).toBeTruthy()
+    fireEvent.change(input('attempts'), { target: { value: '2' } })
+    expect(document.getElementById('route-retry-failure')).toBeNull()
+    fireEvent.click(apply())
+    await waitFor(() => { expect(writeSettings).toHaveBeenCalled() })
+    expect(writeSettings.mock.calls[0]?.[1]).toEqual([
+      { op: 'set', path: ['retryPolicy', 'mode'], value: 'patient' },
+      { op: 'set', path: ['retryPolicy', 'attempts'], value: 2 },
+    ])
+  })
+
+  it('offers only Default when the retry schema declares no mode branches', () => {
+    const namespace = deepSeekNamespace()
+    const policy = Schema.union([Schema.object({ backoff: Schema.object({}) }), Schema.const(false)])
+    setup({ ...namespace, schema: json(Schema.object({ retryPolicy: policy })) })
+    expect(mode().options).toHaveLength(1)
+    cleanup()
+    setup({ ...namespace, schema: json(Schema.object({ retryPolicy: Schema.object({ mode: Schema.string() }) })) })
+    expect(mode().options).toHaveLength(1)
+  })
+
+  it('lists no inherited codes when the inherited value is not a list', () => {
+    setup(deepSeekNamespace({ base: { retryPolicy: { mode: 'normal', retryableCodes: 'SERVER' } } }))
     fireEvent.change(mode(), { target: { value: 'normal' } })
     expect(code_('SERVER').checked).toBe(false)
+  })
+
+  it('refuses a stored policy whose mode is not text', () => {
+    setup(deepSeekNamespace({ user: { retryPolicy: { mode: 5 } } }))
+    expect(mode().value).toBe('')
+    expect(apply().disabled).toBe(true)
+  })
+
+  it('keeps only the fields the new mode declares when switching modes', async () => {
+    const { writeSettings } = setup(deepSeekNamespace({
+      user: { retryPolicy: { mode: 'normal', maxRetries: 2, backoff: { maxDelayMs: 2_000 } } },
+    }))
+    expect(input(en.retryMaxDelay).value).toBe('2000')
+    fireEvent.change(mode(), { target: { value: 'always' } })
+    fireEvent.click(apply())
+    await waitFor(() => { expect(writeSettings).toHaveBeenCalled() })
+    expect(writeSettings.mock.calls[0]?.[1]).toEqual([
+      { op: 'set', path: ['retryPolicy', 'mode'], value: 'always' },
+      { op: 'unset', path: ['retryPolicy', 'maxRetries'] },
+    ])
   })
 
   it('renders no retry fields when the namespace schema has no retry policy', () => {

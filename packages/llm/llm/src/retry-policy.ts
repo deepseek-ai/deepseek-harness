@@ -78,16 +78,18 @@ export interface ResolvedAlwaysRetryPolicy extends ResolvedRetryBackoff {
 /** Immutable provider policy captured when its adapter route is registered. */
 export type ResolvedRetryPolicy = ResolvedNormalRetryPolicy | ResolvedAlwaysRetryPolicy
 
+// Field bounds live in the schema so settings forms can read them; resolveRetryPolicy
+// additionally enforces the cross-field rules no field bound expresses.
 const backoffSchema: z<BackoffConfig> = z.object({
-  initialDelayMs: z.number().max(MAX_TIMER_DELAY_MS).default(DEFAULT_INITIAL_DELAY_MS),
-  maxDelayMs: z.number().max(MAX_TIMER_DELAY_MS).default(DEFAULT_MAX_DELAY_MS),
+  initialDelayMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_INITIAL_DELAY_MS),
+  maxDelayMs: z.number().min(Number.MIN_VALUE).max(MAX_TIMER_DELAY_MS).default(DEFAULT_MAX_DELAY_MS),
   jitterRatio: z.number().min(0).max(1).default(DEFAULT_JITTER_RATIO),
 })
 
 const normalPolicySchema: z<NormalRetryPolicyConfig> = z.object({
   mode: z.const('normal').required(),
   maxRetries: z.number().step(1).min(0).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_MAX_RETRIES),
-  retryableCodes: z.array(z.string()).default([...DEFAULT_RETRYABLE_CODES]),
+  retryableCodes: z.array(z.string().min(1)).min(1).default([...DEFAULT_RETRYABLE_CODES]),
   backoff: backoffSchema,
 })
 
