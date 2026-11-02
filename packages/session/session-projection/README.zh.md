@@ -55,13 +55,28 @@ const definition = {
 
 ### 注册与读取
 
-`await register(definition)` 从 `stateSchema` 推导宿主状态类型，安装单元，并返回提供同步 `stateOf(session)` 读取和 `dispose(): Promise<void>` 的 handle。等待 `dispose()` 完成即可释放注册；重复调用是安全的。具有相同 key 和 `stateVersion` 的注册方共享 cell；版本不兼容或非法时注册会拒绝。注册归调用方 fiber 所有。最后一个注册方注销后，单元退出全局事件驱动、快照、检查点和变更通知。已有 handle 仍可读取：它保留原有单元，按需折叠新增的 Session 事件，即使同一 key 后来注册了其他版本也不受影响。读取 handle 不会初始化无关单元，也不会重新注册。载体用 `snapshot(session)` 读取一致的客户端视图切面，用 `onChanged(listener)` 订阅已注册单元的变更。
+`await register(definition)` 从 `stateSchema` 推导宿主状态类型，安装单元，并返回提供同步 `stateOf(session)` 读取和 `dispose(): Promise<void>` 的 handle。等待 `dispose()` 完成即可释放注册；重复调用是安全的。具有相同 key 和 `stateVersion` 的注册方共享 cell；版本不兼容或非法时注册会拒绝。注册归调用方 fiber 所有。最后一个注册方注销后，单元退出全局事件驱动、快照、检查点和变更通知。已有 handle 仍可读取：它保留原有单元，按需折叠新增的 Session 事件，即使同一 key 后来注册了其他版本也不受影响。读取 handle 不会初始化无关单元，也不会重新注册。载体用 `snapshot(session)` 读取一致的客户端视图切面，用 `onChanged(listener)` 按每个变化的单元接收一次调用，用 `onEventChanged(listener)` 按每个已提交事件接收一次调用，列出该事件改变了视图的全部客户端可见单元。
 
 ```text
 const todoProjectionHandle = await ctx.sessionProjections.register(definition)
 const state = todoProjectionHandle.stateOf(session)
 const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 ```
+
+<a id="bind-several-states-to-one-session"></a>
+### 将多个状态绑定到一个 Session
+
+对已等待注册完成的句柄调用 `handle.readerFor(session)`，即可得到 `() => S` 回调。调用它时无需 Session 参数即可读取当前状态。组合多个状态的所有者将这些回调放入一个类型化对象，交给运行时。新增状态只增加属性，不增加构造参数；普通插件仍通过领域服务的方法读取。
+
+```text
+const projections = {
+  todo: todoProjectionHandle.readerFor(session),
+  goal: goalProjectionHandle.readerFor(session),
+}
+const todo = projections.todo()
+```
+
+每个读取函数保存确切的 Session，并将读取委托给原句柄的 `stateOf(session)`，保留就绪要求、null 和 undefined 值、状态引用及同步失败。创建读取函数不读取状态、不准备 Session、不执行存储 I/O，也不创建状态缓存。读取函数不拥有注册或释放职责。原句柄仍负责释放；注销或版本替换后，读取函数仍读取原有单元。同一句柄可为多个 Session 独立创建读取函数。注册和 Session 准备仍由原所有者完成；客户端快照保持独立。
 
 持有投影状态的领域将 `sessionProjections` 声明为 Cordis 服务依赖，并在内部保留句柄。消费方注入该领域服务并使用其方法，例如 `ctx.agents.turnBoundaryOf(session)`，无需导入定义或保留投影读取句柄。可选贡献方可以在 `ctx.inject(['sessionProjections'], …)` 下注册。载体使用 `ctx.get('sessionProjections')`，注册表缺席时省略自己的块或帧。
 
@@ -113,7 +128,7 @@ Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectio
 
 ### 驱动与检查点流程
 
-一个已提交事件按注册顺序驱动每个已注册单元；原始 view 通过 `Object.is` 判定为变化的客户端可见单元会以经 schema 校验的视图与致因 seq 通知变更流。live drive 保留前后两个原始 view；snapshot 与冷读仍是彼此独立的完整读取。`checkpoint(session)` 为持久缓存返回每个单元一份独立的 `(key → {ver, seq, val})` 行；`restoreFloor` 把尾部读取锚定在最低可用水位之前一个事件处，使缩短的日志可被检出；`restore` 把持久行在存储后缀上重新折叠，丢弃任何 `ver` 不匹配或声称越过存储末尾的行。
+一个已提交事件按注册顺序驱动每个已注册单元；原始 view 通过 `Object.is` 判定为变化的客户端可见单元会以经 schema 校验的视图与致因 seq 通知每个 `onChanged` 监听器。所有单元驱动完成后，每个 `onEventChanged` 监听器收到一次调用，携带按注册顺序排列、每个变化的客户端可见单元一项的 `{ key, val }`（`val` 为经 schema 校验的视图），以及致因 seq；未改变任何客户端可见视图的事件不产生事件级调用。驱动中某个单元或 `onChanged` 监听器抛错时，事件级监听器仍会收到抛错前已产生的变化，随后错误继续抛给 Session 的监听器兜底处理。live drive 保留前后两个原始 view；snapshot 与冷读仍是彼此独立的完整读取。`checkpoint(session)` 为持久缓存返回每个单元一份独立的 `(key → {ver, seq, val})` 行；`restoreFloor` 把尾部读取锚定在最低可用水位之前一个事件处，使缩短的日志可被检出；`restore` 把持久行在存储后缀上重新折叠，丢弃任何 `ver` 不匹配或声称越过存储末尾的行。
 
 </details>
 

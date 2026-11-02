@@ -1,0 +1,4 @@
+
+--- recent plugin operations (context, not proof of cause) ---
+{"journal":null,"bytesRead":260,"filesRead":1,"truncated":false,"invalidRecords":0,"unavailableFiles":0,"cancelled":false,"outputRecordsOmitted":0,"records":[{"runId":"c254ab28-97c9-4382-95e6-2db9c66f98c8","operation":{"id":"c254ab28-97c9-4382-95e6-2db9c66f98c9","time":"2026-10-19T00:00:00.000Z","reason":"bundle","target":"test-bundle","stage":"enable","phase":"started"},"transportDropped":0}]}
+--- operation history collection complete; consult omission counters above ---

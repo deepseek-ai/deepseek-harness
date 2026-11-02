@@ -126,7 +126,7 @@ describe('the shipped creator skills', () => {
         ...locales, manifest.dsh.bundle.patch])
       for (const resource of resources) {
         const file = resource.replace(/^\.\//u, '')
-        expect(body('cordis-plugin-development'), file).toContain(`\`templates/${name}/${file}\``)
+        expect(body('cordis-plugin-development'), file).toContain(`\`templates/${name}/${file.startsWith('locale/') ? 'locale' : file}\``)
         expect(statSync(join(dir, file)).isFile(), file).toBe(true)
         if (file !== 'package.json') expect(manifest.files.some(pattern => matchesGlob(file, pattern)), file).toBe(true)
       }

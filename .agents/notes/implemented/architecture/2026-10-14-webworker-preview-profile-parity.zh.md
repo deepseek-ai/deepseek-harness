@@ -23,7 +23,7 @@ Status: implemented
 正式启动链路（apps/cli、app-boot）不含 Preview 专用代码；由 webworker 包复现这条链路：
 
 - **packer**
-  - 收包清单 = `PROFILE_TEMPLATES[profile].bundles` + `OPTIONAL_BUNDLES` + 这些 bundle 补丁文件里的行；bundle 包本身也打进镜像（补丁、locale、icon 走 publish view）。两张表从 app-boot 读，与插件页同一来源。
+  - 收包清单 = `PROFILE_TEMPLATES[profile].bundles` + `OPTIONAL_BUNDLES` + 这些 bundle 补丁文件里的行；bundle 包本身也打进镜像（补丁、locale、icon 走 publish view）。两张表从 `@deepseek-ai/dsh-official-bundles` 读，与插件页同一来源。
   - 镜像里放一份只含清单的 `node_modules/@deepseek-ai/dsh/package.json`（原样复制 `apps/cli/package.json`），作为安装锚点，镜像 manifest 在 `installation` 里记录它。
   - 镜像不带组合好的配置，也没有 `config/cordis.yml`；镜像 manifest 记录 Worker 要启动的 `profile`。
   - 镜像带一份 home patch `home/cordis.patch.yml`：对运行时 `PLATFORM_ENTRY_CONFIG` 列出的每一行（`session-persistence-jsonl`），写入模板各 bundle 层合成出的配置，并在其上设置所需字段（`compression: none`）。补丁会整体替换一行的配置，所以保留合成出的字段；打包时读取的 bundle 文件就是镜像里的那些。

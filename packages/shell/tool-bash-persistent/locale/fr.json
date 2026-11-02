@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Outils Bash persistants",
+    "description": "Demandez à l'IA d'exécuter des commandes en continu dans une session Bash qui préserve l'état."
+  }
+}

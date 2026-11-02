@@ -102,7 +102,7 @@ Handle 返回前，外部 caller 无法 append。因此 `append`、`flush` 与 `
 
 ### Follow 与 Agent promotion
 
-`session.follow` 通过 read path 打开历史、恢复 Session 与 projections、发出 opening snapshot，然后启动 Agent promotion。Agent resume 使用 write open，因此会在 Agent 接收新一轮对话前等待 publication。历史可见与写入就绪成为两个明确时间点，同时不引入 unpublished append state。
+`session.follow` 通过 read path 打开历史、恢复 Session 与 projections，在调用方请求激活时先用单独 retain 的 Observation 启动 Agent promotion，再交付 opening snapshot。Agent resume 使用 write open，因此会在 Agent 接收新一轮对话前等待 publication。历史可见与写入就绪成为两个明确时间点，同时不引入 unpublished append state。
 
 ## 问题与方案对照
 

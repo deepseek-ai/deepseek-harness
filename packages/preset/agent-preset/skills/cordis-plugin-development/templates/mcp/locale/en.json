@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Demo MCP Connection",
+    "title": "Demo MCP connection",
     "description": "Connects a remote MCP server to make its tools available to the agent."
   }
 }

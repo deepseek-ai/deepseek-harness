@@ -1,3 +1,4 @@
+import { toolFileInject, type ToolFileInjected } from '../file-menu.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { IconEditOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -7,7 +8,7 @@ import { toolRowModel } from '../models/tool-call-model.ts'
 import { ToolRow } from '../components/ToolRow.tsx'
 import { CONVERSATION_NS as NS } from '../../locale.ts'
 
-type FileMutationRowProps = ToolCallViewProps & PropsLocale<'conversation'>
+type FileMutationRowProps = ToolCallViewProps & ToolFileInjected & PropsLocale<'conversation'>
 const FILE_MUTATION_ICON = <IconEditOutlineRegular size={14} />
 
 const CONTENT_FIELDS = ['content', 'old_string', 'new_string']
@@ -30,13 +31,20 @@ function contentKilobytes(block: FileMutationRowProps['block']): number | null {
  * Shows the path and decoded input size through preparation, execution, and
  * settlement, with the applied diff available once the call settles.
  */
-export function FileMutationRow({ toolName, block, cwd, home, openFile, inspect, useDisclosure, t }: FileMutationRowProps) {
+export function FileMutationRow({
+  toolName, block, cwd, home, openFile, useContextMenu, sessionId, resolveFilePath, inspect, useDisclosure, t,
+}: FileMutationRowProps) {
+  const { getTriggerProps } = useContextMenu()
   const model = toolRowModel(toolName, block, cwd, home)
+  const path = model.filePath
   const diff = diffCardModel(block)
   const kilobytes = contentKilobytes(block)
   const size = kilobytes === null ? null : t('tool.preparing.content', { kilobytes })
   return (
     <ToolRow
+      fileContextMenuProps={getTriggerProps(path === undefined ? undefined : () => ({
+        kind: 'file', value: { sessionId, path: resolveFilePath(path) },
+      }))}
       useDisclosure={useDisclosure}
       t={t}
       variant={model.variant}
@@ -56,14 +64,15 @@ export function FileMutationRow({ toolName, block, cwd, home, openFile, inspect,
   )
 }
 
-/** Registers the edit and write conversation rows. */
+/** Registers file-mutation conversation rows. */
 export const fileMutationToolview = {
   name: 'file-mutation-toolview',
-  inject: ['slots'],
+  inject: ['slots', 'sessions'],
   apply(ctx: Context): void {
     ctx.slots.inject('tool.call.toolview', function* () {
-      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'edit', locale: NS }, FileMutationRow)
-      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'write', locale: NS }, FileMutationRow)
+      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'apply_patch', locale: NS, inject: toolFileInject(ctx) }, FileMutationRow)
+      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'edit', locale: NS, inject: toolFileInject(ctx) }, FileMutationRow)
+      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'write', locale: NS, inject: toolFileInject(ctx) }, FileMutationRow)
     })
   },
 }

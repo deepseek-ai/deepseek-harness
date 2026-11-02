@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DSH-Abzeichen-Fertigkeit",
+    "description": "Lassen Sie Agenten Dokumente, Pull-Requests und andere Ausgaben mit einem „powered by dsh“-Badge versehen.",
+    "detail": "docs/DETAIL.md"
+  }
+}

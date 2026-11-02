@@ -22,14 +22,31 @@ it('maps Retina and downscaled screenshot pixels to the same native point', () =
   }
 })
 
-it('maps integer ratios after AX observation and keeps endpoint 1000 inside the window', () => {
+it.each(['click', 'hover', 'scroll'])('preserves thousandth scaling for %s across screenshot resolutions', (method) => {
   const coordinates = new CuaCoordinates()
-  coordinates.observe(handle, [window()])
-  expect(coordinates.parameters(call('hover', { x: 500, y: 250, relative: true }))).toEqual({ appHandle: handle, windowId: 7, x: 320, y: 120 })
-  expect(coordinates.parameters(call('click', { x: 1000, y: 1000, relative: true }))).toMatchObject({ x: 639, y: 479 })
-  coordinates.screenshot(handle, 7, window().bounds, { width: 1280, height: 960 })
-  expect(coordinates.parameters(call('click', { x: 1000, y: 1000, relative: true }))).toMatchObject({ x: 639, y: 479 })
-  expect(coordinates.parameters(call('click', { x: 0, y: 0, relative: true }))).toMatchObject({ x: 0, y: 0 })
+  const bounds = window(1200, 900).bounds
+  coordinates.observe(handle, [window(1200, 900)])
+  const params = { relative: true, ...method === 'scroll' ? { deltaLinesX: 0, deltaLinesY: -1 } : {} }
+  const assertPoints = () => {
+    expect(coordinates.parameters(call(method, { ...params, x: 500, y: 250 }))).toMatchObject({ x: 600, y: 225 })
+    expect(coordinates.parameters(call(method, { ...params, x: 999, y: 999 }))).toMatchObject({ x: 1198.8, y: 899 })
+    expect(coordinates.parameters(call(method, { ...params, x: 0, y: 0 }))).toMatchObject({ x: 0, y: 0 })
+  }
+  assertPoints()
+  for (const image of [{ width: 2400, height: 1800 }, { width: 300, height: 225 }]) {
+    coordinates.screenshot(handle, 7, bounds, image)
+    assertPoints()
+  }
+})
+
+it('maps relative drag endpoints and keeps 999 inside a one-point window', () => {
+  const coordinates = new CuaCoordinates()
+  coordinates.observe(handle, [window(1200, 900)])
+  const params = { fromX: 0, fromY: 250, toX: 999, toY: 500, relative: true }
+  expect(coordinates.parameters(call('drag', params))).toEqual({ appHandle: handle, windowId: 7,
+    fromX: 0, fromY: 225, toX: 1198.8, toY: 450 })
+  coordinates.observe(handle, [window(1, 1)])
+  expect(coordinates.parameters(call('click', { x: 999, y: 999, relative: true }))).toMatchObject({ x: 0, y: 0 })
 })
 
 it('maps both drag endpoints and preserves button, modifiers and snapshot identity', () => {
@@ -48,7 +65,7 @@ it('preserves pixels after movement but requires a new image after resize or clo
   expect(coordinates.parameters(request)).toMatchObject({ x: 320, y: 240 })
   coordinates.observe(handle, [window(800, 600)])
   expect(() => coordinates.parameters(request)).toThrow('SCREENSHOT_REQUIRED')
-  expect(coordinates.parameters(call('click', { x: 500, y: 500, relative: true }))).toMatchObject({ x: 400, y: 300 })
+  expect(coordinates.parameters(call('click', { x: 999, y: 999, relative: true }))).toMatchObject({ x: 799, y: 599 })
   coordinates.observe(handle, [])
   expect(() => coordinates.parameters(request)).toThrow('STALE_SNAPSHOT')
 })

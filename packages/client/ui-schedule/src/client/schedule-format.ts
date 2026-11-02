@@ -1,6 +1,7 @@
 /** Browser-safe formatting shared by Session and Host reminder catalogs. */
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
+import { hostFrequencyKind, ruleFields, taskNextRunAt } from './task-record.ts'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { CronDescriptionKey } from './task-cron.ts'
 import { cronPreview, parseCronExpression } from './task-cron.ts'
@@ -11,6 +12,12 @@ type WeekdayKey = `frequency.weekday.${1 | 2 | 3 | 4 | 5 | 6 | 7}`
 
 /** Dictionary keys required to display exact reminder frequencies. */
 export type FrequencyKey =
+  | 'frequency.hostMonthly'
+  | 'frequency.hostDailyInterval'
+  | 'frequency.hostWeeklyInterval'
+  | 'frequency.hostMonthlyInterval'
+  | 'frequency.hostZone'
+  | 'frequency.hostCustom'
   | 'time.locale'
   | 'time.utcPrefix'
   | 'frequency.once'
@@ -223,6 +230,7 @@ export function zoneChoices(stored: string, system: string, at = Date.now()): re
  * @returns the stored IANA zone, or undefined when the record stores none.
  */
 export function recordTimeZone(record: ScheduleRecord): string | undefined {
+  if (record.kind === 'rrule') return /^DTSTART;TZID=([^:]+):/m.exec(record.rrule)?.[1]
   switch (record.kind) {
     case 'after':
     case 'at':
@@ -237,9 +245,8 @@ export function recordTimeZone(record: ScheduleRecord): string | undefined {
  * Format exact intervals or wall-clock rules without changing their precision or zone.
  *
  * A cron rule reads as the sentence `cronPreview` derives from its expression,
- * for example `Every day at 09:00, 15:00`. An expression this parser cannot
- * read keeps the raw `Cron {expression}` form, so the stored rule stays visible
- * when the Host's dialect and this parser diverge.
+ * for example `Every day at 09:00, 15:00`. Other rules read as Custom;
+ * their authoritative expression remains available in the editor.
  * @param record - reminder whose kind and stored rule determine its frequency.
  * @param t - frequency, weekday, and unit translations, independent of the catalog namespace.
  * @param zone - host-zone context; when present, a stored zone equal to `zone.system` is omitted
@@ -251,6 +258,35 @@ export function formatScheduleFrequency(
   t: FrequencyTranslator,
   zone?: FrequencyZone,
 ): string {
+  if (record.kind === 'rrule') {
+    const kind = hostFrequencyKind(record)
+    if (kind === 'custom') return t('frequency.hostCustom')
+    const fields = ruleFields(record.rrule)
+    if (kind === 'once') return t('frequency.once')
+    // hostFrequencyKind returns custom for a rule without a DTSTART clock.
+    const clock = (/T(\d{6})/.exec(record.rrule) as RegExpExecArray)[1] as string
+    const hour = String(Number(fields.get('BYHOUR') ?? clock.slice(0, 2))).padStart(2, '0')
+    const minute = String(Number(fields.get('BYMINUTE') ?? clock.slice(2, 4))).padStart(2, '0')
+    const time = clockLabel(`${hour}:${minute}:${clock.slice(4)}`)
+    const timeZone = recordTimeZone(record) ?? 'UTC'
+    const interval = Number(fields.get('INTERVAL') ?? 1)
+    const withZone = (text: string): string => zone?.system === timeZone ? text
+      : t('frequency.hostZone', { rule: text, timeZone: zone?.label(timeZone) ?? zoneLabel(timeZone, t) })
+    if (kind === 'weekly') {
+      const days = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU']
+      const weekdays = (fields.get('BYDAY') as string).split(',').map(day => days.indexOf(day) + 1).filter(day => day > 0)
+      return withZone(t(interval === 1 ? 'frequency.weeklyLocal' : 'frequency.hostWeeklyInterval', {
+        weekdays: formatWeekdays(weekdays, t), time, interval,
+      }))
+    }
+    if (kind === 'daily') return withZone(t(interval === 1 ? 'frequency.dailyLocal' : 'frequency.hostDailyInterval', { time, interval }))
+    if (kind === 'minutely' || kind === 'hourly') {
+      const unit = kind === 'minutely' ? 'minute' : 'hour'
+      return t('frequency.every', { value: interval, unit: unitLabel(unit, interval, t) })
+    }
+    const days = (fields.get('BYMONTHDAY') as string).split(',')[0] as string
+    return withZone(t(interval === 1 ? 'frequency.hostMonthly' : 'frequency.hostMonthlyInterval', { days, time, interval }))
+  }
   switch (record.kind) {
     case 'after':
     case 'at': return t('frequency.once')
@@ -263,10 +299,10 @@ export function formatScheduleFrequency(
           ? rule
           : t('frequency.cronRule', { rule, timeZone: zone.label(record.timeZone) })
       }
-      if (zone === undefined) return t('frequency.cron', { expression: record.expression, timeZone: zoneLabel(record.timeZone, t) })
+      if (zone === undefined) return t('frequency.cron', { timeZone: zoneLabel(record.timeZone, t) })
       return zone.system === record.timeZone
-        ? t('frequency.cronLocal', { expression: record.expression })
-        : t('frequency.cron', { expression: record.expression, timeZone: zone.label(record.timeZone) })
+        ? t('frequency.cronLocal')
+        : t('frequency.cron', { timeZone: zone.label(record.timeZone) })
     }
     case 'daily': {
       const time = clockLabel(record.time)
@@ -383,8 +419,29 @@ export function formatScheduleAbsolute(scheduledAt: string, locale: string): str
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    // h23 matches the clock rows' own formatter (task-timing.ts): `hour12: false`
-    // leaves midnight's hour open in older engines, which may render `24:00`.
+    // `hour12: false` leaves midnight's hour open in older engines, which may render `24:00`.
+    hourCycle: 'h23',
+  }).format(at)
+}
+
+/**
+ * Format the instant a held action becomes available, in this device's zone.
+ *
+ * A delivery floor lasts from one minute to one week, so the clock reads to the
+ * second and the month and day appear only for another day: `15:51:37` today,
+ * and `Oct 20, 15:51:37` in English or `10月20日 15:51:37` in Chinese otherwise.
+ * @param at - epoch milliseconds when the action becomes available.
+ * @param locale - BCP-47 locale owning the month name, field order, and clock.
+ * @param now - current epoch milliseconds.
+ * @returns the localized clock time, with the month and day when `at` falls on another day.
+ */
+export function formatAvailableAt(at: number, locale: string, now: number): string {
+  const today = new Date(at).toDateString() === new Date(now).toDateString()
+  return new Intl.DateTimeFormat(locale, {
+    ...(today ? {} : { month: 'short' as const, day: 'numeric' as const }),
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
     hourCycle: 'h23',
   }).format(at)
 }
@@ -444,10 +501,10 @@ export function formatScheduleRelative(
  * @param now - current epoch milliseconds used to identify overdue targets.
  * @returns sorted copy preserving input order for equal targets.
  */
-export function orderScheduleRecords(records: readonly ScheduleRecord[], now: number): ScheduleRecord[] {
+export function orderScheduleRecords<T extends ScheduleRecord>(records: readonly T[], now: number): T[] {
   return records.map((record, index) => ({ record, index })).sort((left, right) => {
-    const leftTime = Date.parse(left.record.scheduledAt)
-    const rightTime = Date.parse(right.record.scheduledAt)
+    const leftTime = Date.parse(taskNextRunAt(left.record))
+    const rightTime = Date.parse(taskNextRunAt(right.record))
     const leftOverdue = leftTime <= now
     const rightOverdue = rightTime <= now
     if (leftOverdue !== rightOverdue) return Number(rightOverdue) - Number(leftOverdue)

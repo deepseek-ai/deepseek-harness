@@ -5,13 +5,16 @@
  * `exec.signal` aborts, mirroring how a real capability forwards the signal and
  * reaches quiescence.
  */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { ToolCallId, HarnessError } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture, TOOL_ABORTED, type ToolExecutionInput, type PostToolDecision } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { TOOL_ABORTED, type ToolExecutionInput, type PostToolDecision } from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as timeoutPolicy from '@deepseek-ai/dsh-tool-call-timeout-policy'
 import { TOOL_TIMEOUT } from '@deepseek-ai/dsh-tool-call-timeout-policy'
 
@@ -22,6 +25,7 @@ async function setup() {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(timeoutPolicy)
   return ctx
 }
@@ -52,7 +56,7 @@ describe('timeout-policy delegation (unconfigured / fast)', () => {
     ctx.tools.register(defineContentToolFixture({ name: 'probe', description: 'd', parameters: {},
       async execute(_a, exec) { seenSignal = exec.signal; return [{ type: 'text' as const, text: 'ok' }] } }))
     const upstream = new AbortController().signal
-    const result = await ctx.tools.execute({ callId: ToolCallId('c1'), name: 'probe', arguments: {}, signal: upstream })
+    const result = await executeToolFixture(ctx, { callId: ToolCallId('c1'), name: 'probe', arguments: {}, signal: upstream })
     expect(result.isError).toBe(false)
     expect(seenSignal).toBe(upstream)
   })
@@ -61,7 +65,7 @@ describe('timeout-policy delegation (unconfigured / fast)', () => {
     const ctx = await setup()
     ctx.tools.register(defineContentToolFixture({ name: 'fast', description: 'd', parameters: {}, timeoutMs: 10_000,
       async execute() { return [{ type: 'text' as const, text: 'ok' }] } }))
-    const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'fast', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'fast', arguments: {} })
     expect(result).toEqual({
       content: [{ type: 'text', text: 'ok' }],
       isError: false,
@@ -75,7 +79,7 @@ describe('timeout-policy delegation (unconfigured / fast)', () => {
     ctx.tools.register(defineContentToolFixture({ name: 'probe', description: 'd', parameters: {}, timeoutMs: 10_000,
       async execute(_a, exec) { seenSignal = exec.signal; return [{ type: 'text' as const, text: 'ok' }] } }))
     const upstream = new AbortController().signal
-    await ctx.tools.execute({ callId: ToolCallId('c1'), name: 'probe', arguments: {}, signal: upstream })
+    await executeToolFixture(ctx, { callId: ToolCallId('c1'), name: 'probe', arguments: {}, signal: upstream })
     expect(seenSignal).toBeDefined()
     expect(seenSignal).not.toBe(upstream)
   })
@@ -89,7 +93,7 @@ describe('timeout-policy signal restoration', () => {
     let postSignal: AbortSignal | undefined | 'unset' = 'unset'
     ctx.on('tools/post-execute', async (exec, _result, next): Promise<PostToolDecision> => { postSignal = exec.signal; return next() })
     const upstream = new AbortController().signal
-    await ctx.tools.execute({ callId: ToolCallId('c1'), name: 'fast', arguments: {}, signal: upstream })
+    await executeToolFixture(ctx, { callId: ToolCallId('c1'), name: 'fast', arguments: {}, signal: upstream })
     expect(postSignal).toBe(upstream)
   })
 })
@@ -101,7 +105,7 @@ describe('timeout-policy TOOL_TIMEOUT replacement (deadline wins)', () => {
   it('replaces a cooperative tool result with TOOL_TIMEOUT when its own deadline fires', async () => {
     const ctx = await setup()
     ctx.tools.register(cooperativeTool)
-    const pending = ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'slow', arguments: {} })
+    const pending = executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'slow', arguments: {} })
     await vi.advanceTimersByTimeAsync(150)
     const result = await pending
     expect(result).toEqual({
@@ -117,7 +121,7 @@ describe('timeout-policy TOOL_TIMEOUT replacement (deadline wins)', () => {
   it('replaces a provider-owned abort ERROR result with TOOL_TIMEOUT when the signal was ours', async () => {
     const ctx = await setup()
     ctx.tools.register(abortThrowingTool)
-    const pending = ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'aborter', arguments: {} })
+    const pending = executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'aborter', arguments: {} })
     await vi.advanceTimersByTimeAsync(150)
     const result = await pending
     expect(result.isError).toBe(true)
@@ -143,7 +147,7 @@ describe('timeout-policy TOOL_TIMEOUT replacement (deadline wins)', () => {
       },
     }))
     const upstream = new AbortController()
-    const pending = ctx.tools.execute({ callId: ToolCallId('c1'), name: 'slow', arguments: {}, signal: upstream.signal })
+    const pending = executeToolFixture(ctx, { callId: ToolCallId('c1'), name: 'slow', arguments: {}, signal: upstream.signal })
     await entered.promise
     upstream.abort('user cancelled')
     await vi.advanceTimersByTimeAsync(0)
@@ -174,7 +178,7 @@ describe('timeout-policy TOOL_TIMEOUT replacement (deadline wins)', () => {
       },
     }))
     const upstream = new AbortController()
-    const pending = ctx.tools.execute({
+    const pending = executeToolFixture(ctx, {
       callId: ToolCallId('timeout-first'), name: 'slow-cleanup', arguments: {}, signal: upstream.signal,
     })
 
@@ -204,15 +208,16 @@ describe('timeout-policy disposal (HMR safety)', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     let seenSignal: AbortSignal | undefined
     ctx.tools.register(defineContentToolFixture({ name: 'probe', description: 'd', parameters: {}, timeoutMs: 10_000,
       async execute(_a, exec) { seenSignal = exec.signal; return [{ type: 'text' as const, text: 'ok' }] } }))
     const fiber = await ctx.plugin(timeoutPolicy)
     const upstream = new AbortController().signal
-    await ctx.tools.execute({ callId: ToolCallId('c1'), name: 'probe', arguments: {}, signal: upstream })
+    await executeToolFixture(ctx, { callId: ToolCallId('c1'), name: 'probe', arguments: {}, signal: upstream })
     expect(seenSignal).not.toBe(upstream)
     await fiber.dispose()
-    await ctx.tools.execute({ callId: ToolCallId('c2'), name: 'probe', arguments: {}, signal: upstream })
+    await executeToolFixture(ctx, { callId: ToolCallId('c2'), name: 'probe', arguments: {}, signal: upstream })
     expect(seenSignal).toBe(upstream)
   })
 })
@@ -232,12 +237,13 @@ describe('dsh-tool-call-timeout-policy real-load-path guard', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     ctx.tools.register(defineContentToolFixture({ name: 'fast', description: 'd', parameters: {}, timeoutMs: 5_000,
       async execute() { return [{ type: 'text' as const, text: 'ok' }] } }))
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped = loader.unwrapExports(timeoutPolicy) as Parameters<Context['plugin']>[0]
     const fiber = await ctx.plugin(unwrapped)
-    const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'fast', arguments: {} } satisfies ToolExecutionInput)
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'fast', arguments: {} } satisfies ToolExecutionInput)
     expect(result.isError).toBe(false)
     await fiber.dispose()
   })

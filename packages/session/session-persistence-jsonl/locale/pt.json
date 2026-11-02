@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Persistência do log de sessão",
+    "description": "Salve o log da sessão como um arquivo JSONL local para recuperação e leitura posterior."
+  }
+}

@@ -7,9 +7,10 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import type { CuaApplicationId, CuaApplicationState, CuaSystemPermissionState } from '../src/access-types.ts'
 import { PermissionController } from '../src/client/controller.ts'
 
-const value: CuaSystemPermissionState = { accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
+const value: CuaSystemPermissionState = {
+  accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
 const applications: CuaApplicationState = {
-  allowedApps: [], blockedApps: [], settingsNamespace: 'cua', persistentAvailable: true }
+  allowedApps: [], blockedApps: [], persistentAvailable: true }
 type CuaRemote = Context['remote']['cuaAccess']
 function fixture() {
   const actions = {
@@ -23,15 +24,35 @@ function fixture() {
     retryApproval: vi.fn<CuaRemote['retryApproval']>(async () => ({ ok: true, value: undefined })),
     enablePersistentPtc: vi.fn<CuaRemote['enablePersistentPtc']>(async () => ({ ok: true, value: undefined })),
   }
-  const controller = new PermissionController(actions)
-  return { actions, controller, face: controller.face() }
+  let locale = 'zh'
+  const controller = new PermissionController(actions, () => locale)
+  onTestFinished(() => controller.dispose())
+  return { actions, controller, face: controller.face(), setLocale: (value: string) => { locale = value } }
 }
+
+it('refreshes after a request and then waits for an explicit refresh', async () => {
+  vi.useFakeTimers()
+  const f = fixture()
+  try {
+    f.face.request('screenRecording')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.actions.systemStatus).toHaveBeenCalledOnce()
+    f.actions.systemStatus.mockResolvedValue({ ok: true, value: { ...value, screenRecording: true } })
+    await vi.advanceTimersByTimeAsync(120000)
+    expect(f.actions.systemStatus).toHaveBeenCalledOnce()
+    expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
+    f.face.refresh()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.actions.systemStatus).toHaveBeenCalledTimes(2)
+    expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(true)
+  } finally { await f.controller.dispose(); vi.useRealTimers() }
+})
 
 it('refreshes after a user request without treating the request itself as a grant', async () => {
   const f = fixture()
   f.face.request('screenRecording')
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
-  expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording')
+  expect(f.actions.requestPermission).toHaveBeenCalledWith('screenRecording', 'zh')
   expect(f.controller.state.getSnapshot().system.value?.screenRecording).toBe(false)
   expect(f.controller.state.getSnapshot().toast?.kind).toBe('requested')
   f.face.dismissToast()
@@ -54,6 +75,7 @@ it.each([new Error('write refused'), 'write refused'])('reports settings and rev
   const f = fixture()
   f.face.openSettings('accessibility')
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().toast?.kind).toBe('opened') })
+  expect(f.actions.openSettings).toHaveBeenCalledWith('accessibility', 'zh')
   f.face.revoke('a'.repeat(64) as CuaApplicationId)
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().toast?.kind).toBe('revoked') })
   f.face.retryApproval('a'.repeat(64) as CuaApplicationId)
@@ -124,6 +146,7 @@ it('ignores stale toast completion after the permission UI is disposed', async (
   await f.controller.dispose()
   const before = f.controller.state.getSnapshot()
   f.face.dismissToast()
+  f.controller.setChanging(false)
   f.face.refresh()
   expect(f.controller.state.getSnapshot()).toBe(before)
 })
@@ -211,6 +234,52 @@ it('keeps a user-action failure visible when a refresh is queued behind it', asy
 })
 
 
+it.each(['success', 'failure'])('drops a permission read %s from the previous bundle activation', async (outcome) => {
+  const f = fixture()
+  f.face.refresh()
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
+  const pending = Promise.withResolvers<CuaSystemPermissionState>(), entered = Promise.withResolvers<undefined>()
+  onTestFinished(async () => { pending.resolve(value); await f.controller.dispose() })
+  f.actions.systemStatus.mockImplementationOnce(async () => {
+    entered.resolve(undefined)
+    return { ok: true, value: await pending.promise }
+  })
+  f.face.refresh()
+  await entered.promise
+  f.controller.setChanging(true)
+  f.controller.setChanging(true)
+  expect(f.controller.state.getSnapshot()).toMatchObject({ busy: true, system: { error: null, value } })
+  f.face.request('accessibility')
+  expect(f.actions.requestPermission).not.toHaveBeenCalled()
+  if (outcome === 'failure') pending.reject(new Error('old helper stopped'))
+  else pending.resolve({ ...value, screenRecording: true })
+  await Promise.allSettled([pending.promise])
+  expect(f.controller.state.getSnapshot()).toMatchObject({ busy: true, system: { error: null, value } })
+  f.controller.setChanging(false)
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
+  expect(f.controller.state.getSnapshot()).toMatchObject({ system: { error: null, value } })
+  expect(f.actions.systemStatus).toHaveBeenCalledTimes(3)
+})
+
+it.each(['success', 'failure'])('does not publish a user-action %s after its bundle is replaced', async (outcome) => {
+  const f = fixture(), pending = Promise.withResolvers<undefined>(), entered = Promise.withResolvers<undefined>()
+  onTestFinished(async () => { pending.resolve(undefined); await f.controller.dispose() })
+  f.actions.requestPermission.mockImplementationOnce(async () => {
+    entered.resolve(undefined)
+    await pending.promise
+    return { ok: true, value }
+  })
+  f.face.request('accessibility')
+  await entered.promise
+  f.controller.setChanging(true)
+  if (outcome === 'failure') pending.reject(new Error('old request cancelled'))
+  else pending.resolve(undefined)
+  f.controller.setChanging(false)
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
+  expect(f.controller.state.getSnapshot()).toMatchObject({ toast: null, system: { error: null, value } })
+  expect(f.actions.systemStatus).toHaveBeenCalledOnce()
+})
+
 it('publishes each observation before the other queries finish', async () => {
   const f = fixture()
   const system = Promise.withResolvers<CuaSystemPermissionState>()
@@ -249,6 +318,20 @@ it('keeps application decisions available when system inspection fails', async (
   await f.controller.dispose()
 })
 
+it.each(['success', 'failure'])('drops old icon %s after disabling and reenabling the bundle', async (outcome) => {
+  const f = fixture(), pending = Promise.withResolvers<Record<string, string>>()
+  onTestFinished(async () => { pending.resolve({}); await f.controller.dispose() })
+  f.actions.applicationIcons.mockImplementationOnce(async () => ({ ok: true, value: await pending.promise }))
+  f.face.refresh()
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().system.busy).toBe(false) })
+  f.controller.setChanging(true)
+  f.controller.setChanging(false)
+  if (outcome === 'success') pending.resolve({ '/old/app': 'old-icon' })
+  else pending.reject(new Error('old helper stopped'))
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
+  expect(f.controller.state.getSnapshot().icons).toEqual({ value: {}, error: null, busy: false })
+})
+
 
 it.each([
   ['ptcConfiguration', 'runtime'], ['systemStatus', 'system'],
@@ -279,3 +362,38 @@ it.each(['requestPermission', 'openSettings', 'revoke', 'retryApproval'] as cons
     expect(f.actions.systemStatus).toHaveBeenCalledOnce()
   },
 )
+
+
+it('preserves settled failures and values while all four observations are paused', async () => {
+  const f = fixture()
+  const error = new Error('unavailable')
+  f.actions.ptcConfiguration.mockRejectedValueOnce(error)
+  f.actions.systemStatus.mockRejectedValueOnce(error)
+  f.actions.applications.mockRejectedValueOnce(error)
+  f.actions.applicationIcons.mockRejectedValueOnce(error)
+  f.face.refresh()
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
+  f.controller.setChanging(true)
+  for (const key of ['runtime', 'system', 'applications', 'icons'] as const) {
+    expect(f.controller.state.getSnapshot()[key]).toMatchObject({ error: 'unavailable', busy: true })
+  }
+  f.face.refresh()
+  expect(f.actions.systemStatus).toHaveBeenCalledOnce()
+  f.controller.setChanging(false)
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
+  for (const key of ['runtime', 'system', 'applications', 'icons'] as const) {
+    expect(f.controller.state.getSnapshot()[key].error).toBeNull()
+  }
+  await f.controller.dispose()
+})
+
+it('reads the current Client language for each permission action', async () => {
+  const f = fixture()
+  f.face.request('accessibility')
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
+  expect(f.actions.requestPermission).toHaveBeenLastCalledWith('accessibility', 'zh')
+  f.setLocale('en')
+  f.face.openSettings('screenRecording')
+  await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
+  expect(f.actions.openSettings).toHaveBeenLastCalledWith('screenRecording', 'en')
+})

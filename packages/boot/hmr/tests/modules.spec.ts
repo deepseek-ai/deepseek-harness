@@ -298,7 +298,7 @@ it('leaves disposed child instances to their replacing parent', async () => {
   expect(seen).toContain('new:entry')
   expect(seen).not.toContain('new:child')
   expect(seen).toContain('new:independent')
-  expect(entry.fiber?._config).toEqual({ value: 'entry' })
+  expect(entry.fiber?.rawConfig).toEqual({ value: 'entry' })
 })
 
 it.each(['v1', 'v2'] as const)('invalidates a disabled %s module without activating it', async (version) => {

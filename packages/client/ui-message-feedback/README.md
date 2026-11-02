@@ -31,6 +31,8 @@ Mount this plugin alongside `ui-conversation` and `ui-commands`; the Like/Dislik
 
 A rating or list-load failure shows inline in the row; a submission failure shows in a warning toast while the dialog stays open so the draft can be corrected. Only finalized messages reach the message entry — an interruption-frozen partial carries no `messageId` and therefore no feedback controls.
 
+Access: the rating buttons render only while the current Peer may call `messageFeedback/put` on the Session; the `/feedback` decoration has no Client check, and the Host refuses a submission without access.
+
 -----
 
 <a id="understand-the-implementation"></a>

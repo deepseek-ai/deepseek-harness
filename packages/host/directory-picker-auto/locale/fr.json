@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Adaptation de la méthode de sélection d'annuaire",
+    "description": "Sélectionnez la boîte de dialogue du répertoire système ou la navigation dans le répertoire dans l'application en fonction de l'environnement d'exécution."
+  }
+}

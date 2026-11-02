@@ -9,7 +9,7 @@ description: 现有 SDK profile 包含原生桌面工具和模型上下文。
 
 ## 变更
 
-现有 `sdk` profile 现在包含 `present`、`ask_user_question`、定时任务工具、文件引用说明和时间上下文。它不启动 Web server。默认仍使用标准工具调用；`DSH_TOOLS_MODE=ptc` 在同一 profile 中选择程序化工具调用。`sdk-minimal` 保持不变。
+现有 `sdk` profile 现在包含 `present`、`ask_user_question`、定时任务工具、文件引用说明和时间上下文。它不启动 Web server。默认仍使用原生工具执行；通过[执行器 overlay](../tool-executor-plugins/guide.zh.md) 选择 PTC。`sdk-minimal` 保持不变。
 
 ## 迁移
 

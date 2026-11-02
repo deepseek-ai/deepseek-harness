@@ -21,11 +21,11 @@ export function apply(ctx: Context, config: Config): void {
       yield* next()
       return
     }
-    const text = options.messages[0]?.content.find(block => block.type === 'text')?.text ?? ''
-    if (!text.includes('"role": "user-instruction"')) {
+    const texts = options.messages.map(message => message.content.find(block => block.type === 'text')?.text ?? '')
+    if (!texts.some(text => text.includes('"role": "user-instruction"'))) {
       throw new Error('headless task has no user authority')
     }
-    const pending = text.slice(text.indexOf('\n\nPENDING_ACTION\n'))
+    const pending = texts.at(-1) ?? ''
     const mode = config.mode ?? (pending.includes('denied.txt') ? 'deny'
       : pending.includes('malformed.txt') ? 'malformed'
         : pending.includes('failed.txt') ? 'failed' : 'allow')

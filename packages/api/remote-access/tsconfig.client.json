@@ -9,6 +9,7 @@
     "src/client/index.ts",
     "src/client/mount.ts",
     "src/client/state.ts",
+    "src/client/when-allowed.ts",
     "src/snapshot.ts",
     "src/types.ts"
   ],

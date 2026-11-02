@@ -3,7 +3,7 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import { chromium, type Browser } from 'playwright'
+import { chromium, webkit, type Browser } from 'playwright'
 import { expect, it, onTestFinished } from 'vitest'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts, launchWebScaffold,
@@ -16,7 +16,9 @@ const fixture = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/s
 const bundle = fileURLToPath(new URL('../../../packages/experimental/inspector-profile', import.meta.url))
 const picker = fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url))
 
-it.skipIf(webSnapshotMode() === 'record')('inspects a replayed Session log and Chat groups through the optional bundle', async () => {
+it.skipIf(webSnapshotMode() === 'record').each([
+  { name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webkit },
+])('inspects a replayed Session log and Chat groups through the optional bundle ($name)', async ({ engine }) => {
   const resources: { browser?: Browser; scaffold?: WebScaffold } = {}
   onTestFinished(async () => {
     try { await resources.browser?.close() } finally { await resources.scaffold?.close() }
@@ -29,7 +31,7 @@ it.skipIf(webSnapshotMode() === 'record')('inspects a replayed Session log and C
     extraOverlayPath: picker, replayFixture, compareReplaySession: 'read-only', paceMs: 5,
   })
   resources.scaffold = scaffold
-  const browser = await chromium.launch()
+  const browser = await engine.launch()
   resources.browser = browser
   const page = await newEnglishPage(browser)
   await page.setViewportSize({ width: 1680, height: 1000 })
@@ -46,12 +48,24 @@ it.skipIf(webSnapshotMode() === 'record')('inspects a replayed Session log and C
   await page.locator('[data-sidebar-right-guide-entry="session-inspector-log"]').click()
   const mode = page.getByRole('combobox', { name: 'Presentation', exact: true })
   expect(await mode.inputValue()).toBe('session-log')
-  const raw = page.getByRole('table', { name: 'Raw Log', exact: true })
+  const raw = page.getByRole('table', { name: 'Raw log', exact: true })
   await raw.getByRole('button', { name: 'Filter types', exact: true }).click()
+  const filter = page.getByRole('dialog', { name: 'Filter types', exact: true })
+  const keyword = page.getByRole('combobox', { name: 'Type keyword', exact: true })
+  await filter.waitFor()
+  await expect.poll(() => keyword.evaluate(element => element === document.activeElement)).toBe(true)
+  for (const width of [1680, 800, 390, 1680]) {
+    await page.setViewportSize({ width, height: 1000 })
+    await expect.poll(async () => {
+      const rect = await filter.boundingBox()
+      return rect !== null && rect.x >= 11 && rect.x + rect.width <= width - 11
+        && rect.y >= 11 && rect.y + rect.height <= 989
+    }).toBe(true)
+  }
   await page.getByRole('combobox', { name: 'Type keyword', exact: true }).fill('user/message')
   await page.getByRole('option', { name: 'user/message', exact: true }).click()
   await raw.getByRole('button', { name: 'user/message', exact: true }).first().click()
-  const panel = page.locator('section[aria-label="Raw Log"]')
+  const panel = page.locator('section[aria-label="Raw log"]')
   const details = panel.getByRole('separator').locator('..').locator('ul').first()
   expect(await details.innerText()).toContain(prompts[0])
   expect(await details.locator('details:not([open])').count()).toBe(0)
@@ -64,14 +78,14 @@ it.skipIf(webSnapshotMode() === 'record')('inspects a replayed Session log and C
   const replacements = [...new Set(times)].filter(value => /^\d{2}:\d{2}:\d{2}\.\d{3}$/.test(value))
     .map(value => [value, '{{time}}'] as const)
   await compareOrRefreshGolden(join(directory, 'log.expected.md'),
-    await captureStableAria(page, 'section[aria-label="Raw Log"] table', scaffold.workspaceCwd, { replacements }), webSnapshotMode())
+    await captureStableAria(page, 'section[aria-label="Raw log"] table', scaffold.workspaceCwd, { replacements }), webSnapshotMode())
   await mode.selectOption('chat-node')
-  const groups = page.getByRole('table', { name: 'Chat Group', exact: true })
+  const groups = page.getByRole('table', { name: 'Chat group', exact: true })
   expect(await groups.getByRole('columnheader', { name: 'Time (UTC)' }).count()).toBe(0)
   await groups.getByRole('button', { name: 'assistant-step', exact: true }).first().click()
   await page.getByRole('navigation', { name: 'Raw data navigation', exact: true }).waitFor()
-  const groupPanel = page.locator('section[aria-label="Chat Group"]')
-  await groupPanel.locator('summary').filter({ hasText: 'Node Data' }).click()
+  const groupPanel = page.locator('section[aria-label="Chat group"]')
+  await groupPanel.locator('summary').filter({ hasText: 'Node data' }).click()
   const blocks = groupPanel.getByText('blocks:', { exact: true }).locator('..')
   await blocks.click()
   await blocks.locator('..').getByText('Other properties:', { exact: true }).waitFor()
@@ -104,7 +118,7 @@ it.skipIf(webSnapshotMode() === 'record')('highlights nearby Chat content when t
   await page.getByText('DONE', { exact: true }).waitFor()
   await page.getByRole('button', { name: 'Open right sidebar', exact: true }).click()
   await page.locator('[data-sidebar-right-guide-entry="session-inspector-log"]').click()
-  const table = page.getByRole('table', { name: 'Raw Log', exact: true })
+  const table = page.getByRole('table', { name: 'Raw log', exact: true })
   await table.getByRole('button', { name: 'Filter types', exact: true }).click()
   await page.getByRole('combobox', { name: 'Type keyword', exact: true }).fill('tool/call')
   await page.getByRole('button', { name: 'Apply filter', exact: true }).click()

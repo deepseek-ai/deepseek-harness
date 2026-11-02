@@ -12,7 +12,7 @@ Status: implemented
 
 保留现有 `SessionInputShell`、`DraftEditorRuntime`、Conversation store 和 Session 引用生命周期。普通文字与结构化草稿统一经过输入模型导入；初始导入在 `InputHub.shellFor()` 返回对象前完成，不由 React effect 恢复文字。已存在的输入对象不重新恢复。React 只挂载同一编辑器，并绑定现有持久化回调。
 
-`startSession(workspaceId?, options?)` 的第二参数保留 `prompt` 与 `clearPreviousDraft`。`prompt` 仅接受字符串；结构化草稿只用于内部恢复和工作区携带。无选项时维持原流程。不清空时保留已有内容，空稿才采用 prompt；显式清空作用于目标 Session 的文字文档，不删除附件，也不修改其他 Session。预填不自动发送、执行命令或改变 `blank`。
+`startSession(workspaceId?, options?)` 的第二参数包含 `prompt`、`whenDraftExists` 与 `clearPreviousDraft`。`prompt` 仅接受字符串；结构化草稿只用于内部恢复和工作区携带。无选项时维持原流程。空稿直接采用 prompt。目标已有文字或附件时由 `whenDraftExists` 决定：`keep`（默认）保留原稿，`replace` 用 prompt 替换目标 Session 的文字文档、无 prompt 时清空，`append` 在原有文字与引用之后另起段落追加 prompt。三者都不删除附件，也不修改其他 Session。只有未传 `whenDraftExists` 时，`clearPreviousDraft: true` 才等同 `replace`。预填不自动发送、执行命令或改变 `blank`。
 
 ### 数据模型
 
@@ -41,7 +41,7 @@ Status: implemented
 
 不新增草稿服务、存储 key、通用任务框架或另一套 Session 创建入口；不改 SlotRenderer、Host Session 日志、命令执行和文件发现 RPC。`InputActions` 保留统一输入操作入口，组件不单独注入另一条内容初始化回调。
 
-调用参数依次为 `startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions)`、`requestDraftInitialization(binding: SessionBinding, options: DraftInitializationOptions)`、`SessionInputShell.requestDraftInitialization(options)`，以及内部的 `SessionInputShell.setDraft(input: string | DraftSnapshot)`。`StartSessionOptions` 直接引用 `DraftInitializationOptions`，字段为 `prompt?: string` 和 `clearPreviousDraft?: boolean`；进入异步创建前浅拷贝这些值，结果只作用于最终保留的 binding。初始化结果区分已应用、保留原稿和提交期间拒绝；拒绝不先清空，导航被后续操作取消时不写稿。
+调用参数依次为 `startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions)`、`requestDraftInitialization(binding: SessionBinding, options: DraftInitializationOptions)`、`SessionInputShell.requestDraftInitialization(options)`，以及内部的 `SessionInputShell.setDraft(input: string | DraftSnapshot)`。`StartSessionOptions` 扩展 `DraftInitializationOptions`，字段为 `prompt?: string`、`whenDraftExists?: 'replace' | 'append' | 'keep'` 和 `clearPreviousDraft?: boolean`；进入异步创建前浅拷贝这些值，结果只作用于最终保留的 binding。初始化结果区分已应用、保留原稿和提交期间拒绝；拒绝不先清空，导航被后续操作取消时不写稿。
 
 ### 数据流
 

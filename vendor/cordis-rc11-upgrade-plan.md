@@ -31,7 +31,7 @@ The comparison above checks the current vendored source against the release tag;
 
 The identifiers below are plan labels, not GitHub issue numbers. Preconditions are merge requirements. Independent PRs can be developed and reviewed concurrently; a dependent PR can start against the proposed changes before its predecessors merge, but must validate the actual combined result before merging.
 
-`Vn` below identifies item `n` in the [current local-modification log](README.md#local-modifications), not a PR. **Retire** means the upstream implementation replaces the local difference; **partial** means some behavior still needs a local adaptation; **retain** means the requirement remains; **prepare** does not retire a patch. These are proposed outcomes, confirmed only by the owning PR's tests. Track each item by its subject if later manifest edits renumber the log.
+`Vn` below is the stable ID of an entry in the [local-modification log](README.md#local-modifications), not a PR; a retired ID no longer appears in the log. **Retire** means the upstream implementation replaces the local difference; **partial** means some behavior still needs a local adaptation; **retain** means the requirement remains; **prepare** does not retire a patch. These are proposed outcomes, confirmed only by the owning PR's tests.
 
 | PR | Scope | Prerequisite PRs | Existing vendor modifications | Required evidence |
 |---|---|---|---|---|

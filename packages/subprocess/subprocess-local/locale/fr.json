@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "processus enfant local",
+    "description": "Fournit des fonctionnalités de démarrage et de gestion de processus locaux pour d’autres plug-ins."
+  }
+}

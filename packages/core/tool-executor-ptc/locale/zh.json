@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "PTC 工具执行",
+    "description": "通过 run_code 程序执行工具并生成 SDK 绑定。"
+  }
+}

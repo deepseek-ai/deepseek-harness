@@ -2,7 +2,9 @@
  * Model-facing `web_search` and `web_fetch` tools over `ctx.web`. This package owns schemas,
  * validation, prompt guidance, limits, and presentation, never concrete providers. Enablement
  * controls tool registration; an enabled tool remains visible when its provider is unavailable
- * and fails with a structured error at execution time.
+ * and fails with a structured error at execution time. A model step does not admit
+ * `web_search` or `web_fetch` while `ctx.web.searchReady()` or `ctx.web.fetchReady()`
+ * reports that the selected provider cannot authenticate for that step's chat route.
  * @module @deepseek-ai/dsh-tool-web
  */
 

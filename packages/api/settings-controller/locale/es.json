@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Configurar la interfaz de lectura y escritura",
+    "description": "Proporcionar al cliente la capacidad de leer y modificar varias configuraciones."
+  }
+}

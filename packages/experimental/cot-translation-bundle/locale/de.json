@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Maschinelle Übersetzung der Argumentation",
+    "description": "Übersetzt aufgeklappte „Denken Sie nach“-Zeilen, während der Agent sie schreibt, in die von Ihnen gewählte Sprache, und „Original ansehen“ wechselt zurück.",
+    "detail": "docs/DETAIL.md"
+  }
+}

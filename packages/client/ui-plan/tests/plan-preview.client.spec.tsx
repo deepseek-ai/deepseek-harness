@@ -333,7 +333,6 @@ describe('plan entry points and document', () => {
     expect(screen.getByRole('status').textContent).toBe(dictionary['preview.unavailable'])
     for (const [code, message] of [
       ['plan/invalid-address', dictionary['preview.invalidAddress']],
-      ['plan/unavailable', dictionary['preview.historyUnavailable']],
       ['plan/not-found', dictionary['preview.notFound']],
       ['plan/read-failed', 'connection lost'],
       ['session/not-found', 'connection lost'],

@@ -1,3 +1,4 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -23,7 +24,7 @@ import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
-import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import ClaudeCodeMods, { defineMod, MODS_API_VERSION, type Config, type ModPlugin, type ModRegister } from '../src/index.ts'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -416,7 +417,7 @@ describe('tool.call: answers and rewrites', () => {
       'claude-code-mods: reroute-mod: tool.call hook skipped: rerouted the call from echo to Read; the logged call runs the tool it named',
     )
     // A call without an agent (a host-side execute) is answered by the same schema rule.
-    const direct = await h.ctx.tools.execute({ callId: ToolCallIdOf('direct'), name: 'greet', arguments: {}, signal: new AbortController().signal })
+    const direct = await executeToolFixture(h.ctx, { callId: ToolCallIdOf('direct'), name: 'greet', arguments: {}, signal: new AbortController().signal })
     expect(direct.isError).toBe(false)
     expect(direct.content).toEqual([{ type: 'text', text: 'rendered hello from answer-mod' }])
     const refusals = h.warn.mock.calls.map(call => String(call[0])).filter(line => line.includes('rewrote the arguments of echo'))
@@ -770,7 +771,7 @@ describe('subagents, programmatic calls, and malformed tool arguments', () => {
     h.ctx.tools.register(echoTool('echo'))
     const root = await h.agent()
     const child = await h.ctx.agentLoop.createAgent(h.ctx, {
-      sessionId: SessionId('child-1'), parentAgent: root, agentOptions: { provider: 'mock', model: 'mock' }, meta: { cwd: h.workspace, origin: 'subagent' },
+      sessionId: SessionId('child-1'), agentOptions: { provider: 'mock', model: 'mock' }, meta: { cwd: h.workspace, origin: 'subagent' },
     })
     await h.turn(child.agent, 'child task')
     await child.dispose()
@@ -786,7 +787,7 @@ describe('subagents, programmatic calls, and malformed tool arguments', () => {
       'watch-mod: tool.call echo agent=root n=1',
       'watch-mod: turn.complete agent=root inputs=[{}]',
     ])
-    const direct = await h.ctx.tools.execute({ callId: ToolCallIdOf('direct'), name: 'echo', arguments: { command: 'direct' }, signal: new AbortController().signal })
+    const direct = await executeToolFixture(h.ctx, { callId: ToolCallIdOf('direct'), name: 'echo', arguments: { command: 'direct' }, signal: new AbortController().signal })
     expect(direct.isError).toBe(false)
     // The nested `$.tool.call` reaches only mods loaded before watch-mod, so its own hook is not re-entered.
     expect(h.info).toHaveBeenCalledWith('watch-mod: direct saw echo and {"result":"ran nested"}')
@@ -921,17 +922,19 @@ describe('loading diagnostics and configuration', () => {
     const mod = writeMod('sleeper-mod', `
       export function register(on) {
         on('session.start', async ($, e, next) => {
-          $.clock.after(1, async () => { await $.clock.sleep(60_000) })
+          $.clock.after(1, async () => {
+            const sleeping = $.clock.sleep(60_000)
+            await $.ui.log('timer sleeping')
+            await sleeping
+          })
           return next(e)
         })
       }
     `)
     const h = await harness([mod], new MockAdapter([]))
     await h.agent()
-    await new Promise(resolve => setTimeout(resolve, 20))
-    const started = Date.now()
+    await vi.waitFor(() => { expect(h.info.mock.calls.flat().join(' ')).toContain('timer sleeping') })
     await h.mods.dispose()
-    expect(Date.now() - started).toBeLessThan(5_000)
     expect(h.warn).toHaveBeenCalledWith('claude-code-mods: sleeper-mod: timer callback failed: claude-code-mods disposed')
   })
 

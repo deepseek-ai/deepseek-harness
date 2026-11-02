@@ -336,8 +336,9 @@ describe('apply', () => {
   it('registers the late-reply conversation node with the conversation runtime', async () => {
     const b = await bench()
 
-    expect(b.registerNode).toHaveBeenCalledOnce()
+    expect(b.registerNode).toHaveBeenCalledTimes(2)
     expect(b.registerNode.mock.calls[0]![0]).toMatchObject({ kind: 'user-question-reply', target: 'chat' })
+    expect(b.registerNode.mock.calls[1]![0]).toMatchObject({ kind: 'answered-user-question', target: 'chat' })
     expect(b.slots.entries('conversation.chat.node').map(entry => entry.options.key)).toEqual(['question-reply'])
   })
 
@@ -378,6 +379,9 @@ describe('apply', () => {
     ) => PendingQuestion | null
     expect(select({ pendingInteraction: undefined })).toBeNull()
     expect(select({ pendingInteraction: pending })).toBe(pending)
+    expect(select({ pendingInteraction: new PendingQuestion(SESSION_ID, PLAN_QUESTIONS) })?.kind).toBe('plan-review')
+    expect(select({ pendingInteraction: new PendingQuestion(SESSION_ID, [{ id: 'cua-app-access', question: 'Allow?',
+      intent: { kind: 'approval', approve: 'Allow', reject: 'Deny' } }]) })?.questions[0]?.intent?.kind).toBe('approval')
     expect(pending).toMatchObject({ kind: 'question', sessionId: SESSION_ID, questions: QUESTIONS, callId: undefined })
     expect(pending.snapshot()).toEqual({
       state: 'open', waitState: 'counting', countdown: undefined,

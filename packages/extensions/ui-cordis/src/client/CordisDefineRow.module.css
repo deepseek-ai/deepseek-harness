@@ -177,9 +177,11 @@
   font: var(--dsw-font-xs-13);
 }
 
-.sourceTab:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .sourceTab:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .sourceTab:disabled {
@@ -270,14 +272,19 @@
   transition: opacity 100ms ease;
 }
 
-.card:hover .inspectButton,
 .inspectButton:focus-visible {
   opacity: 1;
 }
 
-.inspectButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .card:hover .inspectButton {
+    opacity: 1;
+  }
+
+  .inspectButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover-solid);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .visuallyHidden {
@@ -292,5 +299,11 @@
 @media (prefers-reduced-motion: reduce) {
   .inspectButton {
     transition: none;
+  }
+}
+
+@media (hover: none) {
+  .inspectButton {
+    opacity: 1;
   }
 }

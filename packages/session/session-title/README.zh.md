@@ -54,7 +54,7 @@ kind: "package-reference"
 
 ### 添加提供方
 
-可选异步提供方可通过 `ctx.sessionTitle.register(provider)` 注册一个；在前一个提供方开始释放之前，第二次注册会立即抛出。因此替代提供方可以在前一个提供方排空期间激活，前一个提供方迟到的结果不会提交。随附的模型支持提供方是[首消息](../session-title-first-prompt-llm/README.zh.md)与[全消息](../../experimental/session-title-all-prompts-llm/README.zh.md)，两者都使用共享的 [LLM（大语言模型）执行模块](../session-title-llm/README.zh.md)。每次调用前，服务会捕获最新已接纳标题快照（包括它刚刚确保的回退），并作为 `request.currentTitle` 传入；提供方自行决定是否以及如何使用。提供方只有在带标记、由循环构建的请求的确切路由与已记录 `request/header` 匹配时才启动，较新的修订会取代并中止旧工作。路由不变时，活跃步骤中带标记的请求会启动待处理的自动生成，无需新的 header 事件；已接受的人类消息可以位于当前 `step/start` 之后。
+可选异步提供方可通过 `ctx.sessionTitle.register(provider)` 注册一个；在前一个提供方开始释放之前，第二次注册会立即抛出。因此替代提供方可以在前一个提供方排空期间激活，前一个提供方迟到的结果不会提交。随附的模型支持提供方是[首消息](../session-title-first-prompt-llm/README.zh.md)与[全消息](../../experimental/session-title-all-prompts-llm/README.zh.md)，两者都使用共享的 [LLM（大语言模型）执行模块](../session-title-llm/README.zh.md)。每次调用前，服务会捕获最新已接纳标题快照（包括它刚刚确保的回退），并作为 `request.currentTitle` 传入；提供方自行决定是否以及如何使用。提供方只有在带标记、由循环构建的请求的确切路由与已记录 `request/header` 匹配时才启动，较新的修订会取代并中止旧工作。路由不变时，活跃步骤中带标记的请求会启动待处理的自动生成，无需新的 header 事件；已接受的人类消息可以位于当前 `step/start` 之后。 首提示词生成排除带继承前缀及 subagent 来源的 Session；独立 fork 不会因缺少来源关系而变为符合条件。
 
 ### 读取标题
 

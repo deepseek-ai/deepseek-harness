@@ -1,0 +1,11 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`reports recorded decisions once on the next request, with each kind guidance once, without waking the conversation > status notice 1`] = `
+[
+  {
+    "text": "Latest status of action cards from user actions and background work. These are status facts, not a request to start or retry work. Use these receipts instead of the earlier proposal when describing progress. Failed runs can be retried from their card. Continue with the user’s current request.
+[{"action":"test_action","callId":"call-card-1","title":"Counter","phase":"failed","data":{"reason":"timeout"}},{"action":"test_action","callId":"call-card-2","title":"Second","phase":"dismissed"},{"action":"retired_action","callId":"call-orphan","phase":"done"}]",
+    "type": "text",
+  },
+]
+`;

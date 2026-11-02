@@ -2,7 +2,7 @@
 // wire — the one add card offers the dormant pi-ai catalog on its third-party
 // mode and the create form on its custom-API mode, a blank key saves a
 // reference-free profile for provider-native auth, and typing an API key later
-// stores it write-only under the derived reference (`MINIMAX_CN_API_KEY`)
+// stores it under the derived reference (`MINIMAX_CN_API_KEY`)
 // while the settings document records only that reference. Each saved row
 // appears after route topology invalidation without presenting liveness as
 // provider status. The customized-settings fold writes its curated fields —
@@ -20,13 +20,13 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page, Request, Route } from 'playwright'
-import { chromium } from 'playwright'
+import { chromium, webkit } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { openSettings, ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
+import { expectTooltipOnTop, openSettings, ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/models-settings', import.meta.url))
 const EMPTY_EXPECTED = join(SNAPSHOT_DIR, 'empty.expected.md')
@@ -154,8 +154,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await dialog.getByText('该 API 密钥格式错误，请检查。').waitFor({ timeout: 10_000 })
     await expect.poll(async () => save.isEnabled(), { timeout: 10_000 }).toBe(false)
 
-    // Clearing it restores submit: an empty field means "keep what is stored",
-    // never a refusal, or editing any other setting would demand the key.
+    // An empty field leaves this new profile on native authentication.
     await key.fill('')
     await expect.poll(async () => save.isEnabled(), { timeout: 10_000 }).toBe(true)
     expect(await dialog.getByText('该 API 密钥格式错误，请检查。').count()).toBe(0)
@@ -221,7 +220,9 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-customized'))
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByRole('button', { name: '编辑 minimax-cn' }).click()
-    await dialog.getByPlaceholder('留空使用已保存凭据', { exact: true }).waitFor({ timeout: 10_000 })
+    const savedKey = dialog.getByLabel('API 密钥', { exact: true })
+    await expect.poll(() => savedKey.inputValue(), { timeout: 10_000 }).toBe('sk-e2e-minimax')
+    expect(await savedKey.getAttribute('type')).toBe('password')
     expect(await dialog.textContent()).not.toContain('API 密钥来源：')
     expect(await dialog.textContent()).not.toMatch(/oauth/i)
     await dialog.getByText('自定义设置').click()
@@ -536,6 +537,281 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('saves model drag order, discards canceled moves, and preserves the other provider', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-models-order'))
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    const edit = dialog.getByRole('button', { name: '编辑 Acme 网关 (acme-gateway)' })
+    const settings = () => scaffold.ctx.settings.describe({ redactSecrets: true }).find(row => row.ns === 'llm-pi-ai')?.value
+    await edit.click()
+    await dialog.getByText('自定义设置').click()
+    for (const [position, id] of [[2, 'order-second'], [3, 'order-third']] as const) {
+      await dialog.getByRole('button', { name: '添加模型', exact: true }).click()
+      await dialog.getByLabel(`模型 ID ${String(position)}`, { exact: true }).fill(id)
+      await dialog.getByLabel(`显示名称 ${String(position)}`, { exact: true }).fill(id)
+    }
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await dialog.getByText('已保存 Acme 网关 (acme-gateway)。', { exact: true }).waitFor()
+    const before = structuredClone(settings())
+    const path = join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml')
+    const document = await readFile(path, 'utf8')
+
+    for (const save of [false, true]) {
+      await edit.click()
+      await dialog.getByText('自定义设置').click()
+      // Keep the last insertion gap inside the scrollport before native dragging starts.
+      await dialog.getByRole('button', { name: '添加模型', exact: true }).scrollIntoViewIfNeeded()
+      const source = dialog.getByRole('button', { name: '调整模型顺序 1', exact: true })
+      const target = dialog.getByRole('button', { name: `调整模型顺序 ${save ? '3' : '2'}`, exact: true })
+      await source.hover()
+      const from = await source.boundingBox()
+      if (from === null) throw new Error('Model drag handle is not visible')
+      await page.mouse.down()
+      await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 10, { steps: 3 })
+      // Native dragging needs an initial motion; the second hover follows any scroll at the dialog edge.
+      await target.hover()
+      const targetBox = await target.boundingBox()
+      if (targetBox === null) throw new Error('Model drop target is not visible')
+      await target.hover({ position: { x: targetBox.width / 2, y: targetBox.height * 0.75 } })
+      const insertion = await target.evaluate((button) => {
+        const rect = button.closest('[data-row-key]')!.getBoundingClientRect()
+        return { x: rect.left + 20, y: rect.bottom + 4 }
+      })
+      await page.mouse.move(insertion.x, insertion.y, { steps: 3 })
+      expect(await dialog.locator('[data-drop-target]').evaluate(element => getComputedStyle(element).zIndex)).toBe('1')
+      await page.mouse.up()
+      await page.locator('body > div[inert][aria-hidden="true"]:has(button[aria-label^="调整模型顺序 "])').waitFor({ state: 'detached' })
+      await expect.poll(() => dialog.getByLabel(`模型 ID ${save ? '3' : '2'}`, { exact: true }).inputValue()).toBe('acme-large')
+      await expect.poll(() => dialog.locator('[data-row-key]').evaluateAll(rows => rows.flatMap(row => row.getAnimations()).length)).toBe(0)
+      expect(await readFile(path, 'utf8')).toBe(document)
+      await dialog.getByRole('button', { name: save ? '保存' : '取消', exact: true }).click()
+      await dialog.getByLabel('模型 ID 1', { exact: true }).waitFor({ state: 'detached' })
+      if (!save) expect(settings()).toEqual(before)
+    }
+
+    await dialog.getByText('已保存 Acme 网关 (acme-gateway)。', { exact: true }).waitFor()
+    expect(settings()).toMatchObject({ providers: {
+      'acme-gateway': { models: [
+        { id: 'order-second', name: 'order-second' },
+        { id: 'order-third', name: 'order-third' },
+        { id: 'acme-large', input: ['image'], reasoningEfforts: { off: null, low: 'low', high: 'deep' } },
+      ] },
+      'minimax-cn': { apiKeyEnv: 'MINIMAX_CN_API_KEY', baseURL: 'https://gateway.minimax.example/v1' },
+    } })
+    await edit.click()
+    await dialog.getByText('自定义设置').click()
+    expect(await Promise.all([1, 2, 3].map(position =>
+      dialog.getByLabel(`模型 ID ${String(position)}`, { exact: true }).inputValue(),
+    ))).toEqual(['order-second', 'order-third', 'acme-large'])
+    const viewport = page.viewportSize()
+    if (viewport === null) throw new Error('Model ordering checks require an explicit viewport')
+    try {
+      const id = dialog.getByRole('textbox', { name: '模型 ID 1', exact: true })
+      const name = dialog.getByRole('textbox', { name: '显示名称 1', exact: true })
+      const toggle = dialog.getByRole('button', { name: '模型选项 1', exact: true })
+      const desktopId = await id.boundingBox()
+      const desktopName = await name.boundingBox()
+      if (desktopId === null || desktopName === null) throw new Error('Wide model identity fields are not visible')
+      expect(Math.abs(desktopId.y - desktopName.y)).toBeLessThan(1)
+      await name.focus()
+      await page.setViewportSize({ width: 390, height: 844 })
+      expect(await name.evaluate(input => input.ownerDocument.activeElement === input)).toBe(true)
+      expect(await name.isVisible()).toBe(true)
+      await toggle.click()
+      await name.waitFor({ state: 'hidden' })
+      await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'mobile-collapsed.expected.md'),
+        await captureStableAria(page, '[data-shortcut-modal="settings"]', scaffold.workspaceCwd), MODE)
+      for (const name of ['调整模型顺序 1', '模型选项 1', '删除模型 1']) {
+        const box = await dialog.getByRole('button', { name, exact: true }).boundingBox()
+        expect(box).not.toBeNull()
+        if (box === null) throw new Error(`Model control is not visible: ${name}`)
+        expect(box.x).toBeGreaterThanOrEqual(0)
+        expect(box.x + box.width).toBeLessThanOrEqual(390)
+      }
+      const compactId = await id.boundingBox()
+      if (compactId === null) throw new Error('Narrow model ID is not visible')
+      await toggle.click()
+      await name.waitFor({ state: 'visible' })
+      await name.fill('手机上的完整显示名称')
+      await toggle.click()
+      await name.waitFor({ state: 'hidden' })
+      expect(await id.inputValue()).toBe('order-second')
+      await toggle.click()
+      expect(await name.inputValue()).toBe('手机上的完整显示名称')
+      const expandedName = await name.boundingBox()
+      if (expandedName === null) throw new Error('Expanded model name is not visible')
+      expect(expandedName.y).toBeGreaterThanOrEqual(compactId.y + compactId.height)
+      expect(expandedName.width).toBeGreaterThan(compactId.width)
+      expect(await dialog.getByRole('region', { name: '模型目录', exact: true })
+        .evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'mobile-expanded.expected.md'),
+        await captureStableAria(page, '[data-shortcut-modal="settings"]', scaffold.workspaceCwd), MODE)
+    } finally {
+      await page.setViewportSize(viewport)
+    }
+    await dialog.getByRole('button', { name: '取消', exact: true }).click()
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
+  it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webkit }])(
+    'keeps mobile model actions, focus and keyboard order in $name', async ({ name: engineName, engine }) => {
+      const provider = `review-${engineName.toLowerCase()}`
+      let mobileBrowser: Browser | undefined
+      try {
+        await scaffold.ctx.settings.mutate('llm-pi-ai', [{
+          op: 'set', path: ['providers', provider], value: {
+            api: 'anthropic-messages', baseURL: 'https://layout.example',
+            models: [{ id: 'layout-model', name: '完整显示名称' }, { id: 'next-model', name: '下一模型' }],
+          },
+        }])
+        mobileBrowser = await engine.launch()
+        const mobilePage = await mobileBrowser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+        const errors = watchConsole(mobilePage)
+        onTestFailed(() => saveFailureShot(mobilePage, `web-e2e-models-mobile-${engineName.toLowerCase()}`))
+        await mobilePage.goto(scaffold.authenticatedUrl)
+        await openSettings(mobilePage, 'zh')
+        const dialog = mobilePage.getByRole('dialog', { name: '设置' })
+        await dialog.getByRole('button', { name: '模型', exact: true }).click()
+        const edit = dialog.getByRole('button', { name: `编辑 ${provider}`, exact: true })
+        await edit.click()
+        await dialog.getByText('自定义设置').click()
+        const id = dialog.getByRole('textbox', { name: '模型 ID 1', exact: true })
+        const name = dialog.getByRole('textbox', { name: '显示名称 1', exact: true })
+        const toggle = dialog.getByRole('button', { name: '模型选项 1', exact: true })
+        const nextToggle = dialog.getByRole('button', { name: '模型选项 2', exact: true })
+        await toggle.click()
+        await assertModelInputLayout(mobilePage, dialog)
+        await dialog.getByRole('button', { name: '调整模型顺序 1', exact: true }).hover()
+        const tooltip = mobilePage.getByRole('tooltip')
+        await tooltip.waitFor()
+        expect(await tooltip.evaluate(element => element.parentElement === element.ownerDocument.body)).toBe(true)
+        await expectTooltipOnTop(tooltip)
+        await id.hover()
+        await tooltip.waitFor({ state: 'hidden' })
+        await toggle.click()
+        await name.fill('缩窄后继续编辑')
+        const input = await name.elementHandle()
+        if (input === null) throw new Error('Model name input is missing')
+        await mobilePage.setViewportSize({ width: 390, height: 844 })
+        expect(await input.evaluate(element => element.isConnected && element.ownerDocument.activeElement === element)).toBe(true)
+        await nextToggle.click()
+        expect(await nextToggle.getAttribute('aria-expanded')).toBe('true')
+        expect(await toggle.getAttribute('aria-expanded')).toBe('true')
+        await nextToggle.click()
+        await name.fill('手机保存后的名称')
+        await dialog.getByRole('button', { name: '保存', exact: true }).click()
+        await id.waitFor({ state: 'detached' })
+        expect(scaffold.ctx.settings.describe().find(row => row.ns === 'llm-pi-ai')?.value).toMatchObject({
+          providers: { [provider]: { models: [{ id: 'layout-model', name: '手机保存后的名称' }, { id: 'next-model', name: '下一模型' }] } },
+        })
+        await dialog.getByText(`已保存 ${provider}。`, { exact: true }).waitFor()
+        await edit.click()
+        await dialog.getByText('自定义设置').click()
+        await name.waitFor({ state: 'hidden' })
+        await toggle.focus()
+        await mobilePage.keyboard.press('Enter')
+        const tab = engine === webkit ? 'Alt+Tab' : 'Tab'
+        await mobilePage.keyboard.press(tab)
+        expect(await dialog.getByRole('button', { name: '删除模型 1', exact: true })
+          .evaluate(button => button.ownerDocument.activeElement === button)).toBe(true)
+        await mobilePage.keyboard.press(tab)
+        expect(await name.evaluate(element => element.ownerDocument.activeElement === element)).toBe(true)
+        await name.fill('直接点击收起后保留')
+        await toggle.click()
+        await name.waitFor({ state: 'hidden' })
+        expect(await toggle.getAttribute('aria-expanded')).toBe('false')
+        expect(await toggle.evaluate(button => button.ownerDocument.activeElement === button)).toBe(true)
+        await toggle.click()
+        expect(await name.inputValue()).toBe('直接点击收起后保留')
+        const region = dialog.getByRole('region', { name: '模型目录', exact: true })
+        expect(await region.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+        await dialog.getByRole('button', { name: '取消', exact: true }).click()
+        expect(errors.pageErrors).toEqual([])
+
+        const touchPage = await mobileBrowser.newPage({
+          viewport: { width: 390, height: 844 }, locale: ZH_BROWSER_LOCALE, isMobile: true, hasTouch: true,
+        })
+        const touchErrors = watchConsole(touchPage)
+        await touchPage.goto(scaffold.authenticatedUrl)
+        await openSettings(touchPage, 'zh')
+        const touchDialog = touchPage.getByRole('dialog', { name: '设置' })
+        await touchDialog.getByRole('button', { name: '模型', exact: true }).tap()
+        await touchDialog.getByRole('button', { name: `编辑 ${provider}`, exact: true }).tap()
+        await touchDialog.getByText('自定义设置').tap()
+        const touchToggle = touchDialog.getByRole('button', { name: '模型选项 1', exact: true })
+        const touchName = touchDialog.getByRole('textbox', { name: '显示名称 1', exact: true })
+        await touchToggle.tap()
+        expect(await touchName.evaluate(element => element.ownerDocument.activeElement === element)).toBe(false)
+        await touchName.fill('触屏编辑后的名称')
+        await touchToggle.tap()
+        await touchName.waitFor({ state: 'hidden' })
+        expect(await touchToggle.getAttribute('aria-expanded')).toBe('false')
+        await touchToggle.tap()
+        expect(await touchName.inputValue()).toBe('触屏编辑后的名称')
+        await touchName.fill('触屏保存后的名称')
+        const touchNext = touchDialog.getByRole('button', { name: '模型选项 2', exact: true })
+        await touchNext.tap()
+        expect(await touchNext.getAttribute('aria-expanded')).toBe('true')
+        await touchDialog.getByRole('button', { name: '保存', exact: true }).tap()
+        await touchName.waitFor({ state: 'detached' })
+        expect(scaffold.ctx.settings.describe().find(row => row.ns === 'llm-pi-ai')?.value).toMatchObject({
+          providers: { [provider]: { models: [{ id: 'layout-model', name: '触屏保存后的名称' }, { id: 'next-model', name: '下一模型' }] } },
+        })
+        expect(touchErrors.pageErrors).toEqual([])
+      } finally {
+        await mobileBrowser?.close()
+        await scaffold.ctx.settings.mutate('llm-pi-ai', [{ op: 'unset', path: ['providers', provider] }])
+      }
+    }, 60_000,
+  )
+
+  it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webkit }])(
+    'keeps keyboard reorder focus and visibility in $name', async ({ engine }) => {
+      const keyboardBrowser = await engine.launch()
+      try {
+        const keyboardPage = await keyboardBrowser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+        await keyboardPage.goto(scaffold.authenticatedUrl)
+        await openSettings(keyboardPage, 'zh')
+        await keyboardPage.getByRole('button', { name: '模型', exact: true }).click()
+        const dialog = keyboardPage.getByRole('dialog', { name: '设置' })
+        await dialog.getByRole('button', { name: '编辑 Acme 网关 (acme-gateway)' }).click()
+        await dialog.getByText('自定义设置').click()
+        const initialFirst = await dialog.getByLabel('模型 ID 1', { exact: true }).inputValue()
+        for (let position = 4; position <= 9; position++) {
+          await dialog.getByRole('button', { name: '添加模型', exact: true }).click()
+          await dialog.getByLabel(`模型 ID ${String(position)}`, { exact: true }).fill(`keyboard-${String(position)}`)
+        }
+        const source = await dialog.getByRole('button', { name: '调整模型顺序 1', exact: true }).elementHandle()
+        if (source === null) throw new Error('Keyboard reorder handle is missing')
+        await source.focus()
+        for (let position = 2; position <= 9; position++) {
+          await keyboardPage.keyboard.press('ArrowDown')
+          await expect.poll(() => source.evaluate(button => document.activeElement === button)).toBe(true)
+          expect(await source.getAttribute('aria-label')).toBe(`调整模型顺序 ${String(position)}`)
+          await expect.poll(() => source.evaluate(button => button.closest('[data-row-key]')!.getAnimations().length)).toBe(0)
+          expect(await source.evaluate((button) => {
+            const rect = button.getBoundingClientRect()
+            let top = 0
+            let bottom = innerHeight
+            for (let parent = button.parentElement; parent !== null; parent = parent.parentElement) {
+              if (getComputedStyle(parent).overflowY === 'visible') continue
+              const clip = parent.getBoundingClientRect()
+              top = Math.max(top, clip.top)
+              bottom = Math.min(bottom, clip.bottom)
+            }
+            return rect.top >= top && rect.bottom <= bottom
+          })).toBe(true)
+        }
+        expect(await dialog.getByLabel('模型 ID 9', { exact: true }).inputValue()).toBe(initialFirst)
+        await keyboardPage.keyboard.press('ArrowUp')
+        await expect.poll(() => source.evaluate(button => document.activeElement === button)).toBe(true)
+        expect(await source.getAttribute('aria-label')).toBe('调整模型顺序 8')
+        await dialog.getByRole('button', { name: '取消', exact: true }).click()
+      } finally {
+        await keyboardBrowser.close()
+      }
+    }, 60_000,
+  )
+
   it('confirms an identified provider deletion before removing its profile and key', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-delete'))
     expect(await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')).not.toContain('openai:')
@@ -574,6 +850,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       'configured.expected.md', 'declared-edit.expected.md', 'declared.expected.md',
       'delete.expected.md', 'empty.expected.md', 'model-picker.expected.md',
       'native-delete.expected.md', 'native-keyless.expected.md', 'catalog-inputs.expected.md',
+      'mobile-collapsed.expected.md', 'mobile-expanded.expected.md',
       'refreshing.expected.md', 'image-only.expected.md',
     ])
   })

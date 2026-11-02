@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Rapport d'incident d'utilisation du produit",
+    "description": "Signalez les événements d'utilisation du produit spécifiés au service configuré via OpenTelemetry."
+  }
+}

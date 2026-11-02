@@ -423,7 +423,7 @@ export async function saveImageFile(
 /**
  * Read and verify one content-addressed image.
  * @param root - absolute `DSH_HOME/attachments/v1` root.
- * @param ref - reference recorded in the session log.
+ * @param ref - supplied image reference; display fields are returned unchanged.
  * @param signal - optional cancellation for filesystem and verification work.
  * @returns verified bytes and reference.
  * @throws the signal reason when aborted, or an AttachmentError when verification fails.

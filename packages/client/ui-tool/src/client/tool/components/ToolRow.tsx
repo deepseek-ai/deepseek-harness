@@ -5,6 +5,7 @@ import {
   TerminalBlock, TextShimmer, WebBlock,
   diffTotals,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ContextMenuTriggerProps } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type { PropsRenderSlots, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { OpenFileOptions, UseDisclosure } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { MessageImageLoader } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -71,10 +72,10 @@ export interface ToolRowProps {
   /**
    * Dispatch the image gallery through the tool-owned `tool.call.images`
    * slot, supplied by the toolview that owns this row together with the
-   * session-authorized loader.
+   * Gateway-authorized loader.
    */
   renderSlot?: PropsRenderSlots<'tool.call.images'>['renderSlot'] | undefined
-  /** Session-authorized image URL loader for the gallery slot. */
+  /** Gateway-authorized image URL loader for the gallery slot. */
   loadImage?: MessageImageLoader | undefined
   search?: SearchCardModel | null | undefined
   web?: WebCardModelProps | null | undefined
@@ -90,6 +91,10 @@ export interface ToolRowProps {
   filePathLine?: number | undefined
   /** Open the path (already cwd-resolved), landing on `filePathLine` when given. */
   onOpenFile?: ((path: string, options?: OpenFileOptions) => void) | undefined
+  /** File gesture bindings supplied by the owning tool view. */
+  fileContextMenuProps?: ContextMenuTriggerProps | undefined
+  /** URL gesture bindings supplied by the owning tool view. */
+  urlContextMenuProps?: ContextMenuTriggerProps | undefined
   /** Safe http(s) URL from tool args; when set, the summary renders as a link that opens it in a new tab. */
   href?: string | undefined
   /**
@@ -146,6 +151,7 @@ export const ToolRow = memo(function ToolRow({
   filePath,
   filePathLine,
   onOpenFile,
+  fileContextMenuProps, urlContextMenuProps,
   href,
   inspect,
   useDisclosure,
@@ -217,8 +223,12 @@ export const ToolRow = memo(function ToolRow({
         <button
           type="button"
           className={css.fileLink}
+          {...fileContextMenuProps}
           onClick={openFile}
-          onKeyDown={summaryLinkKeyDown}
+          onKeyDown={(event) => {
+            summaryLinkKeyDown(event)
+            fileContextMenuProps?.onKeyDown?.(event)
+          }}
         >
           <TextShimmer>{summaryText}</TextShimmer>
         </button>
@@ -226,10 +236,14 @@ export const ToolRow = memo(function ToolRow({
         <a
           className={css.fileLink}
           href={linkHref}
+          {...urlContextMenuProps}
           target="_blank"
           rel="noopener noreferrer"
           onClick={stopLinkClick}
-          onKeyDown={summaryLinkKeyDown}
+          onKeyDown={(event) => {
+            summaryLinkKeyDown(event)
+            urlContextMenuProps?.onKeyDown?.(event)
+          }}
         >
           <TextShimmer>{summaryText}</TextShimmer>
         </a>
@@ -254,7 +268,7 @@ export const ToolRow = memo(function ToolRow({
         </TextShimmer>
       )}
     </>
-  ), [summaryLinkKeyDown, linkHref, openFile, state, suffix, totals, summaryText, exitLabel])
+  ), [summaryLinkKeyDown, fileContextMenuProps, urlContextMenuProps, linkHref, openFile, state, suffix, totals, summaryText, exitLabel])
   const expandedContent = useMemo(() => open ? (
     <div className={clsx(css.bodyWrap, detailsBody !== null && css.detailsBodyWrap)}>
       {askQuestionBody !== null
@@ -269,7 +283,19 @@ export const ToolRow = memo(function ToolRow({
             />
           )
           : diffBody !== null
-            ? <DiffBlock {...diffBody.card} labels={diffLabels} maxLines={CHAT_DIFF_MAX_LINES} className={css.diffBody} />
+            ? (
+              <>
+                <DiffBlock {...diffBody.card} labels={diffLabels} maxLines={CHAT_DIFF_MAX_LINES} className={css.diffBody} />
+                {state === 'error' && outputText !== null && (
+                  <div className={css.ioCard}>
+                    <div className={css.ioSection}>
+                      <span className={css.ioLabel}>{t('row.output')}</span>
+                      <span className={css.ioText} data-error>{outputText}</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            )
             : readBody !== null
               ? <ReadBlock {...readBody} labels={readLabels} maxLines={CHAT_READ_MAX_LINES} className={css.readBody} />
               : imageBody !== null

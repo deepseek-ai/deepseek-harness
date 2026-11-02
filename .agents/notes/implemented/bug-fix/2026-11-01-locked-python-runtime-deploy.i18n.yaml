@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-01-locked-python-runtime-deploy.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-11-01-locked-python-runtime-deploy.md
+/agent-note-locked-python-runtime-deployment:
+  en: 6a06f1078957df51
+  zh: d7c2146381443ced
+/agent-note-locked-python-runtime-deployment/problem:
+  en: 2293006c8bae6a1a
+  zh: 10670f2d703777dd
+/agent-note-locked-python-runtime-deployment/decision:
+  en: 223079c8e1e3a44e
+  zh: c906266cb0b231bc
+/agent-note-locked-python-runtime-deployment/alternatives-considered:
+  en: 978c94c7013056a5
+  zh: afae764120582b6a
+/agent-note-locked-python-runtime-deployment/testing:
+  en: d862dd609725c686
+  zh: 8889c5d9002bbc68
+/agent-note-locked-python-runtime-deployment/consequences:
+  en: 41827db476b30a43
+  zh: 5a7652f310a69909

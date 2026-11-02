@@ -121,7 +121,10 @@ interface Host {
   port: number
   /** Warnings any plugin of the composed Host logged. */
   warnings: unknown[][]
-  /** Send one raw request target through the Web route and the shell carrier and require identical answers. */
+  /**
+   * Send one raw request target over HTTP, through `webServer.readResource`,
+   * and through `fetchBundle`, and require identical answers.
+   */
   both: (path: string, init?: AssetRequestInit) => Promise<Answer>
 }
 
@@ -159,14 +162,19 @@ async function composeHost(): Promise<Host> {
     outgoing.on('error', reject)
     outgoing.end()
   })
+  const reader = { principal: { kind: 'owner' } } as Parameters<WebServer['readResource']>[1]
   const both = async (path: string, init?: AssetRequestInit): Promise<Answer> => {
     const answer = await http(path, init)
-    const response = await service.fetchBundle(new Request(`http://localhost${path}`, init))
-    expect({
-      status: response.status,
-      headers: assetHeaders(name => response.headers.get(name)),
-      body: Buffer.from(await response.arrayBuffer()),
-    }).toEqual(answer)
+    for (const response of [
+      await context.webServer.readResource(new Request(`http://localhost${path}`, init), reader),
+      await service.fetchBundle(new Request(`http://localhost${path}`, init)),
+    ]) {
+      expect({
+        status: response.status,
+        headers: assetHeaders(name => response.headers.get(name)),
+        body: Buffer.from(await response.arrayBuffer()),
+      }).toEqual(answer)
+    }
     return answer
   }
   // The Web route registers once the injected webServer is ready.
@@ -268,9 +276,9 @@ describe('package asset route', () => {
     })
     const stream = opened.findLast(entry => entry.path === file)?.stream
     if (stream === undefined) throw new Error('the asset route opened no file stream')
-    // events.once would reject on the premature-close error the cancelled pipeline reports; only the close matters here.
+    // The cancelled response body closes the file stream; only the close matters here.
     if (!stream.closed) await new Promise<void>((resolve) => { stream.once('close', () => { resolve() }) })
-    // pipeline settles its rejection in the turn after the file stream closes; the route logs nothing then.
+    // The webserver settles the cancelled exchange in the turn after the file stream closes; nothing is logged then.
     await new Promise(resolve => setImmediate(resolve))
     expect(warnings).toEqual([])
   })

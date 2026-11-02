@@ -37,6 +37,11 @@ it('does not advertise a missing callback and reports an unexpected question ins
   await expect(f.client.request('test/question', {})).resolves.toMatchObject({ error: { message: expect.stringContaining('onUserQuestion') as string } })
 })
 
+it('forwards a user dismissal as a result distinct from callback failure', async () => {
+  const f = await client(async () => ({ cancelled: true }))
+  await expect(f.client.request('test/question', {})).resolves.toEqual({ answer: { cancelled: true }, error: null })
+})
+
 it.each([
   { params: { method: 'unexpected/request' }, message: 'unknown runtime request' },
   { params: { questions: [{ question: 'Missing identity' }] }, message: 'requires requestId, sessionId, and questions' },
@@ -97,4 +102,21 @@ it.each(['close', 'disconnect'] as const)('aborts host work when the client or r
   await stopped.promise
   expect(signal.aborted).toBe(true)
   await pending
+})
+
+it('keeps native questions active beside the approval request handler', async () => {
+  const answer = { answers: [{ id: 'format', selected: ['CSV'] }] }
+  const f = await client(async () => answer)
+  const approvals: string[] = []
+  f.client.onRequest(async (method) => {
+    approvals.push(method)
+    return { outcome: 'allowed-once' }
+  })
+  const [question, approval] = await Promise.all([
+    f.client.request('test/question', { requestId: 'native' }),
+    f.client.request('test/question', { requestId: 'approval', method: 'approval/request' }),
+  ])
+  expect(question).toEqual({ answer, error: null })
+  expect(approval).toEqual({ answer: { outcome: 'allowed-once' }, error: null })
+  expect(approvals).toEqual(['approval/request'])
 })

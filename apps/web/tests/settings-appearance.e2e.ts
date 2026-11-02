@@ -1,4 +1,4 @@
-/** Built settings controls share radius and card materials across account, model, and plugin pages. */
+/** Built settings controls share materials and adapt their geometry to the viewport and pointer. */
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { chromium, type Locator } from 'playwright'
@@ -22,6 +22,109 @@ function appearance(element: Locator) {
     }
   })
 }
+
+function rowGeometry(control: Locator) {
+  return control.evaluate((node) => {
+    const row = node.parentElement!
+    const text = row.firstElementChild!
+    const description = text.lastElementChild!.getBoundingClientRect()
+    const rowBox = row.getBoundingClientRect()
+    const textBox = text.getBoundingClientRect()
+    const controlBox = node.getBoundingClientRect()
+    return {
+      widthDifference: rowBox.width - controlBox.width,
+      leftDifference: controlBox.left - textBox.left,
+      rightGap: rowBox.right - controlBox.right,
+      afterText: controlBox.left - textBox.right,
+      belowDescription: controlBox.top - description.bottom,
+      centerDifference: (controlBox.top + controlBox.bottom - textBox.top - textBox.bottom) / 2,
+      height: controlBox.height,
+    }
+  })
+}
+
+it('stacks font fields at narrow widths while keeping font-size controls on the right', async () => {
+  const scaffold = await launchWebScaffold({ developerTools: false })
+  onTestFinished(() => scaffold.close())
+  const browser = await chromium.launch()
+  onTestFinished(() => browser.close())
+
+  for (const platform of ['web', 'darwin', 'win32'] as const) {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 }, locale: ZH_BROWSER_LOCALE, hasTouch: platform === 'web',
+    })
+    try {
+      const page = await context.newPage()
+      await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await openSettings(page, 'zh')
+      const dialog = page.getByRole('dialog', { name: '设置', exact: true })
+      await dialog.getByRole('button', { name: '更多字体设置', exact: true }).click()
+      await page.evaluate((platform) => {
+        document.documentElement.toggleAttribute('data-windows-titlebar', platform === 'win32')
+        if (platform === 'darwin') document.documentElement.setAttribute('data-platform', platform)
+      }, platform)
+
+      for (const width of platform === 'web' ? [390, 767, 768] : [520, 767, 768]) {
+        await page.setViewportSize({ width, height: 844 })
+        for (const name of ['正文字体', '代码字体', '终端字体']) {
+          const geometry = await rowGeometry(dialog.getByRole('textbox', { name, exact: true }).locator('..'))
+          if (width <= 767) {
+            expect(Math.abs(geometry.widthDifference), `${platform} ${width}px ${name} width`).toBeLessThan(1)
+            expect(Math.abs(geometry.leftDifference), `${platform} ${width}px ${name} alignment`).toBeLessThan(1)
+            expect(geometry.belowDescription, `${platform} ${width}px ${name} placement`).toBeGreaterThanOrEqual(0)
+            expect(geometry.height, `${platform} ${width}px ${name} height`).toBeLessThan(60)
+          } else {
+            expect(geometry.afterText, `${platform} ${width}px ${name} placement`).toBeGreaterThanOrEqual(0)
+          }
+        }
+        for (const name of ['增大字号', '增大代码字号', '增大终端字号']) {
+          const geometry = await rowGeometry(dialog.getByRole('button', { name, exact: true }).locator('../../..'))
+          expect(geometry.afterText, `${platform} ${width}px ${name} placement`).toBeGreaterThanOrEqual(0)
+          expect(Math.abs(geometry.rightGap), `${platform} ${width}px ${name} alignment`).toBeLessThan(1)
+          expect(Math.abs(geometry.centerDifference), `${platform} ${width}px ${name} centering`).toBeLessThan(1)
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+      }
+
+      const field = dialog.getByRole('textbox', { name: '正文字体', exact: true })
+      await field.fill('Uncommitted font draft')
+      const original = await field.elementHandle()
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 844 })
+        expect(await original!.evaluate(input => input === document.activeElement && input.isConnected)).toBe(true)
+        expect(await field.inputValue()).toBe('Uncommitted font draft')
+      }
+    } finally {
+      await context.close()
+    }
+  }
+})
+
+it('uses 16px text for coarse-pointer font fields and preserves compact fine-pointer fields', async () => {
+  const scaffold = await launchWebScaffold({ developerTools: false })
+  onTestFinished(() => scaffold.close())
+  const browser = await chromium.launch()
+  onTestFinished(() => browser.close())
+
+  for (const hasTouch of [true, false]) {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: ZH_BROWSER_LOCALE, hasTouch })
+    try {
+      const page = await context.newPage()
+      await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+      await openSettings(page, 'zh')
+      const dialog = page.getByRole('dialog', { name: '设置', exact: true })
+      await dialog.getByRole('button', { name: '更多字体设置', exact: true }).click()
+      expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(hasTouch)
+      for (const name of ['正文字体', '代码字体', '终端字体']) {
+        const fontSize = await dialog.getByRole('textbox', { name, exact: true })
+          .evaluate(input => getComputedStyle(input).fontSize)
+        expect(fontSize, name).toBe(hasTouch ? '16px' : '14px')
+      }
+    } finally {
+      await context.close()
+    }
+  }
+})
 
 it('shares settings card materials and control sizes in both palettes', async () => {
   const scaffold = await launchWebScaffold({})

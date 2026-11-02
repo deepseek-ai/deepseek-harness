@@ -12,6 +12,8 @@
  * the same artifact safe.
  */
 
+import { execFileSync } from 'node:child_process'
+import { verifyCuaHelperTarball } from '../cua-helper/verify-tarball.ts'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -184,6 +186,11 @@ export async function publishRelease(familyId: string, directory: string, distTa
     const tarball = join(directory, filename)
     return { tarball, ...packedIdentity(tarball) }
   })
+  for (const member of order) {
+    if (member.name !== '@deepseek-ai/dsh-experimental-cua-macos') continue
+    const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+    await verifyCuaHelperTarball(member.tarball, { version: member.version, commit })
+  }
   if (distTag !== undefined) {
     for (const member of order) verifyDistTag(member, distTag)
   }
@@ -199,7 +206,8 @@ export async function publishRelease(familyId: string, directory: string, distTa
         throw new Error(
           `${name}@${version} is already published with different content`
           + `\n  registry: ${state.integrity}\n  packed:   ${local}`
-          + '\nBump the version, or investigate why the build is not reproducible.',
+          + '\nRetry a partial publication with its original release tarballs; rebuilding can change signed bytes.'
+          + '\nPublish a new version only when the package contents intentionally change.',
         )
       }
       console.log(`release publish: ${progress} ${name}@${version} already published, skipping`)

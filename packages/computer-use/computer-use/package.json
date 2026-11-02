@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-computer-use",
   "description": "Exclusive named computer-use provider registration",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -19,6 +19,7 @@
       "default": "./lib/index.js"
     },
     "./src/*": "./src/*",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json",
     "./brand": {
       "types": "./lib/types/brand.d.ts",
@@ -26,6 +27,7 @@
     }
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"

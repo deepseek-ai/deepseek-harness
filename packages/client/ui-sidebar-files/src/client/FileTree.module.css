@@ -1,0 +1,113 @@
+/* The tree's rows; the caller's container owns the font, colour, padding, and scrolling. */
+.level {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Every nested level indents by one step; the root level sits flush. */
+.level .level {
+  padding-left: 18px;
+}
+
+.item {
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  border-radius: var(--dsw-radius-md);
+}
+
+.action {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  /* Rows abut, so the hover fill is the whole row; the tree's air is this
+     inset, not a gap between rows. */
+  padding: 5px 10px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  cursor: pointer;
+}
+
+/* Local Components can render nothing; empty wrappers must not take row space. */
+.accessory:empty {
+  display: none;
+}
+
+.accessory {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding-right: 10px;
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .current:hover {
+    background: var(--dsw-alias-interactive-bg-active);
+  }
+}
+
+/* The caller's current file; hovering keeps its fill. */
+.current {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+/* The folder glyph rides the tertiary ink, as the workspace tree's does (ui-workspace Rows `.slot`). */
+.icon {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The type's coloured sheet at the folder glyph's 16px; its colour is its own. */
+.fileIcon {
+  flex: 0 0 auto;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* An entry the caller marks hidden: subdued, with the secondary ink that stays
+   readable in both themes. */
+.hidden {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Neither an openable file nor a directory: shown so the directory is
+   reported whole, greyed so nobody tries to open it. */
+.other {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .inactive:hover {
+    background: transparent;
+  }
+}
+
+.note {
+  margin: 0;
+  padding: 3px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}

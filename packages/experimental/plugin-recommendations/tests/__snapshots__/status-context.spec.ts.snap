@@ -1,0 +1,11 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`reports the card outcome with the plugin guidance on the next request without waking the conversation > restart-required plugin status 1`] = `
+[
+  {
+    "text": "Latest status of action cards from user actions and background work. These are status facts, not a request to start or retry work. Use these receipts instead of the earlier proposal when describing progress. Plugin cards: enabled means the plugin is on now, or after a DSH restart when application is restart-required; already-enabled means it was on before; failed, or unconfirmed when a reload cut enabling off, can be retried from the card; dismissed means the user declined it, so do not offer it again in this conversation; enabling authorizes nothing beyond that plugin. Continue with the user’s current request.
+[{"action":"enable_official_plugin","callId":"call-plugin-1","title":"Search","phase":"enabled","data":{"application":"restart-required"}}]",
+    "type": "text",
+  },
+]
+`;

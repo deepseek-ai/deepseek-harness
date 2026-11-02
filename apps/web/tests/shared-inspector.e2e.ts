@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { chromium, type Browser } from 'playwright'
 import { expect, it, onTestFinished } from 'vitest'
 import { compareOrRefreshGolden, launchWebScaffold, seedSession, selectedSessionFixture, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
+import { experimentalBundleDescription } from './support.ts'
 
 const bundle = fileURLToPath(new URL('../../../packages/experimental/inspector-profile', import.meta.url))
 const fixture = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.v4.jsonl', import.meta.url))
@@ -42,7 +43,7 @@ it('toggles bottom DevTools from the page and iframe without a selected Session'
       const close = panel.getByRole('button', { name: 'Collapse', exact: true })
       expect(await close.textContent()).toBe('')
       expect(await close.locator('svg').count()).toBe(1)
-      const divider = panel.getByRole('separator', { name: 'Resize NodeJS Inspector panel' })
+      const divider = panel.getByRole('separator', { name: 'Resize NodeJS inspector panel' })
       const drag = async (deltaY: number): Promise<void> => {
         const box = (await divider.boundingBox())!
         const x = box.x + box.width / 2
@@ -87,16 +88,16 @@ it('toggles bottom DevTools from the page and iframe without a selected Session'
 it.each([
   {
     locale: 'zh-CN', file: 'zh', plugins: '插件', open: '查看 开发者工具', bundle: '开发者工具',
-    description: '查看调试会话原始数据、聊天消息分组数据，以及调试 NodeJS 后端',
+    description: experimentalBundleDescription('inspector-profile', 'zh'),
     inspector: 'NodeJS 诊断', inspectorDescription: '按 Ctrl/Cmd+Shift+. 在底部面板打开 Chrome DevTools 进行开发调试',
     session: '会话数据诊断', sessionDescription: '在会话侧边栏启用当前会话的原始数据和聊天分组数据分析功能',
     openSidebar: '打开右侧边栏', sidebarDescription: '在侧边栏分析当前会话原始日志和聊天分组数据',
   },
   {
-    locale: 'en-US', file: 'en', plugins: 'Plugins', open: 'View Developer Tools', bundle: 'Developer Tools',
-    description: 'Inspect and debug raw session data, grouped chat messages, and the NodeJS backend.',
-    inspector: 'NodeJS Inspector', inspectorDescription: 'Press Ctrl/Cmd+Shift+. to open Chrome DevTools in the bottom panel for development and debugging.',
-    session: 'Session Log', sessionDescription: "Enable analysis of the current session's raw data and grouped chat messages in the session sidebar.",
+    locale: 'en-US', file: 'en', plugins: 'Plugins', open: 'View Developer tools', bundle: 'Developer tools',
+    description: experimentalBundleDescription('inspector-profile', 'en'),
+    inspector: 'NodeJS inspector', inspectorDescription: 'Press Ctrl/Cmd+Shift+. to open Chrome DevTools in the bottom panel for development and debugging.',
+    session: 'Session log', sessionDescription: "Enable analysis of the current session's raw data and grouped chat messages in the session sidebar.",
     openSidebar: 'Open right sidebar', sidebarDescription: 'Analyze raw logs and grouped chat messages for the current session in the sidebar.',
   },
 ])('shows the Inspector bundle and component copy in $locale', async (copy) => {
@@ -150,7 +151,7 @@ it.each([
     `  description: ${await sessionGuide.getByText(copy.sidebarDescription, { exact: true }).innerText()}`,
     `- NodeJS bottom: ${await bottomTitle.innerText()}`)
   await sessionGuide.click()
-  await page.getByRole('table', { name: copy.locale === 'zh-CN' ? '原始数据' : 'Raw Log', exact: true }).waitFor()
+  await page.getByRole('table', { name: copy.locale === 'zh-CN' ? '原始数据' : 'Raw log', exact: true }).waitFor()
   await compareOrRefreshGolden(fileURLToPath(new URL(`./expected/shared-inspector/metadata-${copy.file}.expected.md`, import.meta.url)),
     snapshot.join('\n'), webSnapshotMode())
 })

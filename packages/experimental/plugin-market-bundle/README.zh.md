@@ -1,5 +1,5 @@
 ---
-description: "从插件管理页启用实验性的自定义插件市场。"
+description: "从插件管理页启用实验性的自定义插件索引。"
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-此可选组合包（bundle）挂载自定义插件市场：Host 的 [`pluginMarket`](../../boot/plugin-market/README.zh.md) 服务读取用户添加的插件市场索引，Web 端提供插件页的[发现标签页](../../client/ui-plugin-market/README.zh.md)。随包配置默认禁用。
+此可选组合包（bundle）挂载自定义插件索引：Host 的 [`pluginMarket`](../../boot/plugin-market/README.zh.md) 服务读取用户添加的插件索引，Web 端提供插件页的[发现标签页](../../client/ui-plugin-market/README.zh.md)。随包配置默认禁用。
 
 ## 目录
 
@@ -24,7 +24,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用此包
 
-打开 Web 侧栏中的**插件**，点击**实验性插件**旁的**更多**，启用**自定义插件市场**；启用后它也会出现在主列表中。页面随后显示**已安装**和**发现**两个标签页；**发现**用于添加索引源并安装其中的组合包。禁用此组合包会移除发现标签页和 `plugin_market` 工具；已保存的索引源保留在 profile 中。
+打开 Web 侧栏中的**插件**，在**实验性插件**下启用**自定义插件索引**。页面随后显示**已安装**和**发现**两个标签页；**发现**用于添加索引源并安装其中的组合包。禁用此组合包会移除发现标签页和 `plugin_market` 工具；已保存的索引源保留在 profile 中。
 
 -----
 
@@ -53,7 +53,7 @@ kind: "package-bundle"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 目前没有官方插件市场；发现标签页只列出用户添加的索引源。
+- 目前没有官方插件索引；发现标签页只列出用户添加的索引源。
 
 -----
 

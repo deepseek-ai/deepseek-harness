@@ -8,3 +8,4 @@ If application files are missing or damaged, close the application and reinstall
 Exit
 Restart
 Disable third-party plugins, back up profile patch, and restart
+Get diagnostic report

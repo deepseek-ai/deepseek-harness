@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Aufgabenplanung",
+    "description": "Speichert Automatisierungsaufgaben, führt jede bei Fälligkeit in ihrer ursprünglichen Sitzung aus und stellt dem Agenten Tools zur Verwaltung bereit."
+  }
+}

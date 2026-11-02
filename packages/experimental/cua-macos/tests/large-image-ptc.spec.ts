@@ -1,4 +1,5 @@
 /** Valid large PNG admission through Loader, Harness tool rendering, disk attachments and a real Node PTC process. */
+import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -65,14 +66,14 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
   }))
   const modules = {
     llm: LlmRuntime, session: SessionStore, projection: SessionProjectionRegistry,
-    systemPrompt: SystemPrompt, tools: ToolRuntime, agents: AgentRegistry, agentLoop: AgentLoop,
+    systemPrompt: SystemPrompt, tools: ToolRuntime, toolExecutor: PtcToolExecutor, agents: AgentRegistry, agentLoop: AgentLoop,
     attachments: LocalAttachmentStore, fs: FileSystem, subprocess: SubprocessLocal,
     sandbox: Sandbox, sandboxPolicy: SandboxPolicy, ptc: NodePtcRuntime,
     computerUse: ComputerUseRegistry, cua: NativeProvider, workingDirectory: WorkingDirectory,
   }
   const configPath = join(root, 'cordis.yml')
   const configs: Record<string, object> = {
-    tools: { mode: 'ptc' }, attachments: { dshHome: join(root, 'home') }, workingDirectory: { defaultDirectory: root },
+    attachments: { dshHome: join(root, 'home') }, workingDirectory: { defaultDirectory: root },
     fs: { cwd: root }, sandboxPolicy: { mode: 'danger-full-access', workspaceRoot: root }, cua: { agentPreset: false, helperPath, allowedApps: [{ 'id': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'name': 'Fixture', 'executablePath': '/fixture/app' }] },
   }
   await writeFile(configPath, Object.keys(modules).flatMap(name => [

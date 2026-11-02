@@ -11,13 +11,18 @@ import {
   evaluateApproval as evaluateWithHistory,
   listPullRequestReviews,
   parseApprovalPolicy,
-  runApprovalCheck as runWithHistory,
+  runApprovalCheck as runPublisher,
   publishApprovalPhase,
 } from './check-approval.mjs'
 
 const policySource = readFileSync(new URL('approval-policy.json', import.meta.url), 'utf8')
-const withoutComments = api => (path, options) => path.includes('/comments?') ? [] : api(path, options)
+const emptyCheckRuns = { total_count: 0, check_runs: [] }
+const isCheckRunsList = path => path.includes('/commits/') && path.includes('/check-runs?')
+const withoutChecks = api => (path, options) =>
+  isCheckRunsList(path) ? emptyCheckRuns : path.includes('/check-runs') ? {} : api(path, options)
+const withoutComments = api => withoutChecks((path, options) => path.includes('/comments?') ? [] : api(path, options))
 const evaluateApproval = options => evaluateWithHistory({ getMergedCount: async () => 0, ...options, api: withoutComments(options.api) })
+const runWithHistory = options => runPublisher({ ...options, api: withoutChecks(options.api) })
 const runApprovalCheck = options => runWithHistory({ getMergedCount: async () => 0, ...options, api: withoutComments(options.api) })
 const HEAD_SHA = '1234567890abcdef1234567890abcdef12345678'
 
@@ -475,14 +480,179 @@ test('uses policy endpoints and formats only the displayed score', async () => {
 
 test('publishes setup phases without evaluating or installing dependencies', async () => {
   const states = []
+  const phases = []
   const options = {
     event: pullRequestEvent(), runUrl: 'https://github.example/run/1',
-    api: async (path, { body }) => { assert.match(path, /\/statuses\//u); states.push(body.state) },
+    api: async (path, options = {}) => {
+      if (isCheckRunsList(path)) return emptyCheckRuns
+      if (path.includes('/check-runs')) { phases.push(options.body?.conclusion ?? options.body?.status); return {} }
+      assert.match(path, /\/statuses\//u)
+      states.push(options.body.state)
+    },
   }
   await publishApprovalPhase({ ...options, phase: 'pending' })
   await publishApprovalPhase({ ...options, phase: 'error' })
   assert.deepEqual(states, ['pending', 'error'])
+  assert.deepEqual(phases, ['in_progress', 'failure'])
   await assert.rejects(publishApprovalPhase({ ...options, phase: 'success' }), /invalid approval setup phase/u)
+})
+
+test('updates the App-owned run instead of creating another', async () => {
+  const calls = []
+  const appRuns = [{ id: 42, app: { slug: 'dsh-weighted-approval' }, conclusion: 'success', external_id: 'weighted-approval-decision' }]
+  await runPublisher({
+    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', write: () => {},
+    checkAppSlug: 'dsh-weighted-approval',
+    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
+    getMergedCount: async () => 0,
+    api: async (path, options = {}) => {
+      if (path.includes('/reviews?')) return [review('writer', 'APPROVED')]
+      if (path.includes('/collaborators/writer/permission')) return { permission: 'write' }
+      if (path.includes('/comments?')) return []
+      if (path.includes('/statuses/')) return {}
+      throw new Error(`unexpected status API path ${path}`)
+    },
+    checkApi: async (path, options = {}) => {
+      calls.push({ path, method: options.method, body: options.body })
+      if (isCheckRunsList(path)) return { total_count: appRuns.length, check_runs: appRuns }
+      if (path.includes('/check-runs')) return {}
+      throw new Error(`unexpected check API path ${path}`)
+    },
+  })
+  assert.deepEqual(calls.map(call => call.path), [
+    `/repos/deepseek-harness/deepseek-harness/commits/${HEAD_SHA}/check-runs?check_name=weighted%20approval%20decision&filter=all&per_page=100`,
+    '/repos/deepseek-harness/deepseek-harness/check-runs/42',
+  ])
+  assert.equal(calls[1].method, 'PATCH')
+  assert.equal(calls[1].body.name, undefined)
+})
+
+test('ignores job-token runs when the App token publishes', async () => {
+  const calls = []
+  const jobRuns = [{ id: 7, app: { slug: 'github-actions' }, conclusion: 'success', external_id: 'weighted-approval-decision' }]
+  await runPublisher({
+    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', write: () => {},
+    checkAppSlug: 'dsh-weighted-approval',
+    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
+    getMergedCount: async () => 0,
+    api: async (path) => {
+      if (path.includes('/reviews?')) return [review('writer', 'APPROVED')]
+      if (path.includes('/collaborators/writer/permission')) return { permission: 'write' }
+      if (path.includes('/comments?')) return []
+      if (path.includes('/statuses/')) return {}
+      throw new Error(`unexpected status API path ${path}`)
+    },
+    checkApi: async (path, options = {}) => {
+      calls.push({ path, method: options.method, body: options.body })
+      if (isCheckRunsList(path)) return { total_count: jobRuns.length, check_runs: jobRuns }
+      if (path.includes('/check-runs')) return {}
+      throw new Error(`unexpected check API path ${path}`)
+    },
+  })
+  assert.equal(calls.at(-1).method, 'POST')
+  assert.equal(calls.at(-1).body.name, 'weighted approval decision')
+  assert.equal(calls.at(-1).body.external_id, 'weighted-approval-decision')
+})
+
+test('publishes the check run through the App token when one is provided', async () => {
+  const statusCalls = []
+  const checkCalls = []
+  await runPublisher({
+    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', write: () => {},
+    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
+    getMergedCount: async () => 0,
+    api: async (path, options = {}) => {
+      statusCalls.push({ path, body: options.body })
+      if (path.includes('/reviews?')) return [review('writer', 'APPROVED')]
+      if (path.includes('/collaborators/writer/permission')) return { permission: 'write' }
+      if (path.includes('/comments?')) return []
+      if (path.includes('/statuses/')) return {}
+      throw new Error(`unexpected status API path ${path}`)
+    },
+    checkApi: async (path, options = {}) => {
+      checkCalls.push({ path, body: options.body })
+      if (isCheckRunsList(path)) return emptyCheckRuns
+      if (path.includes('/check-runs')) return {}
+      throw new Error(`unexpected check API path ${path}`)
+    },
+  })
+  assert.equal(statusCalls.at(-1).body.context, 'weighted approval')
+  assert.equal(checkCalls.at(-1).body.name, 'weighted approval decision')
+  assert.equal(checkCalls.at(-1).body.conclusion, 'action_required')
+  assert.ok(statusCalls.every(call => !call.path.includes('/check-runs')))
+  assert.ok(checkCalls.every(call => !call.path.includes('/statuses/')))
+})
+
+test('keeps the status gate when the label write fails', async () => {
+  const writes = []
+  const states = []
+  await runPublisher({
+    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1',
+    write: line => writes.push(line),
+    getOwnership: async () => ({ totalLines: 100, reviewerLines: { turtle2099: 25 } }),
+    api: async (path, options = {}) => {
+      if (path.includes('/reviews?')) return [review('turtle2099', 'APPROVED')]
+      if (path.includes('/collaborators/turtle2099/permission')) return { permission: 'write' }
+      if (path.includes('/comments?')) return []
+      if (path.includes('/statuses/')) { states.push(options.body.state); return {} }
+      if (path.includes('/check-runs')) throw new Error('check runs unavailable')
+      throw new Error(`unexpected API path ${path}`)
+    },
+  })
+  assert.deepEqual(states, ['pending', 'success'])
+  assert.ok(writes.some(line => /Decision check run not published/.test(line)))
+})
+
+test('reports the decision on a non-required check run beside the status', async () => {
+  const calls = []
+  const api = async (path, options = {}) => {
+    calls.push({ path, method: options.method, body: options.body })
+    if (path.includes('/reviews?')) return [review('writer', 'APPROVED')]
+    if (path.includes('/collaborators/writer/permission')) return { permission: 'write' }
+    if (path.includes('/comments?')) return []
+    if (isCheckRunsList(path)) return emptyCheckRuns
+    if (path.includes('/check-runs') || path.includes('/statuses/')) return {}
+    throw new Error(`unexpected API path ${path}`)
+  }
+  const result = await runPublisher({
+    event: pullRequestEvent(), policySource, runUrl: 'https://github.example/run/1', write: () => {},
+    getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
+    getMergedCount: async () => 0,
+    api,
+  })
+  const status = calls.filter(call => call.path.includes('/statuses/')).at(-1)
+  const check = calls.filter(call => call.path.endsWith('/check-runs')).at(-1)
+  assert.equal(result.state, 'pending')
+  assert.equal(status.body.state, 'pending')
+  assert.equal(check.body.name, 'weighted approval decision')
+  assert.equal(check.body.conclusion, 'action_required')
+})
+
+test('revokes a published success check run and updates one run per head', async () => {
+  const calls = []
+  const checkRuns = [
+    { id: 7, app: { slug: 'github-actions' }, conclusion: 'success', external_id: '' },
+    { id: 8, app: { slug: 'github-actions' }, conclusion: 'action_required', external_id: 'weighted-approval-decision' },
+    { id: 9, app: { slug: 'other-app' }, conclusion: 'success', external_id: '' },
+    { id: 10, app: { slug: 'github-actions' }, conclusion: 'success', external_id: 'a-job-check-run' },
+  ]
+  await publishApprovalPhase({
+    event: pullRequestEvent(), runUrl: 'https://github.example/run/1', phase: 'pending',
+    api: async (path, options = {}) => {
+      calls.push({ path, method: options.method, body: options.body })
+      return isCheckRunsList(path) ? { total_count: checkRuns.length, check_runs: checkRuns } : {}
+    },
+  })
+  assert.deepEqual(calls.map(call => call.path), [
+    `/repos/deepseek-harness/deepseek-harness/statuses/${HEAD_SHA}`,
+    `/repos/deepseek-harness/deepseek-harness/commits/${HEAD_SHA}/check-runs?check_name=weighted%20approval%20decision&filter=all&per_page=100`,
+    '/repos/deepseek-harness/deepseek-harness/check-runs/7',
+    '/repos/deepseek-harness/deepseek-harness/check-runs/10',
+  ])
+  for (const call of calls.slice(2)) {
+    assert.equal(call.method, 'PATCH')
+    assert.equal(call.body.conclusion, 'action_required')
+  }
 })
 
 for (const [mergedCount, credit] of [[0, 0], [1, 0.011], [50, 0.55], [99, 1.089], [100, 1.1], [101, 1.1], [200, 1.1]]) {

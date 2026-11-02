@@ -66,7 +66,7 @@ describe('SDK session/wait with parked child input', () => {
       for (let level = 0; level < depth; level++) {
         const started = await ctx.subagents.startActivation({
           provider: 'local-test', label: 'interruptible child', delivery: 'caller', signal: new AbortController().signal,
-          request: { parent: owner, prompt: [{ type: 'text', text: 'work' }] },
+          parent: owner, prompt: [{ type: 'text', text: 'work' }],
         })
         closeChildren ??= () => started.dispose()
         child = ctx.agents.get(started.childId)!
@@ -85,7 +85,7 @@ describe('SDK session/wait with parked child input', () => {
       await waiting
       expect(child.inbox.nextStep.length + child.inbox.nextTurn.length).toBeGreaterThan(0)
       expect(ctx.agents.get(child.id)).toBe(child)
-      await expect(ctx.subagents.waitForChildren(parent)).resolves.toBe(false)
+      await expect(ctx.subagents.waitForTreeWork(parent)).resolves.toBe(false)
     } finally {
       release.resolve(undefined)
       await closeChildren?.()
@@ -118,7 +118,7 @@ describe('SDK session/wait failures', () => {
       const warnings = vi.spyOn(ctx.logger, 'warn')
       const child = await ctx.subagents.startActivation({
         provider: 'local-test', label: 'child failure', delivery: 'caller', signal: new AbortController().signal,
-        request: { parent, prompt: [{ type: 'text', text: 'delegated task' }] },
+        parent, prompt: [{ type: 'text', text: 'delegated task' }],
       })
       await expect(child.result).resolves.toMatchObject({ stopReason: 'error' })
       expect(observed).toEqual([failure])
@@ -145,7 +145,7 @@ describe('SDK session/wait failures', () => {
       let completion: ReturnType<typeof server.wait> | undefined
       if (timing === 'during') {
         const waiting = Promise.withResolvers<undefined>()
-        vi.spyOn(ctx.subagents, 'waitForChildren').mockImplementationOnce(() => {
+        vi.spyOn(ctx.subagents, 'waitForTreeWork').mockImplementationOnce(() => {
           waiting.resolve(undefined)
           return children.promise
         })

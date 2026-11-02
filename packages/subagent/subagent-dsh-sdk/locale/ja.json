@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DSH SDK サブエージェントバックエンド",
+    "description": "TypeScript SDK と標準入出力の JSON-RPC で、子プロセス内の Harness を操作します。"
+  }
+}

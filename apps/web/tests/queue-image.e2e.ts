@@ -96,10 +96,14 @@ describe('web e2e: queued image submission', () => {
     await input.press('Enter')
     await expect.poll(() => existsSync(readyFile), { timeout: 15_000 }).toBe(true)
 
-    // A just-submitted composer is read-only for the prompt round-trip.
+    // The composer keeps the sent prompt, still editable, until the Host accepts it.
+    await expect.poll(() => input.textContent(), { timeout: 10_000 }).toBe('')
     await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor({ timeout: 10_000 })
     await pasteImage(page, await readFile(PNG))
     await page.getByRole('img', { name: 'queued.png' }).waitFor({ timeout: 10_000 })
+    // The image uploads as soon as it is added, and Send waits for its receipt.
+    await page.locator('button[aria-busy="false"]', { has: page.getByRole('img', { name: 'queued.png' }) })
+      .waitFor({ timeout: 10_000 })
     const releasePrompt = Promise.withResolvers<undefined>()
     const releaseImage = Promise.withResolvers<undefined>()
     let cleanupPromise: Promise<void> | undefined
@@ -123,17 +127,20 @@ describe('web e2e: queued image submission', () => {
     try {
       await input.fill(QUEUED_TEXT)
       await input.press('Enter')
-      await dockThumb.waitFor({ timeout: 15_000 })
-      await expect.poll(() => dockThumb.getAttribute('src'), { timeout: 15_000 }).toMatch(/^blob:/)
-      expect(await page.locator('[data-queue-dock] [data-submission-echo]').count()).toBe(1)
+      // The composer keeps the text and image, read-only, until the Host accepts the prompt.
+      await expect.poll(() => input.getAttribute('contenteditable'), { timeout: 15_000 }).toBe('false')
+      expect(await page.getByRole('img', { name: 'queued.png' }).count()).toBe(1)
+      expect(await page.locator('[data-queue-dock] [data-submission-echo]').count()).toBe(0)
       releasePrompt.resolve(undefined)
       await expect.poll(() => imageRequested, { timeout: 15_000 }).toBe(true)
-      await page.getByText(QUEUED_TEXT, { exact: true }).waitFor()
+      // The Host queue row can arrive before the prompt reply that clears the composer.
+      await expect.poll(() => input.textContent(), { timeout: 15_000 }).toBe('')
+      await page.locator('[data-queue-dock]').getByText(QUEUED_TEXT, { exact: true }).waitFor()
       await page.getByRole('button', { name: 'Remove queued message', disabled: false }).waitFor({ timeout: 15_000 })
       expect(await page.locator('[data-queue-dock] [data-submission-echo]').count()).toBe(0)
       expect(await dockThumb.count()).toBe(0)
       releaseImage.resolve(undefined)
-      // Admission replaces the optimistic image; wait for the durable row's own thumbnail.
+      // The Host queue row replaces the accepted echo; wait for the durable row's own thumbnail.
       const durableThumb = page.locator('[data-queue-dock] li:not([data-submission-echo]) img[alt="Queued message image"]')
       await durableThumb.waitFor({ timeout: 15_000 })
       await expect.poll(() => durableThumb.getAttribute('src'), { timeout: 15_000 }).toMatch(/^blob:/)

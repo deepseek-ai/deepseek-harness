@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ローカル Bash 実行",
+    "description": "ローカルの子プロセスで Bash コマンドを実行します。"
+  }
+}

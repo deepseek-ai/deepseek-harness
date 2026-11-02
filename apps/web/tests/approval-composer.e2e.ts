@@ -112,6 +112,17 @@ describe.each(MODE === 'record' ? ['button'] as const : ['button', 'keyboard'] a
     await panel.waitFor({ timeout: MODE === 'record' ? 180_000 : 60_000 })
     const scroll = panel.locator('[data-approval-scroll]')
     await expect.poll(() => scroll.getByText(/tok/).count(), { timeout: 15_000 }).toBeGreaterThan(0)
+    const defaults = await panel.evaluate((root: HTMLElement) => {
+      const before = root.style.textAlign
+      root.style.textAlign = 'center'
+      try {
+        return {
+          alignment: getComputedStyle(root.querySelector('[data-approval-scroll]')!).textAlign,
+          wrapping: getComputedStyle(root.querySelector('button')!.parentElement!).flexWrap,
+        }
+      } finally { root.style.textAlign = before }
+    })
+    expect(defaults).toEqual({ alignment: 'center', wrapping: 'nowrap' })
 
     if (MODE !== 'record') {
       const snapshot = await captureStableAria(page, '[data-approval-key]', scaffold.workspaceCwd)

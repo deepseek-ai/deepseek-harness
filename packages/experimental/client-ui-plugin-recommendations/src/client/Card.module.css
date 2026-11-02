@@ -1,0 +1,13 @@
+.header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 20px; background: var(--dsw-alias-bg-module-platform); font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
+.badge { font-size: 12px; }
+.body { padding: 20px; }
+.details { display: block; box-sizing: border-box; width: calc(100% + 16px); margin: -8px; padding: 8px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; transition: background-color 120ms ease; }
+@media (hover: hover) { .details:hover { background: var(--dsw-alias-interactive-bg-hover); } }
+.details:focus-visible { outline: none; background: var(--dsw-alias-interactive-bg-hover); box-shadow: inset 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); }
+.title { display: block; font-size: 16px; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
+.description { display: block; margin: 8px 0 0; font-size: 13px; line-height: 1.7; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.placeholder { display: inline-block; width: 50%; height: 0.8em; vertical-align: middle; border-radius: var(--dsw-radius-xs); background: var(--dsw-alias-bg-skeleton); }
+.footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 0.5px solid var(--dsw-alias-border-l1); flex-wrap: wrap; }
+.scope { font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
+.actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.status { margin: 16px 0 0; padding-top: 12px; border-top: 0.5px solid var(--dsw-alias-border-l1); font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }

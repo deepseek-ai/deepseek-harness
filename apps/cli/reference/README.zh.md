@@ -132,7 +132,7 @@ dsh web --help
 
 基于 base 的 profile 中，新会话默认使用 `workspace-write` 权限预设。Bash 和文件系统修改仅限于会话 workspace 与平台临时根目录；读取和网络访问不受限制，进程可见性则取决于所选沙箱后端——bwrap 在私有 PID 命名空间中运行命令并隐藏宿主进程，Landlock 与 Seatbelt 保持宿主进程可见性不变。`DSH_PERMISSION_MODE` 更改进程后备值。General settings 中存储的权限影响后续 Web 会话，不改变已打开的会话。独立的 `sdk-minimal` 配置树则固定为 `danger-full-access`，且不挂载 approval 或权限 settings 服务。
 
-`DSH_TOOLS_MODE` 为进程选择 `native` 或 `ptc`；其他值会导致启动失败。随附的 `minimal` agent preset 会保留该部署的呈现方式，将完整系统提示词固定为 `You are a helpful software engineer assistant.`，并提供按平台选择的持久 shell、`read_image` 和 `working_directory`。它支持自动上下文压缩和用户 `/compact` 命令。创建 Web 会话时请选择极简模式；共享的浏览器、workspace、持久化、沙箱与权限宿主保持不变。
+Web、headless 与 SDK 继承 base bundle 的原生工具执行；使用 [PTC overlay](../config/examples/ptc.yml) 可选择 PTC。随附的 `minimal` agent preset 会保留该部署的呈现方式，将完整系统提示词固定为 `You are a helpful software engineer assistant.`，并提供按平台选择的持久 shell、`read_image` 和 `working_directory`。它支持自动上下文压缩和用户 `/compact` 命令。创建 Web 会话时请选择极简模式；共享的浏览器、workspace、持久化、沙箱与权限宿主保持不变。
 
 ## 共享部署行为
 

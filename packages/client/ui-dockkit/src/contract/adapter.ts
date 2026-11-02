@@ -45,7 +45,11 @@ export interface DockLabels {
 
 /**
  * Renders one tab's body. The embedder dispatches on `tab.kind`, which is the
- * only place that string carries meaning.
+ * only place that string carries meaning. As `renderTab`, the kit calls it
+ * again only when the renderer or the tab record is a new object and reuses the
+ * previous body across its own re-renders, such as a gesture's frames: the body
+ * must follow from `tab` and the values the renderer captures, and any other
+ * input reaches it through a new renderer or the body's own hooks and context.
  */
 export type TabRenderer = (tab: TabRecord) => ReactNode
 

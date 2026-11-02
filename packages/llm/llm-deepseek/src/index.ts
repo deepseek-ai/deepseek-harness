@@ -1,5 +1,5 @@
 /** DeepSeek Messages transport, request configuration, and model capabilities. */
-export { catalogModelFields, deepSeekConfigFields, Config, plainOptions, resolveAdapterOptions, PUBLIC_BASE_URL } from './config.ts'
+export { catalogModelFields, deepSeekConfigFields, Config, isBuiltInCatalog, plainOptions, resolveAdapterOptions, PUBLIC_BASE_URL } from './config.ts'
 export type { Options, ResolvedDeepSeekOptions } from './config.ts'
 export {
   DEFAULT_CONTEXT_WINDOW,
@@ -38,4 +38,12 @@ export type { DeepSeekUploadRecord } from './upload-index.ts'
 export type { RequestDefaults } from './types.ts'
 
 export { catalogModelInfo } from './model-info.ts'
-export { registerDeepSeekProvider } from './host.ts'
+export { createModelListingCache, registerDeepSeekProvider } from './host.ts'
+export { LISTING_TIMEOUT, modelListingURL, parseModelListing, requestModelListing } from './listing.ts'
+export type { ClientRequirement, ListedBadge, ListedCapabilities, ListedFacts, ListingEntry, ModelListing } from './listing.ts'
+export { DEFAULT_MODELS_MAX_AGE_MS, DEFAULT_MODELS_TIMEOUT_MS, modelListingConfigFields, resolveListingTiming } from './listing-config.ts'
+export type { ListingSettings, ListingTiming, ModelListingConfig, ModelListingOptions } from './listing-config.ts'
+export { ModelListingCache } from './listing-cache.ts'
+export type { ListingCacheDependencies, ListingView } from './listing-cache.ts'
+export { refuseListedModel, resolveListedCatalog } from './listed-catalog.ts'
+export type { CatalogRefusal, ListedCatalog, ListedCatalogInput, ModelOverride } from './listed-catalog.ts'

@@ -141,7 +141,7 @@ export class UserQuestionService extends TypertRemoteService {
         'human interaction requires the exact live calling agent when an agent is supplied',
         'CALLER_NOT_LIVE')
     }
-    if (!agents.roots().includes(agent)) {
+    if (agent.session.header.origin === 'subagent') {
       throw new UserQuestionError(
         'human interaction is unavailable while the calling agent is owned by another live agent; '
         + "include the unresolved question or decision in the child agent's final result",
@@ -277,17 +277,16 @@ export class UserQuestionService extends TypertRemoteService {
    * Ask the scoped answerer waterfall and wait for the user's answer.
    *
    * When a caller supplies an agent, human interaction is valid only for the
-   * exact live runtime root. Runtime ownership, not durable session lineage,
-   * decides this boundary: an owned child has no human answerer and would
-   * block forever, while a lineage-bearing session resumed as a new runtime
-   * root may ask normally.
+   * exact live instance of an ordinary Session. Explicit subagent origin
+   * rejects delegated callers; historical ordinary forks may retain parent
+   * metadata and still ask normally.
    *
    * @param request Questions, owner agent, and abort signal.
    * @returns The answer chosen or typed by the human.
    * @throws {UserQuestionError} code `ASK_ABORTED` when the supplied signal
    *   is already or becomes aborted, `CALLER_NOT_LIVE` when a supplied agent
    *   is not the registry's exact live instance, or `DELEGATED_CALLER` when
-   *   that live agent is owned by another agent.
+   *   that live agent has subagent origin.
    */
   async ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer> {
     if (request.signal?.aborted) {
@@ -298,26 +297,44 @@ export class UserQuestionService extends TypertRemoteService {
     }
     const agent = request.agent
     if (agent !== undefined) this.assertLiveRoot(agent)
-    // A presentation intent asserts two things the types cannot: that the
-    // named approve label is one of this question's own options, and that a
-    // plan-review carries the plan it is a review of. A UI honouring the
-    // intent answers with that label, and shows that detail as the plan, so
-    // either gap would put a choice the asker never offered — or an approval of
-    // something invisible — in front of the user. Caught at the asker, where
-    // the mistake is, rather than in each UI.
     for (const question of request.questions) {
       const intent = question.intent
       if (intent === undefined) continue
-      if (!(question.options ?? []).some(option => option.label === intent.approve)) {
-        throw new UserQuestionError(
-          `question ${question.id} declares intent ${intent.kind} whose approve label `
-          + `${JSON.stringify(intent.approve)} names none of its options`,
-          'BAD_INTENT')
+      const labels = intent.kind === 'approval'
+        ? [intent.approve, intent.reject, ...intent.always === undefined ? [] : [intent.always]]
+        : [intent.approve]
+      const options = question.options ?? []
+      const unoffered = labels.find(label => !options.some(option => option.label === label))
+      if (unoffered !== undefined) {
+        if (intent.kind === 'plan-review') {
+          throw new UserQuestionError(
+            `question ${question.id} declares intent ${intent.kind} whose approve label `
+            + `${JSON.stringify(intent.approve)} names none of its options`,
+            'BAD_INTENT')
+        }
+        throw new UserQuestionError(`question ${question.id} declares intent ${intent.kind} whose action label `
+          + `${JSON.stringify(unoffered)} names none of its options`, 'BAD_INTENT')
       }
       if (question.detail === undefined) {
-        throw new UserQuestionError(
-          `question ${question.id} declares intent ${intent.kind} without the detail it reviews`,
-          'BAD_INTENT')
+        const detail = intent.kind === 'approval' ? 'scope detail it requires' : 'detail it reviews'
+        throw new UserQuestionError(`question ${question.id} declares intent ${intent.kind} without the ${detail}`, 'BAD_INTENT')
+      }
+      if (intent.kind === 'approval') {
+        if (request.questions.length !== 1) {
+          throw new UserQuestionError(`approval presentation requires one question; received ${request.questions.length}`, 'BAD_INTENT')
+        }
+        if (question.multiSelect === true) {
+          throw new UserQuestionError(`approval question ${question.id} does not support multiSelect`, 'BAD_INTENT')
+        }
+        if (request.wait !== undefined) {
+          throw new UserQuestionError(`approval question ${question.id} requires a blocking request without wait`, 'BAD_INTENT')
+        }
+        if (new Set(labels).size !== labels.length) {
+          throw new UserQuestionError(`approval question ${question.id} requires distinct action labels; received ${JSON.stringify(labels)}`, 'BAD_INTENT')
+        }
+        if (options.length !== labels.length) {
+          throw new UserQuestionError(`approval question ${question.id} requires ${labels.length} options matching its actions; received ${options.length}`, 'BAD_INTENT')
+        }
       }
     }
     const noAnswerer = () => Promise.reject(new UserQuestionError(

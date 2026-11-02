@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Serveur frontal statique",
+    "description": "Servir la page d'entrée et les fichiers statiques de l'application Web, rejeter les chemins en dehors de leur répertoire et renvoyer 404 pour les ressources manquantes."
+  }
+}

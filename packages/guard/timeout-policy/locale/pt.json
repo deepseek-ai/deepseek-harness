@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Controle de tempo limite de chamada de ferramenta",
+    "description": "Envia um sinal de cancelamento de acordo com o limite de tempo de cada ferramenta e retorna o resultado do timeout."
+  }
+}

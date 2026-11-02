@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { collectLogEvents } from './gen-persistence-catalog.ts'
 import { extractPersistenceSchema } from './persistence-schema.ts'
 import { classifyPersistenceChange, parsePersistenceSnapshot } from './persistence-changes.ts'
-import { canonicalizeSchema, isArbitraryJsonSchema, schemaDigest, type PersistenceSchemaInventory } from './persistence-schema-model.ts'
+import { canonicalizeSchema, encodePersistenceSnapshot, isArbitraryJsonSchema, schemaDigest, type PersistenceSchemaInventory } from './persistence-schema-model.ts'
 
 const roots: string[] = []
 afterEach(() => {
@@ -63,7 +63,7 @@ describe('persistent source type extraction', () => {
     expect(inventory.types.some(type => type.names.includes('packages/domain/payload/src/types.ts#Section'))).toBe(true)
     expect(inventory.types.some(type => type.names.length === 0 && type.sources.includes('packages/domain/payload/src/types.ts:2'))).toBe(true)
     expect(inventory.types.some(type => type.schema.nodes[0]?.kind === 'array' && type.names.length === 0)).toBe(true)
-    expect(parsePersistenceSnapshot(inventory)).toEqual(inventory)
+    expect(parsePersistenceSnapshot(encodePersistenceSnapshot(inventory))).toEqual(inventory)
   })
 
   it('ignores alias names, files, documentation, readonly, brands and property order', () => {
@@ -421,7 +421,7 @@ describe('source compatibility authoring', () => {
       discriminator: 'kind', unknownKinds: 'preserve', attributionKinds: ['attribution'] })
     expect(classifyPersistenceChange(before.roots.find(root => root.kind === 'event')!, root))
       .toEqual([expect.objectContaining({ kind: 'attribution-kind-added', requiresCompatibilityReview: false })])
-    expect(parsePersistenceSnapshot({ ...after, types: [] })).toEqual({ ...after, types: [] })
+    expect(parsePersistenceSnapshot(encodePersistenceSnapshot({ ...after, types: [] }))).toEqual({ ...after, types: [] })
   })
 
   it('binds inherited source declarations only on explicitly eligible required roles', () => {

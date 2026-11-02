@@ -26,6 +26,7 @@ The test-support group gives repository tests deterministic, keyless ways to exe
 |---|---|
 | [`session-snapshot`](session-snapshot/README.md) | Provides session-log snapshot support and protocol adapters for profile-driven tests |
 | [`agent-loop-testkit`](agent-loop-testkit/README.md) | Provides the shared prerequisite services for tests that exercise the concrete AgentLoop |
+| [`tool-testkit`](tool-testkit/README.md) | Defines tool fixtures and exercises invocation or executor behavior in tests |
 | [`client-runtime`](client-runtime/README.md) | Provides the jsdom slot test bench for browser feature specs |
 | [`remote-mock`](remote-mock/README.md) | Provides the endpoint-named Typert Remote mock and the Connection carrier face whole-client specs install |
 | [`loader-smoke`](loader-smoke/README.md) | Boots Loader-composed applications and drives fixture turns for smoke tests |

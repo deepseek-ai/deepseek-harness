@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interface d'approbation des opérations",
+    "description": "Affiche les actions en attente d'approbation et renvoie les sélections de l'utilisateur aux tâches en cours d'exécution."
+  }
+}

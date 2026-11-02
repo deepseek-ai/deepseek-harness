@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbeitsbereichsabhängigkeiten",
+    "description": "Geben Sie absolute Pfade zu den gebündelten Python-, Node.js- und pnpm-Laufzeiten an."
+  }
+}

@@ -164,6 +164,8 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
       const revealResponse = page.waitForResponse(response => response.url().includes('action=reveal') && response.request().method() === 'POST')
       await page.getByRole('menuitem', { name: 'Show file location', exact: true }).click()
       expect((await revealResponse).status()).toBe(204)
+      await page.waitForFunction(() => document.querySelector('[data-presented-files-row] button:disabled') === null)
+      expect(await page.getByRole('alert').count()).toBe(0)
       await expect.poll(opened).toHaveLength(beforeReveal + 1)
       expect((await opened()).at(-1)).toEqual({ action: 'reveal', content: null, path: await realpath(process.platform === 'darwin' ? join(cwd, 'report.txt') : cwd) })
       for (const [name, bytes] of [['report.txt', 'EDITED_REPORT\n'], ['说明.txt', 'EDITED_NOTE\n']] as const) {
@@ -172,6 +174,8 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
         await row.locator('[data-presented-file]').filter({ hasText: name }).getByRole('button', { name: 'Open in Test Editor', exact: true }).click()
         expect((await response).status()).toBe(204)
         await page.waitForFunction(() => document.querySelector('[data-presented-files-row] button:disabled') === null)
+        expect(await page.getByRole('alert').count()).toBe(0)
+        expect(await row.locator('[data-presented-file] [role="status"]').count()).toBe(0)
         expect(await opened()).toHaveLength(count + 1)
         expect((await opened()).at(-1)).toEqual({ action: 'open', path: await realpath(join(cwd, name)), content: bytes })
       }
@@ -292,5 +296,65 @@ fs.appendFileSync(${JSON.stringify(openLog)}, JSON.stringify({ path, action, con
     expect(downloads).toEqual([])
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
+  })
+
+  it('announces mobile native opens and reveals on another device, and reports a deleted file', async () => {
+    const context = await browser.newContext({
+      storageState: await page.context().storageState(),
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1',
+      viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'en-US', timezoneId: 'Asia/Shanghai',
+    })
+    try {
+      const phone = await context.newPage()
+      const consoleWatch = watchConsole(phone)
+      const phoneDownloads: string[] = []
+      phone.on('download', (download) => { phoneDownloads.push(download.suggestedFilename()) })
+      await phone.goto(page.url(), { waitUntil: 'load' })
+      await phone.getByText(/^PRESENT_DONE\.?$/).waitFor({ timeout: 30_000 })
+      const card = phone.locator('[data-presented-file]').filter({ hasText: '说明.txt' })
+      const open = card.getByRole('button', { name: 'Open in Test Editor', exact: true })
+      await open.waitFor()
+      const notices: string[] = []
+      const beforeOpen = (await opened()).length
+      const openResponse = phone.waitForResponse(response => response.url().includes('/api/present.open?') && response.request().method() === 'POST')
+      await open.tap()
+      expect((await openResponse).status()).toBe(204)
+      const success = phone.getByRole('alert').filter({ hasText: 'Opened on another device' })
+      await success.waitFor()
+      notices.push(`## Open\n\n${await success.ariaSnapshot()}`)
+      await expect.poll(opened).toHaveLength(beforeOpen + 1)
+      expect((await opened()).at(-1)).toEqual({ action: 'open', path: await realpath(join(cwd, '说明.txt')), content: 'EDITED_NOTE\n' })
+      expect(await card.locator('[role="status"]').count()).toBe(0)
+      const bounds = await success.boundingBox()
+      expect(bounds).not.toBeNull()
+      expect(bounds!.x).toBeGreaterThanOrEqual(0)
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390)
+
+      await card.getByRole('button', { name: 'More ways to open', exact: true }).tap()
+      const revealResponse = phone.waitForResponse(response => response.url().includes('action=reveal') && response.request().method() === 'POST')
+      await phone.getByRole('menuitem', { name: 'Show file location', exact: true }).tap()
+      expect((await revealResponse).status()).toBe(204)
+      const revealed = phone.getByRole('alert').filter({ hasText: 'File location shown on another device' })
+      await revealed.waitFor()
+      notices.push(`## Show file location\n\n${await revealed.ariaSnapshot()}`)
+      await expect.poll(opened).toHaveLength(beforeOpen + 2)
+      expect((await opened()).at(-1)).toEqual({ action: 'reveal', content: null, path: await realpath(process.platform === 'darwin' ? join(cwd, '说明.txt') : cwd) })
+
+      await unlink(join(cwd, '说明.txt'))
+      const missingResponse = phone.waitForResponse(response => response.url().includes('/api/present.open?') && response.request().method() === 'POST')
+      await open.tap()
+      expect((await missingResponse).status()).toBe(404)
+      const failure = phone.getByRole('alert').filter({ hasText: 'Could not open. Try again.' })
+      await failure.waitFor()
+      notices.push(`## Missing file\n\n${await failure.ariaSnapshot()}`)
+      await card.getByText('Could not open. Click to retry.', { exact: true }).waitFor()
+      expect(await opened()).toHaveLength(beforeOpen + 2)
+      expect(phoneDownloads).toEqual([])
+      await compareOrRefreshGolden(join(DIR, 'mobile-open.expected.md'), notices.join('\n\n'), MODE)
+      expect(consoleWatch.pageErrors).toEqual([])
+      expect(consoleWatch.warnings).toEqual([])
+    } finally {
+      await context.close()
+    }
   })
 })

@@ -2,7 +2,7 @@
 
 [English](dynamic-cordis.md) | 中文
 
-创造模式提供 [Plugin Manager](../../../../packages/boot/plugin-manager/README.zh.md) 和只读[运行时检查](../../../../packages/extensions/tool-cordis/README.zh.md)。插件配置属于当前 profile，影响其会话，并在进程重启后保留。
+标准模式和创造模式提供 [Plugin Manager](../../../../packages/boot/plugin-manager/README.zh.md)；创造模式还提供只读[运行时检查](../../../../packages/extensions/tool-cordis/README.zh.md)。插件配置属于当前 profile，影响其会话，并在进程重启后保留。
 
 ## 连接 MCP 服务器
 

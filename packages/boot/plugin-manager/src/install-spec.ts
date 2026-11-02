@@ -94,7 +94,7 @@ export function parseInstallSpec(raw: string): ParsedInstallSpec {
 /** A recorded dependency value pnpm resolves outside a registry: a protocol other than a registry alias, or an scp-like git address. */
 const NON_REGISTRY_VALUE = /^(?!(?:npm|jsr|workspace|catalog):)[a-z][a-z0-9+.-]*:|^[^@/:\s]+@[^:/\s]+:/i
 /** The user information of an http(s) URL, up to the last `@` before the path, which holds a password or access token when present. */
-const HTTP_USER_INFO = /^((?:git\+)?https?:\/\/)[^/]*@/i
+export const HTTP_USER_INFO = /^((?:git\+)?https?:\/\/)[^/]*@/i
 
 /**
  * The spec `pnpm add` accepts for a dependency the profile manifest records. A git address, URL, or other

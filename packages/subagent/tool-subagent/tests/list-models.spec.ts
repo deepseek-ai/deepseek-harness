@@ -1,3 +1,5 @@
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
@@ -18,7 +20,6 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import * as tool from '../src/index.ts'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -96,7 +97,7 @@ async function setupAllowedListTool() {
 let counter = 0
 
 function call(ctx: Context, args: unknown, signal = testToolSignal) {
-  return ctx.tools.execute({
+  return executeToolFixture(ctx, {
     signal,
     callId: ToolCallId(`list-models-${++counter}`),
     name: 'list_subagent_models',
@@ -148,22 +149,22 @@ describe('list_subagent_models', () => {
 
   it('keeps discovery registration and disposal local to each tool scope', async () => {
     const ctx = await setup({ provider: 'mock' })
-    const first = createScope(ctx, { preset: 'first' })
-    const second = createScope(ctx, { preset: 'second' })
+    const first = await ctx.agents.create({ sessionId: SessionId('first-discovery-owner') })
+    const second = await ctx.agents.create({ sessionId: SessionId('second-discovery-owner') })
     const config = { provider: 'mock', modelDiscovery: true }
-    const firstOwner = await first.ctx.plugin(tool, config)
-    const secondOwner = await second.ctx.plugin(tool, config)
-    const firstDefinition = ctx.tools.get('list_subagent_models', scopeOf(first.ctx))
-    const secondDefinition = ctx.tools.get('list_subagent_models', scopeOf(second.ctx))
+    const firstOwner = await first.agent.ctx.plugin(tool, config)
+    const secondOwner = await second.agent.ctx.plugin(tool, config)
+    const firstDefinition = ctx.tools.get('list_subagent_models', first.agent)
+    const secondDefinition = ctx.tools.get('list_subagent_models', second.agent)
     expect(firstDefinition).toBeDefined()
     expect(secondDefinition).toBeDefined()
     expect(firstDefinition).not.toBe(secondDefinition)
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
     await firstOwner.dispose()
-    expect(ctx.tools.get('list_subagent_models', scopeOf(first.ctx))).toBeUndefined()
-    expect(ctx.tools.get('list_subagent_models', scopeOf(second.ctx))).toBe(secondDefinition)
+    expect(ctx.tools.get('list_subagent_models', first.agent)).toBeUndefined()
+    expect(ctx.tools.get('list_subagent_models', second.agent)).toBe(secondDefinition)
     await secondOwner.dispose()
-    expect(ctx.tools.get('list_subagent_models', scopeOf(second.ctx))).toBeUndefined()
+    expect(ctx.tools.get('list_subagent_models', second.agent)).toBeUndefined()
   })
 
   it('requires a calling Agent and an effective parent route', async () => {
@@ -171,6 +172,7 @@ describe('list_subagent_models', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
@@ -180,7 +182,7 @@ describe('list_subagent_models', () => {
 
     const parentContext = await setup({ provider: 'mock', withModelSelection: true, hostSelectionEnabled: false })
     const agent = modelSelectionSetupAgent(parentContext)
-    const result = await parentContext.tools.execute({
+    const result = await executeToolFixture(parentContext, {
       signal: testToolSignal, callId: ToolCallId('missing-parent-route'),
       name: 'list_subagent_models', arguments: {}, agent,
     })
@@ -191,7 +193,7 @@ describe('list_subagent_models', () => {
   it('reads the recorded Session allowlist through the delegation plugin', async () => {
     const ctx = await setup({ provider: 'mock', withModelSelection: true })
     ctx.llm.registerAdapter(['alpha', 'secret'], new CatalogAdapter())
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal, callId: ToolCallId('recorded-routes'),
       name: 'list_subagent_models', arguments: {}, agent: modelSelectionSetupAgent(ctx),
     })
@@ -205,6 +207,7 @@ describe('list_subagent_models', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
@@ -344,7 +347,7 @@ describe('list_subagent_models', () => {
     const adapter = new CatalogAdapter(empty)
     const listModels = vi.spyOn(adapter, 'listModels')
     ctx.llm.registerAdapter(['alpha'], adapter)
-    const result = await ctx.tools.execute({
+    const result = await executeToolFixture(ctx, {
       signal: testToolSignal, callId: ToolCallId('parent-only-discovery'),
       name: 'list_subagent_models', arguments: { provider: 'alpha' }, agent: modelSelectionSetupAgent(ctx),
     })

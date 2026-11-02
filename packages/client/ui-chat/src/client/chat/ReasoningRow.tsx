@@ -3,6 +3,7 @@ import { memo, useMemo } from 'react'
 import { DisclosureRow, IconThinkOutlineRegular, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChatViewSlotProps, UseDisclosure, UsePresentation } from '../contract/slots.ts'
+import { reasoningText } from '../reasoning-text.ts'
 import a11yCss from './accessibility.module.css'
 import css from './ReasoningRow.module.css'
 
@@ -36,7 +37,7 @@ function latestCompletedParagraphFirstLine(text: string): string {
  * collapsed summary omits double-asterisk markers; expanded content renders
  * the complete Markdown with secondary typography. A streaming preview advances
  * when a paragraph's first line completes. Mode changes toggle CSS display without unmounting
- * collapsed summaries.
+ * collapsed summaries. The Body Slot receives both original and display-ready text.
  * @param props.text - complete or streaming reasoning text.
  * @param props.running - whether this block is the streaming tail.
  * @param props.usePresentation - live display-policy selector for this reasoning row.
@@ -45,14 +46,21 @@ function latestCompletedParagraphFirstLine(text: string): string {
  * @param props.t - conversation locale seat for the disclosure and running status.
  * @returns the reasoning disclosure.
  */
-export const ReasoningRow = memo(function ReasoningRow({ text, running, usePresentation, useDisclosure, renderSlot, t }: {
+export const ReasoningRow = memo(function ReasoningRow({
+  text: rawText, running, textInteractionSource = false, usePresentation, useDisclosure, renderSlot, t,
+}: {
   text: string
   running: boolean
+  textInteractionSource?: boolean
   useDisclosure: UseDisclosure
   usePresentation: UsePresentation
   t: ChatViewSlotProps['t']
 } & Pick<PropsRenderSlots<'conversation.chat.reasoning.body'>, 'renderSlot'>) {
   const { expanded, toggle } = useDisclosure()
+  const { text, hidden } = useMemo(() => {
+    const text = reasoningText(rawText)
+    return { text, hidden: text !== rawText && text.trim() === '' }
+  }, [rawText])
   const summaryText = running ? latestCompletedParagraphFirstLine(text) : firstLine(text)
   const summary = useMemo(() => summaryText.replaceAll('**', ''), [summaryText])
   const preview = usePresentation(policy => !expanded && summary !== ''
@@ -68,10 +76,12 @@ export const ReasoningRow = memo(function ReasoningRow({ text, running, usePrese
     </>
   ), [running, summary])
   const content = useMemo(() => expanded ? (
-    <div className={css.thinkBody}>
-      {renderSlot('conversation.chat.reasoning.body', { text, running })}
+    <div className={css.thinkBody} data-text-interaction-source={textInteractionSource && !running ? '' : undefined}>
+      {renderSlot('conversation.chat.reasoning.body', { rawText, text, running })}
     </div>
-  ) : undefined, [expanded, renderSlot, running, text])
+  ) : undefined, [expanded, renderSlot, running, rawText, text, textInteractionSource])
+
+  if (hidden) return null
 
   return (
     <div

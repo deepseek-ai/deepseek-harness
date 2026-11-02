@@ -1,10 +1,10 @@
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentCancelCause, AgentStatus, CancelOptions } from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import SessionStore, { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SessionActivity } from '@deepseek-ai/dsh-workspace'
@@ -16,14 +16,15 @@ type CancelCall = [AgentCancelCause, CancelOptions | undefined]
 /** A registered Agent double whose status the test flips and whose cancels it records. */
 type LiveAgent = Agent & { cancels: CancelCall[]; setStatus(status: AgentStatus): void }
 
-async function harness(options: { sessionQuery?: boolean } = {}): Promise<Context> {
+async function harness(options: { sessionQuery?: boolean; runtime?: boolean } = {}): Promise<Context> {
   const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   if (options.sessionQuery !== false) await ctx.plugin(TestSessionQuery)
   await mountWorkingDirectoryFixture(ctx)
-  await ctx.plugin(SubagentRuntime)
+  if (options.runtime !== false) await ctx.plugin(SubagentRuntime)
   return ctx
 }
 
@@ -34,6 +35,7 @@ async function liveAgent(ctx: Context, session: Session, initial: AgentStatus): 
     id: session.id,
     options: {},
     session,
+    model: unsupportedModel(),
     inbox: unsupportedInbox(),
     get status() { return status },
     ctx,
@@ -68,6 +70,13 @@ function stop(ctx: Context, sessionId: SessionId): Promise<void> {
   return ctx.parallel('workspace/session-stop', { sessionId })
 }
 
+function proposed(ctx: Context, agent: Agent) {
+  return ctx.waterfall('agent/pre-step', {
+    agent, modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1,
+    signal: new AbortController().signal,
+  }, () => Promise.resolve({ kind: 'enter' as const, messages: [] }))
+}
+
 describe('Subagent archive admission: reporting', () => {
   it('reports running descendants by durable lineage at any depth, with their labels, but never forks', async () => {
     const ctx = await harness()
@@ -93,13 +102,15 @@ describe('Subagent archive admission: reporting', () => {
     expect(await ask(ctx, SessionId('cold-or-unknown'))).toEqual([{ kind: 'probe' }])
   })
 
-  it('names a child by id alone without the Session query service or with a damaged descriptor', async () => {
+  it('reports a child label without the Session query service', async () => {
     const queryless = await harness({ sessionQuery: false })
     const parent = queryless.sessions.create(SessionId('parent'))
     await liveAgent(queryless, parent, 'idle')
     await liveAgent(queryless, childOf(queryless, 'child', parent.id, 'reviewer'), 'running')
-    expect(await ask(queryless, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: 'child' }] }])
+    expect(await ask(queryless, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: 'child', label: 'reviewer' }] }])
+  })
 
+  it('names a child by id alone with a damaged descriptor', async () => {
     const ctx = await harness()
     const damagedParent = ctx.sessions.create(SessionId('damaged-parent'))
     await liveAgent(ctx, damagedParent, 'idle')
@@ -108,6 +119,36 @@ describe('Subagent archive admission: reporting', () => {
     damaged.append('subagent/descriptor', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 7 } as never)
     await liveAgent(ctx, damaged, 'running')
     expect(await ask(ctx, damagedParent.id)).toEqual([{ kind: 'subagent', items: [{ id: 'damaged-child' }] }])
+  })
+
+  it('uses only the latest own descriptor identity without observing history', async () => {
+    const ctx = await harness()
+    const parent = ctx.sessions.create(SessionId('seed-parent'))
+    await liveAgent(ctx, parent, 'idle')
+    const child = ctx.sessions.create(SessionId('seed-child'), {
+      meta: { parentSession: parent.id, origin: 'subagent', isSeeded: true },
+      seed: [{
+        type: 'subagent/descriptor', seq: SessionSeq(0), time: 1,
+        data: { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'fork', label: 'ancestor' },
+      }],
+      inheritedEventCount: SessionLogOffset(1),
+    })
+    await liveAgent(ctx, child, 'running')
+    const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
+    onTestFinished(() => { observe.mockRestore() })
+
+    expect(await ask(ctx, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: child.id }] }])
+    for (const label of ['reviewer', 'latest reviewer']) {
+      child.append('subagent/descriptor', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'fork', label })
+      expect(await ask(ctx, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: child.id, label }] }])
+    }
+    child.append('subagent/descriptor', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'fork', label: 7 } as never)
+    expect(await ask(ctx, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: child.id }] }])
+    child.append('subagent/descriptor', { version: SUBAGENT_DESCRIPTOR_VERSION + 1, mode: 'continuable', provider: 'fork', label: 'unknown' })
+    expect(await ask(ctx, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: child.id }] }])
+    child.append('subagent/descriptor', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'fork' })
+    expect(await ask(ctx, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: child.id }] }])
+    expect(observe).not.toHaveBeenCalled()
   })
 
   it('visits a damaged lineage that loops only once', async () => {
@@ -159,8 +200,62 @@ describe('Subagent archive admission: stopping', () => {
 })
 
 describe('Subagent archive admission: lifetime', () => {
-  it('stops answering once the runtime fiber is disposed', async () => {
+  it.each(['ready', 'failed', 'disposed'] as const)('installs reporting only after identity registration is %s', async (outcome) => {
+    const ctx = await harness({ runtime: false })
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    onTestFinished(() => { release.resolve(undefined) })
+    const register = ctx.sessionProjections.register.bind(ctx.sessionProjections)
+    const registration = vi.spyOn(ctx.sessionProjections, 'register').mockImplementation(async (definition) => {
+      const handle = await register(definition)
+      if (definition.key === 'subagent') {
+        entered.resolve(undefined)
+        await release.promise
+      }
+      return handle
+    })
+    onTestFinished(() => { registration.mockRestore() })
+    const error = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    onTestFinished(() => { error.mockRestore() })
+    const parent = ctx.sessions.create(SessionId('initializing-parent'))
+    await liveAgent(ctx, parent, 'idle')
+    await liveAgent(ctx, childOf(ctx, 'initializing-child', parent.id, 'reviewer'), 'running')
+    const fiber = ctx.plugin(SubagentRuntime)
+    await entered.promise
+    expect(await ask(ctx, parent.id)).toEqual([])
+
+    if (outcome === 'failed') {
+      const failure = expect(Promise.resolve(fiber)).rejects.toThrow('identity registration failed')
+      release.reject(new Error('identity registration failed'))
+      await failure
+      expect(error).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: 'identity registration failed' }))
+    } else {
+      const disposal = outcome === 'disposed' ? fiber.dispose() : undefined
+      release.resolve(undefined)
+      await (disposal ?? fiber)
+      expect(error).not.toHaveBeenCalled()
+    }
+    expect(await ask(ctx, parent.id)).toEqual(outcome === 'ready'
+      ? [{ kind: 'subagent', items: [{ id: 'initializing-child', label: 'reviewer' }] }]
+      : [])
+  })
+
+  it('checks header ancestry for unmanaged Agents and permits independent forks', async () => {
+    const ctx = await harness()
+    const parentId = SessionId('offline-parent')
+    const archived: SessionId[] = [parentId]
+    ctx.provide('workspaceRegistry', { get archivedSessionIds() { return archived } } as never)
+    const child = await liveAgent(ctx, childOf(ctx, 'orphan', parentId), 'idle')
+    const fork = await liveAgent(ctx, ctx.sessions.create(SessionId('fork'), { meta: { parentSession: parentId } }), 'idle')
+    expect(await proposed(ctx, child)).toEqual({ kind: 'reject' })
+    expect(await proposed(ctx, fork)).toEqual({ kind: 'enter', messages: [] })
+    archived.length = 0
+    expect(await proposed(ctx, child)).toEqual({ kind: 'enter', messages: [] })
+  })
+
+  it('removes archive listeners on disposal and restores them on replacement', async () => {
     const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
@@ -168,12 +263,20 @@ describe('Subagent archive admission: lifetime', () => {
     const fiber = await ctx.plugin(SubagentRuntime)
     const parent = ctx.sessions.create(SessionId('watched'))
     await liveAgent(ctx, parent, 'idle')
-    const child = await liveAgent(ctx, childOf(ctx, 'watched-child', parent.id), 'running')
-    expect(await ask(ctx, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: 'watched-child' }] }])
+    const child = await liveAgent(ctx, childOf(ctx, 'watched-child', parent.id, 'reviewer'), 'running')
+    ctx.provide('workspaceRegistry', { archivedSessionIds: [parent.id] } as never)
+    expect(await proposed(ctx, child)).toEqual({ kind: 'reject' })
+    expect(await ask(ctx, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: 'watched-child', label: 'reviewer' }] }])
     await fiber.dispose()
     expect(await ask(ctx, parent.id)).toEqual([])
     await stop(ctx, parent.id)
     expect(child.cancels).toEqual([])
+    expect(await proposed(ctx, child)).toEqual({ kind: 'enter', messages: [] })
+    await ctx.plugin(SubagentRuntime)
+    expect(await ask(ctx, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: 'watched-child', label: 'reviewer' }] }])
+    expect(await proposed(ctx, child)).toEqual({ kind: 'reject' })
+    await stop(ctx, parent.id)
+    expect(child.cancels).toEqual([[{ kind: 'parent' }, undefined]])
   })
 })
 

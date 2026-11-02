@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Servicio de selección de directorio del sistema.",
+    "description": "Llama al cuadro de diálogo de selección de directorio del sistema operativo."
+  }
+}

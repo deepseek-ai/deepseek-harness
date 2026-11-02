@@ -28,10 +28,19 @@
   config:
     maxBytes: 65536
 
-- id: tools
-  name: '@deepseek-ai/dsh-tools'
-  config:
-    mode: ptc
+- id: tool-executor-native
+  disabled: true
+
+- id: tool-executor-ptc
+  disabled: false
+
+# The runtime mounts after the executor, which waits for its required service.
+- id: ptc-runtime
+  disabled: true
+
+- insert:
+    - id: ptc-runtime-late
+      name: '@deepseek-ai/dsh-ptc-runtime-node'
 
 - id: system-prompt
   name: '@deepseek-ai/dsh-system-prompt'

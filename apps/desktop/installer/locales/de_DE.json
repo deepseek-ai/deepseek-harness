@@ -1,0 +1,40 @@
+{
+  "nsisLanguage": "GERMAN",
+  "strings": {
+    "INSTALLER_INSTALL": "Jetzt installieren",
+    "INSTALLER_FINISH": "Fertigstellen",
+    "INSTALLER_NATIVE_PROGRESS": "Installation wird vorbereitet… %d%%",
+    "INSTALLER_PROGRESS_EXTRACT": "Dateien extrahieren… %d%%",
+    "INSTALLER_PROGRESS_COPY": "Dateien werden installiert… %d%%",
+    "INSTALLER_PROGRESS_REGISTER": "Abschluss der Installation… %d%%",
+    "INSTALLER_PROGRESS_CLEAN": "Bereinigen temporärer Dateien… %d%%",
+    "INSTALLER_CHOOSE_PATH": "Standort wählen",
+    "INSTALLER_BROWSE": "Durchsuchen",
+    "INSTALLER_LAUNCH": "Jetzt starten",
+    "INSTALLER_LAUNCH_FAILED": "DeepSeek Harness konnte nicht gestartet werden. Versuchen Sie es noch einmal oder deaktivieren Sie „Jetzt starten“ und schließen Sie das Installationsprogramm.",
+    "INSTALLER_UI_ERROR": "Das Installationsprogramm konnte sein Fenster nicht initialisieren. Schließen Sie es und versuchen Sie es erneut.",
+    "INSTALLER_THEME_ERROR": "Verwenden Sie /THEME=auto, /THEME=light oder /THEME=dark.",
+    "INSTALLER_FAILED": "Die Installation wurde nicht abgeschlossen. Schließen Sie dieses Installationsprogramm und versuchen Sie es erneut. Wenn das Problem weiterhin besteht, laden Sie das Installationsprogramm erneut herunter.",
+    "INSTALLER_RUNNING": "DeepSeek Harness läuft. Beenden Sie es über die Taskleiste und versuchen Sie es erneut.",
+    "INSTALLER_DIRECTORY_FAILED": "Das Installationsverzeichnis konnte nicht ersetzt werden.",
+    "INSTALLER_DIRECTORY_HINT": "Überprüfen Sie den Zugriff auf das Installationsverzeichnis und schließen Sie Programme mithilfe seiner Dateien. Führen Sie dann das Installationsprogramm erneut aus. Kopieren Sie die Fehlerdetails, wenn das Problem weiterhin besteht.",
+    "INSTALLER_DIRECTORY_RESTORE_HINT": "Die vorherige Installation konnte nicht wiederhergestellt werden. Behalten Sie das in den Fehlerdetails angezeigte Sicherungsverzeichnis bei und wenden Sie sich vor der erneuten Installation an den Support.",
+    "INSTALLER_PATH_INVALID": "Wählen Sie einen vollständigen lokalen Ordnerpfad. Laufwerksstämme, Systemordner, Links und Sonderzeichen werden nicht unterstützt.",
+    "INSTALLER_PATH_OWNERSHIP": "Wählen Sie einen leeren Ordner oder den registrierten DeepSeek Harness-Installationsordner.",
+    "INSTALLER_PATH_WRITABLE": "Dieser Ort ist nicht beschreibbar. Wählen Sie einen Ordner, der für den aktuellen Benutzer verfügbar ist.",
+    "INSTALLER_DISK_SPACE": "Es ist nicht genügend freier Speicherplatz vorhanden. Wählen Sie einen anderen Standort.",
+    "INSTALLER_PER_USER": "Dieses Installationsprogramm unterstützt nur den aktuellen Benutzer. Deinstallieren Sie zunächst die vorhandene All-User-Installation.",
+    "INSTALLER_EXTRACT_FAILED": "Die Anwendungsdateien konnten nicht extrahiert werden.",
+    "INSTALLER_EXTRACT_HINT": "Möglicherweise hat die Sicherheitssoftware eine Datei blockiert oder die Festplatte ist voll. Schließen Sie dieses Installationsprogramm und versuchen Sie es erneut. Wenn es weiterhin fehlschlägt, senden Sie uns die Fehlerdetails unten.",
+    "INSTALLER_EXTRACT_COPY": "Fehlerdetails kopieren",
+    "INSTALLER_EXTRACT_EXPAND": "Details anzeigen",
+    "INSTALLER_EXTRACT_COLLAPSE": "Details ausblenden",
+    "INSTALLER_EXTRACT_SAVED": "Der vollständige Bericht wurde unter %s gespeichert",
+    "INSTALLER_EXTRACT_UNSAVED": "Der vollständige Bericht konnte nicht gespeichert werden. Verwenden Sie „Fehlerdetails kopieren“, um sie beizubehalten.",
+    "INSTALLER_EXTRACT_COPIED": "Fehlerdetails wurden in die Zwischenablage kopiert."
+  },
+  "uninstaller": {
+    "welcome": "Willkommen",
+    "finished": "entfernt worden"
+  }
+}

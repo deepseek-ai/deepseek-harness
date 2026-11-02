@@ -29,6 +29,8 @@ const CORPUS = { search: 1_000, fork: 1_000, list: 3_000 } as const
 const FILE_LIMIT_MS = 300_000
 /** Per-child deadline: an endpoint slower than its budget still reports a measurement instead of a kill. */
 const WORKER_TIMEOUT_MS = FILE_LIMIT_MS
+/** Fixed old-space capacity makes fork RSS comparable across hosted V8 heap defaults. */
+const FORK_HEAP_LIMIT_MB = 512
 /** Fresh processes per list and fork-strata scenario; the median enforces each budget. */
 const ATTEMPTS = { list: 3, fork: 3 } as const
 /** Concurrent anchor-preparation processes; standard hosted runners have two CPUs. */
@@ -119,7 +121,10 @@ function serialDeadline(workers: number): number {
 }
 
 async function run<Report extends SessionCorpusReport>(args: readonly string[]): Promise<Report> {
-  const outcome = await runBuiltBenchmarkWorker<Report>({ worker: WORKER, args, timeoutMs: WORKER_TIMEOUT_MS, exposeGc: true })
+  const outcome = await runBuiltBenchmarkWorker<Report>({
+    worker: WORKER, args, timeoutMs: WORKER_TIMEOUT_MS, exposeGc: true,
+    ...(args[1] === 'fork' ? { heapLimitMb: FORK_HEAP_LIMIT_MB } : {}),
+  })
   if (outcome.report === undefined) {
     const stderr = outcome.stderr.trim().split('\n').slice(-20).join('\n')
     throw new Error(`session-corpus worker ${args[1] ?? ''} failed: exit=${String(outcome.exitCode)}, `

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interfaz de modo de permiso",
+    "description": "Establece los permisos predeterminados para nuevas sesiones y cambia el modo de permisos para la sesión actual."
+  }
+}
