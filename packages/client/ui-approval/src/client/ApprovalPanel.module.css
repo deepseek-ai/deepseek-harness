@@ -60,6 +60,8 @@
 .warningTag { gap: 4px; }
 
 .warningPopover {
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   border: 0;
   box-shadow: var(--dsw-elevation-panel);
   position: fixed;
@@ -70,16 +72,14 @@
   max-height: var(--dsh-anchored-max-height, calc(100vh - 24px));
   overflow-y: auto;
   padding: 24px;
-  visibility: hidden;
   color: var(--dsw-alias-label-secondary);
   font-size: 13px;
   line-height: 20px;
 }
 
-.warningPopover[data-positioned] { visibility: visible; }
 .warningPopover p { margin: 16px 0 0; }
 
-.warningPopover p:last-child {
+.warningPopover p + p:last-child {
   border-top: 0.5px solid var(--dsw-alias-border-l2);
   padding-top: 16px;
   color: var(--dsw-alias-label-primary);

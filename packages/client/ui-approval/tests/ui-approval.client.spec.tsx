@@ -6,6 +6,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApprovalCard } from '../src/client/ApprovalCard.tsx'
+import { ApprovalWarning } from '../src/client/ApprovalWarning.tsx'
+import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
 import { ApprovalPanel } from '../src/client/ApprovalPanel.tsx'
 import type { ApprovalCardInput, ApprovalComposerProps, ApprovalInjected } from '../src/client/contract/slots.ts'
@@ -123,6 +125,7 @@ const id = (value: string): SessionId => value as SessionId
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
@@ -556,13 +559,11 @@ it('opens and dismisses risk details without answering the approval', () => {
   } as FactoryComponentPropsOf<'conversation.approval.card'>
   const view = render(<ApprovalCard {...props} />)
   const trigger = screen.getByRole('button', { name: 'Risks' })
-  fireEvent.pointerEnter(trigger)
-  fireEvent.focus(trigger)
-  expect(screen.queryByRole('dialog', { name: 'Computer use risks' })).toBeNull()
-  fireEvent.click(trigger)
+  vi.spyOn(trigger, 'matches').mockImplementation(selector => selector === ':focus-visible')
+  act(() => { trigger.focus() })
   const dialog = screen.getByRole('dialog', { name: 'Computer use risks' })
   expect([...dialog.querySelectorAll('p')].map(p => p.textContent).join('\n\n')).toBe(props.warning!.detail)
-  expect(document.activeElement).toBe(dialog)
+  expect(document.activeElement).toBe(trigger)
   expect(trigger.getAttribute('aria-expanded')).toBe('true')
   act(() => { trigger.focus() })
   fireEvent.keyDown(trigger, { key: 'Enter' })
@@ -582,4 +583,56 @@ it('opens and dismisses risk details without answering the approval', () => {
   expect(screen.queryByRole('dialog', { name: 'Computer use risks' })).toBeNull()
   expect(onAllow).not.toHaveBeenCalled()
   expect(onReject).not.toHaveBeenCalled()
+})
+
+it('keeps risk details readable across the pointer gap and after a touch tap', () => {
+  vi.useFakeTimers()
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })))
+  render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} closeLabel="Close" />)
+  const trigger = screen.getByRole('button', { name: 'Risks' })
+  const pointer = (target: Element, type: string, pointerType = 'mouse') => {
+    const event = new Event(type, { bubbles: true })
+    Object.defineProperty(event, 'pointerType', { value: pointerType })
+    fireEvent(target, event)
+  }
+  pointer(trigger, 'pointerover')
+  const dialog = screen.getByRole('dialog', { name: 'Computer use risks' })
+  expect(document.activeElement).toBe(document.body)
+  pointer(trigger, 'pointerout')
+  act(() => { vi.advanceTimersByTime(100) })
+  pointer(dialog, 'pointerover')
+  act(() => { vi.advanceTimersByTime(200) })
+  expect(screen.getByRole('dialog', { name: 'Computer use risks' })).toBe(dialog)
+  pointer(dialog, 'pointerout')
+  act(() => { vi.advanceTimersByTime(200) })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  pointer(trigger, 'pointerover', 'touch')
+  expect(screen.queryByRole('dialog')).toBeNull()
+  fireEvent.click(trigger)
+  pointer(trigger, 'pointerout', 'touch')
+  act(() => { vi.advanceTimersByTime(200) })
+  expect(screen.getByRole('dialog', { name: 'Computer use risks' })).toBeTruthy()
+})
+
+it('leaves Escape to composition and a foreground modal without moving focus', () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  const onClose = vi.fn()
+  const warning = <ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} closeLabel="Close" />
+  const view = render(warning)
+  fireEvent.click(screen.getByRole('button', { name: 'Risks' }))
+  fireEvent.compositionStart(document)
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(screen.getByRole('dialog', { name: 'Computer use risks' })).toBeTruthy()
+  fireEvent.compositionEnd(document)
+  fireEvent.keyUp(document, { key: 'Escape' })
+  fireEvent.keyDown(document, { key: 'Escape', shiftKey: true })
+  expect(screen.getByRole('dialog', { name: 'Computer use risks' })).toBeTruthy()
+  view.rerender(<>{warning}<Modal open title="Foreground" closeLabel="Close modal" onClose={onClose} /></>)
+  const modal = screen.getByRole('dialog', { name: 'Foreground' })
+  act(() => { modal.focus() })
+  fireEvent.keyDown(modal, { key: 'Escape' })
+  expect(onClose).toHaveBeenCalledOnce()
+  expect(document.activeElement).toBe(modal)
+  expect(screen.getByRole('dialog', { name: 'Computer use risks' })).toBeTruthy()
 })

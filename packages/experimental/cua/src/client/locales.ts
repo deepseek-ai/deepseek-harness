@@ -45,7 +45,7 @@ export type CuaPermissionLocaleKey = keyof typeof en
 export const zh: Record<CuaPermissionLocaleKey, string> = {
   approvalRisks: '风险提示',
   approvalRiskTitle: 'Computer Use 风险提示',
-  approvalRiskNotice: '智能体可以读取应用内容，并通过键盘和鼠标在后台操作应用。这些操作可能不符合您的意图，或无法撤销。\n\n部分应用，尤其是即时通讯应用和网络游戏，禁止自动化控制。这些应用可能因您使用自动化而暂停或封禁您在该应用中的账号。\n\n请自行承担使用风险。如需随时停止自动化控制，请点击 DSH 中的停止按钮。',
+  approvalRiskNotice: '智能体可以读取应用内容，并通过键盘和鼠标在后台操作应用。这些操作可能不符合你的意图，或无法撤销。\n\n部分应用，尤其是即时通讯应用和网络游戏，禁止自动化控制。这些应用可能因你使用自动化而暂停或封禁你在该应用中的账号。\n\n请自行承担使用风险。如需随时停止自动化控制，请点击 DSH 中的停止按钮。',
   title: '给 Computer Use 授权', applicationsTitle: '管理 Computer Use 可访问的应用', setupTitle: '使用 Computer Use 前需要设置',
   setupBody: 'Computer Use 插件已开启。使用前请切换到 PTC 模式，并授予辅助功能和屏幕录制权限。请前往插件详情页完成设置。',
   setupQueryFailed: 'Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。',
