@@ -103,7 +103,7 @@ Windows 签名打包按 PE 文件内容扫描第一方运行时和应用生产�
 
 Desktop 携带独立的 Python、Node.js 和 pnpm 分发包。Python 包含 numpy、pandas、python-docx、python-pptx、openpyxl、Pillow、lxml、XlsxWriter 及其完整依赖。`load_workspace_dependencies` 工具首次使用时，将该产物离线安装到 `$DSH_HOME/dsh-runtimes/dsh-primary-runtime`（通常为 `~/.dsh/dsh-runtimes/dsh-primary-runtime`），并返回解释器、pnpm 脚本和库目录的绝对路径，以及记录内置分发包名称与版本的 `pythonDistributions`。版本报告不包含用户自行安装的包。Office 任务默认使用这些库，用户或工作区指令指定其他环境时遵循其要求。pnpm 脚本通过返回的 Node 可执行文件运行。返回的 Node 库目录为随包交付的库预留，不是 pnpm 的全局安装目录。
 
-Desktop 展示精简的 `office` 路由及可具名调用的创作／操作子技能。创作使用内置 Python 库；操作技能调用 [`office` 工具](../../packages/document/tool-office/README.zh.md)，它通过 Office 套件服务在 Host 内运行 LibreOffice Kit。技能包本身可以留在 ASAR 中。技能位于 ASAR 之外的 `runtime/office-skills`。缺失或无效的技能文件只会把该技能移出目录；无法加载的 Office profile 行会使 Office 技能或 `load_workspace_dependencies` 不可用；这两种失败都不会阻止 Host 启动。渐进加载与限制见 [Office 技能包](../../packages/skill/skill-office/README.zh.md)。
+Desktop 展示精简的 `office` 路由及可具名调用的创作子技能。创作使用内置 Python 库；渲染、转换和重算调用 [`office` 工具](../../packages/document/tool-office/README.zh.md)，它通过 Office 套件服务在 Host 内运行 LibreOffice Kit。技能包本身可以留在 ASAR 中。技能位于 ASAR 之外的 `runtime/office-skills`。缺失或无效的技能文件只会把该技能移出目录；无法加载的 Office profile 行会使 Office 技能或 `load_workspace_dependencies` 不可用；这两种失败都不会阻止 Host 启动。渐进加载与限制见 [Office 技能包](../../packages/skill/skill-office/README.zh.md)。
 
 无法加载 Kit 时，Office 技能和 `office` 工具仍会注册；每次调用工具都会报告 LibreOffice Kit 未安装，Office 套件通过 `ctx.logger.warn` 对每种不同的失败只记录一次。独立的依赖查询行不受影响。没有单独的诊断文件或 GUI 通知。必需的 Host 组件仍须成功启动，打包冒烟检查会拒绝不可用的 Kit。
 

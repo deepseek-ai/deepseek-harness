@@ -11,7 +11,7 @@ import { builtHost, prepareDesktopHome, repository } from './harness.ts'
 afterEach(() => { vi.unstubAllEnvs() })
 
 const SKILL_PROBE = 'desktop-office-skill-probe'
-const OFFICE_SKILLS = ['office', 'office-docx', 'office-export-pdf', 'office-pptx', 'office-recalculate', 'office-render', 'office-xlsx']
+const OFFICE_SKILLS = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
 
 /** Add a test-only profile bundle whose route reports the Host registry's Office skills through the real Loader. */
 function installSkillProbe(profile: string): void {
@@ -26,7 +26,7 @@ export function apply(ctx) {
     try {
       const names = (await ctx.skills.list()).map(skill => skill.name).filter(name => name.startsWith('office'))
       const content = {}
-      for (const name of ['office-docx', 'office-export-pdf']) content[name] = (await ctx.skills.get(name))?.content ?? null
+      for (const name of ['office', 'office-docx']) content[name] = (await ctx.skills.get(name))?.content ?? null
       response.end(JSON.stringify({ names, content, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name === 'office') }))
     } catch (error) {
       response.statusCode = 500
@@ -85,16 +85,16 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
         case 'complete':
           expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS)
           expect(skills.content['office-docx']).toEqual(expect.any(String))
-          expect(skills.content['office-export-pdf']).toContain('`office` tool')
+          expect(skills.content.office).toContain('`office` tool')
           break
         case 'missing-skill':
           expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS.filter(name => name !== 'office-docx'))
           expect(skills.content['office-docx']).toBeNull()
-          expect(skills.content['office-export-pdf']).toContain('`office` tool')
+          expect(skills.content.office).toContain('`office` tool')
           break
         case 'empty-runtime':
         case 'relative-source':
-          expect(skills).toMatchObject({ names: [], content: { 'office-docx': null, 'office-export-pdf': null } })
+          expect(skills).toMatchObject({ names: [], content: { office: null, 'office-docx': null } })
           break
         default:
           assertNever(mode)

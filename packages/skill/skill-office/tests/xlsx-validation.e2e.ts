@@ -161,11 +161,7 @@ else:
         ? answer.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n').slice(0, 800) : undefined })
     expect(loaded, diagnostic).toContain('office-xlsx')
     expect(calls.some(call => call.name === 'load_workspace_dependencies'), diagnostic).toBe(true)
-    if (kind === 'formula') {
-      expect(loaded, diagnostic).toContain('office-recalculate')
-    }
     if (kind === 'layout') {
-      expect(calls.some(call => call.name === 'skill' && call.arguments.includes('office-render'))).toBe(true)
       const office = officeCalls(events)
       expect(office.some(call => call.args.operation === 'render' && 'sheet' in call.args && 'range' in call.args), diagnostic).toBe(true)
       expect(office.some(call => call.args.operation === 'convert'), diagnostic).toBe(false)
@@ -192,7 +188,6 @@ else:
     } else {
       expectNoRenderContext(events)
       expect(officeCalls(events).some(call => call.args.operation === 'render')).toBe(false)
-      expect(calls.some(call => call.name === 'skill' && call.arguments.includes('office-render'))).toBe(false)
       expect(commands).not.toMatch(/(?<![\w/.-])(?:render|convert)(?![\w/.-])|\.pdf\b|\.png\b/iu)
       const answer = events.findLast(event => event.type === 'assistant/message')
       if (answer?.type !== 'assistant/message') throw new Error('Agent did not finish with an answer')

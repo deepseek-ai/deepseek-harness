@@ -17,7 +17,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 const assets = fileURLToPath(new URL('../assets/', import.meta.url))
 const userPython = 'Follow an explicit user or applicable AGENTS.md requirement for a Python environment. Otherwise use the project\'s or user\'s existing Python, such as `python3` or `python` on PATH. Before the first script, check that this Python can import the libraries the workflow needs. If Python or a library is missing, tell the user which packages to install; do not install packages into a global environment without the user\'s agreement.'
 const workspacePython = 'Follow an explicit user or applicable AGENTS.md requirement for a Python environment. Otherwise call `load_workspace_dependencies` and run scripts with its Python executable and bundled libraries. Do not install packages or search for a system Python for the default workflow. If the tool is unavailable, use an already configured environment and report a missing dependency only when it prevents the requested operation.'
-const names = ['office', 'office-docx', 'office-export-pdf', 'office-pptx', 'office-recalculate', 'office-render', 'office-xlsx']
+const names = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
 
 describe('bundled Office skills', () => {
   it('keeps routing and authoring within the progressive context budgets', async () => {
@@ -32,10 +32,11 @@ describe('bundled Office skills', () => {
       expect(Math.ceil(route.content.length / 4)).toBeLessThanOrEqual(200)
       for (const [name, previousTokens] of [['office-docx', 1688], ['office-pptx', 1879], ['office-xlsx', 2330]] as const) {
         const skill = (await ctx.skills.get(name))!
-        expect(Math.ceil(skill.content.length / 4)).toBeLessThanOrEqual(Math.floor(previousTokens * 0.65))
-        expect(skill.content).not.toMatch(/read_image|transparent|DPI/)
+        expect(Math.ceil(skill.content.length / 4)).toBeLessThanOrEqual(Math.floor(previousTokens * 0.7))
+        expect(skill.content).not.toMatch(/read_image/)
         expect(skill.content).not.toContain('dsoffice')
-        expect(skill.content).toContain('office-render')
+        expect(skill.content).toContain('`operation: "render"`')
+        expect(skill.content).toContain('"Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。"')
       }
     } finally { await ctx.fiber.dispose() }
   })
@@ -54,7 +55,7 @@ describe('bundled Office skills', () => {
         expect(loaded?.resourceBase).toEqual({ kind: 'directory', path: join(assets, skill.name).split(sep).join('/') })
         const raw = await readFile(join(assets, skill.name, 'SKILL.md'), 'utf8')
         const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/u, '').trim()
-        const expected = ['office', 'office-render', 'office-export-pdf'].includes(skill.name) ? body : `${body}\n\n## Python environment\n\n${workspacePython}`
+        const expected = skill.name === 'office' ? body : `${body}\n\n## Python environment\n\n${workspacePython}`
         expect(loaded?.content).toBe(expected)
       }
       await fiber.dispose()
@@ -120,14 +121,12 @@ describe('bundled Office skills', () => {
     try {
       await ctx.plugin(SkillRegistry)
       await ctx.plugin(SkillOffice, pythonEnvironment === undefined ? {} : { pythonEnvironment })
-      for (const name of ['office-docx', 'office-pptx', 'office-xlsx', 'office-recalculate']) {
+      for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
         const content = (await ctx.skills.get(name))!.content
         expect(content).toContain(`\n\n## Python environment\n\n${section}`)
         expect(content).not.toContain(section === userPython ? workspacePython : userPython)
       }
-      for (const name of ['office', 'office-render', 'office-export-pdf']) {
-        expect((await ctx.skills.get(name))!.content).not.toContain('## Python environment')
-      }
+      expect((await ctx.skills.get('office'))!.content).not.toContain('## Python environment')
     } finally { await ctx.fiber.dispose() }
   })
 
@@ -308,18 +307,18 @@ describe('bundled Office skills', () => {
   })
 })
 
-it('directs operation skills to the office tool without executable paths', async () => {
+it('directs Office operations to the office tool without executable paths', async () => {
   const ctx = new Context()
   try {
     await ctx.plugin(SkillRegistry)
     await ctx.plugin(SkillOffice)
-    for (const name of ['office-render', 'office-export-pdf', 'office-recalculate']) {
+    for (const name of names) {
       const content = (await ctx.skills.get(name))!.content
-      expect(content).toContain('`office`')
-      expect(content).not.toMatch(/LibreOffice Kit CLI|--output-dir|read_image|"<node>"/u)
+      expect(content).toContain('`office` tool')
+      expect(content).not.toMatch(/office-render|office-recalculate|office-export-pdf|LibreOffice Kit CLI|--output-dir|"<node>"/u)
     }
-    for (const name of ['office-export-pdf', 'office-recalculate']) {
-      expect((await ctx.skills.get(name))!.content).toMatch(/`cp [\s\S]*`Copy-Item /u)
-    }
+    const route = (await ctx.skills.get('office'))!.content
+    for (const operation of ['`operation: "render"`', '`operation: "recalculate"`', '`operation: "convert"`, `format: "pdf"`', '`format: "xlsx"` or `"ods"`']) expect(route).toContain(operation)
+    expect((await ctx.skills.get('office-xlsx'))!.content).toContain('`operation: "recalculate"` and `format: "xlsx"`')
   } finally { await ctx.fiber.dispose() }
 })

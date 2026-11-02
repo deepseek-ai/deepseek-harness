@@ -37,7 +37,7 @@ async function sessionEvents(cwd: string) {
   return events
 }
 
-it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mode: 'native' }, { format: 'pdf', mode: 'native' }, { format: 'docx', mode: 'ptc' }])('loads the operation skill and renders $format with the office tool in $mode mode', async ({ format, mode }) => {
+it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mode: 'native' }, { format: 'pdf', mode: 'native' }, { format: 'docx', mode: 'ptc' }])('renders $format with the office tool in $mode mode', async ({ format, mode }) => {
   let original: Buffer | undefined
   await runLoaderSmoke({
     label: 'Office rendering', tempDirPrefix: 'dsh-office-render-',
@@ -61,8 +61,6 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mod
         if (event.type === 'tool/ptc-dispatch') return [{ name: event.data.name, arguments: JSON.stringify(event.data.arguments) }]
         return []
       })
-      const skills = calls.filter(call => call.name === 'skill').map(call => JSON.parse(call.arguments) as { name: string })
-      expect(skills.some(skill => skill.name === 'office-render'), JSON.stringify(skills)).toBe(true)
       const renders = officeCalls(events).filter(call => call.args.operation === 'render')
       expect(renders.length, JSON.stringify(calls)).toBeGreaterThan(0)
       const images = events.some(event => (event.type === 'tool/result' && event.data.message.content.some(block => block.type === 'image'))
@@ -91,7 +89,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('keeps Office skills and th
   })
 })
 
-it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF through the operation skill and preserves the source', async () => {
+it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF with the office tool and preserves the source', async () => {
   let original: Buffer | undefined
   await runLoaderSmoke({
     ...launch,
@@ -109,8 +107,6 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF through the op
       const calls = events.flatMap(event => event.type === 'tool/call' ? [event.data]
         : event.type === 'tool/ptc-dispatch' ? [{ name: event.data.name, arguments: JSON.stringify(event.data.arguments) }] : [])
       const skills = calls.filter(call => call.name === 'skill').map(call => (JSON.parse(call.arguments) as { name: string }).name)
-      expect(skills).toContain('office-export-pdf')
-      expect(skills).not.toEqual(expect.arrayContaining(['office-render']))
       expect(skills.some(name => ['office-docx', 'office-pptx', 'office-xlsx'].includes(name))).toBe(false)
       const commands = calls.filter(call => call.name === 'bash' || call.name === 'pwsh')
         .map(call => (JSON.parse(call.arguments) as { command: string }).command).join('\n')

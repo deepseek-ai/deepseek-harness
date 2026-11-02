@@ -221,8 +221,9 @@ function codeOf(error: unknown): unknown {
 /** Model-facing failure for a classified Office service error; other failures pass through unchanged. */
 function officeFailure(verb: string, path: string, error: unknown): unknown {
   if (!(error instanceof Error) || error.name !== 'OfficeKitError') return error
-  const hint = codeOf(error) === 'busy' ? ' Retry after other document operations finish.'
-    : codeOf(error) === 'output-too-large' && verb === 'render' ? ' Select fewer pages, a smaller range, or a lower dpi.' : ''
+  const hint = codeOf(error) === 'unavailable' ? ' Tell the user this operation is unavailable; do not substitute system soffice, npx, or another converter.'
+    : codeOf(error) === 'busy' ? ' Retry after other document operations finish.'
+      : codeOf(error) === 'output-too-large' && verb === 'render' ? ' Select fewer pages, a smaller range, or a lower dpi.' : ''
   return new Error(`cannot ${verb} "${path}": ${error.message}${hint}`, { cause: error })
 }
 

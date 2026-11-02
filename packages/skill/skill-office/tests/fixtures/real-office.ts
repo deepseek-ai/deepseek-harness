@@ -53,10 +53,10 @@ export function officeCalls(events: SessionEvent[]): OfficeCall[] {
 }
 
 /**
- * Assert that a non-rendering task has received no rendering commands or detailed guidance.
+ * Assert that a non-rendering task has received no render calls or render-skill guidance.
  * @param events - Recorded task events, including nested skill and shell results.
  */
-export function expectNoRenderContext(events: SessionEvent[]): void {
+export function expectNoRenderContext(events: readonly SessionEvent[]): void {
   const messages = Session.create(SessionId('office-context'), events).deriveMessages()
-  expect(JSON.stringify(messages)).not.toMatch(/uniformly blank|Render the saved deliverable|"operation":"render"/)
+  expect(JSON.stringify(messages)).not.toMatch(/Render the saved deliverable|"operation":"render"/)
 }

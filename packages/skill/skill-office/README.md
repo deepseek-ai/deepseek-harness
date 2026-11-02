@@ -1,5 +1,5 @@
 ---
-description: "Progressive Office authoring and office-tool operation skills for document workflows."
+description: "Progressive Office routing and authoring skills that direct document operations to the office tool."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The catalog lists the Office router and six authoring or operation skills. Full instructions load on demand. Python authoring and verification skills append the configured Python environment; operation skills direct the model to the [`office` tool](../../document/tool-office/README.md) and the shell copy of converted files. The Web application and SDK profiles mount the provider; only Desktop, or an SDK with a primary runtime, also mounts the bundled dependency query.
+The catalog lists the Office router and three authoring skills. Full instructions load on demand. The authoring skills append the configured Python environment; the router and authoring skills direct rendering, conversion, and recalculation to the [`office` tool](../../document/tool-office/README.md) and the shell copy of converted files. The Web application and SDK profiles mount the provider; only Desktop, or an SDK with a primary runtime, also mounts the bundled dependency query.
 
 ## Table of Contents
 
@@ -26,7 +26,7 @@ The catalog lists the Office router and six authoring or operation skills. Full 
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the skill provider beside the skill registry and `dsh-tool-skill`. The provider supplies skill instructions; Python skills append a Python environment section. Operation skills call the `office` tool, so compose [`tool-office`](../../document/tool-office/README.md) beside this provider.
+Mount the skill provider beside the skill registry and `dsh-tool-skill`. The provider supplies skill instructions; Python skills append a Python environment section. The skills direct operations to the `office` tool, so compose [`tool-office`](../../document/tool-office/README.md) beside this provider.
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'
@@ -35,21 +35,21 @@ Mount the skill provider beside the skill registry and `dsh-tool-skill`. The pro
 
 | Field | Default | Meaning |
 |---|---|---|
-| `assetRoot` | Carrier resources or packaged `assets/` | Absolute directory containing the seven skill folders. |
-| `pythonEnvironment` | `'workspace-dependencies'` | Python that `office-docx`, `office-pptx`, `office-xlsx`, and `office-recalculate` direct the model to; see below. |
+| `assetRoot` | Carrier resources or packaged `assets/` | Absolute directory containing the four skill folders. |
+| `pythonEnvironment` | `'workspace-dependencies'` | Python that `office-docx`, `office-pptx`, and `office-xlsx` direct the model to; see below. |
 
-`pythonEnvironment` selects one fixed section appended to those four skills. Both values first defer to an explicit user or applicable AGENTS.md environment requirement. `'workspace-dependencies'` directs the model to call `load_workspace_dependencies` and use the bundled Python and libraries it returns; mount it only with `dsh-tool-workspace-dependencies`. A custom composition that mounts this package without `dsh-tool-workspace-dependencies` must configure `pythonEnvironment: user`. `'user'` directs the model to the project's or user's existing Python on PATH, to check that the required libraries import, and to name missing packages instead of installing them globally without the user's agreement.
+`pythonEnvironment` selects one fixed section appended to those three skills. Both values first defer to an explicit user or applicable AGENTS.md environment requirement. `'workspace-dependencies'` directs the model to call `load_workspace_dependencies` and use the bundled Python and libraries it returns; mount it only with `dsh-tool-workspace-dependencies`. A custom composition that mounts this package without `dsh-tool-workspace-dependencies` must configure `pythonEnvironment: user`. `'user'` directs the model to the project's or user's existing Python on PATH, to check that the required libraries import, and to name missing packages instead of installing them globally without the user's agreement.
 
 A relative `assetRoot` rejects registration. Catalog discovery reads each `SKILL.md`. A missing or invalid skill is omitted from the catalog with a warning, and a skill whose file disappears after discovery fails to load and leaves the catalog. Other read errors, such as a locked file, leave discovery incomplete so the registry retries it. Loading instructions resolves no executable and prepares no engine; the `office` tool reports an unavailable LibreOffice Kit when called. Bash or PowerShell owns the approvals, sandboxing, and cancellation of copying converted files into the workspace.
 
 <a id="progressive-loading"></a>
 ### Progressive loading
 
-The model chooses skills from the task; the host does not inject complete instructions based on file extensions. With complete resources, all seven skills are listed and loadable by name through `skill` or explicit user invocation. Requested appearance changes, including spreadsheet cell fills and text alignment, require rendering even without an explicit visual-check request; an explicit request to skip rendering takes precedence. Pure operations can enter the corresponding skill directly.
+The model chooses skills from the task; the host does not inject complete instructions based on file extensions. With complete resources, all four skills are listed and loadable by name through `skill` or explicit user invocation. Requested appearance changes, including spreadsheet cell fills and text alignment, require rendering even without an explicit visual-check request; an explicit request to skip rendering takes precedence. Standalone operations call the `office` tool after routing without loading an authoring skill.
 
 ```mermaid
 flowchart TD
-    A["Initial catalog: seven Office summaries"]
+    A["Initial catalog: four Office summaries"]
     A -->|Non-Office task| N["Continue without loading Office instructions"]
     A -->|Office task| B["skill(office): task routing"]
 
@@ -57,26 +57,21 @@ flowchart TD
     C --> D["Author and validate content, structure and data"]
     D -->|No additional operation needed| F["Deliver"]
 
-    B -->|Images, visual inspection, or appearance changes| R["skill(office-render)"]
+    B -->|Images, visual inspection, or appearance changes| R["office render: images in the tool result"]
     D -->|Images, visual inspection, or appearance changes| R
-    R --> RC["office render: images in the tool result"]
-    RC -->|Usable preview| V["Inspect requested images"]
+    R --> V["Inspect requested images"]
     V --> F
-    RC -->|Failed or blank preview| L["Report content checks and unfinished visual inspection separately"]
-    L --> F
 
-    B -->|Formula recalculation| X["skill(office-recalculate)"]
+    B -->|Formula recalculation| X["office recalculate, shell copy"]
     D -->|Formula recalculation| X
-    X --> XC["office recalculate, shell copy, verify values"]
-    XC --> F
+    X --> F
 
-    B -->|PDF export| P["skill(office-export-pdf)"]
+    B -->|PDF export| P["office convert, shell copy"]
     D -->|PDF export| P
-    P --> PC["office convert, shell copy"]
-    PC --> F
+    P --> F
 ```
 
-New files and content, data, or formula edits do not require rendering solely because they include incidental basic formatting. Preview images arrive in the `office` tool result, so no workspace files are created for inspection; replies report the inspection in text. Converted and recalculated files arrive as temporary paths that the model copies into the workspace with `cp` or `Copy-Item`. PDF export validates the copied file's `%PDF-` signature without searching for PDF readers. Loaded instructions remain in session history after an operation finishes. The diagram describes ordinary presets across supported clients; it does not change the shell-only definition of minimal or sdk-minimal.
+New files and content, data, or formula edits do not require rendering solely because they include incidental basic formatting. Preview images arrive in the `office` tool result, so no workspace files are created for inspection; replies report the inspection in text. Converted and recalculated files arrive as temporary paths that the model copies into the workspace with `cp` or `Copy-Item`. Loaded instructions remain in session history after an operation finishes. The diagram describes ordinary presets across supported clients; it does not change the shell-only definition of minimal or sdk-minimal.
 
 Ordinary Word text edits inspect the target runs and formatting, then reopen the saved document to verify the edit. Successful checks end validation; package and metadata investigation requires a concrete problem or an explicit request.
 
@@ -96,7 +91,7 @@ The provider registers no tools or activation projection. Loaded skill results r
 |---|---|
 | [`src/index.ts`](src/index.ts) | Provider registration, per-skill resource reads, and the appended Python environment section. |
 
-| [`assets/`](assets/) | Router and six subskills. |
+| [`assets/`](assets/) | Router and three authoring skills. |
 
 </details>
 
@@ -119,7 +114,7 @@ Indirectly, through `dsh-tool-skill`, which renders the initial Office summary a
 
 #### KV Cache effect
 
-Skill results append to history without changing tool declarations, and loaded text or images remain after an operation finishes. A skill omitted or removed for unreadable resources changes the catalog, which a later step publishes as a catalog update. Character estimates use `ceil(characters / 4)`: the summary is at most 50 tokens and the router body at most 200; authoring bodies are at least 35% smaller than the combined authoring and operation guides. The appended Python environment section stays fixed while the configuration stays unchanged, and counts toward each skill body. Skill wrappers, the generic catalog, shell and `office` declarations, and `load_workspace_dependencies` are separate costs, and these estimates are not server usage.
+Skill results append to history without changing tool declarations, and loaded text or images remain after an operation finishes. A skill omitted or removed for unreadable resources changes the catalog, which a later step publishes as a catalog update. Character estimates use `ceil(characters / 4)`: the summary is at most 50 tokens and the router body at most 200; authoring bodies are at least 30% smaller than the combined authoring and operation guides. The appended Python environment section stays fixed while the configuration stays unchanged, and counts toward each skill body. Skill wrappers, the generic catalog, shell and `office` declarations, and `load_workspace_dependencies` are separate costs, and these estimates are not server usage.
 
 ## Known Limitations and Deferred Work
 

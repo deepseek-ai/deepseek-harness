@@ -280,6 +280,8 @@ describe('render', () => {
 })
 
 describe('Office service failures', () => {
+  const unavailableHint = ' Tell the user this operation is unavailable; do not substitute system soffice, npx, or another converter.'
+
   it('stays registered without the Office service, fails each call as unavailable, and uses the service once it is provided', async () => {
     const { ctx, kit } = await setup({ kit: false })
     expect(ctx.tools.schemas().map(tool => tool.name)).toContain('office')
@@ -290,7 +292,7 @@ describe('Office service failures', () => {
     ] as const) {
       const result = await office(ctx, args)
       expect(result.isError).toBe(true)
-      expect(text(result)).toBe(`Error: cannot ${verb} "${join(dir, args.input)}": The document converter is unavailable.`)
+      expect(text(result)).toBe(`Error: cannot ${verb} "${join(dir, args.input)}": The document converter is unavailable.${unavailableHint}`)
     }
     expect(kit.renderImages).not.toHaveBeenCalled()
     ctx.provide('officeKit', kit as never)
@@ -302,7 +304,7 @@ describe('Office service failures', () => {
   const officeError = (code: OfficeKitErrorCode, message: string) => new OfficeKitError(code, message)
 
   it.each<[OfficeKitErrorCode, string, string]>([
-    ['unavailable', 'LibreOffice Kit is not installed.', 'deck.pptx": LibreOffice Kit is not installed.'],
+    ['unavailable', 'LibreOffice Kit is not installed.', `deck.pptx": LibreOffice Kit is not installed.${unavailableHint}`],
     ['busy', 'The document converter has reached its admission limit.', 'Retry after other document operations finish.'],
     ['output-too-large', 'Selected page count exceeds maxPages.', 'Select fewer pages, a smaller range, or a lower dpi.'],
     ['invalid-request', 'Selected page lies outside the 3-page document.', 'deck.pptx": Selected page lies outside the 3-page document.'],

@@ -11,7 +11,7 @@ Combined authoring and rendering instructions spend context on operations unrela
 ## Decision
 
 
-The [Office provider](../../../../packages/skill/skill-office/README.md) lists a compact router and six format-specific authoring or operation skills. The model loads full instructions by name and selects rendering for appearance-focused changes unless the user explicitly skips it. Rendering uses a private, randomly named temporary directory inside the task workspace and removes it after inspection. Skills invoke the shared Python checker and configured LibreOffice Kit CLI through ordinary Bash or PowerShell. SDK and Desktop own their Office composition separately; ordinary Web and the shared base do not mount these plugins. [Office skills in every deployment](2026-10-26-cross-deployment-office-kit.md) supersedes this mounting decision, and the [resident office tool](2026-10-31-native-office-tool.md) supersedes the shell execution and renderer-tool rejection.
+The [Office provider](../../../../packages/skill/skill-office/README.md) lists a compact router and three format-specific authoring skills; the operation skills this decision introduced are replaced by the [resident office tool](2026-10-31-native-office-tool.md). The model loads full instructions by name and selects rendering for appearance-focused changes unless the user explicitly skips it. Rendering uses a private, randomly named temporary directory inside the task workspace and removes it after inspection. Skills invoke the shared Python checker and configured LibreOffice Kit CLI through ordinary Bash or PowerShell. SDK and Desktop own their Office composition separately; ordinary Web and the shared base do not mount these plugins. [Office skills in every deployment](2026-10-26-cross-deployment-office-kit.md) supersedes this mounting decision, and the [resident office tool](2026-10-31-native-office-tool.md) supersedes the shell execution and renderer-tool rejection.
 
 Carriers own interpreter and resource locations. Operation skills append the configured Node and CLI paths only when their bodies are loaded; authoring skills use the selected Python and shared checker resource. Loading instructions does not prepare engines or authoring payloads. Ordinary shell execution retains its existing permissions and process management.
 
@@ -21,7 +21,7 @@ LibreOffice Kit dependencies declare one exact version in every manifest; the ro
 
 **Keep a dedicated renderer tool.** A small typed schema constrains rendering arguments, but requires its own execution configuration, scoped registration, projection, and activation lifecycle. The CLI operation skills accept shell quoting and model-selected arguments in exchange for reusing the existing approval, sandbox, cancellation, and output mechanisms.
 
-**Hide subskills from the catalog.** This requires a generic visibility policy independent of invocation permission. Listing seven short summaries preserves the existing skill API while full instruction bodies remain demand-loaded.
+**Hide subskills from the catalog.** This requires a generic visibility policy independent of invocation permission. Listing four short summaries preserves the existing skill API while full instruction bodies remain demand-loaded.
 
 **Automatically inject guides for file extensions.** Extensions do not distinguish text edits, recalculation, conversion, and requested visual checks. Model-selected routing keeps unrelated operations out of context and permits explicit direct invocation.
 

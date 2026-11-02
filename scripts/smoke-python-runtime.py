@@ -996,9 +996,8 @@ def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshot
             assert len(requests) == 2, requests
             prompt = json.dumps(requests[0], ensure_ascii=False)
             assert ("- `office`:" in prompt) == (mode != "disabled"), mode
-            for name in ("office-docx", "office-pptx", "office-xlsx", "office-render", "office-recalculate", "office-export-pdf"):
+            for name in ("office-docx", "office-pptx", "office-xlsx"):
                 assert (name in prompt) == (mode != "disabled"), (mode, name)
-            assert "Render the saved deliverable" not in prompt, mode
             assert ("CUSTOM_OFFICE_DOCX" in prompt) == (mode == "replacement"), mode
             tool_result = next(block for message in requests[1]["messages"]
                                for block in message.get("content", [])

@@ -30,7 +30,7 @@ vi.mock('@deepseek-ai/dsh-office-kit/locate', async (original) => {
 })
 
 const assets = fileURLToPath(new URL('../../../skill/skill-office/assets/', import.meta.url))
-const names = ['office', 'office-docx', 'office-export-pdf', 'office-pptx', 'office-recalculate', 'office-render', 'office-xlsx']
+const names = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
 const ROWS = ['office-kit', 'tool-office', 'workspace-dependencies', 'skill-office']
 
 afterEach(() => { vi.unstubAllEnvs() })
@@ -112,7 +112,7 @@ it('mounts Desktop skills from the primary runtime beside the resident office to
   expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(['load_workspace_dependencies', 'office'])
   expect(ctx.officeKit.outputDirectory).toBe(join(root, 'home', 'office-kit', 'outputs'))
   expect((await ctx.skills.get('office-docx'))?.content).toMatch(/## Python environment\n\n.*`load_workspace_dependencies`/u)
-  expect((await ctx.skills.get('office-render'))?.content).toContain('`office` tool')
+  expect((await ctx.skills.get('office'))?.content).toContain('`office` tool')
 })
 
 it('keeps the office tool and returns the unavailable Kit error to the model when Kit is absent', async () => {
@@ -126,7 +126,8 @@ it('keeps the office tool and returns the unavailable Kit error to the model whe
   })
   expect(result.isError).toBe(true)
   expect(result.content).toEqual([{ type: 'text', text: `Error: cannot convert "${join(workspace, 'report.docx')}": LibreOffice Kit is not installed. `
-    + 'This deployment does not provide LibreOffice Kit; install or enable it as this deployment requires, then retry.' }])
+    + 'This deployment does not provide LibreOffice Kit; install or enable it as this deployment requires, then retry.'
+    + ' Tell the user this operation is unavailable; do not substitute system soffice, npx, or another converter.' }])
   expect(resolveKitModule).toHaveBeenCalled()
   expect(warnings.filter(warning => warning.startsWith('OfficeKitError: LibreOffice Kit is not installed.'))).toHaveLength(1)
 })
@@ -141,7 +142,8 @@ it('mounts the preset office tool without the Office kit row and reaches the ser
     signal: new AbortController().signal, callId: ToolCallId('office-without-service'), name: 'office',
     arguments: { operation: 'convert', input: 'report.docx', format: 'pdf' },
   })
-  expect((await convert()).content).toEqual([{ type: 'text', text: `Error: cannot convert "${join(workspace, 'report.docx')}": The document converter is unavailable.` }])
+  expect((await convert()).content).toEqual([{ type: 'text', text: `Error: cannot convert "${join(workspace, 'report.docx')}": The document converter is unavailable.`
+    + ' Tell the user this operation is unavailable; do not substitute system soffice, npx, or another converter.' }])
   expect(resolveKitModule).not.toHaveBeenCalled()
   await ctx.loader.root.update(entries)
   await ctx.loader.await()

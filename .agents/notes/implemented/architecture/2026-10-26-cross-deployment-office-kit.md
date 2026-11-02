@@ -34,7 +34,7 @@ An absent Kit degrades instead of failing a load. The conversion service registe
 
 ## Consequences
 
-Ordinary Web and SDK sessions without a bundled environment list the seven Office skills, which adds their summaries to the first context. Deployments without Kit see `unavailable` previews and an `office` tool that reports the missing Kit instead of failing at startup; skill loading does not check for Kit; a later Kit installation takes effect for conversion without reloading the provider. External compositions migrate from the `office-to-pdf` row, `ctx.officeToPdf`, and the `officeToPdf/*` Remote methods through the [upgrade guide](../../../../docs/upgrade-guide/v0.2.2-alpha.2/office-kit-package/guide.md).
+Ordinary Web and SDK sessions without a bundled environment list the four Office skills, which adds their summaries to the first context. Deployments without Kit see `unavailable` previews and an `office` tool that reports the missing Kit instead of failing at startup; skill loading does not check for Kit; a later Kit installation takes effect for conversion without reloading the provider. External compositions migrate from the `office-to-pdf` row, `ctx.officeToPdf`, and the `officeToPdf/*` Remote methods to the `office-kit` package.
 
 Processes launched from the Desktop built-in terminal inherit `DSH_BUNDLED_PRIMARY_RUNTIME`, so the SDK uses its bundled environment. The shell publishes no Kit location; child applications resolve their own Kit.
 

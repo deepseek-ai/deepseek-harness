@@ -119,10 +119,8 @@ export function registerVisualIntentCases(selected: readonly DocumentFormat[]): 
           expect(checked.exitCode, `${checked.stderr}\n${diagnostic}`).toBe(0)
           expect(loaded, diagnostic).toContain(`office-${format}`)
           if (intent === 'excluded' || kind === 'content' && intent !== 'explicit') {
-            expect(loaded, diagnostic).not.toContain('office-render')
             expect(renderCalls, diagnostic).toEqual([])
           } else {
-            expect(loaded, diagnostic).toContain('office-render')
             expect(renderCalls, diagnostic).toHaveLength(1)
             if (rendered === 0) {
               expect(text.match(/Content and structure checks passed; visual inspection was not completed\./gu), diagnostic).toHaveLength(1)

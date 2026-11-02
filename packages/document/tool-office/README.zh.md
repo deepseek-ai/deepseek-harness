@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-[Web bundle](../../bundle/web-app/README.zh.md)和 [SDK bundle](../../bundle/sdk-app/README.zh.md)在 Desktop、普通 `dsh web` 和 SDK 中随 `office-kit` 挂载此工具；Web bundle 中由 `standard` 和 `ptc` Agent 预设包含它，`minimal` 预设不包含。无论是否安装 LibreOffice Kit、是否挂载 `office-kit` 服务，工具都会注册，并在每次调用时读取该服务。Kit 缺失时，每次调用都以 Office 服务的 `unavailable` 消息失败；服务不存在时，每次调用都以 `The document converter is unavailable.` 失败。[Office 技能](../../skill/skill-office/README.zh.md)告诉模型何时渲染以及如何检查结果。
+[Web bundle](../../bundle/web-app/README.zh.md)和 [SDK bundle](../../bundle/sdk-app/README.zh.md)在 Desktop、普通 `dsh web` 和 SDK 中随 `office-kit` 挂载此工具；Web bundle 中由 `standard` 和 `ptc` Agent 预设包含它，`minimal` 预设不包含。无论是否安装 LibreOffice Kit、是否挂载 `office-kit` 服务，工具都会注册，并在每次调用时读取该服务。Kit 缺失时，每次调用都以 Office 服务的 `unavailable` 消息失败；服务不存在时，每次调用都以 `The document converter is unavailable.` 失败。两种失败都提示模型告知用户该操作不可用，不改用系统 soffice、npx 或其他转换工具。[Office 技能](../../skill/skill-office/README.zh.md)告诉模型何时渲染以及如何检查结果。
 
 ```yaml
 - name: '@deepseek-ai/dsh-office-kit'
@@ -57,7 +57,7 @@ kind: "package-reference"
 
 工具通过 `ctx.fs` 解析输入并要求其为普通文件，用 `fs.readByteRange` 读取其第一个字节后再 stat 一次，因此没有内容读取权限的调用，或文件在 stat 之后被替换的调用，会在 Office 套件可能从缓存应答之前失败。随后工具向 Office 套件提交已授权的源；其延迟读取在有界的 `fs.readBytes` 前后各 stat 一次，版本变化时拒绝。渲染结果在返回前通过 `attachments.saveImages()` 提交，因此 `tool/result` 事件携带持久的图片引用；恢复、分叉和回放会还原相同的图片，图片卸载也像对待其他工具结果图片一样适用于它们。规范值携带附件引用和图片位置；`output.render` 先生成一条摘要文本，再为每个渲染的页面或区域生成位置标签和图片块。`presentationMeta` 记录规范化的输入路径，转换时还记录临时文件路径。输出存储中的文件归调用方 subagent 树的根 Session 所有：挂载 `subagents` 服务时通过 `subagents.rootOf()` 读取，否则为调用方 Session；文件以输入文件名加新扩展名命名。
 
-schema 无法表达的参数规则——各操作专用的参数、互不重复的从 1 开始的页码、dpi 范围以及各操作的输入输出格式——在访问任何文件之前检查。Office 套件的错误报告为 `cannot <operation> "<path>": <message>`，`busy` 附带重试提示，渲染过大时附带缩小选择的提示。PTC 嵌套调用重新进入同一执行管线，因此策略和日志同样适用；嵌套渲染的图片在程序运行结束后附加。
+schema 无法表达的参数规则——各操作专用的参数、互不重复的从 1 开始的页码、dpi 范围以及各操作的输入输出格式——在访问任何文件之前检查。Office 套件的错误报告为 `cannot <operation> "<path>": <message>`，`unavailable` 附带告知用户的提示，`busy` 附带重试提示，渲染过大时附带缩小选择的提示。PTC 嵌套调用重新进入同一执行管线，因此策略和日志同样适用；嵌套渲染的图片在程序运行结束后附加。
 
 </details>
 

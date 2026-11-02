@@ -1527,7 +1527,7 @@ describe('headless recorded-session snapshots', () => {
                   type: 'text', text: expect.stringMatching(/^Error: cannot render ".+[\\/]report\.docx": model "deepseek-v4-flash" does not accept images$/u),
                 }])
               }
-              expect(results).toHaveLength(4)
+              expect(results).toHaveLength(2)
               expect(results.every(result => result.isError === false)).toBe(true)
               expect(log).toContain('# Office task routing')
             }

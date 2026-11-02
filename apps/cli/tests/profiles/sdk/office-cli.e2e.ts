@@ -1,6 +1,6 @@
 /**
- * PDF export through the shipped SDK profile: the agent loads the `office-export-pdf` skill, converts with the
- * `office` tool, and copies the temporary PDF into the workspace with the shell, with no Node on PATH.
+ * PDF export through the shipped SDK profile: the agent converts with the `office` tool and copies the temporary PDF
+ * into the workspace with the shell, with no Node on PATH.
  * Defaults to built Node packages. DSH_OFFICE_TEST_EXECUTABLE/ENTRY select a relocated Node or Electron carrier;
  * CARRIER=sdk selects the standalone executable. API=openai-completions selects a development gateway instead of the
  * default Messages API.
@@ -104,11 +104,9 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || process.platform === 'win32')(`agent 
         const params = record.params as { event?: { type: string; data: ToolCall } } | undefined
         return params?.event?.type === 'tool/call' ? [params.event.data] : []
       })
-      const skill = calls.findIndex(call => call.name === 'skill' && callArguments(call).name === 'office-export-pdf')
       const convert = calls.findIndex(call => call.name === 'office' && callArguments(call).operation === 'convert')
       const copy = calls.findIndex(call => call.name === 'bash' && /\bcp\b/u.test(String(callArguments(call).command)))
-      expect(skill, diagnostic).toBeGreaterThanOrEqual(0)
-      expect(convert, diagnostic).toBeGreaterThan(skill)
+      expect(convert, diagnostic).toBeGreaterThanOrEqual(0)
       expect(copy, diagnostic).toBeGreaterThan(convert)
       expect(existsSync(decoyMarker), 'the agent must not invoke system Office').toBe(false)
       const pdf = await readFile(join(root, 'result.pdf'))
