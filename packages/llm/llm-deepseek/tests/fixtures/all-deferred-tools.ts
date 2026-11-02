@@ -1,4 +1,4 @@
-/** Replay explicitly deferred declarations without activating them. */
+/** Verify serialized deferred-only declarations; keyless replay does not validate provider acceptance. */
 import assert from 'node:assert/strict'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
@@ -29,7 +29,6 @@ export function apply(ctx: Context): void {
     assert.deepEqual(projected.tools, options.tools)
     const request = serialize({ ...options, tools: [...projected.tools] }, connection, projected.messages, new Map(), () => undefined)
     assert.deepEqual(request.tools, [
-      { name: 'DeferredToolPlaceholder', description: 'Reserved placeholder that keeps deferred tool loading active; never call this tool.', input_schema: { type: 'object', properties: {} } },
       { name: 'snapshot_pending', description: 'Wait for activation.', input_schema: { type: 'object', properties: {} }, defer_loading: true },
     ])
     assert.deepEqual(request.messages.filter(message => message.role === 'system'), [])

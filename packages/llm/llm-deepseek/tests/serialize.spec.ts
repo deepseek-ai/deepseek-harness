@@ -80,23 +80,13 @@ describe('Messages request conversion', () => {
     ])
   })
 
-  it('keeps an all-deferred list inactive and adds one immediate placeholder', () => {
+  it('preserves an all-deferred list without synthesizing tools', () => {
     const tools = [{ name: 'search', description: 'Search', parameters: {}, deferLoading: true as const }]
     const saved = JSON.stringify(tools)
     expect(body([user()], { tools }).tools).toEqual([
-      { name: 'DeferredToolPlaceholder', description: 'Reserved placeholder that keeps deferred tool loading active; never call this tool.', input_schema: { type: 'object', properties: {} } },
       { name: 'search', description: 'Search', input_schema: {}, defer_loading: true },
     ])
     expect(JSON.stringify(tools)).toBe(saved)
-  })
-
-  it('avoids colliding with real deferred tool names', () => {
-    const tools = ['DeferredToolPlaceholder', 'DeferredToolPlaceholder_1'].map(name => ({
-      name, description: 'Real tool', parameters: {}, deferLoading: true as const,
-    }))
-    expect(body([user()], { tools }).tools?.map(tool => [tool.name, tool.defer_loading])).toEqual([
-      ['DeferredToolPlaceholder_2', undefined], ['DeferredToolPlaceholder', true], ['DeferredToolPlaceholder_1', true],
-    ])
   })
 
   it('preserves absent and empty tool lists', () => {

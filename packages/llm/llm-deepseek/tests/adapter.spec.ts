@@ -118,12 +118,27 @@ describe('direct Messages HTTP', () => {
     await assemble(llm.stream(options({ messages: [user(), changes], tools })))
     expect(http.requests[0]).toMatchObject({
       headers: { 'anthropic-beta': 'mid-conversation-tool-changes-2026-07-01' },
-      body: { tools: [{ name: 'DeferredToolPlaceholder' }, { name: 'search', defer_loading: true }], messages: [
+      body: { tools: [{ name: 'search', defer_loading: true }], messages: [
         { role: 'user' }, { role: 'system', content: [{ type: 'tool_addition', tool: { type: 'tool_reference', name: 'search' } }] },
       ] },
     })
     await assemble(llm.stream(options({ tools })))
     expect(http.requests[1]?.headers).not.toHaveProperty('anthropic-beta')
+  })
+
+  it('surfaces provider rejection of an all-deferred request without adding tools', async () => {
+    const message = 'At least one tool must not be deferred'
+    const http = await endpoint((response) => {
+      response.statusCode = 400
+      response.end(JSON.stringify({ error: { type: 'invalid_request_error', message } }))
+    })
+    const tools = [{ name: 'search', description: 'Search', parameters: {}, deferLoading: true as const }]
+    await expect(chunks(adapter({ baseURL: http.url }).stream(options({ tools }))))
+      .rejects.toMatchObject({ code: 'INVALID_REQUEST', message, failure: { status: 400 } })
+    expect(http.requests).toHaveLength(1)
+    expect(http.requests[0]?.body.tools).toEqual([
+      { name: 'search', description: 'Search', input_schema: {}, defer_loading: true },
+    ])
   })
 
   it('uses the Messages endpoint, authentication, attribution and final usage', async () => {
