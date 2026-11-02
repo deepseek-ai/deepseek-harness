@@ -278,7 +278,8 @@ describe('card structure', () => {
     const { mode } = await mount()
     expect(mode.elements.inEnvelope('title')).toBe(true)
     expect(mode.elements.has('element.button.action')).toBe(true)
-    expect(mode.limits).toEqual({ 'limit.elements': 200, 'limit.payload.bytes': 30_000, 'limit.stream.interval': 120 })
+    // `limit.stream.interval` keeps two edits of the same message 200 ms apart (the platform allows 5 QPS per message).
+    expect(mode.limits).toEqual({ 'limit.elements': 200, 'limit.payload.bytes': 30_000, 'limit.stream.interval': 200 })
     expect(createCardMode({ cardStreaming: false }).limits['limit.stream.interval']).toBeUndefined()
   })
 

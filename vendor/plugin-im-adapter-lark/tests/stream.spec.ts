@@ -1,16 +1,16 @@
 /**
- * The CardKit `patch` stream driver.
+ * The card mode's stream driver.
  *
  * Three layers:
- * - **installation**: `LarkBot.streamDriver` answers the CardKit driver in card mode (`cardStreaming !== false`), the
- *   core `edit` driver in post mode and `undefined` (buffered `final`) nowhere else; both drivers are memoized, so
- *   every stream of one bot reuses the same stateless instance;
- * - **the driver itself**: entity creation + one reference message, one request per diff op with a strictly
- *   increasing `sequence`, a full update when the scheduler had no patches or the streaming window closed, `close`
- *   switching `streaming_mode` off, the streaming window as the budget;
+ * - **installation**: `LarkBot.streamDriver` answers the core `edit` driver in card mode (`cardStreaming !== false`) and
+ *   in post mode, and `undefined` (buffered `final`) nowhere else; the drivers are memoized, so every stream of one bot
+ *   reuses the same stateless instance;
+ * - **the CardKit driver itself**, still exported but no longer installed: entity creation + one reference message, one
+ *   request per diff op with a strictly increasing `sequence`, a full update when the scheduler had no patches or the
+ *   streaming window closed, `close` switching `streaming_mode` off, the streaming window as the budget. It is kept
+ *   until the entity path is deleted; nothing in the adapter reaches it any more;
  * - **through `bot.stream`** (the stream scheduler) under fake timers with a scripted growing activity from
- *   `streamingScripts()`: a growing text, a growing list and a non-prefix change, plus a failed request whose retry
- *   keeps the sequence strictly increasing, the post `edit` path and the non-streaming card path.
+ *   `streamingScripts()`: a card edited in place (one `PATCH` per state, no entity) and the post `edit` path.
  *
  * Every request is answered by a stubbed transport; nothing touches the network.
  */
@@ -23,7 +23,6 @@ import {
   type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import { streamingScripts } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
-import { h } from '@deepseek-ai/satori-element'
 import LarkBot, { Config, type LarkConfig } from '@deepseek-ai/cordis-plugin-im-adapter-lark'
 import { cardJson, type CardDraft, type CardMessageDraft, type CardPayload, type CardPatch } from '../src/modes/card.ts'
 import {
@@ -103,7 +102,7 @@ function route(call: Call): Response {
     return Response.json({ code: 0, data: { message_id: 'om_1', chat_id: CHAT } })
   }
   if (call.path === '/open-apis/im/v1/messages/om_1') {
-    return call.method === 'PUT' || call.method === 'DELETE' ? ok() : unexpected(call)
+    return call.method === 'PUT' || call.method === 'PATCH' || call.method === 'DELETE' ? ok() : unexpected(call)
   }
   throw unexpected(call)
 }
@@ -179,10 +178,10 @@ function contentPatch(content: string, id = 'e1', append = true): CardPatch {
 // Installation
 
 describe('driver installation', () => {
-  it('answers the patch driver in card mode and the edit driver in post mode', async () => {
+  it('answers the edit driver in card mode and in post mode', async () => {
     const { bot } = await mount()
     const card = bot.streamDriver('card')
-    expect(card?.strategy).toBe('patch')
+    expect(card?.strategy).toBe('edit')
     // The driver is one stateless instance: the per-message bookkeeping lives in `handle.state`.
     expect(bot.streamDriver('card')).toBe(card)
 
@@ -449,88 +448,28 @@ describe('through the scheduler', () => {
     return await done
   }
 
-  it('streams a growing text into one card: entity, typewriter ticks, streaming off at close', async () => {
+  it('streams a card by editing the one message in place', async () => {
     const { bot, calls } = await mount()
     const stream = bot.stream(target)
-    expect(stream.strategy).toBe('patch')
+    expect(stream.strategy).toBe('edit')
 
     const result = await run(stream, script('growing-text').states)
 
-    expect(calls[0]).toMatchObject({ method: 'POST', path: '/open-apis/cardkit/v1/cards' })
-    expect(calls[1]).toMatchObject({ method: 'POST', path: '/open-apis/im/v1/messages' })
-    expect(JSON.parse(bodyOf(calls[1]).content)).toEqual({ type: 'card', data: { card_id: 'card_1' } })
-    // Intermediate states are element updates (the typewriter route), never a second message.
-    const middle = calls.slice(2, -1)
-    expect(middle.length).toBeGreaterThan(0)
-    for (const call of middle) {
-      expect(call.path).toMatch(/^\/open-apis\/cardkit\/v1\/cards\/card_1\/elements\/[^/]+\/content$/)
-      expect(call.method).toBe('PUT')
+    // One message: the first state sends it, every later state replaces that same message's card JSON.
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/open-apis/im/v1/messages' })
+    expect(bodyOf(calls[0]).msg_type).toBe('interactive')
+    const edits = calls.slice(1)
+    expect(edits.length).toBeGreaterThan(0)
+    for (const call of edits) {
+      expect(call).toMatchObject({ method: 'PATCH', path: '/open-apis/im/v1/messages/om_1' })
+      // The whole card travels again: an inline card is replaced, not patched element by element.
+      expect(JSON.parse(bodyOf(call).content)).toMatchObject({ schema: '2.0', config: { update_multi: true } })
     }
-    // The last publication is the final document with streaming off.
-    const last = calls[calls.length - 1]!
-    expect(last).toMatchObject({ method: 'PUT', path: '/open-apis/cardkit/v1/cards/card_1' })
-    const final = cardOfBody(bodyOf(last))
-    expect(final.config.streaming_mode).toBe(false)
-    expect(JSON.stringify(final.body.elements)).toContain('Patching them now.')
-
-    expectContiguous(sequences(calls))
+    expect(JSON.stringify(JSON.parse(bodyOf(edits.at(-1)!).content))).toContain('Patching them now.')
+    // A card message is edited directly: no CardKit entity and no streaming mode that could expire.
+    expect(calls.some(call => call.path.includes('/cardkit/'))).toBe(false)
     expect(stream.state).toBe('closed')
-    expect(result.handle.parts[0]).toMatchObject({ id: 'om_1', kind: 'card-entity' })
-  })
-
-  it('typewrites a growing list into the one markdown component the card mode assembled', async () => {
-    const { bot, calls } = await mount()
-    const stream = bot.stream(target)
-    await run(stream, script('growing-list').states)
-
-    // The card mode merges consecutive flow blocks into one markdown component, so a list that gains items keeps its
-    // element id and only its text grows — the cheapest possible update.
-    const updates = calls.filter(call => call.method === 'PUT' && /\/elements\/[^/]+\/content$/.test(call.path))
-    expect(updates.length).toBeGreaterThan(0)
-    expect(new Set(updates.map(call => call.path.split('/').at(-2))).size).toBe(1)
-    expectContiguous(sequences(calls))
-    // No message beyond the one that carries the entity.
-    expect(calls.filter(call => call.path === '/open-apis/im/v1/messages')).toHaveLength(1)
-    expect(JSON.stringify(cardOfBody(bodyOf(calls[calls.length - 1])).body.elements)).toContain('report')
-  })
-
-  it('keeps the sequence strictly increasing across a failed request and its retry', async () => {
-    let attempts = 0
-    const { bot, calls } = await mount((call) => {
-      if (call.method !== 'PUT' || !call.path.endsWith('/content')) return undefined
-      // The first element update is lost in transport; its retry must succeed on a **new** number.
-      return ++attempts === 1 ? { status: 500, body: { code: 1 } } : undefined
-    })
-    const stream = bot.stream(target)
-    const result = await run(stream, script('growing-text').states)
-
-    expect(attempts).toBeGreaterThan(1)
-    // The failed request consumed its number and the retry took the next one: never reused, never skipped.
-    expectContiguous(sequences(calls))
-    expect(sequences(calls).length).toBeGreaterThan(2)
-    expect(stream.state).toBe('closed')
-    expect(result.handle.parts[0]!.id).toBe('om_1')
-  })
-
-  it('publishes a `replace` diff as a full card update', async () => {
-    const { bot, calls } = await mount()
-    const stream = bot.stream(target)
-    // The header appears between the states, which the by-id diff cannot express as an element op.
-    await run(stream, [
-      h('p', 'Checking the build'),
-      [h('title', {}, 'Build status'), h('p', 'Checking the build')],
-      [h('title', {}, 'Build status'), h('p', 'Build is green')],
-    ])
-
-    const full = calls.filter(call => call.method === 'PUT' && call.path === '/open-apis/cardkit/v1/cards/card_1')
-    expect(full.length).toBeGreaterThanOrEqual(2)
-    // The mid-stream replacement keeps streaming on (more ticks may follow), the closing one ends it.
-    expect(cardOfBody(bodyOf(full[0]))).toMatchObject({
-      config: { streaming_mode: true },
-      header: { title: { tag: 'plain_text', content: 'Build status' } },
-    })
-    expect(cardOfBody(bodyOf(full[full.length - 1]))).toMatchObject({ config: { streaming_mode: false } })
-    expectContiguous(sequences(calls))
+    expect(result.handle.parts[0]).toMatchObject({ id: 'om_1', kind: 'card-inline' })
   })
 
   it('streams a post through the edit driver when the card mode cannot stream', async () => {

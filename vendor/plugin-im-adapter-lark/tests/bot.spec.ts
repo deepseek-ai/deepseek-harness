@@ -150,8 +150,8 @@ describe('LarkBot shell', () => {
     expect(bot.modeOrder).toEqual(['card', 'post'])
     expect(bot.modes.post.id).toBe('post')
     expect(bot.modes.card.id).toBe('card')
-    // A stream opens in the card mode, which is also where CardKit patches in place.
-    expect(bot.streamDriver('card')?.strategy).toBe('patch')
+    // A stream opens in the card mode, which edits the one card message in place.
+    expect(bot.streamDriver('card')?.strategy).toBe('edit')
   })
 
   it('publishes each message in the mode that keeps the most of it, weighted per element', async () => {
@@ -222,11 +222,11 @@ describe('LarkBot shell', () => {
     expect(bot.referrerOf(group)).toBeUndefined()
   })
 
-  // The hooks delegate to their module: modes (`modes/`), prepare/send (`prepare.ts`, `send.ts`), the stream driver
-  // (`stream.ts`) and the decoder (`decode.ts`); each is covered by its own spec.
+  // The hooks delegate to their module: modes (`modes/`), prepare/send (`prepare.ts`, `send.ts`), the stream drivers
+  // (the core `edit` driver) and the decoder (`decode.ts`); each is covered by its own spec.
   it('wires the stream driver per mode', async () => {
     const { bot } = await mount()
-    expect(bot.streamDriver('card')?.strategy).toBe('patch')
+    expect(bot.streamDriver('card')?.strategy).toBe('edit')
     expect(bot.streamDriver('post')?.strategy).toBe('edit')
     expect(bot.streamDriver('text')).toBeUndefined()
     const plain = await mount({ cardStreaming: false })

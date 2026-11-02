@@ -204,7 +204,7 @@ export interface CardModeConfig {
   allowAtAll?: boolean
   /** Card callbacks accepted (default true): declares the `action` variant of `<button>`. */
   callbacks?: boolean
-  /** CardKit streaming (default true): `streamDriver` returns the CardKit driver and `limit.stream.interval` is set. */
+  /** In-place editing (default true): `streamDriver` edits the card message and `limit.stream.interval` is set. */
   cardStreaming?: boolean
   /** `limit.elements` (default 200). */
   elementLimit?: number
@@ -220,8 +220,8 @@ export const CARD_ELEMENT_LIMIT = 200
 export const CARD_PAYLOAD_BYTES = 30_000
 /** GFM tables one markdown component may hold. */
 export const CARD_TABLES_PER_MARKDOWN = 4
-/** CardKit: 10 QPS per card entity. */
-export const CARD_STREAM_INTERVAL = 120
+/** Editing one card message: 5 QPS per message, so no two edits may be closer than 200 ms. */
+export const CARD_STREAM_INTERVAL = 200
 /** CardKit streaming config. */
 export const CARD_STREAMING_CONFIG = {
   print_frequency_ms: { default: 50 },

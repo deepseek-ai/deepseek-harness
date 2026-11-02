@@ -8,8 +8,8 @@
  * - `prepare.ts` (`upload`) and `send.ts` ({@link LarkBot.sendPayload}, {@link LarkBot.editPayload},
  *   {@link LarkBot.deletePart}): create vs reply vs reply_in_thread, `receive_id_type`, the per-part `uuid`,
  *   `PUT`/`PATCH` by payload kind.
- * - `stream.ts`, returned by {@link LarkBot.streamDriver}: the CardKit `patch` driver in card mode when
- *   `config.cardStreaming`, the core `edit` driver in post mode.
+ * - {@link LarkBot.streamDriver}: the core `edit` driver in card and post mode, or none for the buffered `final`
+ *   strategy.
  * - `decode.ts` ({@link LarkBot.decodeEvent}, {@link LarkBot.decodeMessage}).
  *
  * `upload`, `sendPayload`, `editPayload`, `deletePart`, `decodeEvent` and `decodeMessage` are one-line
@@ -44,7 +44,6 @@ import { createCardMode } from './modes/card.ts'
 import { createPostMode } from './modes/post.ts'
 import { uploadResource } from './prepare.ts'
 import { deleteSentPart, editMessagePayload, sendMessagePayload } from './send.ts'
-import { createCardStreamDriver } from './stream.ts'
 import type { Message } from './types/index.ts'
 import { WsClient } from './ws.ts'
 
@@ -219,14 +218,22 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
   }
 
   /**
-   * The stream driver: a CardKit `patch` driver in card mode when `config.cardStreaming`, the core `edit` driver for a
-   * post (`PUT /im/v1/messages/:id`, ≤ 20 edits per message) — or `undefined` for the buffered `final` strategy. See
-   * `stream.ts`.
+   * The stream driver: the core `edit` driver in card mode and for a post, or `undefined` for the buffered `final`
+   * strategy.
+   *
+   * A card is a plain `interactive` message edited in place with `PATCH /im/v1/messages/:id`, not a CardKit entity.
+   * CardKit streaming bought nothing here — a card that is republished whole every couple of seconds never uses its
+   * incremental rendering — and cost plenty: streaming mode expires ten minutes after it is switched on, refuses
+   * callbacks that update the card, and makes the card unforwardable. One message accepts an unbounded number of
+   * edits (400 measured on a single message, none refused); the cap is 5 QPS for that message, which
+   * `CARD_STREAM_INTERVAL` stays under.
+   *
+   * A post keeps the same driver with its own limit: `PUT` accepts 20 edits per message.
    *
    * The drivers are memoized: one stateless instance each, all per-message bookkeeping lives in `handle.state`.
    *
-   * A tenant that refuses `PUT` on post messages answers `230075`, which `errors.ts` classifies `limit`: the stream
-   * scheduler resolves a limit by recalling the message and sending the final state as a new one.
+   * A tenant that refuses an edit answers `230075`, which `errors.ts` classifies `limit`: the stream scheduler
+   * resolves a limit by recalling the message and sending the final state as a new one.
    *
    * @param mode - mode id.
    * @returns the driver, or `undefined` for `final`.
@@ -234,9 +241,9 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
   override streamDriver(mode: string): StreamDriver | undefined {
     switch (mode) {
       case 'card':
-        // `cardStreaming: false` means no CardKit entity streaming, i.e. one card `PATCH`ed in place at the end.
+        // `cardStreaming: false` keeps the card buffered: one `PATCH` at the end instead of one per published state.
         if (this.config.cardStreaming === false) return undefined
-        return (this._cardDriver ??= createCardStreamDriver(this))
+        return (this._cardDriver ??= createEditDriver(this, { state: () => ({ kind: 'card' }) }))
       case 'post':
         return (this._postDriver ??= createEditDriver(this, { limit: 20, state: () => ({ kind: 'post' }) }))
       default:
