@@ -23,6 +23,7 @@ beforeEach(() => {
   vi.stubEnv('DSH_WEB_SNAPSHOT_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_MAX_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_PARTITIONS', undefined)
+  vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', undefined)
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -305,11 +306,19 @@ describe('gate graph validation', () => {
     expect(ids).toContain('public-repository-links')
   })
 
-  it('checks the complete CLI reference locally and in the static CI lane', () => {
-    for (const mode of ['doc-sync', 'ci-static'] as const) {
+  it.each([undefined, ''])('allocates one CLI help child inside each aggregate when its allowance is %j', (raw) => {
+    vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', raw)
+    for (const mode of ['doc-sync', 'ci-static', 'ci-windows-observational-ready'] as const) {
       const gates = withPnpmEntrypoint(() => gatesForMode(mode))
-      expect(gates.find(gate => gate.id === 'cli-help')).toBeDefined()
+      expect(gates.find(gate => gate.id === 'cli-help')).toMatchObject({ env: { DSH_CLI_HELP_CONCURRENCY: '1' } })
+      expect(gates.filter(gate => gate.id !== 'cli-help').every(gate => gate.env?.DSH_CLI_HELP_CONCURRENCY === undefined)).toBe(true)
     }
+  })
+
+  it.each(['3', 'invalid'])('passes an explicit CLI help allowance %j to its owner', (raw) => {
+    vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', raw)
+    const gates = withPnpmEntrypoint(() => gatesForMode('ci-windows-observational-ready'))
+    expect(gates.find(gate => gate.id === 'cli-help')).toMatchObject({ env: { DSH_CLI_HELP_CONCURRENCY: raw } })
   })
 
   it('keeps the concrete terminology policy in the documentation gate', () => {
@@ -998,7 +1007,7 @@ describe('Node 24 lane ownership', () => {
         'packages/subprocess/subprocess-local/tests/spawn-runner-built.e2e.ts',
         'packages/subagent/subagent-codex/tests/loader-composition.e2e.ts',
         'packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts',
-        'packages/experimental/agent-team/tests/built-lib.e2e.ts',
+        'packages/team/agent-team/tests/built-lib.e2e.ts',
       ]),
     )
     expect(subject.find(item => item.id === 'web-snapshot')).toMatchObject({

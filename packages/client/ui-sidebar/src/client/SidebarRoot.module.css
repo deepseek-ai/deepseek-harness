@@ -530,6 +530,65 @@
   }
 }
 
+/* The entry wrapper paints the row fill, so it carries the shared paint inset
+   instead of its inner panel row. */
+.panelEntry {
+  position: relative;
+  display: flex;
+  border-inline: var(--dsh-sidebar-paint-inset) solid transparent;
+  border-radius: var(--dsw-radius-md);
+  background-clip: padding-box;
+}
+
+.panelEntryWide > *:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.panelEntryWide .panelRow {
+  width: 100%;
+  margin: 0;
+  border-inline: 0;
+  padding-right: 38px;
+  background: transparent;
+}
+
+.panelEntryActive,
+.panelEntry:has(:focus-visible) {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+
+.panelUnpin {
+  position: absolute;
+  right: 0;
+  top: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-caption);
+  cursor: pointer;
+}
+
+.panelUnpin:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .panelUnpin { opacity: 0; }
+  .panelEntry:hover { background-color: var(--dsw-alias-interactive-bg-hover); }
+  .panelEntry .panelRow:hover { background: transparent; }
+  .panelUnpin:hover { color: var(--dsw-alias-label-primary); }
+  .panelEntry:hover .panelUnpin,
+  .panelEntry:has(:focus-visible) .panelUnpin { opacity: 1; }
+}
+
 .panelList {
   flex: none;
   display: flex;
@@ -564,11 +623,6 @@
   .panelRow:hover {
     background-color: var(--dsw-alias-interactive-bg-hover);
   }
-}
-
-.panelRow.panelActive {
-  background-color: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
 }
 
 .panelRow:focus-visible {
@@ -608,6 +662,10 @@
 .collapsed .panelList {
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.collapsed .panelEntry {
+  border-inline: 0;
 }
 
 .collapsed .panelRow {

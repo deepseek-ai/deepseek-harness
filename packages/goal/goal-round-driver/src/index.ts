@@ -176,7 +176,7 @@ export function apply(ctx: Context): void {
     // proves this goal view is still current.
     const subagents = ctx.get('subagents')
     if (subagents !== undefined) {
-      await Promise.race([subagents.waitForChildren(agent), unloading.promise])
+      await Promise.race([subagents.waitForTreeWork(agent), unloading.promise])
       if (!readyAfterCheckpoint(state)) return
     }
     if (goal.roundsStarted >= goal.maxGoalRounds) {

@@ -79,16 +79,22 @@ export interface QuotaNoticeState {
   seq: number
 }
 
-/** Original model-provided reasoning offered to the expanded Body Slot. */
+/** Original and display-ready reasoning offered to the expanded Body Slot. */
 export interface ReasoningBodyOwnerProps {
-  /** Complete or streaming reasoning text. */
+  /** Complete or streaming model output. */
+  readonly rawText: string
+  /** Reasoning text prepared for display. */
   readonly text: string
   /** Whether the reasoning tail is still streaming. */
   readonly running: boolean
 }
 
 /** Session-independent original or derived display input to the Content Factory. */
-export interface ReasoningContentInput extends ReasoningBodyOwnerProps {
+export interface ReasoningContentInput {
+  /** Caller-selected Markdown. */
+  readonly text: string
+  /** Whether the supplied text is still streaming. */
+  readonly running: boolean
   /** Localized Markdown controls, used unchanged when supplied; omission uses Chat's defaults. */
   readonly labels?: MarkdownLabels
 }
@@ -468,9 +474,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'conversation.chat.commandview': { kind: 'keyed'; scope: 'session'; owner: CommandRowOwnerProps }
     /**
-     * Expanded reasoning body with the unchanged model text. The official entry
+     * Expanded reasoning body with raw and display-ready text. The official entry
      * has priority 100 and calls the reasoning Content Factory; smaller priority
-     * values replace it. Contributions must preserve access to the original text.
+     * values replace it. Contributions must preserve access to untranslated display text.
      */
     'conversation.chat.reasoning.body': { kind: 'single'; scope: 'session'; owner: ReasoningBodyOwnerProps }
     /**

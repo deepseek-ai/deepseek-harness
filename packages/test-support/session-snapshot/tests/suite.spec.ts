@@ -1361,6 +1361,23 @@ describe('stabilizeRefreshLog', () => {
     ].join('\n'))
   })
 
+  it('keeps job identities consistent across registration, tool text, and later calls during refresh', () => {
+    const log = (jobIds: string[], guidance: string): string => [
+      { type: 'session', id: 'same', createdAt: 1, cwd: '/same' },
+      { type: 'user/message', data: { content: [{ type: 'text', text: guidance }] } },
+      ...jobIds.flatMap(jobId => [
+        { type: 'job/registered', data: { jobId, startedAt: 1 } },
+        { type: 'tool/result', data: { text: `started background job ${jobId}` } },
+        { type: 'tool/call', data: { name: 'job_output', arguments: JSON.stringify({ job_id: jobId }) } },
+        { type: 'job/settled', data: { jobId, startedAt: 1, finishedAt: 2 } },
+      ]),
+    ].map(record => JSON.stringify(record)).join('\n') + '\n'
+    const fresh = log(['bash-1111111111111111', 'bash-2222222222222222'], 'new guidance')
+    const existing = log(['{{id:1}}', '{{id:2}}'], 'old guidance')
+
+    expect(stabilize(fresh, existing)).toBe(log(['{{id:1}}', '{{id:2}}'], 'new guidance'))
+  })
+
   it('preserves normalized volatile fields while accepting fresh semantic fields', () => {
     const freshApprovalId = '11111111-1111-4111-8111-111111111111'
     const existingApprovalId = '22222222-2222-4222-8222-222222222222'

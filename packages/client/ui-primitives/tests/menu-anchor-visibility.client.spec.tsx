@@ -43,10 +43,14 @@ it('does not restart a contextual dismissal while its original control remains i
         onClose={() => { close(); setExiting('dismiss') }} items={[{ id: 'copy', label: 'Copy' }]} /></>
   }
   const view = render(<Fixture />)
+  const menu = screen.getByRole('menu')
+  const top = menu.style.top
   view.getByTestId('owner').setAttribute('inert', '')
   act(() => { for (const callback of [...frames.values()]) callback(0) })
   act(() => { for (const callback of [...frames.values()]) callback(0) })
   expect(close).toHaveBeenCalledTimes(1)
+  expect(menu.style.visibility).not.toBe('hidden')
+  expect(menu.style.top).toBe(top)
 })
 
 it.each([undefined, 'existing-panel'])('restores the trigger aria-controls value %s after closing', (previous) => {

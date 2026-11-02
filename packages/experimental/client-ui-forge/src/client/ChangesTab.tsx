@@ -32,6 +32,7 @@ import { parseChangesAddress, type ChangesSource } from './changes-address.ts'
 import type { createChangesStore } from './changes-store.ts'
 import { Counts, DiffFile, type DiffFileAction } from './DiffFile.tsx'
 import { FileTreePane, type FileTreePosition } from './FileTreePane.tsx'
+import { changedFileTree, filesInTreeOrder } from './file-tree.ts'
 import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from './ChangedFiles.tsx'
 import { drawnLines, matchesHunks, textLines } from './diff-rows.ts'
 import { ChangeRequestGlyph } from './glyphs.tsx'
@@ -415,6 +416,7 @@ export function ChangesTab({
     return () => { controller.abort() }
   }, [tab.visible, read, source, scope, dataKey, localDiff, changeRequestDiff])
   const data = loaded !== null && loaded.key === dataKey ? loaded.data : null
+  const files = useMemo(() => filesInTreeOrder(changedFileTree(data?.files ?? [])), [data])
   // The centered loader marks a first read; the toolbar's glyph turns only while shown changes are read again.
   const rereading = read !== null && finished !== read && data !== null
   const failed = failure !== null && failure.key === dataKey ? failure.code : null
@@ -423,7 +425,7 @@ export function ChangesTab({
   const latest = useRef(data)
   useEffect(() => { latest.current = data }, [data])
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set())
-  const initial = useMemo(() => initiallyOpen(data === null ? [] : data.files), [data])
+  const initial = useMemo(() => initiallyOpen(files), [files])
   const sections = useRef(new Map<string, HTMLElement>())
   const scrollport = useRef<HTMLDivElement>(null)
   // A short final file cannot align with the viewport top; retain its jump until the reader scrolls away.
@@ -501,7 +503,6 @@ export function ChangesTab({
     .filter(path => !data?.files.some(file => file.path === path))
   const orphanRecords = absentPaths.map(path => <OrphanReviews key={path} path={path} actions={recordActions} t={t} />)
 
-  const files = data === null ? [] : data.files
   const jump = (path: string): void => {
     setTreeState(value => ({ ...value, selected: path }))
     setChosen(value => ({ ...value, [path]: true }))
@@ -570,7 +571,7 @@ export function ChangesTab({
         onKeyDown={navigateFiles} onScroll={(event) => {
           if (jumpPosition.current?.top !== event.currentTarget.scrollTop) jumpPosition.current = null
         }}>
-        {data.files.map((file) => {
+        {files.map((file) => {
           const path = file.path
           return (
             <DiffFile

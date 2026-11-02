@@ -26,6 +26,36 @@ export function experimentalBundleDescription(bundle: string, locale: string): s
 const installationRequire = createRequire(join(REPO_ROOT, 'apps/cli/package.json'))
 
 /**
+ * Check the shared warning title, theme color, and compact body alignment.
+ * @param dialog - visible warning dialog under test.
+ */
+export async function assertWarningDialogLayout(dialog: Locator): Promise<void> {
+  const layout = await dialog.evaluate((element) => {
+    const title = element.querySelector('h2')!
+    const icon = title.querySelector('svg')!
+    const paragraph = element.querySelector('p')!
+    const titleRect = title.getBoundingClientRect()
+    const bodyRect = paragraph.getBoundingClientRect()
+    const color = getComputedStyle(icon).color
+    const previous = icon.style.color
+    icon.style.color = 'var(--dsw-alias-state-warn-primary)'
+    const warningColor = getComputedStyle(icon).color
+    icon.style.color = previous
+    return {
+      decorative: icon.getAttribute('aria-hidden'),
+      matchesWarningColor: color === warningColor,
+      leftGap: Math.abs(bodyRect.left - titleRect.left),
+      topGap: bodyRect.top - titleRect.bottom,
+    }
+  })
+  expect(layout.decorative).toBe('true')
+  expect(layout.matchesWarningColor).toBe(true)
+  expect(layout.leftGap).toBeLessThan(1)
+  expect(layout.topGap).toBeGreaterThanOrEqual(0)
+  expect(layout.topGap).toBeLessThanOrEqual(16)
+}
+
+/**
  * The built copy of a workspace package, as the dsh installation resolves it.
  * The Host plugins a scaffold profile loads run from built packages through
  * Node's own loader; a scaffold call that must share their module state

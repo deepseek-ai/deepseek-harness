@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ScheduleId, ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
 import {
-  FALLBACK_ZONES, formatScheduleAbsolute, formatScheduleNextRun, formatWeekdays, recordTimeZone,
+  FALLBACK_ZONES, formatAvailableAt, formatScheduleAbsolute, formatScheduleFrequency, formatScheduleNextRun, formatWeekdays, recordTimeZone,
   zoneChoices, zoneLabel, zoneName,
 } from '../src/client/schedule-format.ts'
 import { en, zh } from '../src/client/task-manager-locales.ts'
@@ -266,6 +266,24 @@ describe('formatScheduleAbsolute', () => {
   })
 })
 
+describe('formatAvailableAt', () => {
+  // Device-local wall-clock instants, so the same-day comparison holds in any runner zone.
+  const now = new Date(2026, 9, 19, 12, 0, 0).getTime()
+
+  it('reads the clock to the second today and adds the month and day for another day', () => {
+    const today = new Date(2026, 9, 19, 15, 51, 37).getTime()
+    const tomorrow = new Date(2026, 9, 20, 15, 51, 37).getTime()
+    expect(formatAvailableAt(today, 'en', now)).toBe('15:51:37')
+    expect(formatAvailableAt(today, 'zh-CN', now)).toBe('15:51:37')
+    expect(formatAvailableAt(tomorrow, 'en', now)).toBe('Oct 20, 15:51:37')
+    expect(formatAvailableAt(tomorrow, 'zh-CN', now)).toBe('10月20日 15:51:37')
+  })
+
+  it('reads the first hour of the day as 00, not 24', () => {
+    expect(formatAvailableAt(new Date(2026, 9, 20, 0, 0, 5).getTime(), 'en', now)).toBe('Oct 20, 00:00:05')
+  })
+})
+
 describe('formatScheduleNextRun', () => {
   /** The display zone's current calendar year; an instant inside it stays year-less. */
   const yearIn = (timeZone: string): string =>
@@ -315,5 +333,50 @@ describe('formatScheduleNextRun', () => {
       expect(shown).not.toContain('37')
       expect(shown).not.toContain('456')
     }
+  })
+})
+
+/**
+ * One Host task under one recurrence rule.
+ * @param rrule - stored DTSTART and RRULE lines.
+ * @returns the task record the formatter reads.
+ */
+function hostRecord(rrule: string): ScheduleRecord {
+  return { kind: 'rrule', id: 'task-host' as ScheduleId, title: 'Host', prompt: 'Host', rrule, scheduledAt: '2026-10-05T01:00:00.000Z' }
+}
+
+describe('formatScheduleFrequency', () => {
+  const t = makeTranslate(en)
+  const local = { system: SYSTEM, label: (zone: string) => zone }
+  const start = 'DTSTART;TZID=Asia/Shanghai:20261005T090000\nRRULE:'
+
+  it.each([
+    ['FREQ=WEEKLY;BYDAY=MO;COUNT=3', 'Custom'],
+    ['FREQ=DAILY;COUNT=1', 'Once'],
+    ['FREQ=DAILY;BYHOUR=9;BYMINUTE=0', 'Daily at 09:00'],
+    ['FREQ=DAILY;INTERVAL=2', 'Every 2 days at 09:00'],
+    ['FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE', 'Every 2 weeks on Mon, Wed at 09:00'],
+    ['FREQ=MINUTELY;INTERVAL=15', 'Every 15 minutes'],
+    ['FREQ=HOURLY;INTERVAL=2', 'Every 2 hours'],
+    ['FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=15,-1;BYSETPOS=1', 'Monthly on day 15 at 09:00, or month end'],
+    ['FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=15,-1;BYSETPOS=1', 'Every 3 months on day 15 at 09:00, or month end'],
+  ])('reads the Host rule %s', (rule, expected) => {
+    expect(formatScheduleFrequency(hostRecord(start + rule), t, local)).toBe(expected)
+  })
+
+  it('names UTC for a Host rule whose start states no zone', () => {
+    expect(formatScheduleFrequency(hostRecord('DTSTART:20261005T090000Z\nRRULE:FREQ=DAILY;INTERVAL=1'), t, local))
+      .toBe('Daily at 09:00 (UTC)')
+  })
+
+  it('names the zone of a Session-bound daily or weekly rule only when it is not the system zone', () => {
+    const elsewhere = { system: 'UTC', label: (zone: string) => zone }
+    const [, , , daily, weekly] = ZONE_RECORDS
+    expect(formatScheduleFrequency(daily, t)).toBe(`Daily at 23:00 (${zoneLabel(SYSTEM, t)})`)
+    expect(formatScheduleFrequency(daily, t, local)).toBe('Daily at 23:00')
+    expect(formatScheduleFrequency(daily, t, elsewhere)).toBe('Daily at 23:00 (Asia/Shanghai)')
+    expect(formatScheduleFrequency(weekly, t)).toBe(`Weekly on Mon at 09:30 (${zoneLabel(SYSTEM, t)})`)
+    expect(formatScheduleFrequency(weekly, t, local)).toBe('Weekly on Mon at 09:30')
+    expect(formatScheduleFrequency(weekly, t, elsewhere)).toBe('Weekly on Mon at 09:30 (Asia/Shanghai)')
   })
 })

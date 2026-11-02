@@ -1,12 +1,12 @@
 /** Real helper dispatch over private in-memory transport, without changing the Harness process cwd. */
-import { symlink, writeFile } from 'node:fs/promises'
+import { readFile, symlink, writeFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import { LocalSandboxProvider } from '@deepseek-ai/dsh-sandbox-local'
 import { SubprocessExecutableNotFoundError } from '@deepseek-ai/dsh-subprocess'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import { z } from 'zod'
 import { createHelperHarness as helper } from './fixtures/helper.ts'
-import { targetSchema, writeResultSchema, editResultSchema, infoSchema, entriesSchema } from '../src/schemas.ts'
+import { hunkSchema, moveOptionsSchema, moveResultSchema, deleteResultSchema, targetSchema, writeResultSchema, editResultSchema, infoSchema, entriesSchema } from '../src/schemas.ts'
 
 
 const policy = (workspaceRoot: string) => ({ mode: 'workspace-write', workspaceRoot })
@@ -109,4 +109,52 @@ describe.skipIf(process.platform === 'win32')('SSH helper runtime', () => {
       expect(confine).toHaveBeenCalledWith(['true'], policy(test.root), expect.any(AbortSignal))
     } finally { resolveExecutable.mockRestore(); confine.mockRestore(); await test.close() }
   })
+})
+
+describe.skipIf(process.platform === 'win32')('guarded patch helper dispatch', () => {
+  it.each([false, true])('executes patch, move, and delete with guards %s through the sandbox provider', async (guarded) => {
+    const test = await helper()
+    try {
+      await writeFile(`${test.root}/a`, 'old\r\n')
+      const target = await test.client.request('fs.resolve', { path: 'a' }, targetSchema)
+      const destination = await test.client.request('fs.resolve', { path: 'b' }, targetSchema)
+      const info = await test.client.request('fs.stat', { target }, infoSchema)
+      const hunks = [{ lineNumber: 3, oldLines: ['old'], newLines: ['new'], isEndOfFile: false }]
+      const patched = await test.client.request('fs.patch', { target, hunks, expected: guarded ? { version: info.version } : undefined, policy: policy(test.root) }, editResultSchema)
+      expect(patched).toMatchObject({ before: 'old\n', after: 'new\n' })
+      expect(await readFile(`${test.root}/a`, 'utf8')).toBe('new\r\n')
+      const options = guarded ? { hunks: [{ ...hunks[0], context: 'new', oldLines: [], newLines: ['tail'] }], expectedSource: { version: patched.version }, expectedDestination: { kind: 'createIfAbsent' } } : {}
+      const moved = await test.client.request('fs.move', { source: target, destination, options, policy: policy(test.root) }, moveResultSchema)
+      expect(moved).toMatchObject({ sourceBefore: 'new\n', sourceDeleted: true, destination: { operation: 'create', before: null, after: guarded ? 'new\ntail\n' : 'new\n' } })
+      await expect(readFile(`${test.root}/a`)).rejects.toMatchObject({ code: 'ENOENT' })
+      expect(await readFile(`${test.root}/b`, 'utf8')).toBe(guarded ? 'new\r\ntail\r\n' : 'new\r\n')
+      expect(await test.client.request('fs.delete', { target: destination, expected: guarded ? { version: moved.destination.version } : undefined, policy: policy(test.root) }, deleteResultSchema)).toEqual({ before: guarded ? 'new\ntail\n' : 'new\n' })
+      await expect(readFile(`${test.root}/b`)).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally { await test.close() }
+  })
+
+  it('rejects malformed hunks and read-only mutations without changing source bytes', async () => {
+    const test = await helper()
+    try {
+      await writeFile(`${test.root}/a`, 'old')
+      const target = await test.client.request('fs.resolve', { path: 'a' }, targetSchema)
+      await expect(test.client.request('fs.patch', { target, hunks: [{ lineNumber: 0 }], policy: policy(test.root) }, editResultSchema)).rejects.toThrow()
+      const denied = { mode: 'read-only', workspaceRoot: test.root }
+      for (const [method, params] of [
+        ['fs.patch', { target, hunks: [], policy: denied }],
+        ['fs.delete', { target, policy: denied }],
+        ['fs.move', { source: target, destination: target, options: {}, policy: denied }],
+      ] as const) await expect(test.client.request(method, params, z.unknown())).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+      expect(await readFile(`${test.root}/a`, 'utf8')).toBe('old')
+    } finally { await test.close() }
+  })
+})
+
+it.each([
+  { lineNumber: 0 }, { lineNumber: 1.5 }, { context: 1 }, { oldLines: [1] }, { newLines: [false] },
+  { isEndOfFile: 'true' }, { extra: true },
+])('rejects invalid hunk fields %j', (fields) => {
+  const valid = { lineNumber: 3, oldLines: ['old'], newLines: ['new'], isEndOfFile: false }
+  expect(hunkSchema.safeParse({ ...valid, ...fields }).success).toBe(false)
+  expect(moveOptionsSchema.safeParse({ hunks: [{ ...valid, ...fields }] }).success).toBe(false)
 })

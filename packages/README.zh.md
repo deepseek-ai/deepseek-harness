@@ -52,6 +52,7 @@ harness 由 `packages/` 下的 npm 包组装而成，按能力系列分组：会
 | [`compaction/`](compaction/README.zh.md) | 压缩（compaction）能力系列：Service Definition + 基础提供方 + 命令 Consumer |
 | [`context/`](context/README.zh.md) | 模型可见请求上下文：workspace 指令、时间上下文、引用 |
 | [`subagent/`](subagent/README.zh.md) | subagent 能力系列：提供方注册表约定和面向模型的委托工具 |
+| [`team/`](team/README.zh.md) | Team 协调：共享任务板与面向模型的任务工具 |
 | [`jobs/`](jobs/README.zh.md) | 通用后台任务运行时和面向模型的作业控制工具 |
 | [`experimental/`](experimental/README.zh.md) | 仍在评估中的能力；[状态与支持策略](experimental/README.zh.md#status) |
 | [`workflow/`](workflow/README.zh.md) | 工作流 seam、PTC 进程引擎、面向模型的 `workflow` 工具 |

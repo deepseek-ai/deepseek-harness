@@ -108,7 +108,7 @@ export async function fixture(initial?: PageCardState) {
       ? { slot, ...customLocation === undefined ? {} : { customLocation } } : undefined)
   const complete = async () => {
     const spec = await entered.promise
-    await writeBundle(spec.request.cwd!, current()!.bundleName!)
+    await writeBundle(spec.cwd!, current()!.bundleName!)
     result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await vi.waitFor(() => { expect(current()?.phase).toBe('installed') })
     return spec

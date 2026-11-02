@@ -43,6 +43,10 @@ const testToolSignal = new AbortController().signal
 
 /** An in-memory fake provider; a test can arm a rejection on any primitive. */
 class FakeFs extends FileSystem {
+  override async patchText(): Promise<never> { throw new FsError('patch unsupported by test provider', 'FS_IO_ERROR') }
+  override async deleteFile(): Promise<never> { throw new FsError('delete unsupported by test provider', 'FS_IO_ERROR') }
+  override async moveFile(): Promise<never> { throw new FsError('move unsupported by test provider', 'FS_IO_ERROR') }
+
   override watch(): never { throw new Error('Fixture does not support watching') }
   files = new Map<string, string>()
   rejectWith?: FsError
@@ -157,6 +161,7 @@ describe('registration', () => {
     { config: { read: false }, tools: ['edit', 'write'], sections: ['tool:edit', 'tool:write'] },
     { config: { write: false }, tools: ['edit', 'read'], sections: ['tool:edit', 'tool:read'] },
     { config: { edit: false }, tools: ['read', 'write'], sections: ['tool:read', 'tool:write'] },
+    { config: { write: false, applyPatch: true }, tools: ['apply_patch', 'edit', 'read'], sections: ['tool:apply_patch', 'tool:edit', 'tool:read'] },
     { config: { read: false, readImage: false, write: false, edit: false }, tools: [], sections: [] },
   ])('omits disabled tools and their guidance: $config', async ({ config, tools, sections }) => {
     const { ctx } = await setup(config)
@@ -164,14 +169,14 @@ describe('registration', () => {
       expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(tools)
       expect((await ctx.systemPrompt.assemble()).sections.map(section => section.name)
         .filter(name => name.startsWith('tool:')).sort()).toEqual(sections)
-      const excluded = ['read', 'write', 'edit'].find(name => !tools.some(tool => tool === name))!
+      const excluded = ['read', 'write', 'edit', 'apply_patch'].find(name => !tools.some(tool => tool === name))!
       expect((await call(ctx, excluded, { file_path: 'a.txt' })).isError).toBe(true)
     } finally {
       await ctx.fiber.dispose()
     }
   })
 
-  it.each([{ read: 'false' }, { readImage: 1 }, { write: [] }, { edit: {} }])('rejects non-boolean switches at configuration parsing: %j', async (config) => {
+  it.each([{ read: 'false' }, { readImage: 1 }, { write: [] }, { edit: {} }, { applyPatch: 'true' }])('rejects non-boolean switches at configuration parsing: %j', async (config) => {
     expect((await ToolFs.Config['~standard'].validate(config)).issues).toBeDefined()
   })
 
@@ -1150,8 +1155,8 @@ async function guidanceScope(ctx: Context) {
 
 const originalGuidance = {
   read: 'Use the read tool — not shell commands like cat — to inspect text files. Use offset and limit to continue reading large files.',
-  write: 'Read an existing file before overwriting it with write (the default fs-observation-policy requires it) and prefer edit for targeted changes.',
-  edit: 'Read a file before editing it (the default fs-observation-policy requires it), unless you just created or edited it in this session.',
+  write: 'Read an existing file before overwriting it with write and prefer edit for targeted changes.',
+  edit: 'Read a file before editing it unless you just created or edited it in this session.',
 }
 
 describe('scope-aware filesystem guidance', () => {

@@ -1114,10 +1114,41 @@
                 "accessibility",
                 "screenRecording"
               ]
+            },
+            "settingsMessage": {
+              "type": "string",
+              "minLength": 1
+            },
+            "instruction": {
+              "type": "string",
+              "minLength": 1
+            },
+            "backLabel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "finderLabel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "unavailableMessage": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pollIntervalMs": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 2147483647
             }
           },
           "required": [
-            "permission"
+            "permission",
+            "settingsMessage",
+            "instruction",
+            "backLabel",
+            "finderLabel",
+            "unavailableMessage",
+            "pollIntervalMs"
           ],
           "additionalProperties": false
         }
@@ -1148,10 +1179,15 @@
                 "accessibility",
                 "screenRecording"
               ]
+            },
+            "settingsMessage": {
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [
-            "permission"
+            "permission",
+            "settingsMessage"
           ],
           "additionalProperties": false
         }
