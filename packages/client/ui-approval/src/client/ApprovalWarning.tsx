@@ -28,7 +28,8 @@ export function ApprovalWarning({ warning }: {
   })
   useDismissOnOutsidePointer(anchor, open, setOpen, panel)
   const { arm: armClose, cancel: cancelClose } = usePointerGrace(() => {
-    if (anchor.current?.matches(':focus-visible') || panel.current?.contains(document.activeElement)) return
+    if (anchor.current?.matches(':focus-visible')
+      || (panel.current?.contains(document.activeElement) && document.activeElement?.matches(':focus-visible'))) return
     setOpen(false)
   })
   const show = () => {

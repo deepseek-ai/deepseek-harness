@@ -79,6 +79,20 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(await warning.count()).toBe(1)
   await approval.locator('p').hover()
   await warning.waitFor({ state: 'hidden' })
+  for (const selectText of [false, true]) {
+    await risks.hover()
+    await warning.waitFor()
+    const paragraph = warning.locator('p').first()
+    if (selectText) {
+      await paragraph.dblclick({ position: { x: 8, y: 10 } })
+      expect(await page.evaluate(() => window.getSelection()?.toString().trim().length ?? 0)).toBeGreaterThan(0)
+    } else {
+      await paragraph.click()
+    }
+    expect(await warning.evaluate(element => element === document.activeElement)).toBe(true)
+    await approval.locator('p').hover()
+    await warning.waitFor({ state: 'hidden' })
+  }
   await page.keyboard.press('Tab')
   await risks.focus()
   await warning.waitFor()

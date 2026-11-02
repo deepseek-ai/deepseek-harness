@@ -1,5 +1,5 @@
 - dialog "Computer use risks":
   - heading "Computer use risks" [level=3]
-  - paragraph: The agent can read app content and perform actions in the background using keyboard and mouse input. Actions may be unintended or irreversible.
-  - paragraph: Some apps, particularly instant messaging apps and online games, prohibit automated control. Those apps may suspend or ban your account for using automation.
-  - paragraph: Proceed at your own risk. To stop automated control at any time, press Stop in DSH.
+  - paragraph: The agent can access only apps you approve. It can read content and perform actions in those apps in the background.
+  - paragraph: Check each app’s rules on automation, especially for online games and messaging apps. Violations could lead to restrictions on your account with that app, including suspension or a ban.
+  - paragraph: Proceed at your own risk. To stop automated control at any time, press Stop in DeepSeek Harness.

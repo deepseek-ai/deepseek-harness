@@ -43,7 +43,7 @@ Actions return `dispatched:true, verified:false`; read fresh state to verify the
 
 ### Permission controls
 
-The application approval card includes a **Risks** tag. Hover over it, focus it with the keyboard, or tap it to read a formatted card about background control, unintended actions, account restrictions in the controlled app, and stopping through DSH. Moving the pointer onto the card keeps it readable and selectable. **Allow for this session** is the rightmost primary action; **Always allow** remains a secondary action.
+The application approval card includes a **Risks** tag. Hover over it, focus it with the keyboard, or tap it to read a formatted card about background access to approved apps, each app’s automation rules and possible account restrictions, and stopping through DeepSeek Harness. Moving the pointer onto the card keeps it readable and selectable. **Allow for this session** is the rightmost primary action; **Always allow** remains a secondary action.
 
 On the Computer Use detail page, permission cards, component rows, and source facts use l3 borders, with 32px gaps between sections. Application badges retain their l1 borders.
 

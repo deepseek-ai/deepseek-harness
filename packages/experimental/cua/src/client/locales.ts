@@ -4,7 +4,7 @@ export const NS = 'cuaPermissions'
 export const en = {
   approvalRisks: 'Risks',
   approvalRiskTitle: 'Computer use risks',
-  approvalRiskNotice: 'The agent can read app content and perform actions in the background using keyboard and mouse input. Actions may be unintended or irreversible.\n\nSome apps, particularly instant messaging apps and online games, prohibit automated control. Those apps may suspend or ban your account for using automation.\n\nProceed at your own risk. To stop automated control at any time, press Stop in DSH.',
+  approvalRiskNotice: 'The agent can access only apps you approve. It can read content and perform actions in those apps in the background.\n\nCheck each app’s rules on automation, especially for online games and messaging apps. Violations could lead to restrictions on your account with that app, including suspension or a ban.\n\nProceed at your own risk. To stop automated control at any time, press Stop in DeepSeek Harness.',
   title: 'Authorize computer use',
   applicationsTitle: 'Manage applications computer use can access',
   setupTitle: 'Set up computer use before use',
@@ -45,7 +45,7 @@ export type CuaPermissionLocaleKey = keyof typeof en
 export const zh: Record<CuaPermissionLocaleKey, string> = {
   approvalRisks: '风险提示',
   approvalRiskTitle: 'Computer Use 风险提示',
-  approvalRiskNotice: '智能体可以读取应用内容，并通过键盘和鼠标在后台操作应用。这些操作可能不符合你的意图，或无法撤销。\n\n部分应用，尤其是即时通讯应用和网络游戏，禁止自动化控制。这些应用可能因你使用自动化而暂停或封禁你在该应用中的账号。\n\n请自行承担使用风险。如需随时停止自动化控制，请点击 DSH 中的停止按钮。',
+  approvalRiskNotice: '智能体只能访问你已授权的应用，并可在这些应用中读取内容、执行后台操作。\n\n使用自动化前，请留意各应用的相关规则，尤其是网络游戏和即时通讯应用。违反规则可能导致你在相应应用中的账号被限制使用、暂停或封禁。\n\n请自行承担使用风险。你可以随时点击 DeepSeek Harness 中的停止按钮，结束自动化控制。',
   title: '给 Computer Use 授权', applicationsTitle: '管理 Computer Use 可访问的应用', setupTitle: '使用 Computer Use 前需要设置',
   setupBody: 'Computer Use 插件已开启。使用前请切换到 PTC 模式，并授予辅助功能和屏幕录制权限。请前往插件详情页完成设置。',
   setupQueryFailed: 'Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。',
@@ -83,7 +83,7 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
 export const ja = {
   approvalRisks: 'リスク',
   approvalRiskTitle: 'コンピュータ操作のリスク',
-  approvalRiskNotice: 'エージェントはアプリの内容を読み取り、キーボードとマウスを使ってバックグラウンドで操作できます。意図しない操作や取り消せない操作が行われる可能性があります。\n\n一部のアプリ、特にメッセージアプリやオンラインゲームは自動操作を禁止しています。自動操作の利用により、それらのアプリのアカウントが停止または永久に利用禁止になる場合があります。\n\n自己責任でご利用ください。自動操作は、DSH の停止ボタンでいつでも停止できます。',
+  approvalRiskNotice: 'エージェントがアクセスできるのは、あなたが許可したアプリだけです。そのアプリの内容を読み取ったり、バックグラウンドで操作したりできます。\n\nオンラインゲームやメッセージアプリなどを操作する際は、自動操作に関する各アプリの規約をご確認ください。規約に違反すると、そのアプリのアカウントが一時停止または永久停止になる場合があります。\n\n自己責任でご利用ください。自動操作は、DeepSeek Harness の停止ボタンでいつでも止められます。',
   'title': 'コンピュータ操作を承認',
   'applicationsTitle': 'Computer Useがアクセスできるアプリを管理',
   'setupTitle': '使用前にComputer Useを設定',
@@ -139,7 +139,7 @@ export const ja = {
 export const es = {
   approvalRisks: 'Riesgos',
   approvalRiskTitle: 'Riesgos del control del equipo',
-  approvalRiskNotice: 'El agente puede leer el contenido de la aplicación y realizar acciones en segundo plano con el teclado y el ratón. Las acciones pueden ser involuntarias o irreversibles.\n\nAlgunas aplicaciones, especialmente las de mensajería instantánea y los juegos en línea, prohíben el control automatizado. Esas aplicaciones pueden suspender o bloquear tu cuenta por usar automatización.\n\nContinúa bajo tu propia responsabilidad. Para detener el control automatizado en cualquier momento, pulsa Detener en DSH.',
+  approvalRiskNotice: 'El agente solo puede acceder a las aplicaciones que autorices. En ellas, puede leer contenido y realizar acciones en segundo plano.\n\nConsulta las normas de cada aplicación sobre automatización, especialmente en juegos en línea y aplicaciones de mensajería. Incumplirlas podría dar lugar a restricciones en tu cuenta de esa aplicación, incluida su suspensión o bloqueo permanente.\n\nContinúa bajo tu propia responsabilidad. Para detener el control automatizado en cualquier momento, pulsa Detener en DeepSeek Harness.',
   title: 'Autorizar el uso de la computadora',
   applicationsTitle: 'Administrar aplicaciones a las que puede acceder el uso de la computadora',
   setupTitle: 'Configurar el uso de la computadora antes de usarla',
@@ -179,7 +179,7 @@ export const es = {
 export const fr = {
   approvalRisks: 'Risques',
   approvalRiskTitle: 'Risques du contrôle de l’ordinateur',
-  approvalRiskNotice: 'L’agent peut lire le contenu de l’application et agir en arrière-plan à l’aide du clavier et de la souris. Ces actions peuvent être involontaires ou irréversibles.\n\nCertaines applications, notamment les messageries instantanées et les jeux en ligne, interdisent le contrôle automatisé. Ces applications peuvent suspendre ou bannir votre compte en raison de l’utilisation de l’automatisation.\n\nContinuez à vos propres risques. Pour arrêter le contrôle automatisé à tout moment, appuyez sur Arrêter dans DSH.',
+  approvalRiskNotice: 'L’agent ne peut accéder qu’aux applications que vous autorisez. Il peut y lire du contenu et effectuer des actions en arrière-plan.\n\nVérifiez les règles de chaque application concernant l’automatisation, notamment pour les jeux en ligne et les messageries. Leur non-respect peut entraîner des restrictions sur votre compte dans l’application concernée, voire une suspension ou un bannissement.\n\nUtilisez cette fonction à vos risques et périls. Vous pouvez interrompre le contrôle automatisé à tout moment en cliquant sur Arrêter dans DeepSeek Harness.',
   title: "Autoriser l'utilisation de l'ordinateur",
   applicationsTitle: "Gérer les applications auxquelles l'ordinateur peut accéder",
   setupTitle: "Configurer l'utilisation de l'ordinateur avant utilisation",
@@ -219,7 +219,7 @@ export const fr = {
 export const de = {
   approvalRisks: 'Risiken',
   approvalRiskTitle: 'Risiken der Computersteuerung',
-  approvalRiskNotice: 'Der Agent kann App-Inhalte lesen und im Hintergrund Aktionen mit Tastatur und Maus ausführen. Diese Aktionen können unbeabsichtigt oder unumkehrbar sein.\n\nEinige Apps, insbesondere Messenger und Online-Spiele, verbieten automatisierte Steuerung. Diese Apps können Ihr dortiges Konto wegen der Nutzung von Automatisierung vorübergehend oder dauerhaft sperren.\n\nDie Nutzung erfolgt auf eigenes Risiko. Um die automatisierte Steuerung jederzeit zu beenden, drücken Sie Stopp in DSH.',
+  approvalRiskNotice: 'Der Agent kann nur auf Apps zugreifen, die Sie freigeben. Dort kann er Inhalte lesen und Aktionen im Hintergrund ausführen.\n\nPrüfen Sie die Regeln der jeweiligen App zur Automatisierung, besonders bei Online-Spielen und Messengern. Verstöße können dazu führen, dass Ihr Konto bei der betreffenden App eingeschränkt oder vorübergehend bzw. dauerhaft gesperrt wird.\n\nDie Nutzung erfolgt auf eigenes Risiko. Über Stopp in DeepSeek Harness können Sie die automatisierte Steuerung jederzeit beenden.',
   title: 'Autorisieren Sie die Computernutzung',
   applicationsTitle: 'Verwalten Sie Anwendungen, auf die der Computer zugreifen kann',
   setupTitle: 'Richten Sie die Computernutzung vor der Nutzung ein',
@@ -259,7 +259,7 @@ export const de = {
 export const ru = {
   approvalRisks: 'Риски',
   approvalRiskTitle: 'Риски управления компьютером',
-  approvalRiskNotice: 'Агент может читать содержимое приложения и выполнять действия в фоновом режиме с помощью клавиатуры и мыши. Действия могут быть непреднамеренными или необратимыми.\n\nНекоторые приложения, особенно мессенджеры и онлайн-игры, запрещают автоматизированное управление. Эти приложения могут временно или навсегда заблокировать вашу учётную запись в них за использование автоматизации.\n\nВы продолжаете на свой страх и риск. Чтобы в любой момент остановить автоматизированное управление, нажмите «Остановить» в DSH.',
+  approvalRiskNotice: 'Агент получает доступ только к приложениям, которые вы разрешили. В них он может читать содержимое и выполнять действия в фоновом режиме.\n\nПроверьте правила автоматизации в каждом приложении, особенно в онлайн-играх и мессенджерах. Нарушение правил может привести к ограничениям для вашей учётной записи в этом приложении, включая временную или постоянную блокировку.\n\nВы пользуетесь этой возможностью на свой страх и риск. Чтобы в любой момент остановить автоматизированное управление, нажмите «Остановить» в DeepSeek Harness.',
   title: 'Разрешить использование компьютера',
   applicationsTitle: 'Управление приложениями, к которым может иметь доступ компьютер',
   setupTitle: 'Настройте использование компьютера перед использованием',
@@ -299,7 +299,7 @@ export const ru = {
 export const pt = {
   approvalRisks: 'Riscos',
   approvalRiskTitle: 'Riscos do controle do computador',
-  approvalRiskNotice: 'O agente pode ler o conteúdo do aplicativo e realizar ações em segundo plano usando o teclado e o mouse. As ações podem ser indesejadas ou irreversíveis.\n\nAlguns aplicativos, especialmente os de mensagens instantâneas e jogos on-line, proíbem o controle automatizado. Esses aplicativos podem suspender ou banir sua conta pelo uso de automação.\n\nProssiga por sua conta e risco. Para interromper o controle automatizado a qualquer momento, pressione Parar no DSH.',
+  approvalRiskNotice: 'O agente só pode acessar os aplicativos que você autorizar. Neles, pode ler conteúdo e executar ações em segundo plano.\n\nConfira as regras de cada aplicativo sobre automação, principalmente em jogos on-line e aplicativos de mensagens. O descumprimento dessas regras pode resultar em restrições à sua conta naquele aplicativo, incluindo suspensão ou banimento.\n\nUse por sua conta e risco. Para interromper o controle automatizado a qualquer momento, clique em Parar no DeepSeek Harness.',
   title: 'Autorizar o uso do computador',
   applicationsTitle: 'Gerenciar aplicativos que o computador pode acessar',
   setupTitle: 'Configure o uso do computador antes de usar',

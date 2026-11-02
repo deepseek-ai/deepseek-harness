@@ -639,7 +639,7 @@ it('leaves Escape to composition and a foreground modal without moving focus', (
   expect(document.activeElement).toBe(modal)
 })
 
-it('keeps risk details open while focus moves within them and closes when focus leaves', () => {
+it('keeps risk details open for keyboard focus and closes when focus leaves', () => {
   vi.useFakeTimers()
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   render(<>
@@ -652,6 +652,7 @@ it('keeps risk details open while focus moves within them and closes when focus 
   expect(screen.queryByRole('dialog')).toBeNull()
   fireEvent.click(trigger)
   const dialog = screen.getByRole('dialog', { name: 'Computer use risks' })
+  vi.spyOn(dialog, 'matches').mockImplementation(selector => selector === ':focus-visible')
   act(() => { dialog.focus() })
   fireEvent.pointerLeave(dialog)
   act(() => { vi.advanceTimersByTime(200) })
@@ -668,6 +669,19 @@ it('keeps risk details open while focus moves within them and closes when focus 
   fireEvent.click(trigger)
   act(() => { screen.getByRole('dialog').focus() })
   act(() => { screen.getByRole('dialog').blur() })
+  expect(screen.queryByRole('dialog')).toBeNull()
+})
+
+it('dismisses pointer-focused risk details when the pointer leaves', () => {
+  vi.useFakeTimers()
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Risks' }))
+  const dialog = screen.getByRole('dialog', { name: 'Computer use risks' })
+  vi.spyOn(dialog, 'matches').mockReturnValue(false)
+  act(() => { dialog.focus() })
+  fireEvent.pointerLeave(dialog)
+  act(() => { vi.advanceTimersByTime(200) })
   expect(screen.queryByRole('dialog')).toBeNull()
 })
 
