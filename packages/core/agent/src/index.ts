@@ -66,8 +66,6 @@ export type AgentSetup = (
 export interface CreateAgentOptions {
   /** The live agent/session identity. */
   readonly sessionId: SessionId
-  /** Live parent Agent for runtime ownership; omit for a root Agent. */
-  readonly parentAgent?: Agent
   /**
    * Session creation metadata: validated absolute `cwd`, `parentSession`
    * fork lineage, the `isSeeded` fork marker, the coarse `origin`
@@ -129,8 +127,6 @@ export interface CreateAgentOptions {
 export interface ResumeAgentOptions {
   /** The persisted session id to load and use as the live agent/session identity. */
   readonly resumeSessionId: SessionId
-  /** Live parent Agent for runtime ownership; omit for a root Agent. */
-  readonly parentAgent?: Agent
   /** Route fallback and output controls; see {@link AgentOptions} for live accessor semantics. */
   readonly agentOptions?: AgentOptions
   /** Optional creation-only cancellation signal for persistence load/setup; detached before return. */
@@ -191,7 +187,7 @@ export interface AgentFactory {
    * transaction and resulting lifecycle to that owner; it must not infer
    * ownership from the factory object's registration context.
    * @param ownerCtx - caller-bound context that owns the transaction and live handle.
-   * @param options - agent/session identity, configuration, optional live parent, and setup.
+   * @param options - agent/session identity, configuration, and setup.
    * @returns the owned handle after setup and both creation announcements complete.
    */
   createAgent(ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle>
@@ -203,7 +199,7 @@ export interface AgentFactory {
    * Initialization cleanup and publication follow the same timing as
    * {@link createAgent}.
    * @param ownerCtx - caller-bound context that owns load, setup, and the live handle.
-   * @param options - persisted identity, configuration, optional live parent, and setup.
+   * @param options - persisted identity, configuration, and setup.
    * @returns the owned handle after setup, both announcements, and loop start complete.
    */
   resume(ownerCtx: Context, options: ResumeAgentOptions): Promise<AgentHandle>
@@ -218,8 +214,6 @@ const DISPOSED_INITIATOR_MESSAGE = 'agent initiator scope is disposed'
 interface AgentEntry {
   readonly id: SessionId
   readonly agent: Agent
-  /** Runtime creator-agent ownership; independent of durable session lineage. */
-  readonly owner: Agent | undefined
   readonly carrier: Scoped<Agent>
   announced: boolean
   announcing: boolean
@@ -410,7 +404,7 @@ export class AgentRegistry extends Service {
    * agent): this constructs the agent and its session. Rejects if no factory is
    * registered or creation/setup fails. The resolved {@link AgentHandle} lets
    * the owner tear down exactly this agent.
-   * @param options - shared identity, optional live parent, session seed/metadata, and agent options.
+   * @param options - shared identity, session seed/metadata, and agent options.
    * @returns the handle after setup, rollback-covered publication, and loop start complete.
    */
   async create(options: CreateAgentOptions): Promise<AgentHandle> {
@@ -429,7 +423,7 @@ export class AgentRegistry extends Service {
    * Load a persisted session and resume an agent on it through the registered
    * factory. Rejects if no factory is registered; the factory rejects if
    * session persistence is not configured or persistence/setup fails.
-   * @param options - persisted identity, optional live parent, configuration, and setup.
+   * @param options - persisted identity, configuration, and setup.
    * @returns the handle after setup, rollback-covered publication, and loop start complete.
    */
   async resume(options: ResumeAgentOptions): Promise<AgentHandle> {
@@ -447,8 +441,7 @@ export class AgentRegistry extends Service {
    * (`scopeTarget(agent, agent)`): the subject is the agent in hand, so the
    * emits are scope-filtered regardless of which context invoked `register`
    * (calling through `agent.ctx` scopes EFFECTS; dispatch scoping always
-   * requires passing the carrier). The entry is a runtime root; factory-backed
-   * creation uses `options.parentAgent` for child ownership. Await the registration before using the agent.
+   * requires passing the carrier). Await registration before using the agent.
    * @param agent - the already-constructed agent to record in the store.
    * @returns the awaitable Cordis effect disposer (single-shot; a repeat call
    *   returns undefined without awaiting an in-flight teardown). Exact
@@ -461,7 +454,7 @@ export class AgentRegistry extends Service {
    */
   register(agent: Agent): ReturnType<Context['effect']> {
     return this.ctx.effect(async function* (this: AgentRegistry) {
-      yield this.enter(agent, undefined)
+      yield this.enter(agent)
       await this.announce(agent, 'startup')
     }.bind(this), 'agents.register()')
   }
@@ -473,15 +466,12 @@ export class AgentRegistry extends Service {
    * returned detach closure into its pre-installed composite teardown before
    * calling {@link announce}. Ordinary callers use {@link register}.
    * @param agent - the prepared, unpublished agent.
-   * @param owner - explicitly supplied live runtime owner, or
-   *   undefined for a top-level runtime root. This is runtime ownership, not
-   *   the resumed session's durable parent lineage.
    * @returns an idempotent closure that removes this exact entry and emits
    *   `agent/disposed` with listener failures contained. When called from a
    *   `agent/created` listener, removal and disposal wait until the serial
    *   creation dispatch settles.
    */
-  enter(agent: Agent, owner: Agent | undefined): () => void {
+  enter(agent: Agent): () => void {
     const id = agent.id
     if (id !== agent.session.id) {
       throw new Error(`agent id "${id}" does not match session id "${agent.session.id}"`)
@@ -493,7 +483,6 @@ export class AgentRegistry extends Service {
     const entry: AgentEntry = {
       id,
       agent,
-      owner,
       carrier,
       announced: false,
       announcing: false,
@@ -593,35 +582,11 @@ export class AgentRegistry extends Service {
   }
 
   /**
-   * Test whether a live agent was created through one exact parent agent's
-   * scoped context. Runtime ownership is independent of durable session
-   * lineage and remains unambiguous when unrelated providers reuse an id.
-   * @param id - the candidate child agent's shared agent/session id.
-   * @param owner - the expected runtime creator agent.
-   * @returns true only while the exact child entry is live under that owner.
-   */
-  isOwnedBy(id: SessionId, owner: Agent): boolean {
-    return this.store.get(id)?.owner === owner
-  }
-
-  /**
    * All live agents, in registration order.
    * @returns a fresh array; mutating it does not affect the registry.
    */
   list(): Agent[] {
     return [...this.store.values()].map(entry => entry.agent)
-  }
-
-  /**
-   * All live top-level agents in registration order. A top-level agent was
-   * created without an owning agent context; durable session lineage does not
-   * affect this runtime relation, so a resumed fork may still be a root.
-   * @returns a fresh array; mutating it does not affect the registry.
-   */
-  roots(): Agent[] {
-    return [...this.store.values()]
-      .filter(entry => entry.owner === undefined)
-      .map(entry => entry.agent)
   }
 
   /** Reject new initiator boundaries while inherited continuations drain. */

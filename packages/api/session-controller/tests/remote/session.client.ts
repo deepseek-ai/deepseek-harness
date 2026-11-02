@@ -147,7 +147,7 @@ export const sessionWorld: RemoteTable = {
     'session/page': pageRule(ok({ cursor: -1, records: [], hasMore: false })),
     'session/projections': ok({ kind: 'sequenced', asOfSeq: -1, values: { subagentCatalog: [] } }),
     'subagents/prompt': ok({ messageId: 'fake-message' }),
-    'subagents/interruptByParent': ok({ accepted: true }),
+    'subagents/interruptByUser': ok({ accepted: true }),
   },
   stream: {
     'session/follow': followScript(ok({ cursor: -1, records: [], hasMore: false })),

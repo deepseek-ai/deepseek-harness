@@ -57,12 +57,9 @@ describe('Quote browser plugin', () => {
     await sessions.updateSessionSnapshot(sessionId, (draft) => { draft.removed = false })
     const child: NonNullable<SessionSnapshot['subagent']> = {
       address: { parentSessionId: SessionId('parent'), childSessionId: sessionId, mode: 'continuable' },
-      parentAvailable: true,
     }
     await sessions.updateSessionSnapshot(sessionId, (draft) => { draft.subagent = child })
     expect(conversation.interactions.dispatch(sessionId, gesture)).toBe('quote')
-    await sessions.updateSessionSnapshot(sessionId, (draft) => { draft.subagent = { ...child, parentAvailable: false } })
-    expect(conversation.interactions.dispatch(sessionId, gesture)).toBeNull()
     await sessions.updateSessionSnapshot(sessionId, (draft) => {
       draft.subagent = { ...child, address: { ...child.address, mode: 'one-shot' } }
     })

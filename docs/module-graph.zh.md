@@ -163,6 +163,7 @@ flowchart TD
     pkg_client_shortcuts["client-shortcuts"]
     pkg_client_store["client-store"]
     pkg_client_ui_agent_preset["client-ui-agent-preset"]
+    pkg_client_ui_agent_team["client-ui-agent-team"]
     pkg_client_ui_approval["client-ui-approval"]
     pkg_client_ui_attachment["client-ui-attachment"]
     pkg_client_ui_brand_official["client-ui-brand-official"]
@@ -265,8 +266,6 @@ flowchart TD
     pkg_creation_recommendations["creation-recommendations"]
     pkg_cua["cua"]
     pkg_cua_bundle["cua-bundle"]
-    pkg_experimental_agent_team["experimental-agent-team"]
-    pkg_experimental_agent_team_profile["experimental-agent-team-profile"]
     pkg_experimental_api_speech_to_text["experimental-api-speech-to-text"]
     pkg_experimental_auto_review["experimental-auto-review"]
     pkg_experimental_badge_skill_bundle["experimental-badge-skill-bundle"]
@@ -275,7 +274,6 @@ flowchart TD
     pkg_experimental_browser_use_runtime["experimental-browser-use-runtime"]
     pkg_experimental_browser_use_stagehand_native["experimental-browser-use-stagehand-native"]
     pkg_experimental_claude_code_mods["experimental-claude-code-mods"]
-    pkg_experimental_client_ui_agent_team["experimental-client-ui-agent-team"]
     pkg_experimental_client_ui_claude_code_mods["experimental-client-ui-claude-code-mods"]
     pkg_experimental_client_ui_cot_translation["experimental-client-ui-cot-translation"]
     pkg_experimental_client_ui_forge["experimental-client-ui-forge"]
@@ -306,7 +304,6 @@ flowchart TD
     pkg_experimental_speech_to_text_sensevoice["experimental-speech-to-text-sensevoice"]
     pkg_experimental_subagent_oar["experimental-subagent-oar"]
     pkg_experimental_terminal_bundle["experimental-terminal-bundle"]
-    pkg_experimental_tool_agent_team["experimental-tool-agent-team"]
     pkg_experimental_tool_subagent_oar["experimental-tool-subagent-oar"]
     pkg_experimental_tool_worktree["experimental-tool-worktree"]
     pkg_experimental_translator["experimental-translator"]
@@ -456,6 +453,10 @@ flowchart TD
     pkg_subprocess["subprocess"]
     pkg_subprocess_local["subprocess-local"]
     pkg_win32_process["win32-process"]
+  end
+  subgraph group_team["packages/team"]
+    pkg_agent_team["agent-team"]
+    pkg_tool_agent_team["tool-agent-team"]
   end
   subgraph group_telemetry["packages/telemetry"]
     pkg_otel["otel"]
@@ -1144,6 +1145,16 @@ flowchart TD
   pkg_experimental_forge_session --> pkg_shell
   pkg_experimental_forge_session --> pkg_shell_env
   pkg_experimental_forge_session --> pkg_tools
+  pkg_experimental_im --> pkg_agent
+  pkg_experimental_im --> pkg_agent_preset_registry
+  pkg_experimental_im --> pkg_attachment
+  pkg_experimental_im --> pkg_fs
+  pkg_experimental_im --> pkg_llm
+  pkg_experimental_im --> pkg_session
+  pkg_experimental_im --> pkg_session_persistence
+  pkg_experimental_im --> pkg_storage_domain
+  pkg_experimental_im --> pkg_tools
+  pkg_experimental_im --> pkg_working_directory
   pkg_webhook --> pkg_agent
   pkg_webhook --> pkg_agent_default_model
   pkg_webhook --> pkg_agent_preset_registry
@@ -1286,18 +1297,10 @@ flowchart TD
   pkg_experimental_claude_code_mods --> pkg_typert_protocol
   pkg_experimental_claude_code_mods --> pkg_user_questions
   pkg_experimental_claude_code_mods --> pkg_working_directory
-  pkg_experimental_im --> pkg_agent
-  pkg_experimental_im --> pkg_agent_preset_registry
-  pkg_experimental_im --> pkg_attachment
-  pkg_experimental_im --> pkg_compaction
-  pkg_experimental_im --> pkg_fs
-  pkg_experimental_im --> pkg_llm
-  pkg_experimental_im --> pkg_session
-  pkg_experimental_im --> pkg_session_persistence
-  pkg_experimental_im --> pkg_storage_domain
-  pkg_experimental_im --> pkg_token_meter
-  pkg_experimental_im --> pkg_tools
-  pkg_experimental_im --> pkg_working_directory
+  pkg_experimental_im_session_commands --> pkg_agent
+  pkg_experimental_im_session_commands --> pkg_commands
+  pkg_experimental_im_session_commands --> pkg_experimental_im
+  pkg_experimental_im_session_commands --> pkg_session
   pkg_tool_session_query --> pkg_agent
   pkg_tool_session_query --> pkg_llm
   pkg_tool_session_query --> pkg_session
@@ -1346,6 +1349,7 @@ flowchart TD
   pkg_tool_subagent_control --> pkg_llm
   pkg_tool_subagent_control --> pkg_session
   pkg_tool_subagent_control --> pkg_subagent
+  pkg_tool_subagent_control --> pkg_system_prompt
   pkg_tool_subagent_control --> pkg_tools
   pkg_api_session_controller --> pkg_agent
   pkg_api_session_controller --> pkg_agent_default_model
@@ -1412,16 +1416,6 @@ flowchart TD
   pkg_session_reference --> pkg_subagent
   pkg_session_reference --> pkg_system_prompt
   pkg_session_reference --> pkg_typert_protocol
-  pkg_experimental_agent_team --> pkg_agent
-  pkg_experimental_agent_team --> pkg_llm
-  pkg_experimental_agent_team --> pkg_session
-  pkg_experimental_agent_team --> pkg_session_persistence
-  pkg_experimental_agent_team --> pkg_session_projection
-  pkg_experimental_agent_team --> pkg_subagent
-  pkg_experimental_im_session_commands --> pkg_agent
-  pkg_experimental_im_session_commands --> pkg_commands
-  pkg_experimental_im_session_commands --> pkg_experimental_im
-  pkg_experimental_im_session_commands --> pkg_session
   pkg_experimental_subagent_oar --> pkg_llm
   pkg_experimental_subagent_oar --> pkg_session
   pkg_experimental_subagent_oar --> pkg_subagent
@@ -1446,6 +1440,13 @@ flowchart TD
   pkg_sdk_protocol --> pkg_session
   pkg_sdk_protocol --> pkg_subagent
   pkg_sdk_protocol --> pkg_user_questions
+  pkg_agent_team --> pkg_agent
+  pkg_agent_team --> pkg_llm
+  pkg_agent_team --> pkg_session
+  pkg_agent_team --> pkg_session_persistence
+  pkg_agent_team --> pkg_session_projection
+  pkg_agent_team --> pkg_subagent
+  pkg_agent_team --> pkg_typert_protocol
   pkg_workflow_ptc --> pkg_agent
   pkg_workflow_ptc --> pkg_llm
   pkg_workflow_ptc --> pkg_ptc_runtime
@@ -1456,11 +1457,6 @@ flowchart TD
   pkg_workflow_ptc --> pkg_tools
   pkg_workflow_ptc --> pkg_workflow
   pkg_workflow_ptc --> pkg_working_directory
-  pkg_experimental_tool_agent_team --> pkg_agent
-  pkg_experimental_tool_agent_team --> pkg_experimental_agent_team
-  pkg_experimental_tool_agent_team --> pkg_session
-  pkg_experimental_tool_agent_team --> pkg_system_prompt
-  pkg_experimental_tool_agent_team --> pkg_tools
   pkg_schedule --> pkg_agent
   pkg_schedule --> pkg_api_session_controller
   pkg_schedule --> pkg_brand
@@ -1477,6 +1473,12 @@ flowchart TD
   pkg_sdk_client --> pkg_llm
   pkg_sdk_client --> pkg_sdk_protocol
   pkg_sdk_client --> pkg_session
+  pkg_tool_agent_team --> pkg_agent
+  pkg_tool_agent_team --> pkg_agent_team
+  pkg_tool_agent_team --> pkg_session
+  pkg_tool_agent_team --> pkg_subagent
+  pkg_tool_agent_team --> pkg_system_prompt
+  pkg_tool_agent_team --> pkg_tools
   pkg_client_test_runtime --> pkg_api_gateway
   pkg_client_test_runtime --> pkg_api_session_controller
   pkg_client_test_runtime --> pkg_api_workspace_controller
@@ -1570,6 +1572,7 @@ flowchart TD
 | [`client-shortcuts`](../packages/client/shortcuts) | `client` | — |
 | [`client-store`](../packages/client/store) | `client` | — |
 | [`client-ui-agent-preset`](../packages/client/ui-agent-preset) | `client` | — |
+| [`client-ui-agent-team`](../packages/client/ui-agent-team) | `client` | — |
 | [`client-ui-approval`](../packages/client/ui-approval) | `client` | — |
 | [`client-ui-attachment`](../packages/client/ui-attachment) | `client` | — |
 | [`client-ui-brand-official`](../packages/client/ui-brand-official) | `client` | — |
@@ -1635,9 +1638,7 @@ flowchart TD
 | [`client-ui-creation-recommendations`](../packages/experimental/client-ui-creation-recommendations) | `experimental` | — |
 | [`client-ui-plugin-recommendations`](../packages/experimental/client-ui-plugin-recommendations) | `experimental` | — |
 | [`cua-bundle`](../packages/experimental/cua-bundle) | `experimental` | — |
-| [`experimental-agent-team-profile`](../packages/experimental/agent-team-profile) | `experimental` | — |
 | [`experimental-badge-skill-bundle`](../packages/experimental/badge-skill-bundle) | `experimental` | — |
-| [`experimental-client-ui-agent-team`](../packages/experimental/client-ui-agent-team) | `experimental` | — |
 | [`experimental-client-ui-claude-code-mods`](../packages/experimental/client-ui-claude-code-mods) | `experimental` | — |
 | [`experimental-client-ui-stats`](../packages/experimental/client-ui-stats) | `experimental` | — |
 | [`experimental-client-ui-voice-input`](../packages/experimental/client-ui-voice-input) | `experimental` | — |
@@ -1851,6 +1852,7 @@ flowchart TD
 | [`web-app`](../packages/bundle/web-app) | `bundle` | [`shell-env`](../packages/shell/shell-env) |
 | [`experimental-auto-review`](../packages/experimental/auto-review) | `experimental` | [`agent`](../packages/core/agent), [`agent-instructions`](../packages/context/agent-instructions), [`llm`](../packages/llm/llm), [`permission-presets`](../packages/interaction/permission-presets), [`session`](../packages/core/session), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`experimental-forge-session`](../packages/experimental/forge-session) | `experimental` | [`experimental-forge`](../packages/experimental/forge), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`shell`](../packages/shell/shell), [`shell-env`](../packages/shell/shell-env), [`tools`](../packages/core/tools) |
+| [`experimental-im`](../packages/experimental/im) | `experimental` | [`agent`](../packages/core/agent), [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`attachment`](../packages/attachment/attachment), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`storage-domain`](../packages/storage/storage-domain), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`webhook`](../packages/experimental/webhook) | `experimental` | [`agent`](../packages/core/agent), [`agent-default-model`](../packages/core/agent-default-model), [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`llm`](../packages/llm/llm), [`permission-presets`](../packages/interaction/permission-presets), [`session`](../packages/core/session), [`session-title`](../packages/session/session-title), [`workspace`](../packages/workspace/workspace) |
 | [`tool-cordis`](../packages/extensions/tool-cordis) | `extensions` | [`agent`](../packages/core/agent), [`app-boot`](../packages/boot/app-boot), [`cordis-host-runner`](../packages/extensions/cordis-host-runner), [`tools`](../packages/core/tools) |
 | [`host-plugin-inventory`](../packages/host/plugin-inventory) | `host` | [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`brand`](../packages/util/brand), [`typert-protocol`](../packages/typert/protocol) |
@@ -1871,7 +1873,7 @@ flowchart TD
 | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | `compaction` | [`compaction`](../packages/compaction/compaction), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`token-meter`](../packages/llm/token-meter) |
 | [`experimental-browser-use-runtime`](../packages/experimental/browser-use-runtime) | `experimental` | [`agent`](../packages/core/agent), [`browser-use`](../packages/browser-use/browser-use), [`mcp-client`](../packages/mcp/mcp-client), [`scope`](../packages/core/scope), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`experimental-claude-code-mods`](../packages/experimental/claude-code-mods) | `experimental` | [`agent`](../packages/core/agent), [`commands`](../packages/interaction/commands), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`storage-domain`](../packages/storage/storage-domain), [`subprocess`](../packages/subprocess/subprocess), [`token-meter`](../packages/llm/token-meter), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol), [`user-questions`](../packages/interaction/user-questions), [`working-directory`](../packages/session/working-directory) |
-| [`experimental-im`](../packages/experimental/im) | `experimental` | [`agent`](../packages/core/agent), [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`attachment`](../packages/attachment/attachment), [`compaction`](../packages/compaction/compaction), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`storage-domain`](../packages/storage/storage-domain), [`token-meter`](../packages/llm/token-meter), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
+| [`experimental-im-session-commands`](../packages/experimental/im-session-commands) | `experimental` | [`agent`](../packages/core/agent), [`commands`](../packages/interaction/commands), [`experimental-im`](../packages/experimental/im), [`session`](../packages/core/session) |
 | [`tool-session-query`](../packages/experimental/tool-session-query) | `experimental` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-query`](../packages/session-query/session-query), [`system-prompt`](../packages/core/system-prompt), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |
 | [`webhook-github`](../packages/experimental/webhook-github) | `experimental` | [`credentials`](../packages/credentials/credentials), [`host-webserver`](../packages/host/webserver), [`session`](../packages/core/session), [`webhook`](../packages/experimental/webhook) |
 | [`goal-round-driver`](../packages/goal/goal-round-driver) | `goal` | [`agent`](../packages/core/agent), [`goal`](../packages/goal/goal), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent) |
@@ -1881,23 +1883,22 @@ flowchart TD
 | [`subagent-fork-in-process`](../packages/subagent/subagent-fork-in-process) | `subagent` | [`agent`](../packages/core/agent), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent) |
 | [`subagent-spawn-in-process`](../packages/subagent/subagent-spawn-in-process) | `subagent` | [`subagent`](../packages/subagent/subagent) |
 | [`tool-subagent`](../packages/subagent/tool-subagent) | `subagent` | [`agent`](../packages/core/agent), [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`subagent`](../packages/subagent/subagent), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
-| [`tool-subagent-control`](../packages/subagent/tool-subagent-control) | `subagent` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`tools`](../packages/core/tools) |
+| [`tool-subagent-control`](../packages/subagent/tool-subagent-control) | `subagent` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`api-session-controller`](../packages/api/session-controller) | `api` | [`agent`](../packages/core/agent), [`agent-default-model`](../packages/core/agent-default-model), [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`api-gateway`](../packages/api/gateway), [`attachment`](../packages/attachment/attachment), [`client-connection`](../packages/client/connection), [`client-file-upload`](../packages/client/file-upload), [`commands`](../packages/interaction/commands), [`credentials`](../packages/credentials/credentials), [`file-reference`](../packages/context/file-reference), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`native-command`](../packages/util/native-command), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`session-projection`](../packages/session/session-projection), [`session-projection-cache`](../packages/session/session-projection-cache), [`session-query`](../packages/session-query/session-query), [`session-title`](../packages/session/session-title), [`settings`](../packages/settings/settings), [`skill`](../packages/skill/skill), [`subagent`](../packages/subagent/subagent), [`typert-protocol`](../packages/typert/protocol), [`typert-registry`](../packages/typert/registry), [`util-time`](../packages/util/time), [`util-values`](../packages/util/values), [`util-workspace-path`](../packages/util/workspace-path), [`working-directory`](../packages/session/working-directory), [`workspace`](../packages/workspace/workspace) |
 | [`plugin-market`](../packages/boot/plugin-market) | `boot` | [`plugin-manager`](../packages/boot/plugin-manager), [`settings`](../packages/settings/settings), [`subprocess`](../packages/subprocess/subprocess), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol) |
 | [`headless`](../packages/bundle/headless) | `bundle` | [`agent`](../packages/core/agent), [`agent-default-model`](../packages/core/agent-default-model), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`permission-presets`](../packages/interaction/permission-presets), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`session-query`](../packages/session-query/session-query), [`subagent`](../packages/subagent/subagent), [`user-approval`](../packages/interaction/user-approval) |
 | [`compaction-basic`](../packages/compaction/compaction-basic) | `compaction` | [`agent`](../packages/core/agent), [`commands`](../packages/interaction/commands), [`compaction`](../packages/compaction/compaction), [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`token-meter`](../packages/llm/token-meter) |
 | [`session-reference`](../packages/context/session-reference) | `context` | [`agent`](../packages/core/agent), [`compaction`](../packages/compaction/compaction), [`llm`](../packages/llm/llm), [`output-retention`](../packages/util/output-retention), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`session-projection-cache`](../packages/session/session-projection-cache), [`session-query`](../packages/session-query/session-query), [`session-title`](../packages/session/session-title), [`spill`](../packages/spill/spill), [`subagent`](../packages/subagent/subagent), [`system-prompt`](../packages/core/system-prompt), [`typert-protocol`](../packages/typert/protocol) |
-| [`experimental-agent-team`](../packages/experimental/agent-team) | `experimental` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`session-projection`](../packages/session/session-projection), [`subagent`](../packages/subagent/subagent) |
-| [`experimental-im-session-commands`](../packages/experimental/im-session-commands) | `experimental` | [`agent`](../packages/core/agent), [`commands`](../packages/interaction/commands), [`experimental-im`](../packages/experimental/im), [`session`](../packages/core/session) |
 | [`experimental-subagent-oar`](../packages/experimental/subagent-oar) | `experimental` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`subprocess`](../packages/subprocess/subprocess) |
 | [`experimental-tool-subagent-oar`](../packages/experimental/tool-subagent-oar) | `experimental` | [`subagent`](../packages/subagent/subagent), [`tools`](../packages/core/tools) |
 | [`hooks-claude-code`](../packages/experimental/hooks-claude-code) | `experimental` | [`agent`](../packages/core/agent), [`hook-protocol`](../packages/experimental/hook-protocol), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`tool-ralph`](../packages/experimental/tool-ralph) | `experimental` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`subagent`](../packages/subagent/subagent), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`workflow`](../packages/workflow/workflow) |
 | [`sdk-protocol`](../packages/sdk/protocol) | `sdk` | [`commands`](../packages/interaction/commands), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`user-questions`](../packages/interaction/user-questions) |
+| [`agent-team`](../packages/team/agent-team) | `team` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`session-projection`](../packages/session/session-projection), [`subagent`](../packages/subagent/subagent), [`typert-protocol`](../packages/typert/protocol) |
 | [`workflow-ptc`](../packages/workflow/workflow-ptc) | `workflow` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`ptc-runtime`](../packages/ptc-runtime/ptc-runtime), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`tools`](../packages/core/tools), [`workflow`](../packages/workflow/workflow), [`working-directory`](../packages/session/working-directory) |
-| [`experimental-tool-agent-team`](../packages/experimental/tool-agent-team) | `experimental` | [`agent`](../packages/core/agent), [`experimental-agent-team`](../packages/experimental/agent-team), [`session`](../packages/core/session), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`schedule`](../packages/schedule/schedule) | `schedule` | [`agent`](../packages/core/agent), [`api-session-controller`](../packages/api/session-controller), [`brand`](../packages/util/brand), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`session-projection`](../packages/session/session-projection), [`storage-domain`](../packages/storage/storage-domain), [`subagent`](../packages/subagent/subagent), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol), [`util-time`](../packages/util/time), [`workspace`](../packages/workspace/workspace) |
 | [`sdk-client`](../packages/sdk/client) | `sdk` | [`llm`](../packages/llm/llm), [`sdk-protocol`](../packages/sdk/protocol), [`session`](../packages/core/session) |
+| [`tool-agent-team`](../packages/team/tool-agent-team) | `team` | [`agent`](../packages/core/agent), [`agent-team`](../packages/team/agent-team), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`client-test-runtime`](../packages/test-support/client-runtime) | `test-support` | [`api-gateway`](../packages/api/gateway), [`api-session-controller`](../packages/api/session-controller), [`api-workspace-controller`](../packages/api/workspace-controller), [`attachment`](../packages/attachment/attachment), [`client-connection`](../packages/client/connection), [`client-hmr`](../packages/client/hmr), [`client-modules`](../packages/client/modules), [`client-store`](../packages/client/store), [`client-ui-chat`](../packages/client/ui-chat), [`client-ui-context-menu`](../packages/client/ui-context-menu), [`client-ui-conversation`](../packages/client/ui-conversation), [`client-ui-renderer`](../packages/client/ui-renderer), [`client-ui-session`](../packages/client/ui-session), [`client-ui-settings`](../packages/client/ui-settings), [`client-ui-slots`](../packages/client/ui-slots), [`client-web`](../packages/client/web), [`remote-mock`](../packages/test-support/remote-mock), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`typert-protocol`](../packages/typert/protocol) |
 | [`subagent-dsh-sdk`](../packages/subagent/subagent-dsh-sdk) | `subagent` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`sdk-client`](../packages/sdk/client), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`subprocess`](../packages/subprocess/subprocess) |
 | [`tool-schedule`](../packages/schedule/tool-schedule) | `schedule` | [`llm`](../packages/llm/llm), [`schedule`](../packages/schedule/schedule), [`subagent`](../packages/subagent/subagent), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |

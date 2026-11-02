@@ -205,16 +205,14 @@ export class PtcWorkflowRun implements WorkflowRun {
       label: `${this.meta.name} child ${callId}`,
       delivery: 'caller',
       signal: this.controller.signal,
-      request: {
-        cwd: await this.cwd,
-        prompt: [{ type: 'text', text: request.prompt }],
-        parent: this.parent,
-        ...request.schema === undefined ? {} : { outputSchema: request.schema },
-        ...request.provider === undefined && request.model === undefined ? {} : {
-          agentOptions: {
-            ...request.provider === undefined ? {} : { provider: request.provider },
-            ...request.model === undefined ? {} : { model: request.model },
-          },
+      cwd: await this.cwd,
+      prompt: [{ type: 'text', text: request.prompt }],
+      parent: this.parent,
+      ...request.schema === undefined ? {} : { outputSchema: request.schema },
+      ...request.provider === undefined && request.model === undefined ? {} : {
+        agentOptions: {
+          ...request.provider === undefined ? {} : { provider: request.provider },
+          ...request.model === undefined ? {} : { model: request.model },
         },
       },
     })

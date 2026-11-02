@@ -81,7 +81,12 @@ async function run(root: string, mode: string): Promise<CatalogReport | { seeded
       await seed(ctx)
       return { seeded: true }
     }
-    const readCatalog = () => ctx.subagents.listChildren(PARENT_ID)
+    const readCatalog = async () => {
+      using observation = await ctx.sessionQuery.observeSession(PARENT_ID)
+      const catalog = observation.projections?.values.subagentCatalog
+      if (catalog === undefined) throw new Error('child-catalog projection is unavailable')
+      return catalog
+    }
     const cpuStart = process.cpuUsage()
     const start = performance.now()
     const first = await readCatalog()

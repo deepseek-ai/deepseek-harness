@@ -50,8 +50,8 @@ async function expectEllipsizedText(labels: Locator): Promise<void> {
 }
 
 describe.each([
-  { locale: 'en-US', tasks: 'Automation tasks', edit: 'Edit', time: 'Time', second: 'Second', zone: 'Time zone' },
-  { locale: 'zh-CN', tasks: '自动化任务', edit: '编辑', time: '时间', second: '秒', zone: '时区' },
+  { locale: 'en-US', tasks: 'Automation tasks', time: 'Time', second: 'Second', zone: 'Time zone' },
+  { locale: 'zh-CN', tasks: '自动化任务', time: '时间', second: '秒', zone: '时区' },
 ])('automation pickers ($locale)', (copy) => {
   it.each(['clock', 'zone'] as const)('ellipsizes the %s labels and keeps vertical choices reachable at 500% zoom', async (kind) => {
     const context = await browser.newContext({
@@ -66,7 +66,6 @@ describe.each([
       await page.getByRole('button', { name: copy.tasks, exact: true }).click()
       const detail = page.getByTestId('task-manager-page')
       await detail.getByRole('button', { name: TITLE, exact: true }).click()
-      await detail.getByRole('button', { name: copy.edit, exact: true }).click()
       await page.evaluate(() => document.fonts.ready)
       const trigger = kind === 'clock'
         ? detail.getByRole('button', { name: copy.time, exact: true })

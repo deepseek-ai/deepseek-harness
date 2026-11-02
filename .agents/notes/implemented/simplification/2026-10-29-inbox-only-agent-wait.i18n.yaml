@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-29-inbox-only-agent-wait.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-10-29-inbox-only-agent-wait.md
+/agent-note-inbox-only-agent-waits:
+  en: 8a451f9706af8dea
+  zh: 9818b5abdee12a9c
+/agent-note-inbox-only-agent-waits/problem:
+  en: 7a6e28745bda3305
+  zh: e862166572cb9a9f
+/agent-note-inbox-only-agent-waits/decision:
+  en: 553a1e166dd7e7e9
+  zh: c05f16577fa6753c
+/agent-note-inbox-only-agent-waits/alternatives-considered:
+  en: 64a44ad3884a90c3
+  zh: 1fffe0c6fd78acbe
+/agent-note-inbox-only-agent-waits/consequences:
+  en: 45b6d456c3ca226c
+  zh: e9ebacd4b6bcaeca

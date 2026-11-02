@@ -2,7 +2,7 @@
 /** The task tab renders the one task its navigation parameters name. */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { PaneId, SidebarRightTabActions, SidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
@@ -10,10 +10,10 @@ import type { ScheduleId, ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { CatalogDeleteOutcome, CatalogSnapshot } from '../src/client/catalog-source.ts'
 import type { HostTaskActions } from '../src/client/TaskDetail.tsx'
-import { formatScheduleFrequency } from '../src/client/schedule-format.ts'
 import { ScheduleTaskTab, type ScheduleTaskTabProps } from '../src/client/ScheduleTaskTab.tsx'
 import { ScheduleTaskTabTitle, type ScheduleTaskTabTitleProps } from '../src/client/ScheduleTaskTabTitle.tsx'
 import { TaskTabBindings, type TaskTabPage } from '../src/client/task-tab-bindings.ts'
+import { createEditorStore } from '../src/client/editor-store.ts'
 import { en, zh } from '../src/client/task-manager-locales.ts'
 import css from '../src/client/TaskManagerPage.module.css'
 
@@ -87,6 +87,7 @@ function mount(
   sessionState: SessionListState = sessions,
   overrides: Partial<ScheduleTaskTabProps> = {},
 ) {
+  const editor = createEditorStore().create()
   // Model the source: a first read is unsettled, and only a successful read
   // settles the snapshot and advances its revision. A refresh and a failure keep
   // both, which is what separates "no answer yet" from "the last answer stands".
@@ -99,6 +100,7 @@ function mount(
   }
   const info = params === RESTORED ? tabInfo(undefined, 0) : tabInfo(params)
   const props = {
+    useStore: bindSnapshotSelector(editor), actions: editor.actions,
     sessionId: SESSION,
     useTabInfo: () => info,
     useSessions: <T,>(select: (value: SessionListState) => T): T => select(sessionState),
@@ -178,9 +180,9 @@ describe.each([['English', en], ['Chinese', zh]] as const)('task tab body in %s'
     expect(follows(tabs, name)).toBe(true)
     expect(follows(name, nextRun)).toBe(true)
     expect(nextRun.querySelector('time')?.dateTime).toBe(at.scheduledAt)
-    expect(detail.querySelector(`.${css.readonlyPrompt}`)?.textContent).toBe(at.prompt)
-    const rule = detail.querySelector<HTMLElement>(`.${css.ruleCard}`)!
-    expect(rule.textContent).toContain(formatScheduleFrequency(at, makeTranslate(dictionary)))
+    expect(detail.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe(at.prompt)
+    const rule = detail.querySelector<HTMLFieldSetElement>('fieldset')!
+    expect(within(rule).getByRole('spinbutton', { name: dictionary['host.interval'] }).getAttribute('value')).toBe('5')
     expect(rule.textContent).toContain(dictionary['host.currentConversation'])
     expect(within(tabs).getAllByRole('tab')).toHaveLength(2)
     fireEvent.click(within(detail).getByRole('button', { name: dictionary['detail.more'] }))
@@ -200,7 +202,7 @@ describe.each([['English', en], ['Chinese', zh]] as const)('task tab body in %s'
     mount({ records: [named] })
     const detail = screen.getByRole('complementary', { name: en['detail.label'] })
     expect(within(detail).getByRole('heading', { level: 2 }).textContent).toBe('Metrics review')
-    expect(detail.querySelector(`.${css.readonlyPrompt}`)?.textContent).toBe(named.prompt)
+    expect(detail.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe(named.prompt)
   })
 
   it('labels the target Session with its catalog title instead of its id', () => {
@@ -472,7 +474,6 @@ describe('task tab states', () => {
     const h = mount()
     const pending = Promise.withResolvers<Awaited<ReturnType<HostTaskActions['edit']>>>()
     vi.mocked(h.props.hostActions.edit).mockReturnValueOnce(pending.promise)
-    fireEvent.click(screen.getByRole('button', { name: en['host.edit'] }))
     fireEvent.change(screen.getByRole('textbox', { name: en['detail.name'] }), { target: { value: 'Renamed' } })
     fireEvent.click(within(document.querySelector<HTMLElement>(`.${css.saveFooter}`)!)
       .getByRole('button', { name: en['rule.save'] }))

@@ -3,7 +3,7 @@ import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallBlock } from './tool-call-model.ts'
 import type { ToolDetailsModel } from '../components/ToolDetails.tsx'
 import { parsedToolCall, singleResultText } from './raw-tool-call.ts'
-import { controlDetails } from './control-details-model.ts'
+import { controlDetails, subagentDetails } from './control-details-model.ts'
 import { inspectionDetails } from './inspection-details-model.ts'
 import { detailJson, detailRecord, nonempty } from './detail-model-shared.ts'
 
@@ -175,6 +175,9 @@ export function detailsCardModel(block: ToolCallBlock, t: Translate, locale: str
   const call = parsedToolCall(block)
   if (call === null) return null
   const text = singleResultText(block)
+  if (call.name === 'subagent' || call.name === 'subagent_fork') {
+    return subagentDetails(call.args, text, block.meta, t)
+  }
   if (text === undefined) return null
   const value = detailJson(text)
   const details = controlDetails(call.name, call.args, text, value, t) ?? inspectionDetails(call.name, call.args, text, value, t, locale)

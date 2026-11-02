@@ -329,8 +329,8 @@ describe('hooks-claude-code bridge — SubagentStart / SubagentStop (observe)', 
     const { ctx, hooks } = await harnessWithFiber(dir, adapter)
     // Drive the observe-only lifecycle events directly. SubagentStart must run
     // the hook even when no registered child resolves from the notification.
-    ctx.emit(subagentCarrier(ctx), 'subagent/start', { runId: SubagentRunId('run-1'), provider: 'inproc', id: SessionId('child-1'), local: false })
-    ctx.emit(subagentCarrier(ctx), 'subagent/end', { runId: SubagentRunId('run-1'), provider: 'inproc', id: SessionId('child-1'), local: false, stopReason: 'completed', lastAssistantMessage: [{ type: 'text', text: 'done' }] })
+    ctx.emit(subagentCarrier(ctx), 'subagent/start', { parentSessionId: SessionId('parent'), runId: SubagentRunId('run-1'), provider: 'inproc', id: SessionId('child-1'), local: false })
+    ctx.emit(subagentCarrier(ctx), 'subagent/end', { parentSessionId: SessionId('parent'), runId: SubagentRunId('run-1'), provider: 'inproc', id: SessionId('child-1'), local: false, stopReason: 'completed', lastAssistantMessage: [{ type: 'text', text: 'done' }] })
 
     // Both hooks run async (detached .then); poll for their marker files rather
     // than a fixed sleep that flakes under load.
@@ -365,7 +365,7 @@ describe('hooks-claude-code bridge — SubagentStart / SubagentStop (observe)', 
     const { ctx, hooks } = await harnessWithFiber(dir, new MockAdapter([]))
     const warn = vi.fn()
     ctx.logger.warn = warn as never
-    ctx.emit(subagentCarrier(ctx), 'subagent/start', { runId: SubagentRunId('run-1'), provider: 'inproc', id: SessionId('child-1'), local: false })
+    ctx.emit(subagentCarrier(ctx), 'subagent/start', { parentSessionId: SessionId('parent'), runId: SubagentRunId('run-1'), provider: 'inproc', id: SessionId('child-1'), local: false })
     await waitFor(() => existsSync(marker))
     const pid = Number(readFileSync(pidFile, 'utf8').trim())
     await hooks.dispose()

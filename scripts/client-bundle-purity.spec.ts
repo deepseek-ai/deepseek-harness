@@ -362,8 +362,8 @@ describe('client bundle purity gate', () => {
 })
 
 describe('client bundle experimental input isolation', () => {
-  const experimental = '@deepseek-ai/dsh-experimental-client-ui-agent-team'
-  const experimentalDir = packageDir('experimental/client-ui-agent-team')
+  const experimental = '@deepseek-ai/dsh-experimental-client-ui-voice-input'
+  const experimentalDir = packageDir('experimental/client-ui-voice-input')
 
   function fixture() {
     const root = mkdtempSync(join(tmpdir(), 'dsh-client-inputs-'))

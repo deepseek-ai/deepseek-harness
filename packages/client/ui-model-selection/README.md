@@ -61,6 +61,8 @@ Catalog availability does not block sending with a saved selection; request exec
 
 When another writer owns the Session, model-selection failures tell the user to quit other running DSH instances and retry.
 
+The session-scoped `conversation.input.model.options` list slot appends controls below model and reasoning selection. Owner props expose `locked`, `reportFailure(message)`, and `dismiss()`, which closes the menu and synchronously focuses its trigger before another overlay opens; contributions read their own projections and supply narrow commands. Enabled switch buttons participate in the menu’s keyboard navigation.
+
 -----
 
 <a id="understand-the-implementation"></a>

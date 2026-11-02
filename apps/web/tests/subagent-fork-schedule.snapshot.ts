@@ -48,7 +48,7 @@ it.skipIf(MODE === 'record')('replays inherited schedule tools and refusals in a
     const activation = await scaffold.ctx.subagents.startActivation({
       provider: 'fork', label: 'Check child reminder refusal', delivery: 'caller',
       signal: new AbortController().signal,
-      request: { parent, prompt: [...childPrompt.data.content] },
+      parent, prompt: [...childPrompt.data.content],
     })
     try {
       await activation.result

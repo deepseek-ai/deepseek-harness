@@ -18,10 +18,6 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./internal": {
-      "types": "./lib/types/internal.d.ts",
-      "default": "./lib/types/internal.js"
-    },
     "./client": {
       "types": "./lib/types/client.d.ts",
       "default": "./lib/types/client.js"
