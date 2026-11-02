@@ -86,14 +86,7 @@
   font-weight: 500;
 }
 
-.warningHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.warningHeader h3 {
+.warningTitle {
   margin: 0;
   color: var(--dsw-alias-label-primary);
   font-size: 15px;

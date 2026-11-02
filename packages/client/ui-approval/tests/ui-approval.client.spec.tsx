@@ -571,9 +571,6 @@ it('opens and dismisses risk details without answering the approval', () => {
   fireEvent.keyDown(trigger, { key: 'Escape' })
   expect(screen.queryByRole('dialog', { name: 'Computer use risks' })).toBeNull()
   expect(onReject).not.toHaveBeenCalled()
-  fireEvent.click(trigger)
-  fireEvent.click(screen.getByRole('button', { name: 'close' }))
-  expect(screen.queryByRole('dialog', { name: 'Computer use risks' })).toBeNull()
   expect(document.activeElement).toBe(trigger)
   fireEvent.click(trigger)
   fireEvent.pointerDown(document.body)
@@ -589,7 +586,7 @@ it('keeps risk details readable across the pointer gap and after a touch tap', (
   vi.useFakeTimers()
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })))
-  render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} closeLabel="Close" />)
+  render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
   const trigger = screen.getByRole('button', { name: 'Risks' })
   const pointer = (target: Element, type: string, pointerType = 'mouse') => {
     const event = new Event(type, { bubbles: true })
@@ -618,7 +615,7 @@ it('keeps risk details readable across the pointer gap and after a touch tap', (
 it('leaves Escape to composition and a foreground modal without moving focus', () => {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const onClose = vi.fn()
-  const warning = <ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} closeLabel="Close" />
+  const warning = <ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />
   const view = render(warning)
   fireEvent.click(screen.getByRole('button', { name: 'Risks' }))
   fireEvent.compositionStart(document)

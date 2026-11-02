@@ -71,7 +71,7 @@ function ApprovalFlow(props: FactoryComponentPropsOf<'conversation.approval.card
           </div>}
           <div className={css.heading}>
             <div className={css.headline}>{title}</div>
-            {warning !== undefined && <ApprovalWarning warning={warning} closeLabel={t('close')} />}
+            {warning !== undefined && <ApprovalWarning warning={warning} />}
           </div>
           {description !== undefined && <p className={css.description}>{description}</p>}
           {detail !== null && <div className={css.command}>{detail}</div>}
