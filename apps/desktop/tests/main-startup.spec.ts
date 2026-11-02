@@ -1889,6 +1889,28 @@ describe('desktop main startup', () => {
     }))
   })
 
+  it.each([
+    { phase: 'available', version: '1.0.3' },
+    { phase: 'idle' },
+    { phase: 'error', failedOperation: 'check', message: 'Old feed unavailable' },
+  ] satisfies DesktopUpdateState[])('discards a manual check result after switching channel: $phase', async (result) => {
+    await readyForUpdate()
+    const checked = Promise.withResolvers<DesktopUpdateState>()
+    const requested = Promise.withResolvers<undefined>()
+    harness.updateCheck.mockImplementationOnce(() => { requested.resolve(undefined); return checked.promise })
+    harness.dialog.showMessageBox.mockResolvedValue({ response: 0 })
+    const action = applicationMenuItems().find(item => item.label === 'Check for Updates…')
+    Reflect.apply(action!.click!, undefined, [])
+    const prompt = Promise.resolve(invoke(DESKTOP_IPC.updatesOpen, 'app'))
+    await requested.promise
+    await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'stable')
+    checked.resolve(result)
+    await prompt
+    expect(harness.dialog.showMessageBox).toHaveBeenCalledTimes(1)
+    expect(harness.updateDownload).not.toHaveBeenCalled()
+    expect(harness.updateInstall).not.toHaveBeenCalled()
+  })
+
   it('reports a manual check failure without offering a download', async () => {
     await readyForUpdate()
     harness.updateCheck.mockResolvedValueOnce({ phase: 'error', failedOperation: 'check', message: 'Feed unavailable' })

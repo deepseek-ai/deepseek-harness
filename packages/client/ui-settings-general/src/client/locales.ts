@@ -10,7 +10,7 @@ export const zh = {
   'desktop.channel.error': '未能应用更新配置。请点击桌面更新入口查看原因。',
   'desktop.update.configurationFailed': '未能应用更新配置。请点击桌面更新入口查看原因。',
   'desktop.channel.result.applied': '更新渠道已切换',
-  'desktop.channel.result.configuration': '设置文件异常，更新已暂停',
+  'desktop.channel.result.configuration': '配置文件异常，更新已暂停',
   'desktop.channel.details': '查看详情',
   'desktop.channel.result.save': '保存失败',
   'desktop.channel.result.format': '保存失败，配置文件格式有误',

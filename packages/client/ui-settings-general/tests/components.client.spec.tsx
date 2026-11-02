@@ -420,3 +420,7 @@ it('keeps the settings-file notification for ten seconds with a details action',
     expect(dismiss).toHaveBeenCalledWith(8)
   } finally { view.unmount(); vi.useRealTimers() }
 })
+
+it('uses the concise Chinese configuration error for the settings notification', () => {
+  expect(zh['desktop.channel.result.configuration']).toBe('配置文件异常，更新已暂停')
+})
