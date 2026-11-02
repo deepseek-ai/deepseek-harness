@@ -65,7 +65,11 @@ def main():
                 assert requirement(custom.parents[2]) == first_requirement
             print(f"PASS: developer setup reuses and unlocks its identity; configured signatures across changed builds share {first_requirement}")
         finally:
-            signing.remove(directory)
+            try:
+                signing.remove(directory)
+            finally:
+                # This fixture owns the temporary directory even if ownership validation fails.
+                signing.clear_identity(directory)
     assert signing.user_keychains() == before, "the user keychain search list was not restored"
 
 

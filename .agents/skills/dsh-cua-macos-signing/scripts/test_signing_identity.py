@@ -82,6 +82,29 @@ class DevelopmentSigningTests(unittest.TestCase):
                 self.assertEqual({p.name: p.read_bytes() for p in self.directory.iterdir()}, before)
         self.assertEqual(security.commands, [])
 
+    def test_system_keychain_locks_are_removed_by_security(self):
+        security = self.configure()
+        lock = self.directory / ".flD3051040"
+        lock.touch()
+        def remove_keychain(*args):
+            result = security(*args)
+            if args[0] == "delete-keychain":
+                lock.unlink()
+            return result
+        with patch.object(signing, "security", side_effect=remove_keychain):
+            signing.remove(self.directory)
+        self.assertFalse(self.directory.exists())
+
+    def test_nonempty_files_with_a_system_lock_name_are_preserved(self):
+        security = self.configure()
+        lock = self.directory / ".flD3051040"
+        lock.write_text("unrelated contents")
+        for operation in (signing.setup, signing.remove):
+            with self.assertRaisesRegex(RuntimeError, "unrelated entries"):
+                operation(self.directory)
+        self.assertEqual(lock.read_text(), "unrelated contents")
+        self.assertEqual(security.commands, [])
+
     def test_missing_or_invalid_marker_cannot_adopt_an_existing_identity(self):
         security = self.configure()
         marker = self.directory / signing.OWNER_MARKER

@@ -115,7 +115,9 @@ def owned_directory(directory, create=False):
         raise RuntimeError(f"Refusing unowned signing directory: {directory}; choose a new or empty dedicated directory")
     allowed = {OWNER_MARKER, record_path(directory).name, record_path(directory).with_suffix(".tmp").name, keychain_path(directory).name}
     for entry in directory.iterdir():
-        if entry.name not in allowed or entry.is_symlink() or not entry.is_file():
+        # security creates empty .flXXXXXXXX locks and removes them with delete-keychain.
+        system_lock = re.fullmatch(r"\.fl[0-9A-Fa-f]{8}", entry.name) and entry.is_file() and entry.stat().st_size == 0
+        if (entry.name not in allowed and not system_lock) or entry.is_symlink() or not entry.is_file():
             raise RuntimeError(f"Refusing signing directory with unrelated entries: {directory}; preserve those entries before retrying")
 
 
