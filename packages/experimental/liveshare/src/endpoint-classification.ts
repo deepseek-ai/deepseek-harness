@@ -105,6 +105,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'session/updateQueue': 'owner-only', // owner edits queued input
   'session/workspacePathApplications': 'owner-only', // owner applies a Workspace path
   'credentials/describe': 'owner-only', // owner credentials; secrets never reach a reader
+  'credentials/readStored': 'owner-only', // owner credentials; secrets never reach a reader
   'credentials/set': 'owner-only', // owner credentials; secrets never reach a reader
   'credentials/unset': 'owner-only', // owner credentials; secrets never reach a reader
   'settings/describe': 'owner-only', // owner settings
@@ -214,13 +215,17 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'agentPresets/list': 'owner-only', // owner agent presets
   'agentPresets/read': 'owner-only', // owner agent presets
   'agentPresets/select': 'owner-only', // owner agent presets
+  'agentTeams/setEnabled': 'owner-only', // owner Team mode
   'schedule/catalog': 'owner-only', // owner schedules
-  'schedule/delete': 'owner-only', // owner schedules
+  'schedule/create': 'owner-only', // owner schedules
+  'schedule/deliveryLimits': 'owner-only', // owner schedules
   'schedule/deleteInactive': 'owner-only', // owner schedules
+  'schedule/edit': 'owner-only', // owner schedules
   'schedule/history': 'owner-only', // owner schedules
   'schedule/list': 'owner-only', // owner schedules
-  'schedule/update': 'owner-only', // owner schedules
-  'subagents/interruptByParent': 'owner-only', // owner subagents
+  'schedule/run': 'owner-only', // owner schedules
+  'schedule/view': 'owner-only', // owner schedules
+  'subagents/interruptByUser': 'owner-only', // owner subagents
   'subagents/prompt': 'owner-only', // owner subagents
 
   // Owner share management stays on the owner's own page; a `share-viewer` Peer is refused first.

@@ -14,7 +14,8 @@ import type { ApplicationApprovalProps } from '../src/client/ApplicationApproval
 
 const contribution: TypertRemoteContribution = { package: '@deepseek-ai/dsh-cua', descriptors: [] }
 const value: CuaApplicationState & { system: CuaSystemPermissionState } = {
-  system: { accessibility: false, screenRecording: false, helper: { pid: 2 }, parent: { pid: 1 } },
+  system: {
+    accessibility: false, screenRecording: false, helper: { pid: 2 }, parent: { pid: 1 } },
   allowedApps: [], blockedApps: [], persistentAvailable: true }
 
 function actionsOf(value: Record<string, unknown>): asserts value is Record<string, unknown> & PermissionFace {
@@ -93,6 +94,8 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('requested') })
     actions.openSettings('screenRecording')
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('opened') })
+    expect(f.requestPermission).toHaveBeenCalledWith('accessibility', 'en')
+    expect(f.openSettings).toHaveBeenCalledWith('screenRecording', 'en')
     actions.revoke('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId)
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('revoked') })
     actions.retryApproval('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId)

@@ -2,13 +2,51 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import { chromium, type Locator } from 'playwright'
+import { chromium, webkit, type Locator } from 'playwright'
 import sharp from 'sharp'
 import { expect, it, onTestFinished } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, seedSession, webSnapshotMode } from './scaffold.ts'
 
 const expected = fileURLToPath(new URL('./expected/menu-material', import.meta.url))
 const seed = new URL('../../../snapshots/web/seeded-history/session.v3.jsonl', import.meta.url)
+
+it('keeps the view options menu anchored and dismissible through WebKit window resizing', async () => {
+  const scaffold = await launchWebScaffold({})
+  onTestFinished(() => scaffold.close())
+  const browser = await webkit.launch()
+  onTestFinished(() => browser.close())
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'en-US' })
+  await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+  const anchor = page.getByRole('button', { name: 'View options', exact: true })
+  await anchor.click()
+  const menu = page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: 'Workspace Tree', exact: true }) })
+  await menu.waitFor()
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 1200, height: 700 }]) {
+    await page.setViewportSize(viewport)
+    await expect.poll(async () => {
+      const trigger = await anchor.boundingBox()
+      const panel = await menu.boundingBox()
+      if (trigger === null || panel === null) return null
+      return {
+        // The menu can be wider than the sidebar, so its left margin takes precedence over end alignment.
+        horizontalOffset: Math.round(panel.x - Math.max(12, trigger.x + trigger.width - panel.width)),
+        topGap: Math.round(panel.y - trigger.y - trigger.height),
+        insideViewport: panel.x >= 12 && panel.y >= 12
+          && panel.x + panel.width <= viewport.width - 12
+          && panel.y + panel.height <= viewport.height - 12,
+      }
+    }).toEqual({ horizontalOffset: 0, topGap: 4, insideViewport: true })
+  }
+  await page.keyboard.press('Escape')
+  await menu.waitFor({ state: 'hidden' })
+  await anchor.click()
+  await menu.waitFor()
+  await page.mouse.click(800, 500)
+  await menu.waitFor({ state: 'hidden' })
+  await anchor.click()
+  await page.getByRole('menuitem', { name: 'In one list', exact: true }).click()
+  await menu.waitFor({ state: 'hidden' })
+})
 
 async function material(menu: Locator) {
   return menu.evaluate((node) => {

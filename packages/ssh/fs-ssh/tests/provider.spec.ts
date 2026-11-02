@@ -202,3 +202,40 @@ describe('SSH filesystem provider', () => {
     },
   )
 })
+
+it.each([false, true])('forwards patch/delete/move with explicit policy %s and preserves partial results', async (explicit) => {
+  const { fs, dispatch } = await setup()
+  const signal = new AbortController().signal
+  const policy: SandboxExecutionPolicy = { mode: 'workspace-write', workspaceRoot: '/remote/work' }
+  const selected = explicit ? policy : undefined
+  const resolved = explicit ? policy : { mode: 'read-only', workspaceRoot: '/remote/work' }
+  const expected = { version: FsVersion('v1') }
+  const hunks = [{ lineNumber: 3, context: 'anchor', oldLines: ['old'], newLines: ['new'], isEndOfFile: false }]
+  const edited = { version: 'v2', before: 'old', after: 'new' }
+  const deleted = { before: 'old' }
+  const destination = { targetKey: FsTargetKey('/remote/work/new.txt'), displayPath: 'new.txt' }
+  const moved = { sourceBefore: 'source before patch\n', destination: { ...edited, operation: 'create' }, sourceDeleted: false, sourceFailure: { code: 'FS_PERMISSION_DENIED', message: 'cannot delete source' } }
+  dispatch.mockResolvedValueOnce(edited).mockResolvedValueOnce(deleted).mockResolvedValueOnce(moved)
+  expect(await fs.patchText(target, hunks, expected, signal, selected)).toEqual(edited)
+  expect(dispatch).toHaveBeenLastCalledWith('fs.patch', { target, hunks, expected, policy: resolved }, signal)
+  expect(await fs.deleteFile(target, expected, signal, selected)).toEqual(deleted)
+  expect(dispatch).toHaveBeenLastCalledWith('fs.delete', { target, expected, policy: resolved }, signal)
+  const options = { hunks, expectedSource: expected, expectedDestination: { kind: 'createIfAbsent' as const } }
+  expect(await fs.moveFile(target, destination, options, signal, selected)).toEqual(moved)
+  expect(dispatch).toHaveBeenLastCalledWith('fs.move', { source: target, destination, options, policy: resolved }, signal)
+})
+
+it.each(['FS_PATCH_MISMATCH', 'FS_SAME_TARGET'])('preserves new remote error %s', async (code) => {
+  const { fs, dispatch } = await setup()
+  dispatch.mockRejectedValue(new RemoteOperationError('rejected', code))
+  await expect(fs.patchText(target, [])).rejects.toMatchObject({ code, message: 'rejected' })
+})
+
+it.each([
+  { destination: { operation: 'create', version: 'v', before: null, after: '' }, sourceDeleted: false },
+  { destination: { operation: 'create', version: 'v', before: null, after: '' }, sourceDeleted: false, sourceBefore: '', sourceFailure: { code: 'INVALID', message: 'bad' } },
+])('rejects malformed move outcomes', async (outcome) => {
+  const { fs, dispatch } = await setup()
+  dispatch.mockResolvedValue(outcome)
+  await expect(fs.moveFile(target, target, {})).rejects.toMatchObject({ code: 'FS_IO_ERROR' })
+})

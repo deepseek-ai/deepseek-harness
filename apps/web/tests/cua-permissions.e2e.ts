@@ -129,7 +129,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   expect(await accessibility.getByRole('button', { name: 'Request permission', exact: true }).count()).toBe(1)
   await writeFile(state, JSON.stringify({ accessibility: true, screenRecording: false, launchApplication }))
-  // Headless pages retain document focus; model returning from System Settings at the window-event boundary.
+  // Returning from System Settings refreshes the page's native permission observation.
   await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
   await accessibility.getByText('Allowed', { exact: true }).waitFor()
   const screen = panel.getByRole('group', { name: 'Screen Recording', exact: true })
@@ -149,9 +149,14 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect((await scaffold.ctx.cuaAccess.applications()).allowedApps).toEqual([])
   const events = (await readFile(audit, 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { event: string; method: string; params: object })
     .filter(record => record.event === 'call').map(({ method, params }) => ({ method, params }))
-  expect(events).toContainEqual({ method: 'requestPermission', params: { permission: 'accessibility' } })
+  expect(events).toContainEqual({ method: 'requestPermission', params: { permission: 'accessibility',
+    instruction: 'Drag {application} to the list above to allow Accessibility',
+    backLabel: 'Back', finderLabel: 'Show in Finder',
+    unavailableMessage: 'Application unavailable. Enable Computer Use again and retry.',
+    settingsMessage: 'Open System Settings > Privacy & Security > Accessibility manually.', pollIntervalMs: 1000 } })
   expect(events.filter(event => event.method === 'openPermissionSettings')).toEqual([
-    { method: 'openPermissionSettings', params: { permission: 'accessibility' } },
+    { method: 'openPermissionSettings', params: { permission: 'accessibility',
+      settingsMessage: 'Open System Settings > Privacy & Security > Accessibility manually.' } },
   ])
   expect(events.every(event => ['permissionStatus', 'requestPermission', 'openPermissionSettings', 'applicationIcons', 'getApp'].includes(event.method))).toBe(true)
   const preview = plugins.locator('[data-detail-document] img')

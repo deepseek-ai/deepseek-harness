@@ -1,7 +1,7 @@
 /**
- * The panel card of the checkout's changes before a change request carries
- * them: the files the `branch` scope changes, their size, which opens the
- * changes view, and the action that asks the Agent for a change request.
+ * The panel card of the checkout's `branch` scope changes, independent of
+ * change request bindings: file counts and paths open the local changes view,
+ * and an optional action asks the Agent for a change request.
  */
 
 import { useState, type ReactNode } from 'react'

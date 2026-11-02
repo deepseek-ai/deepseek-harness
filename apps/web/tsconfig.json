@@ -23,6 +23,7 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
+    "tests/credential-editor.e2e.ts",
     "tests/sidebar-drawer.e2e.ts",
     "tests/creation-recommendations.e2e.ts",
     "tests/plugin-recommendations.e2e.ts",
@@ -49,6 +50,8 @@
     "tests/code-card-layout.e2e.ts",
     "tests/code-language.snapshot.ts",
     "tests/scaffold.ts",
+    "tests/subagent-summary.e2e.ts",
+    "tests/subagent-result-notice.e2e.ts",
     "tests/clock.e2e.ts",
     "tests/connection-recovery.e2e.ts",
     "tests/server-restart.e2e.ts",
@@ -106,6 +109,7 @@
     "tests/cua-permissions.e2e.ts",
     "tests/schedule-header.e2e.ts",
     "tests/schedule-phone.e2e.ts",
+    "tests/schedule-pickers.e2e.ts",
     "tests/worktree-opt-in.e2e.ts",
     "tests/session-inspector.e2e.ts",
     "tests/shared-inspector.e2e.ts",
@@ -211,6 +215,7 @@
     "tests/agent-preset-authoring.e2e.ts",
     "tests/shipped-composition.e2e.ts",
     "tests/schedule-after.e2e.ts",
+    "tests/schedule-manual.e2e.ts",
     "tests/feedback-command.e2e.ts",
     "tests/feedback-release.e2e.ts",
     "tests/agent-team-panel.e2e.ts",

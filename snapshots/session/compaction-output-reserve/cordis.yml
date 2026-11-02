@@ -7,7 +7,7 @@
   config:
     models:
       - id: deepseek-v4-flash
-        contextWindow: 8622
+        contextWindow: 8780
         maxTokens: 1000
 
 - id: compaction-basic
@@ -20,3 +20,8 @@
 - insert:
     - id: compaction-working-directory
       name: '../../../packages/test-support/session-snapshot/tests/fixtures/compaction-working-directory.ts'
+
+# Fixed-budget compaction scenario: keep the recorded tool set, whose token counts the thresholds were tuned to.
+- id: tool-fs
+  config:
+    applyPatch: false
