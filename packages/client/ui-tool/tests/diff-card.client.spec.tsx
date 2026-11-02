@@ -251,18 +251,33 @@ describe('FileMutationRow diff card', () => {
       ] } })
     const model = toolRowModel('apply_patch', block)
     expect(model.variant).toBe('edit')
-    expect(model.titleKey).toBe('tool.title.applyPatch')
+    expect(model.titleKey).toBe('tool.title.edit')
     expect(model.summary).toBe('')
     expect(model.filePath).toBeUndefined()
     expect(model.state).toBe('error')
     expect(model.errorSummary).toBe('Patch stopped after 1 of 3 operations.')
     const view = render(<FileMutationRow {...rowProps(block, 'apply_patch')} />)
-    expect(view.getByText('应用补丁')).toBeTruthy()
+    expect(view.getByText('编辑')).toBeTruthy()
     toggleRow(view)
     expect(view.container.querySelectorAll('[data-diff]').length).toBeGreaterThan(0)
     expect(view.getByText('created')).toBeTruthy()
     expect(view.getByText('after')).toBeTruthy()
     expect(view.container.textContent).toContain(output)
+  })
+
+  it('summarizes a complete patch by the files its headers name', () => {
+    const patchRow = (input: string) => toolRowModel('apply_patch', settled({ call: { name: 'apply_patch', argsRaw: JSON.stringify({ input }) } }), '/w/app')
+    expect(patchRow('*** Begin Patch\n*** Update File: src/a.ts\n@@\n-old\n+new\n*** End Patch')).toMatchObject({
+      summary: 'src/a.ts', filePath: 'src/a.ts',
+    })
+    expect(patchRow([
+      '*** Begin Patch', '*** Add File: /w/app/docs/new.md', '+hello', '*** Update File: src/a.ts', '*** Move to: src/b.ts',
+      '@@', ' *** Delete File: context.txt', '-old', '+new', '*** Delete File: old.txt  ', '*** End Patch',
+    ].join('\n'))).toMatchObject({ summary: 'docs/new.md, src/a.ts → src/b.ts, old.txt', filePath: undefined })
+    expect(patchRow('*** Begin Patch\n*** Delete File: old.txt\n*** End Patch')).toMatchObject({ summary: 'old.txt', filePath: undefined })
+    expect(patchRow('*** Begin Patch\n*** Update File: a.ts\n*** Move to: b.ts\n*** End Patch')).toMatchObject({ summary: 'a.ts → b.ts', filePath: undefined })
+    expect(patchRow('*** Begin Patch\n*** Add File: \n*** Add File: a.ts\n*** Move to: b.ts\n*** Update File: c.ts\n*** Move to: \n*** End Patch'))
+      .toMatchObject({ summary: 'a.ts, c.ts', filePath: undefined })
   })
 
   it('collapses to the summary row; expanding reveals the applied diff card', () => {

@@ -74,7 +74,6 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
 
 /** Tool-owned titles that refine a generic row variant without replacing it. */
 const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
-  apply_patch: 'tool.title.applyPatch',
   cordis_package_inspect: 'tool.title.inspect',
   cordis_runtime_inspect: 'tool.title.inspect',
   cordis_run: 'tool.title.runCordis',
@@ -269,6 +268,42 @@ function argumentSummary(
   return { summary: description === undefined ? '' : firstLine(description), filePath: undefined }
 }
 
+const PATCH_HEADERS = [
+  ['*** Add File: ', 'add'], ['*** Update File: ', 'update'], ['*** Delete File: ', 'delete'],
+] as const
+const PATCH_MOVE = '*** Move to: '
+
+interface PatchTarget { kind: typeof PATCH_HEADERS[number][1]; path: string; moveTo?: string }
+
+/**
+ * Summary material for `apply_patch`: the paths its Codex file headers name, once
+ * the `input` text is complete. A move reads `source → destination`; only a lone
+ * added or updated file without a move is an openable path. Hunk body lines carry
+ * a prefix character, so an indented `***` line is content, not a header.
+ */
+function patchSummary(args: ToolArgs, cwd?: string, home?: string): { summary: string; filePath: string | undefined } {
+  const patch = args.complete('input') ? args.text('input') : undefined
+  if (patch === undefined) return { summary: '', filePath: undefined }
+  const targets: PatchTarget[] = []
+  for (const line of patch.split(/\r?\n/u)) {
+    const text = line.trimEnd()
+    const header = PATCH_HEADERS.find(([prefix]) => text.startsWith(prefix))
+    const last = targets.at(-1)
+    if (header !== undefined) {
+      const path = text.slice(header[0].length).trim()
+      if (path !== '') targets.push({ kind: header[1], path })
+    } else if (text.startsWith(PATCH_MOVE) && last?.kind === 'update') {
+      const moveTo = text.slice(PATCH_MOVE.length).trim()
+      if (moveTo !== '') last.moveTo = moveTo
+    }
+  }
+  const display = (path: string) => abbreviateHomePath(relativizeToCwd(path, cwd), home)
+  const summary = targets.map(target => target.moveTo === undefined ? display(target.path)
+    : `${display(target.path)} → ${display(target.moveTo)}`).join(', ')
+  const only = targets.length === 1 ? targets[0] : undefined
+  return { summary, filePath: only !== undefined && only.kind !== 'delete' && only.moveTo === undefined ? only.path : undefined }
+}
+
 function deriveFilePath(variant: ToolRowVariant, argsRaw: string): string | undefined {
   if (!FILE_PATH_VARIANTS.has(variant)) return undefined
   const parsed = parseArgs(argsRaw)
@@ -312,7 +347,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   // Result metadata marks a settled call that did not finish every requested effect.
   const stopped = done && typeof block.meta === 'object' && block.meta !== null
     && !Array.isArray(block.meta) && (block.meta as Record<string, unknown>).stopped === true
-  const primary = argumentSummary(variant, block.args, cwd, home)
+  const primary = toolName === 'apply_patch' ? patchSummary(block.args, cwd, home) : argumentSummary(variant, block.args, cwd, home)
   const argumentPath = primary.filePath ?? (argsRaw === null ? undefined : deriveFilePath(variant, argsRaw))
   const recordedPath = done ? recordedAbsolutePath(block.meta, 'path') : undefined
   const canUseArgumentPath = argumentPath !== undefined
@@ -323,7 +358,8 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
     : block.error?.code === 'interrupted' ? 'stopped'
       : block.isError || stopped ? 'error' : 'ok'
   // The argument view serves every stage; the raw text is the fallback when it carries nothing useful.
-  const base = toolName === 'apply_patch' ? '' : primary.summary !== '' || argsRaw === null ? primary.summary
+  // An incomplete patch keeps an empty summary instead of falling back to the raw patch text.
+  const base = toolName === 'apply_patch' || primary.summary !== '' || argsRaw === null ? primary.summary
     : argsRaw === '' ? block.callId
       : abbreviateHomePath(relativizeToCwd(deriveSummary(variant, argsRaw), cwd), home)
   const summary = [titleKey === 'tool.title.generic' ? toolName : '', base].filter(Boolean).join(' · ')
