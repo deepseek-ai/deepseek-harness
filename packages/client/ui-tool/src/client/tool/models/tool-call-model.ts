@@ -143,6 +143,16 @@ export function toolTitleKey(toolName: string): ToolTitleKey {
   return TOOL_TITLE_KEYS[toolName] ?? VARIANT_TITLE_KEYS[classifyTool(toolName)]
 }
 
+/** One file a patch row names, rendered as its own link when `filePath` is set. */
+export interface ToolRowFileTarget {
+  /** Display path of a moved file's source; the source no longer exists once the move completes. */
+  readonly from?: string | undefined
+  /** Display path of the file, or of a move's destination. */
+  readonly label: string
+  /** Path to open; absent for a deletion or while the row cannot open argument paths. */
+  readonly filePath: string | undefined
+}
+
 /** Everything ToolRow needs, derived once from the frozen slice. */
 export interface ToolRowModel {
   variant: ToolRowVariant
@@ -155,6 +165,11 @@ export interface ToolRowModel {
    * stay unavailable until their result identifies the target.
    */
   filePath: string | undefined
+  /**
+   * Per-file links for a patch naming several files or a move; undefined for
+   * every other row, which uses `filePath` for the whole summary.
+   */
+  fileTargets: readonly ToolRowFileTarget[] | undefined
   /** Original argument JSON retained for expansion-time body formatting. */
   bodyRaw: string | null
   /** Flattened result text ({@link resultText}); null while running or when the result carries no text. */
@@ -275,33 +290,46 @@ const PATCH_MOVE = '*** Move to: '
 
 interface PatchTarget { kind: typeof PATCH_HEADERS[number][1]; path: string; moveTo?: string }
 
+/** Summary material read from patch file headers; `targets` keep each file's raw openable path. */
+interface PatchSummary {
+  summary: string
+  filePath: string | undefined
+  targets: readonly ToolRowFileTarget[]
+}
+
 /**
- * Summary material for `apply_patch`: the paths its Codex file headers name, once
- * the `input` text is complete. A move reads `source → destination`; only a lone
- * added or updated file without a move is an openable path. Hunk body lines carry
- * a prefix character, so an indented `***` line is content, not a header.
+ * Summary material for `apply_patch`: the paths its file headers name, once the
+ * `input` text is complete. A move reads `source → destination`, and only its
+ * destination is openable; a deletion is not. Only a lone added or updated file
+ * without a move sets `filePath`. Hunk body lines carry a prefix character, so
+ * an indented `***` line is content, not a header.
  */
-function patchSummary(args: ToolArgs, cwd?: string, home?: string): { summary: string; filePath: string | undefined } {
+function patchSummary(args: ToolArgs, cwd?: string, home?: string): PatchSummary {
   const patch = args.complete('input') ? args.text('input') : undefined
-  if (patch === undefined) return { summary: '', filePath: undefined }
-  const targets: PatchTarget[] = []
+  if (patch === undefined) return { summary: '', filePath: undefined, targets: [] }
+  const headers: PatchTarget[] = []
   for (const line of patch.split(/\r?\n/u)) {
     const text = line.trimEnd()
     const header = PATCH_HEADERS.find(([prefix]) => text.startsWith(prefix))
-    const last = targets.at(-1)
+    const last = headers.at(-1)
     if (header !== undefined) {
       const path = text.slice(header[0].length).trim()
-      if (path !== '') targets.push({ kind: header[1], path })
+      if (path !== '') headers.push({ kind: header[1], path })
     } else if (text.startsWith(PATCH_MOVE) && last?.kind === 'update') {
       const moveTo = text.slice(PATCH_MOVE.length).trim()
       if (moveTo !== '') last.moveTo = moveTo
     }
   }
   const display = (path: string) => abbreviateHomePath(relativizeToCwd(path, cwd), home)
-  const summary = targets.map(target => target.moveTo === undefined ? display(target.path)
-    : `${display(target.path)} → ${display(target.moveTo)}`).join(', ')
-  const only = targets.length === 1 ? targets[0] : undefined
-  return { summary, filePath: only !== undefined && only.kind !== 'delete' && only.moveTo === undefined ? only.path : undefined }
+  const targets = headers.map(({ kind, path, moveTo }): ToolRowFileTarget => moveTo === undefined
+    ? { label: display(path), filePath: kind === 'delete' ? undefined : path }
+    : { from: display(path), label: display(moveTo), filePath: moveTo })
+  const summary = targets.map(target => target.from === undefined ? target.label : `${target.from} → ${target.label}`).join(', ')
+  const only = headers.length === 1 ? headers[0] : undefined
+  return {
+    summary, targets,
+    filePath: only !== undefined && only.kind !== 'delete' && only.moveTo === undefined ? only.path : undefined,
+  }
 }
 
 function deriveFilePath(variant: ToolRowVariant, argsRaw: string): string | undefined {
@@ -347,11 +375,18 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   // Result metadata marks a settled call that did not finish every requested effect.
   const stopped = done && typeof block.meta === 'object' && block.meta !== null
     && !Array.isArray(block.meta) && (block.meta as Record<string, unknown>).stopped === true
-  const primary = toolName === 'apply_patch' ? patchSummary(block.args, cwd, home) : argumentSummary(variant, block.args, cwd, home)
+  const patch = toolName === 'apply_patch' ? patchSummary(block.args, cwd, home) : undefined
+  const primary = patch ?? argumentSummary(variant, block.args, cwd, home)
   const argumentPath = primary.filePath ?? (argsRaw === null ? undefined : deriveFilePath(variant, argsRaw))
   const recordedPath = done ? recordedAbsolutePath(block.meta, 'path') : undefined
-  const canUseArgumentPath = argumentPath !== undefined
-    && (isAbsoluteWorkspacePath(argumentPath) || done && !block.isError && block.parentCallId === undefined)
+  const usableArgumentPath = (path: string) => isAbsoluteWorkspacePath(path)
+    || done && !block.isError && block.parentCallId === undefined
+  const canUseArgumentPath = argumentPath !== undefined && usableArgumentPath(argumentPath)
+  // A lone added or updated file keeps the whole-summary link; several files or a move link each file.
+  const fileTargets = patch !== undefined && (patch.targets.length > 1 || patch.targets.some(target => target.from !== undefined))
+    ? patch.targets.map(target => target.filePath === undefined || usableArgumentPath(target.filePath) ? target
+      : { ...target, filePath: undefined })
+    : undefined
   const filePath = argumentPath === undefined ? undefined
     : recordedPath ?? (canUseArgumentPath ? argumentPath : undefined)
   const state: ToolRowState = !done ? block.phase === 'preparing' ? 'preparing' : 'running'
@@ -374,6 +409,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
     titleKey,
     summary,
     filePath,
+    fileTargets,
     bodyRaw,
     output,
     errorSummary,

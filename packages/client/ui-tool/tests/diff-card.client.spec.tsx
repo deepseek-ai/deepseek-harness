@@ -268,16 +268,54 @@ describe('FileMutationRow diff card', () => {
   it('summarizes a complete patch by the files its headers name', () => {
     const patchRow = (input: string) => toolRowModel('apply_patch', settled({ call: { name: 'apply_patch', argsRaw: JSON.stringify({ input }) } }), '/w/app')
     expect(patchRow('*** Begin Patch\n*** Update File: src/a.ts\n@@\n-old\n+new\n*** End Patch')).toMatchObject({
-      summary: 'src/a.ts', filePath: 'src/a.ts',
+      summary: 'src/a.ts', filePath: 'src/a.ts', fileTargets: undefined,
     })
     expect(patchRow([
       '*** Begin Patch', '*** Add File: /w/app/docs/new.md', '+hello', '*** Update File: src/a.ts', '*** Move to: src/b.ts',
       '@@', ' *** Delete File: context.txt', '-old', '+new', '*** Delete File: old.txt  ', '*** End Patch',
-    ].join('\n'))).toMatchObject({ summary: 'docs/new.md, src/a.ts → src/b.ts, old.txt', filePath: undefined })
-    expect(patchRow('*** Begin Patch\n*** Delete File: old.txt\n*** End Patch')).toMatchObject({ summary: 'old.txt', filePath: undefined })
-    expect(patchRow('*** Begin Patch\n*** Update File: a.ts\n*** Move to: b.ts\n*** End Patch')).toMatchObject({ summary: 'a.ts → b.ts', filePath: undefined })
+    ].join('\n'))).toMatchObject({ summary: 'docs/new.md, src/a.ts → src/b.ts, old.txt', filePath: undefined, fileTargets: [
+      { label: 'docs/new.md', filePath: '/w/app/docs/new.md' },
+      { from: 'src/a.ts', label: 'src/b.ts', filePath: 'src/b.ts' },
+      { label: 'old.txt', filePath: undefined },
+    ] })
+    expect(patchRow('*** Begin Patch\n*** Delete File: old.txt\n*** End Patch')).toMatchObject({ summary: 'old.txt', filePath: undefined, fileTargets: undefined })
+    expect(patchRow('*** Begin Patch\n*** Update File: a.ts\n*** Move to: b.ts\n*** End Patch')).toMatchObject({
+      summary: 'a.ts → b.ts', filePath: undefined, fileTargets: [{ from: 'a.ts', label: 'b.ts', filePath: 'b.ts' }],
+    })
     expect(patchRow('*** Begin Patch\n*** Add File: \n*** Add File: a.ts\n*** Move to: b.ts\n*** Update File: c.ts\n*** Move to: \n*** End Patch'))
       .toMatchObject({ summary: 'a.ts, c.ts', filePath: undefined })
+  })
+
+  it('keeps only absolute patch paths openable before a successful result', () => {
+    const argsRaw = JSON.stringify({ input: '*** Begin Patch\n*** Add File: /w/app/a.md\n+a\n*** Update File: b.ts\n*** End Patch' })
+    const expected = [{ label: 'a.md', filePath: '/w/app/a.md' }, { label: 'b.ts', filePath: undefined }]
+    expect(toolRowModel('apply_patch', running({ name: 'apply_patch', argsRaw }), '/w/app').fileTargets).toEqual(expected)
+    expect(toolRowModel('apply_patch', settled({ call: { name: 'apply_patch', argsRaw }, isError: true }), '/w/app').fileTargets).toEqual(expected)
+  })
+
+  it('opens each file a multi-file patch names without toggling the row', () => {
+    const open = vi.fn()
+    const openFile = vi.fn()
+    const input = '*** Begin Patch\n*** Add File: docs/new.md\n+hi\n*** Update File: a.ts\n*** Move to: b.ts\n*** Delete File: old.txt\n*** End Patch'
+    const block = settled({ call: { name: 'apply_patch', argsRaw: JSON.stringify({ input }) } })
+    const view = render(<FileMutationRow {...{ ...rowProps(block, 'apply_patch'), openFile, useContextMenu: contextMenuHook(open) }} />)
+    expect([...view.container.querySelectorAll('button')].map(button => button.textContent)).toEqual(['docs/new.md', 'b.ts'])
+    expect(view.container.textContent).toContain('docs/new.md, a.ts → b.ts, old.txt')
+    fireEvent.click(view.getByRole('button', { name: 'b.ts' }))
+    fireEvent.keyDown(view.getByRole('button', { name: 'docs/new.md' }), { key: 'Enter' })
+    fireEvent.click(view.getByRole('button', { name: 'docs/new.md' }))
+    expect(openFile.mock.calls).toEqual([['b.ts'], ['docs/new.md']])
+    expect(view.container.querySelector('[data-diff]')).toBeNull()
+    fireEvent.contextMenu(view.getByRole('button', { name: 'docs/new.md' }))
+    expect(open).toHaveBeenCalledWith({ kind: 'file', value: { sessionId: SID, path: 'docs/new.md' } }, expect.anything())
+  })
+
+  it('renders a failed multi-file patch as plain text', () => {
+    const input = '*** Begin Patch\n*** Update File: a.ts\n*** Update File: b.ts\n*** End Patch'
+    const block = settled({ call: { name: 'apply_patch', argsRaw: JSON.stringify({ input }) }, meta: { stopped: true, diffs: DIFFS } })
+    const view = render(<FileMutationRow {...rowProps(block, 'apply_patch')} />)
+    expect(view.queryByRole('button', { name: 'a.ts' })).toBeNull()
+    expect(view.queryByRole('button', { name: 'b.ts' })).toBeNull()
   })
 
   it('collapses to the summary row; expanding reveals the applied diff card', () => {

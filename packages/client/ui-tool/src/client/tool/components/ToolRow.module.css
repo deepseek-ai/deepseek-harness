@@ -115,6 +115,36 @@
   cursor: pointer;
 }
 
+/* Multi-file patch summary: one ellipsized line of plain separators and per-file
+   links. Shrink-to-fit like .fileLink, so the row's empty remainder stays the
+   expand/collapse toggle. */
+.fileLinks {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+}
+
+/* One file inside .fileLinks: .fileLink's affordance without its own box, so the
+   line keeps flowing and the parent's ellipsis applies. */
+.fileTargetLink {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline dotted;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 /* Error row's collapsed summary: the failure's first line in the error color. */
 .errorSummary {
   color: var(--dsw-alias-state-error-primary);
