@@ -137,7 +137,7 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
   buildViewNode: (context) => {
     if (context.state === undefined) return null
     if (context.start?.event.type === 'user/message'
-      && context.state.source.kind === 'retry' && context.state.content.length === 0) return null
+      && context.start.event.data.source.kind === 'retry' && context.start.event.data.content.length === 0) return null
     const waking = context.state.kind === 'context'
       && context.start?.event.type === 'user/message'
       && context.state.waking === true

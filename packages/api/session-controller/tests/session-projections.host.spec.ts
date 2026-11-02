@@ -416,14 +416,15 @@ describe('session.history projections block', () => {
 
     seedMessages(session, 1)
     let changed = await iterator.next()
-    while (!changed.done && changed.value.type === 'projection' && changed.value.key !== 'sessionListMetadata') {
-      expect(changed.value.key).not.toBe('test/internal-count')
+    while (!changed.done && changed.value.type === 'projection'
+      && !changed.value.changes.some(change => change.key === 'sessionListMetadata')) {
+      expect(changed.value.changes.map(change => change.key)).not.toContain('test/internal-count')
       changed = await iterator.next()
     }
-    expect(changed).toMatchObject({
-      done: false,
-      value: { type: 'projection', changes: [{ key: 'sessionListMetadata' }] },
-    })
+    if (changed.done || changed.value.type !== 'projection') throw new Error('control stream ended before its projection')
+    const keys = changed.value.changes.map(change => change.key)
+    expect(keys).toContain('sessionListMetadata')
+    expect(keys).not.toContain('test/internal-count')
     abort.abort()
     await iterator.return?.()
 
@@ -783,6 +784,7 @@ describe('Session control projection frames', () => {
       {
         type: 'projection', sessionId: session.id, seq: 0, changes: [
           { key: 'test/last-user', val: { text: 'm0' } },
+          { key: 'conversationContinuation', val: null },
           { key: 'sessionListMetadata', val: { blank: true, lastPromptAt: 100 } },
         ],
       },
@@ -823,6 +825,7 @@ describe('Session control projection frames', () => {
       value: {
         type: 'projection', seq: 0, changes: [
           { key: 'test/last-user', val: { text: 'm0' } },
+          { key: 'conversationContinuation', val: null },
           { key: 'sessionListMetadata', val: { blank: true, lastPromptAt: 100 } },
         ],
       },
