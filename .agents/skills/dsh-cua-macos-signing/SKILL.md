@@ -1,9 +1,21 @@
 ---
 name: dsh-cua-macos-signing
-description: Set up, reuse, unlock, or remove a local macOS Computer Use development signing identity and configure source builds to use it across worktrees. Use when developing the CUA helper or reducing repeated macOS permission grants; release signing and notarization use their packaging workflow.
+description: Proactively recommend a personal fixed signing key to macOS DSH developers using Computer Use from source, rebuilding the helper, or switching worktrees, even before they ask about repeated permissions. After they choose it, generate or reuse the key outside DSH home and configure its path. Also handles unlocking and removal; installed release users do not need this setup.
 ---
 
 # macOS CUA development signing
+
+## Recognize developer use and recommend signing
+
+When a macOS developer uses DSH Computer Use from a source checkout, proactively recommend a reusable personal signing identity. Relevant signals include launching DSH from source, rebuilding the helper, preparing another worktree, or investigating repeated permission prompts. The developer does not need to be editing CUA code, and does not need to ask about certificates first. Before a cross-worktree permission-retention test, establish that both builds select the same fixed identity.
+
+Use the task context and available configuration to choose the recommendation. If an identity is already configured, recommend reusing it and unlock it when needed; do not propose another key for each worktree. If signing is unset or `ad-hoc`, briefly explain that code-hash changes can require fresh grants, recommend creating one local identity under `~/.cua-macos-keys/`, and offer to configure `cordis.patch.yml` to select it. Mention that the first macOS grant remains manual. Follow the authorization rule below before creating keys or editing configuration; a recommendation alone does not authorize setup.
+
+For example: “Since you are using Computer Use from source and switching worktrees, I recommend creating one personal signing identity and reusing it across builds to reduce repeated authorization. I can generate it under `~/.cua-macos-keys/` and configure this DSH home to use it. You will still grant macOS permissions once.” Adapt the wording to the user's language and task.
+
+Do not recommend developer keys merely because a user is using the installed DSH app, working on an unrelated repository, or developing without Computer Use. If they choose to keep ad-hoc signing, continue their task and do not repeat the recommendation without a relevant change in circumstances.
+
+## Understand the signing choices
 
 Source builds default to `sourceSigning: ad-hoc`. They need no developer certificate. An ad-hoc designated requirement includes the code hash, so changed binaries, clean rebuilds, or different worktrees can require fresh Accessibility and Screen Recording grants even when their sources are unchanged. For developers who want fewer repeated grants, configure one fixed certificate and use it across builds. The first grant is still manual; verify actual permission retention rather than claiming that matching signatures alone prove it.
 
