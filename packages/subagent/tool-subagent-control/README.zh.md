@@ -57,7 +57,7 @@ kind: "package-reference"
 
 ### list_agents
 
-按稳定前序列出根与所有可达的可继续后代，包括调用方。每行包含 `name`、`status`；根和可继续后代还包含 `description`。根的名称为 `lead`，描述为 `root agent`；后代的名称是其相对根的完整路径，描述是其创建标签。目录条目没有名称的子级及其下所有后代以 Session id 列出。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生状态为 `unsupported`、`corrupt` 或 `unavailable` 的行。普通 Session 分叉形成独立的 subagent 树。
+按稳定前序列出根与所有可达的可继续后代，包括调用方。每行包含 `name`、`status`；根和可继续后代还包含 `description`。根的名称为 `lead`，描述为 `root agent`；后代的名称是其相对根的完整路径，描述是其创建标签。目录条目没有名称的子级及其下所有后代以 Session id 列出。在线状态为 `running` 或 `inactive`。外部条目被省略，且不读取其子 Session；可读的一次性子级仍作为遍历节点。未知模式与不可读目录产生状态为 `unsupported`、`corrupt` 或 `unavailable` 的行；该状态表示这一行自身的后代目录无法读取，该行本身仍可寻址。普通 Session 分叉形成独立的 subagent 树。
 
 -----
 

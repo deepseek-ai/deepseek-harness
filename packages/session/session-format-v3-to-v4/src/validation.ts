@@ -109,6 +109,7 @@ export function validateDeliveryAccepted(event: SessionFormatEvent, currentVersi
  */
 export function assertReleasedV4Relationships(artifact: SessionFormatArtifact, knownEventTypes: ReadonlySet<string>): void {
   const ids = new Set<string>()
+  const names = new Set<string>()
   for (const event of artifact.events) {
     if (!knownEventTypes.has(event.type)) continue
     assertV4DeveloperData(event)
@@ -124,6 +125,11 @@ export function assertReleasedV4Relationships(artifact: SessionFormatArtifact, k
       const id = fact['childId'] as string
       if (ids.has(id)) throw new SessionFormatError(`duplicate catalog child ${id}`)
       ids.add(id)
+      // Sibling names are unique by construction, so a log that repeats one makes name lookup ambiguous.
+      if (fact['name'] === undefined) continue
+      const name = fact['name'] as string
+      if (names.has(name)) throw new SessionFormatError(`duplicate catalog child name ${name}`)
+      names.add(name)
     }
   }
   assertV4LifecycleRelationships(artifact, knownEventTypes)

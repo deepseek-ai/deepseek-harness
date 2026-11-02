@@ -59,7 +59,7 @@ export function parentAgentPath(path: string): string {
 /** A sibling name held from admission until the creator's catalog commits or startup fails. */
 export interface SiblingNameReservation {
   readonly name: string
-  /** Return the name to the pool; the creating operation calls this exactly once. */
+  /** Return the name to the pool; repeated calls are harmless. */
   release(): void
 }
 
@@ -105,7 +105,8 @@ export class SiblingNameReservations {
       name,
       release: () => {
         pending.delete(name)
-        if (pending.size === 0) this.pending.delete(parent)
+        // A later reservation for the same creator replaces the set; a stale release must not drop it.
+        if (pending.size === 0 && this.pending.get(parent) === pending) this.pending.delete(parent)
       },
     }
   }

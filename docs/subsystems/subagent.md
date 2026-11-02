@@ -181,7 +181,7 @@ interface ContinuableCreateSpec {
 
 ## Agent names
 
-Session ids remain the only execution identity for routing, authorization, persistence, and task ownership; names are model-facing references. `SubagentActivation.name` is the child's full name, and `listDescendants()` rows carry it as `path` when every link from the root is named. `namesOf(agent)` reports the names of a live member and its direct creator; the root is `lead`. `resolveName(caller, name, signal)` returns the Session id for `lead` or a full name and returns any other text unchanged as a Session id. Callers authorize the result; resolution grants no authority. The [package README](../../packages/subagent/subagent/README.md#agent-names) defines the name rule, defaults, failures, and catalog persistence.
+Session ids remain the only execution identity for routing, authorization, persistence, and task ownership; names are model-facing references. `SubagentActivation.name` is the child's full name, and `listDescendants()` rows carry it as `path` when every link from the root is named. `namesOf(agent)` reports the names of a live member and its direct creator; the root is `lead`. `resolveName(caller, name, signal)` returns the Session id for `lead` or a full name; any other text that names no member is returned unchanged as a Session id, while a slash-separated address that names no member fails with `AGENT_NAME_NOT_FOUND`. Callers authorize the result; resolution grants no authority. The [package README](../../packages/subagent/subagent/README.md#agent-names) defines the name rule, defaults, failures, and catalog persistence.
 
 ```ts type-equiv
 /** Model-facing names of one live tree member and its direct creator. */
@@ -482,14 +482,18 @@ namesOf(agent: Agent): SubagentMemberNames
 
 /**
  * Resolve a model-supplied agent reference within the caller's tree. `lead`
- * selects the root; a slash-separated path is looked up through the catalogs
- * along it; any other text is returned as a Session id. Resolution grants no
- * authority: messaging, interruption, and assignment authorize the result.
+ * selects the root and a slash-separated path is looked up through the
+ * catalogs along it. Any other text that is not a name in the tree is
+ * returned as a Session id, because a single token can be one; a
+ * slash-separated address never is, so an unmatched path fails instead of
+ * reaching a member lookup as an unknown id. Resolution grants no authority:
+ * messaging, interruption, and assignment authorize the result.
  * @param caller - exact live Agent whose tree root anchors the lookup.
  * @param name - `lead`, a full name from the root, or a Session id.
  * @param signal - cancellation forwarded to each catalog read.
  * @returns the referenced Session id.
- * @throws when the caller's root is unavailable or a catalog along the path cannot be read.
+ * @throws {@link SubagentError} `AGENT_NAME_NOT_FOUND` when a path names no member;
+ *   when the caller's root is unavailable; or when a catalog along the path cannot be read.
  */
 async resolveName(caller: Agent, name: string, signal: AbortSignal): Promise<SessionId>
 

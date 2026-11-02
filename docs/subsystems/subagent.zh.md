@@ -181,7 +181,7 @@ interface ContinuableCreateSpec {
 
 ## Agent 名称
 
-Session id 仍是路由、授权、持久化和任务归属使用的唯一执行身份；名称是面向模型的引用。`SubagentActivation.name` 是子级的完整名称；当从根开始的每一级都有名称时，`listDescendants()` 的行以 `path` 携带该名称。`namesOf(agent)` 报告在线成员及其直接创建者的名称；根的名称为 `lead`。`resolveName(caller, name, signal)` 为 `lead` 或完整名称返回对应 Session id，其他文本原样作为 Session id 返回。调用方授权解析结果；解析本身不授予权限。[包 README](../../packages/subagent/subagent/README.zh.md#agent-names) 定义名称规则、默认值、失败和目录持久化。
+Session id 仍是路由、授权、持久化和任务归属使用的唯一执行身份；名称是面向模型的引用。`SubagentActivation.name` 是子级的完整名称；当从根开始的每一级都有名称时，`listDescendants()` 的行以 `path` 携带该名称。`namesOf(agent)` 报告在线成员及其直接创建者的名称；根的名称为 `lead`。`resolveName(caller, name, signal)` 为 `lead` 或完整名称返回对应 Session id；树中不存在的其他文本原样作为 Session id 返回，而指向无成员的斜杠路径以 `AGENT_NAME_NOT_FOUND` 失败。调用方授权解析结果；解析本身不授予权限。[包 README](../../packages/subagent/subagent/README.zh.md#agent-names) 定义名称规则、默认值、失败和目录持久化。
 
 ```ts type-equiv
 /** Model-facing names of one live tree member and its direct creator. */
@@ -484,14 +484,18 @@ namesOf(agent: Agent): SubagentMemberNames
 
 /**
  * Resolve a model-supplied agent reference within the caller's tree. `lead`
- * selects the root; a slash-separated path is looked up through the catalogs
- * along it; any other text is returned as a Session id. Resolution grants no
- * authority: messaging, interruption, and assignment authorize the result.
+ * selects the root and a slash-separated path is looked up through the
+ * catalogs along it. Any other text that is not a name in the tree is
+ * returned as a Session id, because a single token can be one; a
+ * slash-separated address never is, so an unmatched path fails instead of
+ * reaching a member lookup as an unknown id. Resolution grants no authority:
+ * messaging, interruption, and assignment authorize the result.
  * @param caller - exact live Agent whose tree root anchors the lookup.
  * @param name - `lead`, a full name from the root, or a Session id.
  * @param signal - cancellation forwarded to each catalog read.
  * @returns the referenced Session id.
- * @throws when the caller's root is unavailable or a catalog along the path cannot be read.
+ * @throws {@link SubagentError} `AGENT_NAME_NOT_FOUND` when a path names no member;
+ *   when the caller's root is unavailable; or when a catalog along the path cannot be read.
  */
 async resolveName(caller: Agent, name: string, signal: AbortSignal): Promise<SessionId>
 

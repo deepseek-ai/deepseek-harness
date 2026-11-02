@@ -67,7 +67,7 @@ kind: "package-reference"
 
 每个进入目录的子级都有一个名称，在其创建者的子级之间唯一。传入 `name` 可选择名称：1–32 个小写字母、数字或连字符，以字母开头，且不能是 `lead`。省略时，运行时在创建者目录中的名称以及仍在启动的创建所持有的名称之外，选择第一个空闲的 `agent-N`（`agent-1`、`agent-2`……）。请求同级已持有的名称会以 `DUPLICATE_AGENT_NAME` 拒绝，不符合规则的名称会以 `INVALID_AGENT_NAME` 拒绝；两者都在启动前拒绝，运行时绝不替换为其他名称。创建者在准入时同步预留名称，并在目录条目提交或启动失败时释放预留。调用方投递的外部执行不进入目录：请求名称时以 `UNSUPPORTED_CAPABILITY` 拒绝，其 activation 名称为其 Session id。
 
-根的名称始终为 `lead`。后代的完整名称是从根开始、以斜杠分隔的名称路径，不带 `lead/` 前缀，例如 `reviewer` 或 `reviewer/checker`；同级唯一的各段使完整名称在整棵树中唯一。`SubagentActivation.name` 和 `listDescendants()` 行的 `path` 字段携带完整名称。目录条目没有名称的子级及其下所有后代使用 Session id 作为名称。`namesOf(agent)` 报告在线成员及其创建者的名称。`resolveName(caller, name, signal)` 为 `lead` 或完整名称返回 Session id，只读取路径上的目录；其他文本原样作为 Session id 返回。解析不授予权限：消息、中断和任务分配会对解析出的 Session id 进行授权。
+根的名称始终为 `lead`。后代的完整名称是从根开始、以斜杠分隔的名称路径，不带 `lead/` 前缀，例如 `reviewer` 或 `reviewer/checker`；同级唯一的各段使完整名称在整棵树中唯一。`SubagentActivation.name` 和 `listDescendants()` 行的 `path` 字段携带完整名称。目录条目没有名称的子级及其下所有后代使用 Session id 作为名称。`namesOf(agent)` 报告在线成员及其创建者的名称。`resolveName(caller, name, signal)` 为 `lead` 或完整名称返回 Session id，只读取路径上的目录。树中不存在的其他文本原样作为 Session id 返回，因为单个词元可能就是 Session id；斜杠路径不可能是 Session id，因此指向无成员的路径以 `AGENT_NAME_NOT_FOUND` 失败。解析不授予权限：消息、中断和任务分配会对解析出的 Session id 进行授权。
 
 ### 子级 preset
 

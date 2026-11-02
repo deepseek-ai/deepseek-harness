@@ -34,7 +34,7 @@ Session id 仍是路由、授权、持久化、任务归属和导航使用的唯
 
 ## Consequences
 
-第 3 版目录载荷是同格式增量：`SESSION_FORMAT_VERSION` 不变，当前读取器接受第 0 至第 3 版，早于名称机制的发布会明确拒绝第 3 版。`subagentCatalog` 投影状态版本为 7，因此缓存会从 Session 事件重建。[持久化确认记录](../../../../docs/persistence-changes/2026-11-02-subagent-catalog-names.zh.md)记录了该类型变更。
+第 3 版目录载荷是同格式增量：`SESSION_FORMAT_VERSION` 不变，当前读取器接受第 0 至第 3 版，早于名称机制的发布会明确拒绝第 3 版。`subagentCatalog` 投影状态版本为 7，因此缓存会从 Session 事件重建。原生准入会拒绝自身目录事实中重复的同级名称，因此会让名称查找产生歧义的日志在解析任何成员之前就失败。[持久化确认记录](../../../../docs/persistence-changes/2026-11-02-subagent-catalog-names.zh.md)记录了该类型变更。
 
 每个委派工具的 schema 增加一个可选 `name` 参数，`send_message` 和 `interrupt_agent` 把 `agent_id` 改名为 `agent`。这些 schema 变更会在升级后使缓存的请求前缀失效一次。对浅层树而言，身份运行时上下文、回执、结算通知、agent 消息和列表行都变短，完整名称则随嵌套深度变长。`list_agents` 不再携带父级 id 和深度，因为完整名称已包含这两项信息。
 

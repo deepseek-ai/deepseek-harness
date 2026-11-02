@@ -402,6 +402,20 @@ it('records a parent-delivered external run under its requested name', async () 
   await activation.dispose()
 })
 
+it('resolves a named external run but not a path below it', async () => {
+  const backend = execution()
+  const fixture = await setup(async () => backend.run)
+  const activation = await fixture.start('parent', 'auditor')
+  const signal = new AbortController().signal
+  expect(await fixture.ctx.subagents.resolveName(fixture.parent, 'auditor', signal)).toBe(activation.childId)
+  // The external run owns no local Session, so a further segment cannot name a descendant.
+  await expect(fixture.ctx.subagents.resolveName(fixture.parent, 'auditor/deeper', signal))
+    .rejects.toMatchObject({ code: 'AGENT_NAME_NOT_FOUND' })
+  backend.result.resolve(completed)
+  backend.cleanup.resolve(undefined)
+  await activation.dispose()
+})
+
 it('rejects a name for a caller-delivered external run that never enters the catalog', async () => {
   const start = vi.fn<(request: SubagentStartRequest) => Promise<SubagentRun>>()
   const fixture = await setup(start)

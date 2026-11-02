@@ -2132,7 +2132,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `list_agents`
 
-列出整棵 subagent 树：根代理和所有可达的可继续后代，包括调用方自身。行包含名称、描述和状态。后代的名称是其相对根的路径，例如 reviewer/checker。可以向树中列为 running 或 inactive 的任意其他代理发送消息。running 表示正在工作；inactive 表示当前没有轮次在执行，不表示任务完成、成功或失败。自身仍在线时，直属子代理结束会收到通知，无需反复查询其状态。使用 send_message 继续对话。
+列出整棵 subagent 树：根代理和所有可达的可继续后代，包括调用方自身。行包含名称、描述和状态。后代的名称是其相对根的路径，例如 reviewer/checker。可以向树中任意其他代理发送消息。running 表示正在工作；inactive 表示当前没有轮次在执行，不表示任务完成、成功或失败。corrupt、unsupported 或 unavailable 表示该行自身的后代目录无法读取，该行本身仍是可发送消息的成员。自身仍在线时，直属子代理结束会收到通知，无需反复查询其状态。使用 send_message 继续对话。
 
 ```json
 {

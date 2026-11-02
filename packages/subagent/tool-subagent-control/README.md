@@ -57,7 +57,7 @@ Waits for the exact caller’s next-step inbox. Pending input returns immediatel
 
 ### list_agents
 
-Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Each row carries a `name`, a `status`, and, for the root and continuable descendants, a `description`. The root is `lead` with the description `root agent`; a descendant's name is its full path from the root and its description is its creation label. A child whose catalog entry has no name, and every descendant below it, is listed by Session id. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce rows whose status is `unsupported`, `corrupt`, or `unavailable`. Ordinary Session forks lead separate subagent trees.
+Lists the root and all reachable continuable descendants, including the caller, in stable pre-order. Each row carries a `name`, a `status`, and, for the root and continuable descendants, a `description`. The root is `lead` with the description `root agent`; a descendant's name is its full path from the root and its description is its creation label. A child whose catalog entry has no name, and every descendant below it, is listed by Session id. Live status is `running` or `inactive`. External entries are omitted without reading child Sessions; readable one-shot children remain traversal nodes. Unknown modes and unreadable catalogs produce rows whose status is `unsupported`, `corrupt`, or `unavailable`; the status reports that the row's own descendants could not be read, while the row itself stays an addressable member. Ordinary Session forks lead separate subagent trees.
 
 -----
 

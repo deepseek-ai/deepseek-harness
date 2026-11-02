@@ -34,7 +34,7 @@ This supersedes the rejection of "unique names as sibling-routing opt-in" and th
 
 ## Consequences
 
-Catalog payload version 3 is a same-format addition: `SESSION_FORMAT_VERSION` is unchanged, current readers accept versions 0 through 3, and releases that predate names reject version 3 loudly. The `subagentCatalog` projection state version is 7, so caches rebuild from Session events. The [persistence acknowledgement](../../../../docs/persistence-changes/2026-11-02-subagent-catalog-names.md) records the type change.
+Catalog payload version 3 is a same-format addition: `SESSION_FORMAT_VERSION` is unchanged, current readers accept versions 0 through 3, and releases that predate names reject version 3 loudly. The `subagentCatalog` projection state version is 7, so caches rebuild from Session events. Native admission rejects a repeated sibling name in own catalog facts, so a log that could make name lookup ambiguous fails before any member is resolved. The [persistence acknowledgement](../../../../docs/persistence-changes/2026-11-02-subagent-catalog-names.md) records the type change.
 
 Tool schemas grow by one optional `name` parameter on each delegation tool, and `send_message` and `interrupt_agent` rename `agent_id` to `agent`. These schema changes invalidate cached request prefixes once after upgrading. Identity runtime context, receipts, settlement notices, agent messages, and listing rows become shorter for shallow trees, while full names lengthen with nesting depth. `list_agents` drops parent ids and depth because a full name encodes both.
 

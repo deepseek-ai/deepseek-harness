@@ -149,10 +149,12 @@ export async function resolveAgentPath(
   const segments = name.split('/')
   if (!segments.every(isAgentName)) return undefined
   let current = rootSessionId
-  for (const segment of segments) {
+  for (const [index, segment] of segments.entries()) {
     const children = await listChildren(ctx, current, signal)
     const child = children.find(entry => 'name' in entry && entry.name === segment)
     if (child === undefined) return undefined
+    // External and unknown children own no local Session, so they are the last segment too.
+    if (index < segments.length - 1 && child.mode !== 'continuable' && child.mode !== 'one-shot') return undefined
     current = child.id
   }
   return current

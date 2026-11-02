@@ -426,9 +426,12 @@ describe('agent names', () => {
     expect(ctx.subagents.namesOf(parent)).toEqual({ self: 'lead' })
     expect(ctx.subagents.namesOf(branchAgent)).toEqual({ self: 'reviewer', parent: 'lead' })
     expect(ctx.subagents.namesOf(leafAgent)).toEqual({ self: 'reviewer/checker', parent: 'reviewer' })
-    const resolved = await Promise.all(['lead', 'reviewer', 'reviewer/checker', 'reviewer/missing', 'missing', 'Not a name', leaf.childId]
-      .map(name => ctx.subagents.resolveName(leafAgent, name, signal)))
-    expect(resolved).toEqual([parent.id, branch.childId, leaf.childId, 'reviewer/missing', 'missing', 'Not a name', leaf.childId])
+    const resolve = (name: string) => ctx.subagents.resolveName(leafAgent, name, signal)
+    expect(await Promise.all(['lead', 'reviewer', 'reviewer/checker', 'missing', 'Not a name', leaf.childId].map(resolve)))
+      .toEqual([parent.id, branch.childId, leaf.childId, 'missing', 'Not a name', leaf.childId])
+    // A slash-separated address is never a Session id, so an unmatched path fails instead of reaching member lookup.
+    await expect(resolve('reviewer/missing')).rejects.toMatchObject({ code: 'AGENT_NAME_NOT_FOUND' })
+    await expect(resolve('reviewer/checker/deeper')).rejects.toMatchObject({ code: 'AGENT_NAME_NOT_FOUND' })
     expect((await ctx.subagents.listDescendants(parent.id, signal)).map(entry => entry.path))
       .toEqual(['reviewer', 'reviewer/checker'])
     ctx.subagents.interrupt(branch.childId, { kind: 'ancestor', agent: parent })

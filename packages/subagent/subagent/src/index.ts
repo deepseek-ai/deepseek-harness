@@ -79,7 +79,7 @@ export type {} from './projection.ts'
 export * from './out-of-process.ts'
 export { AssistantOutputFold, finalAssistantOutput } from './assistant-output.ts'
 export { SubagentRunId } from './types.ts'
-export { ROOT_AGENT_NAME, isAgentName } from './names.ts'
+export { ROOT_AGENT_NAME } from './names.ts'
 export type {
   ContinuableCreateRequest,
   ContinuableCreateSpec,
@@ -315,19 +315,31 @@ export class SubagentRuntime extends TypertRemoteService {
 
   /**
    * Resolve a model-supplied agent reference within the caller's tree. `lead`
-   * selects the root; a slash-separated path is looked up through the catalogs
-   * along it; any other text is returned as a Session id. Resolution grants no
-   * authority: messaging, interruption, and assignment authorize the result.
+   * selects the root and a slash-separated path is looked up through the
+   * catalogs along it. Any other text that is not a name in the tree is
+   * returned as a Session id, because a single token can be one; a
+   * slash-separated address never is, so an unmatched path fails instead of
+   * reaching a member lookup as an unknown id. Resolution grants no authority:
+   * messaging, interruption, and assignment authorize the result.
    * @param caller - exact live Agent whose tree root anchors the lookup.
    * @param name - `lead`, a full name from the root, or a Session id.
    * @param signal - cancellation forwarded to each catalog read.
    * @returns the referenced Session id.
-   * @throws when the caller's root is unavailable or a catalog along the path cannot be read.
+   * @throws {@link SubagentError} `AGENT_NAME_NOT_FOUND` when a path names no member;
+   *   when the caller's root is unavailable; or when a catalog along the path cannot be read.
    */
   async resolveName(caller: Agent, name: string, signal: AbortSignal): Promise<SessionId> {
     const root = this.rootOf(caller)
     if (name === ROOT_AGENT_NAME) return root.id
-    return await resolveAgentPath(this.ctx, root.id, name, signal) ?? brandString<SessionId>(name)
+    const resolved = await resolveAgentPath(this.ctx, root.id, name, signal)
+    if (resolved !== undefined) return resolved
+    if (name.includes('/')) {
+      throw new SubagentError(
+        `agent name ${JSON.stringify(name)} was not found in this subagent tree; use list_agents to see the names`,
+        'AGENT_NAME_NOT_FOUND',
+      )
+    }
+    return brandString<SessionId>(name)
   }
 
   /**
