@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.4/reasoning-body-props/guide.md
+/:
+  en: ec5a417eaedb6661
+  zh: b5adde6bf6c32fd0
+/reasoning-body-slot-text-fields:
+  en: ea09fc75b8c4467e
+  zh: 64d548cbdb42792a
+/reasoning-body-slot-text-fields/change:
+  en: ff40c45f886d47f5
+  zh: 18d7bb5456b048e6
+/reasoning-body-slot-text-fields/migration:
+  en: 49cd6281b4aef73a
+  zh: 6bdf66c3f82bfa8b

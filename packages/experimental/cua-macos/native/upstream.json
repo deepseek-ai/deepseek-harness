@@ -44,6 +44,7 @@
     "Sources/CuaNative/ClipboardPaste.swift",
     "Sources/CuaNative/Main.swift",
     "Sources/CuaNative/NativeProtocol.generated.swift",
+    "Sources/CuaNative/PermissionGuide.swift",
     "Sources/CuaNative/Protocol.swift",
     "Sources/CuaNative/RequestAdmission.swift",
     "Sources/CuaNative/RequestCoordinator.swift",

@@ -258,9 +258,26 @@ describe('ForgeTab local changes', () => {
   })
 
   it.each([
+    { label: 'a project with an open PR', linked: false, draft: false },
+    { label: 'a project with a draft PR', linked: false, draft: true },
+    { label: 'a linked worktree with an open PR', linked: true, draft: false },
+    { label: 'a linked worktree with a draft PR', linked: true, draft: true },
+  ])('keeps local and PR changes independent in $label', ({ linked, draft }) => {
+    const request = entry(7, snapshot(7, { headBranch: 'main', draft }))
+    const b = tab(ready({ local, changeRequests: [request] }, { linked }))
+    expect(b.view.container.querySelector('[data-forge-local]')).not.toBeNull()
+    expect(b.view.container.querySelector('[data-forge-change]')).not.toBeNull()
+    expect(b.view.queryByRole('button', { name: en['changes.local.create'] })).toBeNull()
+
+    fireEvent.click(b.view.getByRole('button', { name: 'View the changes of this Session: 1 files, 3 lines added, 1 lines deleted' }))
+    expect(b.openResource).toHaveBeenLastCalledWith(LOCAL_ADDRESS, undefined)
+    fireEvent.click(b.view.getByRole('button', { name: 'View the changes of #7: 12 lines added, 3 lines deleted' }))
+    expect(b.openResource).toHaveBeenLastCalledWith(changesAddress({ sessionId: SESSION, source: { kind: 'change', url: request.url } }), undefined)
+  })
+
+  it.each([
     ['before the branch scope is read', ready()],
     ['while the branch scope changes nothing', ready({ local: { base: 'origin/main', files: [] } })],
-    ['once an open change request carries the checked-out branch', ready({ local, changeRequests: [entry(7, snapshot(7, { headBranch: 'main' }))] })],
   ])('hides the card %s', (_label, state) => {
     const b = tab(state)
     expect(b.view.container.querySelector('[data-forge-local]')).toBeNull()

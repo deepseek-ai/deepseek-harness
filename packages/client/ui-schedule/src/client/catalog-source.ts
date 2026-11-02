@@ -81,11 +81,14 @@ export interface CatalogInjected<Item extends { readonly id: ScheduleId } = Sche
  * Mutations retain visible rows until an authoritative list read succeeds, and
  * each deletion resolves with its own outcome for the caller to report.
  * @param deps - Remote calls and invalidation subscriptions.
- * @returns observable catalog and component callbacks.
+ * @returns observable catalog, component callbacks, and acknowledged-creation retention.
  */
 export function createCatalogSource<Item extends { readonly id: ScheduleId } = ScheduleRecord>(
   deps: CatalogDependencies<Item>,
-): CatalogInjected<Item> {
+): CatalogInjected<Item> & {
+  /** Retain a Host-confirmed creation until the next successful catalog read. */
+  readonly retainCreated: (record: Item) => void
+} {
   let snapshot: CatalogSnapshot<Item> = { records: [], status: 'loading', deleting: [], settled: false, readRequest: 0, readSettled: 0 }
   const listeners = new Set<() => void>()
   let disposers: readonly (() => void)[] = []
@@ -187,5 +190,10 @@ export function createCatalogSource<Item extends { readonly id: ScheduleId } = S
     },
     onDelete: remove,
     onRetry: (since = 0) => refresh(false, since),
+    retainCreated: (record) => {
+      // A read started before creation cannot replace its acknowledged result.
+      epoch++
+      if (!snapshot.records.some(item => item.id === record.id)) publish({ ...snapshot, records: [...snapshot.records, record] })
+    },
   }
 }

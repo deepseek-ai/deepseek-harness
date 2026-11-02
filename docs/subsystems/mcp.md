@@ -23,7 +23,7 @@ Model Context Protocol (MCP) connects the model to tools supplied by external se
 
 MCP servers are opt-in. Configure one `@deepseek-ai/dsh-mcp-client` entry per server in the intended Cordis scope. Every shipped profile supplies the [tool registry](tools.md) and mounts the shared resource service once; users configure only client entries. Callers with no visible configured server receive no MCP prompt text or tools in native or PTC mode.
 
-The Web and Desktop profiles also mount the [MCP server manager](../../packages/mcp/mcp-manager/README.md) once. It runs servers configured through Settings and servers that installed plugins register for their own lifetime, and serves their status, restart, and probe operations to Remote clients. A plugin that registers an OAuth server shows its account on the **Plugins** page through [`ui-mcp-account`](../../packages/client/ui-mcp-account/README.md).
+The Web and Desktop profiles also mount the [MCP server manager](../../packages/mcp/mcp-manager/README.md) once. It runs servers configured through Settings and servers that installed plugins register for their own lifetime, and serves their status, restart, and probe operations to Remote clients. A plugin that registers an OAuth server registers its account with `ctx.mcpAccounts` from [`ui-mcp-account`](../../packages/client/ui-mcp-account/README.md) to show it on the **Plugins** page.
 
 | Choice | Configuration owner |
 |---|---|

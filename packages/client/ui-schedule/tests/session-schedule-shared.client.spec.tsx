@@ -2,7 +2,7 @@
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ScheduleCatalogEntry, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
+import type { ScheduleId, ScheduleCatalogEntry as ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-ui-renderer/src/client/bind.ts'
 import type { CatalogSnapshot } from '../src/client/catalog-source.ts'
@@ -16,11 +16,13 @@ afterEach(cleanup)
 function entry(
   taskId: string,
   sessionId: SessionId,
-  status: 'active' | 'inactive' = 'active',
+  status: ScheduleCatalogEntry['status'] = 'active',
 ): ScheduleCatalogEntry {
-  return {
-    id: taskId as ScheduleId, sessionId, status, kind: 'at',
-    title: 'Read status', prompt: 'Read status', scheduledAt: '2026-10-01T00:00:00.000Z',
+  return { kind: 'rrule',
+    id: taskId as ScheduleId, title: 'Read status', prompt: 'Read status',
+    rrule: 'DTSTART;TZID=UTC:20261001T000000\nRRULE:FREQ=DAILY;COUNT=1', scheduledAt: '2026-10-01T00:00:00.000Z',
+    target: { kind: 'session', sessionId }, involvedSessionIds: [sessionId], status,
+    createdAt: '2026-09-30T00:00:00.000Z', updatedAt: '2026-09-30T00:00:00.000Z',
   }
 }
 

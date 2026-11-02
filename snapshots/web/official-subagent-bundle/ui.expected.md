@@ -11,8 +11,8 @@
 - button "Bad response"
 - button "Branch into a new conversation"
 - text: {{clock}}
-- button "Subtask status updated {{clock}}":
-  - text: Subtask status updated
+- button "Subagent run completed {{clock}}":
+  - text: Subagent run completed
   - time: {{clock}}
 - status: Completed
 - button "Completed in {{duration}}" [disabled]

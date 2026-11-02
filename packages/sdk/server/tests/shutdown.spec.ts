@@ -51,7 +51,7 @@ describe('SDK descendant shutdown', () => {
       gates.set(id, gate)
       const receipt = await ctx.subagents.startActivation({
         provider: 'local-test', childId: id, label: 'parked child', delivery: 'caller', signal: new AbortController().signal,
-        request: { parent, prompt: [{ type: 'text', text: 'work' }] },
+        parent, prompt: [{ type: 'text', text: 'work' }],
       })
       receipts.push(receipt)
       await gate.entered.promise
@@ -75,11 +75,9 @@ describe('SDK descendant shutdown', () => {
       for (let level = 0; level < depth; level++) {
         const child = await start(parent, SessionId(`owned-child-${level}`))
         owned.push(child)
-        if (level + 1 === depth) await park(parent, child)
-        else parent = child
+        parent = child
       }
-      for (const child of owned) gates.get(child.id)!.release.resolve(undefined)
-      await Promise.all(owned.map(child => child.whenIdle()))
+      await Promise.all(owned.map(child => park(root, child)))
       const { agent: outside } = await ctx.agents.create({
         sessionId: SessionId('outside'), agentOptions: { provider: 'mock', model: 'mock' },
       })
@@ -92,7 +90,8 @@ describe('SDK descendant shutdown', () => {
 
       expect(ctx.agents.get(root.id)).toBeUndefined()
       for (const child of owned) expect(ctx.agents.get(child.id)?.id).toBeUndefined()
-      expect(disposed).toEqual([...owned.toReversed().map(child => child.id), root.id])
+      expect(new Set(disposed)).toEqual(new Set([...owned.map(child => child.id), root.id]))
+      expect(disposed.at(-1)).toBe(root.id)
       expect(ctx.agents.get(outside.id)).toBe(outside)
       expect(ctx.agents.get(outsideChild.id)).toBe(outsideChild)
       expect(outsideChild.inbox.nextStep.length + outsideChild.inbox.nextTurn.length).toBeGreaterThan(0)

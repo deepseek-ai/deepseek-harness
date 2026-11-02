@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-22-subagent-tool-owned-communication.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-22-subagent-tool-owned-communication.md
+/agent-note-subagent-tools-own-communication-guidance:
+  en: 0bd031aa81fbc18d
+  zh: c530e980826698ed
+/agent-note-subagent-tools-own-communication-guidance/problem:
+  en: ac391b569d2bc7e9
+  zh: a95f613aa2b330b8
+/agent-note-subagent-tools-own-communication-guidance/decision:
+  en: 52fb33963bedfe07
+  zh: 75fe66d80f47323f
+/agent-note-subagent-tools-own-communication-guidance/alternatives-considered:
+  en: c55d44c6414e0c4c
+  zh: 9fa2ab31843e259b
+/agent-note-subagent-tools-own-communication-guidance/consequences:
+  en: 52f7234664c515ec
+  zh: 55ec7b54c044e9af

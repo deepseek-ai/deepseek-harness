@@ -351,7 +351,7 @@ export default defineConfig({
         'packages/api/remotes/src/client/index.ts',
         // The Team browser entry binds its source-covered mount lifecycle to
         // the generated Team Remote contribution, which likewise exists only in lib.
-        'packages/experimental/client-ui-agent-team/src/client/index.ts',
+        'packages/client/ui-agent-team/src/client/index.ts',
         // The speech entry also imports generated Remote definitions; voice-input.e2e.ts
         // exercises the built entry, while source tests cover mountVoiceInput.
         'packages/experimental/client-ui-voice-input/src/client/index.ts',
@@ -370,6 +370,9 @@ export default defineConfig({
         // The forge panel entry imports its generated Remote contribution, which exists only in lib;
         // forge-panel.e2e.ts exercises the built entry, while source tests cover mountForgePanel.
         'packages/experimental/client-ui-forge/src/client/index.ts',
+        // The MCP account entry imports its generated Remote contribution, which exists only in lib;
+        // built Web runs load it with the Web app, while source tests cover mountMcpAccounts.
+        'packages/client/ui-mcp-account/src/client/index.ts',
         // Slash/command/input round: per-file gaps deferred with the same
         // client-lane debt. TODO(gui): cover and remove with the lane above.
         'packages/client/ui-commands/src/index.ts',

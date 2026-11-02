@@ -1,29 +1,13 @@
-/** Browser mirror of one managed MCP server and the Plugins page's account actions. */
+/** Browser mirror of the registered connector accounts and the Plugins page's account actions. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteStream } from '@deepseek-ai/dsh-api-gateway/client'
 import type { McpManagedServerView } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { McpAuthorizationReason, McpOAuthAttemptId, McpOAuthAttemptView } from '@deepseek-ai/dsh-mcp-client/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-
-/** A transient outcome the page reports outside its own lifetime. */
-export interface ConnectionNotice {
-  readonly seq: number
-  readonly kind: 'connected' | 'signed-out' | 'action-failed'
-}
-
-/** The page's whole view: the Host's entry for the server plus this browser's pending action and notice. */
-export interface ConnectionSnapshot {
-  /** The manager's entry for the server; undefined until the stream reports one. */
-  readonly server: McpManagedServerView | undefined
-  /** Whether the manager stream is delivering. */
-  readonly linked: boolean
-  /** Whether an action this page started has not settled. */
-  readonly busy: boolean
-  readonly notice: ConnectionNotice | undefined
-}
+import type { McpAccountEntry, McpAccountsView } from '../types.ts'
+import type { McpAccountFace, McpAccountNotice, McpAccountSnapshot } from './types.ts'
 
 /** What the user sees about the connection, derived from the Host entry alone. */
 export type ConnectionPresentation =
@@ -33,17 +17,6 @@ export type ConnectionPresentation =
   | { readonly phase: 'disconnected'; readonly failed: boolean }
   | { readonly phase: 'reconnect'; readonly reason: Exclude<McpAuthorizationReason, 'missing'>; readonly failed: boolean }
   | { readonly phase: 'unavailable'; readonly failed: boolean; readonly retryable: boolean }
-
-/** Page-facing actions and the snapshot hook the slot entries inject. */
-export interface ConnectionFace {
-  hooks: { mcpAccount: HostObservable<ConnectionSnapshot> }
-  connect(): void
-  cancel(): void
-  signOut(): void
-  retry(): void
-  openAuthorization(): void
-  dismissNotice(): void
-}
 
 function attemptPresentation(attempt: McpOAuthAttemptView): ConnectionPresentation | undefined {
   switch (attempt.phase) {
@@ -105,50 +78,76 @@ async function settle<T>(call: Promise<RemoteResult<T>>): Promise<T> {
   return result.value
 }
 
-/** One manager subscription per registered account, shared by every surface of that account on the Plugins page. */
-export class McpAccountConnection {
-  /** The page's whole view, published after each stream item or page action settles. */
-  readonly state: SnapshotStore<ConnectionSnapshot> = createSnapshotStore<ConnectionSnapshot>({
-    server: undefined, linked: false, busy: false, notice: undefined,
-  })
+/** The registry stream the mirror follows. */
+export interface McpAccountsRemote {
+  watch(signal: AbortSignal): AsyncIterable<McpAccountsView>
+}
 
-  /** The attempt this browser started; only its URL opens a window here. */
-  private started: McpOAuthAttemptId | undefined
+/** The manager's account actions the page runs. */
+export interface McpServersRemote {
+  startAuthorization(server: string): Promise<RemoteResult<McpOAuthAttemptView>>
+  cancelAuthorization(server: string, id: McpOAuthAttemptId): Promise<RemoteResult<void>>
+  signOut(server: string): Promise<RemoteResult<void>>
+  restart(server: string): Promise<RemoteResult<void>>
+}
+
+/** One Host subscription per browser, shared by every account surface on the Plugins page. */
+export class McpAccountsConnection {
+  /** Each registered account's snapshot source by bundle package, republished when the Host adds or removes an account. */
+  readonly accounts: SnapshotStore<ReadonlyMap<string, SnapshotStore<McpAccountSnapshot>>> =
+    createSnapshotStore<ReadonlyMap<string, SnapshotStore<McpAccountSnapshot>>>(new Map())
+
+  private readonly stores = new Map<string, SnapshotStore<McpAccountSnapshot>>()
+  /** The attempt each account's latest connect in this browser started; only its authorization page opens here. */
+  private readonly started = new Map<string, McpOAuthAttemptId>()
   private readonly opened = new Set<McpOAuthAttemptId>()
   private seq = 0
   private disposed = false
-  private readonly stream: RemoteStream<McpManagedServerView[]>
+  private readonly stream: RemoteStream<McpAccountsView>
   private readonly observing: Promise<void>
 
-  constructor(private readonly ctx: Context, private readonly server: string) {
-    this.stream = ctx.remote.$stream<McpManagedServerView[]>({
-      name: `MCP account ${server}`, open: signal => ctx.remote.mcpServers.watch(signal),
-      ended: () => new Error(`MCP account ${server} stream ended`),
-      carrierFailed: () => { this.patch({ linked: false }) },
+  /**
+   * @param ctx - the browser context carrying the Remote client.
+   * @param registry - the `mcpAccounts` Remote.
+   * @param servers - the manager's `mcpServers` Remote.
+   */
+  constructor(ctx: Context, registry: McpAccountsRemote, private readonly servers: McpServersRemote) {
+    this.stream = ctx.remote.$stream<McpAccountsView>({
+      name: 'MCP accounts', open: signal => registry.watch(signal),
+      ended: () => new Error('MCP accounts stream ended'),
+      carrierFailed: () => { this.setLinked(false) },
     })
     this.observing = this.observe()
   }
 
   /**
-   * Bind the page-facing actions; each runs without awaiting so slot handlers stay synchronous.
-   * @returns the face the slot entries inject.
+   * Bind one account's page actions; each runs without awaiting so slot handlers stay synchronous.
+   * @param packageName - the account's bundle package.
+   * @returns the actions a surface entry injects.
    */
-  face(): ConnectionFace {
+  actions(packageName: string): Pick<McpAccountFace, 'connect' | 'cancel' | 'signOut' | 'retry' | 'openAuthorization' | 'dismissNotice'> {
     return {
-      hooks: { mcpAccount: this.state },
-      connect: () => { void this.connect() },
-      cancel: () => { void this.cancel() },
-      signOut: () => { void this.run(async () => { await settle(this.ctx.remote.mcpServers.signOut(this.server)); this.notify('signed-out') }) },
-      retry: () => { void this.run(async () => { await settle(this.ctx.remote.mcpServers.restart(this.server)) }) },
+      connect: () => { void this.connect(packageName) },
+      cancel: () => { void this.cancel(packageName) },
+      signOut: () => {
+        void this.run(packageName, async (server) => {
+          await settle(this.servers.signOut(server))
+          this.notify(packageName, 'signed-out')
+        })
+      },
+      retry: () => { void this.run(packageName, async (server) => { await settle(this.servers.restart(server)) }) },
       openAuthorization: () => {
-        const shown = presentConnection(this.state.getSnapshot().server)
+        const shown = presentConnection(this.stores.get(packageName)?.getSnapshot().entry.view)
         if (shown.phase === 'waiting-browser') openAuthorizationPage(shown.url)
       },
-      dismissNotice: () => { this.patch({ notice: undefined }) },
+      dismissNotice: () => { this.patch(packageName, { notice: undefined }) },
     }
   }
 
-  /** Stop observing the manager; Host-owned attempts keep running. */
+  /**
+   * Stop observing the Host; afterwards the page opens no page and reports nothing more. Host-owned attempts keep running.
+   * @returns after the stream closes.
+   */
   async dispose(): Promise<void> {
     this.disposed = true
     await this.stream.dispose()
@@ -158,64 +157,95 @@ export class McpAccountConnection {
   private async observe(): Promise<void> {
     try {
       for await (const item of this.stream) {
-        const server = item.value.find(entry => entry.name === this.server)
-        this.patch({ server, linked: true })
-        this.follow(server)
+        // An item the stream yielded just before disposal must not reach the disposed page.
+        if (this.disposed) return
+        this.show(item.value.accounts)
         item.accept()
       }
     } catch {
       // The carrier already reported the failure; a disposed page has nothing left to show.
-      if (!this.disposed) this.patch({ linked: false })
+      if (!this.disposed) this.setLinked(false)
     }
   }
 
-  /** Open this browser's authorization page once, and report its outcome. */
-  private follow(server: McpManagedServerView | undefined): void {
-    const attempt = server?.authorization
-    if (attempt === undefined || attempt.id !== this.started) return
+  private show(entries: readonly McpAccountEntry[]): void {
+    const names = new Set(entries.map(entry => entry.packageName))
+    let changed = false
+    for (const packageName of [...this.stores.keys()]) {
+      if (names.has(packageName)) continue
+      this.stores.delete(packageName)
+      this.started.delete(packageName)
+      changed = true
+    }
+    for (const entry of entries) {
+      const store = this.stores.get(entry.packageName)
+      if (store === undefined) {
+        this.stores.set(entry.packageName, createSnapshotStore<McpAccountSnapshot>({ entry, linked: true, busy: false, notice: undefined }))
+        changed = true
+      } else {
+        store.set({ ...store.getSnapshot(), entry, linked: true })
+      }
+      this.follow(entry)
+    }
+    if (changed) this.accounts.set(new Map(this.stores))
+  }
+
+  /** Open the authorization page of the attempt this browser started once, and report its outcome. */
+  private follow(entry: McpAccountEntry): void {
+    const attempt = entry.view?.authorization
+    if (attempt === undefined || attempt.id !== this.started.get(entry.packageName)) return
     if (attempt.phase === 'waiting-browser' && !this.opened.has(attempt.id)) {
       this.opened.add(attempt.id)
       openAuthorizationPage(attempt.authorizationUrl)
     }
-    if (attempt.phase === 'authorized') this.notify('connected')
-    if (attempt.phase === 'authorized' || attempt.phase === 'cancelled' || attempt.phase === 'failed') this.started = undefined
+    if (attempt.phase === 'authorized') this.notify(entry.packageName, 'connected')
+    if (attempt.phase === 'authorized' || attempt.phase === 'cancelled' || attempt.phase === 'failed') this.started.delete(entry.packageName)
   }
 
-  private async connect(): Promise<void> {
-    await this.run(async () => {
-      const attempt = await settle(this.ctx.remote.mcpServers.startAuthorization(this.server))
-      this.started = attempt.id
+  private async connect(packageName: string): Promise<void> {
+    await this.run(packageName, async (server) => {
+      const attempt = await settle(this.servers.startAuthorization(server))
+      const current = this.stores.get(packageName)?.getSnapshot().entry
+      // A disposed page or an account the Host withdrew meanwhile follows nothing.
+      if (this.disposed || current === undefined) return
+      this.started.set(packageName, attempt.id)
       // The stream may have reported this attempt before the call answered.
-      this.follow(this.state.getSnapshot().server)
+      this.follow(current)
     })
   }
 
-  private async cancel(): Promise<void> {
-    const shown = presentConnection(this.state.getSnapshot().server)
+  private async cancel(packageName: string): Promise<void> {
+    const shown = presentConnection(this.stores.get(packageName)?.getSnapshot().entry.view)
     if (shown.phase !== 'waiting-browser' && shown.phase !== 'authorizing') return
-    await this.run(async () => { await settle(this.ctx.remote.mcpServers.cancelAuthorization(this.server, shown.attempt)) })
+    await this.run(packageName, async (server) => { await settle(this.servers.cancelAuthorization(server, shown.attempt)) })
   }
 
-  private async run(operation: () => Promise<void>): Promise<void> {
-    if (this.state.getSnapshot().busy) return
-    this.patch({ busy: true })
+  private async run(packageName: string, operation: (server: string) => Promise<void>): Promise<void> {
+    const snapshot = this.stores.get(packageName)?.getSnapshot()
+    if (snapshot === undefined || snapshot.busy) return
+    this.patch(packageName, { busy: true })
     try {
-      await operation()
+      await operation(snapshot.entry.server)
     } catch {
       // The Host keeps the diagnostic; the page reports one retryable outcome.
-      this.notify('action-failed')
+      this.notify(packageName, 'action-failed')
     } finally {
-      this.patch({ busy: false })
+      this.patch(packageName, { busy: false })
     }
   }
 
-  private patch(change: Partial<ConnectionSnapshot>): void {
-    this.state.set({ ...this.state.getSnapshot(), ...change })
+  private setLinked(linked: boolean): void {
+    for (const packageName of this.stores.keys()) this.patch(packageName, { linked })
   }
 
-  private notify(kind: ConnectionNotice['kind']): void {
+  private patch(packageName: string, change: Partial<McpAccountSnapshot>): void {
+    const store = this.stores.get(packageName)
+    if (store !== undefined) store.set({ ...store.getSnapshot(), ...change })
+  }
+
+  private notify(packageName: string, kind: McpAccountNotice['kind']): void {
     if (this.disposed) return
     this.seq += 1
-    this.patch({ notice: { seq: this.seq, kind } })
+    this.patch(packageName, { notice: { seq: this.seq, kind } })
   }
 }

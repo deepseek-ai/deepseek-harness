@@ -412,8 +412,8 @@ export interface LaunchOptions {
    * the settings switch does.
    */
   deepSeekWebApi?: {
-    /** Search and Fetch API base URL; the providers append `/search` or `/fetch`. */
-    baseURL: string
+    /** Search and Fetch API base URL; omitted uses the provider default. The providers append `/search` or `/fetch`. */
+    baseURL?: string
     /** Credential reference resolved by both providers. */
     apiKeyEnv: string
     /** Select `deepseek-search-api` and `deepseek-fetch-api` in place of the shipped selection. */
@@ -699,7 +699,13 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         },
       }],
     ...options.deepSeekWebApi === undefined ? [] : [
-      { id: 'web-deepseek-api', config: { apiKeyEnv: options.deepSeekWebApi.apiKeyEnv, baseURL: options.deepSeekWebApi.baseURL } },
+      {
+        id: 'web-deepseek-api',
+        config: {
+          apiKeyEnv: options.deepSeekWebApi.apiKeyEnv,
+          ...options.deepSeekWebApi.baseURL === undefined ? {} : { baseURL: options.deepSeekWebApi.baseURL },
+        },
+      },
       ...options.deepSeekWebApi.select === true
         ? [{ id: 'web', config: { searchProvider: 'deepseek-search-api', fetchProvider: 'deepseek-fetch-api' } }]
         : [],
