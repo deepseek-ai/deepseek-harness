@@ -11,6 +11,8 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import TerminalSessionService from '@deepseek-ai/dsh-terminal'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as TerminalPanel from '../src/index.ts'
 import { registerUserTerminalTools, renderUserScreen, renderUserTerminals } from '../src/tools.ts'
@@ -31,13 +33,14 @@ async function registries(): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   return ctx
 }
 
 function call(ctx: Context, agent: Agent | undefined, name: string, args: unknown) {
-  return ctx.tools.execute({ signal, callId: ToolCallId(`panel-${++callNumber}`), name, arguments: args, ...agent === undefined ? {} : { agent } })
+  return executeModelToolFixture(ctx, { signal, callId: ToolCallId(`panel-${++callNumber}`), name, arguments: args, ...agent === undefined ? {} : { agent } })
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {

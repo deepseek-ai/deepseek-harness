@@ -11092,6 +11092,12 @@ importers:
       '@deepseek-ai/dsh-terminal':
         specifier: workspace:*
         version: link:../../terminal/terminal
+      '@deepseek-ai/dsh-tool-executor-native':
+        specifier: workspace:*
+        version: link:../../core/tool-executor-native
+      '@deepseek-ai/dsh-tool-testkit':
+        specifier: workspace:*
+        version: link:../../test-support/tool-testkit
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../core/tools
