@@ -92,34 +92,48 @@ describe('card mode: conformance', () => {
 // Card markdown
 
 describe('card markdown escaping', () => {
-  it('escapes model-markdown metacharacters of literal text', () => {
+  it('escapes the markdown syntax of literal text', () => {
     expect(escapeCardText('2 * 3 = _x_ ~y~ `z` [a](b) # h | c > d \\')).toBe(
-      '2 \\* 3 = \\_x\\_ \\~y\\~ \\`z\\` \\[a\\](b) \\# h \\| c \\> d \\\\')
+      '2 \\* 3 = \\_x\\_ \\~y\\~ \\`z\\` \\[a]\\(b) # h | c > d \\\\')
   })
 
-  it('turns every < into an entity, so text can never open an allowed tag', () => {
+  it('gives < and an entity-looking & the entity the platform documents', () => {
+    expect(escapeCardText('/home/agent/.dsh/skills/<name>/SKILL.md')).toBe(
+      '/home/agent/.dsh/skills/&#60;name>/SKILL.md')
     expect(escapeCardText('<at id=all></at> <font color=red>x</font> a<b')).toBe(
-      '&#60;at id=all\\>&#60;/at\\> &#60;font color=red\\>x&#60;/font\\> a&#60;b')
+      '&#60;at id=all>&#60;/at> &#60;font color=red>x&#60;/font> a&#60;b')
+    expect(escapeCardText('a & b &amp; &#60; &x')).toBe('a & b &#38;amp; &#38;#60; &#38;x')
   })
 
-  it('escapes entity-looking ampersands only', () => {
-    expect(escapeCardText('a & b &amp; &#60; &x')).toBe('a & b &#38;amp; &#38;\\#60; &x')
+  it('leaves a < that cannot open a tag literal', () => {
+    expect(escapeCardText('2 < 3')).toBe('2 < 3')
+    expect(escapeCardText('Array<string> is not a tag either')).toBe('Array&#60;string> is not a tag either')
+  })
+
+  it('keeps the spaces of one run, including the trailing one', () => {
+    expect(escapeCardText('run  now ')).toBe('run  now ')
+    expect(textMarkdown('run  now')).toBe('run  now')
   })
 
   it('neutralises block markers at line starts', () => {
     expect(escapeCardText('- item\n1. first\n+ plus\n===\na - b\n3.5\n= 104 B, align 8')).toBe(
-      '\\- item\n1\\. first\n\\+ plus\n\\===\na - b\n3.5\n= 104 B, align 8')
+      '\\- item\n1\\. first\n\\+ plus\n\\===\na - b\n3.5\n\\= 104 B, align 8')
   })
 
   it('unwraps bare URLs into explicit links and keeps newlines as <br>', () => {
     expect(textMarkdown('see https://example.com/a_b. done\nnext')).toBe(
-      'see [https://example.com/a\\_b](https://example.com/a_b). done<br>next')
-    expect(textMarkdown('https://example.com', false)).toBe('https://example.com')
+      'see [https\\://example.com/a\\_b](https://example.com/a_b). done<br>next')
+    expect(textMarkdown('https://example.com', false)).toBe('https\\://example.com')
   })
 
-  it('keeps code spans verbatim, because the platform decodes no entity inside code', () => {
+  it('keeps code verbatim, because the platform decodes no entity inside code', () => {
     expect(cardCodeSpan('a<b `c`')).toBe('`` a<b `c` ``')
+    expect(cardCodeSpan('``x``')).toBe('` ``x`` `')
+    expect(cardCodeSpan('a\r\nb')).toBe('`a b`')
+    expect(cardCodeSpan('')).toBe('')
     expect(cardFence('```\n<at id=all>', 'ts')).toBe('````ts\n```\n<at id=all>\n````')
+    expect(cardFence('a\n<b>\n')).toBe('```\na\n<b>\n```')
+    expect(cardFence('body', 'ts space')).toBe('```tsspace\nbody\n```')
   })
 
   it('never indents fences when prefixing list continuation lines', () => {
@@ -127,12 +141,18 @@ describe('card markdown escaping', () => {
     expect(prefixLines('a\n\nb', '> ', '> ')).toBe('> a\n>\n> b')
   })
 
-  it('ports normalizeMarkdown: dedent fences, close unterminated fences, unwrap autolinks, escape unknown tags', () => {
+  it('ports normalizeMarkdown: dedent and close fences, unwrap autolinks, leave < alone', () => {
     expect(normalizeCardMarkdown('  ```ts\n<x>\n')).toBe('```ts\n<x>\n\n```')
     expect(normalizeCardMarkdown('<https://a.b/c> <b>x</b> <at id=1></at><br>')).toBe(
-      '[https://a.b/c](https://a.b/c) &#60;b>x&#60;/b> <at id=1></at><br>')
-    expect(normalizeCardMarkdown('````\n```\n````\n<i>')).toBe('````\n```\n````\n&#60;i>')
+      '[https://a.b/c](https://a.b/c) <b>x</b> <at id=1></at><br>')
+    expect(normalizeCardMarkdown('````\n```\n````\n<i>')).toBe('````\n```\n````\n<i>')
     expect(normalizeCardMarkdown('')).toBe('')
+  })
+
+  it('leaves a < inside an inline code span alone through the normalize pass', () => {
+    expect(normalizeCardMarkdown('run `cat <name> | x` now')).toBe('run `cat <name> | x` now')
+    expect(normalizeCardMarkdown('run ``a`<name>`` now')).toBe('run ``a`<name>`` now')
+    expect(normalizeCardMarkdown('`` `x` and <at id=all> ``')).toBe('`` `x` and <at id=all> ``')
   })
 
   it('element ids: e + 15 base32 chars, deterministic', () => {
@@ -243,7 +263,7 @@ describe('card structure', () => {
     const target = { chat: { id: 'lark:test', type: 'group' as const } }
     const rendered = await renderContent(bot, h('button', { type: 'action', id: 'b' }, 'Go'), { target, mode })
     expect(rendered.report.degraded).toEqual([expect.objectContaining({ tag: 'button', variant: 'action' })])
-    expect(elements(rendered.payloads[0])[0]!.content).toBe('\\[Go\\]')
+    expect(elements(rendered.payloads[0])[0]!.content).toBe('\\[Go]')
   })
 
   it('allowAtAll: false renders @all as text', async () => {

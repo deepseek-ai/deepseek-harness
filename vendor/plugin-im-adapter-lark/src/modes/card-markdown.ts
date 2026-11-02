@@ -5,10 +5,13 @@
  * Why a separate escaper from the post one. Card markdown (JSON 2.0 `markdown` component) is the broadest Lark
  * dialect: CommonMark + GFM plus an HTML-ish tag allow-list (`<at>`, `<font>`, `<br>`, `<hr>`, `<link>`, `<person>`,
  * `<text_tag>`, `<local_datetime>`, `<raw>`, `<a>`). The platform renders any allowed tag it finds — so a model that
- * writes `<at id=all>` inside plain text would ping the whole group — and shows CommonMark autolinks with their
- * angle brackets. The rules are:
- * - **every `<` of user text becomes `&#60;`** (user text is never allowed to open a tag); a code span or fence keeps
- *   its body verbatim, because the platform decodes no entity inside code and the reader would see `&#60;` there;
+ * writes `<at id=all>` inside plain text would ping the whole group. The rules are:
+ * - **user text goes through `mdast-util-to-markdown`**, the CommonMark/GFM writer: it escapes the markdown syntax of
+ *   literal text (`\ * _ ~ ` [ ] # | >`, line-start block markers) and keeps a code span or fence verbatim, with a
+ *   delimiter longer than any backtick run of its body;
+ * - **a `<` and an entity-looking `&` take the entity forms the platform documents** (`&#60;`, `&#38;`), so user text
+ *   never opens a tag. The platform decodes entities in markdown text only, never inside a code span or fence, which
+ *   is why nothing is escaped inside code: an entity there reaches the reader as `&#60;`;
  * - **autolinks are unwrapped**: a bare `http(s)://` URL in text becomes an explicit `[url](url)` link (and
  *   {@link normalizeCardMarkdown} still rewrites a literal `<https://…>`), so neither backslash escapes nor angle
  *   brackets end up inside a rendered URL;
@@ -16,9 +19,6 @@
  *   their body, list continuation never indents a fence (the platform does not recognise an indented fence), and the
  *   final pass closes an unterminated fence and dedents any indented one;
  * - fenced code bodies are left verbatim.
- * On top of that, CommonMark metacharacters of user text (`\ * _ ~ \` [ ] # | >`) are backslash-escaped and a line
- * start that would open a block (`- `, `1. `, `+ `, `===`) is neutralised, because text is literal (markdown input
- * was already parsed by `normalize` → `fromMarkdown`).
  *
  * Images inside markdown (`![alt](img_key)`) cannot carry their key at transform time (upload is `prepare`'s job), so
  * the handlers write a **placeholder** `\uE000<src>\uE001` that {@link resolveImagePlaceholders} replaces with the
@@ -27,30 +27,32 @@
  */
 
 import { createHash } from 'node:crypto'
+import { gfmToMarkdown } from 'mdast-util-gfm'
+import { toMarkdown } from 'mdast-util-to-markdown'
+import type { Root, RootContent } from 'mdast'
 
 // ---------------------------------------------------------------------------------------------------------------
 // Text escaping
 
-/** HTML-like tags a card markdown component accepts (dsh `ALLOWED_TAGS`); every other `<` is escaped. */
-export const CARD_MD_ALLOWED_TAGS: ReadonlySet<string> = new Set([
-  'br', 'hr', 'person', 'local_datetime', 'at', 'a', 'text_tag', 'raw', 'link', 'font',
-])
+/**
+ * The serializer of the card dialect. Every rule for literal text — markdown metacharacters, line-start block markers,
+ * entity-looking `&`, code-span delimiters, fence length — comes from `mdast-util-to-markdown`; this file adds only
+ * what the platform adds on top: GFM (it renders tables, strikethrough and task lists) and the entity forms below.
+ */
+const SERIALIZE = { extensions: [gfmToMarkdown()] }
 
-/** CommonMark/GFM metacharacters that user text must not be able to use (besides `<`, `&` and line starts). */
-export const CARD_MD_ESCAPABLE = '\\*_~`[]#|>'
-
-/** The `<` of user text: an entity, which the platform renders as a literal `<` and never as a tag. */
+/**
+ * The `<` of user text, in the form the platform documents for showing it. The platform decodes entities in markdown
+ * text and in no other context, so a `<` inside a code span or fence is left verbatim.
+ */
 export const LT_ENTITY = '&#60;'
+
+/** An entity-looking `&` (`&amp;`, `&#60;`), which the platform would decode if the text carried it unescaped. */
+const AMP_ENTITY = '&#38;'
 
 /** A hard line break. A single newline is a soft break the platform may collapse (dsh `TITLE_BREAK`). */
 export const CARD_BREAK = '<br>'
 
-/** A line start that would open a list or a thematic break. */
-const BLOCK_START = /^(\s*)([-+]|\d{1,9}[.)])/
-/** A line that is nothing but `=` — a setext heading underline for the paragraph above it (plain `=` text is not). */
-const SETEXT_UNDERLINE = /^(\s*)(=+)\s*$/
-/** `&name;` / `&#123;` / `&#x1F;` — text that the platform would decode as an entity. */
-const ENTITY = /^&(?:#\d+;|#x[0-9a-f]+;|[a-z][a-z0-9]*;)/i
 /** A bare URL inside text (GFM extended autolink, approximately); trailing punctuation is trimmed by {@link splitUrls}. */
 const BARE_URL = /https?:\/\/[^\s<>"'`\u3000-\u303f\uff00-\uffef]+/gi
 /** Characters a URL does not end with (they are sentence punctuation in running text). */
@@ -61,43 +63,25 @@ export const IMAGE_OPEN = '\uE000'
 export const IMAGE_CLOSE = '\uE001'
 const PLACEHOLDER = /\uE000([^\uE001]*)\uE001/g
 
-/**
- * Escape one run of user text: metacharacters, `<`, entity-looking `&`, the placeholder delimiters and — at the start
- * of every line — block markers. Newlines are kept; the caller decides what they mean.
- */
-export function escapeCardText(text: string): string {
-  let escaped = ''
-  let index = 0
-  for (const char of text) {
-    if (char === '<') escaped += LT_ENTITY
-    else if (char === '&') escaped += ENTITY.test(text.slice(index)) ? '&#38;' : '&'
-    else if (char === IMAGE_OPEN || char === IMAGE_CLOSE) escaped += `&#${char.codePointAt(0)};`
-    else escaped += CARD_MD_ESCAPABLE.includes(char) ? `\\${char}` : char
-    index += char.length
-  }
-  return escaped.split('\n').map(escapeCardBlockStart).join('\n')
+/** Serialize these block nodes as a document, without the newline the serializer ends the last block with. */
+function serialize(children: RootContent[]): string {
+  const root: Root = { type: 'root', children }
+  return toMarkdown(root, SERIALIZE).replace(/\n$/, '')
 }
 
 /**
- * Escape the block marker of one line of already character-escaped text: `- a` → `\- a`, `12. b` → `12\. b`,
- * `---` → `\---`, and a line of nothing but `=` → `\===` (a setext underline). A marker that can only be literal
- * (`a - b`, `3.5`, `= 104 B`) is left alone: a backslash the platform does not consume would show up in the chat.
+ * Escape one run of user text as card markdown. The serializer escapes the markdown syntax of literal text; the two
+ * replacements then give `<` and an entity-looking `&` the form the platform documents, so text can neither open an
+ * allowed tag nor be decoded as an entity of its own. Newlines are kept — {@link textMarkdown} turns them into breaks.
  */
-export function escapeCardBlockStart(line: string): string {
-  const setext = SETEXT_UNDERLINE.exec(line)
-  if (setext) {
-    const at = (setext[1] ?? '').length
-    return `${line.slice(0, at)}\\${line.slice(at)}`
-  }
-  const match = BLOCK_START.exec(line)
-  if (!match) return line
-  const indent = match[1] ?? ''
-  const marker = match[2] ?? ''
-  const rest = line.slice(indent.length + marker.length)
-  const opensBlock = rest === '' || /^\s/.test(rest) || (marker[0] === rest[0] && rest.length >= 2)
-  if (!opensBlock) return line
-  const at = indent.length + marker.length - 1
-  return `${line.slice(0, at)}\\${line.slice(at)}`
+export function escapeCardText(text: string): string {
+  return serialize([{ type: 'paragraph', children: [{ type: 'text', value: text }] }])
+    .replace(/\\</g, LT_ENTITY)
+    .replace(/\\&/g, AMP_ENTITY)
+    // A space the serializer preserved as `&#x20;` to keep it from becoming a hard break. Text never ends a block
+    // here, so the plain space renders the same and keeps the component readable.
+    .replace(/&#x20;/g, ' ')
+    .replace(/[\uE000\uE001]/g, char => `&#${char.charCodeAt(0)};`)
 }
 
 /** Split text into plain runs and bare URLs (the URL without its trailing sentence punctuation). */
@@ -130,37 +114,23 @@ export function textMarkdown(text: string, linkify = true): string {
 // ---------------------------------------------------------------------------------------------------------------
 // Builders
 
-/** Longest run of `char` in `text`. */
-export function longestRun(text: string, char: string): number {
-  let longest = 0
-  let current = 0
-  for (const item of text) {
-    current = item === char ? current + 1 : 0
-    if (current > longest) longest = current
-  }
-  return longest
-}
-
 /**
- * An inline code span. Newlines become spaces (a span is one line) and the body stays verbatim, like a fence: the
- * platform decodes no entity inside code, so escaping `<` would show `&#60;` to the reader, and a span cannot open a
- * tag anyway. The delimiter is longer than any backtick run of the text.
+ * An inline code span. Newlines become spaces (a span is one line) and the delimiter is longer than any backtick run
+ * of the body, both from the serializer. The body stays verbatim: the platform decodes no entity inside code, so an
+ * escaped `<` there would reach the reader as `&#60;`, and a span cannot open a tag anyway.
  */
 export function cardCodeSpan(text: string): string {
   const body = stripPlaceholders(text).replace(/\r?\n/g, ' ')
   if (!body) return ''
-  const fence = '`'.repeat(longestRun(body, '`') + 1)
-  const pad = body.startsWith('`') || body.endsWith('`') ? ' ' : ''
-  return `${fence}${pad}${body}${pad}${fence}`
+  return serialize([{ type: 'paragraph', children: [{ type: 'inlineCode', value: body }] }])
 }
 
 /** A fenced code block at column zero, longer than any backtick run of its body; the body is verbatim. */
 export function cardFence(text: string, lang?: string): string {
   const raw = stripPlaceholders(text)
-  const body = raw.endsWith('\n') ? raw.slice(0, -1) : raw
-  const fence = '`'.repeat(Math.max(3, longestRun(body, '`') + 1))
+  const value = raw.endsWith('\n') ? raw.slice(0, -1) : raw
   const info = (lang ?? '').replace(/[`\s]/g, '')
-  return `${fence}${info}\n${body}\n${fence}`
+  return serialize([{ type: 'code', lang: info || undefined, value }])
 }
 
 /**
@@ -263,26 +233,13 @@ export function prefixLines(text: string, first: string, rest: string, options: 
 // normalizeMarkdown port
 
 const AUTOLINK = /<((?:https?|mailto):[^\s<>]+)>/g
-const TAG = /^<\/?([a-zA-Z_][\w-]*)/
-
-function escapeTags(line: string): string {
-  let result = ''
-  let index = 0
-  while (index < line.length) {
-    const next = line.indexOf('<', index)
-    if (next === -1) return result + line.slice(index)
-    result += line.slice(index, next)
-    const tag = TAG.exec(line.slice(next))?.[1]
-    result += tag !== undefined && CARD_MD_ALLOWED_TAGS.has(tag.toLowerCase()) ? '<' : LT_ENTITY
-    index = next + 1
-  }
-  return result
-}
 
 /**
  * The port of dsh `normalizeMarkdown` for card markdown, applied by `assemble` to every component text as a final
- * guard: indented fences move to column zero, an unterminated fence is closed, CommonMark autolinks become ordinary
- * links (the card shows their angle brackets verbatim) and any `<` that does not open an allowed tag is escaped.
+ * guard: indented fences move to column zero, an unterminated fence is closed and CommonMark autolinks become
+ * ordinary links (the card shows their angle brackets verbatim). A `<` that does not open an allowed tag is left
+ * alone: `escapeCardText` already escaped the ones that could take effect, and escaping the rest would show the
+ * reader an entity instead of the text.
  * Fenced bodies stay verbatim. Image rewriting is not ported: v4 images are elements whose keys `prepare` resolves.
  *
  * Unlike dsh, fences are tracked by character and length (CommonMark closing rules), so a ```` ```` ```` fence
@@ -309,7 +266,7 @@ export function normalizeCardMarkdown(text: string): string {
       result.push(dedented)
       continue
     }
-    result.push(escapeTags(dedented.replace(AUTOLINK, (_match, target: string) => `[${target}](${target})`)))
+    result.push(dedented.replace(AUTOLINK, (_match, target: string) => `[${target}](${target})`))
   }
   if (open) result.push(open.char.repeat(open.length))
   return result.join('\n')

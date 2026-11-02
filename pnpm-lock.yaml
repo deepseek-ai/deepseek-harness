@@ -18774,6 +18774,12 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: link:../schemastery
         version: link:../schemastery
+      mdast-util-gfm:
+        specifier: ^3.1.0
+        version: 3.1.0(supports-color@9.4.0)
+      mdast-util-to-markdown:
+        specifier: ^2.1.2
+        version: 2.1.2
       protobufjs:
         specifier: ^8.0.0
         version: 8.8.1
@@ -18793,6 +18799,9 @@ importers:
       '@deepseek-ai/satori-element':
         specifier: workspace:~
         version: link:../satori-element
+      '@types/mdast':
+        specifier: ^4.0.4
+        version: 4.0.4
 
   vendor/plugin-im-adapter-qq:
     dependencies:
