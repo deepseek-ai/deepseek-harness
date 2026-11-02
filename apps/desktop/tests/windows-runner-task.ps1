@@ -7,13 +7,18 @@ $source = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../scripts'))
 $runner = Join-Path $root 'runner with spaces'
 $null = New-Item -ItemType Directory -Path $runner
 Set-Content -LiteralPath (Join-Path $runner '.runner') -Value '{}'
-foreach ($file in @('windows-runner-task.ps1','run-windows-runner-task.ps1','windows-runner-launcher.cs')) { Copy-Item -LiteralPath (Join-Path $source $file) -Destination $root }
+foreach ($file in @('windows-runner-task.ps1','run-windows-runner-task.ps1','windows-runner-launcher.cs','windows-runner-network.ps1','run-windows-runner-network-process.ps1')) { Copy-Item -LiteralPath (Join-Path $source $file) -Destination $root }
 $manager = Join-Path $root 'windows-runner-task.ps1'
 @'
 param([string]$RunnerRoot, [string]$ConfigRoot, [switch]$CheckOnly)
 if ($CheckOnly) { exit 0 }
 Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class ConsoleProbe { [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); }'
 Add-Content -LiteralPath (Join-Path $RunnerRoot 'consoles.txt') -Value ([ConsoleProbe]::GetConsoleWindow().ToInt64())
+Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class SchedulingProbe { [DllImport("ntdll.dll")] static extern int NtQueryInformationProcess(IntPtr handle, int kind, out int value, int size, out int length); public static int Read(IntPtr handle, int kind) { int value, length; int status = NtQueryInformationProcess(handle, kind, out value, 4, out length); if (status != 0) throw new InvalidOperationException("Priority query failed: " + status); return value; } }'
+$process = [Diagnostics.Process]::GetCurrentProcess()
+try {
+    @{ Cpu = $process.PriorityClass.ToString(); Io = [SchedulingProbe]::Read($process.Handle, 33); Memory = [SchedulingProbe]::Read($process.Handle, 39) } | ConvertTo-Json -Compress | Add-Content -LiteralPath (Join-Path $RunnerRoot 'priorities.jsonl')
+} finally { $process.Dispose() }
 Add-Content -LiteralPath (Join-Path $RunnerRoot 'starts.txt') -Value $PID
 if (-not (Test-Path -LiteralPath (Join-Path $RunnerRoot 'failed-once'))) {
     Set-Content -LiteralPath (Join-Path $RunnerRoot 'failed-once') -Value 'yes'
@@ -50,6 +55,7 @@ try {
     $peOffset = [BitConverter]::ToInt32($image, 0x3c)
     if ([BitConverter]::ToUInt16($image, $peOffset + 24 + 68) -ne 2) { throw 'Launcher must use the Windows GUI subsystem.' }
     if ($task.State -ne 'Disabled' -or $task.Settings.ExecutionTimeLimit -ne 'PT0S' -or $task.Settings.MultipleInstances -ne 'IgnoreNew') { throw 'Unexpected task scheduling settings.' }
+    if ($task.Settings.Priority -ne 4) { throw 'Runner task must use normal CPU, I/O and memory priority.' }
     Invoke-Manager install -ExpectFailure
     $runScript = Join-Path $runner 'dsh-task/run.ps1'
     $originalRun = Get-Content -LiteralPath $runScript -Raw
@@ -75,6 +81,8 @@ if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'inherited-writer-star
     if ([int](Get-Content -LiteralPath (Join-Path $runner 'dsh-task/attempts.txt') -Raw) -ne 2) { throw 'Drain recovery did not consume the normal restart budget.' }
     $consoles = @(Get-Content -LiteralPath (Join-Path $runner 'consoles.txt'))
     if ($consoles.Count -ne 2 -or @($consoles | Where-Object { $_ -ne '0' }).Count) { throw 'Initial or recovered runner allocated a console.' }
+    $priorities = @(Get-Content -LiteralPath (Join-Path $runner 'priorities.jsonl') | ForEach-Object { $_ | ConvertFrom-Json })
+    if ($priorities.Count -ne 2 -or @($priorities | Where-Object { $_.Cpu -ne 'Normal' -or $_.Io -ne 2 -or $_.Memory -ne 5 }).Count) { throw 'Initial or recovered runner inherited background scheduling priority.' }
     $childId = [int]@(Get-Content -LiteralPath $starts)[-1]
     $child = Get-Process -Id $childId
     Invoke-Manager start

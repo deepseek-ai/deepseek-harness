@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Automatische Autorisierungsüberprüfung",
-    "description": "Fügen Sie einen Auto review-Berechtigungsmodus hinzu, der das Modell verwendet, um die Autorisierung vor jedem Toolaufruf zu bewerten.",
+    "description": "Fügt den Zugriffsmodus „Auto review“ hinzu: Vor jedem Tool-Aufruf prüft ein Modell den Aufruf anhand Ihrer Anforderung; zugelassene Aufrufe laufen sofort, abgelehnte Aufrufe warten auf Ihre Genehmigung.",
     "detail": "docs/DETAIL.md"
   }
 }

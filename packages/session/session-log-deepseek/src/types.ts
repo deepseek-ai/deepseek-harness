@@ -1,7 +1,22 @@
 /** Wire types for lossless incremental DeepSeek session-log upload. */
 
-import type { SessionEvent, SurfaceEventType } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionId, SurfaceEventType } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+
+/** Request identity inspected before preparing a Session-log contribution. */
+export interface SessionLogUploadRequest {
+  /** Live Session whose canonical log would be contributed. */
+  readonly sessionId: SessionId
+  /** Auxiliary request classification; absent for ordinary conversation requests. */
+  readonly purpose?: string
+}
+
+/**
+ * Synchronous, side-effect-free upload exclusion owned by its registering plugin.
+ * @param request - request identity; the predicate must not mutate it.
+ * @returns `true` to omit the log field and acceptance callback, or `false` to keep checking eligibility.
+ */
+export type SessionLogUploadExclusion = (request: SessionLogUploadRequest) => boolean
 
 /** Session header fields serialized as raw JSON primitives on the external request wire. */
 export interface DeepSeekSessionLogWireHeader {

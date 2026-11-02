@@ -98,11 +98,17 @@ it.each(['per-call', 'persistent-in-memory'] as const)('keeps a %s call canceled
   }
 })
 
-it('rejects a retained call when its provider unloads during earlier policy cleanup', async () => {
-  const h = await setup()
+it.each(['persistent-in-memory', 'per-call'] as const)('rejects admission when %s unloads during earlier policy cleanup', async (executionMode) => {
+  const h = await setup({ executionMode })
   const session = h.ctx.sessions.create(SessionId('unloading-admission'))
-  h.onBoot(() => { h.complete({}) })
-  await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  h.onBoot(() => {
+    if (executionMode === 'persistent-in-memory') h.complete({})
+    entered.resolve()
+  })
+  const first = h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
+  await entered.promise
+  if (executionMode === 'persistent-in-memory') await first
   const cleaning = Promise.withResolvers<undefined>()
   const cleanup = Promise.withResolvers<boolean>()
   h.waitForExit.mockImplementation(() => { cleaning.resolve(undefined); return cleanup.promise })
@@ -111,11 +117,12 @@ it('rejects a retained call when its provider unloads during earlier policy clea
   const pending = h.runtime.run(h.runtime.resolve({
     ...request, stateOwner: {}, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }),
   }))
-  const rejected = expect(pending).rejects.toThrow('persistent PTC: run after disposal')
+  const prefix = executionMode === 'per-call' ? 'ptc-runtime-node' : 'persistent PTC'
+  const rejected = expect(pending).rejects.toThrow(`${prefix}: run after disposal`)
   const closing = h.fiber.dispose()
   try {
     await vi.waitFor(() => {
-      expect(() => h.runtime.resolve(request)).toThrow('persistent PTC: resolve after disposal')
+      expect(() => h.runtime.resolve(request)).toThrow(`${prefix}: resolve after disposal`)
     })
     expect(h.spawn).toHaveBeenCalledOnce()
     cleanup.resolve(true)
@@ -125,7 +132,7 @@ it('rejects a retained call when its provider unloads during earlier policy clea
     expect(h.spawn).toHaveBeenCalledOnce()
   } finally {
     cleanup.resolve(true)
-    await Promise.allSettled([pending, rejected, closing])
+    await Promise.allSettled([first, pending, rejected, closing])
   }
 })
 
@@ -363,8 +370,8 @@ describe('persistent PTC host protocol', () => {
   it('rejects invalid resolved inputs and deployment bounds', async () => {
     const h = await setup()
     expect(h.runtime.executionInstructions).toContain('Variables, functions, and imported modules remain in memory')
-    await expect(h.runtime.run({ ...request, cwd: '.', timeoutMs: null })).rejects.toThrow('resolved inputs')
-    await expect(h.runtime.run({ ...request, cwd: process.cwd(), timeoutMs: Infinity })).rejects.toThrow('resolved inputs')
+    await expect(h.runtime.run({ ...request, cwd: '.', timeoutMs: null })).rejects.toThrow('resolved sandbox policy')
+    await expect(h.runtime.run({ ...h.runtime.resolve(request), timeoutMs: Infinity })).rejects.toThrow('resolved cwd and timeout')
     for (const config of [
       { timeoutMs: 0 }, { maxMessageBytes: 1.5 }, { maxOutputBytes: 3 }, { graceMs: 2_147_483_648 },
       { launch: { kind: 'node-script', executable: '' } },
@@ -460,7 +467,7 @@ it('logs unexpected idle readiness and its failed cleanup', async () => {
     h.waitForExit.mockRejectedValueOnce(new Error('idle cleanup failed'))
     h.emit({ t: 'q', m: 'ready', a: [] })
     await vi.waitFor(() => { expect(reported).toHaveBeenCalledTimes(2) })
-    expect(reported.mock.calls).toEqual([['unexpected persistent PTC readiness'], ['idle cleanup failed']])
+    expect(reported.mock.calls).toEqual([['duplicate program readiness'], ['idle cleanup failed']])
   } finally { reported.mockRestore() }
 })
 
@@ -524,7 +531,7 @@ it('reserves the owner while parse-output overflow releases its environment', as
   const pending = h.runtime.run(h.runtime.resolve({ ...request, program: 'return 1' }))
   try {
     await cleanup.promise
-    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('cleanup is incomplete')
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('does not accept concurrent')
     expect(h.spawn).toHaveBeenCalledOnce()
     stopped.resolve(true)
     expect((await pending).error?.kind).toBe('output-limit')
@@ -573,7 +580,7 @@ it('releases a confirmed exited process even when its output pipe did not drain'
   const warn = vi.spyOn(h.ctx.logger, 'warn').mockImplementation(() => {})
   try {
     await expect(h.runtime.release(request.stateOwner!)).resolves.toBeUndefined()
-    expect(warn).toHaveBeenCalledWith('persistent Node process exited but its output did not drain cleanly')
+    expect(warn).toHaveBeenCalledWith('Node process exited but its output did not drain cleanly')
     await expect(h.runtime.release(request.stateOwner!)).resolves.toBeUndefined()
   } finally { warn.mockRestore() }
 })

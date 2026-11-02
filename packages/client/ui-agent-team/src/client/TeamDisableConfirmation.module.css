@@ -1,0 +1,31 @@
+.dialog {
+  width: min(440px, 100%);
+  max-height: 100%;
+}
+
+.content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.copy p {
+  margin: 0;
+}
+
+.copy p + p {
+  margin-top: 12px;
+}
+
+.error {
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}

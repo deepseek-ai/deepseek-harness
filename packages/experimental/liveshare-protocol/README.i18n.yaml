@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/liveshare-protocol/README.md
+/:
+  en: efeee80d1665d7fc
+  zh: 18c481ee3920a247
+/deepseek-ai-dsh-experimental-liveshare-protocol:
+  en: 023b0ec3130c921a
+  zh: 83a7492f544eed39
+/deepseek-ai-dsh-experimental-liveshare-protocol/summary:
+  en: cf4bc338899afa65
+  zh: e8376bead1d99529
+/deepseek-ai-dsh-experimental-liveshare-protocol/table-of-contents:
+  en: 80b31a934611cb4a
+  zh: 05f3f7f9cb2fd881
+/deepseek-ai-dsh-experimental-liveshare-protocol/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-experimental-liveshare-protocol/use-this-package/when-to-use-it:
+  en: d3f965cdd4635ef2
+  zh: cca0198bc469ba1d
+/deepseek-ai-dsh-experimental-liveshare-protocol/use-this-package/entry-point:
+  en: 452b98f914e90804
+  zh: 20c344a12a23f9c1
+/deepseek-ai-dsh-experimental-liveshare-protocol/understand-the-implementation:
+  en: 2b683ba1b31c8ce5
+  zh: 94ad38d16e83f823
+/deepseek-ai-dsh-experimental-liveshare-protocol/further-exploration:
+  en: e773c21200a61a9d
+  zh: 57108786433cf892
+/deepseek-ai-dsh-experimental-liveshare-protocol/known-limitations-and-deferred-work:
+  en: 130c67d0129445b7
+  zh: 21009a95b7f7d917
+/deepseek-ai-dsh-experimental-liveshare-protocol/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

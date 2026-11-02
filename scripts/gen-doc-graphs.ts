@@ -108,6 +108,22 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'actionCards',
+    pkg: 'action-cards',
+    title: 'Optional action cards',
+    mode: 'service',
+    consumers: ['creation-recommendations', 'client-ui-action-cards'],
+    note: 'Owns the card tool, card state, user actions and status notices; card kinds register their actions and handlers.',
+  },
+  {
+    key: 'pluginRecommendations',
+    pkg: 'plugin-recommendations',
+    title: 'Explicit-need plugin recommendations',
+    mode: 'service',
+    consumers: ['client-ui-plugin-recommendations'],
+    note: 'Reads the current catalog text of an official plugin card and enables the plugin through the profile plugin manager after a click.',
+  },
+  {
     key: 'headlessStartup',
     pkg: 'headless',
     title: 'Headless invocation options',
@@ -177,6 +193,30 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['api-gateway', 'host-frontend-static'],
     note: 'Owns browser authentication and shared HTTP request dispatch; API adapters register endpoints and streams.',
+  },
+  {
+    key: 'forge',
+    pkg: 'experimental-forge',
+    title: 'Code host change requests',
+    mode: 'seam',
+    implementations: ['experimental-forge-github'],
+    consumers: ['experimental-forge-session', 'experimental-client-ui-forge'],
+    note: 'Providers map remote and change request URLs, look up change requests by head branch, and read status in batches; watchers of one change request share one polling loop.',
+  },
+  {
+    key: 'forgeSession',
+    pkg: 'experimental-forge-session',
+    title: 'Session change request bindings',
+    mode: 'service',
+    consumers: ['experimental-client-ui-forge'],
+    note: 'A Session projection derives bindings from shell results and binding records and publishes their URLs without status to clients; push results trigger head-branch discovery, and Session watchers poll bound change requests through the forge registry.',
+  },
+  {
+    key: 'forgePanel',
+    pkg: 'experimental-client-ui-forge',
+    title: 'Forge panel Remote',
+    mode: 'service',
+    note: 'Streams one panel state per followed Session: Git inspection using Session permissions, the recognized code host and its sign-in, and the bound change requests with polled status.',
   },
   {
     key: 'worktrees',
@@ -258,6 +298,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: ['llm-deepseek', 'llm-pi-ai', 'llm-replay'],
     consumers: ['agent-loop', 'compaction-basic'],
     note: 'Adapters register provider implementations; the loop and compaction call the provider-neutral stream service.',
+  },
+  {
+    key: 'sessionLogDeepSeek',
+    pkg: 'session-log-deepseek',
+    title: 'Session-log upload policy',
+    mode: 'core',
+    implementations: [],
+    note: 'Plugins register caller-owned exclusions before the canonical Session-log request contribution is prepared; unmatched requests use normal upload eligibility.',
   },
   {
     key: 'deepseekLlmApiExtensions',
@@ -439,7 +487,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'seam',
     implementations: ['credentials-local'],
     consumers: ['api-settings-controller', 'llm-deepseek', 'llm-pi-ai'],
-    note: 'Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the settings controller exposes value-free views and write-only storage.',
+    note: 'Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the settings controller exposes value-free metadata, writes, and owner-only reads of stored keys.',
   },
   {
     key: 'deepseekAccount',
@@ -662,7 +710,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'schedule',
     title: 'Host scheduled messages',
     mode: 'core',
-    note: 'Stores tasks independently of Session activation and queues due messages in the original Session.',
+    note: 'Stores tasks independently of Session activation and queues due messages in each task\'s target Session.',
   },
   {
     key: 'goals',
@@ -797,11 +845,11 @@ const SERVICE_ROLES: ServiceRole[] = [
   },
   {
     key: 'agentTeams',
-    pkg: 'experimental-agent-team',
+    pkg: 'agent-team',
     title: 'Agent Teams coordination domain',
     mode: 'core',
-    consumers: ['experimental-tool-agent-team'],
-    note: 'Owns the implicit-root roster, direct peer inbox delivery, shared task DAG, and continuable-child lifecycle; tool-agent-team contributes model controls.',
+    consumers: ['tool-agent-team'],
+    note: 'Owns the shared task DAG for a subagent tree; tool-agent-team contributes task controls.',
   },
   {
     key: 'claudeCodeMods',
@@ -918,6 +966,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['tool-cordis'],
     note: 'Registers host inspect providers, mirrors the client provider manifest, and routes client queries through the dynamic Cordis transport.',
+  },
+  {
+    key: 'liveshareShares',
+    pkg: 'experimental-liveshare',
+    title: 'Owner share management Remote',
+    mode: 'service',
+    note: 'Publishes the owner share-management operations as one Typert Remote namespace that the owner client face calls; every method delegates to the same operations the same-origin routes used.',
   },
 ]
 
@@ -1505,6 +1560,8 @@ function renderEventRelations(pkgs: Pkg[], events: readonly EventEntry[]): strin
   const lines = generatedHeader('Event Producer And Consumer Matrix')
   lines.push(
     'This matrix shows which packages dispatch each harness-owned event and which packages listen to it. Events are many-to-many, so the dense relation data is presented as a table rather than one large graph. Receiver and event-name types also cover contained dispatch sites that deliberately bypass `ctx.emit`, such as subagent lifecycle containment.',
+    '',
+    'Application listeners are outside this package matrix. Desktop Host subscribes to `plugin-manager/operation` through [`installOperationDiagnostics`](../apps/desktop-host/src/operation-diagnostics.ts) and forwards bounded records to the shell.',
     '',
   )
   const rows = ['| Event | Mode | Declared in | Dispatchers | Listeners |', '| --- | --- | --- | --- | --- |']

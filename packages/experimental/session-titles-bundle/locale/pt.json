@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Títulos que acompanham conversas",
-    "description": "Atualize os títulos das sessões à medida que novos prompts humanos chegam.",
+    "description": "Escreve o título de uma sessão a partir de todas as suas mensagens e o atualiza quando a tarefa principal muda, em vez de usar apenas a primeira mensagem.",
     "detail": "docs/DETAIL.md"
   }
 }

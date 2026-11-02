@@ -1,0 +1,10 @@
+- tabpanel "Result":
+  - region "Raw result":
+    - heading "Raw result" [level=3]
+    - text: "{"
+    - tree "Result JSON":
+      - treeitem "answer:42"
+    - text: "}"
+  - region "Rendered result":
+    - heading "Rendered result" [level=3]
+    - text: LIVE_RESULT_RENDERED

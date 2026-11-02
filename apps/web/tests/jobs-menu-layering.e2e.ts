@@ -28,7 +28,7 @@ const COMMAND = `printf 'jobs-menu-%s\\n' output; for _ in $(seq 1 3000); do [ -
 function placement(page: Page) {
   return page.evaluate(() => {
     const list = document.querySelector<HTMLElement>('ul[aria-label="Background jobs"]')
-    const anchor = document.querySelector<HTMLElement>('button[aria-label="1 background job running"]')
+    const anchor = document.querySelector<HTMLElement>('button[aria-label="1 background job"]')
     const frame = document.querySelector<HTMLElement>('[data-sidebar-browser-frame]')
     const dock = document.querySelector<HTMLElement>('[data-sidebar-right-panel][data-sidebar-right-open]')
     if (list === null || anchor === null || frame === null || dock === null) {
@@ -105,6 +105,7 @@ describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
 
   it('keeps the list and live output above the Browser dock while anchored and dismissable', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-jobs-menu-layering'))
+    const initialViewport = page.viewportSize()!
     const session = page.locator(`[data-row-key="session:${SEED_ID}"]`)
     await expect.poll(async () => {
       if (await session.isVisible()) return true
@@ -148,7 +149,7 @@ describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
     await page.frameLocator('[data-sidebar-browser-frame]')
       .getByRole('heading', { name: 'Jobs menu browser fixture' }).waitFor()
 
-    const trigger = page.getByRole('button', { name: '1 background job running', exact: true })
+    const trigger = page.getByRole('button', { name: '1 background job', exact: true })
     await trigger.waitFor({ timeout: 15_000 })
     await trigger.focus()
     await page.keyboard.press('Enter')
@@ -184,6 +185,13 @@ describe.skipIf(MODE === 'record')('web e2e: jobs menu layering', () => {
     await list.waitFor({ state: 'detached' })
     const outsideDismisses = await trigger.getAttribute('aria-expanded') === 'false'
     expect(outsideDismisses).toBe(true)
+    await page.setViewportSize(initialViewport)
+    await trigger.hover()
+    await list.waitFor()
+    expect(await address.evaluate(element => element === document.activeElement)).toBe(true)
+    await page.keyboard.press('Escape')
+    await list.waitFor({ state: 'detached' })
+    expect(await address.evaluate(element => element === document.activeElement)).toBe(true)
     expect(scaffold.ctx.jobs.get(jobId, agent.id).status).toBe('running')
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])

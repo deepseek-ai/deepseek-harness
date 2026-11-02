@@ -1,4 +1,4 @@
-/** Mount the headless snapshot's parent preset before Agent publication checks. */
+/** Compose a blank headless Session through the scenario's preset selections. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
@@ -8,12 +8,15 @@ export const name = 'parent-agent-preset'
 export const inject = ['agentPresets']
 
 /**
- * Register the root Session's initial preset selection.
+ * Select the root Session's presets before its first model request.
  * @param ctx - Snapshot composition context with the preset roster.
+ * @param config - Ordered preset selections; omission selects the parent preset once.
  */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config: { presets?: string[] } = {}): void {
   ctx.on('agent/created', async ({ agent }) => {
     if (agent.session.header.parentSession !== undefined) return
-    await ctx.agentPresets.select(agent, 'parent')
+    for (const preset of config.presets ?? ['parent']) {
+      await ctx.agentPresets.select(agent, preset)
+    }
   }, { prepend: true })
 }

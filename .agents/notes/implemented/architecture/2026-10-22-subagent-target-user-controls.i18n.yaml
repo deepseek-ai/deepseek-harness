@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-22-subagent-target-user-controls.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-22-subagent-target-user-controls.md
+/agent-note-user-controls-address-the-target-subagent:
+  en: d7dcf54ddb311881
+  zh: 5f388447737c5414
+/agent-note-user-controls-address-the-target-subagent/problem:
+  en: 962c75771235903c
+  zh: 203b651c0830310e
+/agent-note-user-controls-address-the-target-subagent/decision:
+  en: 13a2617e28445744
+  zh: 75d193ef7d8c7804
+/agent-note-user-controls-address-the-target-subagent/alternatives-considered:
+  en: 447adb24280bf2bb
+  zh: 08d95a93b14aa5c7
+/agent-note-user-controls-address-the-target-subagent/consequences:
+  en: 98e784f55775247d
+  zh: 1c62d2ebc71b658f

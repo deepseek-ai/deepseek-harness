@@ -1,0 +1,52 @@
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: var(--dsw-radius-md);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.infoButton {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--dsw-alias-label-caption);
+}
+
+/* Extend the native switch hit target without nesting the information button. */
+.row .toggle {
+  position: static;
+}
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--dsw-radius-md);
+}
+
+.row:has(.toggle:focus-visible) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .row:has(.toggle:not(:disabled)):hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}

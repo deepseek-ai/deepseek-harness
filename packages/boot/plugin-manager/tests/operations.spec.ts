@@ -172,6 +172,40 @@ function install(dir: string, name: string) {
   writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest))
 }
 
+it.each(['service', 'cli'] as const)('reports unsupported activation through %s diagnostics without saving any selection changes', async (execution) => {
+  const { dir, context, pnpm } = fixture()
+  pnpm.mutate = (target) => {
+    install(target, 'supported')
+    install(target, 'restricted')
+    writeFileSync(join(target, 'node_modules/restricted/package.json'), JSON.stringify({ name: 'restricted', version: '1',
+      dsh: { bundle: { patch: './cordis.patch.yml', platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'] } } }))
+  }
+  const messages: string[] = []
+  const result = await runPluginCommand(context, ['add', 'restricted'], {
+    execution, outputBytes: 8192, onOutput: (text) => { messages.push(text) },
+  })
+  expect(result.exitCode).toBe(1)
+  expect(result.output).toContain('restricted: Bundle supports Host platforms')
+  expect(result.output).toContain('installed dependencies remain; bundle selection is unchanged')
+  expect(result.output).toContain('dsh plugin remove <package>')
+  expect(readFileSync(result.logPath, 'utf8')).toContain(result.output)
+  expect(messages.join('')).toContain(result.output)
+  expect(readProfileManifest('test', dir).dependencies).toMatchObject({ supported: '1', restricted: '1' })
+  expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual([])
+})
+
+it('preserves malformed platform metadata errors without selecting the installed bundle', async () => {
+  const { dir, context, pnpm } = fixture()
+  pnpm.mutate = (target) => {
+    install(target, 'malformed')
+    writeFileSync(join(target, 'node_modules/malformed/package.json'), JSON.stringify({ name: 'malformed', version: '1',
+      dsh: { bundle: { patch: './cordis.patch.yml', platforms: ['macos'] } } }))
+  }
+  await expect(runProfilePnpm(context, ['add', 'malformed'], { execution: 'service', outputBytes: 8192 }))
+    .rejects.toThrow('dsh.bundle.platforms must be a nonempty list of Node platform names')
+  expect(readProfileManifest('test', dir).dsh?.profile?.bundles).toEqual([])
+})
+
 function installGuarded(dir: string, dependency: string, name = dependency, version = '1.0.0', peer = '>=999.0.0') {
   install(dir, dependency)
   writeFileSync(join(dir, 'node_modules', dependency, 'package.json'), JSON.stringify({
@@ -840,10 +874,16 @@ it.each([
 ])('reports launch failures with a complete log: $code', async ({ code, shortMessage, expected }) => {
   const { context } = fixture()
   command.run.mockImplementationOnce(() => result(undefined, '', () => {}, { code, ...shortMessage === undefined ? {} : { shortMessage } }))
-  const outcome = await runProfilePnpm(context, ['root'], { execution: 'service', outputBytes: 4, signal: new AbortController().signal })
+  const messages: string[] = []
+  const outcome = await runProfilePnpm(context, ['root'], {
+    execution: 'service', outputBytes: 4, signal: new AbortController().signal,
+    onOutput: (text) => { messages.push(text) },
+  })
   expect(outcome.exitCode).toBe(expected)
   expect(outcome.truncated).toBe(true)
   expect(readFileSync(outcome.logPath, 'utf8')).toBe(shortMessage ?? 'pnpm failed')
+  // A run that printed nothing still streams the diagnostic its log carries.
+  expect(messages).toEqual([shortMessage ?? 'pnpm failed'])
 })
 
 it('cancels and settles package output when the output consumer fails', async () => {

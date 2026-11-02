@@ -751,7 +751,8 @@
 }
 
 .table tbody tr[data-collapsed-summary='turn'] td,
-.table tbody tr[data-collapsed-summary='assistant'] td {
+.table tbody tr[data-collapsed-summary='assistant'] td,
+.table tbody tr[data-collapsed-summary='tool'] td {
   height: 20px;
 }
 
@@ -1237,6 +1238,34 @@
   background: var(--dsw-alias-bg-layer-1);
   font: var(--dsw-font-xs-strong-13);
   user-select: none;
+}
+
+.resultSections {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0 12px;
+}
+
+.resultSection {
+  min-width: 0;
+}
+
+.resultSection .jsonPayload {
+  min-height: 0;
+  overflow: visible;
+}
+
+.resultSection .resultBlocks,
+.resultSection .payload,
+.resultSection .noPayload {
+  min-height: 0;
+  padding: 2px 14px 8px;
+}
+
+.resultTitle {
+  margin: 0;
+  font: inherit;
 }
 
 .overviewTitle {

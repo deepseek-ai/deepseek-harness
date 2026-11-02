@@ -94,6 +94,8 @@ export interface PackageRow {
   readonly enabled: boolean
   /** The entry's fiber phase, null without a live fiber. */
   readonly phase: PluginInfo['fiberPhase']
+  /** Current startup failure projected by the Host inventory. */
+  readonly diagnostic?: string
   /** Why the Host refuses to switch the row, when it does. */
   readonly readOnlyReason?: ReadOnlyReason
 }
@@ -113,7 +115,7 @@ export interface PackageView {
   readonly meta?: PluginLocalizedMeta
   /** Whether the profile declares this dependency; availability separately describes its readable files. */
   readonly installed: boolean
-  /** GUI listing before explicit selection or profile installation; omission means true. */
+  /** Default GUI visibility after package and Host checks; selected or profile-installed bundles remain manageable. */
   readonly listedByDefault?: boolean
   /** Present for a profile dependency the installation does not also supply: the spec `pnpm add` accepts. */
   readonly source?: string
@@ -127,7 +129,7 @@ export interface PackageView {
   readonly enabled: boolean
   /** Why the Host refuses to switch the bundle off or remove it, when it does. */
   readonly readOnlyReason?: ReadOnlyReason
-  /** Why the Host cannot read the bundle, when it cannot. */
+  /** Why the Host cannot read or enable the bundle. */
   readonly error?: ManagementError
   readonly rows: readonly PackageRow[]
 }
@@ -137,7 +139,7 @@ export type InstallSubject = Extract<PluginSpecInspection, { status: 'accepted' 
   readonly spec: string
   /** The installation already provides this bundle; only explicit enablement remains. */
   readonly bundled?: true
-  /** Present for a catalog install or update: desired selection after installation. */
+  /** Explicit selection for a catalog toggle or update; typed installation offers enablement afterward. */
   readonly selection?: boolean
   /** Save an exact dependency version through the generic installer. */
   readonly saveExact?: boolean
@@ -251,6 +253,11 @@ export interface InstallState {
   readonly runs: readonly InstallRun[]
   /** Whether the run's command and output are unfolded, including after reopening. */
   readonly detailsOpen: boolean
+  /**
+   * The complete Host log file of the run that settled the dialog, which the details point
+   * to for diagnostics the captured terminal output does not carry; null until a run settles.
+   */
+  readonly logPath: string | null
   /** The bundle ready for enablement, from an install run or the installation; catalog operations carry their selection. */
   readonly installed: string | null
   /** The available bundle's manifest version; null when undeclared. */
@@ -273,6 +280,10 @@ export interface InstallState {
     /** The packages an `incompatible-version` refusal names. */
     readonly incompatible?: readonly IncompatiblePlugin[]
     readonly kind?: PluginInstallFailureKind
+    /** The step the failed change reached; `enable` means the installation finished and applying the bundle failed. */
+    readonly stage?: ChangeResult['stage']
+    /** Whether the failed change also asked to enable the installed bundle; an enable-stage sentence needs both. */
+    readonly enabled?: boolean
     /** What the last failed run could not reach, as the Host attributed it: the registry, or the spec's own host. */
     readonly failedAt?: 'registry' | 'spec-host'
     readonly pendingBuilds?: readonly string[]
@@ -494,16 +505,18 @@ class RemoteAnswerError extends Error {
   }
 }
 
-/** The dialog's reading of a failed change: the Host's code and diagnostic, and the run's classified failure. */
+/** The dialog's reading of a failed change: the Host's code and diagnostic, the step it reached, and the run's classified failure. */
 function failureOf(
-  error: ManagementError | undefined, kind: PluginInstallFailureKind | undefined, pendingBuilds?: readonly string[],
-  failedAt?: ChangeResult['failedAt'],
+  error: ManagementError | undefined, kind: PluginInstallFailureKind | undefined, pendingBuilds: readonly string[] | undefined,
+  failedAt: ChangeResult['failedAt'], stage: ChangeResult['stage'], enabled: ChangeResult['enabled'],
 ): NonNullable<InstallState['failure']> {
   return {
     reason: error?.diagnostic ?? '',
     ...error === undefined ? {} : { code: error.code },
     ...error?.incompatible === undefined ? {} : { incompatible: error.incompatible },
     ...kind === undefined ? {} : { kind },
+    stage,
+    ...enabled === undefined ? {} : { enabled },
     ...failedAt === undefined ? {} : { failedAt },
     ...pendingBuilds === undefined || pendingBuilds.length === 0 ? {} : { pendingBuilds },
   }
@@ -547,6 +560,7 @@ export function packageView(bundle: BundleInfo, plugins: readonly PluginInfo[]):
       moduleName: row.moduleName,
       enabled: live?.enabled ?? false,
       phase: live?.fiberPhase ?? null,
+      ...live?.diagnostic === undefined ? {} : { diagnostic: live.diagnostic },
       ...row.meta === undefined ? {} : { meta: row.meta },
       ...row.entryId === undefined ? {} : { entryId: row.entryId },
       ...live?.readOnlyReason === undefined ? {} : { readOnlyReason: live.readOnlyReason },
@@ -585,7 +599,7 @@ export function sortPackages(packages: readonly PackageView[]): PackageView[] {
 
 const IDLE_INSTALL: InstallState = {
   open: false, spec: '', registries: null, registry: OFFICIAL_REGISTRY, registryOpen: false, registryError: false, attempts: null,
-  phase: 'idle', inputError: null, subject: null, runs: [], detailsOpen: false,
+  phase: 'idle', inputError: null, subject: null, runs: [], detailsOpen: false, logPath: null,
   installed: null, installedVersion: null, restartRequired: false, failure: null, approvedBuilds: [], enabling: false,
 }
 
@@ -994,8 +1008,9 @@ export class PluginManagerController {
   }
 
   /**
-   * Fold a chunk belonging to this installation into its pnpm command.
-   * A final chunk may arrive after the install answer and still updates an existing run.
+   * Fold a chunk belonging to this installation into its run. The install answer and the log travel over
+   * separate transports, so the run that ended the installation can arrive after its answer: a settled
+   * dialog keeps that run too, with the outcome's exit code when the chunk carries none of its own.
    * @param chunk - the chunk the Host forwarded.
    */
   appendLog(chunk: PluginInstallLogChunk): void {
@@ -1006,10 +1021,14 @@ export class PluginManagerController {
       this.installProgress({ requestId: install.requestId, phase: 'installing' })
     }
     const index = install.runs.findIndex(run => run.jobId === chunk.jobId)
-    if (index === -1 && !isInstallPending(install.phase)) return
     const settled = chunk.exitCode === undefined ? {} : { exitCode: chunk.exitCode }
+    const settledRun = install.phase === 'failed' || install.phase === 'done'
+    if (index === -1 && !isInstallPending(install.phase) && !settledRun) return
     const runs = index === -1
-      ? [...install.runs, { jobId: chunk.jobId, command: chunk.argv.join(' '), cwd: chunk.cwd, output: chunk.text, ...settled }]
+      ? [...install.runs, {
+        jobId: chunk.jobId, command: chunk.argv.join(' '), cwd: chunk.cwd, output: chunk.text,
+        ...settledRun && chunk.exitCode === undefined ? { exitCode: null } : settled,
+      }]
       : install.runs.map((run, at) => at === index ? { ...run, output: run.output + chunk.text, ...settled } : run)
     this.patchInstall({ runs })
   }
@@ -1161,12 +1180,21 @@ export class PluginManagerController {
     const install = state.install
     const spec = install.spec.trim()
     if (install.phase === 'checking' || isInstallPending(install.phase) || spec === '') return
+    const listed = state.packages.find(pkg => pkg.name === spec)
+    let catalogSubject = install.subject?.selection === undefined || install.subject.spec !== spec ? undefined : install.subject
+    if (listed?.availability === 'missing' && listed.installTarget !== undefined
+      && listed.error === undefined && catalogSubject === undefined) {
+      const target = listed.installTarget
+      const local = target.spec.startsWith('link:')
+      catalogSubject = {
+        status: 'accepted', kind: local ? 'path' : 'registry', name: listed.name, version: target.version, bundle: true,
+        spec: target.spec, registry: null, ...local ? {} : { saveExact: true },
+      }
+    }
     if (this.ctx.get('productAnalytics')?.enabled) {
       this.analyticsAttempt = { input: sanitizeInstallInput(spec), started: Date.now() }
       this.ctx.get('productAnalytics')?.track('plugin_install_click', { input_value: sanitizeInstallInput(spec) })
     }
-    const listed = state.packages.find(pkg => pkg.name === spec)
-    const catalogSubject = install.subject?.selection === undefined || install.subject.spec !== spec ? undefined : install.subject
     if (listed?.availability === 'installation' && listed.optional && listed.listedByDefault === false
       && !listed.enabled && listed.error === undefined && listed.readOnlyReason === undefined) {
       this.abortInspect()
@@ -1196,7 +1224,7 @@ export class PluginManagerController {
     this.inspectAbort = controller
     this.patchInstall({
       phase: 'checking', inputError: null, subject: catalogSubject ?? null, runs: [], detailsOpen: false, attempts: null, registryOpen: false,
-      installed: null, installedVersion: null, restartRequired: false, failure: null, approvedBuilds: [],
+      installed: null, installedVersion: null, restartRequired: false, failure: null, approvedBuilds: [], logPath: null,
     })
     const read = this.registryRead
     if (read !== undefined && choice === read.choice && read.done !== undefined) {
@@ -1239,7 +1267,10 @@ export class PluginManagerController {
     const requestId = randomUUID() as PluginInstallRequestId
     const request: InstallRequest = { requestId, acknowledged: false, replyLost: false, recovering: false }
     this.request = request
-    this.patchInstall({ phase: 'starting', requestId, subject, runs: [], attempts: null, failure: null, installed: null, installedVersion: null, approvedBuilds: [] })
+    this.patchInstall({
+      phase: 'starting', requestId, subject, runs: [], attempts: null, failure: null, installed: null, installedVersion: null,
+      approvedBuilds: [], logPath: null,
+    })
     // The Host announces `plugin-manager/changed` while the run is still on
     // the wire, and every such event reads again; those reads must not cancel
     // the run's settlement.
@@ -1295,7 +1326,8 @@ export class PluginManagerController {
       const packages = result.packageResult
       this.patchInstall({
         phase: 'failed', runs: settledRuns(runs, packages?.exitCode ?? null),
-        failure: failureOf(result.error, packages?.kind, result.pendingBuilds, result.failedAt),
+        failure: failureOf(result.error, packages?.kind, result.pendingBuilds, result.failedAt, result.stage, result.enabled),
+        logPath: result.packageResult?.logPath ?? null,
         ...asked,
       })
     } else {
@@ -1305,6 +1337,7 @@ export class PluginManagerController {
         installedVersion: result.version ?? null,
         restartRequired: result.application === 'restart-required',
         ...result.restartReason === undefined ? {} : { restartReason: result.restartReason },
+        logPath: result.packageResult?.logPath ?? null,
         approvedBuilds: result.approvedBuilds ?? [],
         ...asked,
       })

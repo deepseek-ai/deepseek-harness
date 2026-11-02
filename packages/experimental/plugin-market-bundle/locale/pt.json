@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Índices de plug-ins personalizados",
-    "description": "Adiciona uma guia Descobrir a Plug-ins para navegar e instalar pacotes dos índices de plug-ins que você adicionar.",
+    "description": "Adiciona a guia “Descubra” a “Plug-ins”, onde você navega e instala plug-ins dos índices de plug-ins que adiciona.",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -44,7 +44,7 @@ async function onlyRootAgent(ctx: Context): Promise<Agent> {
   // Configured agents publish asynchronously (persistence create/resume runs
   // before publication), so a settled Loader does not imply a registered
   // agent yet; wait for the first publication instead of requiring it.
-  if (registry.roots().length === 0) {
+  if (registry.list().filter(agent => agent.session.header.origin !== 'subagent').length === 0) {
     await new Promise<void>((resolve) => {
       const dispose = ctx.on('agent/created', () => {
         dispose()
@@ -52,7 +52,7 @@ async function onlyRootAgent(ctx: Context): Promise<Agent> {
       })
     })
   }
-  const agents = registry.roots()
+  const agents = registry.list().filter(agent => agent.session.header.origin !== 'subagent')
   const [agent] = agents
   if (agent === undefined || agents.length !== 1) {
     throw new Error(`fixture turn requires exactly one top-level agent, found ${agents.length}`)

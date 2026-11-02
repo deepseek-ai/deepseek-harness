@@ -207,6 +207,14 @@ describe('GoalBar', () => {
     expect(screen.getByText('受阻的目标').closest('[title]')?.getAttribute('title')).toBe('No progress in 3 rounds')
   })
 
+  it('blocked goal: offers resume and no pause', () => {
+    const actions = makeActions()
+    render(<GoalBar goal={makeGoal({ phase: 'blocked' })} {...actions} t={t} />)
+    expect(screen.queryByRole('button', { name: '暂停目标' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '恢复目标' }))
+    expect(actions.onResume).toHaveBeenCalledTimes(1)
+  })
+
   it('blocked goal without a reason carries no tooltip', () => {
     const actions = makeActions()
     render(<GoalBar goal={makeGoal({ phase: 'blocked' })} {...actions} t={t} />)

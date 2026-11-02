@@ -20,6 +20,7 @@ const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn<ExecFileMock>()
 
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 import { pickNativeDirectory, type DirectoryPickerRunner } from '../src/native-picker.ts'
 
@@ -57,6 +58,107 @@ describe('native directory picker', () => {
   it('surfaces a macOS panel failure instead of reading it as a cancel', async () => {
     const run = vi.fn<DirectoryPickerRunner>(async () => { throw failure(1, 'execution error: User canceled. (-128)') })
     await expect(pickNativeDirectory(signal(), { platform: 'darwin', run })).rejects.toThrow('command failed')
+  })
+
+  // This VM checks script scheduling and results; native focus requires a macOS test.
+  it.each([
+    { label: 'returns the selected path', response: 1, path: '/tmp/selected workspace', expected: '/tmp/selected workspace' },
+    { label: 'returns null on cancel despite a highlighted directory', response: 0, path: '/tmp/highlighted workspace', expected: null },
+    { label: 'returns null when OK has no selected URL', response: 1, path: null, expected: null },
+  ])('queues macOS activation for the modal loop and $label', async ({ response, path, expected }) => {
+    const operations: (() => void)[] = []
+    const modalEntries: object[] = []
+    const activationPhases: boolean[] = []
+    let modalRunning = false
+    const menu = { addItem: vi.fn(), addItemWithTitleActionKeyEquivalent: vi.fn() }
+    const objectAtIndex = vi.fn((_index: number) => ({ path }))
+    const readURLs = vi.fn(() => ({
+      count: path === null ? 0 : 1,
+      objectAtIndex,
+    }))
+    const unwrap = vi.fn((value: string) => value)
+    const activate = vi.fn(() => {
+      activationPhases.push(modalRunning)
+    })
+    const panel = {
+      canChooseFiles: true,
+      canChooseDirectories: false,
+      canCreateDirectories: false,
+      allowsMultipleSelection: true,
+      message: '',
+      get runModal(): number {
+        modalEntries.push({
+          canChooseFiles: panel.canChooseFiles,
+          canChooseDirectories: panel.canChooseDirectories,
+          canCreateDirectories: panel.canCreateDirectories,
+          allowsMultipleSelection: panel.allowsMultipleSelection,
+          message: panel.message,
+          activationCount: activate.mock.calls.length,
+          queuedOperationCount: operations.length,
+        })
+        modalRunning = true
+        for (const operation of operations) operation()
+        modalRunning = false
+        return response
+      },
+      get URLs() { return readURLs() },
+    }
+    const app = {
+      setActivationPolicy: vi.fn(),
+      activateIgnoringOtherApps: activate,
+    }
+    const run = vi.fn<DirectoryPickerRunner>(async (_command, args) => {
+      // osascript receives -l JavaScript -e <source>, followed by run(argv)'s arguments.
+      const [, , , source, ...argv] = args
+      const result: unknown = runInNewContext(`${source}\nrun(argv)`, {
+        argv,
+        ObjC: { import: vi.fn(), unwrap },
+        $: {
+          NSApplication: { sharedApplication: app },
+          NSApplicationActivationPolicyAccessory: 1,
+          NSMenu: { alloc: { init: menu, initWithTitle: () => menu } },
+          NSMenuItem: { alloc: { init: {} } },
+          NSOpenPanel: { openPanel: panel },
+          NSOperationQueue: {
+            mainQueue: {
+              addOperationWithBlock: (operation: () => void) => {
+                operations.push(operation)
+              },
+            },
+          },
+          NSModalResponseOK: 1,
+        },
+      })
+      if (typeof result !== 'string') throw new TypeError('macOS panel script did not return a string')
+      return { stdout: `${result}\n`, stderr: '' }
+    })
+
+    const selectedPath = await pickNativeDirectory(signal(), { platform: 'darwin', run })
+    expect(selectedPath).toBe(expected)
+    expect(run).toHaveBeenCalledOnce()
+    expect(run.mock.calls[0]![1]).toEqual(['-l', 'JavaScript', '-e', expect.any(String), 'Select Workspace Directory'])
+    expect(modalEntries).toEqual([{
+      canChooseFiles: false,
+      canChooseDirectories: true,
+      canCreateDirectories: true,
+      allowsMultipleSelection: false,
+      message: 'Select Workspace Directory',
+      activationCount: 0,
+      queuedOperationCount: 1,
+    }])
+    expect(activationPhases).toEqual([true])
+    expect(activate).toHaveBeenCalledOnce()
+    expect(activate).toHaveBeenCalledWith(true)
+    expect(readURLs).toHaveBeenCalledTimes(response === 1 ? 1 : 0)
+    if (expected === null) {
+      expect(objectAtIndex).not.toHaveBeenCalled()
+      expect(unwrap).not.toHaveBeenCalled()
+    } else {
+      expect(objectAtIndex).toHaveBeenCalledOnce()
+      expect(objectAtIndex).toHaveBeenCalledWith(0)
+      expect(unwrap).toHaveBeenCalledOnce()
+      expect(unwrap).toHaveBeenCalledWith(path)
+    }
   })
 
   it.each([

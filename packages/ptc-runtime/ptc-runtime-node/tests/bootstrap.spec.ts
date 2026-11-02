@@ -1,22 +1,13 @@
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
-import { LogBuffer, makeBindingErrorClasses, makeConsoleShim, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException, runProgram } from '../src/bootstrap.ts'
-import type { PatchableStream } from '../src/bootstrap.ts'
+import { LogBuffer, makeBindingErrorClass, makeConsoleShim, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException } from '../src/bootstrap.ts'
+import type { BindingErrorConstructor, PatchableStream } from '../src/bootstrap.ts'
 import type { HostMethods } from '../src/protocol.ts'
-import { decodePtcJsonWire, encodePtcJsonWire } from '../src/json-wire.ts'
+import { encodePtcJsonWire } from '../src/json-wire.ts'
 
-function host(): Omit<HostMethods, 'ready'> & { logs: string[]; limits: number } {
-  const calls = {
-    logs: [] as string[], limits: 0,
-    invoke: vi.fn<HostMethods['invoke']>(async () => encodePtcJsonWire(42)),
-    log: (text: string) => { calls.logs.push(text) },
-    outputLimit: () => { calls.limits += 1 },
-  }
-  return calls
+function host(): Pick<HostMethods, 'invoke'> {
+  return { invoke: vi.fn<HostMethods['invoke']>(async () => encodePtcJsonWire(42)) }
 }
-function fakeStreams(): { stdout: PatchableStream; stderr: PatchableStream } {
-  return { stdout: { write: () => true }, stderr: { write: () => true } }
-}
-const BOOT = { maxOutputBytes: 65_536 }
 const TOOL_ERROR_CLASS = { name: 'ToolCallError', memberNameProperty: 'toolName' } as const
 function toolNamespace(names: string[]) { return { global: 'tools', names, errorClass: TOOL_ERROR_CLASS } }
 
@@ -136,6 +127,15 @@ describe('prepareCompletion', () => {
 })
 
 describe('prepareException', () => {
+  it.each([
+    ['const error = new Error("foreign"); error.stack = "foreign stack"; error', 'foreign stack'],
+    ['const error = new Error("bare"); error.stack = undefined; error', 'bare'],
+    ['const error = new Error("hidden"); Object.defineProperty(error, "stack", { get() { throw 1 } }); error', 'program threw an unrenderable value'],
+  ])('formats a cross-realm error through the shared diagnostic path: %s', (source, message) => {
+    const error: unknown = runInNewContext(source)
+    expect(prepareException(error, 1_000)).toEqual({ error: { kind: 'exception', message } })
+  })
+
   it('passes a fitting diagnostic and rejects one byte over without carrying its text', () => {
     expect(prepareException('boom', 6, 64)).toEqual({ error: { kind: 'exception', message: 'boom' } })
     expect(prepareException('boom', 5, 64)).toEqual({
@@ -160,7 +160,7 @@ describe('makeNamespaces', () => {
   it('rejects malformed remote results and keeps prototype-colliding function names callable', async () => {
     const remote = host()
     remote.invoke = vi.fn(async (_global, name) => name === 'bad' ? [undefined] as never : encodePtcJsonWire(`${name}-ok`))
-    const [tools] = makeNamespaces({ namespaces: [{ global: 'tools', names: ['bad', '__proto__', 'constructor', 'toString'] }] }, remote) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const [tools] = makeNamespaces({ namespaces: [{ global: 'tools', names: ['bad', '__proto__', 'constructor', 'toString'] }] }, remote, new Map<string, BindingErrorConstructor>()) as [Record<string, (args: unknown) => Promise<unknown>>]
     expect(Object.getPrototypeOf(tools)).toBeNull()
     for (const name of ['__proto__', 'constructor', 'toString']) await expect(tools[name]?.({})).resolves.toBe(`${name}-ok`)
     await expect(tools.bad?.({})).rejects.toThrow('binding resolution must be lossless JSON')
@@ -169,7 +169,7 @@ describe('makeNamespaces', () => {
   it('uses the declared constructor for remote and argument failures', async () => {
     const remote = host()
     const data = { namespaces: [toolNamespace(['x'])] }
-    const classes = makeBindingErrorClasses(data)
+    const classes = new Map([['tools', makeBindingErrorClass(TOOL_ERROR_CLASS)]])
     const [tools] = makeNamespaces(data, remote, classes) as [Record<string, (args: unknown) => Promise<unknown>>]
     const decorated = [1]
     Object.defineProperty(decorated, 'extra', { value: true })
@@ -189,66 +189,8 @@ describe('makeNamespaces', () => {
   it('uses ordinary Error when the namespace declares no rejection class', async () => {
     const remote = host()
     remote.invoke = async () => { throw new Error('helper denied') }
-    const [helpers] = makeNamespaces({ namespaces: [{ global: 'helpers', names: ['x'] }] }, remote) as [Record<string, (args: unknown) => Promise<unknown>>]
+    const [helpers] = makeNamespaces({ namespaces: [{ global: 'helpers', names: ['x'] }] }, remote, new Map<string, BindingErrorConstructor>()) as [Record<string, (args: unknown) => Promise<unknown>>]
     await expect(helpers.x?.({})).rejects.toMatchObject({ name: 'Error', message: 'helper denied' })
     await expect(helpers.x?.(() => 1)).rejects.toThrow('binding arguments must be lossless JSON')
-  })
-})
-
-describe('runProgram', () => {
-  it('returns the completion after streaming logs and invoking host functions', async () => {
-    const remote = host()
-    remote.invoke = async (_global, _name, wire) => {
-      const args = decodePtcJsonWire(wire) as { n: number }
-      return encodePtcJsonWire(args.n * 2)
-    }
-    const result = await runProgram(remote, { ...BOOT, code: 'const doubled = await tools.double({ n: 21 }); console.log("got", doubled); return { doubled };', namespaces: [{ global: 'tools', names: ['double'] }] }, fakeStreams())
-    expect(remote.logs).toEqual(['got 42'])
-    expect(decodePtcJsonWire(result.value)).toEqual({ doubled: 42 })
-  })
-
-  it('reports captured output overflow before completing', async () => {
-    const remote = host()
-    const result = await runProgram(remote, { maxOutputBytes: 4, code: 'console.log("12345"); return null', namespaces: [] }, fakeStreams())
-    expect(remote.logs).toEqual([])
-    expect(remote.limits).toBe(1)
-    expect(result).toEqual({ error: { kind: 'output-limit', message: 'outer output exceeded 4 bytes' } })
-  })
-
-  it.each([
-    ['throw new Error("boom")', 'boom'],
-    ['throw "raw-throw"', 'raw-throw'],
-    ['const e = new Error("bare"); e.stack = undefined; throw e', 'bare'],
-  ])('returns bounded program exceptions for %s', async (code, message) => {
-    const result = await runProgram(host(), { ...BOOT, code, namespaces: [] }, fakeStreams())
-    expect(result.error?.kind).toBe('exception')
-    expect(result.error?.message).toContain(message)
-    expect(result.value).toBeUndefined()
-  })
-
-  it.each(['throw "x".repeat(1_000_000)', 'throw new Error("x".repeat(1_000_000))'])('bounds large diagnostics for %s', async (code) => {
-    expect(await runProgram(host(), { maxOutputBytes: 64, code, namespaces: [] }, fakeStreams())).toEqual({ error: { kind: 'output-limit', message: 'outer output exceeded 64 bytes' } })
-  })
-
-  it.each([
-    ['tools', 'ToolCallError', 'toolName'],
-    ['helpers', 'HelperCallError', 'helperName'],
-  ])('injects the declared rejection class for %s', async (global, name, memberNameProperty) => {
-    const remote = host()
-    remote.invoke = async () => { throw new Error('denied by host') }
-    const result = await runProgram(remote, {
-      ...BOOT,
-      code: `try { await ${global}.x({}) } catch (error) { return { caught: error instanceof ${name}, name: error.name, member: error.${memberNameProperty}, message: error.message } }`,
-      namespaces: [{ global, names: ['x'], errorClass: { name, memberNameProperty } }],
-    }, fakeStreams())
-    expect(decodePtcJsonWire(result.value)).toEqual({ caught: true, name, member: 'x', message: 'denied by host' })
-  })
-
-  it('leaves the owned output streams connected to their capture sink', async () => {
-    const remote = host()
-    const streams = fakeStreams()
-    await runProgram(remote, { ...BOOT, code: 'return 1', namespaces: [] }, streams)
-    streams.stdout.write('captured')
-    expect(remote.logs).toEqual(['captured'])
   })
 })

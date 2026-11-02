@@ -16,7 +16,7 @@ Status: implemented
 
 ### 工具与模型约定
 
-`get_goal()` 返回当前目标或 `null`。非空结果包含用于比较并交换的 id 与修订号、目标描述、持久阶段、已接纳和最大 Goal Round 数、可能存在的阻塞原因，以及进程本地激活态观察。`create_goal(objective, max_goal_rounds?)` 创建一个长时间运行的同会话目标。`update_goal(goal_id, revision, action, objective?, max_goal_rounds?, blocked_reason?)` 支持 `edit`、`pause`、`resume`、`complete` 和 `blocked`；替换字段仅对 `edit` 有效，非空的 `blocked_reason` 仅在 `blocked` 时必填，并以稳定代码 `model-reported` 持久化。持久 paused goal 会以 `GOAL_TOOL_RESUME_PAUSED` 拒绝 `resume`；面向用户的命令或 Web 控件拥有该转换。执行器把值恰好为空字符串的可选字段和值为 0 的 `max_goal_rounds` 视为严格 schema 占位值：这些值等同于省略；编辑时仍必须提供至少一个有实际意义的替换字段；所有非占位值仍受对应操作的限制。
+`get_goal()` 返回当前目标或 `null`。非空结果包含用于比较并交换的 id 与修订号、目标描述、持久阶段、已接纳和最大 Goal Round 数、可能存在的阻塞原因，以及进程本地激活态观察。`create_goal(objective, max_goal_rounds?)` 创建一个长时间运行的同会话目标。`update_goal(goal_id, revision, action, objective?, max_goal_rounds?, blocked_reason?)` 支持 `edit`、`pause`、`resume`、`complete` 和 `blocked`；替换字段仅在 `edit` 时使用，非空的 `blocked_reason` 仅在 `blocked` 时必填，并以稳定代码 `model-reported` 持久化。持久 paused goal 会以 `GOAL_TOOL_RESUME_PAUSED` 拒绝 `resume`；面向用户的命令或 Web 控件拥有该转换。对于 `edit`，值恰好为空字符串的目标描述和值为 0 的 `max_goal_rounds` 视为省略，且至少需要一个有实际意义的替换字段。每个 action 都忽略它不使用的已知可选字段（[理由](../bug-fix/2026-09-20-unambiguous-tool-arguments.zh.md)）。
 
 提示词告诉模型：它可以从任何措辞或语言的直接人类请求中推断目标意图，但不应把常规单轮工作转换为目标。更新前必须读取当前目标，并复制准确的 id 和修订号。对于恢复或 fork 后处于活跃但未激活状态的目标，人类在语义上要求继续即可成为执行 `resume` 的依据。提示词不会静态声明持久 paused 的边界；执行时以 `GOAL_TOOL_RESUME_PAUSED` 拒绝该尝试，面向用户的恢复路径拥有该转换。只有目标已经实现时才能标记完成，困难或不确定性本身不构成阻塞；阻塞报告必须说明具体条件。
 
@@ -48,7 +48,7 @@ Status: implemented
 - **根据持久的根或 fork 元数据授权**——不予采纳，因为作为顶层会话独立恢复的 fork 应接受新的人类权限，而当前仍受所有权约束的 subagent 则不应接受。
 - **允许自主 Round 编辑或恢复目标**——不予采纳，因为继续执行权限比重新定义或重启人类目标的权限更窄。
 - **把阻塞阈值当作评估器**——不予采纳，因为事件计数无法证明障碍在语义上未改变或确实不可继续。
-- **拒绝所有已提供的特定操作字段**——不予采纳，因为采用严格 schema 的提供方可能为每个可选字段序列化零值占位符；只有有实际意义的字段值才能表示与指定操作相冲突的另一项操作。
+- **拒绝所有已提供的特定操作字段**——不予采纳，因为采用严格 schema 的提供方可能为每个可选字段序列化零值占位符；只有有实际意义的字段值才能表示与指定操作相冲突的另一项操作。[无关字段决策](../bug-fix/2026-09-20-unambiguous-tool-arguments.zh.md)规定了哪些已填写字段会被忽略。
 
 ## 后果
 

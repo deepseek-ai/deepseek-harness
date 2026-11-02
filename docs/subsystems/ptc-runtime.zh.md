@@ -19,9 +19,11 @@ interface PtcRunRequest {
   /**
    * The program source, in the runtime's {@link ../index.ts | language}. It
    * follows the provider's programFormat: an async function body supports
-   * top-level `await` and `return`; a REPL supports top-level declarations,
-   * `await`, and a final expression. The completion value becomes
-   * {@link PtcRunResult.value}.
+   * top-level `await` and `return`; REPL and Script programs support top-level
+   * declarations, `await`, and a final expression, but not top-level `return`.
+   * The Script provider lowers top-level await; its executionInstructions and
+   * documentation define retained-binding semantics. The completion value
+   * becomes {@link PtcRunResult.value}.
    */
   program: string
   /**
@@ -84,7 +86,7 @@ interface PtcRunResult {
   /** Applied file policy and observed denial, when the provider enforces file policy. */
   sandbox?: PtcRunSandbox
   /**
-   * The program's completion value (a return or final REPL expression), when it ran to
+   * The program's completion value (a return or final REPL/Script expression), when it ran to
    * completion and the value crossed the runtime's lossless-JSON boundary.
    * Invalid or over-limit completions fail the run instead of substituting a
    * rendered string; a failed or value-less run leaves this absent.
@@ -101,7 +103,12 @@ interface PtcRunResult {
 }
 ```
 
-`programFormat` 区分异步函数体与 REPL 语句。`stateOwner` 是标识可选保留内存的进程内对象身份；不同对象相互隔离。消费者在所有者结束时等待 `release(owner)`；清理失败时该调用拒绝。省略所有者时仅执行一次，无状态提供方忽略所有权。[持久 Node 提供方](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl)定义重置和恢复行为；保留对象不会进入持久 Session 格式。
+```ts type-equiv
+/** Source evaluation form, independent of retained program state. */
+type PtcProgramFormat = 'function-body' | 'repl' | 'script'
+```
+
+`programFormat` 区分异步函数体、REPL 语句与脚本。REPL 与 Script 程序接受顶层 `await`、声明和末尾表达式，不支持顶层 `return`。Node Script 提供方转换顶层 await 并等待完成值；其[声明限制](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#known-limitations-and-deferred-work)适用于转换后的程序。`retainsState` 独立于源码语法报告是否保留内存。`stateOwner` 是标识可选保留内存的进程内对象身份；不同对象相互隔离。消费者在所有者结束时等待 `release(owner)`；清理失败时该调用拒绝。省略所有者时仅执行一次，无状态提供方忽略所有权。[持久 Node 提供方](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl)定义重置和恢复行为；保留对象不会进入持久 Session 格式。
 
 ## 绑定：宿主函数作为程序全局变量
 

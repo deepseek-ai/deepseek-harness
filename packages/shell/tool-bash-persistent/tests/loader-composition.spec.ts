@@ -165,6 +165,14 @@ suite('persistent Bash through a real cordis.yml Loader composition', () => {
     ))
     expect(heredoc).toBe('alpha\nbeta\n[Command finished with exit code 0]')
 
+    // Interactive bash applies history expansion to typed input before parsing;
+    // it must neither rewrite `!` sequences nor drop the whole wrapper line.
+    const history = text(await execute(
+      'history-expansion',
+      "echo '<!doctype html>' > page.html; cat page.html; echo 'it'; echo hi!!",
+    ))
+    expect(history).toBe('<!doctype html>\nit\nhi!!\n[Command finished with exit code 0]')
+
     const pipeline = text(await execute(
       'pipeline',
       '{ sleep 0.1; printf "delayed\\n"; } | cat',

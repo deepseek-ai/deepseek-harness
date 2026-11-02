@@ -66,7 +66,7 @@ Web 与桌面端的通用设置底部显示当前发布版本，使用构建注�
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-外壳声明 settings.launcher，供账号功能提供侧边栏菜单，并以设置按钮作为回退。入口接收 settingsOpen，其 false→true 边沿代表一次进入设置页，因此注册方在每次进入时执行一次，而不是在同一次打开中的每次重渲染执行。关闭对话框后，焦点返回当前入口。
+外壳声明 settings.launcher，供账号功能提供侧边栏菜单，并以设置按钮作为回退。入口接收 settingsOpen，其 false→true 边沿代表一次进入设置页，因此注册方在每次进入时执行一次，而不是在同一次打开中的每次重渲染执行。关闭对话框后，焦点返回当前入口。侧栏展开时，回退按钮采用导航行的紧凑图文对齐及内缩悬停底色。贡献入口自行拥有内缩；外壳保持行宽占满可用空间，状态指示器的尾侧边缘不随账号状态移动。折叠轨道保留居中的 36 × 36 px 控件。
 
 <details>
 <summary>实现细节——点击展开</summary>
@@ -75,7 +75,7 @@ Web 与桌面端的通用设置底部显示当前发布版本，使用构建注�
 
 ### 账本投影
 
-导航是 `settings.section` 账本的投影；导航 label 可以是跟随语言的 thunk，经 `resolveSlotLabel` 解析，并在分区账本更新或 locale revision 变化时重新渲染（`ctx.get('locale')` 可选读取，无硬 locale 依赖）。引导账本按升序投影；当前注册方会收到该条目的 id、`complete()` 与 `openSection(id)` 回调，完成或跳过当前步骤后，所有权转交给下一项。
+导航是 `settings.section` 账本的投影；导航 label 可以是跟随语言的 thunk，经 `resolveSlotLabel` 解析，并在分区账本更新或 locale revision 变化时重新渲染（`ctx.get('locale')` 可选读取，无硬 locale 依赖）。每行渲染匹配的 `settings.section.icon` 贡献；没有贡献时，已知内置分区使用各自的图标，其他 id 使用设置齿轮。引导账本按升序投影；当前注册方会收到该条目的 id、`complete()` 与 `openSection(id)` 回调，完成或跳过当前步骤后，所有权转交给下一项。
 
 ### 连接恢复
 

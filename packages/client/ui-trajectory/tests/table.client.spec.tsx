@@ -6,6 +6,7 @@ import { es, pt } from '../src/client/locales.ts'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { useState, type ComponentProps, type ReactNode } from 'react'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
@@ -13,7 +14,7 @@ import type { MessageImageLoader, MessageImagesOwnerProps } from '@deepseek-ai/d
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { TrajectoryTable as LocalizedTrajectoryTable } from '../src/client/TrajectoryTable.tsx'
 import { deriveTrajectoryLayout, type TrajectoryTurnModel } from '../src/client/layout.ts'
-import { trajectoryRecordId } from '../src/client/trajectory-record.ts'
+import { trajectoryRecordId, type TrajectoryCellProps } from '../src/client/trajectory-record.ts'
 import { t, tZh } from './locale.client.ts'
 
 const loadImage: MessageImageLoader = async () => 'blob:trajectory'
@@ -159,6 +160,8 @@ const FOLD_PROPS = {
   onToggleTurn: () => {},
   collapsedAssistants: new Set<string>(),
   onToggleAssistant: () => {},
+  collapsedTools: new Set<string>(),
+  onToggleTool: () => {},
 }
 
 describe('TrajectoryTable', () => {
@@ -209,6 +212,8 @@ describe('TrajectoryTable', () => {
         onToggleTurn={() => {}}
         collapsedAssistants={new Set([trajectoryRecordId(assistant)])}
         onToggleAssistant={() => {}}
+        collapsedTools={new Set()}
+        onToggleTool={() => {}}
       />,
     )
 
@@ -1133,6 +1138,103 @@ describe('TrajectoryTable', () => {
     expect(turnLabel.textContent).toContain('#1')
   })
 
+  it.each([null, false, 0, '', { answer: 42 }])('shows raw value %j above rendered output and releases it across selections', (value) => {
+    const turns: readonly TrajectoryTurnModel[] = [{ turn: 1, groups: [{ title: 'Step 1', cells: [
+      { index: 1, kind: 'tool', text: 'recorded', outputDetail: 'rendered answer', resultSeq: 42, timeSeconds: 0.1 },
+      { index: 2, kind: 'subtool', text: 'historical', outputDetail: 'old answer', timeSeconds: 0.1 },
+    ] }] }]
+    const dispose = vi.fn()
+    const watchToolResult = vi.fn<NonNullable<TableProps['watchToolResult']>>((_seq, publish) => {
+      publish(value)
+      return dispose
+    })
+    const view = render(<TrajectoryTable turns={turns} {...FOLD_PROPS} watchToolResult={watchToolResult} />)
+    fireEvent.click(screen.getByRole('row', { name: /recorded/ }))
+    expect(watchToolResult).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+    const raw = screen.getByRole('region', { name: 'Raw result' })
+    const rendered = screen.getByRole('region', { name: 'Rendered result' })
+    expect(raw.compareDocumentPosition(rendered) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(raw.textContent).toContain(typeof value === 'object' && value !== null ? 'answer:' : JSON.stringify(value))
+    expect(within(rendered).getByText('rendered answer')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Raw result' })).toBeNull()
+    fireEvent.click(screen.getByRole('row', { name: /historical/ }))
+    expect(dispose).toHaveBeenCalledOnce()
+    expect(screen.getByText('Raw results are only available for live tool calls')).toBeTruthy()
+    expect(screen.getByText('old answer')).toBeTruthy()
+    fireEvent.click(screen.getByRole('row', { name: /recorded/ }))
+    expect(screen.queryByText('Raw results are only available for live tool calls')).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: 'Summary' }))
+    expect(dispose).toHaveBeenCalledTimes(2)
+    view.unmount()
+  })
+
+  it.each(['tool', 'subtool'] as const)('shows an in-flight PTC %s as running before retaining its failure output', (kind) => {
+    const cell: TrajectoryCellProps = {
+      index: 1, kind, text: 'pending-call', timeSeconds: null, toolName: 'run_code',
+      inputDetail: JSON.stringify({ code: 'return 42', description: 'pending-call' }),
+    }
+    const turns = (current: TrajectoryCellProps): readonly TrajectoryTurnModel[] => [
+      { turn: 1, groups: [{ title: 'Step 1', cells: [current] }] },
+    ]
+    const view = render(<TrajectoryTable turns={turns(cell)} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /pending-call/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+    const raw = screen.getByRole('region', { name: 'Raw result' })
+    expect(within(raw).getByText('Running…')).toBeTruthy()
+    expect(within(raw).queryByText('Raw results are only available for live tool calls')).toBeNull()
+    view.rerender(<TrajectoryTable turns={turns({
+      ...cell, isError: true, outputDetail: 'Error: execution failed', timeSeconds: 0.1,
+    })} {...FOLD_PROPS} />)
+    expect(within(raw).getByText('Raw results are only available for live tool calls')).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Rendered result' }).textContent).toContain('Error: execution failed')
+  })
+
+  it('keeps rendered output visible when the raw value unloads and ignores stale callbacks', () => {
+    const callbacks: ((value: JsonValue | undefined) => void)[] = []
+    const dispose = vi.fn()
+    const watchToolResult: NonNullable<TableProps['watchToolResult']> = (_seq, publish) => {
+      callbacks.push(publish)
+      publish({ live: true })
+      return dispose
+    }
+    const turns: readonly TrajectoryTurnModel[] = [{ turn: 1, groups: [{ title: 'Step 1', cells: [
+      { index: 1, kind: 'tool', text: 'live result', outputDetail: 'rendered', resultSeq: 42, timeSeconds: 0.1 },
+      { index: 2, kind: 'tool', text: 'historical result', outputDetail: 'historical', timeSeconds: 0.1 },
+    ] }] }]
+    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} watchToolResult={watchToolResult} />)
+    fireEvent.click(screen.getByRole('row', { name: /live result/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+    expect(screen.getByRole('region', { name: 'Raw result' }).textContent).toContain('live:')
+    act(() => { callbacks[0]?.(undefined) })
+    expect(screen.getByText('Raw results are only available for live tool calls')).toBeTruthy()
+    expect(screen.getByText('rendered')).toBeTruthy()
+    fireEvent.click(screen.getByRole('row', { name: /historical result/ }))
+    expect(dispose).toHaveBeenCalledOnce()
+    act(() => { callbacks[0]?.({ live: true }) })
+    expect(screen.getByText('Raw results are only available for live tool calls')).toBeTruthy()
+    expect(screen.getByText('historical')).toBeTruthy()
+  })
+
+  it('keeps both result sections when rendered JSON equals the raw value', () => {
+    const turns: readonly TrajectoryTurnModel[] = [{ turn: 1, groups: [{ title: 'Step 1', cells: [{
+      index: 1, kind: 'tool', text: 'json-result', outputDetail: '{"answer":42}', resultSeq: 42, timeSeconds: 0.1,
+      outputBlocks: [{ type: 'text', content: '{"answer":42}' }],
+    }] }] }]
+    const watchToolResult: NonNullable<TableProps['watchToolResult']> = (_seq, publish) => {
+      publish({ answer: 42 })
+      return () => {}
+    }
+    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} watchToolResult={watchToolResult} />)
+    fireEvent.click(screen.getByRole('row', { name: /json-result/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Result' }))
+    for (const name of ['Raw result', 'Rendered result']) {
+      const section = within(screen.getByRole('region', { name }))
+      expect(section.getByRole('tree').textContent).toContain('answer:42')
+      expect(section.queryAllByRole('button')).toHaveLength(0)
+    }
+  })
+
   it('renders a single-text JSON tool result as a JSON tree', () => {
     const turns: readonly TrajectoryTurnModel[] = [{
       turn: 1,
@@ -1320,6 +1422,164 @@ describe('TrajectoryTable', () => {
       }],
     }],
   }]
+
+  const NESTED_CALL_TURNS: readonly TrajectoryTurnModel[] = [{
+    turn: 1,
+    groups: [{
+      title: 'Step 1',
+      cells: [
+        {
+          index: 1,
+          kind: 'message',
+          text: 'Plan',
+          outputDetail: 'Plan',
+          timeSeconds: 1,
+        },
+        {
+          index: 2,
+          kind: 'tool',
+          text: 'run_code · {"code":"..."}',
+          inputDetail: '{"code":"..."}',
+          callId: 'root',
+          timeSeconds: 0.5,
+        },
+        {
+          index: 3,
+          kind: 'subtool',
+          text: 'bash · {"command":"ls"}',
+          callId: 'nested-first',
+          timeSeconds: 0.1,
+        },
+        {
+          index: 4,
+          kind: 'subtool',
+          text: 'read · {"file":"a"}',
+          callId: 'nested-target',
+          timeSeconds: 0.1,
+        },
+        {
+          index: 5,
+          kind: 'tool',
+          text: 'write · {"file":"b"}',
+          callId: 'sibling',
+          timeSeconds: 0.2,
+        },
+      ],
+    }],
+  }]
+
+  const NESTED_CALLS = NESTED_CALL_TURNS[0]!.groups[0]!.cells
+  const NESTED_ASSISTANT_ID = trajectoryRecordId(NESTED_CALLS[0]!)
+  const NESTED_TOOL_ID = trajectoryRecordId(NESTED_CALLS[1]!)
+
+  function toggled<T>(current: ReadonlySet<T>, id: T): Set<T> {
+    const next = new Set(current)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  }
+
+  function NestedCallTable({
+    initialAssistants = [],
+    initialTools = [],
+    initialTurns = [],
+    inspectCallId,
+    onInspectApplied,
+  }: {
+    initialAssistants?: readonly string[]
+    initialTools?: readonly string[]
+    initialTurns?: readonly number[]
+    inspectCallId?: string
+    onInspectApplied?: () => void
+  }) {
+    const [collapsedAssistants, setCollapsedAssistants] = useState(() => new Set(initialAssistants))
+    const [collapsedTools, setCollapsedTools] = useState(() => new Set(initialTools))
+    const [collapsedTurns, setCollapsedTurns] = useState(() => new Set(initialTurns))
+    return (
+      <TrajectoryTable
+        turns={NESTED_CALL_TURNS}
+        collapsedAssistants={collapsedAssistants}
+        onToggleAssistant={(id) => { setCollapsedAssistants(current => toggled(current, id)) }}
+        collapsedTools={collapsedTools}
+        onToggleTool={(id) => { setCollapsedTools(current => toggled(current, id)) }}
+        collapsedTurns={collapsedTurns}
+        onToggleTurn={(turn) => { setCollapsedTurns(current => toggled(current, turn)) }}
+        {...(inspectCallId === undefined ? {} : { inspectCallId })}
+        {...(onInspectApplied === undefined ? {} : { onInspectApplied })}
+      />
+    )
+  }
+
+  it('folds only a tool\'s subcalls and keeps its sibling tool visible', () => {
+    render(<NestedCallTable initialTools={[NESTED_TOOL_ID]} />)
+
+    const summary = screen.getByRole('row', {
+      name: /Collapsed subcalls summary, 2 tool calls · bash, read/,
+    })
+    expect(summary.getAttribute('data-collapsed-summary')).toBe('tool')
+    expect(summary.textContent).toBe('…2 tool calls · bash, read')
+    expect(summary.tabIndex).toBe(0)
+    expect(screen.getByRole('row', { name: /TOOL.*run_code/ })).toBeTruthy()
+    expect(screen.getByRole('row', { name: /TOOL.*write/ })).toBeTruthy()
+    expect(screen.queryByRole('row', { name: /SUBTOOL/ })).toBeNull()
+  })
+
+  it.each(['click', 'Enter', ' '])('expands a folded subcall summary with %j', (activation) => {
+    render(<NestedCallTable initialTools={[NESTED_TOOL_ID]} />)
+    const summary = screen.getByRole('row', { name: /Collapsed subcalls summary/ })
+
+    if (activation === 'click') fireEvent.click(summary)
+    else fireEvent.keyDown(summary, { key: activation })
+
+    expect(screen.getAllByRole('row', { name: /SUBTOOL/ })).toHaveLength(2)
+    expect(screen.queryByRole('row', { name: /Collapsed subcalls summary/ })).toBeNull()
+  })
+
+  it('preserves nested fold state while outer summaries expand', () => {
+    render(
+      <NestedCallTable
+        initialAssistants={[NESTED_ASSISTANT_ID]}
+        initialTools={[NESTED_TOOL_ID]}
+        initialTurns={[1]}
+      />,
+    )
+
+    expect(screen.getByRole('row', { name: /Collapsed turn summary/ })).toBeTruthy()
+    expect(screen.queryByRole('row', { name: /Collapsed assistant summary/ })).toBeNull()
+    expect(screen.queryByRole('row', { name: /Collapsed subcalls summary/ })).toBeNull()
+
+    fireEvent.click(screen.getByRole('row', { name: /Collapsed turn summary/ }))
+    expect(screen.getByRole('row', { name: /Collapsed assistant summary, 4 tool calls/ }))
+      .toBeTruthy()
+    expect(screen.queryByRole('row', { name: /Collapsed subcalls summary/ })).toBeNull()
+
+    fireEvent.click(screen.getByRole('row', { name: /Collapsed assistant summary/ }))
+    expect(screen.getByRole('row', { name: /Collapsed subcalls summary, 2 tool calls/ }))
+      .toBeTruthy()
+    expect(screen.getByRole('row', { name: /TOOL.*write/ })).toBeTruthy()
+    expect(screen.queryByRole('row', { name: /SUBTOOL/ })).toBeNull()
+
+    fireEvent.click(screen.getByRole('row', { name: /Collapsed subcalls summary/ }))
+    expect(screen.getAllByRole('row', { name: /SUBTOOL/ })).toHaveLength(2)
+    expect(screen.queryByRole('row', { name: /Collapsed/ })).toBeNull()
+  })
+
+  it('expands every collapsed parent when inspecting a nested subcall', () => {
+    const onInspectApplied = vi.fn()
+    render(
+      <NestedCallTable
+        initialAssistants={[NESTED_ASSISTANT_ID]}
+        initialTools={[NESTED_TOOL_ID]}
+        inspectCallId="nested-target"
+        onInspectApplied={onInspectApplied}
+      />,
+    )
+
+    expect(onInspectApplied).toHaveBeenCalledOnce()
+    expect(screen.getByRole('row', { name: /SUBTOOL.*read/ }).getAttribute('aria-selected'))
+      .toBe('true')
+    expect(screen.queryByRole('row', { name: /Collapsed/ })).toBeNull()
+  })
 
   it('an inspect target opens the matching record and acknowledges once', () => {
     const onInspectApplied = vi.fn()

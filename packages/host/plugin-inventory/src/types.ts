@@ -23,6 +23,8 @@ export interface PluginInventoryEntry {
   /** Effective Loader enablement, including disabled ancestor groups. */
   readonly enabled: boolean
   readonly fiberPhase: PluginFiberPhase
+  /** Current startup failure message; absent when this entry has no failed fiber. */
+  readonly diagnostic?: string
 }
 
 /** Effective enablement of one preset composition row. */

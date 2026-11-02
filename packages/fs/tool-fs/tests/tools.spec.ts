@@ -43,6 +43,10 @@ const testToolSignal = new AbortController().signal
 
 /** An in-memory fake provider; a test can arm a rejection on any primitive. */
 class FakeFs extends FileSystem {
+  override async patchText(): Promise<never> { throw new FsError('patch unsupported by test provider', 'FS_IO_ERROR') }
+  override async deleteFile(): Promise<never> { throw new FsError('delete unsupported by test provider', 'FS_IO_ERROR') }
+  override async moveFile(): Promise<never> { throw new FsError('move unsupported by test provider', 'FS_IO_ERROR') }
+
   override watch(): never { throw new Error('Fixture does not support watching') }
   files = new Map<string, string>()
   rejectWith?: FsError
@@ -157,6 +161,7 @@ describe('registration', () => {
     { config: { read: false }, tools: ['edit', 'write'], sections: ['tool:edit', 'tool:write'] },
     { config: { write: false }, tools: ['edit', 'read'], sections: ['tool:edit', 'tool:read'] },
     { config: { edit: false }, tools: ['read', 'write'], sections: ['tool:read', 'tool:write'] },
+    { config: { write: false, applyPatch: true }, tools: ['apply_patch', 'edit', 'read'], sections: ['tool:apply_patch', 'tool:edit', 'tool:read'] },
     { config: { read: false, readImage: false, write: false, edit: false }, tools: [], sections: [] },
   ])('omits disabled tools and their guidance: $config', async ({ config, tools, sections }) => {
     const { ctx } = await setup(config)
@@ -164,14 +169,14 @@ describe('registration', () => {
       expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(tools)
       expect((await ctx.systemPrompt.assemble()).sections.map(section => section.name)
         .filter(name => name.startsWith('tool:')).sort()).toEqual(sections)
-      const excluded = ['read', 'write', 'edit'].find(name => !tools.some(tool => tool === name))!
+      const excluded = ['read', 'write', 'edit', 'apply_patch'].find(name => !tools.some(tool => tool === name))!
       expect((await call(ctx, excluded, { file_path: 'a.txt' })).isError).toBe(true)
     } finally {
       await ctx.fiber.dispose()
     }
   })
 
-  it.each([{ read: 'false' }, { readImage: 1 }, { write: [] }, { edit: {} }])('rejects non-boolean switches at configuration parsing: %j', async (config) => {
+  it.each([{ read: 'false' }, { readImage: 1 }, { write: [] }, { edit: {} }, { applyPatch: 'true' }])('rejects non-boolean switches at configuration parsing: %j', async (config) => {
     expect((await ToolFs.Config['~standard'].validate(config)).issues).toBeDefined()
   })
 
@@ -990,6 +995,24 @@ describe('sandbox escalation API (write/edit)', () => {
     expect(text(result)).toContain('retry this exact operation once with sandbox_permissions')
   })
 
+  it('keeps read-only denials when an ordinary write includes a blank reason', async () => {
+    const { ctx, fs } = await setupConfining({ approval: true })
+    try {
+      const approval = vi.fn(() => Promise.resolve('allowed-once' as const))
+      ctx.on('approval/request', approval)
+      fs.rejectWith = new FsError('denied', 'FS_SANDBOX_DENIED')
+      const result = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', justification: '' },
+        escalationAgent([{ type: 'sandbox/mode', data: { mode: 'read-only' } }]))
+      expect(result.isError).toBe(true)
+      expect(text(result)).toContain('[sandbox: file access denied under read-only mode]')
+      expect(fs.stamped[0]?.mode).toBe('read-only')
+      expect(fs.files.size).toBe(0)
+      expect(approval).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('a non-FS_SANDBOX_DENIED provider error passes through unchanged', async () => {
     const { ctx, fs } = await setupConfining()
     fs.rejectWith = new FsError('boom', 'FS_IO_ERROR')
@@ -1029,6 +1052,57 @@ describe('sandbox escalation API (write/edit)', () => {
     }])
   })
 
+  it.each(['workspace-write', 'danger-full-access'] as const)('writes and edits under %s with absent or blank unused reasons', async (mode) => {
+    const { ctx, fs } = await setupConfining({ approval: true })
+    try {
+      const approval = vi.fn(() => Promise.resolve('allowed-once' as const))
+      ctx.on('approval/request', approval)
+      const agent = escalationAgent([{ type: 'sandbox/mode', data: { mode } }])
+      for (const [index, justification] of ['', undefined, ' \t\n'].entries()) {
+        for (const repeatMode of [true, false]) {
+          const file_path = `unused-reason-${index}-${repeatMode}.txt`
+          const args = {
+            file_path,
+            ...repeatMode ? { sandbox_permissions: mode } : {},
+            ...justification === undefined ? {} : { justification },
+          }
+          const written = await call(ctx, 'write', { ...args, content: 'before' }, agent)
+          expect(written.isError, text(written)).toBe(false)
+          const edited = await call(ctx, 'edit', { ...args, old_string: 'before', new_string: 'after' }, agent)
+          expect(edited.isError, text(edited)).toBe(false)
+          expect(fs.files.get(`key:${file_path}`)).toBe('after')
+        }
+      }
+      expect(fs.stamped).toHaveLength(12)
+      expect(fs.stamped.every(policy => policy?.mode === mode && policy.workspaceRoot === '/session-project')).toBe(true)
+      expect(approval).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['write', 'edit'] as const)('rejects missing or blank widening reasons before %s mutates or requests approval', async (tool) => {
+    const { ctx, fs } = await setupConfining({ approval: true })
+    try {
+      const approval = vi.fn(() => Promise.resolve('allowed-once' as const))
+      ctx.on('approval/request', approval)
+      for (const justification of [undefined, '', ' \t\n']) {
+        const result = await call(ctx, tool, {
+          file_path: 'denied.txt', content: 'x', old_string: 'x', new_string: 'y',
+          sandbox_permissions: 'workspace-write',
+          ...justification === undefined ? {} : { justification },
+        }, escalationAgent([{ type: 'sandbox/mode', data: { mode: 'read-only' } }]))
+        expect(result.isError).toBe(true)
+        expect(text(result)).toContain(justification === undefined ? 'requires a justification' : 'expected a non-empty sentence')
+      }
+      expect(fs.stamped).toEqual([])
+      expect(fs.files.size).toBe(0)
+      expect(approval).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('a rejected escalation fails closed with its own text and never mutates', async () => {
     const { ctx, fs } = await setupConfining({ approval: true })
     ctx.on('approval/request', () => Promise.resolve('rejected' as const))
@@ -1054,9 +1128,12 @@ describe('sandbox escalation API (write/edit)', () => {
 
   it('rejects the escalation argument pairing (one field without the other)', async () => {
     const { ctx } = await setupConfining()
-    const missing = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', sandbox_permissions: 'workspace-write' }, escalationAgent())
+    const missing = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', sandbox_permissions: 'danger-full-access' }, escalationAgent())
     expect(missing.isError).toBe(true)
     expect(text(missing)).toContain('sandbox_permissions requires a justification')
+    const orphan = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', justification: 'why' }, escalationAgent())
+    expect(orphan.isError).toBe(true)
+    expect(text(orphan)).toContain('justification is only valid together with sandbox_permissions')
   })
 
   it('sandbox_permissions under a non-confining backend fails closed (unadvertised field still reaches execute)', async () => {
@@ -1077,9 +1154,9 @@ async function guidanceScope(ctx: Context) {
 }
 
 const originalGuidance = {
-  read: 'Use the read tool — not shell commands like cat — to inspect text files. Use offset and limit to continue reading large files.',
-  write: 'Read an existing file before overwriting it with write (the default fs-observation-policy requires it) and prefer edit for targeted changes.',
-  edit: 'Read a file before editing it (the default fs-observation-policy requires it), unless you just created or edited it in this session.',
+  read: 'Use the read tool — not shell commands like cat, sed, head, or tail — to inspect text files. Use offset and limit to read a line range or continue a large file.',
+  write: 'Read an existing file before overwriting it with write and prefer edit for targeted changes.',
+  edit: 'Read a file before editing it unless you just created or edited it in this session.',
 }
 
 describe('scope-aware filesystem guidance', () => {

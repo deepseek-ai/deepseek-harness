@@ -43,6 +43,29 @@ function ViewsMoreMenu({ label, current, entries, onOpen, onPinnedChange, render
   )
 }
 
+/** Approximate 13px text advance: full-width glyphs take one em, other glyphs about half. */
+const WIDE_GLYPH = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/u
+const WIDE_GLYPH_WIDTH = 13
+const NARROW_GLYPH_WIDTH = 7
+/** Mirrors the `.tabLabel` max-width in `ConversationRoot.module.css`. */
+const TAB_LABEL_MAX_WIDTH = 88
+
+/** Estimate whether a View tab label exceeds its 88px cell. */
+function labelNeedsTooltip(label: string): boolean {
+  let width = 0
+  for (const glyph of label) width += WIDE_GLYPH.test(glyph) ? WIDE_GLYPH_WIDTH : NARROW_GLYPH_WIDTH
+  return width > TAB_LABEL_MAX_WIDTH
+}
+
+/** One View tab label; its full-name tooltip is offered only when the text is expected to overflow. */
+function ViewTabLabel({ label }: { readonly label: string }) {
+  return (
+    <Tooltip label={label} portal disabled={!labelNeedsTooltip(label)}>
+      <span className={css.tabLabel}>{label}</span>
+    </Tooltip>
+  )
+}
+
 interface Breadcrumb {
   readonly id: SessionId
   readonly displayTitle: string
@@ -84,8 +107,9 @@ function equalBreadcrumbs(left: readonly Breadcrumb[], right: readonly Breadcrum
  */
 export function ConversationSessionHeader({
   sessionId, hideChrome, useSessions, useConversationViews, useStore,
-  renderSlot, open, selectView, setPinned, t, useEntryPins, useEntryActions,
+  renderSlot, open, useContextMenu, selectView, setPinned, t, useEntryPins, useEntryActions,
 }: ConversationSessionHeaderProps) {
+  const { getTriggerProps } = useContextMenu()
   const tabs = useConversationViews(value => value)
   const selectedId = useStore(s => s.view)
   const active = resolveActiveView(tabs, selectedId)
@@ -133,14 +157,14 @@ export function ConversationSessionHeader({
                   // base.css) and leave the title inert for dragging too.
                   const title = last
                     ? (
-                      <span className={clsx(css.crumb, summary.subagent && css.crumbSubagent, css.crumbCurrent)}>
+                      <span className={clsx(css.crumb, css.crumbCurrent)}>
                         {summary.displayTitle}
                       </span>
                     )
                     : (
                       <button
                         type="button"
-                        className={clsx(css.crumb, summary.subagent && css.crumbSubagent)}
+                        className={css.crumb}
                         onClick={() => { open(summary.id) }}
                       >
                         {summary.displayTitle}
@@ -153,7 +177,7 @@ export function ConversationSessionHeader({
                     ...last ? {} : { openTitle: () => { open(summary.id) } },
                   }
                   return (
-                    <span key={summary.id} className={css.crumbSeg}>
+                    <span key={summary.id} className={css.crumbSeg} {...getTriggerProps({ kind: 'session', value: { sessionId: summary.id, displayTitle: summary.displayTitle } })}>
                       {index > 0 && <span className={css.crumbSep}>/</span>}
                       {lineage
                         ? summary.subagent
@@ -205,13 +229,13 @@ export function ConversationSessionHeader({
                 className={clsx(css.tab, viewTab.id === active?.id && css.tabActive)}
                 onClick={() => { selectView(viewTab.id) }}
               >
-                <Tooltip label={viewTab.label} portal><span className={css.tabLabel}>{viewTab.label}</span></Tooltip>
+                <ViewTabLabel label={viewTab.label} />
               </button>
             ))}
           </div>
           {hasEntryActions && (
             <ViewsMoreMenu
-              label={currentInMore && active !== undefined ? t('session.moreViewsCurrent', { name: active.label }) : t('session.moreViews')}
+              label={t('session.moreViews')}
               current={currentInMore}
               entries={moreTabs.map(viewTab => ({
                 id: viewTab.id, label: viewTab.label,

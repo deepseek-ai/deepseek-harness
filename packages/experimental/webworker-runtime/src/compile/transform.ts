@@ -10,16 +10,27 @@
  * so **line numbers survive**: a stack frame in a transformed module points at
  * the same line as the built artifact it came from.
  *
+ * Named and default imports stay live: every reference reads the required
+ * module object when it runs (`__dsh$m1["x"]`), never a copy taken at the
+ * import statement, so a module in an import cycle sees a binding once the
+ * exporting module has initialized it, as ES modules do. Scope analysis tells
+ * those references apart from same-named locals that shadow them; it runs only
+ * for a module that declares or assigns an import's name somewhere, because
+ * elsewhere every read of the name is the import.
+ *
  * The image packer is this transform's only caller: it lowers every JavaScript
  * entry it packs and records `LOWERING_VERSION` in the image manifest, so the
  * worker wraps those bodies without carrying a compiler of its own.
  * @module @deepseek-ai/dsh-experimental-webworker-runtime/src/compile/transform
  */
-import { parse } from 'acorn'
+import { parse, type Identifier, type Literal, type Program } from 'acorn'
+import { analyze } from 'eslint-scope'
+import { KEYS } from 'eslint-visitor-keys'
+import type * as ESTree from 'estree'
 
 const HELPER_SOURCE: Record<string, string> = {
   def: 'const __dsh$def=(t,k,get)=>Object.defineProperty(t,k,{enumerable:true,configurable:true,get});',
-  default: 'const __dsh$default=(m)=>(m&&m.__esModule?m.default:m);',
+  default: 'const __dsh$default=(m)=>(m&&m.__esModule&&Object.prototype.hasOwnProperty.call(m,"default")?m.default:m);',
   ns: 'const __dsh$ns=(m)=>(m&&m.__esModule?m:Object.assign({},m,{default:m}));',
   exportAll: 'const __dsh$exportAll=(t,m)=>{for(const k of Object.keys(m))if(k!=="default"&&!(k in t))__dsh$def(t,k,()=>m[k]);};',
   dynImport: 'const __dsh$dynImport=(s)=>Promise.resolve().then(()=>__dsh$ns(require(s)));',
@@ -60,6 +71,28 @@ interface Binding {
   readonly local: string
 }
 
+/** A named or default import, read through its module object at every reference. */
+interface ImportedBinding {
+  /** Temporary holding the required module object. */
+  readonly held: string
+  readonly kind: 'named' | 'default'
+  /** Export name a named import reads. */
+  readonly imported: string
+}
+
+/** An identifier in a read position that spells an import's name. */
+interface ImportCandidate {
+  readonly node: Node
+  readonly parent: Node
+  readonly key: string | undefined
+  /** Start of the enclosing expression statement when that statement sits in a statement list. */
+  readonly statementStart: number | undefined
+  readonly binding: ImportedBinding
+}
+
+/** Prefix of the identifiers this transform emits; a module declaring one would capture them. */
+const RESERVED_PREFIX = '__dsh$'
+
 class Transformer {
   private readonly edits: Edit[] = []
   private readonly source: string
@@ -71,6 +104,18 @@ class Transformer {
   private readonly moduleRequests = new Set<string>()
   private readonly metaResolveRequests = new Set<string>()
   private readonly createRequireBindings = new Set<string>()
+  /** Module temporary per import declaration with specifiers, assigned before traversal. */
+  private readonly importModules = new Map<object, string>()
+  /** Named and default imports by local name. */
+  private readonly importedBindings = new Map<string, ImportedBinding>()
+  /** Read-position identifiers spelling an import's name, rewritten after traversal. */
+  private readonly importCandidates: ImportCandidate[] = []
+  /**
+   * Set when an import name (or the reserved prefix) is declared or assigned.
+   * Only then can a candidate be a shadowing local, so only then does scope
+   * analysis decide which candidates read the import.
+   */
+  private scopeAnalysisNeeded = false
 
   constructor(source: string, private readonly path: string) {
     // A `#!` line is only legal at offset zero, and the prologue takes that spot;
@@ -157,28 +202,83 @@ class Transformer {
     }
     const source = node.source as Node
     const request = `require(${this.literal(source)})`
-    const specifiers = node.specifiers as Node[]
-    if (specifiers.length === 0) {
+    const held = this.importModules.get(node)
+    if (held === undefined) {
       this.replace(node.start, node.end, `${request};`)
       return
     }
-    const held = this.moduleTemp()
+    // Named and default imports declare nothing here: each reference reads the
+    // held module object instead (`importReference`).
     const lines = [`const ${held}=${request};`]
-    for (const specifier of specifiers) {
-      const local = (specifier.local as Node).name as string
-      if (specifier.type === 'ImportDefaultSpecifier') {
-        lines.push(`const ${local}=${this.helper('default')}(${held});`)
-        continue
-      }
+    for (const specifier of node.specifiers as Node[]) {
       if (specifier.type === 'ImportNamespaceSpecifier') {
-        lines.push(`const ${local}=${this.helper('ns')}(${held});`)
-        continue
+        lines.push(`const ${nameOf(specifier.local as Node)}=${this.helper('ns')}(${held});`)
       }
-      const imported = specifier.imported as Node
-      const name = imported.type === 'Identifier' ? imported.name as string : imported.value as string
-      lines.push(`const ${local}=${held}[${JSON.stringify(name)}];`)
     }
     this.replace(node.start, node.end, lines.join(''))
+  }
+
+  /**
+   * The expression that reads an import when the reference runs. The default
+   * form is parenthesized so it stays one operand in any position, including
+   * `new` callees and member objects.
+   */
+  private importAccess(binding: ImportedBinding): string {
+    return binding.kind === 'default'
+      ? `(${this.helper('default')}(${binding.held}))`
+      : `${binding.held}[${JSON.stringify(binding.imported)}]`
+  }
+
+  /** @returns How a local export reads its binding: imports through their module object. */
+  private bindingAccess(local: string): string {
+    const imported = this.importedBindings.get(local)
+    return imported === undefined ? local : this.importAccess(imported)
+  }
+
+  /**
+   * Record an identifier that spells an import's name in a read position, and
+   * flag one in a declaration or assignment position (or one using the
+   * reserved prefix there), which makes scope analysis decide the candidates.
+   * @param node - The identifier.
+   * @param parent - Its parent node.
+   * @param key - The parent property holding it.
+   * @param statementStart - Start of the enclosing expression statement when that statement sits in a statement list.
+   */
+  private identifier(node: Node, parent: Node | undefined, key: string | undefined, statementStart: number | undefined): void {
+    if (parent === undefined || this.importedBindings.size === 0) return
+    const name = node.name as string
+    const binding = this.importedBindings.get(name)
+    if (binding === undefined && !name.startsWith(RESERVED_PREFIX)) return
+    if (isBindingPosition(parent, key)) {
+      this.scopeAnalysisNeeded = true
+      return
+    }
+    if (binding !== undefined && isReadPosition(parent, key)) {
+      this.importCandidates.push({ node, parent, key, statementStart, binding })
+    }
+  }
+
+  /** Flag a declared or assigned name that could shadow an import or capture an emitted temporary. */
+  private bindingOccurrence(name: string): void {
+    if (this.importedBindings.size === 0) return
+    if (this.importedBindings.has(name) || name.startsWith(RESERVED_PREFIX)) this.scopeAnalysisNeeded = true
+  }
+
+  /** Rewrite one identifier that reads an import. */
+  private importReference({ node, parent, key, statementStart, binding }: ImportCandidate): void {
+    const access = this.importAccess(binding)
+    // A shorthand property holds the name as both key and value; only the value
+    // is a candidate.
+    if (parent.type === 'Property' && parent.shorthand === true) {
+      this.replace(node.start, node.end, `${nameOf(node)}:${access}`)
+      return
+    }
+    const called = (parent.type === 'CallExpression' && key === 'callee')
+      || (parent.type === 'TaggedTemplateExpression' && key === 'tag')
+    // `(0, m.f)()` calls with `this` undefined, as calling an imported binding does.
+    const text = called && binding.kind === 'named' ? `(0,${access})` : access
+    // A leading parenthesis would extend a preceding statement that ends without a semicolon.
+    this.replace(node.start, node.end, text.startsWith('(') && node.start === statementStart ? `;${text}` : text)
   }
 
   private exportNamed(node: Node): void {
@@ -320,16 +420,27 @@ class Transformer {
     functionDepth: number
     moduleScope: boolean
     statement?: Node
-  }): void {
+    /** Start of the enclosing expression statement when it sits in a statement list. */
+    statementStart?: number | undefined
+  }, parent?: Node, key?: string): void {
     if (node === null || typeof node !== 'object') return
     if (Array.isArray(node)) {
-      for (const child of node) this.visit(child, context)
+      for (const child of node) this.visit(child, context, parent, key)
       return
     }
     const record = node as Node
     if (typeof record.type !== 'string') return
     let next = context
     switch (record.type) {
+      case 'Identifier': this.identifier(record, parent, key, context.statementStart); break
+      case 'ObjectPattern':
+        // A property value here is a declaration or assignment target, which its
+        // own parent (a Property) cannot tell apart from an object literal value.
+        for (const property of record.properties as Node[]) {
+          const value = property.value as Node | undefined
+          if (value?.type === 'Identifier') this.bindingOccurrence(value.name as string)
+        }
+        break
       case 'ImportDeclaration': this.importDeclaration(record); break
       case 'ExportNamedDeclaration': this.exportNamed(record); break
       case 'ExportDefaultDeclaration': this.exportDefault(record); break
@@ -350,6 +461,13 @@ class Transformer {
         // only a direct module-scope createRequire call with the importer URL.
         const callee = record.callee as Node
         const callArguments = record.arguments as Node[]
+        // Module code is strict, so `eval` cannot be rebound: a call through the
+        // bare name is a direct eval, whose code could name an import that no
+        // longer exists as a local. An optional call (`eval?.()`) is indirect.
+        if (callee.type === 'Identifier' && callee.name === 'eval' && record.optional !== true
+          && this.importedBindings.size > 0) {
+          this.fail('direct eval cannot see imports once they are read through their module', record.start)
+        }
         if (this.isRequireCall(callee, context.moduleScope) && callArguments.length === 1
           && typeof callArguments[0]?.value === 'string') {
           this.moduleRequests.add(callArguments[0].value)
@@ -421,10 +539,12 @@ class Transformer {
         break
       default: break
     }
-    if (record.type === 'ExpressionStatement') next = { ...next, statement: record }
-    for (const [key, value] of Object.entries(record)) {
-      if (key === 'type' || key === 'start' || key === 'end') continue
-      this.visit(value, next)
+    if (record.type === 'ExpressionStatement') {
+      next = { ...next, statement: record, statementStart: inStatementList(parent, key) ? record.start : undefined }
+    }
+    for (const [childKey, value] of Object.entries(record)) {
+      if (childKey === 'type' || childKey === 'start' || childKey === 'end') continue
+      this.visit(value, next, record, childKey)
     }
   }
 
@@ -450,16 +570,80 @@ class Transformer {
       || (moduleScope && this.isCreateRequireCall(callee))
   }
 
-  private indexCreateRequireImports(program: Node): void {
-    for (const statement of program.body as Node[]) {
+  private indexCreateRequireImports(program: Program): void {
+    for (const statement of program.body) {
       if (statement.type !== 'ImportDeclaration') continue
-      const source = statement.source as Node
+      const source = statement.source
       if (source.value !== 'node:module' && source.value !== 'module') continue
-      for (const specifier of statement.specifiers as Node[]) {
-        if (specifier.type !== 'ImportSpecifier' || nameOf(specifier.imported as Node) !== 'createRequire') continue
-        this.createRequireBindings.add(nameOf(specifier.local as Node))
+      for (const specifier of statement.specifiers) {
+        if (specifier.type !== 'ImportSpecifier' || specifierName(specifier.imported) !== 'createRequire') continue
+        this.createRequireBindings.add(specifier.local.name)
       }
     }
+  }
+
+  /**
+   * Give every import declaration its module temporary and record its named and
+   * default bindings before traversal, because references may precede the
+   * declaration in source order.
+   */
+  private indexImports(program: Program): void {
+    for (const statement of program.body) {
+      if (statement.type !== 'ImportDeclaration' || statement.specifiers.length === 0) continue
+      const held = this.moduleTemp()
+      this.importModules.set(statement, held)
+      for (const specifier of statement.specifiers) {
+        if (specifier.type === 'ImportDefaultSpecifier') {
+          this.importedBindings.set(specifier.local.name, { held, kind: 'default', imported: 'default' })
+        } else if (specifier.type === 'ImportSpecifier') {
+          this.importedBindings.set(specifier.local.name, { held, kind: 'named', imported: specifierName(specifier.imported) })
+        }
+      }
+    }
+  }
+
+  /**
+   * Decide with scope analysis which candidates read an import.
+   *
+   * Refuses an assignment to an import, which live reads cannot express, and a
+   * declaration using the reserved prefix, which would capture an emitted
+   * module temporary. Direct `eval` is refused during traversal.
+   * @param program - The parsed module, which gains node ranges here.
+   * @returns The identifier nodes that read a named or default import.
+   */
+  private resolveImportReads(program: Program): ReadonlySet<object> {
+    assignRanges(program)
+    // acorn's node types model directives differently from `@types/estree`; the
+    // tree itself is ESTree. eslint-scope distinguishes only ES5 and ES2015+
+    // scoping, so any later edition selects the module rules.
+    const manager = analyze(program as ESTree.Program, { ecmaVersion: 2022, sourceType: 'module', childVisitorKeys: KEYS })
+    for (const scope of manager.scopes) {
+      for (const variable of scope.variables) {
+        const definition = variable.defs[0]
+        if (definition === undefined || !variable.name.startsWith(RESERVED_PREFIX)) continue
+        this.fail(`${variable.name} uses the transform's reserved ${RESERVED_PREFIX} prefix`, this.rangeStart(definition.name))
+      }
+    }
+    const reads = new Set<object>()
+    const moduleScope = manager.scopes.find(scope => scope.type === 'module')
+    for (const variable of moduleScope?.variables ?? []) {
+      if (!this.importedBindings.has(variable.name) || variable.defs[0]?.type !== 'ImportBinding') continue
+      for (const reference of variable.references) {
+        if (reference.isWrite()) this.fail(`the import ${variable.name} cannot be assigned`, this.rangeStart(reference.identifier))
+        reads.add(reference.identifier)
+      }
+    }
+    return reads
+  }
+
+  /**
+   * @param node - A node scope analysis reports.
+   * @returns Its source offset; `assignRanges` gave every node a range.
+   */
+  private rangeStart(node: ESTree.BaseNode): number {
+    const start = node.range?.[0]
+    if (start === undefined) this.fail('scope analysis reported a node without a source range', 0)
+    return start
   }
 
   run(): string {
@@ -469,29 +653,38 @@ class Transformer {
     if (this.source.includes(`${ALS}.pause(`) || this.source.includes('__als$')) {
       this.fail('the module is already lowered; check the image manifest wiring', 0)
     }
-    let program: Node
+    let program: Program
     try {
       program = parse(this.source, {
         ecmaVersion: 'latest',
         sourceType: 'module',
         allowAwaitOutsideFunction: true,
-      }) as unknown as Node
+      })
     } catch (reason) {
       this.fail(`parse failed: ${(reason as Error).message}`, 0)
     }
     this.indexCreateRequireImports(program)
+    this.indexImports(program)
     this.visit(program, { asyncGenerator: false, functionDepth: 0, moduleScope: true })
+    // Without a declaration or assignment of an import's name, nothing can
+    // shadow it, so every candidate reads the import.
+    const reads = this.scopeAnalysisNeeded ? this.resolveImportReads(program) : undefined
+    for (const candidate of this.importCandidates) {
+      if (reads === undefined || reads.has(candidate.node)) this.importReference(candidate)
+    }
     if (this.edits.length === 0 && !this.moduleSyntax) return this.source
 
     const prologue: string[] = []
     if (this.moduleSyntax) prologue.push('"use strict";Object.defineProperty(exports,"__esModule",{value:true});')
+    // Reading an exported import can register the default helper, so the
+    // getters are built before the helper sources are emitted.
+    const getters = this.bindings.map(({ exported, local }) =>
+      `__dsh$def(exports,${JSON.stringify(exported)},()=>${this.bindingAccess(local)});`)
     if (this.bindings.length > 0) this.helper('def')
     for (const [name, source] of Object.entries(HELPER_SOURCE)) {
       if (this.helpers.has(name)) prologue.push(source)
     }
-    for (const { exported, local } of this.bindings) {
-      prologue.push(`__dsh$def(exports,${JSON.stringify(exported)},()=>${local});`)
-    }
+    prologue.push(...getters)
 
     const sorted = [...this.edits].sort((left, right) => left.start - right.start || left.end - right.end)
     const render = (from: number, to: number): string => {
@@ -519,6 +712,101 @@ class Transformer {
 /** @returns The name a specifier or identifier node carries. */
 function nameOf(node: Node): string {
   return node.type === 'Identifier' ? node.name as string : String(node.value)
+}
+
+/** @returns The name an import or export specifier spells, as an identifier or a string literal. */
+function specifierName(node: Identifier | Literal): string {
+  return node.type === 'Identifier' ? node.name : String(node.value)
+}
+
+/**
+ * Give every node the `range` that eslint-scope reads. The parse leaves ranges
+ * out because only modules that need scope analysis use them.
+ * @param node - A node or node array of the parsed module.
+ */
+function assignRanges(node: unknown): void {
+  if (node === null || typeof node !== 'object') return
+  if (Array.isArray(node)) {
+    for (const child of node) assignRanges(child)
+    return
+  }
+  const record = node as { type?: unknown; start?: unknown; end?: unknown; range?: readonly [unknown, unknown] }
+  if (typeof record.type !== 'string') return
+  record.range = [record.start, record.end]
+  for (const value of Object.values(record)) assignRanges(value)
+}
+
+/**
+ * ESTree positions where an identifier names a declared or assigned binding.
+ * Property values inside an object pattern are checked at the pattern.
+ *
+ * Together with the ObjectPattern check, this must recognize every ESTree
+ * declaration and assignment form: a missed form lets a shadowing local skip
+ * scope analysis and be rewritten as an import read. A parser upgrade that adds
+ * a binding form must extend this list and the shadowing cases in
+ * `transform-imports.spec.ts`.
+ * @param parent - Parent of the identifier.
+ * @param key - The parent property holding it.
+ * @returns Whether the identifier declares or assigns a binding.
+ */
+function isBindingPosition(parent: Node, key: string | undefined): boolean {
+  switch (parent.type) {
+    case 'VariableDeclarator': return key === 'id'
+    case 'FunctionDeclaration':
+    case 'FunctionExpression':
+    case 'ArrowFunctionExpression': return key === 'id' || key === 'params'
+    case 'ClassDeclaration':
+    case 'ClassExpression': return key === 'id'
+    case 'CatchClause': return key === 'param'
+    case 'ArrayPattern':
+    case 'RestElement':
+    case 'UpdateExpression': return true
+    case 'AssignmentPattern':
+    case 'AssignmentExpression':
+    case 'ForInStatement':
+    case 'ForOfStatement': return key === 'left'
+    default: return false
+  }
+}
+
+/**
+ * ESTree positions where an identifier, outside a binding position, reads a
+ * binding rather than naming a property, label, specifier, or meta property.
+ * Positions not listed read a binding, so the binding positions must be ruled
+ * out first (`isBindingPosition`).
+ * @param parent - Parent of the identifier.
+ * @param key - The parent property holding it.
+ * @returns Whether the identifier reads a binding.
+ */
+function isReadPosition(parent: Node, key: string | undefined): boolean {
+  switch (parent.type) {
+    case 'MemberExpression': return key !== 'property' || parent.computed === true
+    case 'Property':
+    case 'MethodDefinition':
+    case 'PropertyDefinition': return key !== 'key' || parent.computed === true
+    case 'LabeledStatement':
+    case 'BreakStatement':
+    case 'ContinueStatement':
+    case 'ImportSpecifier':
+    case 'ImportDefaultSpecifier':
+    case 'ImportNamespaceSpecifier':
+    case 'ExportSpecifier':
+    case 'ExportAllDeclaration':
+    case 'MetaProperty': return false
+    default: return true
+  }
+}
+
+/**
+ * @param parent - Parent of a statement.
+ * @param key - The parent property holding it.
+ * @returns Whether the statement sits in a statement list, where it can follow
+ * a statement that ends without a semicolon.
+ */
+function inStatementList(parent: Node | undefined, key: string | undefined): boolean {
+  if (parent === undefined) return false
+  if (parent.type === 'SwitchCase') return key === 'consequent'
+  return key === 'body' && (parent.type === 'Program' || parent.type === 'BlockStatement' || parent.type === 'StaticBlock')
 }
 
 /** Every binding an exported declaration introduces, including patterns. */

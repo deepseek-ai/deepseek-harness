@@ -39,6 +39,13 @@ function bindings(functions: Record<string, PtcBindingFunction>): PtcBindingName
 }
 
 describe('Node program process', () => {
+  it('allows function-local process imports with the scrubbed program environment', async () => {
+    const { run } = await setup()
+    const result = await run({ program: 'const process = await import("node:process"); return { platform: process.platform, env: { ...process.env } }', bindings: [] })
+    expect(result.error).toBeUndefined()
+    expect(result.value).toEqual({ platform: process.platform, env: {} })
+  })
+
   it('runs erasable TypeScript in the resolved directory with an empty environment', async () => {
     const { run, cwd } = await setup()
     const result = await run({ program: 'const n: number = 6; console.log("ready"); return { n: n * 7, cwd: process.cwd(), env: { ...process.env } };', bindings: [] })

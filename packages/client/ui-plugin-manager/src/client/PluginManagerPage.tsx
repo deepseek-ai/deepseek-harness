@@ -100,7 +100,19 @@ function AddPluginMenu({ t, disabled, openInstall, renderSlot }: {
 const HIGHLIGHT_MS = 2_400
 
 /**
- * Whether the main list shows an official optional bundle: the always-held ones, and any held-back one the profile enabled.
+ * Whether any plugin row this bundle's patch declares is running.
+ *
+ * A default-hidden bundle's rows may run without the profile selecting it, for example through
+ * `cordis.patch.yml`; that run state is the effective enablement the lists offer.
+ * @param pkg - the bundle as the Host reports it.
+ * @returns whether at least one declared row runs.
+ */
+function rowsRunning(pkg: PackageView): boolean {
+  return pkg.rows.some(row => row.enabled)
+}
+
+/**
+ * Whether the main list shows an official optional bundle: any bundle outside `MORE_BUNDLES`, and any held-back one the profile enabled.
  * @param pkg - the official bundle as the Host reports it.
  * @returns whether the main list shows it.
  */
@@ -109,14 +121,14 @@ function pinnedToMainList(pkg: PackageView): boolean {
 }
 
 /**
- * Where an optional bundle sits on both lists: the always-held ones in their order, then the bundles neither list
+ * Where an optional bundle sits on both lists: the `EXTENSION_BUNDLES` in their order, then the bundles neither list
  * ranks, then the held-back ones in theirs, so Codex and Claude Code stay last on the More list.
  * @param name - the bundle's package name.
  * @returns the rank; bundles of equal rank keep the order the Host reported.
  */
 function optionalBundleRank(name: string): number {
-  const alwaysHeld = EXTENSION_BUNDLES.indexOf(name)
-  if (alwaysHeld >= 0) return alwaysHeld
+  const ranked = EXTENSION_BUNDLES.indexOf(name)
+  if (ranked >= 0) return ranked
   const heldBack = MORE_BUNDLES.indexOf(name)
   return heldBack < 0 ? EXTENSION_BUNDLES.length : EXTENSION_BUNDLES.length + 1 + heldBack
 }
@@ -251,6 +263,11 @@ function MetadataError({ error, t }: { readonly error: string | undefined; reado
   return error === undefined ? null : <p className={css.reason} role="status" data-package-meta-error>{t('metadataError', { error })}</p>
 }
 
+/** A failed component keeps its current Host diagnostic beside its controls. */
+function RuntimeError({ error, t }: { readonly error: string | undefined; readonly t: Translate }): ReactNode {
+  return error === undefined ? null : <p className={css.reason} role="status" data-plugin-runtime-error>{t('reasonLabel')}: {error}</p>
+}
+
 /**
  * A pack's rows as a list in the order the pack declares them: a state dot,
  * the row id, one line saying its state, a configure control for a row that
@@ -327,6 +344,7 @@ function RowsSection({ rows, t, resolveText, toggle, configure }: {
                     />}
                 </div>
                 <MetadataError error={row.meta?.error} t={t} />
+                <RuntimeError error={row.diagnostic} t={t} />
               </li>
             ))}
           </ul>
@@ -392,7 +410,8 @@ function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
       <Switch
         checked={pkg.enabled}
         label={t('enableToggle', { name: title })}
-        disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined && !(pkg.availability === 'missing' && pkg.installTarget !== undefined))}
+        disabled={busy || pkg.readOnlyReason !== undefined || (!pkg.enabled && pkg.error !== undefined
+          && (pkg.error.code === 'unsupported-platform' || !(pkg.availability === 'missing' && pkg.installTarget !== undefined)))}
         {...pkg.readOnlyReason === undefined ? {} : { title: managementText({ code: pkg.readOnlyReason }, t) }}
         onChange={onSetEnabled}
       />
@@ -402,7 +421,7 @@ function EnableSwitch({ pkg, title, t, busy, onSetEnabled }: {
 
 /** The status one card carries: running, off, or a problem the Host reported. */
 function packageStatus(pkg: PackageView): 'running' | 'disabled' | 'problem' {
-  if (pkg.error !== undefined) return 'problem'
+  if (pkg.error !== undefined || (pkg.enabled && pkg.rows.some(row => row.phase === 'failed'))) return 'problem'
   return pkg.enabled ? 'running' : 'disabled'
 }
 
@@ -548,6 +567,7 @@ function PackageCard({ pkg, t, resolveText, busy, highlighted, newer, onOpen, on
         end={<EnableSwitch pkg={pkg} title={title} t={t} busy={busy} onSetEnabled={onSetEnabled} />}
       />
       <MetadataError error={pkg.meta?.error} t={t} />
+      {pkg.error?.code === 'unsupported-platform' && <p className={css.reason} role="status">{managementText(pkg.error, t)}</p>}
     </li>
   )
 }
@@ -662,6 +682,7 @@ function RowDetail({ pkg, row, t, resolveText, onBack, renderSlot, form }: {
         <p className={css.detailDesc}>{description ?? renderSlot('plugins.row.config', { view: 'summary' }, { entryKey: key })}</p>
       </div>
       <MetadataError error={row.meta?.error} t={t} />
+      <RuntimeError error={row.diagnostic} t={t} />
       <div className={css.detailSections} data-plugin-config>
         {renderSlot('plugins.row.config', { view: 'page', form }, { entryKey: key })}
         {renderSlot('plugins.detail.section', { subject })}
@@ -923,7 +944,9 @@ function failureText(failure: InstallState['failure'], t: Translate, install?: P
   }
   if (failure.kind !== undefined) return t(FAILURE_KIND_KEYS[failure.kind])
   if (failure.code !== undefined) return managementText({ code: failure.code, diagnostic: failure.reason }, t)
-  return failure.reason === '' ? t('installFailureGeneric') : failure.reason
+  if (failure.reason !== '') return failure.reason
+  // An enabled install that failed applying the bundle names that step, never the install command it already finished.
+  return failure.stage === 'enable' && failure.enabled === true ? t('installFailedEnabling') : t('installFailureGeneric')
 }
 
 interface SubjectLines {
@@ -1308,6 +1331,8 @@ function InstallDialog({
   }
   const heading = t(phase === 'done' && install.subject?.bundled ? 'installBundledTitle' : SCREEN_TITLE_KEYS[phase])
   const pending = isInstallPending(phase)
+  // A settled screen whose install never reported a run can say the details received no terminal output.
+  const settledDetails = phase === 'failed' || phase === 'done' || phase === 'unknown'
   const cancellable = phase === 'starting' || phase === 'running' || phase === 'unconfirmed'
   const stoppable = cancellable || phase === 'failed' || phase === 'unknown'
   const failure = install.failure
@@ -1368,6 +1393,10 @@ function InstallDialog({
             <h2 className={css.wizardTitle} role={phase === 'failed' ? 'alert' : 'status'}>{heading}</h2>
             {phase === 'done' && subject?.bundled ? <p className={css.wizardSub}>{t('installBundledDescription')}</p> : null}
             {phase === 'failed' ? <p className={css.wizardSub}>{failureText(install.failure, t, install)}</p> : null}
+            {phase === 'failed' && failure?.stage === 'enable' && failure.enabled === true
+              && (failure.code !== undefined || failure.reason !== '')
+              ? <p className={css.wizardSub}>{t('installFailedEnabling')}</p>
+              : null}
             {attemptLine === null ? null : <p className={css.wizardSub}>{attemptLine}</p>}
             {uncertaintyText === null ? null : <p className={css.wizardSub} role="alert">{uncertaintyText}</p>}
             {phase === 'unknown' ? <p className={css.wizardSub}>{t('installUnknownDescription')}</p> : null}
@@ -1439,7 +1468,11 @@ function InstallDialog({
           {install.detailsOpen
             ? (
               <div className={css.detailsBody}>
-                <p className={css.installLocation}>{firstRun === undefined ? t('terminalNoOutput') : t('installLocation', { dir: firstRun.cwd })}</p>
+                {firstRun !== undefined
+                  ? <p className={css.installLocation}>{t('installLocation', { dir: firstRun.cwd })}</p>
+                  : settledDetails
+                    ? <p className={css.installLocation}>{t('installDetailsNoOutput')}</p>
+                    : null}
                 {install.runs.map((run, index) => {
                   const registry = asked?.registries[index]
                   return (
@@ -1459,6 +1492,9 @@ function InstallDialog({
                     </div>
                   )
                 })}
+                {install.logPath === null
+                  ? null
+                  : <p className={css.installLocation}>{t('installLogPath', { path: install.logPath })}</p>}
               </div>
             )
             : null}
@@ -1537,7 +1573,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   // The page omits profile bundles and persistent terminals. Other installed or offered bundles and
   // unreadable selections remain manageable; Settings' Plugin list inspects the full Host inventory.
   const listed = state.packages.filter(pkg => !HIDDEN_BUNDLES.has(pkg.name)
-    && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed)
+    && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed || rowsRunning(pkg))
     && (pkg.installed || pkg.official || pkg.error !== undefined))
   const mine = listed.filter(pkg => !pkg.official)
   const official = listed.filter(pkg => pkg.official)
@@ -1550,7 +1586,9 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const more = ordered
   const loaded = state.status === 'ready' || state.status === 'error'
   const refreshing = state.refreshStatus === 'refreshing'
-  const openPkg = view.kind === 'package' || view.kind === 'row' ? listed.find(pkg => pkg.name === view.name) : undefined
+  const openPkg = view.kind === 'package' || view.kind === 'row'
+    ? listed.find(pkg => pkg.name === view.name)
+    : undefined
   const openItem = view.kind === 'item' ? ledger.items.find(item => item.id === view.id) : undefined
   const openRow = view.kind === 'row' && openPkg !== undefined ? openPkg.rows.find(row => row.rowId === view.rowId) : undefined
   const onInstalled = tab === INSTALLED_TAB
@@ -1569,6 +1607,10 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     ? {}
     : { role: 'tabpanel', id: `${tabsId}-${INSTALLED_TAB}-panel`, 'aria-labelledby': `${tabsId}-${INSTALLED_TAB}` }
   const activated = listed.find(pkg => pkg.name === activation && pkg.enabled && !state.busy.includes(pkg.name))
+  const setBundleEnabled = (name: string, enabled: boolean): void => {
+    setActivation(enabled ? name : null)
+    props.setEnabled(name, enabled)
+  }
   const setRowEnabled = (row: PackageRow, enabled: boolean): void => {
     /* v8 ignore next -- a row without a live entry has its switch disabled */
     if (row.entryId !== undefined) props.setRowEnabled(row.entryId, enabled)
@@ -1590,7 +1632,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
       highlighted={state.highlight === pkg.name}
       newer={versionUpdate(state.versions[pkg.name])}
       onOpen={() => { setActivation(null); setView({ kind: 'package', name: pkg.name, ...showsMoreList ? { from: 'more' } : {} }) }}
-      onSetEnabled={(enabled) => { setActivation(enabled ? pkg.name : null); props.setEnabled(pkg.name, enabled) }}
+      onSetEnabled={(enabled) => { setBundleEnabled(pkg.name, enabled) }}
     />
   )
   const basicCards = ledger.items.map(item => (
@@ -1761,7 +1803,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
                 if (returnTab !== undefined) setTab(returnTab)
                 setView({ kind: backToMore ? 'more' : 'list' })
               }}
-              onSetEnabled={(enabled) => { props.setEnabled(openPkg.name, enabled) }}
+              onSetEnabled={(enabled) => { setBundleEnabled(openPkg.name, enabled) }}
               onUninstall={() => { props.uninstall(openPkg.name) }}
               onUpdate={() => { props.update(openPkg.name) }}
               onSetRowEnabled={setRowEnabled}
@@ -1806,8 +1848,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
               </div>
             )
           : null}
-        {/* Activation guidance belongs beside the Installed list that holds the enabled bundle's card. */}
-        {installedCards && activated !== undefined && !state.install.open
+        {onInstalled && activated !== undefined && !state.install.open
           ? renderSlot('plugins.bundle.activation', {
             packageName: activated.name,
             onDismiss: () => { setActivation(null) },

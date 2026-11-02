@@ -1,0 +1,12 @@
+{
+  "bucket": "replace-with-bucket-1250000000",
+  "origin": "https://download.deepseek.com",
+  "credentialsFile": "C:/absolute/path/to/packaging/secrets/cos-production.json",
+  "windows": {
+    "certificateThumbprint": "0000000000000000000000000000000000000000"
+  },
+  "githubApp": {
+    "clientId": "REPLACE_WITH_GITHUB_APP_CLIENT_ID",
+    "privateKeyFile": "C:/absolute/path/to/packaging/publishing/keys/desktop-release-tagger.pem"
+  }
+}

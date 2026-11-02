@@ -1,6 +1,10 @@
 /** The package names the plugin manager protects, hides, orders, or marks experimental. */
 
-/** Plugin packages the plugin manager refuses to disable or remove, because management itself needs them. */
+/**
+ * Plugin packages the plugin manager refuses to disable or remove, because management itself needs them; a bundle that
+ * contains one is read-only as well. Removing a name drops only this `management-required` refusal; the manager's own
+ * entry, installation-carried bundles, and unaddressable rows stay protected by their own rules.
+ */
 export const PROTECTED_PLUGINS: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-plugin-manager', '@deepseek-ai/cordis-plugin-loader',
   '@deepseek-ai/cordis-plugin-include', '@deepseek-ai/dsh-api-gateway',
@@ -27,9 +31,11 @@ export const HIDDEN_BUNDLES: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-experimental-terminal-bundle',
 ])
 
-/** The optional bundles the plugin manager's main list always holds, in this order; unlisted bundles join the main list. */
+/**
+ * The optional bundles the plugin manager's main and More lists rank first, in this order. {@link MORE_BUNDLES}, not
+ * this list, decides whether a bundle appears on the main list.
+ */
 export const EXTENSION_BUNDLES: readonly string[] = [
-  '@deepseek-ai/dsh-experimental-agent-team-profile',
   '@deepseek-ai/dsh-experimental-voice-input-bundle',
   '@deepseek-ai/dsh-experimental-plugin-market-bundle',
   '@deepseek-ai/dsh-experimental-auto-review',
@@ -40,6 +46,7 @@ export const EXTENSION_BUNDLES: readonly string[] = [
  * which includes every eligible bundle, ranks them last in this order.
  */
 export const MORE_BUNDLES: readonly string[] = [
+  '@deepseek-ai/dsh-personalized-recommendations',
   '@deepseek-ai/dsh-experimental-inspector-profile',
   '@deepseek-ai/dsh-cua-bundle',
   '@deepseek-ai/dsh-experimental-tool-worktree',
@@ -54,11 +61,12 @@ export const MORE_BUNDLES: readonly string[] = [
 
 /** Official bundles the plugin manager marks with the Experimental badge. */
 export const EXPERIMENTAL_BUNDLES: ReadonlySet<string> = new Set([
+  '@deepseek-ai/dsh-personalized-recommendations',
   '@deepseek-ai/dsh-cua-bundle',
-  '@deepseek-ai/dsh-experimental-agent-team-profile',
   '@deepseek-ai/dsh-experimental-voice-input-bundle',
   '@deepseek-ai/dsh-experimental-auto-review',
   '@deepseek-ai/dsh-experimental-inspector-profile',
+  '@deepseek-ai/dsh-experimental-forge-bundle',
   '@deepseek-ai/dsh-experimental-tool-worktree',
   '@deepseek-ai/dsh-experimental-cot-translation-bundle',
   '@deepseek-ai/dsh-experimental-session-search',
@@ -66,4 +74,5 @@ export const EXPERIMENTAL_BUNDLES: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-experimental-badge-skill-bundle',
   '@deepseek-ai/dsh-experimental-ralph-bundle',
   '@deepseek-ai/dsh-experimental-plugin-market-bundle',
+  '@deepseek-ai/dsh-experimental-liveshare',
 ])

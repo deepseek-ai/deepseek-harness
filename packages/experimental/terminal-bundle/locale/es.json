@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Terminales persistentes",
-    "description": "Mantenga vivos los procesos de shell en todas las llamadas a herramientas.",
+    "description": "Proporciona al agente terminales cuyos procesos siguen ejecutándose en segundo plano entre llamadas a herramientas, de modo que puede iniciar un servidor de desarrollo o un REPL y volver más tarde para leer la salida o escribir entradas.",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -229,7 +229,7 @@ export function createRestrictedToken(
   const tokenSlot = allocPtrSlot()
   const created = api.createRestrictedToken(
     currentToken,
-    abi.DISABLE_MAX_PRIVILEGE | abi.LUA_TOKEN | abi.WRITE_RESTRICTED,
+    abi.DISABLE_MAX_PRIVILEGE | abi.WRITE_RESTRICTED,
     0, null, // no SIDs disabled
     0, null, // no privileges deleted
     restrictingSids.length / abi.SID_AND_ATTRIBUTES_SIZE,

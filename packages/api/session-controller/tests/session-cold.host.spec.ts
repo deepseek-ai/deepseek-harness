@@ -11,7 +11,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import { SessionHistoryController } from '@deepseek-ai/dsh-api-session-controller/src/history.ts'
 import { subagentIdentityProjectionDefinition } from '@deepseek-ai/dsh-subagent/src/projection.ts'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
@@ -574,10 +573,7 @@ describe('subagent ownership fence', () => {
     const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
     await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
 
-    const history = await new SessionHistoryController(
-      ctx,
-      (observation) => { observation[Symbol.dispose]() },
-    ).page({
+    const history = await ctx.sessionController.events({
       address: {
         kind: 'subagent',
         parentSessionId: meta.parentSession as SessionId,
@@ -676,10 +672,10 @@ describe('subagent ownership fence', () => {
     await ctx.agents.register(originChild)
 
     const startingSession = ctx.sessions.create(sid('session-starting-child'), {
-      meta: { cwd: '/proj', parentSession: parent.id },
+      meta: { cwd: '/proj', parentSession: parent.id, origin: 'subagent' },
     })
     const startingChild = { id: startingSession.id, session: startingSession, status: 'idle', ctx } as Agent
-    ctx.agents.enter(startingChild, parent)
+    ctx.agents.enter(startingChild)
     const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     const stopped = await remote.cancel(request({ sessionId: originChild.id }))

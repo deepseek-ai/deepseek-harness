@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-root",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-alpha.2",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -24,7 +24,7 @@
     "build:bench": "npm run build:native-system && npm run build:lib && tsdown --config-loader native --config benchmarks/tsdown.config.ts",
     "build:official": "tsx scripts/build.ts --profile official",
     "build:lib": "pnpm run build:lib:host && pnpm run build:lib:client",
-    "build:lib:host": "tsx scripts/compile-referenced-projects.ts host-libraries && node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -p tsconfig.host.json && pnpm --filter @deepseek-ai/dsh-desktop run bundle",
+    "build:lib:host": "tsx scripts/compile-referenced-projects.ts host-libraries && node --max-old-space-size=8192 ./node_modules/typescript/bin/tsc -p tsconfig.host.json && pnpm --filter @deepseek-ai/dsh-desktop run bundle",
     "build:lib:client": "tsc -b tsconfig.client.json && tsdown --config-loader native --env.DSH_BUILD_FACE client",
     "build:web": "pnpm --filter @deepseek-ai/dsh-web-frontend run build",
     "build:desktop": "pnpm --filter @deepseek-ai/dsh-desktop run build",
@@ -48,6 +48,7 @@
     "upload:latest:mac:arm64": "pnpm --filter @deepseek-ai/dsh-desktop run upload:latest:mac:arm64",
     "upload:latest:mac:x64": "pnpm --filter @deepseek-ai/dsh-desktop run upload:latest:mac:x64",
     "upload:latest:win:x64": "pnpm --filter @deepseek-ai/dsh-desktop run upload:latest:win:x64",
+    "purge:latest": "pnpm --filter @deepseek-ai/dsh-desktop run purge:latest",
     "clean": "tsx scripts/clean.ts",
     "change-scope": "tsx scripts/change-scope.ts",
     "typecheck": "tsx scripts/build.ts --scope typecheck",
@@ -63,7 +64,7 @@
     "test:coverage:partitioned": "tsx scripts/run-coverage-partitions.ts",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:bench": "npm run build:bench && npm run build:web && npm run test:bench:built",
-    "test:bench:built": "vitest run --config vitest.bench.config.ts",
+    "test:bench:built": "tsx scripts/run-bench-suite.ts",
     "test:bench:memory": "tsx scripts/run-memory-pressure-bench.ts",
     "test:expected": "vitest run --config vitest.expected.config.ts",
     "test:expected:refresh": "DSH_SNAPSHOT=refresh vitest run --config vitest.expected.config.ts",
@@ -134,7 +135,7 @@
     "docs:build": "tsx website/build.ts && pnpm run verify-doc-site-fragments",
     "docs:build:mpa": "tsx website/build.ts --mpa && pnpm run verify-doc-site-fragments",
     "docs:preview": "pnpm --filter @deepseek-ai/website run preview",
-    "docs:check": "pnpm exec vitest run scripts/project-doc-site.spec.ts scripts/verify-doc-site-fragments.spec.ts website/tests/mermaid-viewer.spec.ts website/tests/image-viewer.spec.ts website/tests/code-groups.spec.ts website/tests/page-markdown-actions.spec.ts website/tests/raw-markdown.spec.ts && pnpm run docs:build",
+    "docs:check": "pnpm exec vitest run scripts/project-doc-site.spec.ts scripts/verify-doc-site-fragments.spec.ts website/tests/mermaid-viewer.spec.ts website/tests/image-viewer.spec.ts website/tests/code-groups.spec.ts website/tests/page-markdown-actions.spec.ts website/tests/raw-markdown.spec.ts website/tests/table-filter.spec.ts && pnpm run docs:build",
     "website:dev": "pnpm run docs:dev",
     "website:build": "pnpm run docs:build",
     "verify-package-readme-limitations": "tsx scripts/verify-package-readme-limitations.ts",
@@ -300,6 +301,10 @@
     "@deepseek-ai/dsh-cua-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-subagent-oar": "workspace:*",
     "@deepseek-ai/dsh-experimental-tool-subagent-oar": "workspace:*",
-    "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*"
+    "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*",
+    "@deepseek-ai/dsh-experimental-forge": "workspace:*",
+    "@deepseek-ai/dsh-experimental-forge-github": "workspace:*",
+    "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
+    "@deepseek-ai/dsh-action-cards": "workspace:*"
   }
 }

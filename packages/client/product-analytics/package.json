@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-product-analytics",
   "description": "Desktop product event collection and authenticated Host reporting",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },

@@ -1,6 +1,6 @@
 /** Native helper replacement is synchronized with Agent and provider disposal. */
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -11,9 +11,14 @@ import Timer from '@deepseek-ai/cordis-plugin-timer'
 import { initProfile, mountRootInclude, readProfilePatches, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import ConfigEditor from '@deepseek-ai/dsh-config-editor'
 import Settings from '@deepseek-ai/dsh-settings'
+import Storage from '@deepseek-ai/dsh-storage'
+import * as StorageJson from '@deepseek-ai/dsh-storage-json'
+import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
+import { CuaConfig } from '@deepseek-ai/dsh-cua'
+import { createConfigProjector } from '@deepseek-ai/dsh-app-boot/src/config-schema/projector.ts'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import UserQuestions from '@deepseek-ai/dsh-user-questions'
@@ -56,12 +61,37 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 }))
 
 const config = {
+  permissionPollIntervalMs: 1000,
   agentPreset: false,
-  helperPath: resolve('fixture-helper'), buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
+  helperPath: resolve('fixture-helper'), sourceSigning: 'ad-hoc', buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
   graceMs: 10, textEventIntervalMs: 8, maxClickHoldMs: 7000, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
 } satisfies Omit<NativeProvider.Config, 'allowedApps'>
 
 const { helperPath: _helperPath, ...automaticConfig } = config
+
+it('defaults to ad-hoc signing and requires a keychain path for certificate signing', () => {
+  expect(NativeProvider.Config({}).sourceSigning).toBe('ad-hoc')
+  expect(NativeProvider.Config({ sourceSigning: 'ad-hoc' }).sourceSigning).toBe('ad-hoc')
+  for (const sourceSigning of [{ identity: 'Apple Development: Example', keychain: '/keychains/custom.keychain-db' }, { identity: 'ABC123', keychain: '/keychains/custom.keychain-db' }]) {
+    expect(NativeProvider.Config({ sourceSigning }).sourceSigning).toEqual(sourceSigning)
+  }
+  for (const sourceSigning of ['local-identity', 'developer-id', {}, { identity: 'Example' }, { identity: '' }, { identity: ' ' }, { identity: 'Example', keychain: 'relative' }, ...['-', '--help', '-Example', ' Example'].map(identity => ({ identity, keychain: '/keychains/custom.keychain-db' }))]) {
+    expect(() => NativeProvider.Config({ sourceSigning } as never)).toThrow()
+  }
+})
+
+it('projects shared controls and macOS signing without adding signing to the shared schema', async () => {
+  const project = await createConfigProjector()
+  const projected = project(NativeProvider.Config, 'cua-macos')
+  for (const field of ['sourceSigning', 'permissionPollIntervalMs', 'agentPreset', 'helperPath']) {
+    expect(projected.schema.anyOf?.[0]).toHaveProperty(`properties.${field}`)
+  }
+  expect(CuaConfig({})).not.toHaveProperty('sourceSigning')
+  expect(CuaConfig.dict).not.toHaveProperty('sourceSigning')
+  expect(NativeProvider.Config({ sourceSigning: 'ad-hoc', timeoutMs: 1234 })).toMatchObject({
+    agentPreset: 'ptc', sourceSigning: 'ad-hoc', permissionPollIntervalMs: 1000, timeoutMs: 1234,
+  })
+})
 
 it('defaults the explicit click hold limit to five seconds and accepts a configured zero or larger limit', () => {
   expect(NativeProvider.Config({}).maxClickHoldMs).toBe(5000)
@@ -110,7 +140,7 @@ async function selectApplication(f: Awaited<ReturnType<typeof setup>>) {
 it('rejects a relative helper path before publishing computer-use operations', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await expect(NativeProvider.apply(ctx, { ...config, allowedApps: { get: () => [] }, helperPath: 'relative-helper' })).rejects.toThrow('helperPath must be absolute')
+  await expect(NativeProvider.apply(ctx, { ...config, allowedApps: [], helperPath: 'relative-helper' })).rejects.toThrow('helperPath must be absolute')
 })
 
 it.each(['Allow for this session', 'Deny'])('obtains %s before a stopped application can launch', async (choice) => {
@@ -267,7 +297,8 @@ it('keeps Agent disposal pending until its helper cleanup completes', async () =
 
 it('retains the computer-use registration until permission helper cleanup settles', async () => {
   const f = await setup()
-  native.request.mockResolvedValue({ accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+  native.request.mockResolvedValue({ accessibility: false, screenRecording: false,
+    helper: { pid: 9 }, parent: { pid: 8 } })
   await f.ctx.cuaAccess.systemStatus()
   const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
   native.dispose.mockImplementation(async () => { entered.resolve(undefined); await release.promise })
@@ -577,8 +608,9 @@ it('prepares the selected native component before registering CUA and creates no
   const f = await setup()
   await f.provider.dispose()
   native.prepare.mockReset().mockResolvedValue(resolve('prepared-helper'))
-  await NativeProvider.apply(f.ctx, { ...automaticConfig, allowedApps: { get: () => [] } })
+  await NativeProvider.apply(f.ctx, { ...automaticConfig, allowedApps: [] })
   expect(native.prepare).toHaveBeenCalledTimes(1)
+  expect(native.prepare.mock.calls[0]![0].sourceSigning).toBe('ad-hoc')
   expect(native.instances).toHaveLength(0)
   await f.execute()
   expect(native.instances).toHaveLength(1)
@@ -626,7 +658,7 @@ it('waits for canceled preparation and never publishes its late success', async 
   const ready = Promise.withResolvers<string>()
   onTestFinished(() => { ready.resolve(resolve('late-helper')) })
   native.prepare.mockReset().mockReturnValue(ready.promise)
-  const starting = Promise.resolve(NativeProvider.apply(f.ctx, { ...automaticConfig, allowedApps: { get: () => [] } }))
+  const starting = Promise.resolve(NativeProvider.apply(f.ctx, { ...automaticConfig, allowedApps: [] }))
   const failed = expect(starting).rejects.toThrow()
   const signal = native.prepare.mock.calls[0]![0].signal
   const aborted = new Promise<void>((resolve) => {
@@ -649,11 +681,12 @@ it('rejects an unsupported native host before starting preparation', async () =>
   await f.provider.dispose()
   native.architecture.mockImplementationOnce(() => { throw new Error('unsupported host') })
   native.prepare.mockReset()
-  await expect(NativeProvider.apply(f.ctx, { ...automaticConfig, allowedApps: { get: () => [] } })).rejects.toThrow('unsupported host')
+  await expect(NativeProvider.apply(f.ctx, { ...automaticConfig, allowedApps: [] })).rejects.toThrow('unsupported host')
   expect(native.prepare).not.toHaveBeenCalled()
 })
 
-it('stores signed application consent in the current profile and refuses unavailable settings', async () => {
+
+async function permissionProfile(allowedApps: Array<{ id: string; name: string; executablePath?: string }> = []) {
   const f = await setup()
   await f.provider.dispose()
   const home = await mkdtemp(join(tmpdir(), 'cua-grant-profile-')), dir = join(home, 'profile')
@@ -664,7 +697,7 @@ it('stores signed application consent in the current profile and refuses unavail
   await writeFile(join(home, 'package.json'), '{"name":"test-installation"}\n')
   await writeFile(join(bundle, 'package.json'), JSON.stringify({ name: 'permission-fixture-bundle', version: '1.0.0',
     dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
-  await writeFile(join(bundle, 'cordis.patch.yml'), JSON.stringify([{ insert: [{ id: 'cua', name: 'cordis:cua', config }] }]))
+  await writeFile(join(bundle, 'cordis.patch.yml'), JSON.stringify([{ insert: [{ id: 'cua', name: 'cordis:cua', config: { ...config, allowedApps } }] }]))
   await writeFile(join(dir, 'cordis.yml'), '[]\n')
   const profile: ProfileContext = { name: 'test', startedBundles: ['permission-fixture-bundle'], dir,
     patchPath: join(dir, 'cordis.patch.yml'), installAnchor: join(home, 'package.json'), cwd: home, home,
@@ -675,35 +708,56 @@ it('stores signed application consent in the current profile and refuses unavail
   await f.ctx.plugin(Loader)
   f.ctx.loader.builtins.cua = NativeProvider
   await f.ctx.plugin(ConfigEditor)
+  await f.ctx.plugin(Storage)
+  await f.ctx.plugin(StorageJson, { root: join(home, 'storages') })
+  await f.ctx.plugin(StorageDomain, { backend: 'json' })
   await mountRootInclude(f.ctx, join(dir, 'cordis.yml'), readProfilePatches('test', profile))
   await f.ctx.loader.await()
-  await f.ctx.plugin(UserQuestions)
-  const answer = vi.fn(async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] }))
-  f.ctx.on('user-questions/request', answer)
-  native.request.mockResolvedValue({ appHandle: 'task-app', pid: 17, name: 'Fixture',
-    authorization: { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true } })
-  expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
+  native.request.mockImplementation(async (method: string) => method === 'applicationIcons' ? {}
+    : { accessibility: true, screenRecording: true, helper: { pid: 2 }, parent: { pid: 1 } })
+  expect((await f.ctx.cuaAccess.applications()).persistentAvailable).toBe(true)
   await f.ctx.plugin(Settings)
   await f.ctx.plugin(Timer)
   await f.ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
   await f.ctx.hmr.runExclusive(async () => {})
-  expect(f.ctx.settings.describe().find(row => row.ns === 'cua')?.autoGenerate).toBe(false)
-  answer.mockResolvedValue({ answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] })
-  const authorization = { id: 'b'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true }
+  return { ...f, profile }
+}
+
+it('stores revocation without entering the HMR configuration queue', async () => {
+  const grant = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app' }
+  const f = await permissionProfile([grant])
+  const before = await readFile(f.profile.patchPath, 'utf8')
+  const acquired = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
+  onTestFinished(() => { release.resolve(undefined) })
+  const blocked = f.ctx.hmr.runExclusive(async () => { acquired.resolve(undefined); await release.promise })
+  await acquired.promise
+  await f.ctx.cuaAccess.revoke(grant.id as import('@deepseek-ai/dsh-cua/types').CuaApplicationId)
+  expect((await f.ctx.cuaAccess.applications()).allowedApps).toEqual([])
+  expect(await readFile(f.profile.patchPath, 'utf8')).toBe(before)
+  release.resolve(undefined)
+  await blocked
+})
+
+it.each([true, false])('stores persistable application consent separately from configuration (path present: %s)', async (hasPath) => {
+  const f = await permissionProfile(), { profile } = f
+  expect(f.ctx.settings.describe().find(row => row.ns === 'cua')).toBeUndefined()
+  await f.ctx.plugin(UserQuestions)
+  f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] }))
+  const authorization = { id: 'a'.repeat(64), name: 'Fixture', ...(hasPath ? { executablePath: '/fixture/app' } : {}), persistable: true }
   native.request.mockResolvedValue({ appHandle: 'signed-app', pid: 17, name: 'Fixture', authorization })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
-  expect(await readFile(profile.patchPath, 'utf8')).toContain(authorization.id)
-  const settings = f.ctx.settings.describe().find(row => row.ns === 'cua')!
-  await f.ctx.settings.mutate('cua', [{ op: 'set', path: ['allowedApps'], value: [] }], settings.revision)
-  expect(await readFile(profile.patchPath, 'utf8')).toContain('allowedApps: []')
-  const revoked = await f.execute('getState', { appHandle: 'signed-app' })
-  expect(revoked.isError).toBe(true)
-  expect(JSON.stringify(revoked.content)).toContain('APP_ACCESS_REVOKED')
-  vi.spyOn(f.ctx.settings, 'describe').mockReturnValue([])
-  native.request.mockResolvedValue({ appHandle: 'different-app', pid: 18, name: 'Other fixture', authorization: { ...authorization, id: 'c'.repeat(64) } })
-  const unavailable = await f.execute('getApp', { selector: 'Fixture' })
-  expect(unavailable.isError).toBe(true)
-  expect(JSON.stringify(unavailable.content)).toContain('APP_ACCESS_DENIED')
+  expect(await readFile(profile.patchPath, 'utf8')).not.toContain(authorization.id)
+  const files = await readdir(join(profile.home, 'storages'))
+  const stored = files.find(file => file.startsWith('cua_permissions_'))!
+  expect(await readFile(join(profile.home, 'storages', stored), 'utf8')).toContain(authorization.id)
+  native.request.mockImplementation(async (method: string) => method === 'applicationIcons' ? {}
+    : { accessibility: true, screenRecording: true, helper: { pid: 2 }, parent: { pid: 1 } })
+  const permission = await f.ctx.cuaAccess.applications()
+  expect(permission.allowedApps).toHaveLength(1)
+  await f.ctx.cuaAccess.revoke(permission.allowedApps[0]!.id)
+  expect((await f.ctx.cuaAccess.applications()).allowedApps).toEqual([])
+  await f.ctx.cuaAccess.retryApproval(permission.allowedApps[0]!.id)
+
 })
 
 it('rejects an application handle before any helper or consent has been acquired', async () => {
@@ -715,10 +769,10 @@ it('rejects an application handle before any helper or consent has been acquired
   expect(native.request).not.toHaveBeenCalled()
 })
 
-it('uses configured signed application grants without requesting a human answer', async () => {
+it.each([true, false])('uses configured grants without requesting a human answer (path present: %s)', async (hasPath) => {
   const f = await setup()
   await f.provider.dispose()
-  const grant = { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app' }
+  const grant = { id: 'a'.repeat(64), name: 'Fixture', ...(hasPath ? { executablePath: '/fixture/app' } : {}) }
   await f.ctx.plugin(NativeProvider, { ...config, allowedApps: [grant] })
   native.request.mockResolvedValueOnce({ appHandle: 'saved-app', pid: 17, name: 'Fixture', authorization: { ...grant, persistable: true } })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
@@ -726,4 +780,21 @@ it('uses configured signed application grants without requesting a human answer'
   expect((await f.execute('activate', { appHandle: 'saved-app' })).isError).toBe(false)
   expect(native.instances).toHaveLength(1)
   expect(native.request).toHaveBeenCalledTimes(2)
+})
+
+it('routes permission actions through the macOS provider with the Client language and configured interval', async () => {
+  const f = await setup()
+  native.request.mockResolvedValueOnce({ accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+  await f.ctx.cuaAccess.requestPermission('accessibility', 'zh')
+  expect(native.request).toHaveBeenLastCalledWith('requestPermission', {
+    permission: 'accessibility', pollIntervalMs: 1000,
+    instruction: '将 {application} 拖入上方列表以允许辅助功能', backLabel: '返回', finderLabel: '在 Finder 中显示',
+    unavailableMessage: '找不到此应用。请重新启用 Computer Use 后重试',
+    settingsMessage: '请手动打开系统设置 > 隐私与安全性 > 辅助功能',
+  }, expect.any(AbortSignal))
+  native.request.mockResolvedValueOnce({ opened: true })
+  await f.ctx.cuaAccess.openSettings('screenRecording', 'en')
+  expect(native.request).toHaveBeenLastCalledWith('openPermissionSettings', {
+    permission: 'screenRecording', settingsMessage: 'Open System Settings > Privacy & Security > Screen Recording manually.',
+  }, expect.any(AbortSignal))
 })

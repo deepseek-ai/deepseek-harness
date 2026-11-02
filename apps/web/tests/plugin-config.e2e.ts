@@ -23,6 +23,7 @@ const ROW_EXPECTED = join(SNAPSHOT_DIR, 'row.expected.md')
 const BUNDLE_EXPECTED = join(SNAPSHOT_DIR, 'bundle.expected.md')
 const FIXTURE_PLUGINS = fileURLToPath(new URL('./fixtures/plugins', import.meta.url))
 const MODE = webSnapshotMode()
+const UNUSED_KEY_ENV = 'DSH_PLUGIN_CONFIG_E2E_UNUSED_KEY'
 
 describe('web e2e: plugin configuration pages', () => {
   let scaffold: WebScaffold
@@ -35,7 +36,8 @@ describe('web e2e: plugin configuration pages', () => {
     // below, that half registers its row's configuration into the page.
     scaffold = await launchWebScaffold({
       extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),
-      deepSeekSearch: { apiKeyEnv: 'DSH_PLUGIN_CONFIG_E2E_UNUSED_KEY' },
+      deepSeekSearch: { apiKeyEnv: UNUSED_KEY_ENV },
+      deepSeekWebApi: { apiKeyEnv: UNUSED_KEY_ENV },
       profile: { packages: [{ dir: join(FIXTURE_PLUGINS, 'fixture-live-client') }] },
     })
     browser = await chromium.launch()
@@ -110,9 +112,15 @@ describe('web e2e: plugin configuration pages', () => {
     await more.focus()
     await page.keyboard.press('Enter')
     await panel.getByRole('heading', { name: '实验性插件', exact: true, level: 1 }).waitFor()
+    // The More list omits the shipped bundles whose own rows do not run (the visibility rule lives in
+    // ui-plugin-manager), so it holds fewer cards than the installed optional-bundle list.
     const bundles = await scaffold.ctx.pluginManager.listBundles()
+    const hiddenBundles = new Set([
+      '@deepseek-ai/dsh-experimental-terminal-bundle',
+      '@deepseek-ai/dsh-experimental-liveshare',
+    ])
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
-      .toBe(bundles.filter(bundle => bundle.name !== '@deepseek-ai/dsh-experimental-terminal-bundle'
+      .toBe(bundles.filter(bundle => !hiddenBundles.has(bundle.name)
         && bundle.official && (bundle.listedByDefault !== false || bundle.enabled || bundle.installed)).length)
     expect(await basic.count()).toBe(0)
     expect(await extensions.count()).toBe(0)

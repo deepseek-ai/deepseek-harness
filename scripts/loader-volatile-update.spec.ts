@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import type { Awaitable } from '@deepseek-ai/cosmokit'
 import { Context, type Fiber, type Plugin } from '@deepseek-ai/cordis'
 import Loader, { Group } from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -110,7 +111,7 @@ describe('volatile Loader updates', () => {
   it('bypasses custom update hooks for volatile changes and retains them for mixed changes', async () => {
     const ctx = await runtimeContext()
     const hooks: string[] = []
-    const globalHook = vi.fn((_config: unknown, _noSave: boolean, next: () => void) => { next() })
+    const globalHook = vi.fn((_config: unknown, next: () => Awaitable<void>) => next())
     ctx.on('internal/update', globalHook, { global: true })
     const fiber = await mountEntry(ctx, { Config, apply(owner: Context) {
       owner.on('internal/update', (config: ReturnType<typeof Config>) => {
@@ -144,7 +145,7 @@ describe('volatile Loader updates', () => {
     await fiber.await()
     expect(apply).toHaveBeenCalledTimes(3)
     const ordinary = await mountEntry(ctx, { Config: z.object({ value: z.string() }), apply() { apply() } }, { value: 'same' })
-    ordinary.update({ value: 'same' })
+    await ordinary.update({ value: 'same' })
     await ordinary.await()
     expect(apply).toHaveBeenCalledTimes(5)
   })
@@ -243,9 +244,9 @@ it('reloads real YAML and persists plain values independently of custom update h
   expect(include.store.group!.fiber).toBe(group)
   expect(group.uid).toBe(groupUid)
   expect(configs[0]!.title.get()).toBe('file-update')
-  entry.fiber!.update({ title: 'program-update', group: { list: ['item'] } })
+  await entry.fiber!.update({ title: 'program-update', group: { list: ['item'] } })
   expect(entry.options.config).toEqual({ title: 'program-update', group: { list: ['item'] } })
-  entry.fiber!.update({ title: 'ephemeral' }, true)
+  await entry.fiber!.update({ title: 'ephemeral' }, true)
   expect(entry.options.config).toEqual({ title: 'program-update', group: { list: ['item'] } })
   await ctx.fiber.dispose()
   const saved = await readFile(filename, 'utf8')
@@ -298,11 +299,11 @@ it('updates volatile children through Group and Include custom updates and saves
   const originalConsumer = consumer.fiber
   const initial = configs[0]!
 
-  group.fiber!.update([child('group-update')])
+  await group.fiber!.update([child('group-update')])
   await ctx.loader.await()
   expect(initial.title.get()).toBe('group-update')
   expect(group.options.config).toEqual([child('group-update')])
-  includeEntry.fiber!.update({ path: includePath, patches: [{ id: 'consumer', config: { title: 'include-update' } }] })
+  await includeEntry.fiber!.update({ path: includePath, patches: [{ id: 'consumer', config: { title: 'include-update' } }] })
   await ctx.loader.await()
   expect(initial.title.get()).toBe('include-update')
   expect(includeEntry.fiber).toBe(originalInclude)
@@ -315,14 +316,14 @@ it('updates volatile children through Group and Include custom updates and saves
 
   const ordinary = await ctx.loader.create({ name: 'cordis:volatile-test', config: {} })
   const entry = ctx.loader.resolve(ordinary)
-  entry.fiber!.update({ title: 'custom-update', fixed: 'ordinary' })
+  await entry.fiber!.update({ title: 'custom-update', fixed: 'ordinary' })
   expect(childUpdates).toHaveBeenCalledOnce()
   expect(entry.options.config).toEqual({ title: 'custom-update', fixed: 'ordinary' })
-  expect((entry.fiber!.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('hello')
-  entry.fiber!.update({ title: 'ephemeral', fixed: 'ordinary' }, true)
+  expect((entry.fiber!.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('custom-update')
+  await entry.fiber!.update({ title: 'ephemeral', fixed: 'ordinary' }, true)
   expect(childUpdates).toHaveBeenCalledTimes(2)
   expect(entry.options.config).toEqual({ title: 'custom-update', fixed: 'ordinary' })
-  expect(() => { entry.fiber!.update({ nested: { count: -1 } }) }).toThrow()
+  expect(() => { void entry.fiber!.update({ nested: { count: -1 } }) }).toThrow()
   expect(childUpdates).toHaveBeenCalledTimes(2)
   expect(entry.options.config).toEqual({ title: 'custom-update', fixed: 'ordinary' })
 })
@@ -347,9 +348,9 @@ it('commits volatile edits in place and retains direct Fiber updates', async () 
   const current = fiber.effectiveConfig as ReturnType<typeof Config>
   expect(current.title.get()).toBe('mixed')
 
-  const hook = vi.fn((_config: unknown, _noSave: boolean, next: () => void) => { next() })
+  const hook = vi.fn((_config: unknown, next: () => Awaitable<void>) => next())
   fiber.ctx.on('internal/update', hook)
-  fiber.update({ title: 'direct' })
+  await fiber.update({ title: 'direct' })
   await fiber.await()
   expect(hook).toHaveBeenCalledOnce()
   expect(apply).toHaveBeenCalledTimes(3)
@@ -368,7 +369,7 @@ it('parses a volatile-only update through the config hook without patching the e
   const current = fiber.effectiveConfig as ReturnType<typeof Config>
   const resolveHook = vi.fn((_raw: unknown, next: () => unknown) => next())
   fiber.ctx.on('internal/config', resolveHook)
-  const contextPatch = vi.fn((_entry: unknown, next: () => void) => { next() })
+  const contextPatch = vi.fn((_entry: unknown, next: () => Awaitable<void>) => next())
   ctx.on('loader/patch-context', contextPatch)
   trim.mockClear()
   trace.length = 0
@@ -594,7 +595,7 @@ it('keeps an ordinary plugin mounted when an absent object becomes its explicit 
 it('keeps a noSave volatile value as the pending raw config across a no-op entry update', async () => {
   const ctx = await runtimeContext()
   const fiber = await mountEntry(ctx, { Config, apply() {} }, { title: 'saved' })
-  fiber.update({ title: 'ephemeral' }, true)
+  await fiber.update({ title: 'ephemeral' }, true)
   await fiber.await()
   expect((fiber.effectiveConfig as ReturnType<typeof Config>).title.get()).toBe('ephemeral')
   expect(fiber.entry!.options.config).toEqual({ title: 'saved' })

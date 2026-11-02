@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-workspace-changes",
   "description": "Per-turn workspace file changes recorded from git working-tree snapshots and whole-file captures, with per-file comparisons, for the DeepSeek Harness",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -60,7 +60,11 @@
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
     "@deepseek-ai/dsh-agent-loop": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
+    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
     "@deepseek-ai/dsh-tool-fs": "workspace:*",
-    "@deepseek-ai/dsh-tool-str-replace-editor": "workspace:*"
+    "@deepseek-ai/dsh-tool-testkit": "workspace:*",
+    "@deepseek-ai/dsh-tool-str-replace-editor": "workspace:*",
+    "@deepseek-ai/dsh-fs-observation-policy": "workspace:*",
+    "@deepseek-ai/dsh-system-prompt": "workspace:*"
   }
 }
