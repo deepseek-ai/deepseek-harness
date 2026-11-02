@@ -59,6 +59,7 @@ import {
   type NormalizeContext,
 } from '@deepseek-ai/dsh-session-snapshot'
 import type { Profile, ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import type { PresetDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type {
@@ -712,6 +713,20 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     ],
     { id: 'llm-deepseek', disabled: mode !== 'record' && !maskDeepSeekCredential },
   ]
+
+  // Recorded standard sessions pin the optional patch tool in their request headers.
+  if (options.replayFixture !== undefined) {
+    const config = composedRows.find(row => row.id === 'preset-standard')!.config as PresetDefinition
+    overlayPatches.push({
+      id: 'preset-standard',
+      config: {
+        ...config,
+        plugins: config.plugins.map(plugin => plugin.id === 'tool-fs'
+          ? { ...plugin, config: { ...plugin.config, applyPatch: true } }
+          : plugin),
+      },
+    })
+  }
 
   // Live fields use a shared deployment layer; process-specific ports and roots stay in CLI overlays.
   const formEntries = new Set(['agent-default-model', 'agent-preset-registry', 'llm-deepseek', 'llm-pi-ai',

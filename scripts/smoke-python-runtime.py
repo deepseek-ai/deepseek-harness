@@ -1522,6 +1522,7 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
         task = root / "dynamic-tool-task.txt"
         task.write_text("Call snapshot_ping once.\n", encoding="utf-8")
         patch = write_profile_patch(root, "dynamic-tools.patch.yml", sessions, [
+            {"id": "tool-fs", "config": {"applyPatch": True}},
             {"id": "llm-deepseek", "config": {"models": [
                 {"id": "smoke-model", "toolUpdate": "addition-only"},
             ]}},
