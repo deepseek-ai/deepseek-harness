@@ -40,7 +40,7 @@ export { STOP_BUTTON_PREFIX } from './outputs.ts'
 export { sessionIdOf } from './hosting.ts'
 export { operationId } from './send.ts'
 export { mediaLabel, mediaRefs, parseMediaId } from './media.ts'
-export type { ImMediaItem, ImMediaKind, ImMediaRef } from './media.ts'
+export type { ImMediaFileItem, ImMediaItem, ImMediaKind, ImMediaRef } from './media.ts'
 export { formatText } from './format.ts'
 export { IM_TOOLS } from './tools.ts'
 export type { ImToolName } from './tools.ts'
@@ -59,7 +59,7 @@ export class ImService extends Service implements ImApi {
 
   /** Durable message store and the `ctx.im.history` read side. */
   readonly store: ImStore
-  /** Media references and bounded download into attachments (`im_read_image`). */
+  /** Media references and bounded download into attachments (`im_read_image`, `im_read_file`). */
   readonly media: ImMediaStore
   /** `ctx.im.format` renderer of stored messages. */
   readonly formatter: ImFormatter

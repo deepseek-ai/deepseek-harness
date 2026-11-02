@@ -6,7 +6,7 @@ import {
   Config, IM_TOOLS, ImChatKey, ImMessageKey, ImSourceId, STOP_BUTTON_PREFIX, sessionIdOf, splitKey,
   type ImActivity, type ImConfig, type ImOutcome, type ImOutputRenderer,
 } from '../src/index.ts'
-import { errorValue, imReadImageParameters, imSendParameters } from '../src/schema.ts'
+import { errorValue, imReadFileParameters, imReadImageParameters, imSendParameters } from '../src/schema.ts'
 
 const root = join(import.meta.dirname, '..')
 /** Raw operator input (schemastery types its input as the resolved config). */
@@ -50,9 +50,12 @@ describe('dsh-im contracts', () => {
 
   it('exposes the constants plugins rely on', () => {
     expect(STOP_BUTTON_PREFIX).toBe('dsh:stop:')
-    expect(IM_TOOLS).toEqual(['im_read', 'im_history', 'im_send', 'im_reply', 'im_send_file', 'im_read_image'])
+    expect(IM_TOOLS).toEqual([
+      'im_read', 'im_history', 'im_send', 'im_reply', 'im_send_file', 'im_read_image', 'im_read_file',
+    ])
     expect(imSendParameters.text).toMatchObject({ type: 'string', required: true })
     expect(imReadImageParameters.id).toMatchObject({ type: 'string', required: true })
+    expect(imReadFileParameters.id).toMatchObject({ type: 'string', required: true })
     expect(errorValue.properties.status).toMatchObject({ type: 'string', const: 'error', required: true })
   })
 

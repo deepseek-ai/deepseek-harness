@@ -9,8 +9,8 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 28e5fc485b6541e0
-  zh: a8d05d08547eeefe
+  en: 6989bc8c2196cea8
+  zh: e18d63e23f97ad6c
 /tool-schema-catalog/deepseek-ai-dsh-experimental-im:
   en: 31fa03c9866eb844
   zh: 31fa03c9866eb844
@@ -20,6 +20,9 @@
 /tool-schema-catalog/deepseek-ai-dsh-experimental-im/im-read:
   en: 7f4765144673fc36
   zh: 7f4765144673fc36
+/tool-schema-catalog/deepseek-ai-dsh-experimental-im/im-read-file:
+  en: 2ea4598ce7e724e9
+  zh: 2ea4598ce7e724e9
 /tool-schema-catalog/deepseek-ai-dsh-experimental-im/im-read-image:
   en: 8b705d054087e6f8
   zh: 8b705d054087e6f8
@@ -30,7 +33,7 @@
   en: 2869b8da22139254
   zh: 2869b8da22139254
 /tool-schema-catalog/deepseek-ai-dsh-experimental-im/im-send-file:
-  en: dd1837cadb7292c6
+  en: 133686bac6a659f4
   zh: dd1837cadb7292c6
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:
   en: e0143916bb634762

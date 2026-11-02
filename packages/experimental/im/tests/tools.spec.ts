@@ -18,7 +18,7 @@ import {
 } from '../src/api.ts'
 import { Config } from '../src/config.ts'
 import { ImError } from '../src/error.ts'
-import type { ImMediaItem } from '../src/media.ts'
+import type { ImMediaFileItem, ImMediaItem } from '../src/media.ts'
 import { operationId } from '../src/send.ts'
 import { applyTools, IM_TOOLS } from '../src/tools.ts'
 
@@ -99,7 +99,7 @@ class FakeHistory implements ImHistory {
 
 /** Media admission double: one canned item per id, or the failure a scenario needs. */
 class FakeMedia {
-  readonly items = new Map<string, ImMediaItem>()
+  readonly items = new Map<string, ImMediaFileItem>()
   failure: Error | undefined
 
   async read(chat: ImChatKey, id: string): Promise<ImMediaItem> {
@@ -108,6 +108,10 @@ class FakeMedia {
     const item = this.items.get(id)
     if (item === undefined) throw new ImError('access', `no media ${id}`)
     return item
+  }
+
+  async readFile(chat: ImChatKey, id: string): Promise<ImMediaFileItem> {
+    return await this.read(chat, id)
   }
 }
 
@@ -227,14 +231,14 @@ function textOf(result: ToolExecutionResult): string {
 }
 
 describe('im tool registration', () => {
-  it('registers six tools, the file tool included', async () => {
+  it('registers seven tools, the file tools included', async () => {
     const mounted = await mount()
     expect([...mounted.names()].sort()).toEqual([...IM_TOOLS].sort())
   })
 
   it('registers only the read tools when the preset is read-only', async () => {
     const mounted = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50 } } })
-    expect(mounted.names()).toEqual(['im_read', 'im_history', 'im_read_image'])
+    expect(mounted.names()).toEqual(['im_read', 'im_history', 'im_read_image', 'im_read_file'])
   })
 
   it('keeps the read tools parallel and the publishing tools exclusive', async () => {
@@ -242,6 +246,7 @@ describe('im tool registration', () => {
     expect(mounted.mode('im_read', { message: '1' })).toEqual({ kind: 'parallel' })
     expect(mounted.mode('im_history', {})).toEqual({ kind: 'parallel' })
     expect(mounted.mode('im_read_image', { id: '1.1' })).toEqual({ kind: 'parallel' })
+    expect(mounted.mode('im_read_file', { id: '1.2' })).toEqual({ kind: 'parallel' })
     expect(mounted.mode('im_send', { text: 'hi' })).toEqual({ kind: 'exclusive' })
   })
 
@@ -527,6 +532,47 @@ describe('im_read_image', () => {
       .toMatchObject({ status: 'error', code: 'access' })
     mounted.im.media.failure = new Error('the platform refused the download')
     const failed = await mounted.call('im_read_image', { id: '1.1' })
+    expect(failed.isError).toBe(true)
+    expect(textOf(failed)).toContain('refused the download')
+  })
+})
+
+describe('im_read_file', () => {
+  const attachment = { attachmentId: 'sha256:aa', name: 'report.pdf', bytes: 9 }
+  const ref = { message: ImMessageKey('fake:bot', 'm1'), chat: CHAT, seq: 1, index: 2, kind: 'file' as const, src: 'x' }
+
+  it('saves the file of one label and reports the path to read it', async () => {
+    const mounted = await mount()
+    mounted.im.media.items.set('1.2', {
+      ref, file: { type: 'file', attachment: attachment as never }, mime: 'application/pdf', bytes: 9, path: '/work/report.pdf',
+    })
+    expect(value(await mounted.call('im_read_file', { id: '1.2' }))).toEqual({
+      id: '1.2', chat: CHAT, file: attachment, path: '/work/report.pdf',
+    })
+  })
+
+  it('reports a stored file this execution environment cannot reach', async () => {
+    const mounted = await mount()
+    mounted.im.media.items.set('1.2', { ref, file: { type: 'file', attachment: attachment as never }, bytes: 9 })
+    expect(value(await mounted.call('im_read_file', { id: '1.2' })))
+      .toEqual({ id: '1.2', chat: CHAT, file: attachment, skipped: 'unmapped' })
+  })
+
+  it('reports a media element that was not admitted, with and without a reason', async () => {
+    const mounted = await mount()
+    mounted.im.media.items.set('1.2', { ref, skipped: 'too-large' })
+    expect(value(await mounted.call('im_read_file', { id: '1.2' })))
+      .toEqual({ id: '1.2', chat: CHAT, skipped: 'too-large' })
+    mounted.im.media.items.set('1.2', { ref })
+    expect(value(await mounted.call('im_read_file', { id: '1.2' }))).toEqual({ id: '1.2', chat: CHAT })
+  })
+
+  it('reports a refused and a failing file read', async () => {
+    const mounted = await mount()
+    expect(value(await mounted.call('im_read_file', { id: '2.1' })))
+      .toMatchObject({ status: 'error', code: 'access' })
+    mounted.im.media.failure = new Error('the platform refused the download')
+    const failed = await mounted.call('im_read_file', { id: '1.2' })
     expect(failed.isError).toBe(true)
     expect(textOf(failed)).toContain('refused the download')
   })

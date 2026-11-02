@@ -44,9 +44,11 @@ interface FakeHttp {
 
 interface FakeStore {
   saveImages(inputs: readonly { data: Uint8Array; mediaType: string; name?: string }[]): Promise<unknown[]>
+  saveFile(input: { data: Uint8Array; name?: string }): Promise<unknown>
+  fileHostPath?(ref: unknown): string | undefined
 }
 
-function fakeContext(services: { http?: FakeHttp; attachments?: FakeStore; im?: unknown }): Context {
+function fakeContext(services: { http?: FakeHttp; attachments?: FakeStore; im?: unknown; fs?: unknown }): Context {
   return { get: (name: string) => (services as Record<string, unknown>)[name] } as Context
 }
 
@@ -60,11 +62,16 @@ function httpServing(bytes: Uint8Array, mime = 'image/png'): FakeHttp {
   }
 }
 
-/** `ctx.attachments` stand-in: one durable reference per image. */
-function attachmentsSaving(): FakeStore & { saved: { data: Uint8Array; mediaType: string; name?: string }[] } {
+/** `ctx.attachments` stand-in: one durable reference per image and per file. */
+function attachmentsSaving(): FakeStore & {
+  saved: { data: Uint8Array; mediaType: string; name?: string }[]
+  files: { data: Uint8Array; name?: string }[]
+} {
   const saved: { data: Uint8Array; mediaType: string; name?: string }[] = []
+  const files: { data: Uint8Array; name?: string }[] = []
   return {
     saved,
+    files,
     saveImages: async (inputs) => {
       saved.push(...inputs)
       return inputs.map((input, index) => ({
@@ -76,7 +83,20 @@ function attachmentsSaving(): FakeStore & { saved: { data: Uint8Array; mediaType
         ...input.name ? { name: input.name } : {},
       }))
     },
+    saveFile: async (input) => {
+      files.push(input)
+      return {
+        attachmentId: `sha256:${files.length}`,
+        name: input.name ?? 'file',
+        bytes: input.data.byteLength,
+      }
+    },
   }
+}
+
+/** A `saveFile` a scenario never reaches: it only fills the double's shape. */
+async function unusedFileStore(): Promise<unknown> {
+  throw new Error('this scenario stores no file')
 }
 
 function config(overrides: Partial<ImConfig['media']> = {}): ImConfig {
@@ -182,6 +202,8 @@ describe('sniffImageMediaType', () => {
 describe('ImMediaStore.admit', () => {
   const imageRef = (index = 1, src = 'https://cdn/1.png', name?: string): ImMediaRef =>
     ({ message: 'b|m' as never, chat: CHAT.key, seq: 12, index, kind: 'image', src, ...name ? { name } : {} })
+  const fileRef = (index = 2, src = 'https://cdn/report.pdf', name?: string): ImMediaRef =>
+    ({ message: 'b|m' as never, chat: CHAT.key, seq: 12, index, kind: 'file', src, ...name ? { name } : {} })
 
   it('admits an image through http into a durable attachment', async () => {
     const attachments = attachmentsSaving()
@@ -209,16 +231,44 @@ describe('ImMediaStore.admit', () => {
     expect(await store.admit([imageRef()])).toEqual([{ ref: imageRef(), skipped: 'disabled' }])
   })
 
-  it('skips non-image media and enforces the item bound', async () => {
+  it('admits a non-image element as a durable verbatim file', async () => {
+    const attachments = attachmentsSaving()
+    const store = new ImMediaStore(
+      fakeContext({ http: httpServing(TEXT_BYTES, 'application/pdf'), attachments }),
+      config(),
+    )
+    const [item] = await store.admit([fileRef(2, 'https://cdn/report.pdf', 'report.pdf')])
+    expect(item).toEqual({
+      ref: fileRef(2, 'https://cdn/report.pdf', 'report.pdf'),
+      file: { type: 'file', attachment: { attachmentId: 'sha256:1', name: 'report.pdf', bytes: 10 } },
+      mime: 'application/pdf',
+      bytes: 10,
+    })
+    expect(attachments.files).toEqual([{ data: TEXT_BYTES, name: 'report.pdf' }])
+    expect(attachments.saved).toEqual([])
+  })
+
+  it('keeps an unnamed or mime-less file under the store defaults', async () => {
+    const attachments = attachmentsSaving()
+    const withoutMime: FakeHttp = {
+      get: async () => ({ headers: { get: () => null }, arrayBuffer: async () => TEXT_BYTES.slice().buffer }),
+    }
+    const store = new ImMediaStore(fakeContext({ http: withoutMime, attachments }), config())
+    const [item] = await store.admit([fileRef(1, 'https://cdn/voice.opus')])
+    expect(item).toEqual({
+      ref: fileRef(1, 'https://cdn/voice.opus'),
+      file: { type: 'file', attachment: { attachmentId: 'sha256:1', name: 'file', bytes: 10 } },
+      bytes: 10,
+    })
+    expect(attachments.files).toEqual([{ data: TEXT_BYTES }])
+  })
+
+  it('enforces the item bound across kinds', async () => {
     const attachments = attachmentsSaving()
     const store = new ImMediaStore(fakeContext({ http: httpServing(PNG_BYTES), attachments }), config({ maxItems: 1 }))
-    const refs: ImMediaRef[] = [
-      imageRef(1),
-      { ...imageRef(2), kind: 'file' },
-      imageRef(3),
-    ]
+    const refs: ImMediaRef[] = [imageRef(1), { ...imageRef(2), kind: 'file' }, imageRef(3)]
     const items = await store.admit(refs)
-    expect(items.map(item => item.image ? 'image' : item.skipped)).toEqual(['image', 'unsupported', 'limit'])
+    expect(items.map(item => item.image ? 'image' : item.file ? 'file' : item.skipped)).toEqual(['image', 'limit', 'limit'])
   })
 
   it('skips an oversized download', async () => {
@@ -227,6 +277,30 @@ describe('ImMediaStore.admit', () => {
       config({ maxBytes: 4 }),
     )
     expect(await store.admit([imageRef()])).toEqual([{ ref: imageRef(), bytes: 11, skipped: 'too-large' }])
+  })
+
+  it('skips an oversized file and one the attachment service cannot keep', async () => {
+    const oversized = new ImMediaStore(
+      fakeContext({ http: httpServing(TEXT_BYTES, 'application/pdf'), attachments: attachmentsSaving() }),
+      config({ maxBytes: 4 }),
+    )
+    expect(await oversized.admit([fileRef()])).toEqual([{ ref: fileRef(), bytes: 10, skipped: 'too-large' }])
+    const missing = new ImMediaStore(fakeContext({ http: httpServing(TEXT_BYTES, 'application/pdf') }), config())
+    expect(await missing.admit([fileRef()]))
+      .toEqual([{ ref: fileRef(), mime: 'application/pdf', bytes: 10, skipped: 'unavailable' }])
+    const withoutMime: FakeHttp = {
+      get: async () => ({ headers: { get: () => null }, arrayBuffer: async () => TEXT_BYTES.slice().buffer }),
+    }
+    const bareMissing = new ImMediaStore(fakeContext({ http: withoutMime }), config())
+    expect(await bareMissing.admit([fileRef()])).toEqual([{ ref: fileRef(), bytes: 10, skipped: 'unavailable' }])
+    const failing = new ImMediaStore(fakeContext({
+      http: httpServing(TEXT_BYTES, 'application/pdf'),
+      attachments: {
+        saveImages: async () => [],
+        saveFile: async () => { throw new Error('the disk is full') },
+      },
+    }), config())
+    expect(await failing.admit([fileRef()])).toEqual([{ ref: fileRef(), skipped: 'the disk is full' }])
   })
 
   it('skips bytes that are not an accepted raster format', async () => {
@@ -245,7 +319,10 @@ describe('ImMediaStore.admit', () => {
     expect(await missing.admit([imageRef()]))
       .toEqual([{ ref: imageRef(), mime: 'image/png', bytes: 11, skipped: 'unavailable' }])
     const empty = new ImMediaStore(
-      fakeContext({ http: httpServing(PNG_BYTES), attachments: { saveImages: async () => [] } }),
+      fakeContext({
+        http: httpServing(PNG_BYTES),
+        attachments: { saveImages: async () => [], saveFile: unusedFileStore },
+      }),
       config(),
     )
     expect(await empty.admit([imageRef()]))
@@ -259,7 +336,7 @@ describe('ImMediaStore.admit', () => {
     expect(await failing.admit([imageRef()])).toEqual([{ ref: imageRef(), skipped: '403 forbidden' }])
     const throwing = new ImMediaStore(fakeContext({
       http: httpServing(PNG_BYTES),
-      attachments: { saveImages: async () => { throw new ImError('capacity', 'too many pixels') } },
+      attachments: { saveImages: async () => { throw new ImError('capacity', 'too many pixels') }, saveFile: unusedFileStore },
     }), config())
     expect(await throwing.admit([imageRef()])).toEqual([{ ref: imageRef(), skipped: 'too many pixels' }])
     const odd = new ImMediaStore(fakeContext({
@@ -290,40 +367,43 @@ describe('ImMediaStore.admit', () => {
   })
 })
 
-describe('ImMediaStore.read', () => {
-  const mediaMessage = (seq: number): ImMessage =>
-    message(media(h('p', '图：', h('img', { src: 'https://cdn/1.png' }))), seq)
-  const mixedMessage = (seq: number): ImMessage =>
-    message(media(h('p', h('img', { src: 'https://cdn/1.png' }), h('file', { src: 'https://cdn/r.pdf' }))), seq)
+const imageMessage = (seq: number): ImMessage =>
+  message(media(h('p', '图：', h('img', { src: 'https://cdn/1.png' }))), seq)
+const mixedMessage = (seq: number): ImMessage =>
+  message(media(h('p', h('img', { src: 'https://cdn/1.png' }), h('file', { src: 'https://cdn/r.pdf' }))), seq)
+const fileMessage = (seq: number): ImMessage =>
+  message(media(h('p', '看报告 ', h('file', { src: 'https://cdn/r.pdf', name: 'r.pdf' }))), seq)
 
-  function storeWith(
-    messages: readonly ImMessage[],
-    options: { http?: FakeHttp; attachments?: FakeStore; media?: Partial<ImConfig['media']> } = {},
-  ): ImMediaStore {
-    const history = {
-      after: (chat: string, seq: number, limit: number) =>
-        messages.filter(message => message.chat.key === chat && message.seq > seq).slice(0, limit),
-      before: () => [],
-      get: () => undefined,
-      latest: () => undefined,
-    }
-    return new ImMediaStore(
-      fakeContext({ http: httpServing(PNG_BYTES), attachments: attachmentsSaving(), im: { history }, ...options }),
-      config(options.media),
-    )
+/** A store over one fixed history, with the doubles a read scenario needs. */
+function storeWith(
+  messages: readonly ImMessage[],
+  options: { http?: FakeHttp; attachments?: FakeStore; fs?: unknown; media?: Partial<ImConfig['media']> } = {},
+): ImMediaStore {
+  const history = {
+    after: (chat: string, seq: number, limit: number) =>
+      messages.filter(message => message.chat.key === chat && message.seq > seq).slice(0, limit),
+    before: () => [],
+    get: () => undefined,
+    latest: () => undefined,
   }
+  return new ImMediaStore(
+    fakeContext({ http: httpServing(PNG_BYTES), attachments: attachmentsSaving(), im: { history }, ...options }),
+    config(options.media),
+  )
+}
 
+describe('ImMediaStore.read', () => {
   it('resolves the media element by its stable id', async () => {
-    const item: ImMediaItem = await storeWith([mediaMessage(12)]).read(CHAT.key, '#12.1')
+    const item: ImMediaItem = await storeWith([imageMessage(12)]).read(CHAT.key, '#12.1')
     expect(item.ref).toMatchObject({ seq: 12, index: 1, kind: 'image' })
     expect(item.image?.attachment).toMatchObject({ mediaType: 'image/png' })
   })
 
   it('rejects an unknown id, message, element or missing im service', async () => {
-    await expect(storeWith([mediaMessage(12)]).read(CHAT.key, 'nope')).rejects.toThrow(ImError)
-    await expect(storeWith([mediaMessage(12)]).read(CHAT.key, '13.1')).rejects.toThrow('no stored message #13')
-    await expect(storeWith([mediaMessage(12)]).read(CHAT.key, '12.2')).rejects.toThrow('no media element #2')
-    await expect(storeWith([mediaMessage(12)]).read(ImChatKey('b', 'other'), '12.1'))
+    await expect(storeWith([imageMessage(12)]).read(CHAT.key, 'nope')).rejects.toThrow(ImError)
+    await expect(storeWith([imageMessage(12)]).read(CHAT.key, '13.1')).rejects.toThrow('no stored message #13')
+    await expect(storeWith([imageMessage(12)]).read(CHAT.key, '12.2')).rejects.toThrow('no media element #2')
+    await expect(storeWith([imageMessage(12)]).read(ImChatKey('b', 'other'), '12.1'))
       .rejects.toThrow('no stored message')
     const noIm = new ImMediaStore(fakeContext({}), config())
     await expect(noIm.read(CHAT.key, '12.1')).rejects.toThrow('im service is not available')
@@ -331,7 +411,7 @@ describe('ImMediaStore.read', () => {
 
   it('refuses a non-image element and a disabled download', async () => {
     expect(await storeWith([mixedMessage(12)]).read(CHAT.key, '12.2')).toMatchObject({ skipped: 'unsupported' })
-    expect(await storeWith([mediaMessage(12)], { media: { download: false } }).read(CHAT.key, '12.1'))
+    expect(await storeWith([imageMessage(12)], { media: { download: false } }).read(CHAT.key, '12.1'))
       .toMatchObject({ skipped: 'disabled' })
   })
 
@@ -342,7 +422,7 @@ describe('ImMediaStore.read', () => {
         return { headers: { get: () => 'image/png' }, arrayBuffer: async () => PNG_BYTES.slice().buffer }
       },
     }
-    await expect(storeWith([mediaMessage(12)], { http: abortAware }).read(CHAT.key, '12.1', AbortSignal.abort(new Error('gone'))))
+    await expect(storeWith([imageMessage(12)], { http: abortAware }).read(CHAT.key, '12.1', AbortSignal.abort(new Error('gone'))))
       .rejects.toThrow('gone')
   })
 
@@ -366,5 +446,83 @@ describe('ImMediaStore.read', () => {
       config(),
     )
     expect(await store.read(CHAT.key, '7.1')).toMatchObject({ ref: { seq: 7, index: 1, src: 'https://cdn/9.png' } })
+  })
+})
+
+describe('ImMediaStore.readFile', () => {
+  /** The attachment double whose stored copy lives at one host path the filesystem double can map. */
+  const located = () => {
+    const attachments = attachmentsSaving()
+    attachments.fileHostPath = () => '/host/attachments/r.pdf'
+    return attachments
+  }
+  const mapping = (hostPath: string) => ({
+    processPathFromHostPath: (path: string) => (path === hostPath ? '/work/r.pdf' : undefined),
+  })
+  const http = (): FakeHttp => httpServing(TEXT_BYTES, 'application/pdf')
+
+  it('saves the file of one label and reports the path it maps to', async () => {
+    const item = await storeWith([fileMessage(12)], {
+      http: http(),
+      attachments: located(),
+      fs: mapping('/host/attachments/r.pdf'),
+    }).readFile(CHAT.key, '12.1')
+    expect(item.ref).toMatchObject({ seq: 12, index: 1, kind: 'file' })
+    expect(item.file?.attachment).toEqual({ attachmentId: 'sha256:1', name: 'r.pdf', bytes: 10 })
+    expect(item.path).toBe('/work/r.pdf')
+  })
+
+  it('reports no path when the execution world cannot reach the stored copy', async () => {
+    const unmapped = await storeWith([fileMessage(12)], { http: http(), attachments: located() })
+      .readFile(CHAT.key, '12.1')
+    expect(unmapped.file?.attachment).toMatchObject({ name: 'r.pdf' })
+    expect(unmapped.path).toBeUndefined()
+    const elsewhere = await storeWith([fileMessage(12)], {
+      http: http(), attachments: located(), fs: mapping('/host/other.pdf'),
+    }).readFile(CHAT.key, '12.1')
+    expect(elsewhere.path).toBeUndefined()
+  })
+
+  it('reports no path for a reference the attachment backend refuses to locate', async () => {
+    const attachments = attachmentsSaving()
+    attachments.fileHostPath = () => { throw new Error('invalid reference') }
+    const item = await storeWith([fileMessage(12)], {
+      http: http(), attachments, fs: mapping('/host/attachments/r.pdf'),
+    }).readFile(CHAT.key, '12.1')
+    expect(item.file?.attachment).toMatchObject({ name: 'r.pdf' })
+    expect(item.path).toBeUndefined()
+  })
+
+  it('reports no path when the backend keeps no host copy or the element was not admitted', async () => {
+    const unmapped = attachmentsSaving()
+    unmapped.fileHostPath = () => undefined
+    const backendless = await storeWith([fileMessage(12)], {
+      http: http(), attachments: unmapped, fs: mapping('/host/attachments/r.pdf'),
+    }).readFile(CHAT.key, '12.1')
+    expect(backendless.file?.attachment).toMatchObject({ name: 'r.pdf' })
+    expect(backendless.path).toBeUndefined()
+    const oversized = await storeWith([fileMessage(12)], { http: http(), media: { maxBytes: 4 } })
+      .readFile(CHAT.key, '12.1')
+    expect(oversized.file).toBeUndefined()
+    expect(oversized.path).toBeUndefined()
+    expect(oversized.skipped).toBe('too-large')
+  })
+
+  it('keeps the original bytes of an image label as a file', async () => {
+    const attachments = attachmentsSaving()
+    const item = await storeWith([imageMessage(12)], { attachments }).readFile(CHAT.key, '12.1')
+    expect(item.file?.attachment).toMatchObject({ name: 'file', bytes: PNG_BYTES.byteLength })
+    expect(attachments.files).toEqual([{ data: PNG_BYTES }])
+    expect(attachments.saved).toEqual([])
+  })
+
+  it('reports a disabled download instead of storing anything', async () => {
+    const attachments = attachmentsSaving()
+    const item = await storeWith([fileMessage(12)], { attachments, media: { download: false } })
+      .readFile(CHAT.key, '12.1')
+    expect(item.ref.kind).toBe('file')
+    expect(item.file).toBeUndefined()
+    expect(item.skipped).toBe('disabled')
+    expect(attachments.files).toEqual([])
   })
 })

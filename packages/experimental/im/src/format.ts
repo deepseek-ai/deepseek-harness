@@ -138,11 +138,11 @@ export class ImFormatter {
 
   /**
    * `xml` (default): one `<im-message seq from time quote>text [图片 #seq.n]</im-message>` per message;
-   * `line`: compact one-liners. `media` attaches admitted images as image blocks after the text.
-   * `forward` elements render as a one-line preview.
+   * `line`: compact one-liners. `media` attaches every admitted image as an image block and every admitted non-image
+   * as a verbatim file block after the text. `forward` elements render as a one-line preview.
    * @param messages - stored messages in transcript order.
    * @param options - style, media admission, envelope header and cancellation.
-   * @returns user-message content: one text block, then the admitted images.
+   * @returns user-message content: one text block, then the admitted images and files.
    */
   async format(messages: readonly ImMessage[], options: ImFormatOptions = {}): Promise<UserMessage['content']> {
     const style = options.style ?? 'xml'
@@ -152,7 +152,8 @@ export class ImFormatter {
     if (options.media && messages.length) {
       const refs = messages.flatMap(message => mediaRefs(message))
       for (const item of await this.media.admit(refs, options.signal)) {
-        if (item.image) content.push(item.image)
+        if (item.image !== undefined) content.push(item.image)
+        else if (item.file !== undefined) content.push(item.file)
       }
     }
     return content

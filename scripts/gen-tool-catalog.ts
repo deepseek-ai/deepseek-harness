@@ -219,7 +219,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       applyImTools(ctx, {} as ImToolHost, ImConfig())
       return Promise.resolve()
     },
-    note: 'Read messages, history pages and images of the chats the caller may use, explicitly publish markdown messages, replies, or files, and read one image of a message. `tools.readOnly` registers only the reads. Assistant output remains private unless the session streams replies; uncertain sends are never automatically repeated.',
+    note: 'Read messages, history pages, and the media of the chats the caller may use, explicitly publish markdown messages, replies, or files, and read one image or one file of a message. `tools.readOnly` registers only the reads. Assistant output remains private unless the session streams replies; uncertain sends are never automatically repeated.',
   },
   {
     pkg: '@deepseek-ai/dsh-plugin-manager',

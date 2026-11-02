@@ -65,6 +65,13 @@ export interface ImReadImageInput {
   /** Stable media id such as `12.1` from `[图片 #12.1]`. */
   id: string
 }
+/** `im_read_file` arguments. */
+export interface ImReadFileInput {
+  /** Chat the id was shown in; defaults to the caller's home chat. */
+  chat?: string
+  /** Stable media id such as `12.2` from `[文件 #12.2 report.pdf]`. */
+  id: string
+}
 
 const chatParameter = {
   type: 'string',
@@ -119,6 +126,15 @@ export const imReadImageParameters = {
   id: {
     type: 'string', required: true,
     description: 'Stable media id such as 12.1 from [图片 #12.1].',
+  },
+} as const satisfies ParameterSchemaSpec
+
+/** `im_read_file` parameters. */
+export const imReadFileParameters = {
+  ...{ chat: chatParameter },
+  id: {
+    type: 'string', required: true,
+    description: 'Stable media id such as 12.2 from [文件 #12.2 report.pdf].',
   },
 } as const satisfies ParameterSchemaSpec
 
@@ -228,6 +244,38 @@ export const imReadImageOutput = {
           },
         },
         skipped: { type: 'string', description: 'Why the media element was not admitted as an image.' },
+      },
+    },
+    errorValue,
+  ],
+} as const satisfies ValueSchemaSpec
+
+/** `im_read_file` result: the stored file and where to read it, or why the id carries no readable file. */
+export const imReadFileOutput = {
+  oneOf: [
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        id: { type: 'string', required: true },
+        chat: { type: 'string', required: true },
+        file: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            name: { type: 'string', required: true, description: 'Display name of the stored copy.' },
+            bytes: { type: 'integer', required: true, description: 'Exact byte length of the stored copy.' },
+            attachmentId: { type: 'string', required: true, description: 'Content digest of the stored copy.' },
+          },
+        },
+        path: {
+          type: 'string',
+          description: 'Read-only path of the stored copy; read it with your file tools.',
+        },
+        skipped: {
+          type: 'string',
+          description: 'Why the media element was not admitted as a file, or why it has no readable path here.',
+        },
       },
     },
     errorValue,

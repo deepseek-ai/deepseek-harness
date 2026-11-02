@@ -252,7 +252,30 @@ describe('ImFormatter.format', () => {
     expect(media.calls[0]?.refs.map(ref => `${ref.seq}.${ref.index}`)).toEqual(['12.1', '12.2'])
   })
 
-  it('drops items without an image and forwards the cancellation signal', async () => {
+  it('attaches an admitted file after the text as well as an image', async () => {
+    const body = content(
+      h('p', '看这个 ', h('img', { src: 'https://cdn/1.png' }), h('file', { src: 'https://cdn/r.pdf', name: 'r.pdf' })),
+    )
+    const media = mediaStore(refs => refs.map(ref => (ref.kind === 'image'
+      ? {
+        ref,
+        image: {
+          type: 'image',
+          attachment: { attachmentId: `att_${ref.index}` as never, mediaType: 'image/png', bytes: 3, width: 1, height: 1 },
+        },
+      }
+      : {
+        ref,
+        file: { type: 'file', attachment: { attachmentId: 'sha256:aa' as never, name: 'r.pdf', bytes: 9 } },
+      })))
+    const blocks = await formatter({ media }).format([message({ body })], { media: true })
+    expect(blocks.slice(1)).toMatchObject([
+      { type: 'image', attachment: { attachmentId: 'att_1' } },
+      { type: 'file', attachment: { name: 'r.pdf', bytes: 9 } },
+    ])
+  })
+
+  it('drops items that admitted neither an image nor a file, and forwards the cancellation signal', async () => {
     const controller = new AbortController()
     const media = mediaStore(refs => refs.map(ref => ({ ref, skipped: 'limit' })))
     const blocks = await formatter({ media }).format([message({ body: content(h('p', h('img', { src: 'https://cdn/1.png' }))) })], {

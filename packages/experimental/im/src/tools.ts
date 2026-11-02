@@ -1,6 +1,6 @@
 /**
- * `im_read`, `im_history`, `im_send`, `im_reply`, `im_send_file`, `im_read_image` and their prompt section,
- * registered by the service through `ctx.inject(['tools', 'systemPrompt'], …)`.
+ * `im_read`, `im_history`, `im_send`, `im_reply`, `im_send_file`, `im_read_image`, `im_read_file` and their prompt
+ * section, registered by the service through `ctx.inject(['tools', 'systemPrompt'], …)`.
  *
  * Contract:
  * - **Caller.** A tool acts for the IM session that hosts the calling agent: the session resolves through
@@ -30,13 +30,15 @@ import {
 import { ImError } from './error.ts'
 import { imageAttachmentSchema, mediaLabel, mediaRefs, type ImMediaStore } from './media.ts'
 import {
-  imHistoryOutput, imHistoryParameters, imReadImageOutput, imReadImageParameters, imReadOutput, imReadParameters,
-  imReplyParameters, imSendFileParameters, imSendOutput, imSendParameters,
+  imHistoryOutput, imHistoryParameters, imReadFileOutput, imReadFileParameters, imReadImageOutput, imReadImageParameters,
+  imReadOutput, imReadParameters, imReplyParameters, imSendFileParameters, imSendOutput, imSendParameters,
 } from './schema.ts'
 import { grantChain, operationId } from './send.ts'
 
 /** Names of the IM tools the service registers (`config.tools.readOnly` drops the publishing ones). */
-export const IM_TOOLS = ['im_read', 'im_history', 'im_send', 'im_reply', 'im_send_file', 'im_read_image'] as const
+export const IM_TOOLS = [
+  'im_read', 'im_history', 'im_send', 'im_reply', 'im_send_file', 'im_read_image', 'im_read_file',
+] as const
 /** One registered IM tool name. */
 export type ImToolName = typeof IM_TOOLS[number]
 
@@ -47,8 +49,8 @@ export interface ImToolHost extends Pick<ImApi, 'send' | 'readMessage'> {
   readonly history: ImHistory
   /** Output renderers a session may name: whether its turn text reaches the chat. */
   readonly outputs: Pick<ImOutputs, 'get'>
-  /** Image reads of one media label. */
-  readonly media: Pick<ImMediaStore, 'read'>
+  /** Reads of one media element through its label: an image block, or a stored file and its read path. */
+  readonly media: Pick<ImMediaStore, 'read' | 'readFile'>
 }
 
 /** A declared operation error, as every IM tool reports it. */
@@ -159,6 +161,35 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
       return image === undefined
         ? { id: args.id, chat, ...item.skipped === undefined ? {} : { skipped: item.skipped } }
         : { id: args.id, chat, image: { type: 'image' as const, attachment: { ...image.attachment } } }
+    }),
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'im_read_file',
+    description: 'Save the file of one media label such as [文件 #12.2 report.pdf] and get the read-only path to open '
+      + 'it with your file tools.',
+    parameters: imReadFileParameters,
+    output: { schema: imReadFileOutput, render },
+    isConcurrencySafe: () => true,
+    execute: (args, exec) => run(async () => {
+      const { record } = caller(im, exec)
+      const chat = chatOf(im, record, args.chat)
+      const item = await im.media.readFile(chat, args.id, exec.signal)
+      const attachment = item.file?.attachment
+      if (attachment === undefined) {
+        return { id: args.id, chat, ...item.skipped === undefined ? {} : { skipped: item.skipped } }
+      }
+      return {
+        id: args.id,
+        chat,
+        file: {
+          name: attachment.name,
+          bytes: attachment.bytes,
+          attachmentId: String(attachment.attachmentId),
+        },
+        // A stored file this execution world cannot reach still reports what was stored, and why it has no path.
+        ...item.path === undefined ? { skipped: 'unmapped' } : { path: item.path },
+      }
     }),
   }))
 
@@ -384,7 +415,7 @@ function guidance(im: ImToolHost, record: ImSessionRecord, config: ImConfig): st
       + 'arrived in another one.')
   }
   if (config.tools.readOnly) {
-    parts.push('Read with im_read, im_history and im_read_image; this preset publishes nothing.')
+    parts.push('Read with im_read, im_history, im_read_image and im_read_file; this preset publishes nothing.')
   } else {
     // A session whose `output` names a registered renderer has its turn text rendered into the chat; every other
     // session — the default, whose output is `none` — publishes only through its tools.
@@ -399,8 +430,10 @@ function guidance(im: ImToolHost, record: ImSessionRecord, config: ImConfig): st
       + 'the same tool call is never resent; partial means only some parts were published. The report line names what '
       + 'the platform could not render natively.')
   }
-  parts.push('Media arrives as a label such as [图片 #12.1]; im_read_image with that id reads exactly that image of '
-    + 'the chat.')
+  parts.push('Media arrives as a label such as [图片 #12.1] or [文件 #12.2 report.pdf]; im_read_image with an image id '
+    + 'shows exactly that image of the chat, and im_read_file with any media id saves that element and returns the '
+    + 'read-only path to open with your file tools. An image or file in the message you were handed already arrives '
+    + 'with the text.')
   return parts.join(' ')
 }
 

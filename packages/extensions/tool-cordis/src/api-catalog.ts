@@ -1735,7 +1735,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'readonly media: ImMediaStore',
-        description: 'Media references and bounded download into attachments (`im_read_image`).',
+        description: 'Media references and bounded download into attachments (`im_read_image`, `im_read_file`).',
         parameters: [],
       },
       {
@@ -1813,7 +1813,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'async readMessage(chat: ImChatKey, id: string): Promise<ImMessage>',
         description: 'One message of one chat: the stored message when this deployment received it, and a platform read otherwise, so a reference to a message that never reached this deployment still resolves. A platform read is admitted and stored like any other message, which gives it a sequence number and keeps later reads of it local.',
         parameters: [{ name: 'chat', description: 'chat to read in; its bot serves the platform request.' }, { name: 'id', description: 'platform message id.' }],
-        returns: 'the message as the store holds it.',
+        returns: 'the message as the store holds it, with a merged forward\'s entries filled in when the platform has them.',
       },
       {
         signature: 'status(): ImStatus',
@@ -6886,8 +6886,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ImIntakeHost {\n    event(message: ImMessage, source: ImSourceConfig): ImMessageEvent;\n    readonly unhandled?: (event: ImMessageEvent) => Promise<ImOutcome>;\n}',
   },
   {
+    name: 'ImMediaFileItem',
+    declaration: 'export interface ImMediaFileItem extends ImMediaItem {\n    path?: string;\n}',
+  },
+  {
     name: 'ImMediaItem',
-    declaration: 'export interface ImMediaItem {\n    ref: ImMediaRef;\n    image?: ImageBlock;\n    mime?: string;\n    bytes?: number;\n    skipped?: string;\n}',
+    declaration: 'export interface ImMediaItem {\n    ref: ImMediaRef;\n    image?: ImageBlock;\n    file?: FileBlock;\n    mime?: string;\n    bytes?: number;\n    skipped?: string;\n}',
   },
   {
     name: 'ImMediaKind',
@@ -6899,7 +6903,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImMediaStore',
-    declaration: 'export class ImMediaStore {\n    constructor(readonly ctx: Context, readonly config: ImConfig);\n    async admit(refs: readonly ImMediaRef[], signal?: AbortSignal): Promise<ImMediaItem[]>;\n    async read(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaItem>;\n}',
+    declaration: 'export class ImMediaStore {\n    constructor(readonly ctx: Context, readonly config: ImConfig);\n    async admit(refs: readonly ImMediaRef[], signal?: AbortSignal): Promise<ImMediaItem[]>;\n    async read(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaItem>;\n    async readFile(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaFileItem>;\n}',
   },
   {
     name: 'ImMessage',

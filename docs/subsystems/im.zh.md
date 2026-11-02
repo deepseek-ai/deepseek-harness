@@ -121,7 +121,7 @@ chat(key: ImChatKey): ImChat | undefined
  * like any other message, which gives it a sequence number and keeps later reads of it local.
  * @param chat - chat to read in; its bot serves the platform request.
  * @param id - platform message id.
- * @returns the message as the store holds it.
+ * @returns the message as the store holds it, with a merged forward's entries filled in when the platform has them.
  */
 async readMessage(chat: ImChatKey, id: string): Promise<ImMessage>
 

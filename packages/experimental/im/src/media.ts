@@ -5,17 +5,21 @@
  * Identifiers are per chat and stable for the lifetime of the stored message: `#<seq>.<n>` names the *n*-th media
  * element of the message stored with that `seq`, so a model that saw `[图片 #12.1]` can ask for it later with
  * `im_read_image { id: '12.1' }` even after the record was paged out of the transcript.
+ *
+ * Images are admitted as normalized image blocks; every other kind (`file`, `audio`, `video`) is admitted as the exact
+ * bytes of a durable verbatim file, which request assembly projects to the saved read-only path `im_read_file` also
+ * reports.
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { createResourceFetcher, type Element, type PrepareContext } from '@deepseek-ai/cordis-plugin-im-core'
-import { AttachmentId, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
-import type { ImageBlock } from '@deepseek-ai/dsh-llm'
+import { AttachmentId, type AttachmentStore, type FileAttachmentRef, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
+import type { FileBlock, ImageBlock } from '@deepseek-ai/dsh-llm'
 import { z } from 'zod'
 import { splitKey, type ImChatKey, type ImConfig, type ImMessage, type ImMessageKey } from './api.ts'
 import { ImError } from './error.ts'
 import { hasUnreadForward } from './intake.ts'
 
-/** Kind of a downloadable media element: images are admitted to the model, the other kinds are labelled only. */
+/** Kind of a downloadable media element: the image kind is normalized, every other kind is kept verbatim. */
 export type ImMediaKind = 'image' | 'file' | 'audio' | 'video'
 
 /** One media element (`img` / `file` / `audio` / `video`) of a stored message, in content order. */
@@ -34,12 +38,20 @@ export interface ImMediaRef {
 /** Outcome of downloading one reference. */
 export interface ImMediaItem {
   ref: ImMediaRef
-  /** Present when admitted (images become image blocks). */
+  /** Present when the reference was admitted as an image. */
   image?: ImageBlock
+  /** Present when the reference was admitted as a verbatim file (`file`, `audio` and `video` kinds). */
+  file?: FileBlock
   mime?: string
   bytes?: number
-  /** Why the item was not admitted (`too-large`, `limit`, `disabled`, platform error text …). */
+  /** Why the item was not admitted (`too-large`, `limit`, `disabled`, `unavailable`, platform error text …). */
   skipped?: string
+}
+
+/** Outcome of resolving one media id as a file read (`im_read_file`). */
+export interface ImMediaFileItem extends ImMediaItem {
+  /** Read path of the stored copy in the calling execution world, when that world can reach it. */
+  path?: string
 }
 
 /** Media tag → admission kind. Only these tags carry downloadable bytes. */
@@ -196,8 +208,9 @@ function abortReason(signal: AbortSignal): unknown {
 }
 
 /**
- * Downloads the media of stored messages, bounded by `config.media`: fetches a src, bounds its bytes, sniffs the raster
- * format and keeps the bytes as a durable attachment so a later `im_read_image` resolves the same element.
+ * Downloads the media of stored messages, bounded by `config.media`: fetches a src, bounds its bytes, and keeps the
+ * bytes as a durable attachment — normalized for an image, verbatim for every other kind — so a later
+ * `im_read_image` / `im_read_file` resolves the same element.
  */
 export class ImMediaStore {
   /** `createResourceFetcher` closure, built on first use (it reads `ctx.http` per call). */
@@ -219,26 +232,55 @@ export class ImMediaStore {
     let admitted = 0
     for (const ref of refs) {
       if (signal?.aborted) throw abortReason(signal)
-      if (ref.kind !== 'image') {
-        items.push({ ref, skipped: 'unsupported' })
-      } else if (admitted >= limits.maxItems) {
+      if (admitted >= limits.maxItems) {
         items.push({ ref, skipped: 'limit' })
-      } else {
-        admitted += 1
-        items.push(await this.admitOne(ref, signal))
+        continue
       }
+      admitted += 1
+      items.push(await this.admitAs(ref, signal, ref.kind === 'image' ? 'image' : 'file'))
     }
     return items
   }
 
   /**
-   * Resolve one stable id within a chat (`im_read_image`).
+   * Resolve one stable id within a chat as an image (`im_read_image`).
    * @param chat - the chat the id was shown in.
    * @param id - `#12.1`, `12.1` or `12` (the first media element of message 12).
    * @param signal - cancellation of the calling turn.
-   * @returns the admission outcome of exactly that media element.
+   * @returns the admission outcome of exactly that media element, as an image.
    */
   async read(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaItem> {
+    const ref = await this.elementAt(chat, id)
+    if (ref.kind !== 'image') return { ref, skipped: 'unsupported' }
+    if (!this.config.media.download) return { ref, skipped: 'disabled' }
+    return this.admitAs(ref, signal, 'image')
+  }
+
+  /**
+   * Resolve one stable id within a chat as a stored file (`im_read_file`): every kind is kept verbatim, so an image
+   * label resolves to its original bytes as well as a `[文件 #12.1]` label does.
+   * @param chat - the chat the id was shown in.
+   * @param id - `#12.1`, `12.1` or `12` (the first media element of message 12).
+   * @param signal - cancellation of the calling turn.
+   * @returns the admission outcome of exactly that media element, plus the read path of the stored copy when the
+   *   calling execution world can reach it.
+   */
+  async readFile(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaFileItem> {
+    const ref = await this.elementAt(chat, id)
+    if (!this.config.media.download) return { ref, skipped: 'disabled' }
+    const item = await this.admitAs(ref, signal, 'file')
+    const file = item.file
+    const path = file === undefined ? undefined : this.storedPath(file.attachment)
+    return path === undefined ? item : { ...item, path }
+  }
+
+  /**
+   * The media element one stable id names within a chat (both read tools resolve their id here).
+   * @param chat - the chat the id was shown in.
+   * @param id - `#12.1`, `12.1` or `12` (the first media element of message 12).
+   * @returns that element's reference.
+   */
+  private async elementAt(chat: ImChatKey, id: string): Promise<ImMediaRef> {
     const parsed = parseMediaId(id)
     if (!parsed) throw new ImError('access', `"${id}" is not a media id such as 12.1.`)
     const stored = this.messageAt(chat, parsed.seq)
@@ -246,9 +288,7 @@ export class ImMediaStore {
     const message = await this.expanded(chat, stored)
     const ref = mediaRefs(message).find(ref => ref.index === parsed.index)
     if (!ref) throw new ImError('access', `Message #${parsed.seq} has no media element #${parsed.index}.`)
-    if (ref.kind !== 'image') return { ref, skipped: 'unsupported' }
-    if (!this.config.media.download) return { ref, skipped: 'disabled' }
-    return this.admitOne(ref, signal)
+    return ref
   }
 
   /**
@@ -273,25 +313,79 @@ export class ImMediaStore {
     return message?.seq === seq ? message : undefined
   }
 
-  /** One image reference: fetch → size bound → raster sniff → durable attachment. */
-  private async admitOne(ref: ImMediaRef, signal: AbortSignal | undefined): Promise<ImMediaItem> {
+  /**
+   * Read path of one stored file in the calling execution world: the mapping request assembly uses for a file block,
+   * so the path `im_read_file` reports is the one a later request would name.
+   * @param ref - durable verbatim file reference.
+   * @returns an absolute read path, or undefined when this execution world cannot reach the stored copy.
+   */
+  private storedPath(ref: FileAttachmentRef): string | undefined {
+    let hostPath: string | undefined
+    try {
+      hostPath = this.ctx.get('attachments')?.fileHostPath(ref)
+    } catch {
+      // A malformed durable reference degrades this read to "no path" instead of failing the tool call.
+      return undefined
+    }
+    if (hostPath === undefined) return undefined
+    // Structural face: this package owns media admission, not the filesystem service, so only the one mapping call.
+    const fs = this.ctx.get('fs') as { processPathFromHostPath(hostPath: string): string | undefined } | undefined
+    return fs?.processPathFromHostPath(hostPath)
+  }
+
+  /**
+   * Fetch one reference, bound it by `media.maxBytes`, and hand the bytes to the store `as` selects. Every failure is
+   * reported as `skipped`; only the caller's own cancellation is rethrown.
+   * @param ref - the reference to admit.
+   * @param signal - cancellation of the caller.
+   * @param as - `image` for a normalized image block, `file` for a durable verbatim file.
+   * @returns the admission outcome of that reference.
+   */
+  private async admitAs(ref: ImMediaRef, signal: AbortSignal | undefined, as: 'image' | 'file'): Promise<ImMediaItem> {
     try {
       const fetched = await this.fetch(ref.src, signal)
       const bytes = fetched.data.byteLength
       if (bytes > this.config.media.maxBytes) return { ref, bytes, skipped: 'too-large' }
-      const mediaType = sniffImageMediaType(fetched.data)
-      if (!mediaType) return { ref, ...fetched.mime ? { mime: fetched.mime } : {}, bytes, skipped: 'unsupported' }
       const attachments = this.ctx.get('attachments')
-      if (!attachments) return { ref, mime: mediaType, bytes, skipped: 'unavailable' }
-      const [attachment] = await attachments.saveImages([
-        { data: fetched.data, mediaType, ...ref.name ? { name: ref.name } : {} },
-      ])
-      if (!attachment) return { ref, mime: mediaType, bytes, skipped: 'persistence' }
-      return { ref, image: { type: 'image', attachment }, mime: mediaType, bytes }
+      return as === 'image'
+        ? await this.storeImage(ref, fetched, attachments)
+        : await this.storeFile(ref, fetched, attachments)
     } catch (error) {
       if (signal?.aborted) throw error
       return { ref, skipped: error instanceof Error ? error.message : String(error) }
     }
+  }
+
+  /** One downloaded image: sniff the raster format, then keep the normalized bytes as a durable attachment. */
+  private async storeImage(
+    ref: ImMediaRef,
+    fetched: { data: Uint8Array; mime?: string },
+    attachments: AttachmentStore | undefined,
+  ): Promise<ImMediaItem> {
+    const bytes = fetched.data.byteLength
+    const mediaType = sniffImageMediaType(fetched.data)
+    if (!mediaType) return { ref, ...fetched.mime ? { mime: fetched.mime } : {}, bytes, skipped: 'unsupported' }
+    if (!attachments) return { ref, mime: mediaType, bytes, skipped: 'unavailable' }
+    const [attachment] = await attachments.saveImages([
+      { data: fetched.data, mediaType, ...ref.name ? { name: ref.name } : {} },
+    ])
+    if (!attachment) return { ref, mime: mediaType, bytes, skipped: 'persistence' }
+    return { ref, image: { type: 'image', attachment }, mime: mediaType, bytes }
+  }
+
+  /** One downloaded non-image: keep the exact bytes as a durable verbatim file the model reads by path. */
+  private async storeFile(
+    ref: ImMediaRef,
+    fetched: { data: Uint8Array; mime?: string },
+    attachments: AttachmentStore | undefined,
+  ): Promise<ImMediaItem> {
+    const bytes = fetched.data.byteLength
+    if (!attachments) return { ref, ...fetched.mime ? { mime: fetched.mime } : {}, bytes, skipped: 'unavailable' }
+    const attachment = await attachments.saveFile({
+      data: fetched.data,
+      ...ref.name ? { name: ref.name } : {},
+    })
+    return { ref, file: { type: 'file', attachment }, ...fetched.mime ? { mime: fetched.mime } : {}, bytes }
   }
 
   /** Bytes of a src: `satori:` internal resources, http(s), and inline `data:`/`base64:` forms. */
