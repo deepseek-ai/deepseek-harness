@@ -493,10 +493,12 @@ export class SessionProjectionRegistry extends Service {
   /**
    * One consistent cut over every registered client-visible unit for one session, read from
    * the watermark cache (missing cells fold lazily over the in-memory log).
+   * Only the returned units are computed: other units, including Host-only
+   * units without `wire`, are neither folded nor advanced by this read.
    * Fully synchronous — every value and `asOfSeq` reflect the same log
    * position. Each value passes its unit's `viewSchema` before leaving.
    * @param session - the session whose projection values are read.
-   * @param keys - optional client-visible outputs; state materialization remains complete.
+   * @param keys - optional client-visible outputs; only these units are computed.
    * @returns the snapshot; `values` is empty when no selected client-visible unit is registered.
    */
   snapshot(
@@ -505,7 +507,6 @@ export class SessionProjectionRegistry extends Service {
   ): ProjectionSnapshot {
     const values: Record<string, unknown> = {}
     const selected = selectedKeys(keys)
-    this.materializeCells(session)
     for (const registration of this.registrations.values()) {
       if (registration.def.wire === undefined) continue
       if (selected !== undefined && !selected.has(registration.def.key)) continue
@@ -522,6 +523,8 @@ export class SessionProjectionRegistry extends Service {
    * @param session - attached Session whose cached cells are inspected.
    * @param keys - optional wire keys to view.
    * @returns the lowest common cached cut, or `undefined` when no wire cell exists.
+   * @deprecated Returns only values another read already computed and may omit keys; never use it to decide behavior.
+   *   Use snapshot(session, keys) for complete values, or a retained handle for host state.
    */
   cachedSnapshot(
     session: Session,
@@ -548,7 +551,7 @@ export class SessionProjectionRegistry extends Service {
    * whose unit does not declare `summary: false`. The returned set is stable —
    * the same instance on every call — until a registration or its disposal
    * changes the key table, so a consumer may hold it across rows. Callers pass
-   * it to a key-taking read face such as `cachedSnapshot(session, summaryKeys())`
+   * it to a key-taking read face such as `snapshot(session, summaryKeys())`
    * or `viewCheckpoint(rows, summaryKeys())`; those faces use the set as-is.
    * @returns the current summary key set; do not mutate it.
    */
@@ -770,6 +773,7 @@ export class SessionProjectionRegistry extends Service {
     )
     for (const registration of this.registrations.values()) {
       const row = restored.checkpoint[registration.def.key]
+      /* v8 ignore next -- restore() writes a row for every registration in the same synchronous pass. */
       if (row === undefined) continue
       const current = registration.cells.get(session)
       if (current !== undefined && current.observedSeq > row.seq) continue
@@ -828,6 +832,7 @@ export class SessionProjectionRegistry extends Service {
     for (let seq = cell.observedSeq + 1; seq <= throughSeq; seq++) {
       // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
       const event = session.eventAt(SessionSeq(seq))
+      /* v8 ignore next 3 -- throughSeq never exceeds the committed log, whose seqs are contiguous by the Session invariant. */
       if (event === undefined || event.seq !== seq) {
         throw new Error(`session projection ${JSON.stringify(def.key)} cannot advance across missing seq ${String(seq)}`)
       }
@@ -911,6 +916,7 @@ export class SessionProjectionRegistry extends Service {
   /** Return one schema-validated wire value. */
   private viewCell(registration: Registration, cell: UnitCell): unknown {
     const wire = registration.def.wire
+    /* v8 ignore next -- every caller filters to units with wire before calling viewCell. */
     if (wire === undefined) throw new Error(`session projection ${JSON.stringify(registration.def.key)} has no wire view`)
     return wire.viewSchema.parse(wire.view(cell.state))
   }

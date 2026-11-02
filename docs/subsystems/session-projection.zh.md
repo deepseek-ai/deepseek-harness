@@ -156,9 +156,9 @@ type ProjectionEventChangeListener = (
 
 Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectionMap` 条目带 `SessionProjectionSummaryExcluded<T>` 标记的 key。标记没有运行时表示：它决定客户端视图类型，`wire.summary` 决定运行时键集合，省略即 `true`。map 条目带标记的 key 应声明 `wire.summary: false` 以保持一致；该字段是普通布尔值，类型层不做强制。
 
-`summaryKeys()` 从实时注册派生该集合，并在注册或注销改变 key 表之前持续返回同一实例。摘要消费方把它传给既有的带 key 读取面 —— 缓存 cell 用 `cachedSnapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，两者保持各自的水位规则且直接使用 Set、不做复制 —— 因此不存在摘要专用读取面，集合也只有一处定义。
+`summaryKeys()` 从实时注册派生该集合，并在注册或注销改变 key 表之前持续返回同一实例。摘要消费方把它传给既有的带 key 读取面 —— 实时 Session 用 `snapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，两者都直接使用 Set、不做复制 —— 因此不存在摘要专用读取面，集合也只有一处定义。
 
-列表行携带的是这个摘要投影，绝不是全量投影：它只承诺摘要键集合，不承诺更多。`snapshot`、`cachedSnapshot` 与 `viewCheckpoint` 在不传 key 子集时仍是完整的，打开的 Session、其 follow 基线与控制基线因此保留每个投影值；`@` 引用只通过同一组带 key 的读取面读取其标签 key。
+列表行携带的是这个摘要投影，绝不是全量投影：它只承诺摘要键集合，不承诺更多。`snapshot(session, keys)` 只计算它返回的单元。不传 key 子集时，`snapshot` 计算每个客户端可见单元、不计算 Host 专用单元，`viewCheckpoint` 返回每个 wire key，因此打开的 Session、其 follow 基线与控制基线携带每个投影值；`@` 引用只通过同一组带 key 的读取面读取其标签 key。注册表的 `cachedSnapshot(session, keys)` 已废弃：它只返回其他读取已经算好的值，可能缺少 key。
 
 ### 摘要词汇
 
@@ -376,30 +376,22 @@ onEventChanged(listener: ProjectionEventChangeListener): () => void
 /**
  * One consistent cut over every registered client-visible unit for one session, read from
  * the watermark cache (missing cells fold lazily over the in-memory log).
+ * Only the returned units are computed: other units, including Host-only
+ * units without `wire`, are neither folded nor advanced by this read.
  * Fully synchronous — every value and `asOfSeq` reflect the same log
  * position. Each value passes its unit's `viewSchema` before leaving.
  * @param session - the session whose projection values are read.
- * @param keys - optional client-visible outputs; state materialization remains complete.
+ * @param keys - optional client-visible outputs; only these units are computed.
  * @returns the snapshot; `values` is empty when no selected client-visible unit is registered.
  */
 snapshot( session: Session, keys?: ProjectionKeySelection, ): ProjectionSnapshot
-
-/**
- * Read only already-materialized client-visible cells without folding history.
- * Values may trail the live Session and are therefore hints, not a complete
- * baseline. Missing cells are omitted.
- * @param session - attached Session whose cached cells are inspected.
- * @param keys - optional wire keys to view.
- * @returns the lowest common cached cut, or `undefined` when no wire cell exists.
- */
-cachedSnapshot( session: Session, keys?: ProjectionKeySelection, ): ProjectionSnapshot | undefined
 
 /**
  * The keys a Session summary carries: every registered client-visible key
  * whose unit does not declare `summary: false`. The returned set is stable —
  * the same instance on every call — until a registration or its disposal
  * changes the key table, so a consumer may hold it across rows. Callers pass
- * it to a key-taking read face such as `cachedSnapshot(session, summaryKeys())`
+ * it to a key-taking read face such as `snapshot(session, summaryKeys())`
  * or `viewCheckpoint(rows, summaryKeys())`; those faces use the set as-is.
  * @returns the current summary key set; do not mutate it.
  */

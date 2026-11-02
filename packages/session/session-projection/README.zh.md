@@ -91,6 +91,8 @@ const todo = projections.todo()
 
 每个 registry 实例对每个键的首次旧式 `stateOf(session, key)` 读取输出一次 `ctx.logger.warn` 弃用警告。注册、调用其返回值、句柄方法和 owner 清理不产生警告。
 
+注册表的 `cachedSnapshot(session, keys)` 已弃用。它只读取其他读取已经算好的 cell，可能缺少选中的 key，没有选中的客户端可见 cell 时返回 `undefined`；已有调用方仍可继续使用。需要 Session 当前游标处的完整值时使用 `snapshot(session, keys)`，读取 Host 状态时使用注册返回的 `handle.stateOf(session)`。持久化缓存的读取 `ctx.sessionProjectionCache.cachedSnapshot(header, keys)` 是另一个方法，本次未变。
+
 定义同步安装，句柄交付保持异步。注册错误使返回值拒绝。当前宏任务及其微任务结束前没有调用方观察该拒绝时，registry 将其记录为错误，而不留下未处理的拒绝，插件保持激活；发生键冲突后，其按键读取返回另一注册方的状态；owner 已不在加载或激活状态的拒绝会被丢弃。新插件在提供读取操作前等待注册完成。同步 `try/catch` 无法捕获异步注册错误。
 
 ### 持久检查点
@@ -99,11 +101,11 @@ const todo = projections.todo()
 
 ### Session 摘要
 
-Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectionMap` 条目（非空值）带 `SessionProjectionSummaryExcluded<T>` 标记的 key。`summaryKeys()` 返回该集合，从实时注册派生；在注册或注销改变 key 表之前，它保持同一实例。摘要消费方把它传给既有的带 key 读取面 —— 实时 cell 用 `cachedSnapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，持久化缓存用 `cachedSnapshot(header, keys)` —— 这些读取面把 Set 视为已选好的集合，因此不存在摘要专用读取面、每次读取无需复制，集合也只有一处定义。由于集合由注册表派生，摘要消费方无法通过该集合请求被排除的 key；完整读取面仍会按显式命名的 key 提供值，打开的 Session 因此保留全部取值。列表行携带的是摘要投影，绝不是全量投影。
+Session 摘要包含每个已注册客户端视图，但排除 `SessionProjectionMap` 条目（非空值）带 `SessionProjectionSummaryExcluded<T>` 标记的 key。`summaryKeys()` 返回该集合，从实时注册派生；在注册或注销改变 key 表之前，它保持同一实例。摘要消费方把它传给既有的带 key 读取面 —— 实时 Session 用 `snapshot(session, keys)`，checkpoint 行用 `viewCheckpoint(rows, keys)`，持久化缓存用 `cachedSnapshot(header, keys)` —— 这些读取面把 Set 视为已选好的集合，因此不存在摘要专用读取面、每次读取无需复制，集合也只有一处定义。由于集合由注册表派生，摘要消费方无法通过该集合请求被排除的 key；完整读取面仍会按显式命名的 key 提供值，打开的 Session 因此保留全部取值。列表行携带的是摘要投影，绝不是全量投影。
 
-标记决定客户端视图类型，`wire.summary` 决定运行时键集合，省略即 `true`。map 条目带标记的 key 应声明 `wire.summary: false` 以保持一致；该字段就是普通布尔值，而不是类型层的互锁。可空条目把 `null` 放在包装之外（`SessionProjectionSummaryExcluded<TodoItem[]> | null`），以便首次写入前的值仍可表达。当前被标记的 key 是 `turnOutline`、`sessionStats`、`todos` 和 `imageLimits`：outline 随整份日志增长，列表行不渲染统计或 todo 清单，而图片上限是每个 Session 共享的同一个宿主级启动常量。
+标记决定客户端视图类型，`wire.summary` 决定运行时键集合，省略即 `true`。map 条目带标记的 key 应声明 `wire.summary: false` 以保持一致；该字段就是普通布尔值，而不是类型层的互锁。可空条目把 `null` 放在包装之外（`SessionProjectionSummaryExcluded<TodoItem[]> | null`），以便首次写入前的值仍可表达。当前被标记的 key 是 `turnOutline`、`sessionStats`、`todos`、`imageLimits`、`contextPressure` 和 `contextBreakdown`：outline 随整份日志增长，列表行不渲染统计、todo 清单或上下文用量，而图片上限是每个 Session 共享的同一个宿主级启动常量。
 
-摘要服务于 Session 列表行，列表无需打开 Session。`@` 引用同样以列表方式枚举 Session，但只通过带 key 的 `snapshot(session, keys)` 与 `cachedSnapshot(header, keys)` 读取其 `title` 和 `subagent` 标签 key。`snapshot`、`cachedSnapshot` 和 `viewCheckpoint` 在不传 key 子集时仍返回每个 wire key，因此打开的 Session 仍会收到全部投影值。
+摘要服务于 Session 列表行，列表无需打开 Session。`@` 引用同样以列表方式枚举 Session，但只通过带 key 的 `snapshot(session, keys)` 与 `cachedSnapshot(header, keys)` 读取其 `title` 和 `subagent` 标签 key。`snapshot(session, keys)` 只计算它返回的单元；不传 key 子集时计算每个客户端可见单元、不计算 Host 专用单元，因此打开的 Session 仍会收到全部投影值，`viewCheckpoint` 不传 key 子集时同样返回每个 wire key。
 
 -----
 
