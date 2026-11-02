@@ -47,7 +47,7 @@ describe('desktop release metadata', () => {
 const coordinators: InstanceType<typeof DesktopUpdateCoordinator>[] = []
 afterEach(() => { for (const item of coordinators.splice(0)) item.dispose() })
 
-function fixture(channel: 'nightly' | 'stable' = 'nightly', version = '1.1.0-alpha.1') {
+function fixture(channel: 'nightly' | 'stable' = 'nightly', version = '1.1.0-alpha.1', discard?: (updater: AppUpdater) => Promise<void>) {
   const events = new EventEmitter()
   const checkForUpdates = vi.fn(async () => ({
     isUpdateAvailable: true,
@@ -66,7 +66,7 @@ function fixture(channel: 'nightly' | 'stable' = 'nightly', version = '1.1.0-alp
   const updater = Object.assign(events, { checkForUpdates, downloadUpdate, quitAndInstall }) as unknown as AppUpdater
   const coordinator = new DesktopUpdateCoordinator(
     (state) => { states.push(state); return state },
-    beforeRestart, updater, () => true, () => version, downloadResult, channel,
+    beforeRestart, updater, () => true, () => version, downloadResult, channel, discard,
   )
   coordinators.push(coordinator)
   return { coordinator, updater, events, states, checkForUpdates, downloadUpdate, quitAndInstall, beforeRestart, downloadResult }
@@ -372,12 +372,11 @@ it('does not accept a channel switch after installer handoff even if a later err
 })
 
 it('suspends updates if retiring a downloaded target fails and recovers on a later switch', async () => {
-  const f = fixture()
+  const discard = vi.fn().mockRejectedValueOnce(new Error('native target busy')).mockResolvedValueOnce(undefined)
+  const f = fixture('nightly', '1.1.0-alpha.1', discard)
   await f.coordinator.check()
   await f.coordinator.download('1.1.0-rc.2')
-  const clear = vi.fn().mockRejectedValueOnce(new Error('locked cache')).mockResolvedValueOnce(undefined)
-  Object.assign(f.updater, { downloadedUpdateHelper: { clear } })
-  await expect(f.coordinator.switchChannel('stable', async () => {})).rejects.toThrow('locked cache')
+  await expect(f.coordinator.switchChannel('stable', async () => {})).rejects.toThrow('native target busy')
   expect(f.coordinator.configurationFailure).toBe('cleanup')
   expect(f.coordinator.state).toMatchObject({ phase: 'error', failedOperation: 'configuration' })
   const checks = f.checkForUpdates.mock.calls.length

@@ -18,8 +18,8 @@ async function main() {
   const requests = []
   let percentage
   let version = '2.0.0'
-  const payload = Buffer.from('inert channel-switch qualification payload')
-  const sha512 = createHash('sha512').update(payload).digest('base64')
+  let payload = Buffer.from('inert channel-switch qualification payload')
+  let sha512 = createHash('sha512').update(payload).digest('base64')
   const server = createServer((request, response) => {
     const path = request.url.split('?')[0]
     requests.push(path)
@@ -82,6 +82,9 @@ async function main() {
     const file = helper.file
     assert.ok(file)
     assert.deepEqual(await readFile(file), payload)
+    const pending = helper.cacheDirForPendingUpdate
+    const cachedInfo = await readFile(join(pending, 'update-info.json'))
+    const oldPayload = Buffer.from(payload)
     const proxy = target.server
     if (process.platform === 'darwin') assert.equal(proxy.listening, true)
     await discardDesktopUpdate(target)
@@ -92,6 +95,28 @@ async function main() {
     assert.equal(target.updateInfoAndProvider, null)
     await assert.rejects(access(file), { code: 'ENOENT' })
     await assert.rejects(target.downloadUpdate())
+    // A later process can encounter files that a previous process could not remove.
+    await writeFile(file, oldPayload)
+    await writeFile(join(pending, 'update-info.json'), cachedInfo)
+    version = '2.1.0'
+    payload = Buffer.from('different release after obsolete cache survived')
+    sha512 = createHash('sha512').update(payload).digest('base64')
+    const recovered = new Target(undefined, adapter)
+    ownedUpdater = recovered
+    recovered.logger = null
+    recovered.autoDownload = false
+    recovered.autoInstallOnAppQuit = false
+    recovered.disableDifferentialDownload = true
+    recovered.httpExecutor = new DesktopUpdateHttpExecutor(5000)
+    recovered.setFeedURL({ provider: 'generic', url: origin })
+    recovered.quitAndInstall = forbidden
+    recovered.on('error', () => {})
+    selectUpdateChannel(recovered, 'stable')
+    await recovered.checkForUpdates()
+    await recovered.downloadUpdate()
+    assert.deepEqual(await readFile(recovered.downloadedUpdateHelper.file), payload)
+    assert.equal(recovered.downloadedUpdateHelper.versionInfo.version, '2.1.0')
+    console.log('PASS: obsolete cache rejected by a new updater instance; current payload verified')
     console.log('PASS: real provider channel switching, rollout eligibility, real downloads, native platform cache and proxy retirement')
   } finally {
     try {

@@ -310,6 +310,8 @@ During a UI switch, the selector shows the pending choice with a loading indicat
 
 The shared settings storage distinguishes missing files, read failures, malformed JSON, invalid document structure and invalid individual fields. Popup and channel fields are validated independently with Zod; an invalid popup field does not invalidate a valid channel, and vice versa. Reads never create files; startup initialization is explicit and shares the writer lock with saves. A save preserves unknown and unrelated invalid fields. Write diagnostics distinguish no write, uncertain completion and a committed write followed by lock-cleanup failure; the last case is not a rollback.
 
+Once installation eligibility is revoked, obsolete-file removal failures do not block switching. They are flushed to `update-cleanup.jsonl` in Electron’s logs directory with the time, operation, path and filesystem error; inability to write that log falls back to stderr. Later download failures are reported independently and are not attributed to an earlier cleanup warning.
+
 Updater adapter compatibility and platform version records are documented in [Electron updater compatibility](tests/updates/electron-updater/README.md).
 
 <a id="mandatory-update-policy"></a>
