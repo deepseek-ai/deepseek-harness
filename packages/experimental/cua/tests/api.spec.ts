@@ -37,6 +37,7 @@ function fixture(withSink = true) {
         windows: params.windowId === undefined ? windows : windows.filter(window => window.windowId === params.windowId),
       }
       case 'screenshot': return { mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: params.windowId, bounds, coordinateSpace: 'screenshot-pixels' }
+      case 'listActions': return ['AXPress', 'AXShowMenu', 'AXTextArea.AXValue.Set']
       default: return delivered
     }
   })
@@ -229,6 +230,21 @@ describe('text selections', () => {
     const calls = f.dispatch.mock.calls.length
     await expect(app.selectText(element('1'), '')).rejects.toThrow()
     expect(f.dispatch).toHaveBeenCalledTimes(calls)
+  })
+})
+
+describe('element action queries', () => {
+  it('returns raw provider action names including attribute-setting operations without reading new state', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    expect(await app.listActions(element('42.12345'))).toEqual(['AXPress', 'AXShowMenu', 'AXTextArea.AXValue.Set'])
+    expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
+      { method: 'listActions', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '42.12345' } },
+    ])
+    await expect(app.listActions(element(''))).rejects.toThrow()
+    expect(f.dispatch).toHaveBeenCalledTimes(1)
+    expect(f.sink.text).not.toHaveBeenCalled()
   })
 })
 

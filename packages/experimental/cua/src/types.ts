@@ -118,6 +118,12 @@ export interface CuaSurface {
    */
   getAXStateAndScreenshot(options?: CuaAxOptions): Promise<CuaObservation>
   /**
+   * List the actions currently advertised by an element, including attribute-setting operations.
+   * @param elementId - Element id from this surface's latest observation.
+   * @returns Provider-defined action names; empty when the element advertises none.
+   */
+  listActions(elementId: CuaElementId): Promise<string[]>
+  /**
    * Reveal advertised AX alternate UI, otherwise move the system cursor without pressing a button.
    * The system-pointer route requires the app to be foreground and the point unobscured; never activates or raises it.
    * Returning and subsequent observations do not restore the previous pointer position.

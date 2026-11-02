@@ -300,6 +300,8 @@ actor AXWorker {
             let window = try coordinateWindow(identity, params.windowID(), trace: trace)
             trace?.mark("geometry.before.end")
             return .capture(CaptureTarget(appHandle: handle, process: identity, window: window))
+        case "listActions":
+            return .result(.array(try ax().listActions(element(handle, params)).map { .string($0) }))
         case "paste":
             return .paste(PastePlan(handle: handle, text: try params.string("text"), format: try params.optionalString("format") ?? "text",
                                    maxBytes: try params.integer("maxClipboardBytes", in: 1024...Int.max),

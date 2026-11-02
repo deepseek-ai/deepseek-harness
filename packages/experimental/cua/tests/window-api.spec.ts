@@ -19,6 +19,7 @@ function fixture() {
       case 'getWindows': return request.params.ids.map(windowId => ({ windowId, pid: 10, windowHandle: 'window-7' }))
       case 'getState': return { windowHandle: 'window-7', windowId: 7, pid: 10, snapshotId: 'state-1', tree: 'AX window', windows: [metadata], truncated: false }
       case 'findApps': return [{ id: 'shell-entry', displayName: 'Settings', kind: 'shell' }]
+      case 'listActions': return ['AXPress']
       default: return { dispatched: true, verified: false }
     }
   })
@@ -47,6 +48,17 @@ it('binds all observation and keyboard operations to a selected window and suppr
   await window.pressKey('ctrl+a')
   expect(f.dispatch.mock.calls.slice(2).every(([r]) => 'windowHandle' in r.params && r.params.windowHandle === 'window-7')).toBe(true)
   expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'pressKey', params: { windowHandle: 'window-7', key: 'a', modifiers: ['control'] } })
+  expect(await window.listActions(element('42.12345'))).toEqual(['AXPress'])
+  expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'listActions', params: {
+    windowHandle: 'window-7', snapshotId: 'state-1', elementId: '42.12345',
+  } })
+})
+it('accepts an element action query only for a selected window snapshot', () => {
+  const params = { windowHandle: 'window-7', snapshotId: 'state-1', elementId: '42.12345' }
+  expect(WindowRequest.parse({ method: 'listActions', params })).toEqual({ method: 'listActions', params })
+  expect(WindowRequest.safeParse({ method: 'listActions', params: {
+    windowHandle: 'window-7', elementId: '42.12345',
+  } }).success).toBe(false)
 })
 it('launches a discovered entry without inventing a selected window or waiting for one', async () => {
   const f = fixture()

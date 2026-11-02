@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer'
 import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
+import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaScreenshot, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
@@ -188,6 +188,9 @@ export function createCuaSurface(dispatch: CuaDispatch, sink: CuaObservationSink
     async getAXStateAndScreenshot(options) {
       const state = await result.getAXState(options)
       return { state, screenshot: await result.getScreenshot(options) }
+    },
+    async listActions(elementId) {
+      return ActionNamesResult.parse(await call('listActions', { ...snapshotParams(), elementId }))
     },
     async hover(target, options) {
       const relative = options?.relative === undefined ? {} : { relative: options.relative }

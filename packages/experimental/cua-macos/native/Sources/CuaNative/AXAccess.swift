@@ -157,6 +157,33 @@ final class AXAccess {
         guard let result = names as? [String] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility actions are not strings") }
         return result
     }
+    func listActions(_ element: AXUIElement) throws -> [String] {
+        let advertised = try actions(element)
+        let attributes = try writableAttributes(element)
+        guard !attributes.isEmpty else { return advertised }
+        let role = try string(element, "AXRole")
+        return try Self.listActionNames(actions: advertised, role: role, writableAttributes: attributes)
+    }
+    static func listActionNames(actions: [String], role: String?, writableAttributes: [String]) throws -> [String] {
+        guard !writableAttributes.isEmpty else { return actions }
+        guard let role, !role.isEmpty else {
+            throw NativeFailure(code: "NATIVE_ERROR", message: "Cannot name attribute-setting operations without an accessibility role")
+        }
+        return actions + writableAttributes.map { "\(role).\($0).Set" }
+    }
+    func writableAttributes(_ element: AXUIElement) throws -> [String] {
+        try prepare(element)
+        var names: CFArray?
+        let error = AXUIElementCopyAttributeNames(element, &names)
+        if absent(error) { return [] }
+        guard error == .success else { throw failure(error, "read attribute names") }
+        guard let names else { return [] }
+        guard let result = names as? [String] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility attributes are not strings") }
+        return try Self.writableAttributeNames(result) { try writable(element, $0) }
+    }
+    static func writableAttributeNames(_ names: [String], isWritable: (String) throws -> Bool?) rethrows -> [String] {
+        try names.filter { try isWritable($0) == true }
+    }
     func writable(_ element: AXUIElement, _ name: String) throws -> Bool? {
         try prepare(element)
         var result: DarwinBoolean = false

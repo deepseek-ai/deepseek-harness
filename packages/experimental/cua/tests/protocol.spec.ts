@@ -83,6 +83,17 @@ it.each(['0', '42.12345', 'runtime:7/child', 'e12'])('admits an opaque element i
   expect(Request.safeParse({ method: 'click', params: { ...params, elementId: '' } }).success).toBe(false)
 })
 
+it('admits an element action query only with a retained snapshot identity', () => {
+  const params = { appHandle: 'app', snapshotId: 'snapshot', elementId: '42.12345' }
+  expect(Request.parse({ method: 'listActions', params })).toEqual({ method: 'listActions', params })
+  for (const invalid of [
+    { appHandle: 'app', elementId: '0' },
+    { appHandle: 'app', snapshotId: 'snapshot' },
+    { appHandle: 'app', snapshotId: 'snapshot', elementId: '' },
+    { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', action: 'AXPress' },
+  ]) expect(Request.safeParse({ method: 'listActions', params: invalid }).success).toBe(false)
+})
+
 it.each(['click', 'hover', 'scroll', 'drag'])('validates 0–999 integer coordinates for %s', (method) => {
   const params = { appHandle: 'app', windowId: 7, relative: true,
     ...method === 'drag' ? { fromX: 0, fromY: 0, toX: 999, toY: 999 } : { x: 0, y: 999 },

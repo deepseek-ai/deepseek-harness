@@ -44,6 +44,7 @@ export const Request = z.discriminatedUnion('method', [
     includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
     details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
   }),
+  operation('listActions', snapshot),
   z.object({ method: z.literal('hover'), params: z.union([
     z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
   ]) }).strict(),
@@ -112,6 +113,8 @@ export const StateResult = z.object({
   snapshotId: z.string().min(1).transform(value => value as CuaSnapshotId),
   tree: z.string(), windows: WindowsResult, truncated: z.boolean(),
 })
+/** Provider-defined action names for one element, including attribute-setting operations; an element may advertise none. */
+export const ActionNamesResult = z.array(z.string())
 /** Original native PNG and platform window geometry before Host image preparation. */
 export const NativeScreenshotResult = z.object({
   mimeType: z.literal('image/png'), data: imageBase64, pixelWidth: id, pixelHeight: id, windowId: id,
