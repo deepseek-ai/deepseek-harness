@@ -70,7 +70,7 @@ async function harness(rows: readonly Row[], summaryMs = 8, workSliceMs = 8) {
     ctx.sessions.announce(session)
     const agent = { id: session.id, session, ctx, status: 'idle' as Agent['status'] }
     // Only registry lookup and status are consumed; no Agent execution occurs in this fixture.
-    const detachAgent = ctx.agents.enter(agent as Agent, undefined)
+    const detachAgent = ctx.agents.enter(agent as Agent)
     ctx.effect(() => detachAgent, 'list-scheduling.agent')
     agents.set(id, agent)
     detach.set(id, () => { detachAgent(); detachSession() })

@@ -83,13 +83,14 @@ async function setup(config: toolAskUser.Config = { mode: 'timed', timeout: -1 }
   return ctx
 }
 
-function stubAgent(id: string, delegationDepth = 0): Agent {
+function stubAgent(id: string, delegationDepth = 0, origin?: 'subagent'): Agent {
   const agentId = SessionId(id)
   const agent: Agent = {
     id: agentId,
     options: {},
     session: Session.create(agentId, [], {
       version: SESSION_FORMAT_VERSION, id: agentId, createdAt: 0, isSeeded: false, delegationDepth,
+      ...origin === undefined ? {} : { origin },
     }),
     model: unsupportedModel(),
     inbox: {
@@ -150,7 +151,7 @@ describe('ask_user_question tool', () => {
       },
     })
     const agent = { ...stubAgent('timed-in-time'), steer: vi.fn() } as Agent
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
@@ -263,7 +264,7 @@ describe('ask_user_question tool', () => {
       },
     })
     const agent = stubAgent('legacy-agent')
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     const detailed = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-legacy-detailed'),
@@ -443,7 +444,7 @@ describe('ask_user_question tool', () => {
       },
     })
     const agent = stubAgent('resumed-root', 1)
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
@@ -473,7 +474,7 @@ describe('ask_user_question tool', () => {
       },
     })
     const agent = { ...stubAgent('timed-root'), steer: vi.fn() } as Agent
-    ctx.agents.enter(agent, undefined)
+    ctx.agents.enter(agent)
     const settled = await executeToolFixture(ctx, {
       signal: testToolSignal,
       callId: ToolCallId('ask-timeout'),
@@ -522,7 +523,7 @@ describe('ask_user_question tool', () => {
     try {
       const ctx = await setup({ mode: 'timed', timeout: 1 })
       const agent = { ...stubAgent('timed-unclaimed'), steer: vi.fn() } as Agent
-      ctx.agents.enter(agent, undefined)
+      ctx.agents.enter(agent)
       const result = executeToolFixture(ctx, {
         signal: testToolSignal,
         callId: ToolCallId('ask-unclaimed'),
@@ -628,7 +629,7 @@ describe('ask_user_question tool', () => {
     })
   })
 
-  it('rejects a live runtime-owned agent with a structured DELEGATED_CALLER error', async () => {
+  it('rejects a live subagent with a structured DELEGATED_CALLER error', async () => {
     const ctx = await setup()
     const seen: AskUserQuestionRequest[] = []
     registerQuestionAnswerer(ctx, {
@@ -638,9 +639,9 @@ describe('ask_user_question tool', () => {
       },
     })
     const root = stubAgent('root', 0)
-    const child = stubAgent('child', 0)
-    ctx.agents.enter(root, undefined)
-    ctx.agents.enter(child, root)
+    const child = stubAgent('child', 0, 'subagent')
+    ctx.agents.enter(root)
+    ctx.agents.enter(child)
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,

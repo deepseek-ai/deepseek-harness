@@ -50,6 +50,7 @@ function mountColumn(): { column: HTMLElement; quiet: () => boolean } {
       useContextMenu={contextMenuHook()} useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={vi.fn()} toggleSidebar={vi.fn()} trackEntryClick={vi.fn()} t={t}
+      renderFactorySlot={() => null}
       renderSlot={((_key: string, owner: SidebarSectionOwnerProps) =>
         <div data-testid="region" data-wide={owner.wide} />) as SidebarRootComponentProps['renderSlot']}
     />,

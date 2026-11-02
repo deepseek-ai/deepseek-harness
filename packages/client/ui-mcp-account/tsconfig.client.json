@@ -1,0 +1,60 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  "include": [
+    "src/client",
+    "src/css-modules.d.ts",
+    "src/types.ts"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../api/gateway/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
+      "path": "../store"
+    },
+    {
+      "path": "../ui-layout"
+    },
+    {
+      "path": "../ui-plugin-manager/tsconfig.client.json"
+    },
+    {
+      "path": "../ui-primitives"
+    },
+    {
+      "path": "../ui-renderer"
+    },
+    {
+      "path": "../ui-slots"
+    },
+    {
+      "path": "../../mcp/mcp-client"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../locale/tsconfig.client.json"
+    },
+    {
+      "path": "../../util/package-manifest"
+    },
+    {
+      "path": "../../mcp/mcp-manager"
+    }
+  ]
+}

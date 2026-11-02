@@ -64,9 +64,10 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-skill/`](ui-skill/README.md) | Adds skill references to inline suggestions | — |
 | [`ui-reference/`](ui-reference/README.md) | Unified Web `@file` / `@session` reference source | — |
 | [`ui-secret-mask/`](ui-secret-mask/README.md) | Masks recognized credentials in sent user text | — |
+| [`ui-agent-team/`](ui-agent-team/README.md) | Session Team switch and shared tasks below the Subagent tree | — |
 | [`ui-subagent/`](ui-subagent/README.md) | Provides subagent navigation, child transcript states, and inline references | — |
 | [`ui-jobs/`](ui-jobs/README.md) | Lists this session's background jobs with on-demand streaming record panels | — |
-| [`ui-schedule/`](ui-schedule/README.md) | Lists the current Session's active reminders in a read-only header catalog | — |
+| [`ui-schedule/`](ui-schedule/README.md) | Provides the sidebar Automation tasks page and right Sidebar task tab, which create, edit, run, pause, resume, and delete Host scheduled tasks, plus the Session header clock and row mark | — |
 | [`ui-model-selection/`](ui-model-selection/README.md) | Provides model selection in conversation surfaces | — |
 | [`ui-permission-presets/`](ui-permission-presets/README.md) | Configures default permissions and switches the current session's access | — |
 | [`ui-plan/`](ui-plan/README.md) | Presents active plan-mode status and its exit control | — |
@@ -86,7 +87,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-plugin-market/`](ui-plugin-market/README.md) | Contributes the Discover tab to the Plugins page: browse market indexes and install their bundles | — |
 | [`ui-settings-plugin-inventory/`](ui-settings-plugin-inventory/README.md) | Contributes the read-only Host Loader inventory tab to Plugins settings | — |
 | [`ui-deliverables/`](ui-deliverables/README.md) | Produces the changed-files card with its comparison tabs, delivery cards, and clickable final-response file references | — |
-| [`ui-mcp-account/`](ui-mcp-account/README.md) | Provides the account section, title tag, activation guidance, and notices that connector plugins register for their MCP servers on the Plugins page | `ctx.mcpAccounts` |
+| [`ui-mcp-account/`](ui-mcp-account/README.md) | Holds the OAuth accounts MCP connector plugins register on the Host and shows each one's section, tag, activation guidance, and notices on the Plugins page | `ctx.mcpAccounts` |
 | [`ui-message-feedback/`](ui-message-feedback/README.md) | Provides message ratings and feedback dialogs opened from ratings, `/feedback`, or the Session Header menu | `ctx.feedbackUi` |
 | [`ui-directory-picker-browse/`](ui-directory-picker-browse/README.md) | In-app directory browsing surface for the workspace directory flow | — |
 | [`ui-directory-picker-native/`](ui-directory-picker-native/README.md) | Native directory-picker surface driving the local Desktop or Host OS chooser | — |

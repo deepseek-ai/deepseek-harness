@@ -30,6 +30,7 @@ interface SentenceContract {
  * so an absent section cannot be mistaken for forgotten documentation.
  */
 const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
+  'packages/fs/fs-patch': 'The pure library only parses caller-supplied patch text and applies hunks to text; consumers own tools, execution, capture, and model output.',
   'packages/util/file-drag': 'The package resolves export names and declares native file operations; it does not construct model input.',
   'packages/core/scope': 'The package is a model-agnostic registration and lifecycle primitive; model-facing consumers own any context selection.',
   'packages/experimental/liveshare-protocol': 'The package only defines wire frames and identity values that its consumers exchange; it registers nothing model-facing.',
@@ -138,7 +139,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/file-upload': { kind: 'none', reason: 'Browser-side request-body transport; registers nothing model-facing.' },
   'packages/api/remotes': { kind: 'none', reason: 'The Remote BFF selects business methods and forwarded events; selected services own any model-visible effect.' },
   'packages/api/remote-access': { kind: 'none', reason: 'Remote access decisions for Client callers; registers nothing model-facing.' },
-  'packages/experimental/client-ui-agent-team': { kind: 'none', reason: 'The browser projection and task controls register no model-facing input.' },
+  'packages/client/ui-agent-team': { kind: 'none', reason: 'The browser projection and task controls register no model-facing input.' },
   'packages/experimental/client-ui-claude-code-mods': { kind: 'none', reason: 'The browser draws Host-held mod trees and relays clicks; the mods\' own hooks own any model-visible effect.' },
   'packages/client/shortcuts': { kind: 'none', reason: 'Browser keyboard routing; registers nothing model-facing.' },
   'packages/client/ui-shortcuts': { kind: 'none', reason: 'Read-only browser reference; registers nothing model-facing.' },
@@ -150,7 +151,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/ui-conversation': { kind: 'none', reason: 'Browser-side UI plugin layer; registers nothing model-facing.' },
   'packages/client/ui-approval': { kind: 'none', reason: 'Browser-side approval presentation; registers nothing model-facing.' },
   'packages/client/ui-chat': { kind: 'none', reason: 'Browser-side Chat presentation; registers nothing model-facing.' },
-  'packages/client/ui-mcp-account': { kind: 'none', reason: 'Browser-side account controls over the MCP manager Remote; the connector and the MCP client document the tools a grant exposes.' },
+  'packages/client/ui-mcp-account': { kind: 'none', reason: 'Plugins page account registry and controls over the MCP manager; the connector and the MCP client document the tools a grant exposes.' },
   'packages/client/ui-message-feedback': { kind: 'none', reason: 'Browser-side controls over log-only message feedback; ratings and notes never enter model context or change model-input tokens.' },
   'packages/client/ui-tool': { kind: 'none', reason: 'Browser-side Tool presentation layer; renders logged calls without changing model context.' },
   'packages/client/ui-schedule': { kind: 'none', reason: 'Browser-side catalog, editing, and deletion of Host Schedule records; dsh-schedule owns storage and delivery, and dsh-tool-schedule contributes the model-facing tools in a preset that mounts it.' },
