@@ -11,8 +11,7 @@
  * client itself never retries: the core pipeline owns retries.
  *
  * Routes: bot identity, message create/reply/update/patch/delete/get/list, chat get, image and file upload, message
- * resource download, and reactions. CardKit entity routes live in {@link ./cardkit.ts}; the generated `types/` tree
- * stays the escape hatch (`bot.internal`, `/_api/:name`).
+ * resource download, and reactions. The generated `types/` tree stays the escape hatch (`bot.internal`, `/_api/:name`).
  *
  * @module @deepseek-ai/cordis-plugin-im-adapter-lark/api/client
  */
