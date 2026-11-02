@@ -6817,6 +6817,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:*
         version: link:../ui-slots
+      '@deepseek-ai/dsh-fs-patch':
+        specifier: workspace:*
+        version: link:../../fs/fs-patch
       '@deepseek-ai/dsh-llm':
         specifier: workspace:*
         version: link:../../llm/llm

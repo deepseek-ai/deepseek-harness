@@ -48,6 +48,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-spill-policy": "workspace:*",
+    "@deepseek-ai/dsh-fs-patch": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",

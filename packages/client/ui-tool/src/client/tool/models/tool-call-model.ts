@@ -7,6 +7,7 @@
  */
 import type { ToolArgs, ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { LocaleKeysOf } from '@deepseek-ai/dsh-client-ui-slots'
+import { parsePatch, PatchParseError, type PatchOperation } from '@deepseek-ai/dsh-fs-patch'
 import { abbreviateHomePath, isAbsoluteWorkspacePath, relativizeToCwd } from '@deepseek-ai/dsh-util-workspace-path'
 import { recordedAbsolutePath } from './recorded-path.ts'
 
@@ -74,6 +75,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
 
 /** Tool-owned titles that refine a generic row variant without replacing it. */
 const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
+  apply_patch: 'tool.title.applyPatch',
   cordis_package_inspect: 'tool.title.inspect',
   cordis_runtime_inspect: 'tool.title.inspect',
   cordis_run: 'tool.title.runCordis',
@@ -143,8 +145,16 @@ export function toolTitleKey(toolName: string): ToolTitleKey {
   return TOOL_TITLE_KEYS[toolName] ?? VARIANT_TITLE_KEYS[classifyTool(toolName)]
 }
 
+/** Text between two files a patch row names. */
+export const FILE_TARGET_SEPARATOR = ', '
+
+/** Text between a moved file's source and destination. */
+export const FILE_TARGET_MOVE = ' → '
+
 /** One file a patch row names, rendered as its own link when `filePath` is set. */
 export interface ToolRowFileTarget {
+  /** One-based patch line of the file header; identifies the file operation within its call. */
+  readonly id: number
   /** Display path of a moved file's source; the source no longer exists once the move completes. */
   readonly from?: string | undefined
   /** Display path of the file, or of a move's destination. */
@@ -283,13 +293,6 @@ function argumentSummary(
   return { summary: description === undefined ? '' : firstLine(description), filePath: undefined }
 }
 
-const PATCH_HEADERS = [
-  ['*** Add File: ', 'add'], ['*** Update File: ', 'update'], ['*** Delete File: ', 'delete'],
-] as const
-const PATCH_MOVE = '*** Move to: '
-
-interface PatchTarget { kind: typeof PATCH_HEADERS[number][1]; path: string; moveTo?: string }
-
 /** Summary material read from patch file headers; `targets` keep each file's raw openable path. */
 interface PatchSummary {
   summary: string
@@ -298,37 +301,36 @@ interface PatchSummary {
 }
 
 /**
- * Summary material for `apply_patch`: the paths its file headers name, once the
- * `input` text is complete. A move reads `source → destination`, and only its
- * destination is openable; a deletion is not. Only a lone added or updated file
- * without a move sets `filePath`. Hunk body lines carry a prefix character, so
- * an indented `***` line is content, not a header.
+ * Summary material for `apply_patch`: the files a complete `input` names, parsed
+ * by the same `parsePatch` the executor uses. A move reads `source → destination`,
+ * and only its destination is openable; a deletion is not. Only a lone added or
+ * updated file without a move sets `filePath`. Incomplete or malformed patch text
+ * yields an empty summary.
  */
 function patchSummary(args: ToolArgs, cwd?: string, home?: string): PatchSummary {
   const patch = args.complete('input') ? args.text('input') : undefined
-  if (patch === undefined) return { summary: '', filePath: undefined, targets: [] }
-  const headers: PatchTarget[] = []
-  for (const line of patch.split(/\r?\n/u)) {
-    const text = line.trimEnd()
-    const header = PATCH_HEADERS.find(([prefix]) => text.startsWith(prefix))
-    const last = headers.at(-1)
-    if (header !== undefined) {
-      const path = text.slice(header[0].length).trim()
-      if (path !== '') headers.push({ kind: header[1], path })
-    } else if (text.startsWith(PATCH_MOVE) && last?.kind === 'update') {
-      const moveTo = text.slice(PATCH_MOVE.length).trim()
-      if (moveTo !== '') last.moveTo = moveTo
+  let operations: PatchOperation[] = []
+  if (patch !== undefined) {
+    try {
+      operations = parsePatch(patch)
+    } catch (error) {
+      // PatchParseError: the executor rejects this patch before changing any file, so no file is named.
+      if (!(error instanceof PatchParseError)) throw error
     }
   }
   const display = (path: string) => abbreviateHomePath(relativizeToCwd(path, cwd), home)
-  const targets = headers.map(({ kind, path, moveTo }): ToolRowFileTarget => moveTo === undefined
-    ? { label: display(path), filePath: kind === 'delete' ? undefined : path }
-    : { from: display(path), label: display(moveTo), filePath: moveTo })
-  const summary = targets.map(target => target.from === undefined ? target.label : `${target.from} → ${target.label}`).join(', ')
-  const only = headers.length === 1 ? headers[0] : undefined
+  const targets = operations.map((operation): ToolRowFileTarget => {
+    const moveTo = operation.kind === 'update' ? operation.moveTo : undefined
+    return moveTo === undefined
+      ? { id: operation.lineNumber, label: display(operation.path), filePath: operation.kind === 'delete' ? undefined : operation.path }
+      : { id: operation.lineNumber, from: display(operation.path), label: display(moveTo), filePath: moveTo }
+  })
+  const summary = targets.map(target => target.from === undefined ? target.label
+    : `${target.from}${FILE_TARGET_MOVE}${target.label}`).join(FILE_TARGET_SEPARATOR)
+  const only = operations.length === 1 ? operations[0] : undefined
   return {
     summary, targets,
-    filePath: only !== undefined && only.kind !== 'delete' && only.moveTo === undefined ? only.path : undefined,
+    filePath: only?.kind === 'add' || only?.kind === 'update' && only.moveTo === undefined ? only.path : undefined,
   }
 }
 

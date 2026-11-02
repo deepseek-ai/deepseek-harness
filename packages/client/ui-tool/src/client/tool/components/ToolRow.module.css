@@ -108,11 +108,6 @@
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   color: inherit;
-  text-decoration: underline dotted;
-  text-decoration-color: currentColor;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-  cursor: pointer;
 }
 
 /* Multi-file patch summary: one ellipsized line of plain separators and per-file
@@ -138,6 +133,11 @@
   background: none;
   font: inherit;
   color: inherit;
+}
+
+/* Path link affordance shared by the whole-summary and per-file links. */
+.fileLink,
+.fileTargetLink {
   text-decoration: underline dotted;
   text-decoration-color: currentColor;
   text-decoration-thickness: 1px;

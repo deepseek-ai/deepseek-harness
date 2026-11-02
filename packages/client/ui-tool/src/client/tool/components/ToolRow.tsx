@@ -21,7 +21,7 @@ import {
 } from '../models/primitive-labels.ts'
 import type { AskQuestionCardModel } from '../models/ask-question-card-model.ts'
 import {
-  formatToolBody, type ToolRowFileTarget, type ToolRowState, type ToolRowVariant,
+  FILE_TARGET_MOVE, FILE_TARGET_SEPARATOR, formatToolBody, type ToolRowFileTarget, type ToolRowState, type ToolRowVariant,
 } from '../models/tool-call-model.ts'
 import type { WebCardModelProps } from '../models/web-card-model.ts'
 import { AskQuestionCard } from './AskQuestionCard.tsx'
@@ -94,8 +94,9 @@ export interface ToolRowProps {
   /** File gesture bindings supplied by the owning tool view. */
   fileContextMenuProps?: ContextMenuTriggerProps | undefined
   /**
-   * Files a patch row names. With onOpenFile, each target with a `filePath`
-   * renders as its own link in place of the whole-summary `filePath` link.
+   * Files a patch row names. When onOpenFile is set, the row state is `ok`, and
+   * at least one target has a `filePath`, each such target renders as its own
+   * link in place of the summary text; otherwise the row shows `summary`.
    */
   fileTargets?: readonly ToolRowFileTarget[] | undefined
   /** File gesture bindings for one `fileTargets` path, supplied by the owning tool view. */
@@ -239,9 +240,9 @@ export const ToolRow = memo(function ToolRow({
     }
     : undefined, [filePath, filePathLine, onOpenFile, settledWithCue])
   const linkHref = settledWithCue ? undefined : href
-  // Per-file links follow the whole-summary link's settled-state rule; with no
-  // openable file the summary keeps its plain text and running shimmer.
-  const openTarget = fileTargets?.some(target => target.filePath !== undefined) === true && !settledWithCue
+  // Per-file links appear only on a successful result: TextShimmer accepts no
+  // buttons, so running and failed rows keep the plain summary text.
+  const openTarget = state === 'ok' && fileTargets?.some(target => target.filePath !== undefined) === true
     ? onOpenFile : undefined
   // Keep Enter/Space on the focused path or URL link from bubbling to the row's
   // keydown handler, which would preventDefault() the key and toggle expand
@@ -262,9 +263,9 @@ export const ToolRow = memo(function ToolRow({
       {exitLabel === null && fileTargets !== undefined && openTarget !== undefined ? (
         <span className={css.fileLinks}>
           {fileTargets.map((target, index) => (
-            <Fragment key={index}>
-              {index > 0 && ', '}
-              {target.from !== undefined && `${target.from} → `}
+            <Fragment key={target.id}>
+              {index > 0 && FILE_TARGET_SEPARATOR}
+              {target.from !== undefined && `${target.from}${FILE_TARGET_MOVE}`}
               {target.filePath === undefined ? target.label : (
                 <FileTargetLink
                   label={target.label}
