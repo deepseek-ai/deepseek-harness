@@ -92,6 +92,7 @@
 
 .rowLabel { color: var(--dsw-alias-label-primary); flex-shrink: 0; white-space: nowrap; }
 .hint { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.warning { margin: 0; color: var(--dsw-alias-label-primary); font-size: 12px; }
 
 
 .identityName { color: var(--dsw-alias-label-primary); }

@@ -111,6 +111,7 @@ describe('read-only fork authorization', () => {
     expect(ceiling.readOnly).toBe(true)
     expect(ceiling.allowedTools).toEqual([
       'read', 'read_image', 'glob', 'grep', 'present', 'todo_write', 'skill', 'web_search', 'web_fetch',
+      'run_code',
     ])
     expect(WRITE_FORK_CEILING.allowedTools).toEqual([...ceiling.allowedTools, 'edit', 'write'])
     // A ceiling that can be edited is not a ceiling: these are refused at the seam, not configured.
