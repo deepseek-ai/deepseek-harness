@@ -109,7 +109,7 @@ export function registerListSubagentModels(
   ctx.tools.register(defineTool({
     name: 'list_subagent_models',
     description:
-      'Inspect the subagent routes this Session authorizes. No arguments: authorized providers. '
+      'Inspect the routes available for explicit subagent model selection. No arguments: authorized providers. '
       + '`provider`: that provider\'s authorized models. `provider` + `model`: that model and its reasoning efforts. '
       + 'Query when choosing an explicit child route or reasoning effort. '
       + 'Omit optional fields rather than sending empty strings.',
