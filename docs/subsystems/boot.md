@@ -195,6 +195,33 @@ async reconcileProfile(requiredIds: readonly string[] = []): Promise<ProfileReco
 
 Source: [`packages/boot/hmr/src/index.ts`](../../packages/boot/hmr/src/index.ts)
 
+<a id="ctxmcpaccounts--mcpaccounts"></a>
+
+### `ctx.mcpAccounts` — `McpAccounts`
+
+Holds the registered accounts and serves them, with their servers' manager views, to the Plugins page.
+
+```ts cordis-catalog
+/**
+ * Show one account on the Plugins page for as long as the returned disposer has not run.
+ * @param registration - the server name, the bundle package, and the connector's text.
+ * @returns an idempotent disposer that withdraws the account.
+ * @throws when another account already uses the package or the server.
+ */
+register(registration: McpAccountRegistration): () => void
+
+/**
+ * Follow every registered account with the manager's view of its server.
+ * @param signal - the Client's observation lifetime; disposal also ends the stream.
+ * @returns the accounts once the manager lists its servers, then after each change of either, coalescing changes that
+ *   arrive before the next read; ends with the manager's stream.
+ * @throws what the manager's stream throws.
+ */
+@Remote({ mode: 'stream' }) async *watch(signal: AbortSignal): AsyncIterable<McpAccountsView>
+```
+
+Source: [`packages/client/ui-mcp-account/src/index.ts`](../../packages/client/ui-mcp-account/src/index.ts)
+
 <a id="ctxpluginmanager--pluginmanager"></a>
 
 ### `ctx.pluginManager` — `PluginManager`

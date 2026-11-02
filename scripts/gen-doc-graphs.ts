@@ -713,6 +713,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Reconciles mcp-client instances against its volatile servers configuration, aggregates their connection statuses, and serves restart and probe to management surfaces.',
   },
   {
+    key: 'mcpAccounts',
+    pkg: 'client-ui-mcp-account',
+    title: 'MCP connector accounts on the Plugins page',
+    mode: 'service',
+    note: 'Holds the accounts MCP connector plugins register and serves them, with the manager\'s view of each server, to the Plugins page through one Remote; authorization runs through the manager.',
+  },
+  {
     key: 'schedule',
     pkg: 'schedule',
     title: 'Host scheduled messages',

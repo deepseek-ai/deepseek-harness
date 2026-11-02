@@ -424,8 +424,9 @@
     - id: ui-message-feedback
       name: '@deepseek-ai/dsh-client-ui-message-feedback'
 
-    # Account section, title tag, activation guidance, and notices that
-    # connector plugins register for their MCP servers on the Plugins page.
+    # MCP connector plugins register their OAuth accounts with the `mcpAccounts`
+    # registry; the Plugins page shows each account's section, title tag,
+    # activation guidance, and notices through the `mcpAccounts` Remote.
     - id: ui-mcp-account
       name: '@deepseek-ai/dsh-client-ui-mcp-account'
 

@@ -370,6 +370,9 @@ export default defineConfig({
         // The forge panel entry imports its generated Remote contribution, which exists only in lib;
         // forge-panel.e2e.ts exercises the built entry, while source tests cover mountForgePanel.
         'packages/experimental/client-ui-forge/src/client/index.ts',
+        // The MCP account entry imports its generated Remote contribution, which exists only in lib;
+        // built Web runs load it with the Web app, while source tests cover mountMcpAccounts.
+        'packages/client/ui-mcp-account/src/client/index.ts',
         // Slash/command/input round: per-file gaps deferred with the same
         // client-lane debt. TODO(gui): cover and remove with the lane above.
         'packages/client/ui-commands/src/index.ts',

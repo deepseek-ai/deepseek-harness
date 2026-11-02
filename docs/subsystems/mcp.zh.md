@@ -23,7 +23,7 @@
 
 MCP 服务器需要主动配置。在目标 Cordis 作用域中，为每台服务器配置一个 `@deepseek-ai/dsh-mcp-client` 条目。每个随附 profile 都提供[工具注册表](tools.zh.md)，并统一挂载共享资源服务一次；用户只需配置客户端条目。调用方没有可见的已配置服务器时，在 native 或 PTC 模式下都不会获得 MCP 提示词文本或工具。
 
-Web 与 Desktop profile 还统一挂载一次 [MCP 服务器管理器](../../packages/mcp/mcp-manager/README.zh.md)。它运行通过 Settings 配置的服务器，以及已安装插件在自身生命周期内注册的服务器，并向 Remote 客户端提供它们的状态、重启与探测操作。注册 OAuth 服务器的插件通过 [`ui-mcp-account`](../../packages/client/ui-mcp-account/README.zh.md) 在**插件**页面显示账号。
+Web 与 Desktop profile 还统一挂载一次 [MCP 服务器管理器](../../packages/mcp/mcp-manager/README.zh.md)。它运行通过 Settings 配置的服务器，以及已安装插件在自身生命周期内注册的服务器，并向 Remote 客户端提供它们的状态、重启与探测操作。注册 OAuth 服务器的插件通过 [`ui-mcp-account`](../../packages/client/ui-mcp-account/README.zh.md) 的 `ctx.mcpAccounts` 注册账号，使其显示在**插件**页面上。
 
 | 选择 | 配置维护位置 |
 |---|---|
