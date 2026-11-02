@@ -34,7 +34,7 @@ Kit 缺失时降级，而不是加载失败。转换服务照常注册，以代�
 
 ## 影响
 
-没有内置环境的普通 Web 和 SDK 会话会列出四个 Office 技能，首个上下文因此增加它们的摘要。没有 Kit 的部署看到的是 `unavailable` 预览和报告 Kit 缺失的 `office` 工具，而不是启动失败；加载技能时不检查 Kit；之后安装的 Kit 无需重新加载提供方即可用于转换。外部组合需从 `office-to-pdf` 配置行、`ctx.officeToPdf` 和 `officeToPdf/*` Remote 方法迁移到 `office-kit` 包。
+没有内置环境的普通 Web 和 SDK 会话会列出四个 Office 技能，首个上下文因此增加它们的摘要。没有 Kit 的部署看到的是 `unavailable` 预览和报告 Kit 缺失的 `office` 工具，而不是启动失败；加载技能时不检查 Kit；之后安装的 Kit 无需重新加载提供方即可用于转换。外部组合按[升级指南](../../../../docs/upgrade-guide/v0.2.2-alpha.2/office-kit-package/guide.zh.md)从 `office-to-pdf` 配置行、`ctx.officeToPdf` 和 `officeToPdf/*` Remote 方法迁移到 `office-kit` 包。
 
 从 Desktop 内置终端启动的进程会继承 `DSH_BUNDLED_PRIMARY_RUNTIME`，因此 SDK 使用其内置环境。Desktop 壳不发布 Kit 位置；子应用自行解析自己的 Kit。
 
