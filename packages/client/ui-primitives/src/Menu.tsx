@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode, SyntheticEvent } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode, RefObject, SyntheticEvent } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import { IconCheckOutlineRegular } from './icons/index.tsx'
-import { useAnchoredPosition } from './useAnchoredPosition.ts'
 import { usePointerGrace } from './pointer-grace.ts'
 import { isBehindModal } from './useModalLayer.ts'
 import { observeComposition } from './keyboard-composition.ts'
@@ -152,9 +151,6 @@ function iconColumns(entries: readonly MenuEntry[], contextual: boolean): Readon
   return aligned
 }
 
-/** Unplaced portal list: hidden but laid out at a fixed origin so offsetWidth/offsetHeight are real. */
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
-
 /**
  * Render an anchored dropdown menu. While the list is open its keys mirror the
  * composer's: Tab settles the focused row — from the trigger, Tab enters the
@@ -178,8 +174,8 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * @param props.align - list alignment against the anchor (default 'start').
  * @param props.side - open below (`bottom`, default) or above (`top`) the anchor.
  * @param props.portal - render the list into document.body, fixed-positioned
- * synchronously (follows movement, resizing, and browser zoom while open)
- * and clamped inside the visual viewport. Use when an ancestor's overflow clipping would crop the
+ * with CSS anchor positioning; it follows browser zoom and may exceed the
+ * visual viewport. Use when an ancestor's overflow clipping would crop the
  * in-place list; default false keeps the pure-CSS in-place behavior.
  * @param props.closeOnPointerLeave - close the list once the pointer has left
  * both trigger and list for the pointer grace (default false keeps it open
@@ -187,12 +183,8 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * gap and a brief overshoot survivable; coming back cancels the close.
  * @param props.dense - reduce vertical row spacing without changing the standard typography or card width.
  * @param props.compact - use reduced menu typography and spacing.
- * @param props.getAnchorRect - portal mode only: supply the anchor rect
- * directly (e.g. from a host-owned trigger button) instead of measuring the
- * Menu's own wrapper span. Required when the wrapper isn't itself laid out at
- * the trigger (render-prop anchors, effect-positioned proxies — measuring the
- * wrapper there races the host's layout effects). Called while tracking the
- * anchor and on scroll/resize; return null to defer placement.
+ * @param props.anchorRef - external element used as the CSS anchor in portal mode.
+ * @param props.anchorPoint - client viewport coordinates captured when a context menu opens.
  * @param props.minWidthFromAnchor - in portal mode, keep the menu at least as wide as its anchor, bounded by viewport margins.
  * @param props.footer - rows pinned below the scrolling items area, separated
  * by a hairline; contextual menus reuse an explicit leading separator. These rows stay visible while the items above scroll.
@@ -210,7 +202,7 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * document.body outside the owner's DOM subtree.
  * @returns anchor wrapper with the conditional list.
  */
-export function Menu({ open, anchor, items = [], children, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, autoFocus = false, selection = 'check', getAnchorRect, minWidthFromAnchor = false, footer, className, listClassName, contextual = false, exiting, returnFocus }: {
+export function Menu({ open, anchor, items = [], children, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, autoFocus = false, selection = 'check', anchorRef, anchorPoint, minWidthFromAnchor = false, footer, className, listClassName, contextual = false, exiting, returnFocus }: {
   open: boolean
   /** Pointer-positioned popup: cursor clearance, grouped icons, and context gestures. */
   contextual?: boolean
@@ -234,7 +226,9 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   dense?: boolean
   compact?: boolean
   selection?: 'check' | 'fill'
-  getAnchorRect?: () => DOMRect | null
+  anchorRef?: RefObject<HTMLElement | null> | undefined
+  /** Client coordinates captured for this opening; Safari offsets are applied once. */
+  anchorPoint?: { readonly x: number; readonly y: number } | undefined
   minWidthFromAnchor?: boolean
   className?: string | undefined
   listClassName?: string | undefined
@@ -242,6 +236,17 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   const rootRef = useRef<HTMLSpanElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const menuId = useId()
+  const pointX = anchorPoint?.x
+  const pointY = anchorPoint?.y
+  const point = useMemo(() => {
+    if (pointX === undefined || pointY === undefined) return undefined
+    // WebKit reports client coordinates from the visual origin; fixed CSS uses
+    // the layout origin. Subsequent panning must not move this captured point.
+    const visualOrigin = open && typeof window.CSS !== 'undefined'
+      && window.CSS.supports('-webkit-backdrop-filter', 'none')
+    const viewport = visualOrigin ? window.visualViewport : undefined
+    return { x: pointX + (viewport?.offsetLeft ?? 0), y: pointY + (viewport?.offsetTop ?? 0) }
+  }, [open, pointX, pointY])
   useLayoutEffect(() => {
     const trigger = returnFocus?.()
     if (!open || !contextual || trigger == null) return
@@ -270,7 +275,9 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
    * @param navigation - whether explicit keyboard traversal should retain its focus indicator.
    */
   const refocusAnchor = (navigation = false): void => {
-    const trigger = returnFocus?.() ?? triggerRef.current
+    const remembered = triggerRef.current
+    const trigger = returnFocus?.()
+      ?? (anchorRef === undefined || anchorRef.current?.contains(remembered) === true ? remembered : anchorRef.current)
     const target = trigger !== null && document.contains(trigger) && !(trigger as HTMLButtonElement).disabled
       ? trigger : rootRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')
     if (target == null) return
@@ -300,30 +307,36 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null)
   const close = useRef(onClose)
   close.current = onClose
-  // Keep the dismissal fade at the last interactive anchor position.
-  const lastAnchorRect = useRef<DOMRect | null>(null)
-  const readAnchor = useCallback(() => {
-    const anchorElement = returnFocus?.() ?? rootRef.current
-    if (anchorElement?.closest('[inert], [hidden]') != null) {
-      if (exitingRef.current === undefined) close.current()
-      return lastAnchorRect.current
-    }
-    lastAnchorRect.current = getAnchorRect === undefined ? rootRef.current?.getBoundingClientRect() ?? null : getAnchorRect()
-    return lastAnchorRect.current
-  }, [getAnchorRect, returnFocus])
-  const fixedPos = useAnchoredPosition({
-    open: open && portal,
-    anchorRef: rootRef,
-    panelRef: listRef,
-    side,
-    align,
-    gap: 4,
-    margin: 12,
-    frameClearance: !contextual,
-    minWidthFromAnchor,
-    getAnchorRect: readAnchor,
+  const anchorName = `--dsh-menu-trigger-${menuId.replaceAll(':', '')}`
+  const [externalAnchor, setExternalAnchor] = useState<HTMLElement | null>(null)
+  const positioned = !portal || anchorRef === undefined || externalAnchor !== null
+  useLayoutEffect(() => {
+    if (!open || !portal || anchorRef === undefined) return
+    const element = anchorRef.current
+    setExternalAnchor(element)
+    if (element === null) return
+    const previous = element.style.getPropertyValue('anchor-name')
+    const priority = element.style.getPropertyPriority('anchor-name')
+    element.style.setProperty('anchor-name', anchorName)
+    return () => { element.style.setProperty('anchor-name', previous, priority) }
   })
-  const positioned = !portal || fixedPos !== null
+  useEffect(() => {
+    if (!open || !portal || exiting !== undefined) return
+    const element = returnFocus?.() ?? (anchorRef === undefined ? rootRef.current : externalAnchor)
+    if (element == null) return
+    let dismissed = false
+    const check = (): void => {
+      if (dismissed || (element.isConnected && element.closest('[inert], [hidden]') === null)) return
+      dismissed = true
+      close.current()
+    }
+    const observer = new MutationObserver(check)
+    observer.observe(element.ownerDocument.documentElement, {
+      subtree: true, childList: true, attributes: true, attributeFilter: ['inert', 'hidden'],
+    })
+    check()
+    return () => { observer.disconnect() }
+  }, [open, portal, exiting, anchorRef, externalAnchor, returnFocus])
   const { arm: armClose, cancel: cancelClose } = usePointerGrace(onClose)
 
   // Opening remembers where the keyboard was, so closing can hand it back to
@@ -333,17 +346,18 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   useEffect(() => {
     if (!open) return
     const active = document.activeElement
-    triggerRef.current = active instanceof HTMLElement && (getAnchorRect !== undefined || rootRef.current?.contains(active) === true)
+    triggerRef.current = active instanceof HTMLElement
+      && (anchorRef?.current?.contains(active) === true || anchorPoint !== undefined || rootRef.current?.contains(active) === true)
       ? active : null
   }, [open])
 
   useEffect(() => {
-    if (!open || exiting !== undefined || !autoFocus || !positioned
+    if (!open || !positioned || exiting !== undefined || !autoFocus
       || listRef.current?.contains(document.activeElement)) return
     const first = listRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')
     walkIndex.current = first === undefined || first === null ? null : 0
     if (first != null) focusWithoutRing(first)
-  }, [open, autoFocus, items.length, footer?.length, positioned, exiting])
+  }, [open, autoFocus, items.length, footer?.length, exiting, positioned])
 
   useEffect(() => {
     if (!open || exiting !== undefined) {
@@ -355,7 +369,7 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
     const onPointerDown = (e: PointerEvent) => {
       if (!(e.target instanceof Node) || (contextual && e.button === 2)) return
       // The portaled list is outside the anchor subtree; check both.
-      if (rootRef.current?.contains(e.target) === true) return
+      if (rootRef.current?.contains(e.target) === true || anchorRef?.current?.contains(e.target) === true) return
       if (listRef.current?.contains(e.target) === true) return
       onClose()
     }
@@ -366,7 +380,8 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
       // row or sits on its anchor region.
       const focused = document.activeElement
       const insideList = listRef.current?.contains(focused) === true
-      const anchored = focused === returnFocus?.() || rootRef.current?.contains(focused) === true || insideList
+      const anchored = focused === returnFocus?.() || anchorRef?.current?.contains(focused) === true
+        || rootRef.current?.contains(focused) === true || insideList
       if (e.key === 'Escape' && !e.shiftKey) {
         e.preventDefault()
         if (e.repeat) return
@@ -457,7 +472,7 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
       document.removeEventListener('keydown', onEscape, true)
       window.removeEventListener('blur', onWindowBlur)
     }
-  }, [open, onClose, autoFocus, contextual, exiting])
+  }, [open, onClose, autoFocus, contextual, exiting, anchorRef, returnFocus])
 
   useLayoutEffect(() => {
     if (exiting === 'dismiss' && listRef.current?.contains(document.activeElement)) refocusAnchor()
@@ -554,12 +569,14 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
     setOpenSubmenuId(null)
   }
 
-  // Portal lists stay hidden until their first synchronous measurement.
-  const list = open && (
+  const list = open && positioned && (
     <MenuSurface compact={compact} id={contextual ? menuId : undefined}
       ref={listRef}
       className={clsx(css.list, listClassName, dense && css.denseList, compact && css.compactList, scrollable && css.scrollable, portal && css.portal, side === 'top' && !portal && css.sideTop, align === 'end' && !portal && css.alignEnd)}
-      style={portal ? fixedPos ?? MEASURE_STYLE : undefined}
+      style={portal ? { positionAnchor: anchorName } : undefined}
+      data-anchor-side={portal ? side : undefined}
+      data-anchor-align={portal ? align : undefined}
+      data-match-anchor-width={portal && minWidthFromAnchor ? '' : undefined}
       role={exiting === undefined ? 'menu' : undefined}
       aria-hidden={exiting === undefined ? undefined : true}
       data-context-menu={contextual ? '' : undefined}
@@ -601,6 +618,10 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
     <span
       ref={rootRef}
       className={clsx(css.root, className)}
+      data-menu-point-anchor={point === undefined ? undefined : ''}
+      style={{ anchorName: anchorRef === undefined ? anchorName : undefined, ...(point === undefined ? {} : {
+        position: 'fixed', left: point.x, top: point.y, width: 0, height: 0,
+      }) }}
       onPointerEnter={closeOnPointerLeave ? cancelClose : undefined}
       onPointerLeave={closeOnPointerLeave ? () => { if (open) armClose() } : undefined}
     >

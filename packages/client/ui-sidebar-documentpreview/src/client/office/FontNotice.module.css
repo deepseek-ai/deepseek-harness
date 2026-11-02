@@ -30,7 +30,7 @@
   z-index: 100;
   box-sizing: border-box;
   width: min(340px, calc(100vw - 24px));
-  max-height: min(calc(100dvh - 24px), var(--dsh-anchored-max-height, 100vh));
+  max-height: min(calc(100dvh - 24px));
   padding: 16px;
   overflow: auto;
   color: var(--dsw-alias-label-primary);
@@ -40,7 +40,7 @@
   box-shadow: var(--dsw-elevation-prominent);
   font-size: 13px;
   line-height: 1.6;
-  max-width: var(--dsh-anchored-max-width, none);
+  max-width: calc(100vw - 24px);
 }
 
 .panelHeader {
@@ -77,4 +77,34 @@
 .fonts li {
   padding: 8px 0;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* CSS keeps the panel attached while the page zooms; only the layout viewport constrains its size. */
+.panel {
+  position-area: bottom span-right;
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --dsh-fonts-window, --dsh-fonts-viewport;
+  align-self: start;
+  justify-self: start;
+  height: fit-content;
+  min-height: 0;
+  margin: 8px 0;
+}
+
+@position-try --dsh-fonts-window {
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 8px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe start;
+}
+
+@position-try --dsh-fonts-viewport {
+  position-area: none;
+  inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe start;
 }

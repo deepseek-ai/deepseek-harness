@@ -1,55 +1,31 @@
-// @vitest-environment jsdom
-/** Portal menus keep the desktop frame's top clearance without leaving a gap below an anchor inside it. */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
-import { Menu } from '../src/Menu.tsx'
+/** The window fallback reserves desktop chrome while direct anchor placement keeps its normal gap. */
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
 
-const root = document.documentElement
-let prior = ''
-
-beforeEach(() => {
-  prior = root.style.getPropertyValue('--dsh-frame-top-clearance')
-  root.style.setProperty('--dsh-frame-top-clearance', '48px')
-})
-
-afterEach(() => {
-  cleanup()
-  vi.restoreAllMocks()
-  if (prior === '') root.style.removeProperty('--dsh-frame-top-clearance')
-  else root.style.setProperty('--dsh-frame-top-clearance', prior)
-})
-
-/**
- * Open an 80px-tall portal menu from an anchor with the stated rect.
- * @param anchor - the anchor rect in viewport coordinates.
- * @param side - which anchor edge the menu opens from.
- * @returns the render result.
- */
-function openMenu(anchor: DOMRect, side: 'top' | 'bottom') {
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(anchor)
-  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(120)
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(80)
-  return render(<Menu open portal side={side} anchor={<button>Open</button>} items={[{ id: 'one', label: 'One' }]} onClose={vi.fn()} />)
-}
+const css = readFileSync(new URL('../src/Menu.module.css', import.meta.url), 'utf8')
 
 describe('Menu top clearance', () => {
-  it('opens directly below an anchor that sits inside the top strip', () => {
-    const view = openMenu(new DOMRect(300, 14, 18, 22), 'bottom')
-    expect(view.getByRole('menu').style.top).toBe('40px')
+  it('uses the frame overlay inset when no anchor-side placement fits', () => {
+    const fallback = /@position-try --dsh-menu-window\s*\{([^}]+)\}/.exec(css)?.[1]
+    expect(fallback).toBeDefined()
+    expect(fallback).toMatch(/top:\s*var\(--dsh-menu-window-top\)/)
+    expect(css).toMatch(/\.portal\s*\{[^}]*--dsh-menu-window-top:\s*max\(12px, var\(--dsh-frame-overlay-top, 12px\)\)/)
+    expect(fallback).toMatch(/bottom:\s*12px/)
   })
 
-  it('keeps a menu that does not fit above its anchor below the top strip', () => {
-    const view = openMenu(new DOMRect(300, 100, 18, 22), 'top')
-    expect(view.getByRole('menu').style.top).toBe('68px')
+  it('starts direct placement at the anchor with the normal four-pixel gap', () => {
+    const portal = /\.portal\s*\{([^}]+)\}/.exec(css)?.[1]
+    expect(portal).toBeDefined()
+    expect(portal).toMatch(/position-area:\s*bottom span-right/)
+    expect(portal).toMatch(/margin:\s*4px 0 0/)
+    expect(portal).toMatch(/position-try-fallbacks:[^;]*flip-block[^;]*--dsh-menu-window/)
   })
 
-  it('places a menu that does not fit above an anchor inside the top strip directly below it', () => {
-    const view = openMenu(new DOMRect(300, 14, 18, 22), 'top')
-    expect(view.getByRole('menu').style.top).toBe('40px')
-  })
-
-  it('keeps the top strip clear when the anchor has scrolled above the viewport', () => {
-    const view = openMenu(new DOMRect(300, -30, 18, 22), 'bottom')
-    expect(view.getByRole('menu').style.top).toBe('68px')
+  it('keeps pointer-menu height independent of desktop frame clearance', () => {
+    const contextual = /\.list\[data-context-menu\]\.scrollable\s*\{([^}]+)\}/.exec(css)?.[1]
+    expect(contextual).toBeDefined()
+    expect(contextual).toContain('calc(100dvh - 24px)')
+    expect(contextual).not.toContain('--dsh-frame-overlay-top')
+    expect(css).toMatch(/\.portal\[data-context-menu\]\s*\{\s*--dsh-menu-window-top:\s*12px;/)
   })
 })

@@ -811,7 +811,7 @@
    recent choices stay visible without letting the global list dominate the detail. */
 .zoneMenu.zoneMenu {
   height: min(420px, calc(100dvh - 48px));
-  max-height: min(420px, calc(100dvh - 48px), var(--dsh-anchored-max-height, 100dvh));
+  max-height: min(420px, calc(100dvh - 48px));
 }
 
 /* A stronger rule makes the unlabeled recent block read as a distinct section. */
