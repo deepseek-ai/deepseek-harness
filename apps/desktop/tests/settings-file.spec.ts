@@ -41,7 +41,7 @@ it.each([
   const result = await file.initialize()
   expect(result).toMatchObject({ kind: 'error', error: { problem: { kind: 'invalid', reason }, path: file.path } })
   expect(JSON.stringify(result)).not.toContain('secret-value')
-  await expect(file.saveUpdates({ channel: 'latest' })).rejects.toMatchObject({ problem: { kind: 'invalid', reason } })
+  await expect(file.saveUpdates({ channel: 'stable' })).rejects.toMatchObject({ problem: { kind: 'invalid', reason } })
   expect(await readFile(file.path, 'utf8')).toBe(raw)
 })
 
@@ -52,7 +52,7 @@ it('keeps an invalid channel independent from the popup preference and repairs o
     allowTestAuthPopupWindow: { kind: 'valid', value: true },
   } })
   expect((await readDesktopSettings(root)).updates.allowTestAuthPopupWindow).toBe(true)
-  expect(await new DesktopUpdateSettings(root, 'latest').load()).toMatchObject({ kind: 'error' })
+  expect(await new DesktopUpdateSettings(root, 'stable').load()).toMatchObject({ kind: 'error' })
   await file.saveUpdates({ channel: 'nightly' })
   expect(JSON.parse(await readFile(file.path, 'utf8'))).toEqual({ other: [1], updates: {
     channel: 'nightly', allowTestAuthPopupWindow: true, future: { x: 2 },
@@ -63,12 +63,12 @@ it('keeps a valid channel usable when the popup preference is invalid', async ()
   const { root, file } = await fixture('{"updates":{"channel":"nightly","allowTestAuthPopupWindow":"bad"}}')
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   expect((await readDesktopSettings(root)).updates.allowTestAuthPopupWindow).toBe(false)
-  expect(await new DesktopUpdateSettings(root, 'latest').load()).toEqual({ kind: 'ready', channel: 'nightly' })
-  await file.saveUpdates({ channel: 'latest' })
-  expect(JSON.parse(await readFile(file.path, 'utf8'))).toEqual({ updates: { channel: 'latest', allowTestAuthPopupWindow: 'bad' } })
+  expect(await new DesktopUpdateSettings(root, 'stable').load()).toEqual({ kind: 'ready', channel: 'nightly' })
+  await file.saveUpdates({ channel: 'stable' })
+  expect(JSON.parse(await readFile(file.path, 'utf8'))).toEqual({ updates: { channel: 'stable', allowTestAuthPopupWindow: 'bad' } })
   await file.saveUpdates({ allowTestAuthPopupWindow: true })
   expect(await file.read()).toMatchObject({ kind: 'ready', fields: {
-    allowTestAuthPopupWindow: { kind: 'valid', value: true }, channel: { kind: 'valid', value: 'latest' },
+    allowTestAuthPopupWindow: { kind: 'valid', value: true }, channel: { kind: 'valid', value: 'stable' },
   } })
 })
 
@@ -83,8 +83,8 @@ it('serializes initializers and patches from separate storage instances without 
   const { root, file } = await fixture()
   const other = new DesktopSettingsFile(root)
   await Promise.all([file.initialize(), other.initialize()])
-  await Promise.all([file.saveUpdates({ channel: 'latest' }), other.saveUpdates({ allowTestAuthPopupWindow: true })])
-  expect(JSON.parse(await readFile(file.path, 'utf8'))).toEqual({ updates: { channel: 'latest', allowTestAuthPopupWindow: true } })
+  await Promise.all([file.saveUpdates({ channel: 'stable' }), other.saveUpdates({ allowTestAuthPopupWindow: true })])
+  expect(JSON.parse(await readFile(file.path, 'utf8'))).toEqual({ updates: { channel: 'stable', allowTestAuthPopupWindow: true } })
   await expect(fs.access(`${file.path}.lock`)).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
@@ -103,7 +103,7 @@ it('preserves a file created by an external writer during exclusive initializati
 it('reports preparation failure as unchanged and does not create a file', async () => {
   const { file } = await fixture()
   vi.spyOn(fs, 'mkdir').mockRejectedValue(Object.assign(new Error('denied'), { code: 'EACCES' }))
-  await expect(file.saveUpdates({ channel: 'latest' })).rejects.toMatchObject({ problem: {
+  await expect(file.saveUpdates({ channel: 'stable' })).rejects.toMatchObject({ problem: {
     kind: 'write', operation: 'save', effect: 'unchanged',
   } })
   await expect(readFile(file.path)).rejects.toMatchObject({ code: 'ENOENT' })
@@ -112,7 +112,7 @@ it('reports preparation failure as unchanged and does not create a file', async 
 it('reports uncertain write completion without reporting a successful save', async () => {
   const { file } = await fixture('{}')
   vi.spyOn(atomic, 'writeFileAtomic').mockRejectedValue(new Error('write failed'))
-  await expect(file.saveUpdates({ channel: 'latest' })).rejects.toMatchObject({ problem: {
+  await expect(file.saveUpdates({ channel: 'stable' })).rejects.toMatchObject({ problem: {
     kind: 'write', operation: 'save', effect: 'unknown',
   } })
   expect(await readFile(file.path, 'utf8')).toBe('{}')
@@ -126,13 +126,13 @@ it('reports a committed write when lock cleanup fails, without claiming rollback
     if (path === `${file.path}.lock`) throw new Error('lock cleanup failed')
     return original(path, options)
   })
-  await expect(file.saveUpdates({ channel: 'latest' })).rejects.toMatchObject({ problem: {
+  await expect(file.saveUpdates({ channel: 'stable' })).rejects.toMatchObject({ problem: {
     kind: 'write', operation: 'save', effect: 'written',
   } })
-  expect(JSON.parse(await readFile(file.path, 'utf8'))).toEqual({ updates: { channel: 'latest' } })
+  expect(JSON.parse(await readFile(file.path, 'utf8'))).toEqual({ updates: { channel: 'stable' } })
 })
 
-it.each(['nightly', 'latest'])('accepts the same channel at the IPC and file boundaries: %s', async (channel) => {
+it.each(['nightly', 'stable'])('accepts the same channel at the IPC and file boundaries: %s', async (channel) => {
   const { file } = await fixture(JSON.stringify({ updates: { channel } }))
   expect(isDesktopUpdateChannel(channel)).toBe(true)
   expect(await file.read()).toMatchObject({ kind: 'ready', fields: { channel: { kind: 'valid', value: channel } } })
@@ -160,13 +160,13 @@ it('reports a partial initialization write as uncertain and preserves it for dia
 })
 
 it('rereads fields after acquiring the writer lock instead of saving a stale snapshot', async () => {
-  const { file } = await fixture('{"updates":{"channel":"latest"}}')
+  const { file } = await fixture('{"updates":{"channel":"stable"}}')
   const started = Promise.withResolvers<undefined>()
   const release = Promise.withResolvers<undefined>()
   const holder = atomic.withFileLock(file.path, async () => {
     started.resolve(undefined)
     await release.promise
-    await writeFile(file.path, '{"updates":{"channel":"latest","future":3},"other":4}')
+    await writeFile(file.path, '{"updates":{"channel":"stable","future":3},"other":4}')
   })
   await started.promise
   const attempting = Promise.withResolvers<undefined>()

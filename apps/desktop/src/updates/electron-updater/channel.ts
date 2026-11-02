@@ -6,7 +6,7 @@ import type { AppUpdater } from 'electron-updater'
  * @param updater - Updater whose prior operations have settled.
  * @param channel - Selected distribution channel.
  */
-export function selectUpdateChannel(updater: AppUpdater, channel: 'nightly' | 'latest'): void {
+export function selectUpdateChannel(updater: AppUpdater, channel: 'nightly' | 'stable'): void {
   updater.channel = channel
   // The library channel setter enables downgrades.
   updater.allowDowngrade = false

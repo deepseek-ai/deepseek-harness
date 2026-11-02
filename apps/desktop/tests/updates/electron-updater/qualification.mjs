@@ -56,9 +56,9 @@ async function main() {
     selectUpdateChannel(target, 'nightly')
     assert.ok((await target.checkForUpdates()).updateInfo)
     assert.equal(requests.at(-1), `/nightly${process.platform === 'darwin' ? '-mac' : ''}.yml`)
-    selectUpdateChannel(target, 'latest')
+    selectUpdateChannel(target, 'stable')
     await target.checkForUpdates()
-    assert.equal(requests.at(-1), `/latest${process.platform === 'darwin' ? '-mac' : ''}.yml`)
+    assert.equal(requests.at(-1), `/stable${process.platform === 'darwin' ? '-mac' : ''}.yml`)
     assert.equal(target.allowDowngrade, false)
     assert.equal(target.allowPrerelease, false)
     version = '0.9.0'
@@ -85,7 +85,7 @@ async function main() {
     const proxy = target.server
     if (process.platform === 'darwin') assert.equal(proxy.listening, true)
     await discardDesktopUpdate(target)
-    selectUpdateChannel(target, 'latest')
+    selectUpdateChannel(target, 'stable')
     if (proxy) assert.equal(proxy.listening, false)
     assert.equal(helper.file, null)
     assert.equal(helper.packageFile, null)

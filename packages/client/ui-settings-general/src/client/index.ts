@@ -112,7 +112,7 @@ export function apply(ctx: ClientContext): void {
     ctx.effect(() => () => { channel.dispose() }, 'ui-settings-general: desktop channel')
     ctx.slots.inject('settings.general.item', () => ctx.slots.register({
       name: 'settings.general.item', id: 'desktop-update-channel', order: 95, locale: NS,
-      inject: () => ({ hooks: { channel: channel.store }, select: (value: 'nightly' | 'latest') => channel.select(value) }),
+      inject: () => ({ hooks: { channel: channel.store }, select: (value: 'nightly' | 'stable') => channel.select(value) }),
     }, DesktopChannelRow))
     ctx.slots.inject('shell.overlay', () => ctx.slots.register({
       name: 'shell.overlay', id: 'desktop-channel-toast', locale: NS,

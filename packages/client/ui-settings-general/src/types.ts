@@ -39,7 +39,7 @@ export interface DesktopUpdateView {
 }
 
 /** Shell-owned channel choices exposed through the isolated preload. */
-export type DesktopUpdateChannel = 'nightly' | 'latest'
+export type DesktopUpdateChannel = 'nightly' | 'stable'
 
 /** Current runtime selection and application status; failure never implies a successful switch. */
 export interface DesktopChannelState {

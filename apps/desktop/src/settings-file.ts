@@ -6,7 +6,7 @@ import { z } from 'zod'
 
 const preferencesSchema = z.object({
   allowTestAuthPopupWindow: z.boolean(),
-  channel: z.enum(['nightly', 'latest']),
+  channel: z.enum(['nightly', 'stable']),
 })
 const documentSchema = z.looseObject({ updates: z.looseObject({}).optional() })
 

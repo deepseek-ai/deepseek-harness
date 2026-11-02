@@ -8,7 +8,7 @@ export interface DesktopPolicyIdentity {
   readonly platform: 'win32' | 'darwin'
   readonly bundledDshVersion: string
   readonly arch: 'x64' | 'arm64'
-  readonly channel: 'nightly' | 'latest'
+  readonly channel: 'nightly' | 'stable'
 }
 
 /** Validated deployment choices; test authentication is explicitly enabled, never inferred from a redirect. */

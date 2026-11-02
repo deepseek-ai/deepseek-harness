@@ -223,8 +223,8 @@ describe('ui-settings-general apply', () => {
     const row = c.ctx.slots.entries('settings.general.item').find(row => row.options.id === 'desktop-update-channel')!
     expect(c.ctx.slots.entries('shell.overlay').some(entry => entry.options.id === 'desktop-channel-toast')).toBe(true)
     const select = row.inject!().select as DesktopChannelRowInjected['select']
-    await select('latest')
-    expect(save).toHaveBeenCalledWith('latest')
+    await select('stable')
+    expect(save).toHaveBeenCalledWith('stable')
     const toast = c.ctx.slots.entries('shell.overlay').find(entry => entry.options.id === 'desktop-channel-toast')!
     const injected = toast.inject!()
     const hooks = injected.hooks as DesktopChannelToastInjected['hooks']

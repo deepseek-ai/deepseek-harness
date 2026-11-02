@@ -324,7 +324,7 @@ describe('Host release change confirmation', () => {
 
 
 it('shows channel load errors and waits for an explicit selection to settle', async () => {
-  let state: { state?: DesktopChannelState; failed: boolean; pending?: 'latest' } = { failed: false }
+  let state: { state?: DesktopChannelState; failed: boolean; pending?: 'stable' } = { failed: false }
   const pending = Promise.withResolvers<undefined>()
   const select = vi.fn(() => pending.promise)
   const props = { ...kit, t, select, useChannel: bindSnapshotSelector(createSnapshotStore(state)) }
@@ -339,13 +339,13 @@ it('shows channel load errors and waits for an explicit selection to settle', as
   expect(control.textContent).toContain('Configuration unavailable')
   fireEvent.click(control)
   fireEvent.click(screen.getByRole('menuitem', { name: 'Stable' }))
-  expect(select).toHaveBeenCalledWith('latest')
-  state = { ...state, pending: 'latest' }
+  expect(select).toHaveBeenCalledWith('stable')
+  state = { ...state, pending: 'stable' }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
   expect(control.textContent).toBe('Stable')
   expect(control.getAttribute('aria-busy')).toBe('true')
   pending.resolve(undefined)
-  state = { failed: false, state: { channel: 'latest', packagedChannel: 'nightly', changing: false } }
+  state = { failed: false, state: { channel: 'stable', packagedChannel: 'nightly', changing: false } }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
   expect(control.textContent).toBe('Stable')
   fireEvent.click(control)
@@ -367,7 +367,7 @@ it('keeps the failure toast after Settings unmounts and rolls back the remounted
   const reply = Promise.withResolvers<DesktopChannelChangeResult>()
   const source = new DesktopChannelSource({ get: async () => state, set: () => reply.promise, subscribe: () => () => {} })
   const useChannel = bindSnapshotSelector(source.store)
-  const select = (channel: 'nightly' | 'latest') => source.select(channel)
+  const select = (channel: 'nightly' | 'stable') => source.select(channel)
   const row = render(<DesktopChannelRow {...kit} t={t} useChannel={useChannel} select={select} />)
   const toast = render(<DesktopChannelToast {...kit} t={t} useChannel={useChannel}
     dismiss={(sequence) => { source.dismissNotice(sequence) }} />)

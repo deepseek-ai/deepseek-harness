@@ -299,13 +299,13 @@ it('exposes channel choices and scoped subscriptions without exposing updater ob
   await import('../src/preload-app.ts')
   const api = electron.contextBridge.exposeInMainWorld.mock.calls.find(([name]) => name === 'dshDesktop')?.[1] as DshDesktopProductApi
   await api.updates.channels.get()
-  await api.updates.channels.set('latest')
-  expect(electron.ipcRenderer.invoke.mock.calls).toEqual([[DESKTOP_IPC.updatesChannelGet], [DESKTOP_IPC.updatesChannelSet, 'latest']])
+  await api.updates.channels.set('stable')
+  expect(electron.ipcRenderer.invoke.mock.calls).toEqual([[DESKTOP_IPC.updatesChannelGet], [DESKTOP_IPC.updatesChannelSet, 'stable']])
   const listener = vi.fn()
   const dispose = api.updates.channels.subscribe(listener)
   const handler = electron.ipcRenderer.on.mock.calls.find(([channel]) => channel === DESKTOP_IPC.updatesChannelChanged)?.[1] as
     (event: unknown, state: unknown) => void
-  const state = { channel: 'latest', packagedChannel: 'nightly', changing: false }
+  const state = { channel: 'stable', packagedChannel: 'nightly', changing: false }
   handler({}, state)
   expect(listener).toHaveBeenCalledWith(state)
   dispose()

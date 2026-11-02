@@ -39,7 +39,7 @@ describe('desktop release metadata', () => {
       nodeVersion: '24.17.0',
       pnpmVersion: '11.7.0',
     }
-    expect(() => parseDesktopRelease({ ...base, version: 'latest' })).toThrow(/invalid desktop release metadata/u)
+    expect(() => parseDesktopRelease({ ...base, version: 'stable' })).toThrow(/invalid desktop release metadata/u)
     expect(() => parseDesktopRelease({ ...base, hostProtocolVersion: 999 })).toThrow(/invalid desktop release metadata/u)
   })
 })
@@ -47,7 +47,7 @@ describe('desktop release metadata', () => {
 const coordinators: InstanceType<typeof DesktopUpdateCoordinator>[] = []
 afterEach(() => { for (const item of coordinators.splice(0)) item.dispose() })
 
-function fixture(channel: 'nightly' | 'latest' = 'nightly', version = '1.1.0-alpha.1') {
+function fixture(channel: 'nightly' | 'stable' = 'nightly', version = '1.1.0-alpha.1') {
   const events = new EventEmitter()
   const checkForUpdates = vi.fn(async () => ({
     isUpdateAvailable: true,
@@ -244,18 +244,18 @@ it.each([new DesktopUpdatePreparationError('stop-failed', 'private diagnostic'),
 })
 
 
-it('keeps a stable-version nightly installation on nightly and rejects prereleases on latest', async () => {
+it('keeps a stable-version nightly installation on nightly and rejects prereleases on stable', async () => {
   const nightly = fixture('nightly', '1.0.0')
   expect(nightly.updater.channel).toBe('nightly')
   expect(nightly.updater.allowPrerelease).toBe(true)
   expect((await nightly.coordinator.check()).phase).toBe('available')
   expect(nightly.updater.channel).toBe('nightly')
-  const latest = fixture('latest', '1.0.0')
-  expect(latest.updater.channel).toBe('latest')
-  expect(latest.updater.allowPrerelease).toBe(false)
-  expect(latest.updater.allowDowngrade).toBe(false)
-  expect((await latest.coordinator.check()).phase).toBe('error')
-  expect(latest.downloadUpdate).not.toHaveBeenCalled()
+  const stable = fixture('stable', '1.0.0')
+  expect(stable.updater.channel).toBe('stable')
+  expect(stable.updater.allowPrerelease).toBe(false)
+  expect(stable.updater.allowDowngrade).toBe(false)
+  expect((await stable.coordinator.check()).phase).toBe('error')
+  expect(stable.downloadUpdate).not.toHaveBeenCalled()
 })
 
 
@@ -266,9 +266,9 @@ it('retires a downloaded target and rejects its old confirmation after switching
   await f.coordinator.download('1.1.0-rc.2')
   const save = vi.fn(async () => {})
   f.checkForUpdates.mockResolvedValueOnce({ isUpdateAvailable: true, updateInfo: { version: '1.2.0' } })
-  await f.coordinator.switchChannel('latest', save)
+  await f.coordinator.switchChannel('stable', save)
   expect(save).toHaveBeenCalledOnce()
-  expect(f.coordinator.selectedChannel).toBe('latest')
+  expect(f.coordinator.selectedChannel).toBe('stable')
   expect(f.updater.allowDowngrade).toBe(false)
   expect(f.coordinator.state).toMatchObject({ phase: 'available', version: '1.2.0' })
   await f.coordinator.install('1.1.0-rc.2', revision)
@@ -279,7 +279,7 @@ it('leaves the current target intact if saving the choice fails', async () => {
   const f = fixture()
   await f.coordinator.check()
   await f.coordinator.download('1.1.0-rc.2')
-  await expect(f.coordinator.switchChannel('latest', () => Promise.reject(new Error('read only')))).rejects.toThrow('read only')
+  await expect(f.coordinator.switchChannel('stable', () => Promise.reject(new Error('read only')))).rejects.toThrow('read only')
   expect(f.coordinator.selectedChannel).toBe('nightly')
   expect(f.coordinator.state.phase).toBe('ready')
   await f.coordinator.install('1.1.0-rc.2')
@@ -294,7 +294,7 @@ it('discards a check result that belongs to the previous channel', async () => {
   const checking = f.coordinator.check()
   await started.promise
   const saved = Promise.withResolvers<undefined>()
-  const switching = f.coordinator.switchChannel('latest', async () => { saved.resolve(undefined) })
+  const switching = f.coordinator.switchChannel('stable', async () => { saved.resolve(undefined) })
   await saved.promise
   f.checkForUpdates.mockResolvedValueOnce({ isUpdateAvailable: true, updateInfo: { version: '1.2.0' } })
   checked.resolve({ isUpdateAvailable: true, updateInfo: { version: '9.0.0-alpha.1' } })
@@ -327,7 +327,7 @@ it('waits for a cancelled download before checking the new channel and ignores l
   const downloading = f.coordinator.download('1.1.0-rc.2')
   await entered.promise
   const persisted = Promise.withResolvers<undefined>()
-  const switching = f.coordinator.switchChannel('latest', async () => { persisted.resolve(undefined) })
+  const switching = f.coordinator.switchChannel('stable', async () => { persisted.resolve(undefined) })
   await persisted.promise
   await Promise.resolve()
   const count = f.states.length
@@ -351,7 +351,7 @@ it('rejects a channel switch during installation preparation without persisting 
   f.beforeRestart.mockReturnValueOnce(preparation.promise)
   const installing = f.coordinator.install('1.1.0-rc.2')
   const save = vi.fn(async () => {})
-  await expect(f.coordinator.switchChannel('latest', save)).rejects.toThrow('installation is in progress')
+  await expect(f.coordinator.switchChannel('stable', save)).rejects.toThrow('installation is in progress')
   expect(save).not.toHaveBeenCalled()
   preparation.resolve(false)
   await installing
@@ -367,7 +367,7 @@ it('does not accept a channel switch after installer handoff even if a later err
   f.events.emit('error', new Error('native updater failed after handoff'))
   expect(f.coordinator.state.phase).toBe('error')
   const save = vi.fn(async () => {})
-  await expect(f.coordinator.switchChannel('latest', save)).rejects.toThrow('installation is in progress')
+  await expect(f.coordinator.switchChannel('stable', save)).rejects.toThrow('installation is in progress')
   expect(save).not.toHaveBeenCalled()
 })
 
@@ -377,7 +377,7 @@ it('suspends updates if retiring a downloaded target fails and recovers on a lat
   await f.coordinator.download('1.1.0-rc.2')
   const clear = vi.fn().mockRejectedValueOnce(new Error('locked cache')).mockResolvedValueOnce(undefined)
   Object.assign(f.updater, { downloadedUpdateHelper: { clear } })
-  await expect(f.coordinator.switchChannel('latest', async () => {})).rejects.toThrow('locked cache')
+  await expect(f.coordinator.switchChannel('stable', async () => {})).rejects.toThrow('locked cache')
   expect(f.coordinator.configurationFailure).toBe('cleanup')
   expect(f.coordinator.state).toMatchObject({ phase: 'error', failedOperation: 'configuration' })
   const checks = f.checkForUpdates.mock.calls.length
@@ -385,7 +385,7 @@ it('suspends updates if retiring a downloaded target fails and recovers on a lat
   await expect(f.coordinator.install('1.1.0-rc.2')).rejects.toThrow('channel selection is not ready')
   expect(f.checkForUpdates).toHaveBeenCalledTimes(checks)
   expect(f.quitAndInstall).not.toHaveBeenCalled()
-  await f.coordinator.switchChannel('latest', async () => {})
+  await f.coordinator.switchChannel('stable', async () => {})
   expect(f.coordinator.configurationFailure).toBeUndefined()
 })
 
