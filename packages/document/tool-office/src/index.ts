@@ -17,7 +17,7 @@ import type { FsInfo, FsTarget } from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-subagent'
 import { OfficeKitError, OfficeSourceKey, type OfficeKit, type OfficeKitSource } from '@deepseek-ai/dsh-office-kit'
-import { assertImageInputRoute, defineTool, type GenericCallView, type ToolExecution } from '@deepseek-ai/dsh-tools'
+import { defineTool, type GenericCallView, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { checkArguments, checkOutputFormat, extensionOf, inputFamily, OUTPUT_FORMATS, type OfficeArgs, type OfficeFamily } from './formats.ts'
 import { renderFileContent, renderImagesContent, type OfficeFileValue, type OfficeRenderValue } from './content.ts'
@@ -227,16 +227,29 @@ function officeFailure(verb: string, path: string, error: unknown): unknown {
   return new Error(`cannot ${verb} "${path}": ${error.message}${hint}`, { cause: error })
 }
 
+/**
+ * Require the calling model route to declare image input. The route is the Session's latest request header
+ * configuration, falling back to the agent options; a model whose capability is unknown is refused.
+ */
+async function assertRenderRoute(ctx: Context, exec: ToolExecution, displayPath: string): Promise<void> {
+  const llm = ctx.get('llm')
+  const header = exec.agent?.session.requestHeader()?.config
+  const model = header?.model ?? exec.agent?.options.model
+  const provider = header?.provider ?? exec.agent?.options.provider
+  if (llm === undefined || provider === undefined || model === undefined) {
+    throw new Error(`cannot render "${displayPath}": the current model route could not be resolved`)
+  }
+  const { inputModalities = [] } = await llm.resolveModelInfo(provider, model, exec.signal)
+  if (!inputModalities.includes('image')) throw new Error(`cannot render "${displayPath}": model "${model}" does not accept images`)
+}
+
 async function render(
   ctx: Context, kit: OfficeKit, config: Config, exec: ToolExecution, args: OfficeArgs, target: FsTarget, source: OfficeKitSource,
 ): Promise<OfficeRenderValue> {
   const path = ctx.fs.processPath(target)
   const attachments = ctx.get('attachments')
   if (attachments === undefined) throw new Error(`cannot render "${target.displayPath}": no attachment service is mounted`)
-  await assertImageInputRoute(ctx, exec, {
-    unresolved: `cannot render "${target.displayPath}": the current model route could not be resolved`,
-    unsupported: model => `cannot render "${target.displayPath}": model "${model}" does not accept images`,
-  })
+  await assertRenderRoute(ctx, exec, target.displayPath)
   const limits = attachments.imageLimits
   let result
   try {

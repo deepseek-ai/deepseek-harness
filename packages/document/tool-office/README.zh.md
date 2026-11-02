@@ -41,7 +41,7 @@ kind: "package-reference"
 | `maxImageDimension` | `8192` | 每张图片的最大宽度和高度 |
 | `maxImageBytes` | `33554432` | 一次渲染全部图片的最大 PNG 字节数 |
 
-渲染对每个字段取其与附件存储对应图片上限（`maxImagesPerMessage`、`maxImagePixels`、`maxImageDimension`、`maxMessageImageBytes`）中的较小值，并拒绝超过存储 `maxImageBytes` 的单张图片。超出上限的选择直接失败，不会被截断。渲染要求挂载附件存储，且调用方模型路由声明支持图片输入（由 `dsh-tools` 的 `assertImageInputRoute` 检查）；其他路由在开始任何渲染工作之前就会被拒绝。
+渲染对每个字段取其与附件存储对应图片上限（`maxImagesPerMessage`、`maxImagePixels`、`maxImageDimension`、`maxMessageImageBytes`）中的较小值，并拒绝超过存储 `maxImageBytes` 的单张图片。超出上限的选择直接失败，不会被截断。渲染要求挂载附件存储，且调用方模型路由声明支持图片输入。工具从会话最近一次模型请求读取该路由，首次请求之前则读取 agent 选项；模型的输入模态不含图片或未声明时，在开始任何渲染工作之前就会被拒绝。
 
 输入相对 Session 工作目录解析，并沿用文件系统后端的读取权限，与 `read` 和 Office 预览一致，因此可以读取工作区外的文件。输入扩展名决定文档类别，`format` 决定 `convert` 和 `recalculate` 的输出格式。其结果给出 Office 套件私有[输出存储](../office-kit/README.zh.md#use-this-package)中位于 Harness 主目录下的一个文件；模型用 shell 复制它，因此文件落在哪里由 shell 的沙箱和审批决定。文件系统后端无法读取 Host 文件时（例如 SSH 工作区），`convert` 和 `recalculate` 在转换前即失败；`render` 不受影响。
 

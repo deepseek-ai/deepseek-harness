@@ -409,5 +409,4 @@ export * from './executor.ts'
 export * from './schema.ts'
 export * from './json-schema.ts'
 export * from './presentation.ts'
-export * from './image-route.ts'
 export { ToolsService as ToolRuntime }

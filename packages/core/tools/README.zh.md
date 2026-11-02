@@ -93,10 +93,6 @@ Agent 步骤的并发上限使用 [agent-loop 配置](../agent-loop/README.zh.md
 
 工具的 `projectContent` 在执行后策略之前安装执行期间准备的图文内容。策略仍可替换或阻止这些内容；`finalizeContent` 保留为策略之后的最终内容处理。
 
-### 检查图片输入
-
-`assertImageInputRoute(ctx, exec, refusals)` 供结果会向模型展示图片的工具使用，在读取文件或写入附件前拒绝调用。它先读取调用方 Session 最新的请求头路由，再读取 agent 选项，并要求 `ctx.llm.resolveModelInfo()` 声明 `image` 输入；能力未知，或缺少 agent、provider、模型或 `llm` 服务时都会拒绝。工具传入自己的 `unresolved` 文案和 `unsupported(model)` 构造函数，因此每条拒绝信息都写明该工具的操作和参数。
-
 ### Host 展示描述
 
 工具可以为 Host 本地消费方保留纯函数 `presentCall()` 与 `presentResult()` 方法。内置 Web Client 不消费这些值，而是通过 `tool.call.toolview` 选择 renderer，并从原始调用参数、结果内容、失败状态与持久 metadata 派生 card props。[Client 派生展示决策](../../../.agents/notes/implemented/architecture/2026-08-23-client-derived-tool-presentation.zh.md)负责该 transport 拆分。
@@ -126,7 +122,6 @@ Agent 步骤的并发上限使用 [agent-loop 配置](../agent-loop/README.zh.md
 - [`src/schema.ts`](src/schema.ts) — 类型化工具定义与面向模型的 schema 投影。
 - [`src/json-schema.ts`](src/json-schema.ts) — 支持的 JSON Schema 校验.
 - [`src/presentation.ts`](src/presentation.ts) — 工具卡片呈现意图.
-- [`src/image-route.ts`](src/image-route.ts) — 调用方模型路由的图片输入检查.
 
 ### 执行与取消
 

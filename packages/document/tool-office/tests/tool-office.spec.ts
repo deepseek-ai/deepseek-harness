@@ -35,10 +35,16 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR
 const generation = OfficeKitGeneration('test')
 const signal = new AbortController().signal
 
+/** Declared input modalities by model id; `legacy` declares none. */
+const MODALITIES: Partial<Record<string, readonly ('text' | 'image')[]>> = { vision: ['text', 'image'], text: ['text'] }
+
 class CatalogAdapter extends LlmAdapter {
   override listModels(): Promise<readonly LlmModelInfo[]> { return Promise.resolve([]) }
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
-    return Promise.resolve({ provider, id: model, name: model, ...model === 'vision' ? { inputModalities: ['text', 'image'] } : {} })
+    const inputModalities = MODALITIES[model]
+    return Promise.resolve({
+      provider, id: model, name: model, ...inputModalities === undefined ? {} : { inputModalities: [...inputModalities] },
+    })
   }
   /* v8 ignore next 3 -- office tests never stream */
   override stream(_options: GenerateOptions): AsyncIterable<StreamChunk> { throw new Error('unused') }
@@ -120,11 +126,11 @@ async function setup(options: SetupOptions = {}) {
 }
 
 let sessions = 0
-function agentOn(model: string | undefined): object {
+function agentOn(model: string | undefined, options: { provider?: string; model?: string } = {}): object {
   const id = SessionId(`office-session-${++sessions}`)
   const session = Session.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, cwd: dir, isSeeded: false })
   vi.spyOn(session, 'requestHeader').mockReturnValue(model === undefined ? undefined : { config: { provider: 'visual', model } })
-  return { options: {}, session }
+  return { options, session }
 }
 
 let calls = 0
@@ -209,6 +215,7 @@ describe('render', () => {
 
   it.each([
     ['a text-only model', { model: 'text' }, 'model "text" does not accept images'],
+    ['a model without declared input modalities', { model: 'legacy' }, 'model "legacy" does not accept images'],
     ['an unresolved route', { model: undefined }, 'the current model route could not be resolved'],
     ['no attachment service', { attachments: false }, 'no attachment service is mounted'],
     ['no model runtime', { llm: false }, 'the current model route could not be resolved'],
@@ -218,6 +225,25 @@ describe('render', () => {
     const result = await office(ctx, { operation: 'render', input: 'deck.pptx' }, agentOn(model))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(message)
+    expect(kit.renderImages).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the agent route when the Session has no request header', async () => {
+    const { ctx, kit } = await setup()
+    expect((await office(ctx, { operation: 'render', input: 'deck.pptx' }, agentOn(undefined, { provider: 'visual', model: 'vision' }))).isError).toBe(false)
+    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' }, agentOn(undefined, { provider: 'visual', model: 'text' }))))
+      .toBe(`Error: cannot render "${join(dir, 'deck.pptx')}": model "text" does not accept images`)
+    expect(kit.renderImages).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['no agent', null],
+    ['an agent route without a provider', { model: 'vision' }],
+    ['an agent route without a model', { provider: 'visual' }],
+  ] as const)('refuses %s as an unresolved route', async (_label, route) => {
+    const { ctx, kit } = await setup()
+    const result = await office(ctx, { operation: 'render', input: 'deck.pptx' }, route === null ? null : agentOn(undefined, route))
+    expect(text(result)).toBe(`Error: cannot render "${join(dir, 'deck.pptx')}": the current model route could not be resolved`)
     expect(kit.renderImages).not.toHaveBeenCalled()
   })
 
