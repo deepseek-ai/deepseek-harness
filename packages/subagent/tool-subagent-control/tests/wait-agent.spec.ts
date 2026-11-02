@@ -55,7 +55,7 @@ describe('wait_agent', () => {
     const assembled = await ctx.systemPrompt.assemble({ agent, scope: agent })
     expect(assembled.sections.some(section => section.name === 'subagent:policy')).toBe(false)
     expect(assembled.contexts.some(context => context.name === 'team:identity')).toBe(false)
-    expect(renderContextSnapshot(assembled)).toContain(`You are the root agent. Your agent id is ${JSON.stringify(agent.id)}.`)
+    expect(renderContextSnapshot(assembled)).toContain('You are the root agent. Your name is "lead".')
     expect(renderContextSnapshot(assembled)).not.toContain('You are a subagent delegated by agent')
     expect(ctx.tools.get('wait_agent', agent)).toBeDefined()
     expect(JSON.stringify(ctx.tools.schemas(agent))).not.toMatch(/\b(?:Team|teammate|Lead)\b/)

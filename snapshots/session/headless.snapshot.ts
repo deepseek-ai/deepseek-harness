@@ -769,7 +769,9 @@ function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   const textOf = (index: number) => results[index]!.content
     .flatMap(block => block.type === 'text' ? [block.text] : []).join('')
   expect(JSON.parse(textOf(1))).toEqual(['Service', 'Event', 'Config', 'Tool'])
-  expect(textOf(2)).toBe(`started subagent ${logs[1]!.header.id}`)
+  expect(textOf(2)).toBe('started subagent agent-1')
+  expect(events.filter(event => event.type === 'subagent/catalog').map(event => event.data))
+    .toContainEqual(expect.objectContaining({ childId: logs[1]!.header.id, name: 'agent-1' }))
   const completions = events.flatMap(event => event.type === 'user/message'
     && event.data.source.kind === 'subagent-settled' ? [{
       sender: event.data.source.senderSessionId,

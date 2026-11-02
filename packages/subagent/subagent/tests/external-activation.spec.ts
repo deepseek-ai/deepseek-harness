@@ -27,8 +27,9 @@ async function setup(start: (request: SubagentStartRequest) => Promise<SubagentR
   const controller = new AbortController()
   return {
     ctx, parent, controller,
-    start: (delivery: 'parent' | 'caller' = 'caller') => ctx.subagents.startActivation({
+    start: (delivery: 'parent' | 'caller' = 'caller', name?: string) => ctx.subagents.startActivation({
       provider: 'external', label: 'External work', signal: controller.signal, delivery,
+      ...name === undefined ? {} : { name },
       parent, prompt: [{ type: 'text', text: 'Work independently' }],
     }),
     records: () => ctx.sessionProjections.snapshot(parent.session, ['subagentCatalog']).values.subagentCatalog,
@@ -388,4 +389,29 @@ it.each(['completed', 'aborted'] as const)('reports external %s without offering
   await activation.dispose()
   expect(JSON.stringify(fixture.parent.inbox.nextTurn)).toContain(stopReason === 'completed' ? 'cannot receive follow-up messages' : 'was stopped before it finished')
   expect(JSON.stringify(fixture.parent.inbox.nextTurn)).not.toContain('send it more')
+})
+
+it('records a parent-delivered external run under its requested name', async () => {
+  const backend = execution()
+  const fixture = await setup(async () => backend.run)
+  const activation = await fixture.start('parent', 'auditor')
+  expect(activation.name).toBe('auditor')
+  expect(fixture.records()).toMatchObject([{ id: activation.childId, mode: 'external', name: 'auditor' }])
+  backend.result.resolve(completed)
+  backend.cleanup.resolve(undefined)
+  await activation.dispose()
+})
+
+it('rejects a name for a caller-delivered external run that never enters the catalog', async () => {
+  const start = vi.fn<(request: SubagentStartRequest) => Promise<SubagentRun>>()
+  const fixture = await setup(start)
+  await expect(fixture.start('caller', 'auditor')).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
+  expect(start).not.toHaveBeenCalled()
+  const backend = execution()
+  start.mockResolvedValue(backend.run)
+  const unnamed = await fixture.start('caller')
+  expect(unnamed.name).toBe(unnamed.childId)
+  backend.result.resolve(completed)
+  backend.cleanup.resolve(undefined)
+  await unnamed.dispose()
 })

@@ -208,7 +208,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const definition = defineTool({
       name: toolName,
       description: wording.description
-        + ' This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing.'
+        + ' This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing.'
         + (subagentProvider.prepareContinuable !== undefined
           ? ' Use `send_message` to steer it while running or continue its conversation after it finishes.'
           : ' This backend does not accept follow-up messages.')
@@ -226,6 +226,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           required: true,
           description: 'A short (3-5 word) description of the delegated task, for display. '
             + "Use the language of the user's current request.",
+        },
+        name: {
+          type: 'string',
+          description: 'Optional short name for the subagent, unique among the subagents you create: lower-case letters, '
+            + 'digits, and hyphens, starting with a letter, at most 32 characters. Omitted names default to agent-1, agent-2, and so on.',
         },
         prompt: {
           type: 'string',
@@ -261,10 +266,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           properties: {
             kind: { type: 'string', required: true, const: 'activation' },
             subagentId: { type: 'string', required: true },
+            name: { type: 'string', required: true },
           },
         },
-        render: (_args, value) => [{ type: 'text', text: `started subagent ${value.subagentId}` }],
-        presentationMeta: (_args, value) => ({ kind: value.kind, subagentId: value.subagentId }),
+        render: (_args, value) => [{ type: 'text', text: `started subagent ${value.name}` }],
+        presentationMeta: (_args, value) => ({ kind: value.kind, subagentId: value.subagentId, name: value.name }),
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
@@ -326,11 +332,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         const started = await ctx.subagents.startActivation({
           provider: config.provider,
           label: args.description,
+          ...args.name === undefined ? {} : { name: args.name },
           ...request,
           signal: exec.signal,
           delivery: 'parent',
         })
-        return { kind: 'activation' as const, subagentId: started.childId }
+        return { kind: 'activation' as const, subagentId: started.childId, name: started.name }
       },
     })
     const disposeTool = ctx.effect(() => {

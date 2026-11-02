@@ -316,6 +316,29 @@ describe('SubagentHeaderLineage', () => {
     expect(row.getAttribute('aria-label')).toMatch(new RegExp(`^${CHILD}`))
   })
 
+  it('shows agent names in place of Session ids while navigation keeps the Session id', () => {
+    const external = 'external-id' as SessionId
+    const input = props(catalog({
+      entries: [
+        { id: CHILD, mode: 'continuable', label: 'Review the diff', name: 'reviewer', activity: 'running' },
+        { id: GRANDCHILD, mode: 'continuable', label: '', name: 'checker', activity: 'inactive' },
+        { id: external, mode: 'external', name: 'outside', activity: 'inactive' },
+      ],
+    }), {}, { [CHILD]: { ...summary(CHILD, 1), running: true } })
+    render(<HeaderCatalog {...input} />)
+    fireEvent.click(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
+    const named = screen.getByRole('treeitem', { name: /^Review the diff reviewer/ })
+    expect(within(named).getByText('Review the diff').compareDocumentPosition(within(named).getByText('reviewer'))
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(named).queryByText(CHILD)).toBeNull()
+    const undescribed = screen.getByRole('treeitem', { name: /^checker/ })
+    expect(within(undescribed).getAllByText('checker')).toHaveLength(1)
+    expect(within(undescribed).queryByText(GRANDCHILD)).toBeNull()
+    expect(screen.getByRole('treeitem', { name: /^outside/ }).getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(named)
+    expect(input.openChild).toHaveBeenCalledExactlyOnceWith({ parentSessionId: PARENT, childSessionId: CHILD, mode: 'continuable' })
+  })
+
   it('hides an empty Team entry but keeps shared tasks and errors reachable without children', () => {
     const input = props(catalog({ entries: [] }))
     const initial = input.useSessions(state => state)
@@ -1604,6 +1627,19 @@ describe('SubagentHeaderLineage', () => {
     render(<HeaderCatalog {...input} />)
 
     expect(screen.getByRole('button', { name: `切换子智能体：${CHILD}` })).toBeTruthy()
+  })
+
+  it('names the breadcrumb by the agent name when the selected row has an empty description', () => {
+    const input = {
+      ...props(catalog({ entries: [{ id: CHILD, mode: 'continuable', label: '', name: 'reviewer', activity: 'inactive' }] }), {}, {
+        [CHILD]: { ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' as const },
+      }),
+      sessionId: CHILD,
+      lineageSessionId: CHILD,
+      displayTitle: 'summary title',
+    }
+    render(<HeaderCatalog {...input} />)
+    expect(screen.getByRole('button', { name: '切换子智能体：reviewer' }).textContent).toBe('reviewer')
   })
 
   it('keeps an ancestor switcher muted and omits its descendant count and section heading', () => {

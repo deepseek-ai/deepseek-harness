@@ -11,6 +11,7 @@ import {
 } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import {
+  catalogNames,
   establishExternalCatalogChild,
   subagentCatalogProjectionDefinition,
 } from '../src/catalog.ts'
@@ -58,12 +59,12 @@ describe('subagent catalog projection', () => {
       await ctx.plugin(SessionStore)
       const parent = ctx.sessions.create(header.id)
       const before = Date.now()
-      establishExternalCatalogChild(parent, SessionId('external'), 'External work')
+      establishExternalCatalogChild(parent, SessionId('external'), 'External work', 'agent-1')
       const events = parent.snapshotEvents()
       expect(events).toHaveLength(1)
       expect(events[0]).toMatchObject({
         type: 'subagent/catalog',
-        data: { version: 2, childId: 'external', mode: 'external', label: 'External work' },
+        data: { version: 3, childId: 'external', mode: 'external', label: 'External work', name: 'agent-1' },
       })
       const entries = subagentCatalogProjectionDefinition.wire.view(fold(events))
       expect(entries).toHaveLength(1)
@@ -191,6 +192,13 @@ describe('subagent catalog projection', () => {
     { version: 9, childId: 'child', childCreatedAt: 0, mode: 'one-shot' },
     { version: 0, childId: 'child', childCreatedAt: 0, mode: 'continuable' },
     { version: 0, childId: 'child', childCreatedAt: -1, mode: 'one-shot' },
+    { version: 3, childId: 'child', childCreatedAt: 0, mode: 'continuable', label: 'child' },
+    { version: 3, childId: 'child', childCreatedAt: 0, mode: 'continuable', label: 'child', name: 'lead' },
+    { version: 3, childId: 'child', childCreatedAt: 0, mode: 'continuable', label: 'child', name: 'Reviewer' },
+    { version: 3, childId: 'child', childCreatedAt: 0, mode: 'one-shot', name: 'reviewer' },
+    { version: 3, childId: 'child', childCreatedAt: 0, mode: 'unknown', name: 'reviewer' },
+    { version: 2, childId: 'child', childCreatedAt: 0, mode: 'external', name: 'reviewer' },
+    { version: 0, childId: 'child', childCreatedAt: 0, mode: 'continuable', label: 'child', name: 'reviewer' },
   ])('refuses to restore a catalog containing an invalid fact: %j', async (data) => {
     const ctx = new Context()
     try {
@@ -230,5 +238,28 @@ describe('external catalog membership', () => {
     const view = subagentCatalogProjectionDefinition.wire.view(restored)
     expect(subagentCatalogProjectionDefinition.wire.viewSchema.parse(view)).toEqual(view)
     expect(subagentCatalogProjectionDefinition.wire.viewSchema.safeParse([{ id: 'external', createdAt: 1, mode: 'external', external: true }]).success).toBe(false)
+  })
+})
+
+describe('named catalog membership', () => {
+  it('restores version-3 names beside unnamed historical children', () => {
+    const named: SessionEvent<'subagent/catalog'>[] = [
+      { type: 'subagent/catalog', seq: SessionSeq(1), time: 0,
+        data: { version: 3, childId: SessionId('reviewer'), childCreatedAt: 2, mode: 'continuable', label: 'Review', name: 'reviewer' } },
+      { type: 'subagent/catalog', seq: SessionSeq(2), time: 0,
+        data: { version: 3, childId: SessionId('auditor'), childCreatedAt: 3, mode: 'external', label: 'Audit', name: 'auditor' } },
+    ]
+    const state = fold([fact(0, 'historical', 1, { mode: 'continuable', label: 'Old work' }), ...named])
+    const view = subagentCatalogProjectionDefinition.wire.view(
+      subagentCatalogProjectionDefinition.stateSchema.parse(JSON.parse(JSON.stringify(state))),
+    )
+    expect(view).toEqual([
+      { id: SessionId('historical'), createdAt: 1, mode: 'continuable', label: 'Old work' },
+      { id: SessionId('reviewer'), createdAt: 2, mode: 'continuable', label: 'Review', name: 'reviewer' },
+      { id: SessionId('auditor'), createdAt: 3, mode: 'external', label: 'Audit', name: 'auditor' },
+    ])
+    expect(subagentCatalogProjectionDefinition.wire.viewSchema.parse(view)).toEqual(view)
+    expect(subagentCatalogProjectionDefinition.wire.viewSchema.safeParse([{ ...view[1], name: 'Bad name' }]).success).toBe(false)
+    expect(catalogNames(view)).toEqual(new Set(['reviewer', 'auditor']))
   })
 })

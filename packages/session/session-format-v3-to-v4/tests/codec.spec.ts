@@ -179,3 +179,24 @@ it.each([
   const data = { ...(catalog.data as SessionFormatJsonObject), ...descriptor }
   expect(() => restore([{ ...catalog, data }])).toThrow('supported versioned catalog fact')
 })
+
+it.each([
+  { version: 3, mode: 'continuable', label: 'Named', name: 'reviewer' },
+  { version: 3, mode: 'external', label: 'Named', name: 'auditor' },
+  { version: 3, mode: 'external', name: 'auditor' },
+])('admits a native named catalog fact: %j', (descriptor) => {
+  const entry = { ...catalog, data: { ...(catalog.data as SessionFormatJsonObject), ...descriptor } }
+  expect(restore([entry]).events).toEqual([entry])
+})
+
+it.each([
+  { version: 3, mode: 'continuable', label: 'Named' },
+  { version: 3, mode: 'continuable', name: 'reviewer' },
+  { version: 3, mode: 'external', label: 1, name: 'auditor' },
+  { version: 3, mode: 'one-shot', name: 'reviewer' },
+  { version: 3, mode: 'unknown', name: 'reviewer' },
+  { version: 3, mode: 'continuable', label: 'Named', name: 'reviewer', childId: 1 },
+])('rejects an invalid native named catalog fact: %j', (descriptor) => {
+  const data = { ...(catalog.data as SessionFormatJsonObject), ...descriptor }
+  expect(() => restore([{ ...catalog, data }])).toThrow('supported versioned catalog fact')
+})

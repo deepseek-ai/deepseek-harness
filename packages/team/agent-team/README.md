@@ -57,19 +57,19 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Teammates
 
-Ask the Lead to start a subagent with a `description` of its work: `subagent` starts fresh, while `subagent_fork` inherits completed turns. The returned Session id addresses the teammate; descriptions may repeat.
+Ask the Lead to start a subagent with a `description` of its work: `subagent` starts fresh, while `subagent_fork` inherits completed turns. The returned name, such as `reviewer`, addresses the teammate; pass `name` to choose it. Names are unique among one creator's children, while descriptions may repeat.
 
 Every root agent and its descendants form one Team. Task assignment accepts the root or any reachable continuable descendant discovered by the subagent runtime, at any depth. Historical roster records remain readable but grant no assignment authority.
 
 ### Messages between teammates
 
-Members use standard `list_agents` to discover the tree and `send_message` to contact another member by Session id. The subagent runtime owns routing, sender attribution, and cold restoration.
+Members use standard `list_agents` to discover the tree and `send_message` to contact another member by name. The subagent runtime owns routing, sender attribution, and cold restoration.
 
 ### Shared task board
 
 Any member can add a task with a title, details, optional dependencies on other tasks, and optional hints about which files it will touch. A task is claimable only when everything it depends on is complete.
 
-A member claims a task to start work, completes it, releases it, or reopens it. The root can reassign a task to itself or any reachable continuable descendant by Session id. Other members claim tasks themselves. Every change is compare-and-set, so stale updates cannot overwrite newer work.
+A member claims a task to start work, completes it, releases it, or reopens it. The root can reassign a task to itself or any reachable continuable descendant. Other members claim tasks themselves. Every change is compare-and-set, so stale updates cannot overwrite newer work.
 
 File hints produce warnings when two in-progress tasks plan to touch overlapping paths — they never block anything. Deleted tasks remain in history but disappear from the active list.
 
@@ -146,7 +146,7 @@ Unloading the service unregisters the projection. The retained handle remains re
 
 The `agentTeam` projection publishes non-deleted task views and any failure beside the last valid state. Historical roster and mailbox records cannot cause a task-board projection failure. A failed projection rejects task reads and mutations without appending task events. Mode selections can still be saved and applied, including disabling Team; the projection failure remains visible. Invalid mode payloads retain the last valid selection and publish a projection failure. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
 
-The [Web UI](../../client/ui-agent-team/README.md) displays tasks only. Ordinary subagent navigation owns the member list; task owner labels display Session ids.
+The [Web UI](../../client/ui-agent-team/README.md) displays tasks only. Ordinary subagent navigation owns the member list; task owner labels display the owner's full name, or its Session id when the owner has no name.
 
 </details>
 
@@ -172,7 +172,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-The model reads task views through task-tool results. Model-facing and host views identify owners by `ownerId`; stale updates report the current revision. Task updates do not end `wait_agent`; send an explicit message when a member needs to act on an update.
+The model reads task views through task-tool results. Host views and the durable task record identify owners by `ownerId`, a Session id; [task tools](../tool-agent-team/README.md) show the owner's name to the model. Stale updates report the current revision. Task updates do not end `wait_agent`; send an explicit message when a member needs to act on an update.
 
 #### Token effect
 

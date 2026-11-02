@@ -6,7 +6,7 @@
 
 import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 
-/** Known child modes and their creation labels, shared by catalog views. */
+/** Known child modes with their creation labels and names, shared by catalog views. */
 export type KnownSubagentCatalogFields =
   | {
     /** A terminal one-shot child. */
@@ -19,12 +19,16 @@ export type KnownSubagentCatalogFields =
     readonly mode: 'external'
     /** Optional durable creation label from the parent catalog. */
     readonly label?: string
+    /** Name unique among the parent's children; absent on historical entries. */
+    readonly name?: string
   }
   | {
     /** A resumable conversation. */
     readonly mode: 'continuable'
     /** Durable creation label from the parent catalog. */
     readonly label: string
+    /** Name unique among the parent's children; absent on historical entries. */
+    readonly name?: string
   }
 
 /** One current direct-child discovery row materialized from parent facts. */

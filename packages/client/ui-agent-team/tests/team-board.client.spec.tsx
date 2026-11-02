@@ -141,8 +141,8 @@ describe('TeamBoard', () => {
     const details = document.getElementById(first.getAttribute('aria-controls')!)!
     const owner = details.querySelector('[data-team-task-owner]')!
     expect(owner.tagName).toBe('P')
-    expect(owner.textContent).toBe(`${zh.owner}: ${SESSION}`)
-    expect(ownerValue()).toBe(SESSION)
+    expect(owner.textContent).toBe(`${zh.owner}: lead`)
+    expect(ownerValue()).toBe('lead')
     const paragraphs = details.querySelectorAll('p')
     expect(paragraphs).toHaveLength(2)
     expect(paragraphs[0]?.textContent).toBe(description)
@@ -179,7 +179,7 @@ describe('TeamBoard', () => {
     expect(row('Completed second').querySelector('[data-state="done"]')).toBeTruthy()
     fireEvent.click(row('Completed second'))
     expect(row('Completed second').getAttribute('aria-expanded')).toBe('true')
-    expect(ownerValue()).toBe(SESSION)
+    expect(ownerValue()).toBe('lead')
     expect(screen.getByText(task.description)).toBeTruthy()
   })
 
@@ -212,30 +212,44 @@ describe('TeamBoard', () => {
     fireEvent.click(row())
     expect(within(row()).getByRole('img', { name: zh['status.pending'] })).toBeTruthy()
     expect(row().querySelector('[data-state="idle"]')).toBeTruthy()
-    expect(ownerValue()).toBe(SESSION)
+    expect(ownerValue()).toBe('lead')
     expect(document.querySelector('[data-team-task-details]')?.children).toHaveLength(1)
     expect(document.querySelector('[data-team-task-details] p:not([data-team-task-owner])')).toBeNull()
   })
 
-  it('uses the owner id independently of catalog descriptions and Session titles', () => {
+  it('names the owner by its catalog path from the root, independently of descriptions and Session titles', () => {
     const b = bench({
       byId: { [SESSION]: summary(SESSION), [NESTED]: { ...summary(NESTED, 'Session title'), parentId: WORKER } },
       projections: {
         [SESSION]: { state: 'ready', error: null, values: {
           agentTeam: { ...team, tasks: [{ ...task, ownerId: NESTED }] },
+          subagentCatalog: [{ id: WORKER, createdAt: 0, mode: 'continuable', label: 'Worker responsibility', name: 'worker' }],
         } },
         [WORKER]: { state: 'ready', error: null, values: {
-          subagentCatalog: [{ id: NESTED, createdAt: 0, mode: 'continuable', label: 'Catalog responsibility' }],
+          subagentCatalog: [{ id: NESTED, createdAt: 0, mode: 'continuable', label: 'Catalog responsibility', name: 'checker' }],
         } },
       },
     })
     render(<TeamBoard {...b.props} />)
     fireEvent.click(row())
-    expect(ownerValue()).toBe(NESTED)
+    expect(ownerValue()).toBe('worker/checker')
     setProjectionSnapshot(b.sessions, WORKER, { state: 'ready', error: null, values: {} })
     act(() => { b.sessions.update((draft) => { draft.byId[NESTED] = { ...summary(NESTED), displayTitle: 'Display title' } }) })
     expect(ownerValue()).toBe(NESTED)
-    setProjection(b.sessions, SESSION, { ...team, tasks: [{ ...task, ownerId: WORKER }] })
+    setProjectionSnapshot(b.sessions, SESSION, { state: 'ready', error: null, values: {
+      agentTeam: { ...team, tasks: [{ ...task, ownerId: WORKER }] },
+      subagentCatalog: [{ id: WORKER, createdAt: 0, mode: 'continuable', label: 'Worker responsibility', name: 'worker' }],
+    } })
+    expect(ownerValue()).toBe('worker')
+  })
+
+  it('uses the owner Session ID when its catalog entry has no name', () => {
+    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: {
+      agentTeam: { ...team, tasks: [{ ...task, ownerId: WORKER }] },
+      subagentCatalog: [{ id: WORKER, createdAt: 0, mode: 'continuable', label: 'Historical worker' }],
+    } } } })
+    render(<TeamBoard {...b.props} />)
+    fireEvent.click(row())
     expect(ownerValue()).toBe(WORKER)
   })
 
@@ -344,8 +358,8 @@ describe('TeamBoard', () => {
     render(<TeamBoard {...b.props} t={makeTranslate(en)} />)
     expect(screen.getByRole('heading').textContent).toBe(`${en.tasks}${makeTranslate(en)('progress.active', { count: 1 })}`)
     fireEvent.click(row())
-    expect(ownerValue()).toBe(SESSION)
-    expect(document.querySelector('[data-team-task-owner]')?.textContent).toBe(`${en.owner}: ${SESSION}`)
+    expect(ownerValue()).toBe('lead')
+    expect(document.querySelector('[data-team-task-owner]')?.textContent).toBe(`${en.owner}: lead`)
     expect(screen.queryByText(TASK_1)).toBeNull()
     expect(screen.queryByText('Show more')).toBeNull()
     expect(screen.queryByText('Show less')).toBeNull()

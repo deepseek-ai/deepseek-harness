@@ -44,7 +44,7 @@ The plugin takes no configuration; mount it beside the Team domain as in the [ag
 
 A row that sets `interrupt`, `freshProvider`, or `forkProvider` does not activate, and dsh names the key in its startup warning. The [upgrade guide](../../../docs/upgrade-guide/v0.2.1-rc.2/agent-team-subagents/guide.md) maps the removed tools and keys to their replacements, and the generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-agent-team) records the empty configuration.
 
-Ask the Lead to start a subagent to review the diff, add a review task, and wait for its result. The `description` explains the subagent’s work; the returned id addresses it.
+Ask the Lead to start a subagent to review the diff, add a review task, and wait for its result. The `description` explains the subagent’s work; the returned name addresses it.
 
 ### What the model can do
 
@@ -54,7 +54,7 @@ The task tools complement the ordinary subagent controls:
 - **Wait for inbox input** — `wait_agent` belongs to `@deepseek-ai/dsh-tool-subagent-control` and remains available without this package.
 - **Create and reach teammates** — `subagent`, `subagent_fork`, `send_message`, `list_agents`, and `interrupt_agent` come from the subagent tool packages and are unchanged by this package.
 
-Task `owner` arguments and `ownerId` results use Session ids. The root may reassign to itself or any reachable continuable descendant; historical roster records grant no authority. Other agents claim ready tasks themselves. Updates enforce ownership and revision checks.
+Task `owner` arguments accept the names that `list_agents` shows: `lead`, a full name such as `reviewer/checker`, or a Session id. Task results report `owner` as that name, or as the Session id when the owner has no name; `unowned` still filters tasks without an owner. The Team service stores and authorizes `ownerId` Session ids. The root may reassign to itself or any reachable continuable descendant; historical roster records grant no authority. Other agents claim ready tasks themselves. Updates enforce ownership and revision checks.
 
 ### What success and failure look like
 
@@ -89,7 +89,7 @@ The [subagent teammates Agent Note](../../../.agents/notes/implemented/architect
 
 ### Policy and tools
 
-One plugin registration provides a dynamic `team:policy` section and four conditional task tools. Each provider reads the caller’s root Session selection, including fork children. An unavailable root disables Team tools and guidance. Tree authority comes from `ctx.subagents.rootOf(agent)`; task owners remain Session ids. Identity, discovery, communication, and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md) and remain unchanged when Team mode switches. The subagent runtime delivers final results.
+One plugin registration provides a dynamic `team:policy` section and four conditional task tools. Each provider reads the caller’s root Session selection, including fork children. An unavailable root disables Team tools and guidance. Tree authority comes from `ctx.subagents.rootOf(agent)`; task owners remain Session ids in `ctx.agentTeams`. Owner arguments resolve through `ctx.subagents.resolveName()`, which grants no authority. Results replace `ownerId` with `owner`, read from the `path` of `ctx.subagents.listDescendants()` rows. `team_task_list` and `team_task_get` read names only when a returned task has an owner; `team_task_update` reads them before its change commits, so a failed read rejects the call before the task changes. Identity, discovery, communication, and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md) and remain unchanged when Team mode switches. The subagent runtime delivers final results.
 
 ### Scoped registration and teardown
 
@@ -124,7 +124,7 @@ Every Team member's system prompt carries one `team:policy` section; the Lead an
 ##### Team policy
 
 ```markdown
-A shared task board is available in this session. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
+A shared task board is available in this session. Task owners are agent names from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
 Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
 
@@ -147,7 +147,7 @@ Every member receives the same four task schemas in the [generated tool catalog]
 
 #### Token effect
 
-The four schemas are a fixed cost per request. Tool results add compact JSON; `team_task_list` returns at most 100 tasks per page.
+The four schemas are a fixed cost per request. Tool results add compact JSON; `team_task_list` returns at most 100 tasks per page. An owner name is usually shorter than the 36-character Session id it replaces.
 
 #### KV Cache effect
 

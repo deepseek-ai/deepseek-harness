@@ -73,7 +73,7 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
         await rename(join(spec.cwd!, 'index.js'), join(spec.cwd!, 'runtime.mjs'))
         await symlink('./runtime.mjs', join(spec.cwd!, 'index.js'))
       }
-      return { childId: spec.childId!, dispose: async () => {},
+      return { childId: spec.childId!, name: 'agent-1', dispose: async () => {},
         result: Promise.resolve({ output: [], stopReason: 'completed', structured: { ready: true } }) }
     } })
     Object.assign(ctx.loader.builtins, { sessions: Sessions, projections: Projections, llm: Llm, prompt: SystemPrompt, tools: Tools,

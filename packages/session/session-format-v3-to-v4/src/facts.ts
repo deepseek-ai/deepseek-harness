@@ -84,6 +84,25 @@ export function catalogFact(value: SessionFormatJsonValue, subject = 'subagent/c
 }
 
 /**
+ * Validate an own native V4 catalog payload: a historical version or version 3,
+ * which adds the child's name and is written only by native V4 creation.
+ * @param value - native `subagent/catalog` payload.
+ * @returns validated catalog payload.
+ */
+export function nativeCatalogFact(value: SessionFormatJsonValue): SessionFormatJsonObject {
+  if (!isSessionFormatJsonObject(value) || value['version'] !== 3) return catalogFact(value)
+  if (typeof value['childId'] !== 'string'
+    || (value['mode'] !== 'continuable' && value['mode'] !== 'external')
+    || typeof value['name'] !== 'string'
+    || (value['mode'] === 'continuable' && typeof value['label'] !== 'string')
+    || (value['label'] !== undefined && typeof value['label'] !== 'string')) {
+    throw new SessionFormatError('subagent/catalog requires a supported versioned catalog fact')
+  }
+  sessionFormatCount(value['childCreatedAt'], 'catalog child creation time')
+  return value
+}
+
+/**
  * Name the child and its optional storage-owned location in a migration diagnostic.
  * @param source - validated supplemental child evidence.
  * @returns a child identity with its source path when persistence supplied one.

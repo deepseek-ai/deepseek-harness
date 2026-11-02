@@ -208,6 +208,11 @@ function isKnownLeaf(catalog: SubagentCatalogSnapshot | undefined): boolean {
   return catalog?.state === 'ready' && catalog.entries.length === 0
 }
 
+/** The agent name unique among the row's siblings, or the Session ID for entries recorded without one. */
+function entryName(entry: SubagentCatalogSnapshot['entries'][number]): string {
+  return entry.mode === 'continuable' || entry.mode === 'external' ? entry.name ?? entry.id : entry.id
+}
+
 /** Only a local child's last closed, normally completed turn receives the completed marker. */
 function completedEntry(entry: SubagentCatalogSnapshot['entries'][number], summary: SessionSummary | undefined): boolean {
   return entry.mode !== 'external' && entry.activity === 'inactive'
@@ -282,8 +287,9 @@ function CatalogRows({
           || (childCatalog.state === 'loading' && childCatalog.entries.length === 0)
         const summary = summaries[entry.id]
         const description = entry.label || summary?.title
-        const primaryLabel = description || entry.id
-        const secondaryLabel = description ? entry.id : undefined
+        const name = entryName(entry)
+        const primaryLabel = description || name
+        const secondaryLabel = description ? name : undefined
         const mode = external ? t('mode.external') : entry.mode === 'unknown' ? t('mode.unknown')
           : entry.mode === 'one-shot' ? t('mode.oneShot') : t('mode.continuable')
         const completed = completedEntry(entry, summary)
@@ -533,7 +539,7 @@ function CatalogDropdown(props: CatalogDropdownProps) {
     ? undefined
     : catalog?.entries.find(entry => entry.id === currentSessionId)
   const switcherDisplayTitle = currentEntry !== undefined
-    ? currentEntry.label || currentEntry.id
+    ? currentEntry.label || entryName(currentEntry)
     : displayTitle
   const directChildren = catalog?.entries ?? []
   const directCount = directChildren.length
