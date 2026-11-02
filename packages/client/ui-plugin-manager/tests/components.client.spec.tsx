@@ -300,30 +300,30 @@ describe('PluginManagerPage', () => {
   })
 
   it('keeps the Installed tab panel through loading and the More list out of the tabs, and returns a More plugin opened from Discover to Discover', () => {
-    const worktree = '@deepseek-ai/dsh-experimental-tool-worktree'
+    const inspector = '@deepseek-ai/dsh-experimental-inspector-profile'
     const { navigation, set } = renderTab({ status: 'loading', packages: [] }, {}, {
       'plugins.tab:discover': (_view, owner) => (
-        <button type="button" onClick={() => { (owner as PluginTabProps).openPackage(worktree) }}>Discover open</button>
+        <button type="button" onClick={() => { (owner as PluginTabProps).openPackage(inspector) }}>Discover open</button>
       ),
     }, {}, [{ id: 'discover', label: 'Discover' }])
     const installed = screen.getByRole('tab', { name: en.installedTab })
     expect(document.getElementById(installed.getAttribute('aria-controls') as string)?.getAttribute('role')).toBe('tabpanel')
     set({ status: 'ready', packages: [] })
     expect(screen.getByRole('tabpanel', { name: en.installedTab }).textContent).toBe(en.empty)
-    set({ packages: [pkg({ name: worktree, official: true, optional: true, installed: false, enabled: false })] })
+    set({ packages: [pkg({ name: inspector, official: true, optional: true, installed: false, enabled: false })] })
     act(() => { navigation.actions.setView({ kind: 'more' }) })
     expect(screen.queryByRole('tablist')).toBeNull()
     expect(screen.queryByRole('tabpanel')).toBeNull()
     act(() => { navigation.actions.setView({ kind: 'list' }) })
     fireEvent.click(screen.getByRole('tab', { name: 'Discover' }))
     fireEvent.click(screen.getByRole('button', { name: 'Discover open' }))
-    expect(document.querySelector(`[data-plugin-detail="${worktree}"]`)).not.toBeNull()
+    expect(document.querySelector(`[data-plugin-detail="${inspector}"]`)).not.toBeNull()
     // An official plugin of the More list opened from Discover returns to Discover, not to the More list.
     fireEvent.click(screen.getByRole('button', { name: en.backToList }))
     expect(navigation.getSnapshot()).toEqual({ tab: 'discover', view: { kind: 'list' } })
     fireEvent.click(screen.getByRole('tab', { name: en.installedTab }))
     act(() => { navigation.actions.setView({ kind: 'more' }) })
-    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', worktree) }))
+    fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', inspector) }))
     fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', en.moreTitle) }))
     expect(screen.getByRole('heading', { name: en.moreTitle, level: 1 })).toBeTruthy()
   })
@@ -1237,7 +1237,7 @@ describe('PluginManagerPage', () => {
         .toEqual(['more'])
       const more = document.querySelector('[data-plugin-group="more"]') as HTMLElement
       expect(within(more).getAllByRole('listitem').map(card => card.getAttribute('data-plugin-package')))
-        .toEqual([team, '@acme/new-official', '@deepseek-ai/dsh-experimental-tool-worktree', '@deepseek-ai/dsh-experimental-badge-skill-bundle', '@deepseek-ai/dsh-subagent-codex', '@deepseek-ai/dsh-subagent-claude-code'])
+        .toEqual([team, '@acme/new-official', '@deepseek-ai/dsh-experimental-badge-skill-bundle', '@deepseek-ai/dsh-subagent-codex', '@deepseek-ai/dsh-subagent-claude-code'])
       expect(document.querySelector('[data-plugin-package="dsh-better-sidebar"]')).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', team) }))
       fireEvent.click(screen.getByRole('button', { name: en.backToPackage.replace('{name}', en.moreTitle) }))
@@ -1253,6 +1253,20 @@ describe('PluginManagerPage', () => {
       fireEvent.click(within(detail).getByRole('button', { name: en.backToList }))
       expect(document.querySelector('[data-plugin-item-detail]')).toBeNull()
       expect(screen.getByRole('heading', { name: en.basicTitle })).toBeTruthy()
+    })
+
+    it.each([false, true])('shows one forge card and hides the standalone worktree card when enabled is %s', (enabled) => {
+      const forge = '@deepseek-ai/dsh-experimental-forge-bundle'
+      const worktree = '@deepseek-ai/dsh-experimental-tool-worktree'
+      renderTab({ packages: [
+        pkg({ name: forge, official: true, enabled }),
+        pkg({ name: worktree, official: true, enabled }),
+      ] })
+      expect(document.querySelectorAll(`[data-plugin-package="${forge}"]`)).toHaveLength(1)
+      expect(document.querySelector(`[data-plugin-package="${worktree}"]`)).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
+      expect(document.querySelectorAll(`[data-plugin-package="${forge}"]`)).toHaveLength(1)
+      expect(document.querySelector(`[data-plugin-package="${worktree}"]`)).toBeNull()
     })
 
     it.each([
@@ -1361,7 +1375,7 @@ describe('PluginManagerPage', () => {
     })
 
     it.each([
-      '@deepseek-ai/dsh-experimental-tool-worktree',
+      '@deepseek-ai/dsh-experimental-inspector-profile',
       '@deepseek-ai/dsh-personalized-recommendations',
     ])('pins enabled %s onto the main list and removes it when disabled', (first) => {
       const team = '@deepseek-ai/dsh-experimental-agent-team-profile'
