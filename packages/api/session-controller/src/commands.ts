@@ -308,7 +308,7 @@ export class SessionCommandController {
    * Admit one prompt after Agent and attachment validation; the Remote method
    * has already validated the content and built the durable message source.
    * @param request - Session identity, prompt content, and delivery mode.
-   * @param source - the `user-rpc` source recorded on the accepted message.
+   * @param source - caller metadata recorded on the accepted ordinary or retry user message.
    * @returns acknowledgement that the Agent accepted the prompt.
    */
   async prompt(request: SessionPromptRequest, source: MessageSource): Promise<SessionPromptValue> {
@@ -573,12 +573,7 @@ function hasPromptRequest(agent: Agent, requestId: SessionRequestId): boolean {
   if (agent.inbox.nextTurn.some(matches) || agent.inbox.nextStep.some(matches)) return true
   // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
   return agent.session.snapshotEvents().some((event) => {
-    if (event.type === 'agent/retry') {
-      const source = event.data.source
-      return 'rpcId' in source && source.rpcId === requestId
-    }
     if (event.type !== 'user/message') return false
-    const source = event.data.source
-    return source.kind === 'user' && 'rpcId' in source && source.rpcId === requestId
+    return matches(event.data)
   })
 }

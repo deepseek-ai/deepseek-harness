@@ -57,7 +57,7 @@
       "turn/start",
       "agent/inbox/spliced",
       "step/start",
-      "agent/retry",
+      "user/message",
       "assistant/message",
       "step/end",
       "turn/end"

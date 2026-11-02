@@ -111,7 +111,7 @@ it('publishes a complete-log result independently of the visible page and releas
   expect(ctx.sessionProjections.snapshot(session).values.conversationContinuation).toBe(ending)
   expect(changed.mock.calls.map(([, key, value]) => [key, value])).toEqual([['conversationContinuation', null], ['conversationContinuation', ending]])
   expect(ctx.sessionProjections.checkpoint(session).conversationContinuation)
-    .toEqual({ ver: 3, seq: ending, val: { admitted: false, failedAttempt: false, ending } })
+    .toEqual({ ver: 4, seq: ending, val: { admitted: false, failedAttempt: false, ending } })
   session.append('turn/start', { turn: 2 })
   expect(ctx.sessionProjections.snapshot(session).values.conversationContinuation).toBeNull()
   expect(changed).toHaveBeenCalledTimes(3)
@@ -127,27 +127,35 @@ it('restores valid, absent and outdated checkpoints through the registry', async
   await ctx.sessionProjections.register(definition)
   const session = ctx.sessions.create(SessionId('restored'))
   const log = events(failed('SERVER'))
-  const checkpoint = { conversationContinuation: { ver: 3, seq: SessionSeq(2), val: fold(log.slice(0, 3)) } }
+  const checkpoint = { conversationContinuation: { ver: 4, seq: SessionSeq(2), val: fold(log.slice(0, 3)) } }
   const restore = (rows: typeof checkpoint | Record<string, never>, tail: readonly SessionEvent[], base: number) =>
     ctx.sessionProjections.restore(rows, tail, SessionLogOffset(base), session.header, session.inheritedEventCount)
   expect(restore(checkpoint, log.slice(3), 3).snapshot.values.conversationContinuation).toBe(5)
   expect(restore({}, log, 0).snapshot.values.conversationContinuation).toBe(5)
-  const outdated = { conversationContinuation: { ...checkpoint.conversationContinuation, ver: 2 } }
+  const outdated = { conversationContinuation: { ...checkpoint.conversationContinuation, ver: 3 } }
   expect(restore(outdated, log, 0).snapshot.values.conversationContinuation).toBe(5)
   expect(() => restore(outdated, log.slice(3), 3)).toThrow('re-read from seq 0')
   expect(() => restore({}, log.slice(3), 3)).toThrow('re-read from seq 0')
 })
 
-it('admits retry controls independently of empty ordinary user messages', () => {
+it('admits empty retry messages while ignoring empty ordinary and non-empty retry messages', () => {
   const base = events(failed('SERVER'))
   const input = base.find(event => event.type === 'user/message')!
   const empty: SessionEvent<'user/message'> = { ...input, type: 'user/message', data: createUserMessage({
     content: [], source: { kind: 'user' },
   }) }
   expect(fold(base.map(event => event === input ? empty : event)).ending).toBeNull()
-  const retry: SessionEvent<'agent/retry'> = { type: 'agent/retry', seq: empty.seq, time: empty.time,
-    data: { turn: 1, step: 1, inputId: empty.data.id, source: { kind: 'retry' } },
+  const retry: SessionEvent<'user/message'> = { ...empty, data: createUserMessage({
+    content: [], source: { kind: 'retry', rpcId: 'retry' as import('../src/types.ts').SessionRequestId },
+  }) }
+  const nonEmpty: SessionEvent<'user/message'> = { ...retry, data: { ...retry.data,
+    content: [{ type: 'text', text: 'not an empty retry' }],
+  } }
+  expect(fold(base.map(event => event === input ? nonEmpty : event)).ending).toBeNull()
+  const replacement: SessionEvent<'user/message'> = { ...retry,
+    surfaceOp: { op: 'replace', startSeq: SessionSeq(0), endSeq: SessionSeq(1) },
   }
+  expect(fold(base.map(event => event === input ? replacement : event)).ending).toBeNull()
   expect(fold(base.map(event => event === input ? retry : event)).ending).toBe(5)
   const admitted = definition.apply(definition.init(), retry)
   expect(definition.apply(admitted, retry)).toBe(admitted)

@@ -108,8 +108,6 @@ interface Agent {
 
   /**
    * Route identified input to an inbox boundary and optionally wake the driver.
-   * A retry-source input must be empty; admission records `agent/retry`
-   * without adding a model-visible message.
    * Waking input submitted after active cancellation is queued for the next
    * turn and runs when the aborted activity converges to idle; a `disposed`
    * cancel leaves it parked. A wake submitted while already idle always opens
@@ -122,8 +120,8 @@ interface Agent {
   send(message: UserMessage, target: InboxTarget, wakeup: boolean): void
 
   /**
-   * Queue a follow-up turn and wake the driver. The item is its sole ordinary
-   * prompt, or an empty retry-source control with no model-visible message.
+   * Queue an ordinary follow-up turn and wake the driver. The item becomes the
+   * sole ordinary message of its own turn.
    * @param message - identified prompt content and the source that supplied it.
    */
   followup(message: UserMessage): void

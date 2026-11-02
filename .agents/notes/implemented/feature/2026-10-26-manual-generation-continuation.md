@@ -10,11 +10,11 @@ Users need another request after a model failure without inserting an artificial
 
 ## Decision
 
-The play action submits `content: []` through the existing Session prompt API. The API assigns `source.kind: 'retry'`. AgentLoop retains the identified inbox input and starts a new balanced turn; acceptance records `agent/retry` instead of a model-visible `user/message`. Ordinary empty user-message behavior is unchanged. The original failed turn remains closed.
+The play action submits `content: []` through the existing Session prompt API. The API assigns `source.kind: 'retry'`; unchanged AgentLoop admission records an empty `user/message` and opens a normally balanced new turn. Chat omits the empty retry node while the log retains the input. The original failed turn remains closed.
 
-The Session API owns the fixed-size `conversationContinuation` projection and shares its value with the browser. Admission requires an eligible failure, true idle ownership, and no pending human input. An accepted retry event admits the next turn, preserving eligibility if that request also fails.
+The Session API owns the fixed-size `conversationContinuation` projection and shares its value with the browser. Admission requires an eligible failure, true idle ownership, and no pending human input. An appended empty retry message admits the new turn, preserving eligibility if its request also fails.
 
-The six-code manual allowlist stays independent of provider retry policy. Non-waking injected context accompanies the request. The retry event retains request-id deduplication after the inbox input is claimed; no new Remote operation is required. An explicit control source prevents unrelated empty user inputs from changing behavior, and a separate event keeps chat rendering free of retry-specific filtering.
+The six-code manual allowlist stays independent of provider retry policy. Non-waking injected context accompanies the request. The accepted user message retains request-id deduplication after the inbox input is claimed. Reusing ordinary message admission avoids a Loop branch and a separate durable acceptance event.
 
 ## Alternatives considered
 

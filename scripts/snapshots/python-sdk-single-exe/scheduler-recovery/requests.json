@@ -97,6 +97,10 @@
               }
             ],
             "is_error": true
+          },
+          {
+            "type": "text",
+            "text": "Continue after the scheduler failure without repeating any tools."
           }
         ]
       }

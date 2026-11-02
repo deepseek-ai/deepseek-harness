@@ -9,7 +9,7 @@ kind: persistence-change
 
 ## 概述
 
-新增显式 retry 控制来源与必读 agent/retry 接受事件，关联持久 inbox 身份、轮次和步骤。
+为空 Session API 继续提示词增加 retry 消息来源；普通 user/message 记录保留输入身份和调用方元数据。
 
 ## 目录
 
@@ -28,35 +28,31 @@ baseline: false
 changes:
   - root: "event:agent/inbox/spliced"
     previous: "2026-10-25-skill-catalog-incomplete"
-    after: "a6d8c25f4b2ca2d137672a8a278ee1398df3f3cb60f5d32d8e3007c68299b664"
-    decision: same-version
-  - root: "event:agent/retry"
-    previous: null
-    after: "d8dde9629b7323b03c1c3fb0db75d6b72c73666dc0240ab7d3e41b9c0c40fc7c"
+    after: "2e0cf9dbeea369bc77843e2ec47b0ebf4542c2ac29523a64f56aab99db49f0ee"
     decision: same-version
   - root: "event:developer/message"
     previous: "2026-10-25-skill-catalog-incomplete"
-    after: "92b82e8b7bbb38b3adeb2c07eb76d0f0e0d18c1729808def7004ac2bc9baa583"
+    after: "caad8a860d58ff99ef3576bcb3e484314b1d9d7065b307d14478ec76573ebdec"
     decision: same-version
   - root: "event:session/title-llm-request"
     previous: "2026-10-25-skill-catalog-incomplete"
-    after: "fb28ad7d7aabceb5bda505cf027e0e22354d7f31757337e7e51a4b592feac172"
+    after: "eb0fc09c936ebe3d3f16e17b89143f26ae4eca3bd8277c7518bafab45a29e255"
     decision: same-version
   - root: "event:user/message"
     previous: "2026-10-25-skill-catalog-incomplete"
-    after: "c5bbcb3435908af2036df7105883e0a49c30ecc1fae4420aa5c4cf944066eff5"
+    after: "0d6dd68f18afee7bc130aeecc3bb76ee4c1ab472472c76f2f935151f9417681b"
     decision: same-version
 ```
 
 <a id="compatibility"></a>
 ## 兼容性
 
-更新后的读取方保留旧日志含义和普通空用户消息准入。旧读取方会在追加或尾部修复前拒绝新的必读 agent/retry 事件。接受前的排队控制输入仍采用现有带身份的空 UserMessage 表示；旧 Loop 可按其普通空输入行为消费，保留 inbox 身份且不增加用户文本。API 与两套 SDK 消费方同步识别重试控制输入及接受事件。保留当前 Session 格式版本；更新后的读取方可读取普通消息与重试事件混合的日志。
+retry 来源是现有空 UserMessage 表示中的生产方元数据。AgentLoop、模型历史派生与 SDK 提示词行为保持不变。旧读取方保留可扩展来源元数据，并按普通用户消息准入消费；旧界面可能显示空上下文行。更新后的读取方保留历史普通消息，Chat 仅隐藏空重试消息。现有事件判别标签与当前 Session 版本不变，不新增必读事件。
 
 <a id="verification"></a>
 ## 验证
 
-AgentLoop、Agent、Session API 与 SDK 服务端定向测试通过：91 个文件、1806 个测试，agent.ts 和 continuation.ts 的语句、分支、函数及行覆盖率均为 100%。浏览器继续回放与 TypeScript/Python SDK scheduler-recovery 回放通过；断言保留一条原始用户消息、关联重试输入身份、保留工具结果且新轮次正常闭合。当前事件与原生来源准入测试覆盖未知必读事件在不修改数据的情况下拒绝，以及保留可扩展来源元数据。构建、聚合检查和类型感知 lint 通过。doc-sync 有 42 项通过；剩余仓库引用失败来自未改动的 python/sdk/uv.lock:113 提交哈希。
+源码审查确认 AgentLoop 与 SDK 文件和 PR 基线一致。回归用例覆盖连续失败、请求去重、正常轮次结算、空重试消息准入、无关空消息，以及回放、实时和前插历史三种 Chat 展示。按要求，更新后的行为检查将在发布后运行。
 
 <a id="dev-note"></a>
 ## 开发备注

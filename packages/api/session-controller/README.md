@@ -110,7 +110,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 Blockquotes travel as ordinary prompt text without quote metadata. Local submission echoes and durable messages use the same text rendering rules; queue edits replace content while retaining prompt correlation.
 
-An empty `prompt.content` array requests a new turn only for an eligible failed, idle ordinary Session in queue mode. Pending human input prevents admission; non-waking injected context is retained. `conversationContinuation` supplies the shared six-code manual policy, independently of provider retry configuration. The input uses `source.kind: 'retry'` and ordinary inbox admission; Loop acceptance records `agent/retry` with the input identity and caller metadata for deduplication and audit, without adding a model-visible message. Whitespace-only text parts remain invalid.
+An empty `prompt.content` array requests a new turn only for an eligible failed, idle ordinary Session in queue mode. Pending human input prevents admission; non-waking injected context is retained. `conversationContinuation` supplies the shared six-code manual policy, independently of provider retry configuration. The input follows ordinary inbox and Loop admission and records an empty `user/message` with `source.kind: 'retry'`; its input identity and caller metadata support deduplication and recovery. Whitespace-only text parts remain invalid.
 
 <a id="model-experience"></a>
 ## Model Experience

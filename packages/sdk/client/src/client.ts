@@ -344,7 +344,7 @@ export class HarnessClient {
   /**
    * Queue one prompt and return its durable inbox identity.
    * @param sessionId - target session; an unknown id creates it.
-   * @param contentBlocks - user content, or an empty array to retry without adding a model-visible message.
+   * @param contentBlocks - the user message, sent verbatim.
    * @returns the queued message id.
    */
   async prompt(sessionId: string, contentBlocks: SdkPromptContentBlock[]): Promise<string> {

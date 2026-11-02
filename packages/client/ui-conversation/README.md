@@ -193,15 +193,15 @@ The selector must be a pure function of the owner currency. Its non-null return 
 
 #### What the model sees
 
-The play action submits `content: []` through the existing Session prompt API as a retry control. Loop acceptance records `agent/retry` without adding a `user/message` or a chat bubble. Pending injected context follows ordinary admission; the action adds no localized or hidden continuation text.
+The play action submits `content: []` through the existing Session prompt API. Ordinary Loop admission records an empty `user/message` with `source.kind: 'retry'`. Chat hides the empty retry bubble. The adapter applies its ordinary message serialization; the action adds no localized or hidden continuation text. Pending injected context follows ordinary admission.
 
 #### Token effect
 
-The control adds no model tokens. The request still incurs the ordinary cost of retained history, current prompt sections, tool declarations, and any newly admitted context.
+The action adds no continuation text. Empty-message serialization and framing costs depend on the adapter. The request still incurs the ordinary cost of retained history, current prompt sections, tool declarations, and any newly admitted context.
 
 #### KV Cache effect
 
-The control leaves model history unchanged. Prefix reuse depends on the current model, prompt, tools, injected context, and provider cache policy.
+Serialization of the empty retry message depends on the adapter. Prefix reuse depends on the current model, prompt, tools, injected context, and provider cache policy.
 
 ## Known Limitations and Deferred Work
 

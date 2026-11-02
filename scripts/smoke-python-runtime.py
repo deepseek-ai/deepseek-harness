@@ -113,6 +113,7 @@ RESTART_SECOND_SESSION_ID = "process-two"
 RESUME_PROMPT = "Continue the first Python SDK session after restarting the runtime."
 RESUME_TEXT = "RESUMED_PROCESS_OK"
 RECOVERY_PROMPT = "Run three todo updates; the scheduler will reject the second call."
+RECOVERY_CONTINUE_PROMPT = "Continue after the scheduler failure without repeating any tools."
 RECOVERY_TEXT = "SCHEDULER_RECOVERY_OK"
 RECOVERY_SESSION_ID = "scheduler-recovery"
 RECOVERY_CALL_IDS = ("scheduler-complete", "scheduler-fail", "scheduler-unstarted")
@@ -347,7 +348,7 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         block.get("text")
         for block in latest.get("content", [])
         if isinstance(block, dict) and block.get("type") == "text"
-        and block.get("text") == RECOVERY_PROMPT
+        and block.get("text") in {RECOVERY_PROMPT, RECOVERY_CONTINUE_PROMPT}
     ), None)
     if recovery_prompt == RECOVERY_PROMPT:
         assert_advertised_tool(body, "todo_write")
@@ -357,9 +358,7 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
             chunks.extend({**chunk, "index": index} for chunk in call[1:-2])
         chunks.extend(call[-2:])
         return chunks
-    if any(block.get("tool_use_id") == RECOVERY_CALL_IDS[-1]
-           for message in messages for block in message.get("content", [])
-           if isinstance(block, dict) and block.get("type") == "tool_result"):
+    if recovery_prompt == RECOVERY_CONTINUE_PROMPT:
         results = [
             block for message in messages
             for block in message.get("content", [])
@@ -1910,7 +1909,7 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
 
         with connect() as harness:
             failed = harness.run(RECOVERY_PROMPT, session_id=RECOVERY_SESSION_ID)
-            continued = harness.run([], session_id=RECOVERY_SESSION_ID)
+            continued = harness.run(RECOVERY_CONTINUE_PROMPT, session_id=RECOVERY_SESSION_ID)
         results = [failed, continued]
         if [result.finish_reason for result in results] != ["error", "completed"]:
             outcomes = [
@@ -1925,18 +1924,6 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
             raise AssertionError(f"scheduler recovery expected two serialized model requests: {requests}")
         logs = read_session_logs(sessions)
         records = logs[RECOVERY_SESSION_ID]
-        prompts = [record for record in records if record.get("type") == "user/message"
-                   and record["data"]["source"].get("kind") == "user"]
-        retries = [record for record in records if record.get("type") == "agent/retry"]
-        if len(prompts) != 1 or len(retries) != 1:
-            raise AssertionError("scheduler recovery must record one original prompt and one retry control")
-        retry_id = retries[0]["data"]["inputId"]
-        queued_retry_ids = [message.get("id") for record in records
-                            if record.get("type") == "agent/inbox/spliced"
-                            for message in record["data"]["inserted"]
-                            if message.get("source", {}).get("kind") == "retry"]
-        if not isinstance(retry_id, str) or queued_retry_ids != [retry_id]:
-            raise AssertionError("scheduler recovery lost the retry control's durable inbox identity")
         calls = [record["data"]["callId"] for record in records if record.get("type") == "tool/call"]
         if calls != list(RECOVERY_CALL_IDS[:2]):
             raise AssertionError(f"scheduler recovery dispatched the unstarted call: {calls}")
@@ -1953,7 +1940,6 @@ def smoke_sdk_scheduler_recovery(base_url: str, executable: Path, update_snapsho
         replacements = [
             *snapshot_directory_replacements(root, "{{cwd}}"),
             (RECOVERY_SESSION_ID, "{{parent}}"),
-            (retry_id, "{{messageId}}"),
         ]
         result_value = [{
             "session_id": result.session_id,

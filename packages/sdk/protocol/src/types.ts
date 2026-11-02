@@ -67,7 +67,7 @@ export interface InitializeResult {
 export interface SessionPromptParams {
   /** The SDK-side session id; an unknown id lazily creates the agent+session pair. */
   sessionId: string
-  /** Prompt content; an empty array requests a retry control without a model-visible user message. */
+  /** The prompt content blocks, sent verbatim as the user message. */
   contentBlocks: SdkPromptContentBlock[]
 }
 
@@ -85,7 +85,7 @@ export type SdkPromptContentBlock = ContentBlock | SdkEncodedImageBlock
 
 /** Durable enqueue receipt for one prompt. */
 export interface SessionPromptResult {
-  /** Identity of the queued prompt or retry control. */
+  /** Identity of the queued user message. */
   messageId: string
 }
 

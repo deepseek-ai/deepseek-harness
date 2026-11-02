@@ -4,8 +4,8 @@
  * @module @deepseek-ai/dsh-agent/types
  */
 
-import type { MessageId, ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
-import type { MessageSource, UserMessage } from '@deepseek-ai/dsh-llm/types'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
+import type { UserMessage } from '@deepseek-ai/dsh-llm/types'
 // Type-only: the Workspace registry's archive-admission family map this registry merges `turn` into.
 import type {} from '@deepseek-ai/dsh-workspace/types'
 import type { OptionalSessionSeq, SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
@@ -16,13 +16,6 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 export interface Agent {
   /** Session-backed Agent identity. */
   readonly id: SessionId
-}
-
-declare module '@deepseek-ai/dsh-llm' {
-  interface MessageSourceMap {
-    /** Empty control input requesting a model call without adding user text. */
-    retry: { kind: 'retry' }
-  }
 }
 
 declare module '@deepseek-ai/dsh-workspace/types' {
@@ -109,13 +102,6 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
-    /** An admitted retry control, correlated with its durable inbox input; never enters model history. */
-    'agent/retry': {
-      turn: number
-      step: number
-      inputId: MessageId
-      source: Extract<MessageSource, { kind: 'retry' }>
-    }
     /**
      * One normalized mutation of an agent's durable pending-message lists.
      * The session-projection registry applies the committed event before

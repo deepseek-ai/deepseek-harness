@@ -90,6 +90,8 @@ Assistant 尝试结束且没有可见消息时，Chat 隐藏已发布的 Node，
 <a id="turn-process-folding"></a>
 ## 轮次过程折叠
 
+带 `source.kind: 'retry'` 的空 `user/message` 记录保留在 Session 历史中，Chat 不生成对应展示节点。普通空用户消息与包含内容的重试消息保持正常展示。
+
 正常在线时，本地 transcript 与 steering 回显在 Inbox 接受与领取期间保持挂载，直到持久消息到达，不会重复触发跟随底部。跨客户端的待处理 steering 遵循 Inbox 顺序，在匹配位置使用本地回显。已入档的本地 steering 还会排除匹配的旧 Inbox 行，直到领取投影到达；没有本地提交身份的 steering 仍按 Inbox 投影显示。重连后，Host 消息替代已有接收回执的本地回显；已领取但尚未入档时，气泡可能短暂消失。
 
 Chat 末尾为进行中的 Turn 控制行，且该轮尚无可见输入时，第一条本地 transcript 回显显示在控制行前。其他回显保留在正文末尾。控制行与回显共用一个 keyed 列表，因此控制行到达时不会重新挂载回显。持久输入在同一次渲染中替换匹配的回显。

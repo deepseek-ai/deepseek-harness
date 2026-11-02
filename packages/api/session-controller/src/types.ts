@@ -395,7 +395,7 @@ declare module '@deepseek-ai/dsh-llm' {
      * caller other than the owner, so an absent `principal` means the owner.
      */
     'user-rpc': { kind: 'user'; rpcId: SessionRequestId; clientTimeZone?: string; principal?: Principal }
-    /** Browser retry correlation with the same caller metadata as an ordinary prompt. */
+    /** Empty retry user message with browser prompt correlation and caller metadata. */
     'retry-rpc': { kind: 'retry'; rpcId: SessionRequestId; clientTimeZone?: string; principal?: Principal }
   }
 }

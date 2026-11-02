@@ -492,10 +492,6 @@ function turnActions(log: string): TurnAction[] {
       current = { turn: data.turn }
       continue
     }
-    if (record.type === 'agent/retry' && current !== undefined) {
-      current = { turn: current.turn, content: [] }
-      continue
-    }
     if (record.type === 'user/message' && current !== undefined && current.content === undefined) {
       const data = record.data as JsonObject | undefined
       const source = data?.source as JsonObject | undefined
@@ -772,8 +768,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           session = await harness.resumeSession(sessionId)
           expect(session.id).toBe(sessionId)
         }
-        const input = materializeInput(action.content, scenario, cwd, liveSessions)
-        const result = await session.run(input, {
+        const result = await session.run(materializeInput(action.content, scenario, cwd, liveSessions), {
           onNotification: (notification) => {
             notifications.push(notification)
             observe(notification)
@@ -1122,9 +1117,6 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         } } })
       }
       if (scenario.name === 'tool-scheduler-recovery') {
-        expect(records(ordered[0]!.content).filter(event => event.type === 'user/message'
-          && (event.data['source'] as { kind: string }).kind === 'user')).toHaveLength(1)
-        expect(records(ordered[0]!.content).filter(event => event.type === 'agent/retry')).toHaveLength(1)
         expect(results).toHaveLength(2)
         const events = results.flatMap(result => result.events)
         expect(results[1]?.finalResponse, JSON.stringify(events.filter(event => event.type === 'turn/end')))

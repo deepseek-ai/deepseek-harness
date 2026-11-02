@@ -10,11 +10,11 @@ Status: implemented
 
 ## 决策
 
-播放按钮通过现有 Session prompt API 提交 `content: []`。API 指定 `source.kind: 'retry'`。AgentLoop 保留带身份的 inbox 输入并启动正常闭合的新轮次；接受后记录 `agent/retry`，而不写入模型可见的 `user/message`。普通空用户消息的行为保持不变。原失败轮次保持闭合。
+播放按钮通过现有 Session prompt API 提交 `content: []`。API 指定 `source.kind: 'retry'`；AgentLoop 沿用普通准入，记录空 `user/message` 并开启正常闭合的新轮次。Chat 不生成空重试节点，日志保留该输入。原失败轮次保持闭合。
 
-Session API 拥有固定大小的 `conversationContinuation` 投影，向浏览器发布相同的值。准入要求失败符合条件、持有真正的空闲状态且没有待消费的用户输入。已接受的重试事件使新轮次获得准入，因此请求再次失败后仍保留继续资格。
+Session API 拥有固定大小的 `conversationContinuation` 投影，向浏览器发布相同的值。准入要求失败符合条件、持有真正的空闲状态且没有待消费的用户输入。追加的空重试消息使新轮次获得准入，因此请求再次失败后仍保留继续资格。
 
-六码手动白名单独立于提供方重试策略。非唤醒的注入上下文随请求进入。inbox 输入被领取后，重试事件仍支持 request-id 去重；不需要新增 Remote 操作。显式控制来源避免改变无关空用户输入的行为，独立事件则使聊天渲染无需针对重试过滤。
+六码手动白名单独立于提供方重试策略。非唤醒的注入上下文随请求进入。inbox 输入被领取后，已接受的用户消息仍支持 request-id 去重。复用普通消息准入避免增加 Loop 分支及独立持久接受事件。
 
 ## 考虑过的替代方案
 

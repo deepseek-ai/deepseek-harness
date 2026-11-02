@@ -17,7 +17,7 @@ const stateSchema = z.object({
   ending: endingSchema,
 })
 
-/** Recoverable manual-continuation facts over admitted user input and retry controls. */
+/** Recoverable manual-continuation facts over admitted user input and empty retry messages. */
 export type ContinuationState = z.infer<typeof stateSchema>
 
 const EMPTY: ContinuationState = { admitted: false, failedAttempt: false, ending: null }
@@ -25,20 +25,20 @@ const EMPTY: ContinuationState = { admitted: false, failedAttempt: false, ending
 /** Eligibility requires admitted human work and a failed settlement in the last request step. */
 export const continuationProjectionDefinition = {
   key: 'conversationContinuation',
-  stateVersion: 3,
+  stateVersion: 4,
   stateSchema,
   init: (): ContinuationState => EMPTY,
   apply: (state, event) => {
     switch (event.type) {
       case 'turn/start':
         return EMPTY
-      case 'agent/retry':
-        return state.admitted ? state : { ...state, admitted: true }
       case 'step/start':
       case 'assistant/message':
         return state.failedAttempt ? { ...state, failedAttempt: false } : state
       case 'user/message':
-        return !state.admitted && event.surfaceOp === 'append' && event.data.source.kind === 'user' && event.data.content.length > 0
+        return !state.admitted && event.surfaceOp === 'append'
+          && ((event.data.source.kind === 'user' && event.data.content.length > 0)
+            || (event.data.source.kind === 'retry' && event.data.content.length === 0))
           ? { ...state, admitted: true } : state
       case 'assistant/attempt':
         return state.failedAttempt ? state : { ...state, failedAttempt: true }
