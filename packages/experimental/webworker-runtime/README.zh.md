@@ -59,7 +59,6 @@ kind: "package-library"
 - **`node:assert/strict` 仅支持真值断言**：对于假值，可调用的默认导出和 `ok` 使用传入的消息或通用文本抛出 `ERR_ASSERTION`，或原样抛出传入的 Error。其他断言 API 未提供。
 - **原生 TLS 监听器需要 Node Host**：worker 的 `node:https.createServer` 会拒绝激活，不会替换成明文。预览内部的 HTTP 隧道不绑定套接字；面向浏览器的 HTTPS 由部署服务器提供。
 - **桌面产品埋点不可用**：`got.post` 明确报告 worker host 不支持该调用。浏览器镜像不包含 Got 及其 Node HTTP 依赖；预览组合不启用桌面上报。
-- **stdio MCP 服务器需要 Node Host**：`cross-spawn` 明确报告 worker host 不支持该调用，已配置的 stdio 服务器无法连接；HTTP MCP 服务器不使用它。
 - **宿主包管理命令不可用**：`execa` 明确报告 worker host 不支持该调用；预览无法运行 pnpm、安装插件或安装原生依赖。
 - **Pi Agent 执行不可用**：`@earendil-works/pi-coding-agent` 替代模块允许元数据导入，并以 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 拒绝 SDK 调用。镜像不包含其原生 CLI 与终端 UI 依赖。原生 DSH 仍保留完整的 OAR 运行时注册表。
 - **pi-ai 模型请求不可用**：替代实现暴露已安装提供方标识的固定子集，不包含模型，使适配器能够注册配置元数据。升级 pi-ai 时必须保持这些标识有效；推理入口明确报告 worker host 不支持该调用。

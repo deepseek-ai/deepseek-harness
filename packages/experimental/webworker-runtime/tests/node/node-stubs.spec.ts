@@ -25,7 +25,6 @@ import * as workerThreads from '../../src/node/builtin_modules/mock/worker_threa
 import * as nodePty from '../../src/node/external_packages/node-pty.ts'
 import * as libreofficeKit from '../../src/node/external_packages/libreoffice-kit.ts'
 import * as execa from '../../src/node/external_packages/execa.ts'
-import * as crossSpawn from '../../src/node/external_packages/cross-spawn.ts'
 import * as got from '../../src/node/external_packages/got.ts'
 import * as piAi from '../../src/node/external_packages/pi-ai.ts'
 import * as piCodingAgent from '../../src/node/external_packages/pi-coding-agent.ts'
@@ -56,7 +55,6 @@ const CALLED: [string, Record<string, unknown>, readonly string[]][] = [
   ['node:child_process', childProcess, ['execFileSync', 'execSync', 'fork']],
   ['node-pty', nodePty, ['spawn', 'open']],
   ['execa', execa, ['execa']],
-  ['cross-spawn', crossSpawn, ['spawn', 'sync']],
   ['got', got.default, ['post']],
   ['@earendil-works/pi-coding-agent', piCodingAgent, [
     'getAgentDir', 'initTheme', 'createAgentSessionServices', 'createAgentSessionFromServices',
@@ -120,11 +118,6 @@ describe('not-implemented stubs', () => {
     })
   }
 
-  it('serves cross-spawn\'s callable default export as the same refusal', () => {
-    expect(crossSpawn.default).toBe(crossSpawn.spawn)
-    expect(crossSpawn.default.sync).toBe(crossSpawn.sync)
-  })
-
   it('refuses node:worker_threads construction with the Node platform code', () => {
     quiet()
     expect(() => new workerThreads.MessageChannel()).toThrow(expect.objectContaining({ code: PLATFORM_UNAVAILABLE }))
@@ -134,7 +127,6 @@ describe('not-implemented stubs', () => {
   it('keeps the CommonJS interop marker and a default export on every replaced module', () => {
     for (const namespace of [
       dnsPromises, net, sqlite, vm, repl, workerThreads, childProcess, stream, ws, nodePty, piAi, piCodingAgent, os, perfHooks, got,
-      crossSpawn,
     ]) {
       const holder = namespace as { __esModule?: unknown; default?: unknown }
       expect(holder.__esModule).toBe(true)
