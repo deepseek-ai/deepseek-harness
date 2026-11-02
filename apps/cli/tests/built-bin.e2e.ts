@@ -344,6 +344,20 @@ function startStartupProfile(fixture: StartupFixture, args: readonly string[]) {
 describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', () => {
   testProfileResolution('lib')
 
+  it.runIf(process.platform === 'win32')('resolves the installed entry before loading CLI dependencies', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'dsh-cli-alias-'))
+    try {
+      const alias = join(home, 'launcher')
+      symlinkSync(join(repoRoot, 'apps/cli/lib'), alias, 'junction')
+      const { stdout } = await execa(process.execPath, [
+        '--preserve-symlinks-main', join(alias, 'bin.js'), '--version',
+      ], { timeout: SPAWN_TIMEOUT_MS })
+      expect(stdout).toBe(cliVersion)
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+    }
+  }, SPAWN_TIMEOUT_MS + 5_000)
+
   it('requires a profile and rejects removed flags', async () => {
     const bare = await runBuiltBin()
     expect(bare.code).toBe(1)

@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write apps/cli/README.md
 /deepseek-ai-dsh:
-  en: ebdc75fa0da18801
-  zh: 5c6cd2554b8f8a98
+  en: 1668d6bae782422c
+  zh: 5637be16a7de8740
 /deepseek-ai-dsh/entry-modes:
   en: a1e035a813554366
   zh: b87053214afe71b6
