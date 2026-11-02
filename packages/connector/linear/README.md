@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The Linear plugin registers Linear's hosted MCP server, `https://mcp.linear.app/mcp`, with the Host's shared [MCP manager](../../mcp/mcp-manager/README.md) for as long as the plugin is loaded. The user connects a Linear account from the plugin's page on the Web sidebar's **Plugins** page; afterwards every conversation on that Host can use the server's tools, and the model is told to call the integration the Linear plugin. The manager owns the connection, OAuth authorization, the saved grant, and sign-out; the page reads and drives them through the manager's Remote and adds no account interface of its own. It runs in the Web and Desktop compositions.
+The Linear plugin registers Linear's hosted MCP server, `https://mcp.linear.app/mcp`, with the Host's shared [MCP manager](../../mcp/mcp-manager/README.md) for as long as the plugin is loaded. The user connects a Linear account from the plugin's page on the Web sidebar's **Plugins** page; afterwards every conversation on that Host can use the server's tools, and the model is told to call the integration the Linear plugin. The manager owns the connection, OAuth authorization, the saved grant, and sign-out, which the shared [MCP account surfaces](../../client/ui-mcp-account/README.md) show on the Plugins page. It runs in the Web and Desktop compositions.
 
 ## Table of Contents
 
@@ -50,7 +50,7 @@ While the plugin is on, its page on the **Plugins** page shows a **Linear accoun
 
 Authorization must be completed in a browser on the Host machine. After the user approves access in Linear, the callback page says DSH received the authorization; the section then shows the result. Leaving the page does not cancel an attempt, which the Host owns. A failed attempt shows **Authorization was not completed. Try again.**; a failed page action shows a toast. Sign-out keeps the client registration and does not revoke the connection on Linear's side.
 
-The page calls the manager's [OAuth operations](../../mcp/mcp-manager/README.md#oauth-authorization) through Remote: `watch` reports the entry, `startAuthorization('linear')` returns an attempt whose `authorizationUrl` the stream reports, `cancelAuthorization('linear', id)` cancels it, `signOut('linear')` deletes the grant, and `restart('linear')` retries. Other Remote clients can use the same operations.
+The page follows the account through the `mcpAccounts` Remote, which reports the manager's entry, and calls the manager's [OAuth operations](../../mcp/mcp-manager/README.md#oauth-authorization) through Remote: `startAuthorization('linear')` returns an attempt whose `authorizationUrl` the stream reports, `cancelAuthorization('linear', id)` cancels it, `signOut('linear')` deletes the grant, and `restart('linear')` retries. Other Remote clients can use the same operations.
 
 ### Turn off and uninstall
 
@@ -75,7 +75,7 @@ The generated [config catalog](../../../docs/config-catalog.md#deepseek-aidsh-li
 
 [`cordis.patch.yml`](cordis.patch.yml) inserts one row with id `linear` naming this package, so the package is both the bundle and its only row; `config` overrides target that id. The Host half, [`src/index.ts`](src/index.ts), makes two registrations, both effects of the plugin's fiber: `ctx.mcpServers.register('linear', …)` adds a Streamable HTTP entry with the configured `url` and OAuth credential key, and `ctx.systemPrompt.section()` adds the naming guidance at the `MCP_SERVERS` order. The server name fixes the `mcp__linear__` tool namespace, and the credential key fixes the grant address, so a reloaded or reinstalled plugin reaches the same tools and grant. The manager validates the entry when it is registered; a configured or registered server that already uses the name or key makes the plugin fail to load before the guidance is added.
 
-The browser half, [`src/client/index.ts`](src/client/index.ts), attaches to the `linear` row, so its registrations exist while that row is on. It registers the `linear` dictionary and calls `ctx.mcpAccounts.register({ server: 'linear', packageName: '@deepseek-ai/dsh-linear', locale: 'linear' })`; [`ui-mcp-account`](../../client/ui-mcp-account/README.md) then mirrors the `linear` entry and contributes the section, guidance, tag, and toast described above.
+While the account registry runs, the plugin also calls `ctx.mcpAccounts.register({ server: 'linear', packageName: '@deepseek-ai/dsh-linear', copy })`, where [`src/copy.ts`](src/copy.ts) holds the text that names Linear in every shipped language; [`ui-mcp-account`](../../client/ui-mcp-account/README.md) then serves the `linear` entry and renders the section, guidance, tag, and toast described above. A composition without the registry, such as a headless profile, loads the plugin without the account section.
 
 </details>
 
@@ -89,7 +89,7 @@ The browser half, [`src/client/index.ts`](src/client/index.ts), attaches to the 
 - [MCP client](../../mcp/mcp-client/README.md) — connection, tool naming, OAuth grant refresh, and redaction.
 - [MCP subsystem](../../../docs/subsystems/mcp.md) — how the MCP packages fit together.
 - [Plugin Manager](../../boot/plugin-manager/README.md) — installation and enablement.
-- [MCP account surfaces](../../client/ui-mcp-account/README.md) — the section, tag, guidance, and notices the browser half registers.
+- [MCP account surfaces](../../client/ui-mcp-account/README.md) — the section, tag, guidance, and notices the account registration shows.
 - [Plugins page](../../client/ui-plugin-manager/README.md#use-this-package) — the bundle page those surfaces occupy.
 
 -----
@@ -150,6 +150,6 @@ Linear's instructions (or, with `eager`, its tools) appear when the connection s
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-Host specs run the plugin against the MCP manager and the mcp-client loopback OAuth server fixture; a client spec checks that the browser half registers the dictionary and account and removes both with the row. The `linear-plugin` session snapshot replays the Linear row without a saved grant, so it pins the naming guidance and verifies that no request reaches the server.
+Host specs run the plugin against the MCP manager and the mcp-client loopback OAuth server fixture; another checks that the account registry serves the Linear account with its text and withdraws it with the plugin. The `linear-plugin` session snapshot replays the Linear row without a saved grant, so it pins the naming guidance and verifies that no request reaches the server.
 
 </details>

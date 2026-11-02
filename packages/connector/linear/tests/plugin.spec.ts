@@ -3,6 +3,7 @@
 import { expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import McpAccounts, { type McpAccountsView } from '@deepseek-ai/dsh-client-ui-mcp-account'
 import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -12,6 +13,7 @@ import { createScope } from '@deepseek-ai/dsh-scope'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import { callback, oauthWorld, phase } from '../../../mcp/mcp-client/tests/oauth-fixture.ts'
 import { managerProfile } from '../../../mcp/mcp-manager/tests/profile-fixture.ts'
+import { COPY } from '../src/copy.ts'
 import * as Linear from '../src/index.ts'
 
 // Verbatim pin of the model-visible guidance in src/index.ts.
@@ -98,6 +100,28 @@ it('keeps Linear tools hidden from an agent until it loads them, unless loading 
   await b.mount({ toolLoading: 'eager' }).await()
   await b.state('connected')
   expect(b.ctx.tools.get('mcp__linear__ping', other)).toBeDefined()
+})
+
+/** Read the account stream until a view satisfies the predicate. */
+async function until(stream: AsyncIterator<McpAccountsView>, predicate: (view: McpAccountsView) => boolean): Promise<McpAccountsView> {
+  for (;;) {
+    const next = await stream.next()
+    if (next.done === true) throw new Error('account stream ended')
+    if (predicate(next.value)) return next.value
+  }
+}
+
+it('shows the Linear account on the Plugins page while the account registry runs, and withdraws it with the plugin', async () => {
+  const b = await fixture()
+  await b.ctx.plugin(McpAccounts)
+  const stream = b.ctx.mcpAccounts.watch(new AbortController().signal)[Symbol.asyncIterator]()
+  const plugin = b.mount()
+  await plugin.await()
+  const shown = await until(stream, view => view.accounts[0]?.view !== undefined)
+  expect(shown.accounts).toHaveLength(1)
+  expect(shown.accounts[0]).toMatchObject({ server: 'linear', packageName: '@deepseek-ai/dsh-linear', copy: COPY, view: { name: 'linear' } })
+  await plugin.dispose()
+  await until(stream, view => view.accounts.length === 0)
 })
 
 it('refuses to load when a configured server already uses the Linear name', async () => {

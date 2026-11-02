@@ -1901,7 +1901,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-linear`
 
 - `inject`: `mcpServers` · `systemPrompt`
-- `source`: [`packages/connector/linear/src/index.ts:27`](../packages/connector/linear/src/index.ts)
+- `source`: [`packages/connector/linear/src/index.ts:29`](../packages/connector/linear/src/index.ts)
 
 ```ts config-catalog
 /** Linear MCP endpoint and tool loading for the managed server entry. */
