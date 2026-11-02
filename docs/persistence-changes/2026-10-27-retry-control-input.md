@@ -52,7 +52,7 @@ The retry source is producer-owned metadata on the existing empty UserMessage re
 <a id="verification"></a>
 ## Verification
 
-Source review confirms AgentLoop and SDK files match the PR base. Regression cases cover consecutive failures, request deduplication, normal turn settlement, empty retry-message admission, unrelated empty messages, and replay/live/prepend Chat rendering. Updated behavior checks will run after publication as requested.
+The Session API suite passed 1112 tests across 51 files; continuation.ts has 100% statements, branches, functions, and lines. Chat and conversation tests passed 1875 tests across 113 files; final focused Chat and input regressions passed 96 and 31 tests. The browser continuation replay passed with an empty retry user message retained in the log, no empty Chat bubble, and normally closed turns. Build passed all 10 gates, typed lint exited 0, and doc-sync passed all 43 gates. Git comparison against the PR base confirms no AgentLoop, Core Agent, Core Session, or SDK changes.
 
 <a id="dev-note"></a>
 ## Dev Note

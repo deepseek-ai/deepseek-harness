@@ -52,7 +52,7 @@ retry 来源是现有空 UserMessage 表示中的生产方元数据。AgentLoop�
 <a id="verification"></a>
 ## 验证
 
-源码审查确认 AgentLoop 与 SDK 文件和 PR 基线一致。回归用例覆盖连续失败、请求去重、正常轮次结算、空重试消息准入、无关空消息，以及回放、实时和前插历史三种 Chat 展示。按要求，更新后的行为检查将在发布后运行。
+Session API 测试通过：51 个文件、1112 个测试，continuation.ts 的语句、分支、函数和行覆盖率均为 100%。Chat 与 conversation 测试通过：113 个文件、1875 个测试；最终定向 Chat 与输入回归分别通过 96 和 31 个测试。浏览器继续回放通过，断言日志保留空 retry 用户消息、Chat 无空气泡且轮次正常闭合。构建 10 项全部通过，类型感知 lint 退出码为 0，doc-sync 的 43 项全部通过。与 PR 基线的 Git 比较确认 AgentLoop、Core Agent、Core Session 和 SDK 无改动。
 
 <a id="dev-note"></a>
 ## 开发备注
