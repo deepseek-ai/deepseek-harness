@@ -40,7 +40,7 @@ Web 与 Desktop profile 还统一挂载一次 [MCP 服务器管理器](../../pac
 <a id="responsibilities-and-scope"></a>
 ## 职责与作用域
 
-客户端是每服务器一个的连接插件，也是 Harness 工具注册表的消费者。它不发布共享的 `ctx.mcp` 服务；管理器为其挂载的宿主全局服务器发布 `ctx.mcpServers`。外部服务器实现 MCP 操作；SDK 拥有协议交换；客户端将发现的工具适配到 Harness 执行过程。
+客户端是每服务器一个的连接插件，也是 Harness 工具注册表的消费者。它不发布共享的 `ctx.mcp` 服务；管理器为其挂载的宿主全局服务器发布 `ctx.mcpManager`。外部服务器实现 MCP 操作；SDK 拥有协议交换；客户端将发现的工具适配到 Harness 执行过程。
 
 `mcp-resources` 拥有共享资源工具，并在调用方作用域中选择提供方。每个 MCP 客户端通过自己的连接提供资源操作。作用域中的首个提供方启用本地共享工具，移除最后一个提供方时移除这些工具；继承的提供方仍然可见。服务独立于任何单一客户端拥有这些工具注册。只要可见的客户端条目保持激活，连接失败就不会移除共享资源工具。
 
@@ -122,27 +122,9 @@ interface McpResourceProvider {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
-<a id="ctxmcpresources--mcpresourceruntime"></a>
+<a id="ctxmcpmanager--mcpservermanager"></a>
 
-### `ctx.mcpResources` — `McpResourceRuntime`
-
-Scoped resource access plus three tools shared by configured MCP servers.
-
-```ts cordis-catalog
-/**
- * Register one server and expose resource tools while that scope has providers.
- * @param server - configured server name, unique in this scope.
- * @param provider - connection-owned resource operations.
- * @returns the effect disposer for this exact registration.
- */
-register(server: string, provider: McpResourceProvider): () => void
-```
-
-Source: [`packages/mcp/mcp-resources/src/index.ts`](../../packages/mcp/mcp-resources/src/index.ts)
-
-<a id="ctxmcpservers--mcpservermanager"></a>
-
-### `ctx.mcpServers` — `McpServerManager`
+### `ctx.mcpManager` — `McpServerManager`
 
 The manager service. Reconciliation and `restart` serialize instance replacement. Probes run independently and are cancelled before replacement or disposal waits for their cleanup.
 
@@ -204,6 +186,24 @@ async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult>
 ```
 
 Source: [`packages/mcp/mcp-manager/src/index.ts`](../../packages/mcp/mcp-manager/src/index.ts)
+
+<a id="ctxmcpresources--mcpresourceruntime"></a>
+
+### `ctx.mcpResources` — `McpResourceRuntime`
+
+Scoped resource access plus three tools shared by configured MCP servers.
+
+```ts cordis-catalog
+/**
+ * Register one server and expose resource tools while that scope has providers.
+ * @param server - configured server name, unique in this scope.
+ * @param provider - connection-owned resource operations.
+ * @returns the effect disposer for this exact registration.
+ */
+register(server: string, provider: McpResourceProvider): () => void
+```
+
+Source: [`packages/mcp/mcp-resources/src/index.ts`](../../packages/mcp/mcp-resources/src/index.ts)
 
 <a id="mcp-manager-events"></a>
 

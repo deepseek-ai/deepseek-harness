@@ -40,7 +40,7 @@ Protocol negotiation follows the SDK's supported revisions; there is no product 
 <a id="responsibilities-and-scope"></a>
 ## Responsibilities and scope
 
-The client is a per-server connection plugin and a consumer of the harness tool registry. It does not publish a shared `ctx.mcp` service; the manager publishes `ctx.mcpServers` for the Host-global servers it mounts. The external server implements MCP operations; the SDK owns protocol exchange; the client adapts discovered tools to harness execution.
+The client is a per-server connection plugin and a consumer of the harness tool registry. It does not publish a shared `ctx.mcp` service; the manager publishes `ctx.mcpManager` for the Host-global servers it mounts. The external server implements MCP operations; the SDK owns protocol exchange; the client adapts discovered tools to harness execution.
 
 `mcp-resources` owns the shared resource tools and selects providers in the caller's scope. Each MCP client supplies resource operations through its own connection. The first provider in a scope enables the local shared tools, and removing the last removes them; inherited providers remain visible. The service owns these tool registrations independently of any one client. Connection failures do not remove shared resource tools while a visible client entry remains active.
 
@@ -122,27 +122,9 @@ MCP prompt templates, human-input elicitation, task-based execution, and resourc
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
-<a id="ctxmcpresources--mcpresourceruntime"></a>
+<a id="ctxmcpmanager--mcpservermanager"></a>
 
-### `ctx.mcpResources` — `McpResourceRuntime`
-
-Scoped resource access plus three tools shared by configured MCP servers.
-
-```ts cordis-catalog
-/**
- * Register one server and expose resource tools while that scope has providers.
- * @param server - configured server name, unique in this scope.
- * @param provider - connection-owned resource operations.
- * @returns the effect disposer for this exact registration.
- */
-register(server: string, provider: McpResourceProvider): () => void
-```
-
-Source: [`packages/mcp/mcp-resources/src/index.ts`](../../packages/mcp/mcp-resources/src/index.ts)
-
-<a id="ctxmcpservers--mcpservermanager"></a>
-
-### `ctx.mcpServers` — `McpServerManager`
+### `ctx.mcpManager` — `McpServerManager`
 
 The manager service. Reconciliation and `restart` serialize instance replacement. Probes run independently and are cancelled before replacement or disposal waits for their cleanup.
 
@@ -204,6 +186,24 @@ async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult>
 ```
 
 Source: [`packages/mcp/mcp-manager/src/index.ts`](../../packages/mcp/mcp-manager/src/index.ts)
+
+<a id="ctxmcpresources--mcpresourceruntime"></a>
+
+### `ctx.mcpResources` — `McpResourceRuntime`
+
+Scoped resource access plus three tools shared by configured MCP servers.
+
+```ts cordis-catalog
+/**
+ * Register one server and expose resource tools while that scope has providers.
+ * @param server - configured server name, unique in this scope.
+ * @param provider - connection-owned resource operations.
+ * @returns the effect disposer for this exact registration.
+ */
+register(server: string, provider: McpResourceProvider): () => void
+```
+
+Source: [`packages/mcp/mcp-resources/src/index.ts`](../../packages/mcp/mcp-resources/src/index.ts)
 
 <a id="mcp-manager-events"></a>
 

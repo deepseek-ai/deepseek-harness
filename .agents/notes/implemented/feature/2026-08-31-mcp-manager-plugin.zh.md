@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-`packages/mcp/mcp-manager` 是一个服务插件（`ctx.mcpServers`），拥有 volatile `servers` 配置并对一支普通 `dsh-mcp-client` 子实例编队做对账；`packages/mcp/mcp-client` 拥有连接监督、状态、探测与逐次启动预算。
+`packages/mcp/mcp-manager` 是一个服务插件（`ctx.mcpManager`），拥有 volatile `servers` 配置并对一支普通 `dsh-mcp-client` 子实例编队做对账；`packages/mcp/mcp-client` 拥有连接监督、状态、探测与逐次启动预算。
 
 **配置由 volatile Config 提供，CRUD 不需要新 API。** Settings 按管理器条目的 Loader id 展示其 Config；ConfigEditor 拥有 profile 持久化、继承和 revision 检查。Settings 编辑保留继承的服务器，重置继承条目会恢复其基层值。直接编写 profile patch 会替换完整 `servers` 映射。Loader 先提交引用，再通知管理器现有的协调队列。
 

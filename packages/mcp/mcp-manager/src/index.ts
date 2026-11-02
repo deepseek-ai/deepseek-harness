@@ -1,5 +1,5 @@
 /**
- * MCP server manager (`ctx.mcpServers`): one fleet of `dsh-mcp-client`
+ * MCP server manager (`ctx.mcpManager`): one fleet of `dsh-mcp-client`
  * instances built from two sources. Volatile `Config.servers` holds configured
  * entries, which Settings exposes under the owning Loader entry id with profile
  * inheritance and revision checks; plugins contribute registered entries for
@@ -181,7 +181,7 @@ interface ManagedRecord {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** The MCP server manager. */
-    mcpServers: McpServerManager
+    mcpManager: McpServerManager
   }
 }
 
@@ -218,7 +218,7 @@ export default class McpServerManager extends TypertRemoteService {
    * @param config - resolved manager configuration with live references.
    */
   constructor(ctx: Context, public config: Config) {
-    super(ctx, 'mcpServers')
+    super(ctx, 'mcpManager')
     this.ownerContext = ctx
     validateEntries(config.servers.get())
   }
@@ -300,7 +300,7 @@ export default class McpServerManager extends TypertRemoteService {
         // A stopping manager unmounts every instance itself.
         if (!this.stopped) return this.entriesChanged(`removal of "${name}"`)
       }
-    }, 'mcpServers.register()')
+    }, 'mcpManager.register()')
     return () => void dispose()
   }
 

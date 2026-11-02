@@ -706,7 +706,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The one concrete loop plugin; extension packages depend on dsh-agent events and services, not on this package.',
   },
   {
-    key: 'mcpServers',
+    key: 'mcpManager',
     pkg: 'mcp-manager',
     title: 'Settings-driven MCP server fleet',
     mode: 'core',

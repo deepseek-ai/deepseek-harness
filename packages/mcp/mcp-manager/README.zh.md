@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-mcp-manager` 管理一组实时 MCP 服务器，来源有两个：其 profile 条目 `config.servers` 中的条目（也可通过 Settings 编辑），以及已安装插件在自身生命周期内注册的条目。管理器为每个启用的条目挂载一个 `dsh-mcp-client` 实例，并随任一来源变化实时增加、重建、停用与移除实例。`ctx.mcpServers` 汇总每台服务器的连接状态，`restart` 恢复重连预算耗尽的服务器，`probe` 在不触碰活动实例的情况下测试一个条目，`watch` 向 Remote 客户端推送服务器列表。`${credential:REF}` 模板让密钥不进入条目；mcp-client 在各实例内部处理凭据轮换。
+`dsh-mcp-manager` 管理一组实时 MCP 服务器，来源有两个：其 profile 条目 `config.servers` 中的条目（也可通过 Settings 编辑），以及已安装插件在自身生命周期内注册的条目。管理器为每个启用的条目挂载一个 `dsh-mcp-client` 实例，并随任一来源变化实时增加、重建、停用与移除实例。`ctx.mcpManager` 汇总每台服务器的连接状态，`restart` 恢复重连预算耗尽的服务器，`probe` 在不触碰活动实例的情况下测试一个条目，`watch` 向 Remote 客户端推送服务器列表。`${credential:REF}` 模板让密钥不进入条目；mcp-client 在各实例内部处理凭据轮换。
 
 ## 目录
 
@@ -90,10 +90,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-mcp-manager'
 
 export const name = 'example-app'
-export const inject = ['mcpServers']
+export const inject = ['mcpManager']
 
 export function apply(ctx: Context): void {
-  ctx.mcpServers.register('example', {
+  ctx.mcpManager.register('example', {
     transport: 'streamable-http',
     url: 'https://mcp.example.com/mcp',
     headers: { Authorization: 'Bearer ${credential:EXAMPLE_TOKEN}' },
@@ -105,13 +105,13 @@ export function apply(ctx: Context): void {
 
 ### 观察与恢复
 
-`ctx.mcpServers.list()` 返回各服务器的 `name`、`configured` 标记与实时 `status`，配置条目排在注册条目之前。已移除、但仍在清理或清理失败的条目继续列出，`configured: false`；清理失败时该行保留到宿主重启。清理状态保留首个诊断；任一实例或探测未确认关闭时，`closeConfirmed` 保持 `false`。管理器存活期间，已发布状态的变化会发出 `mcp-manager/status`，包括条目移除后的清理失败。生命周期操作不等待监听器完成；监听器同步抛错或返回的 Promise 拒绝都会被记录，其他监听器仍会收到通知。
+`ctx.mcpManager.list()` 返回各服务器的 `name`、`configured` 标记与实时 `status`，配置条目排在注册条目之前。已移除、但仍在清理或清理失败的条目继续列出，`configured: false`；清理失败时该行保留到宿主重启。清理状态保留首个诊断；任一实例或探测未确认关闭时，`closeConfirmed` 保持 `false`。管理器存活期间，已发布状态的变化会发出 `mcp-manager/status`，包括条目移除后的清理失败。生命周期操作不等待监听器完成；监听器同步抛错或返回的 Promise 拒绝都会被记录，其他监听器仍会收到通知。
 
 重连留在 mcp-client 内。`restart(name)` 替换实例并重置重连预算，预算耗尽后同样适用。传输关闭未确认或本地清理出错时，会阻止该服务器的替换与后续探测；需要重启宿主恢复。`probe(name, options)` 解析模板、连接、读取服务器身份与工具名，再关闭，不注册工具或预留 namespace。已停用条目也可探测。探测有独立的截止时间与取消信号，并分别报告连接/列表查询成功与关闭、清理结果。
 
 ### Remote 操作
 
-浏览器客户端经 [`dsh-api-remotes`](../../api/remotes/README.zh.md) 以 `ctx.remote.mcpServers` 访问管理器。`watch(signal)` 在订阅时推送完整服务器列表，之后每次状态或条目变化再推送一次，订阅方尚未读取的变化会合并；中止信号结束该流，管理器销毁结束所有流。`restart(name)` 与 `probe(name, signal)` 执行上述操作。配置写入仍走 Settings Remote；管理器不提供写入方法，因此浏览器无法定义服务器命令。
+浏览器客户端经 [`dsh-api-remotes`](../../api/remotes/README.zh.md) 以 `ctx.remote.mcpManager` 访问管理器。`watch(signal)` 在订阅时推送完整服务器列表，之后每次状态或条目变化再推送一次，订阅方尚未读取的变化会合并；中止信号结束该流，管理器销毁结束所有流。`restart(name)` 与 `probe(name, signal)` 执行上述操作。配置写入仍走 Settings Remote；管理器不提供写入方法，因此浏览器无法定义服务器命令。
 
 -----
 

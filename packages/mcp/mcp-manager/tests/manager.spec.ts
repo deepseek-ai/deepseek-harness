@@ -168,7 +168,7 @@ async function mountWorld(options?: {
     managerFiber = entry.fiber!
   }
   const settings = ctx.get('settings')
-  const manager = ctx.get('mcpServers')!
+  const manager = ctx.get('mcpManager')!
   return { ctx, manager, settings, credentials, events, managerFiber }
 }
 
@@ -1035,8 +1035,8 @@ describe('mcp-manager', () => {
     const { ctx, manager } = await mountWorld({ managerConfig: { servers: { base: stdioEntry() } }, withSettings: false })
     const registrar = ctx.plugin({
       name: 'registrar',
-      inject: ['mcpServers'],
-      apply(child: Context) { child.mcpServers.register('app', { transport: 'stdio', command: 'echo' }) },
+      inject: ['mcpManager'],
+      apply(child: Context) { child.mcpManager.register('app', { transport: 'stdio', command: 'echo' }) },
     })
     await registrar.await()
     await waitForState(manager, 'app', 'connected')
