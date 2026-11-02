@@ -713,21 +713,39 @@ describe('append strategy and recall-and-resend', () => {
     expect(result.handle.parts[0]!.id).toBe('s1')
   })
 
-  it('budget violation + recall impossible + truthful prefix ⇒ end the stream and send the final as a new message', async () => {
+  it('a closed streaming window closes in place: the final state is a full update of the same message', async () => {
     const driver = fakeDriver('append')
     const host = fakeHost(driver)
     host.canRecall = false
     const stream = createMessageStream(host)
     stream.update('abc')
     await flush()
-    driver.until = 1 // streaming window over
+    // What expires is the platform's streaming mode, not the message: `close` publishes the same full update `tick`
+    // already publishes after the window, so the reader keeps the message instead of being handed a second one.
+    driver.until = 1
     await advance(10)
     stream.update('abcdef')
     await advance(1000)
     const result = await closeAll(stream, 'abcdefgh')
-    expect(driver.calls.map(c => [c.op, c.text])).toEqual([['open', 'abc'], ['close', 'abc']])
-    expect(host.sends.map(s => s.text)).toEqual(['abcdefgh'])
-    expect(result.handle.parts[0]!.id).toBe('s1')
+    expect(driver.calls.map(c => [c.op, c.text])).toEqual([['open', 'abc'], ['close', 'abcdefgh']])
+    expect(host.sends).toHaveLength(0)
+    expect(host.recalls).toHaveLength(0)
+    expect(result.handle.parts[0]!.id).toBe('m1')
+  })
+
+  it('a closed streaming window whose final update the platform refuses still resolves by recall + resend', async () => {
+    const driver = fakeDriver('patch')
+    const host = fakeHost(driver)
+    const stream = createMessageStream(host, { firstDelayMs: 0 })
+    stream.update('a')
+    await flush()
+    driver.until = 1
+    await advance(10)
+    driver.failures.close.push(new Error('the card entity expired'))
+    await closeAll(stream, 'final')
+    expect(driver.failures.close).toHaveLength(0) // the close was attempted before falling back
+    expect(host.recalls).toHaveLength(1)
+    expect(host.sends.map(s => s.text)).toEqual(['final'])
   })
 
   it('a driver-detected shape violation (mode without diff) resolves the same way', async () => {

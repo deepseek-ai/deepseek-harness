@@ -644,9 +644,12 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
     if (budget.updatesLeft !== undefined && budget.updatesLeft < 1) {
       return this.resend(frame, { kind: 'budget', key: 'limit.update.count', actual: handle.edits, message: 'no update left for the final state' })
     }
-    if (budget.until !== undefined && this.host.now() >= budget.until) {
-      return this.resend(frame, { kind: 'budget', message: 'the streaming window has closed' })
-    }
+    // A closed streaming window is not a reason to abandon the message. What expires is the platform's *streaming*
+    // mode, not the message: the driver's own `tick` keeps publishing full updates with streaming switched off once the
+    // window has passed, and `close` publishes the same full update with streaming off. Closing in place therefore
+    // stays available, and a fresh message would replace a card the reader is already watching. The window is kept
+    // only as the reason to fall back to {@link resend} when the platform refuses that update.
+    const windowClosed = budget.until !== undefined && this.host.now() >= budget.until
     if (this.strategy === 'append' && this.host.mode.diff && this.applied && !this.uncertain && !this.prefixOf(frame)) {
       return this.resend(frame, { kind: 'shape', message: 'the final state does not extend the streamed prefix' })
     }
@@ -661,6 +664,7 @@ class Scheduler<T extends ModeTypes> implements MessageStream {
         const violation = this.limitOf(error)
         return violation.kind === 'size' ? this.limitFail(violation, true, frame.result.report) : this.resend(frame, violation)
       }
+      if (windowClosed) return this.resend(frame, { kind: 'budget', message: 'the streaming window has closed' })
       throw error
     }
     if (this.aborted) return
