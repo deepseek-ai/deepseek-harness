@@ -1,4 +1,6 @@
 /** Real Loader, AgentLoop and helper-process transport; only desktop and model responses are fixtures. */
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -77,7 +79,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   const readEvents = async () => (await readFile(join(root, 'helper-events.jsonl'), 'utf8')).trim().split('\n').map(line => AuditEvent.parse(JSON.parse(line)))
   const modules = {
     llm: LlmRuntime, session: SessionStore, projection: SessionProjectionRegistry,
-    systemPrompt: SystemPrompt, tools: ToolRuntime, agents: AgentRegistry, agentLoop: AgentLoop,
+    systemPrompt: SystemPrompt, tools: ToolRuntime, toolExecutor: NativeToolExecutor, agents: AgentRegistry, agentLoop: AgentLoop,
     attachments: LocalAttachmentStore, computerUse: ComputerUseRegistry, subprocess: SubprocessLocal,
     cua: NativeProvider,
   }
@@ -132,7 +134,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   expect(events.find(event => event.method === 'click')?.params).toMatchObject({ holdMs: 800 })
   expect(toolCalls[3]?.data.arguments).toBe(JSON.stringify(calls[3]))
 
-  const direct = await context.tools.execute({ agent, signal: new AbortController().signal,
+  const direct = await executeToolFixture(context, { agent, signal: new AbortController().signal,
     callId: ToolCallId('programmatic-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
   })
   expect(direct.isError).toBe(false)
@@ -141,7 +143,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   for (const [callId, activationRequested, beforePid, beforeWindowId] of [
     ['activate-first', true, 42, 99], ['activate-repeat', false, 9, 7],
   ] as const) {
-    const activated = await context.tools.execute({
+    const activated = await executeToolFixture(context, {
       agent, signal: new AbortController().signal, callId: ToolCallId(callId), name: 'cua',
       arguments: { method: 'activate', params: { appHandle: 'fixture-app' } },
     })
@@ -160,7 +162,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
 
   let objectCall = 0
   const objectApi = (owner: typeof agent) => createCuaApi(async (operation) => {
-    const result = await context.tools.execute({ agent: owner, signal: new AbortController().signal,
+    const result = await executeToolFixture(context, { agent: owner, signal: new AbortController().signal,
       callId: ToolCallId(`retained-object-${++objectCall}`), name: 'cua', arguments: operation })
     if (result.isError) throw new Error(JSON.stringify(result.content))
     return z.json().parse(result.value)
@@ -190,13 +192,13 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   expect((await readEvents()).filter(event => event.event === 'exit')).toHaveLength(1)
 
   const next = await context.agents.create({ sessionId: SessionId('native-loader-next'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
-  const stale = await context.tools.execute({ agent: next.agent, signal: new AbortController().signal,
+  const stale = await executeToolFixture(context, { agent: next.agent, signal: new AbortController().signal,
     callId: ToolCallId('stale-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
   })
   expect(stale.isError).toBe(true)
   expect(JSON.stringify(stale.content)).toContain('APP_ACCESS_REQUIRED')
   expect((await readEvents()).filter(event => event.event === 'start')).toHaveLength(1)
-  const selected = await context.tools.execute({ agent: next.agent, signal: new AbortController().signal,
+  const selected = await executeToolFixture(context, { agent: next.agent, signal: new AbortController().signal,
     callId: ToolCallId('select-new-task'), name: 'cua', arguments: { method: 'getApp', params: { selector: 'test.fixture' } },
   })
   expect(selected.isError).toBe(false)

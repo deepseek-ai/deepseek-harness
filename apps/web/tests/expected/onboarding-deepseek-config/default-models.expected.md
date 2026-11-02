@@ -1,6 +1,6 @@
 - dialog "设置":
+  - text: 设置
   - navigation:
-    - text: 设置
     - button "通用设置"
     - button "模型"
     - button "内置插件"
@@ -17,7 +17,9 @@
       - text: DeepSeek deepseek-official API 密钥
       - button "认证说明": "?"
       - textbox "API 密钥":
-        - /placeholder: 留空使用已保存凭据
+        - /placeholder: 留空使用环境认证（DEEPSEEK_API_KEY）
+        - text: dsh_onboarding_fixture_key
+      - button "显示密钥"
       - group:
         - text: 自定义设置 API 地址
         - textbox "API 地址":
@@ -25,18 +27,19 @@
         - text: 请填写兼容 Anthropic Messages 协议的 API 地址。
         - region "模型目录":
           - text: 模型目录 正在使用适配器默认模型
+          - button "调整模型顺序 1"
           - textbox "模型 ID 1":
             - /placeholder: 模型 ID
             - text: deepseek-flash
+          - button "模型选项 1" [expanded]
+          - button "删除模型 1"
           - textbox "显示名称 1":
             - /placeholder: 显示名称
             - text: DeepSeek-V4.1-Flash
-          - button "模型选项 1" [expanded]
-          - button "删除模型 1"
           - text: 上下文窗口
           - textbox "上下文窗口 1":
             - /placeholder: 1M
-            - text: 1M
+            - text: "1048576"
           - text: 最大输出 token 数
           - textbox "最大输出 token 数 1":
             - /placeholder: 256K
@@ -46,14 +49,15 @@
             - text: 文本
             - checkbox "图片" [checked]
             - text: 图片
+          - button "调整模型顺序 2"
           - textbox "模型 ID 2":
             - /placeholder: 模型 ID
             - text: deepseek-v4-pro
+          - button "模型选项 2"
+          - button "删除模型 2"
           - textbox "显示名称 2":
             - /placeholder: 显示名称
             - text: DeepSeek-V4-Pro
-          - button "模型选项 2"
-          - button "删除模型 2"
           - button "添加模型"
       - button "取消"
       - button "保存"

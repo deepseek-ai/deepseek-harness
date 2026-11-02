@@ -714,7 +714,7 @@ else process.exit(1);
     const initialFilesClose = await filesTab.locator('[data-dockkit-tab-close]').count()
     expect(initialFilesClose).toBe(1)
     await filesTab.click({ button: 'right' })
-    expect(await page.locator('[data-dockkit-tab-menu]:visible').count()).toBe(1)
+    await page.locator('[data-context-menu][role="menu"]').waitFor()
     await page.keyboard.press('Escape')
     await addTab.waitFor({ state: 'visible' })
     const initialAdd = await addTab.count()
@@ -1082,7 +1082,7 @@ else process.exit(1);
       width: (node as HTMLImageElement).naturalWidth,
       height: (node as HTMLImageElement).naturalHeight,
       draggable: (node as HTMLImageElement).draggable,
-    }))).toEqual({ width: 1, height: 1, draggable: false })
+    }))).toEqual({ width: 1, height: 1, draggable: true })
     const centering = await tinyImage.evaluate((node) => {
       const image = node.getBoundingClientRect()
       const scroller = node.closest('[data-textpreview-body]')?.getBoundingClientRect()
@@ -1105,6 +1105,47 @@ else process.exit(1);
     await page.getByRole('menuitem', { name: 'Fit width', exact: true }).click()
     await expect.poll(() => imageZoom.innerText()).toBe('100%')
 
+    await tinyImage.dragTo(input)
+    const draggedPreview = page.getByRole('group', { name: 'Pending attachments', exact: true }).getByRole('img')
+    await draggedPreview.waitFor({ state: 'visible', timeout: 5000 })
+    const draggedBytes = await draggedPreview.evaluate(async (node: HTMLImageElement) =>
+      Array.from(new Uint8Array(await (await fetch(node.src)).arrayBuffer())))
+    expect(Buffer.from(draggedBytes)).toEqual(TINY_PNG)
+    expect(await input.innerText()).toBe('')
+    await page.getByRole('button', { name: 'Remove image tiny.png', exact: true }).click()
+    const endedDrag = await tinyImage.evaluateHandle((node) => {
+      const proof = { token: '', started: false, ended: false }
+      window.addEventListener('dragstart', (event) => {
+        proof.token = event.dataTransfer!.getData('application/x-dsh-file')
+        proof.started = event.isTrusted && proof.token !== ''
+      }, { once: true })
+      node.addEventListener('dragend', (event) => { proof.ended = event.isTrusted && !node.isConnected }, { once: true })
+      return proof
+    })
+    const tinyRect = (await tinyImage.boundingBox())!
+    const inputRect = (await input.boundingBox())!
+    await page.mouse.move(tinyRect.x + tinyRect.width / 2, tinyRect.y + tinyRect.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(tinyRect.x - 20, tinyRect.y, { steps: 4 })
+    await expect.poll(() => endedDrag.evaluate(proof => proof.started)).toBe(true)
+    const tinyTab = column.locator('[data-dockkit-tab]').filter({ has: page.getByText('tiny.png', { exact: true }) })
+    await tinyTab.locator('[data-dockkit-tab-close]').evaluate((button: HTMLElement) => { button.click() })
+    await tinyImage.waitFor({ state: 'detached' })
+    await page.mouse.move(inputRect.x + inputRect.width / 2, inputRect.y + inputRect.height / 2, { steps: 5 })
+    await page.mouse.up()
+    await draggedPreview.waitFor({ state: 'visible', timeout: 5000 })
+    expect(Buffer.from(await draggedPreview.evaluate(async (node: HTMLImageElement) =>
+      Array.from(new Uint8Array(await (await fetch(node.src)).arrayBuffer()))))).toEqual(TINY_PNG)
+    await expect.poll(() => endedDrag.evaluate(proof => proof.ended)).toBe(true)
+    await page.getByRole('button', { name: 'Remove image tiny.png', exact: true }).click()
+    const retiredToken = await endedDrag.evaluate(proof => proof.token)
+    await input.evaluate((node, token) => {
+      const dataTransfer = new DataTransfer()
+      dataTransfer.setData('application/x-dsh-file', token)
+      node.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer }))
+    }, retiredToken)
+    expect(await draggedPreview.count()).toBe(0)
+    await endedDrag.dispose()
     await openFile('large.svg')
     await expect.poll(() => viewer.innerText()).toBe('Image')
     await viewer.click()
@@ -1143,6 +1184,17 @@ else process.exit(1);
     await page.getByRole('menuitem', { name: '100%', exact: true }).click()
     await expect.poll(async () => (await largeImage.boundingBox())!.width).toBeCloseTo(1200, 0)
     expect(await imageScrollport.evaluate(node => node.scrollWidth > node.clientWidth)).toBe(true)
+    await imageScrollport.evaluate((node) => { node.scrollLeft = 0; node.scrollTop = 0 })
+    const panBox = await imageScrollport.boundingBox()
+    if (panBox === null) throw new Error('image viewport missing')
+    await expect.poll(() => largeImage.evaluate(node => getComputedStyle(node).cursor)).toBe('grab')
+    await page.mouse.move(panBox.x + 180, panBox.y + 180)
+    await page.mouse.down()
+    await page.mouse.move(panBox.x + 100, panBox.y + 100, { steps: 8 })
+    await expect.poll(() => imageScrollport.evaluate(node => [node.scrollLeft, node.scrollTop])).toEqual([80, 80])
+    await expect.poll(() => largeImage.evaluate(node => getComputedStyle(node).cursor)).toBe('grabbing')
+    await page.mouse.up()
+    await expect.poll(() => largeImage.evaluate(node => getComputedStyle(node).cursor)).toBe('grab')
     svgZoom = await revealDocumentZoom(page, preview)
     await svgZoom.click()
     await page.getByRole('menuitem', { name: 'Fit width', exact: true }).click()
@@ -1151,9 +1203,11 @@ else process.exit(1);
     expect(await page.locator('html').getAttribute('data-image-preview-escape')).toBeNull()
     sections.push([
       '## Image zoom', '',
+      '- Contained sidebar PNG drags into the composer as an original-byte image attachment',
       '- Small PNG fit width remains at intrinsic size; 200% doubles it',
       '- SVG fit width -> 100% -> fit width toggles horizontal overflow: false -> true -> false',
       '- Image and Blob identities remain stable while zoom changes',
+      '- Overflowing image drag pans both axes by 80px; releasing restores the grab cursor',
     ].join('\n'))
 
     const releaseRead = Promise.withResolvers<undefined>()
@@ -1508,6 +1562,62 @@ else process.exit(1);
     expect(tripwire.warnings).toEqual([])
     await compareOrRefreshGolden(EXPECTED, sections.join('\n\n'), MODE)
     await assertFixtureInventory(SNAPSHOT_DIR, ['document.expected.md', 'applications.expected.md', 'applications-no-default.expected.md', 'paging.patch.yml'])
+  })
+
+  it('preserves Markdown reading position beyond the first page after automatic and manual refresh', async () => {
+    onTestFailed(() => saveFailureShot(page, `screenshots/0908-document-preview/refresh-scroll-${process.pid}`))
+    if (await page.getByText('LIGHTHOUSE', { exact: true }).count() === 0) {
+      const settled = scaffold.whenTurnSettled()
+      const input = page.locator('[data-composer-input]').first()
+      await input.fill(PROMPT)
+      await input.press('Enter')
+      await settled
+      await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
+    }
+    const cwd = scaffold.ctx.agents.list()[0]?.session.header.cwd
+    if (cwd === undefined) throw new Error('Session has no workspace cwd')
+    const path = join(cwd, 'refresh-scroll.md')
+    const markdown = '# Before refresh\n\n' + Array.from({ length: PAGE_LINES * 2 }, (_, index) => `Paragraph ${index + 1}\n`).join('\n')
+    await writeFile(path, markdown)
+    const column = page.locator('[data-rightbar-col]')
+    const expand = page.locator('[data-sidebar-right-expand]')
+    if (await expand.isVisible()) await expand.click()
+    const filesTab = column.locator('[data-dockkit-tab]').filter({ has: page.getByText('Files', { exact: true }) })
+    if (await filesTab.count() === 0) await column.locator('[data-sidebar-right-guide-entry="files"]').click()
+    await filesTab.click()
+    await column.locator('[data-files-reload]').click()
+    const preview = column.locator('[data-textpreview-url]')
+    await openPreviewFile(column, filesTab, preview, 'refresh-scroll.md')
+    const body = preview.locator('[data-textpreview-body]')
+    const heading = body.getByRole('heading', { level: 1 })
+    await expect.poll(() => heading.textContent()).toBe('Before refresh')
+    await expect.poll(() => preview.locator('[data-textpreview-more]').isEnabled()).toBe(true)
+    const target = await body.evaluate(node => node.scrollHeight + 100)
+    await scrollForNextPage(body)
+    await expect.poll(() => body.evaluate(node => node.scrollHeight - node.clientHeight)).toBeGreaterThan(target)
+    await body.evaluate((node, top) => new Promise<void>((resolve) => {
+      node.addEventListener('scroll', () => { resolve() }, { once: true })
+      node.scrollTop = top
+    }), target)
+    const original = await body.evaluate(node => node.scrollTop)
+    expect(original).toBe(target)
+    // Content growing above the viewport keeps the pixel offset instead of following the content.
+    await heading.evaluate((node) => { node.style.paddingTop = '300px' })
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    expect(await body.evaluate(node => node.scrollTop)).toBe(original)
+    await heading.evaluate((node) => { node.style.paddingTop = '' })
+
+    await writeFile(path, markdown.replace('Before refresh', 'After  refresh'))
+    await expect.poll(() => heading.textContent()).toBe('After  refresh')
+    await expect.poll(() => body.evaluate((node, top) => Math.abs(node.scrollTop - top), original)).toBeLessThanOrEqual(1)
+
+    const rendered = await heading.elementHandle()
+    await preview.locator('[data-textpreview-tool="reload"]').click()
+    await expect.poll(() => rendered!.evaluate(node => node.isConnected)).toBe(false)
+    await expect.poll(() => heading.textContent()).toBe('After  refresh')
+    await expect.poll(() => body.evaluate((node, top) => Math.abs(node.scrollTop - top), original)).toBeLessThanOrEqual(1)
+    await rendered!.dispose()
+    expect(tripwire.pageErrors).toEqual([])
   })
 })
 

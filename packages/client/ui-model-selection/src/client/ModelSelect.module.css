@@ -11,10 +11,11 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
-  /* Legacy fallback, then a row-relative cap that grants long names more
-     room without letting this trailing control consume the composer. */
-  max-width: 220px;
-  max-width: min(360px, 45cqw);
+  /* Preferred width: the composer measures this expanded seat against the
+     space the other controls leave, so the cap must not shrink with the row.
+     A row-relative cap would let the measured demand fall with the available
+     width, and the expanded text would then always fit. */
+  max-width: 360px;
   height: 28px;
   padding: 0 4px 0 8px;
   border: none;
@@ -29,8 +30,10 @@
   cursor: pointer;
 }
 
-.trigger:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .trigger:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .trigger:focus-visible:not([data-selection-focus]) {
@@ -89,16 +92,16 @@
    Menu primitive's portal rules), so the sidebar and the columns' overflow
    clips cannot crop it; z matches the primitive's .portal layer. */
 .menu {
+  box-sizing: border-box;
   position: fixed;
   z-index: 1100;
   display: flex;
   flex-direction: column;
-  /* Let the visible pane's rows set the card width, but keep pathological ids
-     and narrow screens inside a bounded card where ellipsis remains. */
+  /* Rows size the card up to its visible bounds; longer names ellipsize. */
   width: max-content;
-  min-width: min(240px, calc(100vw - 32px));
-  max-width: min(420px, calc(100vw - 32px));
-  max-height: min(360px, calc(100vh - 96px));
+  min-width: min(240px, calc(100vw - 32px), var(--dsh-anchored-max-width, 100vw));
+  max-width: min(420px, calc(100vw - 32px), var(--dsh-anchored-max-width, 100vw));
+  max-height: min(360px, calc(100vh - 96px), var(--dsh-anchored-max-height, 100vh));
   overflow: hidden;
   padding: 4px;
   /* Surface tokens match the Menu primitive card (ui-primitives
@@ -193,10 +196,16 @@
   cursor: pointer;
 }
 
-.searchClear:hover,
 .searchClear:focus-visible {
   outline: none;
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .searchClear:hover {
+    outline: none;
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .searchRow .search:focus-within {
@@ -209,12 +218,19 @@
   line-height: normal;
 }
 
+@media (pointer: coarse) {
+  .searchRow .search input {
+    font-size: 16px;
+  }
+}
+
 .searchRow .search input::placeholder {
   color: var(--dsw-alias-label-caption);
 }
 
-.groups {
+.groups:not([hidden]) {
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -236,10 +252,19 @@
   cursor: pointer;
 }
 
-.option:not(.modelOption):hover:not(:disabled),
 .option:focus-visible,
 .optionActive:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.modelOption {
+  max-width: 100%;
+}
+
+@media (hover: hover) {
+  .option:not(.modelOption):hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* Selection marker is the trailing check, not a fill — matches the Menu
@@ -268,6 +293,25 @@
   font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.badgedName {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 4px;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+.badgedNameText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  flex: none;
 }
 
 .check {
@@ -303,9 +347,14 @@
   outline: none;
 }
 
-.cell:hover,
 .cell:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .cell:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .cellLabel {

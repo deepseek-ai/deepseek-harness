@@ -85,7 +85,7 @@ This section explains the design decisions behind the tool and points at the cod
 
 ### Command flow
 
-A first command spawns the shell through `ctx.terminals.spawn`, disables input echo (`stty -echo`), and waits for readiness. Each command is then wrapped into one physical line — a printf of the start marker, the command body escaped with `$'…'`, and a printf of the end marker plus `$?` — so embedded newlines cannot leak terminal prompts into the result. The tool polls the scrollback in 1,000-line pages until the end marker appears, extracts the span, and renders it with any status marker. A timeout aborts the deadline, captures the partial output, and resets the shell.
+A first command spawns the shell through `ctx.terminals.spawn`, disables input echo and history expansion (`stty -echo; set +H`), and waits for readiness. Each command is then wrapped into one physical line — a printf of the start marker, the command body escaped with `$'…'`, and a printf of the end marker plus `$?` — so embedded newlines cannot leak terminal prompts into the result. With history expansion off, `!` sequences reach bash unchanged instead of being rewritten or rejecting the whole line. The tool polls the scrollback in 1,000-line pages until the end marker appears, extracts the span, and renders it with any status marker. A timeout aborts the deadline, captures the partial output, and resets the shell.
 
 </details>
 
@@ -148,6 +148,7 @@ These limits define when the tool is a poor fit or needs special care. They are 
 - **An interactive foreground child returns early with partial output only where the subprocess provider proves its stdin wait** — elsewhere the call runs to `timeoutMs`.
 - **Explicit `exit` and timeout discard shell state** — cancellation also resets and discards the result, even when a complete status marker is already observable; the next call starts a fresh shell.
 - **Environment facts such as network access and package mirrors belong in the configured `description`** — not this package's default.
+- **Raw control characters other than newline and carriage return reach readline as typed keys** — a literal TAB, ESC, or DEL in the command is consumed as an editing key, so content that needs them, such as a Makefile heredoc, should be written with a file tool or produced by `printf` escapes.
 
 <a id="dev-note"></a>
 ### Dev Note

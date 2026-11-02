@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for 2026-10-14-plugin-entry-customization.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-14-plugin-entry-customization.md
+/agent-note-plugin-entry-customization-region-owned-pins-and-more-menus:
+  en: 2fdf5b95d5603955
+  zh: bfdc61e7db5f5f5b
+/agent-note-plugin-entry-customization-region-owned-pins-and-more-menus/problem:
+  en: 896876f139383cba
+  zh: 42a4aae7e5885780
+/agent-note-plugin-entry-customization-region-owned-pins-and-more-menus/decision:
+  en: a6cfc29cb9caa83c
+  zh: 21bbeb6a7ab20018
+/agent-note-plugin-entry-customization-region-owned-pins-and-more-menus/decision/user-visible-behavior:
+  en: f1456281aa937626
+  zh: 6fef46b8d72ddd2b
+/agent-note-plugin-entry-customization-region-owned-pins-and-more-menus/decision/structure-and-ownership:
+  en: d6a2816ca55b1c38
+  zh: 53217016f1595755
+/agent-note-plugin-entry-customization-region-owned-pins-and-more-menus/decision/package-changes-relative-to-release-dsh-0-2-1:
+  en: 18ed81fee1ca7d41
+  zh: fc298457e54b6488
+/agent-note-plugin-entry-customization-region-owned-pins-and-more-menus/decision/actions-slots-and-menu-content:
+  en: c87e2fdd911714b5
+  zh: 074426fdc7abafa9
+/agent-note-plugin-entry-customization-region-owned-pins-and-more-menus/decision/the-three-regions:
+  en: 770c6150e84742ba
+  zh: 1d619388c8f38646
+/agent-note-plugin-entry-customization-region-owned-pins-and-more-menus/alternatives-considered:
+  en: 79355028387c4094
+  zh: 5b518166e4803ebe
+/agent-note-plugin-entry-customization-region-owned-pins-and-more-menus/verification:
+  en: 9c6a9ec155bbbfaa
+  zh: 8bd6e7afc8c43d21
+/agent-note-plugin-entry-customization-region-owned-pins-and-more-menus/consequences:
+  en: a2459a3316f3ee60
+  zh: 713b51329995fe46

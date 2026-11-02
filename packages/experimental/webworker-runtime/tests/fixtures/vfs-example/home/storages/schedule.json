@@ -1,30 +1,39 @@
 {
   "unit": {
     "name": "schedule",
-    "version": 1
+    "version": 2
   },
   "global": null,
   "tables": {
     "tasks": {
       "preview-daily-digest": {
-        "sessionId": "preview-showcase",
+        "target": {
+          "kind": "session",
+          "sessionId": "preview-showcase"
+        },
+        "involvedSessionIds": [
+          "preview-showcase"
+        ],
+        "status": "active",
+        "createdAt": "2026-08-23T08:00:00.000Z",
+        "updatedAt": "2026-08-23T08:00:00.000Z",
         "record": {
+          "kind": "rrule",
           "id": "preview-daily-digest",
-          "kind": "daily",
           "title": "Daily preview digest",
           "prompt": "Summarize the preview workspace changes and their verification status.",
-          "time": "09:00:00.000",
-          "timeZone": "Asia/Shanghai",
+          "rrule": "DTSTART;TZID=Asia/Shanghai:20990101T090000\nRRULE:FREQ=DAILY",
           "scheduledAt": "2099-01-01T01:00:00.000Z"
         },
-        "status": "active",
         "deliveryHistory": {
           "earlierRecordsUnavailable": false,
+          "earlierRecordsPruned": false,
           "records": [
             {
               "scheduledAt": "2098-12-31T01:00:00.000Z",
               "deliveredAt": "2098-12-31T01:00:01.000Z",
               "messageId": "preview-daily-digest-receipt",
+              "targetSessionId": "preview-showcase",
               "prompt": "Summarize the preview workspace changes and their verification status."
             }
           ]
@@ -32,19 +41,34 @@
         "lastDelivery": {
           "scheduledAt": "2098-12-31T01:00:00.000Z",
           "deliveredAt": "2098-12-31T01:00:01.000Z",
-          "messageId": "preview-daily-digest-receipt"
+          "messageId": "preview-daily-digest-receipt",
+          "targetSessionId": "preview-showcase"
         }
       },
       "preview-release-window": {
-        "sessionId": "preview-showcase",
+        "target": {
+          "kind": "session",
+          "sessionId": "preview-showcase"
+        },
+        "involvedSessionIds": [
+          "preview-showcase"
+        ],
+        "status": "active",
+        "createdAt": "2026-08-23T08:00:00.000Z",
+        "updatedAt": "2026-08-23T08:00:00.000Z",
         "record": {
+          "kind": "rrule",
           "id": "preview-release-window",
-          "kind": "at",
           "title": "Preview release window",
           "prompt": "Remind the preview owner that the release window opens.",
+          "rrule": "DTSTART:20990102T000000Z\nRRULE:FREQ=DAILY;COUNT=1",
           "scheduledAt": "2099-01-02T00:00:00.000Z"
         },
-        "status": "active"
+        "deliveryHistory": {
+          "records": [],
+          "earlierRecordsUnavailable": false,
+          "earlierRecordsPruned": false
+        }
       }
     }
   }

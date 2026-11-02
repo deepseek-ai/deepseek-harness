@@ -9,7 +9,7 @@ ManifestDPIAware true
 !endif
 
 !macro customHeader
-  !define /ifndef INSTALLER_STRINGS_FILE "${INSTALLER_SOURCE_DIR}\strings.nsh"
+  !define /ifndef INSTALLER_STRINGS_FILE "${INSTALLER_BUILD_DIR}\strings.nsh"
   !include "${INSTALLER_STRINGS_FILE}"
   !ifdef BUILD_UNINSTALLER
     BrandingText " "

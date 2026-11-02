@@ -35,6 +35,7 @@ export type Mode =
   | 'hygiene'
   | 'doc-sync'
   | 'doc-quick'
+  | 'i18n'
 
 type GateResultStatus = 'passed' | 'failed' | 'skipped'
 type GateState = 'pending' | 'running' | GateResultStatus
@@ -169,11 +170,12 @@ function parseMode(raw: string | undefined): Mode {
     case 'check-all':
     case 'hygiene':
     case 'doc-sync':
+    case 'i18n':
     case 'doc-quick':
       return raw
     default:
       throw new Error(
-        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-unit | ci-bench | ci-snapshot | ci-artifacts | ci-consumers | ci-windows-blocking | ci-windows-complete | ci-windows-observational-ready | node-compat | check-all | hygiene | doc-sync | doc-quick, got ${JSON.stringify(raw)}.`,
+        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-unit | ci-bench | ci-snapshot | ci-artifacts | ci-consumers | ci-windows-blocking | ci-windows-complete | ci-windows-observational-ready | node-compat | check-all | hygiene | doc-sync | doc-quick | i18n, got ${JSON.stringify(raw)}.`,
       )
   }
 }
@@ -277,6 +279,17 @@ function ciBuildGate(id = 'build', options: Partial<Gate> = {}): Gate {
   })
 }
 
+/**
+ * Emit the artifacts every artifact consumer reads, without the aggregate
+ * test and script type checks that the master lanes own.
+ */
+function ciArtifactBuildGate(id = 'build', options: Partial<Gate> = {}): Gate {
+  return pnpmScript(id, 'build:artifacts', {
+    ...options,
+    env: { ...options.env, [CLIENT_BUILD_PROFILE_SELECTOR]: 'official' },
+  })
+}
+
 function pnpmExec(id: string, args: string[], options: Partial<Gate> = {}): Gate {
   return {
     id,
@@ -363,6 +376,8 @@ export function gatesForMode(selected: Mode): Gate[] {
       return docSyncLeafGates()
     case 'doc-quick':
       return docQuickLeafGates()
+    case 'i18n':
+      return i18nGates(true)
   }
 }
 
@@ -385,12 +400,21 @@ function ciSharedStaticGates(): Gate[] {
   ]
 }
 
+function i18nGates(includeDictionaries: boolean): Gate[] {
+  return [
+    pnpmScript('installer-locales', 'verify-installer-locales', { label: 'Windows installer locales' }),
+    pnpmScript('locale-metadata', 'verify-locale-metadata', { label: 'plugin locale metadata' }),
+    ...includeDictionaries ? [pnpmExec('locale-dictionaries', ['vitest', 'run', 'scripts/locale-dictionary-parity.spec.ts', 'scripts/shipped-locales.spec.ts', 'packages/client/locale/tests/apply.client.spec.ts'], { label: 'locale dictionaries' })] : [],
+  ]
+}
+
 function sharedHygieneGates(): Gate[] {
   return [
     pnpmScript('optional-dependency-imports', 'verify-optional-dependency-imports', {
       label: 'optional dependency imports',
     }),
     pnpmScript('client-packages', 'verify-client-packages', { label: 'client packages' }),
+    ...i18nGates(false),
     pnpmScript('client-ui-i18n', 'verify-client-ui-i18n', { label: 'client UI i18n' }),
     pnpmScript('client-route-resolution', 'verify-client-route-resolution', { label: 'client route resolution' }),
     pnpmScript('no-bare-dispatcher', 'verify-no-bare-dispatcher', { label: 'proxy-aware dispatchers' }),
@@ -517,7 +541,6 @@ function ciConsumerGates(): Gate[] {
   // writer starts; `after` preserves the web diagnostic even if a reader fails.
   const buildArtifactReaders = [
     'publint',
-    'lint-and-duplication',
     'snapshot',
     'expected-output',
     'doc-typecheck',
@@ -525,16 +548,12 @@ function ciConsumerGates(): Gate[] {
     'built-bin-smoke',
   ]
   return [
-    ciBuildGate(),
+    ciArtifactBuildGate(),
     pnpmScript('node-compat', 'check:node-compat', {
       label: 'Node compatibility',
       env: { [CLIENT_BUILD_PROFILE_SELECTOR]: 'official' },
     }),
     pnpmScript('publint', 'publint', { needs: builtTree }),
-    pnpmScript('lint-and-duplication', 'check:ci:lint:contracts-ready', {
-      label: 'lint and duplication',
-      needs: builtTree,
-    }),
     snapshotGate(builtTree),
     expectedOutputGate(builtTree),
     webSnapshotGate(builtTree, buildArtifactReaders),
@@ -814,7 +833,11 @@ function docSyncLeafGates(options: {
       : [pnpmScript('doc-typecheck', options.docTypecheckScript ?? 'doc-typecheck', docTypecheckOptions)],
     pnpmScript('docs-site-build', options.docsBuildScript ?? 'docs:build', { label: 'documentation build' }),
     pnpmScript('doc-graphs', 'verify-doc-graphs', { label: 'doc graphs' }),
-    pnpmScript('cli-help', 'verify-cli-help', { label: 'CLI help reference' }),
+    pnpmScript('cli-help', 'verify-cli-help', {
+      label: 'CLI help reference',
+      // Other gate workers already run beside this leaf; direct help generation keeps its own worker budget.
+      env: { DSH_CLI_HELP_CONCURRENCY: process.env.DSH_CLI_HELP_CONCURRENCY || '1' },
+    }),
     pnpmScript('markdown-links', 'verify-md-links', { label: 'markdown links', quick: true }),
     pnpmScript('type-equivalence', 'verify-type-equiv', { label: 'type equivalence', quick: true }),
     pnpmScript('cordis-catalog', 'verify-cordis-catalog', { label: 'cordis catalog' }),
@@ -860,6 +883,7 @@ function docSyncLeafGates(options: {
       'website/tests/mermaid-viewer.spec.ts',
       'website/tests/image-viewer.spec.ts',
       'website/tests/code-groups.spec.ts',
+      'website/tests/table-filter.spec.ts',
       'website/tests/page-markdown-actions.spec.ts', 'website/tests/raw-markdown.spec.ts',
     ], {
       label: 'documentation site checks',
@@ -894,7 +918,7 @@ function builtBinSmokeGate(needs: string[] = ['build']): Gate {
     'packages/subagent/subagent-codex/tests/loader-composition.e2e.ts',
     'packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts',
     'packages/api/remotes/tests/built-lib.e2e.ts',
-    'packages/experimental/agent-team/tests/built-lib.e2e.ts',
+    'packages/team/agent-team/tests/built-lib.e2e.ts',
     // Built execution consumers: the only automated proof that package-name
     // imports reach their lib/ entrypoints under plain Node. The e2e lane runs
     // unbuilt, so these files self-skip there.

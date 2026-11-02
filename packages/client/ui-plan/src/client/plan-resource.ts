@@ -1,6 +1,5 @@
-/** Read immutable plan arguments from a Session snapshot and earlier history pages. */
+/** Read immutable plan arguments from a Session history page and earlier pages. */
 import type { Context } from '@deepseek-ai/cordis'
-import type { SessionFollowFrame } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { ResourceProvider } from '@deepseek-ai/dsh-client-resources/client'
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -10,8 +9,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
     /** The resource URL does not identify a plan invocation. */
     'plan/invalid-address': Record<string, never>
-    /** Session history ended before an opening snapshot. */
-    'plan/unavailable': Record<string, never>
     /** The Session has no readable plan for this invocation. */
     'plan/not-found': Record<string, never>
     /** The Session history read failed. */
@@ -28,13 +25,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /**
  * Bind plan reads to the generated Session Remote face.
- * Opening a follow reads projections and may activate a prepared Session on the Host.
- * Generated Remote streams can throw carrier failures; the provider reports failed
- * reads as resource failure frames and preserves Remote error codes.
+ * A plan is a logged tool-call argument, so the provider reads one page at the current log
+ * end and pages backwards from its cut. It neither activates nor subscribes.
+ * Remote failures are reported as resource failure frames with their original codes.
  * @param remote - Existing Session history API.
  * @returns a provider whose reads stop after finding the exact invocation.
  */
-export function planResourceProvider(remote: Pick<Context['remote']['session'], 'follow' | 'page'>): ResourceProvider<'plan'> {
+export function planResourceProvider(remote: Pick<Context['remote']['session'], 'events' | 'page'>): ResourceProvider<'plan'> {
   return {
     protocol: 'plan',
     async *open(address, { signal }): AsyncIterable<RemoteResult<SubmittedPlan>> {
@@ -47,14 +44,12 @@ export function planResourceProvider(remote: Pick<Context['remote']['session'], 
       }
       const sessionAddress = target.session
       try {
-        // The snapshot supplies the page API's fixed log cut. Breaking closes the follow stream.
-        let snapshot: Extract<SessionFollowFrame, { type: 'snapshot' }> | undefined
-        for await (const frame of remote.follow({ address: sessionAddress }, signal)) {
-          if (frame.type === 'snapshot') { snapshot = frame; break }
-        }
+        // One page fixes the cut the later pages page back from.
+        const first = await remote.events({ address: sessionAddress }, signal)
         if (aborted()) return
-        if (snapshot === undefined) throw new RemoteError('plan/unavailable', 'Session history ended before the plan could be read.', {})
-        let page = { records: snapshot.records, hasMore: snapshot.hasMore }
+        if (!first.ok) { yield { ok: false, error: first.error }; return }
+        const throughSeq = first.value.cursor
+        let page = { records: first.value.records, hasMore: first.value.hasMore }
         while (true) {
           for (const entry of page.records) {
             const plan = submittedPlan(entry.event)
@@ -65,7 +60,7 @@ export function planResourceProvider(remote: Pick<Context['remote']['session'], 
           }
           const beforeSeq = page.records[0]?.event.seq
           if (!page.hasMore || beforeSeq === undefined) break
-          const next = await remote.page({ address: sessionAddress, throughSeq: snapshot.cursor, beforeSeq }, signal)
+          const next = await remote.page({ address: sessionAddress, throughSeq, beforeSeq }, signal)
           if (aborted()) return
           if (!next.ok) { yield next; return }
           page = next.value

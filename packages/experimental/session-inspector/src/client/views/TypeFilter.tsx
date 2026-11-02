@@ -34,10 +34,14 @@ export function TypeFilter({ value, suggest, apply, t }: InspectorTypeFilterProp
     if (restoreFocus) anchor.current?.focus({ preventScroll: true })
   }, [])
   const commit = (query: string): void => { apply(query); close(true) }
+  const positioned = position !== null
   useEffect(() => {
-    if (!open) return
+    if (!open || !positioned) return
     input.current?.focus({ preventScroll: true })
     input.current?.select()
+  }, [open, positioned])
+  useEffect(() => {
+    if (!open) return
     const outside = (event: PointerEvent): void => {
       const target = event.target
       if (target instanceof Node && !panel.current?.contains(target) && !anchor.current?.contains(target)) close(false)

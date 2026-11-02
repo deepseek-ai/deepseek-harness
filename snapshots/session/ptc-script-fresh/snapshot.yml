@@ -1,0 +1,9 @@
+version: 1
+scenario: ptc-script-fresh
+profile: headless
+composition: ptc
+recording: authored
+header:
+  class: ptc-script-fresh
+  pin: true
+permission: workspace-write

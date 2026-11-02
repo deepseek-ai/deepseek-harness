@@ -72,7 +72,7 @@ One small shared execution policy so operational behavior cannot drift: executio
 
 ### Request flow
 
-The caller builds the prepared input and frames it; the function checks the complete input against `maxInputBytes`. The provider's reasoning selector chooses at most one effort during `ctx.llm.prepareCall()`. The function records the exact input, output cap, and resolved effort in `session/title-llm-request`, then dispatches through the same captured adapter generation under the shared deadline. `purpose: 'session-title'` supplies attribution only. The request has no agent-loop identity and does not enter conversation history. Generation failures preserve the request record.
+The caller builds the prepared input and frames it; the function checks the complete input against `maxInputBytes`. The provider's reasoning selector chooses at most one effort during `ctx.llm.prepareCall()`. The function records the exact input, output cap, and resolved effort in `session/title-llm-request`, then dispatches through the same captured adapter generation under the shared deadline. `purpose: 'session-title'` supplies attribution only. The request has no agent-loop identity and does not enter conversation history. Generation failures preserve the request record. The package declares `session-title` in `LlmRequestPurposeMap`; importing its public entry loads that declaration.
 
 </details>
 

@@ -7,7 +7,6 @@ platform: posix
 header:
   class: model-switch-compaction
   pin: true
-  systemPromptSource: compaction-recovery
   toolSchemasSource: compaction-recovery
   changes: 1
-  promptChanges: 0
+  promptChanges: 1

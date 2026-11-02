@@ -84,6 +84,17 @@ describe('web e2e: settings modal and General preferences', () => {
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.waitFor({ timeout: 10_000 })
     expect(await trigger.getAttribute('aria-expanded')).toBe('false')
+    const panelBox = await dialog.boundingBox()
+    const optionsBox = await dialog.locator('[class*="_options"]').boundingBox()
+    const firstSectionBox = await dialog.getByRole('navigation').getByRole('button').first().boundingBox()
+    expect(optionsBox!.y - panelBox!.y).toBe(54)
+    expect(firstSectionBox!.y - panelBox!.y).toBe(64)
+    const lastSection = dialog.getByRole('navigation').getByRole('button').last()
+    await lastSection.focus()
+    await page.keyboard.press('Tab')
+    expect(await dialog.getByRole('button', { name: '打开配置文件' }).evaluate(el => el === document.activeElement)).toBe(true)
+    await page.keyboard.press('Tab')
+    expect(await dialog.getByRole('button', { name: '关闭', exact: true }).evaluate(el => el === document.activeElement)).toBe(true)
     // General is active by default; Permission, Language and Appearance are functional.
     expect(await dialog.getByRole('button', { name: '通用设置' }).getAttribute('aria-current')).toBe('true')
     await dialog.getByRole('button', { name: '工作区内修改' }).waitFor({ timeout: 10_000 })
@@ -210,7 +221,7 @@ describe('web e2e: settings modal and General preferences', () => {
     await page.keyboard.press('Escape')
     await expect.poll(() => page.getByRole('dialog', { name: '设置' }).count(), { timeout: 5_000 }).toBe(0)
     expect(await trigger.getAttribute('aria-expanded')).toBe('false')
-    // Close path 2: the header close button (focus lands there on open).
+    // Close path 2: the header close button.
     await openSettings(page, 'zh')
     await page.getByRole('dialog', { name: '设置' }).getByRole('button', { name: '关闭' }).click()
     await expect.poll(() => page.getByRole('dialog', { name: '设置' }).count(), { timeout: 5_000 }).toBe(0)
@@ -227,7 +238,7 @@ describe('web e2e: settings modal and General preferences', () => {
     const dialog = overflowPage.getByRole('dialog', { name: '设置', exact: true })
     const navigation = dialog.getByRole('navigation')
     const list = navigation.locator('[class*="_navList"]')
-    const title = navigation.getByText('设置', { exact: true })
+    const title = dialog.getByText('设置', { exact: true })
     const options = dialog.locator('[class*="_options"]')
     const last = navigation.getByRole('button').last()
     await last.waitFor()
@@ -261,9 +272,106 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(console.warnings).toEqual([])
   })
 
+  it('fills a phone viewport and turns the rail into the horizontal section strip', async () => {
+    const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, locale: ZH_BROWSER_LOCALE })
+    onTestFinished(() => phone.close())
+    onTestFailed(() => saveSettingsFailureShot(phone, 'web-e2e-settings-phone'))
+    const console = watchConsole(phone)
+    await phone.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await openSettings(phone, 'zh')
+    const dialog = phone.getByRole('dialog', { name: '设置', exact: true })
+    await dialog.waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '通用设置', exact: true }).waitFor({ timeout: 10_000 })
+
+    // The panel is the viewport: no centered card, no side margins, no rail.
+    await expect.poll(() => dialog.boundingBox()).toEqual({ x: 0, y: 0, width: 390, height: 844 })
+
+    // The rail reads left to right on one line instead of stacking.
+    const navigation = dialog.getByRole('navigation')
+    const list = navigation.locator('[class*="_navList"]')
+    const cells = navigation.getByRole('button')
+    const first = await cells.first().boundingBox()
+    const second = await cells.nth(1).boundingBox()
+    expect(first).not.toBeNull()
+    expect(second).not.toBeNull()
+    expect(second!.x).toBeGreaterThanOrEqual(first!.x + first!.width - 1)
+    expect(Math.abs(second!.y - first!.y)).toBeLessThan(1)
+    expect(await list.evaluate(el => getComputedStyle(el).overflowX)).toBe('auto')
+
+    // The shipped sections overflow the strip, which scrolls sideways; the
+    // section column starts below it and keeps the panel's width.
+    const strip = await list.boundingBox()
+    const options = dialog.locator('[class*="_options"]')
+    const optionsBox = await options.boundingBox()
+    expect(strip).not.toBeNull()
+    expect(optionsBox).not.toBeNull()
+    expect(await list.evaluate(el => el.scrollWidth)).toBeGreaterThan(await list.evaluate(el => el.clientWidth))
+    expect(optionsBox!.y).toBeGreaterThanOrEqual(strip!.y + strip!.height - 1)
+    expect(Math.round(optionsBox!.width)).toBe(390)
+    expect(await phone.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+
+    // Tapping a cell swaps the page, and a General row keeps its label and
+    // control on one line rather than stacking.
+    await cells.nth(1).click()
+    await expect.poll(() => cells.nth(1).getAttribute('aria-current')).toBe('true')
+    await expect.poll(() => dialog.getByText('权限', { exact: true }).count()).toBe(0)
+    await cells.first().click()
+    await expect.poll(() => dialog.getByText('权限', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
+    const permissionRow = dialog.getByText('权限', { exact: true }).locator('..')
+    const permissionBox = await permissionRow.boundingBox()
+    const controlBox = await dialog.getByRole('button', { name: '工作区内修改' }).boundingBox()
+    expect(controlBox).not.toBeNull()
+    expect(permissionBox).not.toBeNull()
+    expect(controlBox!.y).toBeLessThan(permissionBox!.y + permissionBox!.height)
+
+    // The Appearance cubes share one row instead of wrapping to two.
+    const cubes = dialog.getByRole('button', { name: /浅色|深色|跟随系统/ })
+    const cubeBoxes = await cubes.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top))
+    expect(new Set(cubeBoxes.map(top => Math.round(top))).size).toBe(1)
+
+    await cells.first().focus()
+    for (let index = 1; index < await cells.count(); index += 1) {
+      await phone.keyboard.press('Tab')
+    }
+    const last = cells.last()
+    expect(await last.evaluate(el => el === document.activeElement)).toBe(true)
+    const lastBox = await last.boundingBox()
+    // Scroll offsets can round while glyph widths remain fractional.
+    expect(Math.round(lastBox!.x)).toBeGreaterThanOrEqual(0)
+    expect(Math.round(lastBox!.x + lastBox!.width)).toBeLessThanOrEqual(390)
+    await last.click()
+    await expect.poll(() => last.getAttribute('aria-current')).toBe('true')
+    await phone.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'hidden' })
+    await openSettings(phone, 'zh')
+    const active = dialog.locator('[aria-current="true"]')
+    expect(await active.textContent()).toBe('通用设置')
+    expect(await active.evaluate(el => el === document.activeElement)).toBe(true)
+
+    const close = dialog.getByRole('button', { name: '关闭', exact: true })
+    const closeBox = await close.boundingBox()
+    expect(closeBox!.width).toBe(28)
+    expect(closeBox!.x).toBeGreaterThanOrEqual(0)
+    expect(closeBox!.y).toBeGreaterThanOrEqual(0)
+    expect(closeBox!.x + closeBox!.width).toBeLessThanOrEqual(390)
+    expect(closeBox!.y + closeBox!.height).toBeLessThanOrEqual(844)
+    await close.click()
+    await dialog.waitFor({ state: 'hidden' })
+    const trigger = phone.getByRole('button', { name: '账号菜单', exact: true })
+    await expect.poll(() => trigger.evaluate(el => el === document.activeElement)).toBe(true)
+
+    expect(console.pageErrors).toEqual([])
+    expect(console.warnings).toEqual([])
+  })
+
   it('stores Permission as the default for future sessions without changing an existing session', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-permission'))
-    const existing = scaffold.ctx.sessions.create(SessionId('settings-permission-before'))
+    const createSession = async (id: string) => {
+      const handle = await scaffold.ctx.agents.create({ sessionId: SessionId(id) })
+      onTestFinished(() => handle.dispose())
+      return handle.agent.session
+    }
+    const existing = await createSession('settings-permission-before')
     expect(existing.snapshotEvents().find(event => event.type === 'permission/preset')?.data)
       .toEqual({ preset: 'workspace-write' })
 
@@ -283,7 +391,7 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(existing.snapshotEvents().find(event => event.type === 'permission/preset')?.data)
       .toEqual({ preset: 'workspace-write' })
 
-    const created = scaffold.ctx.sessions.create(SessionId('settings-permission-after'))
+    const created = await createSession('settings-permission-after')
     expect(created.snapshotEvents().map(event => [event.type, event.data])).toEqual([
       ['permission/preset', { preset: 'read-only' }],
       ['sandbox/mode', { mode: 'read-only' }],
@@ -300,7 +408,7 @@ describe('web e2e: settings modal and General preferences', () => {
     await dialog.getByRole('button', { name: '完全权限' }).waitFor({ timeout: 10_000 })
     const confirmedDocument = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(confirmedDocument).toContain('defaultPreset: danger-full-access')
-    const confirmed = scaffold.ctx.sessions.create(SessionId('settings-permission-confirmed'))
+    const confirmed = await createSession('settings-permission-confirmed')
     expect(confirmed.snapshotEvents().map(event => [event.type, event.data])).toEqual([
       ['permission/preset', { preset: 'danger-full-access' }],
       ['sandbox/mode', { mode: 'danger-full-access' }],
@@ -869,18 +977,18 @@ describe('web e2e: settings modal and General preferences', () => {
 
   it('opens a browser asking for no shipped language in English', async () => {
     // The product default for "no usable signal": a French browser ships
-    // neither zh nor en, so resolution falls to FALLBACK_LOCALE (en) rather
+    // names no shipped language, so resolution falls to FALLBACK_LOCALE (en) rather
     // than to Chinese.
     const fresh = await launchWebScaffold({ developerTools: false })
-    const frPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'fr-FR' })
-    const frTripwire = watchConsole(frPage)
-    onTestFailed(() => saveSettingsFailureShot(frPage, 'settings-unshipped-language'))
+    const unsupportedPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: 'it-IT' })
+    const unsupportedTripwire = watchConsole(unsupportedPage)
+    onTestFailed(() => saveSettingsFailureShot(unsupportedPage, 'settings-unshipped-language'))
     try {
-      await frPage.goto(fresh.authenticatedUrl, { waitUntil: 'load' })
-      await frPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      expect(await frPage.evaluate(() => localStorage.getItem('dsh.locale'))).toBeNull()
-      await openSettings(frPage, 'en')
-      const dialog = frPage.getByRole('dialog', { name: 'Settings' })
+      await unsupportedPage.goto(fresh.authenticatedUrl, { waitUntil: 'load' })
+      await unsupportedPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      expect(await unsupportedPage.evaluate(() => localStorage.getItem('dsh.locale'))).toBeNull()
+      await openSettings(unsupportedPage, 'en')
+      const dialog = unsupportedPage.getByRole('dialog', { name: 'Settings' })
       await dialog.waitFor({ timeout: 10_000 })
       await dialog.getByRole('button', { name: 'English' }).waitFor({ timeout: 10_000 })
       // A locale-owned nav label proves the dictionaries resolved to en.
@@ -888,17 +996,17 @@ describe('web e2e: settings modal and General preferences', () => {
       // The markup already ships `en`, so this alone cannot prove the sync ran
       // — the zh scenario above is the discriminating half. Asserted here too
       // so a future change that resolves en but writes the wrong tag is caught.
-      expect(await frPage.evaluate(() => document.documentElement.lang)).toBe('en')
+      expect(await unsupportedPage.evaluate(() => document.documentElement.lang)).toBe('en')
       // Golden of the English fallback dialog — the visible output this change
       // produces. The zh golden above covers the detected-locale surface, so
       // the pair pins both directions of the resolution.
       await dialog.getByText(`Current version: ${version}`, { exact: true }).waitFor()
-      const snapshot = await captureStableAria(frPage, '[role="dialog"]', fresh.workspaceCwd, versionCapture)
+      const snapshot = await captureStableAria(unsupportedPage, '[role="dialog"]', fresh.workspaceCwd, versionCapture)
       await compareOrRefreshGolden(DIALOG_EN_EXPECTED, snapshot, MODE)
-      expect(frTripwire.pageErrors).toEqual([])
-      expect(frTripwire.warnings).toEqual([])
+      expect(unsupportedTripwire.pageErrors).toEqual([])
+      expect(unsupportedTripwire.warnings).toEqual([])
     } finally {
-      await frPage.close()
+      await unsupportedPage.close()
       await fresh.close()
     }
   }, 90_000)

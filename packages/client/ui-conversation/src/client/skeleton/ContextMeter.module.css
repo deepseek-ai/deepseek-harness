@@ -24,10 +24,16 @@
   cursor: pointer;
 }
 
-.trigger:hover,
 .trigger[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .trigger:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .track {
@@ -59,6 +65,12 @@
   line-height: 20px;
   color: var(--dsw-alias-label-secondary);
   cursor: default;
+  max-width: var(--dsh-anchored-max-width, none);
+  max-height: var(--dsh-anchored-max-height, none);
+  overflow-x: hidden;
+  overflow-y: auto;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 .header {

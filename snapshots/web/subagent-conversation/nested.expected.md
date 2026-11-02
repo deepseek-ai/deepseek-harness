@@ -10,10 +10,12 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Give one concrete event sourcing example. {{clock}}
 - button "Copy"
 - status: Completed
 - button "Completed in {{duration}}" [disabled]
-- status:
-  - strong: This subagent is read-only for now
-  - text: The parent session is offline; reopen it to continue sending messages.
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands"
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Send message" [disabled]

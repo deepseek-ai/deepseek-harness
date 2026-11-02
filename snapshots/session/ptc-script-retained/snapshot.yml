@@ -1,0 +1,11 @@
+version: 1
+scenario: ptc-script-retained
+profile: headless
+composition: ptc
+recording: authored
+header:
+  class: ptc-script-retained
+  pin: true
+permission: workspace-write
+workspace:
+  setup: cua-script-guidance

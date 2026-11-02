@@ -135,7 +135,9 @@ export function createRedactedWindowsSigningError(error, path, secrets) {
   const stderr = record !== undefined && 'stderr' in record
     ? redactedSigningOutput(record.stderr, secrets).trim()
     : ''
-  return new Error(`Windows release signing failed for ${path}${code}${stderr === '' ? '' : `: ${stderr}`}`)
+  return new Error(`Windows release signing failed for ${path}${code}${stderr === '' ? '' : `: ${stderr}`}. `
+    + 'Signing stopped. After replacing the UKey, check the certificate, container, SafeNet provider and user PIN. '
+    + 'This error does not establish device lock status or whether PIN retries were consumed; inspect the retained interlock before operator recovery.')
 }
 
 /**

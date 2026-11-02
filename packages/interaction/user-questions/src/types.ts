@@ -32,6 +32,23 @@ export type AskUserQuestionIntent = {
   approve: string
   /** Logged tool invocation whose arguments contain the reviewed plan. */
   callId?: ToolCallId
+} | {
+  /** A blocking permission decision with fixed actions and no free-text answer. */
+  kind: 'approval'
+  /** Option label granting the scope described by the caller. */
+  approve: string
+  /** Option label refusing the requested access. */
+  reject: string
+  /** Optional persistent grant offered only when the caller supports it. */
+  always?: string
+  /** Metadata for human recognition; the caller admits icon sources, which the UI may load as URLs. Never an authorization identity. */
+  subject?: { name: string; icon?: string }
+  /** Localized question and limited-grant label; fixed cards own reject/always wording. Option labels remain answer values. */
+  display?: {
+    question: { en: string; [locale: string]: string }
+    detail?: { en: string; [locale: string]: string }
+    approve?: { en: string; [locale: string]: string }
+  }
 }
 
 /** One question in a user-questions request. */

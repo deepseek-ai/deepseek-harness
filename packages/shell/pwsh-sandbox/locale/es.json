@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Ejecución de zona de pruebas de PowerShell",
+    "description": "Ejecute comandos de PowerShell dentro de los permisos actuales de la zona de pruebas."
+  }
+}

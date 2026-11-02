@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Worktree service",
+    "description": "Create named Git worktrees and change the current session's working directory."
+  }
+}

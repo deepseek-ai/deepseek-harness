@@ -7,6 +7,7 @@
  * A runner in `America/Toronto` formats `America/New_York`'s sample instant
  * identically, which is how such a case fails on some hosts only.
  */
+import { vi } from 'vitest'
 
 /**
  * Candidate fixture zones.
@@ -62,4 +63,15 @@ export function zoneDifferingFrom(
     throw new Error(`No fixture zone differs from ${deviceZone} at ${instant}; add one to CANDIDATE_ZONES.`)
   }
   return chosen
+}
+
+/**
+ * Pin the zone `Intl.DateTimeFormat` resolves for the runner, so a case that
+ * compares a rule's zone with the system zone renders the same on every host.
+ * The spy lasts until the spec restores its mocks.
+ * @param timeZone - IANA zone the components must resolve as the system zone.
+ */
+export function pinSystemZone(timeZone: string): void {
+  const options = new Intl.DateTimeFormat().resolvedOptions()
+  vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({ ...options, timeZone })
 }

@@ -109,16 +109,18 @@ const REFUSAL_STATUS = 500
 
 const encoder = new TextEncoder()
 const SOURCE_MAP_TRAILER = /\/\/# sourceMappingURL=([^\r\n]+)\s*$/
-const BASE64_CHUNK_BYTES = 32 * 1024
 
-/** Encode UTF-8 text for an inline data URL without a call-stack-sized spread. */
-function base64(value: string): string {
-  const bytes = encoder.encode(value)
-  let binary = ''
-  for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_BYTES) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + BASE64_CHUNK_BYTES))
-  }
-  return btoa(binary)
+/**
+ * Encode source-map bytes as a Base64 data URL with the browser's native encoder.
+ * DevTools cannot load a `blob:` source map, so the map must be inline.
+ */
+function sourceMapDataUrl(bytes: ArrayBuffer): Promise<string> {
+  const reader = new FileReader()
+  return new Promise((resolve, reject) => {
+    reader.addEventListener('load', () => { resolve(reader.result as string) }, { once: true })
+    reader.addEventListener('error', () => { reject(reader.error ?? new Error('source map encoding failed')) }, { once: true })
+    reader.readAsDataURL(new Blob([bytes], { type: 'application/json;charset=utf-8' }))
+  })
 }
 
 /** Replace a tunnel-only map reference with a self-contained Base64 data URL. */
@@ -128,7 +130,7 @@ async function localizeSourceMap(source: string, bundleUrl: string, fetch: Tunne
   try {
     const response = await fetch(new URL(match[1], new URL(bundleUrl, globalThis.location.origin)))
     if (!response.ok) return source.replace(SOURCE_MAP_TRAILER, '')
-    const dataUrl = `data:application/json;charset=utf-8;base64,${base64(await response.text())}`
+    const dataUrl = await sourceMapDataUrl(await response.arrayBuffer())
     return source.replace(SOURCE_MAP_TRAILER, `//# sourceMappingURL=${dataUrl}`)
   } catch {
     // A source map is diagnostic-only; its transport failure must not prevent

@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { zipSync } from 'fflate'
 import { expect, it } from 'vitest'
-import { downloadPrimaryRuntimeAsset, prepareOfficeSkillAssets, primaryRuntimePayloadDigest, smokePrimaryRuntime, unpackPrimaryRuntimeWheel } from './prepare.ts'
+import { downloadPrimaryRuntimeAsset, prepareOfficeSkillAssets, primaryRuntimePayloadDigest, prunePnpmForeignNativePackages, smokePrimaryRuntime, unpackPrimaryRuntimeWheel } from './prepare.ts'
 import lock from './lock.json' with { type: 'json' }
 
 it('covers every SDK wheel target with the shared interpreter lock', () => {
@@ -166,4 +166,42 @@ it('keeps carrier pnpm versions aligned with the shared payload build', () => {
   }
   expect(desktop.devDependencies.pnpm).toBe(root.devDependencies.pnpm)
   expect(root.packageManager).toBe(`pnpm@${root.devDependencies.pnpm}`)
+})
+
+it.each([
+  ['darwin', 'arm64', ['reflink', 'reflink-darwin-arm64'], ['.bin', '@reflink', 'any-cpu', 'not-windows', 'semver']],
+  ['darwin', 'x64', ['reflink', 'reflink-darwin-x64'], ['.bin', '@reflink', 'any-cpu', 'not-windows', 'semver']],
+  ['win32', 'x64', ['reflink', 'reflink-win32-x64-msvc'], ['.bin', '@reflink', 'any-cpu', 'not-darwin', 'semver']],
+] as const)('keeps only pnpm-bundled packages that %s/%s admits', async (platform, arch, reflink, top) => {
+  const root = await mkdtemp(join(tmpdir(), 'primary-pnpm-natives-'))
+  try {
+    const modules = join(root, 'dist', 'node_modules')
+    const packages: Record<string, { os?: string[]; cpu?: string[] }> = {
+      'semver': {}, '@reflink/reflink': {}, 'any-cpu': { cpu: ['any'] },
+      '@reflink/reflink-darwin-arm64': { os: ['darwin'], cpu: ['arm64'] },
+      '@reflink/reflink-darwin-x64': { os: ['darwin'], cpu: ['x64'] },
+      '@reflink/reflink-win32-x64-msvc': { os: ['win32'], cpu: ['x64'] },
+      'not-windows': { os: ['!win32'] },
+      'not-darwin': { os: ['!darwin'] },
+      'contradictory': { os: ['darwin', 'win32', '!darwin', '!win32'] },
+    }
+    for (const [name, fields] of Object.entries(packages)) {
+      await mkdir(join(modules, name), { recursive: true })
+      await writeFile(join(modules, name, 'package.json'), JSON.stringify({ name, ...fields }))
+    }
+    await mkdir(join(modules, '.bin'))
+    await writeFile(join(modules, '.modules.yaml'), '')
+    prunePnpmForeignNativePackages(root, platform, arch)
+    expect((await readdir(modules)).filter(name => name !== '.modules.yaml').sort()).toEqual(top)
+    expect((await readdir(join(modules, '@reflink'))).sort()).toEqual(reflink)
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('names the bundled manifest whose platform field is invalid', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'primary-pnpm-invalid-'))
+  try {
+    await mkdir(join(root, 'dist', 'node_modules', 'invalid'), { recursive: true })
+    await writeFile(join(root, 'dist', 'node_modules', 'invalid', 'package.json'), JSON.stringify({ os: 'darwin' }))
+    expect(() => { prunePnpmForeignNativePackages(root, 'darwin', 'arm64') }).toThrow(/invalid.package\.json: npm platform constraints must be arrays of strings/u)
+  } finally { await rm(root, { recursive: true, force: true }) }
 })

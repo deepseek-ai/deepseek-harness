@@ -87,7 +87,7 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
             self.persist()
         }
         window.contentView!.addSubview(pad)
-        if Bundle.main.object(forInfoDictionaryKey: "DSHFixtureBackground") as? Bool == true {
+        if Bundle.main.object(forInfoDictionaryKey: "DSHFixtureBackground") as? Bool == true || CommandLine.arguments.contains("--background") {
             window.orderFront(nil)
         } else {
             window.makeKeyAndOrderFront(nil)

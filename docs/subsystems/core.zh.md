@@ -15,10 +15,9 @@
 | `tools/` | 带作用域的工具注册表与受保护的执行流水线（`ctx.tools`） | [tools.md](tools.zh.md) |
 | `agent/` | `Agent` 接口、实时注册表、发起者作用域与 `agent/*` 事件词汇（`ctx.agents`） | 本页 |
 | `agent-loop/` | 实现公开 `Agent` 约定的具体 driver（`ctx.agentLoop`） | 本页 |
-| `agent-controller/` | 外部消息经 `agent-controller/admission` 阶段投递进 Agent（`ctx.agentController`） | 本页 |
 | `scope/` | 注册表与循环用于构建按 agent 作用域的注册原语 | [scope.md](scope.zh.md) |
 
-`scope/` 是这里唯一的非服务包：一个零依赖库（`createScope`/`scopeOf`/`scopeTarget`），在模块图中位于 `session/` 与 `system-prompt/` 之下，正是为了让它们消费它而不形成环。`agent-loop` 是公开 `Agent` 约定的唯一具体实现，放在这里因为它是 harness 的默认产品循环；它在 `ctx.agents.withInitiator()` 内运行每个 driver。扩展插件依赖 `agent`——包括需要发起 Agent 时——而绝不直接依赖 `agent-loop`，因此循环保持可替换。`agent-controller` 位于循环之前：代表他人送来消息的发送方经 `ctx.agentController` 投递，而不是自己写入收件箱。[`dsh-base`](../../packages/bundle/base/README.zh.md) 是默认产品组合，[`dsh-sdk-minimal`](../../packages/bundle/sdk-minimal/README.zh.md) 则声明一棵更小的独立配置树。
+`scope/` 是这里唯一的非服务包：一个零依赖库（`createScope`/`scopeOf`/`scopeTarget`），在模块图中位于 `session/` 与 `system-prompt/` 之下，正是为了让它们消费它而不形成环。`agent-loop` 是公开 `Agent` 约定的唯一具体实现，放在这里因为它是 harness 的默认产品循环；它在 `ctx.agents.withInitiator()` 内运行每个 driver。扩展插件依赖 `agent`——包括需要发起 Agent 时——而绝不直接依赖 `agent-loop`，因此循环保持可替换。[`dsh-base`](../../packages/bundle/base/README.zh.md) 是默认产品组合，[`dsh-sdk-minimal`](../../packages/bundle/sdk-minimal/README.zh.md) 则声明一棵更小的独立配置树。
 
 <a id="creation-and-ownership"></a>
 
@@ -49,9 +48,9 @@ interface AgentHandle {
 }
 ```
 
-`CreateAgentOptions` 携带共享标识以及新 agent 发布前所需的一切：可选的存活 `parentAgent`、会话元数据（`meta`——已校验的 `cwd`、fork 谱系、`isSeeded` 标记、来源分类、委派深度与 `agentPreset`）、同级字段 `inheritedEventCount` 所表示的精确 fork cut、可选的 `seed` 回放前缀、按 agent 的 `AgentOptions`、仅创建期有效的取消 `signal`，以及 `setup`。`ResumeAgentOptions` 是持久标识的对应项：`resumeSessionId`、`parentAgent`、`agentOptions`、`signal` 与 `setup`。`setup` 回调（`AgentSetup`）在两个 id 均未发布时接收 `(agentCtx, agent)`：上下文拥有作用域注册，显式 Agent 提供确切的子 Session，Context 无需反向属性。凡经 `agentCtx` 注册的内容都先于 `agent/created` 与第一次提示词组装存在。Setup 可以返回在发布前一刻调用的同步 commit；setup 拒绝、commit 抛出或所有者 dispose（资源释放）都会回滚事务，两个 id 均不发布。
+`CreateAgentOptions` 携带共享标识以及新 agent 发布前所需的一切：会话元数据（`meta`——已校验的 `cwd`、fork 谱系、`isSeeded` 标记、来源分类、委派深度与 `agentPreset`）、同级字段 `inheritedEventCount` 所表示的精确 fork cut、可选的 `seed` 回放前缀、按 agent 的 `AgentOptions`、仅创建期有效的取消 `signal`，以及 `setup`。`ResumeAgentOptions` 是持久标识的对应项：`resumeSessionId`、`agentOptions`、`signal` 与 `setup`。`setup` 回调（`AgentSetup`）在 Session 入库且 `session/created` 完成后、Agent 注册前接收 `(agentCtx, agent)`：上下文拥有作用域注册，显式 Agent 提供确切的子 Session，Context 无需反向属性。凡经 `agentCtx` 注册的内容都先于 `agent/created` 与第一次提示词组装存在。Setup 可以返回在发布前一刻调用的同步 commit；setup 拒绝、commit 抛出或所有者 dispose（资源释放）都会撤销事务并移除 Session，同时保留恢复出的待处理输入及已存储事件。
 
-`AgentFactory` 是注册表背后的创建接口：循环经 `ctx.agents.setFactory()` 注册其工厂，因此消费方使用 `ctx.agents` 时无需依赖具体循环包。运行时子 Agent 的创建方设置 `options.parentAgent`；注册表把 options 与调用方 Context 传给工厂，不从其中一项推导另一项。确切的 `create`/`resume` 签名及回滚约定见下方[生成区块](#ctxagents--agentregistry)。
+`AgentFactory` 是注册表背后的创建接口：循环经 `ctx.agents.setFactory()` 注册其工厂，因此消费方使用 `ctx.agents` 时无需依赖具体循环包。注册表把创建选项和调用方 Context 传给工厂；调用方 Context 拥有返回句柄的生命周期。确切的 `create`/`resume` 签名及回滚约定见下方[生成区块](#ctxagents--agentregistry)。
 
 <a id="the-agent-handle"></a>
 
@@ -66,10 +65,12 @@ interface AgentHandle {
 interface Agent {
   /** Session-backed Agent identity. */
   readonly id: SessionId
-  /** The provider route and model this agent's requests use. */
+  /** Route fallback and output controls; live accessors apply until the Session records a selection or request. */
   readonly options: AgentOptions
   /** The live session this agent drives; its log is the durable source of truth. */
   readonly session: Session
+  /** Agent-owned access to durable model selection for future steps. */
+  readonly model: Model
   /** Agent-owned access to durable pending work. */
   readonly inbox: Inbox
   /** The current lifecycle state, mirrored on every `agent/status` transition. */
@@ -198,20 +199,86 @@ type AssistantStreamFrame =
 `running` 描述整个驱动器的排空区间，可能跨越连续的排队轮次；它不能证明某个轮次仍然打开。dispose 会把 agent 从注册表移除并发出 `agent/disposed`；它不是一个终态 status 值。`followup()` 不返回句柄：其 `MessageId` 标识的是持久的 inbox 插入、认领与丢弃事实，而非之后的助手输出或轮次结束。`whenIdle()` 观察的是整个 agent，因此只有当调用方明确拥有从回执到空闲的这段区间时，才能把它称为一次 run（[决策](../../.agents/notes/implemented/architecture/2026-07-30-followup-enqueue-and-owned-runs.zh.md)）。
 
 ```ts type-equiv
-/** Merge-extensible agent creation options. Persona belongs to system-prompt sections. */
+/**
+ * Merge-extensible agent options. Route fields may be live accessors until the
+ * Session records a selection or request; step preparation captures their value.
+ * Persona belongs to system-prompt sections.
+ */
 interface AgentOptions {
   /** Provider route (must have a registered adapter at call time). */
   provider?: string
   /** Model id interpreted by the selected provider adapter. */
   model?: string
   /** Adapter-owned reasoning effort for the selected provider/model route. */
-  reasoningEffort?: ReasoningEffortId
+  reasoningEffort?: ReasoningEffortId | undefined
   /** Maximum output tokens for each conversation-model request. */
   maxTokens?: number
 }
 ```
 
-在 `agent/request` 之后，分发要求 `provider` 与 `model` 都存在。显式 `reasoningEffort` 会为该路由的首次请求提供初始值；确切模型解析会校验该值，省略时则允许填入适配器默认值。提供 `maxTokens` 时，它必须是正安全整数，并限制每次对话模型请求的输出；省略时，系统会在写入请求 header 前填入确切模型的适配器默认值，否则提供方行为保持不变。agent 作用域的 `deployment:persona-prefix` 提示词段落可以遮蔽全局默认 persona。
+步骤准备在提示词组装前要求 `provider` 与 `model` 都存在。已弃用的 `agent/request` hook 可以更改请求控制参数，但必须保留该路由。显式 `reasoningEffort` 会为该路由的首次请求提供初始值；确切模型解析会校验该值，省略时则允许填入适配器默认值。提供 `maxTokens` 时，它必须是正安全整数，并限制每次对话模型请求的输出；省略时，系统会在写入请求 header 前填入确切模型的适配器默认值，否则提供方行为保持不变。agent 作用域的 `deployment:persona-prefix` 提示词段落可以遮蔽全局默认 persona。
+
+`AgentLoop` 在 `ctx.sessionProjections` 上注册 `modelSelection`，并通过每个 `agent.model` 实例提供选择操作。`model/selection` 记录完整选择，但不进入模型历史。匹配的请求头会清除 `pending`，最近请求仍保留为 `lastUsed`。适配器默认的推理强度会被省略，使后续请求重新解析默认值。只有尚未记录选择或请求时，`next` 才为 null，此时由 `AgentOptions` 提供路由。[Agent 模型 API](../../packages/core/agent/README.zh.md)说明选择优先级与恢复策略。
+
+```ts type-equiv
+/** Agent-owned access to the model choice for future steps. */
+interface Model {
+  /**
+   * Resolve the choice for the next step to begin preparation. Recorded choices
+   * take precedence over the last request and then the Agent's live options.
+   * This read neither starts a step nor changes an already-prepared step.
+   * @returns a detached choice, or undefined when no source names both provider and model.
+   */
+  current(): Readonly<ModelSelection> | undefined
+
+  /**
+   * Replace the next step's complete selection. Omitted effort follows adapter
+   * defaults without inheriting a previous effort or resolving defaults here.
+   * An equal recorded choice is a no-op; an options-only fallback is
+   * always recorded. Callers own model availability and capability validation.
+   * The append uses the Session's existing persistence and failure guarantees.
+   * @param selection - complete provider, model, and optional explicit effort.
+   */
+  select(selection: Readonly<ModelSelection>): void
+
+}
+```
+
+```ts type-equiv
+/** Complete provider, model, and optional reasoning effort chosen for one Session's model steps. */
+interface ModelSelection {
+  /** Registered provider route. */
+  provider: string
+  /** Provider-owned model id. */
+  model: string
+  /** Adapter-owned reasoning effort, or provider/default behavior when absent. */
+  reasoningEffort?: ReasoningEffortId
+}
+```
+
+```ts type-equiv
+/**
+ * Durable model-selection state for one Session. An effort the adapter
+ * defaulted on a recorded request is omitted, so later requests resolve the
+ * default again instead of pinning it as a choice.
+ */
+interface ModelSelectionProjectionState {
+  /** Selection used by the latest recorded model request. */
+  readonly lastUsed: ModelSelection | null
+  /** Later recorded selection not yet used by a matching model request. */
+  readonly pending: ModelSelection | null
+}
+```
+
+```ts type-equiv
+/** Client view of the durable model-selection fold. */
+interface ModelSelectionProjection {
+  /** Selection used by the latest recorded model request. */
+  readonly lastUsed: ModelSelection | null
+  /** Selection the next model step uses; null while the Agent's initial options supply the route. */
+  readonly next: ModelSelection | null
+}
+```
 
 inbox 即投递词汇——agent 以持久投影形式拥有的两条有序待处理消息列表：
 
@@ -312,67 +379,6 @@ cause 是由 TypeScript 强制约束的同进程输入。活跃的取消持有�
 
 `ctx.agents` 携带的进程本地 initiator 就是上面的确切 `Agent`，不是单独的 frame 或复制的标识。环境中存在该值既不能证明存活，也不代表授权；[initiator 作用域决策](../../.agents/notes/implemented/architecture/2026-07-15-agent-initiator-scope.zh.md)定义其生命周期和作用域规则。
 
-<a id="messages-from-outside-an-agent"></a>
-
-## 来自 Agent 外部的消息
-
-代表他人送来消息的发送方（例如 Web Session Remote）调用 [`agent-controller`](../../packages/core/agent-controller/README.zh.md) 的 `ctx.agentController.deliver`，而不是 `followup()` 或 `steer()`。控制器按该 Agent 的投递顺序准备内容，向 `agent-controller/admission` waterfall 请求决定，再放入被接纳的消息；Agent 自身机制产生的消息不经过这个阶段。[投递决策](../../.agents/notes/implemented/architecture/2026-10-17-agent-controller-message-delivery.zh.md)说明了这个阶段为什么不放在 `agent` 里。
-
-源码：[`packages/core/agent-controller/src/types.ts`](../../packages/core/agent-controller/src/types.ts)
-
-```ts type-equiv
-/** How a delivered message enters the inbox: `followup` for its own turn, `steer` for the nearest step. */
-type DeliveryMode = 'followup' | 'steer'
-```
-
-```ts type-equiv
-/** One message a sender delivers on someone's behalf. */
-interface DeliveryRequest {
-  /** Where the message enters once it is admitted. */
-  readonly mode: DeliveryMode
-  /** Durable attribution recorded on the message. */
-  readonly source: MessageSource
-  /** The sender's cancellation; it ends the sender's wait at once and stops a message that has not entered the inbox. */
-  readonly signal: AbortSignal
-  /**
-   * Turn the sender's content into durable message content, such as by
-   * storing attachments. It runs in the Agent's delivery order, after the
-   * earlier messages to the same Agent settled; its failure reaches the
-   * sender unchanged.
-   * @param signal - aborted when the sender cancels or the controller stops; controller disposal waits for the preparation to settle.
-   * @returns the content of the message.
-   */
-  readonly prepare: (signal: AbortSignal) => Promise<UserMessage['content']>
-  /**
-   * Record what the sender needs before the Agent wakes. It runs
-   * synchronously after admission, immediately before the message enters the
-   * inbox. A throw keeps the message out of the inbox and reaches the sender
-   * unchanged; the sender reverts its own effects when `deliver` rejects.
-   * @param message - the admitted message.
-   */
-  readonly beforeInsert?: (message: UserMessage) => void
-}
-```
-
-监听器返回 `next()` 的决定即放行，在 `next()` 之前 await 即暂留消息，返回 `reject` 决定即拒绝：
-
-```ts type-equiv
-/** The outcome of the admission stage for one message. */
-type AdmissionDecision =
-  /** The message enters the inbox. */
-  | { readonly kind: 'admit' }
-  /** The message stays out of the inbox. */
-  | {
-    readonly kind: 'reject'
-    /** Code of the refusal, owned by its source, such as `forge/worktree-missing`. */
-    readonly reason: string
-    /** Explanation for a sender that shows nothing of the refusing plugin. */
-    readonly message: string
-    /** Whether the refusing plugin explains the refusal in its own interface. */
-    readonly presented: boolean
-  }
-```
-
 <a id="interception-decisions"></a>
 
 ## 拦截决策
@@ -454,12 +460,13 @@ declare module '@deepseek-ai/dsh-llm' {
 }
 ```
 
-五个规范 map 使用此模式；插件作者扩展它们：
+六个规范 map 使用此模式；插件作者扩展它们：
 
 | Map | 包 | 派生 | 目录 |
 |---|---|---|---|
 | `ContentBlockMap` | dsh-llm | `ContentBlock` | [llm-streaming.md](llm-streaming.zh.md#content-blocks-and-messages) |
 | `MessageSourceMap` | dsh-llm | `MessageSource` | [llm-streaming.md](llm-streaming.zh.md#content-blocks-and-messages) |
+| `LlmRequestPurposeMap` | dsh-llm | `LlmRequestPurpose` | [llm-streaming.zh.md](llm-streaming.zh.md#the-model-request-and-result) |
 | `FinishReasonMap` | dsh-llm | `FinishReason` | [llm-streaming.md](llm-streaming.zh.md#the-model-request-and-result) |
 | `TurnEndReasonMap` | dsh-session | `TurnEndReason` | [session.md](session.zh.md) |
 | `SessionEventMap` | dsh-session | `SessionEvent` | [session.md](session.zh.md) |
@@ -510,33 +517,6 @@ interface TurnBoundaryProjection {
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
-
-<a id="ctxagentcontroller--agentcontroller"></a>
-
-### `ctx.agentController` — `AgentController`
-
-Delivers the messages that senders, such as the Web Session Remote, bring on someone's behalf. Messages to one Agent are prepared, decided, and appended one at a time in arrival order; messages to different Agents do not wait for each other. Disposal stops every message that has not entered an inbox and finishes once each delivery it stopped has settled.
-
-```ts cordis-catalog
-/**
- * Deliver one message from outside the Agent: prepare its content, ask the
- * `agent-controller/admission` stage for a decision, then append an
- * admitted message with `followup` or `steer`.
- * @param agent - the receiving Agent.
- * @param request - delivery mode, source, cancellation, and the sender's content preparation.
- * @returns the id of the message once it is in the inbox.
- * @throws {@link AgentAdmissionRejected} when a listener rejects the message
- * or throws, or when the Agent left the registry first; the error of
- * `prepare`, `beforeInsert`, `followup`, or `steer` unchanged; the sender's
- * cancellation reason as soon as it cancels, also while the message waits
- * behind another one; the stop reason once the controller stops.
- */
-async deliver(agent: Agent, request: DeliveryRequest): Promise<MessageId>
-```
-
-Types: [MessageId](llm-streaming.zh.md)
-
-Source: [`packages/core/agent-controller/src/index.ts`](../../packages/core/agent-controller/src/index.ts)
 
 <a id="ctxagentdefaultmodel--agentdefaultmodelconfig"></a>
 
@@ -796,7 +776,7 @@ setFactory(factory: AgentFactory): () => void
  * agent): this constructs the agent and its session. Rejects if no factory is
  * registered or creation/setup fails. The resolved {@link AgentHandle} lets
  * the owner tear down exactly this agent.
- * @param options - shared identity, optional live parent, session seed/metadata, and agent options.
+ * @param options - shared identity, session seed/metadata, and agent options.
  * @returns the handle after setup, rollback-covered publication, and loop start complete.
  */
 async create(options: CreateAgentOptions): Promise<AgentHandle>
@@ -805,7 +785,7 @@ async create(options: CreateAgentOptions): Promise<AgentHandle>
  * Load a persisted session and resume an agent on it through the registered
  * factory. Rejects if no factory is registered; the factory rejects if
  * session persistence is not configured or persistence/setup fails.
- * @param options - persisted identity, optional live parent, configuration, and setup.
+ * @param options - persisted identity, configuration, and setup.
  * @returns the handle after setup, rollback-covered publication, and loop start complete.
  */
 async resume(options: ResumeAgentOptions): Promise<AgentHandle>
@@ -817,8 +797,7 @@ async resume(options: ResumeAgentOptions): Promise<AgentHandle>
  * (`scopeTarget(agent, agent)`): the subject is the agent in hand, so the
  * emits are scope-filtered regardless of which context invoked `register`
  * (calling through `agent.ctx` scopes EFFECTS; dispatch scoping always
- * requires passing the carrier). The entry is a runtime root; factory-backed
- * creation uses `options.parentAgent` for child ownership. Await the registration before using the agent.
+ * requires passing the carrier). Await registration before using the agent.
  * @param agent - the already-constructed agent to record in the store.
  * @returns the awaitable Cordis effect disposer (single-shot; a repeat call
  *   returns undefined without awaiting an in-flight teardown). Exact
@@ -838,15 +817,12 @@ register(agent: Agent): ReturnType<Context['effect']>
  * returned detach closure into its pre-installed composite teardown before
  * calling {@link announce}. Ordinary callers use {@link register}.
  * @param agent - the prepared, unpublished agent.
- * @param owner - explicitly supplied live runtime owner, or
- *   undefined for a top-level runtime root. This is runtime ownership, not
- *   the resumed session's durable parent lineage.
  * @returns an idempotent closure that removes this exact entry and emits
  *   `agent/disposed` with listener failures contained. When called from a
  *   `agent/created` listener, removal and disposal wait until the serial
  *   creation dispatch settles.
  */
-enter(agent: Agent, owner: Agent | undefined): () => void
+enter(agent: Agent): () => void
 
 /**
  * Announce an agent previously inserted with {@link enter}.
@@ -868,28 +844,10 @@ async announce(agent: Agent, source: SessionStartSource, signal?: AbortSignal): 
 get(id: SessionId): Agent | undefined
 
 /**
- * Test whether a live agent was created through one exact parent agent's
- * scoped context. Runtime ownership is independent of durable session
- * lineage and remains unambiguous when unrelated providers reuse an id.
- * @param id - the candidate child agent's shared agent/session id.
- * @param owner - the expected runtime creator agent.
- * @returns true only while the exact child entry is live under that owner.
- */
-isOwnedBy(id: SessionId, owner: Agent): boolean
-
-/**
  * All live agents, in registration order.
  * @returns a fresh array; mutating it does not affect the registry.
  */
 list(): Agent[]
-
-/**
- * All live top-level agents in registration order. A top-level agent was
- * created without an owning agent context; durable session lineage does not
- * affect this runtime relation, so a resumed fork may still be a root.
- * @returns a fresh array; mutating it does not affect the registry.
- */
-roots(): Agent[]
 ```
 
 Types: [Session](session.zh.md)
@@ -1077,43 +1035,14 @@ Reject a proposed step or replace the messages that enter it. Calling `next()` p
  * @param payload.turn - the turn that will own the step.
  * @param payload.step - the step proposed by the loop.
  * @param payload.signal - the current turn's cancellation signal.
+ * @param payload.modelSelection - captured step selection, retained across retries; omitted effort uses adapter defaults.
  * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
  * @mode waterfall
  */
-'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
+'agent/pre-step'(this: Scoped<Agent>, payload: { agent: Agent; messages: UserMessage[]; turn: number; step: number; signal: AbortSignal; modelSelection: Readonly<ModelSelection> }, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
 ```
 
 Types: [Scoped](scope.zh.md) · [UserMessage](session.zh.md)
-
-Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
-
-<a id="agentrequest--waterfall"></a>
-
-#### `agent/request` — waterfall
-
-Replace the frozen call configuration. `await next()` yields the config the machine would use (agent options on the first request, the logged header afterwards); return a replacement to switch. On step admission, this runs after assembly and `step/start`, before the system prompt and accepted user batch are committed. Cancellation here or during subsequent `prepareCall()` resolution commits neither. The prepared call capability governs prompt admission. Model-visible content must use logged channels; this waterfall cannot mutate messages.
-
-```ts cordis-catalog
-/**
- * Replace the frozen call configuration. `await next()` yields the config
- * the machine would use (agent options on the first request, the logged
- * header afterwards); return a replacement to switch. On step admission,
- * this runs after assembly and `step/start`, before the system prompt and
- * accepted user batch are committed. Cancellation here or during subsequent
- * `prepareCall()` resolution commits neither. The prepared call capability
- * governs prompt admission. Model-visible content must use logged channels;
- * this waterfall cannot mutate messages.
- * @param payload.agent - the agent making the model call.
- * @param payload.turn - the open turn number.
- * @param payload.step - the step whose request this is.
- * @param payload.signal - the current turn's explicit abort signal.
- * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
- * @mode waterfall
-*/
-'agent/request'(this: Scoped<Agent>, payload: { agent: Agent; turn: number; step: number; signal: AbortSignal }, next: () => Promise<LlmCallConfig>): Promise<LlmCallConfig>
-```
-
-Types: [LlmCallConfig](llm-streaming.zh.md) · [Scoped](scope.zh.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
 
@@ -1199,43 +1128,6 @@ The turn is about to close: the model owes no response (no live tool calls, no f
 Types: [Scoped](scope.zh.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
-
-<a id="agent-controller-events"></a>
-
-### `agent-controller/*` events
-
-<a id="agent-controlleradmission--waterfall"></a>
-
-#### `agent-controller/admission` — waterfall
-
-Decide whether one message from outside an Agent enters its inbox. `ctx.agentController.deliver` runs this stage and appends the message only after the whole chain admitted it; messages the Agent's own machinery produces enter through `followup`, `steer`, or `inject` without it. Listeners run in registration order, and messages to one Agent are decided one at a time in arrival order. A listener admits by returning the decision of `next()`, whose last step admits; awaiting before `next()` holds the message, and returning a `reject` decision refuses it without asking later listeners. A thrown error means the listener's check itself failed. A listener must not wait for a person when the message source is unattended, such as a schedule or a webhook.
-
-```ts cordis-catalog
-/**
- * Decide whether one message from outside an Agent enters its inbox.
- * `ctx.agentController.deliver` runs this stage and appends the message
- * only after the whole chain admitted it; messages the Agent's own
- * machinery produces enter through `followup`, `steer`, or `inject`
- * without it. Listeners run in registration order, and messages to one
- * Agent are decided one at a time in arrival order. A listener admits by
- * returning the decision of `next()`, whose last step admits; awaiting
- * before `next()` holds the message, and returning a `reject` decision
- * refuses it without asking later listeners. A thrown error means the
- * listener's check itself failed. A listener must not wait for a person
- * when the message source is unattended, such as a schedule or a webhook.
- * @param payload.agent - the receiving Agent.
- * @param payload.message - the message as it will enter the inbox.
- * @param payload.signal - aborted when the sender cancels or the controller stops; a holding
- * listener must settle once it aborts, because controller disposal waits for it.
- * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): Agent-scoped listeners receive only that Agent.
- * @mode waterfall
- */
-'agent-controller/admission'(this: Scoped<Agent>, payload: { agent: Agent; message: UserMessage; signal: AbortSignal }, next: () => Promise<AdmissionDecision>): Promise<AdmissionDecision>
-```
-
-Types: [Scoped](scope.zh.md) · [UserMessage](session.zh.md)
-
-Source: [`packages/core/agent-controller/src/types.ts`](../../packages/core/agent-controller/src/types.ts)
 
 <a id="agent-loop-events"></a>
 

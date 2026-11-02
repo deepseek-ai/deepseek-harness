@@ -44,6 +44,7 @@ async function harness(direct = false) {
     runId: WorkflowRunId('run'), seq: 1, label: 'workflow-child', childId,
   })
   const step = (overrides = {}) => agentEvents(ctx, agent).waterfall('agent/pre-step', {
+    modelSelection: { provider: 'mock', model: 'mock' },
     turn: 1, step: 1, messages, signal: controller.signal, ...overrides,
   }, next)
   return { ctx, fiber, parent, other, session, agent, controller, decision, next, start, step }
@@ -78,7 +79,7 @@ describe('advanced Python snapshot workflow ordering', () => {
     const parent = await ctx.agentLoop.create(SessionId(config.parentSessionId), { provider: 'mock', model: 'mock' })
     const run = await ctx.subagents.startActivation({
       provider: 'spawn', label: 'workflow-child', delivery: 'caller',
-      request: { parent, prompt: [{ type: 'text', text: config.prompt }] }, signal: new AbortController().signal,
+      parent, prompt: [{ type: 'text', text: config.prompt }], signal: new AbortController().signal,
     })
     cleanups.push(() => run.dispose())
     const child = await entered.promise

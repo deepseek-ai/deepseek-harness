@@ -5,6 +5,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+  - button "More conversation views"
 - text: Render this mathematical proof. {{clock}}
 - button "Copy"
 - status: Completed

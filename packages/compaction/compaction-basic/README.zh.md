@@ -148,6 +148,8 @@ kind: "package-reference"
 | [`src/config.ts`](src/config.ts) | 加载时验证与路由模型策略解析 |
 | [`src/types.ts`](src/types.ts) | `BasicCompactionConfig` 与已解析策略词汇 |
 
+包根入口的类型声明将 `compaction` 添加到 `LlmRequestPurposeMap`。直接构造压缩请求的调用方使用 `import type {} from '@deepseek-ai/dsh-compaction-basic'`，使 `GenerateOptions.purpose` 包含该键。
+
 </details>
 
 -----

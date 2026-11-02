@@ -218,7 +218,7 @@ it('rebinds configuration handlers when its provider is reconfigured within a re
   })
   await binding.await()
   await hmr.runExclusive(async () => {
-    provider.update({ root: [], ignored: [], debounce: 1 })
+    await provider.update({ root: [], ignored: [], debounce: 1 })
     await provider.await()
     await binding.await()
   })

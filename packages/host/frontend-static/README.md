@@ -39,11 +39,13 @@ Compose this plugin in a browser-facing host that serves the built Web shell: it
 
 ### What the server enforces
 
-Requests are served from the dist root (the directory containing `distIndex`). The dist root and the configured index path render `index.html` with HTTP 200; any other existing file is served directly with its MIME type, and unknown extensions ship as `application/octet-stream`. A path that resolves outside the root is rejected with 403, so a crafted path cannot read files above the dist. An absent or non-file target inside the dist root — a missing file, a directory, or a missing configured index — returns an empty 404. Non-GET/HEAD requests without a matching named route are answered 405. Every successful index response is rendered through the webserver's `renderIndex`, so the boot manifest reaches the page on `/` and on the configured index path.
+Requests are served from the dist root (the directory containing `distIndex`). The dist root and the configured index path render `index.html` with HTTP 200; any other existing file is served directly with its MIME type, and unknown extensions ship as `application/octet-stream`. A path that resolves outside the root is rejected with 403, so a crafted path cannot read files above the dist. An absent or non-file target inside the dist root — a missing file, a directory, or a missing configured index — returns an empty 404. Non-GET/HEAD requests without a matching named route are answered 405. The fallback is a webserver resource. Every successful index response is rendered through the webserver's `renderIndex` — for `connection.browserPeer`, the Peer Connection's browser authentication admits, over HTTP, and for `peer` in a `webServer.readResource(request, peer)` read, which skips browser authentication — so the boot manifest and that Peer's access snapshot reach the page on `/` and on the configured index path.
 
 The served HTML carries one document base, `<base href="./">`, ahead of every injected resource row, so it freezes the entry directory the page was loaded from: the shell's own app-directory-relative references and the Host's plugin-resource rows both resolve under the mount that served the page. The same index therefore serves the origin root and whatever mount a prefix-stripping proxy owns; this plugin renders it only for the dist root and the configured index path.
 
-Root and configured-index responses call `ctx.connection.authorizeIndex` before reading HTML. A valid process token receives a 303 redirect plus the persistent browser cookie; an existing valid cookie serves the index; every other index request receives the Connection-owned 401 response. Non-index files remain public static assets. Connection owns the token, cookie, expiry, and signing-record semantics.
+HTTP root and configured-index requests call `ctx.connection.authorizeIndex` before reading HTML. A valid process token receives a 303 redirect plus the persistent browser cookie; an existing valid cookie serves the index; every other index request receives the Connection-owned 401 response. Non-index files remain public static assets. Connection owns the token, cookie, expiry, and signing-record semantics.
+
+Browsers revalidate every served file except the index. Such a response carries `cache-control: no-cache` and a weak ETag built from a SHA-1 of the file's bytes, so a file whose content changes gets a new ETag even when its name stays the same; a request whose `If-None-Match` equals the current ETag receives an empty 304. The rendered index carries no cache headers.
 
 ### Observable failures
 
@@ -59,7 +61,7 @@ Traversal returns 403 rather than an error page. An absent or non-file target in
 
 ### Design concept
 
-The package is one function plugin around `serveStatic`: `apply` resolves the dist root from `distIndex`, builds a `renderIndex` closure that runs `ctx.webServer.renderIndex` over the raw `index.html` and splices the document base in after the opening head tag (after the raw taps, so it precedes their markup too), and registers the fallback handler under an effect scope. The seat is single-owner by the webserver's contract — a second registration throws — and effect-scoped, so disposing the fiber releases the seat.
+The package is one function plugin around `serveStatic`, which maps a Fetch `Request` to a `Response`: `apply` resolves the dist root from `distIndex` and registers a fallback resource under an effect scope. For each request the resource passes `serveStatic` an `authorizeIndex` closure, which runs `ctx.connection.authorizeIndex` only when no Peer came with the request, and a `renderIndex` closure that runs `ctx.webServer.renderIndex` over the raw `index.html` for that Peer or the browser Peer and splices the document base in after the opening head tag (after the raw taps, so it precedes their markup too). The seat is single-owner by the webserver's contract — a second registration throws — and effect-scoped, so disposing the fiber releases the seat.
 
 ### The traversal fence
 
@@ -69,7 +71,7 @@ The package is one function plugin around `serveStatic`: `apply` resolves the di
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `serveStatic` and `apply`: fallback claim, traversal rejection, index rendering, MIME table |
+| [`src/index.ts`](src/index.ts) | `serveStatic` and `apply`: fallback resource, traversal rejection, index authorization and rendering, revalidation, MIME table |
 
 </details>
 

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Exécuteur de navigateur de plug-in dynamique",
+    "description": "Chargez et exécutez la partie navigateur du plug-in dynamique temporaire."
+  }
+}

@@ -109,7 +109,7 @@ private func acceptConnections(listener: SharedSocket, lifetime: SharedHelperLif
         lifetime = SharedHelperLifetime(startupTimeout: options.startupTimeout)
         try options.prepareDirectory()
         guard let versionLock = try SharedHelperLock(path: options.versionLockPath) else {
-            try FileHandle.standardOutput.write(contentsOf: options.existingReady())
+            try FileHandle.standardOutput.write(contentsOf: options.existingReady(deadline: options.startupDeadline()))
             return nil
         }
         self.versionLock = versionLock
@@ -197,7 +197,7 @@ private func acceptConnections(listener: SharedSocket, lifetime: SharedHelperLif
         let lifetime = self.lifetime
         let onFatal: @MainActor @Sendable () -> Void = { [weak self] in self?.closeConnections() }
         let coordinator = RequestCoordinator(configuration: configuration, capture: capture, channel: channel, cancellation: cancellation,
-            scheduler: scheduler, writer: writer, permissions: permissions, onClose: { [weak self] in
+            scheduler: scheduler, writer: writer, permissions: permissions, permissionOwner: id, onClose: { [weak self] in
                 channel.shutdown()
                 guard let self else { lifetime.remove(id); return }
                 self.disconnected(id)

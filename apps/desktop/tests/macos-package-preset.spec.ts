@@ -60,7 +60,7 @@ it.skipIf(process.platform !== 'darwin')('prepares private machine directories w
   }
 })
 
-it('records debugging artifact paths only for an explicit CI selection without notarization credentials', async () => {
+it.each(['arm64', 'x64'])('records %s debugging artifact paths only for an explicit CI selection without notarization credentials', async (arch) => {
   const root = await mkdtemp(join(tmpdir(), 'macos-ci-settings-'))
   try {
     await mkdir(join(root, 'presets'))
@@ -81,6 +81,7 @@ it('records debugging artifact paths only for an explicit CI selection without n
     const run = (skip: string) => spawnSync(process.execPath,
       [join(import.meta.dirname, '../scripts/prepare-macos-ci.mjs')], { encoding: 'utf8', env: {
         ...process.env, DSH_PACKAGING_CONFIG_DIR: root, DSH_PACKAGING_PRESET: 'test',
+        DSH_DESKTOP_TARGET_PLATFORM: 'darwin', DSH_DESKTOP_TARGET_ARCH: arch,
         PACKAGE_SKIP_NOTARIZATION: skip, PACKAGE_BUILD_VERSION: 'auto',
         GITHUB_RUN_NUMBER: '1', GITHUB_RUN_ATTEMPT: '1', GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary,
       } })
@@ -91,10 +92,13 @@ it('records debugging artifact paths only for an explicit CI selection without n
     expect(invalidSelection.status).toBe(1)
     expect(invalidSelection.stderr).toContain('Invalid skip notarization selection')
     const debugging = run('true')
+    expect(debugging.error).toBeUndefined()
+    expect(debugging.signal).toBeNull()
     expect(debugging.stderr).toBe('')
     expect(debugging.status).toBe(0)
     expect(await readFile(output, 'utf8')).toContain('artifacts=unnotarized-artifacts\nmode=unnotarized-debug\n')
     expect(await readFile(summary, 'utf8')).toContain('Internal debugging only')
+    expect(await readFile(summary, 'utf8')).toContain(`macOS ${arch} signed installer`)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

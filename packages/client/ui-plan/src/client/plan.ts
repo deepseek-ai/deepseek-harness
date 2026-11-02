@@ -1,4 +1,5 @@
 /** Plan text and resource identities derived from logged native or PTC calls. */
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc/client'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionAddress } from '@deepseek-ai/dsh-api-session-controller/types'

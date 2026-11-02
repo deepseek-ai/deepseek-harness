@@ -6,3 +6,5 @@
         captureFetch: true
     - id: session-inspector
       name: '@deepseek-ai/dsh-experimental-session-inspector'
+    - id: client-ui-stats
+      name: '@deepseek-ai/dsh-experimental-client-ui-stats'

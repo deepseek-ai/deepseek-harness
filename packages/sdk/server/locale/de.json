@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SDK-Server",
+    "description": "Bedienen Sie SDK-Clients in separaten Prozessen über JSON-RPC über Standardeingabe und -ausgabe."
+  }
+}

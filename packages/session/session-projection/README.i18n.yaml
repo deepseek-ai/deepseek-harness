@@ -24,8 +24,11 @@
   en: 09758d1475fad86e
   zh: 473637cb34aebe72
 /deepseek-ai-dsh-session-projection/use-this-package/register-and-read:
-  en: 976fb019501a941b
-  zh: e15038a7205337c3
+  en: 84f39e64f252a4d3
+  zh: e3f6dff8c5df9016
+/deepseek-ai-dsh-session-projection/use-this-package/bind-several-states-to-one-session:
+  en: dac4ea4d67ce057d
+  zh: 1cf3e5c7af5a5203
 /deepseek-ai-dsh-session-projection/use-this-package/deprecated-plugin-compatibility:
   en: eed1ad9d62755251
   zh: 88a07c787528009a
@@ -45,8 +48,8 @@
   en: c19f656b022506fa
   zh: fdcba0083f08a76b
 /deepseek-ai-dsh-session-projection/understand-the-implementation/drive-and-checkpoint-flow:
-  en: 00136880bb586403
-  zh: bd35f645111c068c
+  en: 6d38875ac6f20b38
+  zh: cc4fb064642f30d9
 /deepseek-ai-dsh-session-projection/further-exploration:
   en: 304a03d08ea5c9f9
   zh: 200a0505e8d11e0d

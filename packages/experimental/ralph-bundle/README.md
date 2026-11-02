@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Add the experimental Ralph tool to every Agent as a global tool for human-requested repeated work with fresh child agents. It ships switched off in Web and Desktop. Select it in Plugins to enable it.
+Add the experimental Ralph tool to every Agent as a global tool for human-requested repeated work with fresh child agents. It ships switched off in Web and Desktop and is hidden from the default plugin lists.
 
 ## Table of Contents
 
@@ -25,9 +25,9 @@ Add the experimental Ralph tool to every Agent as a global tool for human-reques
 <a id="use-this-package"></a>
 ## Use this package
 
-In Web or Desktop, open Plugins and enable **Ralph loops** in Official. Switch it off to remove its profile layer.
+In **Plugins → Add plugin**, enter `@deepseek-ai/dsh-experimental-ralph-bundle`, choose **Install**, then **Enable now**. DSH uses the shipped copy without downloading another one. Alternatively, add the name to `dsh.profile.bundles` in the target [profile](../../boot/app-boot/README.md#profiles)'s `package.json`. HMR applies the selection live when enabled; otherwise restart the application. The enabled bundle appears in Plugins; switching it off removes its profile layer and hides its card again. A separately installed profile dependency remains listed while disabled.
 
-Enabling or disabling the bundle registers or removes its global tools in the running Host, so every Agent sees the change on its next request, in every preset including minimal.
+With HMR enabled, enabling or disabling the bundle registers or removes its global tools in the running Host, so every Agent sees the change on its next request, in every preset including minimal.
 
 -----
 

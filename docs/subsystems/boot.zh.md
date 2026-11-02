@@ -10,7 +10,7 @@
 
 `PluginInfo` 包含模块标识、实际启停状态、fiber 阶段和可选的展示 `meta`，以及唯一的 `patchId` 或 `readOnlyReason`。
 
-`BundleInfo.official` 标识项目维护的随附可选组合包和按需目录项，独立于安装状态。`availability` 表示可读取的安装随附包、profile 包或 `missing`；按需目录项不计入未声明的传递依赖副本。`installed` 记录 profile 的依赖声明。按需条目的 `installTarget` 包含 Host 生成的精确 spec 和版本。`BundleInfo` 还包含包名、可选的安装版本、组合层选择状态、删除可用性、更新资格（`updatable`）、可选的解析错误；由 profile 自身依赖提供、且安装不提供的组合包还带有 `source`，即该依赖在 `pnpm add` 中可用的 spec。它的可选 `meta` 与各行的 `BundleRowInfo.meta` 包含展示文本或元信息诊断；Client 在渲染时选择语言。
+`BundleInfo.official` 标识项目维护的随附可选组合包和按需目录项，独立于安装状态。`availability` 表示可读取的安装随附包、profile 包或 `missing`；按需目录项不计入未声明的传递依赖副本。`installed` 记录 profile 的依赖声明。按需条目的 `installTarget` 包含 Host 生成的精确 spec 和版本。`BundleInfo` 还包含包名、可选的安装版本、组合层选择状态、删除可用性、更新资格（`updatable`）、可选的解析错误或平台不支持错误；由 profile 自身依赖提供、且安装不提供的组合包还带有 `source`，即该依赖在 `pnpm add` 中可用的 spec。它的可选 `meta` 与各行的 `BundleRowInfo.meta` 包含展示文本或元信息诊断；Client 在渲染时选择语言。
 
 `InstallBundleOptions.saveExact` 向共享包安装器传入 `--save-exact`。`InstallBundleOptions.enabled` 默认为 true，false 表示安装但不选择组合包层。`approvedBuilds` 在安装前向指定的待审批包名授予持久脚本权限。`registry` 指定首先询问的注册表；缺省为配置的那个。
 
@@ -18,7 +18,7 @@
 
 `PluginRegistries` 携带配置的第一个注册表（`null` 即 pnpm 自身配置指定的那个）、随后依次询问的备选注册表，以及 `resolved`——pnpm 自身配置指向的 URL，未读到时为 `null`。`InspectOptions.registry` 指定一次查询首先询问的注册表。
 
-`ChangeResult.changed` 报告磁盘修改，独立于 `application`：`applied`、`restart-required`、`overridden` 或 `failed`。可选的 `error` 包含可本地化的错误码和外部诊断。`packageResult` 记录 pnpm 退出码、有界输出、截断标志及完整诊断日志路径；当管理器终止了一个停止打印的运行，还记录 `timedOut`。被终止的运行不论信号留下什么退出状态都归类为 `timeout`，因此安装与删除都报告失败而非成功，也不会再询问下一个注册表。`pendingBuilds` 列出整个 profile 尚未决定的包；`approvedBuilds` 记录本次操作授予权限的包名；`registries` 按顺序列出一次安装问过的注册表；`bundle` 与 `version` 给出完成的安装新增的包及其清单版本；`failedAt` 说明最后一次失败的运行连不上的是所问的注册表，还是 git 或 tarball spec 自身拉取的主机。
+`ChangeResult.changed` 报告磁盘修改，独立于 `application`：`applied`、`restart-required`、`overridden` 或 `failed`。可选的 `error` 包含可本地化的错误码和外部诊断。`packageResult` 记录运行的退出状态、有界输出、截断标志及完整诊断日志路径；当管理器终止了一个停止打印的运行，或 GitHub 连接检查到达期限，还记录 `timedOut`；被终止的运行记录强制填入的状态 1，因为它的进程没有返回任何状态。被终止的运行不论信号留下什么退出状态都归类为 `timeout`，因此安装与删除都报告失败而非成功，也不会再询问下一个注册表。`pendingBuilds` 列出整个 profile 尚未决定的包；`approvedBuilds` 记录本次操作授予权限的包名；`registries` 按顺序列出一次安装问过的注册表；`bundle` 与 `version` 给出完成的安装新增的包及其清单版本；`failedAt` 说明最后一次失败的运行连不上的是所问的注册表，还是 git 或 tarball spec 自身拉取的主机。
 
 ## 市场记录
 
@@ -68,6 +68,53 @@ interface PendingModule {
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxactioncards--actioncards"></a>
+
+### `ctx.actionCards` — `ActionCards`
+
+Card tool, kind registry, Session projection, user actions and status notices.
+
+```ts cordis-catalog
+/**
+ * Register one action kind for the caller's lifetime.
+ * @param kind - the kind's skill, details schema, verbs and handler.
+ * @returns disposer removing the kind; actions on its cards are then unavailable.
+ * @throws when another kind already registered the same action.
+ */
+register<Details>(kind: ActionCardKind<Details>): () => void
+
+/**
+ * Record a card decision in the Session log; the next model request reports it.
+ * @param agent - agent whose Session owns the card.
+ * @param decision - the card's new state.
+ * @throws when no kind ever registered the decision's action with this service, or its phase is one the projection derives.
+ */
+record(agent: Agent, decision: ActionCardDecision): void
+
+/**
+ * Read the cards of one Session.
+ * @param session - a Session whose projections are prepared.
+ * @returns proposals and decisions by call id.
+ */
+view(session: Session): ActionCardView
+
+/**
+ * Apply a user action to a logged card. Shared checks run first, then the kind reconciles the card; `dismiss` is
+ * recorded here and every other verb goes to the card's kind. `dismiss` also works on an unstarted card whose kind
+ * is no longer registered. Concurrent actions on one card share one operation.
+ * @param agent - live root resolved from the displayed Session.
+ * @param callId - the card's `propose_action` call id.
+ * @param verb - `dismiss` or one of the kind's verbs.
+ * @param payload - kind-defined fields such as a chosen location.
+ * @returns acceptance of background work, the decision in effect, or a refusal.
+ */
+@Remote act(agent: Agent, callId: ToolCallId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>
+```
+
+Types: [Agent](core.zh.md) · [Session](session.zh.md) · [ToolCallId](core.zh.md)
+
+Source: [`packages/experimental/action-cards/src/index.ts`](../../packages/experimental/action-cards/src/index.ts)
 
 <a id="ctxconfigeditor--configeditor"></a>
 
@@ -250,7 +297,10 @@ Manage profile files and apply their declared reload lifecycle.
 /**
  * Install a package using the same pnpm implementation as dsh plugin. GitHub
  * repositories get a connection check bounded by githubConnectionTimeoutMs before pnpm starts;
- * only network failures or timeouts stop installation, while pnpm owns authentication and transport fallback. A run
+ * only network failures or timeouts stop installation, and a stop streams the check's diagnostic
+ * as the installation's install-log run under its request id, while pnpm owns authentication and transport fallback. An
+ * HTTP(S) Git URL on another host is installed over SSH instead when access probes bounded by gitTransportTimeoutMs
+ * find that only SSH can read it. A run
  * that fails, is cancelled, or adds a package without a bundle patch restores
  * `package.json` and `pnpm-lock.yaml` as they were; downloaded files can stay.
  * @param spec One package spec, including local paths relative to the invocation directory.
@@ -352,6 +402,26 @@ async entry(url: string, name: string): Promise<MarketListingEntry | undefined>
 ```
 
 Source: [`packages/boot/plugin-market/src/index.ts`](../../packages/boot/plugin-market/src/index.ts)
+
+<a id="ctxpluginrecommendations--pluginrecommendations"></a>
+
+### `ctx.pluginRecommendations` — `PluginRecommendations`
+
+Catalog lookups for card text and the enabling behind the `enable_official_plugin` card.
+
+```ts cordis-catalog
+/**
+ * Read the current catalog text for a logged card.
+ * @param agent - Exact live root resolved by the Gateway from the Session id.
+ * @param callId - The card's `propose_action` call id, never a package supplied by the browser.
+ * @returns the plugin's title, description and selection, or a refusal when the card names no available official plugin.
+ */
+@Remote async describe(agent: Agent, callId: ToolCallId): Promise<RecommendationDetails>
+```
+
+Types: [Agent](core.zh.md) · [ToolCallId](core.zh.md)
+
+Source: [`packages/experimental/plugin-recommendations/src/index.ts`](../../packages/experimental/plugin-recommendations/src/index.ts)
 
 <a id="ctxpluginregistryprobe--pluginregistryprobe"></a>
 
@@ -463,11 +533,11 @@ Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin
 
 #### `plugin-manager/install-log` — emit
 
-One chunk of a pnpm run's output, streamed as the run produces it.
+One chunk of an installation run's output, streamed as the run produces it.
 
 ```ts cordis-catalog
 /**
- * One chunk of a pnpm run's output, streamed as the run produces it.
+ * One chunk of an installation run's output, streamed as the run produces it.
  * @mode emit
  * @param chunk - the chunk and the run it belongs to.
  */
@@ -490,6 +560,23 @@ An installation moved between its Host phases. `installing` is announced once pe
  * @param progress - the installation's request id and phase, with the attempt while installing.
  */
 'plugin-manager/install-state'(progress: PluginInstallProgress): void
+```
+
+Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin-manager/src/types.ts)
+
+<a id="plugin-manageroperation--parallel"></a>
+
+#### `plugin-manager/operation` — parallel
+
+One manager invocation started or ended; subscribers run independently without delaying management.
+
+```ts cordis-catalog
+/**
+ * One manager invocation started or ended; subscribers run independently without delaying management.
+ * @mode parallel
+ * @param operation - Correlated operation facts; a start without an end has an unknown outcome.
+ */
+'plugin-manager/operation'(operation: PluginOperation): void | Promise<void>
 ```
 
 Source: [`packages/boot/plugin-manager/src/types.ts`](../../packages/boot/plugin-manager/src/types.ts)

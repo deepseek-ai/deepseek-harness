@@ -46,7 +46,7 @@ Status: implemented
 
 ## 验证
 
-[`execution-signal-types.spec.ts`](../../../../packages/core/tools/tests/execution-signal-types.spec.ts) 证明必填的精确信号类型、观察者与工具的只读视图、环绕调度可替换但不可删除的视图，以及 `defineTool()` 推断。[`tools.spec.ts`](../../../../packages/core/tools/tests/tools.spec.ts) 覆盖进入时已中止的物化与阶段跳过、策略和包装层竞态、工具主体调用分类、调用方信号融合、错误优先级、上下文保留和完全停稳。[`tool-calls.spec.ts`](../../../../packages/core/agent-loop/tests/tool-calls.spec.ts) 与 [`contract-regressions.spec.ts`](../../../../packages/core/agent-loop/tests/contract-regressions.spec.ts) 覆盖为未调度的同批调用补齐持久化结果。[`ptc.spec.ts`](../../../../packages/core/tools/tests/ptc.spec.ts) 和第一方集成测试覆盖显式转发，[`timeout-policy.spec.ts`](../../../../packages/guard/timeout-policy/tests/timeout-policy.spec.ts) 保持超时归属。
+[`execution-signal-types.spec.ts`](../../../../packages/core/tools/tests/execution-signal-types.spec.ts) 证明必填的精确信号类型、观察者与工具的只读视图、环绕调度可替换但不可删除的视图，以及 `defineTool()` 推断。[`tools.spec.ts`](../../../../packages/core/tools/tests/tools.spec.ts) 覆盖进入时已中止的物化与阶段跳过、策略和包装层竞态、工具主体调用分类、调用方信号融合、错误优先级、上下文保留和完全停稳。[`tool-calls.spec.ts`](../../../../packages/core/agent-loop/tests/tool-calls.spec.ts) 与 [`contract-regressions.spec.ts`](../../../../packages/core/agent-loop/tests/contract-regressions.spec.ts) 覆盖为未调度的同批调用补齐持久化结果。[`ptc.spec.ts`](../../../../packages/core/tool-executor-ptc/tests/ptc.spec.ts) 和第一方集成测试覆盖显式转发，[`timeout-policy.spec.ts`](../../../../packages/guard/timeout-policy/tests/timeout-policy.spec.ts) 保持超时归属。
 
 任何注册表测试都无法证明任意第三方同进程代码会观察信号或在有界时间内停止。各能力的测试仍需在拥有相应副作用的边界证明取消与完全停稳。
 

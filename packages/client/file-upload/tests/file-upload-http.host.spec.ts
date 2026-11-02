@@ -9,12 +9,14 @@ function request(input: {
   method?: string
   sessionId?: string
   name?: string
+  mediaType?: string
   contentType?: string
   body?: Uint8Array
 } = {}): Request {
   const query = new URLSearchParams()
   if (input.sessionId !== undefined) query.set('sessionId', input.sessionId)
   if (input.name !== undefined) query.set('name', input.name)
+  if (input.mediaType !== undefined) query.set('mediaType', input.mediaType)
   const suffix = query.size === 0 ? '' : `?${query.toString()}`
   return new Request(`http://host/api/session/uploadFileBinary${suffix}`, {
     method: input.method ?? 'POST',
@@ -88,6 +90,27 @@ describe('background file upload Fetch route', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8')
     expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.json()).toEqual({ ok: true, value })
+  })
+
+  it('stages the body as a prompt image when the request names its media type', async () => {
+    const value: Awaited<ReturnType<FileUploads['uploadImageStream']>> = {
+      receiptId: 'receipt-2' as never,
+      image: { attachmentId: 'image-1' as never, mediaType: 'image/png', bytes: 2, width: 1, height: 1 },
+    }
+    const imageChunks: Uint8Array[] = []
+    const uploadImageStream = vi.fn<FileUploads['uploadImageStream']>(async (input) => {
+      for await (const chunk of input.data) imageChunks.push(chunk)
+      return value
+    })
+    const service = Object.assign(uploads(Promise.resolve({})), { uploadImageStream })
+    const response = await handleFileUploadHttp(service, request({
+      sessionId: 's1', name: 'shot.png', mediaType: 'image/png',
+      contentType: 'application/octet-stream', body: Uint8Array.of(7, 8),
+    }))
+    expect(service.uploadStream).not.toHaveBeenCalled()
+    expect(uploadImageStream.mock.calls[0]?.[0]).toMatchObject({ sessionId: 's1', name: 'shot.png', mediaType: 'image/png' })
+    expect(imageChunks).toEqual([Uint8Array.of(7, 8)])
     expect(await response.json()).toEqual({ ok: true, value })
   })
 

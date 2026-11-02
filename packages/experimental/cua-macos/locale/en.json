@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "macOS Computer Use provider",
+    "description": "Provide native macOS applications and windows for the shared Computer Use service."
+  }
+}

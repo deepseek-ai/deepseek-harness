@@ -15,9 +15,10 @@ import {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionLiveEventEntry } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
-import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
-import type { ScheduleCatalogEntry, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
+import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
+import type { ScheduleId, ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
+import type { CatalogSnapshot } from '../src/client/catalog-source.ts'
 import { ScheduleTurnCard, type ScheduleTurnCardProps } from '../src/client/ScheduleTurnCard.tsx'
 import { zoneLabel } from '../src/client/schedule-format.ts'
 import {
@@ -26,6 +27,10 @@ import {
 } from '../src/client/schedule-turn.ts'
 import { en, zh } from '../src/client/task-manager-locales.ts'
 
+type Entry = ScheduleCatalogEntry
+
+const SESSION = 'session' as SessionId
+const CREATED = '2026-09-30T00:00:00.000Z'
 const CALL = 'call-created'
 const PROMPT = 'Check the deployment\nand report'
 const ARGS = { prompt: PROMPT, daily: { time: '23:00:00', time_zone: 'Asia/Shanghai' } }
@@ -170,6 +175,36 @@ function settledBlock(task: unknown, callId = CALL): ToolResultNode {
   }
 }
 
+/** Fields of one recorded Session-bound result: a daily rule, or a weekly rule when it names weekdays. */
+interface RecordedRule {
+  readonly id: string
+  readonly title?: string
+  readonly prompt: string
+  readonly scheduledAt: string
+  readonly time: string
+  readonly timeZone: string
+  readonly weekdays?: number[]
+}
+
+/**
+ * Project one recorded Session-bound result into the Host catalog fixture.
+ * @param block - settled result node whose text is the Session-bound rule.
+ * @returns the active catalog entry with the recorded timing kind.
+ */
+function recordedEntry(block: ToolResultNode): Entry {
+  const first = block.content[0]
+  const rule = JSON.parse(first?.type === 'text' ? first.text : '{}') as RecordedRule
+  const { time, timeZone, weekdays } = rule
+  const timing = weekdays === undefined
+    ? { kind: 'daily' as const, time, timeZone }
+    : { kind: 'weekly' as const, time, timeZone, weekdays }
+  return {
+    ...timing, id: rule.id as ScheduleId, title: rule.title ?? rule.prompt.split('\n', 1)[0] ?? '', prompt: rule.prompt,
+    scheduledAt: rule.scheduledAt, target: { kind: 'session', sessionId: SESSION }, involvedSessionIds: [SESSION],
+    status: 'active', createdAt: CREATED, updatedAt: CREATED,
+  }
+}
+
 /**
  * Component props over one settled task the Turn recorded.
  * @param created - settled result nodes the Turn published.
@@ -185,25 +220,14 @@ function cardProps(
   created: readonly ToolResultNode[],
   openTaskDetail = vi.fn(),
   t = makeTranslate(en),
-  records: readonly ScheduleCatalogEntry[] = created.map((block) => {
-    const task = JSON.parse(block.content[0]?.type === 'text' ? block.content[0].text : '{}') as {
-      readonly prompt?: string
-      readonly title?: string
-    }
-    return {
-      ...task,
-      title: task.title ?? task.prompt?.split('\n', 1)[0] ?? '',
-      sessionId: 'session',
-      status: 'active',
-    } as ScheduleCatalogEntry
-  }),
+  records: readonly Entry[] = created.map(recordedEntry),
   status: 'loading' | 'ready' | 'error' = 'ready',
   settled = status === 'ready',
   readRequest = 0,
   readSettled = 0,
   onRetry = vi.fn(async () => {}),
 ): ScheduleTurnCardProps {
-  const snapshot = { records, status, deleting: [], settled, readRequest, readSettled }
+  const snapshot: CatalogSnapshot<Entry> = { records, status, deleting: [], settled, readRequest, readSettled }
   // The card under test reads none of the session-standard kit the runtime also
   // delivers, so the fake leaves those members to the assertion below.
   const props: Partial<ScheduleTurnCardProps> = {
@@ -321,9 +345,9 @@ describe('ScheduleTurnCard', () => {
    */
   function mountTurnCard(
     created: readonly ToolResultNode[],
-    read: readonly ScheduleCatalogEntry[],
+    read: readonly Entry[],
     mount: {
-      readonly records?: readonly ScheduleCatalogEntry[]
+      readonly records?: readonly Entry[]
       readonly status?: 'loading' | 'ready' | 'error'
       readonly settled?: boolean
       readonly readRequest?: number
@@ -334,7 +358,7 @@ describe('ScheduleTurnCard', () => {
     const onRetry = vi.fn(async () => {})
     /** Props of the snapshot one later read publishes. */
     const snapshot = (next: {
-      readonly records?: readonly ScheduleCatalogEntry[]
+      readonly records?: readonly Entry[]
       readonly status?: 'loading' | 'ready' | 'error'
       readonly settled?: boolean
       readonly readRequest?: number
@@ -379,13 +403,13 @@ describe('ScheduleTurnCard', () => {
   })
 
   it('replaces the creation result with the current task title and timing', async () => {
-    const current = {
-      ...weeklyTask,
-      id: dailyTask.id,
-      title: 'Updated deployment check',
-      sessionId: 'session',
-      status: 'active',
-    } as ScheduleCatalogEntry
+    // An edit renamed the task and replaced its daily rule with a weekly recurrence.
+    const current: Entry = { kind: 'rrule',
+      id: dailyTask.id as ScheduleId, title: 'Updated deployment check', prompt: PROMPT,
+      rrule: 'DTSTART;TZID=Asia/Shanghai:20261005T090000\nRRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,WE',
+      scheduledAt: '2026-10-05T01:00:00.000Z', target: { kind: 'session', sessionId: SESSION },
+      involvedSessionIds: [SESSION], status: 'active', createdAt: CREATED, updatedAt: '2026-10-02T00:00:00.000Z',
+    }
     const { view, snapshot } = mountTurnCard([settledBlock(dailyTask)], [current])
     await act(async () => {})
     view.rerender(<ScheduleTurnCard {...snapshot()} />)

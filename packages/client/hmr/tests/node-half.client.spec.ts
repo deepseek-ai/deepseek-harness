@@ -79,7 +79,7 @@ function fakeClientModuleHost(rows: Map<string, string>, options: FakeHostOption
 // carries private state a literal cannot (and need not) reproduce.
 function fakeHttpServer(routes: WebRoute[]): WebServer {
   const fake: Pick<WebServer, 'register' | 'tapIndex' | 'port'> = {
-    register(route) {
+    register(route: WebRoute) {
       routes.push(route)
       return () => { routes.splice(routes.indexOf(route), 1) }
     },

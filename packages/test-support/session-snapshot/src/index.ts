@@ -21,6 +21,7 @@ export {
   redactSessionSnapshotIds,
 } from './identity.ts'
 export {
+  REPLAY_CREDENTIAL_ENV,
   runScenario,
   snapshotSpillRoot,
   type HarvestedLog,

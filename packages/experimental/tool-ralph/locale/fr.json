@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Outil d'itération Ralph",
+    "description": "Exécutez de nouveaux sous-agents tour par tour autour du même objectif, en leur transmettant un bref rapport du tour précédent."
+  }
+}

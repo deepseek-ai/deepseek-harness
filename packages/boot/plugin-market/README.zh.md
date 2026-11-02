@@ -1,5 +1,5 @@
 ---
-description: "读取用户配置的插件市场索引的 Host 服务，提供安装状态、兼容性以及只读的 plugin_market 工具。"
+description: "读取用户配置的插件索引的 Host 服务，提供安装状态、兼容性以及只读的 plugin_market 工具。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`pluginMarket` 读取用户配置的插件市场索引，用 [`dsh-plugin-market-index`](../../util/plugin-market-index/README.zh.md) 校验，并为每个条目标注 profile 中的安装状态、DSH 兼容性以及安装它所需的精确参数。它还为发现区的条目页面读取每个市场条目的详细介绍，即一份带图片的 Markdown 文档。Web 的[发现标签页](../../client/ui-plugin-market/README.zh.md)和 `plugin_market` agent 工具通过它读取；安装本身经由 [`pluginManager.installBundle`](../plugin-manager/README.zh.md) 进行。格式及其理由见[索引格式 Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-index-format.zh.md)；Host 与 Web 的设计见[发现 Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-discover.zh.md)。
+`pluginMarket` 读取用户配置的插件索引，用 [`dsh-plugin-market-index`](../../util/plugin-market-index/README.zh.md) 校验，并为每个条目标注 profile 中的安装状态、DSH 兼容性以及安装它所需的精确参数。它还为发现区的条目页面读取每个索引条目的详细介绍，即一份带图片的 Markdown 文档。Web 的[发现标签页](../../client/ui-plugin-market/README.zh.md)和 `plugin_market` agent 工具通过它读取；安装本身经由 [`pluginManager.installBundle`](../plugin-manager/README.zh.md) 进行。格式及其理由见[索引格式 Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-index-format.zh.md)；Host 与 Web 的设计见[发现 Agent Note](../../../.agents/notes/implemented/feature/2026-10-02-plugin-market-discover.zh.md)。
 
 ## 目录
 
@@ -24,7 +24,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-可选的[自定义插件市场组合包](../../experimental/plugin-market-bundle/README.zh.md)把该服务挂载为 `plugin-market` 行；随附的 profile 默认不启用该组合包。与 `plugin-manager` 一样，该行在没有 profile 时被禁用，并等待 `pluginManager`。默认不配置任何索引源，因此在用户添加索引源之前，Host 不发送任何市场请求。
+可选的[自定义插件索引组合包](../../experimental/plugin-market-bundle/README.zh.md)把该服务挂载为 `plugin-market` 行；随附的 profile 默认不启用该组合包。与 `plugin-manager` 一样，该行在没有 profile 时被禁用，并等待 `pluginManager`。默认不配置任何索引源，因此在用户添加索引源之前，Host 不发送任何索引请求。
 
 | 配置 | 默认值 | 含义 |
 |---|---|---|
@@ -73,7 +73,7 @@ Remote 方法如下：
 
 三者都没有时，结果为 `{ status: 'none' }`。找到的文档携带其 `origin`（`locale`、`readme` 或 `repository`）、去掉开头 YAML front matter 块后的 Markdown 内容和 `document` id。结果，以及再次读取也会重复出现的 `too-large`、`denied` 和 `invalid` 失败，缓存 `cacheTtlMs`；传入 `refresh` 时改为重新读取；并发读取共享一次读取。只要每个 `cacheTtlMs` 内至少有一次读取返回某个 `document` id 或有一次图片请求引用它，该 id 就保持有效；未使用的 id 会被遗忘，在再次读取该文档之前，其图片请求返回 404。
 
-`github.com` 上的仓库文件通过 GitHub 的原始文件主机读取，`detailGitlabHosts` 中主机上的仓库文件通过 GitLab 仓库文件 API 读取。API 请求跟随同一 origin 内的重定向。API 返回 401、403 或 404 时，由一次不带任何凭据、发往该仓库 smart HTTP 端点的请求判断仓库是否公开；公开仓库中未找到文件即表示该文件不存在。需要凭据的仓库，以及所在主机没有此类 API 的仓库，通过 https、http 或 ssh 从部分克隆中读取。Git 使用用户的配置、凭据助手和 `url.<base>.insteadOf` 规则，且不提示输入，因此 https URL 可能被改为通过 ssh 访问；除非设置了 `GIT_SSH` 或 `GIT_SSH_COMMAND`，ssh 以批处理模式运行。
+`github.com` 上的仓库文件通过 GitHub 的原始文件主机读取，`detailGitlabHosts` 中主机上的仓库文件通过 GitLab 仓库文件 API 读取。API 请求跟随同一 origin 内的重定向。API 返回 401、403 或 404 时，由一次不带任何凭据、发往该仓库 smart HTTP 端点的请求判断仓库是否公开；公开仓库中未找到文件即表示该文件不存在。需要凭据的仓库，以及所在主机没有此类 API 的仓库，通过 https、http 或 ssh 从部分克隆中读取。Git 使用用户的配置、凭据助手和 `url.<base>.insteadOf` 规则，且不提示输入，因此 https URL 可能被改为通过 ssh 访问。Git 拒绝 http(s) URL 时，部分克隆改从 `ssh://git@<host>/<path>`（插件安装也使用的 SSH 形式）再次获取，并保留该远程地址；重试失败时报告两次的诊断，原因是网络或大小限制时分别报告 `network` 或 `too-large`，否则报告 `denied`。因此打开详情页可能通过 ssh 连接索引条目指定的主机；在批处理模式和默认的主机密钥检查下，ssh 只向用户 known hosts 中的主机认证。除非设置了 `GIT_SSH` 或 `GIT_SSH_COMMAND`，ssh 以批处理模式运行。
 
 `GET /api/plugin-market/detail-file?document=<id>&path=<destination>` 向已通过认证的 owner 连接提供已读取文档旁的图片。目标路径相对于该文档；以 `/` 开头时相对于包或仓库的根目录；路径中的查询和片段被忽略。只提供该根目录内的 PNG、JPEG、GIF、WebP、AVIF 和 SVG 文件，响应带有 `Content-Security-Policy: sandbox`、`X-Content-Type-Options: nosniff` 和时长为 `cacheTtlMs` 的私有缓存。文件不存在、文档未知或其他路径返回 404；下文所列的失败依次返回 413、502、403、503 和 400；失败响应不被缓存。
 
@@ -124,10 +124,10 @@ Host 使用进程的 `fetch` 获取，因此配置的出站代理生效，并拒
 <a id="known-limitations-and-deferred-work"></a>
 
 - **不支持升级**——索引版本更新的已安装组合包报告为 `update-available`；升级仍需先卸载再安装。
-- **索引没有签名**——索引内容（包括 Git 条目的名称和版本）是市场的声明；实际安装什么由已安装的 manifest（元数据清单）决定。
+- **索引没有签名**——索引内容（包括 Git 条目的名称和版本）是索引的声明；实际安装什么由已安装的 manifest（元数据清单）决定。
 - **后写入者覆盖**——`setIndexes` 会替换整个列表，因此两个窗口同时编辑索引源时，可能互相覆盖对方的修改。
 - **拒绝重定向**——只能经重定向访问的索引必须以其最终 URL 配置。
-- **读取整份文档**——Host 下载并保留每个不超过 `maxBytes` 的索引，并在内存中构建其文本索引；一个包含 20,000 个插件的合成索引构建用时约 0.8 秒，占用约 130 MiB 堆内存。解析在 Worker 中运行，但接收校验后的索引时，反序列化 clone 仍会阻塞 Host 事件循环：包含 20,000 个插件的 7.6 MiB 合成索引约 35 毫秒，包含 100,000 个插件的 38 MiB 索引约 190 毫秒。更大的市场需要服务端查询协议。
+- **读取整份文档**——Host 下载并保留每个不超过 `maxBytes` 的索引，并在内存中构建其文本索引；一个包含 20,000 个插件的合成索引构建用时约 0.8 秒，占用约 130 MiB 堆内存。解析在 Worker 中运行，但接收校验后的索引时，反序列化 clone 仍会阻塞 Host 事件循环：包含 20,000 个插件的 7.6 MiB 合成索引约 35 毫秒，包含 100,000 个插件的 38 MiB 索引约 190 毫秒。更大的索引需要服务端查询协议。
 - **默认分支的 README**——仓库 README 读取的是默认分支上的文件，可能与列出的版本不一致；CDN 公开的 npm 数据不记录提交。
 - **私有 npm 注册表**——公共 CDN 不提供其他注册表的包，因此此类版本的文档只能来自条目的仓库。
 - **获取未公布的提交**——固定版本的 Git 条目按提交 id 获取，这需要服务器允许（`uploadpack.allowReachableSHA1InWant` 或 `allowAnySHA1InWant`）；GitHub 和 GitLab 允许这样做，拒绝的服务器报告 `denied`。

@@ -12,9 +12,9 @@ CUA provider 通过 `ctx.cuaAccess` 提供系统权限状态、用户主动申�
 
 | 权限类型 | 含义 |
 |---|---|
-| `CuaApplicationId`、`CuaApplicationGrant` | 可执行文件和签名身份，以及显示给用户的已保存决定。 |
+| `CuaApplicationId`、`CuaApplicationGrant` | 平台提供的应用身份，以及显示给用户的已保存决定。 |
 | `CuaSystemPermission` | 用户选择申请的辅助功能或屏幕录制权限。 |
-| `CuaPermissionProcess`、`CuaSystemPermissionState` | 观测到的 helper、父进程和原生权限状态，以及 helper 启动时由 macOS 责任进程记录识别出的应用。可选系统查询或应用查找不可用时，省略应用信息。 |
+| `CuaPermissionProcess`、`CuaSystemPermissionState` | 观测到的 helper、父进程和原生权限状态，以及 helper 启动时由 macOS 责任进程记录识别出的应用。系统归属信息不可用时，独立 helper 使用自身 bundle；两者都无法识别时才省略应用信息。 |
 | `CuaApplicationState` | 持久授权、拒绝记录，以及能否持久保存。会话授权只保留在 provider 内部。系统权限和应用图标分别查询，页面在各项结果返回后分别显示。 |
 
 ## 选择提供方
@@ -85,10 +85,10 @@ Browser controls for provider-owned native permission and application decisions.
 @Remote async enablePersistentPtc(): Promise<void>
 
 /**
- * Read application decisions without waiting for the native helper.
- * @returns Saved grants and refused applications with their persistence owner.
+ * Read fresh stored application decisions without issuing a native request.
+ * @returns Saved grants, refused applications and durable-storage availability.
  */
-@Remote applications(): CuaApplicationState
+@Remote applications(): Promise<CuaApplicationState>
 
 /**
  * Inspect system privileges independently of application decisions and icons.
@@ -98,23 +98,25 @@ Browser controls for provider-owned native permission and application decisions.
 
 /**
  * Load presentation icons separately from application decisions.
- * @returns Optional native PNG icons keyed by executable path for saved and blocked applications.
+ * @returns Optional native PNG icons keyed by executable path; applications without paths are skipped.
  */
 @Remote async applicationIcons(): Promise<Record<string, string>>
 
 /**
- * Request a system privilege explicitly selected by the user.
+ * Request the selected system privilege through the native provider.
  * @param permission macOS privilege to request.
- * @returns Preflight state after requesting; a false value never implies consent.
+ * @param locale Current Client language for provider-owned permission UI.
+ * @returns Current permission observations; requesting does not establish consent.
  */
-@Remote async requestPermission(permission: CuaSystemPermission): Promise<CuaSystemPermissionState>
+@Remote async requestPermission(permission: CuaSystemPermission, locale: string): Promise<CuaSystemPermissionState>
 
 /**
  * Open the macOS privacy pane selected by the user.
  * @param permission Corresponding system privilege.
+ * @param locale Current Client language for provider-owned recovery instructions.
  * @returns Completion after macOS accepted the open request.
  */
-@Remote async openSettings(permission: CuaSystemPermission): Promise<void>
+@Remote async openSettings(permission: CuaSystemPermission, locale: string): Promise<void>
 
 /**
  * Remove saved and session access and join affected operations.

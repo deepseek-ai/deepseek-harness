@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-23-independent-session-forks.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-23-independent-session-forks.md
+/agent-note-ordinary-forks-have-no-durable-creator-relationship:
+  en: 543a84d51e8aea24
+  zh: 24aeec7c3cdf5900
+/agent-note-ordinary-forks-have-no-durable-creator-relationship/problem:
+  en: d2edaafdd83e5974
+  zh: 57ce9ad368c404c2
+/agent-note-ordinary-forks-have-no-durable-creator-relationship/decision:
+  en: aae0053e9dc3be9f
+  zh: bd37095fd5c43c3d
+/agent-note-ordinary-forks-have-no-durable-creator-relationship/compatibility:
+  en: 8393e8526f927134
+  zh: c957cbde9dc6712d
+/agent-note-ordinary-forks-have-no-durable-creator-relationship/alternatives-considered:
+  en: 748aa21283186e02
+  zh: 51d3b0207b250784
+/agent-note-ordinary-forks-have-no-durable-creator-relationship/consequences:
+  en: adcb06ccf7503e55
+  zh: 30e02c6104eefe01

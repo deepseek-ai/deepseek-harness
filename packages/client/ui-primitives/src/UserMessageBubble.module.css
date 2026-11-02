@@ -1,0 +1,11 @@
+.bubble {
+  max-width: 100%;
+  background: var(--dsw-specific-bubble);
+  border-radius: var(--dsw-radius-xl);
+  padding: 10px 16px;
+  font-size: var(--dsh-content-font-size, 14px);
+  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
+  color: var(--dsw-alias-label-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

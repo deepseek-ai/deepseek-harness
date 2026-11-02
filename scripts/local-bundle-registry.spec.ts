@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
 import { describe, expect, it, onTestFinished } from 'vitest'
-import { ON_DEMAND_BUNDLES } from '../packages/boot/app-boot/src/official-bundle-packages.ts'
+import { ON_DEMAND_BUNDLES } from '../packages/util/official-bundles/src/bundles.ts'
 import { generateOfficialBundleCatalog } from './gen-official-bundle-catalog.ts'
 import {
   createRegistryManifest,

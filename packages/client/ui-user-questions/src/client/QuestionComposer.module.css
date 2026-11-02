@@ -60,6 +60,7 @@
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .waitButton {
@@ -85,6 +86,7 @@
 }
 
 .headingBlock {
+  flex: 1;
   min-width: 0;
 }
 
@@ -103,8 +105,70 @@
   font-weight: 500;
 }
 
+/* Long copy keeps one line fewer than its budget once it overflows: a
+   question shows in full up to three lines, an option description up to two;
+   longer copy drops its last line, fades at the end of the line before, and
+   shows its expand button there. Each box keeps its full budget, plus a 2px
+   allowance for glyphs taller than the line, so the scroll timeline that
+   reports the overflow never depends on the collapsed layout. A negative
+   bottom margin, not a smaller box, gives the dropped line back to the row,
+   and clip-path removes that line from hit testing as well as from view. */
+.questionTitle {
+  position: relative;
+  flex-shrink: 0;
+  margin: 5px 24px 0;
+  timeline-scope: --question-copy;
+}
+
+.questionTitle[data-expanded] {
+  padding-bottom: 24px;
+}
+
+.titlePreview {
+  max-height: calc(3lh + 2px);
+  margin: 0 0 -2px;
+  padding-bottom: 2px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  scroll-timeline: --question-copy block;
+  /* Longhands: the bundled lightningcss folds animation-timeline into the
+     animation shorthand, a form browsers reject. */
+  animation-name: question-clipped;
+  animation-fill-mode: both;
+  animation-timeline: --question-copy;
+}
+
+@keyframes question-clipped {
+  from, to {
+    margin-bottom: calc(-1lh - 2px);
+    clip-path: inset(0 0 calc(1lh + 2px) 0);
+    mask-image: linear-gradient(#000, #000), linear-gradient(to right, #000 calc(100% - 56px), transparent calc(100% - 28px));
+    mask-size: 100% 1lh, 100% 1lh;
+    mask-position: 0 0, 0 1lh;
+    mask-repeat: no-repeat;
+  }
+}
+
+.questionToggle {
+  position: absolute;
+  right: -4px;
+  bottom: -1px;
+  animation-name: copy-toggle-shown;
+  animation-fill-mode: both;
+  animation-timeline: --question-copy;
+}
+
+.cardMinimized .title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .detail {
-  margin: 0 2px 8px;
+  flex-shrink: 0;
+  margin: 0 24px 8px;
 }
 
 .footerActions {
@@ -146,9 +210,11 @@
   cursor: pointer;
 }
 
-.iconButton:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
+@media (hover: hover) {
+  .iconButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 .iconButton:disabled {
@@ -173,34 +239,42 @@
   padding: 4px 12px;
 }
 
+.optionRow {
+  position: relative;
+  width: 100%;
+  min-height: 40px;
+  flex-shrink: 0;
+  border: 0.5px solid transparent;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  transition: background-color 120ms ease, border-color 120ms ease;
+  timeline-scope: --description-copy;
+}
+
 .option {
   display: flex;
-  /* flex-start, not center: with a wrapped description the indicator must
-     stay on the FIRST line (centering drifts it down the taller copy block).
-     The 8px padding makes a single-line row 40px exactly, so nothing reads
-     as top-heavy; .number/.checkbox re-center against the first line box. */
+  /* flex-start keeps the indicator aligned with the first label line. */
   align-items: flex-start;
   gap: 8px;
   width: 100%;
+  min-width: 0;
   min-height: 40px;
-  /* Rows are the scroll content, never the slack absorber: a shrinkable row
-     collapses to min-height while its wrapped copy keeps the taller
-     intrinsic height, and centered content then paints outside the row box —
-     over the title and the next row. Overflow belongs to .options. */
-  flex-shrink: 0;
   padding: 8px 12px 8px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--dsw-radius-md);
+  border: 0;
   background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.option:hover:not(:disabled),
 .optionSelected {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .optionRowInteractive:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .optionSelected {
@@ -270,12 +344,17 @@
 }
 
 .optionCopy {
-  min-width: 0;
+  display: flex;
   flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  min-width: 0;
 }
 
 .optionLine {
   display: flex;
+  max-width: 100%;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 2px 6px;
@@ -298,10 +377,84 @@
 }
 
 .description {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  max-height: calc(2lh + 2px);
+  margin-bottom: -2px;
+  padding-bottom: 2px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 14px;
-  line-height: 24px;
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 400;
+  scroll-timeline: --description-copy block;
+  animation-name: description-clipped;
+  animation-fill-mode: both;
+  animation-timeline: --description-copy;
+}
+
+@keyframes description-clipped {
+  from, to {
+    margin-bottom: calc(-1lh - 2px);
+    clip-path: inset(0 0 calc(1lh + 2px) 0);
+    mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent calc(100% - 28px));
+    mask-size: 100% 1lh;
+    mask-repeat: no-repeat;
+  }
+}
+
+.descriptionToggle {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  animation-name: copy-toggle-shown;
+  animation-fill-mode: both;
+  animation-timeline: --description-copy;
+}
+
+/* Expanded copy keeps its collapse button on a line of its own below the text. */
+.optionRow[data-expanded] .option {
+  padding-bottom: 32px;
+}
+
+.questionTitle[data-expanded] .titlePreview,
+.optionRow[data-expanded] .description {
+  max-height: none;
+  animation: none;
+}
+
+/* Shares .iconButton's 24px round control; hidden until its copy overflows or expands. */
+.copyToggle {
+  visibility: hidden;
+}
+
+@keyframes copy-toggle-shown {
+  from, to {
+    visibility: visible;
+  }
+}
+
+.questionTitle[data-expanded] .copyToggle,
+.optionRow[data-expanded] .copyToggle {
+  visibility: visible;
+  animation: none;
+}
+
+/* Without scroll timelines clipped copy cannot be told apart, so it shows in full. */
+@supports not (animation-timeline: scroll()) {
+  .titlePreview,
+  .description {
+    max-height: none;
+    animation: none;
+  }
+
+  .copyToggle {
+    display: none;
+  }
 }
 
 /* Read-only note standing in for a question the user skipped: it takes the
@@ -330,15 +483,20 @@
      it pushes the inline input past the footer. */
   flex-shrink: 0;
   padding: 8px 12px 8px 8px;
-  border: 1px solid transparent;
+  border: 0.5px solid transparent;
   border-radius: var(--dsw-radius-md);
   transition: background-color 120ms ease, border-color 120ms ease;
 }
 
-.customRow:hover,
 .customRow:focus-within:not(.customRowYielded),
 .customRowActive {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .customRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .customRow:focus-within:not(.customRowYielded),
@@ -465,6 +623,10 @@
     padding: 8px 6px;
   }
 
+  .descriptionToggle {
+    right: 2px;
+  }
+
   .footer {
     align-items: flex-end;
     padding: 0 10px;
@@ -476,7 +638,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .option,
+  .optionRow,
   .customRow {
     transition: none;
   }

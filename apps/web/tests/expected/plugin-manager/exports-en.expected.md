@@ -1,5 +1,6 @@
 - button "Back to plugins": Plugins
 - button "Uninstall @fixture/bundle": Uninstall
+- status
 - switch "Enable @fixture/bundle"
 - heading "@fixture/bundle" [level=3]
 - text: v0.0.1

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-log-export",
-  "description": "Web Session-log export command and shared download dialog",
-  "version": "0.2.1-rc.2",
+  "description": "Web Session-log ZIP export and Session Markdown copy",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -58,6 +58,7 @@
     "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-ui-commands": "workspace:*",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-layout": "workspace:*",
     "@deepseek-ai/dsh-client-ui-message-feedback": "workspace:*",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",
@@ -67,6 +68,7 @@
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-persistence": "workspace:*",
     "@deepseek-ai/dsh-session-query": "workspace:*",
+    "@deepseek-ai/dsh-session-title": "workspace:*",
     "react": "^18.2.0"
   },
   "dsh": {
@@ -75,6 +77,7 @@
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-commands",
         "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-session"
       ],

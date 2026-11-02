@@ -5,8 +5,30 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
+  min-width: 0;
   height: 100%;
   min-height: 0;
+}
+
+/* Everything below the header: the body, then the navigator another plugin
+   contributes in a docked or floating pane. The navigator either narrows the
+   body or positions an overlay against this row, so the header always spans
+   the pane. */
+.content {
+  position: relative;
+  /* Child layers stay below the floating pane's resize handle. */
+  isolation: isolate;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Renderers' sticky toolbars stack inside the body, below an overlaying navigator. */
+.content > :first-child {
+  isolation: isolate;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* One 38px row flush under the pane's strip: the path, then the type's
@@ -54,6 +76,8 @@
   margin: 0;
   padding: 0;
   overflow: auto;
+  /* The remembered offset is a pixel distance; browser anchoring would move it when content above it reflows. */
+  overflow-anchor: none;
   /* The notice and retry surfaces in this sheet are elevated, so the file body's
      scroller rebinds the thumb indirection in a complete pair. */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
@@ -188,8 +212,10 @@
   cursor: pointer;
 }
 
-.retry:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .retry:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* The type's 16px sheet before the chip's text; the chip's title row centres
@@ -214,12 +240,14 @@
    empty states below instead of sitting in the corner. */
 .status {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 8px;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
   height: 100%;
+  min-height: 0;
   padding: 12px 10px;
 }
 
@@ -235,8 +263,10 @@
   cursor: pointer;
 }
 
-.action:hover {
-  background: var(--dsw-alias-bg-layer-3);
+@media (hover: hover) {
+  .action:hover {
+    background: var(--dsw-alias-bg-layer-3);
+  }
 }
 
 /* The next page, asked for where the loaded text ends. */
@@ -254,9 +284,11 @@
   cursor: pointer;
 }
 
-.more:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-bg-layer-3);
+@media (hover: hover) {
+  .more:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-bg-layer-3);
+  }
 }
 
 .more:disabled {
@@ -288,9 +320,11 @@
   height: 15px;
 }
 
-.tool:hover {
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .tool:hover {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .tool[data-textpreview-tool='auto-refresh'][aria-pressed='true'] {

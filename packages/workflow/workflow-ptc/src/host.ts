@@ -205,16 +205,14 @@ export class PtcWorkflowRun implements WorkflowRun {
       label: `${this.meta.name} child ${callId}`,
       delivery: 'caller',
       signal: this.controller.signal,
-      request: {
-        cwd: await this.cwd,
-        prompt: [{ type: 'text', text: request.prompt }],
-        parent: this.parent,
-        ...request.schema === undefined ? {} : { outputSchema: request.schema },
-        ...request.provider === undefined && request.model === undefined ? {} : {
-          agentOptions: {
-            ...request.provider === undefined ? {} : { provider: request.provider },
-            ...request.model === undefined ? {} : { model: request.model },
-          },
+      cwd: await this.cwd,
+      prompt: [{ type: 'text', text: request.prompt }],
+      parent: this.parent,
+      ...request.schema === undefined ? {} : { outputSchema: request.schema },
+      ...request.provider === undefined && request.model === undefined ? {} : {
+        agentOptions: {
+          ...request.provider === undefined ? {} : { provider: request.provider },
+          ...request.model === undefined ? {} : { model: request.model },
         },
       },
     })
@@ -288,7 +286,11 @@ export class PtcWorkflowRun implements WorkflowRun {
         throw new Error(`workflow runtime cannot enforce the ${this.policy.mode} file policy`)
       }
       const outcome = await this.runtime.run(this.runtime.resolve({
-        program: this.runtime.programFormat === 'repl' ? `await (async () => {\n${PROGRAM}\n})()` : PROGRAM,
+        program: {
+          'function-body': PROGRAM,
+          repl: `await (async () => {\n${PROGRAM}\n})()`,
+          script: `(async () => {\n${PROGRAM}\n})()`,
+        }[this.runtime.programFormat],
         bindings: [{ global: 'workflowHost', functions: this.bindings() }],
         cwd,
         ...this.runtime.sandboxMode === undefined ? {} : { sandboxPolicy: this.policy },

@@ -19,7 +19,6 @@
 
 .icon {
   flex: none;
-  opacity: 0.7;
 }
 
 /* First sacrifice when the title row (the enclosing inline-size container)

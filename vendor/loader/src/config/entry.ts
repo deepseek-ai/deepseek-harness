@@ -1,4 +1,4 @@
-import { Context, Fiber, FiberState, Inject, resolveConfig } from '@deepseek-ai/cordis'
+import { Context, Fiber, FiberState, Inject } from '@deepseek-ai/cordis'
 import { deepEqual, isNullable, updateVolatile, volatileEntries, type Volatile } from '@deepseek-ai/cosmokit'
 import { Loader } from '../index.ts'
 import { EntryGroup } from './group.ts'
@@ -98,12 +98,15 @@ export class Entry {
     return evaluate(this.ctx, expr)
   }
 
-  private _patchContext(diff: string[]) {
-    this.context.waterfall('loader/patch-context', this, () => {
+  private async _patchContext(diff: string[]) {
+    await this.context.waterfall('loader/patch-context', this, async () => {
       Object.setPrototypeOf(this.ctx, this.parent.ctx)
 
       if (this.fiber?.uid && (diff.includes('config') || this.options.group)) {
-        this.fiber.update(this.options.config, true)
+        // A simultaneous context/config edit must restart against the new dependencies.
+        const fiber = this.fiber.ctx.fiber
+        for (const name of Object.keys(fiber.inject)) fiber._checkImpl(name)
+        await fiber.update(this.options.config, true)
       }
     })
   }
@@ -134,7 +137,7 @@ export class Entry {
 
     // step 2: execute
     if (this.disabled) {
-      this.fiber?.dispose()
+      await this.fiber?.dispose()
       return
     }
 
@@ -146,11 +149,11 @@ export class Entry {
       const volatileOnly = changes.length === 1 && changes[0] === 'config'
         && this.fiber.state === FiberState.ACTIVE && Object.getPrototypeOf(this.ctx) === this.parent.ctx
         && equalExceptVolatile(legacy.config, this.options.config, this.fiber.runtime?.Config)
-      if (volatileOnly) this.fiber._config = this.options.config
+      if (volatileOnly) this.fiber.rawConfig = this.options.config
       const pending = volatileOnly && this._commitVolatile() ? [] : changes
       if (!pending.length && !force) return
       this.context.emit('loader/partial-dispose', this, legacy, true)
-      this._patchContext(pending)
+      await this._patchContext(pending)
     } else {
       await this.init()
     }
@@ -162,19 +165,19 @@ export class Entry {
    * @returns `false` when an ordinary effective value changed, so the caller applies the ordinary update lifecycle.
    */
   private _commitVolatile(): boolean {
-    const fiber = this.fiber!
-    const refs = volatileEntries(fiber.config)
+    const fiber = this.fiber!.ctx.fiber
+    const refs = volatileEntries(fiber.effectiveConfig)
     if (!refs.length) return true
     const raw = this.options.config
     let candidate: unknown
     try {
-      candidate = resolveConfig(fiber.runtime!, fiber.ctx.waterfall(fiber, 'internal/config', raw, () => raw))
+      candidate = fiber.resolveConfig(raw)
     } catch (error) {
       this.ctx.logger.warn('volatile config update failed for %C', this.options.id)
       this.ctx.logger.warn(error)
       return true
     }
-    if (!deepEqual(fiber.config, candidate, true)) {
+    if (!deepEqual(fiber.effectiveConfig, candidate, true)) {
       this.ctx.logger.debug('ordinary config values of %C changed with its volatile values; applying the ordinary update', this.options.id)
       return false
     }
@@ -213,11 +216,10 @@ export class Entry {
     } finally {
       this._initTask = undefined
     }
-    const notify = () => {
+    this.fiber?.await().catch(() => {}).finally(() => {
       if (this.loader.getTasks().length) return
       this.ctx.reflect.notify(['loader'])
-    }
-    this.fiber?.await().then(notify, notify)
+    })
   }
 
   private async _init() {
@@ -227,13 +229,11 @@ export class Entry {
     } catch (error) {
       this.ctx.logger.error(error)
       return
-    } finally {
-      this._initTask = undefined
     }
     const plugin = this.loader.unwrapExports(moduleNamespace)
-    this._patchContext([])
+    await this._patchContext([])
     this.loader.showLog(this, 'apply')
-    this.fiber = this.ctx.registry.plugin(plugin, this.options.config, this.getOuterStack).ctx.fiber
+    this.fiber = this.ctx.registry.plugin(plugin, this.options.config, this.getOuterStack)
     this.moduleNamespace = moduleNamespace
   }
 }

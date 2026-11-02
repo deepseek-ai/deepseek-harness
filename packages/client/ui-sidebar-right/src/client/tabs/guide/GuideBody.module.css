@@ -62,8 +62,10 @@
   cursor: pointer;
 }
 
-.entry:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
+@media (hover: hover) {
+  .entry:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 /* A fixed 26px box — the described glyph's size — so an entry's glyph sits
@@ -121,3 +123,10 @@
 }
 
 .entryCell { width: 380px; max-width: 100%; }
+
+/* The More card keeps the capsule width inside the menu's anchor wrapper. */
+.moreAnchor { display: flex; width: 380px; max-width: 100%; }
+
+.moreAnchor .entry[aria-expanded='true'] { background: var(--dsw-alias-interactive-bg-hover); }
+
+.moreMenu { width: max-content; max-width: min(480px, calc(100vw - 24px)); }

@@ -1,4 +1,5 @@
 - button "返回 实验性插件": 实验性插件
+- status
 - switch "启用 DSH 徽章技能"
 - heading "DSH 徽章技能" [level=3]
 - text: v{{version}} 实验性

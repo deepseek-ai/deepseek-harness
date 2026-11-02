@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Token-Messung",
+    "description": "Schätzen Sie die Token-Nutzung des Modellkontexts, um das Budget für Funktionen wie Komprimierung zu bestimmen."
+  }
+}

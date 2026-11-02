@@ -1,0 +1,22 @@
+.action {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-button-floating-fill);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l3);
+  box-shadow: var(--dsw-elevation-panel);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  cursor: pointer;
+}
+
+.action:focus-visible {
+  background: var(--dsw-alias-button-floating-hover);
+}
+
+@media (hover: hover) {
+  .action:hover {
+    background: var(--dsw-alias-button-floating-hover);
+  }
+}

@@ -42,7 +42,8 @@ it('reserves bottom content height without remounting it on main-panel navigatio
         const viewportHeight = page.viewportSize()!.height
         expect(result.bottom).toEqual({ top: viewportHeight - height, height, bottom: viewportHeight })
         expect(result.main).toEqual({ top: caption, height: viewportHeight - caption - height, bottom: viewportHeight - height })
-        expect(result.sidebar).toEqual(result.main)
+        expect(result.sidebar).toEqual(page.viewportSize()!.width < 768
+          ? { top: 0, height: viewportHeight, bottom: viewportHeight } : result.main)
         expect(result.rightbar).toEqual(result.main)
         expect(result.overlay).toEqual({ top: 0, height: viewportHeight, bottom: viewportHeight })
         for (const handle of result.handles) expect(handle).toEqual(result.main)

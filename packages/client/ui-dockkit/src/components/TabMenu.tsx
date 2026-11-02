@@ -105,13 +105,11 @@ export function TabMenu({ labels, anchor, onClose, onDismiss, extras }: TabMenuP
       data-dockkit-tab-menu
       // Unplaced for one layout pass: measured, then positioned.
       style={position ?? { visibility: 'hidden', top: 0, left: 0 }}
-      // React bubbles a portal's events to its tab chip, so both halves of a
-      // press must stop here: the press would otherwise start a tab drag and
-      // capture the pointer, which retargets the release and swallows this
-      // item's click; the click would otherwise also focus a tab the item may
-      // have removed.
+      // Portal events reach the owning chip: a press would start its drag,
+      // a click would focus it, and a middle click would close it.
       onPointerDown={(event) => { event.stopPropagation() }}
       onClick={(event) => { event.stopPropagation() }}
+      onAuxClick={(event) => { event.stopPropagation() }}
     >
       {onClose !== undefined && (
         <button type="button" role="menuitem" className={css.menuItem} data-dockkit-menu-close onClick={onClose}>

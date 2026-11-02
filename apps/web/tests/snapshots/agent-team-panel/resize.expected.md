@@ -1,15 +1,26 @@
-- dialog "Agent Team":
-  - heading "Members" [level=3]
-  - button "lead Current chat Inactive" [disabled]
-  - heading "Shared tasks 2" [level=3]
-  - article:
-    - strong: Agent task
-    - text: In progress
-    - paragraph: Created by the Team Lead
-    - text: "task-1Owner: leadWrite scopes: src/web"
-  - article:
-    - strong: Responsive task
-    - text: Pending
-    - paragraph: Check the task description before you start work. Check the task description before you start work. Check the task description before you start work.
-    - button "Show more"
-    - text: "task-2Owner: UnownedReady"
+- dialog "Subagent sessions":
+  - heading "Subagents" [level=3]
+  - text: 1 external
+  - tree "Subagent sessions":
+    - 'treeitem "Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. team-panel-researcher · External task" [disabled] [level=1]': "Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. Researcher: investigate the construction and verify every bound before reporting the result. team-panel-researcher"
+  - region "Task board":
+    - heading "Shared tasks 1 completed · 1 in progress · 2 pending" [level=3]
+    - list:
+      - listitem:
+        - button "In progress Agent task":
+          - img "In progress"
+          - text: Agent task
+      - listitem:
+        - button "Completed Completed preparation":
+          - img "Completed"
+          - text: Completed preparation
+      - listitem:
+        - button "Pending Dependency task":
+          - img "Pending"
+          - text: Dependency task
+      - listitem:
+        - button "Blocked by dependencies Responsive task with a long title that remains fully readable when expanded at the minimum supported viewport" [expanded]:
+          - img "Blocked by dependencies"
+          - text: Responsive task with a long title that remains fully readable when expanded at the minimum supported viewport
+        - paragraph: Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work. Check every dependency and write scope before you start work.
+        - paragraph: "Owner: Unowned"

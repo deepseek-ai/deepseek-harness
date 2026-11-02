@@ -10,11 +10,13 @@ import type { CuaApplicationState, CuaSystemPermissionState } from '../src/acces
 import { expect, it, vi } from 'vitest'
 import type { PermissionFace } from '../src/client/controller.ts'
 import { mountCuaPermissions, inject } from '../src/client/mount.ts'
+import type { ApplicationApprovalProps } from '../src/client/ApplicationApproval.tsx'
 
 const contribution: TypertRemoteContribution = { package: '@deepseek-ai/dsh-cua', descriptors: [] }
 const value: CuaApplicationState & { system: CuaSystemPermissionState } = {
-  system: { accessibility: false, screenRecording: false, helper: { pid: 2 }, parent: { pid: 1 } },
-  allowedApps: [], blockedApps: [], settingsNamespace: 'cua', persistentAvailable: true }
+  system: {
+    accessibility: false, screenRecording: false, helper: { pid: 2 }, parent: { pid: 1 } },
+  allowedApps: [], blockedApps: [], persistentAvailable: true }
 
 function actionsOf(value: Record<string, unknown>): asserts value is Record<string, unknown> & PermissionFace {
   assert(typeof value.refresh === 'function' && typeof value.request === 'function' && typeof value.openSettings === 'function')
@@ -24,8 +26,7 @@ function actionsOf(value: Record<string, unknown>): asserts value is Record<stri
 }
 
 async function fixture(fail = false) {
-  const ctx = new Context(), unmount = vi.fn(async () => {}), unsubscribe = vi.fn()
-  let settingsListener: ((namespace: string, revision: number) => void) | undefined
+  const ctx = new Context(), unmount = vi.fn(async () => {})
   class Remote extends Service {
     constructor() { super(ctx, 'remote') }
     async $mount(received: TypertRemoteContribution) {
@@ -33,9 +34,13 @@ async function fixture(fail = false) {
       const owned = this.ctx.effect(() => unmount)
       return () => owned()
     }
-    $on(_event: string, listener: (namespace: string, revision: number) => void) { settingsListener = listener; return unsubscribe }
   }
   new Remote()
+  const changes = createSnapshotStore(false)
+  ctx.provide('pluginChanges', { bundle: (name) => {
+    expect(name).toBe('@deepseek-ai/dsh-cua-bundle')
+    return changes
+  } })
   const setDefault = vi.fn(async () => true)
   const setPersistent = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   const runtimeConfiguration = vi.fn<() => Promise<RemoteResult<{ persistent: boolean; writable: boolean }>>>()
@@ -62,11 +67,11 @@ async function fixture(fail = false) {
   ctx.slots.register({ name: 'root', children: {
     'plugins.bundle.activation': { kind: 'keyed', scope: 'root' },
     'plugins.bundle.config': { kind: 'keyed', scope: 'root' }, 'shell.overlay': { kind: 'list', scope: 'root' },
+    'conversation.composer': { kind: 'chain', scope: 'session' },
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
-  return { ctx, unmount, unsubscribe, status, systemStatus, applicationIcons,
+  return { ctx, changes, unmount, status, systemStatus, applicationIcons,
     requestPermission, openSettings, revoke, retryApproval, setDefault, setPersistent, runtimeConfiguration,
-    updateSettings(namespace: string) { settingsListener!(namespace, 1) },
   }
 }
 
@@ -75,6 +80,11 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
   try {
     const fiber = f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
     await fiber
+    const approval = f.ctx.slots.entries('conversation.composer')[0]!
+    const select = approval.select as (owner: { pendingInteraction: undefined }) => unknown
+    expect(select({ pendingInteraction: undefined })).toBeNull()
+    const presentation = approval.inject!() as Pick<ApplicationApprovalProps, 'resolveText'>
+    expect(presentation.resolveText({ en: 'Localized', zh: 'Localized' })).toBe('Localized')
     const entry = f.ctx.slots.entries('plugins.bundle.config')[0]!
     const actions = entry.inject!()
     actionsOf(actions)
@@ -84,6 +94,8 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('requested') })
     actions.openSettings('screenRecording')
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('opened') })
+    expect(f.requestPermission).toHaveBeenCalledWith('accessibility', 'en')
+    expect(f.openSettings).toHaveBeenCalledWith('screenRecording', 'en')
     actions.revoke('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId)
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('revoked') })
     actions.retryApproval('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId)
@@ -131,7 +143,6 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
     expect(f.ctx.slots.entries('conversation.composer')).toHaveLength(0)
     expect(f.ctx.slots.entries('plugins.bundle.config')).toHaveLength(0)
     expect(f.ctx.slots.entries('shell.overlay')).toHaveLength(0)
-    expect(f.unsubscribe).toHaveBeenCalledOnce()
     expect(f.unmount).toHaveBeenCalledOnce()
   } finally { await f.ctx.fiber.dispose() }
 })
@@ -171,22 +182,34 @@ it.each(['plugin', 'root'])('keeps the Remote mounted until an accepted revoke c
   }
 })
 
-it('refreshes only the settings namespace reported by the permission owner', async () => {
+it('refreshes application storage on reconnect', async () => {
   const f = await fixture()
-  f.status.mockResolvedValue({ ok: true, value: { ...value, settingsNamespace: 'custom-cua-entry' } })
   try {
     await f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
+    f.ctx.emit('connection/reset')
+    await vi.waitFor(() => { expect(f.status).toHaveBeenCalledOnce() })
+  } finally { await f.ctx.fiber.dispose() }
+})
+
+
+it('resumes queries when a management operation settles without a mounted permission page', async () => {
+  const f = await fixture()
+  try {
+    f.changes.set(true)
+    const fiber = await f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
     const actions = f.ctx.slots.entries('plugins.bundle.config')[0]!.inject!()
     actionsOf(actions)
-    f.updateSettings('locale')
-    expect(f.status).not.toHaveBeenCalled()
+    expect(actions.hooks.cuaPermissions.getSnapshot().changing).toBe(true)
     actions.refresh()
+    f.ctx.emit('connection/reset')
+    await setImmediate()
+    expect(f.status).not.toHaveBeenCalled()
+    f.changes.set(false)
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().busy).toBe(false) })
     expect(f.status).toHaveBeenCalledOnce()
-    f.updateSettings('cua')
-    f.updateSettings('locale')
+    f.changes.set(true)
+    await fiber.dispose()
+    f.changes.set(false)
     expect(f.status).toHaveBeenCalledOnce()
-    f.updateSettings('custom-cua-entry')
-    await vi.waitFor(() => { expect(f.status).toHaveBeenCalledTimes(2) })
   } finally { await f.ctx.fiber.dispose() }
 })

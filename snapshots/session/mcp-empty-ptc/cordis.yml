@@ -2,9 +2,11 @@
     - id: literal-sdk
       name: '../../../packages/core/tools/tests/fixtures/literal-sdk.ts'
 
-- id: tools
-  config:
-    mode: ptc
+- id: tool-executor-native
+  disabled: true
+
+- id: tool-executor-ptc
+  disabled: false
 
 - id: system-prompt
   config:

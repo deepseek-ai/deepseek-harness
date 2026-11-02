@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Stdio language server provider",
+    "description": "Connect to language servers through subprocesses and JSON-RPC, open files as needed, and run code queries."
+  }
+}
