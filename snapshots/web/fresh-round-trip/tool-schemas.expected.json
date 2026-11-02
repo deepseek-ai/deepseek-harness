@@ -328,7 +328,7 @@
     },
     {
       "name": "list_subagent_models",
-      "description": "Inspect the subagent routes this Session authorizes. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts. Query when choosing an explicit child route or reasoning effort. Omit `provider`, `model`, and `reasoning_effort` when delegating to use the default child route. Omit optional fields rather than sending empty strings.",
+      "description": "Inspect the subagent routes this Session authorizes. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts. Query when choosing an explicit child route or reasoning effort. Omit optional fields rather than sending empty strings.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -643,7 +643,7 @@
     },
     {
       "name": "subagent",
-      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. Supply `provider` and `model` together. Omit all three selection fields to use child defaults, falling back to compatible parent values. An explicit route without `reasoning_effort` uses that model's default effort, even when the route is unchanged.",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. Omit `provider`, `model`, and `reasoning_effort` to use child defaults, falling back to compatible parent values.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -661,7 +661,7 @@
           },
           "provider": {
             "type": "string",
-            "description": "Child LLM provider id; omit together with `model` and `reasoning_effort` to use the default child route."
+            "description": "Child LLM provider id; requires `model`."
           },
           "model": {
             "type": "string",
@@ -669,7 +669,7 @@
           },
           "reasoning_effort": {
             "type": "string",
-            "description": "Reasoning effort for the selected model; requires `provider` and `model`. Omit to use that model's default effort."
+            "description": "Reasoning effort id; requires `provider` and `model`. Omit to use the selected model's default, even when it matches the parent or configured route."
           }
         },
         "required": [

@@ -52,45 +52,21 @@ describe('dsh-tool-subagent model selection', () => {
       .toThrow('requires non-empty provider and model ids')
   })
 
-  it('allows pure inheritance but rejects explicit values outside a Session allowlist', () => {
-    const policy = {
-      routes: [{ provider: 'alpha', model: 'allowed-model' }],
-    }
+  it('checks complete explicit routes against Session authorization or the current parent route', () => {
+    const policy = { routes: [{ provider: 'alpha', model: 'allowed-model' }] }
     const parent = { provider: 'alpha', model: 'parent-model' }
-
-    expect(() => { assertAllowedModelSelection(policy, parent, undefined, {}) }).not.toThrow()
     expect(() => {
-      assertAllowedModelSelection(
-        policy,
-        parent,
-        { provider: 'alpha', model: 'allowed-model' },
-        { provider: 'alpha', model: 'allowed-model' },
-      )
+      assertAllowedModelSelection(policy, parent, { provider: 'alpha', model: 'allowed-model' })
     }).not.toThrow()
     expect(() => {
-      assertAllowedModelSelection(
-        policy,
-        parent,
-        { provider: 'alpha', model: 'other-model' },
-        { provider: 'alpha', model: 'other-model' },
-      )
-    }).toThrow('is not allowed for this Session')
-    expect(() => {
-      assertAllowedModelSelection(
-        policy,
-        parent,
-        { reasoningEffort: ReasoningEffortId('low') },
-        { reasoning_effort: 'low' },
-      )
+      assertAllowedModelSelection(policy, parent, parent)
     }).toThrow('alpha/parent-model')
     expect(() => {
-      assertAllowedModelSelection(
-        policy,
-        {},
-        { reasoningEffort: ReasoningEffortId('low') },
-        { reasoning_effort: 'low' },
-      )
-    }).toThrow('without an effective provider and model')
+      assertAllowedModelSelection(undefined, parent, parent)
+    }).not.toThrow()
+    expect(() => {
+      assertAllowedModelSelection(undefined, parent, { provider: 'alpha', model: 'other-model' })
+    }).toThrow('explicit selection is limited to the parent route')
   })
 
   it('leaves deployment or parent defaults outside the allowlist usable when the call selects nothing', async () => {

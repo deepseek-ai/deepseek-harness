@@ -21,7 +21,6 @@ import {
 } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider } from '@deepseek-ai/dsh-subagent'
 import {
-  assertAllowedModelSelection,
   hasConfiguredLlmSelection,
   hasDelegationModelRequest,
   preflightChildLlmRoute,
@@ -203,8 +202,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const wording = providerWording(subagentProvider.inheritsParentContext)
     const providerRouteDefaults = subagentProvider.agentRouteDefaults
     const selectionDescription = providerRouteDefaults !== undefined
-      ? ' Supply `provider` and `model` together. Omit all three selection fields to use child defaults, falling back to this backend\'s route defaults. An explicit route without `reasoning_effort` uses that model\'s default effort, even when the route is unchanged.'
-      : ' Supply `provider` and `model` together. Omit all three selection fields to use child defaults, falling back to compatible parent values. An explicit route without `reasoning_effort` uses that model\'s default effort, even when the route is unchanged.'
+      ? ' Omit `provider`, `model`, and `reasoning_effort` to use child defaults, falling back to this backend\'s route defaults.'
+      : ' Omit `provider`, `model`, and `reasoning_effort` to use child defaults, falling back to compatible parent values.'
     const definition = defineTool({
       name: toolName,
       description: wording.description
@@ -242,7 +241,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         ...modelSelectionEnabled ? {
           provider: {
             type: 'string' as const,
-            description: 'Child LLM provider id; omit together with `model` and `reasoning_effort` to use the default child route.',
+            description: 'Child LLM provider id; requires `model`.',
           },
           model: {
             type: 'string' as const,
@@ -250,7 +249,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           },
           reasoning_effort: {
             type: 'string' as const,
-            description: 'Reasoning effort for the selected model; requires `provider` and `model`. Omit to use that model\'s default effort.',
+            description: 'Reasoning effort id; requires `provider` and `model`. Omit to use the selected model\'s default, even when it matches the parent or configured route.',
           },
         } : {},
       },
@@ -288,24 +287,21 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           configuredChildAgentOptions,
           modelRequest,
           modelSelectionEnabled,
-        )
-        assertAllowedModelSelection(
           modelSelectionPolicy,
           parentOptions,
-          requestedChildAgentOptions,
-          modelRequest,
         )
         if (requiresRoutePreflight) {
           const llm = ctx.get('llm')
           if (llm === undefined) {
             throw new Error('cannot resolve the selected child LLM route because the `llm` service is unavailable')
           }
+          const inheritParentReasoningEffort = providerRouteDefaults === undefined && !hasDelegationModelRequest(modelRequest)
           await preflightChildLlmRoute(
             llm,
             parentOptions,
             requestedChildAgentOptions,
             exec.signal,
-            providerRouteDefaults === undefined && !hasDelegationModelRequest(modelRequest),
+            inheritParentReasoningEffort,
           )
           if (ctx.subagents.getProvider(config.provider) !== subagentProvider) {
             throw new Error(`subagent provider "${config.provider}" changed while resolving the child LLM route; retry the delegation`)

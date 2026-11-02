@@ -111,7 +111,7 @@ export function registerListSubagentModels(
     description:
       'Inspect the subagent routes this Session authorizes. No arguments: authorized providers. '
       + '`provider`: that provider\'s authorized models. `provider` + `model`: that model and its reasoning efforts. '
-      + 'Query when choosing an explicit child route or reasoning effort. Omit `provider`, `model`, and `reasoning_effort` when delegating to use the default child route. '
+      + 'Query when choosing an explicit child route or reasoning effort. '
       + 'Omit optional fields rather than sending empty strings.',
     parameters: {
       provider: {
