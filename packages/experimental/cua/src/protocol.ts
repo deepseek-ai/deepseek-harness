@@ -14,6 +14,7 @@ const click = { ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).op
   holdMs: z.number().int().nonnegative().optional()
     .describe('Milliseconds between each mouse press and release; omitted for an ordinary click.') }
 const window = { ...app, windowId: id }
+const jsonValue = z.json()
 export const elementId = z.string().min(1)
   .describe('Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.')
 const snapshot = { ...app, snapshotId: z.string().min(1), elementId }
@@ -45,7 +46,7 @@ export const Request = z.discriminatedUnion('method', [
     details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
   }),
   operation('listActions', snapshot),
-  operation('performAction', { ...snapshot, action: z.string().min(1), argument: z.json().optional() }),
+  operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
   z.object({ method: z.literal('hover'), params: z.union([
     z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
   ]) }).strict(),
@@ -54,7 +55,7 @@ export const Request = z.discriminatedUnion('method', [
     z.object({ ...absoluteCoordinate, ...click }).strict(),
     z.object({ ...relativeCoordinate, ...click }).strict(),
   ]) }).strict(),
-  operation('setValue', { ...snapshot, value: z.string() }),
+  operation('setValue', { ...snapshot, value: jsonValue }),
   operation('selectText', { ...snapshot, text: z.string().min(1), prefix: z.string().optional(), suffix: z.string().optional(),
     selectionType: z.enum(['text', 'cursor_before', 'cursor_after']).optional() }),
   operation('typeText', { ...app, text: z.string() }),

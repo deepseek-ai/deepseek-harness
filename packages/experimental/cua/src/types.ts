@@ -152,10 +152,10 @@ export interface CuaSurface {
   /**
    * Set an observed control value.
    * @param elementId - element id from this surface's latest observation.
-   * @param value - replacement value.
+   * @param value - Replacement value as JSON; supported values are defined by the platform provider.
    * @returns dispatch evidence.
    */
-  setValue(elementId: CuaElementId, value: string): Promise<CuaActionResult>
+  setValue(elementId: CuaElementId, value: JsonValue): Promise<CuaActionResult>
   /**
    * Select one literal text occurrence through writable AXSelectedTextRange and verify its range.
    * @param elementId - Text control element id from this surface's latest observation.

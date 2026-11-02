@@ -16,6 +16,7 @@ const operation = <M extends string, S extends z.ZodRawShape>(method: M, params:
   z.object({ method: z.literal(method), params: z.object(params).strict() }).strict()
 const click = { ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional(),
   holdMs: z.number().int().nonnegative().optional() }
+const jsonValue = z.json()
 
 /** Windows tools expose window handles, never app selection or app-wide input. */
 export const WindowRequest = z.discriminatedUnion('method', [
@@ -26,12 +27,12 @@ export const WindowRequest = z.discriminatedUnion('method', [
   operation('launch', { target: z.string().min(1) }),
   operation('getState', { ...handle, includeMenus: z.boolean().optional(), details: z.boolean().optional() }),
   operation('listActions', snapshot),
-  operation('performAction', { ...snapshot, action: z.string().min(1), argument: z.json().optional() }),
+  operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
   operation('activate', handle), operation('show', handle), operation('screenshot', handle),
   operation('typeText', { ...handle, text: z.string() }),
   operation('paste', { ...handle, text: z.string(), format: z.enum(['text', 'html']).optional() }),
   operation('pressKey', { ...handle, key: z.string().min(1), modifiers }),
-  operation('setValue', { ...snapshot, value: z.string() }),
+  operation('setValue', { ...snapshot, value: jsonValue }),
   operation('selectText', { ...snapshot, text: z.string().min(1), prefix: z.string().optional(), suffix: z.string().optional(),
     selectionType: z.enum(['text', 'cursor_before', 'cursor_after']).optional() }),
   z.object({ method: z.literal('hover'), params: z.union([z.object(snapshot).strict(), z.object(absolute).strict(), z.object(relative).strict()]) }).strict(),

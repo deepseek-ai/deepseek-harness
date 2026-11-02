@@ -113,6 +113,21 @@ it('requires a retained snapshot and a nonempty action for performAction', () =>
   ]) expect(Request.safeParse({ method: 'performAction', params: invalid }).success).toBe(false)
 })
 
+it.each([
+  'First document', 42, true, ['line'], { x: 10, y: 20 },
+])('admits a setValue JSON value %j', (value) => {
+  const params = { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', value }
+  expect(Request.parse({ method: 'setValue', params })).toEqual({ method: 'setValue', params })
+})
+
+it('requires a setValue value and rejects unknown parameters', () => {
+  for (const invalid of [
+    { appHandle: 'app', snapshotId: 'snapshot', elementId: '0' },
+    { appHandle: 'app', elementId: '0', value: 'text' },
+    { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', value: 'text', attribute: 'AXValue' },
+  ]) expect(Request.safeParse({ method: 'setValue', params: invalid }).success).toBe(false)
+})
+
 it.each(['click', 'hover', 'scroll', 'drag'])('validates 0–999 integer coordinates for %s', (method) => {
   const params = { appHandle: 'app', windowId: 7, relative: true,
     ...method === 'drag' ? { fromX: 0, fromY: 0, toX: 999, toY: 999 } : { x: 0, y: 999 },

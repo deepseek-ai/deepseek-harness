@@ -57,6 +57,10 @@ it('binds all observation and keyboard operations to a selected window and suppr
     windowHandle: 'window-7', snapshotId: 'state-1', elementId: '42.12345',
     action: 'AXTextArea.AXValue.Set', argument: 'hello',
   } })
+  await window.setValue(element('42.12345'), { x: 10, y: 20 })
+  expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'setValue', params: {
+    windowHandle: 'window-7', snapshotId: 'state-1', elementId: '42.12345', value: { x: 10, y: 20 },
+  } })
 })
 it('accepts an element action query or execution only for a selected window snapshot', () => {
   const params = { windowHandle: 'window-7', snapshotId: 'state-1', elementId: '42.12345' }

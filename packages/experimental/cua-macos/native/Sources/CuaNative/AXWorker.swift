@@ -312,7 +312,7 @@ actor AXWorker {
             try NativePlatform.verify(recipient)
             if method == "typeText" { try inputs().0.typeText(params.string("text"), to: recipient.pid) }
             else { try inputs().0.pressKey(params.string("key"), modifiers: params.modifiers(), to: recipient.pid) }
-        case "setValue": try ax().setValue(element(handle, params), params.string("value"))
+        case "setValue": try ax().setAttribute(element(handle, params), "AXValue", params.values["value"])
         case "performAction":
             try ax().performAction(element(handle, params), action: params.string("action"), argument: params.values["argument"])
         case "selectText":

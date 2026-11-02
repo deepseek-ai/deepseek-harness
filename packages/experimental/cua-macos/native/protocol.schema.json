@@ -661,7 +661,7 @@
               "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
             },
             "value": {
-              "type": "string"
+              "$ref": "#/$defs/__schema0"
             }
           },
           "required": [
@@ -678,7 +678,40 @@
         "method",
         "params"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$defs": {
+        "__schema0": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              }
+            },
+            {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/__schema0"
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "type": "object",

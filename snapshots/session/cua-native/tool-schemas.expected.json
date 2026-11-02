@@ -757,7 +757,7 @@
                     "minLength": 1
                   },
                   "value": {
-                    "type": "string"
+                    "$ref": "#/$defs/__schema0"
                   }
                 },
                 "required": [

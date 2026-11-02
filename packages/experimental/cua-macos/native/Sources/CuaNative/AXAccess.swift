@@ -214,11 +214,27 @@ final class AXAccess {
         let error = AXUIElementPerformAction(element, action as CFString)
         guard error == .success else { throw failure(error, "perform \(action)") }
     }
-    func setValue(_ element: AXUIElement, _ value: String) throws {
+    func setAttribute(_ element: AXUIElement, _ attributeName: String, _ value: JSONValue?, expectedRole: String? = nil) throws {
+        guard let value, value != .null else {
+            throw RequestParameters.invalid("\(attributeName) requires a value")
+        }
+        if let expectedRole {
+            guard let role = try string(element, "AXRole") else {
+                throw RequestParameters.invalid("Cannot verify an attribute-setting action without an element role")
+            }
+            guard role == expectedRole else {
+                throw RequestParameters.invalid("Action role \(expectedRole) does not match element role \(role)")
+            }
+        }
+        guard try writable(element, attributeName) == true else {
+            throw RequestParameters.invalid("\(attributeName) is not writable on this element")
+        }
+        let current = try attribute(element, attributeName)
+        let converted = try Self.attributeValue(attribute: attributeName, argument: value, current: current)
         try requireEnabled(element)
         try prepare(element)
-        let error = AXUIElementSetAttributeValue(element, "AXValue" as CFString, value as CFString)
-        guard error == .success else { throw failure(error, "set AXValue") }
+        let error = AXUIElementSetAttributeValue(element, attributeName as CFString, converted)
+        guard error == .success else { throw failure(error, "set \(attributeName)") }
     }
     /// Perform an action, including attribute-setting operations.
     func performAction(_ element: AXUIElement, action: String, argument: JSONValue?) throws {
@@ -229,24 +245,7 @@ final class AXAccess {
             try perform(element, action)
             return
         }
-        guard let argument, argument != .null else {
-            throw RequestParameters.invalid("\(target.role).\(target.attribute).Set requires a value")
-        }
-        guard let role = try string(element, "AXRole") else {
-            throw RequestParameters.invalid("Cannot verify an attribute-setting action without an element role")
-        }
-        guard role == target.role else {
-            throw RequestParameters.invalid("Action role \(target.role) does not match element role \(role)")
-        }
-        guard try writable(element, target.attribute) == true else {
-            throw RequestParameters.invalid("\(target.attribute) is not writable on this element")
-        }
-        let current = try attribute(element, target.attribute)
-        let value = try Self.attributeValue(attribute: target.attribute, argument: argument, current: current)
-        try requireEnabled(element)
-        try prepare(element)
-        let error = AXUIElementSetAttributeValue(element, target.attribute as CFString, value)
-        guard error == .success else { throw failure(error, "set \(target.attribute)") }
+        try setAttribute(element, target.attribute, argument, expectedRole: target.role)
     }
     private enum AttributeValueKind {
         case string, boolean, number, point, size, range

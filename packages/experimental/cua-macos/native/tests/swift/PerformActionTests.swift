@@ -71,6 +71,12 @@ import Testing
         } catch let error as NativeFailure {
             #expect(error.code == "INVALID_ARGUMENT")
         } catch { Issue.record("Unexpected error: \(error)") }
+        do {
+            try access.setAttribute(element, "AXValue", argument)
+            Issue.record("AXValue accepted no value")
+        } catch let error as NativeFailure {
+            #expect(error.code == "INVALID_ARGUMENT")
+        } catch { Issue.record("Unexpected error: \(error)") }
     }
 }
 
