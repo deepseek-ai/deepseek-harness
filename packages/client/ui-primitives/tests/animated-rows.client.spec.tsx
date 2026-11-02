@@ -73,6 +73,15 @@ function finish(animation: Animation): void {
   animation.onfinish?.call(animation, new Event('finish') as AnimationPlaybackEvent)
 }
 
+function naturalHeightRows(tree: HTMLElement, top = 0): void {
+  measure.mockImplementation(function (this: HTMLElement) {
+    const items = Array.from(tree.querySelectorAll('[data-row-key]'))
+    if (this === tree) return new DOMRect(0, top, 200, items.length * 34)
+    if (this.dataset.rowKey !== undefined) return new DOMRect(0, top + items.indexOf(this) * 34, 200, 32)
+    return new DOMRect(0, top, 200, items.length * 34)
+  })
+}
+
 describe('AnimatedRows', () => {
   it('settles initial arrivals and glides a subsequent pin reorder', () => {
     const view = render(rows(['a']))
@@ -166,6 +175,57 @@ describe('AnimatedRows', () => {
     view.rerender(rows(['a']))
     view.unmount()
     for (const call of animations) expect(call.cancel).toHaveBeenCalled()
+  })
+
+  it('animates only rows inside the window when 300 natural-height rows reorder', () => {
+    vi.stubGlobal('innerHeight', 324)
+    const keys = Array.from({ length: 300 }, (_, index) => String(index))
+    const view = render(rows(keys))
+    const tree = arm()
+    naturalHeightRows(tree, 50 - 100 * 34)
+    const reordered = keys.map((_, index) => String(index % 2 === 0 ? index + 1 : index - 1))
+    view.rerender(rows(reordered))
+    expect(animations.map(call => call.element.dataset.rowKey))
+      .toEqual(['99', '98', '101', '100', '103', '102', '105', '104', '107', '106', '109', '108'])
+    expect(animations.every(call => call.options.duration === 200)).toBe(true)
+    expect(tree.querySelectorAll('[data-row-key]')).toHaveLength(300)
+  })
+
+  it('fades entries and exits only inside the window', () => {
+    vi.stubGlobal('innerHeight', 68)
+    const view = render(rows(['a', 'b', 'c', 'd', 'e']))
+    const tree = arm()
+    naturalHeightRows(tree)
+    view.rerender(rows(['x', 'y', 'z', 'w', 'v']))
+    expect(animations.map(call => [call.element.textContent, call.options.duration])).toEqual([
+      ['x', 100], ['y', 100], ['a', 100], ['b', 100],
+    ])
+    expect(animations.filter(call => call.element.inert)).toHaveLength(2)
+  })
+
+  it('compares previous positions with the window bounds measured before the commit', () => {
+    vi.stubGlobal('innerHeight', 102)
+    const content = (keys: readonly string[], top: number) => <div data-testid="shift" style={{ top }}>{rows(keys)}</div>
+    const view = render(content(['a', 'b', 'c', 'd', 'e', 'f'], 0))
+    const tree = arm()
+    const shift = screen.getByTestId('shift')
+    measure.mockImplementation(function (this: HTMLElement) {
+      const items = Array.from(tree.querySelectorAll('[data-row-key]'))
+      const top = Number.parseFloat(shift.style.top)
+      if (this.dataset.rowKey !== undefined) return new DOMRect(0, top + items.indexOf(this) * 34, 200, 32)
+      return new DOMRect(0, top, 200, items.length * 34)
+    })
+    view.rerender(content(['b', 'a', 'c', 'd', 'f', 'e'], -136))
+    expect(animations.map(call => call.element.dataset.rowKey)).toEqual(['b', 'a', 'c', 'f', 'e'])
+  })
+
+  it('limits natural-height lists to the window', () => {
+    vi.stubGlobal('innerHeight', 68)
+    const view = render(rows(['a', 'b', 'c', 'd']))
+    const tree = arm()
+    naturalHeightRows(tree)
+    view.rerender(rows(['b', 'a', 'd', 'c']))
+    expect(animations.map(call => call.element.dataset.rowKey)).toEqual(['b', 'a'])
   })
 
   it('does not animate rows that stay outside the list viewport', () => {
