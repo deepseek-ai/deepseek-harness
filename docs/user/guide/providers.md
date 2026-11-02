@@ -10,7 +10,7 @@ Open **Settings → Models**. The DeepSeek card exposes one API-key field; enter
 
 ![The Models page: the DeepSeek card, with Add model provider below it](providers-models-page.png)
 
-Keys are write-only. The page receives a redacted descriptor after saving, never the literal secret. The key is stored in `$DSH_HOME/.credentials.yaml`, while settings retain only its credential reference.
+Opening a provider editor loads its saved key into a masked input. Environment values are never loaded into this input. The key is stored in `$DSH_HOME/.credentials.yaml`, while settings retain only its credential reference. Credential metadata remains redacted.
 
 With a key saved and the default endpoint, DeepSeek's models follow the list the DeepSeek API publishes. The list loads when the models are first needed, refreshes in the background about every ten minutes while they are in use, and falls back to the built-in models when it cannot load. Editing **Models** under **Customized settings** keeps your own list instead and stops following the published one; **Restore defaults** follows it again and reloads it. While the published list is in use, the card shows the built-in models, so a newly published model appears only in the model picker. The [API-key provider reference](../../../packages/llm/llm-deepseek-api-key/README.md) owns the listing, fallback, and gating rules.
 
@@ -18,11 +18,11 @@ With a key saved and the default endpoint, DeepSeek's models follow the list the
 
 Choose **Add model provider**. The card opens on **Third-party model provider**: pick a provider dsh ships with — the list shows provider ids such as `anthropic`, `openai`, `moonshotai` for Kimi, or `zai` for GLM — enter its API key, and save. The installed catalog supplies the endpoint, protocol, and model list.
 
-The authentication **?** explains saved-credential priority and environment fallbacks. Leave the key blank to use a saved credential or try the listed environment variables. A green hint identifies a detected environment variable. A yellow hint means no credential variable was detected; enter an API key or configure the listed variable. An unconfirmed hint means the status read failed. Detection does not validate the credential or test the connection. Provider-managed credential files, including AWS profiles and Google application-default credentials, are outside this check. Providers without native key authentication, such as `openai-codex`, show no key field unless the profile explicitly names a credential reference.
+The authentication **?** explains saved-credential priority and environment fallbacks. With no saved key, leave the input blank to try the listed environment variables. A green hint identifies a detected environment variable. A yellow hint means no credential variable was detected; enter an API key or configure the listed variable. An unconfirmed hint means the status read failed or a saved key still covers the environment lookup. Clearing a saved key shows an unconfirmed hint until you save its removal and the page refreshes the environment check. Detection does not validate the credential or test the connection. Provider-managed credential files, including AWS profiles and Google application-default credentials, are outside this check. Providers without native key authentication, such as `openai-codex`, show no key field unless the profile explicitly names a credential reference.
 
-A saved credential uses the placeholder **Leave blank to use saved credentials**, with no status text below the input. Environment fallback uses **Leave blank to use env as auth** and one detection hint while the input is empty. A nonempty input shows no authentication status text. Address configuration variables appear under **Base URL** and do not count as credentials.
+A saved key appears masked, with no status text below the input. An empty input uses **Leave blank to use env as auth** and one detection hint. A nonempty input shows no authentication status text. Address configuration variables appear under **Base URL** and do not count as credentials.
 
-A nonempty key input has an eye button. Select **Show secret** to check what you typed, and **Hide secret** to mask it again. Changing the input masks it again. Stored credentials remain write-only.
+A nonempty key input has an eye button. Select **Show secret** to check the loaded or newly entered key, and **Hide secret** to mask it again. Changing the input masks it again. Saving an unchanged key preserves its exact stored value. Clearing it and saving removes the saved key. Cancelling preserves the saved key.
 
 ## Add a custom model API
 

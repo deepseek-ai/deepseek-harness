@@ -12,6 +12,7 @@ import { DesktopProjectManager } from '../src/project-manager.ts'
 import { resolveDesktopPaths } from '../src/paths.ts'
 import { desktopClientMetadata } from '../src/client-metadata.ts'
 import { connectDesktopWelcome, type DesktopWelcomeBackend } from '../src/welcome-backend.ts'
+import { authenticateWebHost } from '../src/web-document.ts'
 import { DESKTOP_HOST_PROTOCOL_VERSION } from '../src/host-protocol.ts'
 import { prepareDevelopmentProject } from '../scripts/development-project.ts'
 
@@ -129,17 +130,7 @@ describe.skipIf(!existsSync(builtHost))('built Desktop welcome flow', () => {
         host = new DesktopHostProcess(process.execPath, project, paths.profile)
         const { url } = await host.start()
         hostOrigin = new URL(url).origin
-        let cookie = ''
-        const send: typeof fetch = async (input, init) => {
-          const headers = new Headers(init?.headers)
-          if (cookie !== '') headers.set('cookie', cookie)
-          const response = await fetch(input, { ...init, headers, redirect: 'manual' })
-          if (response.status !== 303) return response
-          cookie = response.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
-          await response.body?.cancel()
-          return fetch(new URL(response.headers.get('location')!, url), { headers: { cookie } })
-        }
-        backend = await connectDesktopWelcome(url, send, () => Promise.resolve(cookie))
+        backend = connectDesktopWelcome(url, await authenticateWebHost(url))
       }
       const status = async () => backend.read()
       const fingerprint = (): string => createHash('sha256')

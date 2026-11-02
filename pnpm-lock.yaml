@@ -336,6 +336,9 @@ importers:
       '@deepseek-ai/dsh-cordis-client-runner':
         specifier: workspace:*
         version: link:../../packages/extensions/cordis-client-runner
+      '@deepseek-ai/dsh-cua-bundle':
+        specifier: workspace:*
+        version: link:../../packages/experimental/cua-bundle
       '@deepseek-ai/dsh-experimental-auto-review':
         specifier: workspace:*
         version: link:../../packages/experimental/auto-review

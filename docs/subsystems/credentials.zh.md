@@ -20,6 +20,8 @@ type CredentialRef = Branded<'CredentialRef'>
 
 `resolve(ref)` 返回值及提供该值的来源层（由提供方定义）；未配置期间返回 `undefined`。消费方在每个操作中重新解析，绝不跨操作缓存——这种按操作进行的读取正是热更新机制。
 
+`readStored(ref)` 仅返回用于编辑的提供方托管值；未存储时返回 `undefined`。它不读取环境后备值。编辑器的 Remote 操作仅允许所有者执行此读取。
+
 ```ts type-equiv
 /** One resolved credential value and the source layer that supplied it. */
 interface ResolvedCredential {
@@ -153,6 +155,13 @@ A CredentialKey answers "what credential does this plugin hold for this id". Not
 abstract resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined>
 
 /**
+ * Read the provider-managed value without consulting environment fallbacks.
+ * @param ref - the reference to read.
+ * @returns the stored secret, or undefined when no non-empty value is stored.
+ */
+abstract readStored(ref: CredentialRef): Promise<string | undefined>
+
+/**
  * Describe one reference for configuration surfaces without exposing the
  * value.
  * @param ref - the reference to describe.
@@ -228,7 +237,7 @@ Source: [`packages/credentials/credentials/src/index.ts`](../../packages/credent
 
 ### `ctx.credentialsController` — `CredentialsController`
 
-Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Secret values cross in one direction only — no method here returns one.
+Host service backing the generated `ctx.remote.credentials` namespace. It carries every wire obligation the credential seam itself does not: the batch fan-out bound, the field-by-field view projection, the reference-grammar guard, and the refusal mapping. Metadata reads exclude secrets; readStored returns only a provider-managed value for an explicitly opened editor.
 
 ```ts cordis-catalog
 /**
@@ -243,8 +252,15 @@ Host service backing the generated `ctx.remote.credentials` namespace. It carrie
 @Remote async describe(refs: string[]): Promise<Record<string, CredentialInfo>>
 
 /**
- * Store one value from a configuration surface. The value crosses the wire in
- * this direction only: no read path returns it.
+ * Read one stored value for a credential editor, excluding environment fallbacks.
+ * @param ref - reference name to read.
+ * @returns the stored secret, or undefined when the provider stores none.
+ * @throws RemoteError for a non-owner Remote caller, an invalid reference, or an absent provider.
+ */
+@Remote async readStored(ref: string): Promise<string | undefined>
+
+/**
+ * Store one value from a configuration surface.
  * @param ref - reference name to store under.
  * @param value - the non-empty secret value.
  * @throws RemoteError when the request is invalid, no provider is mounted, or the provider refuses the write.
