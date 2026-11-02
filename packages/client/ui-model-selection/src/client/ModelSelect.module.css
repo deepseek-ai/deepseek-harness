@@ -110,7 +110,7 @@
   height: fit-content;
   min-width: min(240px, calc(100vw - 24px));
   max-width: min(420px, calc(100vw - 24px));
-  max-height: min(360px, calc(100vh - 96px));
+  max-height: min(360px, calc(100dvh - 96px));
   overflow: hidden;
   padding: 4px;
   /* Surface tokens match the Menu primitive card (ui-primitives

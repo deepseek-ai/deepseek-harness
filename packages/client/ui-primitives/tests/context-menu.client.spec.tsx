@@ -13,7 +13,7 @@ it('places pointer menus at the cursor above the frame inset and focuses after p
   const view = render(<Menu open portal autoFocus contextual anchor={null} onClose={close}
     anchorPoint={{ x: 200, y: 20 }} items={[{ id: 'copy', label: 'Copy' }]} />)
   const menu = view.getByRole('menu')
-  const point = view.container.querySelector<HTMLElement>('[data-menu-point-anchor]')!
+  const point = view.container.firstElementChild as HTMLElement
   expect(point.style.left).toBe('200px')
   expect(point.style.top).toBe('20px')
   expect(menu.style.positionAnchor).toBe(point.style.anchorName)
@@ -33,7 +33,7 @@ it.each([false, true])('captures the point in layout coordinates once with visua
   const props = { portal: true, contextual: true, anchor: null, onClose: vi.fn(),
     items: [{ id: 'copy', label: 'Copy' }] }
   const view = render(<Menu {...props} open anchorPoint={{ x: 200, y: 100 }} />)
-  const point = (): HTMLElement => view.container.querySelector('[data-menu-point-anchor]')!
+  const point = (): HTMLElement => view.container.firstElementChild as HTMLElement
   expect(point().style.left).toBe(visualOrigin ? '240px' : '200px')
   expect(point().style.top).toBe(visualOrigin ? '160px' : '100px')
   viewport.offsetLeft = 80

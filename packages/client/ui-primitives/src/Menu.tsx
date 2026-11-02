@@ -276,8 +276,7 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
    */
   const refocusAnchor = (navigation = false): void => {
     const remembered = triggerRef.current
-    const trigger = returnFocus?.()
-      ?? (anchorRef === undefined || anchorRef.current?.contains(remembered) === true ? remembered : anchorRef.current)
+    const trigger = returnFocus?.() ?? (remembered?.isConnected ? remembered : anchorRef?.current) ?? null
     const target = trigger !== null && document.contains(trigger) && !(trigger as HTMLButtonElement).disabled
       ? trigger : rootRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')
     if (target == null) return
@@ -310,8 +309,13 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   const anchorName = `--dsh-menu-trigger-${menuId.replaceAll(':', '')}`
   const [externalAnchor, setExternalAnchor] = useState<HTMLElement | null>(null)
   const positioned = !portal || anchorRef === undefined || externalAnchor !== null
-  useLayoutEffect(() => {
-    if (!open || !portal || anchorRef === undefined) return
+  // External refs can attach after this component or replace their element
+  // without changing ref identity. Publish the anchor after all refs commit.
+  useEffect(() => {
+    if (!open || !portal || anchorRef === undefined) {
+      setExternalAnchor(null)
+      return
+    }
     const element = anchorRef.current
     setExternalAnchor(element)
     if (element === null) return
@@ -322,11 +326,13 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   })
   useEffect(() => {
     if (!open || !portal || exiting !== undefined) return
-    const element = returnFocus?.() ?? (anchorRef === undefined ? rootRef.current : externalAnchor)
-    if (element == null) return
+    const currentAnchor = (): HTMLElement | null => returnFocus?.() ?? (anchorRef === undefined ? rootRef.current : anchorRef.current)
+    const element = currentAnchor()
+    if (element === null) return
     let dismissed = false
     const check = (): void => {
-      if (dismissed || (element.isConnected && element.closest('[inert], [hidden]') === null)) return
+      const current = currentAnchor()
+      if (dismissed || (current !== null && current.isConnected && current.closest('[inert], [hidden]') === null)) return
       dismissed = true
       close.current()
     }
@@ -346,8 +352,8 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
   useEffect(() => {
     if (!open) return
     const active = document.activeElement
-    triggerRef.current = active instanceof HTMLElement
-      && (anchorRef?.current?.contains(active) === true || anchorPoint !== undefined || rootRef.current?.contains(active) === true)
+    triggerRef.current = active instanceof HTMLElement && active !== document.body
+      && (anchorRef !== undefined || anchorPoint !== undefined || rootRef.current?.contains(active) === true)
       ? active : null
   }, [open])
 
@@ -618,7 +624,6 @@ export function Menu({ open, anchor, items = [], children, selectedId, selectedI
     <span
       ref={rootRef}
       className={clsx(css.root, className)}
-      data-menu-point-anchor={point === undefined ? undefined : ''}
       style={{ anchorName: anchorRef === undefined ? anchorName : undefined, ...(point === undefined ? {} : {
         position: 'fixed', left: point.x, top: point.y, width: 0, height: 0,
       }) }}

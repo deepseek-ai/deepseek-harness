@@ -43,7 +43,25 @@
 @media (hover: hover) {
   .typeFilterButton:hover { color: var(--dsw-alias-state-business-primary); background: var(--dsw-alias-interactive-bg-hover); }
 }
-.typeFilterPanel { position: fixed; z-index: 1250; width: 290px; max-width: min(calc(100vw - 24px)); max-height: min(calc(100vh - 24px)); overflow: auto; box-sizing: border-box; padding: 10px; color: var(--dsw-alias-label-primary); font-size: 11px; }
+.typeFilterPanel {
+  position: fixed;
+  z-index: 1250;
+  width: 290px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 10px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  position-area: bottom span-right;
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --dsh-types-window, --dsh-types-viewport;
+  align-self: start;
+  justify-self: start;
+  height: fit-content;
+  min-height: 0;
+  margin: 4px 0;
+}
 .typeFilterInput { width: 100%; box-sizing: border-box; padding: 5px 6px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 4px; background: transparent; color: inherit; font: inherit; }
 .typeFilterHelp { margin: 6px 0; color: var(--dsw-alias-label-secondary); }
 .typeFilterOptions { max-height: 180px; overflow: auto; }
@@ -111,17 +129,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .table tr { animation: none; }
-}
-
-/* CSS keeps the panel attached while the page zooms; only the layout viewport constrains its size. */
-.typeFilterPanel {
-  position-area: bottom span-right;
-  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --dsh-types-window, --dsh-types-viewport;
-  align-self: start;
-  justify-self: start;
-  height: fit-content;
-  min-height: 0;
-  margin: 4px 0;
 }
 
 @position-try --dsh-types-window {

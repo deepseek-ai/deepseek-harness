@@ -21,11 +21,18 @@
   line-height: 18px;
   color: var(--dsw-alias-label-secondary);
   cursor: default;
-  max-height: calc(100vh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
+  max-height: calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
   overflow-x: hidden;
   overflow-y: auto;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  position-area: top span-right;
+  position-try-fallbacks: --dsh-stat-window, flip-block, --dsh-stat-viewport;
+  align-self: end;
+  justify-self: start;
+  height: fit-content;
+  min-height: 0;
+  margin: 8px 0;
 }
 
 /* Dialog heading row: the section name left, the section's headline value
@@ -90,17 +97,6 @@
 .reasoning {
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
-}
-
-/* CSS keeps the panel attached while the page zooms; only the layout viewport constrains its size. */
-.panel {
-  position-area: top span-right;
-  position-try-fallbacks: --dsh-stat-window, flip-block, --dsh-stat-viewport;
-  align-self: end;
-  justify-self: start;
-  height: fit-content;
-  min-height: 0;
-  margin: 8px 0;
 }
 
 @position-try --dsh-stat-window {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** A portalled menu follows its anchor's interactive lifetime. */
 import { useRef, useState } from 'react'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { Menu } from '../src/Menu.tsx'
 
@@ -105,4 +105,67 @@ it.each([undefined, 'existing-panel'])('restores the trigger aria-controls value
   expect(trigger.getAttribute('aria-controls')?.split(' ')).toContain(menu.id)
   view.rerender(<Fixture open={false} />)
   expect(trigger.getAttribute('aria-controls')).toBe(previous ?? null)
+})
+
+
+it('reopens after its external anchor is replaced while closed', () => {
+  function Fixture() {
+    const [open, setOpen] = useState(false)
+    const [generation, setGeneration] = useState(0)
+    const anchor = useRef<HTMLButtonElement>(null)
+    return <>
+      <button onClick={() => { setGeneration(value => value + 1) }}>Replace anchor</button>
+      <button key={generation} ref={anchor} onClick={() => { setOpen(true) }}>Open</button>
+      <Menu open={open} portal anchor={null} anchorRef={anchor}
+        onClose={() => { setOpen(false) }} items={[{ id: 'copy', label: 'Copy' }]} />
+    </>
+  }
+  render(<Fixture />)
+  fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+  expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeTruthy()
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(screen.queryByRole('menu')).toBeNull()
+  const previous = screen.getByRole('button', { name: 'Open' })
+  fireEvent.click(screen.getByRole('button', { name: 'Replace anchor' }))
+  expect(previous.isConnected).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+  expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeTruthy()
+})
+
+it.each(['before', 'after'])('opens with an external anchor mounted %s the menu in the same commit', (order) => {
+  function Fixture() {
+    const [open, setOpen] = useState(false)
+    const anchor = useRef<HTMLButtonElement>(null)
+    const trigger = open && <button ref={anchor}>External anchor</button>
+    return <>
+      <button onClick={() => { setOpen(true) }}>Open</button>
+      {order === 'before' && trigger}
+      <Menu open={open} portal anchor={null} anchorRef={anchor}
+        onClose={() => { setOpen(false) }} items={[{ id: 'copy', label: 'Copy' }]} />
+      {order === 'after' && trigger}
+    </>
+  }
+  render(<Fixture />)
+  fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+  expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeTruthy()
+})
+
+it('returns focus to the input that opened an external-anchor menu', () => {
+  function Fixture() {
+    const [open, setOpen] = useState(false)
+    const anchor = useRef<HTMLButtonElement>(null)
+    return <>
+      <input aria-label="Draft" onKeyDown={(event) => { if (event.key === 'F2') setOpen(true) }} />
+      <button ref={anchor}>Anchor</button>
+      <Menu open={open} portal autoFocus anchor={null} anchorRef={anchor}
+        onClose={() => { setOpen(false) }} items={[{ id: 'copy', label: 'Copy' }]} />
+    </>
+  }
+  render(<Fixture />)
+  const input = screen.getByRole('textbox', { name: 'Draft' })
+  act(() => { input.focus() })
+  fireEvent.keyDown(input, { key: 'F2' })
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Copy' }))
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(document.activeElement).toBe(input)
 })

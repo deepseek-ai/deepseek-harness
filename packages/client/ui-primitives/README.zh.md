@@ -132,7 +132,7 @@ kind: "package-library"
 
 这些原子组件无法读取应用 locale，因此每段面向用户的文案都必须通过 label prop 提供。`HoverCard`、`TerminalBlock`、`JsonTree`、`CodeBlock`、`MarkdownText`、`JsonBlock`、`ConnectionIndicator`、`Modal`、`DiffBlock`、`ReadBlock`、`SearchBlock`、`WebBlock` 与 `ZoomControls` 接收完整的本地化 label。本包不拥有语言回退；遗漏会导致类型检查失败，各功能会把带类型的 `t` 席位映射到 primitive 的 label 接口。
 
-`Menu` 的 `anchorRef` 指定组件外部的触发元素；`anchorPoint` 接收客户端视口坐标，与 `event.clientX`/`clientY` 和 `getBoundingClientRect()` 一致。Safari 在菜单打开或坐标变化时将其转换为布局视口坐标一次，后续缩放和平移由 CSS 处理，不持续监听视口或测量矩形。`Menu.contextual` 从该指针位置定位而不避让顶部栏，并在弹窗内右键时关闭。右键弹窗没有实际渲染的 `role="menuitem"` 行时保持隐藏，包括旧 Slot 返回空内容的情况。结构化 `items` 按分隔线组预留图标栏；`footer` 与各子菜单独立计算分组。右键菜单的 `footer` 以分隔线开头时，直接使用该线，不再叠加边框。不透明的 `children` 保留原有布局；数据行后方的旧 Slot 保留其声明的首条分隔线。`exiting` 在淡出期间保留不可交互的弹窗；`returnFocus` 在异步准备后恢复原控件焦点。`MenuSurface.phase` 分别对材质层、直接内容和 macOS 背景淡入淡出，让材质层继续模糊页面。`MENU_TRANSITION_MS` 同时提供 CSS 动画与弹窗生命周期计时。普通下拉菜单保留原有时序。
+`Menu` 的 `anchorRef` 指定组件外部的触发元素，支持同一次提交中稍后挂载的元素，以及在两次打开之间替换的元素。`autoFocus` 菜单通过键盘关闭时，会恢复到打开前仍在页面中的焦点控件。`anchorPoint` 接收客户端视口坐标，与 `event.clientX`/`clientY` 和 `getBoundingClientRect()` 一致。Safari 在菜单打开或坐标变化时将其转换为布局视口坐标一次，后续缩放和平移由 CSS 处理，不持续监听视口或测量矩形。`Menu.contextual` 从该指针位置定位而不避让顶部栏，并在弹窗内右键时关闭。右键弹窗没有实际渲染的 `role="menuitem"` 行时保持隐藏，包括旧 Slot 返回空内容的情况。结构化 `items` 按分隔线组预留图标栏；`footer` 与各子菜单独立计算分组。右键菜单的 `footer` 以分隔线开头时，直接使用该线，不再叠加边框。不透明的 `children` 保留原有布局；数据行后方的旧 Slot 保留其声明的首条分隔线。`exiting` 在淡出期间保留不可交互的弹窗；`returnFocus` 在异步准备后恢复原控件焦点。`MenuSurface.phase` 分别对材质层、直接内容和 macOS 背景淡入淡出，让材质层继续模糊页面。`MENU_TRANSITION_MS` 同时提供 CSS 动画与弹窗生命周期计时。普通下拉菜单不经过右键菜单的准备延迟。
 
 -----
 

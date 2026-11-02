@@ -89,12 +89,19 @@
   flex-direction: column;
   width: 500px;
   max-width: min(560px, calc(100vw - 32px));
-  max-height: min(480px, calc(100vh - 140px));
+  max-height: min(480px, calc(100dvh - 140px));
   overflow: hidden;
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
+  position-area: bottom span-right;
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --dsh-jobs-window, --dsh-jobs-viewport;
+  align-self: start;
+  justify-self: start;
+  height: fit-content;
+  min-height: 0;
+  margin: 5px 0;
 }
 
 .menuBody {
@@ -443,17 +450,6 @@
 
 .noticeError {
   color: var(--dsw-alias-state-error-primary);
-}
-
-/* CSS keeps the panel attached while the page zooms; only the layout viewport constrains its size. */
-.menu {
-  position-area: bottom span-right;
-  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --dsh-jobs-window, --dsh-jobs-viewport;
-  align-self: start;
-  justify-self: start;
-  height: fit-content;
-  min-height: 0;
-  margin: 5px 0;
 }
 
 @position-try --dsh-jobs-window {
