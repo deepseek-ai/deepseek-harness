@@ -309,7 +309,7 @@ describe('Conversation inject API', () => {
           expect(composer.addFiles?.([new File([Uint8Array.of(1)], 'draft.pdf', { type: 'application/pdf' })])).toBeNull()
           break
         case 'subagent':
-          await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.subagent = { address: { parentSessionId: ROOT, childSessionId: ROOT, mode: 'continuable' }, parentAvailable: true } })
+          await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.subagent = { address: { parentSessionId: ROOT, childSessionId: ROOT, mode: 'continuable' } } })
           break
         case 'removed':
           await b.runtime.sessions.updateSessionSnapshot(ROOT, (state) => { state.removed = true })
