@@ -39,61 +39,81 @@
   display: none;
 }
 
-/* Fixed cards follow their CSS anchor while the browser handles page zoom. */
+/* Every candidate reserves layout-window margins while browser zoom moves the page. */
 .portal {
   --dsh-menu-window-top: max(12px, var(--dsh-frame-overlay-top, 12px));
   position: fixed;
-  inset: auto;
-  position-area: bottom span-right;
+  position-area: none;
+  top: max(var(--dsh-menu-window-top), calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
   justify-self: start;
   align-self: start;
-  margin: 4px 0 0;
-  position-try-fallbacks: --dsh-menu-wide-below, flip-block, --dsh-menu-wide-above, flip-inline, flip-block flip-inline, --dsh-menu-window;
+  margin: 0;
+  position-try-fallbacks: --dsh-menu-wide-below, --dsh-menu-above, --dsh-menu-wide-above, --dsh-menu-window;
   width: max-content;
   height: fit-content;
   z-index: 1100;
 }
 .portal[data-anchor-side='top'] {
-  position-area: top span-right;
+  top: var(--dsh-menu-window-top);
+  bottom: max(12px, calc(anchor(top) + 4px));
   align-self: end;
-  margin: 0 0 4px;
-  position-try-fallbacks: --dsh-menu-wide-above, flip-block, --dsh-menu-wide-below, flip-inline, flip-block flip-inline, --dsh-menu-window;
+  position-try-fallbacks: --dsh-menu-wide-above, --dsh-menu-below, --dsh-menu-wide-below, --dsh-menu-window;
 }
-.portal[data-anchor-side='right'] { position-area: right span-bottom; margin: 0 0 0 4px; }
+.portal[data-anchor-side='right'] {
+  top: max(var(--dsh-menu-window-top), anchor(top));
+  bottom: 12px;
+  left: max(12px, calc(anchor(right) + 4px));
+  right: 12px;
+  position-try-fallbacks: --dsh-menu-left, --dsh-menu-wide-below, --dsh-menu-window;
+}
 .portal[data-anchor-align='end']:not([data-anchor-side='right']) {
-  position-area: bottom span-left;
+  left: 12px;
+  right: max(12px, anchor(right));
   justify-self: end;
   --dsh-menu-wide-align: start;
 }
-.portal[data-anchor-side='top'][data-anchor-align='end'] { position-area: top span-left; }
 .portal[data-match-anchor-width] { min-width: min(anchor-size(width), calc(100vw - 24px)); }
 .portal[data-context-menu] { --dsh-menu-window-top: 12px; }
 
+@position-try --dsh-menu-below {
+  top: max(var(--dsh-menu-window-top), calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  align-self: start;
+}
+@position-try --dsh-menu-above {
+  top: var(--dsh-menu-window-top);
+  bottom: max(12px, calc(anchor(top) + 4px));
+  align-self: end;
+}
 @position-try --dsh-menu-wide-below {
-  position-area: none;
-  top: calc(anchor(bottom) + 4px);
+  top: max(var(--dsh-menu-window-top), calc(anchor(bottom) + 4px));
+  bottom: 12px;
   left: 12px;
   right: 12px;
-  bottom: auto;
-  margin: 0;
+  align-self: start;
   justify-self: safe var(--dsh-menu-wide-align, end);
 }
 @position-try --dsh-menu-wide-above {
-  position-area: none;
-  top: auto;
+  top: var(--dsh-menu-window-top);
+  bottom: max(12px, calc(anchor(top) + 4px));
   left: 12px;
   right: 12px;
-  bottom: calc(anchor(top) + 4px);
-  margin: 0;
+  align-self: end;
   justify-self: safe var(--dsh-menu-wide-align, end);
 }
+@position-try --dsh-menu-left {
+  left: 12px;
+  right: max(12px, calc(anchor(left) + 4px));
+  justify-self: end;
+}
 @position-try --dsh-menu-window {
-  position-area: none;
   top: var(--dsh-menu-window-top);
   left: 12px;
   right: 12px;
   bottom: 12px;
-  margin: 0;
   align-self: safe start;
   justify-self: safe start;
 }
