@@ -19,6 +19,8 @@ it('persists a Desktop channel from Settings and keeps external edits startup-on
       let state: DesktopChannelState = { channel: 'nightly', packagedChannel: 'nightly', changing: false }
       const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: 'en-US' })
       const tripwire = watchConsole(page)
+      let detailOpens = 0
+      await page.exposeFunction('openUpdateDetails', () => { detailOpens++ })
       await page.exposeFunction('readChannel', () => state)
       await page.exposeFunction('setChannel', async (channel: 'nightly' | 'stable'): Promise<DesktopChannelChangeResult> => {
         try {
@@ -30,10 +32,11 @@ it('persists a Desktop channel from Settings and keeps external edits startup-on
       await page.addInitScript(() => {
         const bridge = globalThis as typeof globalThis & {
           readChannel(): Promise<DesktopChannelState>
+          openUpdateDetails(): Promise<void>
           setChannel(channel: 'nightly' | 'stable'): Promise<DesktopChannelChangeResult>
         }
         Object.assign(globalThis, { dshDesktop: { protocolVersion: 1, updates: {
-          status: async () => ({ phase: 'idle' }), open: async () => {}, subscribe: () => () => {},
+          status: async () => ({ phase: 'idle' }), open: () => bridge.openUpdateDetails(), subscribe: () => () => {},
           channels: { get: () => bridge.readChannel(), set: (channel: 'nightly' | 'stable') => bridge.setChannel(channel),
             subscribe: () => () => {} },
         } } })
@@ -62,6 +65,12 @@ it('persists a Desktop channel from Settings and keeps external edits startup-on
       await compareOrRefreshGolden(fileURLToPath(new URL('./expected/desktop-channel/save-error.expected.md', import.meta.url)),
         await captureStableAria(page, '[role="group"][aria-label="Update channel"]', scaffold.workspaceCwd) + '\n'
           + await captureStableAria(page, '[role="alert"]', scaffold.workspaceCwd), webSnapshotMode())
+      state = { ...state, error: 'format' }
+      await page.reload({ waitUntil: 'load' })
+      await page.getByRole('alert').filter({ hasText: 'Settings file error; updates are paused' }).waitFor()
+      await page.getByRole('button', { name: 'View details', exact: true }).click()
+      await expect.poll(() => detailOpens).toBe(1)
+      expect(await readFile(settings.path, 'utf8')).toBe('{broken')
       expect(tripwire.pageErrors).toEqual([])
       expect(tripwire.warnings).toEqual([])
     } finally { await browser.close() }

@@ -239,6 +239,7 @@ const harness = await vi.hoisted(async () => {
     set publishUpdate(value: (state: DesktopUpdateState) => DesktopUpdateState) { publishUpdate = value },
     dialog: { showOpenDialog: vi.fn(), showErrorBox: vi.fn(), showMessageBox: vi.fn() },
     openExternal: vi.fn(async () => {}),
+    showItemInFolder: vi.fn(),
     protocolHandle: vi.fn<(scheme: string, handler: (request: Request) => Response | Promise<Response>) => void>(),
     applyRelease: vi.fn(() => { preparing.resolve(); return prepared.promise }),
     disableAllPlugins: vi.fn(async () => {
@@ -304,7 +305,7 @@ vi.mock('electron', () => ({
   BrowserWindow: harness.FakeWindow,
   WebContentsView: harness.FakeView,
   dialog: harness.dialog,
-  shell: { openExternal: harness.openExternal, showItemInFolder: vi.fn() },
+  shell: { openExternal: harness.openExternal, showItemInFolder: harness.showItemInFolder },
   nativeTheme: harness.nativeTheme,
   net: { fetch: vi.fn() },
   ipcMain: {
@@ -579,8 +580,7 @@ describe('desktop main startup', () => {
       buttons: [en.updateShowSettingsFile, en.updateClose], cancelId: 1,
     })
     expect(en.updateConfigurationFormat).not.toContain('select')
-    const { shell } = await import('electron')
-    expect(shell.showItemInFolder).toHaveBeenCalledWith(path)
+    expect(harness.showItemInFolder).toHaveBeenCalledWith(path)
     expect(readFileSync(path, 'utf8')).toBe('{broken')
   })
 

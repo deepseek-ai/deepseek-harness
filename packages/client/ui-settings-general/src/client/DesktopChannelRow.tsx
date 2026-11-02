@@ -63,7 +63,7 @@ export function DesktopChannelToast({ useChannel, dismiss, openConfiguration, t 
   const notice = useChannel(value => value.notice)
   if (notice === undefined) return null
   return <Toast key={notice.sequence} text={t(`desktop.channel.result.${notice.outcome}`)}
-    holdMs={notice.outcome === 'configuration' ? 10_000 : undefined}
-    actions={notice.outcome === 'configuration' ? [{ label: t('desktop.channel.details'), onClick: openConfiguration }] : undefined}
+    {...notice.outcome === 'configuration' ? { holdMs: 10_000,
+      actions: [{ label: t('desktop.channel.details'), onClick: openConfiguration }] } : {}}
     onDone={() => { dismiss(notice.sequence) }} {...notice.outcome === 'applied' ? { tone: 'success' as const } : {}} />
 }

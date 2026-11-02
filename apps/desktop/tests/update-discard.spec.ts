@@ -39,9 +39,9 @@ it('retires the target despite a removal failure and persists its exact filesyst
   expect(await readFile(file, 'utf8')).toBe('obsolete')
   const lines = (await readFile(join(environment.logs, 'update-cleanup.jsonl'), 'utf8')).trim().split('\n')
   expect(lines).toHaveLength(1)
+  expect(lines[0]).toMatch(/"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z"/u)
   expect(JSON.parse(lines[0]!)).toMatchObject({ event: 'update-cache-cleanup-failed', operation: 'remove', path: file,
     code: 'EPERM', reason: 'file is locked' })
-  expect(Number.isNaN(Date.parse(JSON.parse(lines[0]!).time))).toBe(false)
 })
 
 it('does not retire a target that the native installer already owns', async () => {

@@ -216,8 +216,9 @@ describe('ui-settings-general apply', () => {
     const save = vi.fn(async () => ({ kind: 'applied' as const, state }))
     const channels: DesktopChannelBridge = { get: async () => state, set: save,
       subscribe: () => unsubscribe }
+    const open = vi.fn(async () => {})
     vi.stubGlobal('dshDesktop', { protocolVersion: 1, updates: { channels,
-      status: async () => ({ phase: 'idle' }), open: async () => {}, subscribe: () => () => {} } })
+      status: async () => ({ phase: 'idle' }), open, subscribe: () => () => {} } })
     onTestFinished(() => { vi.unstubAllGlobals() })
     const { c } = await client(mock, start)
     const row = c.ctx.slots.entries('settings.general.item').find(row => row.options.id === 'desktop-update-channel')!
@@ -229,6 +230,9 @@ describe('ui-settings-general apply', () => {
     const injected = toast.inject!()
     const hooks = injected.hooks as DesktopChannelToastInjected['hooks']
     const dismiss = injected.dismiss as DesktopChannelToastInjected['dismiss']
+    const openConfiguration = injected.openConfiguration as DesktopChannelToastInjected['openConfiguration']
+    openConfiguration()
+    expect(open).toHaveBeenCalledOnce()
     expect(hooks.channel.getSnapshot().notice?.outcome).toBe('applied')
     dismiss(1)
     expect(hooks.channel.getSnapshot().notice).toBeUndefined()
