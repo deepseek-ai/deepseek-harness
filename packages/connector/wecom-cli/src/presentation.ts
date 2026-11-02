@@ -11,6 +11,7 @@ import type { WecomOperationKind, WecomState } from './types.ts'
 /** The npm package whose bundle page carries the authorization section. */
 export const WECOM_PACKAGE = '@deepseek-ai/dsh-wecom'
 
+/* jscpd:ignore-start -- CLI app plugins declare page operations, copy, and commands alike, each with its own text. */
 /** The operations the section's buttons start; binding a bot reports a notice in the browser that started it. */
 export const OPERATIONS: readonly CliAccountOperation<WecomOperationKind>[] = [
   { kind: 'check' },
@@ -26,6 +27,7 @@ export const COPY: CliAccountCopy = {
 
 const CHECK = { kind: 'start', operation: 'check' } as const
 const CONNECT = { kind: 'start', operation: 'connect' } as const
+/* jscpd:ignore-end */
 
 /* jscpd:ignore-start -- CLI app plugins whose guides download report the same states, each in its own text. */
 /** The row that reports guides that are not in place yet; a failed download offers a check, which restarts it. */

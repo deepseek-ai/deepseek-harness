@@ -24,6 +24,7 @@ export type * from './types.ts'
 /** Plugin name. */
 export const name = 'wecom'
 
+/* jscpd:ignore-start -- CLI app plugins with downloaded guides declare the same services, config, and registration. */
 /** Services the CLI, its skills, and its runtime context need. */
 export const inject = ['skills', 'subprocess', 'systemPrompt']
 
@@ -53,3 +54,4 @@ export function apply(ctx: Context, config: Config): void {
     }), 'wecom: Plugins page authorization')
   })
 }
+/* jscpd:ignore-end */
