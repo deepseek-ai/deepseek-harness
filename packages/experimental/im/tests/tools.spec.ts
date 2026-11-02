@@ -124,6 +124,8 @@ class FakeIm {
   }
   /** Messages the platform holds but this deployment never received, by platform id. */
   readonly platform = new Map<string, ImMessage>()
+  /** What the host read answers for a message the platform fills in (a merged forward's entries), by platform id. */
+  readonly expansions = new Map<string, ImMessage>()
   readonly sends: { chat: ImChatKey; content: Fragment; options: ImSendOptions }[] = []
   answer: () => Promise<ImSendResult> = async () => ({ status: 'confirmed' })
 
@@ -135,7 +137,7 @@ class FakeIm {
   /** The store's read: a message it never received comes from the platform stand-in, or stays unreadable. */
   async readMessage(chat: ImChatKey, id: string): Promise<ImMessage> {
     const stored = this.history.get(ImMessageKey('fake:bot', id))
-    if (stored !== undefined) return stored
+    if (stored !== undefined) return this.expansions.get(id) ?? stored
     const fetched = this.platform.get(id)
     if (fetched === undefined) throw new ImError('access', `Chat ${chat} holds no message ${id}.`)
     return fetched
@@ -298,6 +300,20 @@ describe('im_read and im_history', () => {
     expect(bySeq.message).toMatchObject({ seq: 2, key: 'fake:bot|m2', sender: '张三', text: 'hello 2', media: [] })
     expect(value(await mounted.call('im_read', { message: 'fake:bot|m3' })).message).toMatchObject({ seq: 3 })
     expect(value(await mounted.call('im_read', { message: 'm1' })).message).toMatchObject({ seq: 1 })
+  })
+
+  it('reads a seq through the same read as a key, so a merged forward reaches its entries', async () => {
+    const mounted = await mount()
+    const bare = message(6, { content: h('message', h('forward', { id: 'm6' })), text: '[forward]' })
+    mounted.im.history.messages.push(bare)
+    // The host read is where a stored reference gains the entries the platform returns; a seq must not shortcut it.
+    mounted.im.expansions.set('m6', {
+      ...bare,
+      content: h('message', h('forward', { id: 'm6' }, h.text('user-1: 原文'))),
+      text: 'user-1: 原文',
+    })
+    const read = value(await mounted.call('im_read', { message: '6' }))
+    expect((read.message as { text: string }).text).toBe('user-1: 原文')
   })
 
   it('shows thread, quote and media labels of a read message', async () => {

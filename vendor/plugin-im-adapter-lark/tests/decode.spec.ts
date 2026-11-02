@@ -438,10 +438,38 @@ describe('a message read back', () => {
     expect(lines).toHaveLength(4)
     expect(lines[0]).toBe('ou_user: hello')
     expect(lines[1]).toContain('ou_user: ')
-    expect(lines[2]).toBe('ou_user: [forward]')
+    // A forward nested in the answer keeps its own identity on a line of its own.
+    expect(lines[2]).toBe('[合并转发 #om_entry_3]')
     expect(lines[3]).toBe('ou_user: http_trace_id 3a96fa')
-    // The entry's picture points at the entry's own message, which is the resource the read authorizes.
-    expect(attrs(collection(forward, 'img')[0])).toMatchObject({ src: resourceUrl('om_entry_2', 'img_v2_1', 'image') })
+    // The entry's picture is served by the container: the platform answers `File not in msg` for the entry's own id.
+    expect(attrs(collection(forward, 'img')[0])).toMatchObject({ src: resourceUrl('om_forward', 'img_v2_1', 'image') })
+  })
+
+  it('lays a forward of a forward out in the order the platform returned it', async () => {
+    const { bot } = await mount()
+    const merge = { msg_type: 'merge_forward', body: { content: 'Merged and Forwarded Message' } }
+    const entry = (id: string, parent?: string, patch: Record<string, unknown> = {}): Lark.Message => read({
+      message_id: id,
+      chat_id: 'oc_source',
+      upper_message_id: parent,
+      body: { content: `{"text":"${id}"}` },
+      ...patch,
+    })
+    // The answer carries the whole tree: the inner container, then the entries that belong to it.
+    const message = await decodeMessage(bot, entry('om_outer', undefined, merge), CHAT, NOW, [
+      entry('om_outer', undefined, merge),
+      entry('om_t1', 'om_outer'),
+      entry('om_inner', 'om_outer', merge),
+      entry('om_g1', 'om_inner'),
+      entry('om_t2', 'om_outer'),
+    ])
+    const forward = collection(message.content, 'forward')[0]!
+    expect(toText(forward).split('\n')).toEqual([
+      'ou_user: om_t1',
+      '[合并转发 #om_inner]',
+      '  ou_user: om_g1',
+      'ou_user: om_t2',
+    ])
   })
 
   it('keeps a merged forward as a reference when the read carried no entry', async () => {

@@ -25,8 +25,9 @@
  *   `<raw type="interactive">` because a card has no direct element equivalent — but it is still real elements, so a
  *   mention inside card text stays an `<at>` and a target becomes an `<a>`.
  * - `merge_forward`: `<forward id>` — an identity reference, because the entries are separate messages. An event
- *   carries none of them, so the element stands alone there; a platform read returns them with the container
- *   (`upper_message_id`), so a read fills the element with one line per entry. A nested forward stays a reference.
+ *   carries none of them, so the element stands alone there; a platform read returns the whole tree with the container
+ *   (`upper_message_id`), so a read fills the element with one line per entry, a nested forward included. A picture
+ *   inside a forward is addressed through the container, which is the only message that serves its resources.
  * - `sticker`, `share_chat`, `share_user`, `system`, `deleted` and every type with no element: `<raw
  *   platform="lark" type="…">` carrying the payload in `data` and the readable text the platform gave — `[表情]` for a
  *   sticker (the platform never renders its image), `[已撤回]` for a recalled message, the system template as it came.
@@ -320,11 +321,17 @@ function contentNodes(bot: LarkBot, input: ContentInput): Element[] {
 }
 
 /**
- * A merged forward: the container's identity, then one line per entry the read carried.
+ * A merged forward: the container's identity, then one line per entry the read carried, nested forwards included.
  *
- * An event carries no entry, so the element stands as the reference alone and dsh-im shows a placeholder; a platform
- * read answers with the entries, and each becomes its sender, its content and a break. A forward nested inside an
- * entry stays a reference of its own: its entries belong to its own read.
+ * An event carries no entry, so the element stands as the reference alone and dsh-im shows a placeholder. A platform
+ * read answers with the whole tree: the container, its entries, and — for a forward of a forward — the entries of the
+ * inner container as well, every message naming its parent in `upper_message_id` and appearing once per place it sits.
+ * The tree is therefore read in the platform's own order, and a nested container becomes a `[合并转发 #id]` line of its
+ * own with the entries that follow it indented under it.
+ *
+ * The media of an entry is addressed by the container, never by the entry own id: the platform serves
+ * `/messages/{id}/resources/{key}` for the message the read authorized and answers `No such file in message` for an
+ * entry id, so a picture inside a forward is readable only through the container.
  *
  * @param bot - adapter instance.
  * @param input - the container's body, with the entries the read returned.
@@ -332,14 +339,29 @@ function contentNodes(bot: LarkBot, input: ContentInput): Element[] {
  */
 function forwardNode(bot: LarkBot, input: ContentInput): Element<'forward'> {
   const children: Element[] = []
+  /** Depth of the last entry carrying each message id, so an entry lands under the instance of its parent before it. */
+  const depthOf = new Map<string, number>()
+  let first = true
   for (const entry of input.entries ?? []) {
-    if (entry.upper_message_id !== input.messageId) continue
+    const parent = entry.upper_message_id
+    // The container of the read names no parent; a message naming a parent this answer never carried belongs nowhere.
+    if (parent === undefined) continue
+    const id = nonEmpty(entry.message_id)
+    const depth = (depthOf.get(parent) ?? 0) + 1
+    if (id) depthOf.set(id, depth)
+    if (!first) children.push(h('br'))
+    first = false
+    const indent = '  '.repeat(Math.min(depth - 1, FORWARD_INDENT_LIMIT))
+    const type = nonEmpty(entry.msg_type) ?? 'unknown'
+    if (type === 'merge_forward') {
+      children.push(h.text(`${indent}[合并转发 #${id ?? ''}]`))
+      continue
+    }
     const sender = decodeUser(entry.sender)
-    if (children.length) children.push(h('br'))
-    children.push(h.text(`${sender.name?.trim() || sender.id}: `))
+    children.push(h.text(`${indent}${sender.name?.trim() || sender.id}: `))
     children.push(...phrasingOf(decodeContent(bot, {
-      messageId: nonEmpty(entry.message_id) ?? input.messageId,
-      type: nonEmpty(entry.msg_type) ?? 'unknown',
+      messageId: input.messageId,
+      type,
       content: nonEmpty(entry.body?.content) ?? '',
       mentions: readMentions(entry.mentions),
     })))
@@ -567,6 +589,8 @@ const CARD_LABEL_TAGS = new Set(['text', 'plain_text', 'lark_md', 'markdown', 'f
 const CARD_TITLE_FIELDS = ['title', 'subtitle'] as const
 /** Card element fields carrying a target the card links to. */
 const CARD_LINK_FIELDS = ['href', 'url', 'default_url'] as const
+/** Deepest indentation a forward of a forward adds, after which nesting stops moving the text right. */
+const FORWARD_INDENT_LIMIT = 3
 
 /**
  * Text, targets and mention names collected from one card in document order.

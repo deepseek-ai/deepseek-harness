@@ -11,8 +11,9 @@ import { createResourceFetcher, type Element, type PrepareContext } from '@deeps
 import { AttachmentId, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ImageBlock } from '@deepseek-ai/dsh-llm'
 import { z } from 'zod'
-import type { ImChatKey, ImConfig, ImMessage, ImMessageKey } from './api.ts'
+import { splitKey, type ImChatKey, type ImConfig, type ImMessage, type ImMessageKey } from './api.ts'
 import { ImError } from './error.ts'
+import { hasUnreadForward } from './intake.ts'
 
 /** Kind of a downloadable media element: images are admitted to the model, the other kinds are labelled only. */
 export type ImMediaKind = 'image' | 'file' | 'audio' | 'video'
@@ -240,13 +241,28 @@ export class ImMediaStore {
   async read(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaItem> {
     const parsed = parseMediaId(id)
     if (!parsed) throw new ImError('access', `"${id}" is not a media id such as 12.1.`)
-    const message = this.messageAt(chat, parsed.seq)
-    if (!message) throw new ImError('access', `Chat ${chat} has no stored message #${parsed.seq}.`)
+    const stored = this.messageAt(chat, parsed.seq)
+    if (!stored) throw new ImError('access', `Chat ${chat} has no stored message #${parsed.seq}.`)
+    const message = await this.expanded(chat, stored)
     const ref = mediaRefs(message).find(ref => ref.index === parsed.index)
     if (!ref) throw new ImError('access', `Message #${parsed.seq} has no media element #${parsed.index}.`)
     if (ref.kind !== 'image') return { ref, skipped: 'unsupported' }
     if (!this.config.media.download) return { ref, skipped: 'disabled' }
     return this.admitOne(ref, signal)
+  }
+
+  /**
+   * The message as a reader sees it: a merged forward the store holds as a reference gains its entries from one
+   * platform read, and that read is what puts the pictures of the forwarded conversation inside the message.
+   * @param chat - the chat the message was shown in.
+   * @param message - the stored message.
+   * @returns the message, expanded when the platform carries its entries.
+   */
+  private async expanded(chat: ImChatKey, message: ImMessage): Promise<ImMessage> {
+    if (!hasUnreadForward(message.content)) return message
+    const im = this.ctx.get('im')
+    if (im === undefined) return message
+    return await im.readMessage(chat, splitKey(message.key).id)
   }
 
   /** Stored message with exactly this per-chat seq. */

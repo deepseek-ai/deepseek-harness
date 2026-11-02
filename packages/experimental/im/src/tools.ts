@@ -273,19 +273,19 @@ function chatOf(im: ImToolHost, record: ImSessionRecord, value: string | undefin
 }
 
 /**
- * One message by seq (`#12`, `12`) or key (`bot|id`, bare id) within a chat. A seq is always local, because a
- * sequence number only exists for what the store received; a key is read from the platform when this deployment
- * never stored it, since the message exists in the chat whether or not it reached us.
+ * One message by seq (`#12`, `12`) or key (`bot|id`, bare id) within a chat. Both forms read through
+ * {@link ImApi.readMessage}: a seq is local because a sequence number only exists for what the store received, and a
+ * key is read from the platform when this deployment never stored it — done by the same call, because a merged forward
+ * the store holds as a reference needs the platform read for its entries either way.
  */
 async function messageOf(im: ImToolHost, chat: ImChatKey, value: string): Promise<ImMessage> {
   const trimmed = value.trim()
   const seq = SEQ.exec(trimmed)
-  if (seq !== null) {
-    const message = im.history.after(chat, Number(seq[1]) - 1, 1).find(candidate => candidate.seq === Number(seq[1]))
-    if (message === undefined) throw new ImError('access', `Chat ${chat} holds no message ${value}.`)
-    return message
-  }
-  return await im.readMessage(chat, trimmed.includes('|') ? trimmed.slice(trimmed.lastIndexOf('|') + 1) : trimmed)
+  const key = trimmed.includes('|') ? trimmed.slice(trimmed.lastIndexOf('|') + 1) : trimmed
+  if (seq === null) return await im.readMessage(chat, key)
+  const message = im.history.after(chat, Number(seq[1]) - 1, 1).find(candidate => candidate.seq === Number(seq[1]))
+  if (message === undefined) throw new ImError('access', `Chat ${chat} holds no message ${value}.`)
+  return await im.readMessage(chat, splitKey(message.key).id)
 }
 
 

@@ -102,7 +102,7 @@ When `options.operationId` is provided, the sender writes a `pending` receipt to
 
 Media elements in message text are replaced with stable per-chat labels such as `[图片 #12.1]` or `[文件 #12.2 report.pdf]`. When `media: true` is passed to `format`, admitted images are downloaded into attachments and appended as `image` content blocks after the text block.
 
-A `forward` element renders as one line: `[合并转发 #id]` while nothing has read its entries, otherwise `[合并转发 #id: 名字: 内容 …]` with a bounded preview. `im_read` of a stored reference expands it through a platform read, so the entries are readable without the store having to be rewritten.
+A `forward` element renders as one line: `[合并转发 #id]` while nothing has read its entries, otherwise `[合并转发 #id: 名字: 内容 …]` with a bounded preview. `im_read` of a stored reference expands it through a platform read, so the entries are readable without the store having to be rewritten, and `im_read_image` of a label inside one takes the same read — which is what puts a forwarded conversation's pictures where its media refs can find them. A forward nested in the entries keeps a `[合并转发 #id]` line of its own, with the entries that follow it indented under it: the platform returns the whole tree in one answer.
 
 ### Activity tracking and output renderers
 

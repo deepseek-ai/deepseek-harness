@@ -345,4 +345,26 @@ describe('ImMediaStore.read', () => {
     await expect(storeWith([mediaMessage(12)], { http: abortAware }).read(CHAT.key, '12.1', AbortSignal.abort(new Error('gone'))))
       .rejects.toThrow('gone')
   })
+
+  it('reads the entries of a merged forward before resolving its picture', async () => {
+    // The store holds the forward as a bare reference; the picture only exists in what the platform read returns.
+    const bare = message(media(h('forward', { id: 'm_7' })), 7)
+    const expanded = message(media(h('forward', { id: 'm_7' }, h('img', { src: 'https://cdn/9.png' }))), 7)
+    const history = {
+      after: (chat: string, seq: number, limit: number) =>
+        [bare].filter(entry => entry.chat.key === chat && entry.seq > seq).slice(0, limit),
+      before: () => [],
+      get: () => undefined,
+      latest: () => undefined,
+    }
+    const store = new ImMediaStore(
+      fakeContext({
+        http: httpServing(PNG_BYTES),
+        attachments: attachmentsSaving(),
+        im: { history, readMessage: async () => expanded },
+      }),
+      config(),
+    )
+    expect(await store.read(CHAT.key, '7.1')).toMatchObject({ ref: { seq: 7, index: 1, src: 'https://cdn/9.png' } })
+  })
 })
