@@ -8,6 +8,7 @@ import type { DingtalkOperationKind, DingtalkState } from './types.ts'
 /** The npm package whose bundle page carries the account section. */
 export const DINGTALK_PACKAGE = '@deepseek-ai/dsh-dingtalk'
 
+/* jscpd:ignore-start -- CLI app plugins declare page operations, copy, and commands alike, each with its own text. */
 /** The operations the section's buttons start; signing in and out report a notice in the browser that started them. */
 export const OPERATIONS: readonly CliAccountOperation<DingtalkOperationKind>[] = [
   { kind: 'check' },
@@ -25,6 +26,7 @@ export const COPY: CliAccountCopy = {
 const CHECK = { kind: 'start', operation: 'check' } as const
 const SIGN_IN = { kind: 'start', operation: 'sign-in' } as const
 const SIGN_OUT = { kind: 'start', operation: 'sign-out' } as const
+/* jscpd:ignore-end */
 
 type Operation = NonNullable<DingtalkState['operation']>
 type Account = DingtalkState['account']
@@ -87,6 +89,7 @@ export function presentAccount(view: DingtalkState): CliAccountDisplay {
         buttons: [{ label: text('action.connect'), command: SIGN_IN, variant: 'primary' }], connect: SIGN_IN,
         detail: text('detail.disconnected'), notes: [], ...failure,
       }
+    /* jscpd:ignore-start -- CLI app plugins that sign out offer the same confirmed sign-out button. */
     case 'connected':
       return {
         phase: 'connected', status: text('status.connected'), badge: text('badge.connected'),
@@ -96,6 +99,7 @@ export function presentAccount(view: DingtalkState): CliAccountDisplay {
         }],
         detail: connectedDetail(account), notes: [], ...failure,
       }
+    /* jscpd:ignore-end */
     /* v8 ignore next -- closed account state union */
     default: return assertNever(account)
   }
