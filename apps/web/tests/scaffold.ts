@@ -715,7 +715,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   ]
 
   // Recorded standard sessions pin the optional patch tool in their request headers.
-  if (options.replayFixture !== undefined) {
+  if (options.replayFixture !== undefined || options.compareReplaySession === true) {
     const config = composedRows.find(row => row.id === 'preset-standard')!.config as PresetDefinition
     overlayPatches.push({
       id: 'preset-standard',
