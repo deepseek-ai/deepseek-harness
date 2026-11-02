@@ -103,10 +103,10 @@ export class HistoryController {
   }
 
   /**
-   * Subscribe to sparse projection replacements without reading a baseline.
+   * Subscribe to projection changes without reading a baseline.
    * @param request - Session identity to subscribe without reading a baseline.
    * @param signal - stream cancellation.
-   * @returns readiness followed by sparse per-key replacement values.
+   * @returns readiness followed by one change frame per committed event, listing every key it changed.
    */
   async *observeProjections(request: SessionProjectionsRequest, signal: AbortSignal): AsyncIterable<SessionProjectionFrame> {
     using listener = new ProjectionListener(this.ctx, request.sessionId, signal)

@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   canonicalizeTimeZone, createAtScheduleRecord, createDailyScheduleRecord, createEveryScheduleRecord,
-  createWeeklyScheduleRecord, decodeScheduleChange, decodeScheduleRecord, foldScheduleEvents, isRecurringScheduleRecord,
+  createWeeklyScheduleRecord, decodeScheduleRecord, isRecurringScheduleRecord,
   normalizeWeekdays, parseWeeklyInput, renderRecurringReminderBatchFraming, resolveRecurringOccurrence,
   resolveWeeklyOccurrence, ScheduleId, ScheduleInputError, ScheduleLogError,
 } from '../src/domain.ts'
-import { resolveScheduleUpdate } from '../src/update.ts'
-import type { ScheduleRecord, ScheduleTimingChange, WeeklyInput, WeeklyScheduleRecord } from '../src/types.ts'
-import { SessionSeq } from '@deepseek-ai/dsh-session'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { updateResult } from './rule-edits.ts'
+import type { WeeklyInput, WeeklyScheduleRecord } from '../src/types.ts'
+import type { ScheduleRecord, ScheduleTiming } from '../src/types.ts'
 
 function weekly(now: string, weekdays: number[], time = '09:00:00', timeZone = 'UTC'): WeeklyScheduleRecord {
   return createWeeklyScheduleRecord(
@@ -260,14 +259,6 @@ describe('weekly durable decoding', () => {
     expect(decodeScheduleRecord(record)).toEqual(record)
   })
 
-  it('rejects weekly records from the legacy Session decoder', () => {
-    // A stored log carries the payload untyped, so the event envelope is asserted to
-    // hand the legacy decoder the weekly record it must reject.
-    const data: unknown = { version: 1, operation: 'create', schedule: record }
-    expect(() => decodeScheduleChange(data)).toThrow(ScheduleLogError)
-    expect(() => foldScheduleEvents([{ type: 'schedule/change', seq: SessionSeq(0), time: 0, data } as SessionEvent]))
-      .toThrow(ScheduleLogError)
-  })
 
   it.each([
     { kind: 'daily' }, { weekdays: undefined }, { weekdays: [] }, { weekdays: [3, 1] }, { weekdays: [3, 3] },
@@ -316,8 +307,8 @@ describe('weekly timing edits', () => {
     time: '09:00:00.125', time_zone: 'US/Eastern', weekdays: [3, 1],
   }, now, 'Kept name')
 
-  function update(change: ScheduleTimingChange, acceptedAt = now) {
-    return resolveScheduleUpdate(current, current, change, acceptedAt)
+  function update(change: ScheduleTiming, acceptedAt = now) {
+    return updateResult(current, change, acceptedAt)
   }
 
   it('is a no-op for an equivalent normalized weekly rule', () => {
@@ -331,7 +322,7 @@ describe('weekly timing edits', () => {
 
   it('is a no-op for the stored zone alias as well as the canonical name', () => {
     const aliased: ScheduleRecord = { ...current, timeZone: 'US/Eastern' }
-    expect(resolveScheduleUpdate(aliased, aliased, {
+    expect(updateResult(aliased, {
       kind: 'weekly', weekly: { time: '09:00:00.125', time_zone: 'America/New_York', weekdays: [1, 3] },
     }, now + 86_400_000)).toEqual({ id, updated: false, record: aliased })
   })
@@ -363,7 +354,7 @@ describe('weekly timing edits', () => {
     ), 'daily'],
   ])('converts a %s record into weekly with the same identity', (other, kind) => {
     const weekly = { time: '09:00:00', time_zone: 'UTC', weekdays: [1] }
-    expect(resolveScheduleUpdate(other, other, { kind: 'weekly', weekly }, now)).toEqual({
+    expect(updateResult(other, { kind: 'weekly', weekly }, now)).toEqual({
       id, updated: true, record: createWeeklyScheduleRecord(id, 'Keep prompt', weekly, now, 'Keep prompt'),
     })
     expect(kind).not.toBe('weekly')
@@ -374,7 +365,7 @@ describe('weekly timing edits', () => {
       { kind: 'every', every_seconds: 300 },
       { kind: 'daily', daily: { time: '09:00:00', time_zone: 'UTC' } },
       { kind: 'at', at: '2026-09-14T10:00:00Z' },
-    ] as ScheduleTimingChange[]) {
+    ] as ScheduleTiming[]) {
       expect(update(change)).toMatchObject({
         id, updated: true, record: { id, kind: change.kind, prompt: 'Keep prompt' },
       })
@@ -401,7 +392,7 @@ describe('weekly timing edits', () => {
     const change: unknown = {
       kind: 'weekly', weekly: { time: '09:00:00', time_zone: 'UTC', weekdays: [1] }, extra: true,
     }
-    expect(update(change as ScheduleTimingChange)).toMatchObject({ code: 'invalid_rule' })
+    expect(update(change as ScheduleTiming)).toMatchObject({ code: 'invalid_rule' })
   })
 
   it('rejects daily exhaustion using the actual acceptance clock', () => {

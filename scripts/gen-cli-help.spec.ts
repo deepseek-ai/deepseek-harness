@@ -1,7 +1,11 @@
 /** Command discovery and complete output preservation for the CLI reference. */
 
-import { describe, expect, it } from 'vitest'
-import { collectCliHelp, parseCliHelp, prefetchHelp, topLevelHelpArgs } from './gen-cli-help.ts'
+import { execFile } from 'node:child_process'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cliHelpConcurrency, collectCliHelp, main, parseCliHelp, prefetchHelp, topLevelHelpArgs } from './gen-cli-help.ts'
+
+vi.mock('node:child_process', () => ({ execFile: vi.fn() }))
+afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks() })
 
 interface PendingRead {
   args: string
@@ -25,6 +29,23 @@ function controlledReads(): { reads: PendingRead[]; read: (args: readonly string
 async function flush(): Promise<void> {
   await new Promise<void>((resolve) => { setImmediate(resolve) })
 }
+
+describe('CLI help child budget', () => {
+  it.each([undefined, ''])('keeps the independent worker budget for %j', (raw) => {
+    expect(cliHelpConcurrency(raw, 12)).toBe(12)
+  })
+
+  it('uses an explicit caller allowance', () => {
+    expect(cliHelpConcurrency('1', 12)).toBe(1)
+    expect(cliHelpConcurrency('3', 12)).toBe(3)
+  })
+
+  it.each(['0', '-1', '1.5', '2workers', '02', '9007199254740992'])('rejects %j before spawning help', async (raw) => {
+    vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', raw)
+    await expect(main()).rejects.toThrow('DSH_CLI_HELP_CONCURRENCY must be a positive integer')
+    expect(execFile).not.toHaveBeenCalled()
+  })
+})
 
 describe('CLI help discovery', () => {
   it('reads command rows while retaining wrapped descriptions and examples', () => {

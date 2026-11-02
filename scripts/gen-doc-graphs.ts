@@ -713,11 +713,18 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Reconciles mcp-client instances against its volatile servers configuration, aggregates their connection statuses, and serves restart and probe to management surfaces.',
   },
   {
+    key: 'mcpAccounts',
+    pkg: 'client-ui-mcp-account',
+    title: 'MCP connector accounts on the Plugins page',
+    mode: 'service',
+    note: 'Holds the accounts MCP connector plugins register and serves them, with the manager\'s view of each server, to the Plugins page through one Remote; authorization runs through the manager.',
+  },
+  {
     key: 'schedule',
     pkg: 'schedule',
     title: 'Host scheduled messages',
     mode: 'core',
-    note: 'Stores tasks independently of Session activation and queues due messages in the original Session.',
+    note: 'Stores tasks independently of Session activation and queues due messages in each task\'s target Session.',
   },
   {
     key: 'goals',
@@ -852,11 +859,11 @@ const SERVICE_ROLES: ServiceRole[] = [
   },
   {
     key: 'agentTeams',
-    pkg: 'experimental-agent-team',
+    pkg: 'agent-team',
     title: 'Agent Teams coordination domain',
     mode: 'core',
-    consumers: ['experimental-tool-agent-team'],
-    note: 'Owns the implicit-root roster, direct peer inbox delivery, shared task DAG, and continuable-child lifecycle; tool-agent-team contributes model controls.',
+    consumers: ['tool-agent-team'],
+    note: 'Owns the shared task DAG for a subagent tree; tool-agent-team contributes task controls.',
   },
   {
     key: 'claudeCodeMods',

@@ -27,6 +27,8 @@ English | [中文](README.zh.md)
 
 Starting an app with this package is a small, explicit entry point: you give it a config file and it runs the whole boot. This section covers what you can do and what you get; the helper calls behind each outcome are documented in the folded implementation section.
 
+Profile loading removes retired installation-bundle selections from `dsh.profile.bundles` and rewrites the manifest only when needed, preserving other fields. [Team migration](../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.md) describes the default composition and retained row overrides.
+
 ### When to use it
 
 Use it when implementing the shared `dsh` launcher or embedding its lower-level boot helpers. Product features belong in profile bundles instead of new application bins; code that only adds plugins to an already-running app mounts those plugins directly.

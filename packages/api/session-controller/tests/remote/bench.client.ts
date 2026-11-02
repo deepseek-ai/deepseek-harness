@@ -11,7 +11,7 @@ import { sessionWorld } from './session.client.ts'
  * @param mock - this case's Remote responses.
  * @param start - the fixture's lazy client startup.
  * @param sessionId - Session identity.
- * @param options - addressed child and parent availability, when applicable.
+ * @param options - addressed child and other Session options, when applicable.
  * @returns the Session, disposed at the end of the case.
  */
 export async function sessionBench(

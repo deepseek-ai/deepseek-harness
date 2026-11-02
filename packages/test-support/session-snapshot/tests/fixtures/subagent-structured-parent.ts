@@ -30,10 +30,8 @@ export function apply(ctx: Context): void {
       try {
         const activation = await ctx.subagents.startActivation({
           provider: 'spawn', label: 'Structured answer', delivery: 'parent', signal: exec.signal,
-          request: {
-            parent, prompt: [{ type: 'text', text: 'Submit answer 41 through structured_output.' }],
-            outputSchema: { type: 'object', properties: { answer: { type: 'number' } }, required: ['answer'] },
-          },
+          parent, prompt: [{ type: 'text', text: 'Submit answer 41 through structured_output.' }],
+          outputSchema: { type: 'object', properties: { answer: { type: 'number' } }, required: ['answer'] },
         })
         await activation.result
         return [{ type: 'text', text: `Child ${activation.childId} settled.` }]

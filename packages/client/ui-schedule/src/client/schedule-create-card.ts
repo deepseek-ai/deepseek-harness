@@ -85,6 +85,9 @@ export function narrowScheduleRecord(value: unknown): ScheduleRecord | undefined
   const title = typeof value.title === 'string' && value.title.trim() !== '' ? value.title : firstLine(prompt)
   if (title === '') return undefined
   switch (kind) {
+    case 'rrule':
+      return typeof value.rrule === 'string' && value.rrule !== ''
+        ? { id: id as ScheduleId, kind, title, prompt, scheduledAt, rrule: value.rrule } : undefined
     case 'after':
       return typeof value.afterSeconds === 'number'
         ? { id: id as ScheduleId, kind: 'after', title, prompt, afterSeconds: value.afterSeconds, scheduledAt }

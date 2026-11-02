@@ -234,7 +234,7 @@ it('cancels an account child without stopping its API-key parent', async () => {
     signal.throwIfAborted()
   })
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
-  const childHandle = await ctx.agents.create({ sessionId: SessionId('child'), parentAgent: parent,
+  const childHandle = await ctx.agents.create({ sessionId: SessionId('child'),
     agentOptions: { provider: 'deepseek-account', model: 'deepseek-v4-flash' } })
   send(parent)
   send(childHandle.agent)

@@ -33,4 +33,16 @@ describe('Menu anchor minimum width', () => {
     expect(view.getByRole('menu').style.minWidth).toBe('176px')
     expect(view.getByRole('menu').style.left).toBe('12px')
   })
+
+  it('bounds the anchor minimum by the visual viewport after browser zoom', () => {
+    measureAnchor()
+    vi.stubGlobal('CSS', { supports: (property: string) => property === '-webkit-backdrop-filter' })
+    vi.stubGlobal('visualViewport', Object.assign(new EventTarget(), {
+      width: 200, height: 400, offsetLeft: 40, offsetTop: 60,
+    }))
+    const view = render(<Menu open portal minWidthFromAnchor align="end" anchor={<button>Tools</button>}
+      items={[{ id: 'one', label: 'One' }]} onClose={vi.fn()} />)
+    expect(view.getByRole('menu').style.minWidth).toBe('176px')
+    expect(view.getByRole('menu').style.left).toBe('52px')
+  })
 })

@@ -96,7 +96,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-位于 order `0` 的 `deployment:persona-prefix` 段落携带本行的 `prefix`；位于 order `10200` 的 `deployment:persona-suffix` 在第一方指导之后携带其 `suffix`。两者分别替换对应的部署默认值，并解析提示词变量。在完整模式下，模型只会看到渲染后的前缀段落作为系统提示词。运行时上下文默认保持启用。设置 `includeRuntimeContext: false` 后，模型仍会收到必需上下文，例如当前工作目录；可选上下文则会省略。
+位于 order `0` 的 `deployment:persona-prefix` 段落携带本行的 `prefix`；位于 order `10200` 的 `deployment:persona-suffix` 在第一方指导之后携带其 `suffix`。两者分别替换对应的部署默认值，并解析提示词变量。在完整模式下，模型只会看到渲染后的前缀段落作为系统提示词。运行时上下文默认保持启用。设置 `includeRuntimeContext: false` 后，模型仍会收到必需上下文，例如当前工作目录和子代理身份；可选上下文则会省略。
 
 #### Token 影响
 
