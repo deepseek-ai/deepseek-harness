@@ -272,7 +272,6 @@ describe('dsh-tool-subagent', () => {
     expect(seen?.agentOptions).toEqual({
       provider: 'alpha',
       model: 'child-model',
-      reasoningEffort: 'high',
       maxTokens: 321,
     })
   })
@@ -679,7 +678,7 @@ describe('dsh-tool-subagent local activation', () => {
   })
 
   /** Boot the real continuable stack without any model-facing follow-up adapter. */
-  async function continuableSetup() {
+  async function continuableSetup(modelSelection = false) {
     const ctx = new Context()
     const root = mkdtempSync(path.join(tmpdir(), 'dsh-tool-subagent-continuable-'))
     fixtures.push({ ctx, root })
@@ -689,13 +688,35 @@ describe('dsh-tool-subagent local activation', () => {
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
-    await ctx.plugin(tool, { provider: 'spawn' })
+    await ctx.plugin(tool, { provider: 'spawn', modelSelection })
     ctx.llm.registerAdapter(['mock'], new MockAdapter([
       textResponse('continuable answer'),
-    ]))
+    ], modelSelection ? {
+      efforts: [
+        { id: ReasoningEffortId('low'), name: 'Low' },
+        { id: ReasoningEffortId('high'), name: 'High' },
+      ],
+      defaultEffort: ReasoningEffortId('low'),
+    } : undefined))
     const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
     return { ctx, parent }
   }
+
+  it.each([undefined, 'high'] as const)('starts the explicitly selected parent model with effort %s', async (effort) => {
+    const { ctx, parent } = await continuableSetup(true)
+    parent.options.reasoningEffort = ReasoningEffortId('high')
+    let child: Agent | undefined
+    ctx.on('subagent/start', (info) => { child = ctx.agents.get(info.id) })
+    const result = await callSubagent(ctx, {
+      description: 'selected model', prompt: 'work', provider: 'mock', model: 'mock',
+      ...effort === undefined ? {} : { reasoning_effort: effort },
+    }, { agent: parent })
+    expect(result.isError, text(result)).toBe(false)
+    expect(child).toBeDefined()
+    await child!.whenIdle()
+    expect(child!.session.requestHeader()?.config.reasoningEffort).toBe(effort ?? 'low')
+    expect(parent.options.reasoningEffort).toBe('high')
+  })
 
   it('classifies local activations concurrency-safe', async () => {
     const { ctx } = await continuableSetup()

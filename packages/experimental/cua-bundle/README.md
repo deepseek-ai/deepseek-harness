@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Enable macOS Computer Use from Plugins for existing and new PTC sessions. Windows support is in development. This bundle remains in `experimental` until that support is complete, then moves to the `computer-use` group. It is off by default and hidden from the default plugin lists until enabled or separately installed; disabled profiles prepare no native components and register neither CUA tools nor their model guidance.
+Enable macOS Computer Use from Plugins for existing and new PTC sessions. Windows support is in development. This bundle remains in `experimental` until that support is complete, then moves to the `computer-use` group. It ships with DSH switched off and appears in the Experimental plugins list on macOS Hosts; disabled profiles prepare no native components and register neither CUA tools nor their model guidance.
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ Enable macOS Computer Use from Plugins for existing and new PTC sessions. Window
 <a id="use-this-package"></a>
 ## Use this package
 
-In macOS Desktop, open **Plugins → Add plugin**, enter `@deepseek-ai/dsh-cua-bundle`, choose **Install**, then **Enable now**. DSH installs the official version matching its runtime into the profile. Published packages contain the signed and notarized helper; users need no compiler. Source Web and development Desktop link the workspace bundle and prepare an ad-hoc helper when enabled. Open Computer Use details, choose PTC if needed, and grant Accessibility and Screen Recording to `DSH Computer Use.app`. Disabled installed bundles remain available for management. For source Web, run these commands from the repository root:
+On macOS, open **Plugins → More** and switch on **Computer use** in the Experimental plugins list. The bundle ships with DSH and updates with it, so enabling it downloads nothing. Published packages contain the signed and notarized helper; users need no compiler. Source Web and development Desktop prepare an ad-hoc helper when enabled. Open its details, choose PTC if needed, and grant Accessibility and Screen Recording to `DSH Computer Use.app`. An enabled bundle also appears in the main plugin list; switching it off returns it to the Experimental plugins list only. For source Web, run these commands from the repository root:
 
 ```sh
 pnpm run build
@@ -33,11 +33,11 @@ pnpm dsh web
 
 For the source Desktop launcher and its separate development profile, follow [Desktop development](../../../apps/desktop/README.md). Enable Computer Use in each profile that needs it.
 
-The switch saves bundle selection in the profile’s `package.json`. Computer Use is installed only in PTC sessions. Enabling through Add plugin, a visible card, or its detail page offers setup guidance when system permissions need attention. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../cua/README.md). Native preparation runs when the provider loads and reuses the source-hashed executable when available.
+The switch saves bundle selection in the profile’s `package.json`. Computer Use is installed only in PTC sessions. Enabling through its card or detail page offers setup guidance when system permissions need attention. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../cua/README.md). Native preparation runs when the provider loads and reuses the source-hashed executable when available.
 
 Disabling unloads the provider and withdraws CUA tools from its Agent scopes. Runtime configuration, the new-session default and saved grants remain.
 
-Computer Use is available only on a macOS DSH Host. The native provider is an optional dependency installed only on macOS; the bundle and its shared libraries install on demand. Other Hosts hide the bundle from default plugin lists and model recommendations and refuse enablement before saving settings. Explicit profile dependencies and saved selections remain visible for management. An already selected bundle is skipped at startup with a diagnostic and remains available for deselection; saved user settings remain. A browser on another operating system can connect to a supported Mac Host.
+Computer Use is available only on a macOS DSH Host. The native provider is an optional dependency installed only on macOS; shared CUA and Client packages remain in the installation. Other Hosts hide the bundle from default plugin lists and model recommendations and refuse enablement before saving settings. Explicit profile dependencies and saved selections remain visible for management. An already selected bundle is skipped at startup with a diagnostic and remains available for deselection; saved user settings remain. A browser on another operating system can connect to a supported Mac Host.
 
 If preparation fails, the saved selection remains and CUA operations stay unavailable. Refresh or reopen the plugin page to read the component diagnostic, correct its cause, then restart DSH.
 
@@ -85,7 +85,7 @@ CUA activation and removal change the PTC SDK and system guidance; subsequent re
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- First installation requires a reachable registry carrying the matching DSH version. System permissions require the user’s approval in macOS; installation does not grant them.
+- System permissions require the user’s approval in macOS; enabling the bundle does not grant them.
 - PTC execution is shared by the profile and is configured independently. A Host without HMR applies saved changes at restart.
 
 <a id="dev-note"></a>

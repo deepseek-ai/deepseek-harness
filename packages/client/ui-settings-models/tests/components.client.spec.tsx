@@ -162,12 +162,13 @@ function remoteOk<T>(value: T) {
   return { ok: true as const, value }
 }
 /** The codes this page's scripted Host answers refuse with. */
-type RefusalCode = 'credential/rejected' | 'gateway/internal' | 'settings/conflict' | 'settings/rejected'
+type RefusalCode = 'credential/rejected' | 'gateway/internal' | 'gateway/cancelled' | 'settings/conflict' | 'settings/rejected'
 
 /** One refusal per code, each carrying the details its own code declares. */
 const REFUSALS: { [Code in RefusalCode]: (message: string) => RemoteError<Code> } = {
   'credential/rejected': message => new RemoteError('credential/rejected', message, { ref: 'DEEPSEEK_API_KEY' }),
   'gateway/internal': message => new RemoteError('gateway/internal', message, {}),
+  'gateway/cancelled': message => new RemoteError('gateway/cancelled', message, {}),
   'settings/conflict': message =>
     new RemoteError('settings/conflict', message, { ns: 'llm-pi-ai', expected: 4, actual: 5 }),
   'settings/rejected': message => new RemoteError('settings/rejected', message, { ns: 'llm-pi-ai' }),
@@ -216,6 +217,9 @@ function scriptedFace(overrides: {
       mutate,
     },
     credentials: {
+      readStored: vi.fn((ref: string): Promise<RemoteResult<string | undefined>> => Promise.resolve(remoteOk(
+        ref === 'OPENAI_API_KEY' ? 'fixture-openai-key' : undefined,
+      ))),
       // Typed as the Remote answer rather than the success branch alone: a
       // case that scripts a refusal replaces this mock.
       describe: vi.fn((refs: string[]): Promise<RemoteResult<Record<string, CredentialInfo>>> =>
@@ -357,16 +361,156 @@ async function mountFirstRun(overrides: Parameters<typeof scriptedFace>[0] = {})
 async function mountDeepSeekCard(overrides: Parameters<typeof scriptedFace>[0] = {}) {
   const mounted = await mountSection(overrides)
   fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
+  await screen.findByLabelText(en.keyInput)
   return mounted
 }
 
 describe('ModelsSection', () => {
+  it('loads a saved DeepSeek key only when editing and keeps an unchanged key stored', async () => {
+    const scripted = scriptedFace()
+    scripted.face.credentials.describe.mockImplementation(refs => Promise.resolve(remoteOk(
+      Object.fromEntries(refs.map(ref => [ref, { configured: ref === 'DEEPSEEK_API_KEY', source: 'file', writable: true }])),
+    )))
+    scripted.face.credentials.readStored.mockResolvedValue(remoteOk('fixture-deepseek-key'))
+    const { set, unset } = await mountFace(scripted)
+    expect(scripted.face.credentials.readStored).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
+    const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
+    expect(key.value).toBe('fixture-deepseek-key')
+    expect(key.type).toBe('password')
+    expect(scripted.face.credentials.readStored).toHaveBeenCalledWith('DEEPSEEK_API_KEY')
+    fireEvent.click(screen.getByRole('button', { name: en.keyReveal }))
+    expect(key.type).toBe('text')
+    fireEvent.click(screen.getByRole('button', { name: en.apply }))
+    await screen.findByRole('status')
+    expect(set).not.toHaveBeenCalled()
+    expect(unset).not.toHaveBeenCalled()
+  })
+
+  it('removes a cleared saved DeepSeek key and retains the edit when removal fails', async () => {
+    const scripted = scriptedFace()
+    scripted.face.credentials.describe.mockImplementation(refs => Promise.resolve(remoteOk(
+      Object.fromEntries(refs.map(ref => [ref, { configured: ref === 'DEEPSEEK_API_KEY', source: 'file', writable: true }])),
+    )))
+    scripted.face.credentials.readStored.mockResolvedValue(remoteOk('fixture-deepseek-key'))
+    scripted.unset.mockResolvedValueOnce(remoteFail('credential removal failed'))
+    await mountFace(scripted)
+    fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
+    const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
+    fireEvent.change(key, { target: { value: '' } })
+    expect(key.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'DEEPSEEK_API_KEY'))
+    expect(screen.getByText(en.keyFallbackUnchecked)).toBeTruthy()
+    expect(screen.queryByText(en.keyFallbackDetected.replace('{hint}', 'DEEPSEEK_API_KEY'))).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.apply }))
+    await screen.findByText('credential removal failed')
+    expect(scripted.unset).toHaveBeenCalledWith('DEEPSEEK_API_KEY')
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(key.value).toBe('')
+    fireEvent.click(screen.getByRole('button', { name: en.apply }))
+    await screen.findByRole('status')
+    expect(scripted.set).not.toHaveBeenCalled()
+  })
+
+  it('waits for a saved key under a derived reference before opening its provider editor', async () => {
+    const scripted = scriptedFace()
+    const read = Promise.withResolvers<RemoteResult<string | undefined>>()
+    scripted.face.credentials.describe.mockImplementation(refs => Promise.resolve(remoteOk(
+      Object.fromEntries(refs.map(ref => [ref, {
+        configured: ref === 'OPENAI_API_KEY' || ref === 'ZOMBIE_API_KEY', source: 'file', writable: true,
+      }])),
+    )))
+    scripted.face.credentials.readStored.mockReturnValue(read.promise)
+    const { mutate, set } = await mountFace(scripted)
+    const edit = screen.getByRole<HTMLButtonElement>('button', {
+      name: providerCopy(en.editProvider, { provider: 'zombie', displayName: 'zombie' }),
+    })
+    fireEvent.click(edit)
+    expect(scripted.face.credentials.readStored).toHaveBeenCalledWith('ZOMBIE_API_KEY')
+    expect(edit.disabled).toBe(true)
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    await act(async () => { read.resolve(remoteOk('fixture-zombie-key')) })
+    const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
+    expect(key.value).toBe('fixture-zombie-key')
+    expect(key.type).toBe('password')
+    fireEvent.click(screen.getByRole('button', { name: en.apply }))
+    await screen.findByRole('status')
+    expect(mutate).not.toHaveBeenCalled()
+    expect(set).not.toHaveBeenCalled()
+  })
+
+  it('refreshes provider metadata without replacing the loaded key draft', async () => {
+    const { face, controller } = await mountSection()
+    face.credentials.readStored.mockResolvedValue(remoteOk('fixture-zombie-key'))
+    act(() => {
+      controller.store.update((state) => {
+        state.rows = state.rows.map(row => row.entry.provider === 'zombie' ? {
+          ...row,
+          entry: { ...row.entry, displayName: 'Before', defaultBaseURL: 'https://before.example', nativeAuth: { env: ['ZOMBIE_API_KEY'], oauth: false } },
+          derivedCredential: { configured: true, source: 'file', writable: true },
+        } : row)
+      })
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Before (zombie)' }))
+    const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
+    fireEvent.change(key, { target: { value: 'fixture-draft-key' } })
+    fireEvent.click(screen.getByText(en.customized))
+    expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder).toContain('https://before.example')
+    act(() => {
+      controller.store.update((state) => {
+        state.rows = state.rows.map(row => row.entry.provider === 'zombie' ? {
+          ...row, entry: { ...row.entry, displayName: 'After', defaultBaseURL: 'https://after.example', nativeAuth: { env: ['NEW_ZOMBIE_KEY'], oauth: false } },
+        } : row)
+      })
+    })
+    expect(screen.queryByText('Before')).toBeNull()
+    expect(screen.getAllByText('After').length).toBeGreaterThan(0)
+    expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder).toContain('https://after.example')
+    expect(key.value).toBe('fixture-draft-key')
+    fireEvent.change(key, { target: { value: '' } })
+    expect(key.placeholder).toContain('NEW_ZOMBIE_KEY')
+  })
+
+  it.each(['"quoted-key"', 'NAME=value', '密钥', '  fixture-key  '])('preserves an unchanged stored value %s while editing other settings', async (stored) => {
+    const scripted = scriptedFace()
+    scripted.face.credentials.readStored.mockResolvedValue(remoteOk(stored))
+    const { mutate, set, unset } = await mountFace(scripted)
+    fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
+    const key = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
+    expect(key.value).toBe(stored)
+    fireEvent.click(screen.getByText(en.customized))
+    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://edited.example' } })
+    const apply = screen.getByRole<HTMLButtonElement>('button', { name: en.apply })
+    expect(apply.disabled).toBe(false)
+    fireEvent.click(apply)
+    await screen.findByRole('status')
+    expect(mutate).toHaveBeenCalledWith('llm-pi-ai', [{ op: 'set', path: ['providers', 'openai', 'baseURL'], value: 'https://edited.example' }], 0)
+    expect(set).not.toHaveBeenCalled()
+    expect(unset).not.toHaveBeenCalled()
+  })
+
+  it.each(['credential/rejected', 'gateway/internal', 'gateway/cancelled'] as const)('reports a %s stored-key read and enables retry without opening an empty editor', async (code) => {
+    const scripted = scriptedFace()
+    scripted.face.credentials.readStored.mockResolvedValueOnce(remoteFail('credential read failed', code))
+    await mountFace(scripted)
+    const edit = screen.getByRole<HTMLButtonElement>('button', { name: openaiCopy(en.editProvider) })
+    fireEvent.click(edit)
+    expect((await screen.findByRole('alert')).textContent).toBe('credential read failed')
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    expect(edit.disabled).toBe(false)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: en.add }).disabled).toBe(false)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: openaiCopy(en.removeProvider) }).disabled).toBe(false)
+    fireEvent.click(edit)
+    expect((await screen.findByLabelText<HTMLInputElement>(en.keyInput)).value).toBe('fixture-openai-key')
+  })
+
   it('keeps the credential state unconfirmed when its redacted read fails', async () => {
     const scripted = scriptedFace()
+    scripted.face.credentials.readStored.mockResolvedValue(remoteOk(undefined))
     scripted.face.credentials.describe.mockResolvedValue(remoteFail('credentials unavailable', 'gateway/internal'))
     await mountFace(scripted)
     const edit = screen.getByRole('button', { name: openaiCopy(en.editProvider) })
     fireEvent.click(edit)
+    await screen.findByLabelText(en.keyInput)
     const row = within(edit.closest('li')!)
     expect(row.getByText(en.keyFallbackUnchecked)).toBeTruthy()
     expect(row.queryByText(en.keyFallbackMissing.replace('{hint}', 'OPENAI_API_KEY'))).toBeNull()
@@ -1449,9 +1593,10 @@ describe('ModelsSection', () => {
   it('edits a pi-ai profile with the curated fields only', async () => {
     const { mutate } = await mountSection()
     fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
-    // The field names the profile's reference; a stored value stays hidden.
+    // The stored value starts masked, and an empty edit selects environment authentication.
     const editorKey = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
-    expect(editorKey.placeholder).toBe(en.keyPlaceholderSaved)
+    expect(editorKey.value).toBe('fixture-openai-key')
+    expect(editorKey.type).toBe('password')
     // pi-ai carries Base URL too: the stored override shows as the value and
     // the effective profile endpoint, ahead of the catalog's, as its placeholder.
     fireEvent.click(screen.getByText(en.customized))
@@ -1637,7 +1782,8 @@ describe('ModelsSection', () => {
     face.credentials.describe.mockImplementation(() => Promise.resolve(remoteFail('down', 'gateway/internal')))
     fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
     const editorKey = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
-    expect(editorKey.placeholder).toBe(en.keyPlaceholderSaved)
+    expect(editorKey.value).toBe('fixture-openai-key')
+    expect(editorKey.type).toBe('password')
     fireEvent.change(editorKey, { target: { value: 'sk-live' } })
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(set).toHaveBeenCalledTimes(1) })
@@ -2211,7 +2357,7 @@ it.each(['file', 'env', 'project-env', 'user-env'] as const)('shows only the bla
   else expect(screen.getAllByText(hint)).toHaveLength(1)
   expect(input.value).toBe('')
   expect(input.placeholder)
-    .toBe(source === 'file' ? en.keyPlaceholderSaved : en.keyPlaceholderFallback.replace('{hint}', 'OPENAI_API_KEY'))
+    .toBe(en.keyPlaceholderFallback.replace('{hint}', 'OPENAI_API_KEY'))
   fireEvent.change(input, { target: { value: 'new-key' } })
   expect(screen.queryByText(hint)).toBeNull()
   expect(screen.queryByText(/^API key source:/)).toBeNull()
@@ -2231,21 +2377,31 @@ it.each([
   expect(document.body.textContent).not.toMatch(/oauth/i)
 })
 
-it('refreshes a blank editor from saved credentials to environment detection without an editor probe', async () => {
-  const { face, controller } = await mountSection()
+it.each([
+  { label: 'removed without environment fallback', info: { configured: false, writable: true }, restore: true },
+  { label: 'removed with environment fallback', info: { configured: true, source: 'env', writable: true }, restore: true },
+  { label: 'still stored or externally rotated', info: { configured: true, source: 'file', writable: true }, restore: false },
+  { label: 'unknown source', info: { configured: true, writable: true }, restore: false },
+] as const)('preserves the loaded draft and restores it only after confirmed removal: $label', async ({ info, restore }) => {
+  const { face, controller, set } = await mountSection()
   const reads = face.credentials.describe.mock.calls.length
   fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
-  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder).toBe(en.keyPlaceholderSaved)
+  expect((await screen.findByLabelText<HTMLInputElement>(en.keyInput)).value).toBe('fixture-openai-key')
   expect(screen.queryByText(/^API key source:/)).toBeNull()
   expect(screen.queryByText(/Env var detected/)).toBeNull()
   expect(face.credentials.describe).toHaveBeenCalledTimes(reads)
   face.credentials.describe.mockImplementation(refs => Promise.resolve(remoteOk(
-    Object.fromEntries(refs.map(ref => [ref, { configured: true, source: 'env', writable: true }])),
+    Object.fromEntries(refs.map(ref => [ref, ref === 'OPENAI_API_KEY' ? info : { configured: true, source: 'env', writable: true }])),
   )))
   await act(() => controller.load())
-  expect(screen.getByText(en.keyFallbackDetected.replace('{hint}', 'OPENAI_API_KEY'))).toBeTruthy()
-  expect(screen.queryByText(/^API key source:/)).toBeNull()
+  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).value).toBe('fixture-openai-key')
+  expect(screen.queryByText(/Env var detected/)).toBeNull()
+  expect(face.credentials.readStored).toHaveBeenCalledTimes(1)
   expect(face.credentials.describe).toHaveBeenCalledTimes(reads + 1)
+  fireEvent.click(screen.getByRole('button', { name: en.apply }))
+  await screen.findByRole('status')
+  if (restore) expect(set).toHaveBeenCalledWith('OPENAI_API_KEY', 'fixture-openai-key')
+  else expect(set).not.toHaveBeenCalled()
 })
 
 it('keeps an OAuth-only provider on its native authentication path', () => {
