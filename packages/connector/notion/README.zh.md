@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-Notion 插件在加载期间把 Notion 托管的 MCP 服务器 `https://mcp.notion.com/mcp` 注册到 Host 共用的 [MCP 管理器](../../mcp/mcp-manager/README.zh.md)。用户在 Web 侧栏**插件**页面的插件详情页中连接 Notion 账号，之后该 Host 上的所有对话都能使用这个服务器的工具，模型也会被告知把这项集成称为 Notion 插件。连接、OAuth 授权、已保存的 grant 和退出登录都由管理器负责；页面通过管理器的 Remote 读取和操作它们，不另设账号接口。插件运行在 Web 与 Desktop 组合中。
+Notion 插件在加载期间把 Notion 托管的 MCP 服务器 `https://mcp.notion.com/mcp` 注册到 Host 共用的 [MCP 管理器](../../mcp/mcp-manager/README.zh.md)。用户在 Web 侧栏**插件**页面的插件详情页中连接 Notion 账号，之后该 Host 上的所有对话都能使用这个服务器的工具，模型也会被告知把这项集成称为 Notion 插件。连接、OAuth 授权、已保存的 grant 和退出登录都由管理器负责，并由共用的 [MCP 账号界面](../../client/ui-mcp-account/README.zh.md)显示在插件页面上。插件运行在 Web 与 Desktop 组合中。
 
 ## 目录
 
@@ -50,7 +50,7 @@ bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpS
 
 授权必须在 Host 所在机器的浏览器中完成。用户在 Notion 中同意授权后，回调页面说明 DSH 已收到授权，区块随后显示结果。离开页面不会取消授权尝试，尝试由 Host 持有。授权失败时显示**授权未完成，请重试**；页面操作失败时显示 toast。退出登录保留客户端注册，不会在 Notion 一侧撤销连接。
 
-页面通过 Remote 调用管理器的 [OAuth 操作](../../mcp/mcp-manager/README.zh.md#oauth-authorization)：`watch` 报告条目，`startAuthorization('notion')` 返回一次授权尝试，其 `authorizationUrl` 由流报告，`cancelAuthorization('notion', id)` 取消它，`signOut('notion')` 删除 grant，`restart('notion')` 重试。其他 Remote 客户端可以使用同样的操作。
+页面通过 `mcpAccounts` Remote 跟随账号，该 Remote 报告管理器的条目；页面通过 Remote 调用管理器的 [OAuth 操作](../../mcp/mcp-manager/README.zh.md#oauth-authorization)：`startAuthorization('notion')` 返回一次授权尝试，其 `authorizationUrl` 由流报告，`cancelAuthorization('notion', id)` 取消它，`signOut('notion')` 删除 grant，`restart('notion')` 重试。其他 Remote 客户端可以使用同样的操作。
 
 ### 停用与卸载
 
@@ -75,7 +75,7 @@ bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpS
 
 [`cordis.patch.yml`](cordis.patch.yml) 插入一行 id 为 `notion` 的条目，指向本包，因此本包既是 bundle，也是其唯一的一行；`config` 覆盖以该 id 为目标。Host 侧的 [`src/index.ts`](src/index.ts) 进行两项注册，二者都是插件 fiber 的 effect：`ctx.mcpServers.register('notion', …)` 以配置的 `url` 和 OAuth 凭据 key 添加一个 Streamable HTTP 条目，`ctx.systemPrompt.section()` 在 `MCP_SERVERS` 排序位置添加称呼指引。服务器名固定了 `mcp__notion__` 工具命名空间，凭据 key 固定了 grant 地址，因此重新加载或重新安装的插件会得到同样的工具和 grant。管理器在注册时校验条目；如果已配置或已注册的服务器占用了该名称或 key，插件会在添加指引之前加载失败。
 
-浏览器侧的 [`src/client/index.ts`](src/client/index.ts) 挂在 `notion` 行上，因此其注册只在该行开启时存在。它注册 `notion` 文案，并调用 `ctx.mcpAccounts.register({ server: 'notion', packageName: '@deepseek-ai/dsh-notion', locale: 'notion' })`；随后由 [`ui-mcp-account`](../../client/ui-mcp-account/README.zh.md) 镜像 `notion` 条目，并提供上文所述的区块、引导、标签与 toast。
+账号注册表运行时，插件还调用 `ctx.mcpAccounts.register({ server: 'notion', packageName: '@deepseek-ai/dsh-notion', copy })`，其中 [`src/copy.ts`](src/copy.ts) 以每种已发布语言保存指明 Notion 的文案；随后由 [`ui-mcp-account`](../../client/ui-mcp-account/README.zh.md) 提供 `notion` 条目，并渲染上文所述的区块、引导、标签与 toast。没有注册表的组合（如 headless profile）加载插件时不带账号区块。
 
 </details>
 
@@ -89,7 +89,7 @@ bundle patch 在 profile 其他层之后插入 `notion` 行。插件需要 `mcpS
 - [MCP 客户端](../../mcp/mcp-client/README.zh.md)——连接、工具命名、OAuth grant 刷新与脱敏。
 - [MCP 子系统](../../../docs/subsystems/mcp.zh.md)——各 MCP 包如何协同。
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md)——安装与启用。
-- [MCP 账号界面](../../client/ui-mcp-account/README.zh.md)——浏览器侧注册的区块、标签、引导与提示。
+- [MCP 账号界面](../../client/ui-mcp-account/README.zh.md)——账号注册后显示的区块、标签、引导与提示。
 - [插件页面](../../client/ui-plugin-manager/README.zh.md#use-this-package)——这些界面所在的 bundle 详情页。
 
 -----
@@ -149,6 +149,6 @@ Notion 的服务器说明（设为 `eager` 时则是其工具）在连接成功�
 <details>
 <summary>维护者工作上下文——点击展开</summary>
 
-Host 侧单测让插件运行在 MCP 管理器和 mcp-client 的回环 OAuth 服务器夹具之上；客户端单测检查浏览器侧注册文案与账号，并随该行一起移除两者。`notion-plugin` 会话快照在没有已保存 grant 的情况下回放 Notion 行，因此它固定称呼指引，并验证没有请求到达服务器。
+Host 侧单测让插件运行在 MCP 管理器和 mcp-client 的回环 OAuth 服务器夹具之上；另一项单测检查账号注册表提供带文案的 Notion 账号，并随插件一起撤下。`notion-plugin` 会话快照在没有已保存 grant 的情况下回放 Notion 行，因此它固定称呼指引，并验证没有请求到达服务器。
 
 </details>
