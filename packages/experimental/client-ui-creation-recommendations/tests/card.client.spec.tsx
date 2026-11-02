@@ -151,7 +151,7 @@ it.each([true, false])('explains cost and background creation without starting w
   expect(value.act).not.toHaveBeenCalled()
 })
 
-it('offers cancellation during generation, then waits for cleanup before retrying', async () => {
+it('offers cancellation beside the location during generation, then waits for cleanup before retrying', async () => {
   const value = props({ phase: 'creating', data: { slot: 'page', bundleName: '@dsh-local/view-fixture' } })
   const pending = Promise.withResolvers<ActionCardResult | undefined>()
   value.act.mockImplementation(() => pending.promise)
@@ -159,7 +159,9 @@ it('offers cancellation during generation, then waits for cleanup before retryin
   expect(screen.queryByText(zh.sourceRetained)).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: zh.creationInfo }))
   expect(screen.getByText(zh.sourceRetained)).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: '取消创建' }))
+  const cancel = screen.getByRole('button', { name: '取消创建' })
+  expect(cancel.parentElement).toBe(screen.getByText(`${zh.location} · ${zh.page}`).parentElement)
+  fireEvent.click(cancel)
   expect(value.act).toHaveBeenCalledWith('cancel', undefined)
   expect(screen.getByRole('button', { name: '正在取消…' }).hasAttribute('disabled')).toBe(true)
   expect(screen.queryByRole('button', { name: '重新创建' })).toBeNull()

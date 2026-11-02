@@ -150,12 +150,10 @@ export function PageCardBody({ proposal, decision, summary, Folded, act, infoDis
         </footer>
       </div> : <div className={css.placement}>
         <p className={css.description}>{t('location')} · {data?.customLocation ?? t(data?.slot ?? details.data.slot)}</p>
+        {phase === 'creating' && <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('cancel') }}>{t(pending === 'cancel' ? 'cancelling' : 'cancel')}</Button>}
         {installed && <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('undo') }}>{t('undo')}</Button>}
         {phase === 'removed' && <Button variant="primary" size="sm" disabled={busy} onClick={() => { void run('restore') }}>{t(pending === 'restore' ? 'restoring' : 'restore')}</Button>}
       </div>}
-      {phase === 'creating' && <footer className={css.footer}>
-        <Button variant="ghost" size="sm" disabled={busy} onClick={() => { void run('cancel') }}>{t(pending === 'cancel' ? 'cancelling' : 'cancel')}</Button>
-      </footer>}
     </div>
   </>
 }
