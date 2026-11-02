@@ -306,26 +306,6 @@ describe('editPayload', () => {
     expect(bodyOf(call)).toEqual({ content: JSON.stringify(card) })
   })
 
-  it('updates a CardKit entity as a whole with a fresh sequence', async () => {
-    const { bot, calls } = await mount()
-    const value = handle('card-entity', { kind: 'card-entity', cardId: 'card_1', sequence: 4 })
-    await editMessagePayload(bot, value.parts[0]!, { msg_type: 'interactive', content: card }, value)
-    const first = calls.find(entry => entry.path === '/open-apis/cardkit/v1/cards/card_1')!
-    expect(first.method).toBe('PUT')
-    expect(bodyOf(first)).toEqual({ card: { type: 'card_json', data: JSON.stringify(card) }, sequence: 5 })
-    // The counter lives in the handle, so the next edit keeps increasing.
-    await editMessagePayload(bot, value.parts[0]!, { msg_type: 'interactive', content: card }, value)
-    expect(bodyOf(calls.filter(entry => entry.path.endsWith('/cards/card_1'))[1]).sequence).toBe(6)
-    expect((value.state as { sequence: number }).sequence).toBe(6)
-  })
-
-  it('starts the entity sequence at 1 when the handle has none yet', async () => {
-    const { bot, calls } = await mount()
-    const value = handle('card-entity', { cardId: 'card_1' })
-    await editMessagePayload(bot, value.parts[0]!, { msg_type: 'interactive', content: card }, value)
-    expect(bodyOf(calls[0]).sequence).toBe(1)
-  })
-
   it('refuses to edit a media message (text, post and card only)', async () => {
     const { bot, calls } = await mount()
     const error = await editMessagePayload(bot, handle('file').parts[0]!, { msg_type: 'file', content: { file_key: 'k' } }, handle('file'))
@@ -358,7 +338,6 @@ describe('partKindOf', () => {
     expect(partKindOf(post)).toBe('post')
     expect(partKindOf({ msg_type: 'text', content: { text: 'x' } })).toBe('text')
     expect(partKindOf({ msg_type: 'interactive', content: card })).toBe('card-inline')
-    expect(partKindOf({ msg_type: 'interactive', content: { type: 'card', data: { card_id: 'card_1' } } })).toBe('card-entity')
     expect(partKindOf({ msg_type: 'file', content: { file_key: 'k' } })).toBe('file')
     expect(partKindOf({ msg_type: 'audio', content: { file_key: 'k' } })).toBe('audio')
     expect(partKindOf({ msg_type: 'media', content: { file_key: 'k' } })).toBe('media')

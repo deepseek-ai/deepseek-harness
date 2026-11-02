@@ -16,7 +16,6 @@ export * from './ws.ts'
 export * from './decode.ts'
 export * from './prepare.ts'
 export * from './send.ts'
-export * from './stream.ts'
 export { Internal, type BaseResponse, type InternalRoute, type Paginated, type Pagination } from './internal.ts'
 
 /** The generated OpenAPI subset (`types/`), exported as a type namespace: `Lark.Message`, `Lark.Im.Message.CreateRequest`. */

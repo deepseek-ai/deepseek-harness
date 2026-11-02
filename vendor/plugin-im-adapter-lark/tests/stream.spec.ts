@@ -1,16 +1,13 @@
 /**
- * The card mode's stream driver.
+ * Streaming through the Lark adapter.
  *
- * Three layers:
+ * Two layers:
  * - **installation**: `LarkBot.streamDriver` answers the core `edit` driver in card mode (`cardStreaming !== false`) and
  *   in post mode, and `undefined` (buffered `final`) nowhere else; the drivers are memoized, so every stream of one bot
  *   reuses the same stateless instance;
- * - **the CardKit driver itself**, still exported but no longer installed: entity creation + one reference message, one
- *   request per diff op with a strictly increasing `sequence`, a full update when the scheduler had no patches or the
- *   streaming window closed, `close` switching `streaming_mode` off, the streaming window as the budget. It is kept
- *   until the entity path is deleted; nothing in the adapter reaches it any more;
  * - **through `bot.stream`** (the stream scheduler) under fake timers with a scripted growing activity from
- *   `streamingScripts()`: a card edited in place (one `PATCH` per state, no entity) and the post `edit` path.
+ *   `streamingScripts()`: a card edited in place (one `PATCH` per state, no CardKit entity) and the post `edit` path,
+ *   including its 20-edit budget and the `230075` refusal.
  *
  * Every request is answered by a stubbed transport; nothing touches the network.
  */
@@ -18,16 +15,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Http from '@deepseek-ai/cordis-plugin-http'
-import {
-  createRenderReport, normalize, Satori, type MessageHandle, type Prepared, type SendOptions, type StreamTickContext,
-  type Target,
-} from '@deepseek-ai/cordis-plugin-im-core'
+import { Satori, type Target } from '@deepseek-ai/cordis-plugin-im-core'
 import { streamingScripts } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
 import LarkBot, { Config, type LarkConfig } from '@deepseek-ai/cordis-plugin-im-adapter-lark'
-import { cardJson, type CardDraft, type CardMessageDraft, type CardPayload, type CardPatch } from '../src/modes/card.ts'
-import {
-  CARD_STREAM_WINDOW_MARGIN_MS, CARD_STREAM_WINDOW_MS, createCardStreamDriver, type LarkCardStreamState,
-} from '../src/stream.ts'
 
 const CHAT = 'oc_chat'
 const target: Target = { chat: { id: CHAT, type: 'group' } }
@@ -83,21 +73,9 @@ async function mount(answer?: (call: Call, index: number) => Answer | undefined,
   return { ctx, bot, calls }
 }
 
-/** The CardKit and message routes. */
+/** The message routes one stream uses. */
 function route(call: Call): Response {
   const ok = () => Response.json({ code: 0, data: {} })
-  if (call.method === 'POST' && call.path === '/open-apis/cardkit/v1/cards') {
-    return Response.json({ code: 0, data: { card_id: 'card_1' } })
-  }
-  if (call.method === 'PUT' && call.path === '/open-apis/cardkit/v1/cards/card_1') return ok()
-  if (call.method === 'POST' && call.path === '/open-apis/cardkit/v1/cards/card_1/elements') return ok()
-  if (call.method === 'PATCH' && call.path === '/open-apis/cardkit/v1/cards/card_1/settings') return ok()
-  if (/^\/open-apis\/cardkit\/v1\/cards\/card_1\/elements\/[^/]+\/content$/.test(call.path)) {
-    return call.method === 'PUT' ? ok() : unexpected(call)
-  }
-  if (/^\/open-apis\/cardkit\/v1\/cards\/card_1\/elements\/[^/]+$/.test(call.path)) {
-    return call.method === 'PATCH' || call.method === 'DELETE' ? ok() : unexpected(call)
-  }
   if (call.method === 'POST' && call.path === '/open-apis/im/v1/messages') {
     return Response.json({ code: 0, data: { message_id: 'om_1', chat_id: CHAT } })
   }
@@ -117,63 +95,6 @@ function bodyOf(call: Call | undefined): any {
   return JSON.parse(String(call!.body))
 }
 
-/** The `sequence` of every CardKit write, in call order (the create and message calls carry none). */
-function sequences(calls: Call[]): number[] {
-  return calls
-    .map(call => bodyOf(call).sequence)
-    .filter((sequence): sequence is number => typeof sequence === 'number')
-}
-
-/** Every CardKit write must number its request: `1, 2, 3 …` with no gap and no reuse. */
-function expectContiguous(seq: number[]): void {
-  expect(seq).toEqual(seq.map((_value, index) => index + 1))
-}
-
-/** The card document of a CardKit write (create body or full update body). */
-function cardOfBody(body: any): any {
-  const card = body.card ?? body
-  expect(card.type).toBe('card_json')
-  return JSON.parse(card.data)
-}
-
-// ---------------------------------------------------------------------------------------------------------------
-// Driver-level fixtures
-
-/** One card draft: a single markdown component, as the card mode renders a paragraph. */
-function prepared(content: string, id = 'e1'): Prepared<CardDraft> {
-  const value: CardMessageDraft = { kind: 'card', elements: [{ tag: 'markdown', id, content, refs: [], tables: 0 }] }
-  return { draft: value, resolved: new Map() }
-}
-
-/** The serialized payload of one card state (`CardPayload`, what the mode's `serialize` returns). */
-function payload(content: string, id = 'e1'): CardPayload {
-  const value = prepared(content, id)
-  return { msg_type: 'interactive', content: cardJson(value.draft as CardMessageDraft, () => 'img_v2_key') }
-}
-
-/** A tick context of one driver call. */
-function tickContext(options: SendOptions = {}): StreamTickContext {
-  return {
-    target,
-    mode: 'card',
-    options,
-    signal: new AbortController().signal,
-    report: createRenderReport(),
-    content: normalize('state'),
-    attempt: 1,
-  }
-}
-
-/** The stream bookkeeping of a handle the driver created. */
-function stateOf(handle: MessageHandle): LarkCardStreamState {
-  return handle.state as LarkCardStreamState
-}
-
-/** A `content` patch (a markdown component whose text grew). */
-function contentPatch(content: string, id = 'e1', append = true): CardPatch {
-  return { op: 'content', id, component: { tag: 'markdown', id, content, refs: [], tables: 0 }, append }
-}
-
 // ---------------------------------------------------------------------------------------------------------------
 // Installation
 
@@ -191,226 +112,11 @@ describe('driver installation', () => {
     expect(bot.streamDriver('text')).toBeUndefined()
   })
 
-  it('keeps the buffered final strategy when card streaming is off', async () => {
+  it('keeps the buffered final strategy when card editing is off', async () => {
     const { bot } = await mount(undefined, { cardStreaming: false })
     expect(bot.streamDriver('card')).toBeUndefined()
     // The post driver is independent of the card flag.
     expect(bot.streamDriver('post')?.strategy).toBe('edit')
-  })
-})
-
-// ---------------------------------------------------------------------------------------------------------------
-// The driver itself
-
-describe('driver — open', () => {
-  it('creates a streaming card entity, then sends it once as an interactive message', async () => {
-    const { bot, calls } = await mount()
-    const driver = createCardStreamDriver(bot, { now: () => 1234 })
-    const handle = await driver.open(prepared('Hel'), payload('Hel'), tickContext())
-
-    expect(calls.map(call => `${call.method} ${call.path}`)).toEqual([
-      'POST /open-apis/cardkit/v1/cards',
-      'POST /open-apis/im/v1/messages',
-    ])
-    // `open`: the whole card document with streaming enabled.
-    const created = cardOfBody(bodyOf(calls[0]))
-    expect(created).toMatchObject({ schema: '2.0', config: { update_multi: true, streaming_mode: true } })
-    expect(created.body.elements).toMatchObject([{ tag: 'markdown', element_id: 'e1', content: 'Hel' }])
-    expect(created.config.streaming_config).toBeTruthy()
-
-    // The message references the entity; it is the only content the platform receives.
-    const sent = bodyOf(calls[1])
-    expect(sent).toMatchObject({ msg_type: 'interactive', receive_id: CHAT })
-    expect(JSON.parse(sent.content)).toEqual({ type: 'card', data: { card_id: 'card_1' } })
-
-    expect(handle.parts).toHaveLength(1)
-    // `send.ts` records the kind from `content.type === 'card'`, so a later edit addresses the entity.
-    expect(handle.parts[0]).toMatchObject({ id: 'om_1', kind: 'card-entity' })
-    expect(handle).toMatchObject({ bot: bot.id, target, mode: 'card', edits: 0 })
-    expect(stateOf(handle)).toMatchObject({ cardId: 'card_1', sequence: 0, openedAt: 1234 })
-  })
-
-  it('refuses a card JSON above `limit.payload.bytes` (size)', async () => {
-    const { bot, calls } = await mount()
-    const driver = createCardStreamDriver(bot)
-    const huge = 'x'.repeat(40_000)
-    await expect(driver.open(prepared(huge), payload(huge), tickContext()))
-      .rejects.toMatchObject({ name: 'StreamLimitError', violation: { kind: 'size', key: 'limit.payload.bytes', limit: 30_000 } })
-    // Refused before the entity exists: no orphan card entity and no message either.
-    expect(calls).toHaveLength(0)
-  })
-
-  it('refuses a state a card message cannot show, so the scheduler sends an ordinary message', async () => {
-    const { bot, calls } = await mount()
-    const driver = createCardStreamDriver(bot)
-    const media = { msg_type: 'audio', content: { file_key: 'file_v2_key' } } as CardPayload
-    await expect(driver.open(prepared('x'), media, tickContext()))
-      .rejects.toMatchObject({ name: 'StreamLimitError', violation: { kind: 'shape' } })
-    expect(calls).toHaveLength(0)
-  })
-})
-
-describe('driver — tick and close', () => {
-  it('applies one request per diff op with fresh sequences, then closes with streaming off', async () => {
-    const { bot, calls } = await mount()
-    const driver = createCardStreamDriver(bot)
-    const handle = await driver.open(prepared('Hel'), payload('Hel'), tickContext())
-    calls.length = 0
-
-    await driver.tick(handle, {
-      draft: prepared('Hello'),
-      payload: payload('Hello'),
-      patches: [contentPatch('Hello')],
-    }, tickContext())
-    expect(calls.map(call => `${call.method} ${call.path}`)).toEqual([
-      'PUT /open-apis/cardkit/v1/cards/card_1/elements/e1/content',
-    ])
-    expect(bodyOf(calls[0])).toMatchObject({ content: 'Hello', sequence: 1 })
-
-    await driver.close(handle, { draft: prepared('Hello world'), payload: payload('Hello world') }, tickContext())
-    expect(calls.map(call => `${call.method} ${call.path}`)).toEqual([
-      'PUT /open-apis/cardkit/v1/cards/card_1/elements/e1/content',
-      'PUT /open-apis/cardkit/v1/cards/card_1',
-    ])
-    // One full update carries the final state *and* ends streaming (`close` must turn it off).
-    const final = cardOfBody(bodyOf(calls[1]))
-    expect(final.config.streaming_mode).toBe(false)
-    expect(final.config.streaming_config).toBeUndefined()
-    expect(final.body.elements).toMatchObject([{ content: 'Hello world' }])
-    expect(bodyOf(calls[1]).sequence).toBe(2)
-
-    expectContiguous(sequences(calls))
-    expect(handle.edits).toBe(1)
-  })
-
-  it('publishes the whole document when the scheduler had no patches', async () => {
-    const { bot, calls } = await mount()
-    const driver = createCardStreamDriver(bot)
-    const handle = await driver.open(prepared('abc'), payload('abc'), tickContext())
-    calls.length = 0
-
-    await driver.tick(handle, { draft: prepared('xyz'), payload: payload('xyz') }, tickContext())
-    expect(calls.map(call => `${call.method} ${call.path}`)).toEqual(['PUT /open-apis/cardkit/v1/cards/card_1'])
-    const card = cardOfBody(bodyOf(calls[0]))
-    // Mid-stream, so streaming stays on for the ticks that follow.
-    expect(card.config.streaming_mode).toBe(true)
-    expect(card.body.elements).toMatchObject([{ content: 'xyz' }])
-    expect(bodyOf(calls[0]).sequence).toBe(1)
-  })
-
-  it('resumes a partially applied tick instead of repeating finished requests', async () => {
-    // The second op of the first attempt is lost in transport; its retry must not repeat the first op.
-    let failed = 0
-    const { bot, calls } = await mount((call) => {
-      if (call.method === 'PUT' && call.path.endsWith('/elements/e2/content') && failed++ === 0) {
-        return { status: 500, body: { code: 1 } }
-      }
-      return undefined
-    })
-    const driver = createCardStreamDriver(bot)
-    const handle = await driver.open(prepared('a'), payload('a'), tickContext())
-    calls.length = 0
-
-    const patches = [contentPatch('a+'), contentPatch('b+', 'e2')]
-    await expect(driver.tick(handle, { draft: prepared('a+b+'), payload: payload('a+b+'), patches }, tickContext()))
-      .rejects.toBeInstanceOf(Error)
-    expect(calls.map(call => call.path.split('/elements/')[1])).toEqual(['e1/content', 'e2/content'])
-
-    // The retry of the same tick (the scheduler re-sends the same patches) resumes the queue.
-    await driver.tick(handle, { draft: prepared('a+b+'), payload: payload('a+b+'), patches }, tickContext())
-    expect(calls.map(call => call.path.split('/elements/')[1])).toEqual(['e1/content', 'e2/content', 'e2/content'])
-    // Every request took a fresh number, the failed one included.
-    expect(sequences(calls)).toEqual([1, 2, 3])
-  })
-
-  it('publishes the whole document when the diff changes the element set', async () => {
-    const { bot, calls } = await mount()
-    const driver = createCardStreamDriver(bot)
-    const handle = await driver.open(prepared('abc'), payload('abc'), tickContext())
-    calls.length = 0
-
-    const patches: CardPatch[] = [
-      { op: 'insert', components: [{ tag: 'hr', id: 'e7' }], after: 'e1' },
-      {
-        op: 'patch',
-        id: 'e8',
-        component: {
-          tag: 'button',
-          id: 'e8',
-          text: 'Retry',
-          type: 'default',
-          disabled: false,
-          behavior: { type: 'open_url', url: 'https://example.com/retry' },
-        },
-        fields: ['text'],
-      },
-      { op: 'delete', id: 'e9' },
-    ]
-    await driver.tick(handle, { draft: prepared('abc'), payload: payload('abc'), patches }, tickContext())
-
-    // Element ids are positional, so the insert and the delete it replaces address different ids: as separate requests
-    // the platform can accept the first and reject a later one, which leaves the card with the old control removed and
-    // its replacement missing. One document update cannot land partially.
-    expect(calls.map(call => `${call.method} ${call.path}`)).toEqual([
-      'PUT /open-apis/cardkit/v1/cards/card_1',
-    ])
-    expect(cardOfBody(bodyOf(calls[0])).config.streaming_mode).toBe(true)
-  })
-
-  it('sends a content-only diff as one element request', async () => {
-    const { bot, calls } = await mount()
-    const driver = createCardStreamDriver(bot)
-    const handle = await driver.open(prepared('abc'), payload('abc'), tickContext())
-    calls.length = 0
-
-    await driver.tick(handle, {
-      draft: prepared('abcd'),
-      payload: payload('abcd'),
-      patches: [contentPatch('abcd')],
-    }, tickContext())
-
-    expect(calls.map(call => `${call.method} ${call.path}`))
-      .toEqual(['PUT /open-apis/cardkit/v1/cards/card_1/elements/e1/content'])
-    expect(bodyOf(calls[0])).toMatchObject({ sequence: 1 })
-  })
-
-  it('publishes a full update once the 10-minute streaming window has closed', async () => {
-    let clock = 0
-    const { bot, calls } = await mount()
-    const driver = createCardStreamDriver(bot, { now: () => clock })
-    const handle = await driver.open(prepared('abc'), payload('abc'), tickContext())
-    calls.length = 0
-
-    clock = CARD_STREAM_WINDOW_MS
-    await driver.tick(handle, { draft: prepared('abcd'), payload: payload('abcd'), patches: [contentPatch('abcd')] }, tickContext())
-    // The platform forced streaming off: the content still lands, only as a whole-document update.
-    expect(calls.map(call => `${call.method} ${call.path}`)).toEqual(['PUT /open-apis/cardkit/v1/cards/card_1'])
-    expect(cardOfBody(bodyOf(calls[0])).config.streaming_mode).toBe(false)
-  })
-
-  it('sends the settings route the JSON string the platform accepts', async () => {
-    const { bot, calls } = await mount()
-    calls.length = 0
-
-    await bot.cards.settings('card_1', { streaming_mode: true }, 7)
-
-    expect(calls.map(call => `${call.method} ${call.path}`))
-      .toEqual(['PATCH /open-apis/cardkit/v1/cards/card_1/settings'])
-    const body = bodyOf(calls[0])
-    expect(body.sequence).toBe(7)
-    // The platform answers `400` to an object in this field and accepts the serialized form.
-    expect(typeof body.settings).toBe('string')
-    expect(JSON.parse(body.settings)).toEqual({ streaming_mode: true })
-  })
-})
-
-describe('driver — budget', () => {
-  it('reports the end of the streaming window and no update count', async () => {
-    const { bot } = await mount()
-    const driver = createCardStreamDriver(bot, { now: () => 1_000 })
-    const handle = await driver.open(prepared('a'), payload('a'), tickContext())
-    // CardKit has no per-message edit count; the only limit is the 10-minute window, kept away from its very end.
-    expect(driver.budget(handle)).toEqual({ until: 1_000 + CARD_STREAM_WINDOW_MS - CARD_STREAM_WINDOW_MARGIN_MS })
   })
 })
 
@@ -472,7 +178,7 @@ describe('through the scheduler', () => {
     expect(result.handle.parts[0]).toMatchObject({ id: 'om_1', kind: 'card-inline' })
   })
 
-  it('streams a post through the edit driver when the card mode cannot stream', async () => {
+  it('streams a post through the same driver when the card cannot stream', async () => {
     // `cardStreaming: false` leaves the card mode without a driver, so a stream opens in `post` (a stream uses
     // the mode that can stream).
     const { bot, calls } = await mount(undefined, { cardStreaming: false })
@@ -493,8 +199,6 @@ describe('through the scheduler', () => {
     // `limit.update.count` is 20 including the final one.
     expect(calls.length).toBeLessThanOrEqual(20)
     expect(stream.state).toBe('closed')
-    // The post path never touches CardKit.
-    expect(calls.some(call => call.path.includes('/cardkit/'))).toBe(false)
   })
 
   it('degrades a post stream to one fresh send when the platform refuses the edit (230075)', async () => {

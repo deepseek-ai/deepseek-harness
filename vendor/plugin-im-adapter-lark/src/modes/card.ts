@@ -32,14 +32,8 @@
  * reports `RenderReport.folded`. No text is dropped by folding; buttons inside a folded panel stay buttons.
  * `check()` reports what folding cannot fix: more than 200 elements or more than 30 KB of card JSON (`size`).
  *
- * Streaming. `diff(prev, next)` compares two drafts of the same message by element id (the CardKit driver applies
- * it): a markdown component whose content changed → `content` op (`append: true` when the new text extends the old
- * one: the platform types it out); another changed component → `patch` op with the changed serialized fields (a
- * panel whose children changed is diffed recursively, falling back to patching the whole panel); new components →
- * `insert` ops anchored `after`/`before` an existing sibling; removed ones → `delete`; a header change, a reorder of
- * surviving ids, a tag change under one id, media drafts or more than `maxPatchOps` ops → `'replace'` (full card
- * update). Ops carry draft components (resource refs unresolved); {@link cardKitOps} turns them into wire requests
- * against the tick's `Prepared` draft, and {@link streamingCard} adds the CardKit streaming config to a card.
+ * Publishing. Every published state is the whole card JSON: the mode declares no `diff`, so an in-place update
+ * replaces the message content (`PATCH /im/v1/messages/{id}`) rather than patching one element.
  */
 
 import { type Align, type Element, isPhrasingContainer, type Theme } from '@deepseek-ai/satori-element'
@@ -141,30 +135,6 @@ export function cardRequestBody(payload: CardPayload): { msg_type: CardPayload['
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Streaming patches
-
-/**
- * One incremental update of a streamed card (`Mode.diff` output, consumed by the CardKit driver through
- * {@link cardKitOps}). Ids are card element ids; components are draft components of the *next* draft.
- */
-export type CardPatch =
-  /** `PUT …/elements/:id/content`; `append` = the new text extends the old one (typewriter). */
-  | { op: 'content'; id: string; component: CardMarkdownComponent; append: boolean }
-  /** `PATCH …/elements/:id` with the listed fields of the serialized component. */
-  | { op: 'patch'; id: string; component: CardComponent; fields: string[] }
-  /** `POST …/elements`: insert after / before a sibling; neither ⇒ append to the card body. */
-  | { op: 'insert'; components: CardComponent[]; after?: string; before?: string }
-  /** `DELETE …/elements/:id`. */
-  | { op: 'delete'; id: string }
-
-/** Wire form of a {@link CardPatch}: resources resolved, components serialized. */
-export type CardKitOp =
-  | { type: 'content'; elementId: string; content: string; append: boolean }
-  | { type: 'patch'; elementId: string; partial: Record<string, unknown> }
-  | { type: 'insert'; elements: Record<string, unknown>[]; after?: string; before?: string }
-  | { type: 'delete'; elementId: string }
-
-// ---------------------------------------------------------------------------------------------------------------
 // Nodes (handler output)
 
 interface Md {
@@ -192,7 +162,8 @@ export interface CardTypes extends ModeTypes {
   node: CardNode
   draft: CardDraft
   payload: CardPayload
-  patch: CardPatch
+  /** No incremental diff: every published state is the whole card JSON. */
+  patch: never
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -210,8 +181,6 @@ export interface CardModeConfig {
   elementLimit?: number
   /** `limit.payload.bytes` (default 30 000). */
   payloadBytes?: number
-  /** A diff with more ops than this becomes `'replace'` (default 8; one full update beats many 10-QPS calls). */
-  maxPatchOps?: number
 }
 
 /** Components and elements one card JSON 2.0 may carry (platform error 300305 above). */
@@ -222,12 +191,6 @@ export const CARD_PAYLOAD_BYTES = 30_000
 export const CARD_TABLES_PER_MARKDOWN = 4
 /** Editing one card message: 5 QPS per message, so no two edits may be closer than 200 ms. */
 export const CARD_STREAM_INTERVAL = 200
-/** CardKit streaming config. */
-export const CARD_STREAMING_CONFIG = {
-  print_frequency_ms: { default: 50 },
-  print_step: { default: 2 },
-  print_strategy: 'fast',
-} as const
 
 const DEFAULT_PANEL_TITLE = '详情'
 const DEFAULT_IMAGE_ALT = '图片'
@@ -749,21 +712,6 @@ export function cardJson(draft: CardMessageDraft, key: KeyOf): CardJson {
   }
 }
 
-/**
- * A copy of `card` with CardKit streaming switched on (`open`: `streaming_mode: true` + `streaming_config`) or
- * off (`close`: `streaming_mode: false`, required before callbacks work).
- */
-export function streamingCard(card: CardJson, streaming: boolean): CardJson {
-  return {
-    ...card,
-    config: {
-      ...card.config,
-      streaming_mode: streaming,
-      ...streaming ? { streaming_config: CARD_STREAMING_CONFIG } : {},
-    },
-  }
-}
-
 function resolver(resolved: ReadonlyMap<ResourceRef, ResolvedResource>): KeyOf {
   return ref => resolved.get(ref)?.key ?? ''
 }
@@ -771,135 +719,6 @@ function resolver(resolved: ReadonlyMap<ResourceRef, ResolvedResource>): KeyOf {
 function serializeDraft(draft: CardDraft, key: KeyOf): CardPayload {
   if (draft.kind === 'media') return { msg_type: draft.msgType, content: { file_key: key(draft.ref) } }
   return { msg_type: 'interactive', content: cardJson(draft, key) }
-}
-
-/**
- * Turn diff ops into CardKit requests for one tick: resources resolved against the tick's prepared draft (the
- * `change.draft` the scheduler passes to the driver), components serialized, patch fields picked.
- */
-export function cardKitOps(patches: readonly CardPatch[], prepared: Prepared<CardDraft> | ReadonlyMap<ResourceRef, ResolvedResource>): CardKitOp[] {
-  const key = resolver(prepared instanceof Map ? prepared : (prepared as Prepared<CardDraft>).resolved)
-  return patches.map((patch): CardKitOp => {
-    switch (patch.op) {
-      case 'content':
-        return { type: 'content', elementId: patch.id, content: markdownContent(patch.component.content, patch.component.refs, key), append: patch.append }
-      case 'patch': {
-        const full = serializeComponent(patch.component, key)
-        const partial: Record<string, unknown> = {}
-        for (const field of patch.fields) if (field in full) partial[field] = full[field]
-        return { type: 'patch', elementId: patch.id, partial }
-      }
-      case 'insert':
-        return {
-          type: 'insert',
-          elements: patch.components.map(component => serializeComponent(component, key)),
-          ...patch.after ? { after: patch.after } : {},
-          ...patch.before ? { before: patch.before } : {},
-        }
-      case 'delete':
-        return { type: 'delete', elementId: patch.id }
-    }
-  })
-}
-
-// ---------------------------------------------------------------------------------------------------------------
-// Diff
-
-const fingerprintKey: KeyOf = ref => `ref:${ref.kind}:${ref.src}`
-
-function fingerprint(value: unknown): string {
-  return JSON.stringify(value, (_key, item) => item instanceof ResourceRef ? `ref:${item.kind}:${item.src}` : item) ?? ''
-}
-
-function changedFields(prev: CardComponent, next: CardComponent): string[] {
-  const left = serializeComponent(prev, fingerprintKey)
-  const right = serializeComponent(next, fingerprintKey)
-  const keys = new Set([...Object.keys(left), ...Object.keys(right)])
-  keys.delete('element_id')
-  return [...keys].filter(key => fingerprint(left[key]) !== fingerprint(right[key]))
-}
-
-function diffComponent(prev: CardComponent, next: CardComponent): CardPatch[] | 'replace' {
-  if (prev.tag !== next.tag) return 'replace'
-  if (fingerprint(prev) === fingerprint(next)) return []
-  switch (next.tag) {
-    case 'markdown': {
-      const before = prev as CardMarkdownComponent
-      if ((before.size ?? '') !== (next.size ?? '')) return 'replace'
-      return [{ op: 'content', id: next.id, component: next, append: next.content.startsWith(before.content) }]
-    }
-    case 'collapsible_panel': {
-      const before = prev as CardPanelComponent
-      const inner = diffList(before.elements, next.elements, next.id)
-      if (inner === 'replace') return [{ op: 'patch', id: next.id, component: next, fields: ['header', 'expanded', 'elements'] }]
-      const header = before.title !== next.title || before.expanded !== next.expanded
-        || fingerprint(before.titleRefs) !== fingerprint(next.titleRefs)
-      return [...header ? [{ op: 'patch', id: next.id, component: next, fields: ['header', 'expanded'] } as CardPatch] : [], ...inner]
-    }
-    default: {
-      const fields = changedFields(prev, next)
-      return fields.length ? [{ op: 'patch', id: next.id, component: next, fields }] : []
-    }
-  }
-}
-
-/**
- * Diff two sibling lists by element id. Surviving ids must keep their relative order (else `'replace'`); removed
- * ids are deleted, new runs inserted after the previous sibling (or before the next survivor); inside a container
- * (`parent`) a run without any anchor makes the caller patch the container instead (`'replace'`).
- */
-function diffList(prev: readonly CardComponent[], next: readonly CardComponent[], parent?: string): CardPatch[] | 'replace' {
-  const before = new Map(prev.map(component => [component.id, component]))
-  const after = new Set(next.map(component => component.id))
-  if (before.size !== prev.length || after.size !== next.length) return 'replace'
-  const kept = prev.filter(component => after.has(component.id)).map(component => component.id)
-  const survivors = next.filter(component => before.has(component.id)).map(component => component.id)
-  if (kept.join('\n') !== survivors.join('\n')) return 'replace'
-
-  const ops: CardPatch[] = []
-  for (const component of prev) if (!after.has(component.id)) ops.push({ op: 'delete', id: component.id })
-
-  let anchor: string | undefined
-  let run: CardComponent[] = []
-  const flush = (next?: string): boolean => {
-    if (!run.length) return true
-    if (anchor) ops.push({ op: 'insert', components: run, after: anchor })
-    else if (next) ops.push({ op: 'insert', components: run, before: next })
-    else if (parent === undefined) ops.push({ op: 'insert', components: run })
-    else return false
-    anchor = run[run.length - 1]!.id
-    run = []
-    return true
-  }
-  for (const component of next) {
-    if (!before.has(component.id)) {
-      run.push(component)
-      continue
-    }
-    if (!flush(component.id)) return 'replace'
-    anchor = component.id
-  }
-  if (!flush()) return 'replace'
-
-  for (const component of next) {
-    const old = before.get(component.id)
-    if (!old) continue
-    const changes = diffComponent(old, component)
-    if (changes === 'replace') return 'replace'
-    ops.push(...changes)
-  }
-  return ops
-}
-
-/** `Mode.diff` of the card mode (see the module comment); exported for the CardKit driver's tests. */
-export function diffCards(prev: CardDraft, next: CardDraft, maxOps = 8): CardPatch[] | 'replace' {
-  if (prev.kind !== 'card' || next.kind !== 'card') {
-    return prev.kind === next.kind && fingerprint(prev) === fingerprint(next) ? [] : 'replace'
-  }
-  if (fingerprint(prev.header ?? null) !== fingerprint(next.header ?? null)) return 'replace'
-  const ops = diffList(prev.elements, next.elements)
-  if (ops === 'replace' || ops.length > maxOps) return 'replace'
-  return ops
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -913,7 +732,6 @@ export function createCardMode(config: CardModeConfig = {}): Mode<CardTypes> {
   const callbacks = config.callbacks !== false
   const elementLimit = config.elementLimit ?? CARD_ELEMENT_LIMIT
   const payloadLimit = config.payloadBytes ?? CARD_PAYLOAD_BYTES
-  const maxOps = config.maxPatchOps ?? 8
 
   const elements = new ElementRegistry<CardTypes>()
     .register('text', (el, ctx) => inline(textMarkdown(el.attrs.content, !ctx.ancestors.some(item => item.type === 'a'))))
@@ -1033,7 +851,6 @@ export function createCardMode(config: CardModeConfig = {}): Mode<CardTypes> {
     degradation: { forbidden: ['hr'] },
     assemble: (nodes, envelope, ctx) => assemble(nodes, envelope, ctx, elementLimit, payloadLimit),
     serialize: (msg: Prepared<CardDraft>, _ctx: SerializeContext) => serializeDraft(msg.draft, resolver(msg.resolved)),
-    diff: (prev, next) => diffCards(prev, next, maxOps),
     check: (draft) => {
       if (draft.kind !== 'card') return []
       const card = cardJson(draft, () => PLACEHOLDER_KEY)

@@ -24,22 +24,20 @@
  * ## `editPayload`: the kind is decided by the new payload
  *
  * The platform picks the edit route from the message type being written, not from the message being replaced: text
- * and post go through `PUT /im/v1/messages/{message_id}` (≤ 20 edits, admin window), an inline card through
- * `PATCH /im/v1/messages/{message_id}` (14 days, `update_multi: true`), and a CardKit entity through its own
- * `PUT /cardkit/v1/cards/{card_id}` with a strictly increasing `sequence` — the entity id and its counter live in
- * `MessageHandle.state` (`{ kind: 'card-entity', cardId, sequence }`), which the stream driver owns and fills. An
- * image, file, audio or video message has no edit route at all and is reported `invalid`.
+ * and post go through `PUT /im/v1/messages/{message_id}` (≤ 20 edits, admin window) and a card through
+ * `PATCH /im/v1/messages/{message_id}` (14 days, `update_multi: true`). An image, file, audio or video message has no
+ * edit route at all and is reported `invalid`.
  *
- * `SentPart.kind` records the kind of the part as it was published (`post`, `text`, `card-inline`, `card-entity`,
- * `image`, `file`, `audio`, `media`; {@link partKindOf}).
+ * `SentPart.kind` records the kind of the part as it was published (`post`, `text`, `card-inline`, `image`, `file`,
+ * `audio`, `media`; {@link partKindOf}).
  *
  * @module @deepseek-ai/cordis-plugin-im-adapter-lark/send
  */
 
 import {
-  nextSequence, PlatformError, type MessageHandle, type SendContext, type SentPart, type Target,
+  PlatformError, type MessageHandle, type SendContext, type SentPart, type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
-import { isDict, nonEmpty } from './api/events.ts'
+import { isDict } from './api/events.ts'
 import type { LarkReceiveIdType } from './api/client.ts'
 import type { LarkBot } from './bot.ts'
 import { idempotencyUuid } from './modes/shared.ts'
@@ -54,7 +52,7 @@ export interface LarkPayload {
 
 /** Kinds a part may be published as. */
 export type LarkPartKind =
-  | 'post' | 'text' | 'card-inline' | 'card-entity' | 'image' | 'file' | 'audio' | 'media' | 'message'
+  | 'post' | 'text' | 'card-inline' | 'image' | 'file' | 'audio' | 'media' | 'message'
 
 /** Whether a message is answered with the reply route, and whether that reply must join a thread. */
 export interface LarkReplyPlan {
@@ -107,18 +105,13 @@ export function partKindOf(payload: LarkPayload): LarkPartKind {
   switch (payload.msg_type) {
     case 'post': return 'post'
     case 'text': return 'text'
-    case 'interactive': return isCardEntity(payload.content) ? 'card-entity' : 'card-inline'
+    case 'interactive': return 'card-inline'
     case 'image': return 'image'
     case 'file': return 'file'
     case 'audio': return 'audio'
     case 'media': return 'media'
     default: return 'message'
   }
-}
-
-/** Whether a card payload is the reference to a CardKit entity (`{ type: 'card', data: { card_id } }`). */
-function isCardEntity(content: Record<string, unknown>): boolean {
-  return content.type === 'card' && isDict(content.data) && nonEmpty(content.data.card_id) !== undefined
 }
 
 /**
@@ -202,20 +195,19 @@ export async function sendMessagePayload(
 }
 
 /**
- * Edit one part in place: `PUT` for a post or text message, `PATCH` for an inline card, the CardKit full update for an
- * entity.
+ * Edit one part in place: `PUT` for a post or text message, `PATCH` for a card.
  *
- * @param bot - the adapter (its REST client and CardKit routes).
+ * @param bot - the adapter (its REST client).
  * @param part - the published part to edit (its id is the message id).
  * @param payload - the new payload of the part; its `msg_type` selects the route.
- * @param handle - the message the part belongs to; `handle.state` holds a CardKit entity's id and sequence.
+ * @param _handle - the message the part belongs to; no route needs it.
  * @throws PlatformError `invalid` for a message kind the platform cannot edit (image, file, audio, video).
  */
 export async function editMessagePayload(
   bot: LarkBot,
   part: SentPart,
   payload: unknown,
-  handle: MessageHandle,
+  _handle: MessageHandle,
 ): Promise<void> {
   const request = asPayload(payload)
   switch (request.msg_type) {
@@ -223,19 +215,10 @@ export async function editMessagePayload(
     case 'text':
       await bot.api.updateMessage(part.id, requestBody(request))
       return
-    case 'interactive': {
-      const cardId = isDict(handle.state) ? nonEmpty(handle.state.cardId) : undefined
-      if (cardId === undefined) {
-        // An inline card: the card JSON travels as the `content` string.
-        await bot.api.patchMessage(part.id, { content: JSON.stringify(request.content) })
-        return
-      }
-      // A CardKit entity is replaced as a whole; the platform needs a strictly increasing sequence per entity.
-      const state = handle.state as { sequence?: number }
-      if (typeof state.sequence !== 'number') state.sequence = 0
-      await bot.cards.update(cardId, request.content, nextSequence(state as { sequence: number }))
+    case 'interactive':
+      // The whole card JSON travels as the `content` string; the message keeps its identity and its place in the chat.
+      await bot.api.patchMessage(part.id, { content: JSON.stringify(request.content) })
       return
-    }
     default:
       throw new PlatformError(
         'invalid',

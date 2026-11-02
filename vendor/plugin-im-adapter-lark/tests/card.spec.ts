@@ -5,20 +5,17 @@
  * - `createCardMode()` passes `runConformance` on a `FakeAdapter`.
  * - Corpus payloads are compared against `tests/goldens/card/*.json` (rewrite with `IM_GOLDENS=update`).
  * - Folding: 300 panels stay ≤ 200 elements and report `folded`, without losing text.
- * - Diff: prefix extension → `content` op; changed panel → `patch`; reorder → `replace`; ids stable across
- *   re-transforms when keys are set.
  * Plus the card-markdown escaper and the button/mention vetoes.
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { type Fragment, h, normalize } from '@deepseek-ai/satori-element'
-import { type Prepared, ResourceRef, transform } from '@deepseek-ai/cordis-plugin-im-core'
+import { afterEach, describe, expect, it } from 'vitest'
+import { type Fragment, h } from '@deepseek-ai/satori-element'
 import {
   expectGolden, mountFakeAdapter, payloadText, renderContent, renderCorpus, runConformance,
 } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
 import {
-  CARD_ELEMENT_LIMIT, cardKitOps, cardRequestBody, countCardElements, createCardMode, type CardDraft, type CardJson,
-  type CardMessageDraft, type CardModeConfig, type CardPatch, type CardPayload, streamingCard,
+  CARD_ELEMENT_LIMIT, cardRequestBody, countCardElements, createCardMode, type CardDraft, type CardJson,
+  type CardModeConfig, type CardPayload,
 } from '../src/modes/card.ts'
 import {
   cardCodeSpan, cardElementId, cardFence, escapeCardText, normalizeCardMarkdown, prefixLines, textMarkdown,
@@ -46,16 +43,6 @@ async function render(content: Fragment, config: CardModeConfig = {}) {
   const { bot, mode } = await mount(config)
   const target = { chat: { id: 'lark:test', type: 'group' as const } }
   return renderContent(bot, content, { target, mode })
-}
-
-/** The drafts of one content tree (for diff tests). */
-async function drafter(config: CardModeConfig = {}) {
-  const { bot, mode } = await mount(config)
-  const target = { chat: { id: 'lark:test', type: 'group' as const } }
-  return {
-    mode,
-    draft: (content: Fragment) => transform(normalize(content), { bot, target, mode }).msgs[0] as CardMessageDraft,
-  }
 }
 
 function card(payload: unknown): CardJson {
@@ -283,13 +270,10 @@ describe('card structure', () => {
     expect(createCardMode({ cardStreaming: false }).limits['limit.stream.interval']).toBeUndefined()
   })
 
-  it('cardRequestBody encodes content; streamingCard toggles CardKit streaming', async () => {
+  it('cardRequestBody encodes content', async () => {
     const { payloads } = await render(h('p', 'x'))
     const payload = payloads[0] as CardPayload
     expect(JSON.parse(cardRequestBody(payload).content)).toEqual(payload.content)
-    const on = streamingCard(card(payload), true)
-    expect(on.config).toMatchObject({ update_multi: true, streaming_mode: true, streaming_config: { print_strategy: 'fast' } })
-    expect(streamingCard(on, false).config.streaming_mode).toBe(false)
   })
 })
 
@@ -328,108 +312,5 @@ describe('element budget', () => {
     expect(createCardMode().check!(drafts[0] as CardDraft)).toEqual([
       expect.objectContaining({ kind: 'size', key: 'limit.payload.bytes', limit: 30_000 }),
     ])
-  })
-})
-
-// ---------------------------------------------------------------------------------------------------------------
-// Diff
-
-describe('diff', () => {
-  it('prefix extension of a text block → one content op with append', async () => {
-    const { mode, draft } = await drafter()
-    const prev = draft(h('p', 'Reading the workspace'))
-    const next = draft(h('p', 'Reading the workspace and the tests'))
-    const ops = mode.diff!(prev, next) as CardPatch[]
-    expect(ops).toEqual([expect.objectContaining({ op: 'content', id: prev.elements[0]!.id, append: true })])
-    expect(mode.diff!(next, next)).toEqual([])
-    const rewrite = mode.diff!(next, draft(h('p', 'Build is green'))) as CardPatch[]
-    expect(rewrite).toEqual([expect.objectContaining({ op: 'content', append: false })])
-  })
-
-  it('a new block after a component → insert anchored after it; a removed one → delete', async () => {
-    const { mode, draft } = await drafter()
-    const prev = draft([h('p', 'a'), h('hr')])
-    const next = draft([h('p', 'a'), h('hr'), h('p', 'b')])
-    const ops = mode.diff!(prev, next) as CardPatch[]
-    expect(ops).toEqual([{ op: 'insert', components: [next.elements[2]], after: prev.elements[1]!.id }])
-    expect(mode.diff!(next, prev)).toEqual([{ op: 'delete', id: next.elements[2]!.id }])
-  })
-
-  it('changed panel header → patch; changed panel child → content op on the child', async () => {
-    const { mode, draft } = await drafter()
-    const panel = (summary: string, body: string) => draft(h('details', h('summary', summary), h('p', body)))
-    const ops = mode.diff!(panel('working', 'x'), panel('done', 'x')) as CardPatch[]
-    expect(ops).toEqual([expect.objectContaining({ op: 'patch', fields: ['header', 'expanded'] })])
-    const child = mode.diff!(panel('working', 'x'), panel('working', 'xy')) as CardPatch[]
-    expect(child).toEqual([expect.objectContaining({ op: 'content', append: true })])
-  })
-
-  it('reordered keyed blocks → replace; header change → replace; media → replace', async () => {
-    const { mode, draft } = await drafter()
-    const a = h('details', { key: 'a' }, h('summary', 'A'), h('p', '1'))
-    const b = h('details', { key: 'b' }, h('summary', 'B'), h('p', '2'))
-    const prev = draft([a, b])
-    const next = draft([
-      h('details', { key: 'b' }, h('summary', 'B'), h('p', '2')),
-      h('details', { key: 'a' }, h('summary', 'A'), h('p', '1')),
-    ])
-    expect(mode.diff!(prev, next)).toBe('replace')
-    expect(mode.diff!(draft([h('title', 'x'), h('p', 'y')]), draft([h('title', 'z'), h('p', 'y')]))).toBe('replace')
-    const media: CardDraft = { kind: 'media', msgType: 'file', ref: new ResourceRef('file', 'f') }
-    expect(mode.diff!(media, prev)).toBe('replace')
-  })
-
-  it('ids are stable across re-transforms when keys are set, even with content inserted above', async () => {
-    const { mode, draft } = await drafter()
-    const tail = () => h('details', { key: 'tail' }, h('summary', 'Tail'), h('p', 'end'))
-    const prev = draft([h('p', 'x'), h('hr'), tail()])
-    const next = draft([h('p', 'x'), h('hr'), h('p', 'new'), h('hr'), tail()])
-    expect(next.elements[4]!.id).toBe(prev.elements[2]!.id)
-    expect(draft([h('p', 'x'), h('hr'), tail()]).elements.map(item => item.id)).toEqual(prev.elements.map(item => item.id))
-    const ops = mode.diff!(prev, next) as CardPatch[]
-    expect(ops.map(op => op.op)).toEqual(['insert'])
-  })
-
-  it('too many ops → replace', async () => {
-    const { mode, draft } = await drafter({ maxPatchOps: 2 })
-    const sep = (text: string) => Array.from({ length: 3 }, (_, i) => [h('p', `p${i}${text}`), h('hr')]).flat()
-    expect(mode.diff!(draft(sep('')), draft(sep('!')))).toBe('replace')
-  })
-
-  it('cardKitOps resolves image placeholders and picks patch fields', async () => {
-    const { mode, draft } = await drafter()
-    const prev = draft(h('p', 'a'))
-    const next = draft([h('p', 'a ', h('img', { src: 'https://example.com/i.png', alt: 'i' })), h('button', { type: 'link', href: 'https://x.y' }, 'Go')])
-    const ops = mode.diff!(prev, next) as CardPatch[]
-    const ref = (next.elements[0] as any).refs[0] as ResourceRef
-    const prepared: Prepared<CardDraft> = { draft: next, resolved: new Map([[ref, { key: 'img_v2_1' }]]) }
-    expect(cardKitOps(ops, prepared)).toEqual([
-      expect.objectContaining({ type: 'insert', after: prev.elements[0]!.id }),
-      { type: 'content', elementId: prev.elements[0]!.id, content: 'a ![i](img_v2_1)', append: true },
-    ])
-    const relabel = mode.diff!(next, draft([h('p', 'a ', h('img', { src: 'https://example.com/i.png', alt: 'i' })), h('button', { type: 'link', href: 'https://x.y' }, 'Gone')])) as CardPatch[]
-    expect(cardKitOps(relabel, prepared)).toEqual([
-      { type: 'patch', elementId: next.elements[1]!.id, partial: { text: { tag: 'plain_text', content: 'Gone' } } },
-    ])
-  })
-})
-
-// ---------------------------------------------------------------------------------------------------------------
-// Through the core stream scheduler
-
-describe('streaming through the core scheduler', () => {
-  it('a patch driver receives the diff ops of each tick', async () => {
-    const result = await mountFakeAdapter({ modes: { card: createCardMode() }, stream: { card: 'patch' } })
-    mounted.push({ dispose: () => result.ctx.fiber.dispose() })
-    const { bot } = result
-    const stream = bot.stream({ chat: { id: 'lark:test', type: 'group' } }, { firstDelayMs: 0, intervalMs: 0 })
-    expect(stream.strategy).toBe('patch')
-    stream.update(h('p', 'Reading the workspace'))
-    await vi.waitFor(() => expect(bot.calls('stream.open')).toHaveLength(1))
-    stream.update(h('p', 'Reading the workspace and the tests'))
-    await vi.waitFor(() => expect(bot.calls('stream.tick')).toHaveLength(1), { timeout: 3000 })
-    expect(bot.calls('stream.tick')[0]!.patches).toEqual([expect.objectContaining({ op: 'content', append: true })])
-    await stream.close(h('p', 'Reading the workspace and the tests. Done.'))
-    expect(bot.calls('stream.close')).toHaveLength(1)
   })
 })
