@@ -308,7 +308,7 @@ describe('shared Schedule management', () => {
     expect(resolve).not.toHaveBeenCalled()
     expect(stat).not.toHaveBeenCalled()
     expect(flush).not.toHaveBeenCalled()
-    expect(ctx.agents.roots()).toEqual([])
+    expect(ctx.agents.list()).toEqual([])
     expect(ctx.sessions.get(firstSession)).toBeUndefined()
     expect(ctx.sessions.get(secondSession)).toBeUndefined()
   })
@@ -568,13 +568,13 @@ describe('Schedule activation and shutdown', () => {
   it('registers no tools for existing roots or their owned children', async () => {
     const test = await harness({ beforeService: async (ctx) => {
       const parent = agentFor(ctx, 'existing-root')
-      ctx.effect(() => ctx.agents.enter(parent, undefined))
+      ctx.effect(() => ctx.agents.enter(parent))
     } })
     tests.push(test)
     const parent = test.ctx.agents.get(SessionId('existing-root'))!
     const child = agentFor(test.ctx, 'owned-child')
-    test.ctx.effect(() => test.ctx.agents.enter(child, parent))
-    expect(test.ctx.agents.roots()).toEqual([parent])
+    test.ctx.effect(() => test.ctx.agents.enter(child))
+    expect(test.ctx.agents.list()).toEqual([parent, child])
     for (const name of ['schedule_create', 'schedule_list', 'schedule_view', 'schedule_edit']) {
       expect(test.ctx.tools.get(name, parent)).toBeUndefined()
       expect(test.ctx.tools.get(name, child)).toBeUndefined()

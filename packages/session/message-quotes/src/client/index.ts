@@ -40,7 +40,7 @@ export function apply(ctx: Context): void {
       if (binding === undefined) return
       const session = binding.session.getSnapshot()
       if (session.removed || (session.subagent !== null
-        && (session.subagent.address.mode !== 'continuable' || session.subagent.parentAvailable !== true))) return
+        && session.subagent.address.mode !== 'continuable')) return
       request.open()
     },
   }), 'message-quotes: selection interaction')

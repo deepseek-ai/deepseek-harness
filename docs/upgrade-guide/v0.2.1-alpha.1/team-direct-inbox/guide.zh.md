@@ -18,4 +18,4 @@ description: "Agent Teams 移除待投递消息数量限制，并停止投递历
 1. 升级前，让待投递的 Team 消息完成投递，并确认目标已收到。升级后，显式重发仍需处理的未投递消息；先检查目标历史，避免重复。不要编辑历史 Session 记录。
 2. 从 `cordis.yml` 或覆盖配置中 `@deepseek-ai/dsh-experimental-agent-team` 插件的配置移除 `maxPendingMessagesPerMember`。没有替代的 Team 队列限制；`maxMessageBytes` 仍限制包含发送者标识的完整消息大小。
 3. 更新所有读取 `send_message` 结果的调用方，改为读取 `sent` 而非消息 ID 或投递状态，并显式处理发送错误。不要把发送成功视为目标工作已完成。`ctx.agentTeams.sendMessage()` 服务仍返回 `messageId`。
-4. 启动启用 Team 的 profile，向其他成员发送消息，确认工具返回 `{ "sent": true }` 且目标收到消息。投递语义参见[包参考](../../../../packages/experimental/agent-team/README.zh.md#use-this-package)。
+4. 启动启用 Team 的 profile，向其他成员发送消息，确认工具返回 `{ "sent": true }` 且目标收到消息。投递语义参见[包参考](../../../../packages/team/agent-team/README.zh.md#use-this-package)。

@@ -111,7 +111,6 @@
   border-radius: 0 var(--dsw-radius-lg) var(--dsw-radius-lg) 0;
   border-left: 0.5px solid color-mix(in srgb, var(--dsw-alias-label-primary-foreground) 30%, transparent);
 }
-.manualDialog { width: 520px; max-width: calc(100vw - 48px); }
 .createMenu [role='menuitem'] { gap: 10px; padding: 6px 12px; }
 .targetMenu { width: 320px; max-width: calc(100vw - 48px); }
 .targetMenu [role='menuitem'] { height: 72px; box-sizing: border-box; gap: 10px; padding: 6px 12px; }
@@ -135,9 +134,9 @@
 .taskEditor { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 20px; }
 .editorField { display: grid; gap: 8px; font-size: 14px; min-width: 0; }
 .editorField > h3 { margin: 0; font: inherit; }
-.hostRuleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 12px 0; font-size: 13px; }
-.hostRuleRow > :last-child { text-align: right; overflow-wrap: anywhere; }
-.hostSessionFooter { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 24px; font-size: 13px; }
+.editorField input::placeholder,
+.instruction::placeholder { color: var(--dsw-alias-label-secondary); }
+.hostSessionFooter { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px var(--detail-gutter); font-size: 13px; }
 .hostSessionFooter button { min-width: 0; max-width: 75%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; }
 .hostSessionEmpty { color: var(--dsw-alias-label-tertiary); }
 
@@ -430,6 +429,20 @@
   margin: 0;
 }
 
+.conflictNotice {
+  align-items: center;
+}
+
+/* Wrap the review action below its message in narrow detail panes. */
+.conflictNotice p {
+  flex-basis: 20em;
+  min-width: 0;
+}
+
+.conflictNotice > button {
+  margin-left: auto;
+}
+
 /* The centered state every panel without content shares: empty, deleted,
    loading, and failure alike, on tertiary 14px/400 text with a caption-ink
    glyph and no bold step. The list page renders its heading as an h2, the
@@ -621,6 +634,8 @@
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
+.createTitle { margin: 0; font: inherit; font-weight: 500; }
+
 .detailTabs {
   display: flex;
   flex: 1 1 auto;
@@ -702,6 +717,7 @@
   min-height: 0;
   overflow: auto;
   padding: 24px var(--detail-gutter) 28px;
+  padding-right: max(0px, calc(var(--detail-gutter) - var(--detail-scrollbar-space, 0px)));
   scrollbar-gutter: stable;
   --dsh-scrollbar-width: 9px;
   --dsh-scrollbar-thumb-border: 2px;
@@ -782,14 +798,10 @@
   margin-top: 6px;
 }
 
-/* The read-only rule rows sit 28px below the task instruction. */
-.ruleCard {
-  margin-top: 28px;
-}
-
 .ruleRows {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   padding: 0 12px;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 16px;
@@ -1132,16 +1144,6 @@
   border-color: var(--dsw-alias-state-business-primary);
 }
 
-/* The stored instruction reads as plain text: no box and no edit affordance,
-   on the instruction field's own 14px/24px step. */
-.readonlyPrompt {
-  margin: 0;
-  font-size: 14px;
-  line-height: 24px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 /* Delivery records follow the design mock: the clock glyph owns its own column
    and every record line starts at the text column's left edge. The mock's
    `.history-row` inherits its 14px body text and 22px leading from the page
@@ -1286,10 +1288,10 @@
   flex-shrink: 0;
 }
 
-/* The edit bar closes the detail under its scrolling view while a task is in
-   edit mode. */
+/* Save and discard remain below the shared editor's scrolling view. */
 .saveFooter {
   display: flex;
+  flex-wrap: wrap;
   flex-shrink: 0;
   align-items: center;
   justify-content: flex-end;
@@ -1304,21 +1306,21 @@
   font-size: 13px;
 }
 
-.saveFooter > :last-child {
-  margin-right: -8px;
-}
-
 .saveNotice {
-  margin-right: auto;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The localized reason an edit, a run, or a manual create did not take effect. */
 .saveFailure {
   flex-shrink: 0;
   margin: 0;
-  padding: 12px var(--detail-gutter) 0;
+  padding: 12px 0 0;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-state-error-primary);
   font-size: 12px;
@@ -1329,7 +1331,7 @@
 .detailNotice {
   flex-shrink: 0;
   margin: 0;
-  padding: 0 var(--detail-gutter) 6px;
+  padding: 0 0 6px;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   overflow-wrap: anywhere;

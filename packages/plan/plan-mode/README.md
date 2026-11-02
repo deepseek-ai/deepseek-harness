@@ -186,7 +186,7 @@ These limits describe when plan mode does not behave as you might expect or need
 - **Guidance, not enforcement** — plan mode restrains through text only; deployments that need enforced restrictions configure sandbox mode and approval policy independently.
 - **Pending selections are process-local** — a selection made after the turn's final accepted pre-step is lost if the process exits before another accepted in-turn pre-step; the UI must reapply it.
 - **No creation-time plan option** — forked agents inherit logged plan state, while newly spawned agents begin inactive.
-- **Live children cannot open the review** — a child owned by another live agent fails the `exit_plan_mode` call and is told to include the unresolved decision in its final result; durable fork lineage alone does not prevent a session resumed as a runtime root from opening the review.
+- **Subagents cannot open the review** — a Session with subagent origin fails the `exit_plan_mode` call and is told to include the unresolved decision in its final result; historical ordinary forks can open the review despite retained parent metadata.
 - **One specialized review renderer** — only the Web UI has a `plan-review` presentation; another interaction provider presents the same request through its generic option flow.
 
 <a id="dev-note"></a>

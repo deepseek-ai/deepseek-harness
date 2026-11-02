@@ -12,7 +12,7 @@ import SubagentRuntime, {
   SubagentError,
   type SubagentPromptRequestId,
 } from '@deepseek-ai/dsh-subagent'
-import { deliverSubagentPrompt, type HostPromptDeliverer } from '@deepseek-ai/dsh-subagent/internal'
+import { subagentManager } from './manager-internals.ts'
 import type { PeerId, Principal, RemoteInvocation } from '@deepseek-ai/dsh-typert-protocol'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -50,17 +50,15 @@ async function bench(live?: Record<string, { status: 'running' | 'idle' }>) {
   return { ctx, subagents: ctx.subagents }
 }
 
-/** Spy on the private human-Queue adapter without widening the public service. */
-function promptDelivery(subagents: SubagentRuntime) {
-  return vi.spyOn(subagents as unknown as HostPromptDeliverer, deliverSubagentPrompt)
+/** Observe host delivery without widening the public service. */
+function promptDelivery(ctx: Context) {
+  return vi.spyOn(subagentManager(ctx), 'deliverPrompt')
 }
 
 function promptRequest(clientTimeZone?: string, delivery: 'queue' | 'steer' = 'queue') {
   return {
     requestId: REQUEST_ID,
-    parentSessionId: PARENT,
     childSessionId: CHILD,
-    mode: 'continuable' as const,
     delivery,
     content: [{ type: 'text' as const, text: 'continue' }],
     ...clientTimeZone === undefined ? {} : { clientTimeZone },
@@ -85,27 +83,18 @@ function emptyIdFailure(method: string, field: string) {
 }
 
 describe('subagent prompt Remote', () => {
-  it('rejects empty parent and child ids before delivery', async () => {
-    const { subagents } = await bench({ [PARENT]: { status: 'idle' } })
-    const delivery = promptDelivery(subagents)
+  it('rejects an empty child id before delivery', async () => {
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    const delivery = promptDelivery(ctx)
 
-    const cases: readonly {
-      readonly field: 'parentSessionId' | 'childSessionId'
-      readonly request: ReturnType<typeof promptRequest>
-    }[] = [
-      { field: 'parentSessionId', request: { ...promptRequest(), parentSessionId: SessionId('') } },
-      { field: 'childSessionId', request: { ...promptRequest(), childSessionId: SessionId('') } },
-    ]
-    for (const { field, request } of cases) {
-      await expect(subagents.prompt(request, signal))
-        .rejects.toMatchObject(emptyIdFailure('subagent.prompt', field))
-    }
+    await expect(subagents.prompt({ ...promptRequest(), childSessionId: SessionId('') }, signal))
+      .rejects.toMatchObject(emptyIdFailure('subagent.prompt', 'childSessionId'))
     expect(delivery).not.toHaveBeenCalled()
   })
 
   it('rejects an unknown delivery before admission', async () => {
-    const { subagents } = await bench({ [PARENT]: { status: 'idle' } })
-    const delivery = promptDelivery(subagents)
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    const delivery = promptDelivery(ctx)
 
     await expect(subagents.prompt({ ...promptRequest(), delivery: 'later' as 'queue' }, signal))
       .rejects.toMatchObject({ code: 'gateway/bad-request' })
@@ -117,7 +106,7 @@ describe('subagent prompt Remote', () => {
     const saveImages = vi.fn(async (inputs: readonly { mediaType: string }[]) =>
       inputs.map((input, index) => ({ ...IMAGE_REF, attachmentId: `att-${index}`, mediaType: input.mediaType })))
     ctx.provide('attachments', Object.setPrototypeOf({ saveImages }, AttachmentStore.prototype) as never)
-    const delivery = promptDelivery(subagents).mockResolvedValue('m-content' as MessageId)
+    const delivery = promptDelivery(ctx).mockResolvedValue('m-content' as MessageId)
     const content = [
       { type: 'text' as const, text: 'before' },
       { type: 'image' as const, mediaType: 'image/png' as const, data: 'aGk=' },
@@ -126,7 +115,7 @@ describe('subagent prompt Remote', () => {
 
     await expect(subagents.prompt({ ...promptRequest(), content }, signal))
       .resolves.toEqual({ messageId: 'm-content' })
-    expect(delivery.mock.calls[0]?.[2]).toEqual([
+    expect(delivery.mock.calls[0]?.[1]).toEqual([
       { type: 'text', text: 'before' },
       { type: 'image', attachment: { ...IMAGE_REF, attachmentId: 'att-0', mediaType: 'image/png' } },
       { type: 'text', text: 'after' },
@@ -140,7 +129,7 @@ describe('subagent prompt Remote', () => {
         throw new AttachmentError('Image batch exceeds the configured image-count limit.', 'TOO_MANY_IMAGES')
       },
     }, AttachmentStore.prototype) as never)
-    const delivery = promptDelivery(subagents)
+    const delivery = promptDelivery(ctx)
 
     await expect(subagents.prompt({
       ...promptRequest(),
@@ -155,7 +144,7 @@ describe('subagent prompt Remote', () => {
     const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
     const saveImages = vi.fn()
     ctx.provide('attachments', Object.setPrototypeOf({ saveImages }, AttachmentStore.prototype) as never)
-    const delivery = promptDelivery(subagents)
+    const delivery = promptDelivery(ctx)
 
     await expect(subagents.prompt({
       ...promptRequest(),
@@ -168,8 +157,8 @@ describe('subagent prompt Remote', () => {
   })
 
   it('rejects an image prompt when no attachment store is composed', async () => {
-    const { subagents } = await bench({ [PARENT]: { status: 'idle' } })
-    const delivery = promptDelivery(subagents)
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    const delivery = promptDelivery(ctx)
 
     await expect(subagents.prompt({
       ...promptRequest(),
@@ -179,8 +168,8 @@ describe('subagent prompt Remote', () => {
   })
 
   it('maps a text-only child model refusal to subagent/attachment-invalid', async () => {
-    const { subagents } = await bench({ [PARENT]: { status: 'idle' } })
-    promptDelivery(subagents).mockRejectedValue(
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    promptDelivery(ctx).mockRejectedValue(
       new SubagentError('Model "text-only" does not support image input.', 'MODEL_DOES_NOT_SUPPORT_IMAGES'),
     )
 
@@ -190,24 +179,21 @@ describe('subagent prompt Remote', () => {
   })
 
   it('delivers the content under the caller-minted identity and canonical browser zone', async () => {
-    const { subagents } = await bench({ [PARENT]: { status: 'idle' } })
-    const delivery = promptDelivery(subagents).mockResolvedValue('m-1' as MessageId)
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    const delivery = promptDelivery(ctx).mockResolvedValue('m-1' as MessageId)
 
     await expect(subagents.prompt(promptRequest('Asia/Shanghai'), signal))
       .resolves.toEqual({ messageId: 'm-1' })
     expect(delivery).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'idle' }),
       CHILD,
       [{ type: 'text', text: 'continue' }],
-      { kind: 'user', rpcId: REQUEST_ID, clientTimeZone: 'Asia/Shanghai' },
-      signal,
-      'queue',
+      { source: { kind: 'user', rpcId: REQUEST_ID, clientTimeZone: 'Asia/Shanghai' }, signal, delivery: 'queue' },
     )
   })
 
   it('records a non-owner caller on the follow-up source and nothing for the owner', async () => {
-    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
-    const delivery = promptDelivery(subagents).mockResolvedValue('m-guest' as MessageId)
+    const { ctx } = await bench({ [PARENT]: { status: 'idle' } })
+    const delivery = promptDelivery(ctx).mockResolvedValue('m-guest' as MessageId)
     const as = (principal: Principal) => ctx.extend({
       invocation: {
         request: { namespace: 'subagents', method: 'prompt', args: {} },
@@ -220,32 +206,32 @@ describe('subagent prompt Remote', () => {
 
     await expect(as(GUEST).prompt(promptRequest(), signal)).resolves.toEqual({ messageId: 'm-guest' })
     await expect(as({ kind: 'owner' }).prompt(promptRequest(), signal)).resolves.toEqual({ messageId: 'm-guest' })
-    expect(delivery.mock.calls.map(call => call[3])).toEqual([
+    expect(delivery.mock.calls.map(call => call[2].source)).toEqual([
       { kind: 'user', rpcId: REQUEST_ID, principal: GUEST },
       { kind: 'user', rpcId: REQUEST_ID },
     ])
   })
 
   it('passes steer delivery through the same admission operation', async () => {
-    const { subagents } = await bench({ [PARENT]: { status: 'running' } })
-    const delivery = promptDelivery(subagents).mockResolvedValue('m-steer' as MessageId)
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'running' } })
+    const delivery = promptDelivery(ctx).mockResolvedValue('m-steer' as MessageId)
 
     await expect(subagents.prompt(promptRequest(undefined, 'steer'), signal))
       .resolves.toEqual({ messageId: 'm-steer' })
-    expect(delivery.mock.calls[0]?.[5]).toBe('steer')
+    expect(delivery.mock.calls[0]?.[2].delivery).toBe('steer')
   })
 
   it('omits the zone from the durable source when the browser reported none', async () => {
-    const { subagents } = await bench({ [PARENT]: { status: 'idle' } })
-    const delivery = promptDelivery(subagents).mockResolvedValue('m-2' as MessageId)
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    const delivery = promptDelivery(ctx).mockResolvedValue('m-2' as MessageId)
 
     await expect(subagents.prompt(promptRequest(), signal)).resolves.toEqual({ messageId: 'm-2' })
-    expect(delivery.mock.calls[0]?.[3]).toEqual({ kind: 'user', rpcId: REQUEST_ID })
+    expect(delivery.mock.calls[0]?.[2].source).toEqual({ kind: 'user', rpcId: REQUEST_ID })
   })
 
   it('accepts UTC and rejects an empty, untrimmed, malformed, or unknown zone', async () => {
-    const { subagents } = await bench({ [PARENT]: { status: 'idle' } })
-    promptDelivery(subagents).mockResolvedValue('m-3' as MessageId)
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    promptDelivery(ctx).mockResolvedValue('m-3' as MessageId)
 
     await expect(subagents.prompt(promptRequest('UTC'), signal)).resolves.toEqual({ messageId: 'm-3' })
     for (const zone of ['', ' UTC', 'Shanghai', 'Nowhere/Nowhere']) {
@@ -255,19 +241,16 @@ describe('subagent prompt Remote', () => {
     }
   })
 
-  it('refuses delivery when the exact parent Agent is not live', async () => {
-    const { subagents } = await bench()
-    const delivery = promptDelivery(subagents)
-
-    await expect(subagents.prompt(promptRequest(), signal)).rejects.toMatchObject({
-      code: 'subagent/parent-unavailable', details: { parentSessionId: PARENT },
-    })
-    expect(delivery).not.toHaveBeenCalled()
+  it('passes the target id without requiring a creator Agent', async () => {
+    const { ctx, subagents } = await bench({})
+    const delivery = promptDelivery(ctx).mockResolvedValue('m-offline-creator' as MessageId)
+    await expect(subagents.prompt(promptRequest(), signal)).resolves.toEqual({ messageId: 'm-offline-creator' })
+    expect(delivery.mock.calls[0]?.[0]).toBe(CHILD)
   })
 
   it('maps each admission failure onto its stable code and hides the rest', async () => {
-    const { subagents } = await bench({ [PARENT]: { status: 'idle' } })
-    const delivery = promptDelivery(subagents)
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    const delivery = promptDelivery(ctx)
     const cases: readonly [string, string][] = [
       ['NOT_RESUMABLE', 'subagent/not-resumable'],
       ['UNAUTHORIZED', 'subagent/unauthorized'],
@@ -288,9 +271,9 @@ describe('subagent prompt Remote', () => {
   })
 
   it('answers a caller-cancelled delivery as cancelled rather than a failure', async () => {
-    const { subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
     const aborted = new AbortController()
-    promptDelivery(subagents).mockImplementation(() => {
+    promptDelivery(ctx).mockImplementation(() => {
       aborted.abort()
       return Promise.reject(new SubagentError('gone', 'NOT_RESUMABLE'))
     })
@@ -300,8 +283,8 @@ describe('subagent prompt Remote', () => {
   })
 
   it('preserves a cancellation reported by the continuation operation', async () => {
-    const { subagents } = await bench({ [PARENT]: { status: 'idle' } })
-    promptDelivery(subagents)
+    const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
+    promptDelivery(ctx)
       .mockRejectedValue(new SubagentError('stopped', 'CANCELLED'))
 
     await expect(subagents.prompt(promptRequest(), signal))
@@ -310,63 +293,25 @@ describe('subagent prompt Remote', () => {
 })
 
 describe('subagent interrupt Remote', () => {
-  it('rejects empty child and parent ids before interrupting', async () => {
+  it('rejects an empty child id before interrupting', async () => {
     const { subagents } = await bench()
     const interrupt = vi.spyOn(subagents, 'interrupt')
-
-    for (const [childSessionId, parentSessionId] of [
-      [SessionId(''), PARENT],
-      [CHILD, SessionId('')],
-    ] as const) {
-      const field = childSessionId.length === 0 ? 'childSessionId' : 'parentSessionId'
-      expect(() => subagents.interruptByParent(
-        childSessionId,
-        parentSessionId,
-        'continuable',
-      ))
-        .toThrow(expect.objectContaining(emptyIdFailure('subagent.interrupt', field)))
-    }
+    expect(() => subagents.interruptByUser(SessionId('')))
+      .toThrow(expect.objectContaining(emptyIdFailure('subagent.interrupt', 'childSessionId')))
     expect(interrupt).not.toHaveBeenCalled()
   })
 
-  it('admits the parent-addressed interrupt and acknowledges it', async () => {
+  it('admits a target-only user interrupt and acknowledges it', async () => {
     const { subagents } = await bench()
     const interrupt = vi.spyOn(subagents, 'interrupt').mockReturnValue()
-
-    expect(subagents.interruptByParent(
-      CHILD,
-      PARENT,
-      'continuable',
-    )).toEqual({ accepted: true })
-    expect(interrupt).toHaveBeenCalledWith(CHILD, {
-      kind: 'user',
-      parentSessionId: PARENT,
-    })
+    expect(subagents.interruptByUser(CHILD)).toEqual({ accepted: true })
+    expect(interrupt).toHaveBeenCalledWith(CHILD, { kind: 'user' })
   })
 
-  it('answers a foreign address as unauthorized and everything else as internal', async () => {
+  it('reports an interrupt failure as internal', async () => {
     const { subagents } = await bench()
-    const interrupt = vi.spyOn(subagents, 'interrupt')
-
-    interrupt.mockImplementation(() => { throw new SubagentError('not yours', 'UNAUTHORIZED') })
-    expect(() => subagents.interruptByParent(
-      CHILD,
-      PARENT,
-      'continuable',
-    )).toThrow(
-      expect.objectContaining({
-        code: 'subagent/unauthorized',
-        message: expect.any(String) as unknown as string,
-        details: { childSessionId: CHILD },
-      }),
-    )
-
-    interrupt.mockImplementation(() => { throw new Error('boom') })
-    expect(() => subagents.interruptByParent(
-      CHILD,
-      PARENT,
-      'continuable',
-    )).toThrow(
+    vi.spyOn(subagents, 'interrupt').mockImplementation(() => { throw new Error('boom') })
+    expect(() => subagents.interruptByUser(CHILD)).toThrow(
       expect.objectContaining({ code: 'gateway/internal', message: 'subagent interrupt failed', details: {} }),
     )
   })
