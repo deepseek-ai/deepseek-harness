@@ -16,13 +16,11 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { admitEncodedImages, type EncodedImageAttachment, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, ReasoningEffortId, type ContentBlock, type LlmRuntime } from '@deepseek-ai/dsh-llm'
-import { carrierKeyOf, type Scoped } from '@deepseek-ai/dsh-scope'
 import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-user-approval'
 
 import type {} from '@deepseek-ai/dsh-schedule'
-import type SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import type {
@@ -70,11 +68,6 @@ async function durablePromptContent(ctx: Context, blocks: SessionPromptParams['c
   return blocks.map(block => encodedImage(block)
     ? { type: 'image', attachment: refs[next++] as ImageAttachmentRef }
     : block)
-}
-
-/** Recover the delegating parent from the service-owned scoped carrier. */
-function subagentParentOf(carrier: Scoped<SubagentRuntime>): Agent {
-  return carrierKeyOf(carrier) as Agent
 }
 
 /** Deployment-specific status mapping for SDK turn and subagent outcomes. */
@@ -194,8 +187,7 @@ export class HarnessSdkJsonRpcServer {
       }
       this.transport.notify('subagent.started', payload)
     }))
-    this.disposers.push(ctx.on('subagent/end', function (this: Scoped<SubagentRuntime>, info: SubagentRunEndInfo) {
-      const parent = subagentParentOf(this)
+    this.disposers.push(ctx.on('subagent/end', (info: SubagentRunEndInfo) => {
       // This protocol reports only in-process child sessions. The service
       // snapshots the provider name and local flag through child disposal;
       // matching ids or parent lineage alone never establishes locality.
@@ -203,7 +195,7 @@ export class HarnessSdkJsonRpcServer {
       const payload: SubagentFinishedNotification = {
         provider: info.provider,
         agentId: String(info.id),
-        parentSessionId: String(parent.session.id),
+        parentSessionId: String(info.parentSessionId),
         childSessionId: String(info.id),
         status: successStatus(info.stopReason, serverOptions),
         stopReason: info.stopReason,
@@ -342,7 +334,7 @@ export class HarnessSdkJsonRpcServer {
   /**
    * Restore a persisted session and repair its interrupted final turn without sending input.
    * Uses the initialized model route while preserving the stored session identity and directory.
-   * Rejects missing, unreadable, or already owned sessions; never creates a replacement.
+   * Rejects subagent, missing, unreadable, or already owned sessions; never creates a replacement.
    * @param params - persisted session identity in the configured persistence store.
    * @returns an empty result after the Agent is ready for prompts.
    */
@@ -381,7 +373,7 @@ export class HarnessSdkJsonRpcServer {
       this.assertLiveAgent(rec, params.sessionId)
       await agent.whenIdle()
       const idleSeq = agent.session.seq
-      const children = await subagents?.waitForChildren(agent)
+      const children = await subagents?.waitForTreeWork(agent)
       this.assertLiveAgent(rec, params.sessionId)
       if (!children && agent.status === 'idle' && agent.session.seq === idleSeq) {
         if (rec.failure !== undefined) throw rec.failure.error
@@ -390,18 +382,27 @@ export class HarnessSdkJsonRpcServer {
     }
   }
 
+  /**
+   * Resolves live SDK ownership; root lookup failures other than SubagentError/UNAUTHORIZED propagate.
+   * @param agent - Agent whose requests need routing.
+   * @returns Whether this server owns the Agent or its live subagent tree root.
+   */
   private ownsAgent(agent: Agent): boolean {
     const agents = this.ctx.agents
     if (agents.get(agent.id) !== agent) return false
-    const liveAgents = agents.list()
-    const ancestors = new Set([agent])
-    for (const current of ancestors) {
-      if (this.sessions.get(current.session.id)?.handle.agent === current) return true
-      for (const parent of liveAgents) {
-        if (agents.isOwnedBy(current.id, parent)) ancestors.add(parent)
-      }
+    if (this.sessions.get(agent.session.id)?.handle.agent === agent) return true
+    const subagents = this.ctx.get('subagents')
+    if (subagents === undefined) return false
+    let root: Agent
+    try {
+      root = subagents.rootOf(agent)
+    } catch (error: unknown) {
+      if (typeof error === 'object' && error !== null
+        && 'name' in error && error.name === 'SubagentError'
+        && 'code' in error && error.code === 'UNAUTHORIZED') return false
+      throw error
     }
-    return false
+    return this.sessions.get(root.session.id)?.handle.agent === root
   }
 
   private assertLiveAgent(rec: SessionRecord, sessionId: string): void {
@@ -561,6 +562,9 @@ export class HarnessSdkJsonRpcServer {
   }
 
   private async createSession(sessionId: string, resume: boolean): Promise<SessionRecord> {
+    if (resume && (await this.ctx.get('sessionPersistence')?.stat(brandString<SessionId>(sessionId)))?.header.origin === 'subagent') {
+      throw new Error(`subagent session "${sessionId}" cannot be resumed directly; resume its root session instead`)
+    }
     // No preset composition: this server's compositions keep the model-facing
     // rows in the host plane, so this agent reads them from the global layer. A
     // deployment that configures a roster has to join one here first

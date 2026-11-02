@@ -15,7 +15,7 @@ import type { FsObservationActor } from './types.ts'
 export type { FsObservationActor } from './types.ts'
 
 /**
- * Per-context observed-file state and the three `fs/*` decisions over it. One
+ * Per-context observed-file state and the `fs/*` decisions over it. One
  * instance is created per `apply()` so disposal can drop all state for HMR.
  */
 class ObservedStateGate {
@@ -76,13 +76,22 @@ class ObservedStateGate {
    * observed version as the CAS basis.
    */
   editIntent(target: FsTarget, actor: object | undefined): { version: FsVersion } {
+    return this.requirePresent(target, actor, 'edit')
+  }
+
+  /** Deletion requires the same authoritative present observation as editing. */
+  deleteIntent(target: FsTarget, actor: object | undefined): { version: FsVersion } {
+    return this.requirePresent(target, actor, 'delete')
+  }
+
+  private requirePresent(target: FsTarget, actor: object | undefined, verb: 'edit' | 'delete'): { version: FsVersion } {
     const owner = this.owner(actor)
     const prior = owner ? this.get(owner, target.targetKey) : undefined
     if (!owner || prior === undefined) {
-      throw new FsError(`edit requires reading "${target.displayPath}" first`, 'FS_NOT_OBSERVED')
+      throw new FsError(`${verb} requires reading "${target.displayPath}" first`, 'FS_NOT_OBSERVED')
     }
     if (prior.kind === 'absent') {
-      throw new FsError(`cannot edit "${target.displayPath}": not found`, 'FS_NOT_FOUND')
+      throw new FsError(`cannot ${verb} "${target.displayPath}": not found`, 'FS_NOT_FOUND')
     }
     return { version: prior.version }
   }
@@ -98,7 +107,7 @@ class ObservedStateGate {
 export const name = 'fs-observation-policy'
 
 /**
- * Register the three `fs/*` listeners. No `inject` — this plugin reads no
+ * Register the four `fs/*` listeners. No `inject` — this plugin reads no
  * services; it operates only on its own `WeakMap`. The waterfalls are unbound
  * (the tool dispatches them with no `this`), so the listeners take the raw
  * `(target, actor, next)` arguments.
@@ -120,6 +129,8 @@ export function apply(ctx: Context): void {
 
   // fs/edit-intent: occupy the single decision slot — do not call next().
   ctx.on('fs/edit-intent', (target, actor) => Promise.resolve().then(() => gate.editIntent(target, actor)))
+
+  ctx.on('fs/delete-intent', (target, actor) => Promise.resolve().then(() => gate.deleteIntent(target, actor)))
 
   // fs/observed must remain synchronous and non-throwing: emit does not await
   // promises, and successful mutations have already committed. WeakMap.set

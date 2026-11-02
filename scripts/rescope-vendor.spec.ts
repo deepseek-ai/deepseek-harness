@@ -88,8 +88,8 @@ describe('product identifiers', () => {
     'apps/cli/tests/optional-bundle-transitions.e2e.ts',
     'apps/web/tests/agent-preset-selection.e2e.ts',
     'apps/web/tests/developer-tools-settings.e2e.ts',
-    'docs/subsystems/schedule.md',
-    'docs/subsystems/schedule.zh.md',
+    'docs/subsystems/extensions.md',
+    'docs/subsystems/extensions.zh.md',
     'docs/upgrade-guide/v0.2.0-rc.2/schedule-bundle-retired/guide.md',
     'docs/upgrade-guide/v0.2.0-rc.2/schedule-bundle-retired/guide.zh.md',
     'docs/upgrade-guide/v0.2.1-alpha.1/subagent-preset-composition/guide.md',
@@ -177,7 +177,7 @@ describe('product identifiers', () => {
   })
 
   it('rewrites multiline fenced imports while preserving prose and fenced product data', () => {
-    const file = 'docs/subsystems/schedule.md'
+    const file = 'docs/subsystems/extensions.md'
     const text = "The `cordis` preset.\n```ts\nconst preset = 'cordis'\nimport {\n  Context,\n} from 'cordis'\n```\n"
     const scoped = "The `cordis` preset.\n```ts\nconst preset = 'cordis'\nimport {\n  Context,\n} from '@deepseek-ai/cordis'\n```\n"
     expectRoundTrip(file, text, scoped, 1)
@@ -188,7 +188,7 @@ describe('product identifiers', () => {
     const scoped = `# The 'cordis' preset.\n- name: ${name.replace('cordis', '@deepseek-ai/cordis')} # 'cordis' stays product data\n`
     for (const [file, wrap] of [
       ['packages/bundle/web-app/cordis.patch.yml', (value: string) => value],
-      ['docs/subsystems/schedule.md', (value: string) => `The \`cordis\` preset.\n\`\`\`yaml\n${value}\`\`\`\n`],
+      ['docs/subsystems/extensions.md', (value: string) => `The \`cordis\` preset.\n\`\`\`yaml\n${value}\`\`\`\n`],
     ] as const) {
       expectRoundTrip(file, wrap(text), wrap(scoped), 1)
     }
@@ -215,7 +215,7 @@ describe('product identifiers', () => {
   })
 
   it.each(['```ts\n```\n', "```ts\nimport 'cordis'\n"])('keeps fence line counts without requiring a closing fence', (text) => {
-    const file = 'docs/subsystems/schedule.md'
+    const file = 'docs/subsystems/extensions.md'
     const scoped = text.replace("import 'cordis'", "import '@deepseek-ai/cordis'")
     expectRoundTrip(file, text, scoped, scoped === text ? 0 : 1)
   })

@@ -1,4 +1,5 @@
 /** Compact, read-only fields and lists for recorded Tool results. */
+import { useState } from 'react'
 import {
   CodeBlock, MarkdownText, IconCheckOutlineRegular, IconChevronRightOutlineRegular, IconPlayOutlineRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -27,6 +28,8 @@ export interface ToolDetailItem {
 /** Localized display data shared by the built-in detail cards. */
 export interface ToolDetailsModel {
   items: readonly ToolDetailItem[]
+  /** Tight rows with single-line subtitles that can expand in place. */
+  compact?: boolean
   summary?: string
   /** Header text while expanded, omitting a receipt status shown in the body. */
   expandedSummary?: string
@@ -40,8 +43,9 @@ interface DetailContentProps {
   onOpenFile?: ((path: string, options?: OpenFileOptions) => void) | undefined
 }
 
-function DetailItem({ item, t, onOpenFile }: { item: ToolDetailItem } & DetailContentProps) {
+function DetailItem({ item, compact, t, onOpenFile }: { item: ToolDetailItem; compact?: boolean | undefined } & DetailContentProps) {
   const status = item.status
+  const [expanded, setExpanded] = useState(false)
   return (
     <li className={css.item} data-change={item.change?.value}>
       {item.title !== undefined && (
@@ -73,7 +77,19 @@ function DetailItem({ item, t, onOpenFile }: { item: ToolDetailItem } & DetailCo
           )}
         </div>
       )}
-      {item.subtitle !== undefined && <div className={css.subtitle}>{item.subtitle}</div>}
+      {item.subtitle !== undefined && (compact ? (
+        <button
+          type="button"
+          className={css.subtitleToggle}
+          aria-expanded={expanded}
+          aria-label={item.title === undefined
+            ? t(expanded ? 'collapse' : 'expand')
+            : t(expanded ? 'subtitle.collapse' : 'subtitle.expand', { name: item.title })}
+          onClick={() => { setExpanded(value => !value) }}
+        >
+          <span>{item.subtitle}</span><IconChevronRightOutlineRegular size={12} />
+        </button>
+      ) : <div className={css.subtitle}>{item.subtitle}</div>)}
       {item.description !== undefined && <p className={css.description}>{item.description}</p>}
       {item.fields.length > 0 && (
         <dl className={css.fields}>
@@ -119,11 +135,16 @@ export function ToolDetails({ model, hasInspect = false, t, onOpenFile }: {
   hasInspect?: boolean
 } & DetailContentProps) {
   return (
-    <div className={css.root} data-inspect={hasInspect || undefined} data-caption={model.caption !== undefined || undefined}>
+    <div
+      className={css.root}
+      data-compact={model.compact || undefined}
+      data-inspect={hasInspect || undefined}
+      data-caption={model.caption !== undefined || undefined}
+    >
       {model.caption !== undefined && <div className={css.caption}>{model.caption}</div>}
       {model.items.length === 0 ? <p className={css.empty}>{model.empty}</p> : (
         <ul className={css.list}>
-          {model.items.map((item, index) => <DetailItem key={index} item={item} t={t} onOpenFile={onOpenFile} />)}
+          {model.items.map((item, index) => <DetailItem key={index} item={item} compact={model.compact} t={t} onOpenFile={onOpenFile} />)}
         </ul>
       )}
       {model.unchanged !== undefined && (

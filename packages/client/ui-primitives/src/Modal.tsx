@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import type { KeyboardEventHandler, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
-import { IconCloseOutlineRegular } from './icons/index.tsx'
+import { IconCloseOutlineRegular, IconWarningOutlineRegular } from './icons/index.tsx'
 import { useModalLayer } from './useModalLayer.ts'
 import css from './Modal.module.css'
 
@@ -10,6 +10,7 @@ interface ModalBaseProps {
   open: boolean
   onClose: () => void
   title: string
+  tone?: 'warning'
   description?: string
   children?: ReactNode
   footer?: ReactNode
@@ -31,6 +32,7 @@ type ModalProps = ModalBaseProps & (
  * @param props.onClose - application close command, Escape, or mask click; while a menu is open inside the
  * dialog, Escape belongs to that menu first.
  * @param props.title - dialog heading (aria-label in every mode).
+ * @param props.tone - warning adds an amber title icon and compact title-to-body spacing; ignored for headless dialogs.
  * @param props.closeLabel - localized accessible close-button label.
  * @param props.description - optional supporting sentence under the title.
  * @param props.children - dialog body; mark its initial-focus control with
@@ -47,7 +49,7 @@ type ModalProps = ModalBaseProps & (
  */
 export function Modal({
   open, onClose, title, closeLabel, description, children, footer, className, contentClassName,
-  onKeyDownCapture, headless = false, backdropBlur = true, shortcutModal,
+  onKeyDownCapture, headless = false, backdropBlur = true, shortcutModal, tone,
 }: ModalProps) {
   const dialog = useRef<HTMLDivElement>(null)
   useModalLayer(dialog, open, onClose)
@@ -61,7 +63,7 @@ export function Modal({
         ref={dialog}
         tabIndex={-1}
         data-shortcut-modal={shortcutModal}
-        className={clsx(css.dialog, className)}
+        className={clsx(css.dialog, !headless && tone === 'warning' && css.warning, className)}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -72,7 +74,10 @@ export function Modal({
             <>
               <div className={clsx(css.content, contentClassName)}>
                 <div className={css.header}>
-                  <h2 className={css.title}>{title}</h2>
+                  <h2 className={css.title}>
+                    {tone === 'warning' && <IconWarningOutlineRegular size={18} className={css.warningIcon} aria-hidden="true" />}
+                    {title}
+                  </h2>
                   <button type="button" className={css.close} aria-label={closeLabel} onClick={onClose}>
                     <IconCloseOutlineRegular size={14} />
                   </button>

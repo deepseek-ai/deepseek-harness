@@ -253,3 +253,38 @@ describe('FsError identity', () => {
     expect((error as FsError).code).toBe('FS_SANDBOX_DENIED')
   })
 })
+
+describe('patch, delete, and move fences', () => {
+  it.each(['read-only', 'workspace-write', 'danger-full-access'] as const)('fences every new mutation under %s', async (mode) => {
+    await boot(mode)
+    const sourcePath = join(workspace, 'source')
+    const outsidePath = join(outside, 'file')
+    await writeFile(sourcePath, 'source\n')
+    await writeFile(outsidePath, 'outside\n')
+    const source = await target(sourcePath)
+    const out = await target(outsidePath)
+    const patch = [{ lineNumber: 3, oldLines: ['source'], newLines: ['patched'], isEndOfFile: false }]
+    if (mode === 'read-only') {
+      await expect(fs.patchText(source, patch)).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+      await expect(fs.deleteFile(source)).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+      await expect(fs.moveFile(source, out, {})).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+      expect(await readFile(sourcePath, 'utf8')).toBe('source\n')
+    } else if (mode === 'workspace-write') {
+      await expect(fs.moveFile(source, out, {})).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+      await expect(fs.moveFile(out, source, {})).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+      await expect(fs.patchText(out, [])).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+      await expect(fs.deleteFile(out)).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+      expect(await readFile(sourcePath, 'utf8')).toBe('source\n')
+      expect(await readFile(outsidePath, 'utf8')).toBe('outside\n')
+      expect(await fs.patchText(source, patch)).toMatchObject({ after: 'patched\n' })
+      const destination = await target(join(workspace, 'moved'))
+      expect(await fs.moveFile(source, destination, {})).toMatchObject({ sourceDeleted: true })
+      expect(await fs.deleteFile(destination)).toEqual({ before: 'patched\n' })
+    } else {
+      expect(await fs.patchText(source, patch)).toMatchObject({ after: 'patched\n' })
+      expect(await fs.moveFile(source, out, {})).toMatchObject({ sourceDeleted: true })
+      expect(await readFile(outsidePath, 'utf8')).toBe('patched\n')
+      expect(await fs.deleteFile(out)).toEqual({ before: 'patched\n' })
+    }
+  })
+})

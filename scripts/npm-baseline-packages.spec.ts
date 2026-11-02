@@ -23,8 +23,8 @@ describe('npm baseline package discovery', () => {
     const expected = [
       'apps/cli/package.json',
       'packages/core/session/package.json',
-      'packages/experimental/agent-team/package.json',
       'packages/experimental/new-prototype/package.json',
+      'packages/team/agent-team/package.json',
       'vendor/cordis/package.json',
     ]
     const root = fixture([

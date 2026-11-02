@@ -66,7 +66,7 @@ export function detailBadge(status: string, t: DetailTranslate): NonNullable<Det
 const FIELD_KEYS = {
   id: 'detail.field.id', revision: 'detail.field.revision', platform: 'detail.field.platform',
   provider: 'detail.field.provider', model: 'detail.field.model', role: 'detail.field.role',
-  context: 'detail.field.context', ownerName: 'detail.field.owner', ready: 'detail.field.ready',
+  context: 'detail.field.context', ownerId: 'detail.field.owner', ready: 'detail.field.ready',
   blockedBy: 'detail.field.dependencies', writeScopes: 'detail.field.writeScopes',
   writeScopeWarnings: 'detail.field.warnings', diagnostics: 'detail.field.diagnostics',
   methods: 'detail.field.methods', inputSchema: 'detail.field.inputSchema', outputSchema: 'detail.field.outputSchema',

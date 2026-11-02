@@ -22,7 +22,11 @@ kind: "package-reference"
 
 helper 为授权提示和已授权应用列表提供 64 像素 PNG 图标。读取图标不会启动应用或检查窗口，图标不决定可复用授权。
 
-helper 通过 LaunchServices 以独立的 `DSH Computer Use.app` 后台运行，辅助功能和屏幕录制权限归属于这个应用。权限页使用系统返回的应用名称和图标；无法查询归属时，以系统授权提示为准。
+helper 通过 LaunchServices 作为独立应用 `DSH Computer Use.app` 运行。辅助功能和屏幕录制权限属于此应用。授权引导使用启动时记录的责任应用 bundle URL、标识、文件名和系统图标；系统归属信息不可用时使用独立 helper 自身的 bundle。拖动和 Finder 选择通过应用发现模块读取磁盘上当前的 bundle 标识及可执行文件。页面和引导框统一显示应用的 `.app` 文件名。其他构建更新 `current.json` 后，已有连接仍指向正在运行的应用版本。
+
+权限请求打开对应隐私设置页和原生悬浮引导框。引导框首次选择面积最大的设置窗口，随后按窗口 ID 跟随。它使用普通窗口层级，紧邻所选窗口上方排列，使认证弹窗保持在其上方。定位读取窗口边界，不申请辅助功能权限。引导框等到识别出设置窗口后才显示；打开设置失败时独立显示手动导航说明。材质的透明度遮罩为面板和阴影提供圆角。最新请求替换共享引导，连接清理只关闭自身创建的引导。应用不可用时仍尝试打开设置，并在页面报告失败原因。权限已授予时只打开设置；显式进入设置会关闭原有引导。系统拒绝打开设置时报告 `SETTINGS_UNAVAILABLE`；应用目标缺失或被替换时报告 `APPLICATION_UNAVAILABLE`。系统设置决定是否接收拖入的应用，以及是否要求重新启动。
+
+provider 按当前界面语言生成引导和恢复文案，不支持的语言使用英语。将引导框内的应用拖入权限列表并开启开关；已有此应用时直接开启现有条目。拖动时隐藏引导框，放置被接收后关闭，拖动取消或被拒绝后恢复。返回按钮关闭引导框并返回之前的应用。右键点击应用行，或点击它使引导框获得键盘焦点后按 Return、空格，可在 Finder 中选中同一应用。原生引导打开期间，每隔 `permissionPollIntervalMs` 检查权限和窗口位置，默认 1000 毫秒；在确认授权、用户关闭、系统设置窗口消失或所属连接清理时关闭。拖动应用不代表授权完成。若 macOS 提示退出并重新打开应用，请按提示操作；系统不会自动终止共享 helper。
 
 -----
 
@@ -37,7 +41,7 @@ helper 通过 LaunchServices 以独立的 `DSH Computer Use.app` 后台运行，
 pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.yml --dump-config
 ```
 
-配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。`DSH Computer Use.app` 需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图；按系统提示给 helper 授权。`getCapabilities` 查询权限和锁屏状态，不弹出系统授权窗口。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 和 `cua.getState` 列出运行中的应用。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。授权前从磁盘读取应用的 Bundle ID 和可执行路径，在启动前后重新读取并核对；没有 Bundle ID 的应用使用规范化的可执行路径复用授权。选择尚未运行的安装副本时，会请求为该副本创建新实例。helper 等待应用完成启动后才返回其 PID。启动后验证失败会使待启动句柄失效，但进程可能仍在运行；应先查看运行中的应用，再取得新句柄。返回的对象读取初始 AX，不自动激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏或最小化时，先尝试 `app.show()` 或 `window.show()`，再重新观察。它请求取消隐藏和恢复最小化，不主动激活、抬起窗口或切换桌面空间；应用级恢复选择焦点窗口、主窗口或唯一 AX 窗口。结果通过 `windowId` 指明选中的窗口，未选中时为 null；`foregroundChanged` 比较操作前后的前台应用和最上层窗口，无法取得完整观察时为 null，返回后仍可能发生焦点变化。恢复失败或窗口仍不可用时，说明需要前台的步骤，再调用 `app.activate()` 或窗口的 `raise` 动作并重新观察。必须使用前台时，以完成任务为先。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
+配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。`DSH Computer Use.app` 需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图；通过 Computer Use 权限页打开系统设置并添加 helper。`getCapabilities` 查询权限和锁屏状态，不弹出系统授权窗口。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 和 `cua.getState` 列出运行中的应用。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。授权前从磁盘读取应用的 Bundle ID 和可执行路径，在启动前后重新读取并核对；没有 Bundle ID 的应用使用规范化的可执行路径复用授权。选择尚未运行的安装副本时，会请求为该副本创建新实例。helper 等待应用完成启动后才返回其 PID。启动后验证失败会使待启动句柄失效，但进程可能仍在运行；应先查看运行中的应用，再取得新句柄。返回的对象读取初始 AX，不自动激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏或最小化时，先尝试 `app.show()` 或 `window.show()`，再重新观察。它请求取消隐藏和恢复最小化，不主动激活、抬起窗口或切换桌面空间；应用级恢复选择焦点窗口、主窗口或唯一 AX 窗口。结果通过 `windowId` 指明选中的窗口，未选中时为 null；`foregroundChanged` 比较操作前后的前台应用和最上层窗口，无法取得完整观察时为 null，返回后仍可能发生焦点变化。恢复失败或窗口仍不可用时，说明需要前台的步骤，再调用 `app.activate()` 或窗口的 `raise` 动作并重新观察。必须使用前台时，以完成任务为先。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
@@ -47,6 +51,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `buildTimeoutMs` | `300000` | 原生组件准备的最长时间。 |
 | `timeoutMs` | `30000` | 单次操作截止时间，取消后可能已发生部分输入。 |
 | `connectTimeoutMs` | `5000` | 连接或启动共享 helper 的截止时间。 |
+| `permissionPollIntervalMs` | `1000` | 原生引导打开期间检查权限和窗口位置的间隔，单位为毫秒。 |
 | `screenshotTimeoutMs` | `5000` | 截图总期限，包含排队时间，且不超过 `timeoutMs`。 |
 | `axTimeoutMs` | `3000` | 每次 Accessibility 系统调用的截止时间，与完整操作截止独立配置。 |
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 请求与响应字节限制。 |
@@ -210,6 +215,8 @@ Use selectText only on controls advertising selectionWritable. It selects a uniq
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- 最低支持 macOS 14；设置导航、拖放接收和权限刷新需要在各支持版本验收。若 macOS 要求在修改屏幕录制权限后退出并重新打开 helper，权限检查在重启前可能仍返回未授权。可以关闭引导框，不必终止其他连接。
+- 所选设置窗口离开可见窗口列表时，引导框会关闭，包括切换桌面空间或最小化导致窗口不再可见的情况。返回后再次申请权限可重新打开引导。
 - 只提供 macOS 原生实现，Windows 支持正在开发中。本包暂放在 `experimental`，待 Windows 支持完成后迁回 `computer-use` 组。不支持浏览器标签、启动应用、AX 差分、无法确认应用归属的系统面板，以及仅后台辅助类型的应用。
 - 坐标使用包含标题栏的返回截图像素；`relative: true` 使用 0～999 的整数，由 Host 换算原生 point。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。

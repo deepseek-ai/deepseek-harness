@@ -13,18 +13,18 @@ import type { TranslateText } from '../src/client/translation.ts'
 
 afterEach(cleanup)
 
-function fixture() {
+function fixture(text = 'Original paragraph') {
   const preferences = createSnapshotStore<CotTranslationPreferences>({ provider: 'google', targetLanguage: 'auto' })
   const locale = createSnapshotStore<LocaleSnapshot>({ active: 'zh', locales: [], revision: 0 })
   const translationLimit = createSnapshotStore(4000)
   const translate = vi.fn<TranslateText>(async request => `${request.provider}:${request.targetLanguage}:${request.text}`)
-  const props = { text: 'Original paragraph', running: false, translate, renderFactorySlot, t: makeTranslate(en),
+  const props = { rawText: 'Raw model reasoning', text, running: false, translate, renderFactorySlot, t: makeTranslate(en),
     usePreferences: bindSnapshotSelector(preferences), useTranslationLocale: bindSnapshotSelector(locale),
     useTranslationLimit: bindSnapshotSelector(translationLimit) } as TranslationBodyProps
   return { props, preferences, locale, translationLimit, translate }
 }
 
-it('honors an explicit Google selection and the UI language, and switches to the original without another request', async () => {
+it('translates display text and switches to its original without another request', async () => {
   const b = fixture(), view = render(<TranslationBody {...b.props} />)
   await view.findByText('google:zh:Original paragraph')
   expect(b.translate).toHaveBeenCalledWith({ text: 'Original paragraph', provider: 'google', targetLanguage: 'zh' }, expect.any(AbortSignal))
@@ -32,6 +32,7 @@ it('honors an explicit Google selection and the UI language, and switches to the
   fireEvent.click(view.getByRole('button', { name: 'View original' }))
   expect(view.container.querySelector('[data-markdown-variant]')).toBe(markdown)
   expect(view.getByText('Original paragraph')).toBeTruthy()
+  expect(view.container.textContent).not.toContain(b.props.rawText)
   fireEvent.click(view.getByRole('button', { name: 'View translation' }))
   expect(view.getByText('google:zh:Original paragraph')).toBeTruthy()
   expect(b.translate).toHaveBeenCalledTimes(1)
@@ -62,6 +63,7 @@ it('shows a generic failure with original text and retries only on the reader ac
   const view = render(<TranslationBody {...b.props} />)
   await view.findByText(en.failed)
   expect(view.getByText('Original paragraph')).toBeTruthy()
+  expect(view.container.textContent).not.toContain(b.props.rawText)
   expect(view.queryByRole('button', { name: 'View original' })).toBeNull()
   expect(view.getByRole('button', { name: 'View translation' }).hasAttribute('disabled')).toBe(true)
   expect(view.queryByText('secret request text')).toBeNull()
@@ -72,9 +74,9 @@ it('shows a generic failure with original text and retries only on the reader ac
 })
 
 it('keeps the full original visible after a later paragraph fails and reuses completed translations on retry', async () => {
-  const b = fixture()
+  const b = fixture('First\n\nSecond')
   b.translate.mockResolvedValueOnce('第一段').mockRejectedValueOnce(new Error('provider unavailable'))
-  const view = render(<TranslationBody {...b.props} text={'First\n\nSecond'} />)
+  const view = render(<TranslationBody {...b.props} />)
   await view.findByText(en.failed)
   expect(view.getByText('First')).toBeTruthy()
   expect(view.getByText('Second')).toBeTruthy()
@@ -93,12 +95,15 @@ it('keeps the full original visible after a later paragraph fails and reuses com
 })
 
 it('keeps an unfinished streaming tail original and cancels the disclosure on unmount', async () => {
-  const b = fixture(), pending = Promise.withResolvers<string>()
+  const b = fixture('Unfinished'), pending = Promise.withResolvers<string>()
   b.translate.mockImplementationOnce(() => pending.promise)
-  const view = render(<TranslationBody {...b.props} text="Unfinished" running />)
+  const view = render(<TranslationBody {...b.props} running />)
   expect(b.translate).not.toHaveBeenCalled()
-  view.rerender(<TranslationBody {...b.props} text={'First\n\nTail'} running />)
+  view.rerender(<TranslationBody {...b.props} rawText="Raw model reasoning" text={'First\n\nTail'} running />)
   expect(view.getByRole('status', { name: en.translating })).toBeTruthy()
+  expect(b.translate.mock.calls[0]?.[0].text).toBe('First')
+  expect(view.getByText('Tail', { exact: false })).toBeTruthy()
+  expect(view.container.textContent).not.toContain(b.props.rawText)
   const signal = b.translate.mock.calls[0]![1]
   view.unmount()
   expect(signal.aborted).toBe(true)
@@ -107,9 +112,9 @@ it('keeps an unfinished streaming tail original and cancels the disclosure on un
 })
 
 it('cancels the previous request and rechunks when the request limit changes', async () => {
-  const b = fixture(), first = Promise.withResolvers<string>()
+  const b = fixture('abcdefghij'), first = Promise.withResolvers<string>()
   b.translate.mockImplementationOnce(() => first.promise)
-  const view = render(<TranslationBody {...b.props} text="abcdefghij" />)
+  const view = render(<TranslationBody {...b.props} />)
   const firstSignal = b.translate.mock.calls[0]![1]
   act(() => { b.translationLimit.set(4) })
   expect(firstSignal.aborted).toBe(true)

@@ -137,20 +137,21 @@ describe('WebWorker preview VFS example', () => {
     })
   })
 
-  it('seeds Host Schedule tasks the whole-unit domain accepts', () => {
-    const path = 'home/storages/schedule.json'
-    const text = buildVfsExampleFiles().get(path)
-    if (text === undefined) throw new Error(`missing generated preview Schedule storage ${path}`)
-    const document = JSON.parse(text) as {
+  it('seeds Host Schedule tasks in the authoritative versioned whole-unit store', () => {
+    const files = buildVfsExampleFiles()
+    const document = JSON.parse(files.get(`home/storages/${scheduleDomain.name}.json`)!) as {
       unit: { name: string; version: number }
+      global: null
       tables: { tasks: Record<string, unknown> }
     }
-    expect(document.unit).toEqual({ name: scheduleDomain.name, version: scheduleDomain.version })
+    expect(document.unit).toEqual({ name: 'schedule', version: scheduleDomain.version })
+    expect(document.global).toBeNull()
     for (const id of Object.values(VFS_EXAMPLE_SCHEDULE_IDS)) {
       const task = scheduleDomain.tables.tasks.valueSchema.parse(document.tables.tasks[id])
       expect(task.record.id).toBe(id)
       expect(task.record.title.trim().length).toBeGreaterThan(0)
       expect(task.status).toBe('active')
+      expect(task.target).toEqual({ kind: 'session', sessionId: VFS_EXAMPLE_SESSION_IDS.main })
       expect(Date.parse(task.record.scheduledAt)).toBeGreaterThan(Date.now())
     }
   })

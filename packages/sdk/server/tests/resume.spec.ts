@@ -50,6 +50,25 @@ async function initialized(root: string) {
 }
 
 describe('SDK persisted session resume', () => {
+  it('rejects independent subagent restoration before opening or repairing its log', async () => {
+    const root = await storageRoot()
+    const { ctx, server } = await initialized(root)
+    const child = await ctx.agents.create({
+      sessionId: SessionId('saved-child'),
+      meta: { origin: 'subagent', parentSession: SessionId('creator'), cwd: root },
+    })
+    child.agent.session.append('turn/start', { turn: 1 })
+    await ctx.sessions.flush(child.agent.session)
+    await child.dispose()
+    const resume = vi.spyOn(ctx.agents, 'resume')
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(server.resume({ sessionId: 'saved-child' })).rejects.toThrow('resume its root session instead')
+    }
+    expect(resume).not.toHaveBeenCalled()
+    expect(ctx.agents.get(SessionId('saved-child'))).toBeUndefined()
+    await expect(server.shutdown()).resolves.toEqual({})
+  })
+
   it.each([
     { model: 'mock', effort: undefined, expected: 'high' },
     { model: 'other', effort: undefined, expected: undefined },

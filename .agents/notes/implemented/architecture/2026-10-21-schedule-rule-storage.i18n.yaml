@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-21-schedule-rule-storage.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-21-schedule-rule-storage.md
+/agent-note-schedule-rule-storage-and-shared-recurrence:
+  en: 34817514a06a4351
+  zh: a9e33a1c4d5845d1
+/agent-note-schedule-rule-storage-and-shared-recurrence/problem:
+  en: 22eed4a004cbb1c5
+  zh: dc7b6f8ed9c074cf
+/agent-note-schedule-rule-storage-and-shared-recurrence/decision:
+  en: 50bfa3e81af7c2b0
+  zh: e9bd5fae6e611030
+/agent-note-schedule-rule-storage-and-shared-recurrence/alternatives-considered:
+  en: fbfcd35c35fb637a
+  zh: df9dd646e6d18e3c
+/agent-note-schedule-rule-storage-and-shared-recurrence/consequences:
+  en: 61213641597c18bb
+  zh: 393a79013e311311
