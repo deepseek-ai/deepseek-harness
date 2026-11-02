@@ -70,6 +70,44 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(await approval.getByText('/Applications/Fixture.app', { exact: true }).count()).toBe(0)
   await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/application-approval.expected.md', import.meta.url)),
     await captureStableAria(page, '[data-approval-key]', scaffold.workspaceCwd), webSnapshotMode())
+  const risks = approval.getByRole('button', { name: 'Risks', exact: true })
+  const warning = page.getByRole('dialog', { name: 'Computer use risks' })
+  await risks.hover()
+  expect(await warning.count()).toBe(0)
+  await risks.focus()
+  expect(await warning.count()).toBe(0)
+  await page.keyboard.press('Enter')
+  await warning.waitFor()
+  expect(await warning.evaluate(element => element === document.activeElement)).toBe(true)
+  await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/application-risks.expected.md', import.meta.url)),
+    await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), webSnapshotMode())
+  await page.keyboard.press('Escape')
+  await warning.waitFor({ state: 'hidden' })
+  expect(await approval.count()).toBe(1)
+  for (const width of [1000, 390]) {
+    await page.setViewportSize({ width, height: 800 })
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme })
+      await expect.poll(() => page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
+      await risks.dispatchEvent('pointerdown', { pointerType: 'touch' })
+      await risks.click()
+      await warning.waitFor()
+      await expect.poll(async () => warning.evaluate((element) => {
+        const bounds = element.getBoundingClientRect()
+        return bounds.left >= 0 && bounds.top >= 0 && bounds.right <= innerWidth && bounds.bottom <= innerHeight
+      })).toBe(true)
+      expect(await approval.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      if (webSnapshotMode() === 'refresh') {
+        const directory = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
+        await mkdir(directory, { recursive: true })
+        await page.screenshot({ path: join(directory, `cua-popover-${width}-${colorScheme}.png`), animations: 'disabled' })
+      }
+      await approval.locator('p').click()
+      await warning.waitFor({ state: 'hidden' })
+    }
+  }
+  await page.emulateMedia({ colorScheme: null })
+  await page.setViewportSize({ width: 1680, height: 1000 })
   await approval.getByRole('button', { name: 'Always allow', exact: true }).click()
   expect((await grant).results).toMatchObject([{ result: { isError: false } }])
   await approval.waitFor({ state: 'hidden' })

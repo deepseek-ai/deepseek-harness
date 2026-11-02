@@ -2,6 +2,9 @@
 export const NS = 'cuaPermissions'
 /** English permission-page dictionary. */
 export const en = {
+  approvalRisks: 'Risks',
+  approvalRiskTitle: 'Computer use risks',
+  approvalRiskNotice: 'The agent can read app content and perform actions in the background using keyboard and mouse input. Actions may be unintended or irreversible.\n\nSome apps, particularly instant messaging apps and online games, prohibit automated control. Those apps may suspend or ban your account for using automation.\n\nProceed at your own risk. To stop automated control at any time, press Stop in DSH.',
   title: 'Authorize computer use',
   applicationsTitle: 'Manage applications computer use can access',
   setupTitle: 'Set up computer use before use',
@@ -40,6 +43,9 @@ export const en = {
 export type CuaPermissionLocaleKey = keyof typeof en
 /** Chinese permission-page dictionary. */
 export const zh: Record<CuaPermissionLocaleKey, string> = {
+  approvalRisks: '风险提示',
+  approvalRiskTitle: 'Computer Use 风险提示',
+  approvalRiskNotice: '智能体可以读取应用内容，并通过键盘和鼠标在后台操作应用。这些操作可能不符合您的意图，或无法撤销。\n\n部分应用，尤其是即时通讯应用和网络游戏，禁止自动化控制。这些应用可能因您使用自动化而暂停或封禁您在该应用中的账号。\n\n请自行承担使用风险。如需随时停止自动化控制，请点击 DSH 中的停止按钮。',
   title: '给 Computer Use 授权', applicationsTitle: '管理 Computer Use 可访问的应用', setupTitle: '使用 Computer Use 前需要设置',
   setupBody: 'Computer Use 插件已开启。使用前请切换到 PTC 模式，并授予辅助功能和屏幕录制权限。请前往插件详情页完成设置。',
   setupQueryFailed: 'Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。',
@@ -75,6 +81,9 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  approvalRisks: 'リスク',
+  approvalRiskTitle: 'コンピュータ操作のリスク',
+  approvalRiskNotice: 'エージェントはアプリの内容を読み取り、キーボードとマウスを使ってバックグラウンドで操作できます。意図しない操作や取り消せない操作が行われる可能性があります。\n\n一部のアプリ、特にメッセージアプリやオンラインゲームは自動操作を禁止しています。自動操作の利用により、それらのアプリのアカウントが停止または永久に利用禁止になる場合があります。\n\n自己責任でご利用ください。自動操作は、DSH の停止ボタンでいつでも停止できます。',
   'title': 'コンピュータ操作を承認',
   'applicationsTitle': 'Computer Useがアクセスできるアプリを管理',
   'setupTitle': '使用前にComputer Useを設定',
@@ -128,6 +137,9 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  approvalRisks: 'Riesgos',
+  approvalRiskTitle: 'Riesgos del control del equipo',
+  approvalRiskNotice: 'El agente puede leer el contenido de la aplicación y realizar acciones en segundo plano con el teclado y el ratón. Las acciones pueden ser involuntarias o irreversibles.\n\nAlgunas aplicaciones, especialmente las de mensajería instantánea y los juegos en línea, prohíben el control automatizado. Esas aplicaciones pueden suspender o bloquear tu cuenta por usar automatización.\n\nContinúa bajo tu propia responsabilidad. Para detener el control automatizado en cualquier momento, pulsa Detener en DSH.',
   title: 'Autorizar el uso de la computadora',
   applicationsTitle: 'Administrar aplicaciones a las que puede acceder el uso de la computadora',
   setupTitle: 'Configurar el uso de la computadora antes de usarla',
@@ -165,6 +177,9 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  approvalRisks: 'Risques',
+  approvalRiskTitle: 'Risques du contrôle de l’ordinateur',
+  approvalRiskNotice: 'L’agent peut lire le contenu de l’application et agir en arrière-plan à l’aide du clavier et de la souris. Ces actions peuvent être involontaires ou irréversibles.\n\nCertaines applications, notamment les messageries instantanées et les jeux en ligne, interdisent le contrôle automatisé. Ces applications peuvent suspendre ou bannir votre compte en raison de l’utilisation de l’automatisation.\n\nContinuez à vos propres risques. Pour arrêter le contrôle automatisé à tout moment, appuyez sur Arrêter dans DSH.',
   title: "Autoriser l'utilisation de l'ordinateur",
   applicationsTitle: "Gérer les applications auxquelles l'ordinateur peut accéder",
   setupTitle: "Configurer l'utilisation de l'ordinateur avant utilisation",
@@ -202,6 +217,9 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  approvalRisks: 'Risiken',
+  approvalRiskTitle: 'Risiken der Computersteuerung',
+  approvalRiskNotice: 'Der Agent kann App-Inhalte lesen und im Hintergrund Aktionen mit Tastatur und Maus ausführen. Diese Aktionen können unbeabsichtigt oder unumkehrbar sein.\n\nEinige Apps, insbesondere Messenger und Online-Spiele, verbieten automatisierte Steuerung. Diese Apps können Ihr dortiges Konto wegen der Nutzung von Automatisierung vorübergehend oder dauerhaft sperren.\n\nDie Nutzung erfolgt auf eigenes Risiko. Um die automatisierte Steuerung jederzeit zu beenden, drücken Sie Stopp in DSH.',
   title: 'Autorisieren Sie die Computernutzung',
   applicationsTitle: 'Verwalten Sie Anwendungen, auf die der Computer zugreifen kann',
   setupTitle: 'Richten Sie die Computernutzung vor der Nutzung ein',
@@ -239,6 +257,9 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  approvalRisks: 'Риски',
+  approvalRiskTitle: 'Риски управления компьютером',
+  approvalRiskNotice: 'Агент может читать содержимое приложения и выполнять действия в фоновом режиме с помощью клавиатуры и мыши. Действия могут быть непреднамеренными или необратимыми.\n\nНекоторые приложения, особенно мессенджеры и онлайн-игры, запрещают автоматизированное управление. Эти приложения могут временно или навсегда заблокировать вашу учётную запись в них за использование автоматизации.\n\nВы продолжаете на свой страх и риск. Чтобы в любой момент остановить автоматизированное управление, нажмите «Остановить» в DSH.',
   title: 'Разрешить использование компьютера',
   applicationsTitle: 'Управление приложениями, к которым может иметь доступ компьютер',
   setupTitle: 'Настройте использование компьютера перед использованием',
@@ -276,6 +297,9 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  approvalRisks: 'Riscos',
+  approvalRiskTitle: 'Riscos do controle do computador',
+  approvalRiskNotice: 'O agente pode ler o conteúdo do aplicativo e realizar ações em segundo plano usando o teclado e o mouse. As ações podem ser indesejadas ou irreversíveis.\n\nAlguns aplicativos, especialmente os de mensagens instantâneas e jogos on-line, proíbem o controle automatizado. Esses aplicativos podem suspender ou banir sua conta pelo uso de automação.\n\nProssiga por sua conta e risco. Para interromper o controle automatizado a qualquer momento, pressione Parar no DSH.',
   title: 'Autorizar o uso do computador',
   applicationsTitle: 'Gerenciar aplicativos que o computador pode acessar',
   setupTitle: 'Configure o uso do computador antes de usar',

@@ -43,6 +43,8 @@ Actions return `dispatched:true, verified:false`; read fresh state to verify the
 
 ### Permission controls
 
+The application approval card includes a **Risks** tag. Click, tap, or activate it with the keyboard to open a popover about background control, unintended actions, account restrictions in the controlled app, and stopping through DSH.
+
 On the Computer Use detail page, permission cards, component rows, and source facts use l3 borders, with 32px gaps between sections. Application badges retain their l1 borders.
 
 The [Computer Use bundle](../cua-bundle/README.md) mounts this page with its native provider. **Authorize computer use** groups the new-session default, PTC execution mode, Accessibility, and Screen Recording inside one border. Each permission row shows the responsible application’s name and icon. **Request permission** delegates to the provider with the selected permission and current Client language; the [macOS provider](../cua-macos/README.md) owns the native drag guide. An outlined **Allowed** button opens settings for revocation; unknown status uses **Unknown**. Application grants remain in a separate group.

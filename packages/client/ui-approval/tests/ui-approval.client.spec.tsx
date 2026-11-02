@@ -124,6 +124,7 @@ const id = (value: string): SessionId => value as SessionId
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('PendingApproval', () => {
@@ -540,4 +541,45 @@ it.each(['allow', 'reject', 'always', 'keyboard'] as const)('settles a fixed app
   }
   await waitFor(() => { expect(actions[action]).toHaveBeenCalledOnce() })
   expect(Object.values(actions).filter(callback => callback.mock.calls.length > 0)).toEqual([actions[action]])
+})
+
+it('opens and dismisses risk details without answering the approval', () => {
+  vi.stubGlobal('ResizeObserver', class {
+    observe() {}
+    disconnect() {}
+  })
+  const onAllow = vi.fn(async () => {}), onReject = vi.fn(async () => {})
+  const props = {
+    requestKey: 'risk-approval', title: 'Control this app?',
+    warning: { label: 'Risks', title: 'Computer use risks', detail: 'Background control.\n\nAccount restrictions.\n\nStop in DSH.' },
+    canAnswer: () => true, onAllow, onReject, renderSlot: () => null, t: (key: string) => key,
+  } as FactoryComponentPropsOf<'conversation.approval.card'>
+  const view = render(<ApprovalCard {...props} />)
+  const trigger = screen.getByRole('button', { name: 'Risks' })
+  fireEvent.pointerEnter(trigger)
+  fireEvent.focus(trigger)
+  expect(screen.queryByRole('dialog', { name: 'Computer use risks' })).toBeNull()
+  fireEvent.click(trigger)
+  const dialog = screen.getByRole('dialog', { name: 'Computer use risks' })
+  expect([...dialog.querySelectorAll('p')].map(p => p.textContent).join('\n\n')).toBe(props.warning!.detail)
+  expect(document.activeElement).toBe(dialog)
+  expect(trigger.getAttribute('aria-expanded')).toBe('true')
+  act(() => { trigger.focus() })
+  fireEvent.keyDown(trigger, { key: 'Enter' })
+  expect(onAllow).not.toHaveBeenCalled()
+  fireEvent.keyDown(trigger, { key: 'Escape' })
+  expect(screen.queryByRole('dialog', { name: 'Computer use risks' })).toBeNull()
+  expect(onReject).not.toHaveBeenCalled()
+  fireEvent.click(trigger)
+  fireEvent.click(screen.getByRole('button', { name: 'close' }))
+  expect(screen.queryByRole('dialog', { name: 'Computer use risks' })).toBeNull()
+  expect(document.activeElement).toBe(trigger)
+  fireEvent.click(trigger)
+  fireEvent.pointerDown(document.body)
+  expect(screen.queryByRole('dialog', { name: 'Computer use risks' })).toBeNull()
+  fireEvent.click(trigger)
+  view.rerender(<ApprovalCard {...props} requestKey="replacement" />)
+  expect(screen.queryByRole('dialog', { name: 'Computer use risks' })).toBeNull()
+  expect(onAllow).not.toHaveBeenCalled()
+  expect(onReject).not.toHaveBeenCalled()
 })
