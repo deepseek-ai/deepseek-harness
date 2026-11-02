@@ -18,6 +18,19 @@ struct AXNodeObservation {
     let attribute: (String) throws -> CFTypeRef?
 }
 
+/// Attribute-setting action names are exactly `Role.Attribute.Set`; every other name is a native action.
+struct AXAttributeSetTarget: Sendable {
+    let role: String
+    let attribute: String
+
+    init?(_ action: String) {
+        let parts = action.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[2] == "Set", !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
+        role = String(parts[0])
+        attribute = String(parts[1])
+    }
+}
+
 final class AXAccess {
     let timeout: Float
     let cancellation: CancellationLatch
@@ -206,6 +219,136 @@ final class AXAccess {
         try prepare(element)
         let error = AXUIElementSetAttributeValue(element, "AXValue" as CFString, value as CFString)
         guard error == .success else { throw failure(error, "set AXValue") }
+    }
+    /// Perform an action, including attribute-setting operations.
+    func performAction(_ element: AXUIElement, action: String, argument: JSONValue?) throws {
+        guard let target = AXAttributeSetTarget(action) else {
+            guard argument == nil || argument == .null else {
+                throw RequestParameters.invalid("\(action) is not an attribute-setting action and accepts no argument")
+            }
+            try perform(element, action)
+            return
+        }
+        guard let argument, argument != .null else {
+            throw RequestParameters.invalid("\(target.role).\(target.attribute).Set requires a value")
+        }
+        guard let role = try string(element, "AXRole") else {
+            throw RequestParameters.invalid("Cannot verify an attribute-setting action without an element role")
+        }
+        guard role == target.role else {
+            throw RequestParameters.invalid("Action role \(target.role) does not match element role \(role)")
+        }
+        guard try writable(element, target.attribute) == true else {
+            throw RequestParameters.invalid("\(target.attribute) is not writable on this element")
+        }
+        let current = try attribute(element, target.attribute)
+        let value = try Self.attributeValue(attribute: target.attribute, argument: argument, current: current)
+        try requireEnabled(element)
+        try prepare(element)
+        let error = AXUIElementSetAttributeValue(element, target.attribute as CFString, value)
+        guard error == .success else { throw failure(error, "set \(target.attribute)") }
+    }
+    private enum AttributeValueKind {
+        case string, boolean, number, point, size, range
+    }
+    /// Convert one direct JSON argument to the Core Foundation value expected by the attribute's live type.
+    static func attributeValue(attribute: String, argument: JSONValue, current: CFTypeRef?) throws -> CFTypeRef {
+        let kind = try valueKind(attribute: attribute, argument: argument, current: current)
+        switch kind {
+        case .string:
+            guard case .string(let text) = argument else { throw RequestParameters.invalid("\(attribute) requires a string value") }
+            return text as CFString
+        case .boolean:
+            guard case .bool(let flag) = argument else { throw RequestParameters.invalid("\(attribute) requires a boolean value") }
+            return flag ? kCFBooleanTrue! : kCFBooleanFalse!
+        case .number:
+            guard case .number(let number) = argument, number.isFinite else {
+                throw RequestParameters.invalid("\(attribute) requires a finite number")
+            }
+            return NSNumber(value: number)
+        case .point:
+            let values = try fields(argument, attribute: attribute, keys: ["x", "y"])
+            var point = CGPoint(x: try finite(values["x"], name: "x", attribute: attribute),
+                                y: try finite(values["y"], name: "y", attribute: attribute))
+            guard let value = AXValueCreate(.cgPoint, &point) else {
+                throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create \(attribute)")
+            }
+            return value
+        case .size:
+            let values = try fields(argument, attribute: attribute, keys: ["width", "height"])
+            var size = CGSize(width: try dimension(values["width"], name: "width", attribute: attribute),
+                              height: try dimension(values["height"], name: "height", attribute: attribute))
+            guard let value = AXValueCreate(.cgSize, &size) else {
+                throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create \(attribute)")
+            }
+            return value
+        case .range:
+            let values = try fields(argument, attribute: attribute, keys: ["location", "length"])
+            let location = try nonnegativeInteger(values["location"], name: "location", attribute: attribute)
+            let length = try nonnegativeInteger(values["length"], name: "length", attribute: attribute)
+            guard location <= Int.max - length else { throw RequestParameters.invalid("\(attribute) range is too large") }
+            var range = CFRange(location: location, length: length)
+            guard let value = AXValueCreate(.cfRange, &range) else {
+                throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create \(attribute)")
+            }
+            return value
+        }
+    }
+    private static func valueKind(attribute: String, argument: JSONValue, current: CFTypeRef?) throws -> AttributeValueKind {
+        switch attribute {
+        case "AXPosition": return .point
+        case "AXSize": return .size
+        case "AXSelectedTextRange": return .range
+        default: break
+        }
+        if let current { return try inferredKind(current, attribute: attribute) }
+        switch argument {
+        case .string: return .string
+        case .bool: return .boolean
+        case .number: return .number
+        default:
+            throw NativeFailure(code: "UNSUPPORTED", message: "Accessibility \(attribute) has no known value type for this JSON argument")
+        }
+    }
+    private static func inferredKind(_ value: CFTypeRef, attribute: String) throws -> AttributeValueKind {
+        let type = CFGetTypeID(value)
+        if type == CFStringGetTypeID() { return .string }
+        if type == CFBooleanGetTypeID() { return .boolean }
+        if type == CFNumberGetTypeID() { return .number }
+        if type == AXValueGetTypeID() {
+            switch AXValueGetType(unsafeDowncast(value, to: AXValue.self)) {
+            case .cgPoint: return .point
+            case .cgSize: return .size
+            case .cfRange: return .range
+            default: break
+            }
+        }
+        throw NativeFailure(code: "UNSUPPORTED", message: "Accessibility \(attribute) value type is not supported for attribute-setting arguments")
+    }
+    private static func fields(_ argument: JSONValue, attribute: String, keys: Set<String>) throws -> [String: JSONValue] {
+        guard case .object(let values) = argument, Set(values.keys) == keys else {
+            throw RequestParameters.invalid("\(attribute) requires exactly \(keys.sorted().joined(separator: ", "))")
+        }
+        return values
+    }
+    private static func finite(_ value: JSONValue?, name: String, attribute: String) throws -> Double {
+        guard let value, case .number(let number) = value, number.isFinite else {
+            throw RequestParameters.invalid("\(attribute) \(name) must be a finite number")
+        }
+        return number
+    }
+    private static func dimension(_ value: JSONValue?, name: String, attribute: String) throws -> Double {
+        let number = try finite(value, name: name, attribute: attribute)
+        guard number >= 0 else { throw RequestParameters.invalid("\(attribute) \(name) must be nonnegative") }
+        return number
+    }
+    private static func nonnegativeInteger(_ value: JSONValue?, name: String, attribute: String) throws -> Int {
+        guard let value, case .number(let number) = value, number.isFinite,
+              number.rounded(.towardZero) == number, number >= 0, number <= Double(Int.max),
+              let integer = Int(exactly: number) else {
+            throw RequestParameters.invalid("\(attribute) \(name) must be a nonnegative integer")
+        }
+        return integer
     }
     func pasteCommand(_ pid: Int32, maxElements: Int, maxDepth: Int) throws -> AXUIElement {
         guard let menu = try element(AXUIElementCreateApplication(pid), "AXMenuBar") else {

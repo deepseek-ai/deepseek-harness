@@ -52,13 +52,21 @@ it('binds all observation and keyboard operations to a selected window and suppr
   expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'listActions', params: {
     windowHandle: 'window-7', snapshotId: 'state-1', elementId: '42.12345',
   } })
+  await window.performAction(element('42.12345'), 'AXTextArea.AXValue.Set', 'hello')
+  expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'performAction', params: {
+    windowHandle: 'window-7', snapshotId: 'state-1', elementId: '42.12345',
+    action: 'AXTextArea.AXValue.Set', argument: 'hello',
+  } })
 })
-it('accepts an element action query only for a selected window snapshot', () => {
+it('accepts an element action query or execution only for a selected window snapshot', () => {
   const params = { windowHandle: 'window-7', snapshotId: 'state-1', elementId: '42.12345' }
   expect(WindowRequest.parse({ method: 'listActions', params })).toEqual({ method: 'listActions', params })
   expect(WindowRequest.safeParse({ method: 'listActions', params: {
     windowHandle: 'window-7', elementId: '42.12345',
   } }).success).toBe(false)
+  const action = { ...params, action: 'AXTextArea.AXValue.Set', argument: 'hello' }
+  expect(WindowRequest.parse({ method: 'performAction', params: action })).toEqual({ method: 'performAction', params: action })
+  expect(WindowRequest.safeParse({ method: 'performAction', params: { ...params, action: '' } }).success).toBe(false)
 })
 it('launches a discovered entry without inventing a selected window or waiting for one', async () => {
   const f = fixture()

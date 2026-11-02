@@ -94,6 +94,25 @@ it('admits an element action query only with a retained snapshot identity', () =
   ]) expect(Request.safeParse({ method: 'listActions', params: invalid }).success).toBe(false)
 })
 
+it.each([
+  { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', action: 'AXPress' },
+  { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', action: 'AXPress', argument: null },
+  { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', action: 'AXTextArea.AXValue.Set', argument: 'hello' },
+  { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', action: 'AXTextArea.AXSelectedTextRange.Set', argument: { location: 0, length: 3 } },
+  { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', action: 'AXWindow.AXPosition.Set', argument: { x: 10, y: 20 } },
+])('admits performAction $action with its direct argument', (params) => {
+  expect(Request.parse({ method: 'performAction', params })).toEqual({ method: 'performAction', params })
+})
+
+it('requires a retained snapshot and a nonempty action for performAction', () => {
+  for (const invalid of [
+    { appHandle: 'app', snapshotId: 'snapshot', elementId: '0' },
+    { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', action: '' },
+    { appHandle: 'app', elementId: '0', action: 'AXPress' },
+    { appHandle: 'app', snapshotId: 'snapshot', elementId: '0', action: 'AXPress', extra: true },
+  ]) expect(Request.safeParse({ method: 'performAction', params: invalid }).success).toBe(false)
+})
+
 it.each(['click', 'hover', 'scroll', 'drag'])('validates 0–999 integer coordinates for %s', (method) => {
   const params = { appHandle: 'app', windowId: 7, relative: true,
     ...method === 'drag' ? { fromX: 0, fromY: 0, toX: 999, toY: 999 } : { x: 0, y: 999 },

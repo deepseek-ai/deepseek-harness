@@ -333,6 +333,52 @@
             "properties": {
               "method": {
                 "type": "string",
+                "const": "performAction"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "snapshotId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "elementId": {
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "action": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "argument": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "snapshotId",
+                  "elementId",
+                  "action"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
                 "const": "hover"
               },
               "params": {
@@ -1258,6 +1304,39 @@
             "additionalProperties": false
           }
         ],
+        "$defs": {
+          "__schema0": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/__schema0"
+                }
+              },
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/__schema0"
+                }
+              }
+            ]
+          }
+        },
         "type": "object"
       }
     },

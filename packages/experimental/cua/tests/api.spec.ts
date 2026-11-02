@@ -248,6 +248,33 @@ describe('element action queries', () => {
   })
 })
 
+describe('element actions', () => {
+  it('dispatches advertised actions with omitted, null or direct values without wrapping the value', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    expect(await app.performAction(element('42.12345'), 'AXPress')).toEqual(delivered)
+    expect(await app.performAction(element('42.12345'), 'AXPress', null)).toEqual(delivered)
+    expect(await app.performAction(element('42.12345'), 'AXTextArea.AXValue.Set', 'hello')).toEqual(delivered)
+    expect(await app.performAction(element('42.12345'), 'AXWindow.AXPosition.Set', { x: 10, y: 20 })).toEqual(delivered)
+    expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
+      { method: 'performAction', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '42.12345', action: 'AXPress' } },
+      { method: 'performAction', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '42.12345', action: 'AXPress', argument: null } },
+      { method: 'performAction', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '42.12345', action: 'AXTextArea.AXValue.Set', argument: 'hello' } },
+      { method: 'performAction', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '42.12345', action: 'AXWindow.AXPosition.Set', argument: { x: 10, y: 20 } } },
+    ])
+    expect(f.sink.text).not.toHaveBeenCalled()
+  })
+
+  it('rejects an empty action before dispatch', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    await expect(app.performAction(element('0'), '')).rejects.toThrow('performAction action')
+    expect(f.dispatch).not.toHaveBeenCalled()
+  })
+})
+
 describe('application and window observations', () => {
   it('keeps the latest element id scope separate for an app and each selected window', async () => {
     const f = fixture()

@@ -124,6 +124,14 @@ export interface CuaSurface {
    */
   listActions(elementId: CuaElementId): Promise<string[]>
   /**
+   * Perform an element action, including attribute-setting operations.
+   * @param elementId - Element id from this surface's latest observation.
+   * @param action - Exact action name from listActions.
+   * @param argument - Direct action argument; omit or pass null for a no-argument action, or pass the value itself for attribute setting.
+   * @returns Dispatch evidence; the application state is not verified.
+   */
+  performAction(elementId: CuaElementId, action: string, argument?: JsonValue): Promise<CuaActionResult>
+  /**
    * Reveal advertised AX alternate UI, otherwise move the system cursor without pressing a button.
    * The system-pointer route requires the app to be foreground and the point unobscured; never activates or raises it.
    * Returning and subsequent observations do not restore the previous pointer position.

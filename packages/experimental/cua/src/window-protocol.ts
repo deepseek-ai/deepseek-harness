@@ -26,6 +26,7 @@ export const WindowRequest = z.discriminatedUnion('method', [
   operation('launch', { target: z.string().min(1) }),
   operation('getState', { ...handle, includeMenus: z.boolean().optional(), details: z.boolean().optional() }),
   operation('listActions', snapshot),
+  operation('performAction', { ...snapshot, action: z.string().min(1), argument: z.json().optional() }),
   operation('activate', handle), operation('show', handle), operation('screenshot', handle),
   operation('typeText', { ...handle, text: z.string() }),
   operation('paste', { ...handle, text: z.string(), format: z.enum(['text', 'html']).optional() }),

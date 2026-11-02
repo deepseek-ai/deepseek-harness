@@ -45,6 +45,7 @@ export const Request = z.discriminatedUnion('method', [
     details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
   }),
   operation('listActions', snapshot),
+  operation('performAction', { ...snapshot, action: z.string().min(1), argument: z.json().optional() }),
   z.object({ method: z.literal('hover'), params: z.union([
     z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
   ]) }).strict(),
