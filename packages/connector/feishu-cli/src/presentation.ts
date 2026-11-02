@@ -10,6 +10,7 @@ import type { FeishuAppId, FeishuOperationKind, FeishuState } from './types.ts'
 /** The npm package whose bundle page carries the account section. */
 export const FEISHU_PACKAGE = '@deepseek-ai/dsh-feishu'
 
+/* jscpd:ignore-start -- CLI app plugins declare page operations, copy, and commands alike, each with its own text. */
 /** The operations the section's buttons start; each but a check reports a notice in the browser that started it. */
 export const OPERATIONS: readonly CliAccountOperation<FeishuOperationKind>[] = [
   { kind: 'check' },
@@ -29,6 +30,7 @@ const CHECK = { kind: 'start', operation: 'check' } as const
 const LINK_APP = { kind: 'start', operation: 'link-app' } as const
 const SIGN_IN = { kind: 'start', operation: 'sign-in' } as const
 const SIGN_OUT = { kind: 'start', operation: 'sign-out' } as const
+/* jscpd:ignore-end */
 
 type Operation = NonNullable<FeishuState['operation']>
 type Step = 'step.configuring' | 'step.authorizing' | 'step.connecting' | 'step.signing-out'
@@ -111,6 +113,7 @@ export function presentAccount(view: FeishuState): CliAccountDisplay {
         phase: 'unavailable', status: text('status.unavailable'), badge: text('badge.unavailable'),
         buttons: [{ label: text('action.retry'), command: CHECK }], detail: text('detail.unavailable'), notes: appNotes(account.appId), ...failure,
       }
+    /* jscpd:ignore-start -- CLI app plugins that sign out offer the same confirmed sign-out button. */
     case 'connected':
       return {
         phase: 'connected', status: text('status.connected'), badge: text('badge.connected'),
@@ -121,6 +124,7 @@ export function presentAccount(view: FeishuState): CliAccountDisplay {
         detail: account.userName === undefined ? text('detail.connected') : text('detail.connectedAs', { name: account.userName }),
         notes: appNotes(account.appId), ...failure,
       }
+    /* jscpd:ignore-end */
     /* v8 ignore next -- closed account state union */
     default: return assertNever(account)
   }
