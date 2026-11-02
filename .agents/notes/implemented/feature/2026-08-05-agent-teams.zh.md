@@ -10,47 +10,41 @@ subagent seam 已提供 fresh／fork provider、持久 child Session、FIFO foll
 
 同进程 Agent 还共享一个 checkout。文件系统 edit 工具可以拒绝已观察到的陈旧版本，但 Bash、formatter、generator 与外部 writer 会绕过该屏障。把 teammate name 或 task owner 当作文件锁只会掩盖而不是解决该并发边界。
 
-Agent Teams 的公开约定仍处于实验阶段，因此需要显式启用的组合。默认工具目录与简单任务行为必须保持不变；而显式请求的 Team 必须能跨越 child Activation settlement 与 mailbox 投递竞争，使 Lead 在进程 teardown 前汇总结果。
+Team 协作需要显式开启；[Session 选择](../architecture/2026-10-20-session-team-mode.zh.md)负责选择粒度与默认组合。默认工具目录与简单任务行为必须保持不变；而显式请求的 Team 必须能跨越 child Activation settlement 与 mailbox 投递竞争，使 Lead 在进程 teardown 前汇总结果。
 
 ## Decision
 
-每个普通运行时 Root 都是一个隐式 Team 的 Lead，Team id 等于该 Root 的 `SessionId`。Team 没有 creation event：Lead pseudo-row 由身份直接存在，持久状态从第一条 member、message 或 task event 开始。roster 是扁平结构，最多包含配置数量、不可变且采用小写 kebab-case 的名字。每个 teammate 都是使用预留 Session id 的 continuable 直接 child；只有 Lead 可以创建或 interrupt teammate。roster 外由 provider 管理的普通 subagent 不是 Team member；普通 fork 是新的 Root，继承的 Team 记录会因 ancestor `TeamId` 被排除。
+每个普通根及其后代组成以根 `SessionId` 标识的 Team；持久任务状态从首个任务事件开始。[subagent 队友](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)负责单一 agent 身份。[仅等待收件箱](../simplification/2026-10-29-inbox-only-agent-wait.zh.md)使任务板变更独立于收件箱等待。普通 Session fork 成为一棵新树的根，并排除继承的 Team 权限。
 
-实现拆分为 `@deepseek-ai/dsh-experimental-agent-team` 与 `@deepseek-ai/dsh-experimental-tool-agent-team`：前者负责 `ctx.agentTeams` 和持久语义，后者负责 scoped schema 与模型指引。每个 Team 工具都声明完整的结果 schema，并把该值渲染为紧凑 JSON，因此编译器会检查每个 `execute` 是否符合对模型的承诺，也没有结果把 token 花在缩进上。部署显式挂载两个插件，并可禁用具有相同模型可见名称的旧 continuable control。共享策略声明 Team 可用，并说明协调责任。两个包都是 `packages/experimental/` 的公开成员；[实验性包参考](../../../../packages/experimental/AGENTS.md)负责发布、依赖隔离与 promotion。
+实现拆分为 `@deepseek-ai/dsh-agent-team` 与 `@deepseek-ai/dsh-tool-agent-team`：前者负责 `ctx.agentTeams` 和持久语义，后者负责 scoped schema 与模型指引。每个 Team 工具都声明完整的结果 schema，并把该值渲染为紧凑 JSON，因此编译器会检查每个 `execute` 是否符合对模型的承诺，也没有结果把 token 花在缩进上。基础 bundle 挂载两个插件；Team 不注册与 subagent control 同名的工具。共享策略声明 Team 可用，并说明协调责任。两个包属于 [subagent 家族](../../../../packages/subagent/README.zh.md)；根 Session 保存的选择控制任务工具与策略。[Session 模式升级指南](../../../../docs/upgrade-guide/v0.2.1-rc.2/session-team-mode/guide.zh.md)说明 profile 迁移。
 
 Lead 必须等待所需工作后才能给出最终答案。进程 teardown 仍是最终生命周期 owner，并会 drain continuation Activation；Team task owner 是持久状态，不会因 idle、interrupt 或进程退出自动释放。
 
 ## Profile delegation
 
-[Team profile](../../../../packages/experimental/agent-team-profile/README.zh.md) 禁用 `subagent`、`subagent_fork` 以及名称重叠的全局控件。模型直接委派使用支持 fresh 或 fork 上下文的 `spawn_teammate`，使这些子代理进入持久 roster。Workflow 仍通过 base profile 的 fresh `spawn` 提供方执行脚本编排；经模型工具创建的 workflow 子代理不会继承 teammate 的对话身份。Subagent 服务和提供方仍是共享基础设施。普通 Session fork 保留历史；[当前身份处理](../architecture/2026-10-13-team-identity-runtime-context.zh.md)提供 fork 自己的角色。
+[基础 bundle](../../../../packages/bundle/base/README.zh.md) 插入 Team 行，并保留 base 的委派与控制工具；teammate 按[subagent](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)所述使用这些工具启动。普通 Session fork 保留历史；[当前身份处理](../architecture/2026-10-13-team-identity-runtime-context.zh.md)提供 fork 自己的角色。
 
 ## Team identity
 
-共享 system 策略和全部工具 schema 在成员间保持一致；执行时检查角色权限。Team 工具根据调用者确定 Team，并接受成员名字，因此模型不需要 Team id。[必需 runtime-context 身份](../architecture/2026-10-13-team-identity-runtime-context.zh.md)负责身份注入、保留与 fork 处理。
+成员共享统一系统策略和工具模式；执行时强制角色权限。Team 工具解析调用方所属 Team，并使用 Session id 作为任务负责人。[必需运行时身份](../architecture/2026-10-13-team-identity-runtime-context.zh.md)负责身份注入、保留和分叉处理。
 
 ## Provisioning and recovery
 
-创建操作先在 Lead Session 中追加并 flush `team/member` provisioning 快照，再通过选定 fresh 或 fork provider 启动预留的 continuable child。初始 inbox 获准前的失败会追加 failed 快照；成功会先 flush child 中已接受的 inbox 条目，再追加 active。恢复会在初始消息仍处于 pending 或已进入用户消息历史时识别它。名字由第一条 provisioning 记录永久保留，包括失败后也不能复用。dispose 会关闭准入，中止并等待已获准的创建与发送操作，再停止 roster 记录的所有 live child；failed child 在 Activation 退出前仍由 cleanup 拥有，cleanup 拒绝会让 dispose 失败。
-
-Root 恢复时会把未终结 provisioning 记录与独立持久 child Session 对账。直接 parent 与 continuable descriptor 匹配，并且已经记录初始用户消息，才能证明准入成功并转为 active；缺失、损坏、provider／lineage 不匹配或缺少已准入消息都会转为 failed。creator 会在同一 Lead 日志 serializer 内重读终态；如果 recovery 在创建成功时先标记 failed，creator 会 drain child 并报告 provisioning conflict，而不是遗留孤儿。这样既无需重建从未保存在 Team 日志中的初始 prompt，也能约束插件 reload 竞争。
-
-fresh child 不继承对话。fork child 只捕获一次 Lead 已完成 turn 前缀，并保留为自己的持久 seed。当前 delegation turn 保持排除，与既有 fork provider 契约一致。
+队友创建和冷恢复属于子代理运行时（[子代理队友](../architecture/2026-10-15-agent-teams-as-subagents.zh.md)）。历史 `team/member` 记录保留阶段和描述并继续可读；Team 不写入新成员记录。
 
 ## Mailbox and task transactions
 
-历史 Lead-log mailbox 仍是可读格式：queued 与 delivered 记录保留稳定身份与发送者，Team payload 校验仍适用于它们。Team 不再投递或确认这些记录；新发送遵循[直接 inbox 决策](../simplification/2026-09-26-team-direct-inbox.zh.md)。
+历史 Lead-log mailbox 仍可从原始 Session 日志读取。[仅投影任务的决策](../simplification/2026-10-29-team-task-only-projection.zh.md)取代邮箱投影、检查点保留和 Team 载荷校验。历史排队消息绝不再投递或确认。
 
-事件投影和 checkpoint 准入期间，未知 mailbox 内容保持为已解码 JSON。校验只检查其 type，不重建字段，因为通用对象解析可能省略有效的自有 `__proto__` 键。本地声明的内容变体接受结构校验；不透明的插件字段不获得 Team 语义。缓存失效是必要的，因为只修正解析器无法恢复缓存状态中省略的键。[Team 文档](../../../../packages/experimental/agent-team/README.zh.md)拥有恢复行为的说明。
-
-`send_message` 对 running、idle 和 cold target 使用 Steer。新发送返回 inbox 接收结果。[Team Steer 消息决策](../../archived/simplification/2026-08-30-team-send-message-steer.md)记录单一工具调度的理由。
+member 消息使用 subagent 的 `send_message` 操作，它对 running、idle 和 cold target 使用 Steer，并返回 inbox 接收结果。
 
 共享 task 是带 Team-local id 与单调 revision 的完整快照。每次变更都携带 `expectedRevision`。任意 member 可以创建、读取或 claim ready 且无 owner 的任务；Owner 或 Lead 可以编辑和转换；只有 Lead 可以分配给另一个 member。数字 task id 保持在安全整数分配范围内；该范围耗尽时会失败，不会复用 id。依赖必须指向未删除任务，并形成完整 DAG。删除任务保留为 tombstone。`writeScopes` 是规范化路径前缀，只产生重叠诊断，绝不会阻止 claim 或授予写权限。
 
-`wait_agent` 等待调用注册后发生的下一条 roster、mailbox、task 或实时 status 边，避免模型轮询。它不会回放更早的边，因此调用方需要在唤醒或超时后重新读取权威状态。仅限 Lead 的 interrupt 使用 inbox preservation 取消当前 turn，不改变 mailbox 或 task owner。
+`wait_agent` 属于普通 subagent 控制工具，等待当前调用者的下一步收件箱，包括已有待处理输入。任务提交不结束等待、不投递消息，也不启动空闲轮次。需要另一个成员处理任务变更时，Agent 应发送消息。祖先可中断后代，不改变任务归属。
 
 ## Shared checkout boundary
 
-所有 member 创建时使用 Lead 的当前目录，并立即观察共享文件系统写入。后续目录变更仅影响各自 Session。策略要求 member 切分任务、记录提示性 write scope、为有序工作添加依赖，并由 Lead 检查最终 diff 和运行测试。文件系统 stale-version 拒绝后必须重新读取并 rebase 修改意图。Bash、formatter、codegen 与直接外部写入不具备等价保证。
+所有 member 创建时使用 Lead 的当前目录，并立即观察共享文件系统写入。后续目录变更仅影响各自 Session。任务策略要求 member 认领就绪任务、使用提示性 write scope 和依赖，并在完成工作后完成任务。文件系统 stale-version 拒绝后必须重新读取并 rebase 修改意图。Bash、formatter、codegen 与直接外部写入不具备等价保证。
 
 Team 领域不会推断 branch、创建 worktree、merge 变更或静默改变 cwd。deployment 或调用方可以另外使用[显式工作树创建](2026-09-13-explicit-worktree-creation.zh.md)。这样保留既有 same-world subagent 与 sandbox 契约。
 
@@ -58,36 +52,36 @@ Team 领域不会推断 branch、创建 worktree、merge 变更或静默改变 c
 
 Web panel 读取 Lead Session 的 `agentTeam` 传输投影，因为现有投影流能持续更新浏览器状态，无需独立的 Team 读取 API。Lead 与 teammate 会话均从共享的跨 Session store 选择值。面板不负责投影读取：Session 加载、列表缓存值与控制基线提供数据。
 
-传输视图携带持久 roster phase、使用共享就绪与重叠派生逻辑的未删除任务视图，以及最后有效状态旁的 `failure`。实时活动来自 Session 状态。模型选择有自己的持久投影；面板展示共享 store 中可用的值，不打开成员会话。缺少的缓存值保持缺失，直到 Session 加载或实时更新提供它。
+任务面板使用包含就绪和重叠诊断的未删除任务视图，以及最后有效状态旁的 `failure`。历史名册字段仍可解码，但不拥有当前 UI 或分配权限。普通 subagent 导航负责成员发现；任务所有者标签复用 Session 和目录元数据。
 
-发布要求 `apply` 对每个已应用的 Team 事件返回新的 state 对象，并只替换被触及的集合。仅邮箱的事件保留视图引用，不发布 frame。现有传输层将每个变化后的完整视图发送给所有已连接浏览器；包 README 记录了这项开销。
+发布要求 `apply` 为每个应用的事件返回新状态，且只替换触及的集合。仅邮箱事件保留客户端视图，不发布更新。现有载体向已连接浏览器发送变更后的完整视图；包 README 记录该成本。
 
 ## Alternatives considered
 
-**用 peer id 扩展 direct-child subagent tool。** 拒绝，因为 parent／child 权限与 Team peer membership 是不同领域。向 continuation seam 增加 peer access 会削弱 exact-parent authorization，仍无法为 roster 与 task 提供持久 owner。
+**保留独立 Team 通信权限。** 后续的[整树通信决策](../architecture/2026-10-16-tree-wide-agent-communication.zh.md)将路由和授权置于 subagent 运行时；任务板不能授予另一条路由。
 
-**在 Lead 日志入队前把 mail 存入每个 target Session。** 拒绝，因为 Team 提交发送之后，target materialization 与准入仍可能失败。始终 live 的 Lead Session 是事务 owner；target recording 是 acknowledgement 与去重边界。
+**保留持久化 Team 邮箱。** 目标接纳和任务提交是独立操作。历史 Team 邮箱保持可读，当前通信使用目标收件箱。任务提交既不投递消息，也不结束等待。
 
 **把 task ownership 或 write scope 当作锁。** 拒绝，因为外部 writer 会绕过它们，崩溃 owner 会持久保留，而路径前缀重叠不能证明语义独立。虚假的互斥保证比明确 warning 更危险。
 
 **自动创建隔离 worktree。** 拒绝，因为 worktree 创建、branch 命名、merge 策略、ignored file、构建产物与 cleanup 都是 deployment 选择；它也会改变既有 subagent 与 sandbox 暴露的 same-world 行为。
 
-**在默认工具目录中启用 Team。** 拒绝，因为 scoped Team control 会覆盖同名旧全局工具，主动 delegation 也会给简单任务增加延迟和 token 成本。opt-in profile bundle 会插入 Team 并禁用旧 control，同时不向随附依赖图添加 Team 包。
+**在默认工具目录中启用 Team。** 拒绝，因为主动协调与 Team 工具 schema 会给简单任务增加延迟和 token 成本。opt-in profile bundle 会插入 Team，同时不向随附依赖图添加 Team 包。
 
-**使用内存 board 与 mailbox。** roster 与任务状态必须经受 settlement、HMR 与中断。历史 mailbox 记录保持可读；消息归属目标 inbox。
+**使用内存 board 与 mailbox。** 任务状态必须经受 settlement、HMR 与中断。历史 mailbox 记录保持可读；消息归属目标 inbox。
 
-**让 Team 工具返回未类型化 JSON。** 拒绝，因为未声明的结果类型会让 `execute` 在没有编译错误的情况下偏离对模型的承诺，也会引入在每份 roster、task 与回执上都消耗 token 的缩进。因此每个 Team 工具都声明完整的结果 schema，并由一个共享 helper 紧凑渲染。
+**让 Team 工具返回未类型化 JSON。** 拒绝，因为未声明的结果类型会让 `execute` 在没有编译错误的情况下偏离对模型的承诺，也会引入在每份 task 与 wait 结果上都消耗 token 的缩进。因此每个 Team 工具都声明完整的结果 schema，并由一个共享 helper 紧凑渲染。
 
 ## Testing
 
-包测试覆盖 Team 权限、provisioning 持久性、任务转换、直接 inbox 接收、发送者归属、生命周期取消和历史 mailbox 可读性。无密钥 Team profile 快照固定 policy、工具与工作流；CLI 组合测试检查持久 Team 和 child 日志。
+包测试覆盖任务转换、基于树的分配、历史名册和邮箱解码，以及任务提交后收件箱等待保持未完成。普通 subagent 测试覆盖收件箱等待；录制 Team 组合覆盖身份、任务策略和工具。
 
-模型可见的成员身份与可用状态遵循[工具投影说明](../../../../packages/experimental/tool-agent-team/README.zh.md)；服务驻留状态和持久身份仍保持区分。
+身份和收件箱等待遵循 [subagent 控制工具](../../../../packages/subagent/tool-subagent-control/README.zh.md)；任务策略遵循 [Team 工具参考](../../../../packages/team/tool-agent-team/README.zh.md)。
 
 ## Consequences
 
-Lead Session 保留完整 task／member 快照和历史 mailbox 记录。这优先支持可检查的恢复，而不是紧凑增量；deleted 与 delivered 历史在更广泛的 Session 保留策略生效前仍只追加。
+Lead Session 保留完整 task 快照以及历史 member 与 mailbox 记录。这优先支持可检查的恢复，而不是紧凑增量；deleted 与 delivered 历史在更广泛的 Session 保留策略生效前仍只追加。
 
-active roster 成员可能不驻留，因此 `inactive` 不表示失败，发送可能产生冷恢复延迟。准入失败会拒绝新发送。历史 pending 邮件永远不会被投递。provisioning 失败永久占用其名称和成员槽位。
+teammate 可能不驻留，因此 `inactive` 不表示失败，发送可能产生冷恢复延迟。历史 pending 邮件永远不会被投递。
 
 协调可以降低 checkout 冲突概率，但无法消除文件系统 CAS 工具之外的写入。最终 diff 与测试仍是 Lead 的集成边界。

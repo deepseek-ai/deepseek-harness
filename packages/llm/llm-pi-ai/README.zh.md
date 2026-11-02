@@ -48,6 +48,8 @@ kind: "package-reference"
         requestImagePixelBudget: 4194304 # total pixels; 2048 by 2048 default
         requestImageMaxBytes: 1048576    # raw bytes before base64 expansion
         maxRequestImageBytes: 20971520   # accumulated base64 payload
+        maxRequestImages: 50             # retained image occurrences
+        imageOffloadCountQuantum: 10     # oldest images offloaded per count overflow
         retryPolicy:
           mode: normal
           maxRetries: 3
@@ -86,6 +88,8 @@ kind: "package-reference"
 | `requestImagePixelBudget` | `4,194,304` | 每张确定性请求图片的总像素预算 |
 | `requestImageMaxBytes` | `1 MiB` | 每张请求图片在 base64 扩展前的编码字节目标 |
 | `maxRequestImageBytes` | `20 MiB` | base64 图片载荷总上限，保留图片超过时请求以 `IMAGE_OFFLOAD_REQUIRED` 失败 |
+| `maxRequestImages` | `50` | 保留请求图片数量上限，保留图片超过时请求以 `IMAGE_OFFLOAD_REQUIRED` 失败。默认值取 Azure OpenAI 的 50 张上限；提供方接受更多图片的路由应调高 |
+| `imageOffloadCountQuantum` | `10`，不超过 `maxRequestImages` | 每次数量超限时省略的最老图片数 |
 | `retryPolicy` | normal，5 次重试 | 由 `dsh-llm-retry` 执行的提供方自有重试策略 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-llm-pi-ai)是每个受支持字段及其 JSDoc 的穷尽式真源。
@@ -216,7 +220,7 @@ git add packages/llm/llm-pi-ai/src/provider-data.generated.ts
 
 #### 模型看到什么
 
-所选目录模型会收到系统消息文本、对话历史、工具以及支持的采样字段。目录模型声明 `supportsMidConvoSystemMessages` 时，适配器按历史顺序保留后续系统消息。否则，适配器在传给 pi-ai 之前，将每条非空的后续系统消息转换为以 `<system-reminder>` 包裹的用户消息。包裹文本不会赋予系统角色优先级。单次调用的 `GenerateOptions.system` 放在初始历史提示词之前。重复的系统消息仍会重复发送；空系统消息会被跳过，不会丢弃之前的文本。工具更新能力选择共享的历史声明投影；pi-ai 接收初始可用工具，以及按开发者消息分组的新增和受支持的移除更新。当包含工具更新的 Anthropic 请求中所有投影后的声明均为延迟加载时，初始可用工具为一个占位工具 `DeferredToolPlaceholder`，其描述要求模型永不调用它；若被调用，会得到普通的未知工具结果。Anthropic 在更新消息中以内联方式接收后续工具定义。回放会保留工具调用命名空间，以支持动态加载的 Responses 工具。每张保留图片前都会有文本，注明其完整附件 id 与实际请求尺寸。当前执行文件系统可以映射附件提供方的宿主对象时，该文本还会携带只读规范化对象路径，并警告规范化或请求投影可能缩放或重新编码上传内容。日志中的图片省略决策选中的每个出现位置都会在替换文本中保留自己的身份与当前已解析访问方式，其规范化附件不会读取或变换。当保留的出现位置按精确 base64 载荷仍超过路由的 `maxRequestImageBytes` 时，调用以 `IMAGE_OFFLOAD_REQUIRED` 失败，由 `dsh-compaction-image-offload` 用 `image/offload` 事件记录所选位置并重试步骤。提供方原生回放元数据只在适配器针对历史内容校验通过后恢复。 `imageRequestTarget(provider, model, image)` 向截图调用方提供与模型请求一致的图片尺寸和字节目标；不缩放图片的适配器保留归一化后的原图。
+所选目录模型会收到系统消息文本、对话历史、工具以及支持的采样字段。目录模型声明 `supportsMidConvoSystemMessages` 时，适配器按历史顺序保留后续系统消息。否则，适配器在传给 pi-ai 之前，将每条非空的后续系统消息转换为以 `<system-reminder>` 包裹的用户消息。包裹文本不会赋予系统角色优先级。单次调用的 `GenerateOptions.system` 放在初始历史提示词之前。重复的系统消息仍会重复发送；空系统消息会被跳过，不会丢弃之前的文本。工具更新能力选择共享的历史声明投影；pi-ai 接收初始可用工具，以及按开发者消息分组的新增和受支持的移除更新。当包含工具更新的 Anthropic 请求中所有投影后的声明均为延迟加载时，初始可用工具为一个占位工具 `DeferredToolPlaceholder`，其描述要求模型永不调用它；若被调用，会得到普通的未知工具结果。Anthropic 在更新消息中以内联方式接收后续工具定义。回放会保留工具调用命名空间，以支持动态加载的 Responses 工具。每张保留图片前都会有文本，注明其完整附件 id 与实际请求尺寸。当前执行文件系统可以映射附件提供方的宿主对象时，该文本还会携带只读规范化对象路径，并警告规范化或请求投影可能缩放或重新编码上传内容。日志中的图片省略决策选中的每个出现位置都会在替换文本中保留自己的身份与当前已解析访问方式，其规范化附件不会读取或变换。当保留的出现位置数量仍超过路由的 `maxRequestImages`，或其精确 base64 载荷超过 `maxRequestImageBytes` 时，调用以 `IMAGE_OFFLOAD_REQUIRED` 失败，由 `dsh-compaction-image-offload` 用 `image/offload` 事件记录所选位置并重试步骤。提供方原生回放元数据只在适配器针对历史内容校验通过后恢复。 `imageRequestTarget(provider, model, image)` 向截图调用方提供与模型请求一致的图片尺寸和字节目标；不缩放图片的适配器保留归一化后的原图。
 
 #### Token 影响
 
@@ -224,7 +228,7 @@ git add packages/llm/llm-pi-ai/src/provider-data.generated.ts
 
 #### KV Cache 影响
 
-传给适配器的后续系统消息不会进入初始提示词，从而保留此前的请求前缀。这不改变 Agent loop 的提示词纳入行为；它仍在不支持原生系统更新的路由上合并更新。转换保持逻辑请求顺序，图片句柄与卸载占位符则会添加模型可见文本。即使附件身份与请求字节保持稳定，执行世界路径变化也会改写历史句柄，并可能从该图片起阻止复用。更换适配器实例、提供方、模型或其他上游 token 具有相同的后缀影响。一次省略决策会把较早图片换成占位文本，因此复用在该消息处结束；省略永不回退，此后前缀保持稳定。
+传给适配器的后续系统消息不会进入初始提示词，从而保留此前的请求前缀。这不改变 Agent loop 的提示词纳入行为；它仍在不支持原生系统更新的路由上合并更新。转换保持逻辑请求顺序，图片句柄与卸载占位符则会添加模型可见文本。即使附件身份与请求字节保持稳定，执行世界路径变化也会改写历史句柄，并可能从该图片起阻止复用。更换适配器实例、提供方、模型或其他上游 token 具有相同的后缀影响。一次省略决策会把较早图片换成占位文本，因此复用在该消息处结束；省略永不回退，在下一次决策前前缀保持稳定。数量超限时一次省略 `imageOffloadCountQuantum` 张图片，因此饱和路由每新增这么多张图片才让复用在最老的保留图片处结束一次。
 
 ### 提供方响应
 
@@ -248,6 +252,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 这些限制说明适配器在哪里停止、由未来工作接续。它们是当前包约束，不是通用 pi-ai 对比或任务积压。
 
 - **`maxRequestImageBytes` 只计算 base64 图片载荷**，文本、工具、描述符与 JSON 结构在该上限之外，因此它必须留有余量地低于网关请求体上限。
+- **字节上限没有移除量子**：达到 `maxRequestImageBytes` 后，每张新图片都只省略最少的最老前缀，因此每个新增图片的请求都会让提示词缓存复用从该位置重新开始。
 - **登录只存在于发起它的进程中**——授权尝试不持久，因此登录中途刷新页面会放弃它，用户需要重新开始。退出登录是对已存储记录执行 `deleteRecord`，只在本地忘记它，不会告知签发方。
 - **OpenAI 不提供 ChatGPT 登录**——pi-ai 的 Sign in with ChatGPT 用应用提供的稳定 UUID 向 OpenAI 标识安装实例，而 harness 没有用于第三方账号登录的安装 ID；`openai` 路由改用 API key 登录。
 - **提供方原生发现经本插件的 ambient context 回答**——不点名凭据的路由交由目录提供方自身解析，它会询问环境值（`AZURE_OPENAI_API_KEY`、`AWS_PROFILE` 及各提供方自有集合）与本地凭据文件。两个问题都在这里得到回答：凭据 seam 先于进程环境被查询，文件存在性则针对宿主进程的文件系统以 `~` 展开后检查。它做不到的是*读取*凭据文件内容——自行解析 `~/.aws/credentials` 的提供方会直接读取，不经该 seam。

@@ -79,7 +79,7 @@ export function applyEditTool(ctx: Context, sandbox: FsSandboxController): void 
     order: ctx.systemPrompt.getSectionOrder('TOOL_EDIT'),
     text: ({ scope }) => ctx.tools.get('edit', scope) === undefined
       ? ''
-      : 'Read a file before editing it (the default fs-observation-policy requires it), unless you just created or edited it in this session.',
+      : 'Read a file before editing it unless you just created or edited it in this session.',
   })
 
   ctx.tools.register(defineTool({

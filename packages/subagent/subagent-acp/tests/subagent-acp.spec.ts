@@ -1570,9 +1570,9 @@ describe('dsh-subagent-acp', () => {
     await ctx.plugin(SubagentRuntime)
     await ctx.plugin(LocalSubprocessRuntime)
     const fiber = await ctx.plugin(acp, { providerName: 'acp', command: 'x', args: [], permission: 'reject', env: {} })
-    expect(ctx.subagents.list()).toEqual(['acp'])
+    expect(ctx.subagents.getProvider('acp')).toBeDefined()
     await fiber.dispose()
-    expect(ctx.subagents.list()).toEqual([])
+    expect(ctx.subagents.getProvider('acp')).toBeUndefined()
   })
 
   it('has the namespace-plugin export shape (no stray default)', () => {

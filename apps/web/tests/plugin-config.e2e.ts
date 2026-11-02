@@ -23,6 +23,7 @@ const ROW_EXPECTED = join(SNAPSHOT_DIR, 'row.expected.md')
 const BUNDLE_EXPECTED = join(SNAPSHOT_DIR, 'bundle.expected.md')
 const FIXTURE_PLUGINS = fileURLToPath(new URL('./fixtures/plugins', import.meta.url))
 const MODE = webSnapshotMode()
+const UNUSED_KEY_ENV = 'DSH_PLUGIN_CONFIG_E2E_UNUSED_KEY'
 
 describe('web e2e: plugin configuration pages', () => {
   let scaffold: WebScaffold
@@ -35,7 +36,8 @@ describe('web e2e: plugin configuration pages', () => {
     // below, that half registers its row's configuration into the page.
     scaffold = await launchWebScaffold({
       extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),
-      deepSeekSearch: { apiKeyEnv: 'DSH_PLUGIN_CONFIG_E2E_UNUSED_KEY' },
+      deepSeekSearch: { apiKeyEnv: UNUSED_KEY_ENV },
+      deepSeekWebApi: { apiKeyEnv: UNUSED_KEY_ENV },
       profile: { packages: [{ dir: join(FIXTURE_PLUGINS, 'fixture-live-client') }] },
     })
     browser = await chromium.launch()

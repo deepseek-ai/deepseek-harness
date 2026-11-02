@@ -645,6 +645,40 @@ describe('LocalPtySession readiness and output', () => {
     expect(operation.cancel()).toBe(false)
   })
 
+  it.each(['before', 'after'])('retains child output delivered %s exact stdin readiness', async (delivery) => {
+    vi.useFakeTimers()
+    const terminal = new FakeTerminal()
+    const inspector = new FakeInspector()
+    const session = makeSession(terminal, inspector, config())
+    try {
+      await initialize(session, terminal)
+      inspector.waiting = true
+      const written = Promise.withResolvers<undefined>()
+      terminal.write = async (data) => {
+        terminal.writes.push(data)
+        written.resolve(undefined)
+      }
+      const operation = session.startSend({ text: 'read-tty', submit: true })
+      await written.promise
+      expect(terminal.writes).toEqual(['read-tty\r'])
+      terminal.emitData('command echo\r\n')
+      inspector.pgid = 789
+
+      if (delivery === 'before') terminal.emitData('WAITING\r\n')
+      await vi.advanceTimersByTimeAsync(20)
+      expect(await operation.done).toMatchObject({
+        waitReason: 'stdin_read',
+        sessionStatus: { kind: 'running' },
+      })
+      if (delivery === 'after') terminal.emitData('WAITING\r\n')
+
+      expect(session.read({}).text).toMatch(/(?:^|\n)WAITING\n/)
+      expect(operation.cancel()).toBe(false)
+    } finally {
+      await session.close('delayed output cleanup')
+    }
+  })
+
   it('does not reuse a pre-write stdin wait as post-write readiness', async () => {
     vi.useFakeTimers()
     const terminal = new FakeTerminal()

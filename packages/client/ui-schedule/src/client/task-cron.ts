@@ -1,13 +1,5 @@
-/**
- * Client-side parsing, description, and structured shapes of the five-field
- * cron expressions the Run time card edits.
- *
- * The Host owns canonicalization, occurrence selection, and dispatch. This
- * module parses the same dialect so the card can reject a malformed expression
- * locally, describe a valid one without a Host round trip, and recognize the
- * common shapes the card's cron builder edits as structured rows.
- */
-import { assertNever } from '@deepseek-ai/dsh-util-values'
+/** Localized Cron descriptions built from the shared time parser's immutable fields. */
+import { Cron } from '@deepseek-ai/dsh-util-time'
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
 
 /** ISO weekday dictionary key naming one cron day-of-week value. */
@@ -76,33 +68,6 @@ export interface ParsedCron {
   readonly daysOfWeek: CronField
 }
 
-/** Accepted bounds and Sunday folding of one cron field, in evaluation order. */
-interface CronFieldSpec {
-  /** Lowest accepted value. */
-  readonly min: number
-  /** Highest accepted value; day-of-week accepts both 0 and 7 for Sunday. */
-  readonly max: number
-  /** Size of the matched set that the unrestricted `*` spells. */
-  readonly count: number
-  /** Accepted value folded onto `min` in the matched set; day-of-week folds 7. */
-  readonly foldMax?: number
-}
-
-/** Field bounds of the supported dialect, in `minute hour day-of-month month day-of-week` order. */
-const CRON_FIELDS: readonly CronFieldSpec[] = [
-  { min: 0, max: 59, count: 60 },
-  { min: 0, max: 23, count: 24 },
-  { min: 1, max: 31, count: 31 },
-  { min: 1, max: 12, count: 12 },
-  { min: 0, max: 7, count: 7, foldMax: 7 },
-]
-
-/** One stepped element over the whole field. */
-const CRON_STEP = /^\*\/(?<step>\d+)$/
-
-/** One value, range, or range with step. */
-const CRON_ELEMENT = /^(?<start>\d+)(?:-(?<end>\d+))?(?:\/(?<step>\d+))?$/
-
 /** ISO weekday dictionary keys indexed by ISO weekday minus one. */
 const CRON_WEEKDAY_KEYS = [
   'frequency.weekday.1', 'frequency.weekday.2', 'frequency.weekday.3', 'frequency.weekday.4',
@@ -113,105 +78,6 @@ const CRON_WEEKDAY_KEYS = [
 const CRON_TIME_LIST_LIMIT = 6
 
 /**
- * List one inclusive arithmetic range.
- * @param from - first value.
- * @param to - last value.
- * @param step - positive increment.
- * @returns ascending values from `from` through `to`.
- */
-function ascendingRange(from: number, to: number, step: number): number[] {
-  const values: number[] = []
-  for (let value = from; value <= to; value += step) values.push(value)
-  return values
-}
-
-/**
- * Read one in-range field element value.
- * @param text - digits of one element value.
- * @param spec - bounds of the field it belongs to.
- * @returns the value, or undefined when it is outside the field.
- */
-function cronValue(text: string, spec: CronFieldSpec): number | undefined {
-  const value = Number(text)
-  return Number.isSafeInteger(value) && value >= spec.min && value <= spec.max ? value : undefined
-}
-
-/**
- * Read one positive field step.
- * @param text - digits of one step.
- * @returns the step, or undefined when it is not a positive safe integer.
- */
-function cronStep(text: string): number | undefined {
-  const value = Number(text)
-  return Number.isSafeInteger(value) && value >= 1 ? value : undefined
-}
-
-/**
- * Expand one comma-separated element into the values it matches.
- * @param element - one element of a field.
- * @param spec - bounds of the field it belongs to.
- * @returns matched values, or undefined when the Host would reject the element.
- */
-function cronElementValues(element: string, spec: CronFieldSpec): number[] | undefined {
-  if (element.length === 0) return undefined
-  if (element === '*') return ascendingRange(spec.min, spec.max, 1)
-  if (element.startsWith('*')) {
-    const groups = CRON_STEP.exec(element)?.groups
-    if (groups === undefined) return undefined
-    const stepText = groups['step']
-    /* v8 ignore next -- a successful fixed regex always provides the step group. */
-    if (stepText === undefined) return undefined
-    const step = cronStep(stepText)
-    return step === undefined ? undefined : ascendingRange(spec.min, spec.max, step)
-  }
-  const groups = CRON_ELEMENT.exec(element)?.groups
-  if (groups === undefined) return undefined
-  const startText = groups['start']
-  /* v8 ignore next -- a successful fixed regex always provides the start group. */
-  if (startText === undefined) return undefined
-  const start = cronValue(startText, spec)
-  if (start === undefined) return undefined
-  const end = groups['end']
-  if (end === undefined) return groups['step'] === undefined ? [start] : undefined
-  const last = cronValue(end, spec)
-  if (last === undefined || start > last) return undefined
-  const stepText = groups['step']
-  const step = stepText === undefined ? 1 : cronStep(stepText)
-  return step === undefined ? undefined : ascendingRange(start, last, step)
-}
-
-/**
- * Expand one whitespace-free cron field into its matched value set.
- * @param raw - one field of the expression.
- * @param spec - bounds of that field.
- * @returns unique ascending values with Sunday folded, or undefined when malformed.
- */
-function cronFieldValues(raw: string, spec: CronFieldSpec): number[] | undefined {
-  const matched = new Set<number>()
-  for (const element of raw.split(',')) {
-    const values = cronElementValues(element, spec)
-    if (values === undefined) return undefined
-    for (const value of values) matched.add(value === spec.foldMax ? spec.min : value)
-  }
-  return [...matched].sort((left, right) => left - right)
-}
-
-/**
- * Failure reading a value the cron parser's own matching already proved present.
- */
-/* v8 ignore next -- constructed only by the unreachable bounds guard below. */
-class CronInvariantError extends Error {
-  /**
-   * Construct an invariant failure.
-   * @param message - violated invariant.
-   */
-  constructor(message: string) {
-    super(message)
-    this.name = 'CronInvariantError'
-  }
-}
-
-/**
  * Read one array element the caller's own length guard already bounds.
  * @param values - array whose length the caller checked.
  * @param index - index inside that length.
@@ -220,7 +86,7 @@ class CronInvariantError extends Error {
 function cronElementAt<T>(values: readonly T[], index: number): T {
   const value = values[index]
   /* v8 ignore next -- every caller reads an index inside an array length it already proved. */
-  if (value === undefined) throw new CronInvariantError('cron description read an index outside its array')
+  if (value === undefined) throw new Error('cron description read an index outside its array')
   return value
 }
 
@@ -230,28 +96,22 @@ function cronElementAt<T>(values: readonly T[], index: number): T {
  * @returns parsed fields, or undefined when the Host would reject the expression.
  */
 export function parseCronExpression(expression: string): ParsedCron | undefined {
-  if (expression.length === 0 || expression.trim() !== expression) return undefined
-  const fields = expression.split(/\s+/)
-  if (fields.length !== 5) return undefined
-  const parsed = fields.map((field, index) => {
-    const spec = cronElementAt(CRON_FIELDS, index)
-    const values = cronFieldValues(field, spec)
-    return values === undefined
-      ? undefined
-      : (() => {
-        // The star flag reads the field text's first character, exactly as the
-        // Host's `parseCronField` does; full coverage is a separate fact, because
-        // `*/2` is a star field that still restricts and `1-31` covers everything
-        // without being a star field.
-        const starred = field.startsWith('*')
-        const full = values.length === spec.count
-        return { values, starred, full, unrestricted: starred && full }
-      })()
-  })
-  const [minutes, hours, daysOfMonth, months, daysOfWeek] = parsed
-  if (minutes === undefined || hours === undefined || daysOfMonth === undefined
-    || months === undefined || daysOfWeek === undefined) return undefined
-  return { minutes, hours, daysOfMonth, months, daysOfWeek }
+  const result = Cron.parse(expression, 'UTC')
+  if (result.kind === 'rejected') return undefined
+  const parsed = result.rule.fields
+  const fields = parsed.expression.split(/\s+/)
+  const field = (values: readonly number[], count: number, index: number): CronField => {
+    const starred = cronElementAt(fields, index).startsWith('*')
+    const full = values.length === count
+    return { values, starred, full, unrestricted: starred && full }
+  }
+  return {
+    minutes: field(parsed.minutes, 60, 0),
+    hours: field(parsed.hours, 24, 1),
+    daysOfMonth: field(parsed.daysOfMonth, 31, 2),
+    months: field(parsed.months, 12, 3),
+    daysOfWeek: field(parsed.daysOfWeek, 7, 4),
+  }
 }
 
 /**
@@ -466,131 +326,4 @@ export function cronPreview(parsed: ParsedCron, t: CronDescriptionTranslator, lo
   const day = cronDayText(parsed, locale, t)
   const time = cronTimeText(parsed, t)
   return day.everyDay && time.interval ? time.text : [day.text, time.joined].join(t('cron.part.join'))
-}
-
-/** One structured cron shape the Run time card's builder edits as rows. */
-export type CronBuilderState =
-  | {
-    /** Runs every `step` minutes of every hour and day. */
-    readonly kind: 'minutely'
-    /** Whole minutes between runs, 1 through 59. */
-    readonly step: number
-  }
-  | {
-    /** Runs at one minute of every `step` hours, every day. */
-    readonly kind: 'hourly'
-    /** Whole hours between runs, 1 through 23. */
-    readonly step: number
-    /** Minute of each matched hour, 0 through 59. */
-    readonly minute: number
-  }
-  | {
-    /** Runs once a day at one wall-clock time. */
-    readonly kind: 'daily'
-    /** Hour of that time, 0 through 23. */
-    readonly hour: number
-    /** Minute of that hour, 0 through 59. */
-    readonly minute: number
-  }
-  | {
-    /** Runs on chosen weekdays at one wall-clock time. */
-    readonly kind: 'weekly'
-    /** ISO weekdays, Monday 1 through Sunday 7; never empty. */
-    readonly weekdays: readonly number[]
-    /** Hour of that time, 0 through 23. */
-    readonly hour: number
-    /** Minute of that hour, 0 through 59. */
-    readonly minute: number
-  }
-  | {
-    /** Runs on chosen days of every month at one wall-clock time. */
-    readonly kind: 'monthly'
-    /** Days of the month, 1 through 31, ascending; never empty. */
-    readonly days: readonly number[]
-    /** Hour of that time, 0 through 23. */
-    readonly hour: number
-    /** Minute of that hour, 0 through 59. */
-    readonly minute: number
-  }
-
-/**
- * Recognize the structured shape one parsed expression states, when one does.
- *
- * Every shape requires an unrestricted month. Exactly one of the two day fields
- * may restrict: a restricted weekday beside a star day-of-month is a weekly
- * rule, a restricted day-of-month beside a star weekday is a monthly rule, and
- * both restricting is unrecognized because each restriction matches
- * independently under the Host's Vixie union rule. Only a literal star states a
- * day field with no restriction: a written-out full set such as `0-6` or `1-31`
- * stays a weekly or monthly rule with every value selected, so toggling the
- * last pill on never collapses its row. Stepped shapes accept any uniform
- * full-range step on the clock, spelled with a star or written out, since both
- * match the same minutes or hours.
- * @param parsed - parsed cron expression.
- * @returns the shape the builder can edit, or undefined for the raw-expression fallback.
- */
-export function recognizeCronShape(parsed: ParsedCron): CronBuilderState | undefined {
-  if (!parsed.months.full) return undefined
-  const minuteStep = parsed.minutes.unrestricted ? 1 : cronFullRangeStep(parsed.minutes.values, 0, 59)
-  const hourStep = parsed.hours.unrestricted ? 1 : cronFullRangeStep(parsed.hours.values, 0, 23)
-  const minute = parsed.minutes.values.length === 1 ? cronElementAt(parsed.minutes.values, 0) : undefined
-  const hour = parsed.hours.values.length === 1 ? cronElementAt(parsed.hours.values, 0) : undefined
-  if (parsed.daysOfWeek.unrestricted) {
-    if (parsed.daysOfMonth.unrestricted) {
-      if (minuteStep !== undefined && parsed.hours.full) return { kind: 'minutely', step: minuteStep }
-      if (minute !== undefined && hourStep !== undefined) return { kind: 'hourly', step: hourStep, minute }
-      if (minute !== undefined && hour !== undefined) return { kind: 'daily', hour, minute }
-      return undefined
-    }
-    if (minute === undefined || hour === undefined) return undefined
-    return { kind: 'monthly', days: parsed.daysOfMonth.values, hour, minute }
-  }
-  if (!parsed.daysOfMonth.unrestricted || minute === undefined || hour === undefined) return undefined
-  const weekdays = parsed.daysOfWeek.values
-    .map(value => (value === 0 ? 7 : value))
-    .sort((left, right) => left - right)
-  return { kind: 'weekly', weekdays, hour, minute }
-}
-
-/**
- * Spell ascending unique field values as cron list text, collapsing a run of
- * three or more consecutive values into one range.
- * @param values - ascending unique field values.
- * @returns cron list text, for example `1-3,10`.
- */
-function cronRunField(values: readonly number[]): string {
-  return consecutiveRuns(values)
-    .map(run => (run.length >= 3 ? `${cronElementAt(run, 0)}-${cronElementAt(run, run.length - 1)}` : run.join(',')))
-    .join(',')
-}
-
-/**
- * Spell one builder shape's weekday set as a cron day-of-week field.
- * @param weekdays - ISO weekdays, Monday 1 through Sunday 7.
- * @returns ascending cron weekday field text, Sunday spelled as 0.
- */
-function cronWeekdayField(weekdays: readonly number[]): string {
-  return cronRunField([...new Set(weekdays.map(day => day % 7))].sort((left, right) => left - right))
-}
-
-/**
- * Spell one builder shape as the five-field expression a save submits.
- *
- * `recognizeCronShape` recognizes every expression this returns as the same
- * shape, so a builder edit never falls back to the raw-expression row.
- * @param state - builder shape to spell.
- * @returns the expression stating that shape.
- */
-export function cronShapeExpression(state: CronBuilderState): string {
-  switch (state.kind) {
-    case 'minutely': return state.step === 1 ? '* * * * *' : `*/${state.step} * * * *`
-    case 'hourly': return state.step === 1
-      ? `${state.minute} * * * *`
-      : `${state.minute} */${state.step} * * *`
-    case 'daily': return `${state.minute} ${state.hour} * * *`
-    case 'weekly': return `${state.minute} ${state.hour} * * ${cronWeekdayField(state.weekdays)}`
-    case 'monthly': return `${state.minute} ${state.hour} ${cronRunField([...new Set(state.days)].sort((left, right) => left - right))} * *`
-    /* v8 ignore next -- every CronBuilderState kind has a case above. */
-    default: return assertNever(state)
-  }
 }

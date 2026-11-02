@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-29-shipped-fs-mutation-defaults.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-29-shipped-fs-mutation-defaults.md
+/agent-note-shipped-filesystem-mutation-defaults:
+  en: ca322529f759f46a
+  zh: a8881e2284631255
+/agent-note-shipped-filesystem-mutation-defaults/problem:
+  en: 57dcac3bdbcf1c21
+  zh: f5bf64888e6dd973
+/agent-note-shipped-filesystem-mutation-defaults/decision:
+  en: bcdaca6bff9411b7
+  zh: 7adfc3a9b9d8853b
+/agent-note-shipped-filesystem-mutation-defaults/alternatives-considered:
+  en: 1249a7868ff2a069
+  zh: 739f191121bf5293
+/agent-note-shipped-filesystem-mutation-defaults/consequences:
+  en: 3def7f0443b41d34
+  zh: 70df709d1fcbe8fa
+/agent-note-shipped-filesystem-mutation-defaults/testing:
+  en: 625a8af588dc0ba8
+  zh: 9d489f1bbed14fb3

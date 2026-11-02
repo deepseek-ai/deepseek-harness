@@ -34,7 +34,7 @@ async function mount(config: Partial<scripted.Config> = {}): Promise<Context> {
 describe('scripted subagent provider fixture', () => {
   it('registers through the real service and returns the scripted reply', async () => {
     const ctx = await mount({ reply: 'hello from fixture' })
-    expect(ctx.subagents.list()).toEqual(['mock'])
+    expect(ctx.subagents.getProvider('mock')).toBeDefined()
 
     const run = await ctx.subagents.getProvider('mock')!.start!(baseRequest())
     await expect(run.result).resolves.toEqual({
@@ -47,7 +47,8 @@ describe('scripted subagent provider fixture', () => {
 
   it('registers under a configurable name', async () => {
     const ctx = await mount({ name: 'spawn' })
-    expect(ctx.subagents.list()).toEqual(['spawn'])
+    expect(ctx.subagents.getProvider('spawn')).toBeDefined()
+    expect(ctx.subagents.getProvider('mock')).toBeUndefined()
   })
 
   it('returns configured and default structured results', async () => {
@@ -98,8 +99,9 @@ describe('scripted subagent provider fixture', () => {
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     const fiber = await scripted.mountScriptedProvider(ctx, { name: 'mock' })
-    expect(ctx.subagents.list()).toEqual(['mock'])
+    expect(ctx.subagents.getProvider('mock')).toBeDefined()
+    expect(ctx.subagents.getProvider('spawn')).toBeUndefined()
     await fiber.dispose()
-    expect(ctx.subagents.list()).toEqual([])
+    expect(ctx.subagents.getProvider('mock')).toBeUndefined()
   })
 })

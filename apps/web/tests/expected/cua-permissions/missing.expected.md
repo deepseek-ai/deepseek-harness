@@ -16,7 +16,7 @@
     - strong: Screen Recording
     - paragraph: In System Settings, allow DSH Computer Use.app to capture application windows.
     - button "Request permission"
-  - paragraph: Manage permissions in System Settings for the application named by macOS.
+  - paragraph: Manage Accessibility and Screen Recording permissions in System Settings.
 - region "Manage applications computer use can access":
   - heading "Manage applications computer use can access" [level=3]
   - heading "Always-allowed applications" [level=4]

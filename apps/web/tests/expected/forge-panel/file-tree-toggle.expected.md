@@ -10,6 +10,13 @@
 - button "自动换行" [pressed]
 - button "将文件树移到右侧" [expanded]
 - region "全部 2 个文件":
+  - button "收起 panel.md" [expanded]
+  - text: docs/panel.md 新文件 +2 −0
+  - button "panel.md 的更多操作"
+  - button "选择第 R1 行": "1"
+  - text: "+ # Panel"
+  - button "选择第 R2 行": "2"
+  - text: + Shows the change requests of a Session.
   - button "收起 panel.ts" [expanded]
   - text: src/panel.ts +2 −2
   - button "panel.ts 的更多操作"
@@ -63,13 +70,6 @@
   - button "选择第 R18 行": "18"
   - text: export const n18 = 18
   - button "其余未变更的行"
-  - button "收起 panel.md" [expanded]
-  - text: docs/panel.md 新文件 +2 −0
-  - button "panel.md 的更多操作"
-  - button "选择第 R1 行": "1"
-  - text: "+ # Panel"
-  - button "选择第 R2 行": "2"
-  - text: + Shows the change requests of a Session.
 - separator "调整文件树宽度"
 - navigation "全部 2 个文件":
   - textbox "筛选文件…": src

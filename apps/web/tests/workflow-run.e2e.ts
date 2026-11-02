@@ -220,7 +220,7 @@ describe.skipIf(MODE === 'record')('web e2e: durable workflow run in Chat', () =
 
     await page.getByRole('button', { name: '1 subagent', exact: true }).hover()
     const catalog = page.getByRole('tree', { name: 'Subagent sessions' })
-    await catalog.getByRole('treeitem', { name: /snapshot-flow child 1/ }).click()
+    await catalog.getByRole('treeitem', { name: /snapshot-flow child 1/ }).press('Enter')
     await page.getByText(CHILD_PROMPT, { exact: true }).waitFor({ timeout: 15_000 })
     expect(await page.locator('[data-composer-input][contenteditable="true"]').count()).toBe(1)
   }, 60_000)
