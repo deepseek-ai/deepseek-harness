@@ -189,8 +189,8 @@ it('reads Office skills from the launcher skill directory outside the Desktop pr
 })
 
 it.each([
-  ['desktop', () => '', () => undefined],
-  ['web', () => undefined, () => ''],
+  ['desktop', (): string => '', (): undefined => undefined],
+  ['web', (): undefined => undefined, (): string => ''],
 ] as const)('treats empty launcher variables as unset in the %s profile', async (profile, primaryRuntime, skills) => {
   const { ctx } = await boot(profile, primaryRuntime, skills)
   await ctx.loader.resolve('skill-office').fiber!.await()
