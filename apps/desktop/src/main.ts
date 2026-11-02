@@ -939,18 +939,50 @@ async function main(): Promise<void> {
     await openUpdatePrompt()
   })
 
+  let configurationPrompt: Promise<void> | undefined
+  const showConfigurationError = (): Promise<void> => {
+    configurationPrompt ??= Promise.resolve().then(async () => {
+      while (channelState?.error !== undefined) {
+        const settingsError = channelState.error !== 'cleanup'
+        const result = await ordinaryMessageBox({ type: 'error', title: locale.messages.updateFailedTitle,
+          message: configurationMessage(channelState.error, locale.messages),
+          ...(settingsError ? { detail: channelSettings.path,
+            buttons: [locale.messages.updateReloadSettings, locale.messages.updateShowSettingsFile, locale.messages.updateClose],
+            defaultId: 0, cancelId: 2, action: { index: 0, run: async () => {
+              if (channelRequests > 0 || channelState === undefined) return false
+              channelRequests++
+              publishChannel({ ...channelState, changing: true })
+              try {
+                const loaded = await channelSettings.load()
+                if (loaded.kind === 'error') {
+                  publishChannel({ ...channelState, changing: true, error: configurationFailure(loaded.error) })
+                  return false
+                }
+                await updates.switchChannel(loaded.channel, async () => {})
+                publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: true })
+                return true
+              } catch (error) {
+                console.error('desktop update: settings reload failed', error)
+                publishChannel({ ...channelState,
+                  ...(updates.configurationFailure === 'cleanup' ? { error: 'cleanup' as const } : {}) })
+                return false
+              } finally {
+                publishChannel({ ...channelState, changing: --channelRequests > 0 })
+              }
+            } } } : {}),
+        })
+        if (!settingsError || result.response === 2) return
+        if (result.response === 1) { shell.showItemInFolder(channelSettings.path); return }
+      }
+    }).finally(() => { configurationPrompt = undefined })
+    return configurationPrompt
+  }
+
   let promptOperation: Promise<void> | undefined
   let policyAuthenticationQueued = false
   const openUpdatePrompt = (manual = false): Promise<void> => {
     if (channelState?.error !== undefined) {
-      const settingsError = channelState.error !== 'cleanup'
-      return ordinaryMessageBox({ type: 'error', title: locale.messages.updateFailedTitle,
-        message: configurationMessage(channelState.error, locale.messages),
-        ...(settingsError ? { detail: channelSettings.path,
-          buttons: [locale.messages.updateShowSettingsFile, locale.messages.updateClose], cancelId: 1 } : {}),
-      }).then((result) => {
-        if (settingsError && result.response === 0) shell.showItemInFolder(channelSettings.path)
-      })
+      return showConfigurationError()
     }
     if (authenticationOperation !== undefined) {
       policyAuth?.focus(); updateDialog.focus()

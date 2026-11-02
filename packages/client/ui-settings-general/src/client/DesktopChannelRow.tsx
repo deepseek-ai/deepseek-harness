@@ -1,6 +1,6 @@
 /** Desktop channel selection; persistence and updater transitions remain in Electron. */
 import { useState } from 'react'
-import { Menu, Toast, IconLoadingOutlineRegular, IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Menu, Toast, IconWarningOutlineRegular, IconLoadingOutlineRegular, IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DesktopChannelSource } from './desktop-channel-source.ts'
 import type { DesktopUpdateChannel } from '../types.ts'
@@ -65,5 +65,5 @@ export function DesktopChannelToast({ useChannel, dismiss, openConfiguration, t 
   return <Toast key={notice.sequence} text={t(`desktop.channel.result.${notice.outcome}`)}
     {...notice.outcome === 'configuration' ? { holdMs: 10_000,
       actions: [{ label: t('desktop.channel.details'), onClick: openConfiguration }] } : {}}
-    onDone={() => { dismiss(notice.sequence) }} {...notice.outcome === 'applied' ? { tone: 'success' as const } : {}} />
+    onDone={() => { dismiss(notice.sequence) }} {...notice.outcome === 'applied' ? { tone: 'success' as const } : { icon: <IconWarningOutlineRegular /> }} />
 }

@@ -573,15 +573,35 @@ describe('desktop main startup', () => {
     const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
     writeFileSync(path, '{broken')
     await readyForUpdate()
-    harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 0 })
+    harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 1 })
     await invoke(DESKTOP_IPC.updatesOpen, 'app')
     expect(harness.dialog.showMessageBox.mock.lastCall![0]).toMatchObject({
       message: en.updateConfigurationFormat, detail: path,
-      buttons: [en.updateShowSettingsFile, en.updateClose], cancelId: 1,
+      buttons: [en.updateReloadSettings, en.updateShowSettingsFile, en.updateClose], cancelId: 2,
     })
     expect(en.updateConfigurationFormat).not.toContain('select')
     expect(harness.showItemInFolder).toHaveBeenCalledWith(path)
     expect(readFileSync(path, 'utf8')).toBe('{broken')
+  })
+
+  it('rereads a repaired file without writing it or restarting the shell', async () => {
+    configureTestAuthPopup(false)
+    const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
+    writeFileSync(path, '{broken')
+    await readyForUpdate()
+    harness.dialog.showMessageBox.mockImplementationOnce(async (options: import('../src/update-dialog.ts').UpdateDialogOptions) => {
+      expect(await options.action!.run()).toBe(false)
+      expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toMatchObject({ error: 'format', changing: false })
+      const repaired = JSON.stringify({ updates: { channel: 'stable' }, retained: 'keep' })
+      writeFileSync(path, repaired)
+      expect(await options.action!.run()).toBe(true)
+      expect(readFileSync(path, 'utf8')).toBe(repaired)
+      return { response: 0 }
+    })
+    await invoke(DESKTOP_IPC.updatesOpen, 'app')
+    const state = await invoke(DESKTOP_IPC.updatesChannelGet, 'app')
+    expect(state).toMatchObject({ channel: 'stable', changing: false })
+    expect(state).not.toHaveProperty('error')
   })
 
   it('shows the invalid startup field and file path until a valid channel is applied', async () => {

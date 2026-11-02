@@ -214,3 +214,39 @@ it('reads the current locale and keeps technical diagnostics separate from ordin
     await pending
   }
 })
+
+
+it('keeps a reload action visible for at least half a second and prevents repeat responses', async () => {
+  vi.useFakeTimers()
+  const f = setup()
+  const run = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+  const pending = f.show(undefined, { action: { index: 0, run } })
+  const first = f.invoke(UPDATE_DIALOG_IPC.respond, 0)
+  expect(f.invoke(UPDATE_DIALOG_IPC.status)).toMatchObject({ busyButton: 0 })
+  f.invoke(UPDATE_DIALOG_IPC.respond, 0)
+  expect(run).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(499)
+  expect(f.invoke(UPDATE_DIALOG_IPC.status)).toMatchObject({ busyButton: 0 })
+  await vi.advanceTimersByTimeAsync(1)
+  await first
+  expect(dialogs!.isOpen).toBe(true)
+  expect(f.invoke(UPDATE_DIALOG_IPC.status)).not.toHaveProperty('busyButton')
+  const second = f.invoke(UPDATE_DIALOG_IPC.respond, 0)
+  await vi.advanceTimersByTimeAsync(500)
+  await second
+  expect(await pending).toMatchObject({ response: 0 })
+})
+
+it('does not revive a busy prompt after cancellation', async () => {
+  vi.useFakeTimers()
+  const f = setup()
+  const action = Promise.withResolvers<boolean>()
+  const pending = f.show(undefined, { action: { index: 0, run: () => action.promise } })
+  const responding = f.invoke(UPDATE_DIALOG_IPC.respond, 0)
+  dialogs!.cancel()
+  action.resolve(false)
+  await vi.advanceTimersByTimeAsync(500)
+  await responding
+  expect(await pending).toMatchObject({ response: 1 })
+  expect(dialogs!.isOpen).toBe(false)
+})

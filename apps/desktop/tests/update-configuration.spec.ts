@@ -27,10 +27,10 @@ it('only exposes a permission hint for a known filesystem permission failure', (
   expect(channelSaveFailure(new DesktopSettingsFileError({ kind: 'read' }, '/private/path', { cause: 'private detail' }))).toBe('save')
 })
 
-it('provides distinct localized reasons and recovery without raw errors', () => {
-  expect(configurationMessage('read', en)).toContain('cannot read settings')
-  expect(configurationMessage('format', en)).toContain('invalid settings')
-  expect(configurationMessage('channel', zh)).toContain('nightly 或 stable')
+it('keeps settings errors concise and cleanup recovery distinct', () => {
+  expect(configurationMessage('read', en)).toBe('Settings file error; updates are paused')
+  expect(configurationMessage('format', en)).toBe('Settings file error; updates are paused')
+  expect(configurationMessage('channel', zh)).toBe('配置文件异常，更新已暂停')
   expect(configurationMessage('cleanup', zh)).toContain('请重启应用')
   expect(configurationMessage('cleanup', en)).not.toContain('settings file')
 })

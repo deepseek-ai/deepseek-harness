@@ -411,6 +411,7 @@ it('keeps the settings-file notification for ten seconds with a details action',
   const view = render(<DesktopChannelToast {...kit} t={t} useChannel={bindSnapshotSelector(store)}
     dismiss={dismiss} openConfiguration={openConfiguration} />)
   try {
+    expect(screen.getByRole('alert').querySelector('svg')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'View details' }))
     expect(openConfiguration).toHaveBeenCalledOnce()
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
