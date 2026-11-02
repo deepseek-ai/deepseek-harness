@@ -1,7 +1,7 @@
 name: Policy
 on:
   pull_request_target:
-    branches: [master]
+    branches: [master, 'release/dsh-[0-9]+.[0-9]+.[0-9]+']
     types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
     types: [submitted, dismissed]
