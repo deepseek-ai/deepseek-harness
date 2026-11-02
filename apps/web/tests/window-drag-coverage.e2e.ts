@@ -28,12 +28,16 @@ import {
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
 
-/** One collected box: its app-region value, whether it is interactive, and where it is. */
-interface CollectedRegion extends RegionRect {
-  /** Whether the element itself matches the interactive selector. */
-  readonly interactive: boolean
+/** An interactive box, including controls that declare no native region. */
+interface InteractiveBox extends Rect {
   /** Sample points at which the browser's hit test reaches this element or its content. */
   readonly hits: readonly (readonly [number, number])[]
+}
+
+/** Native region owners and hittable controls describe separate parts of the same frame. */
+interface CollectedSurface {
+  readonly regions: readonly RegionRect[]
+  readonly controls: readonly InteractiveBox[]
 }
 
 /** A point the coverage table claims something about. */
@@ -74,29 +78,26 @@ async function rectOf(page: Page, selector: string): Promise<Rect> {
 }
 
 /**
- * Collect every visible app-region box in DOM order.
+ * Collect visible native region owners and interactive boxes in DOM order.
+ * Controls whose computed region is `none` still need a hit-test probe, but
+ * contribute no rectangle to native drag composition.
  * @param page - the page under test.
- * @returns the boxes, in document order, with the interactive flag of each element.
+ * @param selector - the interactive element selector.
+ * @returns native region boxes and independently sampled controls.
  */
-async function collectedRegions(page: Page, selector: string): Promise<CollectedRegion[]> {
+async function collectedSurface(page: Page, selector: string): Promise<CollectedSurface> {
   return page.evaluate((interactiveSelector) => {
-    const collected: {
-      x: number
-      y: number
-      width: number
-      height: number
-      draggable: boolean
-      interactive: boolean
-      hits: [number, number][]
-    }[] = []
+    const regions: RegionRect[] = []
+    const controls: InteractiveBox[] = []
     for (const element of Array.from(document.querySelectorAll('*'))) {
       const style = getComputedStyle(element)
       const region = style.getPropertyValue('-webkit-app-region')
-      if (region !== 'drag' && region !== 'no-drag') continue
       if (style.visibility === 'hidden' || style.display === 'none') continue
       const rect = element.getBoundingClientRect()
       if (rect.width === 0 || rect.height === 0) continue
-      const interactive = element.matches(interactiveSelector)
+      const box = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+      if (region === 'drag' || region === 'no-drag') regions.push({ ...box, draggable: region === 'drag' })
+      if (!element.matches(interactiveSelector)) continue
       const insetX = Math.min(2, rect.width / 4)
       const insetY = Math.min(2, rect.height / 4)
       const samples: [number, number][] = [
@@ -106,29 +107,24 @@ async function collectedRegions(page: Page, selector: string): Promise<Collected
         [rect.x + insetX, rect.y + rect.height - insetY],
         [rect.x + rect.width - insetX, rect.y + rect.height - insetY],
       ]
-      const hits = interactive
-        ? samples.filter(([x, y]) => {
-          const top = document.elementFromPoint(x, y)
-          // Panes and the navigation dialog contain their own window-drag rows.
-          // Those rows own their pixels; controls inside still subtract themselves.
-          const strip = top?.closest('[data-window-drag]')
-          if (element.matches('[data-dockkit-pane][tabindex="-1"], [data-shortcut-modal="sidebar"][role="dialog"]')
-            && strip != null && element.contains(strip)) return false
-          return top !== null && (top === element || element.contains(top))
-        })
-        : []
-      collected.push({
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
-        draggable: region === 'drag',
-        interactive,
-        hits,
+      const hits = samples.filter(([x, y]) => {
+        const top = document.elementFromPoint(x, y)
+        // Panes and the navigation dialog contain their own window-drag rows.
+        // Those rows own their pixels; controls inside still subtract themselves.
+        const strip = top?.closest('[data-window-drag]')
+        if (element.matches('[data-dockkit-pane][tabindex="-1"], [data-shortcut-modal="sidebar"][role="dialog"]')
+          && strip != null && element.contains(strip)) return false
+        return top !== null && (top === element || element.contains(top))
       })
+      controls.push({ ...box, hits })
     }
-    return collected
+    return { regions, controls }
   }, selector)
+}
+
+/** @param page - the page under test. @param selector - the control selector. @returns native region owners in DOM order. */
+async function collectedRegions(page: Page, selector: string): Promise<readonly RegionRect[]> {
+  return (await collectedSurface(page, selector)).regions
 }
 
 /**
@@ -137,13 +133,12 @@ async function collectedRegions(page: Page, selector: string): Promise<Collected
  * box clipped away by its column (the collapsed sidebar's hidden controls sit at
  * negative x) is not hittable anywhere it overlaps a drag row, and a press there
  * belongs to whatever is painted.
- * @param regions - collected boxes in DOM order.
+ * @param surface - native regions and independent interactive boxes from one frame.
  * @returns one description per interactive box with a hittable sample inside the drag surface.
  */
-function swallowedBoxes(regions: readonly CollectedRegion[]): string[] {
-  return regions
-    .filter(region => region.interactive)
-    .filter(region => region.hits.some(([x, y]) => isDraggableAt(regions, x, y)))
+function swallowedBoxes(surface: CollectedSurface): string[] {
+  return surface.controls
+    .filter(region => region.hits.some(([x, y]) => isDraggableAt(surface.regions, x, y)))
     .map(region => `${Math.round(region.x)},${Math.round(region.y)} ${Math.round(region.width)}x${Math.round(region.height)}`)
 }
 
@@ -428,6 +423,88 @@ describe('web e2e: macOS window drag coverage', () => {
     } finally { await page.close() }
   })
 
+  it('detects an overlay button that loses its no-drag exclusion', async () => {
+    const { page, tripwire } = await desktopPage()
+    try {
+      await settled(page)
+      const header = await rectOf(page, '[data-slot="conversation.header"] > header')
+      const point = { x: header.x + header.width / 2, y: header.y + 10 }
+      expect(isDraggableAt(await collectedRegions(page, INTERACTIVE_SELECTOR), point.x, point.y)).toBe(true)
+      // A root-local overlay must retain its own exclusion even outside a marked controls scope.
+      await page.evaluate(({ x, y }) => {
+        const root = document.getElementById('root')
+        if (root === null) throw new Error('The window drag fixture has no root')
+        const button = document.createElement('button')
+        button.dataset.dragCoverageOverlay = ''
+        button.textContent = 'Overlay control probe'
+        Object.assign(button.style, { position: 'fixed', left: `${x - 32}px`, top: `${y - 8}px`,
+          width: '64px', height: '16px', zIndex: '2000' })
+        button.style.setProperty('-webkit-app-region', 'no-drag')
+        root.append(button)
+      }, point)
+      const button = page.locator('[data-drag-coverage-overlay]')
+      expect(await button.evaluate((element, at) => element.contains(document.elementFromPoint(at.x, at.y)), point)).toBe(true)
+      expect(swallowedBoxes(await collectedSurface(page, INTERACTIVE_SELECTOR))).toEqual([])
+
+      await button.evaluate((element) => { (element as HTMLElement).style.setProperty('-webkit-app-region', 'initial') })
+      expect(await button.evaluate(element => getComputedStyle(element).getPropertyValue('app-region'))).toBe('none')
+      const bounds = await rectOf(page, '[data-drag-coverage-overlay]')
+      const description = `${Math.round(bounds.x)},${Math.round(bounds.y)} ${Math.round(bounds.width)}x${Math.round(bounds.height)}`
+      const unprotected = await collectedSurface(page, INTERACTIVE_SELECTOR)
+      expect(isDraggableAt(unprotected.regions, point.x, point.y), 'the overlay declares no exclusion').toBe(true)
+      expect(swallowedBoxes(unprotected), 'a hittable control without a region is still checked').toContain(description)
+
+      await button.evaluate((element) => { (element as HTMLElement).style.setProperty('-webkit-app-region', 'no-drag') })
+      expect(swallowedBoxes(await collectedSurface(page, INTERACTIVE_SELECTOR))).toEqual([])
+      expect(tripwire.pageErrors).toEqual([])
+    } finally { await page.close() }
+  })
+
+  it('keeps fullscreen panel chrome excluded while another pane floats', async () => {
+    const { page, tripwire } = await desktopPage()
+    try {
+      await connectTranscriptWorkspace(page, 'fullscreen-floating-drag-pane')
+      await page.locator('[data-sidebar-right-expand]').click()
+      const panel = page.locator('[data-sidebar-right-panel][data-sidebar-right-open]')
+      await panel.waitFor()
+      await settled(page)
+      await panel.locator('[data-dockkit-split-button]').first().click()
+      await expect.poll(() => panel.locator('[data-dockkit-pane]').count()).toBe(2)
+      const tab = panel.locator('[data-dockkit-tab]').first()
+      const tabBounds = await tab.boundingBox()
+      const dock = await rectOf(page, '[data-dockkit-surface]')
+      if (tabBounds === null) throw new Error('The floating pane fixture has no tab box')
+      await page.mouse.move(tabBounds.x + 6, tabBounds.y + tabBounds.height / 2)
+      await page.mouse.down()
+      try {
+        await page.mouse.move(dock.x - 240, dock.y + dock.height / 2, { steps: 8 })
+      } finally { await page.mouse.up() }
+      const floating = panel.locator('[data-dockkit-float]')
+      await floating.waitFor()
+      await expect.poll(() => panel.locator('[data-dockkit-pane]').count()).toBe(1)
+      await settled(page)
+      const header = await rectOf(page, '[data-slot="conversation.header"] > header')
+      const point = { x: header.x + header.width / 2, y: header.y + 4 }
+      expect(isDraggableAt(await collectedRegions(page, INTERACTIVE_SELECTOR), point.x, point.y)).toBe(true)
+
+      await panel.locator('[data-sidebar-right-mode="fullscreen"]').click()
+      await expect.poll(() => panel.getAttribute('data-sidebar-right-panel')).toBe('fullscreen')
+      await settled(page)
+      expect(await floating.count()).toBe(1)
+      expect(await panel.locator('[data-dockkit-strip][data-window-drag]').count()).toBe(0)
+      expect(await panel.locator('[data-dockkit-pane]').evaluate(element => getComputedStyle(element).getPropertyValue('app-region')))
+        .toBe('no-drag')
+      expect(await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('[data-dockkit-strip]')), point)).toBe(true)
+      const surface = await collectedSurface(page, INTERACTIVE_SELECTOR)
+      expect(isDraggableAt(surface.regions, point.x, point.y), 'fullscreen chrome does not expose the covered conversation drag row').toBe(false)
+      expect(swallowedBoxes(surface)).toEqual([])
+      expect(tripwire.pageErrors).toEqual([])
+    } catch (error) {
+      await saveFailureShot(page, 'window-drag-fullscreen-float')
+      throw error
+    } finally { await page.close() }
+  })
+
   it('keeps the macOS sidebar toggle stationary as its expanded content starts fading', async () => {
     const { page, tripwire } = await desktopPage()
     try {
@@ -478,7 +555,7 @@ describe('web e2e: macOS window drag coverage', () => {
           .filter(button => button.textContent?.trim() === 'Refresh' || button.textContent?.trim() === 'Add plugin')
         return {
           top: bounds.top,
-          padding: Number.parseFloat(getComputedStyle(header).paddingTop),
+          headingTop: header.querySelector('h1')!.getBoundingClientRect().top - header.getBoundingClientRect().top,
           buttons: buttons.map((button) => { const rect = button.getBoundingClientRect(); return { x: rect.x, y: rect.y } }),
         }
       })
@@ -490,8 +567,9 @@ describe('web e2e: macOS window drag coverage', () => {
         await body.evaluate((element) => { element.scrollTop = 0 })
         await page.waitForFunction(() => !document.querySelector('[data-plugin-bar]')?.hasAttribute('data-compact'))
         const before = await toolbarGeometry()
+        const footprint = (await bar.boundingBox())!.height
         expect(before.top).toBe(platform === 'darwin' ? 0 : 40)
-        expect(before.padding).toBe(platform === 'darwin' ? 76 : 28)
+        expect(before.headingTop).toBe(platform === 'darwin' ? 76 : 28)
         expect(before.buttons).toHaveLength(2)
         await body.evaluate((element) => { element.scrollTop = 120 })
         await page.waitForFunction(() => document.querySelector('[data-plugin-bar]')?.hasAttribute('data-compact'))
@@ -499,13 +577,57 @@ describe('web e2e: macOS window drag coverage', () => {
         // macOS only needs the top strip cleared while the sidebar is collapsed; with it open the
         // native controls live in the sidebar, so the compact bar keeps its own 16px spacing.
         const compactTop = platform === 'darwin' && collapsed ? 56 : 16
-        expect(after.padding).toBe(before.padding)
         expect(await bar.evaluate(element => Number.parseFloat(getComputedStyle(element, '::before').height))).toBe(compactTop + 48)
-        expect(after.buttons).toEqual(before.buttons.map(button => ({ ...button, y: button.y - (before.padding - compactTop) })))
+        expect(after.buttons).toEqual(before.buttons.map(button => ({ ...button, y: button.y - (before.headingTop - compactTop) })))
         expect(after.buttons.every(button => button.y >= (platform === 'darwin' ? compactTop : 16))).toBe(true)
         expect(await body.evaluate(element => element.getBoundingClientRect().top))
           .toBe(await bar.evaluate(element => element.getBoundingClientRect().top))
-        if (platform === 'darwin') expect(swallowedBoxes(await collectedRegions(page, INTERACTIVE_SELECTOR))).toEqual([])
+        expect((await bar.boundingBox())!.height, 'the compact header preserves its list footprint').toBe(footprint)
+        expect(await bar.locator('header').evaluate(element => element.getBoundingClientRect().height))
+          .toBe(await bar.evaluate(element => Number.parseFloat(getComputedStyle(element, '::before').height)))
+        if (platform === 'darwin' && !collapsed) {
+          // A visible card can occupy the bar's reserved footprint below its smaller painted header.
+          const card = await page.locator('[data-plugin-group] button').evaluateAll((buttons) => {
+            const bar = document.querySelector('[data-plugin-bar]')
+            if (bar === null) throw new Error('The plugin drag fixture has no header bar')
+            const bounds = bar.getBoundingClientRect()
+            const paintBottom = bounds.y + Number.parseFloat(getComputedStyle(bar, '::before').height)
+            for (const button of buttons) {
+              const box = button.getBoundingClientRect()
+              const x = box.x + box.width / 2
+              const y = box.y + box.height / 2
+              if (y <= paintBottom || y >= bounds.bottom || !button.contains(document.elementFromPoint(x, y))) continue
+              return { x, y, region: getComputedStyle(button).getPropertyValue('app-region') }
+            }
+            return null
+          })
+          expect(card, 'a real card is hittable inside the header bar footprint').not.toBeNull()
+          if (card === null) throw new Error('No card overlapped the plugin header bar footprint')
+          expect(card.region, 'ordinary plugin cards declare no native region').toBe('none')
+          expect(isDraggableAt(await collectedRegions(page, INTERACTIVE_SELECTOR), card.x, card.y),
+            'a clipped header does not swallow a card inside its reserved footprint').toBe(false)
+          const header = bar.locator('header')
+          const previousStyle = await header.getAttribute('style')
+          try {
+            // A smaller visible clip does not reduce the owner's native region box.
+            await header.evaluate((element) => {
+              const style = (element as HTMLElement).style
+              style.height = 'var(--plugin-header-rest-height)'
+              style.clipPath = 'inset(0 0 calc(var(--plugin-header-rest-height) - var(--plugin-header-paint-height)) 0)'
+            })
+            expect(await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('[data-plugin-group]')), card))
+              .toBe(true)
+            const oversized = await collectedSurface(page, INTERACTIVE_SELECTOR)
+            expect(isDraggableAt(oversized.regions, card.x, card.y), 'oversized header geometry swallows the still-hittable card').toBe(true)
+            expect(swallowedBoxes(oversized), 'the control check detects the oversized owner').not.toEqual([])
+          } finally {
+            await header.evaluate((element, style) => {
+              if (style === null) element.removeAttribute('style')
+              else element.setAttribute('style', style)
+            }, previousStyle)
+          }
+        }
+        if (platform === 'darwin') expect(swallowedBoxes(await collectedSurface(page, INTERACTIVE_SELECTOR))).toEqual([])
       }
       expect(tripwire.pageErrors).toEqual([])
     } finally { await page.close() }
@@ -577,7 +699,8 @@ describe('web e2e: macOS window drag coverage', () => {
         { timeout: 5_000 },
       ).toBe(false)
 
-      const regions = await collectedRegions(page, INTERACTIVE_SELECTOR)
+      const surface = await collectedSurface(page, INTERACTIVE_SELECTOR)
+      const { regions } = surface
       const strip = await rectOf(page, '[data-dockkit-strip]')
       const panel = await rectOf(page, '[data-sidebar-right-panel]')
       const tabs = await rectOf(page, '[data-conversation-tabs]')
@@ -655,7 +778,7 @@ describe('web e2e: macOS window drag coverage', () => {
 
       // The invariant that has no gap budget: a press inside any control box must
       // reach the page instead of dragging the window.
-      expect(swallowedBoxes(regions), 'interactive boxes inside the drag surface').toEqual([])
+      expect(swallowedBoxes(surface), 'interactive boxes inside the drag surface').toEqual([])
 
       expect(tripwire.pageErrors).toEqual([])
     } catch (error) {
@@ -672,7 +795,8 @@ describe('web e2e: macOS window drag coverage', () => {
       await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
       await page.locator('[data-shell-leading]').waitFor({ state: 'visible', timeout: 15_000 })
       await settled(page)
-      const regions = await collectedRegions(page, INTERACTIVE_SELECTOR)
+      const surface = await collectedSurface(page, INTERACTIVE_SELECTOR)
+      const { regions } = surface
       const header = await rectOf(page, '[data-slot="conversation.header"] > header')
       const seat = await rectOf(page, '[data-shell-leading]')
 
@@ -687,7 +811,7 @@ describe('web e2e: macOS window drag coverage', () => {
         'the seat holding the reopen controls',
       ).toBe(false)
 
-      expect(swallowedBoxes(regions), 'interactive boxes inside the drag surface').toEqual([])
+      expect(swallowedBoxes(surface), 'interactive boxes inside the drag surface').toEqual([])
       expect(tripwire.pageErrors).toEqual([])
     } catch (error) {
       await saveFailureShot(page, 'window-drag-coverage-collapsed')
@@ -719,12 +843,13 @@ describe('web e2e: macOS window drag coverage', () => {
       const toggle = drawer.getByRole('button', { name: 'Collapse sidebar', exact: true })
       const button = (await toggle.boundingBox())!
       const seat = await rectOf(page, '[data-shell-leading]')
-      const regions = await collectedRegions(page, INTERACTIVE_SELECTOR)
+      const surface = await collectedSurface(page, INTERACTIVE_SELECTOR)
+      const { regions } = surface
       const y = button.y + button.height / 2
       expect(isDraggableAt(regions, seat.x + seat.width / 2, y), 'the inactive header controls behind the drawer').toBe(true)
       expect(isDraggableAt(regions, (seat.x + seat.width + button.x) / 2, y), 'the gap before the close button').toBe(true)
       expect(isDraggableAt(regions, button.x + button.width / 2, y), 'the close button').toBe(false)
-      expect(swallowedBoxes(regions)).toEqual([])
+      expect(swallowedBoxes(surface)).toEqual([])
       await toggle.click()
       await drawer.waitFor({ state: 'hidden' })
       expect(tripwire.pageErrors).toEqual([])
@@ -794,7 +919,8 @@ describe('web e2e: macOS window drag coverage', () => {
         return { x: box.x, y: box.y, width: box.width, height: box.height }
       })
 
-      const regions = await collectedRegions(page, INTERACTIVE_SELECTOR)
+      const surface = await collectedSurface(page, INTERACTIVE_SELECTOR)
+      const { regions } = surface
       // The row starts at the window's top edge: a page inset above it would be a strip
       // no drag region covers, which is the dead band at the very top of this page.
       expect(rect.y, 'the page head starts at the window’s top edge').toBeLessThanOrEqual(0.5)
@@ -809,7 +935,7 @@ describe('web e2e: macOS window drag coverage', () => {
         'the page body below the head',
       ).toBe(false)
 
-      expect(swallowedBoxes(regions), 'interactive boxes inside the drag surface').toEqual([])
+      expect(swallowedBoxes(surface), 'interactive boxes inside the drag surface').toEqual([])
       expect(tripwire.pageErrors).toEqual([])
     } catch (error) {
       await saveFailureShot(page, 'window-drag-coverage-entry-page')
@@ -846,7 +972,8 @@ describe('web e2e: macOS window drag coverage', () => {
       })
       if (geometry.head === null) throw new Error('the detail view rendered no head row')
       const { detail: detailRect, head: headRect, viewport } = geometry
-      const regions = await collectedRegions(page, INTERACTIVE_SELECTOR)
+      const surface = await collectedSurface(page, INTERACTIVE_SELECTOR)
+      const { regions } = surface
 
       // The head's top inset is the window clearance above the crumb: blank, so
       // it drags like the entry page's head. The row also starts at the window's top
@@ -859,7 +986,7 @@ describe('web e2e: macOS window drag coverage', () => {
 
       // Below the head, a point that no control covers is content: pressing the
       // description, a label, or a gap in the form must reach the page.
-      const interactive = regions.filter(region => region.interactive)
+      const interactive = surface.controls
       const bodyTop = headRect.y + headRect.height
       const bodyBottom = Math.min(detailRect.y + detailRect.height, viewport.height - 4)
       const dragging: string[] = []
@@ -875,7 +1002,7 @@ describe('web e2e: macOS window drag coverage', () => {
       }
       expect(dragging, 'content points inside the detail body that drag the window').toEqual([])
 
-      expect(swallowedBoxes(regions), 'interactive boxes inside the drag surface').toEqual([])
+      expect(swallowedBoxes(surface), 'interactive boxes inside the drag surface').toEqual([])
       expect(tripwire.pageErrors).toEqual([])
     } catch (error) {
       await saveFailureShot(page, 'window-drag-coverage-detail-page')
@@ -907,13 +1034,14 @@ describe('web e2e: macOS window drag coverage', () => {
       expect(layer.parentIsBody, 'the covering overlay portals beside #root').toBe(true)
       expect(layer.coversWindow).toBe(true)
 
-      const regions = await collectedRegions(page, INTERACTIVE_SELECTOR)
+      const surface = await collectedSurface(page, INTERACTIVE_SELECTOR)
+      const { regions } = surface
       const header = await rectOf(page, '[data-slot="conversation.header"] > header')
       expect(
         isDraggableAt(regions, header.x + header.width / 2, 8),
         'the window top behind an open covering overlay',
       ).toBe(false)
-      expect(swallowedBoxes(regions), 'interactive boxes inside the drag surface').toEqual([])
+      expect(swallowedBoxes(surface), 'interactive boxes inside the drag surface').toEqual([])
       expect(tripwire.pageErrors).toEqual([])
     } catch (error) {
       await saveFailureShot(page, 'window-drag-coverage-overlay')

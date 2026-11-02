@@ -44,9 +44,9 @@ html[data-platform='darwin'] body {
   isolation: isolate;
 }
 
-/* Chromium inherits app-region and collects full boxes without overflow clips.
-   Only explicit owners may contribute geometry: a clipped descendant must not
-   subtract a chrome row after scrolling outside its visible container. */
+/* The shipped Electron runtime inherits app-region and collects full boxes
+   without overflow clips. Only explicit owners contribute geometry, so clipped
+   descendants cannot subtract a chrome row after scrolling outside its view. */
 :where(html[data-platform='darwin'] *) {
   -webkit-app-region: initial;
 }
@@ -78,7 +78,8 @@ html[data-platform='darwin'] body > :not(#root) {
   -webkit-app-region: no-drag;
 }
 
-/* A terminal interactive viewport owns one box; its clipped descendants do not.
+/* An interactive viewport without nested drag rows owns one box; its clipped
+   descendants do not.
    Containers with nested drag rows must instead declare their own region. */
 html[data-platform='darwin'] [data-window-no-drag] {
   -webkit-app-region: no-drag;
@@ -99,8 +100,9 @@ html[data-platform='darwin'] :where([data-window-drag], [data-window-drag-contro
   -webkit-app-region: no-drag;
 }
 
-/* Reset both native region types for inert content. Chromium treats the explicit
-   `none` keyword as `no-drag`, which would erase foreground drag rows. */
+/* Reset both native region types for inert content. In the shipped Electron
+   runtime, authored `none` computes to `no-drag`; `initial` computes to `none`
+   and contributes no box, so it cannot erase foreground drag rows. */
 html[data-platform='darwin'] [inert],
 html[data-platform='darwin'] [inert] * {
   -webkit-app-region: initial;

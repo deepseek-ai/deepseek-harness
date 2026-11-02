@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-alpha.2/window-drag-regions/guide.md
+/:
+  en: 3733ed8d0c40fb64
+  zh: f886cd8c61db2bd8
+/explicit-window-regions-for-custom-client-overlays:
+  en: 204e72b8ba3cff5b
+  zh: 9ce7f4f9f82341bd
+/explicit-window-regions-for-custom-client-overlays/change:
+  en: 0fe54065e1f871e7
+  zh: 3a8cff5d8233eba0
+/explicit-window-regions-for-custom-client-overlays/migration:
+  en: 85182ed7759e7a18
+  zh: 48b0f9de217a9087

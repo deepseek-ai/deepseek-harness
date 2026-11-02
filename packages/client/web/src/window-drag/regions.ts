@@ -2,9 +2,11 @@
  * The window drag-region contract for the macOS desktop shell: Electron hands
  * the page's `-webkit-app-region` boxes to the native window, which hit-tests
  * them by geometry in DOM order, ignoring stacking and overflow clipping.
- * Chromium inherits the property; base.css resets it on each element so only
- * explicit owners contribute boxes. Blink collects visible layout boxes whose
- * computed value is not `none`: `drag` adds geometry and `no-drag` removes it.
+ * The shipped Electron runtime inherits the property; base.css resets it on each
+ * element so only explicit owners contribute boxes. Authored `none` computes to
+ * `no-drag`, while `initial` computes to `none` and contributes no box. Blink
+ * collects visible layout boxes with computed `drag` or `no-drag` values:
+ * `drag` adds geometry and `no-drag` removes it.
  * A point is draggable when the last collected box containing it is `drag`.
  *
  * This module is the executable statement of that rule. Production CSS authors
@@ -48,9 +50,10 @@ export const RECALL_MARK = 'data-window-drag-recall'
 
 /**
  * The interactive-element selector that subtracts controls inside marked drag
- * rows or explicit controls scopes. Terminal no-drag viewports own their whole
- * box instead of their clipped controls. ui-web `base.css` scopes this on darwin;
- * this constant is the source that sheet and its contract spec compare against.
+ * rows or explicit controls scopes. Interactive viewports without nested drag
+ * rows own their whole box instead of their clipped controls. ui-web `base.css`
+ * scopes this on darwin; this constant is the source that sheet and its contract
+ * spec compare against.
  */
 export const INTERACTIVE_SELECTOR = [
   'button', 'a', 'input', 'select', 'textarea', 'summary', "[contenteditable='true']", '[tabindex]',

@@ -3,10 +3,11 @@
  * embedder may pin the surface at the window's top edge (the right sidebar does),
  * so the strip row marks itself `data-window-drag` in markup (TabPanel) and ui-web
  * base.css drags the row over its own box. Electron composes app-regions from
- * geometry in DOM order — every box that must stay usable subtracts itself from
- * that row. The divider must be listed explicitly: it is a plain div, so base.css's
- * interactive-element subtraction never matches it, and an unsubtracted vertical
- * divider's top run would drag the window instead of resizing the split.
+ * geometry in DOM order — pane boxes are excluded before marked strip rows add
+ * their geometry back. The divider must be listed explicitly: it is a plain div
+ * outside a drag row, so base.css's scoped controls rule cannot exclude it. An
+ * unsubtracted vertical divider's top run would drag the window instead of
+ * resizing the split.
  */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
