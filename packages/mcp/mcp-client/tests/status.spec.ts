@@ -283,7 +283,7 @@ describe('connection status surface', () => {
     const handle = connectionStatusOf(wrapper)!
     const observed = vi.fn()
     handle.onChange(observed)
-    fiber.update({ ...config, args: ['updated'] })
+    await fiber.update({ ...config, args: ['updated'] })
     await fiber.await()
     expect(mockConnect).toHaveBeenCalledTimes(2)
     expect(connectionStatusOf(fiber)).toBe(handle)
