@@ -23,7 +23,7 @@ import {
 import type { ClientEntryState } from '@deepseek-ai/dsh-client-modules/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import { EXTENSION_BUNDLES, HIDDEN_BUNDLES, MORE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
+import { CONNECTOR_BUNDLES, EXTENSION_BUNDLES, HIDDEN_BUNDLES, MORE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import { localizedValues, TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import type { createNavigationStore } from './navigation-store.ts'
 import type { PluginHeaderLayoutFace } from './header-scroll.ts'
@@ -1589,6 +1589,8 @@ function ConfirmDialog({ name, t, onConfirm, onCancel }: {
   )
 }
 
+const CONNECTORS: ReadonlySet<string> = new Set(CONNECTOR_BUNDLES)
+
 /** Render the plugin manager: the official plugins and installed bundles, their pages, the install dialog, and the confirmation. */
 export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const { t, ensure, renderSlot, resolveText } = props
@@ -1627,8 +1629,10 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const listed = state.packages.filter(pkg => !HIDDEN_BUNDLES.has(pkg.name)
     && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed || rowsRunning(pkg))
     && (pkg.installed || pkg.official || pkg.error !== undefined))
-  const mine = listed.filter(pkg => !pkg.official)
-  const official = listed.filter(pkg => pkg.official)
+  // The Connectors tab presents the official connectors; their pages still open from it.
+  const carded = listed.filter(pkg => !CONNECTORS.has(pkg.name))
+  const mine = carded.filter(pkg => !pkg.official)
+  const official = carded.filter(pkg => pkg.official)
   // Both lists read one order over the eligible bundles: the main list holds the always-held ones plus the held-back
   // ones the profile enabled, and the More list holds the eligible ones, so enabling a bundle from the More list pins it
   // to the main list without moving it among its neighbours there.

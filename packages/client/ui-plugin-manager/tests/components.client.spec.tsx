@@ -887,6 +887,17 @@ describe('PluginManagerPage', () => {
     expect(document.querySelector(`[data-plugin-package="${hidden}"]`)).toBeNull()
   })
 
+  it('leaves the official connectors off both card lists while their pages still open', () => {
+    const b = renderTab({
+      packages: [pkg({ name: '@deepseek-ai/dsh-feishu' }), pkg({ name: '@deepseek-ai/dsh-notion', official: true }), pkg({ name: 'dsh-kept' })],
+    })
+    expect(document.querySelector('[data-plugin-package="@deepseek-ai/dsh-feishu"]')).toBeNull()
+    expect(document.querySelector('[data-plugin-package="@deepseek-ai/dsh-notion"]')).toBeNull()
+    expect(document.querySelector('[data-plugin-package="dsh-kept"]')).not.toBeNull()
+    act(() => { b.navigation.actions.setView({ kind: 'package', name: '@deepseek-ai/dsh-feishu' }) })
+    expect(document.querySelector('[data-plugin-detail="@deepseek-ai/dsh-feishu"]')).not.toBeNull()
+  })
+
   it('does not open a default-hidden bundle by id while its card is hidden', () => {
     const hidden = '@deepseek-ai/dsh-experimental-liveshare'
     const b = renderTab({
