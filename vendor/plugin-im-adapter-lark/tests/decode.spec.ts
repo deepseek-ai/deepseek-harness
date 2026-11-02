@@ -406,6 +406,50 @@ describe('a message read back', () => {
     expect(message.quote).toEqual({ id: 'om_root' })
   })
 
+  it('fills a merged forward with the entries the same read carried', async () => {
+    const { bot } = await mount()
+    const container = read({
+      message_id: 'om_forward',
+      msg_type: 'merge_forward',
+      body: { content: 'Merged and Forwarded Message' },
+    })
+    // The entries are messages of the chat the forward was assembled from, each naming the container it belongs to.
+    const entry = (patch: Record<string, unknown>): Lark.Message => read({
+      chat_id: 'oc_source',
+      upper_message_id: 'om_forward',
+      ...patch,
+    })
+    const message = await decodeMessage(bot, container, CHAT, NOW, [
+      container,
+      entry({ message_id: 'om_entry_1', body: { content: '{"text":"hello"}' } }),
+      entry({ message_id: 'om_entry_2', msg_type: 'image', body: { content: '{"image_key":"img_v2_1"}' } }),
+      entry({ message_id: 'om_entry_3', msg_type: 'merge_forward', body: { content: 'Merged and Forwarded Message' } }),
+      // A forwarded conversation usually carries a rich-text entry: its paragraphs are what a forward can hold inline.
+      entry({
+        message_id: 'om_entry_4',
+        msg_type: 'post',
+        body: { content: '{"title":"","content":[[{"tag":"text","text":"http_trace_id 3a96fa"}]]}' },
+      }),
+    ])
+    const forward = collection(message.content, 'forward')[0]!
+    expect(attrs(forward)).toEqual({ id: 'om_forward' })
+    // One line per entry: the sender, then the entry's own content; a nested forward stays a reference of its own.
+    const lines = toText(forward).split('\n')
+    expect(lines).toHaveLength(4)
+    expect(lines[0]).toBe('ou_user: hello')
+    expect(lines[1]).toContain('ou_user: ')
+    expect(lines[2]).toBe('ou_user: [forward]')
+    expect(lines[3]).toBe('ou_user: http_trace_id 3a96fa')
+    // The entry's picture points at the entry's own message, which is the resource the read authorizes.
+    expect(attrs(collection(forward, 'img')[0])).toMatchObject({ src: resourceUrl('om_entry_2', 'img_v2_1', 'image') })
+  })
+
+  it('keeps a merged forward as a reference when the read carried no entry', async () => {
+    const { bot } = await mount()
+    const message = await bot.decodeMessage(read({ msg_type: 'merge_forward', body: { content: 'Merged and Forwarded Message' } }), CHAT)
+    expect(toText(message.content).trim()).toBe('[forward]')
+  })
+
   it('rejects a message without an identity', async () => {
     const { bot } = await mount()
     await expect(bot.decodeMessage({ chat_id: 'oc_chat' } as Lark.Message, CHAT)).rejects.toThrow(/message ID/)

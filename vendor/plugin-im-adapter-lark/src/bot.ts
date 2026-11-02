@@ -32,7 +32,6 @@ import {
   type PlatformError, type PrepareContext, type ResolvedResource, type ResourceKind, type ResourceRef, type SendContext,
   type SentPart, type Session, type StreamDriver, type Target, type User,
 } from '@deepseek-ai/cordis-plugin-im-core'
-import { LarkCardKit } from './api/cardkit.ts'
 import { type LarkHttp, type LarkMessageListQuery, LarkApi } from './api/client.ts'
 import { type LarkChatKind, type LarkRawEvent, readLarkReferrer } from './api/events.ts'
 import { AccessToken, type TenantAccessTokenResult } from './api/token.ts'
@@ -80,9 +79,6 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
   /** Typed REST client of the OpenAPI routes. */
   readonly api: LarkApi
 
-  /** CardKit entity routes used by the stream driver. */
-  readonly cards: LarkCardKit
-
   /** Generated route tree of the OpenAPI subset, also served as `/_api/:name`. */
   declare internal: Internal
 
@@ -115,7 +111,6 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
       },
     })
     this.api = new LarkApi({ http, baseUrl, token: signal => this.tokens.get(signal) })
-    this.cards = new LarkCardKit(this.api)
     this.internal = new Internal(this)
 
     // Decode turns a resource of a message into a `satori:` URL; this route authorizes and streams it back, so a
@@ -196,8 +191,7 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
   }
 
   /**
-   * Edit one part in place: `PUT` for a post or text message, `PATCH` for an inline card, `PUT
-   * cardkit/v1/cards/:id` for an entity. See `send.ts`.
+   * Edit one part in place: `PUT` for a post or text message, `PATCH` for a card. See `send.ts`.
    *
    * @param part - the sent part to edit.
    * @param payload - new payload of the part.
@@ -268,10 +262,11 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
    *
    * @param raw - message as the platform returns it.
    * @param chat - chat the caller authorized, when it already knows it.
+   * @param entries - the other items the same answer carried; they are a merged forward's contents.
    * @returns the decoded inbound message.
    */
-  async decodeMessage(raw: Message, chat?: ChatRef): Promise<InboundMessage> {
-    return await decodeLarkMessage(this, raw, chat, this.now())
+  async decodeMessage(raw: Message, chat?: ChatRef, entries?: readonly Message[]): Promise<InboundMessage> {
+    return await decodeLarkMessage(this, raw, chat, this.now(), entries)
   }
 
   // -------------------------------------------------------------------------------------------------------------
@@ -399,18 +394,20 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
 
   /**
    * Read one message of a chat. The message is checked to belong to the chat the caller authorized before it
-   * is decoded; a card is read as the JSON it was sent with.
+   * is decoded; a card is read as the JSON it was sent with, and a merged forward keeps the entries the same answer
+   * carries (see `decode.ts`).
    *
    * @param chat - chat the caller is allowed to read.
    * @param id - platform message id.
    * @returns the decoded inbound message.
    */
   override async getMessage(chat: ChatRef, id: string): Promise<InboundMessage> {
-    const message = await this.api.getMessage(id, { card_msg_content_type: 'user_card_content' })
-    if (!message || message.message_id !== id || message.chat_id !== chat.id) {
+    const items = await this.api.getMessage(id, { card_msg_content_type: 'user_card_content' })
+    const message = items.find(item => item.message_id === id)
+    if (!message || message.chat_id !== chat.id) {
       throw new Error(`Lark message ${id} is absent or belongs to another chat`)
     }
-    return await this.decodeMessage(message, chat)
+    return await this.decodeMessage(message, chat, items)
   }
 
   /**

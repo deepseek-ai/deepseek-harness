@@ -248,7 +248,9 @@ describe('LarkBot reads', () => {
     // A card must read as the JSON it was sent with.
     expect(call.search).toContain('card_msg_content_type=user_card_content')
     expect(call.headers.authorization).toBe('Bearer t-token')
-    expect(bot.decodeMessage).toHaveBeenCalledWith(expect.objectContaining({ message_id: 'om_1' }), group.chat)
+    expect(bot.decodeMessage).toHaveBeenCalledWith(expect.objectContaining({ message_id: 'om_1' }), group.chat,
+      // The items the answer carried travel with the container: they are a merged forward's contents.
+      [expect.objectContaining({ message_id: 'om_1' })])
   })
 
   it('refuses a message that is absent or belongs to another chat', async () => {

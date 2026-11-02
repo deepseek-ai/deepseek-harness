@@ -33,6 +33,21 @@ function isCard(content: Element<'message'>): boolean {
   return content.children.some(child => child.type === 'raw' && child.attrs.type === 'interactive')
 }
 
+/**
+ * Whether the content carries a merged forward whose entries never arrived. An event hands the container alone, so its
+ * contents are one platform read away; a read fills them in and the element is no longer empty.
+ * @param content - the decoded message content.
+ * @returns true when a `<forward>` has no entries.
+ */
+export function hasUnreadForward(content: Element<'message'>): boolean {
+  return content.children.some(carriesUnreadForward)
+}
+
+/** {@link hasUnreadForward} over one node, so a forward nested inside another one is found too. */
+function carriesUnreadForward(node: Element): boolean {
+  return node.type === 'forward' ? node.children.length === 0 : node.children.some(carriesUnreadForward)
+}
+
 /** The innermost `im/message` listener without a dispatcher: a message nobody handled is ignored. */
 const ignore = (): Promise<ImOutcome> => Promise.resolve({ kind: 'ignored' })
 
@@ -184,7 +199,7 @@ export class ImIntake {
 
   /**
    * The draft of one inbound message, with the two things an event does not carry filled in: the text of the card it
-   * renders and the text of the message it quotes.
+   * renders or the entries of a merged forward, and the text of the message it quotes.
    * @param bot - the bot that delivered the message.
    * @param message - the inbound message.
    * @param source - the admitting source.
@@ -192,28 +207,41 @@ export class ImIntake {
    */
   private async readableDraft(bot: Bot, message: InboundMessage, source: ImSourceConfig): Promise<ImMessageDraft> {
     const draft = draftOf(bot, message, source, 'platform')
-    const card = isCard(message.content) ? await this.cardOf(bot, message) : undefined
+    const unreadable = isCard(message.content) || hasUnreadForward(message.content)
+    const read = unreadable ? await this.reread(bot, message) : undefined
     // Only the content is taken from the read: the event owns the admission facts (mentions, addressed, thread,
-    // quote), and a card carries no mentions of its own.
-    const readable = card === undefined ? draft : { ...draft, content: card.content, text: toText(card.content) }
+    // quote), and neither a card nor a merged forward carries mentions of its own.
+    const readable = read === undefined ? draft : this.enriched(draft, read)
     return await this.withQuoteText(bot, readable)
   }
 
   /**
-   * One message re-read as the card it was sent with. The platform hands a card it will not project to an API client
-   * as `请升级至最新版本客户端，以查看内容`, and a read with `card_msg_content_type=user_card_content` returns the card
-   * itself — the material the sender pointed at.
+   * The draft with the content of the message read back. A read that would push the message past `maxInputBytes` is
+   * not used: {@link accept} refuses such a message entirely, and the reference the event carried is worth more than
+   * losing the message.
+   * @param draft - the draft as admission built it.
+   * @param read - the message read back from the platform.
+   * @returns the draft to store.
+   */
+  private enriched(draft: ImMessageDraft, read: InboundMessage): ImMessageDraft {
+    const next: ImMessageDraft = { ...draft, content: read.content, text: toText(read.content) }
+    return Buffer.byteLength(JSON.stringify(next)) > this.config.maxInputBytes ? draft : next
+  }
+
+  /**
+   * One message re-read for the part its event does not carry: a card as the JSON it was sent with rather than the
+   * placeholder the platform projects, or the contents of a merged forward.
    * @param bot - the bot that delivered the message.
-   * @param message - the inbound message whose text is that placeholder.
+   * @param message - the inbound message to re-read.
    * @returns the re-read message, or undefined when the platform has nothing more to give.
    */
-  private async cardOf(bot: Bot, message: InboundMessage): Promise<InboundMessage | undefined> {
+  private async reread(bot: Bot, message: InboundMessage): Promise<InboundMessage | undefined> {
     if (bot.getMessage === undefined) return undefined
     try {
       return await bot.getMessage(message.chat, message.id)
     } catch (error: unknown) {
-      // The placeholder is still a deliverable message: a card the platform will not hand back stays unreadable.
-      this.ctx.logger.warn('IM card %s could not be re-read: %s', message.id,
+      // The reference is still a deliverable message: what the platform will not hand back stays unreadable.
+      this.ctx.logger.warn('IM message %s could not be re-read: %s', message.id,
         error instanceof Error ? error.message : String(error))
       return undefined
     }

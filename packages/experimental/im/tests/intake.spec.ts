@@ -164,6 +164,30 @@ describe('ImIntake admission', () => {
     expect(store.get(ImMessageKey('fake:bot', 'm-card'))?.text).toContain('balance-alerter')
   })
 
+  it('reads the entries of a merged forward the event could only reference', async () => {
+    const { bot, store, intake } = await boot()
+    // An event hands the container alone; the platform answers a read of it with the entries.
+    bot.getMessage = async () => ({
+      ...inbound({ id: 'm-forward' }),
+      content: h('message', h('forward', { id: 'm-forward' }, h.text('user-1: 早上好'), h('br'), h.text('user-1: 400 是哪个接口'))),
+    })
+    await deliver(bot, 'evt-forward', inbound({ id: 'm-forward', content: h('message', h('forward', { id: 'm-forward' })) }))
+    await intake.idle()
+    expect(store.get(ImMessageKey('fake:bot', 'm-forward'))?.text).toBe('user-1: 早上好\nuser-1: 400 是哪个接口')
+  })
+
+  it('keeps the reference when the entries would push the message past maxInputBytes', async () => {
+    const { bot, store, intake } = await boot({ config: { maxInputBytes: 1024 } })
+    bot.getMessage = async () => ({
+      ...inbound({ id: 'm-forward' }),
+      content: h('message', h('forward', { id: 'm-forward' }, h.text('x'.repeat(4000)))),
+    })
+    await deliver(bot, 'evt-forward', inbound({ id: 'm-forward', content: h('message', h('forward', { id: 'm-forward' })) }))
+    await intake.idle()
+    // A message over the bound is refused whole, so the reference the event carried is what gets stored.
+    expect(store.get(ImMessageKey('fake:bot', 'm-forward'))?.text).toBe('[forward]')
+  })
+
   it('ignores the bot\'s own echo and non-message sessions', async () => {
     const { bot, store, intake, dispatched } = await boot()
     await deliver(bot, 'evt-1', inbound({ sender: { id: 'bot-user' } }))

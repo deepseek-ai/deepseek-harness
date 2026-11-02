@@ -127,6 +127,19 @@ describe('ImService facade', () => {
     await expect(service.readMessage(other, 'm1')).resolves.toMatchObject({ key: ImMessageKey('fake:bot', 'm1') })
   })
 
+  it('fills a merged forward stored as a bare reference with the entries a read returns', async () => {
+    const { service, bot } = await mount()
+    await deliver(bot, inbound('m1', { content: h('message', h('forward', { id: 'm1' })) }))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+    // The store keeps the reference the event carried; the read is what brings its contents.
+    bot.getMessage = async () => inbound('m1', {
+      content: h('message', h('forward', { id: 'm1' }, h.text('user-1: 原文'))),
+    })
+    const message = await service.readMessage(CHAT, 'm1')
+    expect(message.text).toBe('user-1: 原文')
+    expect(message.seq).toBe(1)
+  })
+
   it('publishes and streams through the send funnel of its sender', async () => {
     const { service, bot } = await mount()
     await deliver(bot, inbound('m1'))

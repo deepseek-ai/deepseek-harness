@@ -6,6 +6,7 @@
  * routing listener passed on.
  */
 import { Context, Service } from '@deepseek-ai/cordis'
+import { toText } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Bot, Fragment, MessageStream, StreamOptions } from '@deepseek-ai/cordis-plugin-im-core'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-agent'
@@ -23,7 +24,7 @@ import { ImActivityTracker } from './activity.ts'
 import { ImFormatter } from './format.ts'
 import { ImAgentHost } from './hosting.ts'
 import { ImDispatcher } from './dispatcher.ts'
-import { ImIntake, admit, draftOf } from './intake.ts'
+import { ImIntake, admit, draftOf, hasUnreadForward } from './intake.ts'
 import { ImMediaStore } from './media.ts'
 import { ImOutputRegistry } from './outputs.ts'
 import { ImSender } from './send.ts'
@@ -222,7 +223,7 @@ export class ImService extends Service implements ImApi {
    * like any other message, which gives it a sequence number and keeps later reads of it local.
    * @param chat - chat to read in; its bot serves the platform request.
    * @param id - platform message id.
-   * @returns the message as the store holds it.
+   * @returns the message as the store holds it, with a merged forward's entries filled in when the platform has them.
    */
   async readMessage(chat: ImChatKey, id: string): Promise<ImMessage> {
     const bot = this.bot(chat)
@@ -233,7 +234,7 @@ export class ImService extends Service implements ImApi {
       if (known.chat.key !== chat) {
         throw new ImError('access', `Message ${id} belongs to chat ${known.chat.key}, not ${chat}.`)
       }
-      return known
+      return await this.expanded(bot, known)
     }
     const record = this.chat(chat)
     if (record === undefined) throw new ImError('access', `Chat ${chat} was never admitted, so message ${id} cannot be read.`)
@@ -242,6 +243,28 @@ export class ImService extends Service implements ImApi {
     const source = admit([...this.sources.values()], bot.id, message)
     if (source === undefined) throw new ImError('access', `Message ${id} of chat ${chat} is admitted by no source.`)
     return await this.store.put(draftOf(bot, message, source, 'platform'), 'none')
+  }
+
+  /**
+   * One stored message with the part its event could not carry. The platform hands a merged forward as its container
+   * alone and answers a read of it with the entries, so the read is where the reference gains its contents; the store
+   * keeps the record as it arrived.
+   * @param bot - the bot serving the chat.
+   * @param message - the stored message.
+   * @returns the message itself, or a copy whose content carries the entries.
+   */
+  private async expanded(bot: Bot, message: ImMessage): Promise<ImMessage> {
+    if (!hasUnreadForward(message.content) || bot.getMessage === undefined) return message
+    try {
+      const read = await bot.getMessage(message.chat.ref, splitKey(message.key).id)
+      if (hasUnreadForward(read.content)) return message
+      return { ...message, content: read.content, text: toText(read.content) }
+    } catch (error: unknown) {
+      // The reference is still readable: what the platform will not hand back stays a placeholder.
+      this.home.logger.warn('IM message %s could not be expanded: %s', message.key,
+        error instanceof Error ? error.message : String(error))
+      return message
+    }
   }
 
   /**

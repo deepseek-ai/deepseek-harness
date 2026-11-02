@@ -393,18 +393,21 @@ export class LarkApi {
   /**
    * Read one message (`GET /im/v1/messages/{message_id}`).
    *
+   * The answer is a list because a merged forward answers with its entries after the container, each naming the
+   * container in `upper_message_id`; the container itself is the item whose id is `messageId`.
+   *
    * @param messageId - message to read.
    * @param query - `user_id_type`, and `card_msg_content_type: 'user_card_content'` to get a card's original JSON.
    * @param signal - cancellation.
-   * @returns the message, or `undefined` when the answer carried none.
+   * @returns every item the answer carried, empty when it carried none.
    */
-  async getMessage(messageId: string, query: LarkMessageQuery = {}, signal?: AbortSignal): Promise<Message | undefined> {
+  async getMessage(messageId: string, query: LarkMessageQuery = {}, signal?: AbortSignal): Promise<Message[]> {
     const answer = await this.answer<Im.Message.GetResponse>(
       'GET',
       `/im/v1/messages/${encodeURIComponent(messageId)}`,
       { params: queryOf(query), signal },
     )
-    return answer.items?.[0]
+    return answer.items ?? []
   }
 
   /**

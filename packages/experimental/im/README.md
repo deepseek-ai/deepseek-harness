@@ -67,6 +67,8 @@ Messages from chats that match no rule are neither stored nor emitted. See the g
 
 Inbound intake (`satori/receive`) resolves only after both the message record and the event deduplication record are written to `im_messages`, and the platform adapter acknowledges the event afterwards. Redelivering a `(bot, eventId)` already recorded is a no-op. A payload that drifted from the recorded one—an edited body, a mention list, a timestamp—is logged once and still acknowledged, so the platform cannot loop on the same message. Every stored message—inbound or own outbound—receives a monotonically increasing per-chat sequence number (`seq`), which `ctx.im.history` uses for pagination and lookup.
 
+A message whose event carries less than a reader needs is re-read once at intake. A card arrives as the projection the platform is willing to describe, and a merged forward arrives as its container alone; for both, the stored content is what the platform read returns — the card JSON, and the container together with its entries. A read that would push the message past `maxInputBytes` is not used: a message over that bound is refused whole, so the reference the event carried is stored instead.
+
 The dispatch loop runs the `im/message` waterfall for each pending message: different chats dispatch concurrently, while messages within the same chat dispatch sequentially in `seq` order. When the waterfall finishes, the store records `handled` (with the plugin name and optional session ids) or `ignored`. If a listener throws, the message remains `pending` and is retried on the next `retryIntervalMs` tick or after a restart. Listeners must therefore be idempotent: session deliveries deduplicate by delivery `id`, and outbound sends deduplicate by `operationId`. Retention sweeps delete only expired settled records; pending messages and pending receipts never expire automatically. `ctx.im.status()` returns a diagnostic snapshot of mounted bots, sources, sessions, pending counts, and recent outcomes.
 
 ### Hosted sessions
@@ -99,6 +101,8 @@ When `options.operationId` is provided, the sender writes a `pending` receipt to
 - `line`: formats each message as a single line (`#12 14:07 张三(u_1) ↩#10 李四: 原文: 正文`) for compact history inspection.
 
 Media elements in message text are replaced with stable per-chat labels such as `[图片 #12.1]` or `[文件 #12.2 report.pdf]`. When `media: true` is passed to `format`, admitted images are downloaded into attachments and appended as `image` content blocks after the text block.
+
+A `forward` element renders as one line: `[合并转发 #id]` while nothing has read its entries, otherwise `[合并转发 #id: 名字: 内容 …]` with a bounded preview. `im_read` of a stored reference expands it through a platform read, so the entries are readable without the store having to be rewritten.
 
 ### Activity tracking and output renderers
 

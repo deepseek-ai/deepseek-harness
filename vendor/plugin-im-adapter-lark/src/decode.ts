@@ -24,8 +24,9 @@
  *   `[image: alt]` reference, and one `[link]` line per target the card links to. The result stands inside
  *   `<raw type="interactive">` because a card has no direct element equivalent — but it is still real elements, so a
  *   mention inside card text stays an `<at>` and a target becomes an `<a>`.
- * - `merge_forward`: `<forward id>` — an identity reference, because the entries are separate messages the platform
- *   returns with the container (`upper_message_id`). A recap or a nested forward is therefore never guessed here.
+ * - `merge_forward`: `<forward id>` — an identity reference, because the entries are separate messages. An event
+ *   carries none of them, so the element stands alone there; a platform read returns them with the container
+ *   (`upper_message_id`), so a read fills the element with one line per entry. A nested forward stays a reference.
  * - `sticker`, `share_chat`, `share_user`, `system`, `deleted` and every type with no element: `<raw
  *   platform="lark" type="…">` carrying the payload in `data` and the readable text the platform gave — `[表情]` for a
  *   sticker (the platform never renders its image), `[已撤回]` for a recalled message, the system template as it came.
@@ -42,7 +43,7 @@
  * @module @deepseek-ai/cordis-plugin-im-adapter-lark/decode
  */
 
-import { type ChatRef, type InboundMessage, type Session, type UserRef } from '@deepseek-ai/cordis-plugin-im-core'
+import { toText, type ChatRef, type InboundMessage, type Session, type UserRef } from '@deepseek-ai/cordis-plugin-im-core'
 import { fromMarkdown, h, isBlock, isInline, normalize, type Element } from '@deepseek-ai/satori-element'
 import {
   type LarkChatKind, type LarkMessageReceivedEvent, type LarkRawEvent, type LarkReferrer, arrayOf, isDict, nonEmpty,
@@ -197,9 +198,16 @@ function reactionSessions(
  * @param raw - message as the platform returns it.
  * @param chat - chat the caller authorized, when it already knows it; without it the chat kind is probed once.
  * @param now - clock used as the timestamp fallback and for `referrer.receivedAt`.
+ * @param entries - the other items of the same answer, which are a merged forward's contents.
  * @returns the decoded inbound message.
  */
-export async function decodeMessage(bot: LarkBot, raw: Message, chat?: ChatRef, now = Date.now()): Promise<InboundMessage> {
+export async function decodeMessage(
+  bot: LarkBot,
+  raw: Message,
+  chat?: ChatRef,
+  now = Date.now(),
+  entries?: readonly Message[],
+): Promise<InboundMessage> {
   const id = nonEmpty(raw.message_id)
   if (!id) throw new TypeError('Invalid Lark message ID')
   const chatId = chat?.id ?? nonEmpty(raw.chat_id)
@@ -225,6 +233,7 @@ export async function decodeMessage(bot: LarkBot, raw: Message, chat?: ChatRef, 
       type: raw.deleted ? 'deleted' : type,
       content: nonEmpty(raw.body?.content) ?? '',
       mentions,
+      ...entries === undefined ? {} : { entries },
     }),
     mentions: mentionFlags(mentions, bot),
     time,
@@ -262,6 +271,11 @@ export interface ContentInput {
   content: string
   /** The message's mentions, which give a mention key its identity. */
   mentions: WireMention[]
+  /**
+   * The other messages the same platform answer carried. A merged forward's entries are separate messages returned
+   * with the container, each naming it in `upper_message_id`; an event carries none of them.
+   */
+  entries?: readonly Message[]
 }
 
 /**
@@ -299,11 +313,55 @@ function contentNodes(bot: LarkBot, input: ContentInput): Element[] {
     case 'interactive':
       return interactiveNodes(bot, input)
     case 'merge_forward':
-      // The entries are separate messages of their own read (`upper_message_id`); this one is an identity reference.
-      return [h('forward', { id: input.messageId })]
+      return [forwardNode(bot, input)]
     default:
       return [rawElement(input, parseBody(input.content))]
   }
+}
+
+/**
+ * A merged forward: the container's identity, then one line per entry the read carried.
+ *
+ * An event carries no entry, so the element stands as the reference alone and dsh-im shows a placeholder; a platform
+ * read answers with the entries, and each becomes its sender, its content and a break. A forward nested inside an
+ * entry stays a reference of its own: its entries belong to its own read.
+ *
+ * @param bot - adapter instance.
+ * @param input - the container's body, with the entries the read returned.
+ * @returns the `<forward>` element.
+ */
+function forwardNode(bot: LarkBot, input: ContentInput): Element<'forward'> {
+  const children: Element[] = []
+  for (const entry of input.entries ?? []) {
+    if (entry.upper_message_id !== input.messageId) continue
+    const sender = decodeUser(entry.sender)
+    if (children.length) children.push(h('br'))
+    children.push(h.text(`${sender.name?.trim() || sender.id}: `))
+    children.push(...phrasingOf(decodeContent(bot, {
+      messageId: nonEmpty(entry.message_id) ?? input.messageId,
+      type: nonEmpty(entry.msg_type) ?? 'unknown',
+      content: nonEmpty(entry.body?.content) ?? '',
+      mentions: readMentions(entry.mentions),
+    })))
+  }
+  return h('forward', { id: input.messageId }, ...children)
+}
+
+/**
+ * The inline nodes of one decoded body: a forward holds phrasing only, so a paragraph contributes its own children and
+ * a block it cannot hold inline (a quote, a table, preformatted text) contributes its text.
+ *
+ * @param content - the decoded body of one entry.
+ * @returns the nodes to place inside `<forward>`.
+ */
+function phrasingOf(content: Element<'message'>): Element[] {
+  const nodes: Element[] = []
+  for (const child of content.children) {
+    if (child.type === 'p') nodes.push(...child.children)
+    else if (isBlock(child.type)) nodes.push(h.text(toText(child)))
+    else nodes.push(child)
+  }
+  return nodes
 }
 
 /**
