@@ -66,7 +66,7 @@ it('copies workspace package links as files and removes command shims', async ()
   expect(await listSymlinks(staging)).toEqual([])
 })
 
-it('shares an identical workspace package while retaining different peers and third-party copies', async () => {
+it.each(['source', 'deployment'])('shares identical workspace packages with %s-relative metadata', async (base) => {
   const workspace = await fixture('dsh-python-staging-dedupe-')
   const staging = join(workspace, 'payload')
   const modules = join(staging, 'node_modules')
@@ -79,14 +79,15 @@ it('shares an identical workspace package while retaining different peers and th
     await mkdir(directory, { recursive: true })
     await writeFile(join(directory, 'index.js'), 'exports.scheduler = Symbol("scheduler")\n')
   }
-  const locations = (paths: string[]) => paths.map(path => relative(workspace, path))
+  const metadataRoot = base === 'source' ? workspace : staging
+  const locations = (paths: string[]) => paths.map(path => relative(metadataRoot, path))
   await writeFile(join(modules, '.modules.yaml'), JSON.stringify({ hoistedLocations: {
     '@fixture/tools@file:packages/tools(peer@1)': locations([root, duplicate]),
     '@fixture/tools@file:packages/tools(peer@2)': locations([differentPeers]),
     'external@1.0.0(@fixture/tools@file:packages/tools)': locations([external, externalCopy]),
   } }))
 
-  await deduplicateStagedWorkspacePackages(staging, workspace)
+  await deduplicateStagedWorkspacePackages(staging, metadataRoot)
 
   expect(existsSync(duplicate)).toBe(false)
   for (const directory of [root, differentPeers, external, externalCopy]) {

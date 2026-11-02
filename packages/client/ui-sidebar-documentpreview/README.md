@@ -109,7 +109,7 @@ Opening an Office file requests conversion on demand. Each read checks renderer 
 
 Background requests leave the final pending-request and reader slots available for foreground work; setting either limit to one rejects background reads. Renderer replacement restarts generation discovery and authorization once. Another replacement during that retry reports the localized busy message.
 
-A yellow rounded-triangle warning appears before Reload in the document toolbar when the current Office preview has missing fonts. Hover or keyboard focus shows the missing-font count; clicking opens an anchored list. Escape, Close, or clicking outside closes the list without hiding the warning or moving the document. Reloading closes the old details; previews with no missing fonts show no warning. Viewed and dismissed states are not retained.
+A yellow rounded-triangle warning appears before Reload in the document toolbar when the current Office preview has missing fonts. Hover or keyboard focus shows the missing-font count; clicking opens an anchored list that follows browser zoom, Visual Viewport panning, and resizing. Focus enters the list after its first position resolves. Escape, Close, or clicking outside closes the list without hiding the warning or moving the document. Reloading closes the old details; previews with no missing fonts show no warning. Viewed and dismissed states are not retained.
 
 <details>
 <summary>Office implementation — click to expand</summary>

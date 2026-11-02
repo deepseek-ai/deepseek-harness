@@ -13,6 +13,20 @@ function field(source: Record<string, unknown>, key: string): string {
   return typeof source[key] === 'string' ? source[key] : ''
 }
 
+/** Missing or malformed historical reasons stay generic; unfamiliar reasons never imply success. */
+function subagentTitle(reason: unknown): ChatKey {
+  if (typeof reason !== 'string' || reason === '') return 'message.trigger.subagent'
+  switch (reason) {
+    case 'completed': return 'message.trigger.subagent.completed'
+    case 'aborted': return 'message.trigger.subagent.aborted'
+    case 'error': return 'message.trigger.subagent.error'
+    case 'max-tokens': return 'message.trigger.subagent.maxTokens'
+    case 'refusal': return 'message.trigger.subagent.refusal'
+    // Backends may extend the recorded reason vocabulary.
+    default: return 'message.trigger.subagent.unknown'
+  }
+}
+
 /**
  * Describe a waking message using its recorded source.
  * @param node - durable context, including the original notification body.
@@ -40,11 +54,10 @@ export function turnTriggerDetails(node: ContextMessageNode): {
       title = 'message.trigger.team'
       icon = 'team'
       break
-    case 'subagent-settled': {
-      title = 'message.trigger.subagent'
+    case 'subagent-settled':
+      title = subagentTitle(source.stopReason)
       icon = 'subagent'
       break
-    }
     case 'webhook': {
       const github = field(source, 'provider') === 'github'
       title = github ? 'message.trigger.github' : 'message.trigger.webhook'

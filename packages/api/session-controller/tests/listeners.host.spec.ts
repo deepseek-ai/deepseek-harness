@@ -178,17 +178,20 @@ describe('EventListener', () => {
 })
 
 describe('ProjectionListener', () => {
-  it('emits sparse changes only for the selected Session', async () => {
+  it('emits one change per event only for the selected Session', async () => {
     const { ctx, session, abort } = await fixture()
-    let receive!: Parameters<typeof ctx.sessionProjections.onChanged>[0]
+    let receive!: Parameters<typeof ctx.sessionProjections.onEventChanged>[0]
     const dispose = vi.fn()
-    vi.spyOn(ctx.sessionProjections, 'onChanged').mockImplementation((listener) => { receive = listener; return dispose })
+    vi.spyOn(ctx.sessionProjections, 'onEventChanged').mockImplementation((listener) => { receive = listener; return dispose })
     using listener = new ProjectionListener(ctx, session.id, abort.signal)
     const other = ctx.sessions.create(SessionId('other'))
-    receive(other, 'subagent', null, SessionSeq(0))
-    receive(session, 'subagent', null, SessionSeq(1))
+    receive(other, [{ key: 'subagent', val: null }], SessionSeq(0))
+    receive(session, [{ key: 'subagent', val: null }, { key: 'title', val: 'renamed' }], SessionSeq(1))
     const changes = listener.changes()[Symbol.asyncIterator]()
-    expect(await changes.next()).toMatchObject({ value: { type: 'projection', key: 'subagent', value: null, seq: 1 } })
+    expect(await changes.next()).toEqual({
+      done: false,
+      value: { type: 'projection', seq: 1, changes: [{ key: 'subagent', val: null }, { key: 'title', val: 'renamed' }] },
+    })
     abort.abort()
     expect(await changes.next()).toMatchObject({ done: true })
     expect(dispose).toHaveBeenCalledOnce()
@@ -197,7 +200,7 @@ describe('ProjectionListener', () => {
   it('releases its buffer when projection subscription fails', async () => {
     const { ctx, session, abort } = await fixture()
     const remove = vi.spyOn(abort.signal, 'removeEventListener')
-    vi.spyOn(ctx.sessionProjections, 'onChanged').mockImplementation(() => { throw new Error('projection subscribe failed') })
+    vi.spyOn(ctx.sessionProjections, 'onEventChanged').mockImplementation(() => { throw new Error('projection subscribe failed') })
     expect(() => new ProjectionListener(ctx, session.id, abort.signal)).toThrow('projection subscribe failed')
     expect(remove).toHaveBeenCalled()
   })

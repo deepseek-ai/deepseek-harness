@@ -223,6 +223,7 @@ export function apply(ctx: ClientContext): void {
           'settings.action': { kind: 'list', scope: 'root' },
           'settings.close': { kind: 'single', scope: 'root' },
           'settings.section': { kind: 'list', scope: 'root' },
+          'settings.section.icon': { kind: 'list', scope: 'root', inline: true },
           'settings.onboarding': { kind: 'list', scope: 'root' },
         },
         inject: shellInjected,

@@ -32,7 +32,7 @@ kind: "package-library"
 <a id="known-limitations-and-deferred-work"></a>
 
 - **持久化仅限浏览器本地**——持久化存储使用 `localStorage` 中的 JSON；非浏览器运行时会禁用持久化，本包也不提供跨设备同步。
-- **Web 壳构建输入**——静态 ESM 为 Vite 保留第三方导入；独立消费方自行提供开发依赖（[依赖规则](../AGENTS.md#dependency-declaration)）。
+- **Web 壳构建输入**——静态 ESM 为 Vite 保留第三方导入；独立消费方自行提供开发依赖（[依赖规则](../AGENTS.md#dependency-declaration)）。构建默认为生产模式；`NODE_ENV=development` 启用开发检查。整份替换的 `set()` 仅在非生产模式冻结快照；`update()` 保留 Immer 的自动冻结。
 
 
 <a id="dev-note"></a>

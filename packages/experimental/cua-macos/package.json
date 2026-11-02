@@ -55,7 +55,8 @@
   "dependencies": {
     "zod": "^4.4.3",
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
-    "@deepseek-ai/dsh-cua": "workspace:*"
+    "@deepseek-ai/dsh-cua": "workspace:*",
+    "@deepseek-ai/schemastery": "workspace:~"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-working-directory": "workspace:*",

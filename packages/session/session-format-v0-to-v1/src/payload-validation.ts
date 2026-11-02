@@ -950,20 +950,32 @@ function modelRouteValue(value: SessionFormatJsonValue | undefined, label: strin
   nonEmptyString(route['model'], `${label} model`)
 }
 
+/** `subagent/descriptor` versions that format v0 logs contain. */
+export const SUBAGENT_DESCRIPTOR_VERSIONS: readonly number[] = [1, 2, 3]
+
 function subagentDescriptorValue(data: JsonRecord, label: string): void {
-  literalValue(data['version'], [3], `${label} version`)
+  literalValue(data['version'], SUBAGENT_DESCRIPTOR_VERSIONS, `${label} version`)
   nonEmptyString(data['provider'], `${label} provider`)
-  if (data['mode'] === 'one-shot') {
+  const composition = ['agentProvider', 'agentModel', 'persona', 'toolFilter']
+  if (data['version'] === 1) {
+    assertReleasedV0Keys(data, ['version', 'provider', 'label'], composition, `${label} data`)
+  } else if (data['mode'] === 'one-shot') {
     assertReleasedV0Keys(data, ['mode', 'version', 'provider'], ['label'], `${label} data`)
     if (data['label'] !== undefined) stringValue(data['label'], `${label} label`)
     return
+  } else {
+    literalValue(data['mode'], ['continuable'], `${label} mode`)
+    const optional = data['version'] === 3 ? [...composition, 'agentReasoningEffort'] : composition
+    assertReleasedV0Keys(data, ['mode', 'version', 'provider', 'label'], optional, `${label} data`)
   }
-  literalValue(data['mode'], ['continuable'], `${label} mode`)
-  nonEmptyString(data['label'], `${label} label`)
+  // Descriptor v1 and v2 writers defaulted each route member independently and did not reject empty strings.
+  const strict = data['version'] === 3
+  const stringField: (value: SessionFormatJsonValue | undefined, label: string) => void = strict ? nonEmptyString : stringValue
+  stringField(data['label'], `${label} label`)
   for (const key of ['agentProvider', 'agentModel', 'agentReasoningEffort', 'persona'] as const) {
-    if (data[key] !== undefined) nonEmptyString(data[key], `${label} ${key}`)
+    if (data[key] !== undefined) stringField(data[key], `${label} ${key}`)
   }
-  if ((data['agentProvider'] === undefined) !== (data['agentModel'] === undefined)) {
+  if (strict && (data['agentProvider'] === undefined) !== (data['agentModel'] === undefined)) {
     throw new SessionFormatError(`${label} agentProvider and agentModel must be paired`)
   }
   if (data['toolFilter'] !== undefined) {
@@ -971,8 +983,8 @@ function subagentDescriptorValue(data: JsonRecord, label: string): void {
     if (filter['allow'] === undefined && filter['deny'] === undefined) {
       throw new SessionFormatError(`${label} toolFilter requires allow or deny`)
     }
-    if (filter['allow'] !== undefined) arrayValue(filter['allow'], `${label} allow`, nonEmptyString)
-    if (filter['deny'] !== undefined) arrayValue(filter['deny'], `${label} deny`, nonEmptyString)
+    if (filter['allow'] !== undefined) arrayValue(filter['allow'], `${label} allow`, stringField)
+    if (filter['deny'] !== undefined) arrayValue(filter['deny'], `${label} deny`, stringField)
   }
 }
 

@@ -623,8 +623,10 @@ async function prepareWorld(browser: Browser, scenario: Case, scaffold: WebScaff
   const trigger = page.getByRole('button', { name: '1 subagent', exact: true })
   await trigger.waitFor({ timeout: 15_000 })
   await trigger.hover()
-  await page.getByRole('treeitem', { name: new RegExp(CHILD_LABEL) })
-    .getByRole('button', { name: `Open ${CHILD_LABEL} in sidebar`, exact: true }).click()
+  const openAside = page.getByRole('treeitem', { name: new RegExp(CHILD_LABEL) })
+    .getByRole('button', { name: /^Open .+ in sidebar$/u })
+  await expect.poll(() => openAside.count()).toBe(1)
+  await openAside.click()
   await page.locator(SIDE_ROOT).getByText('FOLDMX_BODY', { exact: false }).last().waitFor({ timeout: 30_000 })
   await page.mouse.move(0, 0)
   return {

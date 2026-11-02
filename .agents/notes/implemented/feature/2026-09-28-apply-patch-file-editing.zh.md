@@ -20,7 +20,7 @@ Status: implemented
 
 [Review 采集](../../../../packages/deliverables/workspace-changes/README.zh.md)使用文件系统 intent 监听器，不解析参数。`tools/pre-execute` 将执行关联到轮次记录器；前置的 write、edit 和 delete 监听器先等待策略决策，再等待捕获完成，然后提供方才修改文件。移动捕获两端。每轮保留首次基线，比较实际最终字节，因此重复编辑形成一份净 diff，还原的变化不再显示。现有大小、数量、时间、位置和 Session 生命周期限制保持适用。
 
-`tool-fs.applyPatch` 默认为 `false`，因此所有随发行版交付的组合保持该工具出现之前的模型请求；启用 `edit` 的 `tool-fs` 行（`dsh-base` 以及 Web 的 `standard`、`ptc`、`cordis` preset）显式写出 `applyPatch: false`，部署只需改这一行即可开启，或在没有 preset 拥有该行时通过针对 `tool-fs` id 的 profile patch 开启。该工具像 `write` 和 `edit` 一样咨询 `fs/*` intent waterfall，因此已挂载的观察策略对每个补丁操作要求先读并拒绝过期版本。schema 沿用 Codex 的参数名 `input`：在 2,226 条 DS-Bench 与 DeepSWE 录制轨迹中，14% 的 `apply_patch` 调用带着这个键发出，而参数名为 `patch` 时它们都被拒绝。工具通过插件 effect 注册 schema、指导文本、native/PTC 执行与调用展示；不修改 agent loop（智能体循环）。
+`tool-fs.applyPatch` 默认为 `false`；每个启用 `edit` 的随发行版交付的 `tool-fs` 行都显式写出自己的值，因此开关该工具是每个组合一行改动，没有 preset 拥有该行时可通过针对 `tool-fs` id 的 profile patch 开启。该工具像 `write` 和 `edit` 一样咨询 `fs/*` intent waterfall，因此已挂载的观察策略对每个补丁操作要求先读并拒绝过期版本。这些行以及 `fs-observation-policy` 行随发行版交付的值由[随发行版交付的文件系统修改默认值](2026-10-29-shipped-fs-mutation-defaults.zh.md)决定，该 Note 取代本 Note 的 opt-in 基线。schema 沿用 Codex 的参数名 `input`：在 2,226 条 DS-Bench 与 DeepSWE 录制轨迹中，14% 的 `apply_patch` 调用带着这个键发出，而参数名为 `patch` 时它们都被拒绝。工具通过插件 effect 注册 schema、指导文本、native/PTC 执行与调用展示；不修改 agent loop（智能体循环）。
 
 ## 考虑过的替代方案
 
@@ -32,11 +32,11 @@ Status: implemented
 
 **加入工具时同时扩展 Review。** 重命名展示、持久存储、SSH 采集和捕获失败策略是独立产品决策；既有整文件采集和展示覆盖本次接入。
 
-**在同时启用 `write` 与 `edit` 的地方默认注册该工具。** 这会在尚未衡量该工具对普通会话的影响之前，给每个默认模型请求增加一个 schema 和一段指导文本，并改变所有录制请求的预期；显式开关保持基线组合不变，让对比评测自行选择开启。
+**在同时启用 `write` 与 `edit` 的地方默认注册该工具。** 这会在尚未衡量该工具对普通会话的影响之前，给每个默认模型请求增加一个 schema 和一段指导文本，并改变所有录制请求的预期；显式开关保持基线组合不变，让对比评测自行选择开启。随发行版交付的默认值随后在[随发行版交付的文件系统修改默认值](2026-10-29-shipped-fs-mutation-defaults.zh.md)中决定。
 
 ## 后果
 
-一次调用可以表达相关编辑。默认模型请求保持不变；开启该开关的组合会包含额外的工具 schema 及其指导文本，因此其录制请求的预期与基线不同。预检不能阻止之后的冲突、取消或存储失败；调用方在重试前检查操作状态。上游宽松匹配保持固定版本并受到测试约束，不会被收紧。提供方实现和外部子类必须支持三个新增操作，部分移动要求处理两端状态。
+一次调用可以表达相关编辑。开启该开关的组合会包含额外的工具 schema 及其指导文本，因此其录制请求的预期与未开启的组合不同。预检不能阻止之后的冲突、取消或存储失败；调用方在重试前检查操作状态。上游宽松匹配保持固定版本并受到测试约束，不会被收紧。提供方实现和外部子类必须支持三个新增操作，部分移动要求处理两端状态。
 
 ## 测试
 
@@ -44,4 +44,4 @@ Status: implemented
 
 ## 延期工作
 
-受控编辑任务评测：在相同初始状态下与 `edit` 比较最终文件正确性、任务成功率、token、工具调用、重试、延迟和 Review 覆盖。SSH Review、`apply_patch` 的收尾文案文件引用，以及 Codex `PreserveLineEndings`。
+SSH Review、`apply_patch` 的收尾文案文件引用，以及 Codex `PreserveLineEndings`。

@@ -68,7 +68,7 @@ describe('viewer authority', () => {
     const block = { asOfSeq: 0, values: {} }
     const read = reader({ sharedSessionId: () => 'source', forks, gateway: gateway([
       { type: 'baseline', value: { projections: { source: block, 'alice-fork': { asOfSeq: 1, values: { title: 'Mine' } } } } },
-      { type: 'projection', sessionId: 'alice-fork', key: 'title', value: 'Renamed', seq: 2 },
+      { type: 'projection', sessionId: 'alice-fork', seq: 2, changes: [{ key: 'title', val: 'Renamed' }] },
     ]) })
     // The fork's facts are not folded from its log, so the baseline that replaces the block the session
     // list published states them again; the shared Session and later updates are relayed unchanged.
@@ -77,7 +77,7 @@ describe('viewer authority', () => {
         source: block,
         'alice-fork': { asOfSeq: 1, values: { title: 'Mine', forkLineage: forkLineageValue('source') } },
       } } },
-      { type: 'projection', sessionId: 'alice-fork', key: 'title', value: 'Renamed', seq: 2 },
+      { type: 'projection', sessionId: 'alice-fork', seq: 2, changes: [{ key: 'title', val: 'Renamed' }] },
     ])
   })
 })
