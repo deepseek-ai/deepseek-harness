@@ -105,6 +105,7 @@ const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
   session_trace: 'tool.title.traceSession',
   list_subagent_models: 'tool.title.listModels',
   subagent: 'tool.title.subagent',
+  subagent_fork: 'tool.title.subagentFork',
   list_agents: 'tool.title.listAgents',
   send_message: 'tool.title.sendMessage',
   interrupt_agent: 'tool.title.interruptAgent',

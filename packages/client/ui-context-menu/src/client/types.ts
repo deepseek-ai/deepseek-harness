@@ -2,6 +2,7 @@
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { PaneId, TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { HTMLAttributes } from 'react'
 
@@ -27,6 +28,7 @@ export type UseContextMenu = () => ContextMenuBindings
 /** External plugins extend this map with their own target families. */
 export interface ContextMenuTargetMap {
   session: { readonly sessionId: SessionId; readonly displayTitle: string }
+  workspace: { readonly workspaceId: WorkspaceId; readonly path: string; readonly displayTitle: string }
   /** Header utilities, independent of Session-row and title context actions. */
   sessionHeader: { readonly sessionId: SessionId }
   file: { readonly sessionId: SessionId; readonly path: string; readonly line?: number; readonly paneId?: PaneId }
@@ -46,6 +48,15 @@ export interface ContextMenuTargetMap {
 export type ContextMenuTarget = {
   [K in keyof ContextMenuTargetMap]: { readonly kind: K; readonly value: ContextMenuTargetMap[K] }
 }[keyof ContextMenuTargetMap]
+/** Owner data for the shared ellipsis button; labels are already localized. */
+export interface ContextMenuButtonProps {
+  readonly target: ContextMenuTarget
+  readonly label: string
+  readonly className?: string | undefined
+  /** Use the compact toolbar control; omission preserves caller-styled row button geometry. */
+  readonly size?: 'sm'
+}
+
 /** Pointer position in CSS pixels; keyboard gestures use the trigger's bottom edge. */
 export interface MenuPoint { readonly x: number; readonly y: number }
 /** Keyed icon renderer and optional image URL captured with the action. */
@@ -111,6 +122,8 @@ export interface MenuResolution {
 export interface ContextMenus {
   /** Captured target of the shared popup; null after dismissal. */
   readonly active: ObservableSnapshot<ContextMenuTarget | null>
+  /** Target kinds with registered contributions; updates synchronously on registration and withdrawal, without resolving actions. */
+  readonly registeredKinds: ObservableSnapshot<readonly (keyof ContextMenuTargetMap)[]>
   /**
    * Register for subsequent openings; unloading withdraws actions and aborts their queries. Duplicate ids within a target fail.
    * @param contribution - target provider.

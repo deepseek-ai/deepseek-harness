@@ -69,6 +69,7 @@ function ExternalTriggerFixture({ onClose }: { onClose: () => void }) {
     <button ref={trigger} data-context-menu-trigger="" aria-haspopup="menu"
       onClick={() => { setOpen(value => !value) }}><span>External more</span></button>
     <Menu open={open} anchor={null} portal contextual returnFocus={() => trigger.current}
+      isExternalTrigger={node => trigger.current?.contains(node) === true}
       getAnchorRect={() => trigger.current?.getBoundingClientRect() ?? null}
       items={entries} onClose={() => { onClose(); setOpen(false) }} />
   </>
@@ -441,6 +442,128 @@ describe('Menu submenus', () => {
       items={[{ id: 'parent', label: 'Applications', submenu: [{ id: 'disabled', label: 'Unavailable', disabled: true }] }]} />)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Applications' }))
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Go back' }))
+  })
+
+  it('preserves the document composition guard across child opening and placement updates', () => {
+    render(<Menu open anchor={null} items={entries} onClose={vi.fn()} />)
+    const parent = screen.getByRole('menuitem', { name: 'Applications' })
+    fireEvent.compositionStart(document)
+    fireEvent.click(parent)
+    vi.stubGlobal('innerWidth', 390)
+    fireEvent(window, new Event('resize'))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'First app' }))
+    fireEvent.compositionEnd(document)
+    fireEvent.keyUp(document, { key: 'Enter' })
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(document.activeElement).toBe(parent)
+    expect(screen.queryByRole('menuitem', { name: 'First app' })).toBeNull()
+  })
+
+  it('walks the single-panel child and closes to the original anchor on Shift+Tab', () => {
+    vi.stubGlobal('innerWidth', 390)
+    render(<Fixture />)
+    const trigger = openMenu()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Applications' }))
+    fireEvent.keyDown(document.activeElement!, { key: 'End' })
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Second app' }))
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' })
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Go back' }))
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'First app' }))
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab', shiftKey: true })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('cancels a pending child close when the root closes and reopens', () => {
+    const props = { anchor: null, items: entries, onClose: vi.fn() }
+    const view = render(<Menu {...props} open />)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Applications' }))
+    const child = childMenu()
+    pointer(child, 'pointerover', 'mouse')
+    pointer(child, 'pointerout', 'mouse', document.body)
+    view.rerender(<Menu {...props} open={false} />)
+    view.rerender(<Menu {...props} open />)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Applications' }))
+    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'First app' }))
+  })
+
+  it.each([false, true])('requires caller opt-in for external controls even in contextual=%s menus', (contextual) => {
+    const close = vi.fn()
+    const props = { open: true, anchor: null, contextual, items: entries, onClose: close }
+    const view = render(<><button data-context-menu-trigger="">External</button><Menu {...props} /></>)
+    const external = screen.getByRole('button', { name: 'External' })
+    fireEvent.pointerDown(external)
+    expect(close).toHaveBeenCalledOnce()
+    view.rerender(<><button data-context-menu-trigger="">External</button>
+      <Menu {...props} isExternalTrigger={node => external.contains(node)} /></>)
+    fireEvent.pointerDown(external.firstChild!)
+    expect(close).toHaveBeenCalledOnce()
+    fireEvent.pointerDown(document.body)
+    expect(close).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([false, true])('handles child context gestures only in contextual=%s menus', (contextual) => {
+    const close = vi.fn()
+    render(<Menu open contextual={contextual} anchor={null} items={entries} onClose={close} />)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Applications' }))
+    const child = screen.getByRole('menuitem', { name: 'First app' })
+    const nativeMenuAllowed = fireEvent.contextMenu(child)
+    expect(nativeMenuAllowed).toBe(!contextual)
+    expect(close).toHaveBeenCalledTimes(contextual ? 1 : 0)
+  })
+
+  it('does not collapse a compact child on touch leave', () => {
+    render(<Menu open compact dense anchor={null} items={entries} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Applications' }))
+    const child = childMenu()
+    pointer(child, 'pointerover', 'touch')
+    pointer(child, 'pointerout', 'touch', document.body)
+    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'First app' }))
+  })
+
+  it('retains an activated page when an armed side-card grace expires after resizing', () => {
+    render(<Fixture />)
+    openMenu()
+    const parent = screen.getByRole('menuitem', { name: 'Applications' })
+    fireEvent.click(parent)
+    const child = childMenu()
+    pointer(child, 'pointerover', 'mouse')
+    pointer(child, 'pointerout', 'mouse', document.body)
+    vi.stubGlobal('innerWidth', 390)
+    fireEvent(window, new Event('resize'))
+    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+    expect(screen.getAllByRole('menu')).toHaveLength(1)
+    pointer(child, 'pointerover', 'mouse')
+    pointer(child, 'pointerout', 'mouse', document.body)
+    act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'First app' }))
+  })
+
+  it('keeps focus on an enabled parent when its hovered child becomes empty', () => {
+    const props = { open: true, anchor: null, onClose: vi.fn() }
+    const view = render(<Menu {...props} items={entries} />)
+    const parent = screen.getByRole('menuitem', { name: 'Applications' })
+    act(() => { parent.focus() })
+    view.rerender(<Menu {...props} items={[{ ...entries[0]!, submenu: [] }, entries[1]!]} />)
+    expect(document.activeElement).toBe(parent)
+    expect(screen.queryByRole('menuitem', { name: 'First app' })).toBeNull()
+  })
+
+  it('ignores nested custom menu rows and text-target events during submenu exclusivity', () => {
+    render(<Menu open anchor={null} items={entries} onClose={vi.fn()}>
+      <div role="menu"><button role="menuitem">Nested row</button></div>
+      <span>Non-row text</span>
+    </Menu>)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Applications' }))
+    pointer(screen.getByRole('menuitem', { name: 'Nested row' }), 'pointerover', 'mouse')
+    const event = new MouseEvent('pointerover', { bubbles: true })
+    Object.defineProperty(event, 'pointerType', { value: 'mouse' })
+    fireEvent(screen.getByText('Non-row text').firstChild!, event)
+    expect(screen.getByRole('menuitem', { name: 'First app' })).toBeDefined()
   })
 
   it('does not open disabled submenu parents and dismisses on outside pointerdown', () => {

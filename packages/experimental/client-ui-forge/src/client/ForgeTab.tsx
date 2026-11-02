@@ -149,9 +149,9 @@ function SignIn({ state, copyText, t }: {
 }
 
 /**
- * Render the forge tab of one Session. The local changes card shows while the
- * `branch` scope changes files and no open change request has the checked-out
- * branch as its head. The only open change request starts expanded; once the
+ * Render the forge tab of one Session. The local changes card shows whenever
+ * the `branch` scope changes files, independently of bound change requests.
+ * The only open change request starts expanded; once the
  * user expands or collapses a card, the panel keeps that choice across later updates.
  * @param props - tab information, panel snapshot and Host facts hooks, actions, and copy.
  * @returns the tab body.
@@ -192,7 +192,7 @@ export function ForgeTab({
     openLink, copyLink: copyText, retry: startRefresh, remove, markReady, merge, readChecks,
     viewChanges: (entry) => { viewChanges({ kind: 'change', url: entry.url }) },
   }
-  const local = state.local !== null && state.local.files.length > 0 && openChangeRequestOf(state) === undefined ? state.local : null
+  const local = state.local !== null && state.local.files.length > 0 ? state.local : null
   const expanded = chosen ?? defaultExpanded(state.changeRequests)
   const toggle = (url: string): void => {
     const next = new Set(expanded)
@@ -209,7 +209,7 @@ export function ForgeTab({
       {local !== null && (
         <LocalChangesCard
           local={local}
-          creatable={state.repository !== null}
+          creatable={state.repository !== null && openChangeRequestOf(state) === undefined}
           view={(path) => { viewChanges({ kind: 'local' }, path) }}
           create={createChangeRequest}
           t={t}

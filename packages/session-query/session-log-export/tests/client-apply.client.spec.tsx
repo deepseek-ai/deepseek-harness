@@ -6,12 +6,10 @@ import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { SessionMarkdownCopyToast } from '../src/client/CopyToast.tsx'
 import type { SessionMarkdownCopyToastInjected } from '../src/client/CopyToast.tsx'
-import { SessionLogDownloadHeaderAction } from '../src/client/HeaderAction.tsx'
+import { SessionLogDownloadDialog, type SessionLogDownloadDialogInjected } from '../src/client/Dialog.tsx'
 import { apply, inject } from '../src/client/index.ts'
-import type { SessionLogDownloadHeaderInjected } from '../src/client/HeaderAction.tsx'
 
 const SID = 'session-export-apply' as SessionId
 
@@ -81,45 +79,18 @@ describe('session-log-download browser plugin', () => {
     expect(menu.source.getSnapshot()).toEqual([])
   })
 
-  it('toggles only its captured Header menu and replaces an unrelated target', async () => {
-    const b = await bench()
-    const face = injectedOf(b.slots.entries('conversation.session.header.utilities')[0]) as SessionLogDownloadHeaderInjected
-    const point = { x: 20, y: 30 }
-    face.openMenu(SID, point)
-    expect(b.open).toHaveBeenCalledExactlyOnceWith({ kind: 'sessionHeader', value: { sessionId: SID } }, point)
-    face.openMenu(SID, point)
-    expect(b.close).toHaveBeenCalledOnce()
-    b.active.set({ kind: 'session', value: { sessionId: SID, displayTitle: 'Same' } })
-    face.openMenu(SID, point)
-    expect(b.open).toHaveBeenCalledTimes(2)
-    face.openMenu('another' as SessionId, point)
-    expect(b.active.getSnapshot()).toEqual({ kind: 'sessionHeader', value: { sessionId: 'another' } })
-  })
-
-  it('dismisses the same Header menu after its button anchor moves more than four pixels', async () => {
-    const b = await bench()
-    const face = injectedOf(b.slots.entries('conversation.session.header.utilities')[0]) as SessionLogDownloadHeaderInjected
-    face.openMenu(SID, { x: 20, y: 30 })
-    const moved = { x: 120, y: 80 }
-    face.openMenu(SID, moved)
-    expect(b.close).toHaveBeenCalledOnce()
-    expect(b.open).toHaveBeenCalledOnce()
-    expect(b.active.getSnapshot()).toBeNull()
-    face.openMenu(SID, moved)
-    expect(b.open).toHaveBeenLastCalledWith({ kind: 'sessionHeader', value: { sessionId: SID } }, moved)
-  })
-
-  it('provides one controller and removes its Header and overlay contributions on disposal', async () => {
+  it('provides one controller and root overlays without contributing a Header trigger', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 500 })))
     const b = await bench()
     expect(inject).toEqual(['slots', 'locale', 'contextMenus'])
     expect(b.ctx.sessionLogDownload).toBeDefined()
     expect(b.slots.entries('conversation.session.header.actions')).toHaveLength(0)
-    const entry = b.slots.entries('conversation.session.header.utilities')[0]
-    expect(entry?.component).toBe(SessionLogDownloadHeaderAction)
+    expect(b.slots.entries('conversation.session.header.utilities')).toHaveLength(0)
+    const entry = b.slots.entries('shell.overlay').find(row => row.options.id === 'session-log-download')
+    expect(entry?.component).toBe(SessionLogDownloadDialog)
     expect(entry?.options).toMatchObject({ id: 'session-log-download' })
-    const injected = injectedOf(entry) as SessionLogDownloadHeaderInjected
-    await injected.request(SID)
+    const injected = injectedOf(entry) as SessionLogDownloadDialogInjected
+    await b.ctx.sessionLogDownload.download(SID)
     expect(b.ctx.sessionLogDownload.store.getSnapshot().bySession[SID]?.status).toBe('error')
     injected.dismiss(SID)
     expect(b.ctx.sessionLogDownload.store.getSnapshot().bySession[SID]?.open).toBe(false)
@@ -129,9 +100,9 @@ describe('session-log-download browser plugin', () => {
     expect(overlay?.options).toMatchObject({ id: 'session-log-download.copy-toast' })
     const overlayInjected = injectedOf(overlay) as SessionMarkdownCopyToastInjected
     b.menu().select('session-log-download.export/copy')
-    await vi.waitFor(() => { expect(injected.hooks.sessionMarkdownCopy.getSnapshot().notice?.kind).toBe('preparationFailed') })
+    await vi.waitFor(() => { expect(overlayInjected.hooks.sessionMarkdownCopy.getSnapshot().notice?.kind).toBe('preparationFailed') })
     overlayInjected.dismiss()
-    expect(injected.hooks.sessionMarkdownCopy.getSnapshot().notice).toBeNull()
+    expect(overlayInjected.hooks.sessionMarkdownCopy.getSnapshot().notice).toBeNull()
 
     const retained = b.menu()
     await b.fiber.dispose()
@@ -164,7 +135,7 @@ describe('session-log-download browser plugin', () => {
     copy.resolve(new Response('', { status: 500 }))
     await vi.waitFor(() => { expect(menu.source.getSnapshot().every(row => !row.disabled)).toBe(true) })
     expect(b.ctx.sessionLogDownload.store.getSnapshot().bySession[SID]).toMatchObject({ open: true, status: 'error' })
-    const face = injectedOf(b.slots.entries('conversation.session.header.utilities')[0]) as SessionLogDownloadHeaderInjected
+    const face = injectedOf(b.slots.entries('shell.overlay')[0]) as SessionMarkdownCopyToastInjected
     expect(face.hooks.sessionMarkdownCopy.getSnapshot().notice?.kind).toBe('preparationFailed')
     expect(b.failed).not.toHaveBeenCalled()
     b.ctx.locale.setLocale('zh')
@@ -192,14 +163,15 @@ describe('session-log-download browser plugin', () => {
     await second.fiber.dispose()
   })
 
-  it('re-registers after the declaring Header slot collapses and returns', async () => {
+  it('re-registers root overlays after their declaring slot collapses and returns', async () => {
     const b = await bench()
     b.declaration()
     expect(b.slots.entries('conversation.session.header.utilities')).toHaveLength(0)
     expect(b.slots.entries('shell.overlay')).toHaveLength(0)
     const redeclare = declare(b.slots)
     await Promise.resolve()
-    expect(b.slots.entries('conversation.session.header.utilities')[0]?.component).toBe(SessionLogDownloadHeaderAction)
+    expect(b.slots.entries('conversation.session.header.utilities')).toHaveLength(0)
+    expect(b.slots.entries('shell.overlay')[1]?.component).toBe(SessionLogDownloadDialog)
     expect(b.slots.entries('shell.overlay')[0]?.component).toBe(SessionMarkdownCopyToast)
     redeclare()
     await b.fiber.dispose()

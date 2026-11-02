@@ -45,6 +45,7 @@
             "maxTokens": true
           },
           "tools": [
+            "apply_patch",
             "ask_user_question",
             "create_goal",
             "edit",
@@ -70,6 +71,7 @@
             "subagent_fork",
             "todo_write",
             "update_goal",
+            "wait_agent",
             "web_fetch",
             "web_search",
             "workflow",
@@ -107,6 +109,7 @@
             "maxTokens": true
           },
           "tools": [
+            "apply_patch",
             "ask_user_question",
             "create_goal",
             "edit",
@@ -133,6 +136,7 @@
             "subagent_fork",
             "todo_write",
             "update_goal",
+            "wait_agent",
             "web_fetch",
             "web_search",
             "workflow",
@@ -184,6 +188,7 @@
             "maxTokens": true
           },
           "tools": [
+            "apply_patch",
             "ask_user_question",
             "create_goal",
             "edit",
@@ -209,6 +214,7 @@
             "subagent_fork",
             "todo_write",
             "update_goal",
+            "wait_agent",
             "web_fetch",
             "web_search",
             "workflow",

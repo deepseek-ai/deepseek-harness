@@ -45,7 +45,7 @@ kind: "package-library"
 | `Button` | 可点击操作；`variant` 选择 `primary`、`ghost`、`outline` 或 `toolbar`。描边操作使用内侧细线。ref 指向原生按钮，供焦点控制与浮层锚定使用。 |
 | `Switch` | 36×20 的双态开关。关闭态滑块读取 `--dsw-alias-switch-thumb`，在两种主题下均保持亮色；开启态滑块与品牌色轨道形成对比。禁用控件使用半透明样式。`label` 必填，控件不可能在没有名称的情况下发布。 |
 | `SegmentedControl` | 两段或更多等宽分段加一个滑动指示块的 tablist，用于在几种模式间切换一张卡片或面板；选中项由调用方持有，`label` 为列表命名。`id` 派生每个 tab 的 id（`<id>-<value>`）及其控制的面板 id（`<id>-<value>-panel`），面板由调用方渲染并用 `aria-labelledby` 指回 tab；分段可 `disabled` 并带 `title`，控件级 `disabled` 在当前面板有进行中的操作时锁住全部分段。 |
-| `Checkbox` | 带标签的原生复选框，支持受控状态、键盘交互和禁用样式；调用方提供本地化的 `label` 文本。 |
+| `Checkbox` | 带标签的原生复选框，支持受控状态、键盘交互和禁用样式；调用方提供本地化的 `label` 文本。`modalAutofocus` 将输入标记为所属 Modal 的初始焦点，本身不会移动焦点。 |
 | `Input` | 单行文本输入，用于搜索框与行内表单。ref 指向原生输入框，供焦点控制使用，并在卸载时清空。 |
 | `InlineEditor` | 自动聚焦的多行行内编辑器，用于排队消息、goal 等短草稿。它随文本和宽度增高，最多六行，之后滚动；Enter 保存，Shift+Enter 换行，输入法组合中的 Enter 不生效，Escape 取消。调用方提供本地化 `label`，并在 elevated 表面上重绑滚动条。 |
 | `ZoomControls`, `DOCUMENT_ZOOM` | 悬浮文档缩放控件，接收本地化标签、固定预设，以及可见性和交互状态回调。省略 `fit` 时不显示适配项。工具栏带 `data-document-zoom-controls`，可见时另带 `data-document-zoom-visible`。owner 的 `className` 覆盖 `bottom` 与 `max-width`，不受样式表加载顺序影响；`inset-inline-start` 和 `transform` 负责居中与进出场位移，`opacity` 负责淡入淡出，三者都由原语保留。渲染器共用导出的缩放范围。 |
@@ -61,8 +61,8 @@ kind: "package-library"
 | `AnimatedRows` | 带键列表的位移动画：移动为 200 ms，进出淡变为 100 ms。列表内发生指针或键盘输入后才启用，遵循减少动态效果设置，加载或替换视图时直接完成。为行标记 `data-row-key` 并传入对应的 `rowKeys`，为父容器设置定位以承载不可交互的退出层；`role` 和 `label` 由调用方提供。 |
 | `useRowDragPreview` | 使用不可交互的离屏行副本生成原生拖拽预览。可选的 `inheritedProperties` 列表指定离屏包装层需要复制其计算值的 CSS 自定义属性；省略时不复制。列表引用需保持稳定，因为替换列表会清除活动预览。未列出的自定义属性按预览所在位置的正常继承规则生效。传入设置表面底色的类名；拖拽来自子级手柄时，将行元素传给 `start`；`clear` 和卸载会移除副本。 |
 | `TextShimmer` | 同一道高光从左到右扫过一行的标题、分隔符、摘要与后缀：首次等待 300ms，扫动一秒，再静止 500ms。遮罩覆盖内容宽度，并限制在可见行宽内，相对垂直方向倾斜 15°，峰值区域平坦，两侧柔和渐隐。移动的装饰层始终裁剪在行内，不会扩大可滚动区域。底色继承调用方的颜色，包括悬停变化；主题提供半透明高光。图标和箭头放在 `TextShimmer` 外，只有文字和分隔符参与扫光。字符串子节点沿用稳定的文字接口；嵌套的 `TextShimmer` 共用外层动画。活动期间组合子节点渲染两次，因此不得带副作用或元素 id。分隔符标记 `data-shimmer-decoration`，让填色参与扫光。`DisclosureRow` 将 `contentClassName` 传给文字区域，将 `contentLayoutClassName` 传给内部布局。惰性装饰副本不参与交互、选区和无障碍访问；文字更新保留动画，减少动态效果模式保留静态底色。 |
-| `Modal` | 页面遮罩之上的居中对话框。嵌套对话框可通过 `onKeyDownCapture` 在文档级 Escape 处理器之前拦截按键。 色层与弹窗淡入，背景模糊始终完整生效，并遵循减少动态效果偏好。调用方已模糊源页面时设置 `backdropBlur={false}`。 |
-| `RiskConfirmation` | 以显式复选框把关的敏感操作确认。 |
+| `Modal` | 页面遮罩之上的居中对话框。嵌套对话框可通过 `onKeyDownCapture` 在文档级 Escape 处理器之前拦截按键。 色层与弹窗淡入，背景模糊始终完整生效，并遵循减少动态效果偏好。调用方已模糊源页面时设置 `backdropBlur={false}`。`tone="warning"` 在标题中显示橙色警告图标，并移除正文额外的顶部间距；其他弹窗的间距保持不变。 |
+| `RiskConfirmation` | 以显式复选框把关的敏感操作确认，采用共用的警告标题布局。 |
 | `Tooltip` | 锚定在克隆子元素上的悬停与键盘聚焦提示；可选的 `delayMs` 控制悬停延迟，`focusDelayMs` 控制键盘聚焦延迟，均默认为 0 毫秒。可通过 `portal` 渲染到外层，避免被容器裁剪，或受祖先层叠上下文限制其 z-index。 |
 | `HoverCard`、`HoverCardGroup` | 可阅读、可选带复制按钮的悬停预览；物理列表可选择让卡片共享首次显示等待，并互斥显示。 |
 | `DraggableImage` | 通过显式传递与反馈回调提供原图拖放。 |
@@ -115,7 +115,7 @@ kind: "package-library"
 
 明确的 `./`、`../`、斜杠或反斜杠开头的路径（包括 UNC），以及 `C:/work/file.ts` 这样的 Windows 盘符路径优先于 URL 解析。其余目标若能被绝对 URL 解析器接受，就保留为 URL：`index.ts:24`、`Makefile:12` 和 `localhost:3000` 均为链接，不补协议，也不预先检查能否打开。文件引用使用 `./index.ts:24`。其他目标视为路径。正文链接禁止 `javascript:`、`vbscript:`、`data:` 和 `blob:`；其余可解析的协议保留原生导航。HTTP(S) 链接保留委托导航和修饰键点击行为。不添加点击后的失败提示。
 
-`MarkdownText` 渲染不可信的 GFM 与 TeX 公式、阻止不安全的链接与图片，并可把已解析的文件提及转换为显式控件。删除线需要 `~~`；单个 `~`（如 `10~20`）保持字面文本。裸 URL 在非 ASCII 标点或符号（如 `。`、`，`）前结束，紧随其后的中文正文不会并入链接。外层 `MarkdownDelegateProvider` 会接收普通点击产生的已净化 HTTP(S) URL；带修饰键的点击和 Provider 外的链接保留原生外部 anchor 行为。`omitHtml` 不渲染原始 HTML，而不是将其显示为原样文本，用于为 HTML 渲染器编写的文档。当 owner 传入 `pathImages` 词表时，本地媒体路径的图片目标只在落定渲染阶段重写为可展示 URL（与 file mentions 相同的流式门）；不传词表时本地目标保持惰性 alt 文本。重写后的图片支持 HTTP(S)、data、blob 及桌面端 `dsh-app://app/api/file`、`dsh-app://app/api/plugin-market/detail-file` 与 `dsh-app://app/api/plugin-manager/detail-file` 路由；正文直接书写的桌面端 URL 仍保持惰性。加载或解码失败后，图片替换为作者的 alt 文本；alt 为空时显示原始目标路径；`fileImages` 还提供本地化的失败提示前缀。图片源变化后可重新加载。每个挂载的图片会为解析得到的 Host `api/file` 地址追加 `load` 查询参数，因为浏览器在同一文档内会无视 `no-store` 复用相同 URL 的图片；因此覆盖后的文件在新渲染的图片中会加载当前内容，每次重新挂载都会重新请求该文件；Host 文件路由会把该请求重定向到当前文件版本的可缓存地址。回复流式输出时，它冻结已完成的块、按已完成行推进顶层未闭合 fence，并从保存的 Shiki grammar state 为该 fence 增量高亮。已完成的 token 行进入固定大小的 React 分组，后续分片只 reconcile 正在增长的分组；最终全量解析解决跨文档语法时，未变化的 fence 会保留该 DOM。`TerminalBlock`、`ReadBlock`、`DiffBlock`、`SearchBlock` 与 `WebBlock` 把对应的工具结果意图渲染为带复制控件、溢出处理及适用时 ANSI 处理的卡片。`JsonTree` 与 `JsonBlock` 以只读方式检查 JSON 值；`UserTextRun` 渲染不做解析的文本，`ReferenceChip` 渲染业务已解析的标签。显式传入 `onActivate` 后，胶囊成为可由键盘操作的按钮；重复指针点击和已有文本选区不触发激活，键盘激活仍然可用。标签继承所属容器的换行规则。识别和 JSON 变换由 [ui-conversation](../ui-conversation/README.zh.md#sent-user-text) 负责。
+`MarkdownText` 渲染不可信的 GFM 与 TeX 公式、阻止不安全的链接与图片，并可把已解析的文件提及转换为显式控件。复制位于同一个 `MarkdownText` 文档内且包含已渲染公式的选区时，每个完整公式会以 TeX 源码同时写入剪贴板的纯文本和 HTML 格式，行内公式用 `$…$` 包裹，展示公式用 `$$…$$` 包裹。删除线需要 `~~`；单个 `~`（如 `10~20`）保持字面文本。裸 URL 在非 ASCII 标点或符号（如 `。`、`，`）前结束，紧随其后的中文正文不会并入链接。外层 `MarkdownDelegateProvider` 会接收普通点击产生的已净化 HTTP(S) URL；带修饰键的点击和 Provider 外的链接保留原生外部 anchor 行为。`omitHtml` 不渲染原始 HTML，而不是将其显示为原样文本，用于为 HTML 渲染器编写的文档。当 owner 传入 `pathImages` 词表时，本地媒体路径的图片目标只在落定渲染阶段重写为可展示 URL（与 file mentions 相同的流式门）；不传词表时本地目标保持惰性 alt 文本。重写后的图片支持 HTTP(S)、data、blob 及桌面端 `dsh-app://app/api/file`、`dsh-app://app/api/plugin-market/detail-file` 与 `dsh-app://app/api/plugin-manager/detail-file` 路由；正文直接书写的桌面端 URL 仍保持惰性。加载或解码失败后，图片替换为作者的 alt 文本；alt 为空时显示原始目标路径；`fileImages` 还提供本地化的失败提示前缀。图片源变化后可重新加载。每个挂载的图片会为解析得到的 Host `api/file` 地址追加 `load` 查询参数，因为浏览器在同一文档内会无视 `no-store` 复用相同 URL 的图片；因此覆盖后的文件在新渲染的图片中会加载当前内容，每次重新挂载都会重新请求该文件；Host 文件路由会把该请求重定向到当前文件版本的可缓存地址。回复流式输出时，它冻结已完成的块、按已完成行推进顶层未闭合 fence，并从保存的 Shiki grammar state 为该 fence 增量高亮。已完成的 token 行进入固定大小的 React 分组，后续分片只 reconcile 正在增长的分组；最终全量解析解决跨文档语法时，未变化的 fence 会保留该 DOM。`TerminalBlock`、`ReadBlock`、`DiffBlock`、`SearchBlock` 与 `WebBlock` 把对应的工具结果意图渲染为带复制控件、溢出处理及适用时 ANSI 处理的卡片。`JsonTree` 与 `JsonBlock` 以只读方式检查 JSON 值；`UserTextRun` 渲染不做解析的文本，`ReferenceChip` 渲染业务已解析的标签。显式传入 `onActivate` 后，胶囊成为可由键盘操作的按钮；重复指针点击和已有文本选区不触发激活，键盘激活仍然可用。标签继承所属容器的换行规则。识别和 JSON 变换由 [ui-conversation](../ui-conversation/README.zh.md#sent-user-text) 负责。
 
 `MarkdownText` 默认为 `variant="body"`。次级内容使用 `variant="compact"`：其 13px 字号与 20px 行高跟随内容字号设置，各级标题保持同一字号并使用 600 字重，段落与列表采用更紧凑的间距。正文、链接和代码均保持 tertiary 颜色，以点状下划线区分链接。代码标题栏随代码块滚动。表格和公式仍然启用，使用周围文字的字号，并在可用宽度内横向滚动。两个变体共享解析器与流式缓存。 `textInteractionSource` 将已有根元素标记为文本选区交互的来源。
 
@@ -142,13 +142,13 @@ kind: "package-library"
 
 `Button` 的 `md` 使用 H36/R12，`sm` 使用 H28/R8，包含描边控件。`outline` 变体保留 0.5px 透明边框用于布局，并通过内阴影绘制描边。描边宽度读取 ui-theme 随设备像素比更新的 `--dsh-hairline-width`，未安装主题时回退到 0.5px。功能样式通过 `--dsh-button-outline-color` 定制描边颜色，并保留边框宽度、透明边框颜色和 box-shadow。菜单与卡片遵循[共享圆角规则](../../../docs/web-styling.zh.md#corner-radii-and-settings-cards)；功能样式保留控件几何。
 
-锚点变为 inert 或隐藏时，portal 菜单会关闭；右键菜单使用 `returnFocus` 提供的原始控件。对于右键菜单，外部弹窗控件带有 `data-context-menu-trigger`，其指针按下事件不会触发外部关闭，因此拥有者的点击处理器可以切换弹窗；普通下拉菜单仍会在这些外部按下事件中关闭。未标记的 `returnFocus` 目标仅用于恢复焦点，其子树仍属于弹窗外部。右键菜单打开期间会将自身 ID 加入该控件的 `aria-controls`，关闭时恢复原值。其所属区域保留的内容继续挂载。
+锚点变为 inert 或隐藏时，portal 菜单会关闭；右键菜单使用 `returnFocus` 提供的原始控件。调用方通过 `isExternalTrigger(node)` 指定外部控件，使其指针按下事件不触发外部关闭，而由自己的切换处理器处理。省略该 prop 时，锚点与菜单面板之外的按下事件都会关闭菜单，包括 `returnFocus` 目标上的按下事件。单独设置 `returnFocus` 只控制焦点恢复。右键菜单打开期间会将自身 ID 加入该控件的 `aria-controls`，关闭时恢复原值。其所属区域保留的内容继续挂载。
 
 `Menu.listClassName` 独立控制菜单卡片样式，不影响入口容器，也适用于 portal 模式。前置图标使用 `--dsw-alias-menu-icon` 文本色；破坏性操作图标保留错误色。
 
 子菜单父项显示向右箭头，可通过聚焦、点击或支持悬停的非触摸指针事件展开。菜单行上的 ArrowRight 进入其子级，不激活外部弹窗入口；ArrowLeft 与 Escape 将焦点还给父项。每个子级通过 portal 脱离父级滚动区域，优先向右展开，左侧能容纳时向左翻转，并采用根菜单相同的 visual viewport 限制与 WebKit 坐标归一化规则，在内部限高滚动。两侧均放不下时，点击或 ArrowRight 用子级及返回行替换当前可见的父菜单面板；仅聚焦时仍显示父面板。`submenuBackLabel` 提供该行的本地化文案；省略时使用调用方的父项标签配合向左箭头，返回操作不会选定父项。布局取决于可用空间，不取决于设备 UA；宽屏触控设备也可通过点击展开子级。调整窗口大小时保留已聚焦子项的 DOM 节点。JavaScript 悬停要求 `(any-hover: hover)` 与非触摸指针事件，所以主指针为触摸时，外接鼠标或笔仍可展开子级。兼容鼠标悬停事件不会展开或收起子级。指针宽限允许跨越卡片间隙；同级其他行会关闭原子级。宽限结束关闭子级时，仍在子级中的焦点会回到父项。父项被移除、禁用或其子项清空时，恢复根面板并取消该子菜单。留在被移除子级中的焦点会回到仍可用的父项、首个可用根菜单行或锚点；已经移到其他位置的焦点保持不变。
 
-父菜单与子卡片复用 `useAnchoredPosition` 背后的定位核心，各卡片分别注册滚动／窗口变化订阅、尺寸观察与逐帧移动跟踪。子菜单放置函数只选择期望坐标、侧开或单面板模式及页宽。核心持有 `--dsh-anchored-max-width`、`--dsh-anchored-max-height` 和可选的 `--dsh-anchored-width`；菜单内容提交变更时会重新测量自然宽度。子菜单没有独立的祖先、交叉、动画或字体观察器。若内部字体变化未改变已测量的边界和条目身份，则在下一次定位更新时反映，而不通过专用字体订阅触发。
+`useMenuSubmenu` 持有子级状态、焦点转换与指针宽限；`SubmenuPanel` 渲染 portal，`MenuRow` 统一组件行、数据行与子行的展示。根菜单文档监听通过 hook 的包含判定、当前列表与返回操作交互。父菜单与子卡片复用 `useAnchoredPosition` 背后的定位核心，各卡片分别注册滚动／窗口变化订阅、尺寸观察与逐帧移动跟踪。子菜单放置函数只选择期望坐标、侧开或单面板模式及页宽。核心持有 `--dsh-anchored-max-width`、`--dsh-anchored-max-height` 和可选的 `--dsh-anchored-width`；菜单内容提交变更时会重新测量自然宽度。子菜单没有独立的祖先、交叉、动画或字体观察器。若内部字体变化未改变已测量的边界和条目身份，则在下一次定位更新时反映，而不通过专用字体订阅触发。
 
 `Menu` 将卡片材质交给 `MenuSurface`，自定义菜单也使用该组件。`MenuSurface` 转发 div 属性和 ref，采用透明填充及模糊，`compact` 使用较小圆角。默认相对定位使材质层限制在容器内；调用方的类可以设置 fixed 或 absolute 定位。macOS 上，不接收交互的底层通过 CSS 锚点跟随卡片，并随卡片卸载；该底层要求 Web 外壳隔离 body 的层叠上下文。功能类控制布局和层级，组件负责材质和外圆角（[菜单规则](../../../docs/web-styling.zh.md#component-rules)）。 模态遮罩保留黑色半透明填充，不模糊背景。
 
@@ -234,6 +234,7 @@ kind: "package-library"
 - **已知站点标记是固定列表**：只有列名的主机解析为自己的标记，其余外部主机仍使用地球；要识别任意站点需要通过网络抓取它的图标。
 - **流式期间跨边界引用解析被推迟**：定义落在增量冻结边界另一侧的引用式链接或脚注，在回复流式输出期间渲染为字面文本；定稿时的全量解析会将其解析。
 - **长高亮 fence 会保留完整 token DOM**：流式路径避免重新解析、重新 tokenize 和 reconcile 已完成前缀，但不会丢弃旧颜色或虚拟化 token span。因此最终 DOM 数量仍随 fence 的 token 数增长；嵌套／容器内 fence 与病态的单个超长行仍走通用尾部路径。
+- **公式仅在单个 Markdown 文档内复制为 TeX**：超出其 `MarkdownText` 根节点的选区（例如从用户消息延伸到回复）沿用浏览器原生复制，会将 KaTeX 隐藏的 MathML 文本与可见字形拼接在一起。在单个文档内，非公式内容的纯文本取自 `innerText`，因此与原生复制一样，会包含代码块语言标签和复制按钮文本。
 - **超长行不着色**：所有高亮界面中，长度达到 1,000 个 UTF-16 单元的源码行渲染为一段纯文本，因为 TextMate 扫描成本随行长超线性增长，单个生成行否则会阻塞页面数秒。语法状态会跳过该行，因此在该行开始或结束的注释、模板字符串会使后续行着色错误。高亮仍在渲染期间同步执行，因此数千个普通行的文件仍按比例增加开销。
 - **裸 URL 在非 ASCII 标点前结束**：[tokenizer 补丁](../../../patches/micromark-extension-gfm-autolink-literal@2.1.0.patch)和[转换补丁](../../../patches/mdast-util-gfm-autolink-literal@2.0.1.patch)让 GFM 自动链接在非 ASCII 标点、符号或空白处结束，因此路径中含未编码 `（`、`・` 等字符的 URL 只链接到该字符之前；这类 URL 请写成 `<…>` 或 `[…](…)`。URL 后直接跟中日韩文字时仍会并入链接，因为 `/wiki/中文` 这类路径是合法的。两个补丁都绑定精确版本：升级任一依赖时必须重新应用或撤销对应补丁，否则该边界规则会悄然失效。
 - **Go 结构体字段规则在本地打了补丁**：Go 语法加载时，重复匹配单行结构体字段的规则会替换为 [worlpaker/go-syntax#25](https://github.com/worlpaker/go-syntax/pull/25) 合入的规则，因为内置规则在 `struct {` 之后含花括号注释等行上会指数级回溯。若依赖升级后该规则消失，加载语法会抛错，Go 代码以纯文本显示；`@shikijs/langs` 发布上游规则后删除此补丁。
@@ -242,8 +243,6 @@ kind: "package-library"
 - **产品图标依赖 ui-theme 的 sprite**：每个图标只引用自己的 symbol，因此没有 ui-theme 时，或在 iframe 等另一个文档中，图标不渲染任何内容。
 - **`StateDot` 没有 `Active` 变体**：支持的状态为 done、warning、ongoing、error 和 idle。
 - **面向用户的文案必须由渲染点提供**：这些原子组件是 zero-Cordis 的，拿不到 `ctx.locale`；各功能必须通过原子组件的带类型 prop 提供完整本地化 label（见[决策](../../../.agents/notes/implemented/architecture/2026-08-23-locale-owned-client-ui-copy.zh.md)）。
-- **显示数学保留若干回退形状**：开围栏行上的 `$$x$$ trailing` 走上游行内数学，前后正文保持不变；同样形态出现在后续行时块被放弃，随后由上游把正文吞到下一个独占行 `$$` 或文件结尾；未闭合的块在下一个独占行 `$$` 或文件结尾结束；后续行的围栏若位于**含文本**的 `%` 注释之后则不闭合，若无其他围栏闭合，块走同一条回退；开围栏行含孤立 `$` 的多行块会留在段落内，除非与前文空一行；容器内续行若离开条目缩进，块交由上游 flow 处理并丢弃开围栏行。`$$` 围栏 meta 不再生效（见[决策](../../../.agents/notes/implemented/bug-fix/2026-09-17-multiline-display-dollar-math.zh.md)）。
-- **紧跟 `\verb` 分隔符的围栏属于内容**：解析器只读取围栏之前的六个字符，因此紧跟 `\verb` 或 `\verb*` 的 `$` 是该命令的分隔符而不是闭合围栏，内容以 `\verb` 结尾的区域（`\verb**\verb*$$`）同理。未闭合区域内部的围栏（`\verb|$$`）仍会在该处闭合块，因为区域内容不被解析。
 - **`TerminalBlock` 不是终端模拟器**：它渲染已结束或仍在运行的命令输出，而不是交互式会话：SGR 颜色、回车、退格、行内擦除、制表位与字符宽度会被遵循；绝对光标定位、清屏与备用屏幕序列会被剥离。
 
 <a id="dev-note"></a>

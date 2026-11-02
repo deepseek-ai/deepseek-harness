@@ -6,17 +6,21 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import z from '@deepseek-ai/schemastery'
 import { MENU_TRANSITION_MS } from '@deepseek-ai/dsh-client-ui-primitives'
-import { menuTargetKey } from './target-key.ts'
+import { buttonTargetKey, menuTargetKey } from './target-key.ts'
 import { MenuRegistry } from './registry.ts'
 import { createMenuStore } from './store.ts'
 import { dictionaries } from './locales.ts'
 import { MenuOverlay } from './View.tsx'
+import { ContextMenuButton } from './Button.tsx'
+import type { ContextMenuButtonInjected } from './Button.tsx'
+import type { ContextMenuButtonProps } from './types.ts'
+import { isContextMenuTrigger } from './external-trigger.ts'
 import type { ContextMenus, MenuResolution, ContextMenuTarget, ContextMenuIcon, MenuPoint, UseContextMenu } from './types.ts'
 import { createContextMenuBindings } from './trigger.ts'
 
 export type { ContextMenus, ContextMenuTarget, ContextMenuTargetMap, MenuPoint, MenuAction, MenuActionView, MenuContribution, MenuResolution } from './types.ts'
 export type { ContextMenuBindings, ContextMenuTriggerProps, UseContextMenu } from './types.ts'
-export type { ContextMenuIcon } from './types.ts'
+export type { ContextMenuIcon, ContextMenuButtonProps } from './types.ts'
 export { createMenuStore } from './store.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -26,6 +30,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface GlobalStandardProps {
     /** Menu bindings for explicit objects, available in every Slot scope. */
     useContextMenu: UseContextMenu
+  }
+  interface SlotFactoryMap {
+    /** Ellipsis button hidden only while its target kind has no registered contributions. */
+    'contextMenu.button': { scope: 'root'; props: ContextMenuButtonProps; inject: ContextMenuButtonInjected }
   }
   interface SlotMap {
     /** Business-owned glyph or image selected by the action's icon key. */
@@ -86,7 +94,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   }
   const close = (): void => { dismiss(false) }
   const contextMenus: ContextMenus = {
-    active: targetSource,
+    active: targetSource, registeredKinds: registry.registeredKinds,
     register: input => registry.register(input), resolve: target => registry.resolve(target), notify, close,
     open: (target, point) => {
       const previous = active
@@ -117,11 +125,24 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     },
   }
   ctx.provide('contextMenus', contextMenus)
+  ctx.slots.registerFactory({
+    name: 'contextMenu.button', scope: 'root',
+    inject: () => ({
+      hooks: { active: targetSource, registeredKinds: registry.registeredKinds },
+      toggle: (target: ContextMenuTarget, point: MenuPoint) => {
+        if (disposed) return
+        const current = targetSource.getSnapshot()
+        if (current !== null && buttonTargetKey(current) === buttonTargetKey(target)) close()
+        else contextMenus.open(target, point)
+      },
+    }),
+  }, ContextMenuButton)
   const bindings = createContextMenuBindings((target, point) => { contextMenus.open(target, point) }, () => !disposed)
   ctx.slots.provideRoot({ props: { useContextMenu: () => bindings } })
   ctx.effect(() => {
     const outside = (event: PointerEvent): void => {
-      if (event.button === 2 || (event.target instanceof Element && event.target.closest('[role="menu"], [data-context-menu-trigger]'))) return
+      if (event.button === 2 || (event.target instanceof Node && isContextMenuTrigger(event.target))
+        || (event.target instanceof Element && event.target.closest('[role="menu"]'))) return
       close()
     }
     const context = (event: MouseEvent): void => { if (!event.defaultPrevented) close() }

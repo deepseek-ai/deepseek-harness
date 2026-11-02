@@ -1,10 +1,13 @@
 /** Session menu opening over built plugins; only native application discovery and launch are simulated. */
 import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { chromium, webkit, type Browser, type BrowserContext, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
-import { launchWebScaffold, seedSession, type WebScaffold } from './scaffold.ts'
+import {
+  captureStableAria, compareOrRefreshGolden, launchWebScaffold, seedSession, webSnapshotMode, type WebScaffold,
+} from './scaffold.ts'
 
 const FIRST = 'open-app-menu-foreground'
 const OTHER = 'open-app-menu-background'
@@ -76,6 +79,84 @@ describe('Open in Session menus', () => {
   })
   afterAll(async () => {
     try { await browser?.close() } finally { await scaffold?.close() }
+  })
+
+  it.each([true, false])('owns Header More without export, with Open in enabled=%s', async (enabled) => {
+    const isolated = await launchWebScaffold({
+      extraOverlayPath: fileURLToPath(new URL('./open-in-app-no-export.overlay.yml', import.meta.url)),
+      ...(enabled ? { openInAppEnvironment: createLaunchEnvironmentSnapshot([
+        { source: 'process', values: { SSH_CONNECTION: '10.0.0.2 55000 10.0.0.9 22' } },
+      ]) } : {}),
+    })
+    onTestFinished(() => isolated.close())
+    const recorded = await readFile(new URL('../../../snapshots/web/seeded-history/session.v3.jsonl', import.meta.url), 'utf8')
+    await seedSession(isolated, recorded, FIRST)
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
+    onTestFinished(() => context.close())
+    const launches: { app: string; path: string }[] = []
+    await nativeRoutes(context, ['finder'], async (body) => { launches.push(body); return 200 })
+    const page = await context.newPage()
+    await openSeed(page, isolated.authenticatedUrl)
+    const more = page.getByRole('button', { name: 'More actions', exact: true })
+    if (!enabled) {
+      expect(await more.count()).toBe(0)
+      return
+    }
+    await more.click()
+    await page.getByRole('menuitem', { name: 'Open in', exact: true }).waitFor()
+    expect(await page.getByRole('menuitem', { name: 'Download session log', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('menuitem', { name: 'Copy Session as Markdown', exact: true }).count()).toBe(0)
+    await more.click()
+    await expect.poll(() => page.getByRole('menu').count()).toBe(0)
+    await more.click()
+    await page.getByRole('menuitem', { name: 'Open in', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Finder', exact: true }).click()
+    await expect.poll(() => launches.length).toBe(1)
+    expect(launches[0]).toEqual({ app: 'finder', path: isolated.workspaceCwd })
+  })
+
+  it('keeps export feedback across Session navigation and dismissal does not cancel the download', async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'en-US' })
+    const gate = Promise.withResolvers<undefined>()
+    const settled = Promise.withResolvers<undefined>()
+    let requested = false
+    onTestFinished(async () => {
+      gate.resolve(undefined)
+      if (requested) await settled.promise
+      await context.close()
+    })
+    await nativeRoutes(context, ['finder'], async () => 200)
+    await context.route('**/api/session.export?*', async (route) => {
+      if (route.request().method() === 'HEAD') {
+        requested = true
+        try {
+          await gate.promise
+          await route.fulfill({ status: 200 })
+        } finally { settled.resolve(undefined) }
+      } else await route.fulfill({ status: 200, contentType: 'application/zip', body: 'controlled download response' })
+    })
+    const page = await context.newPage()
+    await openSeed(page, scaffold.authenticatedUrl)
+    await page.getByRole('button', { name: 'More actions', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Download session log', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Exporting Session', exact: true })
+    await dialog.waitFor()
+    expect(await dialog.textContent()).toContain(`Session: ${FIRST} `)
+    const other = page.locator(`[data-row-key="session:${OTHER}"]`)
+    // Exercise navigation's real handler while the modal owns pointer hit-testing.
+    await other.dispatchEvent('click')
+    await expect.poll(() => other.getAttribute('aria-selected')).toBe('true')
+    expect(await dialog.textContent()).toContain(`Session: ${FIRST} `)
+    await compareOrRefreshGolden(
+      fileURLToPath(new URL('./expected/open-in-app-menus/global-export.expected.md', import.meta.url)),
+      await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), webSnapshotMode(),
+    )
+    await dialog.getByText('Close', { exact: true }).click()
+    const downloaded = page.waitForEvent('download')
+    gate.resolve(undefined)
+    const download = await downloaded
+    expect(download.suggestedFilename()).toContain(FIRST)
+    expect(await page.getByRole('dialog').count()).toBe(0)
   })
 
   it.each(devices)('opens through Header More on $name with device-specific feedback', async (device) => {

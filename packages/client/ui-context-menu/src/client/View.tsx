@@ -5,6 +5,7 @@ import type { InjectFace, PropsStore, PropsRenderSlots, PropsLocale } from '@dee
 import type { Shortcuts, ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { createMenuStore } from './store.ts'
 import type { MenuActionView } from './types.ts'
+import { isContextMenuTrigger } from './external-trigger.ts'
 
 /**
  * @param actions - plain presentation.
@@ -47,7 +48,7 @@ export function MenuOverlay({ useStore, actions, renderSlot, close, select, retu
   const { target, point, items, notice, occurrence, closing, replacing } = useStore(s => s)
   return <>
     <Menu key={occurrence} open={target !== null} anchor={null} portal autoFocus contextual returnFocus={returnFocus}
-      submenuBackLabel={t('back')}
+      submenuBackLabel={t('back')} isExternalTrigger={isContextMenuTrigger}
       exiting={closing ? replacing ? 'replace' : 'dismiss' : undefined}
       getAnchorRect={() => new DOMRect(point.x, point.y, 0, 0)}
       items={menuEntries(items.filter(item => !item.afterContent), catalog, renderSlot)}

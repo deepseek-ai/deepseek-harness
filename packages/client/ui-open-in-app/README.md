@@ -27,7 +27,7 @@ Open a Session’s directory through **Open in** in its Header More menu or its 
 
 Mount this plugin in the Web composition beside [`dsh-host-open-in-app`](../../host/open-in-app/README.md); this row takes no config. A known Session directory and at least one installed, localized catalog application enable its Open in submenu. The document preview of [`ui-sidebar-documentpreview`](../ui-sidebar-documentpreview/README.md) shows file controls when the Host reports a desktop through `session.canOpenWorkspacePath`; removing this row removes all its controls and menu contributions.
 
-The Header entry uses the existing More button owned by [`dsh-session-log-export`](../../session-query/session-log-export/README.md). Without that plugin, this package contributes only to the other mounted entries, such as Session-row/title context menus and file-tree controls; it does not create a Header button.
+The Header entry uses the More button owned by [`ui-conversation`](../ui-conversation/README.md), with shared button behavior from [`ui-context-menu`](../ui-context-menu/README.md). Open in remains available there without the export plugin; this package supplies menu items rather than its own Header button.
 
 ### What to expect
 
@@ -69,7 +69,7 @@ The directory and file adapters supply application metadata and operations to [`
 ## Further Exploration
 
 - [dsh-host-open-in-app](../../host/open-in-app/README.md) — the host routes serving availability, icons, and launches, and the catalog behind them.
-- [dsh-session-log-export](../../session-query/session-log-export/README.md) — the Header More trigger and its independent context-menu target.
+- [ui-conversation](../ui-conversation/README.md) — the Header owning the shared More button.
 - [ui-sidebar-documentpreview](../ui-sidebar-documentpreview/README.md) — the document preview declaring the header and empty-state child slots the file controls occupy.
 - [ui-deliverables](../ui-deliverables/README.md) — the delivery cards, which still open declared files through their own routes.
 - [Web client architecture](../../../docs/subsystems/web-client.md) — how browser plugin rows load and register slots.

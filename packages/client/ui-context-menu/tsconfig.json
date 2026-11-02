@@ -18,6 +18,9 @@
       "path": "../../core/session"
     },
     {
+      "path": "../../workspace/workspace"
+    },
+    {
       "path": "../locale/tsconfig.client.json"
     },
     {

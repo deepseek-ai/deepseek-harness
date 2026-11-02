@@ -88,7 +88,7 @@ async function exercise(ctx, config) {
     // A transitive repository package the registry served, absent from npm at this version.
     const localDependency = JSON.parse(await readFile(join(config.profile, 'node_modules', config.localDependency, 'package.json'), 'utf8')).version
     const provider = name.endsWith('-codex') ? 'codex' : 'claude-code'
-    const providerEnabled = ctx.subagents.list().includes(provider)
+    const providerEnabled = ctx.subagents.getProvider(provider) !== undefined
     const nativeDir = join(config.profile, 'node_modules', config.nativePackages[name])
     const binaryName = `${provider === 'codex' ? 'codex' : 'claude'}${process.platform === 'win32' ? '.exe' : ''}`
     const nativeBinary = (await readdir(nativeDir, { recursive: true })).find(path => basename(path) === binaryName)

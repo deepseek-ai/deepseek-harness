@@ -310,6 +310,8 @@ function staticLinkedConfig(id: string, entry: string, outputName = basename(ent
     format: ['esm'],
     platform: 'browser',
     target: 'es2024',
+    // Resolve the mode before this intermediate bundle removes conditional branches.
+    define: { 'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production') },
     fixedExtension: false,
     dts: false,
     clean: false,

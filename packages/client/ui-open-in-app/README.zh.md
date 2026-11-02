@@ -27,7 +27,7 @@ kind: "package-reference"
 
 把本插件与 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 并排挂载到 Web 组合；本行不接受配置。会话目录已知且至少有一个已安装、已本地化的目录应用时，显示在应用中打开子菜单。Host 通过 `session.canOpenWorkspacePath` 报告桌面可用时，[`ui-sidebar-documentpreview`](../ui-sidebar-documentpreview/README.zh.md) 的文档预览显示文件控件；删除本行会移除其全部控件与菜单贡献。
 
-头部入口使用 [`dsh-session-log-export`](../../session-query/session-log-export/README.zh.md) 持有的现有更多按钮。未挂载该插件时，本包仅向其他已挂载的入口提供功能，例如会话行、标题右键菜单和文件树控件；不会创建头部按钮。
+头部入口使用 [`ui-conversation`](../ui-conversation/README.zh.md) 持有的更多按钮，由 [`ui-context-menu`](../ui-context-menu/README.zh.md) 提供共享按钮行为。未挂载导出插件时，在应用中打开仍可通过该入口使用；本包提供菜单项，而不创建自己的头部按钮。
 
 ### 预期行为
 
@@ -69,7 +69,7 @@ kind: "package-reference"
 ## 进一步探索
 
 - [dsh-host-open-in-app](../../host/open-in-app/README.zh.md)——提供可用性、图标与启动的主机路由，及其背后的目录。
-- [dsh-session-log-export](../../session-query/session-log-export/README.zh.md)——头部更多入口及其独立的右键菜单目标。
+- [ui-conversation](../ui-conversation/README.zh.md)——持有共享更多按钮的会话头部。
 - [ui-sidebar-documentpreview](../ui-sidebar-documentpreview/README.zh.md)——声明文件控件所占头部与空态子 slot 的文档预览。
 - [ui-deliverables](../ui-deliverables/README.zh.md)——交付卡片，仍通过自己的路由打开声明过的文件。
 - [Web client 架构](../../../docs/subsystems/web-client.zh.md)——浏览器插件行如何加载并注册 slot。
