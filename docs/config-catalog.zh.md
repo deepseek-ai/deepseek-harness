@@ -1121,12 +1121,15 @@ export interface Config extends CuaConfig {
    * an object selects an existing certificate in an explicitly configured keychain.
    * Installed packages and `helperPath` keep their own signature.
    */
-  sourceSigning: 'ad-hoc' | {
-    /** Existing codesign certificate name or SHA-1 fingerprint. */
-    identity: string
-    /** Absolute keychain path. The developer owns creating and unlocking it. */
-    keychain: string
-  }
+  sourceSigning: SourceSigning
+}
+
+/** Signature selected for source builds; certificates are created and unlocked by the developer. */
+export type SourceSigning = 'ad-hoc' | {
+  /** Existing codesign certificate name or SHA-1 fingerprint, without a leading dash or whitespace. */
+  identity: string
+  /** Absolute keychain path. */
+  keychain: string
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-cua-macos -->

@@ -9,7 +9,6 @@ import plistlib
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 
 DEV_BUNDLE_SUFFIX = ".dev"
@@ -139,8 +138,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except RuntimeError as error:
-        print(error, file=sys.stderr)
-        sys.exit(1)
+    main()

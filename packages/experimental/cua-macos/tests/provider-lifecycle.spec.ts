@@ -75,7 +75,7 @@ it('defaults to ad-hoc signing and requires a keychain path for certificate sign
   for (const sourceSigning of [{ identity: 'Apple Development: Example', keychain: '/keychains/custom.keychain-db' }, { identity: 'ABC123', keychain: '/keychains/custom.keychain-db' }]) {
     expect(NativeProvider.Config({ sourceSigning }).sourceSigning).toEqual(sourceSigning)
   }
-  for (const sourceSigning of ['local-identity', 'developer-id', {}, { identity: 'Example' }, { identity: '' }, { identity: ' ' }, { identity: 'Example', keychain: 'relative' }]) {
+  for (const sourceSigning of ['local-identity', 'developer-id', {}, { identity: 'Example' }, { identity: '' }, { identity: ' ' }, { identity: 'Example', keychain: 'relative' }, ...['-', '--help', '-Example', ' Example'].map(identity => ({ identity, keychain: '/keychains/custom.keychain-db' }))]) {
     expect(() => NativeProvider.Config({ sourceSigning } as never)).toThrow()
   }
 })

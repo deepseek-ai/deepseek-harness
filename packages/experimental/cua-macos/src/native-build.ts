@@ -5,12 +5,19 @@ import { join, resolve } from 'node:path'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import type { SubprocessOutcome, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { z } from 'zod'
-import type { Config } from './index.ts'
 
 const NativeApplication = z.object({ bundle: z.string().regex(/^[a-f0-9]{64}$/) }).strict()
 
 /** Architecture names used by the platform-specific native payload. */
 export type NativeArchitecture = 'arm64' | 'x64'
+
+/** Signature selected for source builds; certificates are created and unlocked by the developer. */
+export type SourceSigning = 'ad-hoc' | {
+  /** Existing codesign certificate name or SHA-1 fingerprint, without a leading dash or whitespace. */
+  identity: string
+  /** Absolute keychain path. */
+  keychain: string
+}
 
 /**
  * Validate the host before preparing a platform-specific application.
@@ -29,7 +36,7 @@ export interface NativeBuildSpec {
   packageRoot: string
   architecture: NativeArchitecture
   /** Signature of a source-checkout build; installed packages ignore it. */
-  sourceSigning: Config['sourceSigning']
+  sourceSigning: SourceSigning
   subprocess: Pick<SubprocessRuntime, 'spawn'>
   signal: AbortSignal
   timeoutMs: number

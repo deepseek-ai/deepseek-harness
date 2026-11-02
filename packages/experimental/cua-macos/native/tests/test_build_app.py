@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import plistlib
 import secrets
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -186,7 +187,7 @@ class DevelopmentPublicationTests(PublicationCases, unittest.TestCase):
 class SigningOptionsTests(unittest.TestCase):
     def test_default_dev_and_release_builds_use_ad_hoc_without_keychain_commands(self):
         for variant in ("dev", "release"):
-            with self.subTest(variant=variant), patch.object(builder.sys, "argv", ["build_app.py", "--variant", variant]), \
+            with self.subTest(variant=variant), patch.object(sys, "argv", ["build_app.py", "--variant", variant]), \
                  patch.object(builder.subprocess, "run") as run, patch.object(builder, "publish", return_value="helper") as publish, \
                  contextlib.redirect_stdout(io.StringIO()):
                 builder.main()
@@ -197,7 +198,7 @@ class SigningOptionsTests(unittest.TestCase):
 
     def test_custom_certificate_and_keychain_reach_the_signer(self):
         for flags, keychain in (([], None), (["--keychain", "/keychains/user.keychain-db"], Path("/keychains/user.keychain-db"))):
-            with patch.object(builder.sys, "argv", ["build_app.py", "--variant", "dev", "--identity", "Example", *flags]), \
+            with patch.object(sys, "argv", ["build_app.py", "--variant", "dev", "--identity", "Example", *flags]), \
                  patch.object(builder.subprocess, "run"), patch.object(builder, "publish", return_value="helper") as publish, \
                  contextlib.redirect_stdout(io.StringIO()):
                 builder.main()
@@ -207,7 +208,7 @@ class SigningOptionsTests(unittest.TestCase):
     def test_invalid_or_retired_signing_options_fail_before_building(self):
         for flags in (["--signing", "local-identity"], ["--dsh-home", "/home/example"],
                       ["--keychain", "/keychains/user"], ["--identity", "Example", "--keychain", "relative"], ["--identity", " "]):
-            with self.subTest(flags=flags), patch.object(builder.sys, "argv", ["build_app.py", *flags]), \
+            with self.subTest(flags=flags), patch.object(sys, "argv", ["build_app.py", *flags]), \
                  patch.object(builder.subprocess, "run") as run, contextlib.redirect_stderr(io.StringIO()):
                 with self.assertRaises(SystemExit) as error:
                     builder.main()

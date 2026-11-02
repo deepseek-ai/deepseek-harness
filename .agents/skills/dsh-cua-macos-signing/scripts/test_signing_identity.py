@@ -44,7 +44,8 @@ class DevelopmentSigningTests(unittest.TestCase):
         self.login = "/Users/example/Library/Keychains/login.keychain-db"
 
     def configure(self, listed=True):
-        self.directory.mkdir()
+        self.directory.mkdir(mode=0o700)
+        (self.directory / signing.OWNER_MARKER).write_text(signing.OWNER_VERSION)
         self.keychain.write_bytes(b"keychain")
         (self.directory / "identity.json").write_text(json.dumps({"sha1": "ABC123", "password": "secret"}))
         return self.fake([self.login, str(self.keychain)] if listed else [self.login])
@@ -55,6 +56,81 @@ class DevelopmentSigningTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         return security
+
+    def test_setup_and_remove_preserve_unowned_directory_contents(self):
+        security = self.fake([self.login])
+        self.directory.mkdir()
+        unrelated = self.directory / "notes.txt"
+        unrelated.write_text("keep this document")
+        for operation in (signing.setup, signing.remove):
+            with self.subTest(operation=operation.__name__):
+                with self.assertRaisesRegex(RuntimeError, "Refusing unowned signing directory"):
+                    operation(self.directory)
+                self.assertEqual(unrelated.read_text(), "keep this document")
+                self.assertEqual(list(self.directory.iterdir()), [unrelated])
+        self.assertEqual(security.commands, [])
+
+    def test_unrelated_files_in_an_owned_directory_block_setup_and_removal(self):
+        security = self.configure()
+        unrelated = self.directory / "notes.txt"
+        unrelated.write_text("keep this document")
+        before = {p.name: p.read_bytes() for p in self.directory.iterdir()}
+        for operation in (signing.setup, signing.remove):
+            with self.subTest(operation=operation.__name__):
+                with self.assertRaisesRegex(RuntimeError, "unrelated entries"):
+                    operation(self.directory)
+                self.assertEqual({p.name: p.read_bytes() for p in self.directory.iterdir()}, before)
+        self.assertEqual(security.commands, [])
+
+    def test_missing_or_invalid_marker_cannot_adopt_an_existing_identity(self):
+        security = self.configure()
+        marker = self.directory / signing.OWNER_MARKER
+        for contents in (None, "different tool", "\ufffd"):
+            if contents is None:
+                marker.unlink()
+            else:
+                marker.write_text(contents)
+            for operation in (signing.setup, signing.remove):
+                with self.assertRaisesRegex(RuntimeError, "unowned signing directory"):
+                    operation(self.directory)
+        self.assertTrue(self.keychain.is_file())
+        self.assertEqual(security.commands, [])
+
+    def test_symlinked_identity_files_do_not_delete_another_directorys_data(self):
+        security = self.configure()
+        outside = self.root / "outside.keychain-db"
+        outside.write_bytes(b"other identity")
+        self.keychain.unlink()
+        self.keychain.symlink_to(outside)
+        for operation in (signing.setup, signing.remove):
+            with self.assertRaisesRegex(RuntimeError, "unrelated entries"):
+                operation(self.directory)
+        self.assertEqual(outside.read_bytes(), b"other identity")
+        self.assertEqual(security.commands, [])
+
+    def test_empty_directory_gets_an_ownership_marker_before_generation(self):
+        self.fake([self.login])
+        self.directory.mkdir()
+        with patch.object(signing, "create_certificate", side_effect=RuntimeError("generation interrupted")):
+            with self.assertRaisesRegex(RuntimeError, "generation interrupted"):
+                signing.setup(self.directory)
+        self.assertEqual((self.directory / signing.OWNER_MARKER).read_text(), signing.OWNER_VERSION)
+        signing.remove(self.directory)
+        self.assertFalse(self.directory.exists())
+
+    def test_removing_the_only_search_entry_leaves_no_unrelated_entries_to_restore(self):
+        security = self.configure()
+        security.keychains = [str(self.keychain)]
+        signing.remove(self.directory)
+        self.assertEqual(security.keychains, [])
+        self.assertFalse(self.directory.exists())
+
+    def test_dotted_identity_directories_keep_separate_lock_files(self):
+        directories = [self.root / name for name in ("dev", "dev.keys", "keys.v1", "keys.v2")]
+        for directory in directories:
+            with signing.identity_lock(directory):
+                pass
+        self.assertEqual({p.name for p in self.root.iterdir()}, {f"{p.name}.lock" for p in directories})
 
     def test_default_identity_is_outside_dsh_home(self):
         home = self.root / "user"
@@ -107,7 +183,7 @@ class DevelopmentSigningTests(unittest.TestCase):
         create.assert_not_called()
         self.assertEqual(security.keychains, [self.login, str(self.keychain)])
 
-    def test_setup_replaces_an_incomplete_directory(self):
+    def test_setup_replaces_only_an_incomplete_owned_identity(self):
         security = self.configure()
         (self.directory / "identity.json").unlink()
         def create(directory, password):
@@ -137,6 +213,7 @@ class DevelopmentSigningTests(unittest.TestCase):
     def test_setup_cli_preserves_a_recorded_identity_missing_its_keychain(self):
         directory = self.root / "keys/dev"
         directory.mkdir(parents=True)
+        (directory / signing.OWNER_MARKER).write_text(signing.OWNER_VERSION)
         record = directory / "identity.json"
         before = json.dumps({"sha1": "ABC123", "password": "secret-password"}).encode()
         record.write_bytes(before)
@@ -199,7 +276,7 @@ with open(sys.argv[1], 'w') as lock:
         setup_locked, remove_locked = signing.setup_locked, signing.remove_locked
         def check_lock(operation):
             def run(directory):
-                result = subprocess.run([sys.executable, "-c", probe, str(directory.with_suffix(".lock"))],
+                result = subprocess.run([sys.executable, "-c", probe, str(directory.parent / f"{directory.name}.lock")],
                                         capture_output=True, timeout=10)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 return operation(directory)

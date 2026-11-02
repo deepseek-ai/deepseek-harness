@@ -17,7 +17,9 @@ Run from a repository checkout on macOS with the selected Apple command-line too
 python3 .agents/skills/dsh-cua-macos-signing/scripts/signing_identity.py setup
 ```
 
-The script creates or reuses `~/.cua-macos-keys/dev/signing.keychain-db`, stores its password and certificate fingerprint in the adjacent `identity.json` with mode `0600`, and keeps the directory private. It adds only its dedicated keychain to the user search list and enables `codesign` access without prompting for the login password. A sibling `dev.lock` serializes setup and removal across worktrees. Supply `--directory <absolute identity directory>` when the developer chose another location outside DSH home and the checkout.
+The script creates or reuses `~/.cua-macos-keys/dev/signing.keychain-db`, stores its password and certificate fingerprint in the adjacent `identity.json` with mode `0600`, and keeps the directory private. It adds only its dedicated keychain to the user search list and enables `codesign` access without prompting for the login password. A sibling `dev.lock` serializes setup and removal across worktrees; custom directory names keep their full name before `.lock`. Supply `--directory <absolute identity directory>` when the developer chose another location outside DSH home and the checkout.
+
+Setup claims only a new or empty directory and writes `.dsh-cua-macos-signing` as its ownership marker. Setup and removal refuse directories without that marker, unexpected entries, or symlinked identity files before changing keychains or identity files. Preserve unmarked identities from earlier tooling; do not add a marker automatically. They can still be selected as existing user keychains.
 
 Setup prints only the certificate fingerprint and absolute keychain path as JSON. Keep the password record out of chat, logs, commits, and configuration. Other processes running as this user can read the stored password and use this development identity; this is the local developer setup's access model.
 
@@ -61,4 +63,4 @@ First remove the selecting configuration or set `sourceSigning: ad-hoc` in each 
 python3 .agents/skills/dsh-cua-macos-signing/scripts/signing_identity.py remove
 ```
 
-Use the same `--directory` for a custom location. Removal deletes the dedicated keychain, its search-list entry, and password record; the empty sibling lock remains so waiting processes still coordinate. Deleting DSH home alone leaves the developer identity intact. System Settings permission entries are separate; remove them only when requested.
+Use the same `--directory` for a custom location. Removal deletes only the marked identity’s files and its search-list entry, then removes the empty directory; the empty sibling lock remains so waiting processes still coordinate. Deleting DSH home alone leaves the developer identity intact. System Settings permission entries are separate; remove them only when requested.

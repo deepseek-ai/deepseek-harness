@@ -5,7 +5,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { CuaConfig, installCua } from '@deepseek-ai/dsh-cua'
 import { createPermissionParameters } from './permission-guide.ts'
-import { nativeHostArchitecture, prepareNativeExecutable } from './native-build.ts'
+import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
 import { GUIDANCE } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
@@ -23,12 +23,7 @@ export interface Config extends CuaConfig {
    * an object selects an existing certificate in an explicitly configured keychain.
    * Installed packages and `helperPath` keep their own signature.
    */
-  sourceSigning: 'ad-hoc' | {
-    /** Existing codesign certificate name or SHA-1 fingerprint. */
-    identity: string
-    /** Absolute keychain path. The developer owns creating and unlocking it. */
-    keychain: string
-  }
+  sourceSigning: SourceSigning
 }
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
 export const Config = Schema.object({
@@ -38,7 +33,7 @@ export const Config = Schema.object({
   sourceSigning: Schema.union([
     Schema.const('ad-hoc'),
     Schema.object({
-      identity: Schema.string().pattern(/\S/).required(),
+      identity: Schema.string().pattern(/^[^-\s]/).required(),
       keychain: Schema.string().pattern(/^\/.+/).required(),
     }),
   ]).default('ad-hoc'),

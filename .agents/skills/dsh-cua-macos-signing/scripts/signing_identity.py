@@ -6,7 +6,7 @@ code hash, so every changed build loses the grant. A certificate signature's req
 bundle identifier and the certificate, preserving the requirement across changed builds.
 
 The identity lives in a dedicated keychain whose password is stored beside it with owner-only
-permissions, so builds unlock it and sign without a system dialog. Any process running as the same
+permissions, so developer setup can unlock it without a system dialog. Any process running as the same
 user can read that password and sign code that inherits the development grants; the grants belong
 to the development bundle identifier only, never to the release helper.
 """
@@ -20,12 +20,13 @@ from pathlib import Path
 import re
 import secrets
 import shlex
-import shutil
 import subprocess
 import sys
 import tempfile
 
 COMMON_NAME = "DSH Computer Use Dev (local)"
+OWNER_MARKER = ".dsh-cua-macos-signing"
+OWNER_VERSION = "1\n"
 SECURITY = "/usr/bin/security"
 OPENSSL = "/usr/bin/openssl"
 SETUP_COMMAND = "python3 .agents/skills/dsh-cua-macos-signing/scripts/signing_identity.py setup"
@@ -71,7 +72,7 @@ def security(*args):
 def identity_lock(directory):
     """Serialize setup and removal across worktrees; the lock inode survives identity removal."""
     directory.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with os.fdopen(os.open(directory.with_suffix(".lock"), os.O_WRONLY | os.O_CREAT, 0o600), "w") as lock:
+    with os.fdopen(os.open(directory.parent / f"{directory.name}.lock", os.O_WRONLY | os.O_CREAT, 0o600), "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         yield
 
@@ -97,6 +98,25 @@ def keychain_path(directory):
 def default_directory():
     """Keep developer credentials independent of DSH profiles, homes, and worktrees."""
     return Path.home() / ".cua-macos-keys" / "dev"
+
+
+def owned_directory(directory, create=False):
+    """Refuse unowned or mixed-content directories before changing files or keychains."""
+    marker = directory / OWNER_MARKER
+    if create:
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if not any(directory.iterdir()):
+            directory.chmod(0o700)
+            with os.fdopen(os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as file:
+                file.write(OWNER_VERSION)
+    if not directory.exists():
+        return
+    if marker.is_symlink() or not marker.is_file() or marker.read_bytes() != OWNER_VERSION.encode():
+        raise RuntimeError(f"Refusing unowned signing directory: {directory}; choose a new or empty dedicated directory")
+    allowed = {OWNER_MARKER, record_path(directory).name, record_path(directory).with_suffix(".tmp").name, keychain_path(directory).name}
+    for entry in directory.iterdir():
+        if entry.name not in allowed or entry.is_symlink() or not entry.is_file():
+            raise RuntimeError(f"Refusing signing directory with unrelated entries: {directory}; preserve those entries before retrying")
 
 
 def load(directory):
@@ -168,6 +188,7 @@ def setup(directory):
 
 
 def setup_locked(directory):
+    owned_directory(directory, create=True)
     keychain = keychain_path(directory)
     if record_path(directory).exists():
         if keychain.is_file():
@@ -175,8 +196,7 @@ def setup_locked(directory):
             if not listed(keychain, keychains):
                 security("list-keychains", "-d", "user", "-s", *keychains, str(keychain))
         return load(directory)
-    remove_locked(directory)
-    directory.mkdir(mode=0o700, parents=True)
+    clear_identity(directory)
     password = secrets.token_hex(32)
     sha1 = create_certificate(directory, password)
     security("list-keychains", "-d", "user", "-s", *user_keychains(), str(keychain))
@@ -195,14 +215,23 @@ def remove(directory):
 
 
 def remove_locked(directory):
+    owned_directory(directory)
+    clear_identity(directory)
+    if directory.exists():
+        (directory / OWNER_MARKER).unlink()
+        directory.rmdir()
+
+
+def clear_identity(directory):
+    """Remove only the identity files and its exact keychain search-list entry."""
     keychain = keychain_path(directory)
     keychains = user_keychains()
     if listed(keychain, keychains):
         security("list-keychains", "-d", "user", "-s", *[path for path in keychains if not listed(keychain, [path])])
     if keychain.exists():
         security("delete-keychain", str(keychain))
-    if directory.exists():
-        shutil.rmtree(directory)
+    record_path(directory).unlink(missing_ok=True)
+    record_path(directory).with_suffix(".tmp").unlink(missing_ok=True)
 
 
 def main():
