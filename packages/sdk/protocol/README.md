@@ -41,16 +41,18 @@ Both wire ends share one method set: client-to-server requests, opt-in server-to
 |---|---|---|
 | client→server | `initialize` | `InitializeParams` → `InitializeResult` |
 | client→server | `session/prompt` | `SessionPromptParams` → `SessionPromptResult` (durable enqueue receipt) |
+| client→server | `session/query` | `SessionQueryParams` → `SessionQueryResult` |
 | client→server | `session/resume` | `SessionResumeParams` → `{}` |
 | client→server | `session/wait` | `SessionWaitParams` → `{}` |
 | client→server | `session/working-directory/get` | `SessionWorkingDirectoryParams` → `SessionWorkingDirectoryResult` |
 | client→server | `session/working-directory/set` | `SessionWorkingDirectorySetParams` → `SessionWorkingDirectoryResult` |
 | client→server | `shutdown` | no params → `{}` |
 | server→client | `approval/request` | `ApprovalRequestParams` → `ApprovalRequestResult` |
-| server→client | `user-question/ask` | `SdkUserQuestionRequest` → `SdkUserQuestionAnswer` |
+| server→client | `user-question/ask` | `SdkUserQuestionRequest` → `SdkUserQuestionResult` |
 | server→client | `user-question.cancelled` | `SdkUserQuestionCancelled` |
 | server→client | `session.event` | `SessionEventNotification` (every session in the runtime, unfiltered) |
 | server→client | `session.status` | `SessionStatusNotification` (whole-agent `running`/`idle` transition) |
+| server→client | `session.query.completed` | `{ sessionId, commandId, finalResponse, finishReason }` |
 | server→client | `subagent.started` | `SubagentStartedNotification` |
 | server→client | `subagent.finished` | `SubagentFinishedNotification` (in-process runs only) |
 
@@ -58,12 +60,18 @@ Both wire ends share one method set: client-to-server requests, opt-in server-to
 
 `session/wait` accepts `{ sessionId }` for an existing SDK-owned session and returns `{}` after the root stays idle and progressing managed descendant work finishes. Idle descendants with parked input remain resident without blocking this wait. Unknown ids and live Agent failures without a newer committed terminal are rejected. Notifications committed during the wait precede its response on the same transport; raw `session.status` transitions retain their whole-agent meaning.
 
+`session/query` accepts `{ sessionId, contentBlocks }`, where `contentBlocks` uses `SdkPromptContentBlock[]`. Both SDKs normalize string input into a text block and send content-block arrays through this same entry. The runtime replies with `{ kind: "prompt", messageId }` for queued ordinary input, preserving its block order, or `{ kind: "command", execution }` after a supported command settles. A recognized command requires one complete text block with only encoded images beside it; other combinations reject before execution or enqueue. The images go through native attachment admission and handler validation. Empty arrays and arrays containing only blank text are rejected; image-only input is allowed. A prompt receipt is not a model result; command completion does not require an inbox receipt or idle notification. Recognition and the supported command set belong to the [SDK server](../server/README.md).
+
+`session/prompt` queues content blocks without native slash-command routing; runtime skill recognition still applies.
+
+Command lifecycle notifications precede the `session/query` handler response. A command query ends high-level observation with `session.query.completed` for the same `commandId`, after model activity it starts; goal creation and resume include goal termination and closing activity. State-only commands need no model turn, and their completion notification can precede the response. SDKs consume this receipt internally and return `RunResult`; forwarders must preserve order. Shutdown cancels unfinished observation.
+
 `session/resume` accepts a non-empty persisted `{ sessionId }` and returns `{}` after restoring that exact session. It requires initialization and the original persistence store, sends no new input, and rejects missing, unreadable, incompatible, or occupied sessions without creating a replacement. Historical events remain in the stored log; notifications report newly committed events.
 
 <a id="native-user-questions"></a>
 ### Native user questions
 
-An answering host sets `initialize.capabilities.userQuestions: true`. The runtime sends `user-question/ask` with `{ requestId, sessionId, questions }`; questions retain their original ids, options, detail, and presentation intent. The host returns `{ answers: [{ id, selected, custom? }] }`, naming every question id exactly once. Invalid batches fail with `BAD_ANSWER`; host or transport failures fail with `PROVIDER_ERROR`. The SDK does not synthesize answers.
+An answering host sets `initialize.capabilities.userQuestions: true`. The runtime sends `user-question/ask` with `{ requestId, sessionId, questions }`; questions retain their original ids, options, detail, and presentation intent. The host returns `{ answers: [{ id, selected, custom? }] }`, naming every question id exactly once, or `{ cancelled: true }` with no other fields for a user dismissal. Dismissal maps to native `ASK_CANCELLED`; it is not runtime cancellation, a provider failure, or approval. Invalid batches fail with `BAD_ANSWER`; host or transport failures fail with `PROVIDER_ERROR`. The SDK does not synthesize answers.
 
 `user-question.cancelled` identifies the request that stopped waiting. The host cancels its own work and discards the question; the runtime abandons its pending RPC and ignores late responses. Without the advertised capability, existing in-process answerers remain responsible and an absent answerer reports `NO_PROVIDER`. This flow requires no GUI.
 

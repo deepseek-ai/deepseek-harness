@@ -360,7 +360,7 @@ describe('session.history projections block', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     await expect(next).resolves.toMatchObject({
       done: false,
-      value: { type: 'projection', key: 'sessionListMetadata' },
+      value: { type: 'projection', changes: [{ key: 'sessionListMetadata' }] },
     })
     const extra = iterator.next()
     const quiet = Symbol('quiet')
@@ -422,7 +422,7 @@ describe('session.history projections block', () => {
     }
     expect(changed).toMatchObject({
       done: false,
-      value: { type: 'projection', key: 'sessionListMetadata' },
+      value: { type: 'projection', changes: [{ key: 'sessionListMetadata' }] },
     })
     abort.abort()
     await iterator.return?.()
@@ -752,21 +752,21 @@ describe('Session control projection frames', () => {
     const frames: SessionControlFrame[] = []
     for await (const frame of iterable) {
       frames.push(frame)
-      if (frames.filter(candidate => candidate.type === 'projection' && keys.includes(candidate.key)).length >= count) abort.abort()
+      if (frames.filter(candidate => candidate.type === 'projection' && candidate.changes.some(change => keys.includes(change.key))).length >= count) abort.abort()
     }
     return frames
   }
 
-  it('broadcasts changed view references with the causing seq and skips same-reference applies', async () => {
+  it('broadcasts one frame per event listing changed views in registration order and skips same-reference applies', async () => {
     const { ctx, session } = await harness(true)
     await ctx.sessionProjections.register(lastUserUnit())
     const proxy = await remote(ctx)
-    // The controller's onChanged subscription lives in an inject child whose
+    // The controller's onEventChanged subscription lives in an inject child whose
     // fiber activates asynchronously; yield until it lands before appending.
     await new Promise(resolve => setTimeout(resolve, 0))
     const abort = new AbortController()
     const stream = proxy.control(abort.signal)
-    const collected = collect(stream, 5, abort, ['test/last-user', 'sessionListMetadata'])
+    const collected = collect(stream, 3, abort, ['test/last-user', 'sessionListMetadata'])
 
     const now = vi.spyOn(Date, 'now').mockReturnValue(100)
     seedMessages(session, 1)
@@ -778,24 +778,56 @@ describe('Session control projection frames', () => {
     now.mockRestore()
 
     const frames = await collected
-    const pushes = frames.filter(
-      (f): f is Extract<SessionControlFrame, { type: 'projection' }> =>
-        f.type === 'projection' && f.key === 'test/last-user',
-    )
+    const pushes = frames.filter((f): f is Extract<SessionControlFrame, { type: 'projection' }> => f.type === 'projection')
     expect(pushes).toEqual([
-      { type: 'projection', sessionId: session.id, key: 'test/last-user', value: { text: 'm0' }, seq: 0 },
-      { type: 'projection', sessionId: session.id, key: 'test/last-user', value: { text: 'm0' }, seq: 2 },
-    ])
-    expect(frames.filter(
-      (f): f is Extract<SessionControlFrame, { type: 'projection' }> =>
-        f.type === 'projection' && f.key === 'sessionListMetadata',
-    )).toEqual([
-      { type: 'projection', sessionId: session.id, key: 'sessionListMetadata', value: { blank: true, lastPromptAt: 100 }, seq: 0 },
-      { type: 'projection', sessionId: session.id, key: 'sessionListMetadata', value: { blank: false, lastPromptAt: 100 }, seq: 1 },
-      { type: 'projection', sessionId: session.id, key: 'sessionListMetadata', value: { blank: false, lastPromptAt: 300 }, seq: 2 },
+      {
+        type: 'projection', sessionId: session.id, seq: 0, changes: [
+          { key: 'test/last-user', val: { text: 'm0' } },
+          { key: 'sessionListMetadata', val: { blank: true, lastPromptAt: 100 } },
+        ],
+      },
+      {
+        type: 'projection', sessionId: session.id, seq: 1, changes: [
+          { key: 'sessionListMetadata', val: { blank: false, lastPromptAt: 100 } },
+        ],
+      },
+      {
+        type: 'projection', sessionId: session.id, seq: 2, changes: [
+          { key: 'test/last-user', val: { text: 'm0' } },
+          { key: 'sessionListMetadata', val: { blank: false, lastPromptAt: 300 } },
+        ],
+      },
     ])
     // Frame seq aligns with the tail block's asOfSeq vocabulary (higher-seq-wins compatible).
     const tail = await opening(proxy, session.id)
     expect(tail.projections.asOfSeq).toBe(pushes.at(-1)?.seq)
+  })
+
+  it('streams one observeProjections change per event for the observed Session only', async () => {
+    const { ctx, session } = await harness(true)
+    await ctx.sessionProjections.register(lastUserUnit())
+    const proxy = await remote(ctx)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const other = ctx.sessions.create(undefined, { meta: { cwd: '/workspace' } })
+    const abort = new AbortController()
+    const changes = proxy.observeProjections({ sessionId: session.id }, abort.signal)[Symbol.asyncIterator]()
+    expect(await changes.next()).toEqual({ done: false, value: { type: 'ready' } })
+
+    const now = vi.spyOn(Date, 'now').mockReturnValue(100)
+    seedMessages(other, 1)
+    seedMessages(session, 1)
+    now.mockRestore()
+
+    expect(await changes.next()).toEqual({
+      done: false,
+      value: {
+        type: 'projection', seq: 0, changes: [
+          { key: 'test/last-user', val: { text: 'm0' } },
+          { key: 'sessionListMetadata', val: { blank: true, lastPromptAt: 100 } },
+        ],
+      },
+    })
+    abort.abort()
+    expect(await changes.next()).toEqual({ done: true, value: undefined })
   })
 })

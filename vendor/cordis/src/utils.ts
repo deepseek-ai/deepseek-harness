@@ -50,6 +50,7 @@ export interface Tracker {
 export const symbols = {
   // internal symbols
   shadow: Symbol.for('cordis.shadow'),
+  caller: Symbol.for('cordis.caller'),
   receiver: Symbol.for('cordis.receiver'),
   original: Symbol.for('cordis.original'),
   metadata: Symbol.for('cordis.metadata'),
@@ -146,11 +147,12 @@ function withProp(target: any, prop: string | symbol, value: any) {
   }))
 }
 
-function createShadow(ctx: Context, target: any, property: string | undefined, receiver: any) {
+function createShadow(useSite: Context, target: any, property: string | undefined, receiver: any) {
   if (!property) return receiver
-  const origin = Reflect.getOwnPropertyDescriptor(target, property)?.value
-  if (!origin) return receiver
-  return withProp(receiver, property, ctx.extend({ [symbols.shadow]: origin }))
+  const value = getPropertyDescriptor(target, property)?.value
+  if (!value) return receiver
+  const defSite = (value[symbols.shadow] as Context | undefined) ?? value
+  return withProp(receiver, property, useSite.extend({ [symbols.shadow]: defSite }))
 }
 
 function createShadowMethod(ctx: Context, value: any, outer: any, shadow: {}) {
@@ -162,22 +164,23 @@ function createShadowMethod(ctx: Context, value: any, outer: any, shadow: {}) {
   })
 }
 
+// `ctx` may be a shadow, i.e. a pair of:
+// - def site: where the accessing code was defined, governs service resolution
+// - use site: where the service is consumed, governs intercept, isolate and effects
 function createTraceable(ctx: Context, value: any, tracker: Tracker) {
-  // noShadow services are identity-aware (e.g. logger uses the origin fiber to
-  // derive its name): keep the shadow ctx so they can read [symbols.shadow]
-  // and resolve the origin. Non-noShadow services strip — their side effects
-  // bind to caller, not origin.
-  if (ctx[symbols.shadow] && !tracker.noShadow) {
-    ctx = Object.getPrototypeOf(ctx)
-  }
+  const defSite = (ctx[symbols.shadow] as Context | undefined) ?? ctx
+  const useSite = ctx[symbols.shadow] ? Object.getPrototypeOf(ctx) as Context : ctx
   const proxy = new Proxy(value, {
     get: (target, prop, receiver) => {
       if (prop === symbols.original) return target
-      if (prop === tracker.property) return ctx
+      if (prop === symbols.caller) return defSite
+      if (prop === tracker.property) return useSite
       if (typeof prop === 'symbol') {
         return Reflect.get(target, prop, receiver)
       }
-      if (tracker.associate && ctx.reflect.props[`${tracker.associate}.${prop}`]) {
+      // `ctx` rather than `useSite`, so that `ctx.foo.bar` and `ctx['foo.bar']` are
+      // governed by the same def site
+      if (tracker.associate && useSite.reflect.props[`${tracker.associate}.${prop}`]) {
         return Reflect.get(ctx, `${tracker.associate}.${prop}`, withProp(ctx, symbols.receiver, receiver))
       }
       let shadow: any, innerValue: any
@@ -185,33 +188,37 @@ function createTraceable(ctx: Context, value: any, tracker: Tracker) {
       if (desc && 'value' in desc) {
         innerValue = desc.value
       } else {
-        shadow = createShadow(ctx, target, tracker.property, receiver)
+        shadow = createShadow(useSite, target, tracker.property, receiver)
         innerValue = Reflect.get(target, prop, shadow)
       }
       const innerTracker = innerValue?.[symbols.tracker]
       if (innerTracker) {
-        return createTraceable(ctx, innerValue, innerTracker)
+        return createTraceable(useSite, innerValue, innerTracker)
       } else if (!tracker.noShadow && typeof innerValue === 'function') {
-        shadow ??= createShadow(ctx, target, tracker.property, receiver)
-        return createShadowMethod(ctx, innerValue, receiver, shadow)
+        shadow ??= createShadow(useSite, target, tracker.property, receiver)
+        return createShadowMethod(useSite, innerValue, receiver, shadow)
       } else {
         return innerValue
       }
     },
     set: (target, prop, value, receiver) => {
       if (prop === symbols.original) return false
+      if (prop === symbols.caller) return false
       if (prop === tracker.property) return false
       if (typeof prop === 'symbol') {
         return Reflect.set(target, prop, value, receiver)
       }
-      if (tracker.associate && ctx.reflect.props[`${tracker.associate}.${prop}`]) {
+      if (tracker.associate && useSite.reflect.props[`${tracker.associate}.${prop}`]) {
         return Reflect.set(ctx, `${tracker.associate}.${prop}`, value, withProp(ctx, symbols.receiver, receiver))
       }
-      const shadow = createShadow(ctx, target, tracker.property, receiver)
+      const shadow = createShadow(useSite, target, tracker.property, receiver)
       return Reflect.set(target, prop, value, shadow)
     },
     apply: (target, thisArg, args) => {
-      return applyTraceable(proxy, target, thisArg, args)
+      const receiver = tracker.noShadow
+        ? proxy
+        : createShadow(useSite, target, tracker.property, proxy)
+      return applyTraceable(receiver, target, thisArg, args)
     },
   })
   return proxy
@@ -226,7 +233,7 @@ function applyTraceable(proxy: any, value: any, thisArg: any, args: any[]) {
 export function createCallable(name: string, proto: {}, tracker: Tracker) {
   const self = function (...args: any[]) {
     const proxy = createTraceable(self['ctx'], self, tracker)
-    return applyTraceable(proxy, self, this, args)
+    return Reflect.apply(proxy, this, args)
   }
   defineProperty(self, 'name', name)
   return Object.setPrototypeOf(self, proto)

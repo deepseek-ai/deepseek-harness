@@ -8,7 +8,7 @@ import type {
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
-  Button, IconChevronDownOutlineRegular, MarkdownDelegateProvider, Modal,
+  Button, IconChevronDownOutlineRegular, MarkdownDelegateProvider, Modal, type MarkdownMenuTarget,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { isAtOrOutside } from '../contract/group-tree.ts'
 import type { ChatFlowHookContext, ChatViewSlotProps, OpenFileOptions } from '../contract/slots.ts'
@@ -60,9 +60,22 @@ const MOTION_TAIL_MS = 800
  */
 export function ChatView({
   useSession, useChat, useConversation, useSessions, renderSlot,
-  sessionId, openFile, openExternalLink, loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt, fileMentions,
+  sessionId, openFile, openExternalLink, resolveFilePath, useContextMenu,
+  loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt,
   usePresentation, useProjection, useInteractionIds, dispatchInteraction, t, fileDrag,
 }: ChatViewSlotProps) {
+  const { getTriggerProps } = useContextMenu()
+  const getMarkdownTriggerProps = useCallback((target: MarkdownMenuTarget) => getTriggerProps(() => {
+    switch (target.kind) {
+      case 'file': return { kind: 'file', value: { sessionId, path: resolveFilePath(target.path),
+        ...(target.line === undefined ? {} : { line: target.line }) } }
+      case 'url': return { kind: 'url', value: { sessionId, url: target.url } }
+      case 'image': return { kind: 'image', value: { sessionId, url: target.url,
+        ...(target.name === undefined ? {} : { name: target.name }),
+        ...(target.mediaType === undefined ? {} : { mediaType: target.mediaType }),
+        ...(target.path === undefined ? {} : { path: resolveFilePath(target.path) }) } }
+    }
+  }), [getTriggerProps, resolveFilePath, sessionId])
   const order = useChat(s => s.order)
   const groupedEntries = useConversation(snapshot => snapshot.views.grouped('chat')?.entries)
   const entries = useMemo<readonly RenderEntry[]>(() => groupedEntries
@@ -192,6 +205,7 @@ export function ChatView({
     lastIsUser: lastKey !== null && nodeStore.get(lastKey)?.kind === 'user',
     steeringId,
     submissionId: visibleSubmissions.at(-1)?.requestId ?? null,
+    submissionSteers: visibleSubmissions.at(-1)?.placement === 'steering',
     loadedTurns: turnNavigationItems,
     transcriptView,
   })
@@ -229,10 +243,15 @@ export function ChatView({
                 </button>
               </div>
             )}
-            <MarkdownDelegateProvider openFile={requestOpenFile} openExternalLink={openExternalLink} fileImages={fileImages}>
+            <MarkdownDelegateProvider
+              getTriggerProps={getMarkdownTriggerProps}
+              openFile={requestOpenFile}
+              openExternalLink={openExternalLink}
+              fileImages={fileImages}
+            >
               {renderSlot('conversation.chat.flow', {
                 entries, pendingInputs, lastInputTurn, deferCollapse,
-                cwd, openFile: requestOpenFile, inspectCall, forkAt, loadImage, fileMentions,
+                cwd, openFile: requestOpenFile, inspectCall, forkAt, loadImage,
               }, { hookContext: flowContext })}
             </MarkdownDelegateProvider>
             <div ref={interactionSurfaceRef} className={css.textInteraction} data-text-interaction-surface=""

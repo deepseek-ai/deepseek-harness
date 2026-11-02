@@ -72,8 +72,7 @@ try {
     .sort()
 
   process.stdout.write(`${JSON.stringify({
-    registeredProviders: ctx.subagents.list().filter(providerName =>
-      providerNames.includes(providerName as typeof providerNames[number])).sort(),
+    registeredProviders: providerNames.filter(providerName => ctx.subagents.getProvider(providerName) !== undefined).sort(),
     providers,
     tools,
     jobTools,

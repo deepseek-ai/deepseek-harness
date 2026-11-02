@@ -79,7 +79,7 @@ describe('advanced Python snapshot workflow ordering', () => {
     const parent = await ctx.agentLoop.create(SessionId(config.parentSessionId), { provider: 'mock', model: 'mock' })
     const run = await ctx.subagents.startActivation({
       provider: 'spawn', label: 'workflow-child', delivery: 'caller',
-      request: { parent, prompt: [{ type: 'text', text: config.prompt }] }, signal: new AbortController().signal,
+      parent, prompt: [{ type: 'text', text: config.prompt }], signal: new AbortController().signal,
     })
     cleanups.push(() => run.dispose())
     const child = await entered.promise

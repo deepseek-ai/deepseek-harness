@@ -369,11 +369,15 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/not-a-checkout': Record<string, never>
     /** No remote names a default branch that HEAD shares history with, and the checkout is not a worktree the Session created. */
     'forgePanel/no-fork-point': Record<string, never>
+    /** Filter configuration could not be read completely; no comparison ran. Correct Git settings or the output limit before retrying. */
+    'forgePanel/filter-config-failed': Record<string, never>
     /**
      * The patch, the untracked file list, or the file exceeds `maxDiffBytes`, or the code host
      * or its provider refuses a change request's diff or file over a size limit.
      */
     'forgePanel/diff-too-large': Record<string, never>
+    /** Complete checks could not be loaded; the polling preview remains available. */
+    'forgePanel/checks-failed': Record<string, never>
     /** The code host did not provide the change request's diff or file, or its status has not been read yet; the message says why. */
     'forgePanel/diff-failed': Record<string, never>
   }

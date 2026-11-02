@@ -5,7 +5,7 @@
  * the ready-for-review or merge action.
  */
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular,
@@ -39,6 +39,8 @@ export interface ChangeRequestActions {
   readonly markReady?: ((entry: ForgePanelChangeRequest) => Promise<void>) | undefined
   /** Merge the change request as `request` describes; settles once the outcome is reported. */
   readonly merge?: ((entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>) | undefined
+  /** Load complete check details independently of polling; cancellation follows the open list. */
+  readonly readChecks?: ((url: string, headSha: string, signal: AbortSignal) => Promise<ChangeRequestSnapshot>) | undefined
   /** Open the changes view of the change request. */
   readonly viewChanges?: ((entry: ForgePanelChangeRequest) => void) | undefined
 }
@@ -167,10 +169,10 @@ function Summary({ snapshot, now, t }: {
   return (
     <>
       <span className={css.ci} data-tone={ci.kind === 'failed' ? 'error' : undefined}>
-        {ci.kind !== 'none' && <CheckGlyph state={ROLLUP[snapshot.checksRollup]} size={12} />}
+        {ci.kind !== 'none' && <CheckGlyph state={ci.kind === 'cancelled' ? 'cancelled' : ROLLUP[snapshot.checksRollup]} size={12} />}
         {ci.kind === 'failed'
           ? ci.count > 0 ? t('change.ci.failed', { count: ci.count }) : t('change.ci.failedUnlisted')
-          : t(`change.ci.${ci.kind}`)}
+          : ci.kind === 'cancelled' ? t('change.ci.cancelled', { count: ci.count }) : t(`change.ci.${ci.kind}`)}
       </span>
       {flag !== undefined && <span className={css.flag} data-flag={flag}>{t(`change.flag.${flag}`)}</span>}
     </>
@@ -187,13 +189,36 @@ function Target({ snapshot, t }: { readonly snapshot: ChangeRequestSnapshot; rea
   )
 }
 
-function ChecksRow({ snapshot, openLink, t }: {
+type CheckRead = { readonly kind: 'idle' | 'loading' }
+  | { readonly kind: 'ready'; readonly snapshot: ChangeRequestSnapshot }
+  | { readonly kind: 'failed'; readonly message: string }
+
+function ChecksRow({ snapshot, openLink, readChecks, t }: {
   readonly snapshot: ChangeRequestSnapshot
   readonly openLink: (url: string) => void
+  readonly readChecks: ChangeRequestActions['readChecks']
   readonly t: Translate
 }): ReactNode {
   const [open, setOpen] = useState(false)
-  if (snapshot.checks.length === 0) {
+  const [read, setRead] = useState<CheckRead>({ kind: 'idle' })
+  const [attempt, setAttempt] = useState(0)
+  const { url, headSha, checksTruncated } = snapshot
+  useEffect(() => {
+    if (!open || !checksTruncated || readChecks === undefined) { setRead({ kind: 'idle' }); return }
+    const controller = new AbortController()
+    setRead({ kind: 'loading' })
+    void (async () => {
+      try {
+        const result = await readChecks(url, headSha, controller.signal)
+        if (!controller.signal.aborted) setRead({ kind: 'ready', snapshot: result })
+      } catch (error) {
+        if (!controller.signal.aborted) setRead({ kind: 'failed', message: error instanceof Error ? error.message : String(error) })
+      }
+    })()
+    return () => { controller.abort() }
+  }, [open, url, headSha, checksTruncated, readChecks, attempt])
+  const displayed = read.kind === 'ready' && read.snapshot.headSha === headSha ? read.snapshot : snapshot
+  if (displayed.checks.length === 0 && !displayed.checksTruncated) {
     return (
       <div className={css.row}>
         <span className={css.rowIcon}><CheckGlyph state="neutral" /></span>
@@ -202,15 +227,22 @@ function ChecksRow({ snapshot, openLink, t }: {
       </div>
     )
   }
-  const counts = checkCounts(snapshot.checks)
-  const summary = [
+  const counts = checkCounts(displayed.checks)
+  const summary = displayed.checksTruncated ? t('change.checks.truncated', { count: displayed.checks.length }) : [
     ...counts.failed > 0 ? [t('change.checks.failed', { count: counts.failed })] : [],
     ...counts.running > 0 ? [t('change.checks.running', { count: counts.running })] : [],
     ...counts.passed > 0 ? [t('change.checks.passed', { count: counts.passed })] : [],
+    ...counts.cancelled > 0 ? [t('change.checks.cancelled', { count: counts.cancelled })] : [],
     ...counts.other > 0 ? [t('change.checks.other', { count: counts.other })] : [],
   ].join(' · ')
   const close = (): void => { setOpen(false) }
-  const truncated: MenuEntry[] = [{ type: 'label', id: 'truncated', text: t('change.checks.truncated', { count: snapshot.checks.length }) }]
+  const footer: MenuEntry[] = displayed.checksTruncated
+    ? [{ type: 'label', id: 'truncated', text: t('change.checks.truncated', { count: displayed.checks.length }) }] : []
+  if (read.kind === 'loading') footer.push({ id: 'loading', label: t('change.checks.loading'), disabled: true, icon: <StateDot state="ongoing" size={14} /> })
+  if (read.kind === 'failed') {
+    footer.push({ type: 'label', id: 'failed', text: t('change.checks.loadFailed', { message: read.message }) },
+      { id: 'retry', label: t('change.checks.retry') })
+  }
   return (
     <Menu
       open={open}
@@ -221,17 +253,18 @@ function ChecksRow({ snapshot, openLink, t }: {
       listClassName={css.checksList}
       anchor={(
         <button type="button" className={clsx(css.row, css.rowButton)} aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(!open) }}>
-          <span className={css.rowIcon}><CheckGlyph state={ROLLUP[snapshot.checksRollup]} /></span>
+          <span className={css.rowIcon}><CheckGlyph state={ROLLUP[displayed.checksRollup]} /></span>
           <span className={css.rowLabel}>{t('change.row.checks')}</span>
-          <span className={css.rowValue} data-tone={counts.failed > 0 ? 'error' : undefined}>
+          <span className={css.rowValue} data-tone={!displayed.checksTruncated && counts.failed > 0 ? 'error' : undefined}>
             <span className={css.ellipsis}>{summary}</span>
           </span>
           <IconChevronRightOutlineRegular size={12} className={css.rowChevron} />
         </button>
       )}
-      {...snapshot.checksTruncated ? { footer: truncated } : {}}
+      footer={footer}
+      onSelect={() => { setAttempt(value => value + 1) }}
     >
-      {orderedChecks(snapshot.checks).map((check, index) => {
+      {orderedChecks(displayed.checks).map((check, index) => {
         const { url } = check
         return (
           <MenuItemButton
@@ -395,7 +428,7 @@ function Details({ entry, snapshot, name, now, actions, locale, t }: {
     : snapshot.mergeability === 'conflicting' ? t('change.merge.conflicting', { base: snapshot.baseBranch }) : t('change.merge.unknown')
   return (
     <div className={css.rows}>
-      <ChecksRow snapshot={snapshot} openLink={actions.openLink} t={t} />
+      <ChecksRow key={snapshot.headSha} snapshot={snapshot} openLink={actions.openLink} readChecks={actions.readChecks} t={t} />
       <div className={css.row}>
         <span className={css.rowIcon}><IconUserOutlineRegular size={16} /></span>
         <span className={css.rowLabel}>{t('change.row.review')}</span>

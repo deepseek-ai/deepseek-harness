@@ -5,7 +5,7 @@ import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
-import type { ForgeActionFailure, ForgeFailure, MergeMethod } from '@deepseek-ai/dsh-experimental-forge'
+import type { ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeReviewRequest, ForgeReviewResult, MergeMethod } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type {} from '@deepseek-ai/dsh-experimental-worktree'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
@@ -18,7 +18,7 @@ import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typer
 import { gitIn, inspectCheckout, listBranches } from './git.ts'
 import type { Inspection } from './git.ts'
 import { parseDiff } from './diff.ts'
-import { aheadOf, DiffTooLarge, forkPoint, localDiff, localText, NoForkPoint } from './local-diff.ts'
+import { aheadOf, DiffTooLarge, FilterConfigError, forkPoint, localDiff, localText, NoForkPoint } from './local-diff.ts'
 import { missingWorktree, SessionPanel } from './panel.ts'
 import { PatchCache } from './patch-cache.ts'
 import { ChangeRequestStates, changeRequestStatesDomain } from './states.ts'
@@ -44,7 +44,7 @@ type ControllerConfig = PanelConfig & { readonly maxBranches: number; readonly w
 
 /**
  * Serves the forge panel. Following a Session inspects the checkout of its
- * current directory read-only in the Session's execution world, recognizes the
+ * current directory using the Session's permissions and execution world, recognizes the
  * code host of the upstream remote or `origin`, probes sign-in for that host,
  * and polls the Session's bound change requests through `ctx.forge` until the
  * last follower of that Session leaves. A worktree request makes the panel
@@ -233,13 +233,14 @@ export class ForgePanelController extends TypertRemoteService {
 
   /**
    * Read the changes one scope covers in the checkout of the Session's
-   * current directory, with Git confined to the Session's read-only sandbox.
+   * current directory, with Git using the Session's sandbox policy.
    * @param session - Session whose checkout is read.
    * @param scope - which changes to read.
    * @param signal - request cancellation.
    * @returns the files, the base of the `branch` scope, and the untracked files left out.
    * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/no-fork-point` for the `branch`
-   * scope of a checkout without one; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
+   * scope of a checkout without one; `forgePanel/filter-config-failed` when filter configuration cannot be read
+   * completely, before any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
    */
   @Remote
   async localDiff(session: Session, scope: ForgeLocalScope, signal: AbortSignal): Promise<ForgeLocalDiff> {
@@ -268,6 +269,26 @@ export class ForgePanelController extends TypertRemoteService {
     signal.throwIfAborted()
     const inspection = await this.checkoutOf(session, signal)
     return await diffing(localText(this.home, this.config, session, inspection.checkout.root, scope, path, signal))
+  }
+
+  /**
+   * Load complete checks for the change request whose list the user opened.
+   * @param session - Session retaining the visible binding.
+   * @param url - binding URL.
+   * @param headSha - commit displayed by the card; a different head rejects the result.
+   * @param signal - cancellation when the list closes.
+   * @returns the complete snapshot at the displayed head.
+   * @throws `forgePanel/not-bound` for an invisible binding, `forgePanel/stale-head` for a moved head,
+   * or `forgePanel/checks-failed` when the provider cannot complete the read.
+   */
+  @Remote
+  async changeRequestChecks(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ChangeRequestSnapshot> {
+    signal.throwIfAborted()
+    const result = await this.home.forge.fetchChecks(this.bound(session, url).ref, signal)
+    this.bound(session, url)
+    if ('code' in result) throw new RemoteError('forgePanel/checks-failed', result.message, {})
+    if (result.headSha !== headSha) throw new RemoteError('forgePanel/stale-head', 'The change request head changed; refresh its status', {})
+    return result
   }
 
   /**
@@ -333,6 +354,27 @@ export class ForgePanelController extends TypertRemoteService {
     const text = await this.home.forge.fileText(this.bound(session, url).ref, commit, path, signal)
     if (typeof text !== 'string') throw readError(text)
     return text
+  }
+
+  /**
+   * Publish a line comment or completed review for a visible Session binding.
+   * @param session - Session retaining the change request.
+   * @param url - visible binding URL.
+   * @param request - reviewed head, ranges, plain text, and explicit review decision.
+   * @param signal - request cancellation.
+   * @returns confirmed publication or a typed failure; unknown outcomes require reconciliation on the host.
+   */
+  @Remote
+  async submitReview(session: Session, url: string, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult> {
+    signal.throwIfAborted()
+    const { ref } = this.bound(session, url)
+    if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(request.headSha)) throw new Error('Invalid review commit')
+    const comments = request.kind === 'comment' ? [request.comment] : request.comments
+    if (comments.some(comment => comment.path === '' || comment.body.trim() === ''
+      || !Number.isSafeInteger(comment.startLine) || comment.startLine < 1
+      || !Number.isSafeInteger(comment.endLine) || comment.endLine < comment.startLine)) throw new Error('Invalid review comment')
+    if (request.kind === 'review' && request.event !== 'approve' && request.body.trim() === '' && comments.length === 0) throw new Error('Empty review')
+    return await this.home.forge.submitReview(ref, request, signal)
   }
 
   /**
@@ -617,7 +659,10 @@ export class ForgePanelController extends TypertRemoteService {
       }),
       refOf: url => ctx.forge.changeRequestFromUrl(url),
       watch: (ref, listener) => ctx.forge.watch(ref, listener),
-      open: async () => (await storage.open(changeRequestStatesDomain)).table('states'),
+      open: async () => {
+        const domain = await storage.open(changeRequestStatesDomain)
+        return { table: domain.table('states'), close: () => domain.close() }
+      },
       report: (error) => { ctx.logger.warn(`forge-panel: storing a change request state failed: ${String(error)}`) },
     })
     return this.states
@@ -656,6 +701,7 @@ async function diffing<T>(reading: Promise<T>): Promise<T> {
   try {
     return await reading
   } catch (error) {
+    if (error instanceof FilterConfigError) throw new RemoteError('forgePanel/filter-config-failed', error.message, {}, { cause: error })
     if (error instanceof DiffTooLarge) throw new RemoteError('forgePanel/diff-too-large', error.message, {}, { cause: error })
     if (error instanceof NoForkPoint) throw new RemoteError('forgePanel/no-fork-point', error.message, {}, { cause: error })
     throw error

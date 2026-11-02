@@ -261,6 +261,7 @@ describe('native Flash translation', () => {
 
   it.each(['withdrawn', 'catalog', 'credential'])('rejects a native route %s during async preparation before audit or dispatch', async (change) => {
     const b = await paidFixture(cleanups), entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
+    cleanups.push(async () => { release.resolve(undefined) })
     const original = b.ctx.llm.prepareCall.bind(b.ctx.llm)
     vi.spyOn(b.ctx.llm, 'prepareCall').mockImplementationOnce(async (config, signal) => {
       const call = await original(config, signal)
@@ -270,8 +271,9 @@ describe('native Flash translation', () => {
     const rejected = expect(pending).rejects.toMatchObject({ code: 'TRANSLATION_UNAVAILABLE' })
     await entered.promise
     const owner = [...b.ctx.loader.entries()].find(entry => entry.options.id === 'official-custom-id')!
+    let withdrawal: Promise<void> | undefined
     if (change === 'withdrawn') {
-      await owner.fiber!.dispose()
+      withdrawal = owner.fiber!.dispose()
       await rejected
     } else if (change === 'catalog') {
       const config = owner.fiber!.effectiveConfig as ReturnType<typeof OfficialConfig>
@@ -279,6 +281,7 @@ describe('native Flash translation', () => {
     } else b.setConfigured(false)
     release.resolve(undefined)
     await rejected
+    await withdrawal
     expect(b.requests).toEqual([])
     expect(b.session?.snapshotEvents()).toEqual([])
   })

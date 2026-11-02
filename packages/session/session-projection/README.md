@@ -55,13 +55,28 @@ const definition = {
 
 ### Register and read
 
-`await register(definition)` infers the host state type from `stateSchema`, installs the unit, and returns a handle with synchronous `stateOf(session)` reads and `dispose(): Promise<void>`. Await `dispose()` to release the registration; repeated calls are safe. Registrants with the same key and `stateVersion` share cells; incompatible or invalid versions reject registration. Registration belongs to the calling fiber. The last unregister removes the unit from global event drives, snapshots, checkpoints, and change notifications. Existing handles remain readable: each retains its original unit and folds new Session events on demand, even if another version later registers the same key. Reading a handle does not initialize unrelated units or register it again. Carriers use `snapshot(session)` for a consistent client-view cut and `onChanged(listener)` for changes to registered units.
+`await register(definition)` infers the host state type from `stateSchema`, installs the unit, and returns a handle with synchronous `stateOf(session)` reads and `dispose(): Promise<void>`. Await `dispose()` to release the registration; repeated calls are safe. Registrants with the same key and `stateVersion` share cells; incompatible or invalid versions reject registration. Registration belongs to the calling fiber. The last unregister removes the unit from global event drives, snapshots, checkpoints, and change notifications. Existing handles remain readable: each retains its original unit and folds new Session events on demand, even if another version later registers the same key. Reading a handle does not initialize unrelated units or register it again. Carriers use `snapshot(session)` for a consistent client-view cut, `onChanged(listener)` for one call per changed unit, and `onEventChanged(listener)` for one call per committed event that lists every client-visible unit whose view it changed.
 
 ```text
 const todoProjectionHandle = await ctx.sessionProjections.register(definition)
 const state = todoProjectionHandle.stateOf(session)
 const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 ```
+
+<a id="bind-several-states-to-one-session"></a>
+### Bind several states to one Session
+
+Call `handle.readerFor(session)` on an awaited registration handle to obtain a `() => S` callback. Calling it reads the current state without a Session argument. An owner composing several states passes a typed object of these callbacks to its runtime. New states add properties instead of constructor arguments; ordinary plugins still use domain-service methods.
+
+```text
+const projections = {
+  todo: todoProjectionHandle.readerFor(session),
+  goal: goalProjectionHandle.readerFor(session),
+}
+const todo = projections.todo()
+```
+
+Each reader captures the exact Session and delegates to the original handle's `stateOf(session)`, preserving readiness requirements, null and undefined values, state references, and synchronous failures. Creating a reader does not read state, prepare the Session, perform storage I/O, or create a state cache. Readers own no registration or disposal. The original handle keeps its disposal responsibility; a reader keeps reading the original unit after deregistration or version replacement. One handle can create readers for several Sessions independently. Registration and Session preparation remain the owner's responsibility; client snapshots remain separate.
 
 A domain that owns projected state declares `sessionProjections` as a Cordis service dependency and keeps its handle private. Consumers inject that domain service and use its methods, such as `ctx.agents.turnBoundaryOf(session)`, without importing definitions or retaining projection readers. Optional contributors may register under `ctx.inject(['sessionProjections'], …)`. Carriers use `ctx.get('sessionProjections')` and omit their block or frames when the registry is absent.
 
@@ -113,7 +128,7 @@ The package is the Service Definition and drive role of a capability seam: the f
 
 ### Drive and checkpoint flow
 
-One committed event drives every registered unit in registration order; a client-visible unit whose raw view changes by `Object.is` notifies the change feed with its schema-validated view and the causing seq. The live drive retains its previous and current raw views; snapshots and cold reads remain complete independent reads. `checkpoint(session)` returns one detached `(key → {ver, seq, val})` row per unit for the persisted cache; `restoreFloor` anchors a tail read one event below the lowest usable watermark so a shrunk log is detected, and `restore` refolds persisted rows over a stored suffix, discarding any row whose `ver` does not match or that claims events past the stored end.
+One committed event drives every registered unit in registration order; a client-visible unit whose raw view changes by `Object.is` notifies each `onChanged` listener with its schema-validated view and the causing seq. After every unit has been driven, each `onEventChanged` listener receives one call with one `{ key, val }` entry per changed client-visible unit in registration order, where `val` is the schema-validated view, and the causing seq; an event that changes no client-visible view makes no event-level call. If a unit or an `onChanged` listener throws during the drive, event listeners still receive the changes made before the throw, and the error then propagates to the Session's listener containment. The live drive retains its previous and current raw views; snapshots and cold reads remain complete independent reads. `checkpoint(session)` returns one detached `(key → {ver, seq, val})` row per unit for the persisted cache; `restoreFloor` anchors a tail read one event below the lowest usable watermark so a shrunk log is detected, and `restore` refolds persisted rows over a stored suffix, discarding any row whose `ver` does not match or that claims events past the stored end.
 
 </details>
 

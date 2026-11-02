@@ -1,0 +1,114 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  "files": [
+    "src/share-api-types.ts",
+    "src/endpoint-classification.ts",
+    "src/client/endpoint-classification.ts",
+    "src/client/index.ts",
+    "src/client/ShareAction.tsx",
+    "src/client/ShareDialog.tsx",
+    "src/client/owner-identity-login.ts",
+    "src/client/share-relay-address.ts",
+    "src/client/share-options.ts",
+    "src/client/ShareCreateForm.tsx",
+    "src/client/SharePermissionFields.tsx",
+    "src/client/ShareEditPanel.tsx",
+    "src/client/ShareCapabilitiesPicker.tsx",
+    "src/client/ManageSharesDialog.tsx",
+    "src/client/share-types.ts",
+    "src/client/locales.ts",
+    "src/client/user-origin.tsx",
+    "src/client/owner-display.ts",
+    "src/read-budgets.ts",
+    "src/owner-identity.ts",
+    "src/client/viewer-brand.tsx",
+    "src/client/viewer-model.tsx",
+    "src/client/viewer-permission.tsx",
+    "src/client/viewer-seat.tsx",
+    "src/client/owner-identity.ts",
+    "src/client/owner-login.ts",
+    "src/client/owner-routes.ts",
+    "src/client/owner-shares.ts",
+    "src/client/viewer-capabilities.ts",
+    "src/client/viewer-context.ts",
+    "src/client/viewer-session-plugin.ts",
+    "src/client/viewer-session-row.tsx",
+    "src/client/viewer-share-path.tsx",
+    "src/client/viewer-status.ts",
+    "src/client/viewer-status-banner.ts",
+    "src/client/viewer-session.ts",
+    "src/viewer-channel.ts",
+    "src/css-modules.d.ts",
+    "src/client/share-navigation.ts"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../api/gateway/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/remote-access/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/session-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../client/connection/tsconfig.client.json"
+    },
+    {
+      "path": "../../client/locale/tsconfig.client.json"
+    },
+    {
+      "path": "../../client/store/tsconfig.json"
+    },
+    {
+      "path": "../../client/ui-chat/tsconfig.client.json"
+    },
+    {
+      "path": "../../client/ui-conversation/tsconfig.client.json"
+    },
+    {
+      "path": "../../client/ui-primitives/tsconfig.json"
+    },
+    {
+      "path": "../../client/ui-renderer/tsconfig.json"
+    },
+    {
+      "path": "../../client/ui-session/tsconfig.json"
+    },
+    {
+      "path": "../../client/ui-sidebar/tsconfig.json"
+    },
+    {
+      "path": "../../client/ui-sidebar-right/tsconfig.json"
+    },
+    {
+      "path": "../../client/ui-slots/tsconfig.json"
+    },
+    {
+      "path": "../../client/ui-workspace/tsconfig.json"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../liveshare-protocol/tsconfig.client.json"
+    }
+  ]
+}

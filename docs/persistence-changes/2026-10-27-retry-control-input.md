@@ -27,20 +27,20 @@ id: 2026-10-27-retry-control-input
 baseline: false
 changes:
   - root: "event:agent/inbox/spliced"
-    previous: "2026-10-25-skill-catalog-incomplete"
-    after: "2e0cf9dbeea369bc77843e2ec47b0ebf4542c2ac29523a64f56aab99db49f0ee"
+    previous: "2026-10-27-subagent-settlement-attribution"
+    after: "1682631f010d5ea717d181ed6f4ef46cde08d92a31ab461e7e98edfc98461f85"
     decision: same-version
   - root: "event:developer/message"
-    previous: "2026-10-25-skill-catalog-incomplete"
-    after: "caad8a860d58ff99ef3576bcb3e484314b1d9d7065b307d14478ec76573ebdec"
+    previous: "2026-10-27-subagent-settlement-attribution"
+    after: "510826cf4e1f9220d75c1efd90b349dd9a77fc5ba15d19e16f87e85a48db5f99"
     decision: same-version
   - root: "event:session/title-llm-request"
-    previous: "2026-10-25-skill-catalog-incomplete"
-    after: "eb0fc09c936ebe3d3f16e17b89143f26ae4eca3bd8277c7518bafab45a29e255"
+    previous: "2026-10-27-subagent-settlement-attribution"
+    after: "3bca25b2baa6b22be9b577621a7603497f40870ed88a8dac4383d37dc2bb6e18"
     decision: same-version
   - root: "event:user/message"
-    previous: "2026-10-25-skill-catalog-incomplete"
-    after: "0d6dd68f18afee7bc130aeecc3bb76ee4c1ab472472c76f2f935151f9417681b"
+    previous: "2026-10-27-subagent-settlement-attribution"
+    after: "50a15408d511e9be3fa93abff37a38ae770f3ab905fc6849fee0d989200d2b97"
     decision: same-version
 ```
 

@@ -68,15 +68,17 @@ Electron 使用 Electron Node 模式启动私有 Desktop Host。Host 调用共�
 
 ## 事件
 
-事件就是扩展点，而选对事件域是大多数改动的第一个决定。
+事件在三个域内提供扩展点。
 
 - **会话事件**是追加到日志并通过 `session/event` 广播的持久事实。当某个事实必须在重新加载后仍然存在时，使用它。
 - **Agent 事件**（`agent/*`）携带活跃 `Agent`：inbox、步骤、状态、请求、验证、续跑。要观察或拦截进行中的工作时，使用它。
 - **能力事件**无需导入循环即可向某个 seam（`fs/*`、`tools/*`、`telemetry/*`）附加策略和适配器。
 
-AgentLoop 初始化 Agent，失败则回滚，并在启动已排队工作前等待串行 `agent/created`。卸载在 Agent teardown 期间保留所需资源；[agent-loop](../packages/core/agent-loop/README.zh.md#understand-the-implementation)定义顺序。
+Subagent Activation 拥有运行时树成员关系。
 
-[事件映射](event-producer-consumer.zh.md)列出每个事件的生产方与消费方。
+AgentLoop 回滚失败的初始化，并在启动已排队工作前等待串行 `agent/created`；卸载在 teardown 期间保留所需资源（[顺序](../packages/core/agent-loop/README.zh.md#understand-the-implementation)）。
+
+[事件生产者与消费者](event-producer-consumer.zh.md)。
 
 <a id="turn-flow"></a>
 
@@ -131,7 +133,7 @@ Session 消费方只了解当前逻辑格式。仅 header 的 `stat` 与 `list` 
 
 **模型可见即已记录。** 每个模型请求都必须能从日志重建。新增模型可见输入需要会话事件。修改现有消息内容的插件注册[纯消息投影](subsystems/session.zh.md#plugin-owned-message-projections)，独立读取器显式传入相同的处理器。 工具变更不依赖能力；[Session 工具历史](../packages/core/session/README.zh.md)提供提供方声明。
 
-**投影 seam。** `dsh-session-projection` 提供 `ctx.sessionProjections`：已注册单元增量折叠已提交事件，载体通过 `snapshot()` 批量取得裁剪后的客户端视图。领域服务在激活时等待注册完成，在内部保留句柄，并向其他插件提供业务方法。释放注册会移除全局参与关系；已有句柄仍可继续折叠 Session 事件。`AgentRegistry` 持有轮次和步骤状态，并提供 `turnBoundaryOf(session)`（[注册生命周期](../packages/session/session-projection/README.zh.md)）。 `AgentLoop` 持有 `modelSelection`，并与 inbox 一起构建每个 Agent 的 `model` 实例。
+**投影 seam。** `dsh-session-projection` 提供 `ctx.sessionProjections`：已注册单元折叠已提交事件，载体通过 `snapshot()` 读取选定的客户端视图。领域服务等待注册完成，在内部保留句柄，并提供业务方法（[注册生命周期](../packages/session/session-projection/README.zh.md)）。`AgentRegistry` 通过 `turnBoundaryOf(session)` 提供轮次和步骤状态。`AgentLoop` 持有 `modelSelection` 和 inbox 状态（[Loop 生命周期](../packages/core/agent-loop/README.zh.md)）。
 
 [工作目录](subsystems/working-directory.zh.md) 提供用户上下文和执行路径，不改变原始项目标识、沙箱写入根目录或已有进程目录。
 
@@ -141,7 +143,7 @@ Session 消费方只了解当前逻辑格式。仅 header 的 `stat` 与 `list` 
 
 seam 正是替换一个提供方就能改变整个产品的原因。文件系统与进程提供方共享同一个执行世界，因此把它们指向远程沙箱，也就把 Bash、PTY 和 LSP 一并搬了过去，无需提供方专用 fork。[subagent 提供方](subsystems/subagent.zh.md)在同一个接口之后同样千差万别，从新建一个子 agent，到把一个轮次委派给另一个产品。
 
-[实验性 Agent Teams](subsystems/agent-team.zh.md) 通过显式启用的 `ctx.agentTeams`，在可继续 subagent 之上提供持久 roster、任务状态和直接 inbox 消息协作。
+[Agent Teams](subsystems/agent-team.zh.md)在根 Session 开启后提供任务策略和共享任务板。普通 subagent 控制工具负责身份、通信、发现、中断和收件箱等待。
 
 ## 新行为的归属位置
 

@@ -448,6 +448,26 @@ describe('forgePanel.follow', () => {
 })
 
 describe('forgePanel local changes', () => {
+  it('reports filter configuration overflow separately and recovers after it is reduced', async () => {
+    const { repo } = await project()
+    await withDefaultBranch(repo)
+    await writeFile(join(repo, 'tracked.txt'), 'changed\n')
+    const key = `filter.${'long'.repeat(200)}.clean`
+    await git(repo, 'config', key, 'cat')
+    const opened = await open(repo, { maxDiffBytes: 512, maxOutputBytes: 512 })
+    const follower = reader(opened)
+
+    await expect(follower.until(ready)).resolves.toMatchObject({ checkout: { state: 'ready' }, local: null })
+    await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'unstaged' }, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/filter-config-failed' })
+
+    await git(repo, 'config', '--unset', key)
+    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await expect(follower.until(state => state.local !== null)).resolves.toMatchObject({ local: { files: [{ path: 'tracked.txt' }] } })
+    await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'unstaged' }, signal))
+      .resolves.toMatchObject({ files: [{ path: 'tracked.txt' }] })
+  })
+
   it('measures the branch scope at each inspection', async () => {
     const { repo } = await project()
     await withDefaultBranch(repo)
@@ -502,6 +522,28 @@ describe('forgePanel local changes', () => {
       .rejects.toMatchObject({ code: 'forgePanel/diff-too-large' })
     await expect(opened.ctx.forgePanel.localText(opened.session, { kind: 'unstaged' }, '../outside.txt', signal))
       .rejects.toThrow('is not a path inside the checkout')
+  })
+})
+
+describe('forgePanel complete checks', () => {
+  it('reads only visible bindings and refuses a different head without changing polling state', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => ready(state) && polled(state, pullUrl(7)))
+    const target = opened.provider.changeRequestFromUrl(pullUrl(7))!
+    const original = snapshot(target)
+    const complete = vi.fn(async () => original)
+    Object.assign(opened.provider, { fetchChecks: complete })
+    await expect(opened.ctx.forgePanel.changeRequestChecks(opened.session, pullUrl(7), original.headSha, signal)).resolves.toEqual(original)
+    await expect(opened.ctx.forgePanel.changeRequestChecks(opened.session, pullUrl(8), original.headSha, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+    expect(complete).toHaveBeenCalledTimes(1)
+    await expect(opened.ctx.forgePanel.changeRequestChecks(opened.session, pullUrl(7), 'b'.repeat(40), signal))
+      .rejects.toMatchObject({ code: 'forgePanel/stale-head' })
+    Object.assign(opened.provider, { fetchChecks: async () => ({ code: 'too-large', message: 'Checks exceed limit' }) })
+    await expect(opened.ctx.forgePanel.changeRequestChecks(opened.session, pullUrl(7), original.headSha, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/checks-failed', message: 'Checks exceed limit' })
   })
 })
 
@@ -606,6 +648,23 @@ describe('forgePanel change request diffs', () => {
 })
 
 describe('forgePanel worktree blockers', () => {
+  it('recovers checkout inspection when the Session switches to full access on a host without a sandbox', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    opened.sandbox.failure = new Error('sandbox unavailable')
+    const follower = reader(opened)
+    await follower.until(state => state.checkout.state === 'failed')
+
+    setSandboxMode(opened.session, 'danger-full-access')
+    const full = await follower.next(ready)
+    expect(full.checkout).toMatchObject({ state: 'ready', checkout: { root: repo, branch: 'main' } })
+
+    setSandboxMode(opened.session, 'workspace-write')
+    await expect(follower.next(state => state.checkout.state === 'failed')).resolves.toMatchObject({
+      checkout: { state: 'failed', message: 'sandbox unavailable' },
+    })
+  })
+
   it('reinspects when the sandbox mode changes, and blocks a worktree while the Session is read-only', async () => {
     const { repo } = await project()
     const opened = await open(repo)
@@ -1516,6 +1575,31 @@ describe('forgePanel actions', () => {
       .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'Pull Request is not mergeable' })
 
     expect(opened.provider.actions).toEqual(['ready 7', `merge 7 squash ${head}`, `merge 7 rebase ${head}`, 'ready 7', `merge 7 merge ${head}`])
+  })
+
+  it('publishes a review only for a visible binding and validates wire ranges before calling the provider', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => ready(state) && polled(state, pullUrl(7)))
+    const request = { kind: 'comment' as const, headSha: 'a'.repeat(40),
+      comment: { path: 'src/app.ts', side: 'R' as const, startLine: 3, endLine: 5, body: 'Please check' } }
+    expect(await opened.ctx.forgePanel.submitReview(opened.session, pullUrl(7), request, signal))
+      .toMatchObject({ ok: false, code: 'unsupported' })
+    const submit = vi.fn(async () => ({ ok: true as const, url: pullUrl(7) }))
+    Object.assign(opened.provider, { submitReview: submit })
+    expect(await opened.ctx.forgePanel.submitReview(opened.session, pullUrl(7), request, signal))
+      .toEqual({ ok: true, url: pullUrl(7) })
+    expect(submit).toHaveBeenCalledTimes(1)
+    await expect(opened.ctx.forgePanel.submitReview(opened.session, pullUrl(8), request, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+    await expect(opened.ctx.forgePanel.submitReview(opened.session, pullUrl(7), { ...request, headSha: 'invalid' }, signal)).rejects.toThrow('Invalid review commit')
+    await expect(opened.ctx.forgePanel.submitReview(opened.session, pullUrl(7), { ...request,
+      comment: { ...request.comment, startLine: 6 } }, signal)).rejects.toThrow('Invalid review comment')
+    await expect(opened.ctx.forgePanel.submitReview(opened.session, pullUrl(7), {
+      kind: 'review', headSha: request.headSha, event: 'comment', body: '', comments: [],
+    }, signal)).rejects.toThrow('Empty review')
+    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   it('acts only on change requests visibly bound to the Session that a provider serves', async () => {

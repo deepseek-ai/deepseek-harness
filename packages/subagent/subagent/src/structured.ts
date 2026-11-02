@@ -50,7 +50,7 @@ export interface StructuredAttachment {
  * @param childCtx - the child agent's scope context (`setup`'s argument).
  * @param schema - the trusted, already-asserted schema subset to enforce (see
  *   `assertObjectJsonSchema` in dsh-tools).
- * @param canComplete - whether accepted input and owned child work have finished.
+ * @param canComplete - whether accepted input has been processed.
  * @returns the attachment handle (read `captured()` after the child settles).
  */
 export function attachStructuredRuntime(
@@ -96,7 +96,7 @@ export function attachStructuredRuntime(
       // ToolArgsError → isError result with INVALID_ARGS: the model retries
       // within the same turn, exactly like a schema-validated defineTool call.
       if (violations.length > 0) throw new ToolArgsError(violations)
-      if (!canComplete()) throw new Error('Wait for all delegated child tasks to finish and process pending messages before submitting structured output.')
+      if (!canComplete()) throw new Error('Process pending messages before submitting structured output.')
       // Two-phase commit, keyed by THIS execution: later transformable
       // waterfalls may still turn the success into an error. ToolRuntime has
       // already frozen model-bound arguments at the actual input boundary.

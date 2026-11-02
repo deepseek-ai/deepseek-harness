@@ -60,7 +60,7 @@ describe('headless terminal failures', () => {
     const test = await harness()
     const failures: unknown[] = []
     test.ctx.on('agent/error', ({ error }) => { failures.push(error) })
-    const waitForChildren = vi.fn().mockImplementationOnce((parent: Agent) => {
+    const waitForTreeWork = vi.fn().mockImplementationOnce((parent: Agent) => {
       const append = parent.session.append.bind(parent.session)
       const failAppend: typeof parent.session.append = (type, data, ...intent) => {
         if (type === failedEvent) throw new Error(`summary ${failedEvent} unavailable`)
@@ -70,7 +70,7 @@ describe('headless terminal failures', () => {
       followup(parent)
       return Promise.resolve(true)
     }).mockResolvedValue(false)
-    test.ctx.provide('subagents', { waitForChildren } as never)
+    test.ctx.provide('subagents', { waitForTreeWork } as never)
 
     const result = await test.run(json)
     expect(failures).toHaveLength(1)
@@ -87,7 +87,7 @@ describe('headless terminal failures', () => {
 
   it.each([false, true])('uses the durable outcome after a summary hook fails (recover=%s)', async (recover) => {
     const test = await harness()
-    const waitForChildren = vi.fn().mockImplementationOnce((parent: Agent) => {
+    const waitForTreeWork = vi.fn().mockImplementationOnce((parent: Agent) => {
       const stop = test.ctx.on('agent/pre-step', () => {
         stop()
         throw new Error('summary hook failed')
@@ -98,7 +98,7 @@ describe('headless terminal failures', () => {
       if (recover) followup(parent)
       return Promise.resolve(recover)
     }).mockResolvedValue(false)
-    test.ctx.provide('subagents', { waitForChildren } as never)
+    test.ctx.provide('subagents', { waitForTreeWork } as never)
 
     await expect(test.run()).resolves.toEqual(recover
       ? { code: 0, out: 'summary\n', err: '' }
@@ -107,7 +107,7 @@ describe('headless terminal failures', () => {
 
   it.each(['turn/start', 'turn/end'] as const)('accepts a recovered summary after a missing %s', async (failedEvent) => {
     const test = await harness()
-    const waitForChildren = vi.fn().mockImplementationOnce((parent: Agent) => {
+    const waitForTreeWork = vi.fn().mockImplementationOnce((parent: Agent) => {
       const append = parent.session.append.bind(parent.session)
       let failed = false
       const failAppend: typeof parent.session.append = (type, data, ...intent) => {
@@ -124,7 +124,7 @@ describe('headless terminal failures', () => {
       followup(parent)
       return Promise.resolve(true)
     }).mockResolvedValue(false)
-    test.ctx.provide('subagents', { waitForChildren } as never)
+    test.ctx.provide('subagents', { waitForTreeWork } as never)
 
     await expect(test.run()).resolves.toEqual({
       code: 0,
@@ -142,12 +142,12 @@ describe('headless terminal failures', () => {
       if (agent === other) throw new Error('another Agent failed')
       return next()
     })
-    const waitForChildren = vi.fn().mockImplementationOnce(async () => {
+    const waitForTreeWork = vi.fn().mockImplementationOnce(async () => {
       followup(other)
       await other.whenIdle()
       return false
     }).mockResolvedValue(false)
-    test.ctx.provide('subagents', { waitForChildren } as never)
+    test.ctx.provide('subagents', { waitForTreeWork } as never)
 
     await expect(test.run()).resolves.toEqual({ code: 0, out: 'waiting\n', err: '' })
   })

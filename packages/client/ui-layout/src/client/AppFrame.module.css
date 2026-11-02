@@ -3,11 +3,12 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
+  box-sizing: border-box;
   overflow: hidden;
   background: var(--dsw-alias-bg-base);
 }
 
-/* Only a discrete collapse/expand toggle eases the tracks (the TSX holds
+/* Only discrete collapse/expand and fold changes ease the tracks (the TSX holds
    data-animating across the toggle on the deepsuite sider curve). Steady-state
    tracks move only with the viewport, and those updates must land instantly:
    an eased track chases the live window edge and the centre column visibly
@@ -56,6 +57,8 @@
 }
 
 .sidebarCol {
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
   overflow: hidden;
   background: var(--dsw-specific-sidebar-fill);
@@ -63,10 +66,20 @@
 }
 
 .centerCol {
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.mainPanel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* macOS desktop: the frame goes transparent so window vibrancy reaches the
@@ -107,7 +120,7 @@
   --dsh-frame-chrome-top: 0px;
 }
 
-:global([data-platform='darwin']) .sidebarCol {
+:global([data-platform='darwin']) .frame:not([data-sidebar-drawer]) .sidebarCol {
   /* A blue wash over the top of the translucent tint, gone by a third of the
      column; a faint blue-grey-violet rises through the bottom third; and a
      faint blue cast is mixed into the tint itself. Every layer stays
@@ -126,7 +139,7 @@
 
 /* Dark drops the blue cast (the light-mode wash reads purple over dark fills)
    and thins the fill so more wallpaper shows; the washes stay. */
-:global([data-platform='darwin']) :global([data-ds-dark-theme]) .sidebarCol {
+:global([data-platform='darwin']) :global([data-ds-dark-theme]) .frame:not([data-sidebar-drawer]) .sidebarCol {
   background:
     linear-gradient(
       to bottom,
@@ -143,8 +156,8 @@
    them with a 90%-opaque fill of the same token in both themes (the dark
    selector repeats so this outranks its thinner fill). */
 @media (prefers-reduced-transparency: reduce) {
-  :global([data-platform='darwin']) .sidebarCol,
-  :global([data-platform='darwin']) :global([data-ds-dark-theme]) .sidebarCol {
+  :global([data-platform='darwin']) .frame:not([data-sidebar-drawer]) .sidebarCol,
+  :global([data-platform='darwin']) :global([data-ds-dark-theme]) .frame:not([data-sidebar-drawer]) .sidebarCol {
     background: color-mix(in srgb, var(--dsw-specific-sidebar-fill) 90%, transparent);
   }
 }
@@ -265,9 +278,94 @@
  * where it is. The occupant draws its own left border.
  */
 .rightbarCol {
+  grid-column: 3;
+  grid-row: 1;
   position: relative;
   min-width: 0;
   overflow: visible;
+}
+
+.frame[data-sidebar-drawer] {
+  --dsh-frame-leading-clearance: 84px;
+  overflow: clip;
+}
+
+:global(html:not([data-platform])) .frame[data-sidebar-drawer] {
+  /* 12px seat offset + 28px opener + 8px gap; Desktop keeps room for two controls. */
+  --dsh-frame-leading-clearance: 48px;
+}
+
+.frame[data-sidebar-drawer] .mainPanel[data-global-panel] {
+  padding-top: max(0px, calc(48px - var(--dsh-frame-top-clearance, 0px)));
+}
+
+.frame[data-sidebar-drawer] .sidebarCol {
+  position: absolute;
+  grid-area: auto;
+  inset: 0 auto 0 0;
+  z-index: 71;
+  box-sizing: border-box;
+  border-right: none;
+  transform: translateX(0);
+  visibility: visible;
+  transition: transform var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.frame[data-sidebar-drawer][data-sidebar-collapsed] .sidebarCol {
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition:
+    transform var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    visibility 0s linear var(--ds-transition-duration-slow);
+}
+
+.frame[data-sidebar-drawer][data-sidebar-instant] .sidebarCol {
+  transition: none;
+}
+
+.drawerMask {
+  position: absolute;
+  inset: var(--dsh-frame-chrome-top, 0px) 0 0;
+  z-index: 70;
+  background: var(--dsw-alias-bg-mask-1);
+  backdrop-filter: var(--dsw-mask-blur);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.frame[data-sidebar-drawer]:not([data-sidebar-collapsed]) .drawerMask {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.frame[data-sidebar-drawer] .leadingSeat {
+  top: 11px;
+  left: 12px;
+}
+
+:global([data-platform='darwin']) .frame[data-sidebar-drawer] {
+  --dsh-frame-leading-clearance: 160px;
+}
+
+:global([data-platform='darwin']) .frame[data-sidebar-drawer] .leadingSeat {
+  left: 88px;
+}
+
+:global([data-platform='darwin'][data-fullscreen]) .frame[data-sidebar-drawer] {
+  --dsh-frame-leading-clearance: 84px;
+}
+
+:global([data-platform='darwin'][data-fullscreen]) .frame[data-sidebar-drawer] .leadingSeat {
+  left: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame[data-sidebar-drawer] .sidebarCol,
+  .frame[data-sidebar-drawer][data-sidebar-collapsed] .sidebarCol,
+  .drawerMask {
+    transition: none;
+  }
 }
 
 .bottomRow {

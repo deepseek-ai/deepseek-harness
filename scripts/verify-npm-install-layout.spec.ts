@@ -117,9 +117,15 @@ describe('npm install layout verifier', () => {
 })
 
 describe('resolution work budget', () => {
-  it('accepts the measured dual-release graph', () => {
-    expect(assertResolutionWorkBudget({ dshPackagesPerVersion: 320, checkedDshEdges: 2836 }))
-      .toBe(907_520)
+  it.each([
+    [277, 2524, 699_148],
+    [316, 2780, 878_480],
+    [316, 2786, 880_376],
+    [317, 2786, 883_162],
+    [320, 2836, 907_520],
+  ])('accepts the measured dual-release graph with %i packages and %i edges', (packages, edges, units) => {
+    expect(assertResolutionWorkBudget({ dshPackagesPerVersion: packages, checkedDshEdges: edges }))
+      .toBe(units)
   })
 
   it('accepts a graph exactly at the budget and rejects one internal edge above it', () => {

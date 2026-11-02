@@ -1,0 +1,3 @@
+- insert:
+    - id: team-session-mode-fixture
+      name: ../../../packages/team/agent-team/tests/session-mode-fixture.ts

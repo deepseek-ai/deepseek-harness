@@ -90,7 +90,7 @@ export function captureStartupComposition(ctx: Context): StartupCompositionDiagn
         const impl = store[key]
         if (impl?.name !== service) continue
         providers.push({
-          entry: impl.fiber.entry?.id ?? 'unknown', state: stateName(impl.fiber.state),
+          entry: impl.ctx.fiber.entry?.id ?? 'unknown', state: stateName(impl.ctx.fiber.state),
           visibility: key === scope ? 'same-scope' : 'other-scope',
         })
       }

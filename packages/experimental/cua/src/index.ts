@@ -15,7 +15,7 @@ import { z } from 'zod'
 import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
 import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
-import type { CuaApplicationGrant, CuaApplicationId } from './access-types.ts'
+import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
 import { CuaCoordinates } from './coordinates.ts'
@@ -39,7 +39,7 @@ export interface CuaConfig {
     /** Unbranded digest at the profile configuration boundary; admitted by the Config schema. */
     id: string
   }>
-  /** Absolute native helper override; omission prepares the package-owned executable. */
+  /** Absolute executable inside the signed macOS helper .app; omission prepares the package-owned application. */
   helperPath?: string
   /** Maximum time in milliseconds for native component preparation. */
   buildTimeoutMs: number
@@ -148,6 +148,14 @@ export interface CuaBackend {
   createChannel: NativeChannelFactory
   guidance: string
   description: string
+  /**
+   * Build native permission parameters for the selected action and Client language.
+   * @param method Native permission action.
+   * @param permission System privilege selected by the user.
+   * @param locale Current Client language.
+   * @returns Parameters accepted by the provider's native implementation.
+   */
+  permissionParameters: (method: 'requestPermission' | 'openPermissionSettings', permission: CuaSystemPermission, locale: string) => Record<string, JsonValue>
 }
 
 /**
@@ -167,6 +175,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   }
   const access = installCuaAccess(ctx, {
     native, createChannel: backend.createChannel,
+    permissionParameters: backend.permissionParameters,
     store: new CuaPermissionStore(ctx, config.allowedApps.map(grant => ({ ...grant, id: grant.id as CuaApplicationId })), config.timeoutMs),
   })
   const clients = new Map<Agent, NativeClient>()

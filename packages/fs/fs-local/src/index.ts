@@ -4,6 +4,8 @@
  * @module @deepseek-ai/dsh-fs-local
  */
 
+import { applyHunks } from '@deepseek-ai/dsh-fs-patch'
+import type { PatchHunk } from '@deepseek-ai/dsh-fs-patch'
 import { Context } from '@deepseek-ai/cordis'
 import { constants as bufferConstants } from 'node:buffer'
 import { once } from 'node:events'
@@ -13,6 +15,8 @@ import { pathToFileURL } from 'node:url'
 import z from '@deepseek-ai/schemastery'
 import { FileSystem, FsError, FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
+  FsDeleteOutcome,
+  FsMoveOutcome,
   FsDirEntry,
   FsEditOutcome,
   FsEditRequest,
@@ -37,10 +41,11 @@ import {
   readWholeText,
   resolveLocalTarget,
   restoreLineEndings,
+  removeFile,
   streamWholeText,
   writeFileAtomic,
 } from './fsio.ts'
-import type { FsIoInternals } from './fsio.ts'
+import type { FsIoInternals, PathInfo } from './fsio.ts'
 
 /** Configuration for the local filesystem backend. */
 export interface Config {
@@ -115,20 +120,28 @@ export class LocalFileSystem extends FileSystem {
     this.config = resolved
   }
 
-  /** Run `op` with exclusive access to `targetKey` (FIFO per key). */
-  private async withLock<T>(targetKey: string, op: () => Promise<T>): Promise<T> {
-    const prior = this.locks.get(targetKey) ?? Promise.resolve()
-    const run = prior.then(op, op)
-    // Keep the chain alive but swallow this op's result/throw for the *next* waiter.
-    const tail = run.then(() => undefined, () => undefined)
-    this.locks.set(targetKey, tail)
-    try {
-      return await run
-    } finally {
-      if (this.locks.get(targetKey) === tail) {
-        this.locks.delete(targetKey)
+  /** Run one mutation under the same lock ordering as multi-target operations. */
+  private withLock<T>(targetKey: string, op: () => Promise<T>): Promise<T> {
+    return this.withLocks([targetKey], op)
+  }
+
+  /** Acquire distinct keys in lexical order and release inner locks before outer locks. */
+  private withLocks<T>(keys: string[], op: () => Promise<T>): Promise<T> {
+    const ordered = [...new Set(keys)].sort()
+    const acquire = async (index: number): Promise<T> => {
+      const key = ordered[index]
+      if (key === undefined) return op()
+      const prior = this.locks.get(key) ?? Promise.resolve()
+      const run = prior.then(() => acquire(index + 1))
+      const tail = run.then(() => undefined, () => undefined)
+      this.locks.set(key, tail)
+      try {
+        return await run
+      } finally {
+        if (this.locks.get(key) === tail) this.locks.delete(key)
       }
     }
+    return acquire(0)
   }
 
   override async resolve(path: string, opts?: { cwd?: string; signal?: AbortSignal }): Promise<FsTarget> {
@@ -207,22 +220,7 @@ export class LocalFileSystem extends FileSystem {
     signal?: AbortSignal,
   ): Promise<FsWriteOutcome> {
     return this.withLock(target.targetKey, async () => {
-      const existing = await probe(target.targetKey)
-      if (existing && existing.type !== 'file') {
-        throw new FsError(`cannot write "${target.displayPath}": not a regular file`, 'FS_NOT_REGULAR_FILE')
-      }
-
-      if (expected?.kind === 'replaceIfVersion') {
-        // Stale guard: the file must still exist at the version the owner observed.
-        if (!existing) throw new FsError(`cannot write "${target.displayPath}": file no longer exists`, 'FS_STALE_VERSION')
-        if (existing.version !== expected.version) {
-          throw new FsError(`cannot write "${target.displayPath}": file changed since it was read`, 'FS_STALE_VERSION')
-        }
-      } else if (expected?.kind === 'createIfAbsent' && existing) {
-        // createIfAbsent onto an existing file: a blind overwrite — require a read first.
-        throw new FsError(`cannot overwrite existing "${target.displayPath}" without reading it first`, 'FS_NOT_OBSERVED')
-      }
-      // No expectation means an unconditional but still atomic write.
+      const existing = await this.writeTarget(target, expected)
 
       // Capture an optional contextual-diff basis before the write. The bounded
       // reader checks the opened file itself, so an external replacement after
@@ -234,14 +232,8 @@ export class LocalFileSystem extends FileSystem {
       const before = diffable
         ? await readTextForDiff(target.targetKey, this.config.diffBasisMaxBytes, signal)
         : null
-      await writeFileAtomic(
-        target.targetKey,
-        content,
-        existing?.mode,
-        signal,
-        this.internals,
-        expected?.kind === 'createIfAbsent' ? { displayPath: target.displayPath } : undefined,
-      )
+      await writeFileAtomic(target.targetKey, content, existing?.mode, signal, this.internals,
+        { displayPath: target.displayPath, createIfAbsent: expected?.kind === 'createIfAbsent' })
       const after = await probe(target.targetKey)
       return {
         operation: existing ? 'update' : 'create',
@@ -278,7 +270,7 @@ export class LocalFileSystem extends FileSystem {
       const original = await readForEdit(target.targetKey, target.displayPath, signal)
       const edited = applyLiteralEdit(original.content, edit.oldString, edit.newString, edit.replaceAll, target.displayPath)
       const content = restoreLineEndings(edited.content, original.lineEndings)
-      await writeFileAtomic(target.targetKey, content, existing.mode, signal, this.internals)
+      await writeFileAtomic(target.targetKey, content, existing.mode, signal, this.internals, { displayPath: target.displayPath })
 
       const after = await probe(target.targetKey)
       return {
@@ -289,6 +281,107 @@ export class LocalFileSystem extends FileSystem {
         after: edited.content,
       }
     })
+  }
+
+  override async patchText(
+    target: FsTarget, hunks: readonly PatchHunk[], expected?: { version: FsVersion }, signal?: AbortSignal,
+  ): Promise<FsEditOutcome> {
+    return this.withLock(target.targetKey, async () => {
+      const existing = await this.requireFile(target, expected, 'patch')
+      const original = await readForEdit(target.targetKey, target.displayPath, signal)
+      const after = this.patchContent(target, original.content, hunks)
+      await writeFileAtomic(target.targetKey, restoreLineEndings(after, original.lineEndings), existing.mode, signal, this.internals,
+        { displayPath: target.displayPath })
+      return { version: this.versionAfterWrite(await probe(target.targetKey), target), before: original.content, after }
+    })
+  }
+
+  override async deleteFile(target: FsTarget, expected?: { version: FsVersion }, signal?: AbortSignal): Promise<FsDeleteOutcome> {
+    return this.withLock(target.targetKey, async () => {
+      await this.requireFile(target, expected, 'delete')
+      const before = await readTextForDiff(target.targetKey, this.config.diffBasisMaxBytes, signal)
+      await this.internals.inspectBeforeMutation?.(target)
+      if (signal?.aborted) throw new FsError('delete aborted', 'FS_ABORTED')
+      await removeFile(target.targetKey, target.displayPath, this.internals)
+      return { before }
+    })
+  }
+
+  override async moveFile(
+    source: FsTarget, destination: FsTarget, options: Parameters<FileSystem['moveFile']>[2], signal?: AbortSignal,
+  ): Promise<FsMoveOutcome> {
+    if (source.targetKey === destination.targetKey) {
+      throw new FsError(`cannot move "${source.displayPath}" to itself`, 'FS_SAME_TARGET')
+    }
+    return this.withLocks([source.targetKey, destination.targetKey], async () => {
+      const sourceInfo = await this.requireFile(source, options.expectedSource, 'move')
+      const existing = await this.writeTarget(destination, options.expectedDestination)
+      const original = await readForEdit(source.targetKey, source.displayPath, signal)
+      const after = options.hunks === undefined ? original.content : this.patchContent(source, original.content, options.hunks)
+      const content = restoreLineEndings(after, original.lineEndings)
+      const before = existing && Buffer.byteLength(content, 'utf8') < this.config.diffBasisMaxBytes
+        ? await readTextForDiff(destination.targetKey, this.config.diffBasisMaxBytes, signal) : null
+      await this.internals.inspectBeforeMutation?.(source)
+      if (signal?.aborted) throw new FsError('move aborted', 'FS_ABORTED')
+      // After this checkpoint, complete both effects and report them even if cancellation arrives.
+      await writeFileAtomic(destination.targetKey, content, sourceInfo.mode, undefined, this.internals, {
+        displayPath: destination.displayPath,
+        createIfAbsent: options.expectedDestination?.kind === 'createIfAbsent',
+        existingDestination: existing !== null,
+      })
+      const outcome: FsWriteOutcome = {
+        operation: existing ? 'update' : 'create',
+        version: this.versionAfterWrite(await probe(destination.targetKey), destination), before, after,
+      }
+      const sourceBefore = Buffer.byteLength(original.content, 'utf8') < this.config.diffBasisMaxBytes ? original.content : null
+      try {
+        await removeFile(source.targetKey, source.displayPath, this.internals)
+      } catch (error) {
+        // removeFile maps I/O failures; unexpected defects must still reject.
+        if (!(error instanceof FsError)) throw error
+        return { sourceBefore, destination: outcome, sourceDeleted: false, sourceFailure: { code: error.code, message: error.message } }
+      }
+      return { sourceBefore, destination: outcome, sourceDeleted: true }
+    })
+  }
+
+  private async writeTarget(target: FsTarget, expected?: FsWriteIntent): Promise<PathInfo | null> {
+    const existing = await probe(target.targetKey)
+    if (existing && existing.type !== 'file') {
+      throw new FsError(`cannot write "${target.displayPath}": not a regular file`, 'FS_NOT_REGULAR_FILE')
+    }
+
+    if (expected?.kind === 'replaceIfVersion') {
+      // Stale guard: the file must still exist at the version the owner observed.
+      if (!existing) throw new FsError(`cannot write "${target.displayPath}": file no longer exists`, 'FS_STALE_VERSION')
+      if (existing.version !== expected.version) {
+        throw new FsError(`cannot write "${target.displayPath}": file changed since it was read`, 'FS_STALE_VERSION')
+      }
+    } else if (expected?.kind === 'createIfAbsent' && existing) {
+      // createIfAbsent onto an existing file: a blind overwrite — require a read first.
+      throw new FsError(`cannot overwrite existing "${target.displayPath}" without reading it first`, 'FS_NOT_OBSERVED')
+    }
+    // No expectation means an unconditional but still atomic write.
+
+    return existing
+  }
+
+  private async requireFile(target: FsTarget, expected: { version: FsVersion } | undefined, verb: string): Promise<PathInfo> {
+    const existing = await probe(target.targetKey)
+    if (!existing) throw new FsError(`cannot ${verb} "${target.displayPath}": file changed since it was read`, 'FS_STALE_VERSION')
+    if (existing.type !== 'file') throw new FsError(`cannot ${verb} "${target.displayPath}": not a regular file`, 'FS_NOT_REGULAR_FILE')
+    if (expected && existing.version !== expected.version) {
+      throw new FsError(`cannot ${verb} "${target.displayPath}": file changed since it was read`, 'FS_STALE_VERSION')
+    }
+    return existing
+  }
+
+  private patchContent(target: FsTarget, before: string, hunks: readonly PatchHunk[]): string {
+    const result = applyHunks(before, hunks)
+    if (!result.ok) {
+      throw new FsError(`cannot patch "${target.displayPath}": hunk at patch line ${result.failure.hunkLineNumber} (${result.failure.stage}) does not match`, 'FS_PATCH_MISMATCH')
+    }
+    return result.after
   }
 
   /* v8 ignore next 5 -- the post-write probe finding the file absent requires a

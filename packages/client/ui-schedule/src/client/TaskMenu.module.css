@@ -31,8 +31,8 @@
   top: calc(100% + 4px);
   left: 0;
   z-index: 100;
-  min-width: 144px;
-  max-width: 360px;
+  min-width: min(144px, var(--dsh-anchored-max-width, 100vw));
+  max-width: min(360px, var(--dsh-anchored-max-width, 100vw));
 }
 
 /* Portal mode: fixed in the viewport, coordinates supplied inline from the
@@ -52,9 +52,12 @@
 }
 
 /* Viewport fit: the card stops 12px short of the viewport's top/bottom edges
- * (the hook's margin) and taller content scrolls inside .viewport. */
+ * (the hook's margin) and taller content scrolls inside .viewport. The dynamic
+ * unit, not `vh`, for the same reason as Menu.module.css: mobile browser
+ * chrome shrinks the visible height below the bars-hidden one `vh` reports. */
 .scrollable {
-  max-height: calc(100vh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
+  max-height: min(calc(100vh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px))), var(--dsh-anchored-max-height, 100vh));
+  max-height: min(calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px))), var(--dsh-anchored-max-height, 100vh));
 }
 
 .viewport {
@@ -64,6 +67,7 @@
 }
 
 .scrollable .viewport {
+  overflow-x: hidden;
   overflow-y: auto;
 }
 

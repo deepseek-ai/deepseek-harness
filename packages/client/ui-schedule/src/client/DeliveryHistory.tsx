@@ -7,14 +7,15 @@ import {
   IconWarningOutlineRegular, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ScheduleDeliveryHistoryRequest, ScheduleDeliveryHistoryResult } from '@deepseek-ai/dsh-schedule/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { formatScheduleNextRun } from './schedule-format.ts'
 import css from './TaskManagerPage.module.css'
 
 /** Read saved records without opening or activating the original Session. */
 export interface DeliveryHistoryInjected {
   /**
-   * Read a newest-first page for the exact task and Session.
-   * @param request - Task binding, required page size, and optional older-page cursor.
+   * Read a newest-first page of one task's saved deliveries.
+   * @param request - Task, required page size, and optional older-page cursor.
    * @returns Remote success or failure; transport exceptions may reject the promise.
    */
   readonly loadHistory: (request: ScheduleDeliveryHistoryRequest) => Promise<RemoteResult<ScheduleDeliveryHistoryResult>>
@@ -25,7 +26,12 @@ type Cursor = ScheduleDeliveryHistoryRequest['before']
 type Failure = { key: 'delivery.error' | 'delivery.notFound' | 'delivery.cursorError'; before: Cursor }
 type Props = DeliveryHistoryInjected & PropsLocale<'schedule.manager'> & {
   id: ScheduleDeliveryHistoryRequest['id']
-  sessionId: ScheduleDeliveryHistoryRequest['sessionId']
+  /** Open the Session that accepted one delivery. */
+  onOpenSession: (id: SessionId) => void
+  /** Display titles of known Sessions, by id. */
+  sessionTitles: Readonly<Record<string, string>>
+  /** Sessions that a delivery's open button may open. */
+  availableSessionIds: readonly string[]
   latestMessageId: Cursor
   /** IANA zone of the task's own wall-clock rule; undefined for a one-shot or interval task. */
   timeZone?: string | undefined
@@ -62,12 +68,14 @@ function SavedPrompt({ prompt, t }: { prompt: string } & PropsLocale<'schedule.m
 }
 
 /**
- * Render immutable saved deliveries; the parent keys this view by task and Session.
+ * Render immutable saved deliveries; the parent keys this view by task.
  * Refreshes supersede pending older pages, and unmount ignores both late outcomes.
- * @param props - Exact task binding, latest receipt identity, Remote callback, task zone, and locale.
+ * @param props - Task, latest receipt identity, Remote callback, Session links, task zone, and locale.
  * @returns Saved records and explicit loading, failure, and pagination actions.
  */
-export function DeliveryHistory({ id, sessionId, latestMessageId, timeZone, loadHistory, t }: Props) {
+export function DeliveryHistory({
+  id, latestMessageId, timeZone, loadHistory, onOpenSession, sessionTitles, availableSessionIds, t,
+}: Props) {
   const [page, setPage] = useState<Page>()
   const [loading, setLoading] = useState(true)
   const [failure, setFailure] = useState<Failure>()
@@ -82,7 +90,7 @@ export function DeliveryHistory({ id, sessionId, latestMessageId, timeZone, load
     setFailure(undefined)
     let result: RemoteResult<ScheduleDeliveryHistoryResult>
     try {
-      result = await loadHistory({ id, sessionId, limit: 20, ...(before === undefined ? {} : { before }) })
+      result = await loadHistory({ id, limit: 20, ...(before === undefined ? {} : { before }) })
     } catch (_error: unknown) {
       // Transport exceptions use the same localized retry as Remote failures.
       if (epoch !== request.current.epoch) return
@@ -113,7 +121,7 @@ export function DeliveryHistory({ id, sessionId, latestMessageId, timeZone, load
         return { ...next, records }
       })
     }
-  }, [id, sessionId, loadHistory])
+  }, [id, loadHistory])
 
   useEffect(() => {
     void load()
@@ -153,6 +161,8 @@ export function DeliveryHistory({ id, sessionId, latestMessageId, timeZone, load
         <div className={css.deliveryBody}>
           <div className={css.deliveryHead}>
             <time className={css.deliveryTime} dateTime={record.scheduledAt}>{formatOccurrence(record.scheduledAt)}</time>
+            <Button size="sm" disabled={!availableSessionIds.includes(record.targetSessionId)}
+              onClick={() => { onOpenSession(record.targetSessionId) }}>{sessionTitles[record.targetSessionId] ?? t('host.openDeliverySession')}</Button>
           </div>
           {record.prompt !== undefined && <SavedPrompt prompt={record.prompt} t={t} />}
         </div>

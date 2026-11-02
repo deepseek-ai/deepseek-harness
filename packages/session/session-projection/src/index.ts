@@ -57,6 +57,13 @@ export interface ProjectionHandle<S> {
    */
   stateOf(session: Session): S
   /**
+   * Create a reader for one exact Session without reading state or preparing it.
+   * The reader retains this unit after unregistration and owns no disposal.
+   * @param session - Session whose committed events the bound reader folds.
+   * @returns a synchronous callback with the same state and failures as `stateOf(session)`.
+   */
+  readerFor(session: Session): () => S
+  /**
    * Unregister from global drives and snapshots without invalidating this reader.
    * @returns a promise that resolves when this registration is released.
    */
@@ -132,6 +139,19 @@ export type ProjectionChangeListener = (
   session: Session,
   key: Extract<keyof SessionProjectionMap, string>,
   value: unknown,
+  seq: SessionSeq,
+) => void
+
+/**
+ * Event-level change-feed listener: one committed event changed the raw `view`
+ * result of at least one client-visible unit by `Object.is` for one session.
+ * `changes` holds one entry per such unit in registration order, each with the
+ * unit's `key` and its schema-validated view as `val`; `seq` is the seq of the
+ * causing event.
+ */
+export type ProjectionEventChangeListener = (
+  session: Session,
+  changes: readonly { readonly key: Extract<keyof SessionProjectionMap, string>; readonly val: unknown }[],
   seq: SessionSeq,
 ) => void
 
@@ -254,6 +274,7 @@ export class SessionProjectionRegistry extends Service {
   /** Stable summary key set; dropped whenever the key table changes. */
   private summaryKeySet: ReadonlySet<Extract<keyof SessionProjectionMap, string>> | undefined
   private readonly listeners = new Set<ProjectionChangeListener>()
+  private readonly eventListeners = new Set<ProjectionEventChangeListener>()
   /** Keys whose deprecated registry-level read has already been reported. */
   private readonly deprecatedStateOfKeys = new Set<string>()
 
@@ -400,14 +421,16 @@ export class SessionProjectionRegistry extends Service {
     // Observe disposal during the asynchronous registration handoff before exposing a reader.
     await Promise.resolve()
     this.ctx.fiber.assertActive()
-    return {
+    const handle: ProjectionHandle<S> = {
       async dispose() {
         await dispose()
       },
       stateOf: (session) => {
         return this.cellFor(registration, session).state as S
       },
+      readerFor: session => () => handle.stateOf(session),
     }
+    return handle
   }
 
   /**
@@ -444,6 +467,26 @@ export class SessionProjectionRegistry extends Service {
         this.listeners.delete(listener)
       }
     }, 'sessionProjections.onChanged()')
+    return () => void dispose()
+  }
+
+  /**
+   * Subscribe to the event-level change feed. The registration is an effect on
+   * the calling context's fiber. The listener runs synchronously inside the
+   * committed event's `session/event` handling, once after every unit has been
+   * driven and after every {@link onChanged} call for that event. If a unit or
+   * an {@link onChanged} listener throws during that drive, the listener still
+   * receives the changes made before the throw.
+   * @param listener - called once per committed event that changed at least one client-visible unit's raw view by `Object.is`.
+   * @returns the exact disposer that unsubscribes.
+   */
+  onEventChanged(listener: ProjectionEventChangeListener): () => void {
+    const dispose = this.ctx.effect(() => {
+      this.eventListeners.add(listener)
+      return () => {
+        this.eventListeners.delete(listener)
+      }
+    }, 'sessionProjections.onEventChanged()')
     return () => void dispose()
   }
 
@@ -798,53 +841,70 @@ export class SessionProjectionRegistry extends Service {
     }
   }
 
-  /** Eager drive: pass one committed event through every unit; notify on changed raw view references. */
+  /**
+   * Eager drive: pass one committed event through every unit; notify per-key
+   * listeners on each changed raw view reference, then event listeners once.
+   * When a unit or a per-key listener throws, event listeners still receive
+   * the changes collected before the throw, and the error then propagates.
+   */
   private drive(session: Session, event: SessionEvent): void {
-    for (const registration of this.registrations.values()) {
-      let cell = registration.cells.get(session)
-      if (cell !== undefined && cell.observedSeq >= event.seq) continue
-      if (cell === undefined) {
-        // Late build mid-stream: fold history before this event (seq = log
-        // index, so the prefix slice is exact), then take the normal gate.
-        cell = this.buildCell(
-          registration.def,
-          session.header,
-          session.inheritedEventCount,
-          // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
-          session.snapshotEvents(SessionLogOffset(0), SessionLogOffset(event.seq)),
-        )
-        registration.cells.set(session, cell)
-      } else {
-        this.advanceCell(
-          registration.def,
-          cell,
-          session,
-          event.seq === 0 ? -1 : SessionSeq(event.seq - 1),
-        )
-      }
-      const previousState = cell.state
-      const next = registration.def.apply(previousState, event)
-      const changed = !Object.is(next, previousState)
-      cell.state = next
-      cell.observedSeq = event.seq
-      const wire = registration.def.wire
-      if (changed && wire !== undefined) {
-        const views = cell.views
-        views[0] = views[1]
-        if (this.listeners.size > 0) {
-          views[1] = wire.view(next)
-          if (!Object.is(views[0], views[1])) {
-            const value = wire.viewSchema.parse(views[1])
-            for (const listener of this.listeners) {
-              listener(session, registration.def.key as Extract<keyof SessionProjectionMap, string>, value, event.seq)
-            }
-          }
+    const observed = this.listeners.size > 0 || this.eventListeners.size > 0
+    const changes: { key: Extract<keyof SessionProjectionMap, string>; val: unknown }[] = []
+    try {
+      for (const registration of this.registrations.values()) {
+        let cell = registration.cells.get(session)
+        if (cell !== undefined && cell.observedSeq >= event.seq) continue
+        if (cell === undefined) {
+          // Late build mid-stream: fold history before this event (seq = log
+          // index, so the prefix slice is exact), then take the normal gate.
+          cell = this.buildCell(
+            registration.def,
+            session.header,
+            session.inheritedEventCount,
+            // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
+            session.snapshotEvents(SessionLogOffset(0), SessionLogOffset(event.seq)),
+          )
+          registration.cells.set(session, cell)
         } else {
-          views[1] = undefined
+          this.advanceCell(
+            registration.def,
+            cell,
+            session,
+            event.seq === 0 ? -1 : SessionSeq(event.seq - 1),
+          )
+        }
+        const previousState = cell.state
+        const next = registration.def.apply(previousState, event)
+        const changed = !Object.is(next, previousState)
+        cell.state = next
+        cell.observedSeq = event.seq
+        const wire = registration.def.wire
+        if (changed && wire !== undefined) {
+          const views = cell.views
+          views[0] = views[1]
+          if (observed) {
+            views[1] = wire.view(next)
+            if (!Object.is(views[0], views[1])) {
+              const key = registration.def.key as Extract<keyof SessionProjectionMap, string>
+              const value = wire.viewSchema.parse(views[1])
+              changes.push({ key, val: value })
+              for (const listener of this.listeners) {
+                listener(session, key, value, event.seq)
+              }
+            }
+          } else {
+            views[1] = undefined
+          }
+        }
+        // An unchanged state keeps its current view as the valid comparison
+        // value for the next state change.
+      }
+    } finally {
+      if (changes.length > 0) {
+        for (const listener of this.eventListeners) {
+          listener(session, changes, event.seq)
         }
       }
-      // An unchanged state keeps its current view as the valid comparison
-      // value for the next state change.
     }
   }
 

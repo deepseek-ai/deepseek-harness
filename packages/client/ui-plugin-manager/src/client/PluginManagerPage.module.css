@@ -25,6 +25,12 @@
   color: var(--dsw-alias-label-primary);
 }
 
+@media (max-width: 767px) {
+  .page {
+    --plugin-page-inset: 20px;
+  }
+}
+
 .page > * {
   flex: none;
   width: 100%;
@@ -973,6 +979,12 @@
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
   min-width: 0;
+  max-width: var(--dsh-anchored-max-width, none);
+  max-height: var(--dsh-anchored-max-height, none);
+  overflow-x: hidden;
+  overflow-y: auto;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 .registryOption {

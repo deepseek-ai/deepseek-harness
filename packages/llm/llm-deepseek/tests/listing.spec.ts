@@ -4,7 +4,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
 import { APP_IDENTITY } from '@deepseek-ai/dsh-llm'
 import { deadline } from '@deepseek-ai/dsh-timeout'
-import { LISTING_TIMEOUT, parseModelListing, requestModelListing } from '../src/listing.ts'
+import { LISTING_TIMEOUT, MAX_BADGE_TEXT_LENGTH, parseModelListing, requestModelListing } from '../src/listing.ts'
 import type { ListedCapabilities } from '../src/listing.ts'
 
 /** The listing the service returned to an account token on 2026-09-24. */
@@ -108,6 +108,89 @@ describe('parseModelListing', () => {
   it('reads a null protocol mode as undeclared', () => {
     expect(only({ api_capabilities: { anthropic_messages: { system_prompt_update: null, tool_update: null } } })?.capabilities)
       .toEqual({ usable: true, facts: { inputModalities: ['text'] } })
+  })
+
+  const OWN = `client_metadata["${APP_IDENTITY.product}"]`
+  const showing = (badge: unknown) => ({ ...MESSAGES, client_metadata: { [APP_IDENTITY.product]: { badge } } })
+  const longest = '十'.repeat(MAX_BADGE_TEXT_LENGTH)
+  it.each([
+    [{ text: '1017', tone: 'info' }, { text: '1017', tone: 'info' }],
+    [{ text: '  1017 ', tone: 'success' }, { text: '1017', tone: 'success' }],
+    [{ text: longest, tone: 'warning' }, { text: longest, tone: 'warning' }],
+    [{ text: '👍🏽'.repeat(MAX_BADGE_TEXT_LENGTH) }, { text: '👍🏽'.repeat(MAX_BADGE_TEXT_LENGTH), tone: 'neutral' }],
+    [{ text: '👨‍👩‍👧'.repeat(MAX_BADGE_TEXT_LENGTH) }, { text: '👨‍👩‍👧'.repeat(MAX_BADGE_TEXT_LENGTH), tone: 'neutral' }],
+    [{ text: 'Beta' }, { text: 'Beta', tone: 'neutral' }],
+    [{ text: 'Beta', tone: null }, { text: 'Beta', tone: 'neutral' }],
+    [{ text: 'Beta', tone: 'accent' }, { text: 'Beta', tone: 'neutral' }],
+    [{ text: 'Beta', tone: 1 }, { text: 'Beta', tone: 'neutral' }],
+    [{ text: { en: 'New', zh: '新', 'zh-hant': ' 新 ' }, tone: 'info' }, { text: { en: 'New', zh: '新', 'zh-hant': '新' }, tone: 'info' }],
+  ])('decodes badge %j', (badge, expected) => {
+    expect(only(showing(badge))?.badge).toEqual({ kind: 'badge', badge: expected })
+  })
+
+  it.each([
+    undefined,
+    null,
+    {},
+    { other: { badge: { text: '1017' } } },
+    { [APP_IDENTITY.product]: null },
+    { [APP_IDENTITY.product]: { other_field: 1 } },
+    { [APP_IDENTITY.product]: { badge: null } },
+  ])('declares no badge for client_metadata %j', (metadata) => {
+    expect(only({ ...MESSAGES, client_metadata: metadata })).not.toHaveProperty('badge')
+  })
+
+  it('reads badges only from client_metadata', () => {
+    const badge = { text: '1017' }
+    expect(only({ ...MESSAGES, badge, client_requirements: { [APP_IDENTITY.product]: { badge } } })).not.toHaveProperty('badge')
+  })
+
+  it.each([
+    ['1017', 'client_metadata is not an object'],
+    [['1017'], 'client_metadata is not an object'],
+    [{ [APP_IDENTITY.product]: '1017' }, `${OWN} is not an object`],
+    [{ [APP_IDENTITY.product]: [] }, `${OWN} is not an object`],
+    [{ [APP_IDENTITY.product]: { badge: '1017' } }, `${OWN}.badge is not an object`],
+    [{ [APP_IDENTITY.product]: { badge: ['1017'] } }, `${OWN}.badge is not an object`],
+  ])('rejects client_metadata %j without hiding the entry', (metadata, reason) => {
+    const entry = only({ ...MESSAGES, client_metadata: metadata })
+    expect(entry?.badge).toEqual({ kind: 'invalid', reason })
+    expect(entry?.capabilities.usable).toBe(true)
+  })
+
+  const unreadableText = expect.stringContaining(`${OWN}.badge.text is not a string or an object of lowercase language ids`) as string
+  it.each([
+    { tone: 'info' },
+    { text: null },
+    { text: '   ' },
+    { text: `${longest}十` },
+    { text: 'line\nbreak' },
+    { text: '\nNew' },
+    { text: 'New\u2028Model' },
+    { text: 'New\u2029Model' },
+    { text: 'New\u202e' },
+    { text: '\u2066New\u2069' },
+    { text: '\u200b' },
+    { text: '\u200d' },
+    { text: '\ufe0f' },
+    { text: ' \u00ad\u200b ' },
+    { text: 7 },
+    { text: { zh: '新' } },
+    { text: { en: 'New', ZH: '新' } },
+    { text: { en: 'New', zh: '' } },
+    { text: { en: 'New', zh: '\u200b' } },
+    { text: { en: 1 } },
+  ])('rejects badge %j without hiding the entry', (badge) => {
+    const entry = only(showing(badge))
+    expect(entry?.badge).toEqual({ kind: 'invalid', reason: unreadableText })
+    expect(entry?.capabilities.usable).toBe(true)
+  })
+
+  it('rejects an own "__proto__" translation key', () => {
+    const body: unknown = JSON.parse(
+      `{"data":[{"id":"m","client_metadata":{"${APP_IDENTITY.product}":{"badge":{"text":{"en":"New","__proto__":"x"}}}}}]}`,
+    )
+    expect(parseModelListing(body).entries[0]?.badge).toEqual({ kind: 'invalid', reason: unreadableText })
   })
 })
 

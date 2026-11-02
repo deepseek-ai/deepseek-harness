@@ -142,6 +142,29 @@ export interface MergeRequest {
   readonly headSha: string
 }
 
+/** One inline comment addressed to the old or new side of a pull request diff. */
+export interface ForgeLineComment {
+  readonly path: string
+  readonly side: 'L' | 'R'
+  readonly startLine: number
+  readonly endLine: number
+  readonly body: string
+}
+
+/** A single published comment or one completed review containing all pending comments. */
+export type ForgeReviewRequest = {
+  /** Commit the user reviewed; providers must check it before writing and address that commit explicitly. */
+  readonly headSha: string
+} & (
+  | { readonly kind: 'comment'; readonly comment: ForgeLineComment }
+  | { readonly kind: 'review'; readonly event: 'comment' | 'approve' | 'request-changes'; readonly body: string; readonly comments: readonly ForgeLineComment[] }
+)
+
+/** Result of a review write; unknown outcomes must be checked on the host before another submission. */
+export type ForgeReviewResult =
+  | { readonly ok: true; readonly url: string }
+  | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
+
 /** Why a provider could not change a change request. */
 export interface ForgeActionFailure {
   /**
@@ -168,6 +191,8 @@ export interface ForgeReadiness {
 export interface ForgeProvider {
   /** Forge family name stored in every repository this provider returns. */
   readonly forge: string
+  /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
+  submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /** Map a Git remote URL to its repository, or undefined when this provider does not serve it. */
   repositoryFromRemote(url: string): ForgeRepository | undefined
   /** Map a change request web URL to its reference, or undefined when this provider does not serve it. */
@@ -179,6 +204,8 @@ export interface ForgeProvider {
     refs: readonly ChangeRequestRef[],
     signal: AbortSignal,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>
+  /** Read all checks for one change request on demand; omission declares that only the polling preview is available. */
+  fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>
   /** Find open change requests whose head is `branch` in `repository`, excluding the default branch and forks. */
   findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>
   /** Report whether the provider can reach `host` with current credentials. */

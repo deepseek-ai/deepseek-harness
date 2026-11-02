@@ -465,6 +465,7 @@ export function deriveTrajectoryLayout(
               : resultAsText(resultPreview)),
             ...(node.call !== null ? { inputDetail: node.call.argsRaw } : {}),
             outputDetail: detailResult(node, t),
+            resultSeq: node.seq,
             outputBlocks: node.content.map(block => sourceBlock(block)),
             ...resultPreview,
             callId: node.callId,
@@ -785,6 +786,7 @@ function expandAssistant(
         ...(result !== undefined
           ? {
             outputDetail: detailResult(result, t),
+            resultSeq: result.seq,
             outputBlocks: result.content.map(block => sourceBlock(block)),
             ...resultPreview,
             isError: result.isError,
@@ -1032,6 +1034,7 @@ function expandSubCalls(
         ...(settled
           ? {
             outputDetail: detailResult(sub, t),
+            resultSeq: sub.seq,
             outputBlocks: sub.content.map(block => sourceBlock(block)),
             ...resultPreview,
             isError: sub.isError,
@@ -1069,13 +1072,13 @@ function summarizeResult(
   node: ToolResultNode,
   t: TrajectoryTranslate,
 ): Pick<TrajectoryCellProps, 'result' | 'resultPreviewMarkdown'> {
-  if (node.isError) {
-    return { result: node.error?.code ?? 'error' }
-  }
   for (const block of node.content) {
     if (block.type === 'text' && typeof block.text === 'string' && block.text !== '') {
       return { result: '', resultPreviewMarkdown: block.text }
     }
+  }
+  if (node.isError) {
+    return { result: node.error?.code ?? 'error' }
   }
   const images = imageBlockCount(node.content)
   if (images > 0) return { result: t('layout.imageCount', { count: images }) }
@@ -1094,16 +1097,17 @@ function resultAsText(
 }
 
 function detailResult(node: ToolResultNode, t: TrajectoryTranslate): string {
+  const text = node.content
+    .filter(block => block.type === 'text' && typeof block.text === 'string')
+    .map(block => block.type === 'text' ? block.text : '')
+    .join('\n')
+  if (text !== '' && (!node.isError || node.content.some(block =>
+    block.type === 'text' && typeof block.text === 'string' && block.text !== ''))) return text
   if (node.isError) {
     return node.error === undefined
       ? 'error'
       : `${node.error.name}: ${node.error.code}`
   }
-  const text = node.content
-    .filter(block => block.type === 'text' && typeof block.text === 'string')
-    .map(block => block.type === 'text' ? block.text : '')
-    .join('\n')
-  if (text !== '') return text
   const images = imageBlockCount(node.content)
   if (images > 0) return t('layout.imageCount', { count: images })
   if (
