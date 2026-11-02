@@ -25,6 +25,16 @@ kind: "package-reference"
 
 运行 `pnpm --dir packages/experimental/cua-macos run build:native`，在 `native/bin/darwin-<arch>` 下生成带签名的 `DSH Computer Use.app`，`current.json` 选择完整的内容摘要目录。默认使用临时签名；正式打包可传入 `--identity` 指定 Developer ID，并由发布流程完成公证。Host 运行应用内的 `--ensure-shared` 入口，经 LaunchServices 后台启动服务。最后一条连接完成清理后，服务退出。
 
+源码检出以 `--variant dev` 构建，应用包为 `DSH Computer Use Dev.app`，Bundle ID 为 `com.deepseek.harness.computer-use.dev`。开发版和正式版默认临时签名。临时签名的指定要求包含代码哈希，二进制变化后可能需要重新授权。
+
+源码 provider 的 `sourceSigning: { identity, keychain }` 选择已有证书及其钥匙串绝对路径。构建 CLI 使用 `--identity <证书名称或 SHA-1 指纹>` 和 `--keychain <绝对路径>`；正式打包也可省略 `--keychain`，使用用户搜索列表。构建不生成、解锁或移除签名身份；所选证书不可用时签名失败。
+
+仓库的[开发者签名 skill](../../../../.agents/skills/dsh-cua-macos-signing/SKILL.md)负责 Agent 操作流程：在 `~/.cua-macos-keys/` 生成独立身份，将指向它的配置写入 DSH home，并按需解锁或移除。私钥和密码由开发者单独维护，删除 DSH home 不会删除它们。同一用户的进程可以读取保存的密码并使用该身份签名。
+
+使用相同证书的构建共用包含 Bundle ID 和证书的指定要求。首次授权仍需在系统设置中完成；签名要求相同不代替授权后重建、跨 worktree 的实际权限验证。
+
+证书签名包含签名时间。开发构建在 `sources/` 中记录每个未签名应用与证书指纹对应的目录，内容不变时复用该目录。临时签名使用独立记录。显式传入证书名称时会重新签名，因为续期可能改变名称对应的证书。
+
 `native/.build/prepared/<arch>` 和 `native/bin/darwin-<arch>` 中的各代应用不会自动清理。正式打包时使用全新的 `--output-directory`，或确认没有客户端使用后清理打包输出再构建，避免旧应用进入 tarball。安全签名时间戳可能让相同源码生成不同代应用。
 
 手动工作流 **Package CUA helper · macOS** 的[配置](../../../../.github/workflows/cua-helper-package.yml)在 `dsh-mac-package-trial` 构建两种架构。选择可信的 `source_ref` 和机器 `preset`；凭据沿用[macOS 打包配置](../../../../apps/desktop/packaging/README.zh.md#macos-actions)。打包无需 macOS 桌面登录或 Rosetta。在仓库根目录运行 `pnpm exec tsx scripts/cua-helper/package.ts --out <new-directory>` 可执行相同准备。完整应用签名、公证和贴票后才确定最终内容摘要，再从解包后的 `cua-helper.tgz` 验证架构、签名、票据、Gatekeeper 和文件完整性。打包不启动 helper。在已登录的桌面会话中单独运行 `python3 scripts/cua-helper/smoke.py <helper-executable>` 检查能力、helper 身份和退出清理；Apple Silicon 上执行 x64 版本需要 Rosetta。该检查不申请权限或观察应用。命令失败、超时或启动回复无法解析时，会输出捕获的 stdout 和 stderr；无效编码只在诊断文本中替换，协议解析仍严格校验。打包成功不代表运行验收通过。
@@ -91,7 +101,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 `typeText` 和 `pressKey` 面向所选进程当前获得焦点的控件，不指定窗口。组合键先向 PID 发送修饰键变化，再发送主键，并逆序释放修饰键，不使用全局 HID 队列。后台鼠标操作可能改变键盘焦点。KP_0 和 KP_Enter 等数字键盘名称保留物理键码。文本逐个 Unicode 字符输入，不使用剪贴板。LF、CR 和 CRLF 发送一次 Return，制表符发送 Tab。应用保留缩进和焦点导航等正常编辑行为。每次按下和抬起后等待配置的文本事件间隔，分派完成不证明应用已消费全部事件。取消可能中断部分文本或手势，无法撤销已接收事件。很长的文本可能超过 Host 操作期限。继续输入前应核实应用状态。
 
-`DSH Computer Use.app` 需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
+所选 helper 应用需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
 
 仅供 Host 使用的权限操作为 `permissionStatus {}`、`requestPermission` 和 `openPermissionSettings {permission}`，其中 permission 为 `accessibility` 或 `screenRecording`。请求携带本地化的 `instruction`、`backLabel`、`finderLabel`、`unavailableMessage`、`settingsMessage`，以及 100–2147483647 的整数 `pollIntervalMs`。原生引导将 `{application}` 替换为自身应用名。状态返回权限观测、进程诊断和 `launchApplication` 信息。这些操作不出现在模型工具及 `getCapabilities.methods` 中。helper 动态解析 `responsibility_get_pid_responsible_for_pid`，函数签名与 [Chromium](https://chromium.googlesource.com/chromium/src/+/refs/tags/134.0.6998.28/base/process/process_info_mac.mm) 一致，在报告就绪前记录责任 bundle，无法获取时使用自身 bundle。父进程路径不决定授权归属。
 
@@ -115,13 +125,13 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 <a id="verification"></a>
 ## 验证
 
-桌面检查要求给 `DSH Computer Use.app` 授权；临时签名的源码构建变化后可能需要重新授权。`--helper` 指向该应用内的可执行文件。裸二进制仅用于旧版本对比，不支持作为当前 helper 的覆盖路径。
+桌面检查要求给所选 helper 授权：正式版声明名称 `DSH Computer Use`，开发版声明名称 `DSH Computer Use Dev`。以系统提示为准，临时签名重建后可能需要重新授权。`--helper` 指向该应用内的可执行文件。裸二进制仅用于旧版本对比，不支持作为当前 helper 的覆盖路径。
 
 运行 `python3 packages/experimental/cua-macos/native/tests/startup_e2e.py`，通过 LaunchServices 检查启动即退出、原始错误传递、过期就绪记录拒绝，以及卡住的新实例退出。检查使用自建应用，不申请系统权限。发布单元测试模拟签名；`build:native` 调用真实的 `codesign --verify --strict`，`launcher_identity_e2e.py` 验证 LaunchServices 授权归属。
 
-使用 `python3 packages/experimental/cua-macos/native/tests/test_swift.py` 通过选定 Apple 工具链的 Swift Testing 框架和运行时路径执行离线单元检查；使用 `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` 检查 JSONL 接纳、有序回复和 EOF 退出，不执行桌面操作。应用与协议端到端检查接受 `--helper` 以选择单独构建的对比二进制。 `python3 packages/experimental/cua-macos/native/tests/test_build_app.py` 验证应用发布、签名失败和损坏副本拒绝。
+使用 `python3 packages/experimental/cua-macos/native/tests/test_swift.py` 通过选定 Apple 工具链的 Swift Testing 框架和运行时路径执行离线单元检查；使用 `python3 packages/experimental/cua-macos/native/tests/protocol_e2e.py` 检查 JSONL 接纳、有序回复和 EOF 退出，不执行桌面操作。应用与协议端到端检查接受 `--helper` 以选择单独构建的对比二进制。 `python3 packages/experimental/cua-macos/native/tests/test_build_app.py` 验证应用发布、开发版构建、已签名目录复用、签名失败和损坏副本拒绝。开发者签名工具的单测由 `scripts/cua-macos-signing.spec.ts` 执行；真实签名验证命令见[开发者签名 skill](../../../../.agents/skills/dsh-cua-macos-signing/SKILL.md)。
 
-运行 `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper`，通过测试自建的 AppKit fixture 核实并发启动、共享服务 PID、独立句柄、同一应用交接、请求级截图期限、连接清理和信号退出。需要已经给 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。`--without-desktop` 将检查限定为协议与进程生命期。
+运行 `python3 packages/experimental/cua-macos/native/tests/shared_helper_e2e.py --helper /absolute/helper`，通过测试自建的 AppKit fixture 核实并发启动、共享服务 PID、独立句柄、同一应用交接、请求级截图期限、连接清理和信号退出。需要已经给所选的正式版或开发版 helper 授予辅助功能和屏幕录制权限。`--without-desktop` 将检查限定为协议与进程生命期。
 
 在已解锁的 macOS GUI 会话中运行 `python3 packages/experimental/cua-macos/native/tests/application_consent_e2e.py --helper /absolute/helper`，需要可用的 Apple Swift 编译器。它创建并清理自己的 AppKit 应用和独立 GUI 进程，检查元数据替换、冷启动与直接启动、共用 Bundle ID、独立程序重启后的持久路径身份，以及删除运行中可执行文件后的选择行为。默认身份检查不需要辅助功能或屏幕录制权限。添加 `--desktop` 可读取完整测试应用的控件，通过状态文件验证 AX 按钮点击，截取窗口，并记录删除可执行文件后的观察结果；此模式要求已有两项系统权限。
 
