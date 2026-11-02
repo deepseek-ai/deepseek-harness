@@ -388,3 +388,32 @@ it('suspends updates if retiring a downloaded target fails and recovers on a lat
   await f.coordinator.switchChannel('latest', async () => {})
   expect(f.coordinator.configurationFailure).toBeUndefined()
 })
+
+
+it.each(['idle', 'downloading', 'ready'] as const)('preserves %s when the current channel is selected again', async (phase) => {
+  const f = fixture()
+  const save = vi.fn(async () => {})
+  const pending = Promise.withResolvers<string[]>()
+  const started = Promise.withResolvers<undefined>()
+  let downloading: Promise<DesktopUpdateState> | undefined
+  if (phase !== 'idle') {
+    await f.coordinator.check()
+    if (phase === 'downloading') f.downloadUpdate.mockImplementationOnce(() => { started.resolve(undefined); return pending.promise })
+    downloading = f.coordinator.download('1.1.0-rc.2')
+    if (phase === 'ready') await downloading
+    else await started.promise
+  }
+  const before = f.coordinator.state
+  const revision = f.coordinator.revision
+  const checks = f.checkForUpdates.mock.calls.length
+  try {
+    expect(await f.coordinator.switchChannel('nightly', save)).toBe('unchanged')
+    expect(save).not.toHaveBeenCalled()
+    expect(f.coordinator.state).toBe(before)
+    expect(f.coordinator.revision).toBe(revision)
+    expect(f.checkForUpdates).toHaveBeenCalledTimes(checks)
+  } finally {
+    pending.resolve(['verified-package'])
+    await downloading
+  }
+})

@@ -902,8 +902,8 @@ async function main(): Promise<void> {
     channelRequests++
     publishChannel({ ...channelState, changing: true })
     try {
-      await updates.switchChannel(channel, () => channelSettings.save(channel))
-      return { kind: 'applied', state: publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: --channelRequests > 0 }) }
+      const kind = await updates.switchChannel(channel, () => channelSettings.save(channel))
+      return { kind, state: publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: --channelRequests > 0 }) }
     } catch (error) {
       console.error('desktop update: channel change failed', error)
       const state = publishChannel({ ...channelState, changing: --channelRequests > 0,

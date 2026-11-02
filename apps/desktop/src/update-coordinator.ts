@@ -113,9 +113,9 @@ export class DesktopUpdateCoordinator {
    * suspends updates until another explicit switch successfully retires the target.
    * @param channel - Validated UI choice.
    * @param persist - Atomic settings save; rejects before a choice is applied on failure.
-   * @returns After the selection is applied and its check settles; check failures remain observable.
+   * @returns Whether the selection changed; healthy repeated choices preserve the current operation.
    */
-  switchChannel(channel: DesktopUpdateChannel, persist: () => Promise<void>): Promise<void> {
+  switchChannel(channel: DesktopUpdateChannel, persist: () => Promise<void>): Promise<'applied' | 'unchanged'> {
     this.assertLive()
     if (this.installOperation !== undefined || this.current.phase === 'installing' || this.release.kind === 'handed-off') {
       return Promise.reject(new Error('desktop update: installation is in progress'))
@@ -123,6 +123,7 @@ export class DesktopUpdateCoordinator {
     this.switching++
     const operation = this.switchTail.then(async () => {
       this.assertLive()
+      if (channel === this.channel && this.configurationError === undefined) return 'unchanged' as const
       await persist()
       this.generation++
       this.cancellation?.cancel()
@@ -140,8 +141,9 @@ export class DesktopUpdateCoordinator {
       this.setState({ phase: 'checking' })
       const result = await this.doCheck()
       if (result.phase === 'error') this.setState(result)
+      return 'applied' as const
     }).finally(() => { this.switching-- })
-    this.switchTail = operation.catch(() => { /* The caller reports this selection's failure; later choices may retry. */ })
+    this.switchTail = operation.then(() => {}).catch(() => { /* The caller reports this selection's failure; later choices may retry. */ })
     return operation
   }
 

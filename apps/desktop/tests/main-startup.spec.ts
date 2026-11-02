@@ -382,6 +382,7 @@ vi.mock('../src/update-coordinator.ts', () => ({ DesktopUpdateCoordinator: class
     this.configurationFailure = undefined
     this.revision++
     harness.updateState = { phase: 'idle' }
+    return 'applied' as const
   }
   suspendConfiguration(detail: string, reason: 'startup' | 'cleanup' = 'startup') {
     this.configurationFailure = reason

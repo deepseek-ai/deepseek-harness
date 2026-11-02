@@ -51,7 +51,7 @@ export interface DesktopChannelState {
 
 /** Outcome of one UI action; failures are not global updater state. */
 export type DesktopChannelChangeResult =
-  | { readonly kind: 'applied'; readonly state: DesktopChannelState }
+  | { readonly kind: 'applied' | 'unchanged'; readonly state: DesktopChannelState }
   | { readonly kind: 'failed'; readonly state: DesktopChannelState; readonly reason: 'save' | 'format' | 'permission' | 'apply' }
 
 /** UI choices persist in the shell configuration, independently of Host settings. */

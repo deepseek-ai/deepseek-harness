@@ -120,3 +120,25 @@ it('does not let a late initial read overwrite an accepted selection', async () 
   expect(f.source.store.getSnapshot().state).toEqual(latest)
   f.source.dispose()
 })
+
+
+it('does not submit or toast for the current healthy selection', async () => {
+  const f = fixture()
+  f.get.resolve(nightly)
+  await f.get.promise
+  await f.source.select('nightly')
+  expect(f.select).not.toHaveBeenCalled()
+  expect(f.source.store.getSnapshot()).toEqual({ state: nightly, failed: false })
+  f.source.dispose()
+})
+
+it('allows same-channel recovery and suppresses feedback for a shell no-op', async () => {
+  const f = fixture()
+  f.emit({ ...nightly, error: 'cleanup' })
+  const pending = f.source.select('nightly')
+  expect(f.select).toHaveBeenCalledWith('nightly')
+  f.set.resolve({ kind: 'unchanged', state: nightly })
+  await pending
+  expect(f.source.store.getSnapshot()).toEqual({ state: nightly, failed: false })
+  f.source.dispose()
+})
