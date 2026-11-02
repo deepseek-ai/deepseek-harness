@@ -1,7 +1,7 @@
 /** Typed Agent fixtures whose Session header decides top-level or subagent origin. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedInbox, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
 
 /**
@@ -19,7 +19,7 @@ export function agentFor(ctx: Context, id: string, options: { cwd?: string; suba
     ...options.subagent === true ? { origin: 'subagent' as const } : {},
   })
   return {
-    id: sessionId, options: {}, session, inbox: unsupportedInbox(), status: 'idle', ctx,
+    id: sessionId, options: {}, session, model: unsupportedModel(), inbox: unsupportedInbox(), status: 'idle', ctx,
     send: () => {}, followup: () => {}, steer: () => {}, inject: () => {}, cancel() {},
     runMaintenance: job => job(new AbortController().signal),
     whenIdle: () => Promise.resolve(),
