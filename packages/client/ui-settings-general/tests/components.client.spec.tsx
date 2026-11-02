@@ -369,7 +369,7 @@ it('keeps the failure toast after Settings unmounts and rolls back the remounted
   const useChannel = bindSnapshotSelector(source.store)
   const select = (channel: 'nightly' | 'stable') => source.select(channel)
   const row = render(<DesktopChannelRow {...kit} t={t} useChannel={useChannel} select={select} />)
-  const toast = render(<DesktopChannelToast {...kit} t={t} useChannel={useChannel}
+  const toast = render(<DesktopChannelToast openConfiguration={() => {}} {...kit} t={t} useChannel={useChannel}
     dismiss={(sequence) => { source.dismissNotice(sequence) }} />)
   try {
     await waitFor(() => { expect(screen.getByRole('button', { name: 'Update channel' }).textContent).toBe('Development') })
@@ -391,10 +391,31 @@ it('dismisses a successful channel toast after its display lifetime', async () =
   const store = createSnapshotStore<import('../src/client/desktop-channel-source.ts').DesktopChannelSnapshot>({
     failed: false, notice: { sequence: 7, outcome: 'applied' },
   })
-  const view = render(<DesktopChannelToast {...kit} t={t} useChannel={bindSnapshotSelector(store)} dismiss={dismiss} />)
+  const view = render(<DesktopChannelToast openConfiguration={() => {}} {...kit} t={t}
+    useChannel={bindSnapshotSelector(store)} dismiss={dismiss} />)
   try {
     expect(screen.getByRole('alert').textContent).toBe('Update channel changed')
     await act(async () => { await vi.advanceTimersByTimeAsync(4000) })
     expect(dismiss).toHaveBeenCalledWith(7)
+  } finally { view.unmount(); vi.useRealTimers() }
+})
+
+
+it('keeps the settings-file notification for ten seconds with a details action', async () => {
+  vi.useFakeTimers()
+  const dismiss = vi.fn()
+  const openConfiguration = vi.fn()
+  const store = createSnapshotStore<import('../src/client/desktop-channel-source.ts').DesktopChannelSnapshot>({
+    failed: false, notice: { sequence: 8, outcome: 'configuration' },
+  })
+  const view = render(<DesktopChannelToast {...kit} t={t} useChannel={bindSnapshotSelector(store)}
+    dismiss={dismiss} openConfiguration={openConfiguration} />)
+  try {
+    fireEvent.click(screen.getByRole('button', { name: 'View details' }))
+    expect(openConfiguration).toHaveBeenCalledOnce()
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(dismiss).not.toHaveBeenCalled()
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    expect(dismiss).toHaveBeenCalledWith(8)
   } finally { view.unmount(); vi.useRealTimers() }
 })

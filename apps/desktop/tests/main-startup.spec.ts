@@ -304,7 +304,7 @@ vi.mock('electron', () => ({
   BrowserWindow: harness.FakeWindow,
   WebContentsView: harness.FakeView,
   dialog: harness.dialog,
-  shell: { openExternal: harness.openExternal },
+  shell: { openExternal: harness.openExternal, showItemInFolder: vi.fn() },
   nativeTheme: harness.nativeTheme,
   net: { fetch: vi.fn() },
   ipcMain: {
@@ -565,6 +565,23 @@ describe('desktop main startup', () => {
     const options = harness.dialog.showMessageBox.mock.lastCall![0] as MessageBoxOptions
     expect(options.message).toBe(en.updateConfigurationCleanup)
     expect(options.detail).toBeUndefined()
+  })
+
+  it('offers the actual settings file for malformed JSON without suggesting channel reselection', async () => {
+    configureTestAuthPopup(false)
+    const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
+    writeFileSync(path, '{broken')
+    await readyForUpdate()
+    harness.dialog.showMessageBox.mockResolvedValueOnce({ response: 0 })
+    await invoke(DESKTOP_IPC.updatesOpen, 'app')
+    expect(harness.dialog.showMessageBox.mock.lastCall![0]).toMatchObject({
+      message: en.updateConfigurationFormat, detail: path,
+      buttons: [en.updateShowSettingsFile, en.updateClose], cancelId: 1,
+    })
+    expect(en.updateConfigurationFormat).not.toContain('select')
+    const { shell } = await import('electron')
+    expect(shell.showItemInFolder).toHaveBeenCalledWith(path)
+    expect(readFileSync(path, 'utf8')).toBe('{broken')
   })
 
   it('shows the invalid startup field and file path until a valid channel is applied', async () => {

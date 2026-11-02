@@ -2,7 +2,7 @@
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { DesktopChannelBridge, DesktopChannelState, DesktopUpdateChannel, DesktopChannelChangeResult } from '../types.ts'
 
-type Notice = { sequence: number; outcome: 'applied' | Extract<DesktopChannelChangeResult, { kind: 'failed' }>['reason'] }
+type Notice = { sequence: number; outcome: 'configuration' | 'applied' | Extract<DesktopChannelChangeResult, { kind: 'failed' }>['reason'] }
 /** Actual shell state, optimistic selection and transient operation feedback. */
 export interface DesktopChannelSnapshot {
   state?: DesktopChannelState
@@ -25,12 +25,20 @@ export class DesktopChannelSource {
     this.unsubscribe = bridge.subscribe((state) => {
       if (!this.live) return
       this.revision++
-      this.store.set({ ...this.store.getSnapshot(), state, failed: false })
+      this.receive(state)
     })
     void bridge.get().then((state) => {
-      if (this.live && this.revision === 0) this.store.set({ ...this.store.getSnapshot(), state, failed: false })
+      if (this.live && this.revision === 0) this.receive(state)
     }, () => {
       if (this.live && this.revision === 0) this.store.set({ ...this.store.getSnapshot(), failed: true })
+    })
+  }
+
+  private receive(state: DesktopChannelState): void {
+    const previous = this.store.getSnapshot()
+    const notify = state.error !== undefined && state.error !== 'cleanup' && state.error !== previous.state?.error
+    this.store.set({ ...previous, state, failed: false,
+      ...(notify ? { notice: { sequence: ++this.sequence, outcome: 'configuration' as const } } : {}),
     })
   }
 

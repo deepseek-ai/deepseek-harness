@@ -142,3 +142,16 @@ it('allows same-channel recovery and suppresses feedback for a shell no-op', asy
   expect(f.source.store.getSnapshot()).toEqual({ state: nightly, failed: false })
   f.source.dispose()
 })
+
+
+it('announces startup file errors once and keeps their state after the toast closes', async () => {
+  const f = fixture()
+  const state: DesktopChannelState = { ...nightly, channel: null, error: 'format' }
+  f.get.resolve(state)
+  await f.get.promise
+  expect(f.source.store.getSnapshot().notice).toEqual({ sequence: 1, outcome: 'configuration' })
+  f.source.dismissNotice(1)
+  f.emit(state)
+  expect(f.source.store.getSnapshot()).toEqual({ state, failed: false })
+  f.source.dispose()
+})

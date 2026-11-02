@@ -116,7 +116,8 @@ export function apply(ctx: ClientContext): void {
     }, DesktopChannelRow))
     ctx.slots.inject('shell.overlay', () => ctx.slots.register({
       name: 'shell.overlay', id: 'desktop-channel-toast', locale: NS,
-      inject: () => ({ hooks: { channel: channel.store }, dismiss: (sequence: number) => { channel.dismissNotice(sequence) } }),
+      inject: () => ({ hooks: { channel: channel.store },
+        dismiss: (sequence: number) => { channel.dismissNotice(sequence) }, openConfiguration: () => { desktopUpdate.open() } }),
     }, DesktopChannelToast))
   }
 

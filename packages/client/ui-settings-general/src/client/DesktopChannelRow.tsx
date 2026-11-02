@@ -50,6 +50,7 @@ export function DesktopChannelRow({ useChannel, select, t }:
 export interface DesktopChannelToastInjected {
   hooks: { channel: DesktopChannelSource['store'] }
   dismiss(sequence: number): void
+  openConfiguration(): void
 }
 
 /**
@@ -57,10 +58,12 @@ export interface DesktopChannelToastInjected {
  * @param props - Shared operation state, dismissal and localized copy.
  * @returns A transient toast, or nothing.
  */
-export function DesktopChannelToast({ useChannel, dismiss, t }:
+export function DesktopChannelToast({ useChannel, dismiss, openConfiguration, t }:
   PropsRuntime<'shell.overlay'> & PropsLocale<'settings'> & InjectFace<DesktopChannelToastInjected>) {
   const notice = useChannel(value => value.notice)
   if (notice === undefined) return null
   return <Toast key={notice.sequence} text={t(`desktop.channel.result.${notice.outcome}`)}
+    holdMs={notice.outcome === 'configuration' ? 10_000 : undefined}
+    actions={notice.outcome === 'configuration' ? [{ label: t('desktop.channel.details'), onClick: openConfiguration }] : undefined}
     onDone={() => { dismiss(notice.sequence) }} {...notice.outcome === 'applied' ? { tone: 'success' as const } : {}} />
 }

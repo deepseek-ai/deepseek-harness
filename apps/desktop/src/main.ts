@@ -943,9 +943,14 @@ async function main(): Promise<void> {
   let policyAuthenticationQueued = false
   const openUpdatePrompt = (manual = false): Promise<void> => {
     if (channelState?.error !== undefined) {
+      const settingsError = channelState.error !== 'cleanup'
       return ordinaryMessageBox({ type: 'error', title: locale.messages.updateFailedTitle,
         message: configurationMessage(channelState.error, locale.messages),
-        ...(channelState.error === 'cleanup' ? {} : { detail: channelSettings.path }) }).then(() => {})
+        ...(settingsError ? { detail: channelSettings.path,
+          buttons: [locale.messages.updateShowSettingsFile, locale.messages.updateClose], cancelId: 1 } : {}),
+      }).then((result) => {
+        if (settingsError && result.response === 0) shell.showItemInFolder(channelSettings.path)
+      })
     }
     if (authenticationOperation !== undefined) {
       policyAuth?.focus(); updateDialog.focus()
