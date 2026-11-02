@@ -3887,7 +3887,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tencent-docs`
 
 - `inject`: `mcpServers` · `systemPrompt`
-- `source`: [`packages/connector/tencent-docs/src/index.ts:27`](../packages/connector/tencent-docs/src/index.ts)
+- `source`: [`packages/connector/tencent-docs/src/index.ts:30`](../packages/connector/tencent-docs/src/index.ts)
 
 ```ts config-catalog
 /** Tencent Docs MCP endpoint and tool loading for the managed server entry. */
