@@ -107,7 +107,7 @@ Desktop 展示精简的 `office` 路由及可具名调用的创作子技能。�
 
 无法加载 Kit 时，Office 技能和 `office` 工具仍会注册；每次调用工具都会报告 LibreOffice Kit 未安装，Office 套件通过 `ctx.logger.warn` 对每种不同的失败只记录一次。独立的依赖查询行不受影响。没有单独的诊断文件或 GUI 通知。必需的 Host 组件仍须成功启动，打包冒烟检查会拒绝不可用的 Kit。
 
-从 Desktop 内置终端启动的进程会继承 `DSH_BUNDLED_PRIMARY_RUNTIME`，因此在其中启动的 `dsh --profile sdk` 使用 Desktop 的内置 Python 环境。要改用用户的 Python，请取消设置该变量。Desktop 不向 Host 或其子进程发布 Kit 位置；每个应用加载自己的 Kit。
+从 Desktop 内置终端启动的进程会继承 `DSH_PRIMARY_RUNTIME`，因此在其中启动的 `dsh --profile sdk` 使用 Desktop 的内置 Python 环境。要改用用户的 Python，请取消设置该变量。Desktop 不向 Host 或其子进程发布 Kit 位置；每个应用加载自己的 Kit。
 
 该产物随 Desktop 版本发布。`runtime.json` 记录 Desktop 版本、目标平台、顶层解释器和包管理器版本及 Python 分发包版本表，以及所选目标的锁定产物输入与组装格式的摘要。分发包名称按 PEP 503 归一化；名称归一化后重复时，清单会被拒绝。旧 `components` 清单通过归一化继续可读，并保留其原有库版本一致性校验。匹配的安装会被复用；依赖或压缩包变化后，即使 Desktop 版本不变，也会在完整暂存副本完成后替换目录。不含摘要的旧清单会在下次安装时被替换。用户自行添加的 Python 包仅在产物身份一致时保留。目录替换失败时保留之前的安装；解释器仍在运行时，Windows 可能拒绝替换。
 

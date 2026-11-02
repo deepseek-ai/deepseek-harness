@@ -16,8 +16,9 @@ Office 渲染、转换和重算不再通过 shell 运行 LibreOffice Kit CLI。[
 | `skill-office` 配置键 `node` 和 `cli` | 无；Office 技能让模型调用 `office` 工具执行操作 |
 | Office 技能中的 Node/CLI 路径 | `office` 工具；[已删除的操作技能](../office-operation-skills/guide.zh.md) |
 | `DSH_BUNDLED_OFFICE_CLI` 和 `DSH_BUNDLED_OFFICE_NODE` | 无；不再有组件读取它们 |
+| `DSH_BUNDLED_PRIMARY_RUNTIME` | `DSH_PRIMARY_RUNTIME` |
 
-`DSH_BUNDLED_OFFICE_SKILLS`、`DSH_PRIMARY_RUNTIME` 和 `DSH_BUNDLED_PRIMARY_RUNTIME` 含义不变。`office-kit` 行新增 `outputDirectory`、`outputRetentionMs` 和 `maxOutputStoreBytes`。
+`DSH_BUNDLED_OFFICE_SKILLS` 和 `DSH_PRIMARY_RUNTIME` 含义不变。`office-kit` 行新增 `outputDirectory`、`outputRetentionMs` 和 `maxOutputStoreBytes`。
 
 `render` 只返回供模型查看的页面图片，不保存 PNG 或其他图片文件。转换和重算的文件以 `$DSH_HOME/office-kit/outputs` 下的临时路径返回，由模型用 shell 复制。把页面导出为图片的请求会得到导出 PDF 的建议；需要文件时，以 `operation: "convert"` 和 `format: "pdf"` 调用 `office`。
 

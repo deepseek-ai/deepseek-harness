@@ -527,7 +527,7 @@ async function main(): Promise<void> {
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
       hostInspectPort, {
         ...hostEnvironment,
-        DSH_BUNDLED_PRIMARY_RUNTIME: primaryRuntime,
+        DSH_PRIMARY_RUNTIME: primaryRuntime,
         DSH_CLIENT_VERSION: desktopClientVersion(),
       }, onFailure,
       resources, (next) => { platformView.setSession(next) }, (record) => {

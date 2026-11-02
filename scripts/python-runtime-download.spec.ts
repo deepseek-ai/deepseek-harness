@@ -26,7 +26,7 @@ async function fixture() {
   await file(join(root, 'node/node_modules/@deepseek-ai/dsh/lib/bin.js'), `
     export async function runCli(options = {}) {
       const result = process.argv[2] ? { argv: process.argv.slice(2) }
-        : { primary: process.env.DSH_BUNDLED_PRIMARY_RUNTIME };
+        : { primary: process.env.DSH_PRIMARY_RUNTIME };
       const office = Object.keys(process.env).filter(name => /^DSH_BUNDLED_OFFICE_(?:CLI|NODE)$/.test(name));
       if (office.length > 0) result.office = office;
       if (options.packageManager) Object.assign(result, { packageManager: options.packageManager, hostPath: process.env.PATH });
@@ -76,7 +76,7 @@ async function fixture() {
   `)
   function run(resource?: string, extra: NodeJS.ProcessEnv = {}, args: string[] = []) {
     const child = spawn(process.execPath, [bootstrap, ...args], {
-      env: { ...process.env, DSH_RESOURCE_CACHE: cache, DSH_RUNTIME_DOWNLOAD: resource, DSH_BUNDLED_PRIMARY_RUNTIME: undefined,
+      env: { ...process.env, DSH_RESOURCE_CACHE: cache, DSH_RUNTIME_DOWNLOAD: resource,
         DSH_PRIMARY_RUNTIME: undefined, DSH_OFFICE_SIDECAR: undefined, ...extra },
       stdio: ['pipe', 'pipe', 'pipe'],
     })

@@ -45,7 +45,7 @@ A relative `assetRoot` rejects registration. Catalog discovery reads each `SKILL
 <a id="progressive-loading"></a>
 ### Progressive loading
 
-The model chooses skills from the task; the host does not inject complete instructions based on file extensions. With complete resources, all four skills are listed and loadable by name through `skill` or explicit user invocation. Requested appearance changes, including spreadsheet cell fills and text alignment, require rendering even without an explicit visual-check request; an explicit request to skip rendering takes precedence. Standalone operations call the `office` tool after routing without loading an authoring skill.
+The model chooses skills from the task; the host does not inject complete instructions based on file extensions. With complete resources, all four skills are listed and loadable by name through `skill` or explicit user invocation. Requested appearance changes, including spreadsheet cell fills and text alignment, require rendering even without an explicit visual-check request; an explicit request to skip rendering takes precedence. Standalone operations call the `office` tool after routing without loading an authoring skill. PDF export alone stops after checking that the copied output is nonempty and starts with `%PDF-`.
 
 ```mermaid
 flowchart TD

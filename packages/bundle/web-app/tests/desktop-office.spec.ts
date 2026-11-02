@@ -59,7 +59,7 @@ async function boot(
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-desktop-office-rows-')))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   vi.stubEnv('DSH_HOME', join(root, 'home'))
-  vi.stubEnv('DSH_BUNDLED_PRIMARY_RUNTIME', primaryRuntime(root))
+  vi.stubEnv('DSH_PRIMARY_RUNTIME', primaryRuntime(root))
   vi.stubEnv('DSH_BUNDLED_OFFICE_SKILLS', skills(root))
   await cp(assets, join(root, 'office-skills'), { recursive: true })
   const nodePath = join(root, 'primary-runtime', 'dependencies', 'node', 'bin', process.platform === 'win32' ? 'node.exe' : 'node')
@@ -186,6 +186,17 @@ it('reads Office skills from the launcher skill directory outside the Desktop pr
   expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
   expect((await ctx.skills.get('office-docx'))?.resourceBase)
     .toEqual({ kind: 'directory', path: join(root, 'office-skills', 'office-docx').split(sep).join('/') })
+})
+
+it.each([
+  ['desktop', () => '', () => undefined],
+  ['web', () => undefined, () => ''],
+] as const)('treats empty launcher variables as unset in the %s profile', async (profile, primaryRuntime, skills) => {
+  const { ctx } = await boot(profile, primaryRuntime, skills)
+  await ctx.loader.resolve('skill-office').fiber!.await()
+  expect(ctx.loader.resolve('workspace-dependencies').disabled).toBe(true)
+  expect(ctx.loader.resolve('skill-office').fiber?.effectiveConfig).toStrictEqual({ assetRoot: undefined, pythonEnvironment: 'user' })
+  expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
 })
 
 it('fails only the Office skill rows when the carrier supplies an unusable primary runtime path', async () => {

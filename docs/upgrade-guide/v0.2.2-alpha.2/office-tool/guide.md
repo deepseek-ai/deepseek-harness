@@ -16,8 +16,9 @@ Office rendering, conversion, and recalculation no longer run the LibreOffice Ki
 | `skill-office` configuration keys `node` and `cli` | None; the Office skills direct operations to the `office` tool |
 | Node/CLI paths in the Office skills | The `office` tool; [removed operation skills](../office-operation-skills/guide.md) |
 | `DSH_BUNDLED_OFFICE_CLI` and `DSH_BUNDLED_OFFICE_NODE` | None; no component reads them |
+| `DSH_BUNDLED_PRIMARY_RUNTIME` | `DSH_PRIMARY_RUNTIME` |
 
-`DSH_BUNDLED_OFFICE_SKILLS`, `DSH_PRIMARY_RUNTIME`, and `DSH_BUNDLED_PRIMARY_RUNTIME` keep their meaning. The `office-kit` row gains `outputDirectory`, `outputRetentionMs`, and `maxOutputStoreBytes`.
+`DSH_BUNDLED_OFFICE_SKILLS` and `DSH_PRIMARY_RUNTIME` keep their meaning. The `office-kit` row gains `outputDirectory`, `outputRetentionMs`, and `maxOutputStoreBytes`.
 
 `render` returns page images only for the model to view and saves no PNG or other image file. Converted and recalculated files return as temporary paths under `$DSH_HOME/office-kit/outputs` for the model to copy with the shell. A request to export pages as images gets an offer of a PDF export; for a file, call `office` with `operation: "convert"` and `format: "pdf"`.
 
@@ -25,7 +26,7 @@ The tool runs model-started Office work in the native LibreOffice Kit engine ins
 
 `skill-office` gains `pythonEnvironment`. Its default, `'workspace-dependencies'`, directs the Python skills to `load_workspace_dependencies`; a composition without `@deepseek-ai/dsh-tool-workspace-dependencies` must set `'user'`.
 
-The Web and SDK profiles mount the Office skills by default, including without a primary runtime; a new Session lists them in its first request context and the `/` menu.
+The Web and SDK profiles mount the Office skills by default, including without a primary runtime; new Sessions list them in the first request context and `/` menu.
 
 ## Migration
 

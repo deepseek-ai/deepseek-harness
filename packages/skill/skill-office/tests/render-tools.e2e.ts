@@ -103,17 +103,19 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF with the offic
     },
     async inspect(cwd) {
       const events = await sessionEvents(cwd)
-      expectNoRenderContext(events)
       const calls = events.flatMap(event => event.type === 'tool/call' ? [event.data]
         : event.type === 'tool/ptc-dispatch' ? [{ name: event.data.name, arguments: JSON.stringify(event.data.arguments) }] : [])
       const skills = calls.filter(call => call.name === 'skill').map(call => (JSON.parse(call.arguments) as { name: string }).name)
-      expect(skills.some(name => ['office-docx', 'office-pptx', 'office-xlsx'].includes(name))).toBe(false)
+      const office = officeCalls(events)
+      const diagnostic = JSON.stringify({ calls: calls.map(call => call.name), skills,
+        office: office.map(call => ({ operation: call.args.operation, input: call.args.input, format: call.args.format })) })
+      expect(skills.some(name => ['office-docx', 'office-pptx', 'office-xlsx'].includes(name)), diagnostic).toBe(false)
       const commands = calls.filter(call => call.name === 'bash' || call.name === 'pwsh')
         .map(call => (JSON.parse(call.arguments) as { command: string }).command).join('\n')
-      const office = officeCalls(events)
-      expect(office.some(call => call.args.operation === 'convert' && call.args.format === 'pdf'), JSON.stringify(calls)).toBe(true)
-      expect(office.some(call => call.args.operation === 'render')).toBe(false)
-      expect(commands).not.toMatch(/pypdf|PyPDF2|\bfitz\b|pdfminer|pdfplumber|pdfinfo|pdftotext/iu)
+      expect(office.some(call => call.args.operation === 'convert' && call.args.format === 'pdf'), diagnostic).toBe(true)
+      expect(office.some(call => call.args.operation === 'render'), diagnostic).toBe(false)
+      expectNoRenderContext(events)
+      expect(commands, diagnostic).not.toMatch(/pypdf|PyPDF2|\bfitz\b|pdfminer|pdfplumber|pdfinfo|pdftotext/iu)
       expect((await readFile(join(cwd, 'result.pdf'))).subarray(0, 5).toString()).toBe('%PDF-')
       expect(await readFile(join(cwd, 'input.docx'))).toEqual(original)
     },

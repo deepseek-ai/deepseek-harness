@@ -40,7 +40,7 @@ export interface OfficeCall {
  * @param events - Recorded task events.
  * @returns Native and PTC `office` calls in log order.
  */
-export function officeCalls(events: SessionEvent[]): OfficeCall[] {
+export function officeCalls(events: readonly SessionEvent[]): OfficeCall[] {
   return events.flatMap((event) => {
     if (event.type === 'tool/call' && event.data.name === 'office') {
       return [{ callId: event.data.callId, args: JSON.parse(event.data.arguments) as OfficeCall['args'] }]
@@ -53,10 +53,12 @@ export function officeCalls(events: SessionEvent[]): OfficeCall[] {
 }
 
 /**
- * Assert that a non-rendering task has received no render calls or render-skill guidance.
+ * Reject recorded Office render calls and the "Render the saved deliverable" instruction.
  * @param events - Recorded task events, including nested skill and shell results.
  */
 export function expectNoRenderContext(events: readonly SessionEvent[]): void {
+  const calls = officeCalls(events)
+  expect(calls.filter(call => call.args.operation === 'render'), JSON.stringify(calls)).toEqual([])
   const messages = Session.create(SessionId('office-context'), events).deriveMessages()
-  expect(JSON.stringify(messages)).not.toMatch(/Render the saved deliverable|"operation":"render"/)
+  expect(JSON.stringify(messages)).not.toMatch(/Render the saved deliverable/)
 }

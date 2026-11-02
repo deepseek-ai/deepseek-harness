@@ -502,7 +502,7 @@ describe('desktop main startup', () => {
     const host = harness.hosts[0]!
     expect(host.node).toBe(process.execPath)
     expect(host.environment).toMatchObject({
-      DSH_BUNDLED_PRIMARY_RUNTIME: packaged ? join('desktop-test-resources', 'runtime', 'primary-runtime') : 'test-primary-runtime',
+      DSH_PRIMARY_RUNTIME: packaged ? join('desktop-test-resources', 'runtime', 'primary-runtime') : 'test-primary-runtime',
     })
     expect(host.packageManager).toMatchObject({
       pnpm: packaged
@@ -733,7 +733,7 @@ describe('desktop main startup', () => {
     vi.stubEnv('DSH_DESKTOP_DSH_DIR', join(root, 'app.asar', 'dsh'))
     const host = await readyForUpdate()
     await vi.waitFor(() => { expect(harness.analytics.mock.calls.some(([event]) => (event as { eventName: string }).eventName === 'desktop_app_launch')).toBe(true) })
-    expect(host.environment).toHaveProperty('DSH_BUNDLED_PRIMARY_RUNTIME', 'test-primary-runtime')
+    expect(host.environment).toHaveProperty('DSH_PRIMARY_RUNTIME', 'test-primary-runtime')
     expect(existsSync(harness.app.getPath('logs'))).toBe(false)
     expect(writeCrashReport).not.toHaveBeenCalled()
     expect(harness.dialog.showMessageBox).not.toHaveBeenCalledWith(expect.objectContaining({ title: en.startupFailed }))
@@ -2858,7 +2858,7 @@ describe('desktop main startup', () => {
     expect(harness.hosts[0]).toMatchObject({
       node: process.execPath,
       runtime: join(harness.app.getAppPath(), 'dsh'),
-      environment: { DSH_BUNDLED_PRIMARY_RUNTIME: join('desktop-test-resources', 'runtime', 'primary-runtime') },
+      environment: { DSH_PRIMARY_RUNTIME: join('desktop-test-resources', 'runtime', 'primary-runtime') },
       profile: 'desktop-test-profile',
     })
     expect(harness.hosts[0]!.environment).not.toBe(process.env)
@@ -2880,7 +2880,7 @@ describe('desktop main startup', () => {
     await harness.hostStarted.promise
     const project = join(harness.app.getAppPath(), '.desktop-build', 'development', 'project')
     expect(harness.hosts[0]).toMatchObject({ node: process.execPath, runtime: project,
-      environment: { DSH_BUNDLED_PRIMARY_RUNTIME: 'test-primary-runtime' }, profile: 'desktop-test-profile' })
+      environment: { DSH_PRIMARY_RUNTIME: 'test-primary-runtime' }, profile: 'desktop-test-profile' })
     expect(harness.applyRelease).toHaveBeenCalledOnce()
     harness.hosts[0]!.ready.resolve()
     await harness.navigated.promise

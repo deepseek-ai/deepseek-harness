@@ -35,7 +35,7 @@ export async function smokeDesktopRuntime(
     npm_config_store_dir: join(home, 'store'), npm_config_enable_global_virtual_store: 'false',
   }
   const host = new DesktopHostProcess(node, root, profile, undefined,
-    { ...hostEnvironment, DSH_BUNDLED_PRIMARY_RUNTIME: join(resourcesRuntime, 'primary-runtime') },
+    { ...hostEnvironment, DSH_PRIMARY_RUNTIME: join(resourcesRuntime, 'primary-runtime') },
     undefined,
     { pnpm: join(resourcesRuntime, 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs'), nodeBin: join(resourcesRuntime, 'bin') })
   let timer: ReturnType<typeof setTimeout> | undefined

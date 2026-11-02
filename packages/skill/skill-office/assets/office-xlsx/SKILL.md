@@ -39,7 +39,7 @@ Preserve numbers, dates, booleans, and identifiers as the intended cell types; f
 
 Writing a formula does not calculate its result. openpyxl and XlsxWriter do not evaluate formulas; `data_only=True` returns cached values that may be absent or stale. When calculated results must be refreshed, call the `office` tool with `operation: "recalculate"` and `format: "xlsx"`, and copy the returned temporary workbook to a new file in the workspace. Open the copy with openpyxl using both `data_only=False` and `data_only=True` to check that formulas survive and cached values match the expected results. If recalculation fails, preserve the original workbook and report that calculated values were not refreshed. Do not replace requested formulas with constants or report stale or absent cached values as newly calculated results.
 
-Do not rename `.xls`, `.xlsb`, encrypted files, or macro-enabled files to `.xlsx`. They need an appropriate supported operation. `keep_vba=True` can preserve VBA package content in an XLSM workflow, but does not execute or edit macros and does not guarantee every advanced workbook feature survives. Preserve the original and verify such requirements explicitly.
+Do not rename `.xls`, `.xlsb`, encrypted files, or macro-enabled files to `.xlsx`. They need an appropriate supported operation. `keep_vba=True` can preserve VBA package content in an XLSM workflow, but does not execute or edit macros. Preserve the original and verify each workbook feature the task depends on.
 
 ## Check and deliver
 

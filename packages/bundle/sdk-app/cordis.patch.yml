@@ -26,13 +26,13 @@
 - id: tool-plugin-manager
   disabled: false
 
-# The packaged carrier supplies a default; DSH_PRIMARY_RUNTIME overrides it,
-# including an empty-string opt-out. Each row can be patched independently.
-# Office skills and the office tool always load. With a primary runtime the
-# skills use its Office assets and Python environment; without one the path
-# expression evaluates to `undefined`, which the skill-office schema treats as
-# unset, so the packaged assets and the user's Python apply.
-# DSH_BUNDLED_OFFICE_SKILLS overrides the skill directory.
+# DSH_PRIMARY_RUNTIME names the primary runtime; the packaged launcher fills it
+# from its download cache when unset, and an empty value opts out. Each row can
+# be patched independently. Office skills and the office tool always load. With
+# a primary runtime the skills use its Office assets and Python environment;
+# without one the expressions evaluate to `undefined`, which the skill-office
+# schema treats as unset, so the packaged assets and the user's Python apply.
+# A nonempty DSH_BUNDLED_OFFICE_SKILLS overrides the skill directory.
 - insert:
     - id: office-kit
       name: '@deepseek-ai/dsh-office-kit'
@@ -45,15 +45,15 @@
 
     - id: workspace-dependencies
       name: '@deepseek-ai/dsh-tool-workspace-dependencies'
-      disabled: !!js "!(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME)"
+      disabled: !!js "!process.env.DSH_PRIMARY_RUNTIME"
       config:
-        source: !!js "process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '')"
+        source: !!js "process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? '')"
 
     - id: skill-office
       name: '@deepseek-ai/dsh-skill-office'
       config:
-        assetRoot: !!js "process.env.DSH_BUNDLED_OFFICE_SKILLS ?? ((process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME) ? process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME, '..', 'office-skills') : undefined)"
-        pythonEnvironment: !!js "(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME) ? undefined : 'user'"
+        assetRoot: !!js "process.env.DSH_BUNDLED_OFFICE_SKILLS || (process.env.DSH_PRIMARY_RUNTIME ? process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME, '..', 'office-skills') : undefined)"
+        pythonEnvironment: !!js "process.env.DSH_PRIMARY_RUNTIME ? undefined : 'user'"
 
 # Share native desktop tools and model context without starting a Web server.
 - insert:
