@@ -7,7 +7,7 @@ import electronUpdater, { type AppUpdater, type ProgressInfo, type UpdateInfo, t
 import { gt, valid } from 'semver'
 import type { DesktopUpdateState } from './ipc.ts'
 import { DesktopUpdateHttpExecutor } from './updates/electron-updater/http-executor.ts'
-import { DesktopUpdatePreparationError } from './update-error.ts'
+import { DesktopUpdatePreparationError, downloadFailureDetails } from './update-error.ts'
 import type { DesktopUpdateChannel } from './update-channel.ts'
 import { selectUpdateChannel } from './updates/electron-updater/channel.ts'
 import { discardDesktopUpdate } from './updates/electron-updater/discard.ts'
@@ -254,6 +254,7 @@ export class DesktopUpdateCoordinator {
   private failure(error: unknown, failedOperation: 'check' | 'download' | 'install'): DesktopUpdateState {
     return { phase: 'error', ...this.target(), failedOperation,
       message: error instanceof Error ? error.message : String(error),
+      ...(failedOperation === 'download' ? downloadFailureDetails(error) : {}),
       ...(error instanceof DesktopUpdatePreparationError ? {
         preparationFailure: error.kind,
         ...(error.technicalDetails === undefined ? {} : { technicalDetails: error.technicalDetails }),

@@ -59,6 +59,8 @@ export interface DesktopUpdateState {
   readonly failedOperation?: 'check' | 'download' | 'install' | 'configuration'
   /** Main-owned preparation cause; UI wording is selected by the active locale. */
   readonly preparationFailure?: DesktopUpdatePreparationFailureKind
+  /** Current filesystem failure, independent of previous cache cleanup attempts. */
+  readonly downloadFailure?: 'space' | 'permission' | 'busy'
 }
 
 /** Classified failure copy selected by the Web locale without exposing raw updater diagnostics. */
@@ -68,6 +70,9 @@ export type DesktopUpdateFailureKind =
   | 'check-network'
   | 'download'
   | 'download-network'
+  | 'download-space'
+  | 'download-permission'
+  | 'download-busy'
   | 'install'
   | 'install-network'
   | 'stop-failed'

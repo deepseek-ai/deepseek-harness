@@ -416,3 +416,26 @@ it.each(['idle', 'downloading', 'ready'] as const)('preserves %s when the curren
     await downloading
   }
 })
+
+it.each([
+  ['ENOSPC', 'space'], ['EACCES', 'permission'], ['EPERM', 'permission'], ['EROFS', 'permission'], ['EBUSY', 'busy'],
+] as const)('reports the current %s download failure without attributing it to cleanup', async (code, kind) => {
+  const f = fixture()
+  await f.coordinator.check()
+  f.downloadUpdate.mockRejectedValueOnce(Object.assign(new Error('write failed'), {
+    code, path: '/cache/new.zip', dest: '/cache/pending/new.zip',
+  }))
+  const state = await f.coordinator.download('1.1.0-rc.2')
+  expect(state).toMatchObject({ phase: 'error', failedOperation: 'download', downloadFailure: kind,
+    technicalDetails: `${code}\nwrite failed\n/cache/new.zip\n/cache/pending/new.zip` })
+  await expect(f.coordinator.install('1.1.0-rc.2')).rejects.toThrow('not ready')
+  expect((await f.coordinator.download('1.1.0-rc.2')).phase).toBe('ready')
+  expect(f.coordinator.state.downloadFailure).toBeUndefined()
+})
+
+it('does not diagnose a filesystem cause from error wording alone', async () => {
+  const f = fixture()
+  await f.coordinator.check()
+  f.downloadUpdate.mockRejectedValueOnce(new Error('ENOSPC or EACCES in a remote response'))
+  expect((await f.coordinator.download('1.1.0-rc.2')).downloadFailure).toBeUndefined()
+})
