@@ -2,7 +2,7 @@
 import type { AppUpdater } from 'electron-updater'
 
 /**
- * Select a feed without permitting downgrades or prereleases on latest.
+ * Select a feed without permitting downgrades or prereleases on stable.
  * @param updater - Updater whose prior operations have settled.
  * @param channel - Selected distribution channel.
  */
