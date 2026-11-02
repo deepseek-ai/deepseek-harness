@@ -535,12 +535,10 @@ interface ToolOutputMap {
   };
   subagent: {
     kind: "activation";
-    subagentId: string;
     name: string;
   };
   subagent_fork: {
     kind: "activation";
-    subagentId: string;
     name: string;
   };
   template_echo: string;

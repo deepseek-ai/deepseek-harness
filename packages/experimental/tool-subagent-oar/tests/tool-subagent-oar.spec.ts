@@ -55,9 +55,9 @@ it('selects one configured provider per call and exposes only task inputs', asyn
     expect(result.isError, JSON.stringify(result.content)).toBe(false)
     expect(result.content).toEqual([{ type: 'text', text: `started subagent ${expected}` }])
     if (!result.isError) {
-      const { subagentId } = result.value as { subagentId: string }
+      expect(result.value).toEqual({ kind: 'activation', name: expected })
       expect(ctx.tools.get('subagent_oar')?.output.presentationMeta?.({}, result.value))
-        .toEqual({ kind: 'activation', subagentId, name: expected })
+        .toEqual({ kind: 'activation', name: expected })
     }
   }
   expect(calls.map(call => call.provider)).toEqual(['codex-provider', 'claude-provider', 'future-provider'])

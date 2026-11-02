@@ -172,7 +172,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-The model reads task views through task-tool results. Host views and the durable task record identify owners by `ownerId`, a Session id; [task tools](../tool-agent-team/README.md) show the owner's name to the model. Stale updates report the current revision. Task updates do not end `wait_agent`; send an explicit message when a member needs to act on an update.
+The model reads task views through task-tool results. Host views and the durable task record identify owners by `ownerId`, a Session id, and retain the immutable full name in optional `ownerName`. Claim and reassignment save both fields together; release, reopening, and unassignment clear both. Historical tasks without `ownerName` display `ownerId`; [task tools](../tool-agent-team/README.md) show the owner's name to the model. Stale updates report the current revision. Task updates do not end `wait_agent`; send an explicit message when a member needs to act on an update.
 
 #### Token effect
 

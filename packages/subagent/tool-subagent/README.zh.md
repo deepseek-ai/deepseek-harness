@@ -98,7 +98,7 @@ kind: "package-reference"
 
 ### 结果确认
 
-规范工具结果为 `{ kind: 'activation', subagentId, name }`。其中没有执行 Promise 或最终输出；需要等待结果的程序调用方直接使用 subagent 服务。
+规范工具结果为 `{ kind: 'activation', name }`。其中没有执行 Promise 或最终输出；需要等待结果的程序调用方直接使用 subagent 服务。
 
 ### 随上下文变化的措辞
 

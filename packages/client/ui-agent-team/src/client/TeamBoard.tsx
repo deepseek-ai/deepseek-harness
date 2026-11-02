@@ -10,7 +10,6 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import type {} from '@deepseek-ai/dsh-client-ui-subagent/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { NS, type TeamKey } from './locales.ts'
-import { ownerName } from './owner-name.ts'
 import css from './TeamBoard.module.css'
 
 /** Full props of the task board below the shared subagent catalog. */
@@ -38,16 +37,13 @@ function progressLabel(tasks: readonly VisibleTask[], t: TeamBoardProps['t']): s
   ].join('\u2002·\u2002')
 }
 
-function TaskRow({ task, rootId, expanded, onToggle, useSessions, t }: Pick<TeamBoardProps, 'useSessions' | 't'> & {
+function TaskRow({ task, rootId, expanded, onToggle, t }: Pick<TeamBoardProps, 't'> & {
   task: VisibleTask
   rootId: SessionId
   expanded: boolean
   onToggle: () => void
 }) {
-  const named = useSessions(state => !expanded || task.ownerId === undefined
-    ? undefined
-    : ownerName(state.projectionsBySession, rootId, task.ownerId))
-  const owner = named ?? t('unowned')
+  const owner = task.ownerName ?? task.ownerId ?? t('unowned')
   const blocked = task.status === 'pending' && !task.ready
   const detailsId = `team-task-${rootId}-${task.id}`
   return (
@@ -107,7 +103,6 @@ export function TeamBoard({ sessionId, useProjection, useSessions, t }: TeamBoar
             key={task.id} task={task} rootId={sessionId}
             expanded={expandedTaskId === task.id}
             onToggle={() => { setExpandedTaskId(current => current === task.id ? null : task.id) }}
-            useSessions={useSessions}
             t={t}
           />
         ))}

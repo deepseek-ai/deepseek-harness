@@ -30,6 +30,7 @@ const task: TeamTask = {
   description: 'Build the Team runtime',
   status: 'in_progress',
   ownerId: SESSION,
+  ownerName: 'lead',
   blockedBy: [],
   writeScopes: ['src'],
   ready: false,
@@ -131,7 +132,7 @@ describe('TeamBoard', () => {
     const description = 'First line\n'.repeat(30) + 'Final description line'
     const b = bench({ value: { ...team, tasks: [
       { ...task, subject: longSubject, description },
-      { ...task, id: TASK_2, subject: 'Review implementation', ownerId: WORKER },
+      { ...task, id: TASK_2, subject: 'Review implementation', ownerId: WORKER, ownerName: 'worker' },
     ] } })
     render(<TeamBoard {...b.props} />)
     const first = row(longSubject)
@@ -154,7 +155,7 @@ describe('TeamBoard', () => {
     expect(screen.getAllByRole('button')).toHaveLength(2)
     fireEvent.click(row('Review implementation'))
     expect(first.getAttribute('aria-expanded')).toBe('false')
-    expect(ownerValue()).toBe(WORKER)
+    expect(ownerValue()).toBe('worker')
     expect(document.querySelectorAll('[data-team-task-details]')).toHaveLength(1)
     expect(screen.queryByText(description)).toBeNull()
     fireEvent.click(row('Review implementation'))
@@ -184,7 +185,7 @@ describe('TeamBoard', () => {
   })
 
   it('announces blocked status without displaying readiness, dependencies, scopes, warnings, or task ids', () => {
-    const { ownerId: _ownerId, ...unowned } = task
+    const { ownerId: _ownerId, ownerName: _ownerName, ...unowned } = task
     const b = bench({ value: { ...team, tasks: [
       { ...unowned, status: 'pending', blockedBy: [TASK_2, 'missing' as TeamTaskId] },
       { ...task, id: TASK_2, subject: 'Prepare shared types', status: 'completed' },
@@ -217,49 +218,26 @@ describe('TeamBoard', () => {
     expect(document.querySelector('[data-team-task-details] p:not([data-team-task-owner])')).toBeNull()
   })
 
-  it('names the owner by its catalog path from the root, independently of descriptions and Session titles', () => {
-    const b = bench({
-      byId: { [SESSION]: summary(SESSION), [NESTED]: { ...summary(NESTED, 'Session title'), parentId: WORKER } },
-      projections: {
-        [SESSION]: { state: 'ready', error: null, values: {
-          agentTeam: { ...team, tasks: [{ ...task, ownerId: NESTED }] },
-          subagentCatalog: [{ id: WORKER, createdAt: 0, mode: 'continuable', label: 'Worker responsibility', name: 'worker' }],
-        } },
-        [WORKER]: { state: 'ready', error: null, values: {
-          subagentCatalog: [{ id: NESTED, createdAt: 0, mode: 'continuable', label: 'Catalog responsibility', name: 'checker' }],
-        } },
-      },
-    })
+  it('renders a saved owner path without loading its parent catalog', () => {
+    const b = bench({ value: { ...team, tasks: [{ ...task, ownerId: NESTED, ownerName: 'worker/checker' }] } })
     render(<TeamBoard {...b.props} />)
     fireEvent.click(row())
     expect(ownerValue()).toBe('worker/checker')
-    setProjectionSnapshot(b.sessions, WORKER, { state: 'ready', error: null, values: {} })
     act(() => { b.sessions.update((draft) => { draft.byId[NESTED] = { ...summary(NESTED), displayTitle: 'Display title' } }) })
-    expect(ownerValue()).toBe(NESTED)
-    setProjectionSnapshot(b.sessions, SESSION, { state: 'ready', error: null, values: {
-      agentTeam: { ...team, tasks: [{ ...task, ownerId: WORKER }] },
-      subagentCatalog: [{ id: WORKER, createdAt: 0, mode: 'continuable', label: 'Worker responsibility', name: 'worker' }],
-    } })
-    expect(ownerValue()).toBe('worker')
+    expect(ownerValue()).toBe('worker/checker')
   })
 
-  it('uses the owner Session ID when its catalog entry has no name', () => {
-    const b = bench({ projections: { [SESSION]: { state: 'ready', error: null, values: {
-      agentTeam: { ...team, tasks: [{ ...task, ownerId: WORKER }] },
-      subagentCatalog: [{ id: WORKER, createdAt: 0, mode: 'continuable', label: 'Historical worker' }],
-    } } } })
+  it('uses the owner Session ID when the saved task has no name', () => {
+    const { ownerName: _ownerName, ...historical } = task
+    const b = bench({ value: { ...team, tasks: [{ ...historical, ownerId: WORKER }] }, projections: {
+      [SESSION]: { state: 'ready', error: null, values: {
+        agentTeam: { ...team, tasks: [{ ...historical, ownerId: WORKER }] },
+        subagentCatalog: [{ id: WORKER, createdAt: 0, mode: 'continuable', label: 'Worker', name: 'worker' }],
+      } },
+    } })
     render(<TeamBoard {...b.props} />)
     fireEvent.click(row())
     expect(ownerValue()).toBe(WORKER)
-  })
-
-  it('uses owner id when neither root nor parent projections exist', () => {
-    const b = bench({ value: { ...team, tasks: [{ ...task, ownerId: NESTED }] }, byId: {
-      [NESTED]: { ...summary(NESTED), parentId: WORKER },
-    } })
-    render(<TeamBoard {...b.props} />)
-    fireEvent.click(row())
-    expect(ownerValue()).toBe(NESTED)
   })
 
   it('hides retained tasks while Team is disabled and shows them when enabled', () => {
@@ -369,8 +347,9 @@ describe('TeamBoard', () => {
     vi.useFakeTimers()
     enableTooltips()
     const ownerId = '8c0404a0-4c67-48ab-9513-50b4a755d6de' as SessionId
+    const { ownerName: _ownerName, ...historical } = task
     const b = bench({
-      value: { ...team, tasks: [{ ...task, ownerId }] },
+      value: { ...team, tasks: [{ ...historical, ownerId }] },
     })
     const view = render(<TeamBoard {...b.props} />)
     fireEvent.click(row())

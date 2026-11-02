@@ -265,12 +265,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           additionalProperties: false,
           properties: {
             kind: { type: 'string', required: true, const: 'activation' },
-            subagentId: { type: 'string', required: true },
             name: { type: 'string', required: true },
           },
         },
         render: (_args, value) => [{ type: 'text', text: `started subagent ${value.name}` }],
-        presentationMeta: (_args, value) => ({ kind: value.kind, subagentId: value.subagentId, name: value.name }),
+        presentationMeta: (_args, value) => ({ kind: value.kind, name: value.name }),
       },
       isConcurrencySafe: () => true,
       async execute(args, exec) {
@@ -337,7 +336,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
           signal: exec.signal,
           delivery: 'parent',
         })
-        return { kind: 'activation' as const, subagentId: started.childId, name: started.name }
+        return { kind: 'activation' as const, name: started.name }
       },
     })
     const disposeTool = ctx.effect(() => {

@@ -389,7 +389,6 @@ class SubagentArgs(TypedDict):
 
 class SubagentOutput(TypedDict):
     kind: Literal["activation"]
-    subagentId: str
     name: str
 
 class SubagentForkArgs(TypedDict):
@@ -405,7 +404,6 @@ class SubagentForkArgs(TypedDict):
 
 class SubagentForkOutput(TypedDict):
     kind: Literal["activation"]
-    subagentId: str
     name: str
 
 class TodoWriteArgsTodos(TypedDict):

@@ -111,10 +111,12 @@ export function subagentDetails(
   const description = arg(args, 'description')
   if (nonempty(description)) fields.push({ label: t('detail.field.agentDescription'), value: description })
   if (meta !== undefined) {
-    if (!detailRecord(meta) || meta.kind !== 'activation' || !nonempty(meta.subagentId)) return null
+    if (!detailRecord(meta) || meta.kind !== 'activation') return null
     if (meta.name !== undefined && !nonempty(meta.name)) return null
+    if (meta.subagentId !== undefined && !nonempty(meta.subagentId)) return null
+    if (meta.name === undefined && meta.subagentId === undefined) return null
     if (meta.name !== undefined) fields.push({ label: t('detail.field.agentName'), value: meta.name })
-    fields.push({ label: t('detail.field.id'), value: meta.subagentId })
+    if (meta.subagentId !== undefined) fields.push({ label: t('detail.field.id'), value: meta.subagentId })
   } else {
     if (text === undefined) return null
     // Historical results lack the structured receipt stored by current tools.

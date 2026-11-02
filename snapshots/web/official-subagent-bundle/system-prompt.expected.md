@@ -1470,17 +1470,14 @@ interface ToolOutputMap {
   };
   subagent: {
     kind: "activation";
-    subagentId: string;
     name: string;
   };
   subagent_claude_code: {
     kind: "activation";
-    subagentId: string;
     name: string;
   };
   subagent_fork: {
     kind: "activation";
-    subagentId: string;
     name: string;
   };
   todo_write: {

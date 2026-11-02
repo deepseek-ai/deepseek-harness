@@ -98,7 +98,7 @@ The tool calls `ctx.subagents.startActivation()` with parent delivery selected. 
 
 ### Result acknowledgement
 
-The canonical tool result is `{ kind: 'activation', subagentId, name }`. It contains no execution Promise or final output; programmatic consumers that need to await results use the subagent service directly.
+The canonical tool result is `{ kind: 'activation', name }`. It contains no execution Promise or final output; programmatic consumers that need to await results use the subagent service directly.
 
 ### Context-sensitive wording
 

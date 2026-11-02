@@ -179,7 +179,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-agent-team`
 
 - `inject`: `agents` · `sessions` · `sessionPersistence` · `sessionProjections` · `subagents`
-- `source`: [`packages/team/agent-team/src/types.ts:132`](../packages/team/agent-team/src/types.ts)
+- `source`: [`packages/team/agent-team/src/types.ts:136`](../packages/team/agent-team/src/types.ts)
 
 ```ts config-catalog
 /** Team-service deployment limits. */
@@ -3908,7 +3908,7 @@ export type TokenMeterConfig = Record<string, never>
 ## `@deepseek-ai/dsh-tool-agent-team`
 
 - `inject`: `agentTeams` · `subagents` · `tools` · `systemPrompt`
-- `source`: [`packages/team/tool-agent-team/src/index.ts:19`](../packages/team/tool-agent-team/src/index.ts)
+- `source`: [`packages/team/tool-agent-team/src/index.ts:18`](../packages/team/tool-agent-team/src/index.ts)
 
 ```ts config-catalog
 /** The Team tool plugin takes no configuration. */

@@ -224,7 +224,8 @@ describe('dsh-tool-team', () => {
     })
     expect(JSON.parse(text(reassigned))).toMatchObject({ owner: 'agent-1' })
     expect(JSON.parse(text(reassigned))).not.toHaveProperty('ownerId')
-    expect(ctx.agentTeams.getTask(lead, task.id).ownerId).toBe(childActivation.childId)
+    expect(ctx.agentTeams.getTask(lead, task.id)).toMatchObject({ ownerId: childActivation.childId, ownerName: 'agent-1' })
+    expect(JSON.parse(text(reassigned))).not.toHaveProperty('ownerName')
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: 'agent-1' }))))
       .toMatchObject({ tasks: [{ id: task.id, owner: 'agent-1' }] })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: 'lead' })))).toEqual({ tasks: [] })
@@ -519,7 +520,7 @@ describe('dsh-tool-team', () => {
       status: 'in_progress', owner: lead.id, cursor: 0, limit: 1,
     })))).toMatchObject({ tasks: [{ id: first.id }] })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {
-      owner: 'unowned', limit: 1,
+      unowned: true, limit: 1,
     })))).toMatchObject({ tasks: [{ id: second.id }] })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {
       cursor: 0, limit: 1,
@@ -568,6 +569,45 @@ describe('dsh-tool-team', () => {
 
     await childActivation.dispose()
     await waitNoAgent(ctx, childId)
+  })
+
+  it('distinguishes an agent named unowned from tasks without an owner', async () => {
+    const { ctx, lead } = await setup(['hang'])
+    const child = await ctx.subagents.startActivation({
+      provider: 'spawn', name: 'unowned', label: 'Worker', parent: lead,
+      prompt: [{ type: 'text', text: 'wait' }], signal: SIGNAL, delivery: 'caller',
+    })
+    await waitRunning(ctx, child.childId)
+    const assigned = await ctx.agentTeams.createTask(lead, { subject: 'Assigned', description: 'Owned work' })
+    const pending = await ctx.agentTeams.createTask(lead, { subject: 'Pending', description: 'Unowned work' })
+    const result = await execute(ctx, lead, 'team_task_update', {
+      task_id: assigned.id, expected_revision: assigned.revision, action: 'reassign', owner: 'unowned',
+    })
+    expect(result.isError, text(result)).toBe(false)
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: 'unowned' })))).toMatchObject({ tasks: [{ id: assigned.id }] })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { unowned: true })))).toMatchObject({ tasks: [{ id: pending.id }] })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { unowned: false })))).toMatchObject({ tasks: [{ id: assigned.id }] })
+    expect((await execute(ctx, lead, 'team_task_list', { owner: 'unowned', unowned: true })).isError).toBe(true)
+    await child.dispose()
+  })
+
+  it('reads and edits saved owner names without traversing descendant Sessions', async () => {
+    const { ctx, lead } = await setup([])
+    const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Saved ownership' })
+    const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = created
+    lead.session.append('team/task', {
+      version: 2, teamId: TeamId(lead.id),
+      task: { ...saved, revision: 2, ownerId: SessionId('cold-worker'), ownerName: 'reviewer/checker' },
+    })
+    const lookup = vi.spyOn(ctx.subagents, 'listDescendants').mockRejectedValue(new Error('catalog unavailable'))
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_get', { task_id: created.id })))).toMatchObject({ owner: 'reviewer/checker' })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {})))).toMatchObject({ tasks: [{ owner: 'reviewer/checker' }] })
+    const edited = await execute(ctx, lead, 'team_task_update', {
+      task_id: created.id, expected_revision: 2, action: 'edit', subject: 'Edited',
+    })
+    expect(edited.isError, text(edited)).toBe(false)
+    expect(JSON.parse(text(edited))).toMatchObject({ subject: 'Edited', owner: 'reviewer/checker' })
+    expect(lookup).not.toHaveBeenCalled()
   })
 
   it('names a historical task owner by its Session id', async () => {

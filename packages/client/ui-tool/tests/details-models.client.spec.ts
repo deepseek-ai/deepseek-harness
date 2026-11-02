@@ -117,14 +117,13 @@ describe('control detail adapters', () => {
 
   it.each(['subagent', 'subagent_fork'])('%s renders persisted creation metadata independently of result wording', (name) => {
     const args = { description: 'Review the changes', prompt: 'Read the diff and report defects.' }
-    const block = { ...output(name, 'Delegation accepted.', args), meta: { kind: 'activation', subagentId: 'child-1', name: 'reviewer' } }
+    const block = { ...output(name, 'Delegation accepted.', args), meta: { kind: 'activation', name: 'reviewer' } }
     const model = detailsCardModel(block, t, 'en')
     expect(model?.items[0]).toEqual({
       title: 'Started',
       fields: [
         { label: 'Agent task description', value: args.description },
         { label: 'Agent name', value: 'reviewer' },
-        { label: 'ID', value: 'child-1' },
       ],
       groups: [{ label: 'Task', items: [{ description: args.prompt, fields: [] }] }],
     })
@@ -133,7 +132,6 @@ describe('control detail adapters', () => {
     expect(detailsCardModel(block, makeTranslate(zh, commonZh), 'zh-CN')?.items[0]?.fields).toEqual([
       { label: '智能体任务描述', value: args.description },
       { label: '智能体名称', value: 'reviewer' },
-      { label: 'ID', value: 'child-1' },
     ])
   })
 

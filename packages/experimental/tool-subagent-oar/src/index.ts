@@ -74,12 +74,11 @@ export function apply(ctx: Context, config: Config): void {
         additionalProperties: false,
         properties: {
           kind: { type: 'string', required: true, const: 'activation' },
-          subagentId: { type: 'string', required: true },
           name: { type: 'string', required: true },
         },
       },
       render: (_args, value) => [{ type: 'text', text: `started subagent ${value.name}` }],
-      presentationMeta: (_args, value) => ({ kind: value.kind, subagentId: value.subagentId, name: value.name }),
+      presentationMeta: (_args, value) => ({ kind: value.kind, name: value.name }),
     },
     /* jscpd:ignore-end */
     isConcurrencySafe: () => true,
@@ -102,7 +101,7 @@ export function apply(ctx: Context, config: Config): void {
         signal: exec.signal,
         delivery: 'parent',
       })
-      return { kind: 'activation' as const, subagentId: activation.childId, name: activation.name }
+      return { kind: 'activation' as const, name: activation.name }
     },
     presentCall: args => ({ card: 'generic', title: args.description, rawInput: args }),
   }))

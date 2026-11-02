@@ -172,7 +172,7 @@ Team 在激活前要求 `sessionPersistence` 可用。`Service.init` 等待 `age
 
 #### 模型看到什么
 
-模型通过任务工具结果读取任务视图。host 视图和持久任务记录以 `ownerId`（Session id）标识所有者；[任务工具](../tool-agent-team/README.zh.md)向模型展示所有者名称。过期更新报告当前修订。任务更新不会结束 `wait_agent`；需要成员处理更新时，发送明确消息。
+模型通过任务工具结果读取任务视图。host 视图和持久任务记录以 `ownerId`（Session id）标识所有者，并在可选的 `ownerName` 中保留不可变的完整名称。认领与重新分配一起保存两个字段；释放、重新打开和取消分配一起清除两个字段。缺少 `ownerName` 的历史任务显示 `ownerId`；[任务工具](../tool-agent-team/README.zh.md)向模型展示所有者名称。过期更新报告当前修订。任务更新不会结束 `wait_agent`；需要成员处理更新时，发送明确消息。
 
 #### Token 影响
 

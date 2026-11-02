@@ -58,7 +58,7 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-exper
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`src/index.ts`](src/index.ts) builds the runtime enum from the configured aliases and registers one tool. Each call resolves its provider and starts an activation through the shared subagent service, which owns capacity, parent lifetime, cancellation, terminal recording, and completion delivery. The tool's call card uses the task description and submitted arguments. The result records `{ kind: 'activation', subagentId, name }` as presentation metadata. Disposing the plugin removes its tool registration; the activation manager retains ownership of accepted children.
+[`src/index.ts`](src/index.ts) builds the runtime enum from the configured aliases and registers one tool. Each call resolves its provider and starts an activation through the shared subagent service, which owns capacity, parent lifetime, cancellation, terminal recording, and completion delivery. The tool's call card uses the task description and submitted arguments. The result records `{ kind: 'activation', name }` as presentation metadata. Disposing the plugin removes its tool registration; the activation manager retains ownership of accepted children.
 
 </details>
 

@@ -2,11 +2,11 @@
 
 import { isAbsolute } from 'node:path'
 import { SessionFormatError, SessionFormatUnsupportedMigrationError, isSessionFormatJsonObject, sessionFormatCount } from '@deepseek-ai/dsh-session-format'
-import type { SessionFormatArtifact, SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
+import type { SessionFormatArtifact, SessionFormatEvent, SessionFormatJsonObject, SessionFormatJsonValue } from '@deepseek-ai/dsh-session-format'
 import { assertV4DeveloperData } from './developer.ts'
 import { assertV4LifecycleRelationships } from './relationships.ts'
 import { assertV4MessageSources } from './message-sources.ts'
-import { nativeCatalogFact } from './facts.ts'
+import { catalogFact } from './facts.ts'
 import { assertV4RetiredSyntax } from './retired-syntax.ts'
 import { assertV4SystemMessageFields } from './system-message.ts'
 import { assertV4ForkResult } from './fork-result.ts'
@@ -127,4 +127,23 @@ export function assertReleasedV4Relationships(artifact: SessionFormatArtifact, k
     }
   }
   assertV4LifecycleRelationships(artifact, knownEventTypes)
+}
+
+/**
+ * Validate an own native V4 catalog payload: a historical version or version 3,
+ * which adds the child's name and is written only by native V4 creation.
+ * @param value - native `subagent/catalog` payload.
+ * @returns validated catalog payload.
+ */
+function nativeCatalogFact(value: SessionFormatJsonValue): SessionFormatJsonObject {
+  if (!isSessionFormatJsonObject(value) || value['version'] !== 3) return catalogFact(value)
+  if (typeof value['childId'] !== 'string'
+    || (value['mode'] !== 'continuable' && value['mode'] !== 'external')
+    || typeof value['name'] !== 'string'
+    || (value['mode'] === 'continuable' && typeof value['label'] !== 'string')
+    || (value['label'] !== undefined && typeof value['label'] !== 'string')) {
+    throw new SessionFormatError('subagent/catalog requires a supported versioned catalog fact')
+  }
+  sessionFormatCount(value['childCreatedAt'], 'catalog child creation time')
+  return value
 }

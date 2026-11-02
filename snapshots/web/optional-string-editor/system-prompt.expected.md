@@ -1477,12 +1477,10 @@ interface ToolOutputMap {
   str_replace_editor: string;
   subagent: {
     kind: "activation";
-    subagentId: string;
     name: string;
   };
   subagent_fork: {
     kind: "activation";
-    subagentId: string;
     name: string;
   };
   todo_write: {

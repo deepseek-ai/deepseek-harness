@@ -508,12 +508,10 @@ interface ToolOutputMap {
   };
   subagent: {
     kind: "activation";
-    subagentId: string;
     name: string;
   };
   subagent_fork: {
     kind: "activation";
-    subagentId: string;
     name: string;
   };
   todo_write: {

@@ -69,7 +69,7 @@ The [format references](persistence-changes/historical-formats/README.md) cover 
 | `event:team/message/delivered` | event | `48f9c19417a1abbedfa59f4667bba36b93ac2db407adf5e84cb3ba0de30942cb` | [`{ type: "team/message/delivered" }`](#persistence-type-sha256-48f9c19417a1abbedfa59f4667bba36b93ac2db407adf5e84cb3ba0de30942cb) |
 | `event:team/message/queued` | event | `21fb6a90d5068f6a0003b7ab316ed2f56342477146a65c00db0f13c4d8df667d` | [`{ type: "team/message/queued" }`](#persistence-type-sha256-21fb6a90d5068f6a0003b7ab316ed2f56342477146a65c00db0f13c4d8df667d) |
 | `event:team/mode` | event | `920d87e22b7409bcc7224f8b1dc7f5101c33574c75627c65baab12b85cc96e75` | [`{ type: "team/mode" }`](#persistence-type-sha256-920d87e22b7409bcc7224f8b1dc7f5101c33574c75627c65baab12b85cc96e75) |
-| `event:team/task` | event | `d595ec73b32b016a6055333c67a5d646032b22e672da1d4a09c5b1ae398a093a` | [`{ type: "team/task" }`](#persistence-type-sha256-d595ec73b32b016a6055333c67a5d646032b22e672da1d4a09c5b1ae398a093a) |
+| `event:team/task` | event | `bca0f9cb63d8620b6954bb045b07bb07cb557513a7f0e2e177f5e87f704e7ba7` | [`{ type: "team/task" }`](#persistence-type-sha256-bca0f9cb63d8620b6954bb045b07bb07cb557513a7f0e2e177f5e87f704e7ba7) |
 | `event:todo/write` | event | `b978cff734e62143eb56c9125423ec275405eda969802d42aaf73ecb987d3b26` | [`{ type: "todo/write" }`](#persistence-type-sha256-b978cff734e62143eb56c9125423ec275405eda969802d42aaf73ecb987d3b26) |
 | `event:tool-workflow/agent-end` | event | `babf9ee4d1af62bf6c3a8103737f7a5e4e78ce179be835ce05a38803e15884b7` | [`{ type: "tool-workflow/agent-end" }`](#persistence-type-sha256-babf9ee4d1af62bf6c3a8103737f7a5e4e78ce179be835ce05a38803e15884b7) |
 | `event:tool-workflow/agent-start` | event | `5f26a6c20b37632f8f57729d171c671def4683d994ac6257a8dffcd855101627` | [`{ type: "tool-workflow/agent-start" }`](#persistence-type-sha256-5f26a6c20b37632f8f57729d171c671def4683d994ac6257a8dffcd855101627) |
@@ -1015,7 +1015,7 @@ Source: [`packages/core/session/src/types.ts:338`](../packages/core/session/src/
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamMemberSnapshot](subsystems/agent-team.md)
 
-Source: [`packages/team/agent-team/src/types.ts:173`](../packages/team/agent-team/src/types.ts)
+Source: [`packages/team/agent-team/src/types.ts:177`](../packages/team/agent-team/src/types.ts)
 
 <a id="teammessagedelivered--log-only"></a>
 
@@ -1033,7 +1033,7 @@ Source: [`packages/team/agent-team/src/types.ts:173`](../packages/team/agent-tea
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamMessageId](subsystems/agent-team.md)
 
-Source: [`packages/team/agent-team/src/types.ts:179`](../packages/team/agent-team/src/types.ts)
+Source: [`packages/team/agent-team/src/types.ts:183`](../packages/team/agent-team/src/types.ts)
 
 <a id="teammessagequeued--log-only"></a>
 
@@ -1046,7 +1046,7 @@ Source: [`packages/team/agent-team/src/types.ts:179`](../packages/team/agent-tea
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamMessageSnapshot](subsystems/agent-team.md)
 
-Source: [`packages/team/agent-team/src/types.ts:177`](../packages/team/agent-team/src/types.ts)
+Source: [`packages/team/agent-team/src/types.ts:181`](../packages/team/agent-team/src/types.ts)
 
 <a id="teammode--log-only"></a>
 
@@ -1057,7 +1057,7 @@ Source: [`packages/team/agent-team/src/types.ts:177`](../packages/team/agent-tea
 'team/mode': { enabled: boolean }
 ```
 
-Source: [`packages/team/agent-team/src/types.ts:171`](../packages/team/agent-team/src/types.ts)
+Source: [`packages/team/agent-team/src/types.ts:175`](../packages/team/agent-team/src/types.ts)
 
 <a id="teamtask--log-only"></a>
 
@@ -1070,7 +1070,7 @@ Source: [`packages/team/agent-team/src/types.ts:171`](../packages/team/agent-tea
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamTaskSnapshot](subsystems/agent-team.md)
 
-Source: [`packages/team/agent-team/src/types.ts:175`](../packages/team/agent-team/src/types.ts)
+Source: [`packages/team/agent-team/src/types.ts:179`](../packages/team/agent-team/src/types.ts)
 
 ### `todo/*`
 
@@ -5043,7 +5043,7 @@ Sources: [`packages/team/agent-team/src/types.ts:50`](../packages/team/agent-tea
 
 SHA-256: `2eafefdc6f79a4922d68a787a09eaf4dd2b2369c3777fba4c05e800b5678ac8e`
 
-Sources: [`packages/team/agent-team/src/types.ts:108`](../packages/team/agent-team/src/types.ts)
+Sources: [`packages/team/agent-team/src/types.ts:112`](../packages/team/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -5063,7 +5063,7 @@ Sources: [`packages/team/agent-team/src/types.ts:108`](../packages/team/agent-te
 
 SHA-256: `2152caf1a71e588e4df2358a806dea24936c1c47131134f01a12939d12cdc0c0`
 
-Sources: [`packages/team/agent-team/src/types.ts:117`](../packages/team/agent-team/src/types.ts)
+Sources: [`packages/team/agent-team/src/types.ts:121`](../packages/team/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -5073,7 +5073,7 @@ Sources: [`packages/team/agent-team/src/types.ts:117`](../packages/team/agent-te
 | `senderName` | required | `string` |
 | `teamId` | required | `string` |
 
-<a id="persistence-type-sha256-51edec100659da3a9bd9c3f6ba1180f5e64ec9a1585e5057080df45c180bd357"></a>
+<a id="persistence-type-sha256-4018a00144474b6c60dc1aa6e5c1f03611c66bd739833779a7d20a511df6d082"></a>
 
 <a id="persistence-type-packagesteamagent-teamsrctypeststeamtasksnapshot"></a>
 
@@ -5081,7 +5081,7 @@ Sources: [`packages/team/agent-team/src/types.ts:117`](../packages/team/agent-te
 
 ### `TeamTaskSnapshot`
 
-SHA-256: `51edec100659da3a9bd9c3f6ba1180f5e64ec9a1585e5057080df45c180bd357`
+SHA-256: `4018a00144474b6c60dc1aa6e5c1f03611c66bd739833779a7d20a511df6d082`
 
 Sources: [`packages/team/agent-team/src/types.ts:64`](../packages/team/agent-team/src/types.ts)
 
@@ -5091,6 +5091,7 @@ Sources: [`packages/team/agent-team/src/types.ts:64`](../packages/team/agent-tea
 | `description` | required | `string` |
 | `id` | required | `string` |
 | `ownerId` | optional | `string` |
+| `ownerName` | optional | `string` |
 | `revision` | required | `number` |
 | `status` | required | [`TeamTaskStatus`](#persistence-type-sha256-b2d2a01e51341a3bfec809198952c8c830a7899f4cb6ecd3c1dc0b5d9a2af943) |
 | `subject` | required | `string` |
@@ -6322,7 +6323,7 @@ Sources: [`packages/experimental/liveshare/src/host/viewer-principal.ts:29`](../
 
 SHA-256: `c2a13242efc3bea4b36a843ddf1524ff4d33c765a71b582fa1fdbfa4fa148434`
 
-Sources: [`packages/team/agent-team/src/types.ts:171`](../packages/team/agent-team/src/types.ts)
+Sources: [`packages/team/agent-team/src/types.ts:175`](../packages/team/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7952,7 +7953,7 @@ Sources: [`packages/web/web-search-deepseek/src/provider.ts:61`](../packages/web
 
 SHA-256: `b1ebd5cda47d90d980bb05bffc3f970c51537b9aff15b3bc3d639811727741b1`
 
-Sources: [`packages/team/agent-team/src/types.ts:173`](../packages/team/agent-team/src/types.ts)
+Sources: [`packages/team/agent-team/src/types.ts:177`](../packages/team/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7980,7 +7981,7 @@ Sources: [`packages/core/session/src/types.ts:338`](../packages/core/session/src
 
 SHA-256: `ea08ec1df0c33108fd03345b9af199cf04dea450aa045d3c683f216311403403`
 
-Sources: [`packages/team/agent-team/src/types.ts:177`](../packages/team/agent-team/src/types.ts)
+Sources: [`packages/team/agent-team/src/types.ts:181`](../packages/team/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7994,7 +7995,7 @@ Sources: [`packages/team/agent-team/src/types.ts:177`](../packages/team/agent-te
 
 SHA-256: `0bcfaf5566d271028429ac7b562cb59053c9d78b8ae14708c35fac835108d1b1`
 
-Sources: [`packages/team/agent-team/src/types.ts:179`](../packages/team/agent-team/src/types.ts)
+Sources: [`packages/team/agent-team/src/types.ts:183`](../packages/team/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -8134,17 +8135,17 @@ Sources: [`packages/compaction/compaction-image-offload/src/projection.ts:25`](.
 |---|---|---|
 | `targets` | required | [`ImageOffloadTarget[]`](#persistence-type-sha256-9e2c06d8653585b33d72d5c1a80da79c8a24a88c284409bca15cc0f0ead5ebfb) |
 
-<a id="persistence-type-sha256-a40d12070f6f4a124f32fb3cc86e7857554702e32f0eda3080a25c4b9ac9b18c"></a>
+<a id="persistence-type-sha256-a9427866376b691aace0ce25aa0e1bdec2a14156a05152947a467da3f7967cb9"></a>
 
 ### `{ task, teamId, version }`
 
-SHA-256: `a40d12070f6f4a124f32fb3cc86e7857554702e32f0eda3080a25c4b9ac9b18c`
+SHA-256: `a9427866376b691aace0ce25aa0e1bdec2a14156a05152947a467da3f7967cb9`
 
-Sources: [`packages/team/agent-team/src/types.ts:175`](../packages/team/agent-team/src/types.ts)
+Sources: [`packages/team/agent-team/src/types.ts:179`](../packages/team/agent-team/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
-| `task` | required | [`TeamTaskSnapshot`](#persistence-type-sha256-51edec100659da3a9bd9c3f6ba1180f5e64ec9a1585e5057080df45c180bd357) |
+| `task` | required | [`TeamTaskSnapshot`](#persistence-type-sha256-4018a00144474b6c60dc1aa6e5c1f03611c66bd739833779a7d20a511df6d082) |
 | `teamId` | required | `string` |
 | `version` | required | `2` |
 
@@ -9027,17 +9028,17 @@ SHA-256: `920d87e22b7409bcc7224f8b1dc7f5101c33574c75627c65baab12b85cc96e75`
 | `time` | required | `number` |
 | `type` | required | `"team/mode"` |
 
-<a id="persistence-type-sha256-d595ec73b32b016a6055333c67a5d646032b22e672da1d4a09c5b1ae398a093a"></a>
+<a id="persistence-type-sha256-bca0f9cb63d8620b6954bb045b07bb07cb557513a7f0e2e177f5e87f704e7ba7"></a>
 
 <a id="persistence-type-eventteamtask"></a>
 
 ### `{ type: "team/task" }`
 
-SHA-256: `d595ec73b32b016a6055333c67a5d646032b22e672da1d4a09c5b1ae398a093a`
+SHA-256: `bca0f9cb63d8620b6954bb045b07bb07cb557513a7f0e2e177f5e87f704e7ba7`
 
 | Property | Presence | Type |
 |---|---|---|
-| `data` | required | [`{ task, teamId, version }`](#persistence-type-sha256-a40d12070f6f4a124f32fb3cc86e7857554702e32f0eda3080a25c4b9ac9b18c) |
+| `data` | required | [`{ task, teamId, version }`](#persistence-type-sha256-a9427866376b691aace0ce25aa0e1bdec2a14156a05152947a467da3f7967cb9) |
 | `ignorable` | optional | `true` |
 | `seq` | required | `number` |
 | `time` | required | `number` |

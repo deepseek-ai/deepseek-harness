@@ -54,7 +54,7 @@ kind: "package-reference"
 - **等待收件箱输入** — `wait_agent` 属于 `@deepseek-ai/dsh-tool-subagent-control`，无需此包即可使用。
 - **创建和联系队友**——`subagent`、`subagent_fork`、`send_message`、`list_agents` 和 `interrupt_agent` 来自子代理工具包，本包不修改它们。
 
-任务 `owner` 参数接受 `list_agents` 显示的名称：`lead`、完整名称（例如 `reviewer/checker`）或 Session id。任务结果以 `owner` 报告该名称；所有者没有名称时报告其 Session id；`unowned` 仍筛选没有所有者的任务。Team 服务以 `ownerId` Session id 存储并授权所有者。根可将任务重新分配给自身或任意可达的可继续执行后代；历史名册记录不授予权限。其他 agent 自行认领就绪任务。更新会检查归属和修订。
+任务 `owner` 参数接受 `list_agents` 显示的名称：`lead`、完整名称（例如 `reviewer/checker`）或 Session id。任务结果以 `owner` 报告该名称；所有者没有名称时报告其 Session id；`unowned: true` 筛选没有所有者的任务，`unowned: false` 筛选已分配任务。`owner` 和 `unowned` 筛选不可同时使用。Team 服务以 `ownerId` Session id 授权所有者，并在分配时将完整名称保存到 `ownerName`。根可将任务重新分配给自身或任意可达的可继续执行后代；历史名册记录不授予权限。其他 agent 自行认领就绪任务。更新会检查归属和修订。
 
 ### 成功与失败的表现
 
@@ -89,7 +89,7 @@ kind: "package-reference"
 
 ### 策略与工具
 
-一次插件注册提供动态的 `team:policy` 段落和四个条件任务工具。各提供方读取调用者根 Session 的选择，包括 fork 子级。根不可用时禁用 Team 工具与指导。树权限从 `ctx.subagents.rootOf(agent)` 派生；在 `ctx.agentTeams` 中任务负责人保留为 Session id。所有者参数通过 `ctx.subagents.resolveName()` 解析，解析不授予权限。结果以 `owner` 取代 `ownerId`，名称取自 `ctx.subagents.listDescendants()` 行的 `path`。`team_task_list` 和 `team_task_get` 仅在返回的任务有所有者时读取名称；`team_task_update` 在变更提交前读取名称，因此读取失败会在任务变更前拒绝调用。身份、发现、通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)，在切换 Team 模式时保持不变。subagent 运行时负责投递最终结果。
+一次插件注册提供动态的 `team:policy` 段落和四个条件任务工具。各提供方读取调用者根 Session 的选择，包括 fork 子级。根不可用时禁用 Team 工具与指导。树权限从 `ctx.subagents.rootOf(agent)` 派生；在 `ctx.agentTeams` 中任务负责人保留为 Session id。所有者参数通过 `ctx.subagents.resolveName()` 解析，解析不授予权限。结果以 `owner: ownerName ?? ownerId` 取代保存的 `ownerId` 和 `ownerName` 字段。展示任务或编辑其内容无需读取后代目录。身份、发现、通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)，在切换 Team 模式时保持不变。subagent 运行时负责投递最终结果。
 
 ### 按作用域注册与拆除
 

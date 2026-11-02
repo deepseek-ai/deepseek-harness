@@ -3,8 +3,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { SessionId } from '@deepseek-ai/dsh-session'
-import { ROOT_AGENT_NAME, SubagentError } from '@deepseek-ai/dsh-subagent'
+import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import { TeamTaskId } from '@deepseek-ai/dsh-agent-team'
 import type { TeamTaskView } from '@deepseek-ai/dsh-agent-team'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -76,7 +75,7 @@ function jsonOutput<const S extends ValueSchemaSpec>(schema: S): {
 }
 
 /** One task as the model sees it: the owner's Session id is replaced by its agent name. */
-type NamedTaskView = Omit<TeamTaskView, 'ownerId'> & { readonly owner?: string }
+type NamedTaskView = Omit<TeamTaskView, 'ownerId' | 'ownerName'> & { readonly owner?: string }
 
 /** Recover the exact caller guaranteed by conditional Team-tool discovery. */
 function callingAgent(agent: Agent | undefined, toolName: string): Agent {
@@ -96,20 +95,8 @@ export function apply(ctx: Context, config: Config = {}): void {
       throw new Error(`tool-agent-team: ${key} is no longer supported; create teammates with a subagent tool`)
     }
   }
-  /** Map tree members to the names list_agents reports; the root is `lead`, unnamed history keeps its Session id. */
-  const memberNames = async (caller: Agent, signal: AbortSignal): Promise<ReadonlyMap<SessionId, string>> => {
-    const root = ctx.subagents.rootOf(caller)
-    const names = new Map<SessionId, string>([[root.id, ROOT_AGENT_NAME]])
-    for (const entry of await ctx.subagents.listDescendants(root.id, signal)) {
-      if (entry.path !== undefined) names.set(entry.id, entry.path)
-    }
-    return names
-  }
-  /** Read names only when a result names an owner. */
-  const ownerNamesFor = (caller: Agent, tasks: readonly TeamTaskView[], signal: AbortSignal): Promise<ReadonlyMap<SessionId, string>> =>
-    tasks.some(task => task.ownerId !== undefined) ? memberNames(caller, signal) : Promise.resolve(new Map())
-  const withOwnerName = (names: ReadonlyMap<SessionId, string>, { ownerId, ...task }: TeamTaskView): NamedTaskView =>
-    ownerId === undefined ? task : { ...task, owner: names.get(ownerId) ?? ownerId }
+  const withOwnerName = ({ ownerId, ownerName, ...task }: TeamTaskView): NamedTaskView =>
+    ownerId === undefined ? task : { ...task, owner: ownerName ?? ownerId }
   const enabled = (agent: Agent | undefined): boolean => {
     if (agent === undefined) return false
     try {
@@ -147,8 +134,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
         ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
       }, exec.signal)
-      // New tasks have no owner.
-      return withOwnerName(new Map(), task)
+      return withOwnerName(task)
     },
   }), { when: ({ agent }) => enabled(agent) })
 
@@ -161,7 +147,8 @@ export function apply(ctx: Context, config: Config = {}): void {
         enum: ['pending', 'in_progress', 'completed'],
         description: 'Optional exact status filter.',
       },
-      owner: { type: 'string', description: 'Optional owner agent name filter; use unowned for tasks without an owner.' },
+      owner: { type: 'string', description: 'Optional owner agent name filter; cannot be combined with unowned.' },
+      unowned: { type: 'boolean', description: 'Filter tasks by whether they have no owner; cannot be combined with owner.' },
       ready: { type: 'boolean', description: 'Optional readiness filter.' },
       cursor: { type: 'integer', description: 'Zero-based result offset. Defaults to 0.' },
       limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
@@ -173,17 +160,18 @@ export function apply(ctx: Context, config: Config = {}): void {
       if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error('cursor must be a non-negative safe integer')
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('limit must be an integer from 1 through 100')
       const caller = callingAgent(exec.agent, 'team_task_list')
-      const owner = args.owner === undefined || args.owner === 'unowned'
-        ? args.owner
+      if (args.owner !== undefined && args.unowned !== undefined) throw new Error('owner and unowned filters cannot be combined')
+      const owner = args.owner === undefined
+        ? undefined
         : await ctx.subagents.resolveName(caller, args.owner, exec.signal)
       const filtered = ctx.agentTeams.listTasks(caller).filter(task =>
         (args.status === undefined || task.status === args.status)
-        && (owner === undefined || (owner === 'unowned' ? task.ownerId === undefined : task.ownerId === owner))
+        && (owner === undefined || task.ownerId === owner)
+        && (args.unowned === undefined || (task.ownerId === undefined) === args.unowned)
         && (args.ready === undefined || task.ready === args.ready))
       const page = filtered.slice(cursor, cursor + limit)
-      const names = await ownerNamesFor(caller, page, exec.signal)
       return {
-        tasks: page.map(task => withOwnerName(names, task)),
+        tasks: page.map(withOwnerName),
         ...(cursor + limit < filtered.length ? { nextCursor: cursor + limit } : {}),
       }
     },
@@ -196,10 +184,10 @@ export function apply(ctx: Context, config: Config = {}): void {
       task_id: { type: 'string', required: true, description: 'Shared task id.' },
     },
     output: jsonOutput(TASK_VIEW_SCHEMA),
-    async execute(args, exec) {
+    execute(args, exec) {
       const caller = callingAgent(exec.agent, 'team_task_get')
       const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))
-      return withOwnerName(await ownerNamesFor(caller, [task], exec.signal), task)
+      return Promise.resolve(withOwnerName(task))
     },
   }), { when: ({ agent }) => enabled(agent) })
 
@@ -225,8 +213,6 @@ export function apply(ctx: Context, config: Config = {}): void {
     async execute(args, exec) {
       const caller = callingAgent(exec.agent, 'team_task_update')
       const taskId = TeamTaskId(args.task_id)
-      // Read names before the change commits, so a failed read never reports a committed update as failed.
-      const names = await memberNames(caller, exec.signal)
       const task = await ctx.agentTeams.updateTask(caller, {
         taskId,
         expectedRevision: args.expected_revision,
@@ -237,7 +223,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
         ...args.owner === undefined ? {} : { owner: await ctx.subagents.resolveName(caller, args.owner, exec.signal) },
       }, exec.signal)
-      return withOwnerName(names, task)
+      return withOwnerName(task)
     },
   }), { when: ({ agent }) => enabled(agent) })
 }

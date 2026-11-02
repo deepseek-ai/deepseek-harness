@@ -923,7 +923,6 @@
         },
         "meta": {
           "kind": "activation",
-          "subagentId": "{{child-1}}",
           "name": "agent-1"
         }
       },
@@ -2820,7 +2819,6 @@
             },
             "meta": {
               "kind": "activation",
-              "subagentId": "{{child-1}}",
               "name": "agent-1"
             }
           },

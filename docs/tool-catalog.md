@@ -2340,7 +2340,11 @@ List shared tasks, including readiness, owner, revision, blockers, and write-sco
     },
     "owner": {
       "type": "string",
-      "description": "Optional owner agent name filter; use unowned for tasks without an owner."
+      "description": "Optional owner agent name filter; cannot be combined with unowned."
+    },
+    "unowned": {
+      "type": "boolean",
+      "description": "Filter tasks by whether they have no owner; cannot be combined with owner."
     },
     "ready": {
       "type": "boolean",

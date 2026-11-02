@@ -2346,7 +2346,11 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "owner": {
       "type": "string",
-      "description": "Optional owner agent name filter; use unowned for tasks without an owner."
+      "description": "Optional owner agent name filter; cannot be combined with unowned."
+    },
+    "unowned": {
+      "type": "boolean",
+      "description": "Filter tasks by whether they have no owner; cannot be combined with owner."
     },
     "ready": {
       "type": "boolean",

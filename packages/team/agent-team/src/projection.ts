@@ -33,9 +33,12 @@ const teamTaskSnapshotSchema = z.object({
   description: z.string(),
   status: z.enum(['pending', 'in_progress', 'completed', 'deleted']),
   ownerId: sessionIdSchema.optional(),
+  ownerName: z.string().min(1).optional(),
   blockedBy: z.array(teamTaskIdSchema),
   writeScopes: z.array(z.string()),
-}).strict() as z.ZodType<TeamTaskSnapshot>
+}).strict().refine(task => task.ownerName === undefined || task.ownerId !== undefined, {
+  message: 'task ownerName requires ownerId',
+}) as z.ZodType<TeamTaskSnapshot>
 
 const teamEventSelectorSchema = z.object({
   version: nonNegativeSafeInteger,
@@ -158,6 +161,7 @@ const teamTaskViewSchema = z.object({
   blockedBy: z.array(teamTaskIdSchema),
   writeScopes: z.array(z.string()),
   ownerId: sessionIdSchema.optional(),
+  ownerName: z.string().min(1).optional(),
   ready: z.boolean(),
   writeScopeWarnings: z.array(z.string()),
 }).strict() as z.ZodType<TeamTaskView>
@@ -204,7 +208,7 @@ export function teamProjectionView(state: TeamProjectionState): TeamProjection {
  */
 export const teamProjectionDefinition = {
   key: 'agentTeam',
-  stateVersion: 7,
+  stateVersion: 8,
   stateSchema: teamProjectionEntrySchema,
   init: (header, inheritedEventCount: SessionLogOffset) => emptyTeamState(header.id, inheritedEventCount),
   apply: applyProjectionEvent,
