@@ -1115,7 +1115,7 @@ describe('desktop main startup', () => {
         ['cut', undefined, undefined], ['copy', undefined, undefined], ['paste', undefined, undefined],
         ['pasteAndMatchStyle', 'Shift+Command+V', undefined], ['pasteAndMatchStyle', 'Option+Shift+Command+V', false],
         ['delete', undefined, undefined], ['selectAll', undefined, undefined], ['separator', undefined, undefined],
-        ['Substitutions', undefined, undefined], ['Speech', undefined, undefined]]
+        [en.substitutionsMenu, undefined, undefined], [en.speechMenu, undefined, undefined]]
       : undefined)
     const application = template[0]!.submenu as MenuItemConstructorOptions[]
     expect(application.filter(item => item.visible !== false).map(describeItem)).toEqual(platform === 'darwin'

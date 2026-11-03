@@ -1043,20 +1043,20 @@ async function main(): Promise<void> {
   // its standard menus and application hide commands declared explicitly.
   // Keep app.name stable: Electron derives its default userData directory from it.
   const darwin = process.platform === 'darwin'
-  // A copy of Electron's macOS Edit menu, with its English labels, that binds Paste and Match
-  // Style to Shift+Command+V as chat and document apps do; Electron's Option+Shift+Command+V stays as a hidden alias.
-  const macEditMenu: MenuItemConstructorOptions = { role: 'editMenu', submenu: [
+  // A copy of Electron's macOS Edit menu that binds Paste and Match Style to Shift+Command+V
+  // as chat and document apps do; Electron's Option+Shift+Command+V stays as a hidden alias.
+  const macEditMenu = (): MenuItemConstructorOptions => ({ role: 'editMenu', submenu: [
     { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
     { role: 'cut' }, { role: 'copy' }, { role: 'paste' },
     { role: 'pasteAndMatchStyle', accelerator: 'Shift+Command+V' },
     { role: 'pasteAndMatchStyle', accelerator: 'Option+Shift+Command+V', visible: false },
     { role: 'delete' }, { role: 'selectAll' }, { type: 'separator' },
-    { label: 'Substitutions', submenu: [{ role: 'showSubstitutions' }, { type: 'separator' },
+    { label: currentDesktopLocale().messages.substitutionsMenu, submenu: [{ role: 'showSubstitutions' }, { type: 'separator' },
       { role: 'toggleSmartQuotes' }, { role: 'toggleSmartDashes' }, { role: 'toggleTextReplacement' }] },
-    { label: 'Speech', submenu: [{ role: 'startSpeaking' }, { role: 'stopSpeaking' }] },
-  ] }
+    { label: currentDesktopLocale().messages.speechMenu, submenu: [{ role: 'startSpeaking' }, { role: 'stopSpeaking' }] },
+  ] })
   const platformMenus = (): MenuItemConstructorOptions[] => darwin
-    ? [shortcuts.fileMenu(currentDesktopLocale().messages), macEditMenu, { role: 'windowMenu' }]
+    ? [shortcuts.fileMenu(currentDesktopLocale().messages), macEditMenu(), { role: 'windowMenu' }]
     : [{ role: 'editMenu' }]
   const hideCommands: MenuItemConstructorOptions[] = darwin
     ? [{ role: 'hide', label: currentDesktopLocale().messages.hideApplication },
