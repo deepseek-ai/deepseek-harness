@@ -6,3 +6,5 @@ recording: authored
 header:
   class: sdk-team-default-enabled
   pin: true
+  childSystemPrompts: [1]
+  childToolSchemas: [1]

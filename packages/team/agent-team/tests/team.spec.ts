@@ -103,18 +103,22 @@ async function waitRunning(ctx: Context, id: SessionId): Promise<Agent> {
 }
 
 describe('Tree-owned task boards', () => {
-  it('enables new roots through configuration and shares their saved mode with descendants', async () => {
-    const { ctx, lead } = await setup([], { defaultEnabled: true }, false)
+  it.each(['spawn', 'fork'])('shares the configured root mode with real %s children', async (provider) => {
+    const { ctx, lead } = await setup(['hang', 'hang'], { defaultEnabled: true }, false)
     expect(durable(lead).enabled).toBe(true)
     const task = await ctx.agentTeams.createTask(lead, { subject: 'configured', description: 'shared board' })
-    const child = await resident(ctx, lead, 'configured-child')
+    const started = await spawn(ctx, lead, 'configured child', provider)
+    const child = await waitRunning(ctx, started.childId)
     expect(ctx.agentTeams.isEnabled(child)).toBe(true)
     expect(ctx.agentTeams.listTasks(child)).toEqual([task])
     expect(child.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
     await ctx.agentTeams.setEnabled(lead, false)
     expect(ctx.agentTeams.isEnabled(child)).toBe(false)
-    const laterChild = await resident(ctx, lead, 'disabled-child')
+    const later = await spawn(ctx, lead, 'disabled child', provider)
+    const laterChild = await waitRunning(ctx, later.childId)
     expect(ctx.agentTeams.isEnabled(laterChild)).toBe(false)
+    await later.dispose()
+    await started.dispose()
   })
 
   it.each([undefined, false])('leaves new roots off with defaultEnabled=%s', async (defaultEnabled) => {
@@ -136,6 +140,7 @@ describe('Tree-owned task boards', () => {
 
   it('initializes an ordinary fork independently of its inherited mode and tasks', async () => {
     const { ctx, lead } = await setup([], { defaultEnabled: true }, false)
+    lead.session.append('step/start', { turn: 1, step: 1 })
     await ctx.agentTeams.createTask(lead, { subject: 'source', description: 'belongs to source' })
     await ctx.agentTeams.setEnabled(lead, false)
     const handle = await ctx.agents.create({
@@ -154,6 +159,17 @@ describe('Tree-owned task boards', () => {
     const { ctx, teamFiber } = await setup([], { defaultEnabled: true }, false)
     await teamFiber.dispose()
     const handle = await ctx.agents.create({ sessionId: SessionId('without-team') })
+    expect(handle.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
+    await handle.dispose()
+  })
+
+  it('does not apply the default when startup announces a root with its own steps', async () => {
+    const { ctx } = await setup([], { defaultEnabled: true }, false)
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('started-root'),
+      setup: (_ctx, agent) => { agent.session.append('step/start', { turn: 1, step: 1 }) },
+    })
+    expect(ctx.agentTeams.isEnabled(handle.agent)).toBe(false)
     expect(handle.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
     await handle.dispose()
   })

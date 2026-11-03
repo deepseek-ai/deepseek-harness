@@ -1219,7 +1219,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(events.filter(event => event.type === 'team/mode').map(event => event.data.enabled)).toEqual([true])
         expect(events.findIndex(event => event.type === 'team/mode'))
           .toBeLessThan(events.findIndex(event => event.type === 'step/start'))
-        expect(modelRequests).toHaveLength(3)
+        expect(modelRequests).toHaveLength(6)
         const first = modelRequests[0]!
         expect((first.tools as JsonObject[]).map(tool => tool.name)).toEqual(expect.arrayContaining([
           'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update',
@@ -1228,8 +1228,16 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(events.filter(event => event.type === 'team/task').map(event => event.data.task))
           .toEqual([expect.objectContaining({ subject: 'Configured Team', status: 'pending' })])
         expect(events.filter(event => event.type === 'tool/result').map(event => event.data.message.isError))
-          .toEqual([false, false])
-        expect(JSON.stringify(modelRequests[2]!.messages)).toContain('Configured Team')
+          .toEqual([false, false, false])
+        const child = parseSessionLog(ordered[1]!.content)
+        expect(child.filter(event => event.type === 'team/mode')).toEqual([])
+        const childResults = child.filter(event => event.type === 'tool/result')
+        expect(childResults.map(event => event.data.message.isError)).toEqual([false])
+        expect(JSON.stringify(childResults)).toContain('Configured Team')
+        for (const request of modelRequests) {
+          expect((request.tools as JsonObject[]).map(tool => tool.name)).toContain('team_task_list')
+          expect(JSON.stringify(request.messages)).toContain('shared task board')
+        }
       }
       if (scenario.name === 'command-attachments') {
         const parent = ordered[0]
