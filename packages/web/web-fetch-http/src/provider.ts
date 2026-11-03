@@ -32,6 +32,17 @@ export const LOCAL_FETCH_PROVIDER_ID = 'http'
 /** The anonymous HTTP(S) fetch provider. */
 export class HttpFetchProvider implements WebFetchProvider {
   readonly id = LOCAL_FETCH_PROVIDER_ID
+  /** Picker description: what this provider suits and what it costs or cannot do. */
+  readonly description: NonNullable<WebFetchProvider['description']> = {
+    en: 'Fetches URLs directly from this machine with no API key or charges, including intranet and loopback addresses. Decodes text, HTML, JSON, and XML only; no JavaScript, cookies, or PDFs. You can also try DeepSeek Fetch API.',
+    zh: '本机直接请求，免 API Key 与计费，可访问内网和本机。仅解码 HTML、JSON 等文本，不执行 JavaScript、不带登录态，不支持 PDF；也可以试试 DeepSeek Fetch API',
+    ja: 'このマシンから URL を直接取得し、API キーや料金は不要で、イントラネットやループバックのアドレスにもアクセスできます。テキスト、HTML、JSON、XML のみをデコードし、JavaScript、Cookie、PDF には対応しません。DeepSeek Fetch API も試せます。',
+    es: 'Obtiene las URL directamente desde este equipo, sin clave de API ni cargos, incluidas direcciones de la intranet y de bucle invertido. Solo decodifica texto, HTML, JSON y XML; sin JavaScript, cookies ni PDF. También puede probar DeepSeek Fetch API.',
+    fr: 'Récupère les URL directement depuis cette machine, sans clé API ni frais, y compris les adresses intranet et de bouclage. Ne décode que le texte, le HTML, le JSON et le XML ; ni JavaScript, ni cookies, ni PDF. Vous pouvez aussi essayer DeepSeek Fetch API.',
+    de: 'Ruft URLs direkt von diesem Rechner ab, ohne API-Schlüssel oder Kosten, auch Intranet- und Loopback-Adressen. Dekodiert nur Text, HTML, JSON und XML; kein JavaScript, keine Cookies, keine PDFs. Sie können auch DeepSeek Fetch API ausprobieren.',
+    ru: 'Загружает URL напрямую с этого компьютера без ключа API и оплаты, включая адреса интрасети и loopback. Декодирует только текст, HTML, JSON и XML; без JavaScript, cookie и PDF. Можно также попробовать DeepSeek Fetch API.',
+    pt: 'Obtém URLs diretamente desta máquina, sem chave de API nem cobranças, incluindo endereços da intranet e de loopback. Decodifica apenas texto, HTML, JSON e XML; sem JavaScript, cookies ou PDFs. Você também pode experimentar a DeepSeek Fetch API.',
+  }
 
   /** @param limits - resolved transport and response limits. */
   constructor(private readonly limits: HttpFetchLimits) {}

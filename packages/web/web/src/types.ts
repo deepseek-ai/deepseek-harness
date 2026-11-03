@@ -6,6 +6,21 @@
  */
 
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * The set of registered search or fetch providers changed: one provider
+     * registered, or its registration was disposed. Payload-free; consumers
+     * re-read `ctx.web.listProviders()` (Remote `web/listProviders`) for the
+     * new list. Fires after each committed registry mutation. Observer failures
+     * are contained and cannot veto the mutation.
+     * @mode emit
+     */
+    'web/providers-changed'(): void
+  }
+}
 
 /**
  * What one search-capable backend is asked to search. Each request carries one
@@ -18,17 +33,17 @@ export interface WebSearchRequest {
   /**
    * Upper bound on returned sources; the seam truncates to it. Omitted = no
    * bound. `dsh-tool-web` always sets it. A provider whose API supports a
-   * result-count control (Exa's `numResults`) should apply it at the request
-   * layer as a cost/latency optimization; the seam enforces the bound
-   * regardless.
+   * result-count control (the DeepSeek Search API's `count`) should apply it
+   * at the request layer as a cost/latency optimization; the seam enforces the
+   * bound regardless.
    */
   readonly maxResults?: number
 }
 
 /**
  * Normalized search outcome. `content` is optional provider-generated answer
- * text or summary (Exa and DeepSeek return none; Perplexity returns a
- * generated answer).
+ * text or summary (DeepSeek returns none; a provider whose API generates an
+ * answer returns it here).
  * `sources[]` is the portable citation shape. `truncated` is set by the seam
  * when it cut `sources[]` down to `maxResults`.
  */
@@ -44,8 +59,8 @@ export interface WebSearchResult {
 /**
  * One citeable source. A source always has a URL; `title`, `snippet`, `summary`,
  * and `publishedAt` are optional because not every provider returns them — forcing
- * adapters to invent them would make the seam lie (Perplexity citations may be
- * URL-only). `dsh-tool-web` renders `title ?? hostname(url)` for display.
+ * adapters to invent them would make the seam lie (some providers return
+ * URL-only citations). `dsh-tool-web` renders `title ?? hostname(url)` for display.
  */
 export interface WebSearchSource {
   readonly url: string
@@ -104,6 +119,14 @@ export type WebFetchBody =
  */
 export interface WebSearchProvider {
   readonly id: string
+  /** Display name of this provider; consumers display `id` when it is omitted. */
+  readonly title?: string
+  /**
+   * What a provider picker shows under this provider when it is selected: what the provider
+   * is suited for and what it costs or cannot do. Translations are keyed by lowercase language
+   * id with a required English entry; consumers show nothing when it is omitted.
+   */
+  readonly description?: LocalizedText
   /** Cheap local usability check; must not make network calls. */
   available(): boolean
   /**
@@ -124,6 +147,14 @@ export interface WebSearchProvider {
  */
 export interface WebFetchProvider {
   readonly id: string
+  /** Display name of this provider; consumers display `id` when it is omitted. */
+  readonly title?: string
+  /**
+   * What a provider picker shows under this provider when it is selected: what the provider
+   * is suited for and what it costs or cannot do. Translations are keyed by lowercase language
+   * id with a required English entry; consumers show nothing when it is omitted.
+   */
+  readonly description?: LocalizedText
   /** Cheap local usability check; must not make network calls. */
   available(): boolean
   /**
@@ -136,6 +167,28 @@ export interface WebFetchProvider {
   ready?(llmProvider: string | undefined): Promise<boolean>
   /** Retrieve one URL; honor `signal` for cancellation. */
   fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>
+}
+
+/** One registered provider as listed by {@link WebProviderList}. */
+export interface WebProviderInfo {
+  /** The provider's registry id, the value `searchProvider` / `fetchProvider` select. */
+  readonly id: string
+  /** The provider's display name; absent when the provider declares none. */
+  readonly title?: string
+  /** The provider's picker description; absent when the provider declares none. */
+  readonly description?: LocalizedText
+}
+
+/**
+ * Every currently registered search and fetch provider, each list in
+ * registration order. Availability does not filter the lists: a registered
+ * provider whose `available()` answers false is still listed.
+ */
+export interface WebProviderList {
+  /** Registered search providers. */
+  readonly search: readonly WebProviderInfo[]
+  /** Registered fetch providers. */
+  readonly fetch: readonly WebProviderInfo[]
 }
 
 /**

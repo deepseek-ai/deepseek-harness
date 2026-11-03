@@ -4636,7 +4636,7 @@ export type ApprovalPolicy = 'ask' | 'never'
 ## `@deepseek-ai/dsh-web`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web/src/index.ts:57`](../packages/web/web/src/index.ts)
+- `source`: [`packages/web/web/src/index.ts:62`](../packages/web/web/src/index.ts)
 
 ```ts config-catalog
 /**
@@ -4695,17 +4695,16 @@ export interface Config {
 
 - `inject`: `web`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web-deepseek-api/src/index.ts:38`](../packages/web/web-deepseek-api/src/index.ts)
+- `source`: [`packages/web/web-deepseek-api/src/index.ts:58`](../packages/web/web-deepseek-api/src/index.ts)
 
 ```ts config-catalog
-/** Settings read by the next search or fetch without re-registering either provider. */
+/**
+ * Settings read by the next search or fetch without re-registering either provider. A non-empty `*BaseURL` or
+ * `*ApiKeyEnv` gives that capability its own endpoint and key; with neither, it follows the conversation's DeepSeek
+ * credential. Stored fields of earlier settings (`baseURL`, `apiKeyEnv`, `apiKey`) are not schema fields: they load
+ * without error and have no effect.
+ */
 export interface Config {
-  /** Literal DeepSeek API key; prefer {@link apiKeyEnv} so no secret enters configuration files. */
-  apiKey: Volatile<string | undefined>
-  /** Credential reference resolved for each operation; defaults to `DEEPSEEK_API_KEY`. */
-  apiKeyEnv: Volatile<string>
-  /** API base including its path prefix; `/search` and `/fetch` are appended. */
-  baseURL: Volatile<string>
   /** Search API results per search, from 1 through 50; a smaller request bound wins. Defaults to 10. */
   count: Volatile<number>
   /**
@@ -4716,6 +4715,20 @@ export interface Config {
   searchRequestsPerSecond: Volatile<number>
   /** Send the triggering user question, bounded to 128 characters, as `ori_question`. Defaults to true. */
   sendOriginalQuestion: Volatile<boolean>
+  /**
+   * Own Search API base including its path prefix; `/search` is appended. With only {@link searchApiKeyEnv} set, the
+   * official base applies.
+   */
+  searchBaseURL: Volatile<string | undefined>
+  /** Own Search API credential reference. With only {@link searchBaseURL} set, `DEEPSEEK_API_KEY` applies. */
+  searchApiKeyEnv: Volatile<string | undefined>
+  /**
+   * Own Fetch API base including its path prefix; `/fetch` is appended. With only {@link fetchApiKeyEnv} set, the
+   * official base applies.
+   */
+  fetchBaseURL: Volatile<string | undefined>
+  /** Own Fetch API credential reference. With only {@link fetchBaseURL} set, `DEEPSEEK_API_KEY` applies. */
+  fetchApiKeyEnv: Volatile<string | undefined>
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-web-deepseek-api -->
@@ -4752,7 +4765,7 @@ export interface Config {
 
 - `inject`: `web`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web-search-deepseek/src/index.ts:51`](../packages/web/web-search-deepseek/src/index.ts)
+- `source`: [`packages/web/web-search-deepseek/src/index.ts:54`](../packages/web/web-search-deepseek/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config (all optional — `apply` fills env-var and constant defaults). */
@@ -4774,56 +4787,6 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-web-search-deepseek -->
-
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-web-search-exa -->
-<a id="deepseek-aidsh-web-search-exa"></a>
-
-## `@deepseek-ai/dsh-web-search-exa`
-
-- `inject`: `web`
-- `source`: [`packages/web/web-search-exa/src/index.ts:35`](../packages/web/web-search-exa/src/index.ts)
-
-```ts config-catalog
-/** Plugin config (all optional — `apply` fills env-var and constant defaults). */
-export interface Config {
-  /** Exa API key. Falls back to `$EXA_API_KEY`. Empty → provider unavailable. */
-  apiKey?: string
-  /** Endpoint base; `/search` is appended. Defaults to the public API. */
-  baseURL?: string
-  /** Retrieval mode sent as Exa's `type`. Defaults to `auto`. */
-  searchType?: 'auto' | 'keyword' | 'neural'
-  /** Default result count when a request carries no `maxResults`. Omitted = none. */
-  numResults?: number
-  /** Highlight sentences requested per result. Defaults to 1. */
-  highlightsPerResult?: number
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-web-search-exa -->
-
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-web-search-perplexity -->
-<a id="deepseek-aidsh-web-search-perplexity"></a>
-
-## `@deepseek-ai/dsh-web-search-perplexity`
-
-- `inject`: `web`
-- `source`: [`packages/web/web-search-perplexity/src/index.ts:30`](../packages/web/web-search-perplexity/src/index.ts)
-
-```ts config-catalog
-/** Plugin config (all optional — `apply` fills env-var and constant defaults). */
-export interface Config {
-  /** Perplexity API key. Falls back to `$PERPLEXITY_API_KEY`. Empty → unavailable. */
-  apiKey?: string
-  /** Endpoint base; `/chat/completions` is appended. Defaults to the public API. */
-  baseURL?: string
-  /** Search model name. Defaults to `sonar`. */
-  model?: string
-  /** Upper bound on generated answer tokens. Defaults to 1024. */
-  maxTokens?: number
-  /** Recency window sent as `search_recency_filter`. Omitted = no filter. */
-  searchRecency?: 'day' | 'week' | 'month' | 'year'
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-web-search-perplexity -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-webhook-github -->
 <a id="deepseek-aidsh-webhook-github"></a>

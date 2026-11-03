@@ -4278,19 +4278,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'web',
     summary: 'The web access service.',
-    description: 'The web access service. Registered as `ctx.web` (one instance per context).\n\nSelection semantics (resolved at execution time, never order-dependent):\n\n- A configured id that is registered and `available()` → that provider.\n- A configured id not registered → `WEB_PROVIDER_CONFIGURED_MISSING`.\n- A configured id registered but unavailable → `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`.\n- No id configured, exactly one registered usable provider → that provider.\n- No id configured, multiple usable providers → `WEB_PROVIDER_AMBIGUOUS`.\n- No id configured, no usable provider → `WEB_PROVIDER_UNAVAILABLE`.',
+    description: 'The web access service. Registered as `ctx.web` (one instance per context) and exposed to Clients as the `web` Remote namespace (`listProviders`).\n\nSelection semantics (resolved at execution time, never order-dependent):\n\n- A configured id that is registered and `available()` → that provider.\n- A configured id not registered → `WEB_PROVIDER_CONFIGURED_MISSING`.\n- A configured id registered but unavailable → `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`.\n- No id configured, exactly one registered usable provider → that provider.\n- No id configured, multiple usable providers → `WEB_PROVIDER_AMBIGUOUS`.\n- No id configured, no usable provider → `WEB_PROVIDER_UNAVAILABLE`.',
     methods: [
       {
         signature: 'registerSearchProvider(provider: WebSearchProvider): () => void',
-        description: 'Register a search provider. Throws WebError `WEB_DUPLICATE_PROVIDER` if its id is already registered for search. Returns a disposer; disposed with the calling fiber.',
+        description: 'Register a search provider. `listProviders()` lists it until the registration is disposed, which happens with the calling fiber or through the returned disposer; registration and disposal each emit `web/providers-changed`. Throws WebError `WEB_DUPLICATE_PROVIDER` if its id is already registered for search.',
         parameters: [{ name: 'provider', description: 'the provider; its `id` is the registry key.' }],
         returns: 'the disposer that unregisters the provider.',
       },
       {
         signature: 'registerFetchProvider(provider: WebFetchProvider): () => void',
-        description: 'Register a fetch provider. Throws WebError `WEB_DUPLICATE_PROVIDER` if its id is already registered for fetch. Returns a disposer; disposed with the calling fiber.',
+        description: 'Register a fetch provider, with the listing, disposal, and event behavior of WebRuntime.registerSearchProvider. Throws WebError `WEB_DUPLICATE_PROVIDER` if its id is already registered for fetch.',
         parameters: [{ name: 'provider', description: 'the provider; its `id` is the registry key.' }],
         returns: 'the disposer that unregisters the provider.',
+      },
+      {
+        signature: '@Remote listProviders(): WebProviderList',
+        description: 'List every registered search and fetch provider for provider pickers. Availability does not filter the lists.',
+        parameters: [],
+        returns: 'detached `{ id, title, description }` entries per capability, in registration order.',
       },
       {
         signature: 'async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>',
@@ -5323,6 +5329,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Ask composed answerers for structured user input.',
     description: 'Ask composed answerers for structured user input. Return an answer to claim the request or call `next()` to delegate. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.',
     parameters: [{ name: 'request', description: 'pending user-question request.' }],
+  },
+  {
+    name: 'web/providers-changed',
+    mode: 'emit',
+    signature: '\'web/providers-changed\'(): void',
+    summary: 'The set of registered search or fetch providers changed: one provider registered, or its registration was disposed.',
+    description: 'The set of registered search or fetch providers changed: one provider registered, or its registration was disposed. Payload-free; consumers re-read `ctx.web.listProviders()` (Remote `web/listProviders`) for the new list. Fires after each committed registry mutation. Observer failures are contained and cannot veto the mutation.',
+    parameters: [],
   },
   {
     name: 'webserver/index-inject',
@@ -9946,7 +9960,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebFetchProvider',
-    declaration: 'export interface WebFetchProvider {\n    readonly id: string;\n    available(): boolean;\n    ready?(llmProvider: string | undefined): Promise<boolean>;\n    fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>;\n}',
+    declaration: 'export interface WebFetchProvider {\n    readonly id: string;\n    readonly title?: string;\n    readonly description?: LocalizedText;\n    available(): boolean;\n    ready?(llmProvider: string | undefined): Promise<boolean>;\n    fetch(request: WebFetchRequest, signal?: AbortSignal): Promise<WebFetchResult>;\n}',
   },
   {
     name: 'WebFetchRequest',
@@ -9993,6 +10007,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type WebhookSourceId = Branded<\'WebhookSourceId\'>;',
   },
   {
+    name: 'WebProviderInfo',
+    declaration: 'export interface WebProviderInfo {\n    readonly id: string;\n    readonly title?: string;\n    readonly description?: LocalizedText;\n}',
+  },
+  {
+    name: 'WebProviderList',
+    declaration: 'export interface WebProviderList {\n    readonly search: readonly WebProviderInfo[];\n    readonly fetch: readonly WebProviderInfo[];\n}',
+  },
+  {
     name: 'WebResource',
     declaration: 'export type WebResource = (request: Request, peer?: PeerScope) => Promise<Response>;',
   },
@@ -10014,7 +10036,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebSearchProvider',
-    declaration: 'export interface WebSearchProvider {\n    readonly id: string;\n    available(): boolean;\n    ready?(llmProvider: string | undefined): Promise<boolean>;\n    search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>;\n}',
+    declaration: 'export interface WebSearchProvider {\n    readonly id: string;\n    readonly title?: string;\n    readonly description?: LocalizedText;\n    available(): boolean;\n    ready?(llmProvider: string | undefined): Promise<boolean>;\n    search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult>;\n}',
   },
   {
     name: 'WebSearchRequest',
