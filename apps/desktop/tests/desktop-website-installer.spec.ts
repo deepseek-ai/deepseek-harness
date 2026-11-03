@@ -61,7 +61,7 @@ it.each(['preset', 'qualification', 'attempt', 'commit', 'target', 'repository',
   await expect(prepareWebsiteInstaller(f.directory, { ...f.manifest, source }, f.route, 'owner/repo', 'production-123')).rejects.toThrow('identity or production qualification mismatch')
 })
 
-it.each(['absent', 'missing-header', 'wrong-header'] as const)('reconciles %s after audit failure without repeating the fixed-object PUT', async (initial) => {
+it.each(['absent', 'missing-header', 'wrong-header', 'header-not-retained'] as const)('reconciles %s after audit failure without repeating the fixed-object PUT', async (initial) => {
   const f = await fixture()
   const installer = await prepareWebsiteInstaller(f.directory, f.manifest, f.route, 'owner/repo', 'production-123')
   let stored: Buffer | undefined = initial === 'absent' ? undefined : f.bytes
@@ -75,7 +75,7 @@ it.each(['absent', 'missing-header', 'wrong-header'] as const)('reconciles %s af
       storedDisposition = disposition
       stored = request.body
       answer(response)
-    } else if (stored) answer(response, 200, stored, storedDisposition ? { 'content-disposition': storedDisposition } : {})
+    } else if (stored) answer(response, 200, stored, storedDisposition && initial !== 'header-not-retained' ? { 'content-disposition': storedDisposition } : {})
     else answer(response, 404, cosError('NoSuchKey'))
   })
   try {
@@ -88,9 +88,13 @@ it.each(['absent', 'missing-header', 'wrong-header'] as const)('reconciles %s af
     const transport = desktopPublishCos(installer.plan, credentials, createClient)
     await expect(uploadWebsiteInstaller(installer, credentials, transport, async (event) => {
       if (event === 'uploaded') throw new Error('audit unavailable')
-    }, createClient)).rejects.toThrow('audit unavailable')
+    }, { createClient })).rejects.toThrow(initial === 'header-not-retained' ? 'remote download filename unconfirmed' : 'audit unavailable')
+    if (initial === 'header-not-retained') {
+      expect(server.requests.filter(request => request.method === 'PUT')).toHaveLength(1)
+      return
+    }
     const events: string[] = []
-    expect(await uploadWebsiteInstaller(installer, credentials, transport, async (event) => { events.push(event) }, createClient)).toBe('present')
+    expect(await uploadWebsiteInstaller(installer, credentials, transport, async (event) => { events.push(event) }, { createClient })).toBe('present')
     expect(events).toEqual(['uploaded'])
     expect(stored).toEqual(f.bytes)
     expect(server.requests.filter(request => request.method === 'PUT')).toHaveLength(1)
@@ -103,7 +107,7 @@ it('does not replace changed bytes when recovering an already completed publicat
   try {
     await expect(uploadWebsiteInstaller(installer, { secretId: 'fixture-id', secretKey: 'fixture-key' },
       { read: async () => ({ size: 1, sha512: 'different' }) }, async () => { throw new Error('unexpected write intent') },
-      () => { throw new Error('unexpected PUT') }, true)).rejects.toThrow('recorded upload no longer matches')
+      { createClient: () => { throw new Error('unexpected PUT') }, previouslyUploaded: true })).rejects.toThrow('recorded upload no longer matches')
   } finally { await installer.handle.close() }
 })
 

@@ -11,7 +11,7 @@ import { publishWebsiteCi, websiteApproval } from '../scripts/publish-website-ci
 vi.mock('node:timers/promises', () => ({ setTimeout: async () => {} }))
 afterEach(() => vi.restoreAllMocks())
 
-it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'metadata', 'stable', 'approval'] as const)('preserves publication recovery for %s', async (scenario) => {
+it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'metadata', 'metadata-retry', 'stable', 'approval'] as const)('preserves publication recovery for %s', async (scenario) => {
   const root = await mkdtemp(join(tmpdir(), 'website-ci-'))
   try {
     const config = join(root, 'packaging')
@@ -34,17 +34,25 @@ it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'metadata', 'st
     await writeFile(join(root, 'releases', '12', '1', 'manifest.json'), JSON.stringify(manifest))
     const approval = websiteApproval(manifest, 'production-123')
     await writeFile(join(records, 'state.json'), JSON.stringify({ approval, upload: 'uploaded' }))
+    if (scenario === 'metadata') await writeFile(join(records, 'state.json'), JSON.stringify({ approval, upload: 'uploaded', purgeAttempt: '1', purge: { zoneId: 'zone-fixture', publicUrl: 'https://download.deepseek.com/desktop/dsh-latest-macos-arm64.dmg', submittedAt: '2026-10-30T00:00:00.000Z', jobId: 'old-job', status: 'success' } }))
+    if (scenario === 'metadata-retry') await writeFile(join(records, 'state.json'), JSON.stringify({ approval, upload: 'upload-intent', uploadConfirmed: true }))
     const env = { RUNNER_NAME: 'mini', GITHUB_REPOSITORY: 'owner/repo', GITHUB_RUN_ID: '99',
       GITHUB_RUN_ATTEMPT: '1', DSH_PACKAGING_CONFIG_DIR: config, DESKTOP_PUBLISH_ROUTE: JSON.stringify(route),
       DESKTOP_WEBSITE_APPROVAL: approval, DOWNLOAD_PROD_EO_ZONE_ID: 'zone-fixture', GITHUB_OUTPUT: join(root, 'output') }
-    if (scenario === 'upload' || scenario === 'put' || scenario === 'uploaded' || scenario === 'metadata' || scenario === 'stable' || scenario === 'approval') {
+    if (scenario === 'upload' || scenario === 'put' || scenario === 'uploaded' || scenario === 'metadata' || scenario === 'metadata-retry' || scenario === 'stable' || scenario === 'approval') {
       await writeFile(join(root, 'releases', '12', '1', manifest.files[0]!.name), 'x')
       if (scenario === 'upload' || scenario === 'put') await rm(join(records, 'state.json'))
       let stored = scenario !== 'put'
       let headerStored = scenario !== 'metadata'
-      const server = await startCosLoopback((request, response) => {
+      const server = await startCosLoopback(async (request, response) => {
         if (request.method === 'PUT') {
           expect(request.body.toString()).toBe('x')
+          if (scenario === 'metadata') {
+            const state = JSON.parse(await readFile(join(records, 'state.json'), 'utf8'))
+            expect(state).toMatchObject({ upload: 'upload-intent', uploadConfirmed: true })
+            expect(state.purge).toBeUndefined()
+            expect(state.purgeAttempt).toBeUndefined()
+          }
           expect(request.headers['content-disposition']).toBe(`attachment; filename="${manifest.files[0]!.name}"`)
           stored = true
           headerStored = true
@@ -52,7 +60,7 @@ it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'metadata', 'st
           return
         }
         if (!stored) answer(response, 404, cosError('NoSuchKey'))
-        else answer(response, 200, 'x', headerStored ? { 'content-disposition': `attachment; filename="${manifest.files[0]!.name}"` } : {})
+        else answer(response, 200, scenario === 'metadata-retry' ? 'y' : 'x', headerStored ? { 'content-disposition': `attachment; filename="${manifest.files[0]!.name}"` } : {})
       })
       const original = desktopCos.createDesktopCos
       vi.spyOn(desktopCos, 'createDesktopCos').mockImplementation((credentials) => {
@@ -61,7 +69,10 @@ it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'metadata', 'st
         return client
       })
       try {
-        if (scenario === 'approval') {
+        if (scenario === 'metadata-retry') {
+          await expect(publishWebsiteCi('upload', env)).rejects.toThrow('recorded upload no longer matches')
+          expect(server.requests.map(request => request.method)).toEqual(['GET'])
+        } else if (scenario === 'approval') {
           await expect(publishWebsiteCi('upload', { ...env, DESKTOP_WEBSITE_APPROVAL: 'changed' })).rejects.toThrow('approved build or destination changed')
           expect(server.requests).toHaveLength(0)
         } else {
@@ -73,6 +84,13 @@ it.each(['accepted', 'unconfirmed', 'upload', 'put', 'uploaded', 'metadata', 'st
           expect(server.requests.map(request => request.method)).toEqual((scenario === 'put' || scenario === 'metadata') ? ['GET', 'PUT', 'GET'] : ['GET'])
           expect(JSON.parse(await readFile(join(records, 'state.json'), 'utf8'))).toMatchObject({ approval, upload: 'uploaded' })
           expect(await readFile(env.GITHUB_OUTPUT, 'utf8')).toContain(`record=${records}`)
+          if (scenario === 'metadata') {
+            const submit = vi.spyOn(teo.v20220901.Client.prototype, 'CreatePurgeTask').mockResolvedValue({ JobId: 'new-job' })
+            vi.spyOn(teo.v20220901.Client.prototype, 'DescribePurgeTasks').mockRejectedValue(new Error('unavailable'))
+            await publishWebsiteCi('purge', env)
+            expect(submit).toHaveBeenCalledOnce()
+            expect(JSON.parse(await readFile(join(records, 'state.json'), 'utf8')).purge.jobId).toBe('new-job')
+          }
         }
       } finally { await server.close() }
       return

@@ -72,7 +72,8 @@ export function desktopPublishCos(
       try {
         await cosOperation(cos, 900_000, () => cos.putObject({
           ...address, Body: body, ContentLength: digest.size, ContentType: artifact.contentType,
-          Headers: { 'Content-MD5': md5.digest('base64'), ...(forbidOverwrite ? { 'x-cos-forbid-overwrite': 'true' } : {}) },
+          Headers: { 'Content-MD5': md5.digest('base64'),
+            ...(artifact.contentDisposition ? { 'Content-Disposition': artifact.contentDisposition } : {}), ...(forbidOverwrite ? { 'x-cos-forbid-overwrite': 'true' } : {}) },
         }))
       } catch (error) {
         throw new DesktopCosOperationError('PutObject', error)
