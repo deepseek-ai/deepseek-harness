@@ -2157,7 +2157,7 @@ Source: [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/sub
 
 ### `wait_agent`
 
-Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately when that input is already pending.
+Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if new input is pending. `timedOut: false` means new input is pending. Pending input is delivered to the model after code execution finishes.
 
 ```json
 {
