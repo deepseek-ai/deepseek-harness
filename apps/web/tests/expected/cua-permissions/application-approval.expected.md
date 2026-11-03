@@ -5,5 +5,5 @@
   - button "Risks"
   - paragraph: Manage app permissions for all sessions on the plugin page.
 - button "Reject"
-- button "Always allow"
 - button "Allow for this session"
+- button "Always allow"

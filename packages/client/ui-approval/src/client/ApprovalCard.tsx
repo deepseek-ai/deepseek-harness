@@ -80,12 +80,12 @@ function ApprovalFlow(props: FactoryComponentPropsOf<'conversation.approval.card
           <Button variant="outline" className={css.reject} disabled={answered} onClick={() => { answer(onReject) }}>
             {t('reject')}
           </Button>
-          {onAlways !== undefined && <Button variant="outline" disabled={answered} onClick={() => { answer(onAlways) }}>
-            {t('allowAlways')}
-          </Button>}
-          <Button variant="primary" disabled={answered} onClick={() => { answer(onAllow) }}>
+          <Button variant={onAlways === undefined ? 'primary' : 'outline'} disabled={answered} onClick={() => { answer(onAllow) }}>
             {allowLabel ?? t('allowOnce')}
           </Button>
+          {onAlways !== undefined && <Button variant="primary" disabled={answered} onClick={() => { answer(onAlways) }}>
+            {t('allowAlways')}
+          </Button>}
         </div>
       </div>
     </div>
