@@ -107,7 +107,7 @@ function imageMeta(meta: unknown): ImageMeta | null {
  * @param content - the settled result's content blocks.
  * @returns the narrowed references, or null when no valid image block is present.
  */
-export function imageReferences(content: readonly unknown[]): ImageAttachmentRef[] | null {
+function imageReferences(content: readonly unknown[]): ImageAttachmentRef[] | null {
   const refs: ImageAttachmentRef[] = []
   for (const part of content) {
     if (typeof part !== 'object' || part === null) continue
@@ -171,7 +171,7 @@ function extraTexts(content: readonly { type: string; text?: string }[]): string
  * @param content - the settled result's content blocks.
  * @returns true when every block is a text or image object with usable fields.
  */
-export function fullyRendered(content: readonly unknown[]): boolean {
+function fullyRendered(content: readonly unknown[]): boolean {
   return content.every((part) => {
     if (typeof part !== 'object' || part === null) return false
     const { type, text } = part as { type?: unknown; text?: unknown }

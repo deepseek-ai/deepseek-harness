@@ -55,7 +55,7 @@ While an external file drag is over the page, the full-viewport overlay announce
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The plugin provides the root-scoped `conversation.images.content` Factory. Its official `MessageImages` entries fill `conversation.chat.user.images`, `conversation.chat.message.images`, `conversation.trajectory.images`, `tool.call.images`, and `tool.call.office_render.images` at priority 100 through `ctx.slots.inject`. A lower-priority entry replaces only its own position; removing it restores the official entry. All defaults reuse one gallery with explicit image references, authorized loader, layout hints, and optional complete labels. The Factory owns gallery presentation and default copy, not Session state or read authorization. Each domain owns its Slot declaration. The composer attachment rail remains a separate entry, and the package entry exports no components.
+The plugin provides the root-scoped `conversation.images.content` Factory. Its official `MessageImages` entries fill `conversation.chat.user.images`, `conversation.chat.message.images`, `conversation.trajectory.images`, and `tool.call.images` at priority 100 through `ctx.slots.inject`. A lower-priority entry replaces only its own position; removing it restores the official entry. All defaults reuse one gallery with explicit image references, authorized loader, layout hints, and optional complete labels. The Factory owns gallery presentation and default copy, not Session state or read authorization. Each domain owns its Slot declaration. The composer attachment rail remains a separate entry, and the package entry exports no components.
 
 | File | Role |
 |---|---|

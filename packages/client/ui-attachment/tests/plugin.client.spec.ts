@@ -10,7 +10,7 @@ import { MessageImages, MessageImagesContent } from '../src/client/MessageImages
 
 const IMAGE_SLOTS = [
   'conversation.chat.message.images', 'conversation.chat.user.images',
-  'conversation.trajectory.images', 'tool.call.images', 'tool.call.office_render.images',
+  'conversation.trajectory.images', 'tool.call.images',
 ] as const
 
 async function bench() {
@@ -32,7 +32,6 @@ async function bench() {
       'conversation.chat.user.images': { kind: 'single', scope: 'session' },
       'conversation.trajectory.images': { kind: 'single', scope: 'session' },
       'tool.call.images': { kind: 'single', scope: 'session' },
-      'tool.call.office_render.images': { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
   const readFileDrag = vi.fn(() => undefined)

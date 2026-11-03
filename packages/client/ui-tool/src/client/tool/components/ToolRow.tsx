@@ -6,8 +6,7 @@ import {
   diffTotals,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ContextMenuTriggerProps } from '@deepseek-ai/dsh-client-ui-context-menu/client'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ToolImagesOwnerProps } from '../../contract/slots.ts'
+import type { PropsRenderSlots, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { OpenFileOptions, UseDisclosure } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { MessageImageLoader } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { CHAT_DIFF_MAX_LINES, type DiffCardModel } from '../models/diff-card-model.ts'
@@ -71,11 +70,11 @@ export interface ToolRowProps {
    */
   image?: ImageCardModel | null | undefined
   /**
-   * Dispatch the image gallery through the image slot declared by the
-   * toolview that owns this row, supplied together with the
+   * Dispatch the image gallery through the tool-owned `tool.call.images`
+   * slot, supplied by the toolview that owns this row together with the
    * Gateway-authorized loader.
    */
-  renderImages?: ((owner: ToolImagesOwnerProps) => ReactNode) | undefined
+  renderSlot?: PropsRenderSlots<'tool.call.images'>['renderSlot'] | undefined
   /** Gateway-authorized image URL loader for the gallery slot. */
   loadImage?: MessageImageLoader | undefined
   search?: SearchCardModel | null | undefined
@@ -180,7 +179,7 @@ export const ToolRow = memo(function ToolRow({
   diff,
   read,
   image,
-  renderImages,
+  renderSlot,
   loadImage,
   search,
   web,
@@ -205,7 +204,7 @@ export const ToolRow = memo(function ToolRow({
     : localizeTerminalCardModel(terminal, t), [terminal, t])
   const diffBody = diff ?? null
   const readBody = read ?? null
-  const imageBody = image !== undefined && image !== null && renderImages !== undefined && loadImage !== undefined
+  const imageBody = image !== undefined && image !== null && renderSlot !== undefined && loadImage !== undefined
     ? image
     : null
   const searchBody = search ?? null
@@ -366,7 +365,7 @@ export const ToolRow = memo(function ToolRow({
                      flattened output, which JSON.stringifies the image block. They
                      stay visible when the attachment slot renders nothing. */
                   <div className={css.imageBody}>
-                    {renderImages !== undefined && loadImage !== undefined && renderImages({
+                    {renderSlot !== undefined && loadImage !== undefined && renderSlot('tool.call.images', {
                       images: imageBody.images,
                       loadImage,
                       align: 'start',
@@ -454,7 +453,7 @@ export const ToolRow = memo(function ToolRow({
     </div>
   ) : undefined, [
     open, detailsBody, askQuestionBody, terminalBody, terminalLabels, diffBody, diffLabels, readBody, readLabels,
-    imageBody, renderImages, loadImage, searchBody, searchLabels, webBody, webLabels, inspect, t, onOpenFile,
+    imageBody, renderSlot, loadImage, searchBody, searchLabels, webBody, webLabels, inspect, t, onOpenFile,
     variant, bodyText, cardBody, outputText, state,
   ])
   return (

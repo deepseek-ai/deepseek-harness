@@ -17,7 +17,7 @@ afterEach(cleanup)
 
 const SLOTS = [
   'conversation.chat.user.images', 'conversation.chat.message.images',
-  'conversation.trajectory.images', 'tool.call.images', 'tool.call.office_render.images',
+  'conversation.trajectory.images', 'tool.call.images',
 ] as const
 
 async function bench() {
@@ -49,7 +49,6 @@ async function bench() {
     'conversation.chat.message.images': { kind: 'single', scope: 'session' },
     'conversation.trajectory.images': { kind: 'single', scope: 'session' },
     'tool.call.images': { kind: 'single', scope: 'session' },
-    'tool.call.office_render.images': { kind: 'single', scope: 'session' },
   }, ({ renderSlot, SessionProvider }) => <SessionProvider session={session}>
     {SLOTS.map(name => <section key={name} data-testid={name}>{renderSlot(name, input)}</section>)}
   </SessionProvider>)

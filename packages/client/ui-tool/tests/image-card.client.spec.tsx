@@ -277,9 +277,9 @@ describe('ReadImageRow keyed toolview', () => {
   const rowProps = (
     block: StartedToolCall | ToolResultNode,
     renderSlot?: PropsRenderSlots<'tool.call.images'>['renderSlot'],
-    loader: MessageImageLoader | null = loadImage,
+    loader: MessageImageLoader = loadImage,
   ): Parameters<typeof ReadImageRow>[0] => ({
-    useDisclosure, callId: 'c1', toolName: 'read_image', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(), renderSlot, loadImage: loader ?? undefined,
+    useDisclosure, callId: 'c1', toolName: 'read_image', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(), renderSlot, loadImage: loader,
     useContextMenu: contextMenuHook(), resolveFilePath: path => path,
     sessionId: SID, useSessions: bindSnapshotSelector(list()),
     t,
@@ -362,7 +362,7 @@ describe('ReadImageRow keyed toolview', () => {
   })
 
   it('degrades to the text body when neither the slot nor the loader is supplied', () => {
-    const view = render(<ReadImageRow {...rowProps(settled(), undefined, null)} />)
+    const view = render(<ReadImageRow {...rowProps(settled(), undefined)} />)
     toggleRow(view)
     expect(view.container.querySelector('[data-images]')).toBeNull()
   })

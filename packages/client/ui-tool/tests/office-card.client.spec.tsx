@@ -11,13 +11,12 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import type { StartedToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { MessageImageLoader } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { zh, en, ja, es, fr, de, ru, pt } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ToolTreeProps } from '../src/client/contract/slots.ts'
 import { officeRowModel } from '../src/client/tool/models/office-card-model.ts'
-import { OfficeRow, OfficeRenderRow, officeToolview, type OfficeRenderRowProps } from '../src/client/tool/toolviews/office-row.tsx'
+import { OfficeRow, officeToolview, type OfficeRowProps } from '../src/client/tool/toolviews/office-row.tsx'
 
 afterEach(cleanup)
 
@@ -42,17 +41,16 @@ const settled = (over: Partial<ToolResultNode> = {}, argsRaw = RENDER_ARGS, name
 })
 
 describe('officeRowModel', () => {
-  it('derives a render card from the recorded input path and result images', () => {
+  it('derives a render row from the recorded input path', () => {
     expect(officeRowModel('office_render', settled(), '/w/app')).toEqual({
       titleKey: 'tool.title.officeRender', summary: 'docs/deck.pptx', filePath: '/w/app/docs/deck.pptx',
-      image: { path: '/w/app/docs/deck.pptx', images: [{ attachment: image }], extraText: `${SUMMARY}\nPage 2: 800x600 px` },
     })
   })
 
   it('titles each tool and summarizes written outputs without an operation argument', () => {
     const convert = '{"input":"/w/app/deck.pptx","format":"pdf"}'
     expect(officeRowModel('office_convert', running(convert, 'office_convert'), '/w/app')).toEqual({
-      titleKey: 'tool.title.officeConvert', summary: 'deck.pptx → pdf', filePath: '/w/app/deck.pptx', image: null,
+      titleKey: 'tool.title.officeConvert', summary: 'deck.pptx → pdf', filePath: '/w/app/deck.pptx',
     })
     expect(officeRowModel('office_recalculate', running('{"input":"book.xlsx"}', 'office_recalculate'))).toMatchObject({
       titleKey: 'tool.title.officeRecalculate', summary: 'book.xlsx', filePath: undefined,
@@ -66,19 +64,11 @@ describe('officeRowModel', () => {
   ])('selects %s from its wire name even when operation metadata conflicts', (name, titleKey) => {
     const block = settled({ meta: { path: '/w/app/docs/deck.pptx', operation: 'convert' } },
       '{"operation":"render","input":"docs/deck.pptx"}', name)
-    const model = officeRowModel(name, block)
-    expect(model.titleKey).toBe(titleKey)
-    expect(model.image !== null).toBe(name === 'office_render')
+    expect(officeRowModel(name, block).titleKey).toBe(titleKey)
   })
 
-  it('declines the image card for failures, malformed metadata, unknown blocks, and malformed images', () => {
-    expect(officeRowModel('office_render', settled({ isError: true })).image).toBeNull()
-    expect(officeRowModel('office_render', settled({ meta: { path: 'relative.pptx' } })).image).toBeNull()
-    expect(officeRowModel('office_render', settled({ content: [{ type: 'text', text: SUMMARY }, { type: 'reasoning', text: 'x' } as never] })).image).toBeNull()
-    expect(officeRowModel('office_render', settled({ content: [{ type: 'text', text: SUMMARY }] })).image).toBeNull()
-    expect(officeRowModel('office_render', settled({ content: [{ type: 'image', attachment: image }] })).image).toEqual({
-      path: '/w/app/docs/deck.pptx', images: [{ attachment: image }], extraText: null,
-    })
+  it('ignores a relative recorded path', () => {
+    expect(officeRowModel('office_render', settled({ meta: { path: 'relative.pptx' } })).filePath).toBeUndefined()
   })
 })
 
@@ -88,29 +78,31 @@ describe('OfficeRow', () => {
     byId: { [SID]: { id: SID, displayTitle: 'r', running: false, retainedBy: {}, blank: false, updatedAt: 0, cwd: '/w/app' } },
     phase: 'ready', projectionsBySession: {},
   }))
-  const loadImage: MessageImageLoader = vi.fn(() => Promise.reject(new Error('not used')))
-  const props = (block: StartedToolCall | ToolResultNode, renderSlot = vi.fn(() => <div data-images />)): OfficeRenderRowProps => ({
+  const props = (block: StartedToolCall | ToolResultNode): OfficeRowProps => ({
     useDisclosure, callId: 'c1', toolName: block.name,
     ...'kind' in block ? { phase: 'result' as const, block } : { phase: block.phase, block },
-    openFile: vi.fn(), renderSlot, loadImage, useContextMenu: contextMenuHook(), resolveFilePath: path => path,
+    openFile: vi.fn(), useContextMenu: contextMenuHook(), resolveFilePath: path => path,
     sessionId: SID, useSessions: list(), cwd: '/w/app', t,
-  } as OfficeRenderRowProps)
+  } as OfficeRowProps)
 
-  it('expands a render to its images through the office image slot', () => {
-    const renderSlot = vi.fn(() => <div data-images />)
-    const view = render(<OfficeRenderRow {...props(settled(), renderSlot)} />)
+  it('expands a render to its result text without the image references', () => {
+    const view = render(<OfficeRow {...props(settled())} />)
     expect(view.container.textContent).toContain('渲染文档')
     fireEvent.click(view.container.querySelector('[data-expandable]')!)
-    expect(renderSlot).toHaveBeenLastCalledWith('tool.call.office_render.images', { images: [{ attachment: image }], loadImage, align: 'start' })
-    expect(view.container.textContent).toContain(SUMMARY)
-    expect(view.container.textContent).toContain('Page 2: 800x600 px')
+    expect(view.container.textContent).toContain(`${SUMMARY}\nPage 2: 800x600 px`)
+    expect(view.container.textContent).not.toContain('attachmentId')
+    expect(view.container.querySelector('[data-images]')).toBeNull()
   })
 
-  it('shows a running call without images', () => {
-    const renderSlot = vi.fn(() => <div data-images />)
-    const view = render(<OfficeRenderRow {...props(running(), renderSlot)} />)
+  it('falls back to the flattened output when a result has no text', () => {
+    const view = render(<OfficeRow {...props(settled({ content: [{ type: 'image', attachment: image }] }))} />)
+    fireEvent.click(view.container.querySelector('[data-expandable]')!)
+    expect(view.container.textContent).toContain('attachmentId')
+  })
+
+  it('shows a running call with its input', () => {
+    const view = render(<OfficeRow {...props(running())} />)
     expect(view.container.textContent).toContain('docs/deck.pptx')
-    expect(renderSlot).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -131,10 +123,9 @@ describe('OfficeRow', () => {
     expect(rowProps.openFile).toHaveBeenCalledWith(input)
     fireEvent.click(view.container.querySelector('[data-expandable]')!)
     expect(view.container.textContent).toContain(`${output}\n${warning}`)
-    expect(rowProps.renderSlot).not.toHaveBeenCalled()
   })
 
-  it('registers all three wire names, declares images only for render, and removes them on disposal', async () => {
+  it('registers all three wire names and removes them on disposal', async () => {
     const runtime = await SlotTestRuntime.create()
     onTestFinished(() => runtime.dispose())
     const locale = new LocaleRuntime(runtime.ctx)
@@ -145,12 +136,10 @@ describe('OfficeRow', () => {
     expect(runtime.slots.entries('tool.call.toolview')).toHaveLength(0)
     await runtime.root.declare({ 'tool.call.toolview': { kind: 'keyed', scope: 'session' } }, () => null)
     expect(runtime.slots.entries('tool.call.toolview').map(entry => [entry.options.key, entry.component])).toEqual([
-      ['office_render', OfficeRenderRow], ['office_convert', OfficeRow], ['office_recalculate', OfficeRow],
+      ['office_render', OfficeRow], ['office_convert', OfficeRow], ['office_recalculate', OfficeRow],
     ])
-    expect(runtime.slots.spec('tool.call.office_render.images')).toEqual({ kind: 'single', scope: 'session' })
     await fiber.dispose()
     expect(runtime.slots.entries('tool.call.toolview')).toHaveLength(0)
-    expect(runtime.slots.spec('tool.call.office_render.images')).toBeUndefined()
   })
 })
 

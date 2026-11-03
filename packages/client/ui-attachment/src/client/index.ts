@@ -44,7 +44,4 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('tool.call.images', () => ctx.slots.register({
     name: 'tool.call.images', priority: 100,
   }, MessageImages))
-  ctx.slots.inject('tool.call.office_render.images', () => ctx.slots.register({
-    name: 'tool.call.office_render.images', priority: 100,
-  }, MessageImages))
 }

@@ -17,9 +17,7 @@
 // content until `execute` returns, so a running read_image shows the summary row
 // alone.
 
-import { useCallback } from 'react'
 import { toolFileInject } from '../file-menu.ts'
-import type { ToolImagesOwnerProps } from '../../contract/slots.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import { imageCardModel } from '../models/image-card-model.ts'
 import { readFamilyRow, type ReadImageRowProps } from './read-family-row.tsx'
@@ -33,10 +31,9 @@ import { CONVERSATION_NS as NS } from '../../locale.ts'
 export function ReadImageRow(props: ReadImageRowProps) {
   const { block, renderSlot, loadImage } = props
   const { getTriggerProps } = props.useContextMenu()
-  const renderImages = useCallback((owner: ToolImagesOwnerProps) => renderSlot('tool.call.images', owner), [renderSlot])
   return readFamilyRow(props, {
     image: imageCardModel(block),
-    renderImages,
+    renderSlot,
     loadImage,
   }, getTriggerProps)
 }
