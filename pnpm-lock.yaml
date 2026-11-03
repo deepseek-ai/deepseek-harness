@@ -9990,6 +9990,9 @@ importers:
       '@deepseek-ai/dsh-experimental-forge-session':
         specifier: workspace:*
         version: link:../forge-session
+      '@deepseek-ai/dsh-experimental-tool-worktree':
+        specifier: workspace:*
+        version: link:../tool-worktree
       '@deepseek-ai/dsh-experimental-worktree':
         specifier: workspace:*
         version: link:../worktree

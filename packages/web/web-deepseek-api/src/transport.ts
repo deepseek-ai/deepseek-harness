@@ -59,6 +59,8 @@ interface DeepSeekWebRequest<T> {
   guidance: DeepSeekWebGuidance
   /** Record model input before dispatch; a throw prevents dispatch. */
   recordRequest?: (endpoint: string) => void
+  /** Wait for permission to send after credentials resolve; a rejection prevents dispatch. */
+  waitToSend?: (signal?: AbortSignal) => Promise<void>
 }
 
 /* jscpd:ignore-start */
@@ -169,6 +171,7 @@ export async function dispatchDeepSeekWeb<T>(
 ): Promise<T> {
   const { endpoint, body, decode, recordRequest, guidance } = request
   const auth = await authHeaders(options, request, signal)
+  await request.waitToSend?.(signal)
   throwIfSearchAborted(signal)
   recordRequest?.(endpoint)
   throwIfSearchAborted(signal)
@@ -367,8 +370,13 @@ function throwIfSearchAborted(signal?: AbortSignal): void {
   if (signal?.aborted === true) throw searchAborted(signal)
 }
 
-/** Build the provider's stable cancellation error while retaining the caller's reason. */
-function searchAborted(signal?: AbortSignal, fallback?: unknown): WebError {
+/**
+ * Build the provider's stable cancellation error while retaining the caller's reason.
+ * @param signal - the aborted caller signal; its reason becomes the cause.
+ * @param fallback - the cause when the signal has not aborted, such as a fetch `AbortError`.
+ * @returns a `WEB_ABORTED` error.
+ */
+export function searchAborted(signal?: AbortSignal, fallback?: unknown): WebError {
   return new WebError('DeepSeek web request aborted', 'WEB_ABORTED', {
     cause: signal?.aborted === true ? signal.reason : fallback,
   })

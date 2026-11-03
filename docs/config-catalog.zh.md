@@ -4452,9 +4452,9 @@ export interface Config {
   search?: boolean
   /** Register `web_fetch`. Defaults to true. */
   fetch?: boolean
-  /** Upper bound on sources returned by one `web_search` call. */
+  /** Upper bound on sources returned by one `web_search` call. Defaults to 10. */
   searchMaxResults?: number
-  /** Upper bound on queries accepted by one `web_search` call. */
+  /** Upper bound on queries accepted by one `web_search` call. Defaults to 10. */
   searchMaxQueries?: number
   /** Cap on each source summary in `web_search` output, in characters. Defaults to 800. */
   searchSummaryMaxChars?: number
@@ -4634,7 +4634,7 @@ export interface Config {
 
 - `inject`: `web`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/web/web-deepseek-api/src/index.ts:36`](../packages/web/web-deepseek-api/src/index.ts)
+- `source`: [`packages/web/web-deepseek-api/src/index.ts:38`](../packages/web/web-deepseek-api/src/index.ts)
 
 ```ts config-catalog
 /** Settings read by the next search or fetch without re-registering either provider. */
@@ -4647,6 +4647,12 @@ export interface Config {
   baseURL: Volatile<string>
   /** Search API results per search, from 1 through 50; a smaller request bound wins. Defaults to 10. */
   count: Volatile<number>
+  /**
+   * Most Search requests this plugin instance sends in any one-second window; later searches wait,
+   * and the wait counts against the caller's timeout. Other processes and clients on the same account
+   * share the account limit without coordination. Defaults to 5.
+   */
+  searchRequestsPerSecond: Volatile<number>
   /** Send the triggering user question, bounded to 128 characters, as `ori_question`. Defaults to true. */
   sendOriginalQuestion: Volatile<boolean>
 }

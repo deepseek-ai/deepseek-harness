@@ -15,6 +15,14 @@ export const BINDING_RECORD = 'plugin:forge-session/binding'
 /** Tools whose calls run shell commands with a string `command` argument. */
 const SHELL_TOOLS: ReadonlySet<string> = new Set(['bash', 'pwsh'])
 
+/**
+ * Literal text checked on the raw JSON arguments before parsing: recognized
+ * `gh pr` forms name `gh`, and `git push` names `push`. Arguments whose JSON
+ * text contains neither are not parsed, so a command spelled only through JSON
+ * escapes is not recognized.
+ */
+const EVIDENCE_HINT = /gh|push/
+
 const EMPTY: ForgeChangeRequestsState = Object.freeze({
   pending: Object.freeze([]),
   bindings: Object.freeze([]),
@@ -84,7 +92,7 @@ function apply(state: ForgeChangeRequestsState, event: SessionEvent): ForgeChang
 }
 
 function applyCall(state: ForgeChangeRequestsState, call: SessionEventMap['tool/call']): ForgeChangeRequestsState {
-  if (!SHELL_TOOLS.has(call.name)) return state
+  if (!SHELL_TOOLS.has(call.name) || !EVIDENCE_HINT.test(call.arguments)) return state
   const command = commandOf(call.arguments)
   const evidence = command === undefined ? undefined : commandEvidence(command)
   if (evidence === undefined) return state

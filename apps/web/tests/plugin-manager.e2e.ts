@@ -9,6 +9,7 @@ import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { FiberState } from '@deepseek-ai/cordis'
 import { readProfileManifest } from '@deepseek-ai/dsh-app-boot'
+import { HIDDEN_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import { join } from 'node:path'
 import {
@@ -852,7 +853,7 @@ describe('web e2e: plugin manager', () => {
     // the eligible installed optional-bundle list.
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package="@deepseek-ai/dsh-experimental-liveshare"]').count()).toBe(0)
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package]').count())
-      .toBe(bundles.filter(bundle => bundle.name !== '@deepseek-ai/dsh-experimental-terminal-bundle'
+      .toBe(bundles.filter(bundle => !HIDDEN_BUNDLES.has(bundle.name)
         && bundle.name !== '@deepseek-ai/dsh-experimental-liveshare'
         && bundle.official && (bundle.listedByDefault !== false || bundle.enabled || bundle.installed)).length)
     // Computer Use ships with the installation and is listed only on the macOS Hosts it supports.
@@ -878,7 +879,6 @@ describe('web e2e: plugin manager', () => {
       ['@deepseek-ai/dsh-personalized-recommendations', 1],
       ['@deepseek-ai/dsh-experimental-inspector-profile', 1],
       ...cuaSupported ? [['@deepseek-ai/dsh-cua-bundle', 1]] : [],
-      ['@deepseek-ai/dsh-experimental-tool-worktree', 1],
       ['@deepseek-ai/dsh-experimental-cot-translation-bundle', 1],
       ['@deepseek-ai/dsh-experimental-session-titles-bundle', 1],
       ['@deepseek-ai/dsh-experimental-badge-skill-bundle', 1],
@@ -1062,6 +1062,51 @@ describe('web e2e: plugin manager', () => {
     await panel.locator('[data-detail-document] h1').waitFor()
     expect(await panel.getByRole('img').count()).toBe(0)
     await panel.getByRole('button', { name: '返回插件', exact: true }).click()
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
+  it('introduces code review and worktrees with localized artwork before activation', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-forge-preview'))
+    const panel = await openPluginsPanel()
+    await panel.getByRole('button', { name: '查看 变更请求与工作树', exact: true }).click()
+    const detail = panel.locator('[data-plugin-detail]')
+    expect(await detail.getByRole('switch').getAttribute('aria-checked')).toBe('false')
+    const sources: (string | null)[] = []
+    let english = false
+    try {
+      for (const [language, alt] of [
+        ['zh', '会话关联 GitHub PR，跟踪检查、评审与代码差异，并用工作树隔离任务改动'],
+        ['en', 'A conversation linked to a GitHub pull request, with checks, reviews, code diffs, and an isolated worktree'],
+      ] as const) {
+        if (language === 'en') {
+          await setLanguage(language)
+          english = true
+        }
+        const document = detail.locator('[data-detail-document]')
+        const image = document.getByRole('img', { name: alt, exact: true })
+        await image.waitFor()
+        await image.evaluate(async (node: HTMLImageElement) => { await node.decode() })
+        expect(await image.evaluate((node: HTMLImageElement) => [node.naturalWidth, node.naturalHeight])).toEqual([640, 300])
+        sources.push(await image.getAttribute('src'))
+        for (const width of [1680, 390]) {
+          await page.setViewportSize({ width, height: 1000 })
+          expect(await image.evaluate((node: HTMLImageElement) => {
+            const bounds = node.getBoundingClientRect()
+            return bounds.width > 0 && bounds.left >= 0 && bounds.right <= window.innerWidth
+              && window.document.documentElement.scrollWidth <= window.innerWidth
+          })).toBe(true)
+        }
+        await page.setViewportSize({ width: 1680, height: 1000 })
+      }
+      expect(sources[0]).not.toBe(sources[1])
+    } finally {
+      await page.setViewportSize({ width: 1680, height: 1000 })
+      if (english) await setLanguage('zh')
+    }
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'forge-preview.expected.md'),
+      await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd, {
+        replacements: [[badgeVersion, '{{version}}']],
+      }), MODE)
     expect(tripwire.pageErrors).toEqual([])
   })
 
@@ -1494,7 +1539,7 @@ describe('web e2e: plugin manager', () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'manager.expected.md', 'live-enabled.expected.md', 'missing-bundle.expected.md', 'exports.expected.md', 'exports-en.expected.md', 'icons.expected.md', 'loading.expected.md', 'refresh.expected.md',
       'ime-enter.expected.md', 'header-responsive.expected.md', 'header-natural-motion.expected.md', 'preview.expected.md',
-      'touch-tooltips.expected.md',
+      'touch-tooltips.expected.md', 'forge-preview.expected.md',
     ])
   })
 })
