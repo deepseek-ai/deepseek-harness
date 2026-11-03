@@ -6,7 +6,7 @@
 
 源码：[`packages/session/session-projection/src/index.ts`](../../packages/session/session-projection/src/index.ts)
 
-`ProjectionHandle` 在注销后仍保留同步 reader。`stateOf(session)` 用原有单元折叠新提交的事件，不会重新加入全局快照、检查点或通知。必须等待注册完成才能使用 handle。参见[注册生命周期](../../packages/session/session-projection/README.zh.md)。
+`ProjectionHandle` 在注销后仍保留同步 reader。`stateOf(session)` 用原有单元折叠新提交的事件，不会重新加入全局快照或通知。必须等待注册完成才能使用 handle。参见[注册生命周期](../../packages/session/session-projection/README.zh.md)。
 
 ```ts type-equiv
 /** An effect-owned registration with a reader retained independently of registration. */
@@ -14,6 +14,8 @@ interface ProjectionHandle<S> {
   /**
    * Read the current state, including after unregistering, by folding new
    * Session events with this handle's original unit. Do not mutate the live value.
+   * After the final release, a read also advances the released cell that
+   * `checkpoint(session)` serves, until the key registers again.
    * @param session - Session whose committed events are folded.
    * @returns the projection state at the Session's current cursor.
    */
@@ -230,7 +232,7 @@ type ProjectionKeySelection =
 
 ## 注册表：`ctx.sessionProjections`
 
-`SessionProjectionRegistry`（[签名](#ctxsessionprojections--sessionprojectionregistry)）拥有驱动逻辑：一个 `session/event` 订阅、对所有已注册单元立即执行的 `apply`，以及按会话、按单元保存的水位线缓存。缓存单元惰性构建：若单元在事件产生后才注册，或会话早于注册表存在，第一次访问（事件或读取）会从 `init` 开始折叠内存日志。领域在激活期间等待 `register(definition)`，并保留返回的 handle（句柄）。注册归调用 fiber 所有：最后一次释放会从全局驱动和快照中移除该 key，已有句柄仍可读取。同 key、同版本的注册者共享一个单元；版本不兼容时注册失败。
+`SessionProjectionRegistry`（[签名](#ctxsessionprojections--sessionprojectionregistry)）拥有驱动逻辑：一个 `session/event` 订阅、对所有已注册单元立即执行的 `apply`，以及按会话、按单元保存的水位线缓存。缓存单元惰性构建：若单元在事件产生后才注册，或会话早于注册表存在，第一次访问（事件或读取）会从 `init` 开始折叠内存日志。领域在激活期间等待 `register(definition)`，并保留返回的 handle（句柄）。注册归调用 fiber 所有：最后一次释放会从全局驱动和快照中移除该 key，检查点仍保留每个会话中它的最后状态，直到该 key 再次注册，已有句柄仍可读取。同 key、同版本的注册者共享一个单元；版本不兼容时注册失败。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -331,7 +333,7 @@ Source: [`packages/session/session-projection-cache/src/index.ts`](../../package
 
 ### `ctx.sessionProjections` — `SessionProjectionRegistry`
 
-`ctx.sessionProjections`: the projection unit table and its drive. The service subscribes to `session/event` once; every committed event passes every registered unit's `apply` (eager drive). A changed state reference computes the next client view; the change feed is notified only when its raw result changes by `Object.is`. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Consumers declare `sessionProjections` as a required injection, await registration during activation, and retain its ready handle. Registrants sharing a key share one unit and are counted. The last release removes the unit from live drives, checkpoints, and client snapshots; retained handles still fold new events on demand using the original unit.
+`ctx.sessionProjections`: the projection unit table and its drive. The service subscribes to `session/event` once; every committed event passes every registered unit's `apply` (eager drive). A changed state reference computes the next client view; the change feed is notified only when its raw result changes by `Object.is`. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Consumers declare `sessionProjections` as a required injection, await registration during activation, and retain its ready handle. Registrants sharing a key share one unit and are counted. The last release removes the unit from live drives, restores, and client snapshots, while checkpoints keep each Session's last cell of it until the key registers again and the new unit refolds the log; retained handles still fold new events on demand using the original unit.
 
 ```ts cordis-catalog
 /**
@@ -408,8 +410,13 @@ summaryKeys(): ReadonlySet<Extract<keyof SessionProjectionMap, string>>
  * mutable state, and a caller reaching the live reference could corrupt
  * every subsequent snapshot and frame through it (plain JSON by the unit
  * contract, so the clone is total).
+ * A released unit contributes the Session's last cell. The registry no
+ * longer advances that cell, while a retained handle read still advances it
+ * forward, so a writer running after a plugin unloads keeps that unit's
+ * latest state; a Session that has no cell of it gets no row. {@link restore}
+ * folds only live units, so its refreshed rows omit released units.
  * @param session - the session whose unit states are checkpointed.
- * @returns one row per registered key.
+ * @returns one row per registered key, plus one per released key with a cell for this Session.
  */
 checkpoint(session: Session): ProjectionCheckpoint
 
@@ -426,7 +433,7 @@ checkpoint(session: Session): ProjectionCheckpoint
  * re-read.
  * @param checkpoint - persisted rows for one session (possibly stale or empty).
  * @returns the offset for the stored-log suffix read (`SessionHandle.read`),
- *   or `undefined` when no unit is registered (no read needed —
+ *   or `undefined` when no live unit is registered (released predecessors do not count; no read needed —
  *   {@link restore} would serve empty values regardless).
  */
 restoreFloor(checkpoint: ProjectionCheckpoint): SessionLogOffset | undefined
@@ -467,6 +474,8 @@ viewCheckpoint( checkpoint: ProjectionCheckpoint, keys?: ProjectionKeySelection,
  * @returns the snapshot cut at the supplied log end (`asOfSeq` is the last
  *   supplied event's seq, `baseSeq - 1` for an empty tail) plus the
  *   refreshed checkpoint rows at that cut, ready for a durable write-back.
+ *   The rows cover live units only: a released unit has no cell for a log
+ *   folded without a live `Session`, so a write-back of them omits it.
  */
 restore( checkpoint: ProjectionCheckpoint, events: readonly SessionEvent[], baseSeq: SessionLogOffset, header: SessionHeader, inheritedEventCount: SessionLogOffset, ): { snapshot: ProjectionSnapshot; checkpoint: ProjectionCheckpoint }
 

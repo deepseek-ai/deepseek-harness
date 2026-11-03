@@ -61,9 +61,13 @@ describe('AgentRegistry', () => {
     })
     session.append('turn/end', { turn: 3, reason: { kind: 'completed' } })
     expect(ctx.agents.turnBoundaryOf(session)).toMatchObject({ openTurnStartSeq: null, lastTurn: 3 })
-    expect(ctx.sessionProjections.checkpoint(session).turnBoundary).toBeDefined()
+    const row = ctx.sessionProjections.checkpoint(session).turnBoundary
+    expect(row).toBeDefined()
     await fiber.dispose()
-    expect(ctx.sessionProjections.checkpoint(session).turnBoundary).toBeUndefined()
+    session.append('turn/start', { turn: 4 })
+    // The released unit keeps its last row and folds no event after the unload.
+    expect(ctx.sessionProjections.checkpoint(session)).toHaveProperty('turnBoundary', row)
+    expect(ctx.sessionProjections.checkpoint(Session.create(SessionId('turn-positions-after-unload')))).not.toHaveProperty('turnBoundary')
   })
 
   it('contributes Agent lookup and scoped Context providers while Typert is live', async () => {

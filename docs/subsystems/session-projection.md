@@ -6,7 +6,7 @@ The session-projection seam — a [capability seam](../capability-seams.md) thro
 
 Source: [`packages/session/session-projection/src/index.ts`](../../packages/session/session-projection/src/index.ts)
 
-A `ProjectionHandle` retains its synchronous reader after unregistration. `stateOf(session)` folds newly committed events with the original unit; it does not rejoin global snapshots, checkpoints, or notifications. Registration must still finish before the handle can be used. See the [registration lifecycle](../../packages/session/session-projection/README.md).
+A `ProjectionHandle` retains its synchronous reader after unregistration. `stateOf(session)` folds newly committed events with the original unit; it does not rejoin global snapshots or notifications. Registration must still finish before the handle can be used. See the [registration lifecycle](../../packages/session/session-projection/README.md).
 
 ```ts type-equiv
 /** An effect-owned registration with a reader retained independently of registration. */
@@ -14,6 +14,8 @@ interface ProjectionHandle<S> {
   /**
    * Read the current state, including after unregistering, by folding new
    * Session events with this handle's original unit. Do not mutate the live value.
+   * After the final release, a read also advances the released cell that
+   * `checkpoint(session)` serves, until the key registers again.
    * @param session - Session whose committed events are folded.
    * @returns the projection state at the Session's current cursor.
    */
@@ -230,7 +232,7 @@ type ProjectionKeySelection =
 
 ## The registry: `ctx.sessionProjections`
 
-`SessionProjectionRegistry` ([signatures](#ctxsessionprojections--sessionprojectionregistry)) owns the drive: one `session/event` subscription, eager `apply` over every registered unit, and per-session per-unit watermark cells. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Domains await `register(definition)` during activation and retain its handle. Registration belongs to the calling fiber: its last release removes the key from global drives and snapshots, while retained handles remain readable. Same-key, same-version registrants share one unit; incompatible versions reject registration.
+`SessionProjectionRegistry` ([signatures](#ctxsessionprojections--sessionprojectionregistry)) owns the drive: one `session/event` subscription, eager `apply` over every registered unit, and per-session per-unit watermark cells. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Domains await `register(definition)` during activation and retain its handle. Registration belongs to the calling fiber: its last release removes the key from global drives and snapshots, checkpoints keep each Session's last state of it until the key registers again, and retained handles remain readable. Same-key, same-version registrants share one unit; incompatible versions reject registration.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -331,7 +333,7 @@ Source: [`packages/session/session-projection-cache/src/index.ts`](../../package
 
 ### `ctx.sessionProjections` — `SessionProjectionRegistry`
 
-`ctx.sessionProjections`: the projection unit table and its drive. The service subscribes to `session/event` once; every committed event passes every registered unit's `apply` (eager drive). A changed state reference computes the next client view; the change feed is notified only when its raw result changes by `Object.is`. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Consumers declare `sessionProjections` as a required injection, await registration during activation, and retain its ready handle. Registrants sharing a key share one unit and are counted. The last release removes the unit from live drives, checkpoints, and client snapshots; retained handles still fold new events on demand using the original unit.
+`ctx.sessionProjections`: the projection unit table and its drive. The service subscribes to `session/event` once; every committed event passes every registered unit's `apply` (eager drive). A changed state reference computes the next client view; the change feed is notified only when its raw result changes by `Object.is`. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Consumers declare `sessionProjections` as a required injection, await registration during activation, and retain its ready handle. Registrants sharing a key share one unit and are counted. The last release removes the unit from live drives, restores, and client snapshots, while checkpoints keep each Session's last cell of it until the key registers again and the new unit refolds the log; retained handles still fold new events on demand using the original unit.
 
 ```ts cordis-catalog
 /**
@@ -408,8 +410,13 @@ summaryKeys(): ReadonlySet<Extract<keyof SessionProjectionMap, string>>
  * mutable state, and a caller reaching the live reference could corrupt
  * every subsequent snapshot and frame through it (plain JSON by the unit
  * contract, so the clone is total).
+ * A released unit contributes the Session's last cell. The registry no
+ * longer advances that cell, while a retained handle read still advances it
+ * forward, so a writer running after a plugin unloads keeps that unit's
+ * latest state; a Session that has no cell of it gets no row. {@link restore}
+ * folds only live units, so its refreshed rows omit released units.
  * @param session - the session whose unit states are checkpointed.
- * @returns one row per registered key.
+ * @returns one row per registered key, plus one per released key with a cell for this Session.
  */
 checkpoint(session: Session): ProjectionCheckpoint
 
@@ -426,7 +433,7 @@ checkpoint(session: Session): ProjectionCheckpoint
  * re-read.
  * @param checkpoint - persisted rows for one session (possibly stale or empty).
  * @returns the offset for the stored-log suffix read (`SessionHandle.read`),
- *   or `undefined` when no unit is registered (no read needed —
+ *   or `undefined` when no live unit is registered (released predecessors do not count; no read needed —
  *   {@link restore} would serve empty values regardless).
  */
 restoreFloor(checkpoint: ProjectionCheckpoint): SessionLogOffset | undefined
@@ -467,6 +474,8 @@ viewCheckpoint( checkpoint: ProjectionCheckpoint, keys?: ProjectionKeySelection,
  * @returns the snapshot cut at the supplied log end (`asOfSeq` is the last
  *   supplied event's seq, `baseSeq - 1` for an empty tail) plus the
  *   refreshed checkpoint rows at that cut, ready for a durable write-back.
+ *   The rows cover live units only: a released unit has no cell for a log
+ *   folded without a live `Session`, so a write-back of them omits it.
  */
 restore( checkpoint: ProjectionCheckpoint, events: readonly SessionEvent[], baseSeq: SessionLogOffset, header: SessionHeader, inheritedEventCount: SessionLogOffset, ): { snapshot: ProjectionSnapshot; checkpoint: ProjectionCheckpoint }
 

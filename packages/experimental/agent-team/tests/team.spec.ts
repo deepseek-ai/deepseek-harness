@@ -1164,11 +1164,13 @@ describe('Team direct messages and waiting', () => {
       readDuringShutdown = true
       if (fails) throw new Error('admitted operation failed during shutdown')
     }))
+    const row = ctx.sessionProjections.checkpoint(lead.session).agentTeam
     const disposal = teamFiber.dispose()
     try {
       await vi.waitFor(() => {
         expect(internal.lifecycle.disposed).toBe(true)
-        expect(ctx.sessionProjections.checkpoint(lead.session)).not.toHaveProperty('agentTeam')
+        expect(ctx.sessionProjections.checkpoint(lead.session)).toHaveProperty('agentTeam', row)
+        expect(ctx.sessionProjections.checkpoint(ctx.sessions.create())).not.toHaveProperty('agentTeam')
       })
       expect(readDuringShutdown).toBe(false)
     } finally {

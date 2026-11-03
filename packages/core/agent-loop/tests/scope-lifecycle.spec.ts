@@ -325,8 +325,14 @@ describe('agent scope lifecycle', () => {
     expect(ctx.sessionProjections.checkpoint(second.agent.session).inbox?.val).toBeDefined()
 
     await Promise.all([first.dispose(), second.dispose()])
+    const row = ctx.sessionProjections.checkpoint(second.agent.session).inbox
+    const coldRow = ctx.sessionProjections.checkpoint(cold).inbox
     await loopFiber.dispose()
-    expect(ctx.sessionProjections.checkpoint(second.agent.session).inbox?.val).toBeUndefined()
+    cold.append('turn/start', { turn: 1 })
+    // The released unit keeps each Session's last row and folds no event after the unload.
+    expect(ctx.sessionProjections.checkpoint(second.agent.session)).toHaveProperty('inbox', row)
+    expect(ctx.sessionProjections.checkpoint(cold)).toHaveProperty('inbox', coldRow)
+    expect(ctx.sessionProjections.checkpoint(ctx.sessions.create(SessionId('projection-after-unload')))).not.toHaveProperty('inbox')
   })
 
   it('agent.ctx listeners hear only their own agent (scoped dispatch end to end)', async () => {
