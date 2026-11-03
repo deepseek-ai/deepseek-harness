@@ -14,7 +14,7 @@ on:
         required: false
         default: ''
       skip-tag-check:
-        description: '跳过所选分支或 tag 的发布 tag 校验，仍执行其余发布检查。'
+        description: Skip release tag validation for the selected ref; other publication checks still apply.
         type: boolean
         required: false
         default: false
