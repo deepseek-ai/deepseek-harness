@@ -126,9 +126,9 @@ Every Team member's system prompt carries one `team:policy` section; the Lead an
 ```markdown
 A shared task board is available in this session. Task owners are agent ids from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
-Use the shared task board to coordinate work split across agents. Before delegating, use team_task_list to reuse existing tasks and team_task_create for missing work. Give each task clear acceptance criteria, record expected edits in write_scopes, and set blocked_by when work depends on another task. Split parallel writes into disjoint file or directory scopes. Include the task id in the subagent prompt or send_message so the assignee knows which task to claim.
+Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
 
-Read assigned tasks with team_task_get, claim ready tasks with team_task_update using the current revision, perform the work, then complete the task. Keep task descriptions and dependencies current as the work changes. Before the final answer, check the board and collect the results of all required tasks; report any unfinished work. Dependencies determine readiness; overlapping write scopes are advisory, not locks. Task readiness does not start an agent.
+Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. The Lead must wait for required teammates before giving the final answer.
 
 Task changes do not end wait_agent calls, add inbox messages, or start idle agents. Use send_message when another agent needs to act on a task.
 ```
