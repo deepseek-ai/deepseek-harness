@@ -89,7 +89,7 @@ export function registerWaitAgent(ctx: Context): void {
   }, 'subagent-control.waits()')
   ctx.tools.register(defineTool({
     name: 'wait_agent',
-    description: 'Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if input is pending, unless an earlier wait in the same code execution already reported it. When called from code, wait once, then finish execution so messages can be delivered. Do not loop.',
+    description: 'Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if input is pending, unless an earlier wait in the same code execution already reported it. `timedOut: false` means new input is pending. Pending input is delivered to the model after code execution finishes.',
     parameters: {
       timeout_ms: {
         type: 'integer',

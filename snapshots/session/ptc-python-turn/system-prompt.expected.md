@@ -589,7 +589,7 @@ class Tools(Protocol):
     async def update_goal(self, args: UpdateGoalArgs) -> UpdateGoalOutput1 | UpdateGoalOutput2:
         """Update the current goal."""
     async def wait_agent(self, args: WaitAgentArgs) -> WaitAgentOutput:
-        """Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if input is pending, unless an earlier wait in the same code execution already reported it. When called from code, wait once, then finish execution so messages can be delivered. Do not loop."""
+        """Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if input is pending, unless an earlier wait in the same code execution already reported it. `timedOut: false` means new input is pending. Pending input is delivered to the model after code execution finishes."""
     async def web_fetch(self, args: WebFetchArgs) -> WebFetchOutput:
         """Fetch the content of a specific HTTP(S) URL and return it decoded to text."""
     async def web_search(self, args: WebSearchArgs) -> WebSearchOutput:
