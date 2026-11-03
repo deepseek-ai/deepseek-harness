@@ -25,7 +25,7 @@ import { pdfTextRenderer } from '../src/client/pdf/text.ts'
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks() })
 
-it('lays out text in a detached layer and attaches it once rendering finishes', async () => {
+it('attaches the text layer only after rendering finishes', async () => {
   vi.stubGlobal('ResizeObserver', class { observe = vi.fn(); disconnect = vi.fn() })
   const rendered = Promise.withResolvers<undefined>()
   api.render.mockReturnValueOnce(rendered.promise)

@@ -7,16 +7,17 @@ import type { RenderPdfText } from './document.ts'
 /**
  * Create a selectable overlay in a component-owned host.
  * @param host - absolute overlay matching the displayed canvas dimensions.
- * @returns renderer that attaches the layer to `host` when its promise resolves; cancellation also releases its resize observer and DOM.
+ * @returns renderer that attaches the layer to `host` once its text is laid out, before its promise resolves;
+ *   a cancelled layer is never attached, and cancellation also releases its resize observer and DOM.
  */
 export function pdfTextRenderer(host: HTMLDivElement): RenderPdfText {
   return (page, viewport) => {
     let cancelled = false
     // PDF.js measures each text item against document styles; spans appended to a detached layer do not invalidate them.
-    const layer = new TextLayerBuilder({ pdfPage: page, onAppend: (div: HTMLDivElement) => {
+    const layer = new TextLayerBuilder({ pdfPage: page, onAppend: () => {
       // A cancellation after the text finishes but before this callback cannot stop the builder's continuation.
       if (cancelled) layer.cancel()
-      else host.append(div)
+      else host.append(container)
     } })
     const container = layer.div
     container.style.setProperty('--total-scale-factor', String(viewport.scale * viewport.userUnit))
