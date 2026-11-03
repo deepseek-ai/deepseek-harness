@@ -24,7 +24,7 @@ import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { PtcCalls } from './ptc-calls.ts'
-import { CodeRunFailedError, ToolCallLimitExceededError } from './errors.ts'
+import { CodeRunFailedError, ToolCallLimitExceededError, type ToolCallAllowance } from './errors.ts'
 import type { Config } from './config.ts'
 import type { ToolDefinition, ToolExecutionResult, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from './types.ts'
@@ -380,7 +380,7 @@ export function createRunCodeTool(
         callSignal.addEventListener('abort', onOuterAbort, { once: true })
 
         let toolCallAttempts = 0
-        let maxSubCalls: number
+        let allowance: ToolCallAllowance
         // The per-run scheduler uses the registry's staged interface and follows
         // the same concurrency rules as the native loop. It also follows the
         // native loop's SEQUENCING: every ordered stage (the dispatch-start
@@ -509,8 +509,8 @@ export function createRunCodeTool(
           }
           // Count before validation and queuing so repeated failed calls also exhaust the allowance.
           const n = ++toolCallAttempts
-          if (n > maxSubCalls) {
-            const error = new ToolCallLimitExceededError(maxSubCalls, n)
+          if (n > allowance.limit) {
+            const error = new ToolCallLimitExceededError(allowance, n)
             runController.abort(error)
             throw error
           }
@@ -694,8 +694,11 @@ export function createRunCodeTool(
               ...policy !== undefined ? { sandboxPolicy: policy } : {},
               ...args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {},
             })
-            maxSubCalls = spec.timeoutMs === null ? Infinity
-              : Math.floor(spec.timeoutMs / 60_000 * maxSubCallsPerMinute)
+            allowance = {
+              limit: spec.timeoutMs === null ? Number.POSITIVE_INFINITY
+                : Math.floor(spec.timeoutMs / 60_000 * maxSubCallsPerMinute),
+              maxSubCallsPerMinute,
+            }
             result = await runtime.run(spec)
           } finally {
             // Abort sub-dispatches and drain every in-flight dispatch before

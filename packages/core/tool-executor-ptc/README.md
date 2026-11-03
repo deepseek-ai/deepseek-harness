@@ -112,7 +112,7 @@ Program-only SDK bindings:
 ##### Tool-call allowance exhausted
 
 ```markdown
-Error: code run failed (abort): run_code exceeded its limit of N tool calls; call M was not dispatched. The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.
+Error: code run failed (abort): run_code exceeded its limit of 2048 tool calls (maxSubCallsPerMinute 1024); call 2049 was not dispatched. The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.
 ```
 
 #### Token effect

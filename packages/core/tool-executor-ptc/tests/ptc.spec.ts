@@ -683,7 +683,7 @@ describe('the per-program tool-call limit', () => {
     runtime.behavior = async (request) => {
       const echo = request.bindings[0]!.functions.echo!
       for (let n = 1; n <= 2048; n++) await echo({ value: String(n) })
-      const message = 'run_code exceeded its limit of 2048 tool calls; call 2049 was not dispatched. '
+      const message = 'run_code exceeded its limit of 2048 tool calls (maxSubCallsPerMinute 1024); call 2049 was not dispatched. '
         + 'The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.'
       await expect(echo({ value: 'rejected' })).rejects.toThrow(message)
       expect(request.signal?.aborted).toBe(true)
@@ -719,7 +719,7 @@ describe('the per-program tool-call limit', () => {
       expect(request.timeoutMs).toBe(resolvedMs)
       const echo = request.bindings[0]!.functions.echo!
       for (let n = 0; n < limit; n++) await echo({ value: String(n) })
-      await expect(echo({ value: 'rejected' })).rejects.toThrow(`limit of ${limit} tool calls; call ${limit + 1} was not dispatched`)
+      await expect(echo({ value: 'rejected' })).rejects.toThrow(`limit of ${limit} tool calls (maxSubCallsPerMinute 4); call ${limit + 1} was not dispatched`)
       expect(request.signal?.aborted).toBe(true)
       return { logs: [], error: { kind: 'abort', message: String(request.signal?.reason) } }
     }
@@ -767,7 +767,7 @@ describe('the per-program tool-call limit', () => {
       void functions.active!({}).catch(() => { outcomes.push('active canceled') })
       await entered.promise
       void functions.queued!({ value: 'queued' }).catch(() => { outcomes.push('queued abandoned') })
-      await expect(functions.queued!({ value: 'excess' })).rejects.toThrow('limit of 2 tool calls; call 3 was not dispatched')
+      await expect(functions.queued!({ value: 'excess' })).rejects.toThrow('limit of 2 tool calls (maxSubCallsPerMinute 1); call 3 was not dispatched')
       expect(request.signal?.aborted).toBe(true)
       return { logs: [], error: { kind: 'abort', message: 'execution canceled' } }
     }
@@ -825,7 +825,7 @@ describe('the per-program tool-call limit', () => {
       await expect(functions.echo!(undefined)).rejects.toThrow('lossless JSON')
       await expect(functions.echo!({})).rejects.toThrow()
       await expect(functions.fail!({})).rejects.toThrow('tool failed')
-      await expect(functions.echo!({ value: 'rejected' })).rejects.toThrow('limit of 3 tool calls; call 4 was not dispatched')
+      await expect(functions.echo!({ value: 'rejected' })).rejects.toThrow('limit of 3 tool calls (maxSubCallsPerMinute 3); call 4 was not dispatched')
       expect(request.signal?.aborted).toBe(true)
       return { logs: [], error: { kind: 'abort', message: String(request.signal?.reason) } }
     }
