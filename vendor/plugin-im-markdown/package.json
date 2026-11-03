@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/cordis-plugin-im-markdown",
-  "description": "GFM markdown for Satori messages: the `markdown` service that expands <markdown> while a message renders",
+  "description": "The <markdown> element of the Satori IM plane: a plugin contribution every mode renders as its own markup",
   "version": "4.0.0-alpha.0",
   "type": "module",
   "exports": {
@@ -28,13 +28,6 @@
     "markdown",
     "cordis"
   ],
-  "cordis": {
-    "service": {
-      "implements": [
-        "markdown"
-      ]
-    }
-  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-im-core": "workspace:~",

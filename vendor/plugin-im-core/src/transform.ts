@@ -18,7 +18,7 @@ import type { Bot } from './bot.ts'
 import { createRenderReport } from './fallback.ts'
 import type { Envelope, Mode, ModeTypes, TransformResult } from './mode.ts'
 import type { Target } from './protocol.ts'
-import { markdownOf, RenderEngine } from './registry.ts'
+import { RenderEngine } from './registry.ts'
 import type { StreamPhase } from './stream.ts'
 
 export interface TransformOptions<T extends ModeTypes> {
@@ -35,7 +35,13 @@ export function transform<T extends ModeTypes>(content: Element<'message'>, opti
   const { bot, target, mode, stream } = options
   const report = createRenderReport()
   const engine = new RenderEngine<T>(mode.elements, {
-    bot, target, mode: mode.id, limits: mode.limits, report, stream, markdown: markdownOf(bot),
+    bot,
+    target,
+    mode: mode.id,
+    limits: mode.limits,
+    report,
+    stream,
+    contributions: bot.ctx?.get('satori')?.elements,
   })
   engine.register(content, undefined, 'message', 0)
 

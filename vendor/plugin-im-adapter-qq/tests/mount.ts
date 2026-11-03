@@ -4,7 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Http from '@deepseek-ai/cordis-plugin-http'
 import { Satori, type Target } from '@deepseek-ai/cordis-plugin-im-core'
 import QQBot, { Config, type QQConfig } from '@deepseek-ai/cordis-plugin-im-adapter-qq'
-import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
+import * as Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 
 const contexts: Context[] = []
 

@@ -28,7 +28,7 @@ import QQBot, {
 import type { QQReferrer } from '../src/decode.ts'
 import type { QqDraft } from '../src/modes/shared.ts'
 import { createStreamDriver, INPUT_STATE_CLOSE, INPUT_STATE_OPEN, type QqStreamState } from '../src/stream.ts'
-import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
+import * as Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 
 const GROUP = 'group:FBB1D91204242AAB8B61A0179A6245B0'
 const DIRECT = 'user:DD8246C68EC19CAF8D2AA76941180EA4'

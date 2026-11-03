@@ -10,7 +10,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Http from '@deepseek-ai/cordis-plugin-http'
 import { Satori } from '@deepseek-ai/cordis-plugin-im-core'
 import LarkBot, { Config, type LarkConfig } from '@deepseek-ai/cordis-plugin-im-adapter-lark'
-import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
+import * as Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 
 /** The bot's own open id; the handshake route answers with it. */
 export const SELF_ID = 'ou_bot'

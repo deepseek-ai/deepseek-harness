@@ -1,6 +1,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import { type Awaitable, defineProperty, type Dict } from '@deepseek-ai/cosmokit'
 import type { Bot, SendResult } from './bot.ts'
+import { ElementContributions } from './contributions.ts'
 import { type InternalRouteCallback, InternalRouter, JsonForm } from './internal.ts'
 import type { Meta } from './protocol.ts'
 import type { Session } from './session.ts'
@@ -22,7 +23,7 @@ export * from './directives.ts'
 export * from './resource.ts'
 export * from './bot.ts'
 export * from './stream.ts'
-export * from './markdown.ts'
+export * from './contributions.ts'
 export * from './errors.ts'
 export * from './ws.ts'
 export * from './internal.ts'
@@ -116,6 +117,14 @@ class DisposableSet<T> {
 export class Satori extends Service {
   public uid = Math.random().toString(36).slice(2)
   public proxyUrls: DisposableSet<string> = new DisposableSet(this.ctx)
+
+  /**
+   * Element handlers plugins contribute to every mode that does not register the tag itself.
+   *
+   * A plugin registers its handler inside `ctx.effect()` so unloading it withdraws the handler again; every render
+   * reads this table, so the contribution applies to bots that exist and to bots created later.
+   */
+  public elements = new ElementContributions()
 
   public _internalRouter: InternalRouter
   public _tempStore: Dict<Response> = Object.create(null)

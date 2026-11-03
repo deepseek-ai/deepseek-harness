@@ -9,9 +9,10 @@
     - id: im-core
       name: '@deepseek-ai/cordis-plugin-im-core'
 
-    # The `markdown` service: expands `<markdown>` (every answer the model
-    # writes) while a message renders, so each mode receives ordinary elements.
-    # Without it an answer reaches the chat as its literal markdown source.
+    # Registers the `<markdown>` element and the `markdown` factory every
+    # answer the model writes is built from, so each mode receives ordinary
+    # elements and serializes them in its own dialect. Without this plugin an
+    # answer reaches the chat as its literal markdown source.
     - id: im-markdown
       name: '@deepseek-ai/cordis-plugin-im-markdown'
 

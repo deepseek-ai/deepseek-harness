@@ -20,9 +20,10 @@
  *    A candidate other than the first is recorded in `RenderReport.fallbacks`. Candidates stand in the place of the
  *    `<fallback>`: their parent and ancestors are those of the `<fallback>`.
  * 6. Handlers and fallbacks are synchronous; returning a promise throws (`transform` is pure, I/O is `prepare`).
- * 7. A `<markdown>` goes to the `markdown` service (`markdown.ts`), which renders its converted source through
- *    `RenderContext.transform`; without that service it is lowered through the core fallback (rule 3). For a
- *    `<fallback>` candidate it counts as native: its expansion is lowered like any other content.
+ * 7. Handlers come from the mode's registry first and from plugin contributions second (`contributions.ts`), so a tag
+ *    no adapter names — a plugin's own element, contributed as a handler that calls `RenderContext.transform` — renders
+ *    like any registered element and is otherwise lowered through the core fallback (rule 3). A mode that registers
+ *    the tag itself keeps its own handler.
  *
  * Positions and ids: every element of the input (and of every fallback output) gets a *frame* with its parent, its
  * structural path (`message/ul[2]/li[0]`, the `normalize` error-path format) and its fallback depth. A keyed element
@@ -38,8 +39,8 @@ import {
   variantsOf, type VariantOf,
 } from '@deepseek-ai/satori-element'
 import type { Bot } from './bot.ts'
+import type { ElementContributions } from './contributions.ts'
 import { defaultFallback, type Fallback, preservingVariants, type RenderReport } from './fallback.ts'
-import type { MarkdownRenderer } from './markdown.ts'
 import type { ElementHandler, HandlerOptions, LimitKey, Mode, ModeTypes } from './mode.ts'
 import type { Target } from './protocol.ts'
 import { type ResourceKind, type ResourceMeta, ResourceRef } from './resource.ts'
@@ -171,7 +172,7 @@ export class ElementRegistry<T extends ModeTypes, R extends Tag = never> {
     const limits: Mode['limits'] = {}
     const fresh = new RenderEngine<T>(this, {
       bot: ctx.bot, target: ctx.target, mode: ctx.mode, limits: engine?.base.limits ?? limits, report: ctx.report,
-      stream: ctx.stream, markdown: engine?.base.markdown ?? markdownOf(ctx.bot),
+      stream: ctx.stream, contributions: engine?.base.contributions,
     }, ctx.ancestors)
     return fresh.renderRoots(nodes)
   }
@@ -218,18 +219,31 @@ export interface RenderBase {
   report: RenderReport
   /** The stream state being rendered (`RenderContext.stream`). */
   stream?: StreamPhase | undefined
-  /** Expands `<markdown>`; without one, `<markdown>` takes the core fallback (its source as literal text). */
-  markdown?: MarkdownRenderer | undefined
+  /** Handlers plugins contribute for tags no mode registry declares. */
+  contributions?: ElementContributions | undefined
 }
 
 /**
- * The `markdown` service visible to a bot, if a plugin provides one.
+ * What one render treats as registered: the mode's registry first, contributed handlers second.
  *
- * @param bot - the bot rendering the message.
- * @returns the active provider, or `undefined`.
+ * @param registry - the mode's element registry.
+ * @param contributions - handlers contributed by plugins, if any.
+ * @returns the handler of a tag, or `undefined` when neither source has one.
  */
-export function markdownOf(bot: Bot): MarkdownRenderer | undefined {
-  return bot.ctx?.get('markdown')
+export function contributedEntry(
+  registry: ElementRegistry<any, any>,
+  contributions: ElementContributions | undefined,
+  tag: Tag,
+): RegistryEntry<any, any> | undefined {
+  return registry.entry(tag) ?? contributions?.entry(tag)
+}
+
+/** A handler source: the mode registry and its contributions behind one lookup. */
+export interface HandlerLookup {
+  /** The handler of a tag, if anything renders it. */
+  entry(tag: Tag): RegistryEntry<any, any> | undefined
+  /** Whether the mode takes the tag into its envelope instead of rendering it through a handler. */
+  inEnvelope(tag: Tag): boolean
 }
 
 function isThenable(value: unknown): boolean {
@@ -259,7 +273,7 @@ class Context<T extends ModeTypes> implements RenderContext<T> {
   }
 
   renders(key: ElementKey): boolean {
-    return this[ENGINE].registry.has(key)
+    return this[ENGINE].renders(key)
   }
 
   limit(key: LimitKey): number | undefined {
@@ -297,6 +311,23 @@ export class RenderEngine<T extends ModeTypes> {
     /** Ancestors of parentless frames (outermost first); `[]` for a `<message>` root. */
     private readonly outer: readonly Element[] = [],
   ) {}
+
+  /** The handler of a tag: the mode's own registration, else what a plugin contributes. */
+  entry(tag: Tag): RegistryEntry<any, any> | undefined {
+    return contributedEntry(this.registry, this.base.contributions, tag)
+  }
+
+  /** Whether the mode takes the tag into its envelope (a contributed handler never does). */
+  inEnvelope(tag: Tag): boolean {
+    return this.registry.inEnvelope(tag)
+  }
+
+  /** Whether `element.<tag>` / `element.<tag>.<variant>` renders natively, contributions included. */
+  renders(key: ElementKey): boolean {
+    if (this.registry.has(key)) return true
+    const [, tag, variant] = key.split('.') as [string, Tag, string | undefined]
+    return variant === undefined && this.entry(tag) !== undefined
+  }
 
   /** `onClick` callbacks of natively rendered `button[type=action]` elements, first registration per id wins. */
   actions(): { id: string; callback: ButtonCallback }[] {
@@ -376,7 +407,7 @@ export class RenderEngine<T extends ModeTypes> {
     const candidates = el.children
     if (!candidates.length) return undefined
     const ancestors = this.ancestorsOf(el)
-    const index = chosenCandidate(this.registry, candidates, ancestors)
+    const index = chosenCandidate(this, candidates, ancestors)
     if (index > 0) this.base.report.fallbacks.push({ path: this.frameOf(el).path, candidate: index })
     return candidates[index]
   }
@@ -398,12 +429,7 @@ export class RenderEngine<T extends ModeTypes> {
       return chosen ? chosen.children.flatMap(child => this.render(child)) : []
     }
     const ancestors = this.ancestorsOf(el)
-    if (el.type === 'markdown') {
-      const markdown = this.base.markdown
-      if (!markdown) return this.lower(el, frame, ancestors, undefined)
-      return [...markdown.render(el as Element<'markdown'>, new Context(this, el, ancestors))]
-    }
-    const entry = this.registry.entry(el.type)
+    const entry = this.entry(el.type)
     if (BASE_TAGS.has(el.type)) {
       if (!entry) throw new Error(`mode "${this.base.mode}" has no handler for the base tag <${el.type}>`)
       return this.call(entry, el, ancestors)
@@ -422,7 +448,7 @@ export class RenderEngine<T extends ModeTypes> {
   }
 
   private structuralOk(el: Element, ancestors: readonly Element[]): boolean {
-    return structuralOk(this.registry, el, ancestors)
+    return structuralOk(this, el, ancestors)
   }
 
   private call(entry: RegistryEntry<T, any>, el: Element, ancestors: readonly Element[]): T['node'][] {
@@ -471,7 +497,7 @@ export class RenderEngine<T extends ModeTypes> {
       throw new Error(`fallback chain of ${label} exceeds ${MAX_FALLBACK_STEPS} steps (a fallback loop?)`)
     }
     const output = (fallback as Fallback<Tag>)(el as never, {
-      renders: key => this.registry.has(key),
+      renders: key => this.renders(key),
       ...variant !== undefined && { variant },
       ancestors,
       report: this.base.report,
@@ -506,54 +532,53 @@ function declares(entry: RegistryEntry<any, any>, variant: string): boolean {
 }
 
 /** Rule 4: can every structural child of `el` stand as it is? */
-function structuralOk(registry: ElementRegistry<any, any>, el: Element, ancestors: readonly Element[]): boolean {
+function structuralOk(lookup: HandlerLookup, el: Element, ancestors: readonly Element[]): boolean {
   const fixed = STRUCTURAL[el.type]
   if (!fixed) return true
   const inner = [...ancestors, el]
-  return el.children.every(child => stands(registry, child, fixed, inner))
+  return el.children.every(child => stands(lookup, child, fixed, inner))
 }
 
-function stands(registry: ElementRegistry<any, any>, child: Element, fixed: readonly Tag[], inner: readonly Element[]): boolean {
+function stands(lookup: HandlerLookup, child: Element, fixed: readonly Tag[], inner: readonly Element[]): boolean {
   if (child.type === 'fallback') {
-    return child.children.some(candidate => candidate.children.every(node => stands(registry, node, fixed, inner)))
+    return child.children.some(candidate => candidate.children.every(node => stands(lookup, node, fixed, inner)))
   }
   if (!fixed.includes(child.type)) return true
-  const entry = registry.entry(child.type)
+  const entry = lookup.entry(child.type)
   if (!entry) return false
   const ok = variantsOf(child, inner).every(v => declares(entry, v) || preservingVariants.has(`${child.type}.${v}`))
-  return ok && structuralOk(registry, child, inner)
+  return ok && structuralOk(lookup, child, inner)
 }
 
-function nativeTree(registry: ElementRegistry<any, any>, el: Element, ancestors: readonly Element[]): boolean {
-  if (el.type === 'fallback') return el.children.some(candidate => nativeAll(registry, candidate.children, ancestors))
-  // Markdown expands while it renders; what it expands to is lowered like any other content.
-  if (el.type === 'markdown') return true
+function nativeTree(lookup: HandlerLookup, el: Element, ancestors: readonly Element[]): boolean {
+  if (el.type === 'fallback') return el.children.some(candidate => nativeAll(lookup, candidate.children, ancestors))
   // A root child the mode takes into its envelope is rendered by `assemble`, not lowered.
-  if (ancestors.length === 1 && ancestors[0]!.type === 'message' && registry.inEnvelope(el.type)) return true
+  if (ancestors.length === 1 && ancestors[0]!.type === 'message' && lookup.inEnvelope(el.type)) return true
   const inner = [...ancestors, el]
-  if (BASE_TAGS.has(el.type)) return nativeAll(registry, el.children, inner)
-  const entry = registry.entry(el.type)
+  if (BASE_TAGS.has(el.type)) return nativeAll(lookup, el.children, inner)
+  const entry = lookup.entry(el.type)
   if (!entry) return false
   if (!variantsOf(el, ancestors).every(v => declares(entry, v))) return false
-  if (!structuralOk(registry, el, ancestors)) return false
-  return nativeAll(registry, el.children, inner)
+  if (!structuralOk(lookup, el, ancestors)) return false
+  return nativeAll(lookup, el.children, inner)
 }
 
 /**
  * Index of the candidate a render of `<fallback>` chooses: the first one whose whole subtree is native, else the last.
  *
- * @param registry - element registry of the mode.
+ * @param lookup - the handlers a candidate counts as native against (a mode registry, or an engine with its
+ * contributions).
  * @param candidates - the `<fallback>`'s candidate cases, in author order.
  * @param ancestors - ancestors of the `<fallback>`, outermost first, parent last.
  * @returns the chosen index; `0` for an empty candidate list.
  */
-export function chosenCandidate(registry: ElementRegistry<any, any>, candidates: readonly Element[], ancestors: readonly Element[]): number {
-  const index = candidates.findIndex(candidate => nativeAll(registry, candidate.children, ancestors))
+export function chosenCandidate(lookup: HandlerLookup, candidates: readonly Element[], ancestors: readonly Element[]): number {
+  const index = candidates.findIndex(candidate => nativeAll(lookup, candidate.children, ancestors))
   return index < 0 ? Math.max(0, candidates.length - 1) : index
 }
 
-function nativeAll(registry: ElementRegistry<any, any>, nodes: readonly Element[], ancestors: readonly Element[]): boolean {
-  return nodes.every(node => nativeTree(registry, node, ancestors))
+function nativeAll(lookup: HandlerLookup, nodes: readonly Element[], ancestors: readonly Element[]): boolean {
+  return nodes.every(node => nativeTree(lookup, node, ancestors))
 }
 /** `via` of a degraded entry: `strip` (same tag, variant dropped), `empty`, or the output's top-level tags. */
 function describe(nodes: readonly Element[], same: boolean): string {

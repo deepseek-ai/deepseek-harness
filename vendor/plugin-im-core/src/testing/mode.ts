@@ -80,7 +80,7 @@ export function createPlainMode(tags: readonly Tag[], options: TextModeOptions =
     return ctx.render(el.children)
   }
   for (const tag of tags) {
-    // The root is never registered; `<markdown>` is expanded by the engine's `markdown` service, not by a handler.
+    // The root is never registered; `<markdown>` is contributed by a plugin, so no mode registers it.
     if (tag === 'message' || tag === 'markdown') continue
     const variants = (variantTable as Record<string, readonly string[]>)[tag] ?? []
     registry.register(tag as never, handler as never, { variants } as never)

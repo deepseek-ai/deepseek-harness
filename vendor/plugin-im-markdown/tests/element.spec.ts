@@ -1,11 +1,11 @@
 /**
- * The `markdown` service inside the render engine: expansion in place, the core fallback without the service, and the
- * settled-block rendering of an `append` stream's intermediate states.
+ * The `<markdown>` element of the plugin: expansion in place through the render context, the core fallback while the
+ * plugin is not loaded, and the settled-block rendering of an `append` stream's intermediate states.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { h, type Target } from '@deepseek-ai/cordis-plugin-im-core'
-import { createTextMode, type FakeAdapterConfig, mountFakeAdapter } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
-import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
+import { type ElementRegistry, h, type Target } from '@deepseek-ai/cordis-plugin-im-core'
+import { createTextMode, type FakeAdapterConfig, mountFakeAdapter, type TextTypes } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
+import * as Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 
 const target: Target = { chat: { id: 'c1', type: 'direct' } }
 /** Text of a payload of the test text mode (paragraphs are joined without a separator). */
@@ -24,8 +24,8 @@ async function mount(config: Partial<FakeAdapterConfig> = {}, markdown = true) {
   return { ...mounted, plugin }
 }
 
-describe('markdown service', () => {
-  it('expands <markdown> while the message renders, in the place of the element', async () => {
+describe('markdown element', () => {
+  it('registers the element on the satori service and expands it in place', async () => {
     const { bot } = await mount()
     const result = await bot.render(target, h('message', h('p', 'before'), h.markdown('**b** c\n\nd')))
     expect(result.payloads.map(text)).toEqual(['beforeb cd'])
@@ -38,7 +38,7 @@ describe('markdown service', () => {
     expect(result.payloads.map(text)).toEqual(['say: hi'])
   })
 
-  it('publishes the source as literal text without the service, and again once the service is gone', async () => {
+  it('publishes the source as literal text while the plugin is not loaded, and again once it is gone', async () => {
     const { bot } = await mount({}, false)
     const result = await bot.render(target, h.markdown('**b**'))
     expect(result.payloads.map(text)).toEqual(['**b**'])
@@ -93,5 +93,22 @@ describe('markdown service', () => {
     await vi.advanceTimersByTimeAsync(400)
     expect(text(bot.operations.find(op => op.op === 'stream.open')?.payload)).toBe('onetwofooter')
     await stream.abort()
+  })
+
+  it('builds the element with markdown(), which is the tag the plugin renders', async () => {
+    expect(Markdown.markdown('**b**')).toEqual(h.markdown('**b**'))
+    const { bot } = await mount()
+    expect((await bot.render(target, Markdown.markdown('**b**'))).payloads.map(text)).toEqual(['b'])
+  })
+
+  it('leaves the handler of a mode that registers the tag itself alone', async () => {
+    const mode = createTextMode()
+    // The test text mode tracks no tags; this one registers `markdown` itself, which wins over the contribution.
+    const elements: ElementRegistry<TextTypes, never> = mode.elements as ElementRegistry<TextTypes, never>
+    elements.register('markdown', el => `[md:${el.attrs.content}]`)
+    const mounted = await mountFakeAdapter({ modes: { text: mode } })
+    disposers.push(() => mounted.ctx.fiber.dispose())
+    await mounted.ctx.plugin(Markdown)
+    expect((await mounted.bot.render(target, h.markdown('x'))).payloads.map(text)).toEqual(['[md:x]'])
   })
 })

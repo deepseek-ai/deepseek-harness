@@ -9,7 +9,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
-import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
+import * as Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 import { type Fragment, h } from '@deepseek-ai/satori-element'
 import {
   expectGolden, mountFakeAdapter, payloadText, renderContent, renderCorpus, runConformance,

@@ -8,7 +8,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Http from '@deepseek-ai/cordis-plugin-http'
 import { PlatformError, Satori, type MessageHandle, type SendContext, type SentPart, type Target } from '@deepseek-ai/cordis-plugin-im-core'
 import { normalize } from '@deepseek-ai/satori-element'
-import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
+import * as Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 import QQBot, {
   Config,
   DELETE_WINDOW_MS,

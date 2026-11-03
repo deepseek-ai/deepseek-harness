@@ -494,7 +494,7 @@ export const coreFallbacks: { readonly [K in Tag]?: Fallback<K> } = {
     })
     return h('p', ...out)
   },
-  // Reached only without the `markdown` service: the source is all there is to show.
+  // Reached while no plugin contributes `markdown`: the source is all there is to show.
   markdown: el => el.attrs.content,
   forward: () => '[合并转发]',
   raw: children,

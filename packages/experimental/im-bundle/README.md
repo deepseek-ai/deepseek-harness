@@ -79,7 +79,7 @@ When the `im` row activates, it recovers pending deliveries from its storage dom
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The [bundle patch](cordis.patch.yml) inserts HTTP (`im-http`), Satori core (`im-core`), the markdown service that expands `<markdown>` while a message renders (`im-markdown`), the Feishu adapter (`im-feishu`), the QQ adapter (`im-qq`, disabled), the IM host (`im`), and slash commands (`im-session-commands`). It declares no application entry and overrides no row of the profile. Because `dsh-experimental-im` registers the `im_*` tools globally, the shared session's preset needs no plugin rows of its own.
+The [bundle patch](cordis.patch.yml) inserts HTTP (`im-http`), Satori core (`im-core`), the plugin that renders the `<markdown>` element every answer is written as (`im-markdown`), the Feishu adapter (`im-feishu`), the QQ adapter (`im-qq`, disabled), the IM host (`im`), and slash commands (`im-session-commands`). It declares no application entry and overrides no row of the profile. Because `dsh-experimental-im` registers the `im_*` tools globally, the shared session's preset needs no plugin rows of its own.
 
 </details>
 

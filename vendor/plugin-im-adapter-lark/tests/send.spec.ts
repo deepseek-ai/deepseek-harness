@@ -13,7 +13,7 @@ import {
   normalize, PlatformError, Satori, type MessageHandle, type SendContext, type SentPart, type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import LarkBot, { Config, LarkApiError, type LarkConfig } from '@deepseek-ai/cordis-plugin-im-adapter-lark'
-import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
+import * as Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 import {
   deleteSentPart, editMessagePayload, partKindOf, receiveIdTypeOf, replyPlan, sendMessagePayload, type LarkPayload,
 } from '../src/send.ts'

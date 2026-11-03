@@ -18,7 +18,7 @@ import Http from '@deepseek-ai/cordis-plugin-http'
 import { Satori, type Target } from '@deepseek-ai/cordis-plugin-im-core'
 import { streamingScripts } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
 import LarkBot, { Config, type LarkConfig } from '@deepseek-ai/cordis-plugin-im-adapter-lark'
-import Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
+import * as Markdown from '@deepseek-ai/cordis-plugin-im-markdown'
 
 const CHAT = 'oc_chat'
 const target: Target = { chat: { id: CHAT, type: 'group' } }

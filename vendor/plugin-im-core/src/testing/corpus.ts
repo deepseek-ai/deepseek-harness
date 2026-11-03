@@ -246,7 +246,7 @@ export function corpusCases(): CorpusCase[] {
     },
     {
       name: 'markdown-input',
-      title: 'markdown input expanded by normalize',
+      title: 'markdown element rendered by its contribution',
       content: h.markdown('**bold** text\n\n- item one\n- item two\n\n```ts\nconst x = 1\n```'),
     },
     {

@@ -282,7 +282,7 @@ export function expectedDegradations(root: Element, mode: Mode<any>): { tag: Tag
       for (const child of el.children) visit(child, [el])
       return
     }
-    // `<quote>` and an envelope `<title>` are hoisted; `<markdown>` was expanded by normalize.
+    // `<quote>` and an envelope `<title>` are hoisted; `<markdown>` was expanded by its contribution.
     if (el.type === 'quote' || el.type === 'markdown' || el.type === 'case') return
     if (el.type === 'fallback') {
       // The same candidate the engine renders, so this checker and a render never disagree.
