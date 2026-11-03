@@ -15,7 +15,7 @@ on:
         default: test
         required: true
       update_channel:
-        description: '升级通道：nightly 或 stable（须为稳定版本）；默认通道由此打包输入确定'
+        description: '升级通道：人工选择 nightly 或 stable，与版本后缀无关；默认通道由此打包输入确定'
         type: choice
         options: [nightly, stable]
         default: nightly
