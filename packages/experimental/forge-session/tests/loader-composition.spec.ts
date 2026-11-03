@@ -370,7 +370,9 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
       : null)).toEqual([['Change 7', 'pending'], ['Change 8', 'success'], ['Change 9', 'success']]) })
 
     const entry = [...ctx.loader.entries()].find(candidate => candidate.options.name === 'cordis:@deepseek-ai/dsh-experimental-forge-session')
+    const row = ctx.sessionProjections.checkpoint(agent.session).forgeChangeRequests
     await entry?.fiber?.dispose()
-    expect(ctx.sessionProjections.checkpoint(agent.session)).not.toHaveProperty('forgeChangeRequests')
+    expect(ctx.sessionProjections.checkpoint(agent.session)).toHaveProperty('forgeChangeRequests', row)
+    expect(ctx.sessionProjections.checkpoint(ctx.sessions.create())).not.toHaveProperty('forgeChangeRequests')
   }, 60_000)
 })
