@@ -1,7 +1,9 @@
 /** The one table the source sandbox and a fork child's limit both admit tools from. */
 
 import { describe, expect, it } from 'vitest'
+import { RUN_CODE_NAME as RESERVED_TRANSPORT_NAME } from '@deepseek-ai/dsh-tools'
 import {
+  RUN_CODE_NAME,
   SHARED_TOOL_PROFILES,
   describeSharedTool,
   sharedToolNames,
@@ -13,12 +15,23 @@ describe('shared tool surface', () => {
   it('admits the view surface at both tiers and the two mutation tools only at write', () => {
     expect(sharedToolNames('view')).toEqual([
       'read', 'read_image', 'glob', 'grep', 'present', 'todo_write', 'skill', 'web_search', 'web_fetch',
+      'run_code',
     ])
     expect(sharedToolNames('write')).toEqual([...sharedToolNames('view'), 'edit', 'write'])
     expect(sharedToolProfile('read')).toMatchObject({ tier: 'view', noFileEffect: false })
     expect(sharedToolProfile('glob')).toMatchObject({ defaultsToWorkspace: true })
     expect(sharedToolProfile('todo_write')).toMatchObject({ noFileEffect: true, defaultsToWorkspace: false })
     expect(sharedToolProfile('edit')).toMatchObject({ tier: 'write' })
+    // The PTC transport is admitted at both tiers and declares no path of its own.
+    expect(sharedToolProfile(RUN_CODE_NAME)).toMatchObject({
+      tier: 'view',
+      noFileEffect: true,
+      defaultsToWorkspace: false,
+    })
+    expect(describeSharedTool(RUN_CODE_NAME, { code: 'return 1', description: 'run' }))
+      .toEqual({ paths: [], noFileEffect: true })
+    // The local name must stay the one the tool runtime reserves.
+    expect(RUN_CODE_NAME).toBe(RESERVED_TRANSPORT_NAME)
     expect(sharedToolProfile('bash')).toBeUndefined()
     expect(sharedToolProfile('ghost')).toBeUndefined()
     // Every entry names itself once, so a duplicated name cannot shadow another definition.

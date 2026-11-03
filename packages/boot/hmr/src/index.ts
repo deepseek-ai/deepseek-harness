@@ -469,7 +469,10 @@ class Hmr extends Service {
           loader.exit()
           return
         }
-        for (const include of includes) await include.refresh()
+        for (const include of includes) {
+          // A rejected refresh reports unsaved runtime changes; Include keeps its running tree.
+          try { await include.refresh() } catch (error) { this.ctx.logger.warn(error) }
+        }
         if (this.stashed.size > 0) {
           try { await this.partialReload() } finally { this.stashed.clear() }
         }

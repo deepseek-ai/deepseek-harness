@@ -2,16 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { CredentialInfo } from '@deepseek-ai/dsh-credentials/types'
 import { remoteErrorOf, remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
-import type { PeerId, RemoteInvocation } from '@deepseek-ai/dsh-typert-protocol'
 import CredentialsController from '../src/credentials.ts'
 import { MemoryCredentials } from '../../../credentials/credentials/tests/memory.ts'
-
-declare module '@deepseek-ai/dsh-typert-protocol' {
-  interface PrincipalMap {
-    /** Non-owner used to verify stored-key read denial. */
-    'credential-viewer': { readonly kind: 'credential-viewer' }
-  }
-}
 
 /** A store whose `describe` carries more than the view declares, as a foreign provider might. */
 class LeakyCredentials extends MemoryCredentials {
@@ -54,7 +46,6 @@ describe('the credentials Remote namespace a configuration surface calls', () =>
     expect(binding.namespace).toBe('credentials')
     expect(remoteMethods(controller)).toEqual([
       { method: 'describe', invocation: { kind: 'direct' } },
-      { method: 'readStored', invocation: { kind: 'direct' } },
       { method: 'set', invocation: { kind: 'direct' } },
       { method: 'unset', invocation: { kind: 'direct' } },
     ])
@@ -65,7 +56,6 @@ describe('the credentials Remote namespace a configuration surface calls', () =>
     await ctx.plugin(CredentialsController)
     for (const call of [
       () => ctx.credentialsController.describe(['DEEPSEEK_API_KEY']),
-      () => ctx.credentialsController.readStored('DEEPSEEK_API_KEY'),
       () => ctx.credentialsController.set('DEEPSEEK_API_KEY', 'sk-live'),
       () => ctx.credentialsController.unset('DEEPSEEK_API_KEY'),
     ]) {
@@ -92,7 +82,6 @@ describe('the credentials Remote namespace a configuration surface calls', () =>
     const controller = await boot()
     for (const call of [
       () => controller.describe(['DEEPSEEK_API_KEY', 'not a var']),
-      () => controller.readStored('not a var'),
       () => controller.set('not a var', 'sk-live'),
       () => controller.unset('not a var'),
     ]) {
@@ -124,35 +113,6 @@ describe('the credentials Remote namespace a configuration surface calls', () =>
     await controller.unset('DEEPSEEK_API_KEY')
     expect(await controller.describe(['DEEPSEEK_API_KEY']))
       .toEqual({ DEEPSEEK_API_KEY: { configured: false, writable: true } })
-  })
-
-  it('reads stored secrets only through the explicit editor read', async () => {
-    const controller = await boot({ DEEPSEEK_API_KEY: 'fixture-saved-key' })
-    expect(await controller.readStored('DEEPSEEK_API_KEY')).toBe('fixture-saved-key')
-    expect(await controller.readStored('OPENAI_API_KEY')).toBeUndefined()
-    expect(JSON.stringify(await controller.describe(['DEEPSEEK_API_KEY']))).not.toContain('fixture-saved-key')
-    await controller.unset('DEEPSEEK_API_KEY')
-    expect(await controller.readStored('DEEPSEEK_API_KEY')).toBeUndefined()
-  })
-
-  it('denies non-owner stored-key reads before consulting the provider', async () => {
-    const ctx = new Context()
-    await ctx.plugin(MemoryCredentials, { DEEPSEEK_API_KEY: 'fixture-saved-key' })
-    await ctx.plugin(CredentialsController)
-    const signal = new AbortController().signal
-    const invocation: RemoteInvocation = {
-      request: { namespace: 'credentials', method: 'readStored', args: { ref: 'DEEPSEEK_API_KEY' } },
-      service: 'credentialsController', signal,
-      peer: {
-        id: 'credential-viewer' as PeerId, ctx, signal, principal: { kind: 'credential-viewer' },
-        interactions: 'none', dispose: () => Promise.resolve(),
-      },
-      uplink: async function* <In>(): AsyncGenerator<In> {},
-    }
-    const caller = ctx.extend({ invocation })
-    const failure = await caller.credentialsController.readStored('DEEPSEEK_API_KEY').catch((error: unknown) => error)
-    expect(remoteErrorOf(failure)).toMatchObject({ code: 'credential/rejected', details: { ref: 'DEEPSEEK_API_KEY' } })
-    expect(JSON.stringify(remoteErrorOf(failure))).not.toContain('fixture-saved-key')
   })
 
   it('reports a refused write as credential/rejected naming only the reference', async () => {

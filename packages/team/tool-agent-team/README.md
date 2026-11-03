@@ -126,7 +126,9 @@ Every Team member's system prompt carries one `team:policy` section; the Lead an
 ```markdown
 A shared task board is available in this session. Task owners are agent names from list_agents. The root can reassign tasks to itself or any continuable descendant; other agents claim ready tasks themselves.
 
-Read tasks with team_task_list or team_task_get, claim with the current revision, perform the work, then complete the task. Dependencies determine readiness; write scopes describe expected edits and overlapping scopes are advisory, not locks. Task readiness does not start an agent.
+Split write work into disjoint scopes, record expected write scopes on shared tasks, and use task dependencies when work must be ordered. Write-scope overlap is advisory, not a lock.
+
+Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. The root agent must wait for required teammates before giving the final answer.
 
 Task changes do not end wait_agent calls, add inbox messages, or start idle agents. Use send_message when another agent needs to act on a task.
 ```

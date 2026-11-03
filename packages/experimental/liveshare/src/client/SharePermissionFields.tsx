@@ -75,6 +75,8 @@ export function SharePermissionFields({
         {modeUnsupported || sessionMode === undefined ? null : (
           <p className={css.hint}>{t(`dialog.sessionMode.hint.${sessionMode}` as const)}</p>
         )}
+        {/* The share sandbox bounds a viewer's tools, not the PTC program a viewer starts. */}
+        <p className={css.warning} role="note">{t('dialog.ptcSandboxWarning')}</p>
       </div>
       <div className={css.permissionBlock}>
         <div className={css.row}>
