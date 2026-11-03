@@ -58,7 +58,6 @@ function piAiNamespace(): SettingsNamespaceView {
 function setup(namespace: SettingsNamespaceView, settingsPath: string[] = []) {
   const writeSettings = vi.fn<ModelsOperations['writeSettings']>(() => Promise.resolve({ kind: 'written', view: namespace }))
   const operations: ModelsOperations = {
-    readCredential: vi.fn<ModelsOperations['readCredential']>(() => Promise.resolve({ kind: 'refused', message: '' })),
     storeCredential: vi.fn(() => Promise.resolve(undefined)),
     removeCredential: vi.fn(() => Promise.resolve(undefined)),
     writeSettings,
