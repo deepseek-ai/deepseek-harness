@@ -530,6 +530,49 @@ describe('desktop main startup', () => {
     expect(await invoke(DESKTOP_IPC.updatesStatus, 'app')).not.toHaveProperty('configurationError')
   })
 
+  it('applies a committed selection even when storage lock release fails', async () => {
+    await readyForUpdate()
+    const { DesktopSettingsFile, DesktopSettingsFileError } = await import('../src/settings-file.ts')
+    const save = vi.spyOn(DesktopSettingsFile.prototype, 'saveUpdates').mockRejectedValueOnce(
+      new DesktopSettingsFileError({ kind: 'write', operation: 'save', effect: 'written' }, '/settings.json'))
+    try {
+      expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'stable')).toMatchObject({
+        kind: 'applied', state: { channel: 'stable', changing: false },
+      })
+      expect(save).toHaveBeenCalledTimes(1)
+    } finally { save.mockRestore() }
+  })
+
+  it('suspends updates after an uncertain save and leaves recovery explicit', async () => {
+    await readyForUpdate()
+    harness.updateState = { phase: 'ready', version: '1.0.1' }
+    const { DesktopUpdateSettings } = await import('../src/update-settings.ts')
+    const { DesktopSettingsFileError } = await import('../src/settings-file.ts')
+    const save = vi.spyOn(DesktopUpdateSettings.prototype, 'save').mockRejectedValueOnce(
+      new DesktopSettingsFileError({ kind: 'write', operation: 'save', effect: 'unknown' }, '/settings.json'))
+    try {
+      expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'stable')).toMatchObject({
+        kind: 'failed', reason: 'uncertain', state: { channel: 'nightly', changing: false, error: 'read' },
+      })
+      expect(harness.updateState).toMatchObject({ phase: 'error', failedOperation: 'configuration' })
+      expect(harness.updateInstall).not.toHaveBeenCalled()
+      expect(save).toHaveBeenCalledTimes(1)
+      const path = join(harness.app.getPath('userData'), 'desktop', 'settings.json')
+      const disk = JSON.stringify({ updates: { channel: 'stable' }, keep: true })
+      writeFileSync(path, disk)
+      harness.dialog.showMessageBox.mockImplementationOnce(async (options: import('../src/update-dialog.ts').UpdateDialogOptions) => {
+        expect(await options.action!.run()).toBe(true)
+        return { response: 0 }
+      })
+      await invoke(DESKTOP_IPC.updatesOpen, 'app')
+      const recovered = await invoke(DESKTOP_IPC.updatesChannelGet, 'app')
+      expect(recovered).toMatchObject({ channel: 'stable', changing: false })
+      expect(recovered).not.toHaveProperty('error')
+      expect(readFileSync(path, 'utf8')).toBe(disk)
+      expect(save).toHaveBeenCalledTimes(1)
+    } finally { save.mockRestore() }
+  })
+
   it('keeps the previous ready update installable after a channel save fails', async () => {
     await readyForUpdate()
     harness.updateState = { phase: 'ready', version: '1.0.1' }

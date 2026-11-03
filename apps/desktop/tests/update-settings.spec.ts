@@ -1,10 +1,10 @@
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it, onTestFinished } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import { readDesktopSettings } from '../src/settings.ts'
 import { DesktopUpdateSettings } from '../src/update-settings.ts'
-import { DesktopSettingsFileError } from '../src/settings-file.ts'
+import { DesktopSettingsFile, DesktopSettingsFileError } from '../src/settings-file.ts'
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'desktop-channel-'))
@@ -62,4 +62,20 @@ it('updates the document initialized by shell settings without losing the popup 
   })
   expect((await readDesktopSettings(root)).updates.allowTestAuthPopupWindow).toBe(false)
   expect(await settings.load()).toEqual({ kind: 'ready', channel: 'nightly' })
+})
+
+// Storage has already classified the write; the channel consumer must not retry it.
+it.each(['written', 'unknown', 'unchanged'] as const)('handles the %s write outcome without retrying', async (effect) => {
+  const settings = await fixture()
+  const failure = new DesktopSettingsFileError({ kind: 'write', operation: 'save', effect }, settings.path,
+    { cause: new Error('injected storage failure') })
+  const save = vi.spyOn(DesktopSettingsFile.prototype, 'saveUpdates').mockRejectedValueOnce(failure)
+  const read = vi.spyOn(DesktopSettingsFile.prototype, 'read')
+  try {
+    if (effect === 'written') await expect(settings.save('nightly')).resolves.toBeUndefined()
+    else await expect(settings.save('nightly')).rejects.toBe(failure)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(read).not.toHaveBeenCalled()
+    expect(JSON.parse(await readFile(`${settings.path}.save.jsonl`, 'utf8'))).toMatchObject({ effect })
+  } finally { save.mockRestore(); read.mockRestore() }
 })

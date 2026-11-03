@@ -21,6 +21,7 @@ export function configurationFailure(error: DesktopSettingsFileError): NonNullab
  */
 export function channelSaveFailure(error: unknown): Extract<DesktopChannelChangeResult, { kind: 'failed' }>['reason'] {
   if (!(error instanceof DesktopSettingsFileError)) return 'apply'
+  if (error.problem.kind === 'write' && error.problem.effect === 'unknown') return 'uncertain'
   if (error.problem.kind === 'invalid') return 'format'
   const cause = error.cause
   if (cause instanceof Error && 'code' in cause && (cause.code === 'EACCES' || cause.code === 'EPERM')) return 'permission'

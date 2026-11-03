@@ -20,7 +20,7 @@ it('keeps startup suspensions distinct from transient save failures', () => {
 it('only exposes a permission hint for a known filesystem permission failure', () => {
   for (const code of ['EACCES', 'EPERM', 'EIO']) {
     const cause = Object.assign(new Error('private filesystem detail'), { code })
-    const error = new DesktopSettingsFileError({ kind: 'write', operation: 'save', effect: 'unknown' }, '/private/path', { cause })
+    const error = new DesktopSettingsFileError({ kind: 'write', operation: 'save', effect: 'unchanged' }, '/private/path', { cause })
     expect(channelSaveFailure(error)).toBe(code === 'EIO' ? 'save' : 'permission')
   }
   expect(channelSaveFailure(new DesktopSettingsFileError({ kind: 'read' }, '/private/path'))).toBe('save')
@@ -33,4 +33,10 @@ it('keeps settings errors concise and cleanup recovery distinct', () => {
   expect(configurationMessage('channel', zh)).toBe('配置文件异常，更新已暂停')
   expect(configurationMessage('cleanup', zh)).toContain('请重启应用')
   expect(configurationMessage('cleanup', en)).not.toContain('settings file')
+})
+
+it('reports an uncertain write separately even when its cause is permission denied', () => {
+  const error = new DesktopSettingsFileError({ kind: 'write', operation: 'save', effect: 'unknown' }, '/settings.json',
+    { cause: Object.assign(new Error('denied'), { code: 'EACCES' }) })
+  expect(channelSaveFailure(error)).toBe('uncertain')
 })

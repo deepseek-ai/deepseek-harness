@@ -36,7 +36,8 @@ export class DesktopChannelSource {
 
   private receive(state: DesktopChannelState): void {
     const previous = this.store.getSnapshot()
-    const notify = state.error !== undefined && state.error !== 'cleanup' && state.error !== previous.state?.error
+    const ownSaveFailure = previous.pending !== undefined || previous.notice?.outcome === 'uncertain'
+    const notify = !ownSaveFailure && state.error !== undefined && state.error !== 'cleanup' && state.error !== previous.state?.error
     this.store.set({ ...previous, state, failed: false,
       ...(notify ? { notice: { sequence: ++this.sequence, outcome: 'configuration' as const } } : {}),
     })

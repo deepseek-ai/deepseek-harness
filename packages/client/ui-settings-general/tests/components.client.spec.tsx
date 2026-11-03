@@ -424,3 +424,7 @@ it('keeps the settings-file notification for ten seconds with a details action',
 it('uses the concise Chinese configuration error for the settings notification', () => {
   expect(zh['desktop.channel.result.configuration']).toBe('配置文件异常，更新已暂停')
 })
+
+it('labels uncertain settings saves without claiming they were not written', () => {
+  expect(zh['desktop.channel.result.uncertain']).toBe('设置保存异常')
+})

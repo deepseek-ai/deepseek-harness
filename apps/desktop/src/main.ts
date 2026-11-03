@@ -902,7 +902,15 @@ async function main(): Promise<void> {
     channelRequests++
     publishChannel({ ...channelState, changing: true })
     try {
-      const kind = await updates.switchChannel(channel, () => channelSettings.save(channel))
+      const kind = await updates.switchChannel(channel, async () => {
+        try { await channelSettings.save(channel) } catch (error) {
+          if (channelSaveFailure(error) === 'uncertain') {
+            updates.suspendConfiguration('desktop update: settings save outcome is unknown')
+            publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: true, error: 'read' })
+          }
+          throw error
+        }
+      })
       return { kind, state: publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: --channelRequests > 0 }) }
     } catch (error) {
       console.error('desktop update: channel change failed', error)

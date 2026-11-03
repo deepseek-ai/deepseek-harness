@@ -155,3 +155,16 @@ it('announces startup file errors once and keeps their state after the toast clo
   expect(f.source.store.getSnapshot()).toEqual({ state, failed: false })
   f.source.dispose()
 })
+
+it.each(['before', 'after'] as const)('retains uncertain-save feedback when suspension arrives %s the reply', async (order) => {
+  const f = fixture()
+  f.emit(nightly)
+  const pending = f.source.select('stable')
+  const suspended = { ...nightly, error: 'read' as const }
+  if (order === 'before') f.emit(suspended)
+  f.set.resolve({ kind: 'failed', state: suspended, reason: 'uncertain' })
+  await pending
+  if (order === 'after') f.emit(suspended)
+  expect(f.source.store.getSnapshot()).toMatchObject({ state: suspended, notice: { outcome: 'uncertain' } })
+  f.source.dispose()
+})

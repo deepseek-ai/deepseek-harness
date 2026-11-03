@@ -183,3 +183,40 @@ it('rereads fields after acquiring the writer lock instead of saving a stale sna
   expect(outcomes.map(result => result.status)).toEqual(['fulfilled', 'fulfilled'])
   expect(JSON.parse(await readFile(file.path, 'utf8'))).toEqual({ updates: { channel: 'nightly', future: 3 }, other: 4 })
 })
+
+it('accepts the new channel and persists a warning after a real write with failed lock removal', async () => {
+  const { root, file } = await fixture('{"updates":{"channel":"nightly"},"keep":true}')
+  const settings = new DesktopUpdateSettings(root, 'nightly')
+  const original = fs.rm
+  vi.spyOn(fs, 'rm').mockImplementation(async (path, options) => {
+    if (path === `${file.path}.lock`) throw new Error('injected lock removal failure')
+    return original(path, options)
+  })
+  await expect(settings.save('stable')).resolves.toBeUndefined()
+  expect(JSON.parse(await readFile(file.path, 'utf8'))).toEqual({ updates: { channel: 'stable' }, keep: true })
+  expect(await settings.load()).toEqual({ kind: 'ready', channel: 'stable' })
+  expect(JSON.parse(await readFile(`${file.path}.save.jsonl`, 'utf8'))).toMatchObject({
+    effect: 'written', reason: 'injected lock removal failure',
+  })
+  await expect(fs.access(`${file.path}.lock`)).resolves.toBeUndefined()
+})
+
+it.each([false, true])('leaves an uncertain write for explicit recovery, committed=%s', async (committed) => {
+  const { root, file } = await fixture('{"updates":{"channel":"nightly"},"keep":true}')
+  const settings = new DesktopUpdateSettings(root, 'nightly')
+  const original = atomic.writeFileAtomic
+  const write = vi.spyOn(atomic, 'writeFileAtomic').mockImplementationOnce(async (...args) => {
+    if (committed) await original(...args)
+    throw new Error('injected uncertain completion')
+  })
+  const read = vi.spyOn(DesktopSettingsFile.prototype, 'read')
+  await expect(settings.save('stable')).rejects.toMatchObject({ problem: { effect: 'unknown' } })
+  expect(write).toHaveBeenCalledTimes(1)
+  expect(read).toHaveBeenCalledTimes(1)
+  expect(JSON.parse(await readFile(file.path, 'utf8'))).toEqual({
+    updates: { channel: committed ? 'stable' : 'nightly' }, keep: true,
+  })
+  expect(JSON.parse(await readFile(`${file.path}.save.jsonl`, 'utf8'))).toMatchObject({ effect: 'unknown' })
+  await expect(fs.access(`${file.path}.lock`)).rejects.toMatchObject({ code: 'ENOENT' })
+  expect(await settings.load()).toEqual({ kind: 'ready', channel: committed ? 'stable' : 'nightly' })
+})

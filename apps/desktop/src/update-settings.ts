@@ -1,5 +1,6 @@
 /** Channel-specific default and failure policy over the shared shell settings document. */
-import { DesktopSettingsFile, type DesktopSettingsFileError } from './settings-file.ts'
+import { DesktopSettingsFile, DesktopSettingsFileError } from './settings-file.ts'
+import { appendFileSync } from 'node:fs'
 import type { DesktopUpdateChannel } from './update-channel.ts'
 
 /** Invalid explicit channels suspend ordinary updates; only absence uses the package default. */
@@ -34,9 +35,18 @@ export class DesktopUpdateSettings {
   /**
    * Save a selection while preserving other fields; never changes the runtime selection itself.
    * @param channel - Validated UI selection.
-   * @returns After the atomic save and lock release; failures retain the storage error's effect details.
+   * @returns After a confirmed write, including logged lock-release failures.
+   * Uncertain writes reject without retry; diagnostics are appended to settings.json.save.jsonl.
    */
   async save(channel: DesktopUpdateChannel): Promise<void> {
-    await this.file.saveUpdates({ channel })
+    try { await this.file.saveUpdates({ channel }) } catch (error) {
+      if (!(error instanceof DesktopSettingsFileError) || error.problem.kind !== 'write') throw error
+      const entry = { time: new Date().toISOString(), event: 'settings-save-failed', effect: error.problem.effect,
+        path: this.path, reason: error.cause instanceof Error ? error.cause.message : String(error.cause) }
+      try { appendFileSync(`${this.path}.save.jsonl`, `${JSON.stringify(entry)}\n`, { mode: 0o600, flush: true }) } catch (logError) {
+        console.error('desktop settings: could not persist save warning', entry, logError)
+      }
+      if (error.problem.effect !== 'written') throw error
+    }
   }
 }
