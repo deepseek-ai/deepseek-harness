@@ -14,10 +14,7 @@ import Testing
     }
     for error in [AXError.apiDisabled, .cannotComplete, .invalidUIElement, .illegalArgument] {
         #expect(!AXAccess.optionalAttributeUnavailable(error, attribute: "AXValue"))
-        #expect(!AXAccess.actionsUnavailable(error))
     }
-    #expect(AXAccess.actionsUnavailable(.failure))
-    #expect(AXAccess.actionsUnavailable(.actionUnsupported))
 }
 
 private func wrappedAXError(_ code: AXError) throws -> AXValue {

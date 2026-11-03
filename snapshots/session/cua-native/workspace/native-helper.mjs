@@ -145,7 +145,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       return { ...app, applicationIcon: `data:image/png;base64,${png}`, authorization: {"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app", "persistable": true} }
     }
     if (!acquired || params.appHandle !== app.appHandle) refuse('APP_NOT_FOUND', 'Acquire an application in this helper first')
-    if (method === 'show') return { dispatched: true, verified: false, windowId: params.windowId ?? window.windowId, foregroundChanged: false }
+    if (method === 'show') return { dispatched: true, windowId: params.windowId ?? window.windowId, foregroundChanged: false }
     if (method === 'activate') {
       const before = { frontPid: application.frontPid, focusedWindowId: window.windowId, frontWindowId: application.frontWindowId, frontWindowPid: application.frontPid }
       const activationRequested = application.frontPid !== app.pid
@@ -154,7 +154,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
         application.frontWindowId = window.windowId
       }
       const after = { frontPid: application.frontPid, focusedWindowId: window.windowId, frontWindowId: application.frontWindowId, frontWindowPid: application.frontPid }
-      return { dispatched: true, verified: false, foreground: {
+      return { dispatched: true, foreground: {
         requestId, operation: 'activate', targetPid: app.pid, targetWindowId: null,
         before, after, activationRequested, raiseRequested: false,
       } }
@@ -206,7 +206,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       else if (method === 'click') application.count++
       else application.value = params.value
       record('state', { count: application.count, value: application.value, visualCount: application.visualCount })
-      return { dispatched: true, verified: false, ...method === 'hover' ? { hoverRoute: 'accessibility', systemPointerMoved: false } : {} }
+      return { dispatched: true, ...method === 'hover' ? { hoverRoute: 'accessibility', systemPointerMoved: false } : {} }
     }
     if (method === 'pressKey' && params.key === 'Return') observationChanged = true
     // Fixture-only keys simulate a pending system callback and its eventual completion.
@@ -217,11 +217,11 @@ function createApplicationState(socket, record, application, captureBroker, conn
     if (method === 'paste') {
       if (application.frontPid !== app.pid) refuse('PASTE_NOT_CONSUMED', 'Paste command was dispatched, but clipboard data was not requested within the read deadline. Bring the target app to the foreground and focus its text input. Inspect the contents before deciding whether to retry; a delayed paste may still run.')
       application.value += params.text
-      return { dispatched: true, verified: false }
+      return { dispatched: true }
     }
     if (method === 'typeText') application.value += params.text
     else if (!['pressKey', 'scroll', 'drag'].includes(method)) refuse('UNSUPPORTED_OPERATION', method)
-    return { dispatched: true, verified: false }
+    return { dispatched: true }
   }
   return call
 }

@@ -113,6 +113,20 @@ it('requires a retained snapshot and a nonempty action for performAction', () =>
   ]) expect(Request.safeParse({ method: 'performAction', params: invalid }).success).toBe(false)
 })
 
+it('admits default invocation only with retained locator fields', () => {
+  const params = { appHandle: 'app', snapshotId: 'snapshot', elementId: '42.12345' }
+  expect(Request.parse({ method: 'invoke', params })).toEqual({ method: 'invoke', params })
+  for (const invalid of [
+    { appHandle: 'app', elementId: '0' },
+    { appHandle: 'app', snapshotId: 'snapshot' },
+    { appHandle: 'app', snapshotId: 'snapshot', elementId: '' },
+    { ...params, action: 'AXPress' },
+    { ...params, argument: null },
+    { ...params, mouseButton: 'left' },
+    { ...params, modifiers: ['shift'] },
+  ]) expect(Request.safeParse({ method: 'invoke', params: invalid }).success).toBe(false)
+})
+
 it.each([
   'First document', 42, true, ['line'], { x: 10, y: 20 },
 ])('admits a setValue JSON value %j', (value) => {

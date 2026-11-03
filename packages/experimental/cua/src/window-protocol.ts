@@ -28,6 +28,7 @@ export const WindowRequest = z.discriminatedUnion('method', [
   operation('getState', { ...handle, includeMenus: z.boolean().optional(), details: z.boolean().optional() }),
   operation('listActions', snapshot),
   operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
+  operation('invoke', snapshot),
   operation('activate', handle), operation('show', handle), operation('screenshot', handle),
   operation('typeText', { ...handle, text: z.string() }),
   operation('paste', { ...handle, text: z.string(), format: z.enum(['text', 'html']).optional() }),
@@ -63,7 +64,7 @@ export const LaunchEntriesResult = z.array(z.object({
   path: z.string().min(1).optional(),
 }))
 /** Dispatch acknowledges launch only; callers must discover any resulting windows. */
-export const LaunchResult = z.object({ dispatched: z.literal(true), verified: z.literal(false) })
+export const LaunchResult = z.object({ dispatched: z.literal(true) })
 /** Private Windows preparation and launch continuations, excluded from model arguments. */
 export const WindowNativeOperations = [
   operation('discoverWindows', {}),

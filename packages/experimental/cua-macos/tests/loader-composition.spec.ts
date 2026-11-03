@@ -153,7 +153,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
     })
     expect(activated.isError).toBe(false)
     expect(activated.value).toMatchObject({
-      dispatched: true, verified: false, foreground: {
+      dispatched: true, foreground: {
         requestId: callId, operation: 'activate', targetPid: 9, targetWindowId: null, activationRequested, raiseRequested: false,
         before: { frontPid: beforePid, focusedWindowId: 7, frontWindowId: beforeWindowId, frontWindowPid: beforePid },
         after: { frontPid: 9, focusedWindowId: 7, frontWindowId: 7, frontWindowPid: 9 },

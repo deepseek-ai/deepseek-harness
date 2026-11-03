@@ -32,7 +32,7 @@ private func plan(window: UInt32? = 7, role: String? = "AXWindow", main: Bool? =
 @Test func preservesUnknownForegroundValuesAndDispatchOnlyResult() {
     let observed = ForegroundObservation(frontPID: nil, focusedWindowID: nil, frontWindowID: nil, frontWindowPID: nil)
     #expect(observed.json == .object(["frontPid": .null, "focusedWindowId": .null, "frontWindowId": .null, "frontWindowPid": .null]))
-    #expect(AXWorker.actionResult == .object(["dispatched": .bool(true), "verified": .bool(false)]))
+    #expect(AXWorker.actionResult == .object(["dispatched": .bool(true)]))
 }
 
 @Test func normalizesOnlyTheObservedAXActionName() {

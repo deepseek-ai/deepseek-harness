@@ -47,6 +47,7 @@ export const Request = z.discriminatedUnion('method', [
   }),
   operation('listActions', snapshot),
   operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
+  operation('invoke', snapshot),
   z.object({ method: z.literal('hover'), params: z.union([
     z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
   ]) }).strict(),
@@ -133,9 +134,10 @@ export const CapabilitiesResult = z.object({
   sessionLocked: z.boolean().nullable(),
   methods: z.array(z.string()), coordinateSpace: z.literal('screenshot-pixels'), browser: z.literal(false),
 })
-/** An action has reached native dispatch; application state was not verified. */
+/** Reports whether the provider successfully executed the requested operation. */
 export const ActionResult = z.object({
-  dispatched: z.literal(true), verified: z.literal(false),
+  /** True when the provider successfully executed the operation; false when no applicable operation was found. */
+  dispatched: z.boolean(),
   /** Sampled foreground change; omitted when the provider does not sample this action, null when a requested sample was unavailable. */
   foregroundChanged: z.boolean().nullable().optional(),
 })

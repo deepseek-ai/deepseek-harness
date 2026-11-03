@@ -454,7 +454,7 @@ it('maps the actual model-request image pixels back to native points without sto
   const value = result.value as { data: string }
   expect(await sharp(Buffer.from(value.data, 'base64')).metadata()).toMatchObject({ width: 10, height: 5 })
   expect(save).toHaveBeenCalledTimes(1)
-  native.request.mockResolvedValue({ dispatched: true, verified: false })
+  native.request.mockResolvedValue({ dispatched: true })
   expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 5, y: 2.5 })).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: 7, x: 200, y: 100 }, expect.any(AbortSignal), expect.any(String))
   expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 999, y: 999, relative: true })).isError).toBe(false)
@@ -748,7 +748,7 @@ it('uses configured signed application grants without requesting a human answer'
   await f.ctx.plugin(NativeProvider, { ...config, allowedApps: [grant] })
   native.request.mockResolvedValueOnce({ appHandle: 'saved-app', pid: 17, name: 'Fixture', authorization: { ...grant, persistable: true } })
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
-  native.request.mockResolvedValue({ dispatched: true, verified: false })
+  native.request.mockResolvedValue({ dispatched: true })
   expect((await f.execute('activate', { appHandle: 'saved-app' })).isError).toBe(false)
   expect(native.instances).toHaveLength(1)
   expect(native.request).toHaveBeenCalledTimes(2)

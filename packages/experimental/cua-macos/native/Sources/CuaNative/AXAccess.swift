@@ -66,9 +66,6 @@ final class AXAccess {
                                      "AXSubrole", "AXHelp", "AXURL", "AXFocused", "AXExpanded", "AXEnabled", "AXSelected", "AXSelectedText", "AXSelectedTextRange", "AXPosition", "AXSize", "AXMain", "AXMinimized"]
         return optional.contains(attribute)
     }
-    static func actionsUnavailable(_ error: AXError) -> Bool {
-        error == .failure || error == .actionUnsupported
-    }
     func attribute(_ element: AXUIElement, _ name: String) throws -> CFTypeRef? {
         try prepare(element)
         var value: CFTypeRef?
@@ -164,7 +161,7 @@ final class AXAccess {
         try prepare(element)
         var names: CFArray?
         let error = AXUIElementCopyActionNames(element, &names)
-        if absent(error) || Self.actionsUnavailable(error) { return [] }
+        if absent(error) || error == .actionUnsupported { return [] }
         guard error == .success else { throw failure(error, "read actions") }
         guard let names else { return [] }
         guard let result = names as? [String] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility actions are not strings") }

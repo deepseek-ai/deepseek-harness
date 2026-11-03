@@ -154,7 +154,7 @@ def main():
                     restored = helper.call('show', target)
                     actual = wait_state(lambda state: not state[key], 'show did not restore ' + key)
                     assert restored['windowId'] == window_id, restored
-                    assert restored['dispatched'] and not restored['verified'], restored
+                    assert restored['dispatched'], restored
                     assert restored['foregroundChanged'] is False, restored
                     assert not actual['active'] and json.loads(foreground_path.read_text())['active']
                 helper.call('show', {**owner, 'windowId': json.loads(foreground_path.read_text())['windowId']}, 'WINDOW_UNAVAILABLE')

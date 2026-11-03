@@ -37,7 +37,7 @@ async function setup(choice = 'Allow for this session') {
     screenshotTimeoutMs: 1000, axTimeoutMs: 100, maxRequestBytes: 4096, maxResponseBytes: 4096, graceMs: 100,
     textEventIntervalMs: 0, maxClickHoldMs: 5000 }, () => { throw new Error('Mock client must not connect') })
   const windows = new CuaWindowExecution()
-  const dispatch = vi.fn<(request: import('../src/types.ts').CuaOperation, signal: AbortSignal) => Promise<unknown>>(async () => ({ dispatched: true, verified: false }))
+  const dispatch = vi.fn<(request: import('../src/types.ts').CuaOperation, signal: AbortSignal) => Promise<unknown>>(async () => ({ dispatched: true }))
   const run = (method: string, params: object = {}) => windows.run(WindowRequest.parse({ method, params }),
     owner.agent, client, access, new AbortController().signal, undefined, 20, dispatch)
   return { access, run, dispatch, answer }
@@ -64,8 +64,8 @@ it('does not dispatch a denied launch or grant window access from launch consent
 it('launches only after approval and returns no fabricated window', async () => {
   const f = await setup()
   mocked.request.mockResolvedValueOnce({ appHandle: 'launch-a', authorization: identity })
-    .mockResolvedValueOnce({ dispatched: true, verified: false })
-  await expect(f.run('launch', { target: 'shell-entry' })).resolves.toEqual({ dispatched: true, verified: false })
+    .mockResolvedValueOnce({ dispatched: true })
+  await expect(f.run('launch', { target: 'shell-entry' })).resolves.toEqual({ dispatched: true })
   expect(mocked.request.mock.calls.map(([method]) => method)).toEqual(['prepareLaunch', 'dispatchLaunch'])
   await expect(f.run('getState', { windowHandle: 'launch-a' })).rejects.toThrow('WINDOW_ACCESS_REQUIRED')
 })
@@ -80,7 +80,7 @@ it('rejects duplicate IDs and mismatched native selections before asking for con
 
 it('discovers without permission and preserves both Shell and explicit-path metadata', async () => {
   const f = await setup()
-  await expect(f.run('getCapabilities')).resolves.toEqual({ dispatched: true, verified: false })
+  await expect(f.run('getCapabilities')).resolves.toEqual({ dispatched: true })
   mocked.request.mockResolvedValueOnce([])
   await expect(f.run('listWindows')).resolves.toEqual([])
   const entries = [{ id: 'shell', displayName: 'Settings', kind: 'shell' },
@@ -105,6 +105,7 @@ it('returns only the selected observation and rejects changes of handle, PID or 
     ['show', {}], ['screenshot', {}],
     ['drag', { fromX: 1, fromY: 2, toX: 3, toY: 4 }],
     ['click', { elementId: '1', snapshotId: 's1' }],
+    ['invoke', { elementId: '1', snapshotId: 's1' }],
     ['typeText', { text: 'hello' }],
   ] as const) {
     await f.run(method, { windowHandle: 'window-a', ...params })
@@ -113,6 +114,9 @@ it('returns only the selected observation and rejects changes of handle, PID or 
     if (method === 'show' || method === 'screenshot' || method === 'drag') expect(operation.params).toHaveProperty('windowId', 7)
     else expect(operation.params).not.toHaveProperty('windowId')
   }
+  f.dispatch.mockResolvedValueOnce({ dispatched: false })
+  await expect(f.run('invoke', { windowHandle: 'window-a', snapshotId: 's1', elementId: '2' }))
+    .resolves.toEqual({ dispatched: false })
 })
 it('rejects incomplete selection and reused native handles before consent', async () => {
   const f = await setup()

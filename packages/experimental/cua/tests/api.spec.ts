@@ -12,7 +12,7 @@ const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const bounds = { x: -640, y: 100, width: 640, height: 480 }
 const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', bundleId: 'test.editor' }
-const delivered = { dispatched: true, verified: false }
+const delivered = { dispatched: true }
 const capabilities = { platform: 'macos', sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, methods: ['getState', 'click'], coordinateSpace: 'screenshot-pixels', browser: false }
 
 function windowInfo(windowId: number) {
@@ -272,6 +272,37 @@ describe('element actions', () => {
     f.dispatch.mockClear()
     await expect(app.performAction(element('0'), '')).rejects.toThrow('performAction action')
     expect(f.dispatch).not.toHaveBeenCalled()
+  })
+})
+
+describe('element default invocation', () => {
+  it('uses the latest snapshot and opaque element id without reading fresh state', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    expect(await app.invoke(element('42.12345'))).toEqual(delivered)
+    expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
+      { method: 'invoke', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '42.12345' } },
+    ])
+    expect(f.sink.text).not.toHaveBeenCalled()
+  })
+
+  it('returns confirmed absence of a default action as un-dispatched evidence', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockResolvedValueOnce({ dispatched: false })
+    await expect(app.invoke(element('9'))).resolves.toEqual({ dispatched: false })
+  })
+
+  it('rejects provider failures and malformed dispatch evidence', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const failure = new Error('PERMISSION_DENIED')
+    f.dispatch.mockRejectedValueOnce(failure)
+    await expect(app.invoke(element('0'))).rejects.toBe(failure)
+    f.dispatch.mockResolvedValueOnce({ dispatched: 'yes' })
+    await expect(app.invoke(element('0'))).rejects.toThrow()
+    await expect(app.invoke(element(''))).rejects.toThrow('invoke elementId')
   })
 })
 
@@ -624,7 +655,7 @@ describe('input actions', () => {
     f.dispatch.mockRejectedValueOnce(failure)
     await expect(app.typeText('hello')).rejects.toBe(failure)
     expect(f.dispatch).toHaveBeenCalledTimes(3)
-    f.dispatch.mockResolvedValueOnce({ dispatched: true, verified: true })
+    f.dispatch.mockResolvedValueOnce({ dispatched: 'yes' })
     await expect(app.click(element('0'))).rejects.toThrow()
     expect(f.dispatch).toHaveBeenCalledTimes(4)
   })

@@ -72,8 +72,8 @@ describe('native helper transport', () => {
     const f = fixture()
     const pending = f.client.request('activate', { appHandle: 'app-one' }, new AbortController().signal, ToolCallId('foreground-call'))
     expect(f.id()).toBe('foreground-call')
-    f.reply({ id: 'foreground-call', result: { dispatched: true, verified: false } })
-    await expect(pending).resolves.toEqual({ dispatched: true, verified: false })
+    f.reply({ id: 'foreground-call', result: { dispatched: true } })
+    await expect(pending).resolves.toEqual({ dispatched: true })
   })
 
   it('accepts split UTF-8 replies and preserves native refusal codes without closing the connection', async () => {

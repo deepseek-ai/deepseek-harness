@@ -22,6 +22,13 @@ import Testing
     }
 }
 
+@Test func selectsPressBeforePickForDefaultInvocation() {
+    #expect(AXWorker.defaultAction(["AXPick", "AXShowMenu"]) == "AXPick")
+    #expect(AXWorker.defaultAction(["AXPick", "AXPress"]) == "AXPress")
+    #expect(AXWorker.defaultAction(["AXShowMenu"]) == nil)
+    #expect(AXWorker.defaultAction([]) == nil)
+}
+
 @Test func mapsScalarsToTheirDirectCoreFoundationTypes() throws {
     #expect(CFGetTypeID(try AXAccess.attributeValue(attribute: "AXValue", argument: .string("hello"), current: nil)) == CFStringGetTypeID())
     #expect(CFGetTypeID(try AXAccess.attributeValue(attribute: "AXValue", argument: .bool(true), current: nil)) == CFBooleanGetTypeID())

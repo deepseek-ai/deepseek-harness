@@ -53,7 +53,7 @@ export type CuaFoundAppInfo = z.output<typeof FoundAppsResult>[number]
 export type CuaBounds = CuaWindowInfo['bounds']
 /** Observed window metadata; identifiers are valid only while the window exists, and null Space membership is unknown. */
 export type CuaWindowInfo = z.output<typeof WindowsResult>[number]
-/** Successful input dispatch; application outcome still requires observation. */
+/** Reports whether the provider successfully executed the requested operation. */
 export type CuaActionResult = z.output<typeof ActionResult>
 /** Hover dispatch and the effect on the user's system pointer. */
 export type CuaHoverResult = z.output<typeof HoverResult>
@@ -128,9 +128,16 @@ export interface CuaSurface {
    * @param elementId - Element id from this surface's latest observation.
    * @param action - Exact action name from listActions.
    * @param argument - Direct action argument; omit or pass null for a no-argument action, or pass the value itself for attribute setting.
-   * @returns Dispatch evidence; the application state is not verified.
+   * @returns Whether the provider successfully executed the requested operation.
    */
   performAction(elementId: CuaElementId, action: string, argument?: JsonValue): Promise<CuaActionResult>
+  /**
+   * Invoke the element's default action.
+   * If the element's type does not support a default action, the result's dispatched field is false.
+   * @param elementId - Element id from this surface's latest observation.
+   * @returns Whether the provider successfully executed the requested operation.
+   */
+  invoke(elementId: CuaElementId): Promise<CuaActionResult>
   /**
    * Reveal advertised AX alternate UI, otherwise move the system cursor without pressing a button.
    * The system-pointer route requires the app to be foreground and the point unobscured; never activates or raises it.

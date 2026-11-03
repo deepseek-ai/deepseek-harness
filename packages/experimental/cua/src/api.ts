@@ -197,6 +197,9 @@ export function createCuaSurface(dispatch: CuaDispatch, sink: CuaObservationSink
         ...argument === undefined ? {} : { argument },
       })
     },
+    async invoke(elementId) {
+      return ActionResult.parse(await call('invoke', { ...snapshotParams(), elementId }))
+    },
     async hover(target, options) {
       const relative = options?.relative === undefined ? {} : { relative: options.relative }
       if (typeof target === 'string') return HoverResult.parse(await call('hover', { ...snapshotParams(), elementId: target, ...relative }))

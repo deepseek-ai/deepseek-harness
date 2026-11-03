@@ -231,7 +231,7 @@ import Darwin
             activationRequested = true
         }
         let after = try await worker.foregroundObservation(plan)
-        return .object(["dispatched": .bool(true), "verified": .bool(false), "foreground": .object([
+        return .object(["dispatched": .bool(true), "foreground": .object([
             "requestId": .string(requestID), "operation": .string("activate"),
             "targetPid": .number(Double(plan.identity.pid)), "targetWindowId": .null,
             "before": before.json, "after": after.json, "activationRequested": .bool(activationRequested), "raiseRequested": .bool(false),

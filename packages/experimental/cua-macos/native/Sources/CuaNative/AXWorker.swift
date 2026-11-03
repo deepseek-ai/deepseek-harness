@@ -170,7 +170,11 @@ actor AXWorker {
         try WindowGeometry.validateObservedSize(observed: observedWindowBounds[handle]?[windowID], current: window.bounds)
         return window
     }
-    static var actionResult: JSONValue { .object(["dispatched": .bool(true), "verified": .bool(false)]) }
+    static var actionResult: JSONValue { .object(["dispatched": .bool(true)]) }
+    /// Select the element's default action; Press takes precedence over Pick.
+    static func defaultAction(_ advertised: [String]) -> String? {
+        advertised.contains("AXPress") ? "AXPress" : advertised.contains("AXPick") ? "AXPick" : nil
+    }
 
     // Only observation failures allow a fresh read. Input failures can follow
     // partial effects and keep their original classification.
@@ -260,7 +264,7 @@ actor AXWorker {
             if let beforePID, let afterPID, let beforeWindow, let afterWindow {
                 changed = .bool(beforePID != afterPID || beforeWindow != afterWindow)
             } else { changed = .null }
-            return .result(.object(["dispatched": .bool(true), "verified": .bool(false),
+            return .result(.object(["dispatched": .bool(true),
                 "windowId": restored.map { .number(Double($0)) } ?? .null, "foregroundChanged": changed]))
         case "activate":
             return .foreground(ForegroundPlan(appHandle: handle, identity: identity))
@@ -315,6 +319,14 @@ actor AXWorker {
         case "setValue": try ax().setAttribute(element(handle, params), "AXValue", params.values["value"])
         case "performAction":
             try ax().performAction(element(handle, params), action: params.string("action"), argument: params.values["argument"])
+        case "invoke":
+            let target = try element(handle, params)
+            let advertised = try ax().actions(target)
+            guard let action = Self.defaultAction(advertised) else {
+                return .result(.object(["dispatched": .bool(false)]))
+            }
+            try ax().perform(target, action)
+            return .result(Self.actionResult)
         case "selectText":
             try ax().selectText(element(handle, params), text: params.string("text"), prefix: params.optionalString("prefix"),
                                 suffix: params.optionalString("suffix"), mode: params.optionalString("selectionType") ?? "text")
@@ -446,7 +458,7 @@ actor AXWorker {
             "coordinateSpace": .string("window-points"), "windowId": .number(Double(after.windowID))])
     }
     static func hoverResult(route: String, pointerMoved: Bool) -> JSONValue {
-        .object(["dispatched": .bool(true), "verified": .bool(false), "hoverRoute": .string(route), "systemPointerMoved": .bool(pointerMoved)])
+        .object(["dispatched": .bool(true), "hoverRoute": .string(route), "systemPointerMoved": .bool(pointerMoved)])
     }
     func shutdown() { closed = true; snapshots.removeAll(); observedWindowBounds.removeAll(); targets.removeAll(); hovers.removeAll(); access = nil; keyboard = nil; pointer = nil }
 }

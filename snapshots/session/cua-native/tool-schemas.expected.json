@@ -379,6 +379,44 @@
             "properties": {
               "method": {
                 "type": "string",
+                "const": "invoke"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "snapshotId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "elementId": {
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.",
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "snapshotId",
+                  "elementId"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
                 "const": "hover"
               },
               "params": {

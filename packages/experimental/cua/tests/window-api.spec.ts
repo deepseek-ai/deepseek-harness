@@ -20,7 +20,7 @@ function fixture() {
       case 'getState': return { windowHandle: 'window-7', windowId: 7, pid: 10, snapshotId: 'state-1', tree: 'AX window', windows: [metadata], truncated: false }
       case 'findApps': return [{ id: 'shell-entry', displayName: 'Settings', kind: 'shell' }]
       case 'listActions': return ['AXPress']
-      default: return { dispatched: true, verified: false }
+      default: return { dispatched: true }
     }
   })
   return { dispatch, text, api: createCuaWindowApi(dispatch, { text, image: vi.fn() }) }
@@ -71,11 +71,30 @@ it('accepts an element action query or execution only for a selected window snap
   const action = { ...params, action: 'AXTextArea.AXValue.Set', argument: 'hello' }
   expect(WindowRequest.parse({ method: 'performAction', params: action })).toEqual({ method: 'performAction', params: action })
   expect(WindowRequest.safeParse({ method: 'performAction', params: { ...params, action: '' } }).success).toBe(false)
+  expect(WindowRequest.parse({ method: 'invoke', params })).toEqual({ method: 'invoke', params })
+  for (const invalid of [
+    { windowHandle: 'window-7', elementId: '42.12345' },
+    { windowHandle: 'window-7', snapshotId: 'state-1', elementId: '' },
+    { ...params, action: 'AXPress' },
+    { ...params, argument: null },
+    { ...params, mouseButton: 'left' },
+  ]) expect(WindowRequest.safeParse({ method: 'invoke', params: invalid }).success).toBe(false)
 })
 it('launches a discovered entry without inventing a selected window or waiting for one', async () => {
   const f = fixture()
-  expect(await f.api.launch('shell-entry')).toEqual({ dispatched: true, verified: false })
+  expect(await f.api.launch('shell-entry')).toEqual({ dispatched: true })
   expect(f.dispatch).toHaveBeenCalledExactlyOnceWith({ method: 'launch', params: { target: 'shell-entry' } })
+})
+it('invokes a selected window with its latest snapshot and preserves confirmed absence', async () => {
+  const f = fixture()
+  const [window] = await f.api.getWindows([7])
+  if (!window) throw new Error('Missing selected window')
+  expect(await window.invoke(element('42.12345'))).toEqual({ dispatched: true })
+  expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'invoke', params: {
+    windowHandle: 'window-7', snapshotId: 'state-1', elementId: '42.12345',
+  } })
+  f.dispatch.mockResolvedValueOnce({ dispatched: false })
+  await expect(window.invoke(element('42.12345'))).resolves.toEqual({ dispatched: false })
 })
 it('rejects application operations, caller-selected native windows and malformed relative coordinates', () => {
   for (const request of [

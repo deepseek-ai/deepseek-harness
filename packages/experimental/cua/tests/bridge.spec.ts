@@ -24,10 +24,10 @@ it('uses the current tool binding when a retained app is called by another execu
   const text = vi.fn()
   const cua = connectCua(() => current, text)
   const app = await cua.getApp('Editor')
-  const second = vi.fn(async (): Promise<JsonValue> => ({ dispatched: true, verified: false }))
+  const second = vi.fn(async (): Promise<JsonValue> => ({ dispatched: true }))
   current = second
 
-  await expect(app.click(element('0'))).resolves.toEqual({ dispatched: true, verified: false })
+  await expect(app.click(element('0'))).resolves.toEqual({ dispatched: true })
   expect(first).toHaveBeenCalledTimes(2)
   expect(second).toHaveBeenCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '0' } })
   expect(text).not.toHaveBeenCalled()

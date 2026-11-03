@@ -32,6 +32,10 @@ it('retains optional resource fields and tuple-valued parameters without inventi
   expect(generated.enums.get('getState')?.get('choice')).toEqual(new Set(['one']))
 })
 
+it('admits only locator fields for default invocation', () => {
+  expect(nativeProtocol().fields.get('invoke')).toEqual(new Set(['appHandle', 'snapshotId', 'elementId']))
+})
+
 it('accepts a parameter-free object schema without a properties dictionary', () => {
   replacements.values.set(0, { properties: { method: { const: 'getCapabilities' }, params: { type: 'object' } } })
   expect(nativeProtocol().fields.get('getCapabilities')).toEqual(new Set())
