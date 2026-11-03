@@ -3,26 +3,23 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/document/office-kit/README.md
 /:
-  en: c9e308809be68fdd
-  zh: 5d6ad4b8edc73d4f
+  en: 3aa02c9e17e94752
+  zh: 1157a4f1863e19de
 /deepseek-ai-dsh-office-kit:
   en: 37156fb2f1de123c
   zh: 44b77def8f181d4b
 /deepseek-ai-dsh-office-kit/summary:
-  en: a629208ae63521c2
-  zh: 06c1b0b391f784ca
+  en: fe9c42abe01693ae
+  zh: d3f1a9533a48b40e
 /deepseek-ai-dsh-office-kit/table-of-contents:
-  en: 8454159e70cbfb27
-  zh: ce266c78e285fe9c
+  en: d152484eb41ac6b4
+  zh: a134331a31395608
 /deepseek-ai-dsh-office-kit/use-this-package:
-  en: f702b6276686309f
-  zh: 29cdbd809f2db3c9
-/deepseek-ai-dsh-office-kit/locate-kit:
-  en: a660d273bd72217c
-  zh: 99ddb3b5531b02dd
+  en: 3a4b3e462240f493
+  zh: 336f481e2f14b76b
 /deepseek-ai-dsh-office-kit/understand-the-implementation:
-  en: 774282d28c9e20ae
-  zh: 6d55450db0134e46
+  en: ddd81007f05f3065
+  zh: f103b2664f234f49
 /deepseek-ai-dsh-office-kit/further-exploration:
   en: 9c62c26d46625e8b
   zh: 9d0b734d70fdf948
@@ -33,8 +30,8 @@
   en: cd1110fd1b70aaa0
   zh: 623d77245348d129
 /deepseek-ai-dsh-office-kit/known-limitations-and-deferred-work:
-  en: b8ef4f05825ba899
-  zh: af71b7a48cb30203
+  en: 84a398bf9544d7a7
+  zh: bea8cf2fe57ae836
 /deepseek-ai-dsh-office-kit/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 8ec3e73528ddb1a6

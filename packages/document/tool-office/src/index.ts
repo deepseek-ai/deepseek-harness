@@ -12,21 +12,20 @@ import { basename } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type {} from '@deepseek-ai/dsh-attachment'
+import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { FsInfo, FsTarget } from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-skill'
-import { OfficeKitError, OfficeSourceKey, type OfficeKit, type OfficeKitSource } from '@deepseek-ai/dsh-office-kit'
+import { OfficeKitError, OfficeSourceKey, type OfficeDocumentExtension, type OfficeImageInputExtension, type OfficeKit,
+  type OfficeKitSource, type OfficeWorkbookExtension } from '@deepseek-ai/dsh-office-kit'
 import { defineTool, type ToolActivationContext, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { checkParameterNames, checkRenderArguments, checkConversionArguments, extensionOf, inputFamily, OUTPUT_FORMATS,
+  RECALCULATION_FORMATS,
   type OfficeRenderArgs, type OfficeConvertArgs, type OfficeRecalculateArgs, type OfficeFamily, type OfficeOperationName,
   type OfficeToolName } from './formats.ts'
 import { renderFileContent, renderImagesContent, type OfficeFileValue, type OfficeRenderValue } from './content.ts'
-
-export type { OfficeFileValue, OfficeRenderValue, OfficeRenderedImage } from './content.ts'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'tool-office'
@@ -58,6 +57,9 @@ export const Config: z<Partial<Config>, Config> = z.object({
   maxImageBytes: z.natural().min(1).max(Number.MAX_SAFE_INTEGER).default(32 * 1024 * 1024),
 })
 
+/** Stored encodings of a rendered image; attachment normalization can re-encode a PNG as JPEG or WebP. */
+const IMAGE_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const satisfies readonly ImageMediaType[]
+
 const IMAGE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -66,7 +68,7 @@ const IMAGE_SCHEMA = {
     sheet: { type: 'string' },
     range: { type: 'string' },
     attachmentId: { type: 'string', required: true },
-    mediaType: { type: 'string', const: 'image/png', required: true },
+    mediaType: { type: 'string', enum: IMAGE_MEDIA_TYPES, required: true },
     bytes: { type: 'integer', required: true },
     width: { type: 'integer', required: true },
     height: { type: 'integer', required: true },
@@ -105,7 +107,7 @@ const CONVERT_PARAMETERS = {
 
 const RECALCULATE_PARAMETERS = {
   input: { type: 'string', required: true, description: 'Path to an xls, xlsx, or ods workbook; not modified.' },
-  format: { type: 'string', required: true, enum: ['xlsx', 'ods'], description: 'Output workbook format.' },
+  format: { type: 'string', required: true, enum: RECALCULATION_FORMATS, description: 'Output workbook format.' },
 } as const
 
 const PARAMETER_NAMES: Readonly<Record<OfficeToolName, readonly string[]>> = {
@@ -117,7 +119,7 @@ const PARAMETER_NAMES: Readonly<Record<OfficeToolName, readonly string[]>> = {
 const FILE_PROPERTIES = {
   path: { type: 'string', required: true, description: 'Canonical absolute input path.' },
   file: { type: 'string', required: true, description: 'Absolute path of the temporary output file.' },
-  format: { type: 'string', required: true },
+  format: { type: 'string', required: true, enum: OUTPUT_FORMATS },
   bytes: { type: 'integer', required: true },
   pageCount: { type: 'integer', description: 'Pages of a PDF output.' },
   missingFonts: MISSING_FONTS_SCHEMA,
@@ -323,8 +325,8 @@ async function render(
   try {
     result = await kit.renderImages({
       // `inputFamily` admitted the extension.
-      extension: extensionOf(args.input) as Parameters<OfficeKit['renderImages']>[0]['extension'],
-      priority: 'foreground', source,
+      extension: extensionOf(args.input) as OfficeImageInputExtension,
+      source,
       ...args.pages === undefined ? {} : { pages: args.pages },
       ...args.sheet === undefined ? {} : { sheet: args.sheet },
       ...args.range === undefined ? {} : { range: args.range },
@@ -358,7 +360,7 @@ async function render(
         ...image.page === undefined ? {} : { page: image.page },
         ...image.sheet === undefined ? {} : { sheet: image.sheet },
         ...image.range === undefined ? {} : { range: image.range },
-        attachmentId: ref.attachmentId, mediaType: 'image/png', bytes: ref.bytes, width: ref.width, height: ref.height,
+        attachmentId: ref.attachmentId, mediaType: ref.mediaType, bytes: ref.bytes, width: ref.width, height: ref.height,
         ...ref.originalDimensions === undefined ? {} : { originalDimensions: { ...ref.originalDimensions } },
       }
     }),
@@ -389,15 +391,16 @@ async function convertFile<Operation extends 'convert' | 'recalculate'>(
     result = operation === 'convert'
       ? await kit.convertTo({
         // `inputFamily` and `checkConversionArguments` admitted both extensions.
-        extension: extension as Parameters<OfficeKit['convertTo']>[0]['extension'],
+        extension: extension as OfficeDocumentExtension,
         format,
         ...'sheet' in args ? { sheet: args.sheet } : {},
-        priority: 'foreground', source, output,
+        source, output,
       }, signal)
       : await kit.recalculate({
-        extension: extension as Parameters<OfficeKit['recalculate']>[0]['extension'],
-        format: format as Parameters<OfficeKit['recalculate']>[0]['format'],
-        priority: 'foreground', source, output,
+        extension: extension as OfficeWorkbookExtension,
+        // The office_recalculate schema admitted only recalculation formats.
+        format: format as OfficeRecalculateArgs['format'],
+        source, output,
       }, signal)
   } catch (error) { throw officeFailure(operation, target.displayPath, error) }
   return {

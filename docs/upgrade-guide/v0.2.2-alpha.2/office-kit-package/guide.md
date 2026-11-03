@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-The Office conversion provider moved from `@deepseek-ai/dsh-office-to-pdf` to `@deepseek-ai/dsh-office-kit`. The new package also exports LibreOffice Kit location functions from `@deepseek-ai/dsh-office-kit/locate`. Compositions, plugins, and Clients that name the old package, service, Remote methods, or exported symbols are affected:
+The Office conversion provider moved from `@deepseek-ai/dsh-office-to-pdf` to `@deepseek-ai/dsh-office-kit`. Compositions, plugins, and Clients that name the old package, service, Remote methods, or exported symbols are affected:
 
 | Old | New |
 |---|---|

@@ -3,6 +3,8 @@
  * @module @deepseek-ai/dsh-tool-office/formats
  */
 
+import type { OfficeConversionFormat, OfficeRecalculationFormat } from '@deepseek-ai/dsh-office-kit'
+
 /** Operation requested by one Office tool call. */
 export type OfficeOperationName = 'render' | 'convert' | 'recalculate'
 
@@ -17,14 +19,17 @@ const FAMILIES: Readonly<Record<string, OfficeFamily>> = {
 }
 
 /** Conversion outputs per input family. */
-export const CONVERSION_OUTPUTS: Readonly<Record<Exclude<OfficeFamily, 'pdf'>, readonly string[]>> = {
+export const CONVERSION_OUTPUTS: Readonly<Record<Exclude<OfficeFamily, 'pdf'>, readonly OfficeConversionFormat[]>> = {
   text: ['pdf', 'docx', 'odt', 'txt'],
   spreadsheet: ['pdf', 'xlsx', 'ods', 'csv'],
   presentation: ['pdf', 'pptx', 'odp'],
 }
 
 /** Every conversion or recalculation output format. */
-export const OUTPUT_FORMATS = ['pdf', 'docx', 'odt', 'txt', 'xlsx', 'ods', 'csv', 'pptx', 'odp'] as const
+export const OUTPUT_FORMATS = ['pdf', 'docx', 'odt', 'txt', 'xlsx', 'ods', 'csv', 'pptx', 'odp'] as const satisfies readonly OfficeConversionFormat[]
+
+/** Every recalculation output format. */
+export const RECALCULATION_FORMATS = ['xlsx', 'ods'] as const satisfies readonly OfficeRecalculationFormat[]
 
 /** Arguments for rendering document pages or worksheet areas. */
 export interface OfficeRenderArgs {
@@ -38,14 +43,14 @@ export interface OfficeRenderArgs {
 /** Arguments for converting a document. */
 export interface OfficeConvertArgs {
   input: string
-  format: typeof OUTPUT_FORMATS[number]
+  format: OfficeConversionFormat
   sheet?: string
 }
 
 /** Arguments for recalculating a workbook. */
 export interface OfficeRecalculateArgs {
   input: string
-  format: 'xlsx' | 'ods'
+  format: OfficeRecalculationFormat
 }
 
 /** Model-facing Office tool name. */

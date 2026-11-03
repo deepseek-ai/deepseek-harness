@@ -15,7 +15,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import OfficeKit from '@deepseek-ai/dsh-office-kit'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
-import { resolveKitModule } from '@deepseek-ai/dsh-office-kit/locate'
+import { resolveKitModule } from '@deepseek-ai/dsh-office-kit/src/locate.ts'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillOffice from '@deepseek-ai/dsh-skill-office'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -27,8 +27,8 @@ import * as WorkspaceDependencies from '@deepseek-ai/dsh-tool-workspace-dependen
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 
 // Kit presence is the deployment fact under test; every other row runs unmodified.
-vi.mock('@deepseek-ai/dsh-office-kit/locate', async (original) => {
-  const actual = await original<typeof import('@deepseek-ai/dsh-office-kit/locate')>()
+vi.mock('@deepseek-ai/dsh-office-kit/src/locate.ts', async (original) => {
+  const actual = await original<typeof import('@deepseek-ai/dsh-office-kit/src/locate.ts')>()
   return { ...actual, resolveKitModule: vi.fn(() => ({ kind: 'missing', error: new Error('Cannot find package') })) }
 })
 

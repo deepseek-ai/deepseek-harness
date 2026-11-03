@@ -4,10 +4,14 @@
  */
 
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { OfficeConversionFormat } from '@deepseek-ai/dsh-office-kit'
 
-/** One rendered image and the document location it shows. */
-export interface OfficeRenderedImage {
+/**
+ * One rendered image and the document location it shows. The attachment fields are those of the stored reference;
+ * storage normalization can re-encode a rendered PNG, so `mediaType` names the stored encoding.
+ */
+export interface OfficeRenderedImage extends Pick<ImageAttachmentRef, 'mediaType' | 'bytes' | 'width' | 'height' | 'originalDimensions'> {
   /** One-based page or slide; absent for worksheet areas. */
   page?: number
   /** Worksheet of a worksheet area. */
@@ -15,12 +19,6 @@ export interface OfficeRenderedImage {
   /** A1 rectangle of a worksheet area. */
   range?: string
   attachmentId: string
-  mediaType: 'image/png'
-  bytes: number
-  width: number
-  height: number
-  /** Rendered dimensions before attachment normalization; present only when storage reduced the image. */
-  originalDimensions?: { width: number; height: number }
 }
 
 /** Canonical result of `render`. */
@@ -43,7 +41,7 @@ export interface OfficeFileValue<Operation extends 'convert' | 'recalculate' = '
   path: string
   /** Absolute path of the temporary output file in the filesystem execution world. */
   file: string
-  format: string
+  format: OfficeConversionFormat
   bytes: number
   /** Pages of a PDF output. */
   pageCount?: number

@@ -189,7 +189,7 @@ export class OfficeKit extends TypertRemoteService {
 
   /**
    * Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission
-   * queue, concurrency, source-byte reservation, and cache with previews; `priority` orders them against other work.
+   * queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority.
    * @param request - authorized metadata, deferred bounded source read, selection, and complete-result limits.
    * @param signal - caller cancellation; provider disposal also stops active work.
    * @returns caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits.
@@ -197,8 +197,8 @@ export class OfficeKit extends TypertRemoteService {
    * selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.
    */
   async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<OfficeImagesResult> {
-    const { extension, priority, source, pages, sheet, range, dpi, maxImages, maxPixels, maxDimension, maxBytes } = request
-    const result = await this.queue.read({ extension, priority, source, operation: {
+    const { extension, source, pages, sheet, range, dpi, maxImages, maxPixels, maxDimension, maxBytes } = request
+    const result = await this.queue.read({ extension, priority: 'foreground', source, operation: {
       kind: 'images',
       ...(pages === undefined ? {} : { pages: [...pages] }),
       ...(sheet === undefined ? {} : { sheet }),
@@ -206,13 +206,12 @@ export class OfficeKit extends TypertRemoteService {
       ...(dpi === undefined ? {} : { dpi }),
       maxImages, maxPixels, maxDimension, maxBytes,
     } }, signal)
-    return { images: result.images, pageCount: result.pageCount, dpi: result.dpi, missingFonts: result.missingFonts,
-      generation: result.generation }
+    return { images: result.images, pageCount: result.pageCount, dpi: result.dpi, missingFonts: result.missingFonts }
   }
 
   /**
-   * Convert one document to another format, sharing admission, concurrency, and cache with previews, and save the
-   * result in the provider's output store.
+   * Convert one document to another format at foreground priority, sharing admission, concurrency, and cache with
+   * previews, and save the result in the provider's output store.
    * @param request - authorized metadata, deferred bounded source read, target format, and output owner and name.
    * @param signal - caller cancellation; provider disposal also stops active work.
    * @returns the saved file's absolute Host path and size; the file is deleted after `outputRetentionMs`, when older
@@ -221,13 +220,13 @@ export class OfficeKit extends TypertRemoteService {
    * codes; cancellation rejects with its reason.
    */
   async convertTo(request: OfficeConversionRequest, signal?: AbortSignal): Promise<OfficeFileResult> {
-    const { extension, priority, source, format, sheet, output } = request
-    return this.saveFile(output, await this.queue.read({ extension, priority, source,
+    const { extension, source, format, sheet, output } = request
+    return this.saveFile(output, await this.queue.read({ extension, priority: 'foreground', source,
       operation: { kind: 'convert', format, ...(sheet === undefined ? {} : { sheet }) } }, signal), signal)
   }
 
   /**
-   * Recalculate every formula of one workbook and save formulas with refreshed cached results, sharing admission,
+   * Recalculate every formula of one workbook at foreground priority and save formulas with refreshed cached results, sharing admission,
    * concurrency, and cache with previews, and save the workbook in the provider's output store. This does not validate
    * formulas or business data.
    * @param request - authorized workbook metadata, deferred bounded source read, output format, and output owner and name.
@@ -236,18 +235,18 @@ export class OfficeKit extends TypertRemoteService {
    * @throws {OfficeKitError} Invalid input, unusable output, or engine failure; cancellation rejects with its reason.
    */
   async recalculate(request: OfficeRecalculationRequest, signal?: AbortSignal): Promise<OfficeFileResult> {
-    const { extension, priority, source, format, output } = request
-    return this.saveFile(output, await this.queue.read({ extension, priority, source, operation: { kind: 'recalculate', format } }, signal), signal)
+    const { extension, source, format, output } = request
+    return this.saveFile(output, await this.queue.read({ extension, priority: 'foreground', source, operation: { kind: 'recalculate', format } }, signal), signal)
   }
 
   private async saveFile(
-    output: OfficeOutputTarget, result: Extract<OfficeOperationOutput, { kind: 'file' }> & Pick<OfficeFileResult, 'generation'>,
+    output: OfficeOutputTarget, result: Extract<OfficeOperationOutput, { kind: 'file' }>,
     signal: AbortSignal | undefined,
   ): Promise<OfficeFileResult> {
     signal?.throwIfAborted()
     const path = await this.outputs.save(output.owner, output.name, result.data)
     return { path, bytes: result.data.byteLength, ...(result.pageCount === undefined ? {} : { pageCount: result.pageCount }),
-      missingFonts: result.missingFonts, generation: result.generation }
+      missingFonts: result.missingFonts }
   }
 
   /**

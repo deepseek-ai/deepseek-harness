@@ -9,7 +9,7 @@ description: "`@deepseek-ai/dsh-office-kit` 取代 `@deepseek-ai/dsh-office-to-p
 
 ## 变更
 
-Office 转换提供方从 `@deepseek-ai/dsh-office-to-pdf` 移到 `@deepseek-ai/dsh-office-kit`。新包还从 `@deepseek-ai/dsh-office-kit/locate` 导出 LibreOffice Kit 定位函数。引用旧包、服务、Remote 方法或导出符号的组合、插件和 Client 受到影响：
+Office 转换提供方从 `@deepseek-ai/dsh-office-to-pdf` 移到 `@deepseek-ai/dsh-office-kit`。引用旧包、服务、Remote 方法或导出符号的组合、插件和 Client 受到影响：
 
 | 旧名 | 新名 |
 |---|---|

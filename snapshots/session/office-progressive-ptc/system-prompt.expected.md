@@ -963,7 +963,7 @@ interface ToolOutputMap {
     path: string;
     /** Absolute path of the temporary output file. */
     file: string;
-    format: string;
+    format: "pdf" | "docx" | "odt" | "txt" | "xlsx" | "ods" | "csv" | "pptx" | "odp";
     bytes: number;
     /** Pages of a PDF output. */
     pageCount?: number;
@@ -975,7 +975,7 @@ interface ToolOutputMap {
     path: string;
     /** Absolute path of the temporary output file. */
     file: string;
-    format: string;
+    format: "pdf" | "docx" | "odt" | "txt" | "xlsx" | "ods" | "csv" | "pptx" | "odp";
     bytes: number;
     /** Pages of a PDF output. */
     pageCount?: number;
@@ -988,12 +988,12 @@ interface ToolOutputMap {
     /** Pages or slides of a document, or visible worksheets. */
     pageCount: number;
     dpi: number;
-    images: {
+    images: ({
       page?: number;
       sheet?: string;
       range?: string;
       attachmentId: string;
-      mediaType: "image/png";
+      mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
       bytes: number;
       width: number;
       height: number;
@@ -1001,7 +1001,7 @@ interface ToolOutputMap {
         width: number;
         height: number;
       };
-    }[];
+    })[];
     missingFonts: string[];
   };
   read: {

@@ -1,5 +1,5 @@
 ---
-description: "定位 LibreOffice Kit，并通过独立发布的 kit 在 Host 渲染、转换 Office 文档和重算工作簿。"
+description: "通过独立发布的 kit 在 Host 渲染、转换 Office 文档和重算工作簿。"
 kind: "package-reference"
 ---
 
@@ -9,12 +9,11 @@ kind: "package-reference"
 
 ## 概述
 
-在宿主计算机上将 Office 文档渲染为 PDF 或 PNG 图片、在格式之间转换，以及重算工作簿。声明了原生 LibreOffice 引擎的目标使用原生引擎，其余目标使用 Node WASM。预览支持 DOC、DOCX、XLS、XLSX、PPT 和 PPTX；操作还支持 OpenDocument 格式，图片渲染还支持 PDF。OOXML 操作返回缺失字体名称；二进制 Office 操作返回空列表。`/locate` 入口定位消费方使用的 Kit 安装及其引擎包，不加载 Cordis 或 Kit。
+在宿主计算机上将 Office 文档渲染为 PDF 或 PNG 图片、在格式之间转换，以及重算工作簿。声明了原生 LibreOffice 引擎的目标使用原生引擎，其余目标使用 Node WASM。预览支持 DOC、DOCX、XLS、XLSX、PPT 和 PPTX；操作还支持 OpenDocument 格式，图片渲染还支持 PDF。OOXML 操作返回缺失字体名称；二进制 Office 操作返回空列表。
 
 ## 目录
 
 - [使用此包](#use-this-package)
-- [定位 Kit](#locate-kit)
 - [理解实现](#understand-the-implementation)
 - [延伸阅读](#further-exploration)
 - [模型体验](#model-experience)
@@ -28,7 +27,7 @@ kind: "package-reference"
 
 [Web bundle](../../bundle/web-app/README.zh.md)和 [SDK bundle](../../bundle/sdk-app/README.zh.md)以 `office-kit` 条目挂载此提供方；[Office 工具](../tool-office/README.zh.md)是其面向模型的消费方。独立组合通过 `cordis.yml` 条目挂载 `@deepseek-ai/dsh-office-kit`。
 
-调用方提交已授权源的标识、版本、可选字节数、延迟的有界读取、输入扩展名和调度优先级。源版本变化会拒绝操作。取消以原因为拒绝值，失败使用 `OfficeKitError`。每个结果都携带转换 generation（配置替换后随之改变）和缺失字体。
+调用方提交已授权源的标识、版本、可选字节数、延迟的有界读取、输入扩展名；PDF 转换还指定调度优先级，图片渲染、格式转换和重算以前台优先级运行。源版本变化会拒绝操作。取消以原因为拒绝值，失败使用 `OfficeKitError`。每个结果都携带缺失字体；PDF 结果还携带转换 generation（配置替换后随之改变）。
 
 | 方法 | 操作 | 结果 |
 |---|---|---|
@@ -67,23 +66,6 @@ Kit 缺失时提供方照常注册，例如未下载 Office sidecar 就启动的
 
 默认保留 8 个输出、128 MiB 和 64 个源别名，准入 32 个读取方与 8 个排队任务，最多预留 100 MiB 源字节，并允许一个后台转换。这些限制约束拥有的请求和二进制载荷，不约束引擎 RSS、multipart 封装、调用方保留的结果或 PDF.js 页面渲染。
 
-<a id="locate-kit"></a>
-## 定位 Kit
-
-加载 Kit 的 Node 消费方导入 `@deepseek-ai/dsh-office-kit/locate`。此入口只以值的形式导入 Node 内置模块，不读取环境变量，也没有 `cordis.yml` 配置。消费方负责声明自己的 Kit 依赖。模块解析器接收在消费模块中编写的查找函数：在那里调用 `import.meta.resolve` 会选中消费方的安装，且 Kit 缺失时会抛出：
-
-```ts
-import { resolveKitModule } from '@deepseek-ai/dsh-office-kit/locate'
-
-const kit = resolveKitModule(() => import.meta.resolve('@deepseek-ai/libreoffice-kit'))
-```
-
-`resolveKitModule` 返回 `{ kind: 'available', entry, resolveEnginePackage }` 或 `{ kind: 'missing', error }`。将 `entry` 传给动态 `import()`，将 `resolveEnginePackage` 传给 Kit 的 `createConverter` 或 `discoverRuntime`，或作为编辑器 `openDocument` 请求的 `options` 字段。查找函数抛出的值成为 `error`。
-
-`unpackedPath(path)` 为需要在 ASAR 外锚定查找的独立调用方（例如打包冒烟检查）提供相同映射。它不访问文件系统。
-
-`createEnginePackageResolver(kitEntry)` 直接从绝对入口路径或文件 URL 创建引擎回调；每个回调持有独立的解析器。回调成功时返回引擎 `package.json` 的绝对路径。包不存在时保留 Node 原始的 `MODULE_NOT_FOUND`，允许 Kit 从原生引擎回退到 WASM。如果包目录存在（包括断开的符号链接），但清单无法解析，回调抛出安装不完整错误，并将 Node 错误保存在 `cause` 中；此时应重新安装该包。其他解析错误和文件系统检查错误原样传播。Kit 负责验证返回的清单和必需资源。
-
 -----
 
 <a id="understand-the-implementation"></a>
@@ -94,7 +76,9 @@ const kit = resolveKitModule(() => import.meta.resolve('@deepseek-ai/libreoffice
 
 在 Kit 导入成功之前，每次需要转换器时，提供方都把返回自身 `import.meta.resolve('@deepseek-ai/libreoffice-kit')` 的查找函数传给 [`resolveKitModule`](src/locate.ts)，它返回 Kit 入口和以其为起点的引擎包解析器，或返回 `missing`。随后提供方动态导入该入口；提供方没有静态导入 Kit 的值。这使引擎查找以提供方实际使用的 Kit 安装为起点。
 
-`/locate` 的函数每次解析调用一次消费方的查找函数，并把任何抛出的值视为 Kit 缺失。原生引擎路径使用同一映射，只将第一个 `.asar` 归档段替换为 `.asar.unpacked`，不论进程是否运行在 Electron 中。已解包路径及归档外路径保持不变。`@deepseek-ai/libreoffice-kit-wasm` 始终保留 Node 逻辑路径，供支持归档的文件系统访问。这些函数不导入 Kit、不加载引擎代码、不注册服务、不修改模块解析，也不保留模块级状态；[Desktop 打包](../../../apps/desktop/packaging/README.zh.md#runtime-file-selection)负责决定解包哪些包。
+引擎包解析器以 Kit 入口为起点创建；每个解析器互相独立。解析成功时返回引擎 `package.json` 的绝对路径。包不存在时保留 Node 原始的 `MODULE_NOT_FOUND`，允许 Kit 从原生引擎回退到 WASM。如果包目录存在（包括断开的符号链接），但清单无法解析，解析器抛出安装不完整错误，并将 Node 错误保存在 `cause` 中；此时应重新安装该包。其他解析错误和文件系统检查错误原样传播。Kit 负责验证返回的清单和必需资源。
+
+定位函数每次解析调用一次提供方的查找函数，并把任何抛出的值视为 Kit 缺失。原生引擎路径使用同一映射，只将第一个 `.asar` 归档段替换为 `.asar.unpacked`，不论进程是否运行在 Electron 中。已解包路径及归档外路径保持不变。`@deepseek-ai/libreoffice-kit-wasm` 始终保留 Node 逻辑路径，供支持归档的文件系统访问。这些函数不导入 Kit、不加载引擎代码、不注册服务、不修改模块解析，也不保留模块级状态；[Desktop 打包](../../../apps/desktop/packaging/README.zh.md#runtime-file-selection)负责决定解包哪些包。
 
 引擎元数据无效、必需资源缺失和转换错误会拒绝请求，不会切换引擎。共享的 WASM 引擎使用 LibreOffice 的 CPU 图像过滤器。原生转换使用独立的平台引擎。
 
@@ -130,7 +114,7 @@ Remote 文件读取在查询转换缓存前重新检查内容读取授权和源�
 
 - 转换保真度和已安装的原生/WASM 资产由 `@deepseek-ai/libreoffice-kit` 负责；此提供方不查找系统 LibreOffice，也不在运行时下载引擎。
 - `timeoutMs` 仅在 kit 开始转换时计时，不限制队列等待时间。
-- `/locate` 的消费方必须为自己使用的 Kit 安装提供查找函数；这些函数不搜索其他位置，也不安装 Kit 或引擎。
+- 提供方只定位自身解析到的 Kit 安装；不搜索其他位置，也不安装 Kit 或引擎。
 - 渲染的图片和转换的文件以字节返回；此服务没有工作区输出路径，由各消费方负责发布。
 - 映射原生路径时不验证解包副本是否存在。Kit 会拒绝缺失的清单或资源，而不会将其视为原生包缺失。
 

@@ -68,7 +68,7 @@ async convert(request: OfficeKitRequest, signal?: AbortSignal): Promise<OfficeKi
 
 /**
  * Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission
- * queue, concurrency, source-byte reservation, and cache with previews; `priority` orders them against other work.
+ * queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority.
  * @param request - authorized metadata, deferred bounded source read, selection, and complete-result limits.
  * @param signal - caller cancellation; provider disposal also stops active work.
  * @returns caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits.
@@ -78,8 +78,8 @@ async convert(request: OfficeKitRequest, signal?: AbortSignal): Promise<OfficeKi
 async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<OfficeImagesResult>
 
 /**
- * Convert one document to another format, sharing admission, concurrency, and cache with previews, and save the
- * result in the provider's output store.
+ * Convert one document to another format at foreground priority, sharing admission, concurrency, and cache with
+ * previews, and save the result in the provider's output store.
  * @param request - authorized metadata, deferred bounded source read, target format, and output owner and name.
  * @param signal - caller cancellation; provider disposal also stops active work.
  * @returns the saved file's absolute Host path and size; the file is deleted after `outputRetentionMs`, when older
@@ -90,7 +90,7 @@ async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<
 async convertTo(request: OfficeConversionRequest, signal?: AbortSignal): Promise<OfficeFileResult>
 
 /**
- * Recalculate every formula of one workbook and save formulas with refreshed cached results, sharing admission,
+ * Recalculate every formula of one workbook at foreground priority and save formulas with refreshed cached results, sharing admission,
  * concurrency, and cache with previews, and save the workbook in the provider's output store. This does not validate
  * formulas or business data.
  * @param request - authorized workbook metadata, deferred bounded source read, output format, and output owner and name.

@@ -88,6 +88,6 @@ function lookupEntry(lookupKitEntry: KitEntryLookup): EntryLookup {
  * @param path - Filesystem path, including paths with Windows separators.
  * @returns The path with its first `.asar` segment replaced by `.asar.unpacked`; already-unpacked paths stay unchanged.
  */
-export function unpackedPath(path: string): string {
+function unpackedPath(path: string): string {
   return path.replace(/\.asar(?=[\\/]|$)/, '.asar.unpacked')
 }

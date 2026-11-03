@@ -34,7 +34,7 @@ function source(key = 'source', bytes = new Uint8Array([80, 75, 3, 4])): OfficeK
 
 const limits = { maxImages: 4, maxPixels: 1_000_000, maxDimension: 4096, maxBytes: 1024 } as const
 function imagesRequest(overrides: Partial<OfficeImagesRequest> = {}): OfficeImagesRequest {
-  return { extension: 'pptx', priority: 'foreground', source: source(), ...limits, ...overrides }
+  return { extension: 'pptx', source: source(), ...limits, ...overrides }
 }
 
 function image(request: RenderImagesRequest, index: number, fields: Partial<RenderedImage> = {}): RenderedImage {
@@ -97,7 +97,7 @@ it('renders selected images in document order with their locations and passes th
       { png: Uint8Array.from(PNG), width: 10, height: 20, sheet: 'Data', range: 'A1:B2' },
       { png: Uint8Array.from(PNG), width: 11, height: 20, page: 3 },
     ],
-    pageCount: 3, dpi: 96, missingFonts: ['Missing Sans'], generation: provider.generation,
+    pageCount: 3, dpi: 96, missingFonts: ['Missing Sans'],
   })
   const [request] = converter.renderImages.mock.calls[0]!
   expect(request).toMatchObject({ pages: [3, 1], dpi: 96, maxPages: 4, maxPixels: 1_000_000, maxDimension: 4096 })
@@ -169,10 +169,10 @@ it.each([
   ['csv', XLSX],
 ] as const)('converts a document to %s and returns a copy of a cached result', async (format, expected) => {
   const provider = await mount()
-  const request = { extension: 'xlsx', format, priority: 'foreground', source: source(),
+  const request = { extension: 'xlsx', format, source: source(),
     output: { owner: 'session', name: `book.${format}` }, ...(format === 'csv' ? { sheet: 'Data' } : {}) } as const
   const result = await provider.convertTo(request)
-  expect(result).toEqual({ path: result.path, bytes: expected.length, missingFonts: [], generation: provider.generation })
+  expect(result).toEqual({ path: result.path, bytes: expected.length, missingFonts: [] })
   expect(result.path.endsWith(`book.${format}`)).toBe(true)
   expect(await readFile(result.path)).toEqual(expected)
   const second = await provider.convertTo(request)
@@ -191,9 +191,9 @@ it('recalculates a workbook into the requested format', async () => {
     await writeFile(outputPath, XLSX)
     return { backend: 'native', missingFonts: ['Calc Font'], pageCount: 2 }
   })
-  const result = await provider.recalculate({ extension: 'xls', format: 'xlsx', priority: 'foreground', source: source(),
+  const result = await provider.recalculate({ extension: 'xls', format: 'xlsx', source: source(),
     output: { owner: 'session', name: 'book.xlsx' } })
-  expect(result).toMatchObject({ bytes: XLSX.length, pageCount: 2, missingFonts: ['Calc Font'], generation: provider.generation })
+  expect(result).toMatchObject({ bytes: XLSX.length, pageCount: 2, missingFonts: ['Calc Font'] })
   expect(await readFile(result.path)).toEqual(XLSX)
   expect(converter.recalculate.mock.calls[0]![0].outputPath.endsWith('output.xlsx')).toBe(true)
 })
@@ -204,7 +204,7 @@ it.each([
 ])('rejects %s of a conversion', async (_label, produce, code) => {
   const provider = await mount({ maxOutputBytes: 32 })
   converter.convert.mockImplementationOnce(async ({ outputPath }) => { await produce(outputPath); return { backend: 'native', missingFonts: [] } })
-  await expect(provider.convertTo({ extension: 'docx', format: 'odt', priority: 'foreground', source: source(),
+  await expect(provider.convertTo({ extension: 'docx', format: 'odt', source: source(),
     output: { owner: 'session', name: 'a.odt' } }))
     .rejects.toMatchObject({ code })
 })
@@ -219,7 +219,7 @@ it('shares the conversion queue between previews and operations', async () => {
     await writeFile(outputPath, XLSX)
     return { backend: 'native', missingFonts: [] }
   })
-  const first = provider.recalculate({ extension: 'xlsx', format: 'ods', priority: 'foreground', source: source('a'),
+  const first = provider.recalculate({ extension: 'xlsx', format: 'ods', source: source('a'),
     output: { owner: 'session', name: 'a.ods' } })
   await entered.promise
   const second = provider.renderImages(imagesRequest({ source: source('b') }))
@@ -234,7 +234,7 @@ it('shares the conversion queue between previews and operations', async () => {
 
 it('deletes the outputs of a disposed Session when the Session is disposed and every output when the provider unloads', async () => {
   const provider = await mount()
-  const request = (owner: string) => ({ extension: 'docx', format: 'pdf', priority: 'foreground', source: source(owner),
+  const request = (owner: string) => ({ extension: 'docx', format: 'pdf', source: source(owner),
     output: { owner, name: 'doc.pdf' } }) as const
   const first = await provider.convertTo(request('first'))
   const second = await provider.convertTo(request('second'))
@@ -247,7 +247,7 @@ it('deletes the outputs of a disposed Session when the Session is disposed and e
 
 it('waits for the deletion of a disposed Session\'s outputs before the provider finishes unloading', async () => {
   const provider = await mount()
-  const output = await provider.convertTo({ extension: 'docx', format: 'pdf', priority: 'foreground', source: source(),
+  const output = await provider.convertTo({ extension: 'docx', format: 'pdf', source: source(),
     output: { owner: 'first', name: 'doc.pdf' } })
   const gate = Promise.withResolvers<undefined>()
   outputDeletion.root = provider.outputDirectory
@@ -270,7 +270,7 @@ it('rejects a saved output after cancellation and a relative output directory', 
     controller.abort(new Error('stop'))
     return { backend: 'native', missingFonts: [] }
   })
-  await expect(provider.convertTo({ extension: 'docx', format: 'pdf', priority: 'foreground', source: source(),
+  await expect(provider.convertTo({ extension: 'docx', format: 'pdf', source: source(),
     output: { owner: 'session', name: 'doc.pdf' } }, controller.signal)).rejects.toThrow()
   expect(() => new OfficeKit(new Context(), Config({ outputDirectory: 'relative' }))).toThrow('outputDirectory must be an absolute path')
 })

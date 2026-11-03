@@ -101,7 +101,6 @@
       "@deepseek-ai/dsh-experimental-browser-use-runtime/mcp": ["./packages/experimental/browser-use-runtime/src/mcp.ts"],
 
       "@deepseek-ai/dsh-office-kit/types": ["./packages/document/office-kit/src/types.ts"],
-      "@deepseek-ai/dsh-office-kit/locate": ["./packages/document/office-kit/src/locate.ts"],
       "@deepseek-ai/dsh-api-terminal-controller": ["./packages/api/terminal-controller/src/index.ts"],
       "@deepseek-ai/dsh-api-terminal-controller/types": ["./packages/api/terminal-controller/src/types.ts"],
       "@deepseek-ai/dsh-api-terminal-controller/client": ["./packages/api/terminal-controller/src/client/index.ts"],

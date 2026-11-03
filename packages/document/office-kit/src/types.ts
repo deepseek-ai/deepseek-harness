@@ -53,7 +53,6 @@ export type OfficeRecalculationFormat = 'xlsx' | 'ods'
  */
 export interface OfficeImagesRequest {
   readonly extension: OfficeImageInputExtension
-  readonly priority: OfficeKitPriority
   readonly source: OfficeKitSource
   /** Distinct one-based pages or slides; omission renders every page. */
   readonly pages?: readonly number[]
@@ -97,7 +96,6 @@ export interface OfficeImagesResult {
   readonly dpi: number
   /** Requested OOXML font families unavailable to this rendering. */
   readonly missingFonts: string[]
-  readonly generation: OfficeKitGeneration
 }
 
 /** Owner and file name of a converted or recalculated output saved in the provider's output store. */
@@ -114,7 +112,6 @@ export interface OfficeConversionRequest {
   readonly format: OfficeConversionFormat
   /** Exact worksheet name; accepted only for CSV output. */
   readonly sheet?: string
-  readonly priority: OfficeKitPriority
   readonly source: OfficeKitSource
   readonly output: OfficeOutputTarget
 }
@@ -123,7 +120,6 @@ export interface OfficeConversionRequest {
 export interface OfficeRecalculationRequest {
   readonly extension: OfficeWorkbookExtension
   readonly format: OfficeRecalculationFormat
-  readonly priority: OfficeKitPriority
   readonly source: OfficeKitSource
   readonly output: OfficeOutputTarget
 }
@@ -138,7 +134,6 @@ export interface OfficeFileResult {
   readonly pageCount?: number
   /** Requested OOXML font families unavailable to this operation. */
   readonly missingFonts: string[]
-  readonly generation: OfficeKitGeneration
 }
 
 /** Successful conversion; failed and interrupted conversions reject instead. */

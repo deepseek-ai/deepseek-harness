@@ -121,13 +121,13 @@ export function apply(ctx) {
           const bytes = Buffer.from(input.bytes, 'base64')
           const source = (operation) => ({ key: 'desktop-smoke-' + operation + '-' + input.extension, version: 'fixture', bytes: bytes.length,
             async read() { return { bytes, version: 'fixture' } } })
-          const rendered = await ctx.officeKit.renderImages({ extension: input.extension, priority: 'foreground', source: source('images'),
+          const rendered = await ctx.officeKit.renderImages({ extension: input.extension, source: source('images'),
             maxImages: 4, maxPixels: 16777216, maxDimension: 8192, maxBytes: 64 * 1024 * 1024 })
           const format = { docx: 'odt', xlsx: 'ods', pptx: 'odp' }[input.extension]
-          const converted = await ctx.officeKit.convertTo({ extension: input.extension, format, priority: 'foreground',
+          const converted = await ctx.officeKit.convertTo({ extension: input.extension, format,
             source: source('convert'), output: { owner: 'desktop-smoke', name: 'converted.' + format } })
           const recalculated = input.extension === 'xlsx'
-            ? await ctx.officeKit.recalculate({ extension: 'xlsx', format: 'xlsx', priority: 'foreground', source: source('recalculate'),
+            ? await ctx.officeKit.recalculate({ extension: 'xlsx', format: 'xlsx', source: source('recalculate'),
               output: { owner: 'desktop-smoke', name: 'recalculated.xlsx' } })
             : undefined
           response.end(JSON.stringify({

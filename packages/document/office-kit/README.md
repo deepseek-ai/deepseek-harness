@@ -1,5 +1,5 @@
 ---
-description: "LibreOffice Kit location and Host Office rendering, conversion, and recalculation with the independently published kit."
+description: "Host Office rendering, conversion, and recalculation with the independently published kit."
 kind: "package-reference"
 ---
 
@@ -9,12 +9,11 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Render Office documents as PDFs or PNG images, convert them between formats, and recalculate workbooks on the Host computer. Targets with a declared native LibreOffice engine use it; other targets use Node WASM. Previews accept DOC, DOCX, XLS, XLSX, PPT, and PPTX; operations also accept the OpenDocument formats, and image rendering accepts PDF. OOXML operations return missing-font names; binary Office operations return an empty list. The `/locate` entry finds the Kit installation a consumer uses and its engine packages without loading Cordis or Kit.
+Render Office documents as PDFs or PNG images, convert them between formats, and recalculate workbooks on the Host computer. Targets with a declared native LibreOffice engine use it; other targets use Node WASM. Previews accept DOC, DOCX, XLS, XLSX, PPT, and PPTX; operations also accept the OpenDocument formats, and image rendering accepts PDF. OOXML operations return missing-font names; binary Office operations return an empty list.
 
 ## Table of Contents
 
 - [Use this package](#use-this-package)
-- [Locate Kit](#locate-kit)
 - [Understand the implementation](#understand-the-implementation)
 - [Further Exploration](#further-exploration)
 - [Model Experience](#model-experience)
@@ -28,7 +27,7 @@ Render Office documents as PDFs or PNG images, convert them between formats, and
 
 The [Web bundle](../../bundle/web-app/README.md) and the [SDK bundle](../../bundle/sdk-app/README.md) mount this provider as `office-kit`; the [Office tools](../tool-office/README.md) are its model-facing consumers. Independent compositions mount `@deepseek-ai/dsh-office-kit` as a `cordis.yml` row.
 
-Callers submit authorized source identity, version, optional byte size, a deferred bounded read, input extension, and scheduling priority. A changed source version rejects the operation. Cancellation rejects with its reason; failures use `OfficeKitError`. Every result carries the conversion generation, which changes on configuration replacement, and the missing fonts.
+Callers submit authorized source identity, version, optional byte size, a deferred bounded read, and input extension; PDF conversions also name a scheduling priority, and image rendering, format conversion, and recalculation run at foreground priority. A changed source version rejects the operation. Cancellation rejects with its reason; failures use `OfficeKitError`. Every result carries the missing fonts; PDF results also carry the conversion generation, which changes on configuration replacement.
 
 | Method | Operation | Result |
 |---|---|---|
@@ -67,23 +66,6 @@ Admission bounds queued metadata, outstanding readers, active source-byte reserv
 
 The defaults retain 8 outputs/128 MiB and 64 source aliases, admit 32 readers and 8 queued jobs, reserve at most 100 MiB of source bytes, and allow one background conversion. These limits bound owned requests and binary payloads, not engine RSS, multipart framing, caller-retained results, or PDF.js page rendering.
 
-<a id="locate-kit"></a>
-## Locate Kit
-
-Node consumers that load Kit import `@deepseek-ai/dsh-office-kit/locate`. This entry imports only Node built-in modules as values, reads no environment variables, and has no `cordis.yml` configuration. The consumer owns its Kit dependency. The module resolver takes a lookup written in the consuming module, because `import.meta.resolve` there selects the consumer's installation and throws when Kit is absent:
-
-```ts
-import { resolveKitModule } from '@deepseek-ai/dsh-office-kit/locate'
-
-const kit = resolveKitModule(() => import.meta.resolve('@deepseek-ai/libreoffice-kit'))
-```
-
-`resolveKitModule` returns `{ kind: 'available', entry, resolveEnginePackage }` or `{ kind: 'missing', error }`. Pass `entry` to a dynamic `import()` and `resolveEnginePackage` to Kit's `createConverter` or `discoverRuntime`, or as `options` in the editor's `openDocument` request. The lookup's thrown value becomes `error`.
-
-`unpackedPath(path)` exposes the same mapping for standalone callers that must anchor a lookup outside ASAR, such as packaging smoke checks. It does not access the filesystem.
-
-`createEnginePackageResolver(kitEntry)` creates the engine callback directly from an absolute entry path or file URL; each callback retains its own resolver. A successful callback returns an absolute engine `package.json` path. An absent package preserves Node's original `MODULE_NOT_FOUND`, allowing Kit's native-to-WASM fallback. If a package directory exists, including a dangling symlink, but its manifest cannot resolve, the callback throws an incomplete-installation error with the Node error as `cause`; reinstall that package. Other resolution and filesystem inspection errors propagate unchanged. Kit owns validation of the returned manifest and required assets.
-
 -----
 
 <a id="understand-the-implementation"></a>
@@ -94,7 +76,9 @@ const kit = resolveKitModule(() => import.meta.resolve('@deepseek-ai/libreoffice
 
 Until a Kit import succeeds, each converter request passes a lookup that returns the provider's own `import.meta.resolve('@deepseek-ai/libreoffice-kit')` to [`resolveKitModule`](src/locate.ts), which returns the Kit entry with an engine-package resolver anchored there, or `missing`. The provider then dynamically imports that entry; it has no static Kit value import. This anchors engine lookup to the Kit installation used by the provider.
 
-The `/locate` functions call the consumer's lookup once per resolution and treat any thrown value as an absent Kit. Native engine paths use one mapping that replaces only the first `.asar` archive segment with `.asar.unpacked`, regardless of whether the process runs in Electron. Already-unpacked paths and paths outside an archive remain unchanged. `@deepseek-ai/libreoffice-kit-wasm` always keeps Node's logical path for archive-aware filesystem access. These functions do not import Kit, load engine code, register services, mutate module resolution, or retain module-level state; [Desktop packaging](../../../apps/desktop/packaging/README.md#runtime-file-selection) owns which packages are unpacked.
+The engine-package resolver is created from the Kit entry; each resolver is independent. A successful call returns an absolute engine `package.json` path. An absent package preserves Node's original `MODULE_NOT_FOUND`, allowing Kit's native-to-WASM fallback. If a package directory exists, including a dangling symlink, but its manifest cannot resolve, the resolver throws an incomplete-installation error with the Node error as `cause`; reinstall that package. Other resolution and filesystem inspection errors propagate unchanged. Kit owns validation of the returned manifest and required assets.
+
+The locate functions call the provider's lookup once per resolution and treat any thrown value as an absent Kit. Native engine paths use one mapping that replaces only the first `.asar` archive segment with `.asar.unpacked`, regardless of whether the process runs in Electron. Already-unpacked paths and paths outside an archive remain unchanged. `@deepseek-ai/libreoffice-kit-wasm` always keeps Node's logical path for archive-aware filesystem access. These functions do not import Kit, load engine code, register services, mutate module resolution, or retain module-level state; [Desktop packaging](../../../apps/desktop/packaging/README.md#runtime-file-selection) owns which packages are unpacked.
 
 Invalid engine metadata, missing required assets, and conversion errors reject the request instead of switching engines. The shared WASM engine uses LibreOffice's CPU image filter. Native conversion uses its separate platform engine.
 
@@ -130,7 +114,7 @@ None; this service does not construct or modify model requests.
 
 - Conversion fidelity and installed native/WASM assets belong to `@deepseek-ai/libreoffice-kit`; this provider neither searches for system LibreOffice nor downloads an engine at runtime.
 - Queue waiting time is not bounded by `timeoutMs`, which starts only when kit conversion begins.
-- `/locate` consumers must supply a lookup for the Kit installation they use; the functions do not search other locations or install Kit or engines.
+- The provider locates only the Kit installation it resolves itself; it does not search other locations or install Kit or engines.
 - Rendered images and converted files are returned as bytes; this service has no workspace output path, so each consumer owns publication.
 - Mapping a native path does not verify that the unpacked copy exists. Kit rejects missing manifests or assets instead of treating them as an absent native package.
 

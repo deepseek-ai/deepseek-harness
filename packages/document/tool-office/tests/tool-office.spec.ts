@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { access, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { crc32, deflateSync } from 'node:zlib'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
@@ -21,7 +22,7 @@ import ToolRuntime, { RUN_CODE_NAME, defineTool } from '@deepseek-ai/dsh-tools'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import OfficeKit, { OfficeKitError, OfficeKitGeneration, type OfficeKitErrorCode, type OfficeImagesRequest, type OfficeImagesResult, type OfficeKitSource } from '@deepseek-ai/dsh-office-kit'
+import OfficeKit, { OfficeKitError, type OfficeKitErrorCode, type OfficeImagesRequest, type OfficeImagesResult, type OfficeKitSource } from '@deepseek-ai/dsh-office-kit'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
 import * as ToolOffice from '../src/index.ts'
 import { renderImagesContent } from '../src/content.ts'
@@ -33,8 +34,28 @@ vi.mock('../../office-kit/src/locate.ts', async original => ({
 
 /** 1x1 red PNG. */
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64')
-const generation = OfficeKitGeneration('test')
 const signal = new AbortController().signal
+
+/** Encode a square single-color 8-bit PNG: opaque RGB, or half-transparent RGBA when `translucent` is set. */
+function solidPng(size: number, translucent: boolean): Buffer {
+  const channels = translucent ? 4 : 3
+  const pixel = translucent ? [200, 30, 30, 128] : [200, 30, 30]
+  const row = Buffer.from([0, ...Array.from({ length: size }, () => pixel).flat()])
+  const chunk = (type: string, data: Buffer): Buffer => {
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data])
+    const length = Buffer.alloc(4)
+    length.writeUInt32BE(data.length)
+    const crc = Buffer.alloc(4)
+    crc.writeUInt32BE(crc32(body))
+    return Buffer.concat([length, body, crc])
+  }
+  const header = Buffer.alloc(13)
+  header.writeUInt32BE(size, 0)
+  header.writeUInt32BE(size, 4)
+  header.set([8, channels === 3 ? 2 : 6, 0, 0, 0], 8)
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', header),
+    chunk('IDAT', deflateSync(Buffer.concat(Array.from({ length: size }, () => row)))), chunk('IEND', Buffer.alloc(0))])
+}
 
 /** Declared input modalities by model id; `legacy` declares none. */
 const MODALITIES: Partial<Record<string, readonly ('text' | 'image')[]>> = { vision: ['text', 'image'], text: ['text'] }
@@ -70,19 +91,18 @@ interface FileResult {
   bytes: number
   pageCount?: number
   missingFonts: string[]
-  generation: OfficeKitGeneration
 }
 
 async function fileResult(request: { source: OfficeKitSource; output: { name: string } }): Promise<FileResult> {
   const data = await readSource(request.source)
-  return { path: join(home, 'outputs', request.output.name), bytes: data.byteLength, missingFonts: [], generation }
+  return { path: join(home, 'outputs', request.output.name), bytes: data.byteLength, missingFonts: [] }
 }
 
 function fakeOfficeKit() {
   return {
     renderImages: vi.fn(async (request: OfficeImagesRequest, _signal?: AbortSignal): Promise<OfficeImagesResult> => {
       await readSource(request.source)
-      return { images: [{ png: PNG, width: 1, height: 1, page: 2 }], pageCount: 3, dpi: request.dpi ?? 144, missingFonts: [], generation }
+      return { images: [{ png: PNG, width: 1, height: 1, page: 2 }], pageCount: 3, dpi: request.dpi ?? 144, missingFonts: [] }
     }),
     outputDirectory: join(home, 'outputs'),
     convertTo: vi.fn(async (
@@ -108,7 +128,13 @@ afterEach(async () => {
   await rm(home, { recursive: true, force: true })
 })
 
-interface SetupOptions { ptc?: boolean; attachments?: boolean; llm?: boolean; kit?: boolean; config?: Partial<ToolOffice.Config> }
+interface SetupOptions {
+  ptc?: boolean
+  attachments?: boolean | { normalizedImageMaxPixels: number }
+  llm?: boolean
+  kit?: boolean
+  config?: Partial<ToolOffice.Config>
+}
 
 async function setup(options: SetupOptions = {}) {
   const ctx = new Context()
@@ -121,7 +147,9 @@ async function setup(options: SetupOptions = {}) {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalFileSystem, { cwd: dir })
-  if (options.attachments !== false) await ctx.plugin(LocalAttachmentStore, { dshHome: home })
+  if (options.attachments !== false) {
+    await ctx.plugin(LocalAttachmentStore, { dshHome: home, ...typeof options.attachments === 'object' ? options.attachments : {} })
+  }
   if (options.llm !== false) {
     await ctx.plugin(LlmRuntime)
     ctx.llm.registerAdapter(['visual'], new CatalogAdapter())
@@ -230,7 +258,7 @@ describe('render', () => {
     const result = await office(ctx, { operation: 'render', input: 'deck.pptx', pages: [2], dpi: 96 })
     expect(result.isError).toBe(false)
     expect(kit.renderImages).toHaveBeenCalledWith(expect.objectContaining({
-      extension: 'pptx', priority: 'foreground', pages: [2], dpi: 96, maxImages: 5, maxPixels: 1000, maxDimension: 100, maxBytes: 4096,
+      extension: 'pptx', pages: [2], dpi: 96, maxImages: 5, maxPixels: 1000, maxDimension: 100, maxBytes: 4096,
     }), expect.any(AbortSignal))
     expect(text(result)).toBe(`Rendered 1 image of ${join(dir, 'deck.pptx')} (3 in the document) at 96 DPI.\nPage 2: 1x1 px`)
     expect(result.content[2]).toMatchObject({ type: 'image', attachment: { mediaType: 'image/png', width: 1, height: 1 } })
@@ -254,7 +282,7 @@ describe('render', () => {
     const { ctx, kit } = await setup()
     kit.renderImages.mockResolvedValueOnce({ images: [
       { png: PNG, width: 1, height: 1, sheet: 'Data', range: 'A1:B2' }, { png: PNG, width: 1, height: 1, sheet: 'Data' },
-    ], pageCount: 2, dpi: 144, missingFonts: ['Aptos'], generation })
+    ], pageCount: 2, dpi: 144, missingFonts: ['Aptos'] })
     const result = await office(ctx, { operation: 'render', input: 'book.xlsx', sheet: 'Data', range: 'A1:B2' })
     expect(kit.renderImages.mock.calls[0]![0]).toMatchObject({ extension: 'xlsx', sheet: 'Data', range: 'A1:B2' })
     expect(text(result)).toBe(`Rendered 2 images of ${join(dir, 'book.xlsx')} (2 in the document) at 144 DPI.\n`
@@ -298,14 +326,14 @@ describe('render', () => {
     const { ctx, kit } = await setup()
     const limit = ctx.get('attachments')!.imageLimits.maxImageBytes
     kit.renderImages.mockResolvedValueOnce({ images: [{ png: new Uint8Array(limit + 1), width: 1, height: 1, page: 1 }],
-      pageCount: 1, dpi: 144, missingFonts: [], generation })
+      pageCount: 1, dpi: 144, missingFonts: [] })
     expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' }))).toContain(`exceeds the ${limit}-byte image limit`)
   })
 
   it('reports attachment refusals and passes other storage failures through', async () => {
     const { ctx, kit } = await setup()
     kit.renderImages.mockResolvedValueOnce({ images: [{ png: Buffer.from('not a png'), width: 1, height: 1, page: 1 }],
-      pageCount: 1, dpi: 144, missingFonts: [], generation })
+      pageCount: 1, dpi: 144, missingFonts: [] })
     expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' }))).toContain(`cannot render "${join(dir, 'deck.pptx')}": `)
     vi.spyOn(ctx.get('attachments')!, 'saveImages').mockRejectedValueOnce(new Error('disk failure'))
     expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx' }))).toContain('disk failure')
@@ -339,6 +367,22 @@ describe('render', () => {
       images: [{ attachmentId: 'a', mediaType: 'image/png', bytes: 1, width: 1, height: 1, originalDimensions: { width: 2, height: 2 } }] })
     expect(blocks[1]).toEqual({ type: 'text', text: 'Image: 1x1 px' })
     expect(blocks[2]).toMatchObject({ attachment: { originalDimensions: { width: 2, height: 2 } } })
+  })
+
+  it.each([
+    ['an opaque render as JPEG', false, 'image/jpeg'],
+    ['a transparent render as WebP', true, 'image/webp'],
+  ] as const)('returns the stored encoding when attachment normalization re-encodes %s', async (_label, translucent, mediaType) => {
+    const { ctx, kit } = await setup({ attachments: { normalizedImageMaxPixels: 16 } })
+    kit.renderImages.mockResolvedValueOnce({ images: [{ png: solidPng(8, translucent), width: 8, height: 8, page: 1 }],
+      pageCount: 1, dpi: 144, missingFonts: [] })
+    const result = await office(ctx, { operation: 'render', input: 'deck.pptx' })
+    if (result.isError) throw new Error('render failed')
+    expect(result.value).toMatchObject({ images: [{ mediaType, width: 4, height: 4, originalDimensions: { width: 8, height: 8 } }] })
+    const block = result.content[2]
+    if (block?.type !== 'image') throw new Error('missing image block')
+    expect(block.attachment.mediaType).toBe(mediaType)
+    await expect(ctx.get('attachments')!.readImage(block.attachment)).resolves.toMatchObject({ ref: { mediaType } })
   })
 
   it('returns stored dimensions when attachment normalization reduced the image', async () => {
@@ -501,7 +545,7 @@ describe('arguments and paths', () => {
   it('returns the temporary file and the copy instruction for conversions and recalculations', async () => {
     const { ctx, kit } = await setup()
     const converted = await office(ctx, { operation: 'convert', input: 'book.xlsx', format: 'csv', sheet: 'Data' })
-    expect(kit.convertTo).toHaveBeenCalledWith(expect.objectContaining({ extension: 'xlsx', format: 'csv', sheet: 'Data', priority: 'foreground',
+    expect(kit.convertTo).toHaveBeenCalledWith(expect.objectContaining({ extension: 'xlsx', format: 'csv', sheet: 'Data',
       output: { owner: expect.stringMatching(/^office-session-/u) as string, name: 'book.csv' } }), expect.any(AbortSignal))
     expect(text(converted)).toBe(`Converted ${join(dir, 'book.xlsx')} to csv (10 bytes): ${join(home, 'outputs', 'book.csv')}\n`
       + 'Copy this temporary file to its destination with the shell now; it is deleted when this conversation ends.')
@@ -511,7 +555,7 @@ describe('arguments and paths', () => {
     expect(converted.meta).toEqual({ path: join(dir, 'book.xlsx'), file: join(home, 'outputs', 'book.csv') })
     await office(ctx, { operation: 'convert', input: 'deck.pptx', format: 'pdf' })
     expect(kit.convertTo.mock.calls[1]![0]).not.toHaveProperty('sheet')
-    kit.recalculate.mockResolvedValueOnce({ path: join(home, 'outputs', 'book.ods'), bytes: 3, pageCount: 1, missingFonts: [], generation })
+    kit.recalculate.mockResolvedValueOnce({ path: join(home, 'outputs', 'book.ods'), bytes: 3, pageCount: 1, missingFonts: [] })
     const recalculated = await office(ctx, { operation: 'recalculate', input: 'book.xlsx', format: 'ods' })
     expect(kit.recalculate).toHaveBeenCalledWith(expect.objectContaining({ extension: 'xlsx', format: 'ods' }), expect.any(AbortSignal))
     if (recalculated.isError) throw new Error('recalculate failed')

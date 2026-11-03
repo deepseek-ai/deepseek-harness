@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-office-kit",
-  "description": "LibreOffice Kit location and shared Office rendering, conversion, and recalculation with bounded queues and caching",
+  "description": "Shared Office rendering, conversion, and recalculation with bounded queues and caching",
   "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"
@@ -18,10 +18,6 @@
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
-    },
-    "./locate": {
-      "types": "./lib/types/locate.d.ts",
-      "default": "./lib/types/locate.js"
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
