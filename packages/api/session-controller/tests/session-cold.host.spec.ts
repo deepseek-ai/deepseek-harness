@@ -275,7 +275,8 @@ describe('attached updatedAt tracks human prompts', () => {
     const listed = await remote.list(request({}))
     if (!listed.ok) throw new Error('list failed')
     const summary = listed.value.items.find(item => item.sessionId === 'resumed-untouched')
-    expect(summary?.updatedAt).toBe(500)
+    // The resumed log's last human prompt, not its creation time or the later pickup.
+    expect(summary?.updatedAt).toBe(worked)
 
     // A lifecycle boundary is not a human update.
     resumed.append('turn/start', { turn: 2 })
