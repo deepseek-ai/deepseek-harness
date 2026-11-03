@@ -9,7 +9,7 @@ Verify your work by running the code or tests. Keep answers brief and factual.
 
 Check the [exit code: N] marker on every bash result; investigate failures before moving on.
 
-Use the read tool — not shell commands like cat — to inspect text files. Use offset and limit to continue reading large files.
+Use the read tool — not shell commands like cat, sed, head, or tail — to inspect text files. Use offset and limit to read a line range or continue a large file.
 
 Read an existing file before overwriting it with write and prefer edit for targeted changes.
 
@@ -504,7 +504,7 @@ class WebFetchOutput(TypedDict):
     truncated: bool
 
 class WebSearchArgs(TypedDict):
-    # 1–4 search queries; their results are merged.
+    # 1–10 search queries; their results are merged.
     queries: list[str]
     # Additional keys beyond those declared are allowed.
 

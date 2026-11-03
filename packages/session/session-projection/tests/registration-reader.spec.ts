@@ -154,7 +154,8 @@ describe('retained projection readers', () => {
     expect(apply).toHaveBeenCalledTimes(2)
     expect(changed).toHaveBeenCalledOnce()
     expect(ctx.sessionProjections.snapshot(session).values).toEqual({})
-    expect(ctx.sessionProjections.checkpoint(session)).toEqual({})
+    // The checkpoint carries the released unit's cell as the retained reader last advanced it.
+    expect(ctx.sessionProjections.checkpoint(session)).toEqual({ 'test/reader': { ver: 1, seq: 1, val: 2 } })
     const later = ctx.sessions.create()
     later.append('turn/start', { turn: 1 })
     expect(handle.stateOf(later)).toBe(1)

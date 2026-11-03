@@ -28,7 +28,7 @@
             name: '@deepseek-ai/dsh-tool-fs'
             config:
               # Set false to drop the apply_patch tool beside edit.
-              applyPatch: true
+              applyPatch: false
           - id: tool-fs-search
             name: '@deepseek-ai/dsh-tool-fs-search'
             config:

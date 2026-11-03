@@ -38,9 +38,10 @@ export interface SessionListMetadata {
 }
 
 /**
- * Every available summary wire value a Session-list row carries as partial,
- * possibly stale hints. The block omits the keys whose unit declares
- * `summary: false`. `kind` and `asOfSeq` are independent facts: `kind` says
+ * Summary wire values a Session-list row carries. A `sequenced` block carries
+ * every summary key computed at its `asOfSeq`; a `cached` block carries the
+ * values the persisted cache holds and may omit keys or trail the Session.
+ * The block omits the keys whose unit declares `summary: false`. `kind` and `asOfSeq` are independent facts: `kind` says
  * which sequence space `asOfSeq` belongs to, and therefore how a client may
  * merge the block; `asOfSeq` is the producer's watermark in that space.
  */

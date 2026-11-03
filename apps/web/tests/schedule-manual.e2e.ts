@@ -1,7 +1,51 @@
-/** Manual task creation and editing through the shipped Web composition. */
+/** Schedule creation, prompt prefill, and editing through the shipped Web composition. */
 import { chromium } from 'playwright'
 import { expect, it } from 'vitest'
 import { launchWebScaffold, watchConsole } from './scaffold.ts'
+import { writeComposerDraft } from './support.ts'
+
+it.each([
+  { locale: 'en', panel: 'Automation tasks', create: 'New', menu: 'Choose a creation method', chat: 'Create in a session',
+    prompt: 'Please create an automation task based on the requirements.' },
+  { locale: 'zh', panel: '自动化任务', create: '新建', menu: '选择创建方式', chat: '在会话中创建',
+    prompt: '请根据需求创建一个自动化任务。' },
+])('prefills an unsent Schedule creation draft in $locale through both conversation entries', async (copy) => {
+  const scaffold = await launchWebScaffold({ firstUse: true })
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined
+  try {
+    browser = await chromium.launch()
+    const page = await browser.newPage({ viewport: { width: 1440, height: 960 }, locale: copy.locale })
+    await page.addInitScript((locale) => { localStorage.setItem('dsh.locale', locale) }, copy.locale)
+    const tripwire = watchConsole(page)
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    const input = page.locator('[data-composer-input][contenteditable="true"]').first()
+    for (const { entry, draft } of [
+      { entry: 'primary', draft: '' },
+      { entry: 'primary', draft: 'Existing unsent draft' },
+      { entry: 'menu', draft: '' },
+      { entry: 'menu', draft: 'Existing unsent draft' },
+    ]) {
+      await writeComposerDraft(page, input, draft)
+      await page.getByRole('button', { name: copy.panel, exact: true }).click()
+      const manager = page.getByTestId('task-manager-page')
+      if (entry === 'primary') await manager.getByRole('button', { name: copy.create, exact: true }).click()
+      else {
+        await manager.getByRole('button', { name: copy.menu, exact: true }).click()
+        await page.getByRole('menuitem', { name: copy.chat, exact: true }).click()
+      }
+      await manager.waitFor({ state: 'detached' })
+      await input.getByText(copy.prompt, { exact: true }).waitFor()
+      expect(await input.evaluate(element => [...element.children].map(paragraph => paragraph.textContent).join('\n')))
+        .toBe(draft === '' ? copy.prompt : `${draft}\n${copy.prompt}`)
+      const events = scaffold.ctx.agents.list().flatMap(agent => agent.session.snapshotEvents())
+      expect(events.filter(event => event.type === 'user/message' || event.type === 'turn/start')).toEqual([])
+      expect(await scaffold.ctx.schedule.catalog()).toEqual([])
+    }
+    expect(tripwire.pageErrors).toEqual([])
+  } finally {
+    try { await browser?.close() } finally { await scaffold.close() }
+  }
+})
 
 it('creates from a paused empty state, selects the task, and saves an inline edit without starting an Agent', async () => {
   // First use registers the default Workspace, which a new task's directory starts with.

@@ -40,11 +40,6 @@ export class MemoryCredentials extends CredentialProvider {
     })
   }
 
-  override readStored(ref: CredentialRef): Promise<string | undefined> {
-    const value = this.store.get(ref)
-    return Promise.resolve(value === '' ? undefined : value)
-  }
-
   override set(ref: CredentialRef, value: string): Promise<void> {
     if (value.length === 0) {
       return Promise.reject(new Error('memory credentials: an empty value cannot be stored; use unset'))

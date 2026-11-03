@@ -64,7 +64,7 @@ function writeRefusalOver(
     sourceConfined: () => false,
     forks,
     workspaces: () => [],
-    declaredCapabilities: () => [],
+    offeredPlugins: () => [],
   }
   return (viewer, action, sessionId, concrete) => readerWriteRefusal(facts, viewer, action, sessionId, concrete)
 }

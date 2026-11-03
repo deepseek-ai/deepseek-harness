@@ -32,6 +32,7 @@ import { forkToolGuard, installChildEnforcement, type ForkToolExecution } from '
 import { READ_ONLY_FORK_CEILING, WRITE_FORK_CEILING } from './fork-policy.ts'
 import type { ForkRegistry } from './fork-registry.ts'
 import {
+  RUN_CODE_NAME,
   SHARED_TOOL_PROFILES,
   sharedEditArguments,
   withDefaultSearchRoot,
@@ -329,6 +330,10 @@ export function installSourceSessionAccess(target: SourceSessionAccess): SourceS
   // belongs to the turn the viewer drives.
   const guard = context.tools.guard((execution) => {
     if (!confined(execution)) return undefined
+    // The PTC transport is not a registered tool: the selected executor owns it, the program runs
+    // under the owner's standing file policy, and every nested call comes back through this guard as
+    // its own execution, so admitting the name does not widen any tool.
+    if (execution.name === RUN_CODE_NAME) return undefined
     if (installed.has(execution.name)) return undefined
     // A no-effect tool keeps the deployment's own definition, which this installation vouches for by
     // identity. A name answering to a different definition — a scope-registered shadow — is refused.
@@ -926,6 +931,9 @@ export function installForkEnforcement(
       // A name whose replacement failed, or that anything else now answers to, is refused.
       toolIsTrusted: (_id, tool) => {
         if (target.authorized?.(tool) === false) return false
+        // The PTC transport is owned by the selected executor rather than registered here; its nested
+        // calls re-enter the same limit as separate executions.
+        if (tool === RUN_CODE_NAME) return true
         if (vouchedNames.has(tool)) return true
         const deployment = passthrough.get(tool)
         return deployment !== undefined && deploymentOf(tool) === deployment
