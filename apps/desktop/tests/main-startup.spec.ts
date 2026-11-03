@@ -1096,7 +1096,7 @@ describe('desktop main startup', () => {
     await edit
   })
 
-  it.each(['darwin', 'linux'] as const)('adds the product File menu and standard window commands only on macOS (%s)', async (platform) => {
+  it.each(['darwin', 'linux'] as const)('declares the platform application menus, with the product File, Edit, and Window menus on macOS (%s)', async (platform) => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
     await import('../src/main.ts')
     await harness.preparing.promise
@@ -1109,13 +1109,16 @@ describe('desktop main startup', () => {
     expect(template.map(describeItem)).toEqual(platform === 'darwin'
       ? ['Desktop test', en.fileMenu, 'editMenu', 'windowMenu']
       : ['Application', 'editMenu'])
+    const describeEdit = (items: MenuItemConstructorOptions[]): unknown[] => items.map(item => Array.isArray(item.submenu)
+      ? [describeItem(item), describeEdit(item.submenu)]
+      : [describeItem(item), item.accelerator, item.visible, item.acceleratorWorksWhenHidden].filter(value => value !== undefined))
     const edit = template.find(item => item.role === 'editMenu')!.submenu as MenuItemConstructorOptions[] | undefined
-    expect(edit?.map(item => [describeItem(item), item.accelerator, item.visible])).toEqual(platform === 'darwin'
-      ? [['undo', undefined, undefined], ['redo', undefined, undefined], ['separator', undefined, undefined],
-        ['cut', undefined, undefined], ['copy', undefined, undefined], ['paste', undefined, undefined],
-        ['pasteAndMatchStyle', 'Shift+Command+V', undefined], ['pasteAndMatchStyle', 'Option+Shift+Command+V', false],
-        ['delete', undefined, undefined], ['selectAll', undefined, undefined], ['separator', undefined, undefined],
-        [en.substitutionsMenu, undefined, undefined], [en.speechMenu, undefined, undefined]]
+    expect(edit === undefined ? undefined : describeEdit(edit)).toEqual(platform === 'darwin'
+      ? [['undo'], ['redo'], ['separator'], ['cut'], ['copy'], ['paste'],
+        ['pasteAndMatchStyle', 'Shift+Command+V'], ['pasteAndMatchStyle', 'Option+Shift+Command+V', false, true],
+        ['delete'], ['selectAll'], ['separator'],
+        [en.substitutionsMenu, [['showSubstitutions'], ['separator'], ['toggleSmartQuotes'], ['toggleSmartDashes'], ['toggleTextReplacement']]],
+        [en.speechMenu, [['startSpeaking'], ['stopSpeaking']]]]
       : undefined)
     const application = template[0]!.submenu as MenuItemConstructorOptions[]
     expect(application.filter(item => item.visible !== false).map(describeItem)).toEqual(platform === 'darwin'

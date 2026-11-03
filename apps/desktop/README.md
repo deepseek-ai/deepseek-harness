@@ -161,7 +161,7 @@ Windows and macOS relay native fullscreen transitions and the state after each p
 
 Windows uses a 40-DIP caption with native window controls and colors synchronized from the application palette. Localized Application and Edit entries beside the sidebar toggle open native popup menus. They mount only after the application frame publishes its shell overlay seat, and remain absent during startup loading. Application provides Check for Updates and Exit; Edit provides undo, redo, cut, copy, paste, delete, and select all by sending the corresponding keys to the focused editor, independently of custom shortcut bindings. Plugin management uses the main application's Plugins page. No separate native menu row appears on Alt. Other platforms retain their native menus. Editable fields retain keyboard commands and a context menu without shortcut labels; Chromium supplies command availability, and selected read-only text offers Copy.
 
-On macOS the custom menu retains Electron's standard Window menu and application hide commands, including Minimize (⌘M) and Hide (⌘H). Its Edit menu binds Paste and Match Style to ⇧⌘V and keeps Electron's ⌥⇧⌘V as a hidden alias. Linux keeps the application and Edit menus.
+On macOS the custom menu retains Electron's standard Window menu and application hide commands, including Minimize (⌘M) and Hide (⌘H). Its Edit menu copies Electron's, binds Paste and Match Style to ⇧⌘V, and keeps Electron's ⌥⇧⌘V as a hidden alias; the Substitutions and Speech titles come from the desktop locale, while the other items keep Electron's English labels. Linux keeps the application and Edit menus.
 
 ### Runtime and plugin activation
 
