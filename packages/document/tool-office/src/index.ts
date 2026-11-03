@@ -1,25 +1,29 @@
 /**
- * The model-facing `office` tool: render document pages as images the model sees, convert documents between formats,
- * and recalculate workbooks through the shared `officeKit` service. The tool stays registered while that service is
- * absent, and each call then fails as `unavailable`. Reads use the filesystem backend's read authority; each call reads
+ * Model-facing Office tools render document pages, convert documents, and recalculate workbooks through the shared
+ * `officeKit` service. Tools are admitted after an Office skill loads; a missing service makes admitted calls fail
+ * as `unavailable`. Reads use the filesystem backend's read authority; each call reads
  * one source byte before the service runs, so a cached result never answers a call that cannot read the source.
  * Converted files stay in the Office kit's private output store; the model copies them into the workspace with the
- * shell, so this tool writes no workspace file.
+ * shell, so these tools write no workspace file.
  * @module @deepseek-ai/dsh-tool-office
  */
 
 import { basename } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-attachment'
 import type { FsInfo, FsTarget } from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-subagent'
+import type {} from '@deepseek-ai/dsh-skill'
 import { OfficeKitError, OfficeSourceKey, type OfficeKit, type OfficeKitSource } from '@deepseek-ai/dsh-office-kit'
-import { defineTool, type GenericCallView, type ToolExecution } from '@deepseek-ai/dsh-tools'
+import { defineTool, type ToolActivationContext, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-working-directory'
-import { checkArguments, checkOutputFormat, extensionOf, inputFamily, OUTPUT_FORMATS, type OfficeArgs, type OfficeFamily } from './formats.ts'
+import { checkParameterNames, checkRenderArguments, checkConversionArguments, extensionOf, inputFamily, OUTPUT_FORMATS,
+  type OfficeRenderArgs, type OfficeConvertArgs, type OfficeRecalculateArgs, type OfficeFamily, type OfficeOperationName,
+  type OfficeToolName } from './formats.ts'
 import { renderFileContent, renderImagesContent, type OfficeFileValue, type OfficeRenderValue } from './content.ts'
 
 export type { OfficeFileValue, OfficeRenderValue, OfficeRenderedImage } from './content.ts'
@@ -28,10 +32,12 @@ export type { OfficeFileValue, OfficeRenderValue, OfficeRenderedImage } from './
 export const name = 'tool-office'
 
 /** Required services; `officeKit` is read at each call, and `attachments` and `llm` are checked when rendering. */
-export const inject = ['tools', 'fs', 'workingDirectory']
+export const inject = ['tools', 'fs', 'workingDirectory', 'agents']
 
-/** Bounds on one render result; deployment attachment limits apply when they are lower. */
+/** Activation skills and render bounds; lower deployment attachment limits take precedence. */
 export interface Config {
+  /** Skill names whose successful loading admits all three tools from the following step. */
+  activationSkills: string[]
   /** Maximum images one render returns, including worksheet fragments. */
   maxImages: number
   /** Maximum pixels of each image. */
@@ -42,8 +48,10 @@ export interface Config {
   maxImageBytes: number
 }
 
-/** Validated render bounds. */
+/** Validated activation skills and render bounds. */
 export const Config: z<Partial<Config>, Config> = z.object({
+  activationSkills: z.array(z.string().pattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)).min(1)
+    .default(['office', 'office-docx', 'office-xlsx', 'office-pptx']),
   maxImages: z.natural().min(1).max(10_000).default(20),
   maxImagePixels: z.natural().min(1).max(16_777_216).default(8_388_608),
   maxImageDimension: z.natural().min(1).max(16_777_216).default(8192),
@@ -70,109 +78,168 @@ const IMAGE_SCHEMA = {
 } as const
 
 const MISSING_FONTS_SCHEMA = { type: 'array', required: true, items: { type: 'string' } } as const
+const OFFICE_TOOL_NAMES: readonly string[] = ['office_render', 'office_convert', 'office_recalculate']
 
-/**
- * Register the `office` tool.
- * @param ctx - registration scope; disposing it removes the tool.
- * @param config - validated render bounds.
- */
-export function apply(ctx: Context, config: Config): void {
-  ctx.tools.register(defineTool({
-    name: 'office',
-    description: 'Render document pages as images you can view, convert a document to another format, or recalculate spreadsheet formulas. '
-      + 'Accepts Word (doc, docx, odt), Excel (xls, xlsx, ods), and PowerPoint (ppt, pptx, odp) files; render also accepts PDF.',
-    parameters: {
-      operation: {
-        type: 'string', required: true, enum: ['render', 'convert', 'recalculate'],
-        description: 'render returns page images; convert and recalculate return a temporary file to copy to its destination.',
-      },
-      input: { type: 'string', required: true, description: 'Path of the document to read; it is not modified.' },
-      format: {
-        type: 'string', enum: OUTPUT_FORMATS,
-        description: 'convert and recalculate: output format. Word converts to pdf, docx, odt, or txt; Excel to pdf, xlsx, ods, or csv; '
-          + 'PowerPoint to pdf, pptx, or odp. recalculate writes xlsx or ods.',
-      },
-      pages: {
-        type: 'array', items: { type: 'integer' },
-        description: 'render: one-based pages or slides; omit for all. Spreadsheets use sheet and range instead.',
-      },
-      sheet: {
-        type: 'string',
-        description: 'Exact worksheet name. render: omit to render every visible sheet. convert: required for CSV from a workbook with several sheets.',
-      },
-      range: { type: 'string', description: 'render: A1 range in sheet, such as A1:H40; omit for the used area.' },
-      dpi: { type: 'integer', description: 'render: resolution from 24 to 600; default 144.' },
-    },
-    output: {
-      schema: {
-        oneOf: [
-          {
-            type: 'object', additionalProperties: false,
-            properties: {
-              operation: { type: 'string', const: 'render', required: true },
-              path: { type: 'string', required: true, description: 'Canonical absolute input path.' },
-              pageCount: { type: 'integer', required: true, description: 'Pages or slides of a document, or visible worksheets.' },
-              dpi: { type: 'integer', required: true },
-              images: { type: 'array', required: true, items: IMAGE_SCHEMA },
-              missingFonts: MISSING_FONTS_SCHEMA,
-            },
-          },
-          {
-            type: 'object', additionalProperties: false,
-            properties: {
-              operation: { type: 'string', enum: ['convert', 'recalculate'], required: true },
-              path: { type: 'string', required: true, description: 'Canonical absolute input path.' },
-              file: { type: 'string', required: true, description: 'Absolute path of the temporary output file.' },
-              format: { type: 'string', required: true },
-              bytes: { type: 'integer', required: true },
-              pageCount: { type: 'integer', description: 'Pages of a PDF output.' },
-              missingFonts: MISSING_FONTS_SCHEMA,
-            },
-          },
-        ],
-      },
-      render: (_args, value) => value.operation === 'render' ? renderImagesContent(value) : renderFileContent(value),
-      presentationMeta: (_args, value) => value.operation === 'render' ? { path: value.path } : { path: value.path, file: value.file },
-    },
-    isConcurrencySafe: args => args.operation === 'render',
-    async execute(args: OfficeArgs, exec): Promise<OfficeRenderValue | OfficeFileValue> {
-      const family = inputFamily(args.operation, args.input)
-      checkArguments(args, family)
-      const resolveOptions = await sessionResolveOptions(ctx, exec)
-      const { target, info } = await readableInput(ctx, args.input, resolveOptions)
-      try {
-        await authorizeContent(ctx, target, info, exec.signal)
-      } catch (error) { throw officeFailure(args.operation, target.displayPath, error) }
-      const kit = ctx.get('officeKit')
-      if (kit === undefined) {
-        throw officeFailure(args.operation, target.displayPath, new OfficeKitError('unavailable', 'The document converter is unavailable.'))
-      }
-      const source = officeSource(ctx, exec, target, info)
-      if (args.operation === 'render') return render(ctx, kit, config, exec, args, target, source)
-      // `inputFamily` rejects PDF for convert and recalculate.
-      return convertFile(ctx, kit, exec, args, family as Exclude<OfficeFamily, 'pdf'>, target, source)
-    },
-    presentCall(args): GenericCallView {
-      const title = args.operation === 'render' ? `Render ${args.input}`
-        : args.operation === 'convert' ? `Convert ${args.input}${args.format === undefined ? '' : ` to ${args.format}`}`
-          : `Recalculate ${args.input}`
-      return {
-        card: 'generic', title, kind: args.operation === 'render' ? 'read' : 'other',
-        locations: [{ path: args.input }],
-      }
-    },
-  }))
+const RENDER_PARAMETERS = {
+  input: { type: 'string', required: true, description: 'Path to doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, or pdf; not modified.' },
+  pages: {
+    type: 'array', items: { type: 'integer' },
+    description: 'Distinct one-based pages or slides; omit for all. Spreadsheets use sheet and range instead.',
+  },
+  sheet: {
+    type: 'string',
+    description: 'Exact worksheet name; omit to render every visible sheet.',
+  },
+  range: { type: 'string', description: 'A1 range, such as A1:H40; requires sheet. Omit for the used area.' },
+  dpi: { type: 'integer', description: 'Resolution from 24 to 600; default 144.' },
+} as const
+
+const CONVERT_PARAMETERS = {
+  input: { type: 'string', required: true, description: 'Path to doc, docx, odt, xls, xlsx, ods, ppt, pptx, or odp; not modified.' },
+  format: {
+    type: 'string', required: true, enum: OUTPUT_FORMATS,
+    description: 'Word: pdf, docx, odt, txt. Excel: pdf, xlsx, ods, csv. PowerPoint: pdf, pptx, odp.',
+  },
+  sheet: { type: 'string', description: 'Exact worksheet name for CSV only; required when the workbook has several sheets.' },
+} as const
+
+const RECALCULATE_PARAMETERS = {
+  input: { type: 'string', required: true, description: 'Path to an xls, xlsx, or ods workbook; not modified.' },
+  format: { type: 'string', required: true, enum: ['xlsx', 'ods'], description: 'Output workbook format.' },
+} as const
+
+const PARAMETER_NAMES: Readonly<Record<OfficeToolName, readonly string[]>> = {
+  office_render: Object.keys(RENDER_PARAMETERS),
+  office_convert: Object.keys(CONVERT_PARAMETERS),
+  office_recalculate: Object.keys(RECALCULATE_PARAMETERS),
 }
 
-/** Resolution options for the Session's current directory and the call's cancellation. */
-async function sessionResolveOptions(ctx: Context, exec: ToolExecution): Promise<{ cwd?: string; signal: AbortSignal }> {
-  const cwd = exec.agent === undefined ? undefined : await ctx.workingDirectory.ensure(exec.agent, exec.signal)
-  return { ...cwd === undefined ? {} : { cwd }, signal: exec.signal }
+const FILE_PROPERTIES = {
+  path: { type: 'string', required: true, description: 'Canonical absolute input path.' },
+  file: { type: 'string', required: true, description: 'Absolute path of the temporary output file.' },
+  format: { type: 'string', required: true },
+  bytes: { type: 'integer', required: true },
+  pageCount: { type: 'integer', description: 'Pages of a PDF output.' },
+  missingFonts: MISSING_FONTS_SCHEMA,
+} as const
+
+/**
+ * Register Office tools admitted after a successful skill load or an earlier Office declaration.
+ * @param ctx - registration scope; disposing it removes the tools.
+ * @param config - validated activation skills and render bounds.
+ */
+export function apply(ctx: Context, config: Config): void {
+  const skills = new Set(config.activationSkills)
+  const marked = new WeakSet<Agent>()
+  ctx.on('tools/result', (exec, result) => {
+    if (exec.agent === undefined || exec.name !== 'skill' || result.isError) return
+    const args = exec.arguments
+    if (typeof args === 'object' && args !== null && 'name' in args && typeof args.name === 'string' && skills.has(args.name)) {
+      marked.add(exec.agent)
+    }
+  })
+  ctx.on('session/event', (session, event) => {
+    if (event.type !== 'user/message' || event.data.source.kind !== 'skill-invocation' || !skills.has(event.data.source.name)) return
+    const agent = ctx.agents.get(session.id)
+    if (agent?.session === session) marked.add(agent)
+  })
+  ctx.on('agent/disposed', ({ agent }) => { marked.delete(agent) })
+  // Native request headers retain these declarations across resume and fork. PTC headers contain only run_code;
+  // after losing the in-memory mark, a PTC agent must load an Office skill again.
+  const when = ({ agent }: ToolActivationContext): boolean => marked.has(agent)
+    || agent.session.requestHeader()?.tools?.some(tool => OFFICE_TOOL_NAMES.includes(tool.name)) === true
+  ctx.tools.register(defineTool({
+    name: 'office_render',
+    description: 'Render document pages, slides, or worksheet areas as images you can view.',
+    parameters: RENDER_PARAMETERS,
+    output: {
+      schema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          operation: { type: 'string', const: 'render', required: true },
+          path: { type: 'string', required: true, description: 'Canonical absolute input path.' },
+          pageCount: { type: 'integer', required: true, description: 'Pages or slides of a document, or visible worksheets.' },
+          dpi: { type: 'integer', required: true },
+          images: { type: 'array', required: true, items: IMAGE_SCHEMA },
+          missingFonts: MISSING_FONTS_SCHEMA,
+        },
+      },
+      render: (_args, value) => renderImagesContent(value),
+      presentationMeta: (_args, value) => ({ path: value.path }),
+    },
+    isConcurrencySafe: () => true,
+    async execute(args, exec): Promise<OfficeRenderValue> {
+      checkParameterNames('office_render', args, PARAMETER_NAMES)
+      checkRenderArguments(args, inputFamily('render', args.input))
+      const { agent, kit, target, source } = await prepareInput(ctx, exec, 'render', args.input)
+      return render(ctx, kit, config, agent, exec.signal, args, target, source)
+    },
+    presentCall: args => ({ card: 'generic', title: `Render ${args.input}`, kind: 'read', locations: [{ path: args.input }] }),
+  }), { when })
+  ctx.tools.register(defineTool({
+    name: 'office_convert',
+    description: 'Convert a document to another format. Return a temporary file to copy to its destination with the shell.',
+    parameters: CONVERT_PARAMETERS,
+    output: {
+      schema: { type: 'object', additionalProperties: false, properties: {
+        operation: { type: 'string', const: 'convert', required: true }, ...FILE_PROPERTIES,
+      } },
+      render: (_args, value) => renderFileContent(value),
+      presentationMeta: (_args, value) => ({ path: value.path, file: value.file }),
+    },
+    isConcurrencySafe: () => false,
+    async execute(args, exec): Promise<OfficeFileValue<'convert'>> {
+      checkParameterNames('office_convert', args, PARAMETER_NAMES)
+      // `inputFamily` rejects PDF for convert and recalculate.
+      const family = inputFamily('convert', args.input) as Exclude<OfficeFamily, 'pdf'>
+      const { agent, kit, target, source } = await prepareInput(ctx, exec, 'convert', args.input)
+      checkConversionArguments({ ...args, input: target.displayPath }, family)
+      return convertFile(ctx, kit, agent, exec.signal, 'convert', args, target, source)
+    },
+    presentCall: args => ({ card: 'generic', title: `Convert ${args.input} to ${args.format}`, kind: 'other', locations: [{ path: args.input }] }),
+  }), { when })
+  ctx.tools.register(defineTool({
+    name: 'office_recalculate',
+    description: 'Recalculate spreadsheet formulas. Return a temporary workbook to copy to its destination with the shell.',
+    parameters: RECALCULATE_PARAMETERS,
+    output: {
+      schema: { type: 'object', additionalProperties: false, properties: {
+        operation: { type: 'string', const: 'recalculate', required: true }, ...FILE_PROPERTIES,
+      } },
+      render: (_args, value) => renderFileContent(value),
+      presentationMeta: (_args, value) => ({ path: value.path, file: value.file }),
+    },
+    isConcurrencySafe: () => false,
+    async execute(args, exec): Promise<OfficeFileValue<'recalculate'>> {
+      checkParameterNames('office_recalculate', args, PARAMETER_NAMES)
+      inputFamily('recalculate', args.input)
+      const { agent, kit, target, source } = await prepareInput(ctx, exec, 'recalculate', args.input)
+      return convertFile(ctx, kit, agent, exec.signal, 'recalculate', args, target, source)
+    },
+    presentCall: args => ({ card: 'generic', title: `Recalculate ${args.input}`, kind: 'other', locations: [{ path: args.input }] }),
+  }), { when })
+}
+
+/** Authorize each read before a cache lookup and resolve the calling Agent and the current Office service. */
+async function prepareInput(ctx: Context, exec: ToolExecution, operation: OfficeOperationName, input: string) {
+  const { agent, signal } = exec
+  // Conditional registrations execute only through a step tool set, which the calling Agent resolves.
+  if (agent === undefined) throw new Error(`cannot ${operation} "${input}": Office tools run only in an Agent step`)
+  const cwd = await ctx.workingDirectory.ensure(agent, signal)
+  const { target, info } = await readableInput(ctx, input, { cwd, signal })
+  try {
+    await authorizeContent(ctx, target, info, signal)
+  } catch (error) { throw officeFailure(operation, target.displayPath, error) }
+  const kit = ctx.get('officeKit')
+  if (kit === undefined) {
+    throw officeFailure(operation, target.displayPath, new OfficeKitError('unavailable', 'The document converter is unavailable.'))
+  }
+  return { agent, kit, target, source: officeSource(ctx, agent, target, info) }
 }
 
 /** Resolve an input through the filesystem backend and require a regular file. */
 async function readableInput(
-  ctx: Context, path: string, options: { cwd?: string; signal: AbortSignal },
+  ctx: Context, path: string, options: { cwd: string; signal: AbortSignal },
 ): Promise<{ target: FsTarget; info: FsInfo }> {
   const target = await ctx.fs.resolve(path, options)
   const info = await ctx.fs.stat(target, options.signal)
@@ -197,9 +264,9 @@ async function authorizeContent(ctx: Context, target: FsTarget, info: FsInfo, si
 }
 
 /** A deferred bounded read that refuses a source changed since its authorizing stat. */
-function officeSource(ctx: Context, exec: ToolExecution, target: FsTarget, info: FsInfo): OfficeKitSource {
+function officeSource(ctx: Context, agent: Agent, target: FsTarget, info: FsInfo): OfficeKitSource {
   return {
-    key: OfficeSourceKey(JSON.stringify([exec.agent?.session.id ?? null, ctx.fs.processPath(target)])),
+    key: OfficeSourceKey(JSON.stringify([agent.session.id, ctx.fs.processPath(target)])),
     version: info.version,
     ...info.size === undefined ? {} : { bytes: info.size },
     async read(signal, maxBytes) {
@@ -231,25 +298,26 @@ function officeFailure(verb: string, path: string, error: unknown): unknown {
  * Require the calling model route to declare image input. The route is the Session's latest request header
  * configuration, falling back to the agent options; a model whose capability is unknown is refused.
  */
-async function assertRenderRoute(ctx: Context, exec: ToolExecution, displayPath: string): Promise<void> {
+async function assertRenderRoute(ctx: Context, agent: Agent, signal: AbortSignal, displayPath: string): Promise<void> {
   const llm = ctx.get('llm')
-  const header = exec.agent?.session.requestHeader()?.config
-  const model = header?.model ?? exec.agent?.options.model
-  const provider = header?.provider ?? exec.agent?.options.provider
+  const header = agent.session.requestHeader()?.config
+  const model = header?.model ?? agent.options.model
+  const provider = header?.provider ?? agent.options.provider
   if (llm === undefined || provider === undefined || model === undefined) {
     throw new Error(`cannot render "${displayPath}": the current model route could not be resolved`)
   }
-  const { inputModalities = [] } = await llm.resolveModelInfo(provider, model, exec.signal)
+  const { inputModalities = [] } = await llm.resolveModelInfo(provider, model, signal)
   if (!inputModalities.includes('image')) throw new Error(`cannot render "${displayPath}": model "${model}" does not accept images`)
 }
 
 async function render(
-  ctx: Context, kit: OfficeKit, config: Config, exec: ToolExecution, args: OfficeArgs, target: FsTarget, source: OfficeKitSource,
+  ctx: Context, kit: OfficeKit, config: Config, agent: Agent, signal: AbortSignal, args: OfficeRenderArgs, target: FsTarget,
+  source: OfficeKitSource,
 ): Promise<OfficeRenderValue> {
   const path = ctx.fs.processPath(target)
   const attachments = ctx.get('attachments')
   if (attachments === undefined) throw new Error(`cannot render "${target.displayPath}": no attachment service is mounted`)
-  await assertRenderRoute(ctx, exec, target.displayPath)
+  await assertRenderRoute(ctx, agent, signal, target.displayPath)
   const limits = attachments.imageLimits
   let result
   try {
@@ -265,7 +333,7 @@ async function render(
       maxPixels: Math.min(config.maxImagePixels, limits.maxImagePixels),
       maxDimension: Math.min(config.maxImageDimension, limits.maxImageDimension),
       maxBytes: Math.min(config.maxImageBytes, limits.maxMessageImageBytes),
-    }, exec.signal)
+    }, signal)
   } catch (error) { throw officeFailure('render', target.displayPath, error) }
   const oversized = result.images.find(image => image.png.byteLength > limits.maxImageBytes)
   if (oversized !== undefined) {
@@ -301,40 +369,36 @@ async function render(
  * Output-store owner for a conversion: the root Session of the caller's subagent tree, so a subagent's output stays
  * until the conversation that delegated it ends. Without the `subagents` service every Agent is its own root.
  */
-function outputOwner(ctx: Context, exec: ToolExecution): string {
-  if (exec.agent === undefined) return 'agentless'
-  return (ctx.get('subagents')?.rootOf(exec.agent) ?? exec.agent).session.id
+function outputOwner(ctx: Context, agent: Agent): string {
+  return (ctx.get('subagents')?.rootOf(agent) ?? agent).session.id
 }
 
-async function convertFile(
-  ctx: Context, kit: OfficeKit, exec: ToolExecution, args: OfficeArgs, family: Exclude<OfficeFamily, 'pdf'>,
+async function convertFile<Operation extends 'convert' | 'recalculate'>(
+  ctx: Context, kit: OfficeKit, agent: Agent, signal: AbortSignal, operation: Operation, args: OfficeConvertArgs | OfficeRecalculateArgs,
   target: FsTarget, source: OfficeKitSource,
-): Promise<OfficeFileValue> {
-  const operation = args.operation as 'convert' | 'recalculate'
-  // `checkArguments` requires format for convert and recalculate.
-  const format = args.format as string
-  checkOutputFormat(operation, family, target.displayPath, format)
+): Promise<OfficeFileValue<Operation>> {
+  const { format } = args
   if (ctx.fs.processPathFromHostPath(kit.outputDirectory) === undefined) {
     throw new Error(`cannot ${operation} "${target.displayPath}": converted files are not available when the workspace is on a remote host`)
   }
   const extension = extensionOf(args.input)
   const stem = basename(target.displayPath).replace(/\.[^.]*$/u, '')
-  const output = { owner: outputOwner(ctx, exec), name: `${stem}.${format}` }
+  const output = { owner: outputOwner(ctx, agent), name: `${stem}.${format}` }
   let result
   try {
     result = operation === 'convert'
       ? await kit.convertTo({
-        // `inputFamily` and `checkOutputFormat` admitted both extensions.
+        // `inputFamily` and `checkConversionArguments` admitted both extensions.
         extension: extension as Parameters<OfficeKit['convertTo']>[0]['extension'],
-        format: format as Parameters<OfficeKit['convertTo']>[0]['format'],
-        ...args.sheet === undefined ? {} : { sheet: args.sheet },
+        format,
+        ...'sheet' in args ? { sheet: args.sheet } : {},
         priority: 'foreground', source, output,
-      }, exec.signal)
+      }, signal)
       : await kit.recalculate({
         extension: extension as Parameters<OfficeKit['recalculate']>[0]['extension'],
         format: format as Parameters<OfficeKit['recalculate']>[0]['format'],
         priority: 'foreground', source, output,
-      }, exec.signal)
+      }, signal)
   } catch (error) { throw officeFailure(operation, target.displayPath, error) }
   return {
     operation, path: ctx.fs.processPath(target),

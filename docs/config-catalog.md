@@ -4258,12 +4258,14 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-tool-office`
 
-- `inject`: `tools` · `fs` · `workingDirectory`
-- `source`: [`packages/document/tool-office/src/index.ts:34`](../packages/document/tool-office/src/index.ts)
+- `inject`: `tools` · `fs` · `workingDirectory` · `agents`
+- `source`: [`packages/document/tool-office/src/index.ts:37`](../packages/document/tool-office/src/index.ts)
 
 ```ts config-catalog
-/** Bounds on one render result; deployment attachment limits apply when they are lower. */
+/** Activation skills and render bounds; lower deployment attachment limits take precedence. */
 export interface Config {
+  /** Skill names whose successful loading admits all three tools from the following step. */
+  activationSkills: string[]
   /** Maximum images one render returns, including worksheet fragments. */
   maxImages: number
   /** Maximum pixels of each image. */

@@ -28,6 +28,7 @@ describe('bundled Office skills', () => {
       const catalog = await ctx.skills.list()
       expect(catalog.map(skill => skill.name)).toEqual(names)
       const route = (await ctx.skills.get('office'))!
+      expect(route.description).toBe('Create or edit Office files; inspect Office files and PDFs. Load before rendering, conversion, or recalculation to enable office_render, office_convert, and office_recalculate next step.')
       expect(Math.ceil(route.description.length / 4)).toBeLessThanOrEqual(50)
       expect(Math.ceil(route.content.length / 4)).toBeLessThanOrEqual(200)
       for (const [name, previousTokens] of [['office-docx', 1688], ['office-pptx', 1879], ['office-xlsx', 2330]] as const) {
@@ -35,7 +36,7 @@ describe('bundled Office skills', () => {
         expect(Math.ceil(skill.content.length / 4)).toBeLessThanOrEqual(Math.floor(previousTokens * 0.7))
         expect(skill.content).not.toMatch(/read_image/)
         expect(skill.content).not.toContain('dsoffice')
-        expect(skill.content).toContain('`operation: "render"`')
+        expect(skill.content).toContain('`office_render`')
         expect(skill.content).toContain('"Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。"')
       }
     } finally { await ctx.fiber.dispose() }
@@ -307,18 +308,23 @@ describe('bundled Office skills', () => {
   })
 })
 
-it('directs Office operations to the office tool without executable paths', async () => {
+it('directs Office operations to dedicated tools without executable paths', async () => {
   const ctx = new Context()
   try {
     await ctx.plugin(SkillRegistry)
     await ctx.plugin(SkillOffice)
     for (const name of names) {
       const content = (await ctx.skills.get(name))!.content
-      expect(content).toContain('`office` tool')
-      expect(content).not.toMatch(/office-render|office-recalculate|office-export-pdf|LibreOffice Kit CLI|--output-dir|"<node>"/u)
+      expect(content).toContain('If `office_render`, `office_convert`, or `office_recalculate` is unavailable, call `skill` to load `office`; the tools appear next step.')
+      expect(content).not.toMatch(
+        /operation:|`office` tool|office-render|office-recalculate|office-export-pdf|LibreOffice Kit CLI|--output-dir|"<node>"/u,
+      )
     }
     const route = (await ctx.skills.get('office'))!.content
-    for (const operation of ['`operation: "render"`', '`operation: "recalculate"`', '`operation: "convert"`, `format: "pdf"`', '`format: "xlsx"` or `"ods"`']) expect(route).toContain(operation)
-    expect((await ctx.skills.get('office-xlsx'))!.content).toContain('`operation: "recalculate"` and `format: "xlsx"`')
+    for (const instruction of ['`office_render`', '`office_recalculate`', '`office_convert` with `format`', '`format: "xlsx"` or `"ods"`']) expect(route).toContain(instruction)
+    expect((await ctx.skills.get('office-xlsx'))!.content).toContain('`office_recalculate` with `format: "xlsx"`')
+    for (const [format, legacy, library] of [['docx', 'doc', 'python-docx'], ['xlsx', 'xls', 'openpyxl'], ['pptx', 'ppt', 'python-pptx']]) {
+      expect((await ctx.skills.get(`office-${format}`))!.content).toContain(`${library} cannot read legacy \`.${legacy}\` files. Use \`office_convert\` with \`format: "${format}"\`, copy the result into the workspace, then edit the copy.`)
+    }
   } finally { await ctx.fiber.dispose() }
 })

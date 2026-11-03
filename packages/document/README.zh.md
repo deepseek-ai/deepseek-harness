@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 摘要
 
-在宿主上为预览和模型的 `office` 工具渲染、转换已授权的 Office 文件并重算工作簿。共享服务运行 LibreOffice kit。声明了原生引擎的目标使用原生引擎，其余目标使用 Node WASM。
+在宿主上为预览和模型的 Office 工具渲染、转换已授权的 Office 文件并重算工作簿。共享服务运行 LibreOffice kit。声明了原生引擎的目标使用原生引擎，其余目标使用 Node WASM。
 
 ## 目录
 
@@ -27,7 +27,7 @@ kind: "package-group"
 | 包 | 职责 | ctx 键 |
 |---|---|---|
 | [office-kit](office-kit/README.zh.md) | 将已授权 Office 字节转换为完整 PDF、PNG 图片、转换后的文件和重算后的工作簿，并提供有界队列和缓存；通过 `/locate` 以消费方 Kit 为起点定位 Kit 入口和引擎清单 | `ctx.officeKit` |
-| [tool-office](tool-office/README.zh.md) | 常驻的 `office` 工具：在工具结果中把页面渲染为图片、转换文档、重算工作簿 | — |
+| [tool-office](tool-office/README.zh.md) | 加载 Office 技能后声明的 `office_render`、`office_convert` 和 `office_recalculate`：在工具结果中把页面渲染为图片、转换文档、重算工作簿 | — |
 
 -----
 

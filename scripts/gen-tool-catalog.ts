@@ -335,14 +335,15 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-office',
     dir: 'tool-office',
     source: 'packages/document/tool-office/src/index.ts',
-    requires: ['ctx.workingDirectory', 'ctx.tools', 'ctx.fs', 'ctx.officeKit', 'ctx.attachments and ctx.llm for render'],
+    requires: ['ctx.workingDirectory', 'ctx.tools', 'ctx.fs', 'ctx.agents', 'ctx.officeKit', 'ctx.attachments and ctx.llm for office_render'],
     writes: ['tool/call', 'tool/result with rendered image attachments', 'temporary converted files in the Office kit output store'],
     async mount(ctx) {
       // Schema harvest never renders or converts a document.
       ctx.provide('officeKit', {} as OfficeKit)
+      await ctx.plugin(AgentRegistry)
       await ctx.plugin(ToolOffice)
     },
-    note: 'The tool is registered whether or not LibreOffice Kit is installed; calls then fail with the Office service\'s unavailable error.',
+    note: 'Declared to an Agent from the step after it successfully loads an Office skill, and kept while the previous request header declares an Office tool. Admitted calls fail with the Office service\'s unavailable error when LibreOffice Kit is not installed.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-present',

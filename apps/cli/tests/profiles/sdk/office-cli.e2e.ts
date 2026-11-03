@@ -1,6 +1,6 @@
 /**
- * PDF export through the shipped SDK profile: the agent converts with the `office` tool and copies the temporary PDF
- * into the workspace with the shell, with no Node on PATH.
+ * PDF export through the shipped SDK profile: the agent loads an Office skill, converts with `office_convert`, and
+ * copies the temporary PDF into the workspace with the shell, with no Node on PATH.
  * Defaults to built Node packages. DSH_OFFICE_TEST_EXECUTABLE/ENTRY select a relocated Node or Electron carrier;
  * CARRIER=sdk selects the standalone executable. API=openai-completions selects a development gateway instead of the
  * default Messages API.
@@ -31,7 +31,7 @@ function callArguments(call: ToolCall): Record<string, unknown> {
   return JSON.parse(call.arguments) as Record<string, unknown>
 }
 
-it.skipIf(!process.env.DEEPSEEK_API_KEY || process.platform === 'win32')(`agent exports a PDF with the office tool in the ${carrier} carrier without Node on PATH`, async () => {
+it.skipIf(!process.env.DEEPSEEK_API_KEY || process.platform === 'win32')(`agent exports a PDF with office_convert in the ${carrier} carrier without Node on PATH`, async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh office export '))
   try {
     const source = zipSync({
@@ -104,9 +104,11 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || process.platform === 'win32')(`agent 
         const params = record.params as { event?: { type: string; data: ToolCall } } | undefined
         return params?.event?.type === 'tool/call' ? [params.event.data] : []
       })
-      const convert = calls.findIndex(call => call.name === 'office' && callArguments(call).operation === 'convert')
+      const skill = calls.findIndex(call => call.name === 'skill')
+      const convert = calls.findIndex(call => call.name === 'office_convert' && callArguments(call).format === 'pdf')
       const copy = calls.findIndex(call => call.name === 'bash' && /\bcp\b/u.test(String(callArguments(call).command)))
-      expect(convert, diagnostic).toBeGreaterThanOrEqual(0)
+      expect(skill, diagnostic).toBeGreaterThanOrEqual(0)
+      expect(convert, diagnostic).toBeGreaterThan(skill)
       expect(copy, diagnostic).toBeGreaterThan(convert)
       expect(existsSync(decoyMarker), 'the agent must not invoke system Office').toBe(false)
       const pdf = await readFile(join(root, 'result.pdf'))

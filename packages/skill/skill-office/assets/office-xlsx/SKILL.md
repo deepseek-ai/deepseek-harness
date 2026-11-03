@@ -13,6 +13,10 @@ Name Python scripts for their task, such as `edit_xlsx.py`; avoid module names s
 
 ## Read and modify
 
+If `office_render`, `office_convert`, or `office_recalculate` is unavailable, call `skill` to load `office`; the tools appear next step.
+
+openpyxl cannot read legacy `.xls` files. Use `office_convert` with `format: "xlsx"`, copy the result into the workspace, then edit the copy.
+
 Use `openpyxl` for existing XLSX workbooks and targeted cell or style changes. Load with `data_only=False` when formulas must survive. Inspect sheet names, the affected cell types, formulas, styles, merged ranges, and referenced ranges before editing. Check the saved file by reopening it, including unchanged content that the request requires preserving.
 
 Use pandas for data analysis and transformations. A DataFrame is not the workbook: exporting it over an existing file can lose sheets, formulas, charts, and formatting. Write analysis results back to the intended ranges with openpyxl. `XlsxWriter` can create new workbooks, but cannot read or modify existing ones.
@@ -37,7 +41,7 @@ workbook.save("report.xlsx")
 
 Preserve numbers, dates, booleans, and identifiers as the intended cell types; formatting is not a type conversion. For modifications, load the existing file with `openpyxl.load_workbook("input.xlsx", data_only=False)`, change the requested ranges, and save a separate result. Avoid a DataFrame round trip when workbook features must survive.
 
-Writing a formula does not calculate its result. openpyxl and XlsxWriter do not evaluate formulas; `data_only=True` returns cached values that may be absent or stale. When calculated results must be refreshed, call the `office` tool with `operation: "recalculate"` and `format: "xlsx"`, and copy the returned temporary workbook to a new file in the workspace. Open the copy with openpyxl using both `data_only=False` and `data_only=True` to check that formulas survive and cached values match the expected results. If recalculation fails, preserve the original workbook and report that calculated values were not refreshed. Do not replace requested formulas with constants or report stale or absent cached values as newly calculated results.
+Writing a formula does not calculate its result. openpyxl and XlsxWriter do not evaluate formulas; `data_only=True` returns cached values that may be absent or stale. When calculated results must be refreshed, call `office_recalculate` with `format: "xlsx"`, and copy the returned temporary workbook to a new file in the workspace. Open the copy with openpyxl using both `data_only=False` and `data_only=True` to check that formulas survive and cached values match the expected results. If recalculation fails, preserve the original workbook and report that calculated values were not refreshed. Do not replace requested formulas with constants or report stale or absent cached values as newly calculated results.
 
 Do not rename `.xls`, `.xlsb`, encrypted files, or macro-enabled files to `.xlsx`. They need an appropriate supported operation. `keep_vba=True` can preserve VBA package content in an XLSM workflow, but does not execute or edit macros. Preserve the original and verify each workbook feature the task depends on.
 
@@ -45,10 +49,10 @@ Do not rename `.xls`, `.xlsb`, encrypted files, or macro-enabled files to `.xlsx
 
 Reopen the saved workbook with openpyxl and verify the requested sheet names, values, types, formulas, styles, and totals against the source data, including unchanged content that must be preserved. These checks do not calculate formulas or judge workbook appearance.
 
-Call the `office` tool with `operation: "render"` for requested images or visual inspection and whenever the user's primary task targets appearance, including cell fill colors, text alignment, spacing, or sizing. These appearance changes require rendering even without a separate visual-check request, unless the user explicitly skips it. New workbooks and data or formula edits do not require rendering solely because they include incidental basic formatting. In particular, bold headers and number formats accompanying data edits do not require rendering.
+Call `office_render` for requested images or visual inspection and whenever the user's primary task targets appearance, including cell fill colors, text alignment, spacing, or sizing. These appearance changes require rendering even without a separate visual-check request, unless the user explicitly skips it. New workbooks and data or formula edits do not require rendering solely because they include incidental basic formatting. In particular, bold headers and number formats accompanying data edits do not require rendering.
 
 Render worksheets by `sheet` and the affected `range`; worksheet numbers are not PDF page numbers. Reuse earlier images of an unchanged source instead of rendering again. A fully transparent or uniformly blank image of populated content is a renderer failure: stop visual checks for the task at once, without rendering again with other ranges, sheets, DPI, or settings and without editing the source for it. If content and structure checks pass, state the visual status only as "Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。"; never claim visual verification.
 
-Recalculate when refreshed calculated values are needed. For PDF output, call `office` with `operation: "convert"` and `format: "pdf"`, then copy the returned temporary file to the destination. Deliver after the requested data checks pass and the required operations finish.
+Recalculate when refreshed calculated values are needed. For PDF output, call `office_convert` with `format: "pdf"`, then copy the returned temporary file to the destination. Deliver after the requested data checks pass and the required operations finish.
 
 Call `present({"files":[{"path":"report.xlsx"}]})` with the actual final workbook path. It exposes the current source file without copying or preserving its bytes, so keep that file in place and omit intermediate scripts and reports unless requested. If `present` is unavailable, use the session's supported file delivery method.

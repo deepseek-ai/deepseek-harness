@@ -137,7 +137,7 @@ else:
         assert load_workbook('result.xlsx', data_only=True)['Revenue']['B4'].value == 38
 `], { cwd })
         expect(verified.exitCode).toBe(0)
-        if (kind === 'formula') expect(officeCalls(events).some(call => call.args.operation === 'recalculate')).toBe(true)
+        if (kind === 'formula') expect(officeCalls(events).some(call => call.name === 'office_recalculate')).toBe(true)
         const imageBlocks = events.flatMap(event => event.type === 'tool/result'
           ? event.data.message.content.filter(block => block.type === 'image')
           : event.type === 'user/message' && event.data.source.kind === 'ptc-mode'
@@ -163,9 +163,9 @@ else:
     expect(calls.some(call => call.name === 'load_workspace_dependencies'), diagnostic).toBe(true)
     if (kind === 'layout') {
       const office = officeCalls(events)
-      expect(office.some(call => call.args.operation === 'render' && 'sheet' in call.args && 'range' in call.args), diagnostic).toBe(true)
-      expect(office.some(call => call.args.operation === 'convert'), diagnostic).toBe(false)
-      const reads = calls.filter(call => call.name === 'office')
+      expect(office.some(call => call.name === 'office_render' && 'sheet' in call.args && 'range' in call.args), diagnostic).toBe(true)
+      expect(office.some(call => call.name === 'office_convert'), diagnostic).toBe(false)
+      const reads = calls.filter(call => call.name === 'office_render')
       const results = events.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
       if (previewHasContent) {
         expect(reads.length).toBeGreaterThan(0)
@@ -187,7 +187,7 @@ else:
       }
     } else {
       expectNoRenderContext(events)
-      expect(officeCalls(events).some(call => call.args.operation === 'render')).toBe(false)
+      expect(officeCalls(events).some(call => call.name === 'office_render')).toBe(false)
       expect(commands).not.toMatch(/(?<![\w/.-])(?:render|convert)(?![\w/.-])|\.pdf\b|\.png\b/iu)
       const answer = events.findLast(event => event.type === 'assistant/message')
       if (answer?.type !== 'assistant/message') throw new Error('Agent did not finish with an answer')

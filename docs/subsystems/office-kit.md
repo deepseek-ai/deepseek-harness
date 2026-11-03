@@ -2,15 +2,15 @@
 
 English | [中文](office-kit.zh.md)
 
-The [document package family](../../packages/document/README.md) renders, converts, and recalculates Office files on the Node Host. Consumers authorize source reads and own presentation; the shared provider owns the engine, bounded admission, transient output reuse, and the private output store. The [`office` tool](../../packages/document/tool-office/README.md) is the model-facing consumer; the provider itself creates no Session event.
+The [document package family](../../packages/document/README.md) renders, converts, and recalculates Office files on the Node Host. Consumers authorize source reads and own presentation; the shared provider owns the engine, bounded admission, transient output reuse, and the private output store. The [`office_render`, `office_convert`, and `office_recalculate` tools](../../packages/document/tool-office/README.md) are the model-facing consumers; the provider itself creates no Session event.
 
 ## Ownership
 
 | Owner | Responsibility |
 |---|---|
 | [office-kit](../../packages/document/office-kit/README.md) | `ctx.officeKit`: shared LibreOffice rendering, conversion, and recalculation, bounded admission, output caching, and the per-Session output store; `/locate`, whose contract the package README owns: the caller's Kit entry, engine manifests from that installation, and native paths mapped to ASAR unpacked directories |
-| [tool-office](../../packages/document/tool-office/README.md) | The resident `office` tool: rendered images in tool results and converted files returned for a shell copy |
-| [Web bundle](../../packages/bundle/web-app/README.md) and [SDK bundle](../../packages/bundle/sdk-app/README.md) | One configurable provider and the `office` tool shared by Host consumers |
+| [tool-office](../../packages/document/tool-office/README.md) | The on-demand `office_render`, `office_convert`, and `office_recalculate` tools: rendered images in tool results and converted or recalculated files returned for a shell copy |
+| [Web bundle](../../packages/bundle/web-app/README.md) and [SDK bundle](../../packages/bundle/sdk-app/README.md) | One configurable provider and `tool-office` shared by Host consumers |
 | [Office preview Client](../../packages/client/ui-sidebar-documentpreview/README.md#office-preview) | Office extension selection, PDF reuse, and missing-font notices |
 
 ## Requests and results

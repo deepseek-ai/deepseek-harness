@@ -1,4 +1,4 @@
-/** Actual skill discovery and `office` tool operations through the shipped headless composition. */
+/** Actual skill discovery and Office tool operations through the shipped headless composition. */
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -37,7 +37,7 @@ async function sessionEvents(cwd: string) {
   return events
 }
 
-it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mode: 'native' }, { format: 'pdf', mode: 'native' }, { format: 'docx', mode: 'ptc' }])('renders $format with the office tool in $mode mode', async ({ format, mode }) => {
+it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mode: 'native' }, { format: 'pdf', mode: 'native' }, { format: 'docx', mode: 'ptc' }])('renders $format with office_render in $mode mode', async ({ format, mode }) => {
   let original: Buffer | undefined
   await runLoaderSmoke({
     label: 'Office rendering', tempDirPrefix: 'dsh-office-render-',
@@ -61,7 +61,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mod
         if (event.type === 'tool/ptc-dispatch') return [{ name: event.data.name, arguments: JSON.stringify(event.data.arguments) }]
         return []
       })
-      const renders = officeCalls(events).filter(call => call.args.operation === 'render')
+      const renders = officeCalls(events).filter(call => call.name === 'office_render')
       expect(renders.length, JSON.stringify(calls)).toBeGreaterThan(0)
       const images = events.some(event => (event.type === 'tool/result' && event.data.message.content.some(block => block.type === 'image'))
         || (event.type === 'user/message' && event.data.source.kind === 'ptc-mode' && event.data.content.some(block => block.type === 'image')))
@@ -89,7 +89,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('keeps Office skills and th
   })
 })
 
-it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF with the office tool and preserves the source', async () => {
+it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF with office_convert and preserves the source', async () => {
   let original: Buffer | undefined
   await runLoaderSmoke({
     ...launch,
@@ -108,12 +108,12 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF with the offic
       const skills = calls.filter(call => call.name === 'skill').map(call => (JSON.parse(call.arguments) as { name: string }).name)
       const office = officeCalls(events)
       const diagnostic = JSON.stringify({ calls: calls.map(call => call.name), skills,
-        office: office.map(call => ({ operation: call.args.operation, input: call.args.input, format: call.args.format })) })
+        office: office.map(call => ({ name: call.name, input: call.args.input, format: call.args.format })) })
       expect(skills.some(name => ['office-docx', 'office-pptx', 'office-xlsx'].includes(name)), diagnostic).toBe(false)
       const commands = calls.filter(call => call.name === 'bash' || call.name === 'pwsh')
         .map(call => (JSON.parse(call.arguments) as { command: string }).command).join('\n')
-      expect(office.some(call => call.args.operation === 'convert' && call.args.format === 'pdf'), diagnostic).toBe(true)
-      expect(office.some(call => call.args.operation === 'render'), diagnostic).toBe(false)
+      expect(office.some(call => call.name === 'office_convert' && call.args.format === 'pdf'), diagnostic).toBe(true)
+      expect(office.some(call => call.name === 'office_render'), diagnostic).toBe(false)
       expectNoRenderContext(events)
       expect(commands, diagnostic).not.toMatch(/pypdf|PyPDF2|\bfitz\b|pdfminer|pdfplumber|pdfinfo|pdftotext/iu)
       expect((await readFile(join(cwd, 'result.pdf'))).subarray(0, 5).toString()).toBe('%PDF-')

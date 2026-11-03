@@ -1,5 +1,5 @@
 /**
- * Canonical `office` results and their model-facing content.
+ * Canonical Office tool results and their model-facing content.
  * @module @deepseek-ai/dsh-tool-office/content
  */
 
@@ -37,8 +37,8 @@ export interface OfficeRenderValue {
 }
 
 /** Canonical result of `convert` and `recalculate`. */
-export interface OfficeFileValue {
-  operation: 'convert' | 'recalculate'
+export interface OfficeFileValue<Operation extends 'convert' | 'recalculate' = 'convert' | 'recalculate'> {
+  operation: Operation
   /** Canonical absolute input path in the filesystem execution world. */
   path: string
   /** Absolute path of the temporary output file in the filesystem execution world. */

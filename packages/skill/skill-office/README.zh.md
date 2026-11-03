@@ -1,5 +1,5 @@
 ---
-description: "渐进加载的 Office 路由与创作技能，文档操作交给 office 工具。"
+description: "渐进加载的 Office 路由与创作技能，将渲染、转换和重算交给专用工具。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-目录列出 Office 路由及三个创作技能，完整说明按需加载。创作技能追加配置的 Python 环境说明；路由与创作技能把渲染、转换和重算交给 [`office` 工具](../../document/tool-office/README.zh.md)，并用 shell 复制转换后的文件。Web 应用和 SDK profile 挂载该提供者；只有 Desktop 或带主运行时的 SDK 还挂载内置依赖查询。
+目录列出 Office 路由及三个创作技能，完整说明按需加载。创作技能追加配置的 Python 环境说明；技能把操作交给 [`office_render`、`office_convert` 和 `office_recalculate`](../../document/tool-office/README.zh.md)，并用 shell 复制输出文件。Web 应用和 SDK profile 挂载该提供者；只有 Desktop 或带主运行时的 SDK 还挂载内置依赖查询。
 
 ## 目录
 
@@ -26,7 +26,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者。提供者负责技能说明；加载时，Python 技能追加 Python 环境说明。技能把操作交给 `office` 工具，因此需在本提供者旁组合 [`tool-office`](../../document/tool-office/README.zh.md)。
+在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者。提供者负责技能说明；加载时，Python 技能追加 Python 环境说明。技能把操作交给 `office_render`、`office_convert` 和 `office_recalculate`，因此需在本提供者旁组合 [`tool-office`](../../document/tool-office/README.zh.md)。
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'
@@ -40,12 +40,12 @@ kind: "package-reference"
 
 `pythonEnvironment` 选择追加到这三个技能末尾的一段固定说明。两个取值都先遵守用户或适用 AGENTS.md 明确要求的环境。`'workspace-dependencies'` 指引模型调用 `load_workspace_dependencies`，使用其返回的内置 Python 与库；仅在同时挂载 `dsh-tool-workspace-dependencies` 时使用。只挂载本包而不挂载 `dsh-tool-workspace-dependencies` 的自定义组合必须配置 `pythonEnvironment: user`。`'user'` 指引模型使用项目或用户已有的 PATH 上的 Python，先检查所需库能否 import，缺少时说明需要安装的包，未经用户同意不向全局环境安装。
 
-相对路径的 `assetRoot` 会阻止注册。目录发现时读取每个 `SKILL.md`。缺失或无效的技能会从目录中省略并记录警告；发现之后文件消失的技能加载失败，并从目录中移除。其他读取错误（例如文件被锁）会使本次发现不完整，由注册表重试。加载说明时不解析任何可执行文件，也不准备引擎；调用 `office` 工具时才会报告 LibreOffice Kit 不可用。把转换后的文件复制进工作区时，由 Bash 或 PowerShell 负责审批、沙箱和取消。
+相对路径的 `assetRoot` 会阻止注册。目录发现时读取每个 `SKILL.md`。缺失或无效的技能会从目录中省略并记录警告；发现之后文件消失的技能加载失败，并从目录中移除。其他读取错误（例如文件被锁）会使本次发现不完整，由注册表重试。加载说明时不解析任何可执行文件，也不准备引擎；调用 Office 工具时才会报告 LibreOffice Kit 不可用。把转换后的文件复制进工作区时，由 Bash 或 PowerShell 负责审批、沙箱和取消。
 
 <a id="progressive-loading"></a>
 ### 渐进加载
 
-模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。资源完整时，四个技能均列入目录，可通过 `skill` 按名称加载或由用户显式调用。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染；用户明确要求跳过渲染时以该要求为准。单独的操作任务在路由后直接调用 `office` 工具，不加载创作技能。单独的 PDF 导出在检查复制出的文件非空且以 `%PDF-` 开头后即结束。
+模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。资源完整时，四个技能均列入目录，可通过 `skill` 按名称加载或由用户显式调用。加载 Office 技能后，三个 Office 工具从下一步开始可用；工具不可用时（例如 PTC 模式 resume 或 fork 之后），技能会指示模型重新加载 `office`。python-docx、openpyxl 和 python-pptx 无法读取的旧格式 `.doc`、`.xls`、`.ppt` 文件，先用 `office_convert` 转换再编辑。用户要求的外观修改，包括电子表格单元格填充和文本对齐，即使没有明确要求视觉检查，也需要渲染；用户明确要求跳过渲染时以该要求为准。单独的操作任务在路由后直接调用专用工具，不加载创作技能。单独的 PDF 导出在检查复制出的文件非空且以 `%PDF-` 开头后即结束。
 
 ```mermaid
 flowchart TD
@@ -57,21 +57,21 @@ flowchart TD
     C --> D["Author and validate content, structure and data"]
     D -->|No additional operation needed| F["Deliver"]
 
-    B -->|Images, visual inspection, or appearance changes| R["office render: images in the tool result"]
+    B -->|Images, visual inspection, or appearance changes| R["office_render: images in the tool result"]
     D -->|Images, visual inspection, or appearance changes| R
     R --> V["Inspect requested images"]
     V --> F
 
-    B -->|Formula recalculation| X["office recalculate, shell copy"]
+    B -->|Formula recalculation| X["office_recalculate, shell copy"]
     D -->|Formula recalculation| X
     X --> F
 
-    B -->|PDF export| P["office convert, shell copy"]
+    B -->|PDF export| P["office_convert, shell copy"]
     D -->|PDF export| P
     P --> F
 ```
 
-新建文件以及内容、数据或公式修改，不会仅因附带基础格式调整而需要渲染。预览图片直接出现在 `office` 工具结果中，检查不会在工作区创建文件；回复以文字说明检查结果。转换和重算的文件以临时路径返回，由模型用 `cp` 或 `Copy-Item` 复制进工作区。操作结束后，已加载的说明仍属于会话历史。图中描述各端常规预设，不改变 minimal 或 sdk-minimal 的纯 shell 定义。
+新建文件以及内容、数据或公式修改，不会仅因附带基础格式调整而需要渲染。预览图片直接出现在 `office_render` 结果中，检查不会在工作区创建文件；回复以文字说明检查结果。转换和重算的文件以临时路径返回，由模型用 `cp` 或 `Copy-Item` 复制进工作区。操作结束后，已加载的说明仍属于会话历史。图中描述各端常规预设，不改变 minimal 或 sdk-minimal 的纯 shell 定义。
 
 普通 Word 文本编辑只检查目标文本片段及其格式，保存后重新打开文档验证修改。检查通过即结束验证；只有遇到具体问题或明确要求时才探查内部包结构和元数据。
 
@@ -114,7 +114,7 @@ flowchart TD
 
 #### KV Cache 影响
 
-技能结果追加到历史中且不改变工具声明，操作完成后已加载文本或图片仍保留在历史中。因资源不可读而省略或移除的技能会改变目录，后续步骤会将其作为目录更新发布。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，路由正文最多 200 token；创作正文比合并后的创作与操作指南至少减少 30%。配置不变时，追加的 Python 环境说明保持不变，并计入各技能正文。技能包装、通用目录、shell 与 `office` 声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
+技能结果追加到历史中，操作完成后已加载文本或图片仍保留在历史中。挂载 `tool-office` 时，首次成功加载 Office 技能会在下一步启用三个工具声明。因资源不可读而省略或移除的技能会改变目录，后续步骤会将其作为目录更新发布。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，路由正文最多 200 token；创作正文比合并后的创作与操作指南至少减少 30%。配置不变时，追加的 Python 环境说明保持不变，并计入各技能正文。技能包装、通用目录、shell 与 Office 工具声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
 
 ## 已知限制与后续工作
 

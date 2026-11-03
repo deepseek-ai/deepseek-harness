@@ -1,5 +1,5 @@
 ---
-description: "Package map for Host Office rendering, conversion, and the model-facing office tool."
+description: "Package map for Host Office rendering, conversion, and the model-facing Office tools."
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Render, convert, and recalculate authorized Office files on the Host, for previews and for the model's `office` tool. The shared service runs LibreOffice kit. Targets with a declared native engine use it; other targets use Node WASM.
+Render, convert, and recalculate authorized Office files on the Host, for previews and for the model's Office tools. The shared service runs LibreOffice kit. Targets with a declared native engine use it; other targets use Node WASM.
 
 ## Table of Contents
 
@@ -27,7 +27,7 @@ Each package owns its configuration and lifetime rules; the subsystem reference 
 | Package | Role | ctx key |
 |---|---|---|
 | [office-kit](office-kit/README.md) | Authorized Office bytes to complete PDFs, PNG images, converted files, and recalculated workbooks with bounded queues and caching; consumer-anchored Kit entry and engine manifests through `/locate` | `ctx.officeKit` |
-| [tool-office](tool-office/README.md) | The resident `office` tool: render pages as images in the tool result, convert documents, and recalculate workbooks | — |
+| [tool-office](tool-office/README.md) | `office_render`, `office_convert`, and `office_recalculate`, declared after an Office skill loads: render pages as images in the tool result, convert documents, and recalculate workbooks | — |
 
 -----
 

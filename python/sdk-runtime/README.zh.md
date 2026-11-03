@@ -25,7 +25,7 @@ primary_runtime = download_primary_runtime()
 
 `DSH_RESOURCE_CACHE` 指定绝对缓存根目录，默认为 `~/.cache/deepseek-harness/resources`。资源身份包含发布版本锁定的输入。下载会校验归档哈希和包身份、保留执行权限，并原子发布完整目录。下载失败后可重试。`DSH_RESOURCE_DOWNLOAD_TIMEOUT_MS` 限制每个归档的下载耗时，包含响应内容；默认值为 `300000`，接受 `1` 到 `2147483647` 的整数。下载遵循 Harness 代理环境策略。已安装的 wheel 文件不会被修改。不同发布版本使用独立缓存目录；不再使用的版本需手动删除。下载使用锁定的上游 URL，不提供 registry 或镜像覆盖。
 
-后续启动时，打包 bootstrap 将已下载资源提供给 SDK profile。`DSH_PRIMARY_RUNTIME` 覆盖缓存中的创作环境；空值禁用其查询和包管理器选择。`DSH_OFFICE_SIDECAR` 可选择包含独立 Node 的绝对 sidecar 目录。用户可自行提供 Python 环境和文档库，无需下载创作环境。Office skills 总是可用：有创作环境时指引模型使用其内置 Python 与库，没有时指引模型使用用户已有的 Python。未选择 Office sidecar 时，`office` 工具报告 LibreOffice Kit 不可用。外部创作载荷保留 `primary-runtime/` 及同级 `office-skills/` 布局。SDK 原位读取资源，不复制到 `DSH_HOME`。`sdk-minimal` profile 不挂载这些提供方。
+后续启动时，打包 bootstrap 将已下载资源提供给 SDK profile。`DSH_PRIMARY_RUNTIME` 覆盖缓存中的创作环境；空值禁用其查询和包管理器选择。`DSH_OFFICE_SIDECAR` 可选择包含独立 Node 的绝对 sidecar 目录。用户可自行提供 Python 环境和文档库，无需下载创作环境。Office skills 总是可用：有创作环境时指引模型使用其内置 Python 与库，没有时指引模型使用用户已有的 Python。未选择 Office sidecar 时，Office 工具报告 LibreOffice Kit 不可用。外部创作载荷保留 `primary-runtime/` 及同级 `office-skills/` 布局。SDK 原位读取资源，不复制到 `DSH_HOME`。`sdk-minimal` profile 不挂载这些提供方。
 
 选择 skills 与交付资源相互独立：项目、自定义目录和用户文件系统 skills 优先于同名随包 skills。SDK patch 可以仅禁用 Office 提供方，同时保留 Python 查询：
 
@@ -34,7 +34,7 @@ primary_runtime = download_primary_runtime()
   disabled: true
 ```
 
-Office 技能把渲染、转换和重算交给 [`office` 工具](../../packages/document/tool-office/README.zh.md)，它在 SDK 进程内加载 sidecar 中的 Kit。替换技能集合的方式见 [Office 提供方](../../packages/skill/skill-office/README.zh.md#use-this-package)。配置 patch 在进程启动时生效；切换技能无需重建 runtime wheel 或 Python 环境。
+Office 技能把渲染、转换和重算交给 [Office 工具](../../packages/document/tool-office/README.zh.md)，它们在 SDK 进程内加载 sidecar 中的 Kit。替换技能集合的方式见 [Office 提供方](../../packages/skill/skill-office/README.zh.md#use-this-package)。配置 patch 在进程启动时生效；切换技能无需重建 runtime wheel 或 Python 环境。
 
 仓库构建还会物化仅限开发的 `runtime/node/` 载体。它在系统 Node 24.9 或更高版本上运行 `node runtime/node/runtime-bootstrap.mjs`。系统不会自动选择它，而且 wheel 包与 sdist 均不包含它。
 

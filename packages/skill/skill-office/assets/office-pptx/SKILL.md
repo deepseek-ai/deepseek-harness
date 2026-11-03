@@ -13,6 +13,10 @@ Name Python scripts for their task, such as `edit_pptx.py`; avoid module names s
 
 ## Create and edit
 
+If `office_render`, `office_convert`, or `office_recalculate` is unavailable, call `skill` to load `office`; the tools appear next step.
+
+python-pptx cannot read legacy `.ppt` files. Use `office_convert` with `format: "pptx"`, copy the result into the workspace, then edit the copy.
+
 Use `python-pptx` to inspect or modify an existing presentation. Inspect slide layouts, text runs, images, tables, and charts before editing. Change only the requested content, preserve mixed text formatting, and save to a new file unless the user requests an in-place edit. Rebuilding slides can discard unsupported animation, SmartArt, or other extension content.
 
 For a new deck, use `python-pptx` with editable text, tables, and charts. Use local image assets rather than network-dependent image URLs. Set slide dimensions, text sizes, and chart data explicitly.
@@ -59,7 +63,7 @@ Check that text and images fit the slide dimensions, titles form a useful sequen
 
 Reopen the saved presentation with python-pptx to verify the requested slide count, content, formatting, chart data, and notes, including unchanged content that must be preserved. These checks do not establish text fit, readable contrast, or rendering fidelity.
 
-Deliver after the requested edits are verified. Creating a file or changing content with incidental basic formatting does not require additional operations. Call the `office` tool with `operation: "render"` for requested images or visual inspection and for appearance-focused styling, spacing, sizing, or alignment changes unless the user explicitly skips rendering. For PDF output, call `office` with `operation: "convert"` and `format: "pdf"`, then copy the returned temporary file to the destination.
+Deliver after the requested edits are verified. Creating a file or changing content with incidental basic formatting does not require additional operations. Call `office_render` for requested images or visual inspection and for appearance-focused styling, spacing, sizing, or alignment changes unless the user explicitly skips rendering. For PDF output, call `office_convert` with `format: "pdf"`, then copy the returned temporary file to the destination.
 
 A fully transparent or uniformly blank image of populated content is a renderer failure: stop visual checks for the task at once, without rendering again with other slides, DPI, or settings and without editing the source for it. If content and structure checks pass, state the visual status only as "Content and structure checks passed; visual inspection was not completed." or "内容与结构检查通过；视觉检查未完成。"; never claim visual verification.
 

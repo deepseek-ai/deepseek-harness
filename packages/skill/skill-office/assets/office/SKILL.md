@@ -1,14 +1,16 @@
 ---
 name: office
-description: Create, edit, inspect, or convert Office documents, spreadsheets, presentations, and PDFs. Load to choose the relevant workflow.
+description: Create or edit Office files; inspect Office files and PDFs. Load before rendering, conversion, or recalculation to enable office_render, office_convert, and office_recalculate next step.
 ---
 
 # Office task routing
 
-To create, read, or edit Office files, load the format skill: `office-docx`, `office-pptx`, or `office-xlsx`. Standalone operations skip format skills and call the `office` tool:
+To create, read, or edit, load `office-docx`, `office-pptx`, or `office-xlsx`. Standalone operations skip format skills.
 
-- Images, visual inspection, or tasks mainly about layout, spacing, sizing, or alignment: `operation: "render"`, even when not requested.
-- Recalculate formulas: `operation: "recalculate"`, `format: "xlsx"` or `"ods"`.
-- Export to PDF: `operation: "convert"`, `format: "pdf"`; check the copy is nonempty and starts with `%PDF-`. For PDF export alone, stop after this check.
+If `office_render`, `office_convert`, or `office_recalculate` is unavailable, call `skill` to load `office`; the tools appear next step.
 
-Copy returned temporary files to the destination. Honor requests to skip rendering. New files, content edits, formulas, and incidental formatting such as bold headers need no render unless requested. Do not reload skills.
+- Images, visual inspection, or appearance edits: `office_render`, even without a separate render request.
+- Recalculate formulas: `office_recalculate`, `format: "xlsx"` or `"ods"`.
+- Convert: `office_convert` with `format`. For PDF, check the copy is nonempty and starts with `%PDF-`; PDF export alone stops there.
+
+Copy temporary files to the destination. Honor requests to skip rendering. New files, content, formulas, and incidental formatting need no render unless requested. Otherwise reuse loaded skills.

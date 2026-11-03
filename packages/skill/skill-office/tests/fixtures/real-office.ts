@@ -21,7 +21,7 @@ export function officeModelPatches() {
   ]
 }
 
-/** @returns Patches mounting the Office kit and the `office` tool, which the headless profile does not compose. */
+/** @returns Patches mounting the Office kit and tools, which the headless profile does not compose. */
 export function officeToolPatches() {
   return [{ insert: [
     { id: 'office-kit', name: '@deepseek-ai/dsh-office-kit' },
@@ -29,26 +29,26 @@ export function officeToolPatches() {
   ] }]
 }
 
-/** One `office` call from a native tool call or a PTC dispatch. */
+/** One Office call from a native tool call or a PTC dispatch. */
 export interface OfficeCall {
   readonly callId: string
-  readonly args: { readonly operation?: string; readonly input?: string; readonly format?: string; readonly pages?: number[] }
+  readonly name: 'office_render' | 'office_convert' | 'office_recalculate'
+  readonly args: { readonly input?: string; readonly format?: string; readonly pages?: number[] }
 }
 
 /**
- * Collect the `office` calls of a recorded task.
+ * Collect the Office calls of a recorded task by tool name.
  * @param events - Recorded task events.
- * @returns Native and PTC `office` calls in log order.
+ * @returns Native and PTC Office calls in log order.
  */
 export function officeCalls(events: readonly SessionEvent[]): OfficeCall[] {
-  return events.flatMap((event) => {
-    if (event.type === 'tool/call' && event.data.name === 'office') {
-      return [{ callId: event.data.callId, args: JSON.parse(event.data.arguments) as OfficeCall['args'] }]
-    }
-    if (event.type === 'tool/ptc-dispatch' && event.data.name === 'office') {
-      return [{ callId: event.data.subCallId, args: event.data.arguments as OfficeCall['args'] }]
-    }
-    return []
+  return events.flatMap((event): OfficeCall[] => {
+    if (event.type !== 'tool/call' && event.type !== 'tool/ptc-dispatch') return []
+    const { name } = event.data
+    if (name !== 'office_render' && name !== 'office_convert' && name !== 'office_recalculate') return []
+    return event.type === 'tool/call'
+      ? [{ callId: event.data.callId, name, args: JSON.parse(event.data.arguments) as OfficeCall['args'] }]
+      : [{ callId: event.data.subCallId, name, args: event.data.arguments as OfficeCall['args'] }]
   })
 }
 
@@ -58,7 +58,7 @@ export function officeCalls(events: readonly SessionEvent[]): OfficeCall[] {
  */
 export function expectNoRenderContext(events: readonly SessionEvent[]): void {
   const calls = officeCalls(events)
-  expect(calls.filter(call => call.args.operation === 'render'), JSON.stringify(calls)).toEqual([])
+  expect(calls.filter(call => call.name === 'office_render'), JSON.stringify(calls)).toEqual([])
   const messages = Session.create(SessionId('office-context'), events).deriveMessages()
   expect(JSON.stringify(messages)).not.toMatch(/Render the saved deliverable/)
 }

@@ -26,7 +26,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-[Web bundle](../../bundle/web-app/README.zh.md)和 [SDK bundle](../../bundle/sdk-app/README.zh.md)以 `office-kit` 条目挂载此提供方；[`office` 工具](../tool-office/README.zh.md)是其面向模型的消费方。独立组合通过 `cordis.yml` 条目挂载 `@deepseek-ai/dsh-office-kit`。
+[Web bundle](../../bundle/web-app/README.zh.md)和 [SDK bundle](../../bundle/sdk-app/README.zh.md)以 `office-kit` 条目挂载此提供方；[Office 工具](../tool-office/README.zh.md)是其面向模型的消费方。独立组合通过 `cordis.yml` 条目挂载 `@deepseek-ai/dsh-office-kit`。
 
 调用方提交已授权源的标识、版本、可选字节数、延迟的有界读取、输入扩展名和调度优先级。源版本变化会拒绝操作。取消以原因为拒绝值，失败使用 `OfficeKitError`。每个结果都携带转换 generation（配置替换后随之改变）和缺失字体。
 
@@ -37,7 +37,7 @@ kind: "package-reference"
 | `convertTo()` | 转换为 `format` 指定的格式；CSV 需要 `sheet` | 已保存文件的 Host 路径、大小和 PDF 页数 |
 | `recalculate()` | 把 XLS、XLSX 或 ODS 重算为 XLSX 或 ODS | 已保存工作簿的 Host 路径和大小 |
 
-`renderImages()` 要求提供 `maxImages`、`maxPixels`、`maxDimension` 和 `maxBytes`。图片数超过 `maxImages`，或单张图片超过像素或尺寸上限时，引擎拒绝该选择；图片 PNG 总字节数超过 `maxBytes` 时，提供方在读取前和读取过程中以 `output-too-large` 拒绝。引擎拒绝的页、工作表、区域、分辨率或格式选择以 `invalid-request` 失败，并附带引擎的说明。转换和重算的文件受 `maxOutputBytes` 限制。提供方从不写入工作区：它把每个输出保存在 `outputDirectory` 下各自仅属主可访问的目录中，按请求的 `output.owner`（`office` 工具传入调用方 subagent 树的根 Session）分组，并返回绝对 Host 路径。文件在 `outputRetentionMs` 到期、较新的输出需要 `maxOutputStoreBytes` 内的空间（最旧的先删）、id 等于 owner 的 Session 卸载或提供方卸载时删除；单个文件超过 `maxOutputStoreBytes` 时以 `output-too-large` 失败。文件在删除成功之前一直计入 `maxOutputStoreBytes`；删除失败时记录日志，并在之后的淘汰、释放和卸载时重试，腾不出足够空间的保存以 `unavailable` 失败。卸载会等待进行中的删除结束。启动时还会删除之前进程留下的、超过保留期的输出目录，但只处理名字符合提供方生成格式的真实目录，不处理链接或 junction：`outputDirectory` 下一级为 `session-` 加 24 位小写十六进制数字，其下为小写 UUID v4 的输出目录。其他条目保持不动。服务公开 `outputDirectory`，供消费方检查其执行环境能否读取。
+`renderImages()` 要求提供 `maxImages`、`maxPixels`、`maxDimension` 和 `maxBytes`。图片数超过 `maxImages`，或单张图片超过像素或尺寸上限时，引擎拒绝该选择；图片 PNG 总字节数超过 `maxBytes` 时，提供方在读取前和读取过程中以 `output-too-large` 拒绝。引擎拒绝的页、工作表、区域、分辨率或格式选择以 `invalid-request` 失败，并附带引擎的说明。转换和重算的文件受 `maxOutputBytes` 限制。提供方从不写入工作区：它把每个输出保存在 `outputDirectory` 下各自仅属主可访问的目录中，按请求的 `output.owner`（`office_convert` 和 `office_recalculate` 传入调用方 subagent 树的根 Session）分组，并返回绝对 Host 路径。文件在 `outputRetentionMs` 到期、较新的输出需要 `maxOutputStoreBytes` 内的空间（最旧的先删）、id 等于 owner 的 Session 卸载或提供方卸载时删除；单个文件超过 `maxOutputStoreBytes` 时以 `output-too-large` 失败。文件在删除成功之前一直计入 `maxOutputStoreBytes`；删除失败时记录日志，并在之后的淘汰、释放和卸载时重试，腾不出足够空间的保存以 `unavailable` 失败。卸载会等待进行中的删除结束。启动时还会删除之前进程留下的、超过保留期的输出目录，但只处理名字符合提供方生成格式的真实目录，不处理链接或 junction：`outputDirectory` 下一级为 `session-` 加 24 位小写十六进制数字，其下为小写 UUID v4 的输出目录。其他条目保持不动。服务公开 `outputDirectory`，供消费方检查其执行环境能否读取。
 
 此 provider 依赖独立发布的 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) npm API，kit 版本为 `0.2.3`。应用打包选择 kit 的 `optionalDependencies` 中声明的匹配原生包；目标没有声明原生包时选择 WASM。已声明的原生引擎缺失时拒绝打包，不会选择 WASM。[发布归属决策](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义独立 kit 与 Harness 各自的职责。
 
@@ -118,7 +118,7 @@ Remote 文件读取在查询转换缓存前重新检查内容读取授权和源�
 <a id="model-experience"></a>
 ## 模型体验
 
-间接地，通过 [`office` 工具](../tool-office/README.zh.md#model-experience)，该工具返回此服务渲染的图片和转换的文件。
+间接地，通过 [Office 工具](../tool-office/README.zh.md#model-experience)，这些工具返回此服务渲染的图片和转换的文件。
 
 #### KV Cache effect
 

@@ -67,7 +67,7 @@ it.each(['native', 'ptc'] as const)('loads the router and authoring body in %s; 
   await send(agent, 'Edit the Word document text.')
   expect(adapter.requests).toHaveLength(3)
   const requests = adapter.requests.map(request => JSON.stringify(request))
-  expect(requests[0]).toContain('Create, edit, inspect, or convert Office')
+  expect(requests[0]).toContain('Create or edit Office files; inspect Office files and PDFs.')
   expect(requests[0]).toContain('office-docx')
   expect(requests[1]).toContain('Office task routing')
   expect(requests[1]).not.toContain('python-docx')
@@ -75,7 +75,7 @@ it.each(['native', 'ptc'] as const)('loads the router and authoring body in %s; 
   if (mode === 'ptc') {
     expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.kind === 'skill-invocation')).toEqual([])
   }
-  expect(requests[2]).toMatch(/operation: \\+"render\\+"/)
+  expect(requests[2]).toContain('`office_render`')
   expect(requests[2]).not.toContain('dsoffice')
   expect(requests[0]).not.toContain('dsoffice')
   expect(requests[1]).not.toContain('dsoffice')
@@ -90,19 +90,20 @@ it.each(['native', 'ptc'] as const)('loads the router and authoring body in %s; 
   for (const request of adapter.requests.slice(3)) {
     const text = JSON.stringify(request)
     expect(text).toContain('python-docx')
-    expect(text).toMatch(/operation: \\+"render\\+"/)
+    expect(text).toContain('`office_render`')
     expect(text).not.toContain('dsoffice')
     expect(text).not.toMatch(/fragment rectangles/)
   }
   expect(agent.session.snapshotEvents()).toEqual(seed)
 })
 
-it('routes standalone operations to the office tool without authoring bodies', async () => {
+it('routes standalone operations to dedicated Office tools without authoring bodies', async () => {
   const { agent, adapter } = await setup('native', ['office'])
   await send(agent)
   const loaded = JSON.stringify(adapter.requests.at(-1))
   expect(loaded).toContain('Office task routing')
-  for (const operation of ['render', 'recalculate', 'convert']) expect(loaded).toMatch(new RegExp(`operation: \\\\+"${operation}\\\\+"`))
+  for (const name of ['office_render', 'office_recalculate', 'office_convert']) expect(loaded).toContain(`\`${name}\``)
+  expect(loaded).not.toContain('operation:')
   expect(loaded).not.toMatch(/# Word documents|# Excel workbooks|python-docx/)
 })
 

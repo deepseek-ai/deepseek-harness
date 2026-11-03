@@ -3,44 +3,44 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/document/tool-office/README.md
 /:
-  en: 15d530cb03d97b74
-  zh: d0d9f6941f0963ba
+  en: 2ec7e66cd18356df
+  zh: 4862555b5a4c9f51
 /deepseek-ai-dsh-tool-office:
   en: e9153903d819e2a7
   zh: 3f50cf3c768a1af5
 /deepseek-ai-dsh-tool-office/summary:
-  en: 4455c304b557b80f
-  zh: 1c14fd34ced755ed
+  en: e74f50cd7e13fad9
+  zh: f234831ae934f60a
 /deepseek-ai-dsh-tool-office/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-tool-office/use-this-package:
-  en: 0d4e3ab4fefd478c
-  zh: a6926f482c0c7576
+  en: 2b035f2b430c9e92
+  zh: 67c4ce315c067e17
 /deepseek-ai-dsh-tool-office/understand-the-implementation:
-  en: b90e60b4bf9a200b
-  zh: fbc977cf7c31d169
+  en: 091801006a805958
+  zh: 229337e4add16130
 /deepseek-ai-dsh-tool-office/further-exploration:
-  en: 6ead94ce84c2f528
-  zh: 0a37f6980e2bc08d
+  en: 5d20d2318d1957cf
+  zh: 8b8111099ab8bb46
 /deepseek-ai-dsh-tool-office/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-tool-office/model-experience/office:
-  en: e5917dbf18bf2d87
-  zh: e5917dbf18bf2d87
-/deepseek-ai-dsh-tool-office/model-experience/office/what-the-model-sees:
-  en: b3fead1235d01b07
-  zh: 1c840d1c577fabbf
-/deepseek-ai-dsh-tool-office/model-experience/office/token-effect:
-  en: 2aa995229da70fb3
-  zh: a3f814324f8660b7
-/deepseek-ai-dsh-tool-office/model-experience/office/kv-cache-effect:
-  en: 22f03adf19cc71a5
-  zh: a053a4a469bcb189
+/deepseek-ai-dsh-tool-office/model-experience/office-render-office-convert-office-recalculate:
+  en: 3bc9eb9e036e6224
+  zh: 3bc9eb9e036e6224
+/deepseek-ai-dsh-tool-office/model-experience/office-render-office-convert-office-recalculate/what-the-model-sees:
+  en: 71b1bbd1d32af598
+  zh: 3eecd8daeb3fe8e3
+/deepseek-ai-dsh-tool-office/model-experience/office-render-office-convert-office-recalculate/token-effect:
+  en: b8d5d8c33c7563d4
+  zh: 5b6cb183b690bdba
+/deepseek-ai-dsh-tool-office/model-experience/office-render-office-convert-office-recalculate/kv-cache-effect:
+  en: c4e3595dab58a800
+  zh: 65f7fcf46b1e3130
 /deepseek-ai-dsh-tool-office/known-limitations-and-deferred-work:
-  en: 58a7524b04e6c103
-  zh: 1720b0ac2c75a7df
+  en: c423feeb59afcf62
+  zh: 9ddc3edb7f1cad76
 /deepseek-ai-dsh-tool-office/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

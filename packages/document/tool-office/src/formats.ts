@@ -1,9 +1,9 @@
 /**
- * Office document families, accepted operation formats, and argument rules of the `office` tool.
+ * Office document families, accepted formats, and input-dependent argument rules.
  * @module @deepseek-ai/dsh-tool-office/formats
  */
 
-/** Operation requested by one `office` call. */
+/** Operation requested by one Office tool call. */
 export type OfficeOperationName = 'render' | 'convert' | 'recalculate'
 
 /** Document family selected by an input extension. */
@@ -23,21 +23,50 @@ export const CONVERSION_OUTPUTS: Readonly<Record<Exclude<OfficeFamily, 'pdf'>, r
   presentation: ['pdf', 'pptx', 'odp'],
 }
 
-/** Recalculation outputs. */
-export const RECALCULATION_OUTPUTS: readonly string[] = ['xlsx', 'ods']
-
 /** Every conversion or recalculation output format. */
 export const OUTPUT_FORMATS = ['pdf', 'docx', 'odt', 'txt', 'xlsx', 'ods', 'csv', 'pptx', 'odp'] as const
 
-/** Validated arguments of one `office` call. */
-export interface OfficeArgs {
-  operation: OfficeOperationName
+/** Arguments for rendering document pages or worksheet areas. */
+export interface OfficeRenderArgs {
   input: string
-  format?: string
   pages?: number[]
   sheet?: string
   range?: string
   dpi?: number
+}
+
+/** Arguments for converting a document. */
+export interface OfficeConvertArgs {
+  input: string
+  format: typeof OUTPUT_FORMATS[number]
+  sheet?: string
+}
+
+/** Arguments for recalculating a workbook. */
+export interface OfficeRecalculateArgs {
+  input: string
+  format: 'xlsx' | 'ods'
+}
+
+/** Model-facing Office tool name. */
+export type OfficeToolName = 'office_render' | 'office_convert' | 'office_recalculate'
+
+/**
+ * Refuse argument keys the called tool does not declare, because the open parameter object would otherwise ignore
+ * them; a key that another Office tool declares names that tool.
+ * @param tool - called tool.
+ * @param args - call arguments.
+ * @param declared - parameter names of every Office tool.
+ * @throws Error naming the undeclared key and the Office tools that accept it.
+ */
+export function checkParameterNames(
+  tool: OfficeToolName, args: object, declared: Readonly<Record<OfficeToolName, readonly string[]>>,
+): void {
+  for (const key of Object.keys(args)) {
+    if (declared[tool].includes(key)) continue
+    const owners = (Object.keys(declared) as OfficeToolName[]).filter(other => declared[other].includes(key))
+    throw new Error(owners.length === 0 ? `${tool} does not accept ${key}` : `${key} applies only to ${owners.join(' or ')}`)
+  }
 }
 
 /**
@@ -73,24 +102,12 @@ export function inputFamily(operation: OfficeOperationName, path: string): Offic
 }
 
 /**
- * Check the arguments that apply to the requested operation and input family.
+ * Check render selections that the tool schema subset cannot express.
  * @param args - schema-validated call arguments.
  * @param family - input family selected by {@link inputFamily}.
  * @throws Error naming the misplaced or malformed argument.
  */
-export function checkArguments(args: OfficeArgs, family: OfficeFamily): void {
-  const misplaced = (name: string, scope: string): Error => new Error(`${name} applies only to ${scope}`)
-  if (args.operation === 'render') {
-    if (args.format !== undefined) throw misplaced('format', 'convert and recalculate')
-  } else {
-    if (args.format === undefined) throw new Error(`${args.operation} requires format`)
-    if (args.pages !== undefined) throw misplaced('pages', 'render')
-    if (args.range !== undefined) throw misplaced('range', 'render')
-    if (args.dpi !== undefined) throw misplaced('dpi', 'render')
-    if (args.sheet !== undefined && (args.operation === 'recalculate' || args.format !== 'csv')) {
-      throw misplaced('sheet', 'render and CSV conversion')
-    }
-  }
+export function checkRenderArguments(args: OfficeRenderArgs, family: OfficeFamily): void {
   if (args.pages !== undefined) {
     if (family === 'spreadsheet') throw new Error('pages does not apply to spreadsheets; select sheet and range instead')
     if (args.pages.length === 0 || args.pages.some(page => !Number.isSafeInteger(page) || page < 1)
@@ -98,7 +115,7 @@ export function checkArguments(args: OfficeArgs, family: OfficeFamily): void {
       throw new Error('pages must list distinct one-based page numbers')
     }
   }
-  if (args.operation === 'render' && family !== 'spreadsheet' && args.sheet !== undefined) throw misplaced('sheet', 'spreadsheets')
+  if (family !== 'spreadsheet' && args.sheet !== undefined) throw new Error('sheet applies only to spreadsheets')
   if (args.range !== undefined && args.sheet === undefined) throw new Error('range requires sheet')
   if (args.sheet !== undefined && args.sheet.trim() === '') throw new Error('sheet must be an exact worksheet name')
   if (args.dpi !== undefined && (!Number.isSafeInteger(args.dpi) || args.dpi < 24 || args.dpi > 600)) {
@@ -107,18 +124,16 @@ export function checkArguments(args: OfficeArgs, family: OfficeFamily): void {
 }
 
 /**
- * Check the output format of a conversion or recalculation.
- * @param operation - `convert` or `recalculate`.
+ * Check conversion formats and worksheet selection against the input family.
+ * @param args - schema-validated conversion arguments.
  * @param family - input family.
- * @param input - input path named in the refusal.
- * @param format - requested output format.
  * @throws Error naming the formats available for this input.
  */
-export function checkOutputFormat(
-  operation: Exclude<OfficeOperationName, 'render'>, family: Exclude<OfficeFamily, 'pdf'>, input: string, format: string,
-): void {
-  const accepted = operation === 'recalculate' ? RECALCULATION_OUTPUTS : CONVERSION_OUTPUTS[family]
-  if (!accepted.includes(format)) {
-    throw new Error(`cannot ${operation} "${input}" to ${format}: this file ${operation === 'recalculate' ? 'recalculates' : 'converts'} to ${accepted.join(', ')}`)
+export function checkConversionArguments(args: OfficeConvertArgs, family: Exclude<OfficeFamily, 'pdf'>): void {
+  const accepted = CONVERSION_OUTPUTS[family]
+  if (!accepted.includes(args.format)) {
+    throw new Error(`cannot convert "${args.input}" to ${args.format}: this file converts to ${accepted.join(', ')}`)
   }
+  if (args.sheet !== undefined && args.format !== 'csv') throw new Error('sheet applies only to CSV conversion')
+  if (args.sheet !== undefined && args.sheet.trim() === '') throw new Error('sheet must be an exact worksheet name')
 }

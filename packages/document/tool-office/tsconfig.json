@@ -15,6 +15,12 @@
       "path": "../../../vendor/schemastery"
     },
     {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../skill/skill"
+    },
+    {
       "path": "../../attachment/attachment"
     },
     {

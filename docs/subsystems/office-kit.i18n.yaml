@@ -3,11 +3,11 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/office-kit.md
 /office-kit:
-  en: c5b7b74dce426f0d
-  zh: 5900121507a6cb5f
+  en: ba1e27aece3a68c3
+  zh: 50ca71dd6c6a5438
 /office-kit/ownership:
-  en: a5cf821f90b821ad
-  zh: 0fb670960ec4b771
+  en: fa3d0415d6cbcfd3
+  zh: f1f1a9641133f916
 /office-kit/requests-and-results:
   en: 4ae99f63ed85ce7f
   zh: 0db77cfc734788b1

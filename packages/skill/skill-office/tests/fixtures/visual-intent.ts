@@ -100,7 +100,7 @@ export function registerVisualIntentCases(selected: readonly DocumentFormat[]): 
           const events = parseSessionLog(bytes.toString('utf8'))
           const calls = events.filter(event => event.type === 'tool/call').map(event => event.data)
           const loaded = calls.filter(call => call.name === 'skill').map(call => (JSON.parse(call.arguments) as { name: string }).name)
-          const renderCalls = officeCalls(events).filter(call => call.args.operation === 'render')
+          const renderCalls = officeCalls(events).filter(call => call.name === 'office_render')
           const rendered = events.filter(event => event.type === 'tool/result' && renderCalls.some(call => call.callId === event.data.message.toolCallId)
             && !event.data.message.isError && event.data.message.content.some(block => block.type === 'image')).length
           const shellCommands = calls.filter(call => call.name === 'bash' || call.name === 'pwsh')

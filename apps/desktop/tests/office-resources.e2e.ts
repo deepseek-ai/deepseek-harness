@@ -27,7 +27,7 @@ export function apply(ctx) {
       const names = (await ctx.skills.list()).map(skill => skill.name).filter(name => name.startsWith('office'))
       const content = {}
       for (const name of ['office', 'office-docx']) content[name] = (await ctx.skills.get(name))?.content ?? null
-      response.end(JSON.stringify({ names, content, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name === 'office') }))
+      response.end(JSON.stringify({ names, content, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name.startsWith('office_')) }))
     } catch (error) {
       response.statusCode = 500
       response.end(String(error?.stack ?? error))
@@ -79,18 +79,18 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
       expect(probe.status, body).toBe(200)
       const skills = JSON.parse(body) as { names: string[]; content: Record<string, string | null>; officeKit: boolean; tools: string[] }
       expect(skills.officeKit).toBe(true)
-      // Agent presets, not the Host root, mount the office tool.
+      // Agent presets, not the Host root, mount the Office tools.
       expect(skills.tools).toEqual([])
       switch (mode) {
         case 'complete':
           expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS)
           expect(skills.content['office-docx']).toEqual(expect.any(String))
-          expect(skills.content.office).toContain('`office` tool')
+          expect(skills.content.office).toContain('`office_render`')
           break
         case 'missing-skill':
           expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS.filter(name => name !== 'office-docx'))
           expect(skills.content['office-docx']).toBeNull()
-          expect(skills.content.office).toContain('`office` tool')
+          expect(skills.content.office).toContain('`office_render`')
           break
         case 'empty-runtime':
         case 'relative-source':

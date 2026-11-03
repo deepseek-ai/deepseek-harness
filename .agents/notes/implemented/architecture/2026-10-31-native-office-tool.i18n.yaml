@@ -2,18 +2,18 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-31-native-office-tool.md
-/agent-note-resident-office-tool-for-office-operations:
-  en: d18369e036d521f8
-  zh: 2e9c79f1fe787279
-/agent-note-resident-office-tool-for-office-operations/problem:
+/agent-note-on-demand-office-tools-for-rendering-conversion-and-recalculation:
+  en: ac1af3d918f27b6f
+  zh: 5822ce52c384fca3
+/agent-note-on-demand-office-tools-for-rendering-conversion-and-recalculation/problem:
   en: 5b23962ecc835664
   zh: c96ea8720ebc9419
-/agent-note-resident-office-tool-for-office-operations/decision:
-  en: 08f0097bec154750
-  zh: bcb8cddac23970b5
-/agent-note-resident-office-tool-for-office-operations/alternatives-considered:
-  en: e8ec6e98b9e3c60a
-  zh: 4b104c91af5b9ae9
-/agent-note-resident-office-tool-for-office-operations/consequences:
-  en: 210b60b1e11344b5
-  zh: 81d4a125798599d6
+/agent-note-on-demand-office-tools-for-rendering-conversion-and-recalculation/decision:
+  en: fe1ab9e63c616118
+  zh: 9a31307d1f8359cb
+/agent-note-on-demand-office-tools-for-rendering-conversion-and-recalculation/alternatives-considered:
+  en: f36e8534958e5a46
+  zh: 96a3876a26a9d9ac
+/agent-note-on-demand-office-tools-for-rendering-conversion-and-recalculation/consequences:
+  en: 8ea5f5c493dfae3d
+  zh: 29d7160bd3f98512
