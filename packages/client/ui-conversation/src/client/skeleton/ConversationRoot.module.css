@@ -149,11 +149,6 @@
   cursor: pointer;
 }
 
-.crumbSubagent {
-  font-size: 12px;
-  line-height: 18px;
-}
-
 @media (hover: hover) {
   button.crumb:hover {
     background: var(--dsw-alias-interactive-bg-hover);
@@ -170,7 +165,13 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+
+@container (max-width: 460px) {
+  .headerActions {
+    gap: 8px;
+  }
 }
 
 .headerUtilities {

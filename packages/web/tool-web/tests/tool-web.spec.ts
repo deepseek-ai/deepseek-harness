@@ -981,6 +981,32 @@ describe('searchMaxQueries is plugin config', () => {
     await fiber.dispose()
   })
 
+  it('accepts 10 queries by default, returns a source for each, and rejects 11', async () => {
+    const seen: string[] = []
+    const provider: WebSearchProvider = {
+      id: 'stub-search',
+      available: () => available,
+      search: (request) => {
+        seen.push(request.query)
+        return Promise.resolve({
+          sources: [1, 2].map(rank => ({ url: `https://${request.query}.test/${rank}` })),
+          truncated: false,
+        })
+      },
+    }
+    const { fiber, call } = await mountTools({ webConfig: { searchProvider: 'stub-search' }, search: provider })
+    const queries = Array.from({ length: 10 }, (_, index) => `q${index}`)
+    const out = await call('web_search', { queries })
+    expect(out.isError).toBeFalsy()
+    expect(seen).toEqual(queries)
+    const text = JSON.stringify(out.content)
+    for (const query of queries) expect(text).toContain(`https://${query}.test/1`)
+    expect(text).not.toContain('.test/2')
+    const rejected = await call('web_search', { queries: [...queries, 'q10'] })
+    expect(rejected.content).toEqual([{ type: 'text', text: 'Error: queries must contain at most 10 queries' }])
+    await fiber.dispose()
+  })
+
   it.each([0, -1, 1.5])('rejects an invalid searchMaxQueries value %s at load', async (value) => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)

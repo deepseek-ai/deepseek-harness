@@ -11,8 +11,8 @@
     - button "查看 子智能体": 子智能体
     - text: 设置子智能体的递归层级、数量和模型。
   - listitem:
-    - button "查看 网页搜索": 网页搜索
-    - text: 设置 DeepSeek 的搜索提供方。
+    - button "查看 网页搜索与获取": 网页搜索与获取
+    - text: 选择网页搜索与网页获取使用的提供方。
   - listitem:
     - button "查看 Agent 循环": Agent 循环
     - text: 控制 Agent 派发工具调用的方式。
@@ -22,11 +22,6 @@
 - heading "实验性插件" [level=3]
 - button "更多"
 - list:
-  - listitem:
-    - button "查看 智能体团队": 智能体团队
-    - text: 实验性 让与你对话的智能体把工作分给有名字的队友，在共享任务看板上跟踪进度，并汇总队友的结果向你汇报。
-    - status
-    - switch "启用 智能体团队"
   - listitem:
     - button "查看 语音输入": 语音输入
     - text: 实验性 在本机使用 SenseVoice 转写录音，首次使用需安装依赖。

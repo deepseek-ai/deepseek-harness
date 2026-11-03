@@ -2,7 +2,7 @@
 
 English | [中文](web.zh.md)
 
-The web access seam — a [capability seam](../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md) that spans **two operations** (search and fetch) on one `ctx.web` service, split across packages: Service Definition ([dsh-web](../../packages/web/web), `ctx.web` + the provider registries), Service Providers ([dsh-web-search-exa](../../packages/web/web-search-exa), [dsh-web-search-perplexity](../../packages/web/web-search-perplexity), [dsh-web-search-deepseek](../../packages/web/web-search-deepseek), [dsh-web-deepseek-api](../../packages/web/web-deepseek-api), [dsh-web-fetch-http](../../packages/web/web-fetch-http)), and Consumer ([dsh-tool-web](../../packages/web/tool-web), the `web_search`/`web_fetch` tool schemas). Web is **one optional capability**, not part of the agent-loop spine — so its vocabulary lives here, not in [core.md](core.md). A search-provider swap does not change how the model asks for a query, and a fetch-provider swap does not change how the model asks for a URL.
+The web access seam — a [capability seam](../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.md) that spans **two operations** (search and fetch) on one `ctx.web` service, split across packages: Service Definition ([dsh-web](../../packages/web/web), `ctx.web` + the provider registries), Service Providers ([dsh-web-search-deepseek](../../packages/web/web-search-deepseek), [dsh-web-deepseek-api](../../packages/web/web-deepseek-api), [dsh-web-fetch-http](../../packages/web/web-fetch-http)), and Consumer ([dsh-tool-web](../../packages/web/tool-web), the `web_search`/`web_fetch` tool schemas). Web is **one optional capability**, not part of the agent-loop spine — so its vocabulary lives here, not in [core.md](core.md). A search-provider swap does not change how the model asks for a query, and a fetch-provider swap does not change how the model asks for a URL.
 
 Source: [`packages/web/web/src/types.ts`](../../packages/web/web/src/types.ts)
 
@@ -12,7 +12,7 @@ Search and fetch share no request schema and no business logic, but they are del
 
 ## Search request and result
 
-Each seam request carries exactly one `query`. The `dsh-tool-web` consumer accepts a required `queries` array and fans it out into separate seam requests; a one-item array performs one search. `maxResults` is a consumer-owned bound (`dsh-tool-web`'s `searchMaxResults` config, default `8`) passed through the seam and enforced on the way back — if a provider over-returns, the seam truncates `sources[]` and sets `truncated`.
+Each seam request carries exactly one `query`. The `dsh-tool-web` consumer accepts a required `queries` array and fans it out into separate seam requests; a one-item array performs one search. `maxResults` is a consumer-owned bound (`dsh-tool-web`'s `searchMaxResults` config, default `10`) passed through the seam and enforced on the way back — if a provider over-returns, the seam truncates `sources[]` and sets `truncated`.
 
 ```ts type-equiv
 /**
@@ -26,9 +26,9 @@ interface WebSearchRequest {
   /**
    * Upper bound on returned sources; the seam truncates to it. Omitted = no
    * bound. `dsh-tool-web` always sets it. A provider whose API supports a
-   * result-count control (Exa's `numResults`) should apply it at the request
-   * layer as a cost/latency optimization; the seam enforces the bound
-   * regardless.
+   * result-count control (the DeepSeek Search API's `count`) should apply it
+   * at the request layer as a cost/latency optimization; the seam enforces the
+   * bound regardless.
    */
   readonly maxResults?: number
 }
@@ -37,8 +37,8 @@ interface WebSearchRequest {
 ```ts type-equiv
 /**
  * Normalized search outcome. `content` is optional provider-generated answer
- * text or summary (Exa and DeepSeek return none; Perplexity returns a
- * generated answer).
+ * text or summary (DeepSeek returns none; a provider whose API generates an
+ * answer returns it here).
  * `sources[]` is the portable citation shape. `truncated` is set by the seam
  * when it cut `sources[]` down to `maxResults`.
  */
@@ -56,8 +56,8 @@ interface WebSearchResult {
 /**
  * One citeable source. A source always has a URL; `title`, `snippet`, `summary`,
  * and `publishedAt` are optional because not every provider returns them — forcing
- * adapters to invent them would make the seam lie (Perplexity citations may be
- * URL-only). `dsh-tool-web` renders `title ?? hostname(url)` for display.
+ * adapters to invent them would make the seam lie (some providers return
+ * URL-only citations). `dsh-tool-web` renders `title ?? hostname(url)` for display.
  */
 interface WebSearchSource {
   readonly url: string
@@ -123,9 +123,9 @@ type WebFetchBody =
 
 ## Provider availability
 
-A provider's `available(): boolean` is a cheap LOCAL check (credential presence, parseable config) and **must not make network calls**. It is an input to execution-time selection, not a health system: `search()`/`fetch()` read it to pick a usable provider, and a selection failure surfaces as the structured `WebError` the caller routes on — which carries the branchable detail (the missing id or ambiguous candidate set) in its code and message.
+A provider's `available(): boolean` is a cheap LOCAL check (credential presence, parseable config) and **must not make network calls**. It is an input to execution-time selection, not a health system: `search()`/`fetch()` read it to pick a usable provider, and a selection failure surfaces as the structured `WebError` the caller routes on — which carries the branchable detail (the missing id or ambiguous candidate set) in its code and message. Registration, unlike availability, is observable before an operation runs: `listProviders()` returns every registered search and fetch provider by `id`, optional `title`, and optional localized `description`, and the payload-free `web/providers-changed` event fires after each registration or disposal; availability still shows only when an operation runs.
 
-A search or fetch provider may also implement `ready(llmProvider): Promise<boolean>`, a configuration-only check that must not make network calls: it answers whether an operation made for a model request on that chat route has a credential to send. `searchReady(llmProvider?)` and `fetchReady(llmProvider?)` ask only the provider that `search()` or `fetch()` would select, treat a provider without `ready()` as ready, and answer true when selection fails, because the operation reports that failure as a `WebError`. Readiness is not a selection input; `dsh-tool-web` makes it the activation condition of `web_search` and `web_fetch`, so a model step whose route answers false neither declares nor dispatches the tool.
+A search or fetch provider may also implement `ready(llmProvider): Promise<boolean>`, a configuration-only check that must not make network calls: it answers whether an operation made for a model request on that chat route has a credential to send. `searchReady(llmProvider?)` and `fetchReady(llmProvider?)` ask only the provider that `search()` or `fetch()` would select, treat a provider without `ready()` as ready, and answer true when selection fails, because the operation reports that failure as a `WebError`. Readiness is not a selection input; `dsh-tool-web` makes it the activation condition of `web_search` and `web_fetch`, so a model step whose route answers false neither declares nor dispatches the tool. The DeepSeek Search and Fetch API providers use the route to choose between the account token and the API key, as the [web-deepseek-api authentication](../../packages/web/web-deepseek-api/README.md#authentication) section describes.
 
 Selection never depends on registration, config, or HMR order: a capability has an explicit provider id (config `searchProvider`/`fetchProvider`, or the matching env var feeding the same field), or auto-selects when exactly one usable provider is registered; multiple usable providers with no configured id is `WEB_PROVIDER_AMBIGUOUS`, not first-wins. Each operation reads the configured id when it runs, so a saved settings change applies to the next search or fetch without remounting `ctx.web`.
 
@@ -155,7 +155,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.web` — `WebRuntime`
 
-The web access service. Registered as `ctx.web` (one instance per context).
+The web access service. Registered as `ctx.web` (one instance per context) and exposed to Clients as the `web` Remote namespace (`listProviders`).
 
 Selection semantics (resolved at execution time, never order-dependent):
 
@@ -168,22 +168,31 @@ Selection semantics (resolved at execution time, never order-dependent):
 
 ```ts cordis-catalog
 /**
- * Register a search provider. Throws {@link WebError} `WEB_DUPLICATE_PROVIDER`
- * if its id is already registered for search. Returns a disposer; disposed
- * with the calling fiber.
+ * Register a search provider. `listProviders()` lists it until the
+ * registration is disposed, which happens with the calling fiber or through
+ * the returned disposer; registration and disposal each emit
+ * `web/providers-changed`. Throws {@link WebError} `WEB_DUPLICATE_PROVIDER`
+ * if its id is already registered for search.
  * @param provider - the provider; its `id` is the registry key.
  * @returns the disposer that unregisters the provider.
  */
 registerSearchProvider(provider: WebSearchProvider): () => void
 
 /**
- * Register a fetch provider. Throws {@link WebError} `WEB_DUPLICATE_PROVIDER`
- * if its id is already registered for fetch. Returns a disposer; disposed
- * with the calling fiber.
+ * Register a fetch provider, with the listing, disposal, and event behavior
+ * of {@link WebRuntime.registerSearchProvider}. Throws {@link WebError}
+ * `WEB_DUPLICATE_PROVIDER` if its id is already registered for fetch.
  * @param provider - the provider; its `id` is the registry key.
  * @returns the disposer that unregisters the provider.
  */
 registerFetchProvider(provider: WebFetchProvider): () => void
+
+/**
+ * List every registered search and fetch provider for provider pickers.
+ * Availability does not filter the lists.
+ * @returns detached `{ id, title, description }` entries per capability, in registration order.
+ */
+@Remote listProviders(): WebProviderList
 
 /**
  * Run one search through the selected provider. Resolves the provider at call
@@ -228,4 +237,28 @@ async fetchReady(llmProvider?: string): Promise<boolean>
 ```
 
 Source: [`packages/web/web/src/index.ts`](../../packages/web/web/src/index.ts)
+
+<a id="web-events"></a>
+
+### `web/*` events
+
+<a id="webproviders-changed--emit"></a>
+
+#### `web/providers-changed` — emit
+
+The set of registered search or fetch providers changed: one provider registered, or its registration was disposed. Payload-free; consumers re-read `ctx.web.listProviders()` (Remote `web/listProviders`) for the new list. Fires after each committed registry mutation. Observer failures are contained and cannot veto the mutation.
+
+```ts cordis-catalog
+/**
+ * The set of registered search or fetch providers changed: one provider
+ * registered, or its registration was disposed. Payload-free; consumers
+ * re-read `ctx.web.listProviders()` (Remote `web/listProviders`) for the
+ * new list. Fires after each committed registry mutation. Observer failures
+ * are contained and cannot veto the mutation.
+ * @mode emit
+ */
+'web/providers-changed'(): void
+```
+
+Source: [`packages/web/web/src/types.ts`](../../packages/web/web/src/types.ts)
 <!-- END GENERATED cordis-surface -->

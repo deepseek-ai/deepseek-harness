@@ -938,13 +938,13 @@ describe('same-session goal driving', () => {
   })
 
   /** Provide a subagent service whose descendants settle only when the test says so. */
-  function provideDescendants(ctx: Context): { settle(): void; waitForChildren: ReturnType<typeof vi.fn> } {
+  function provideDescendants(ctx: Context): { settle(): void; waitForTreeWork: ReturnType<typeof vi.fn> } {
     let settle!: () => void
     const settled = new Promise<boolean>((resolve) => { settle = () => { resolve(true) } })
-    const waitForChildren = vi.fn((_parent: Agent): Promise<boolean> => settled)
-    const service: Pick<SubagentRuntime, 'waitForChildren'> = { waitForChildren }
+    const waitForTreeWork = vi.fn((_parent: Agent): Promise<boolean> => settled)
+    const service: Pick<SubagentRuntime, 'waitForTreeWork'> = { waitForTreeWork }
     ctx.provide('subagents', service as SubagentRuntime)
-    return { settle, waitForChildren }
+    return { settle, waitForTreeWork }
   }
 
   it('reserves a round only after progressing descendants settle', async () => {
@@ -952,7 +952,7 @@ describe('same-session goal driving', () => {
     const descendants = provideDescendants(test.ctx)
     test.ctx.goals.create(test.agent, { objective: 'wait for delegates', maxGoalRounds: 1 })
 
-    await vi.waitFor(() => { expect(descendants.waitForChildren).toHaveBeenCalledWith(test.agent) })
+    await vi.waitFor(() => { expect(descendants.waitForTreeWork).toHaveBeenCalledWith(test.agent) })
     expect(test.adapter.requests).toHaveLength(0)
 
     descendants.settle()
@@ -968,14 +968,14 @@ describe('same-session goal driving', () => {
     await waitForRequests(test.adapter, 1)
     await test.agent.whenIdle()
 
-    expect(descendants.waitForChildren).not.toHaveBeenCalled()
+    expect(descendants.waitForTreeWork).not.toHaveBeenCalled()
   })
 
   it('runs human work that arrives while descendants progress before the next round', async () => {
     const test = await harness([textResponse('human answer'), textResponse('goal answer')])
     const descendants = provideDescendants(test.ctx)
     test.ctx.goals.create(test.agent, { objective: 'yield to human input', maxGoalRounds: 1 })
-    await vi.waitFor(() => { expect(descendants.waitForChildren).toHaveBeenCalled() })
+    await vi.waitFor(() => { expect(descendants.waitForTreeWork).toHaveBeenCalled() })
 
     test.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'human during the wait' }], source: { kind: 'user' } }))
     await waitForRequests(test.adapter, 1)
@@ -991,7 +991,7 @@ describe('same-session goal driving', () => {
     const test = await harness([])
     const descendants = provideDescendants(test.ctx)
     const created = test.ctx.goals.create(test.agent, { objective: 'pause during the wait' })
-    await vi.waitFor(() => { expect(descendants.waitForChildren).toHaveBeenCalled() })
+    await vi.waitFor(() => { expect(descendants.waitForTreeWork).toHaveBeenCalled() })
 
     test.ctx.goals.pause(test.agent, { id: created.id, revision: created.revision })
     descendants.settle()
@@ -1006,7 +1006,7 @@ describe('same-session goal driving', () => {
     const test = await harness([])
     const descendants = provideDescendants(test.ctx)
     test.ctx.goals.create(test.agent, { objective: 'unload while delegates run' })
-    await vi.waitFor(() => { expect(descendants.waitForChildren).toHaveBeenCalled() })
+    await vi.waitFor(() => { expect(descendants.waitForTreeWork).toHaveBeenCalled() })
 
     await test.driver.dispose()
 

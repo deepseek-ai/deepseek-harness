@@ -40,6 +40,12 @@
     },
     {
       "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../credentials/credentials"
+    },
+    {
+      "path": "../../util/values"
     }
   ]
 }

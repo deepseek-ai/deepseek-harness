@@ -1843,6 +1843,11 @@ def smoke_sdk_snapshot_mode(
         expected_children = 2 if mode == "native" else 0
         if methods.count("subagent.started") != expected_children or methods.count("subagent.finished") != expected_children:
             raise AssertionError(f"{mode} advanced snapshot emitted unexpected subagent lifecycle: {methods}")
+        creators = {item.payload["childSessionId"]: item.payload["parentSessionId"]
+                    for item in result.notifications if item.method == "subagent.started"}
+        for item in result.notifications:
+            if item.method == "subagent.finished":
+                assert item.payload["parentSessionId"] == creators[item.payload["childSessionId"]]
         ptc_events = [event for event in result.events
                       if event.get("type") in ("tool/ptc-dispatch-start", "tool/ptc-dispatch")]
         expected_ptc_calls = 2 if mode == "ptc" else 0

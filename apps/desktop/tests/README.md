@@ -65,6 +65,8 @@ With Host, client, and Desktop artifacts built, run `node --import tsx apps/desk
 
 <a id="verification-evidence"></a>
 
+After building Desktop, `node apps/desktop/scripts/test-update-channels.mjs` checks the pinned Electron updater against loopback feeds and downloaded inert files. It verifies channel filenames, downgrade prohibition, rollout eligibility, and retirement of actual download caches and stale confirmations after channel switching; on macOS it also closes the updater-created local handoff server. Windows pull-request CI runs this check after the blocking build. No installer, Host or remote publication runs. This qualification does not replace signed installed-app testing on Windows and macOS.
+
 ## Evidence
 
 The local command builds Desktop and executes Electron 44 with the actual HTTP updater, policy client, sandboxed preload, and mandatory renderer. It records each scenario and preserves its report under `.desktop-build/qualification/local-updater-*`. The installer call, external browser, and clipboard are observation substitutes; downloaded bytes are not an executable installer.

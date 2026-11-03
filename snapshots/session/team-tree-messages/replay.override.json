@@ -1,0 +1,33 @@
+{
+  "patches": [
+    {
+      "at": 2,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          {
+            "type": "block-start",
+            "index": 0,
+            "blockType": "tool-call"
+          },
+          {
+            "type": "block-end",
+            "index": 0,
+            "block": {
+              "type": "tool-call",
+              "id": "root-resume-leaf",
+              "name": "send_message",
+              "arguments": "{\"agent_id\":\"{{fromRequest:([a-f0-9-]+) .inactive. parent=[^ ]+ depth=2}}\",\"message\":\"Continue once with LEAF_RESUMED.\"}"
+            }
+          },
+          {
+            "type": "finish",
+            "reason": {
+              "kind": "tool-calls"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -34,6 +34,7 @@ Plain `fetch()` is proxied, and so is any SDK that reaches `globalThis.fetch` �
 | You are writing | Use |
 |---|---|
 | A plain request, or an SDK that reaches `globalThis.fetch` | nothing — the global dispatcher already routes it |
+| A call that needs its own transport choice, such as HTTP/1.1 only | `createRouteDispatcher(env, { allowH2: false })`, use it as `dispatcher`, close it when done |
 | A call that must branch on whether this request is proxied | `proxyRouteFor(url)` |
 | An SDK that takes a proxy URL of its own | `proxyRouteFor(url)`, and pass `route.proxy` |
 | A spawn whose environment you build yourself | apply `proxyEnvironmentForChild()` to it (`undefined` means remove) |
@@ -64,6 +65,8 @@ A proxy value the package cannot use — a SOCKS or PAC URL, an unparseable stri
 
 **One resolution, one matcher.** `proxyForUrl()` and the installed dispatcher must never disagree about a URL, or `dsh-web-fetch-http` would pin a connection the dispatcher meant to tunnel. The dispatcher is therefore an `Agent` whose per-origin `factory` calls `proxyForUrl()` itself, so there is no second parser to drift from the first. undici's `EnvHttpProxyAgent` cannot serve here: with no `HTTPS_PROXY` present it reuses the HTTP proxy for `https:`, which would tunnel a scheme this package keeps direct after refusing the URL the user named for it.
 
+**HTTP/2 is the caller's choice.** undici negotiates HTTP/2 by default, and an idle h2 session then raises an informational `UND_ERR_INFO` error that callers treating every uncaught exception as fatal turn into a process exit. `installProxyFromEnvironment` and `createRouteDispatcher` accept `allowH2: false` for a caller that cannot tolerate that event, and neither changes the default for other outbound requests.
+
 **A child inherits the user's own values, and the resolved policy for what they left unset.** A scheme the user named in either casing reaches a child exactly as they wrote it, so a SOCKS proxy `curl` uses is never replaced by an HTTP one named for another scheme. A scheme they named in neither casing carries the resolved value instead, because otherwise the child's routing diverges from its parent's: Node's `NODE_USE_ENV_PROXY` does not read `ALL_PROXY`. The bypass list is always the resolved one — it only ever adds the loopback entries, so nothing the user wrote is lost. The cost of one routing answer for parent and child alike is that `curl` also sees the `https:` proxy this package derives from the HTTP one. One exception protects the child itself: when a value it receives is one this package refused — a SOCKS URL kept for `curl` — the `NODE_USE_ENV_PROXY` flag is withheld, because Node parses `HTTP_PROXY` and `HTTPS_PROXY` under that flag before running the program and exits on such a value. A child Node then connects directly, as this process already reported for that scheme, instead of failing to start.
 
 ### Source map
@@ -72,7 +75,7 @@ A proxy value the package cannot use — a SOCKS or PAC URL, an unparseable stri
 |---|---|
 | `src/policy.ts` | Resolution and bypass matching; a diagnostic names the variable, never its value. Imports no transport, so it stays loadable where undici is absent. |
 | `src/install.ts` | The global dispatcher, the active-policy record, the route, and the child environment. Imports undici dynamically. |
-| `src/index.ts` | The package face: four functions and one type. |
+| `src/index.ts` | The package face: five functions and two types. |
 
 ### Bypass matching
 

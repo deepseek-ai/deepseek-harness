@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-08-31-mcp-manager-plugin.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-31-mcp-manager-plugin.md
+/agent-note-settings-driven-mcp-server-manager:
+  en: 56c40f7db118247c
+  zh: 3b3c596983cd48e1
+/agent-note-settings-driven-mcp-server-manager/problem:
+  en: 7115cbaefaa11d2d
+  zh: 23aff8797a651a36
+/agent-note-settings-driven-mcp-server-manager/decision:
+  en: 39cf3ae7e8a5799f
+  zh: 7a26503da73e238f
+/agent-note-settings-driven-mcp-server-manager/alternatives-considered:
+  en: daad4acd963926cc
+  zh: 152f3d35a4fe3309
+/agent-note-settings-driven-mcp-server-manager/testing:
+  en: cbfd30400093ade5
+  zh: 018ad32e25c6c7fc
+/agent-note-settings-driven-mcp-server-manager/consequences:
+  en: 2a11ba309122335a
+  zh: 663670e2bf3c5a37

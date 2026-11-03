@@ -45,12 +45,12 @@ it('refuses to create a reminder for a live subagent Session and stores nothing'
   expect(test.resolve).not.toHaveBeenCalled()
 })
 
-it('refuses to create for a Session whose live Agent a delegating parent owns', async () => {
+it('refuses to create for a live child with an explicit subagent origin', async () => {
   const test = await setup()
   const parent = agentFor(test.ctx, parentId)
   await test.ctx.agents.register(parent)
-  const child = agentFor(test.ctx, childId, { parentSession: parentId, delegationDepth: 1 })
-  test.ctx.agents.enter(child, parent)
+  const child = agentFor(test.ctx, childId, { origin: 'subagent', parentSession: parentId, delegationDepth: 1 })
+  test.ctx.agents.enter(child)
 
   await expect(test.service.create({ prompt: 'Check', title: 'Check', timing: { kind: 'after', after_seconds: 60 }, target: { kind: 'session', sessionId: childId } }, childId))
     .rejects.toMatchObject({ code: 'subagent_session' })

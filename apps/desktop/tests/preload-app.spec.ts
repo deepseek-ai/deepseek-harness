@@ -292,3 +292,22 @@ const imageProtocol = (value: import('../src/ipc.ts').DshDesktopProductApi['file
 const imageProtocolBack = (value: DesktopFileDrag): import('../src/ipc.ts').DshDesktopProductApi['fileDrag'] => value
 void imageProtocol
 void imageProtocolBack
+
+
+it('exposes channel choices and scoped subscriptions without exposing updater objects', async () => {
+  vi.stubGlobal('location', new URL('dsh-app://app/index.html'))
+  await import('../src/preload-app.ts')
+  const api = electron.contextBridge.exposeInMainWorld.mock.calls.find(([name]) => name === 'dshDesktop')?.[1] as DshDesktopProductApi
+  await api.updates.channels.get()
+  await api.updates.channels.set('stable')
+  expect(electron.ipcRenderer.invoke.mock.calls).toEqual([[DESKTOP_IPC.updatesChannelGet], [DESKTOP_IPC.updatesChannelSet, 'stable']])
+  const listener = vi.fn()
+  const dispose = api.updates.channels.subscribe(listener)
+  const handler = electron.ipcRenderer.on.mock.calls.find(([channel]) => channel === DESKTOP_IPC.updatesChannelChanged)?.[1] as
+    (event: unknown, state: unknown) => void
+  const state = { channel: 'stable', packagedChannel: 'nightly', changing: false }
+  handler({}, state)
+  expect(listener).toHaveBeenCalledWith(state)
+  dispose()
+  expect(electron.ipcRenderer.off).toHaveBeenCalledWith(DESKTOP_IPC.updatesChannelChanged, handler)
+})
