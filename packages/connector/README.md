@@ -24,7 +24,7 @@ Each package in this group is one application plugin that a user installs into a
 
 | Package | Role | ctx key |
 |---|---|---|
-| [`tencent-docs/`](tencent-docs/README.md) | Registers Tencent Docs' hosted MCP server with OAuth through the shared MCP manager, adds the Tencent Docs plugin naming guidance, and shows its account on the plugin page | registers on `ctx.mcpServers`, `ctx.systemPrompt`, and `ctx.mcpAccounts` |
+| [`tencent-docs/`](tencent-docs/README.md) | Registers Tencent Docs' hosted MCP server with OAuth through the shared MCP manager, adds the Tencent Docs plugin naming guidance, and shows its account on the plugin page | registers on `ctx.mcpManager`, `ctx.systemPrompt`, and `ctx.mcpAccounts` |
 
 -----
 

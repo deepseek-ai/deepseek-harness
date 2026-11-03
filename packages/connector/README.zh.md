@@ -24,7 +24,7 @@ kind: "package-group"
 
 | 包 | 职责 | ctx 键 |
 |---|---|---|
-| [`tencent-docs/`](tencent-docs/README.zh.md) | 通过共用的 MCP 管理器以 OAuth 注册腾讯文档托管的 MCP 服务器，添加腾讯文档插件称呼指引，并在插件页面显示账号 | 注册到 `ctx.mcpServers`、`ctx.systemPrompt` 与 `ctx.mcpAccounts` |
+| [`tencent-docs/`](tencent-docs/README.zh.md) | 通过共用的 MCP 管理器以 OAuth 注册腾讯文档托管的 MCP 服务器，添加腾讯文档插件称呼指引，并在插件页面显示账号 | 注册到 `ctx.mcpManager`、`ctx.systemPrompt` 与 `ctx.mcpAccounts` |
 
 -----
 
