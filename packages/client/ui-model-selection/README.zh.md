@@ -68,7 +68,7 @@ composer 菜单中的模型名称和推理等级均使用 400（regular）字重
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。composer 菜单通过 body portal 使用 fixed 定位及 CSS Anchor Positioning，要求浏览器支持 `anchor-name`、`position-anchor` 和 `anchor()`。触发按钮和菜单共享唯一的锚点名称。CSS 优先将菜单放在按钮上方，右边缘对齐、间距为 8px，并将菜单限制在布局视口的 12px 内边距及桌面窗口边框间距内。定位不通过 JavaScript 读取按钮矩形或追踪视口变化。双指缩放时菜单随页面一起缩放，可以超出视觉视口，包括键盘打开时。模型名称超出面板宽度时以省略号截断，角标保持可见。模型与推理等级列表在面板高度限制内纵向滚动。
+菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。composer 菜单通过 body portal 使用 fixed 定位及 CSS Anchor Positioning，要求浏览器支持 `anchor-name`、`position-anchor` 和 `anchor()`。触发按钮和菜单共享唯一的锚点名称。CSS 优先将菜单放在按钮上方，右边缘对齐、间距为 8px，并将菜单限制在布局视口的 12px 内边距及桌面窗口边框间距内。桌面页面缩放导致 sticky 输入区重新布局时，面板仍保持与触发器的间距。定位不通过 JavaScript 读取按钮矩形或追踪视口变化。双指缩放时菜单随页面一起缩放，可以超出视觉视口，包括键盘打开时。模型名称超出面板宽度时以省略号截断，角标保持可见。模型与推理等级列表在面板高度限制内纵向滚动。
 
 <details>
 <summary>实现细节——点击展开</summary>
