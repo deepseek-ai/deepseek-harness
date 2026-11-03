@@ -30,6 +30,7 @@ interface SentenceContract {
  * so an absent section cannot be mistaken for forgotten documentation.
  */
 const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
+  'packages/fs/fs-patch': 'The pure library only parses caller-supplied patch text and applies hunks to text; consumers own tools, execution, capture, and model output.',
   'packages/util/file-drag': 'The package resolves export names and declares native file operations; it does not construct model input.',
   'packages/core/scope': 'The package is a model-agnostic registration and lifecycle primitive; model-facing consumers own any context selection.',
   'packages/experimental/liveshare-protocol': 'The package only defines wire frames and identity values that its consumers exchange; it registers nothing model-facing.',
@@ -73,7 +74,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/forge': { kind: 'none', reason: 'Providers and watchers exchange code host status without contributing model context.' },
   'packages/experimental/forge-github': { kind: 'none', reason: 'The provider reads pull request status for host-side watchers without contributing model context.' },
   'packages/experimental/client-ui-forge': { kind: 'indirect', reason: 'Switching a Session directory from the panel reaches the model through the working-directory notice; inspection and status stay on the host.' },
-  'packages/experimental/forge-bundle': { kind: 'none', reason: 'Composes the forge packages and panel without adding a model tool or prompt.' },
+  'packages/experimental/forge-bundle': { kind: 'indirect', reason: 'The worktree tool and panel own the model-visible schemas, results, and directory notices selected by the bundle.' },
   'packages/experimental/forge-session': { kind: 'none', reason: 'Bindings, discovery records, and polled status stay on the host; binding records never enter model requests.' },
   'packages/experimental/worktree': { kind: 'indirect', reason: 'The worktree tool renders creation results; the working-directory service owns model-visible directory context.' },
   'packages/experimental/client-ui-stats': { kind: 'none', reason: 'The panel reads Session events and renders them in the browser; it registers no tool, prompt section, or model input.' },
@@ -137,7 +138,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/file-upload': { kind: 'none', reason: 'Browser-side request-body transport; registers nothing model-facing.' },
   'packages/api/remotes': { kind: 'none', reason: 'The Remote BFF selects business methods and forwarded events; selected services own any model-visible effect.' },
   'packages/api/remote-access': { kind: 'none', reason: 'Remote access decisions for Client callers; registers nothing model-facing.' },
-  'packages/experimental/client-ui-agent-team': { kind: 'none', reason: 'The browser projection and task controls register no model-facing input.' },
+  'packages/client/ui-agent-team': { kind: 'none', reason: 'The browser projection and task controls register no model-facing input.' },
   'packages/experimental/client-ui-claude-code-mods': { kind: 'none', reason: 'The browser draws Host-held mod trees and relays clicks; the mods\' own hooks own any model-visible effect.' },
   'packages/client/shortcuts': { kind: 'none', reason: 'Browser keyboard routing; registers nothing model-facing.' },
   'packages/client/ui-shortcuts': { kind: 'none', reason: 'Read-only browser reference; registers nothing model-facing.' },

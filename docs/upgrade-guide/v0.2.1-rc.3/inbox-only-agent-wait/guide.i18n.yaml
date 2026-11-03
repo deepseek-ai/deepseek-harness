@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.1-rc.3/inbox-only-agent-wait/guide.md
+/:
+  en: f09a5fde2cedb48c
+  zh: beec903a10ed62ee
+/agent-waits-require-inbox-input:
+  en: 96c9f5fc6514557a
+  zh: aac52f37d543ed9b
+/agent-waits-require-inbox-input/change:
+  en: 568583cb15f85337
+  zh: 6c7e3028f23d1f3e
+/agent-waits-require-inbox-input/migration:
+  en: 156a027d11ad3769
+  zh: 301029cecd3ae640

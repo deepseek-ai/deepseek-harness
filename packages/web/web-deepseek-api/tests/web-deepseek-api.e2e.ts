@@ -8,7 +8,7 @@ const maybe = apiKey !== undefined && apiKey.length > 0 && baseURL.length > 0 ? 
 
 maybe('DeepSeek Search and Fetch real API', () => {
   it('returns citeable sources from the Search API', async () => {
-    const provider = new DeepSeekSearchApiProvider(() => ({ apiKey: apiKey!, baseURL, count: 10 }))
+    const provider = new DeepSeekSearchApiProvider(() => ({ apiKey: apiKey!, baseURL, count: 10, requestsPerSecond: 5 }))
     const result = await provider.search({ query: 'DeepSeek', maxResults: 3 }, AbortSignal.timeout(30_000))
     expect(result.sources.length).toBeGreaterThan(0)
     expect(result.sources.length).toBeLessThanOrEqual(3)

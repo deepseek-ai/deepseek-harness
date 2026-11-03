@@ -27,7 +27,7 @@
  * chevron, and each row whose value that selection carries shows one in place
  * of its check mark.
  */
-import { MenuGroup, MenuSurface, observeStickyMenuGroups } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MenuGroup, MenuSurface, observeStickyMenuGroups, useAnchoredPosition } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
   type CSSProperties, type KeyboardEvent, type FocusEvent,
@@ -66,7 +66,7 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 export function ModelSelect(
   { locked, available, directory, load, select, resolveText, t, renderSlot }:
   ModelSelectInjected & Pick<PropsRuntime<'conversation.input.model'>, 'locked'> & PropsLocale<'model'>
-    & Omit<PropsRenderSlots<'conversation.input.model.label'>, 'SessionProvider'>,
+    & Omit<PropsRenderSlots<'conversation.input.model.label' | 'conversation.input.model.options'>, 'SessionProvider'>,
 ) {
   const state = useSyncExternalStore(
     fn => directory.subscribe(fn),
@@ -89,7 +89,16 @@ export function ModelSelect(
   const searchRef = useRef<HTMLInputElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const groupsRef = useRef<HTMLDivElement | null>(null)
-  const [menuPos, setMenuPos] = useState<CSSProperties | null>(null)
+  const menuPos = useAnchoredPosition({
+    open: open && available,
+    anchorRef: triggerRef,
+    panelRef: menuRef,
+    side: 'top',
+    align: 'end',
+    gap: 8,
+    margin: 12,
+    layoutKey: pane,
+  })
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const id = useId()
 
@@ -215,38 +224,6 @@ export function ModelSelect(
     }
   }, [open, pane, activeModelIndex, visibleModels])
 
-  // The portal needs viewport coordinates from the trigger and the menu's
-  // measured size before paint. Slot content can resize without parent renders.
-  useLayoutEffect(() => {
-    if (!available || !open) { setMenuPos(null); return }
-    const place = (): void => {
-      /* v8 ignore next 2 -- the trigger ref is attached whenever the menu is open. */
-      const rect = triggerRef.current?.getBoundingClientRect()
-      if (rect === undefined) return
-      const MARGIN = 12
-      const lw = menuRef.current?.offsetWidth ?? 0
-      const lh = menuRef.current?.offsetHeight ?? 0
-      let x = rect.right - lw
-      let y = rect.top - 8 - lh
-      if (lw > 0) x = Math.min(Math.max(x, MARGIN), window.innerWidth - lw - MARGIN)
-      if (lh > 0) y = Math.min(Math.max(y, MARGIN), window.innerHeight - lh - MARGIN)
-      setMenuPos({ left: x, top: y })
-    }
-    place()
-    window.addEventListener('scroll', place, true)
-    window.addEventListener('resize', place)
-    const menu = menuRef.current
-    const observer = typeof ResizeObserver !== 'undefined' && menu !== null
-      ? new ResizeObserver(place)
-      : null
-    if (menu !== null) observer?.observe(menu)
-    return () => {
-      observer?.disconnect()
-      window.removeEventListener('scroll', place, true)
-      window.removeEventListener('resize', place)
-    }
-  }, [available, open, pane, state, query])
-
   if (!available) return null
 
   const show = (): void => {
@@ -290,7 +267,9 @@ export function ModelSelect(
   }
 
   const moveFocus = (offset: number): void => {
-    const items = itemRefs.current.filter(item => item !== null)
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>(
+      'button[role="menuitem"]:not([disabled]), button[role="menuitemradio"]:not([disabled]), button[role="switch"]:not([disabled])',
+    ) ?? [])
     if (items.length === 0) return
     const active = items.findIndex(item => item === document.activeElement)
     // Focus outside the rows (the trigger, which keeps it while the menu
@@ -344,7 +323,9 @@ export function ModelSelect(
       // control inside the card (a retry button) keeps the browser's traversal,
       // so the keystroke stays unconsumed there.
       const focused = document.activeElement
-      const rows = itemRefs.current.filter((item): item is HTMLButtonElement => item !== null)
+      const rows = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>(
+        'button[role="menuitem"]:not([disabled]), button[role="menuitemradio"]:not([disabled]), button[role="switch"]:not([disabled])',
+      ) ?? [])
       if (focused instanceof HTMLButtonElement && rows.includes(focused)) {
         event.preventDefault()
         focused.click()
@@ -530,6 +511,14 @@ export function ModelSelect(
                   <IconChevronRightOutlineRegular className={css.cellChevron} />
                 </button>
               )}
+              {renderSlot('conversation.input.model.options', {
+                locked: locked || busy,
+                dismiss: () => {
+                  close()
+                  triggerRef.current?.focus()
+                },
+                reportFailure: (message) => { setToast({ seq: ++toastSeq.current, text: message }) },
+              })}
             </>
           )}
 
@@ -644,30 +633,32 @@ export function ModelSelect(
                   <button type="button" className={css.retry} onClick={reload}>{t('action.reload')}</button>
                 </div>
               )}
-              {effortChoices.length === 0
-                ? <div className={css.empty}>{t('empty.efforts')}</div>
-                : effortChoices.map(level => (
-                  <button
-                    ref={itemRef()}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={effectiveEffort === level.effort}
-                    className={clsx(css.option, effectiveEffort === level.effort && css.selected)}
-                    key={level.key}
-                    disabled={busy}
-                    onClick={() => { chooseEffort(level.effort) }}
-                  >
-                    <span className={css.optionCopy}>
-                      <span className={css.modelName}>{level.label}</span>
-                    </span>
-                    <span className={css.check}>
-                      {pending !== null && pending.provider === state.current?.provider
-                        && pending.model === state.current.model && pending.reasoningEffort === level.effort
-                        ? <StateDot state="ongoing" />
-                        : effectiveEffort === level.effort ? <IconCheckOutlineRegular /> : null}
-                    </span>
-                  </button>
-                ))}
+              <div className={clsx(css.groups, 'scrollable')}>
+                {effortChoices.length === 0
+                  ? <div className={css.empty}>{t('empty.efforts')}</div>
+                  : effortChoices.map(level => (
+                    <button
+                      ref={itemRef()}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={effectiveEffort === level.effort}
+                      className={clsx(css.option, effectiveEffort === level.effort && css.selected)}
+                      key={level.key}
+                      disabled={busy}
+                      onClick={() => { chooseEffort(level.effort) }}
+                    >
+                      <span className={css.optionCopy}>
+                        <span className={css.modelName}>{level.label}</span>
+                      </span>
+                      <span className={css.check}>
+                        {pending !== null && pending.provider === state.current?.provider
+                          && pending.model === state.current.model && pending.reasoningEffort === level.effort
+                          ? <StateDot state="ongoing" />
+                          : effectiveEffort === level.effort ? <IconCheckOutlineRegular /> : null}
+                      </span>
+                    </button>
+                  ))}
+              </div>
             </>
           )}
         </MenuSurface>,

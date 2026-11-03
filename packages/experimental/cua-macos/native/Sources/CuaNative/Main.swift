@@ -12,7 +12,7 @@ import Dispatch
                 let options = try SharedHelperOptions(arguments: arguments)
                 do {
                     let app = NSApplication.shared
-                    app.setActivationPolicy(.prohibited)
+                    app.setActivationPolicy(.accessory)
                     guard let server = try SharedHelperServer(options: options) else { return }
                     try server.start()
                     withExtendedLifetime(server) { app.run() }

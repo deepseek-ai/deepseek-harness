@@ -371,8 +371,8 @@ describe.each(['reconnect', 'delayed-inbox'] as const)('web e2e: composer shortc
       server.onMessage((message) => {
         const frame = parseRemoteStreamServerMessage(String(message))
         if (holdInbox && frame.type === 'item') {
-          const value = frame.value as { type?: string; key?: string }
-          if (value.type === 'projection' && value.key === 'inbox') heldStream = frame.streamId
+          const value = frame.value as { type?: string; changes?: readonly { key: string }[] }
+          if (value.type === 'projection' && value.changes?.some(change => change.key === 'inbox') === true) heldStream = frame.streamId
         }
         // Hold the remaining control stream in FIFO order, while history keeps flowing.
         if (holdInbox && frame.streamId === heldStream) heldControl.push(() => { route.send(message) })

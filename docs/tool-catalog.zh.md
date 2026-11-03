@@ -34,23 +34,23 @@
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.workingDirectory`、`ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 bash 工具；部署组合提供 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.workingDirectory`、`ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 pwsh 工具，持久 bash 工具的 Windows 对应物；部署组合提供 pwsh 方言的 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`、`ctx.fs` | `tool/call`、`fs/observed after view presence/absence, edit absence, or successful mutation`、`tool/result` | - | 基于文件系统 seam 的独立查看／创建／唯一字面量替换／按行插入工具；可与任何 shell 或终端接口组合。 |
-| `@deepseek-ai/dsh-tool-fs` | `edit`、`read`、`read_image`、`write` | `ctx.workingDirectory`、`ctx.tools`、`ctx.fs`、`ctx.systemPrompt`、`ctx.attachments (image-tool registration)`、`ctx.llm + an image-capable route (image-tool execution)` | `tool/call`、`fs/write-intent or fs/edit-intent for mutations`、`fs/observed after read presence/absence or successful file operation`、`durable attachment (read_image)`、`tool/result` | - | 先读后写／编辑策略由 `@deepseek-ai/dsh-fs-observation-policy` 添加；它是一个 `fs/*` 事件门禁插件，不会改变 schema。加载这些工具的部署按预期也应加载该插件。没有 `ctx.attachments` 时图片工具不会注册；其 schema 与路由无关，执行时除非确切路由的模型声明图片输入，否则拒绝。 |
+| `@deepseek-ai/dsh-tool-fs` | `apply_patch`、`edit`、`read`、`read_image`、`write` | `ctx.workingDirectory`、`ctx.tools`、`ctx.fs`、`ctx.systemPrompt`、`ctx.attachments (image-tool registration)`、`ctx.llm + an image-capable route (image-tool execution)` | `tool/call`、`fs/write-intent, fs/edit-intent, or fs/delete-intent for mutations`、`fs/observed after read presence/absence or successful file operation`、`durable attachment (read_image)`、`tool/result` | - | 先读后写／编辑策略由 `@deepseek-ai/dsh-fs-observation-policy` 添加；它是一个 `fs/*` 事件门禁插件，不会改变 schema。随发行版交付的组合保持该行禁用，因此除非部署启用它，修改都是无条件的。没有 `ctx.attachments` 时图片工具不会注册；其 schema 与路由无关，执行时除非确切路由的模型声明图片输入，否则拒绝。`apply_patch` 仅在 `applyPatch: true` 时注册；目录为了记录其 schema 而开启该开关。`dsh-base` 与 Web 的 `standard` preset 开启它；Web 的 `ptc`、`cordis` preset 以及 PTC overlay 显式写出 `applyPatch: false`。 |
 | `@deepseek-ai/dsh-tool-fs-search` | `glob`、`grep` | `ctx.workingDirectory`、`ctx.tools`、`ctx.subprocess`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn 随包提供的 ripgrep 二进制文件（`@vscode/ripgrep`），并作为普通前台调用运行，绝不作为后台任务；无需在宿主机安装 `rg`，也不经过 shell 层。本目录使用 `sampleOverCapGlobResults: true`；部署必须显式选择该行为。结果超过上限时，会通过可选的 ctx.spillStore 后端保存完整的格式化列表；在共置部署中，如果后端公开本地路径，返回的定位信息可供后续读取／搜索。 |
 | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`、`terminal_list`、`terminal_open`、`terminal_read`、`terminal_send`、`terminal_signal` | `ctx.workingDirectory`、`ctx.tools`、`ctx.terminals`、`ctx.systemPrompt`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | 这 6 个终端工具需要选择启用，用于补充一次性 bash／文件系统工具。`terminal_send(run_in_background: true)` 会注册到 `ctx.jobs`；schema 不包含 TUI、具名按键序列、BEL、调整尺寸、自动启动和跨 agent 共享。 |
 | `@deepseek-ai/dsh-tool-goal` | `create_goal`、`get_goal`、`update_goal` | `ctx.tools`、`ctx.agents`、`ctx.goals`、`ctx.systemPrompt`、`a calling Agent in an authorized open turn` | `tool/call`、`goal/change for mutations`、`tool/result` | - | create、edit、pause 和 resume 要求直接来自人类的根权限；complete 和 blocked 也接受确切的当前 Goal Round。blocked 的默认下限是 3 个获准的 Round。 |
-| `@deepseek-ai/dsh-tool-schedule` | `schedule_create`、`schedule_delete`、`schedule_list`、`schedule_update` | `ctx.tools`、`ctx.schedule` | `tool/call`、Schedule storage domain 创建、更新或删除、`tool/result` | - | preset 或 Agent scope 挂载本包；由 preset 决定哪些 agent 获得这四个管理工具。每次调用都作用于调用方 Agent 的 Session。接受 after_seconds、显式绝对 at、有界固定速率 every_seconds、带显式 IANA 时区的每日与每周本地时间，以及作为五字段表达式的 cron。管理使用宿主 storage domain；到期消息会恢复原 Session。 |
+| `@deepseek-ai/dsh-tool-schedule` | `schedule_create`、`schedule_edit`、`schedule_list`、`schedule_view` | `ctx.tools`、`ctx.schedule`、`ctx.systemPrompt` | `tool/call`、Schedule storage domain 创建、更新或删除、`tool/result` | - | preset 或 Agent scope 挂载本包，并决定哪些 Agent 获得工具。管理工具按 id 跨会话读写 Host 的任务。任务保存 RFC 5545 重复规则，执行位置可选已有会话、首次创建后复用的会话或每次运行新建的会话。委派子 Agent 不能调用这些工具。 |
 | `@deepseek-ai/dsh-tool-lsp` | `lsp` | `ctx.workingDirectory`、`ctx.tools`、`ctx.lsp`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，因此其模型可见 schema 在更换提供方时保持稳定。运行时要求已注册提供方，例如 `@deepseek-ai/dsh-lsp-stdio`；如果没有提供方，查询会返回结构化 `LSP_UNAVAILABLE` 错误，而不会改变 schema。 |
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`、`ctx.workflowEngine`、`ctx.subagents`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents every fresh round)` | `tool/call`、`tool/result`、`workflow and child session events during execution` | - | 固定的前台工作流会在每个 Round 启动一个全新的结构化子级；模型只能选择不可变目标和可选的 Round 上限。 |
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.workingDirectory`、`ctx.tools`、`ctx.agents`、`ctx.skills` | `tool/call`、`tool/result`、`user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`、`session_event_search`、`session_event_trace`、`session_search`、`session_trace` | `ctx.tools`、`ctx.systemPrompt`、`ctx.sessionQuery`、`a calling Agent for workspace authority` | `tool/call`、`tool/result` | - | 这 5 个只读工具会隐藏提供方游标，并根据不可变的调用 agent 会话为每个结果授权。该包需要选择启用；需要强制截止时间或限制行内输出的组合还会挂载通用超时或 spill 策略。 |
 | `@deepseek-ai/dsh-experimental-tool-subagent-oar` | `subagent_oar` | `ctx.tools`, `ctx.subagents` | `tool/call`, `tool/result`, `parent subagent catalog and completion notices` | - | subagent_oar 工具在为外部提供方配置的别名之间选择。本目录展示 Codex 和 Claude Code 别名；每个部署自行选择提供方。原生模型和权限设置由所选提供方的配置决定。 |
 | `@deepseek-ai/dsh-tool-subagent` | `list_subagent_models`、`subagent` | `ctx.tools`、`ctx.subagents`、`ctx.systemPrompt`、`ctx.sessionProjections`、`用于模型发现和所选路由校验的 ctx.llm` | `tool/call`、`tool/result`、`child session events through the chosen provider` | `subagent`、`subagent_fork` | 加载时的 `toolName` 选择委派名称（默认为 `subagent`）；`modelSelection` 增加可选路由字段。`modelDiscovery` 默认关闭，每个作用域由一个实例注册共享发现工具。Web 与 Desktop preset 启用 spawn 发现和路由字段，并为 `subagent_fork` 保持路由字段关闭。Host 设置服务为每个新顶层 Session 记录授权；子 Session 继承该授权。没有已记录策略时，发现和显式选择只允许当前父级路由。每次委派都会立即返回子代理 id；本地子代理接受后续消息，外部后端自动汇报单次执行结果。 |
-| `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`、`list_agents`、`send_message` | `ctx.tools`、`ctx.subagents`、`ctx.agents` | `tool/call`、`tool/result`、`child session events through ctx.subagents` | - | 这些是用于发现、中断托管 subagent 和向本地子代理发送消息的全局命名工具：绑定提供方的 `tool-subagent` 实例注册不同的委派工具；本包的一个实例注册 `send_message`、`interrupt_agent` 和 `list_agents`。 |
+| `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`、`list_agents`、`send_message`、`wait_agent` | `ctx.tools`、`ctx.subagents`、`ctx.agents` | `tool/call`、`tool/result`、`child session events through ctx.subagents` | - | 共享控制工具发现并联系 subagent 树中的 Agent，中断有权控制的后代，并等待调用者收件箱中的输入。绑定提供方的 `tool-subagent` 实例提供委派工具。 |
 | `@deepseek-ai/dsh-tool-jobs` | `job_kill`、`job_list`、`job_output` | `ctx.tools`、`ctx.jobs`、`ctx.systemPrompt` | `tool/call`、`tool/result`、`user/message via agent.inject() for background completion notices` | - | 与任务种类无关的后台任务控制器：后台 bash 命令与 PTY 发送 都通过相同的 3 个工具读取、列出和终止。加载该插件会挂接控制器，从而启用生产方的 `ctx.jobs.start()`。 |
-| `@deepseek-ai/dsh-experimental-tool-agent-team` | `interrupt_agent`、`list_agents`、`send_message`、`spawn_teammate`、`team_task_create`、`team_task_get`、`team_task_list`、`team_task_update`、`wait_agent` | `ctx.tools`、`ctx.systemPrompt`、`ctx.agentTeams`、`an exact live Team member Agent` | `tool/call`、`team/member`、`team/task`、`agent/inbox/spliced`、`user/message on inbox claim`、`tool/result` | - | 这 9 个工具限定于隐式 Team Lead 与持久 teammate 作用域。随产品发布的 dsh-base bundle 默认禁用该包；文档中的 Agent Teams profile patch 会启用它，并禁用旧 continuable child 的同名控制工具。 |
+| `@deepseek-ai/dsh-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | 四个任务板工具共享 subagent 树的根 Session。在根 Session 开启 Team 模式，会在标准 subagent 委派和控制工具之外增加任务板指导。标准 subagent 控制工具提供必需身份，不受 Team 模式影响。 |
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`、`owning Agent session` | `tool/call`、`todo/write`、`tool/result` | - | todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为检查清单。`allowParallelInProgress` 是没有默认值的必填项，因此本目录明确选择 `true`，对应描述允许同时存在多个 `in_progress` 项。选择 `false` 的部署会获得同一工具，但描述会要求只能有 1 个活动任务。 |
 | `@deepseek-ai/dsh-tool-working-directory` | `working_directory` | `ctx.tools`, `ctx.workingDirectory` | `tool/call`, `working-directory/change`, `user context for directory changes`, `tool/result` | - | 读取或改变调用方 Session 的目录。已有 shell 和进程保留自己的目录；原始元数据和权限根目录保持不变。 |
-| `@deepseek-ai/dsh-experimental-tool-worktree` | `create_worktree` | `ctx.tools`, `ctx.worktrees`, `a calling Agent` | `tool/call`, `Git branch and checkout`, `working-directory/change`, `tool/result` | - | 仅通过显式实验组合加载。在现有写权限下从固定的本地提交创建新分支与检出目录，再改变 Session 工作目录。离开时保留分支与检出目录。 |
+| `@deepseek-ai/dsh-experimental-tool-worktree` | `create_worktree` | `ctx.tools`, `ctx.worktrees`, `a calling Agent` | `tool/call`, `Git branch and checkout`, `working-directory/change`, `tool/result` | - | 在 Web 和 Desktop 上通过变更请求与工作树组合包启用；其他 profile 可以选择独立组合包。在现有写权限下从固定的本地提交创建新分支与检出目录，再改变 Session 工作目录。离开时保留分支与检出目录。 |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
@@ -1049,6 +1049,27 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 ## `@deepseek-ai/dsh-tool-fs`
 
+### `apply_patch`
+
+用一个 Codex 风格补丁新增、更新、删除或移动 UTF-8 文本文件；变更跨越多个文件或分离区域时，优先于多次 edit 调用。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "string",
+      "description": "Codex patch text: start with *** Begin Patch and end with *** End Patch. Use *** Add File: path with + lines; *** Update File: path, optionally followed by *** Move to: path, with @@ or @@ context and space-prefixed context, + added, or - removed lines; *** End of File anchors the last hunk to the file end. Use *** Delete File: path to delete. Paths are relative to the Session working directory."
+    }
+  },
+  "required": [
+    "input"
+  ]
+}
+```
+
+来源： [`packages/fs/tool-fs/src/index.ts`](../packages/fs/tool-fs/src/index.ts)
+
 ### `edit`
 
 通过替换字面量文本来编辑现有 UTF-8 文本文件。
@@ -1160,7 +1181,7 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 来源：[`packages/fs/tool-fs/src/index.ts`](../packages/fs/tool-fs/src/index.ts)
 
-先读后写／编辑策略由 `@deepseek-ai/dsh-fs-observation-policy` 添加；它是一个 `fs/*` 事件门禁插件，不会改变 schema。加载这些工具的部署按预期也应加载该插件。没有 `ctx.attachments` 时图片工具不会注册；其 schema 与路由无关，执行时除非确切路由的模型声明图片输入，否则拒绝。
+先读后写／编辑策略由 `@deepseek-ai/dsh-fs-observation-policy` 添加；它是一个 `fs/*` 事件门禁插件，不会改变 schema。随发行版交付的组合保持该行禁用，因此除非部署启用它，修改都是无条件的。没有 `ctx.attachments` 时图片工具不会注册；其 schema 与路由无关，执行时除非确切路由的模型声明图片输入，否则拒绝。`apply_patch` 仅在 `applyPatch: true` 时注册；目录为了记录其 schema 而开启该开关。`dsh-base` 与 Web 的 `standard` preset 开启它；Web 的 `ptc`、`cordis` preset 以及 PTC overlay 显式写出 `applyPatch: false`。
 
 <a id="deepseek-aidsh-tool-fs-search"></a>
 
@@ -1487,134 +1508,48 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
 
 ### `schedule_create`
 
-在当前会话中创建一条提醒，到期时投递 prompt。请恰好提供一个时间参数：after_seconds、at、every_seconds、daily、weekly 或 cron。时区中不存在的本地时间会被跳过；重复出现的本地时间只在较早的时刻触发一次。停机后，重复提醒只投递最近错过的一次。崩溃后可能重复投递。
+创建定时任务。rrule 的每次触发都会将 prompt 作为用户的定时消息投递到目标会话。结果包含任务 id 和下一次触发时间：scheduledAt 为 UTC 时间，scheduledAtLocal 为 rrule 所在时区的时间。停机后只补发最近一次错过的触发。崩溃后可能重复投递。
 
 ```json
 {
   "type": "object",
   "properties": {
-    "prompt": {
-      "type": "string",
-      "description": "Reminder content to present when the target becomes due."
-    },
     "title": {
       "type": "string",
-      "description": "Concise task name in the user's language, at most 120 characters. Name only the core action and subject; keep essential target identifiers such as PR numbers and branch names. Do not include execution frequency (e.g. daily, hourly), scheduled dates/times, time zones, task status, or configuration and execution details (e.g. read-only mode, profile-tag filters), even when embedded in the requested or existing title. Do not append parenthetical notes. Put scheduling information in the timing parameters and execution instructions in prompt."
+      "description": "Task name of at most 120 characters in the user's language: action plus object. Omit timing, status, ids, and bracketed suffixes."
     },
-    "after_seconds": {
-      "type": "number",
-      "description": "Delay in whole seconds."
+    "prompt": {
+      "type": "string",
+      "description": "Instruction delivered at each occurrence."
     },
-    "every_seconds": {
-      "type": "number",
-      "description": "Fixed-rate interval in whole seconds, at least 60, aligned to the creation time; changing it with schedule_update re-aligns it to the save time."
+    "rrule": {
+      "type": "string",
+      "description": "Supported RFC 5545 subset: one DTSTART line, a newline, and one RRULE line. DTSTART ends in Z for UTC or carries TZID with an IANA time zone; a fixed offset such as UTC+5 is Etc/GMT-5, with the sign reversed. DTSTART must name an existing local time. A TZID rule keeps local clock time across daylight-saving changes; generated nonexistent local times are skipped, and repeated ones occur once, at the earlier instant. DTSTART may be in the past; delivery starts with the first occurrence after creation. A one-time delivery is RRULE:FREQ=DAILY;COUNT=1. No SECONDLY; BYSECOND takes one value. COUNT is at most 1000; use UNTIL for longer rules. MINUTELY and HOURLY accept no BY parts, so select clock times with DAILY or WEEKLY plus BYHOUR and BYMINUTE. BYMONTHDAY and ordinal BYDAY require MONTHLY or YEARLY; BYYEARDAY and BYWEEKNO require YEARLY. Ordinal BYDAY cannot combine with BYWEEKNO. Each FREQ period allows at most 10080 candidates before BYSETPOS, which accepts at most 31 values. UNTIL is a UTC instant ending in Z. Example: \"DTSTART;TZID=Asia/Singapore:20260901T080000\\nRRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1\""
     },
-    "daily": {
-      "type": "object",
-      "description": "Every day at a local time.",
-      "additionalProperties": false,
-      "properties": {
-        "time": {
-          "type": "string",
-          "description": "HH:mm:ss with optional 1-3 fractional digits, for example 23:00:00."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        }
-      },
-      "required": [
-        "time",
-        "time_zone"
+    "target": {
+      "type": "string",
+      "description": "this_session delivers to this session; new_once delivers to the same new session every time, opened at the first delivery; new opens a different new session for every delivery. New sessions use this session's working directory and preset. With this_session or new_once, a delivery waits until the previous one finishes, and only the latest occurrence that passed meanwhile is delivered. Use this_session for reminders and for follow-ups to this conversation; use new_once or new for independent work, such as a recurring report, and whenever the user asks for a new conversation.",
+      "enum": [
+        "this_session",
+        "new_once",
+        "new"
       ]
-    },
-    "weekly": {
-      "type": "object",
-      "description": "On the given weekdays at a local time.",
-      "additionalProperties": false,
-      "properties": {
-        "time": {
-          "type": "string",
-          "description": "HH:mm:ss with optional 1-3 fractional digits, for example 09:00:00."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        },
-        "weekdays": {
-          "type": "array",
-          "description": "ISO weekdays, Monday 1 through Sunday 7, without repetitions.",
-          "items": {
-            "type": "integer"
-          }
-        }
-      },
-      "required": [
-        "time",
-        "time_zone",
-        "weekdays"
-      ]
-    },
-    "cron": {
-      "type": "object",
-      "description": "Five-field Vixie cron expression in a time zone.",
-      "additionalProperties": false,
-      "properties": {
-        "expression": {
-          "type": "string",
-          "description": "minute hour day-of-month month day-of-week, for example \"*/15 9-17 * * 1-5\". When both day fields are restricted, a date matches if either one matches."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        }
-      },
-      "required": [
-        "expression",
-        "time_zone"
-      ]
-    },
-    "at": {
-      "oneOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "date": {
-              "type": "string"
-            },
-            "time": {
-              "type": "string"
-            },
-            "time_zone": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "date",
-            "time",
-            "time_zone"
-          ]
-        }
-      ],
-      "description": "Absolute target: an RFC 3339 date-time with offset, or a local date, time, and IANA time_zone."
     }
   },
   "required": [
+    "title",
     "prompt",
-    "title"
+    "rrule",
+    "target"
   ]
 }
 ```
 
-来源：[`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
+源码： [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
 
-### `schedule_delete`
+### `schedule_edit`
 
-删除当前会话中的一条提醒，活动或已结束的均可。删除不会撤回已经入队的提醒消息。
+按 id 更新、暂停、恢复或删除一个定时任务。删除不会撤回已排队的消息。
 
 ```json
 {
@@ -1622,33 +1557,84 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
   "properties": {
     "id": {
       "type": "string",
-      "description": "Exact schedule id."
+      "description": "Task id."
+    },
+    "action": {
+      "type": "string",
+      "description": "update applies the provided fields, at least one; delete removes the task.",
+      "enum": [
+        "update",
+        "delete"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "description": "Task name of at most 120 characters in the user's language: action plus object. Omit timing, status, ids, and bracketed suffixes."
+    },
+    "prompt": {
+      "type": "string",
+      "description": "New instruction delivered at each occurrence."
+    },
+    "rrule": {
+      "type": "string",
+      "description": "New recurrence in the schedule_create rrule format."
+    },
+    "target": {
+      "type": "string",
+      "description": "Omit to retain the destination and its creation settings. Providing target replaces them; new_once reserves a different Session. New targets capture this Session's working directory and preset. Choices are the same as schedule_create.",
+      "enum": [
+        "this_session",
+        "new_once",
+        "new"
+      ]
+    },
+    "active": {
+      "type": "boolean",
+      "description": "false pauses the task; true resumes only if its timing has a future occurrence. Otherwise provide a new rrule."
+    },
+    "expectedUpdatedAt": {
+      "type": "string",
+      "description": "updatedAt from the latest result that returned this task; if the task changed after that result, the result is schedule_conflict and nothing changes."
     }
   },
   "required": [
-    "id"
+    "id",
+    "action"
   ]
 }
 ```
 
-来源：[`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
+源码： [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
 
 ### `schedule_list`
 
-列出当前会话中的活动提醒。
+列出定时任务，包括从其他会话创建的任务。活动任务排在前面，按 scheduledAt 排序。
 
 ```json
 {
   "type": "object",
-  "properties": {}
+  "properties": {
+    "active": {
+      "type": "boolean",
+      "description": "true for active tasks only; false for paused and ended tasks only; omitted for all tasks."
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Page size from 1 to 500; defaults to 100."
+    },
+    "offset": {
+      "type": "integer",
+      "description": "Number of tasks to skip; defaults to 0."
+    }
+  }
 }
 ```
 
-来源：[`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
+源码： [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
 
-### `schedule_update`
+### `schedule_view`
 
-原地修改一条提醒并保留其 id。提供新的 title、prompt，或至多一个时间参数；未提供的字段保持原值。需要相对延迟时请新建一条提醒。
+按 id 查看一个定时任务。
 
 ```json
 {
@@ -1656,112 +1642,7 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
   "properties": {
     "id": {
       "type": "string",
-      "description": "Schedule id returned by schedule_list."
-    },
-    "title": {
-      "type": "string",
-      "description": "New task name; follow the schedule_create title rules."
-    },
-    "prompt": {
-      "type": "string",
-      "description": "New reminder content."
-    },
-    "every_seconds": {
-      "type": "number",
-      "description": "Fixed-rate interval in whole seconds, at least 60, aligned to the creation time; changing it with schedule_update re-aligns it to the save time."
-    },
-    "daily": {
-      "type": "object",
-      "description": "Every day at a local time.",
-      "additionalProperties": false,
-      "properties": {
-        "time": {
-          "type": "string",
-          "description": "HH:mm:ss with optional 1-3 fractional digits, for example 23:00:00."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        }
-      },
-      "required": [
-        "time",
-        "time_zone"
-      ]
-    },
-    "weekly": {
-      "type": "object",
-      "description": "On the given weekdays at a local time.",
-      "additionalProperties": false,
-      "properties": {
-        "time": {
-          "type": "string",
-          "description": "HH:mm:ss with optional 1-3 fractional digits, for example 09:00:00."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        },
-        "weekdays": {
-          "type": "array",
-          "description": "ISO weekdays, Monday 1 through Sunday 7, without repetitions.",
-          "items": {
-            "type": "integer"
-          }
-        }
-      },
-      "required": [
-        "time",
-        "time_zone",
-        "weekdays"
-      ]
-    },
-    "cron": {
-      "type": "object",
-      "description": "Five-field Vixie cron expression in a time zone.",
-      "additionalProperties": false,
-      "properties": {
-        "expression": {
-          "type": "string",
-          "description": "minute hour day-of-month month day-of-week, for example \"*/15 9-17 * * 1-5\". When both day fields are restricted, a date matches if either one matches."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        }
-      },
-      "required": [
-        "expression",
-        "time_zone"
-      ]
-    },
-    "at": {
-      "oneOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "date": {
-              "type": "string"
-            },
-            "time": {
-              "type": "string"
-            },
-            "time_zone": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "date",
-            "time",
-            "time_zone"
-          ]
-        }
-      ],
-      "description": "Absolute target: an RFC 3339 date-time with offset, or a local date, time, and IANA time_zone."
+      "description": "Task id."
     }
   },
   "required": [
@@ -1770,9 +1651,9 @@ create、edit、pause 和 resume 要求直接来自人类的根权限；complete
 }
 ```
 
-Source: [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
+源码： [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
 
-preset 或 Agent scope 挂载本包；由 preset 决定哪些 agent 获得这四个管理工具。每次调用都作用于调用方 Agent 的 Session。接受 after_seconds、显式绝对 at、有界固定速率 every_seconds、带显式 IANA 时区的每日与每周本地时间，以及作为五字段表达式的 cron。管理使用宿主 storage domain；到期消息会恢复原 Session。
+preset 或 Agent scope 挂载本包，并决定哪些 Agent 获得工具。管理工具按 id 跨会话读写 Host 的任务。任务保存 RFC 5545 重复规则，执行位置可选已有会话、首次创建后复用的会话或每次运行新建的会话。委派子 Agent 不能调用这些工具。
 
 <a id="deepseek-aidsh-tool-lsp"></a>
 
@@ -2164,7 +2045,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `list_subagent_models`
 
-查询 subagent 可用的模型，不更改当前 Agent。无参数：提供方；`provider`：允许的模型；`provider` + `model`：该模型及其推理强度。选择子级提供方和模型前先在此查询选项，再将返回的 id 用于委派。
+查询允许为 subagent 显式选择的路由。无参数：提供方；`provider`：允许的模型；`provider` + `model`：该模型及其推理强度。选择子级提供方和模型前先在此查询选项，再将返回的 id 用于委派。
 
 ```json
 {
@@ -2186,7 +2067,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `subagent`
 
-将一项自包含任务委派给 subagent（在自身上下文中工作的独立 agent），用它卸载聚焦且独立的工作，例如研究、限定范围的实现或分析，以免消耗当前对话的上下文。subagent 会返回结果，但不会返回中间步骤。此工具启动独立管理的 subagent 并立即返回其 id。运行时会在任务结束时通知你。子代理通过 `send_message` 汇报结果；你可以使用 `send_message` 在运行时引导它，或在结束后继续对话。
+将一项自包含任务委派给 subagent（在自身上下文中工作的独立 agent），用它卸载聚焦且独立的工作，例如研究、限定范围的实现或分析，以免消耗当前对话的上下文。subagent 会返回结果，但不会返回中间步骤。此工具启动独立管理的 subagent 并立即返回其 id。如果它结束时你仍在线，运行时会自动递送其完成通知。通知包含最终回答，除非子任务在结束前刚给你发过消息。你可以使用 `send_message` 在运行时引导它，或在结束后继续对话。
 
 ```json
 {
@@ -2198,7 +2079,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "description": {
       "type": "string",
-      "description": "A short (3-5 word) description of the delegated task, for display."
+      "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
     },
     "prompt": {
       "type": "string",
@@ -2243,21 +2124,12 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `list_agents`
 
-按持久 ID 和标签列出调用方目录中可继续的直接子代理。使用此工具回忆已启动的子代理，不要轮询完成状态；完成时会收到通知。状态来自在线注册表：running 表示当前正在工作；inactive 表示当前没有执行轮次，无论子代理已加载还是需要恢复，并不表示任务完成、成功、失败或正在等待其他代理。`send_message` 可在最近的步骤边界引导正在运行的子代理，或启动、恢复非活跃子代理的轮次；任何状态下的直接子级都可作为 `send_message` 的候选目标。列表快照不保证投递成功，`send_message` 仍进行权威检查，且可能失败。
+列出整棵 subagent 树：根代理和所有可达的可继续后代，包括调用方自身。行包含 id、描述和状态；后代行包含父级 id 和相对根的深度。可以向树中列为 running 或 inactive 的任意其他代理发送消息。running 表示正在工作；inactive 表示当前没有轮次在执行，不表示任务完成、成功或失败。自身仍在线时，直属子代理结束会收到通知，无需反复查询其状态。使用 send_message 继续对话。
 
 ```json
 {
   "type": "object",
-  "properties": {
-    "scope": {
-      "type": "string",
-      "description": "children (default) lists direct children, which accept send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent.",
-      "enum": [
-        "children",
-        "descendants"
-      ]
-    }
-  }
+  "properties": {}
 }
 ```
 
@@ -2265,7 +2137,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 ### `send_message`
 
-根据 agent id 向直接可继续 child 发送消息。如果你是驻留的可继续 child，也可以把自己的直接 parent 作为目标。如果目标仍在工作，消息会 steer 其最近的 step；如果目标处于 idle，消息会启动一个轮次。此调用不会返回该 agent 的答案，只会确认消息已投递。调用失败表示消息**未**投递。
+向代理发消息。工作中的代理在下一步骤接收消息，空闲代理用消息启动新轮次。返回投递确认。
 
 ```json
 {
@@ -2273,7 +2145,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
   "properties": {
     "agent_id": {
       "type": "string",
-      "description": "The agent id of your direct continuable child, or your direct parent when you are a resident continuable child."
+      "description": "The agent id of another member of your subagent tree, as shown by list_agents."
     },
     "message": {
       "type": "string",
@@ -2289,7 +2161,25 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 来源：[`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts)
 
-这些是用于发现、中断托管 subagent 和向本地子代理发送消息的全局命名工具：绑定提供方的 `tool-subagent` 实例注册不同的委派工具；本包的一个实例注册 `send_message`、`interrupt_agent` 和 `list_agents`。
+### `wait_agent`
+
+等待下一步可处理的输入，包括 Agent 消息、完成通知和用户引导。已有此类待处理输入时立即返回。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "timeout_ms": {
+      "type": "integer",
+      "description": "Wait duration in milliseconds, from 10000 through 3600000. Defaults to 30000."
+    }
+  }
+}
+```
+
+来源：[`packages/subagent/tool-subagent-control/src/wait-agent.ts`](../packages/subagent/tool-subagent-control/src/wait-agent.ts)
+
+共享控制工具发现并联系 subagent 树中的 Agent，中断有权控制的后代，并等待调用者收件箱中的输入。绑定提供方的 `tool-subagent` 实例提供委派工具。
 
 <a id="deepseek-aidsh-tool-jobs"></a>
 
@@ -2364,108 +2254,9 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 
 与任务种类无关的后台任务控制器：后台 bash 命令与 PTY 发送 都通过相同的 3 个工具读取、列出和终止。加载该插件会挂接控制器，从而启用生产方的 `ctx.jobs.start()`。
 
-<a id="deepseek-aidsh-experimental-tool-agent-team"></a>
+<a id="deepseek-aidsh-tool-agent-team"></a>
 
-## `@deepseek-ai/dsh-experimental-tool-agent-team`
-
-### `interrupt_agent`
-
-中断一名 teammate 的当前 turn，同时保留其待处理 inbox。仅 Team Lead 可用。
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "target": {
-      "type": "string",
-      "description": "Teammate target returned by spawn_teammate or list_agents."
-    }
-  },
-  "required": [
-    "target"
-  ]
-}
-```
-
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
-
-### `list_agents`
-
-列出 Lead 与所有持久 teammate，以及可用于寻址的 target 和当前可用状态。inactive 表示没有轮次在执行，不表示任务结果。provisioning 与 failed 描述成员创建状态。
-
-```json
-{
-  "type": "object",
-  "properties": {}
-}
-```
-
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
-
-### `send_message`
-
-向另一名 Team member 发送一条消息。running target 会在最近的步骤边界收到消息；inactive target 会启动或恢复一个 turn。
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "target": {
-      "type": "string",
-      "description": "Member target returned by spawn_teammate or list_agents, including lead."
-    },
-    "message": {
-      "type": "string",
-      "description": "Self-contained message for the target."
-    }
-  },
-  "required": [
-    "target",
-    "message"
-  ]
-}
-```
-
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
-
-### `spawn_teammate`
-
-创建一名具名、持久的 teammate。只有 Team Lead 可以调用此工具。
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "name": {
-      "type": "string",
-      "description": "Unique lower-kebab-case teammate name."
-    },
-    "description": {
-      "type": "string",
-      "description": "Short description of the delegated responsibility."
-    },
-    "prompt": {
-      "type": "string",
-      "description": "Complete initial task for the teammate."
-    },
-    "context": {
-      "type": "string",
-      "description": "fresh starts without Lead history; fork inherits completed Lead turns. Defaults to fresh.",
-      "enum": [
-        "fresh",
-        "fork"
-      ]
-    }
-  },
-  "required": [
-    "name",
-    "description",
-    "prompt"
-  ]
-}
-```
-
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+## `@deepseek-ai/dsh-tool-agent-team`
 
 ### `team_task_create`
 
@@ -2505,7 +2296,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 }
 ```
 
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+来源：[`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 ### `team_task_get`
 
@@ -2526,7 +2317,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 }
 ```
 
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+来源：[`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 ### `team_task_list`
 
@@ -2547,7 +2338,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "owner": {
       "type": "string",
-      "description": "Optional member target from spawn_teammate or list_agents, matching ownerName; use unowned for tasks without an owner."
+      "description": "Optional exact ownerId filter; use unowned for tasks without an owner."
     },
     "ready": {
       "type": "boolean",
@@ -2565,7 +2356,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 }
 ```
 
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+来源：[`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 ### `team_task_update`
 
@@ -2621,7 +2412,7 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
     },
     "owner": {
       "type": "string",
-      "description": "Member target from spawn_teammate or list_agents for Lead-only reassign; omit to unassign."
+      "description": "Agent id of the root or any continuable descendant for root-only reassign; omit to unassign."
     }
   },
   "required": [
@@ -2632,28 +2423,9 @@ subagent_oar 工具在为外部提供方配置的别名之间选择。本目录�
 }
 ```
 
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+来源：[`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
-### `wait_agent`
-
-等待本次调用开始后下一次 teammate 状态、消息或共享任务变更。它绝不会唤醒 inactive member；若没有其他 member 正在 running 或 provisioning，则立即返回 noProgress。唤醒或超时后应重新列出状态，而不是轮询。
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "timeout_ms": {
-      "type": "integer",
-      "description": "Wait duration in milliseconds, from 10000 through 3600000. Defaults to 30000."
-    }
-  }
-}
-```
-
-来源：[`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
-
-这 10 个工具限定于隐式 Team Lead 与持久 teammate 作用域。随产品发布的 dsh-base bundle 默认禁用该包；文档中的 Agent Teams profile patch 会启用它，并禁用旧 continuable child 的同名控制工具。
-
+四个任务板工具共享 subagent 树的根 Session。在根 Session 开启 Team 模式，会在标准子代理委派和控制工具之外增加任务板指导。标准子代理控制工具提供必需身份，不受 Team 模式影响。
 
 <a id="deepseek-aidsh-tool-todo"></a>
 
@@ -2755,7 +2527,7 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 
 来源：[`packages/experimental/tool-worktree/src/index.ts`](../packages/experimental/tool-worktree/src/index.ts)
 
-仅通过显式实验组合加载。在现有写权限下从固定的本地提交创建新分支与检出目录，再改变 Session 工作目录。离开时保留分支与检出目录。
+在 Web 和 Desktop 上通过变更请求与工作树组合包启用；其他 profile 可以选择独立组合包。在现有写权限下从固定的本地提交创建新分支与检出目录，再改变 Session 工作目录。离开时保留分支与检出目录。
 
 <a id="deepseek-aidsh-tool-workflow"></a>
 
@@ -2905,7 +2677,7 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
   "properties": {
     "queries": {
       "type": "array",
-      "description": "1–4 search queries; their results are merged.",
+      "description": "1–10 search queries; their results are merged.",
       "items": {
         "type": "string"
       }

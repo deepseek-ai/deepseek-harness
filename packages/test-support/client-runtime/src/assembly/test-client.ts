@@ -11,7 +11,7 @@ import {
   installConnection,
   type ConnectionHandle,
 } from '@deepseek-ai/dsh-client-connection/client'
-import { bootClient } from '@deepseek-ai/dsh-client-web/src/boot-client.ts'
+import { assertEntriesActive, bootClient } from '@deepseek-ai/dsh-client-web/src/boot-client.ts'
 import { mountClient } from '@deepseek-ai/dsh-client-web/src/mount.ts'
 import type { RemoteMock } from '@deepseek-ai/dsh-remote-mock'
 import { act } from '@testing-library/react'
@@ -43,6 +43,12 @@ export interface TestClientOptions {
   readonly connectTimeoutMs?: number
   /** The fixed access answer for each action on every resource. Default: every action is allowed. */
   readonly access?: (action: string) => boolean
+  /**
+   * Tolerate inactive roster entries outside the Web client's required list, as the product boot does. Default
+   * false: every roster entry must activate, so a plugin that fails to import or activate, or waits on a missing
+   * service, rejects `start` with its audit reason.
+   */
+  readonly allowInactiveEntries?: boolean
 }
 
 /**
@@ -202,12 +208,14 @@ export class TestClient {
    * contract-free proxies over the same Connection instead. The
    * `@deepseek-ai/dsh-api-remote-access` row, which mounts its own generated
    * contribution, is dropped too, and allow-all access Hooks replace it. A
-   * `provide` entry for either row is refused. On any failure the context is disposed, an owned
+   * `provide` entry for either row is refused. Unless `allowInactiveEntries` is set, every roster entry must
+   * activate, stricter than the product boot, which only warns about entries outside its required list. On any
+   * failure the context is disposed, an owned
    * mount removed, and this client's hold on the shims released before the
    * original error is rethrown.
    * @param plan - roster and annotations.
    * @param mock - Remote mock answering every Gateway call.
-   * @param options - mount and readiness options.
+   * @param options - mount, readiness, and strictness options.
    * @returns the booted client.
    */
   static async start(
@@ -257,6 +265,11 @@ export class TestClient {
         ctx.plugin(options.access === undefined ? allowAllAccessPlugin : staticAccessPlugin(options.access))
       }
       await bootClient({ ctx, modules: system, manifest: system.manifest })
+      if (options.allowInactiveEntries !== true) {
+        await assertEntriesActive(ctx, system, (report) => {
+          throw new Error(`client-test-runtime: every roster entry must activate; pass allowInactiveEntries to tolerate it\n${report}`)
+        })
+      }
       if (mountPoint.element !== undefined) {
         if (ctx.get('uiRenderer') === undefined) {
           throw new Error('client-test-runtime: mount requested, but the roster provides no `uiRenderer`')

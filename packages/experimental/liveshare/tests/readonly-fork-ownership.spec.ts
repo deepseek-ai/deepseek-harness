@@ -105,7 +105,7 @@ async function service(childCreator = creator): Promise<{ read: ReturnType<typeo
     sourceConfined: () => false,
     forks,
     workspaces: () => [],
-    declaredCapabilities: () => [],
+    offeredPlugins: () => [],
   }
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())

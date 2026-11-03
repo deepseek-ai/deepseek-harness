@@ -8,7 +8,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import { ApplicationAuthorizationResult, installCuaAccess } from '../src/access.ts'
 import type { CuaApplicationGrant } from '../src/access-types.ts'
 import type { CuaAppHandle } from '../src/types.ts'
-import { NativeClient } from '../src/native-client.ts'
+import { NativeClient, NativeError } from '../src/native-client.ts'
 import { permissionFixture } from './permission-fixture.ts'
 
 const native = vi.hoisted(() => ({ instances: [] as Array<{
@@ -49,7 +49,8 @@ async function setup(choice = 'Allow for this session', options: { writable?: bo
   const answer = vi.fn<() => Promise<AskUserQuestionAnswer>>(async () => ({ answers: [{ id: 'cua-app-access', selected: [choice] }] }))
   ctx.on('user-questions/request', answer)
   const permissions = permissionFixture(ctx, options.initial, options.writable)
-  const access = installCuaAccess(ctx, { native: nativeConfig, createChannel: unusedConnector, store: permissions.store })
+  const access = installCuaAccess(ctx, { native: nativeConfig, createChannel: unusedConnector, store: permissions.store,
+    permissionParameters: (method, permission, locale) => ({ method, permission, locale }) })
   const client = new NativeClient(ctx, nativeConfig, unusedConnector)
   return { ctx, owner, agent: owner.agent, answer, access, client, ...permissions }
 }
@@ -160,10 +161,12 @@ it('checks native permissions without converting an OS request into a grant', as
   const before = (await f.ctx.cuaAccess.applications())
   expect(before).toEqual({ allowedApps: [], blockedApps: [], persistentAvailable: true })
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ accessibility: false, screenRecording: false })
-  expect(await f.ctx.cuaAccess.requestPermission('accessibility')).toMatchObject({ accessibility: false })
-  await f.ctx.cuaAccess.openSettings('screenRecording')
+  expect(await f.ctx.cuaAccess.requestPermission('accessibility', 'en')).toMatchObject({ accessibility: false })
+  await f.ctx.cuaAccess.openSettings('screenRecording', 'en')
   const transport = native.instances[1]!
-  expect(transport.request).toHaveBeenCalledWith('openPermissionSettings', { permission: 'screenRecording' }, expect.any(AbortSignal))
+  expect(transport.request).toHaveBeenCalledWith('requestPermission',
+    { method: 'requestPermission', permission: 'accessibility', locale: 'en' }, expect.any(AbortSignal))
+  expect(transport.request).toHaveBeenCalledWith('openPermissionSettings', { method: 'openPermissionSettings', permission: 'screenRecording', locale: 'en' }, expect.any(AbortSignal))
   transport.request.mockRejectedValueOnce(new Error('transport ended'))
   await expect(f.ctx.cuaAccess.systemStatus()).rejects.toThrow('transport ended')
   transport.disposed = true
@@ -460,3 +463,12 @@ it('does not reactivate old handles when stored permission was revoked and later
   await f.access.select(f.agent, replacement, handle, identity, signal)
   expect(f.answer).toHaveBeenCalledOnce()
 })
+
+it.each([new NativeError('SETTINGS_UNAVAILABLE', '请手动打开系统设置'), new Error('transport ended'), new NativeError('NATIVE_EXIT', 'helper exited')])(
+  'preserves provider and transport settings failures: %s', async (failure) => {
+    const f = await setup()
+    await f.ctx.cuaAccess.systemStatus()
+    native.instances.at(-1)!.request.mockRejectedValueOnce(failure)
+    await expect(f.ctx.cuaAccess.openSettings('accessibility', 'en')).rejects.toBe(failure)
+  },
+)

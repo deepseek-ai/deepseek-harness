@@ -268,6 +268,26 @@ describe.each(['MacIntel', 'Win32', 'Linux x86_64'])('web context menus on %s', 
     await file.click({ button: 'right' })
     await page.getByRole('menuitem', { name: 'Open in sidebar', exact: true }).click()
     await page.locator('[data-document-preview]').getByText('SECOND', { exact: true }).waitFor()
+    // The same link moves that tab into a floating panel and back, delivering its line each time.
+    const floating = page.locator('[data-sidebar-right-session]:not([hidden]) [data-dockkit-float]')
+    const dockedFirst = page.locator('[data-rightbar-col] [data-dockkit-pane] [data-dockkit-tab]', { hasText: 'first.txt' })
+    await file.click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Open in floating panel', exact: true }).click()
+    await expect.poll(() => floating.count()).toBe(1)
+    await floating.locator('[data-textpreview-target="2"]', { hasText: 'SECOND' }).waitFor()
+    await expect.poll(() => dockedFirst.count()).toBe(0)
+    // The new panel covers the link, so the keyboard raises its menu.
+    await file.focus()
+    await page.keyboard.press('Shift+F10')
+    await page.getByRole('menuitem', { name: 'Open in floating panel', exact: true }).click()
+    await floating.locator('[data-textpreview-target="2"]').waitFor()
+    expect(await floating.count()).toBe(1)
+    await file.focus()
+    await page.keyboard.press('Shift+F10')
+    await page.getByRole('menuitem', { name: 'Open in sidebar', exact: true }).click()
+    await expect.poll(() => floating.count()).toBe(0)
+    await expect.poll(() => dockedFirst.count()).toBe(1)
+    await page.locator('[data-rightbar-col] [data-textpreview-target="2"]').waitFor()
     await page.getByRole('link', { name: 'Website', exact: true }).click({ button: 'right' })
     await page.getByRole('menuitem', { name: 'Copy link address', exact: true }).click()
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('https://example.com/path?q=1#fragment')
@@ -310,6 +330,35 @@ describe.each(['MacIntel', 'Win32', 'Linux x86_64'])('web context menus on %s', 
     expect(await page.locator('[data-document-preview]').getByText('SECOND FILE', { exact: true }).count()).toBe(1)
     expect(tripwire.pageErrors).toEqual([])
   })
+  it('keeps context-menu rows reachable after browser zoom', async () => {
+    const cdp = await page.context().newCDPSession(page)
+    try {
+      await page.setViewportSize({ width: 1291, height: 480 })
+      await page.locator('[data-row-key="session:context-menu-first"]').click({ button: 'right' })
+      const menu = page.getByRole('menu')
+      await menu.waitFor()
+      // Desktop Chromium caps page scale at three; the short window makes the rows overflow at that scale.
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 3 })
+      await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBe(3)
+      await expect.poll(() => menu.evaluate((node) => {
+        const view = window.visualViewport!
+        const box = node.getBoundingClientRect()
+        return Math.min(box.left - view.offsetLeft, box.top - view.offsetTop,
+          view.offsetLeft + view.width - box.right, view.offsetTop + view.height - box.bottom)
+      })).toBeGreaterThanOrEqual(11.5)
+      const rows = menu.locator('[role="presentation"]').first()
+      expect(await rows.evaluate((node) => {
+        node.scrollTop = node.scrollHeight
+        return node.scrollTop > 0
+      })).toBe(true)
+    } finally {
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
+      await cdp.detach()
+      await page.keyboard.press('Escape')
+      await page.setViewportSize({ width: 1291, height: 768 })
+    }
+  })
+
   it('keeps original preview open when dismissing its menu and fits both themes at the viewport edge', async () => {
     onTestFailed(() => saveFailureShot(page, 'context-menus-preview'))
     await page.getByRole('button', { name: 'View full image: Original', exact: true }).click()

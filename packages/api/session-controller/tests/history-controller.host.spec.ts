@@ -40,19 +40,22 @@ describe('HistoryController passive reads', () => {
     expect(await stream.next()).toMatchObject({ done: true })
   })
 
-  it('subscribes to sparse projection changes without an Observation', async () => {
+  it('subscribes to per-event projection changes without an Observation', async () => {
     const f = await fixture()
     const observe = vi.spyOn(f.ctx.sessionQuery, 'observeSession')
-    let receive: Parameters<typeof f.ctx.sessionProjections.onChanged>[0] | undefined
+    let receive: Parameters<typeof f.ctx.sessionProjections.onEventChanged>[0] | undefined
     const dispose = vi.fn()
-    vi.spyOn(f.ctx.sessionProjections, 'onChanged').mockImplementation((callback) => {
+    vi.spyOn(f.ctx.sessionProjections, 'onEventChanged').mockImplementation((callback) => {
       receive = callback
       return dispose
     })
     const stream = f.history.observeProjections({ sessionId: f.session.id }, f.abort.signal)[Symbol.asyncIterator]()
     expect(await stream.next()).toMatchObject({ value: { type: 'ready' } })
-    receive?.(f.session, 'title', 'new title', SessionSeq(0))
-    expect(await stream.next()).toMatchObject({ value: { type: 'projection', key: 'title', value: 'new title', seq: 0 } })
+    receive?.(f.session, [{ key: 'title', val: 'new title' }, { key: 'goal', val: null }], SessionSeq(0))
+    expect(await stream.next()).toEqual({
+      done: false,
+      value: { type: 'projection', seq: 0, changes: [{ key: 'title', val: 'new title' }, { key: 'goal', val: null }] },
+    })
     expect(observe).not.toHaveBeenCalled()
     f.abort.abort()
     expect(await stream.next()).toMatchObject({ done: true })

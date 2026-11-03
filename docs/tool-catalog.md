@@ -30,23 +30,23 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.workingDirectory`, `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent bash tool; deployment composition supplies the PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.workingDirectory`, `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent pwsh tool, the Windows counterpart of the persistent bash tool; deployment composition supplies a pwsh-dialect PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`, `ctx.fs` | `tool/call`, `fs/observed after view presence/absence, edit absence, or successful mutation`, `tool/result` | - | Standalone view/create/unique literal replace/line insert tool over the filesystem seam; it composes with any shell or terminal API. |
-| `@deepseek-ai/dsh-tool-fs` | `edit`, `read`, `read_image`, `write` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.systemPrompt`, `ctx.attachments (image-tool registration)`, `ctx.llm + an image-capable route (image-tool execution)` | `tool/call`, `fs/write-intent or fs/edit-intent for mutations`, `fs/observed after read presence/absence or successful file operation`, `durable attachment (read_image)`, `tool/result` | - | The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); a deployment that loads these tools is expected to also load it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. |
+| `@deepseek-ai/dsh-tool-fs` | `apply_patch`, `edit`, `read`, `read_image`, `write` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.systemPrompt`, `ctx.attachments (image-tool registration)`, `ctx.llm + an image-capable route (image-tool execution)` | `tool/call`, `fs/write-intent, fs/edit-intent, or fs/delete-intent for mutations`, `fs/observed after read presence/absence or successful file operation`, `durable attachment (read_image)`, `tool/result` | - | The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); the shipped compositions leave its row disabled, so mutations are unconditional unless a deployment enables it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. `apply_patch` registers only with `applyPatch: true`; the catalog sets it so the schema is documented. `dsh-base` and the Web `standard` preset enable it; the Web `ptc` and `cordis` presets and the PTC overlay state `applyPatch: false`. |
 | `@deepseek-ai/dsh-tool-fs-search` | `glob`, `grep` | `ctx.workingDirectory`, `ctx.tools`, `ctx.subprocess`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments. |
 | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`, `terminal_list`, `terminal_open`, `terminal_read`, `terminal_send`, `terminal_signal` | `ctx.workingDirectory`, `ctx.tools`, `ctx.terminals`, `ctx.systemPrompt`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The six terminal tools are opt-in and complement one-shot shell/filesystem tools. `terminal_send(run_in_background: true)` registers with `ctx.jobs`; TUI, named key sequences, BEL, resize, auto-start, and cross-agent sharing are absent from the schema. |
 | `@deepseek-ai/dsh-tool-goal` | `create_goal`, `get_goal`, `update_goal` | `ctx.tools`, `ctx.agents`, `ctx.goals`, `ctx.systemPrompt`, `a calling Agent in an authorized open turn` | `tool/call`, `goal/change for mutations`, `tool/result` | - | create, edit, pause, and resume require direct-human root authority; complete and blocked also accept the exact current goal round. The default blocked lower bound is three admitted rounds. |
-| `@deepseek-ai/dsh-tool-schedule` | `schedule_create`, `schedule_delete`, `schedule_list`, `schedule_update` | `ctx.tools`, `ctx.schedule` | `tool/call`, `Schedule storage domain create, update, or delete`, `tool/result` | - | A preset or Agent scope mounts this package; the preset decides which agents receive the four management tools. Each call acts on the calling Agent's Session. Accepts after_seconds, explicit absolute at, bounded fixed-rate every_seconds, daily and weekly local times in an explicit IANA zone, and cron as a five-field expression. Management uses the Host storage domain; due messages resume the original Session. |
+| `@deepseek-ai/dsh-tool-schedule` | `schedule_create`, `schedule_edit`, `schedule_list`, `schedule_view` | `ctx.tools`, `ctx.schedule`, `ctx.systemPrompt` | `tool/call`, `Schedule storage domain create, update, or delete`, `tool/result` | - | A preset or Agent scope mounts this package and decides which agents receive its tools. Management reads and writes Host tasks by id across Sessions. Tasks store an RFC 5545 recurrence and an existing, first-created-and-reused, or per-run-new Session target. Delegated subagents cannot call these tools. |
 | `@deepseek-ai/dsh-tool-lsp` | `lsp` | `ctx.workingDirectory`, `ctx.tools`, `ctx.lsp`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | The lsp tool keeps provider selection and language-server subprocesses behind ctx.lsp, so its model-visible schema stays stable across providers. Requires a registered provider (e.g. `@deepseek-ai/dsh-lsp-stdio`) at runtime; without one, a query returns the structured `LSP_UNAVAILABLE` error rather than changing the schema. |
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`, `ctx.workflowEngine`, `ctx.subagents`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents every fresh round)` | `tool/call`, `tool/result`, `workflow and child session events during execution` | - | A fixed foreground workflow starts one fresh structured child per round; the model selects only the immutable objective and an optional round cap. |
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.workingDirectory`, `ctx.tools`, `ctx.agents`, `ctx.skills` | `tool/call`, `tool/result`, `user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`, `session_event_search`, `session_event_trace`, `session_search`, `session_trace` | `ctx.tools`, `ctx.systemPrompt`, `ctx.sessionQuery`, `ctx.agents`, `a calling Agent for workspace authority` | `tool/call`, `tool/result` | - | The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies. |
 | `@deepseek-ai/dsh-experimental-tool-subagent-oar` | `subagent_oar` | `ctx.tools`, `ctx.subagents` | `tool/call`, `tool/result`, `parent subagent catalog and completion notices` | - | The subagent_oar tool selects among configured aliases for external providers. This catalog shows Codex and Claude Code aliases; each deployment chooses its providers. Native model and permission settings belong to the selected provider configuration. |
 | `@deepseek-ai/dsh-tool-subagent` | `list_subagent_models`, `subagent` | `ctx.tools`, `ctx.subagents`, `ctx.systemPrompt`, `ctx.sessionProjections`, `ctx.llm for model discovery and selected-route validation` | `tool/call`, `tool/result`, `child session events through the chosen provider` | `subagent`, `subagent_fork` | The load-time `toolName` selects the delegation name (default `subagent`); `modelSelection` adds optional route fields. `modelDiscovery` defaults off and registers shared discovery on one instance per scope. Web and Desktop presets enable spawn discovery and route fields and leave `subagent_fork` route fields disabled. The Host settings service records authorization for each new top-level Session; child Sessions inherit it. Without a recorded policy, discovery and explicit selection permit only the current parent route. Every delegation returns a child id promptly; local children accept follow-ups, while external backends report their single execution automatically. |
-| `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`, `list_agents`, `send_message` | `ctx.tools`, `ctx.subagents`, `ctx.agents` | `tool/call`, `tool/result`, `child session events through ctx.subagents` | - | The globally named discovery, interruption, and local-message tools over managed subagents: provider-bound `tool-subagent` instances register distinct delegation tools, while one instance of this package registers `send_message`, `interrupt_agent`, and `list_agents`. |
+| `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`, `list_agents`, `send_message`, `wait_agent` | `ctx.tools`, `ctx.subagents`, `ctx.agents` | `tool/call`, `tool/result`, `child session events through ctx.subagents` | - | The shared control tools discover and contact agents in the subagent tree, interrupt owned descendants, and wait for input in the caller’s inbox. Provider-bound `tool-subagent` instances supply delegation tools. |
 | `@deepseek-ai/dsh-tool-jobs` | `job_kill`, `job_list`, `job_output` | `ctx.tools`, `ctx.jobs`, `ctx.systemPrompt` | `tool/call`, `tool/result`, `user/message via agent.inject() for background completion notices` | - | The kind-agnostic background-job controller: background bash commands and PTY sends are read, listed, and killed through the same three tools. Loading the plugin attaches the controller that arms producers' `ctx.jobs.start()`. |
-| `@deepseek-ai/dsh-experimental-tool-agent-team` | `interrupt_agent`, `list_agents`, `send_message`, `spawn_teammate`, `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update`, `wait_agent` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `an exact live Team member Agent` | `tool/call`, `team/member`, `team/task`, `agent/inbox/spliced`, `user/message on inbox claim`, `tool/result` | - | All nine tools are scoped to implicit Team Leads and durable teammates. The shipped dsh-base bundle keeps the package disabled; the documented Agent Teams profile patch enables it while disabling the legacy continuable-child control names. |
+| `@deepseek-ai/dsh-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | Four task-board tools share the subagent tree’s root Session. Enabling Team mode on the root Session adds task-board guidance alongside standard subagent delegation and control tools. Standard subagent controls provide required identity independently of Team mode. |
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`, `owning Agent session` | `tool/call`, `todo/write`, `tool/result` | - | todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task. |
 | `@deepseek-ai/dsh-tool-working-directory` | `working_directory` | `ctx.tools`, `ctx.workingDirectory` | `tool/call`, `working-directory/change`, `user context for directory changes`, `tool/result` | - | Reads or changes the calling Session directory. Existing shells and processes retain their own directories; origin metadata and permission roots stay fixed. |
-| `@deepseek-ai/dsh-experimental-tool-worktree` | `create_worktree` | `ctx.tools`, `ctx.worktrees`, `a calling Agent` | `tool/call`, `Git branch and checkout`, `working-directory/change`, `tool/result` | - | Explicit experimental composition only. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout. |
+| `@deepseek-ai/dsh-experimental-tool-worktree` | `create_worktree` | `ctx.tools`, `ctx.worktrees`, `a calling Agent` | `tool/call`, `Git branch and checkout`, `working-directory/change`, `tool/result` | - | Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout. |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
@@ -1043,6 +1043,27 @@ Standalone view/create/unique literal replace/line insert tool over the filesyst
 
 ## `@deepseek-ai/dsh-tool-fs`
 
+### `apply_patch`
+
+Create, update, delete, or move UTF-8 text files with one Codex-style patch; prefer it over multiple edit calls when a change spans several files or separated regions.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "string",
+      "description": "Codex patch text: start with *** Begin Patch and end with *** End Patch. Use *** Add File: path with + lines; *** Update File: path, optionally followed by *** Move to: path, with @@ or @@ context and space-prefixed context, + added, or - removed lines; *** End of File anchors the last hunk to the file end. Use *** Delete File: path to delete. Paths are relative to the Session working directory."
+    }
+  },
+  "required": [
+    "input"
+  ]
+}
+```
+
+Source: [`packages/fs/tool-fs/src/index.ts`](../packages/fs/tool-fs/src/index.ts)
+
 ### `edit`
 
 Edit an existing UTF-8 text file by replacing literal text.
@@ -1154,7 +1175,7 @@ Create or fully replace a UTF-8 text file.
 
 Source: [`packages/fs/tool-fs/src/index.ts`](../packages/fs/tool-fs/src/index.ts)
 
-The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); a deployment that loads these tools is expected to also load it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input.
+The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); the shipped compositions leave its row disabled, so mutations are unconditional unless a deployment enables it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. `apply_patch` registers only with `applyPatch: true`; the catalog sets it so the schema is documented. `dsh-base` and the Web `standard` preset enable it; the Web `ptc` and `cordis` presets and the PTC overlay state `applyPatch: false`.
 
 <a id="deepseek-aidsh-tool-fs-search"></a>
 
@@ -1481,134 +1502,48 @@ create, edit, pause, and resume require direct-human root authority; complete an
 
 ### `schedule_create`
 
-Create a reminder in the current session that delivers prompt when it becomes due. Supply exactly one timing parameter: after_seconds, at, every_seconds, daily, weekly, or cron. Local times that do not exist in the zone are skipped; repeated local times fire once, at the earlier instant. After downtime, a recurring reminder delivers only its latest missed occurrence. Delivery can repeat after a crash.
+Create a scheduled task. At each occurrence of rrule, prompt is delivered to the target session as a scheduled message from the user. The result includes the task id and the next occurrence as scheduledAt in UTC and scheduledAtLocal in the zone of rrule. After downtime, only the latest missed occurrence is delivered. Delivery can repeat after a crash.
 
 ```json
 {
   "type": "object",
   "properties": {
-    "prompt": {
-      "type": "string",
-      "description": "Reminder content to present when the target becomes due."
-    },
     "title": {
       "type": "string",
-      "description": "Concise task name in the user's language, at most 120 characters. Name only the core action and subject; keep essential target identifiers such as PR numbers and branch names. Do not include execution frequency (e.g. daily, hourly), scheduled dates/times, time zones, task status, or configuration and execution details (e.g. read-only mode, profile-tag filters), even when embedded in the requested or existing title. Do not append parenthetical notes. Put scheduling information in the timing parameters and execution instructions in prompt."
+      "description": "Task name of at most 120 characters in the user's language: action plus object. Omit timing, status, ids, and bracketed suffixes."
     },
-    "after_seconds": {
-      "type": "number",
-      "description": "Delay in whole seconds."
+    "prompt": {
+      "type": "string",
+      "description": "Instruction delivered at each occurrence."
     },
-    "every_seconds": {
-      "type": "number",
-      "description": "Fixed-rate interval in whole seconds, at least 60, aligned to the creation time; changing it with schedule_update re-aligns it to the save time."
+    "rrule": {
+      "type": "string",
+      "description": "Supported RFC 5545 subset: one DTSTART line, a newline, and one RRULE line. DTSTART ends in Z for UTC or carries TZID with an IANA time zone; a fixed offset such as UTC+5 is Etc/GMT-5, with the sign reversed. DTSTART must name an existing local time. A TZID rule keeps local clock time across daylight-saving changes; generated nonexistent local times are skipped, and repeated ones occur once, at the earlier instant. DTSTART may be in the past; delivery starts with the first occurrence after creation. A one-time delivery is RRULE:FREQ=DAILY;COUNT=1. No SECONDLY; BYSECOND takes one value. COUNT is at most 1000; use UNTIL for longer rules. MINUTELY and HOURLY accept no BY parts, so select clock times with DAILY or WEEKLY plus BYHOUR and BYMINUTE. BYMONTHDAY and ordinal BYDAY require MONTHLY or YEARLY; BYYEARDAY and BYWEEKNO require YEARLY. Ordinal BYDAY cannot combine with BYWEEKNO. Each FREQ period allows at most 10080 candidates before BYSETPOS, which accepts at most 31 values. UNTIL is a UTC instant ending in Z. Example: \"DTSTART;TZID=Asia/Singapore:20260901T080000\\nRRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1\""
     },
-    "daily": {
-      "type": "object",
-      "description": "Every day at a local time.",
-      "additionalProperties": false,
-      "properties": {
-        "time": {
-          "type": "string",
-          "description": "HH:mm:ss with optional 1-3 fractional digits, for example 23:00:00."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        }
-      },
-      "required": [
-        "time",
-        "time_zone"
+    "target": {
+      "type": "string",
+      "description": "this_session delivers to this session; new_once delivers to the same new session every time, opened at the first delivery; new opens a different new session for every delivery. New sessions use this session's working directory and preset. With this_session or new_once, a delivery waits until the previous one finishes, and only the latest occurrence that passed meanwhile is delivered. Use this_session for reminders and for follow-ups to this conversation; use new_once or new for independent work, such as a recurring report, and whenever the user asks for a new conversation.",
+      "enum": [
+        "this_session",
+        "new_once",
+        "new"
       ]
-    },
-    "weekly": {
-      "type": "object",
-      "description": "On the given weekdays at a local time.",
-      "additionalProperties": false,
-      "properties": {
-        "time": {
-          "type": "string",
-          "description": "HH:mm:ss with optional 1-3 fractional digits, for example 09:00:00."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        },
-        "weekdays": {
-          "type": "array",
-          "description": "ISO weekdays, Monday 1 through Sunday 7, without repetitions.",
-          "items": {
-            "type": "integer"
-          }
-        }
-      },
-      "required": [
-        "time",
-        "time_zone",
-        "weekdays"
-      ]
-    },
-    "cron": {
-      "type": "object",
-      "description": "Five-field Vixie cron expression in a time zone.",
-      "additionalProperties": false,
-      "properties": {
-        "expression": {
-          "type": "string",
-          "description": "minute hour day-of-month month day-of-week, for example \"*/15 9-17 * * 1-5\". When both day fields are restricted, a date matches if either one matches."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        }
-      },
-      "required": [
-        "expression",
-        "time_zone"
-      ]
-    },
-    "at": {
-      "oneOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "date": {
-              "type": "string"
-            },
-            "time": {
-              "type": "string"
-            },
-            "time_zone": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "date",
-            "time",
-            "time_zone"
-          ]
-        }
-      ],
-      "description": "Absolute target: an RFC 3339 date-time with offset, or a local date, time, and IANA time_zone."
     }
   },
   "required": [
+    "title",
     "prompt",
-    "title"
+    "rrule",
+    "target"
   ]
 }
 ```
 
 Source: [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
 
-### `schedule_delete`
+### `schedule_edit`
 
-Delete a reminder in the current session, active or inactive. Deletion does not retract a reminder message that is already queued.
+Update, pause, resume, or delete one scheduled task by id. Deleting does not retract queued messages.
 
 ```json
 {
@@ -1616,11 +1551,49 @@ Delete a reminder in the current session, active or inactive. Deletion does not 
   "properties": {
     "id": {
       "type": "string",
-      "description": "Exact schedule id."
+      "description": "Task id."
+    },
+    "action": {
+      "type": "string",
+      "description": "update applies the provided fields, at least one; delete removes the task.",
+      "enum": [
+        "update",
+        "delete"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "description": "Task name of at most 120 characters in the user's language: action plus object. Omit timing, status, ids, and bracketed suffixes."
+    },
+    "prompt": {
+      "type": "string",
+      "description": "New instruction delivered at each occurrence."
+    },
+    "rrule": {
+      "type": "string",
+      "description": "New recurrence in the schedule_create rrule format."
+    },
+    "target": {
+      "type": "string",
+      "description": "Omit to retain the destination and its creation settings. Providing target replaces them; new_once reserves a different Session. New targets capture this Session's working directory and preset. Choices are the same as schedule_create.",
+      "enum": [
+        "this_session",
+        "new_once",
+        "new"
+      ]
+    },
+    "active": {
+      "type": "boolean",
+      "description": "false pauses the task; true resumes only if its timing has a future occurrence. Otherwise provide a new rrule."
+    },
+    "expectedUpdatedAt": {
+      "type": "string",
+      "description": "updatedAt from the latest result that returned this task; if the task changed after that result, the result is schedule_conflict and nothing changes."
     }
   },
   "required": [
-    "id"
+    "id",
+    "action"
   ]
 }
 ```
@@ -1629,20 +1602,33 @@ Source: [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/to
 
 ### `schedule_list`
 
-List the active reminders in the current session.
+List scheduled tasks, including tasks created from other sessions. Active tasks come first, ordered by scheduledAt.
 
 ```json
 {
   "type": "object",
-  "properties": {}
+  "properties": {
+    "active": {
+      "type": "boolean",
+      "description": "true for active tasks only; false for paused and ended tasks only; omitted for all tasks."
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Page size from 1 to 500; defaults to 100."
+    },
+    "offset": {
+      "type": "integer",
+      "description": "Number of tasks to skip; defaults to 0."
+    }
+  }
 }
 ```
 
 Source: [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
 
-### `schedule_update`
+### `schedule_view`
 
-Change a reminder in place, keeping its id. Supply a new title, prompt, or at most one timing parameter; omitted fields keep their stored values. To change a relative delay, create a new reminder.
+View one scheduled task by id.
 
 ```json
 {
@@ -1650,112 +1636,7 @@ Change a reminder in place, keeping its id. Supply a new title, prompt, or at mo
   "properties": {
     "id": {
       "type": "string",
-      "description": "Schedule id returned by schedule_list."
-    },
-    "title": {
-      "type": "string",
-      "description": "New task name; follow the schedule_create title rules."
-    },
-    "prompt": {
-      "type": "string",
-      "description": "New reminder content."
-    },
-    "every_seconds": {
-      "type": "number",
-      "description": "Fixed-rate interval in whole seconds, at least 60, aligned to the creation time; changing it with schedule_update re-aligns it to the save time."
-    },
-    "daily": {
-      "type": "object",
-      "description": "Every day at a local time.",
-      "additionalProperties": false,
-      "properties": {
-        "time": {
-          "type": "string",
-          "description": "HH:mm:ss with optional 1-3 fractional digits, for example 23:00:00."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        }
-      },
-      "required": [
-        "time",
-        "time_zone"
-      ]
-    },
-    "weekly": {
-      "type": "object",
-      "description": "On the given weekdays at a local time.",
-      "additionalProperties": false,
-      "properties": {
-        "time": {
-          "type": "string",
-          "description": "HH:mm:ss with optional 1-3 fractional digits, for example 09:00:00."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        },
-        "weekdays": {
-          "type": "array",
-          "description": "ISO weekdays, Monday 1 through Sunday 7, without repetitions.",
-          "items": {
-            "type": "integer"
-          }
-        }
-      },
-      "required": [
-        "time",
-        "time_zone",
-        "weekdays"
-      ]
-    },
-    "cron": {
-      "type": "object",
-      "description": "Five-field Vixie cron expression in a time zone.",
-      "additionalProperties": false,
-      "properties": {
-        "expression": {
-          "type": "string",
-          "description": "minute hour day-of-month month day-of-week, for example \"*/15 9-17 * * 1-5\". When both day fields are restricted, a date matches if either one matches."
-        },
-        "time_zone": {
-          "type": "string",
-          "description": "UTC or IANA Area/Location, for example Asia/Shanghai."
-        }
-      },
-      "required": [
-        "expression",
-        "time_zone"
-      ]
-    },
-    "at": {
-      "oneOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "date": {
-              "type": "string"
-            },
-            "time": {
-              "type": "string"
-            },
-            "time_zone": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "date",
-            "time",
-            "time_zone"
-          ]
-        }
-      ],
-      "description": "Absolute target: an RFC 3339 date-time with offset, or a local date, time, and IANA time_zone."
+      "description": "Task id."
     }
   },
   "required": [
@@ -1766,7 +1647,7 @@ Change a reminder in place, keeping its id. Supply a new title, prompt, or at mo
 
 Source: [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts)
 
-A preset or Agent scope mounts this package; the preset decides which agents receive the four management tools. Each call acts on the calling Agent's Session. Accepts after_seconds, explicit absolute at, bounded fixed-rate every_seconds, daily and weekly local times in an explicit IANA zone, and cron as a five-field expression. Management uses the Host storage domain; due messages resume the original Session.
+A preset or Agent scope mounts this package and decides which agents receive its tools. Management reads and writes Host tasks by id across Sessions. Tasks store an RFC 5545 recurrence and an existing, first-created-and-reused, or per-run-new Session target. Delegated subagents cannot call these tools.
 
 <a id="deepseek-aidsh-tool-lsp"></a>
 
@@ -2158,7 +2039,7 @@ The subagent_oar tool selects among configured aliases for external providers. T
 
 ### `list_subagent_models`
 
-Inspect subagent models without changing the current Agent. No arguments: providers; `provider`: allowed models; `provider` + `model`: that model and its reasoning efforts. Inspect options here before selecting a child provider and model; use returned ids for delegation.
+Inspect the routes available for explicit subagent model selection. No arguments: authorized providers. `provider`: that provider's authorized models. `provider` + `model`: that model and its reasoning efforts. Query when choosing an explicit child route or reasoning effort. Omit optional fields rather than sending empty strings.
 
 ```json
 {
@@ -2180,7 +2061,7 @@ Source: [`packages/subagent/tool-subagent/src/list-models.ts`](../packages/subag
 
 ### `subagent`
 
-Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.
+Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes.
 
 ```json
 {
@@ -2192,7 +2073,7 @@ Delegate a self-contained task to a subagent (a separate agent that works in its
     },
     "description": {
       "type": "string",
-      "description": "A short (3-5 word) description of the delegated task, for display."
+      "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
     },
     "prompt": {
       "type": "string",
@@ -2216,7 +2097,7 @@ The load-time `toolName` selects the delegation name (default `subagent`); `mode
 
 ### `interrupt_agent`
 
-Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local direct child's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.
+Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.
 
 ```json
 {
@@ -2237,21 +2118,12 @@ Source: [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/sub
 
 ### `list_agents`
 
-List subagents you started, with their ids, labels, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation.
+List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry ids, descriptions, and status; descendant rows carry parent ids and depth from the root. You can message any other agent in the subagent tree listed as running or inactive. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.
 
 ```json
 {
   "type": "object",
-  "properties": {
-    "scope": {
-      "type": "string",
-      "description": "children (default) lists direct children, which accept send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent.",
-      "enum": [
-        "children",
-        "descendants"
-      ]
-    }
-  }
+  "properties": {}
 }
 ```
 
@@ -2259,7 +2131,7 @@ Source: [`packages/subagent/tool-subagent-control/src/list-agents.ts`](../packag
 
 ### `send_message`
 
-Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer.
+Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation.
 
 ```json
 {
@@ -2267,7 +2139,7 @@ Send a message to an agent. A working agent receives it at its next step; an idl
   "properties": {
     "agent_id": {
       "type": "string",
-      "description": "The agent id of your direct continuable child, or your direct parent when you are a resident continuable child."
+      "description": "The agent id of another member of your subagent tree, as shown by list_agents."
     },
     "message": {
       "type": "string",
@@ -2283,7 +2155,25 @@ Send a message to an agent. A working agent receives it at its next step; an idl
 
 Source: [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts)
 
-The globally named discovery, interruption, and local-message tools over managed subagents: provider-bound `tool-subagent` instances register distinct delegation tools, while one instance of this package registers `send_message`, `interrupt_agent`, and `list_agents`.
+### `wait_agent`
+
+Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately when that input is already pending.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "timeout_ms": {
+      "type": "integer",
+      "description": "Wait duration in milliseconds, from 10000 through 3600000. Defaults to 30000."
+    }
+  }
+}
+```
+
+Source: [`packages/subagent/tool-subagent-control/src/wait-agent.ts`](../packages/subagent/tool-subagent-control/src/wait-agent.ts)
+
+The shared control tools discover and contact agents in the subagent tree, interrupt owned descendants, and wait for input in the caller’s inbox. Provider-bound `tool-subagent` instances supply delegation tools.
 
 <a id="deepseek-aidsh-tool-jobs"></a>
 
@@ -2358,108 +2248,9 @@ Source: [`packages/jobs/tool-jobs/src/index.ts`](../packages/jobs/tool-jobs/src/
 
 The kind-agnostic background-job controller: background bash commands and PTY sends are read, listed, and killed through the same three tools. Loading the plugin attaches the controller that arms producers' `ctx.jobs.start()`.
 
-<a id="deepseek-aidsh-experimental-tool-agent-team"></a>
+<a id="deepseek-aidsh-tool-agent-team"></a>
 
-## `@deepseek-ai/dsh-experimental-tool-agent-team`
-
-### `interrupt_agent`
-
-Interrupt one teammate's current turn while preserving its pending inbox. Team Lead only.
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "target": {
-      "type": "string",
-      "description": "Teammate target returned by spawn_teammate or list_agents."
-    }
-  },
-  "required": [
-    "target"
-  ]
-}
-```
-
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
-
-### `list_agents`
-
-List the Lead and every durable teammate with an addressable target and current availability. inactive means no turn is executing, not a task result. provisioning and failed describe member creation.
-
-```json
-{
-  "type": "object",
-  "properties": {}
-}
-```
-
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
-
-### `send_message`
-
-Send one message to another Team member. A running target receives it at the nearest step boundary; an inactive target starts or resumes a turn.
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "target": {
-      "type": "string",
-      "description": "Member target returned by spawn_teammate or list_agents, including lead."
-    },
-    "message": {
-      "type": "string",
-      "description": "Self-contained message for the target."
-    }
-  },
-  "required": [
-    "target",
-    "message"
-  ]
-}
-```
-
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
-
-### `spawn_teammate`
-
-Create one named, durable teammate. Only the Team Lead may call this tool.
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "name": {
-      "type": "string",
-      "description": "Unique lower-kebab-case teammate name."
-    },
-    "description": {
-      "type": "string",
-      "description": "Short description of the delegated responsibility."
-    },
-    "prompt": {
-      "type": "string",
-      "description": "Complete initial task for the teammate."
-    },
-    "context": {
-      "type": "string",
-      "description": "fresh starts without Lead history; fork inherits completed Lead turns. Defaults to fresh.",
-      "enum": [
-        "fresh",
-        "fork"
-      ]
-    }
-  },
-  "required": [
-    "name",
-    "description",
-    "prompt"
-  ]
-}
-```
-
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+## `@deepseek-ai/dsh-tool-agent-team`
 
 ### `team_task_create`
 
@@ -2499,7 +2290,7 @@ Create one unowned pending task on the shared Team task board.
 }
 ```
 
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+Source: [`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 ### `team_task_get`
 
@@ -2520,7 +2311,7 @@ Read the complete latest value of one shared task before changing or executing i
 }
 ```
 
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+Source: [`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 ### `team_task_list`
 
@@ -2541,7 +2332,7 @@ List shared tasks, including readiness, owner, revision, blockers, and write-sco
     },
     "owner": {
       "type": "string",
-      "description": "Optional member target from spawn_teammate or list_agents, matching ownerName; use unowned for tasks without an owner."
+      "description": "Optional exact ownerId filter; use unowned for tasks without an owner."
     },
     "ready": {
       "type": "boolean",
@@ -2559,7 +2350,7 @@ List shared tasks, including readiness, owner, revision, blockers, and write-sco
 }
 ```
 
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+Source: [`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
 ### `team_task_update`
 
@@ -2615,7 +2406,7 @@ Compare-and-set a shared task action using the latest revision from team_task_ge
     },
     "owner": {
       "type": "string",
-      "description": "Member target from spawn_teammate or list_agents for Lead-only reassign; omit to unassign."
+      "description": "Agent id of the root or any continuable descendant for root-only reassign; omit to unassign."
     }
   },
   "required": [
@@ -2626,27 +2417,9 @@ Compare-and-set a shared task action using the latest revision from team_task_ge
 }
 ```
 
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
+Source: [`packages/team/tool-agent-team/src/index.ts`](../packages/team/tool-agent-team/src/index.ts)
 
-### `wait_agent`
-
-Wait for the next teammate status, message, or shared-task change after this call starts. This never wakes inactive members and returns noProgress immediately when no other member is running or provisioning. Re-list after wakeup or timeout instead of polling.
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "timeout_ms": {
-      "type": "integer",
-      "description": "Wait duration in milliseconds, from 10000 through 3600000. Defaults to 30000."
-    }
-  }
-}
-```
-
-Source: [`packages/experimental/tool-agent-team/src/index.ts`](../packages/experimental/tool-agent-team/src/index.ts)
-
-All nine tools are scoped to implicit Team Leads and durable teammates. The shipped dsh-base bundle keeps the package disabled; the documented Agent Teams profile patch enables it while disabling the legacy continuable-child control names.
+Four task-board tools share the subagent tree’s root Session. Enabling Team mode on the root Session adds task-board guidance alongside standard subagent delegation and control tools. Standard subagent controls provide required identity independently of Team mode.
 
 <a id="deepseek-aidsh-tool-todo"></a>
 
@@ -2748,7 +2521,7 @@ Create a new Git branch and worktree from a local commit, branch, or tag, then c
 
 Source: [`packages/experimental/tool-worktree/src/index.ts`](../packages/experimental/tool-worktree/src/index.ts)
 
-Explicit experimental composition only. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout.
+Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout.
 
 <a id="deepseek-aidsh-tool-workflow"></a>
 
@@ -2897,7 +2670,7 @@ Search the web for current information. Returns an optional summary answer and a
   "properties": {
     "queries": {
       "type": "array",
-      "description": "1–4 search queries; their results are merged.",
+      "description": "1–10 search queries; their results are merged.",
       "items": {
         "type": "string"
       }

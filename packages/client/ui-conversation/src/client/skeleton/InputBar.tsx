@@ -143,15 +143,8 @@ export const InputBar = memo(function InputBar({
   const cardRef = useRef<HTMLDivElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
-  // A continuable child without its live parent cannot accept human input,
-  // but its independent Stop below stays available while it runs.
   const continuable = subagent?.address.mode === 'continuable'
-  const parentOffline = continuable && subagent.parentAvailable !== true
-  // Running input stays free; locked = session removed, the
-  // inert no-workspace state, the machine faces absent (no session), or a
-  // parent-offline continuable child. An owner block also disables input;
-  // adjudicating and submitting render read-only so the draft stays visible.
-  const disabled = removed || inert || !live || blocked !== undefined || parentOffline
+  const disabled = removed || inert || !live || blocked !== undefined
   const locked = disabled
   // The model seat is the ONE control a block leaves live: every block this
   // contract has is cleared by choosing a model, so locking it too would leave
@@ -403,16 +396,14 @@ export const InputBar = memo(function InputBar({
     return translated !== hintKey ? translated : rawHint
   })()
 
-  const placeholderText = placeholder ?? (parentOffline
-    ? t('placeholder.parentOffline')
-    : disabled
-      ? t('placeholder.unavailable')
-      // The steer hint deliberately outranks the plan placeholder:
-      // while it shows, the whole-queue gesture is genuinely available
-      // (the gate never consults plan mode), so the actionable hint wins.
-      : canSteerQueue
-        ? t('placeholder.steerQueue')
-        : planActive ? t('placeholder.plan') : t('placeholder.default'))
+  const placeholderText = placeholder ?? (disabled
+    ? t('placeholder.unavailable')
+  // The steer hint deliberately outranks the plan placeholder:
+  // while it shows, the whole-queue gesture is genuinely available
+  // (the gate never consults plan mode), so the actionable hint wins.
+    : canSteerQueue
+      ? t('placeholder.steerQueue')
+      : planActive ? t('placeholder.plan') : t('placeholder.default'))
 
   return (
     <div className={clsx(css.root, variant === 'hero' && css.hero)}>
@@ -483,7 +474,7 @@ export const InputBar = memo(function InputBar({
         />
         <div ref={rowRef} className={css.row}>
           <div className={css.tools} hidden={activity}>
-            <Tooltip label={t('input.commands')} side="top" delayMs={500}>
+            <Tooltip label={t('input.commands')} side="top" delayMs={500} portal>
               <button
                 type="button"
                 className={css.add}
@@ -524,7 +515,7 @@ export const InputBar = memo(function InputBar({
               {renderSlot('conversation.input.activity', { locked, onActiveChange: setActivity })}
             </div>}
             {interruptible && !cancelDenied && (
-              <Tooltip label={t('input.stop')} shortcutKeys={stopKeys} side="top" delayMs={500} disabled={stopAction === undefined}>
+              <Tooltip label={t('input.stop')} shortcutKeys={stopKeys} side="top" delayMs={500} disabled={stopAction === undefined} portal>
                 <button
                   type="button"
                   className={css.primary}
@@ -540,7 +531,7 @@ export const InputBar = memo(function InputBar({
               </Tooltip>
             )}
             {(primaryStops ? cancelDenied : promptDenied) ? null : (
-              <Tooltip label={primaryStops ? t('input.stop') : primaryLabel} shortcutKeys={primaryStops ? stopKeys : undefined} side="top" delayMs={500} disabled={primaryDisabled}>
+              <Tooltip label={primaryStops ? t('input.stop') : primaryLabel} shortcutKeys={primaryStops ? stopKeys : undefined} side="top" delayMs={500} disabled={primaryDisabled} portal>
                 <button
                   type="button"
                   className={css.primary}

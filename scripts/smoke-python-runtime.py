@@ -1522,6 +1522,7 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
         task = root / "dynamic-tool-task.txt"
         task.write_text("Call snapshot_ping once.\n", encoding="utf-8")
         patch = write_profile_patch(root, "dynamic-tools.patch.yml", sessions, [
+            {"id": "tool-fs", "config": {"applyPatch": True}},
             {"id": "llm-deepseek", "config": {"models": [
                 {"id": "smoke-model", "toolUpdate": "addition-only"},
             ]}},
@@ -1842,6 +1843,11 @@ def smoke_sdk_snapshot_mode(
         expected_children = 2 if mode == "native" else 0
         if methods.count("subagent.started") != expected_children or methods.count("subagent.finished") != expected_children:
             raise AssertionError(f"{mode} advanced snapshot emitted unexpected subagent lifecycle: {methods}")
+        creators = {item.payload["childSessionId"]: item.payload["parentSessionId"]
+                    for item in result.notifications if item.method == "subagent.started"}
+        for item in result.notifications:
+            if item.method == "subagent.finished":
+                assert item.payload["parentSessionId"] == creators[item.payload["childSessionId"]]
         ptc_events = [event for event in result.events
                       if event.get("type") in ("tool/ptc-dispatch-start", "tool/ptc-dispatch")]
         expected_ptc_calls = 2 if mode == "ptc" else 0

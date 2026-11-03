@@ -427,7 +427,7 @@
   gap: 0;
   height: 38px;
   padding: 8px 12px;
-  margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px) 10px;
+  margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px);
   box-sizing: border-box;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: var(--dsw-radius-md);
@@ -530,7 +530,149 @@
   }
 }
 
+.scrollRegion {
+  margin-top: 4px;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The workspace section is `100cqh` of this bounded region, one viewport tall without a resize observer. */
+.root:not(.collapsed) .scrollRegion {
+  container-type: size;
+}
+
+/* Both gaps scroll away; ordinary rows do not force overflow when they fit. The
+   trailing column keeps content 8px from the sidebar edge; this viewport draws no
+   scrollbar of its own. */
+.scrollArea {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) calc(var(--dsh-sidebar-inline-padding) - 2px);
+  grid-template-rows: 8px max-content 2px max-content;
+  align-content: start;
+  margin-left: -4px;
+  margin-right: calc(2px - var(--dsh-sidebar-inline-padding));
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Expanded, this viewport only scrolls the navigation away; the section below
+   scrolls its own rows and draws the only visible scrollbar. Descendants query
+   the scroll state to take scrolling once this viewport ends. */
+.root:not(.collapsed) .scrollArea {
+  container-type: scroll-state;
+  scrollbar-width: none;
+}
+
+/* Safari versions without `scrollbar-width` still use the WebKit scrollbar. */
+.root:not(.collapsed) .scrollArea::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollArea::before,
+.scrollArea::after {
+  content: '';
+  grid-column: 2;
+  pointer-events: none;
+}
+
+.scrollArea::before { grid-row: 1; }
+.scrollArea::after { grid-row: 3; }
+
+.scrollFade {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 24px;
+  background: linear-gradient(to bottom, transparent, var(--dsw-specific-sidebar-fill));
+  pointer-events: none;
+}
+
+:global([data-platform='darwin']) .scrollFade,
+.collapsed .scrollFade,
+.collapsed .scrollArea::before,
+.collapsed .scrollArea::after {
+  display: none;
+}
+
+.collapsed .scrollRegion {
+  margin-top: 0;
+}
+
+.collapsed .scrollArea {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+/* The entry wrapper paints the row fill, so it carries the shared paint inset
+   instead of its inner panel row. */
+.panelEntry {
+  position: relative;
+  display: flex;
+  border-inline: var(--dsh-sidebar-paint-inset) solid transparent;
+  border-radius: var(--dsw-radius-md);
+  background-clip: padding-box;
+}
+
+.panelEntryWide > *:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.panelEntryWide .panelRow {
+  width: 100%;
+  margin: 0;
+  border-inline: 0;
+  padding-right: 38px;
+  background: transparent;
+}
+
+.panelEntryActive,
+.panelEntry:has(:focus-visible) {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+
+.panelUnpin {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-caption);
+  cursor: pointer;
+}
+
+.panelUnpin:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .panelUnpin { opacity: 0; }
+  .panelEntry:hover { background-color: var(--dsw-alias-interactive-bg-hover); }
+  .panelEntry .panelRow:hover { background: transparent; }
+  .panelUnpin:hover { color: var(--dsw-alias-label-primary); }
+  .panelEntry:hover .panelUnpin,
+  .panelEntry:has(:focus-visible) .panelUnpin { opacity: 1; }
+}
+
 .panelList {
+  grid-column: 2;
+  grid-row: 2;
   flex: none;
   display: flex;
   flex-direction: column;
@@ -545,8 +687,8 @@
   align-items: center;
   gap: var(--dsh-sidebar-label-gap);
   margin: 0;
-  min-height: 36px;
-  padding: 7px calc(var(--dsh-sidebar-row-padding) - var(--dsh-sidebar-paint-inset));
+  min-height: 32px;
+  padding: 5px calc(var(--dsh-sidebar-row-padding) - var(--dsh-sidebar-paint-inset));
   box-sizing: border-box;
   border: none;
   border-inline: var(--dsh-sidebar-paint-inset) solid transparent;
@@ -564,11 +706,6 @@
   .panelRow:hover {
     background-color: var(--dsw-alias-interactive-bg-hover);
   }
-}
-
-.panelRow.panelActive {
-  background-color: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-primary);
 }
 
 .panelRow:focus-visible {
@@ -610,6 +747,10 @@
   margin-bottom: 12px;
 }
 
+.collapsed .panelEntry {
+  border-inline: 0;
+}
+
 .collapsed .panelRow {
   width: 36px;
   height: 36px;
@@ -621,24 +762,18 @@
   color: var(--dsw-alias-label-primary);
 }
 
-/* Region seat: always mounted so the foot never moves. Its trailing margin
-   cancels the wide shell inset so the nested scrollbar can sit at the sidebar
-   edge; the browser restores that inset inside its own rows. */
+/* The workspace seat stays mounted while its wide and rail bodies change. */
 .regionArea {
-  flex: 1;
+  grid-column: 2;
+  grid-row: 4;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  margin-left: -4px;
-  margin-right: calc(-1 * var(--dsh-sidebar-inline-padding));
-  padding-left: 4px;
-  overflow: hidden;
 }
 
 .collapsed .regionArea {
-  margin-left: 0;
-  margin-right: 0;
-  padding-left: 0;
+  flex: 1;
 }
 
 /* Footer seats: additive actions stack above Settings. Each occupant owns its

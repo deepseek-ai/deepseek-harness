@@ -48,7 +48,7 @@ it('offers image actions on file targets, copies absolute paths, and keeps save 
     const copying = registry.resolve(file)
     await copying.ready
     expect(copying.source.getSnapshot().map(action => action.id)).toEqual([
-      'open-in-app.file/sidebar', 'open-in-app.file/reveal', 'open-in-app.file/open',
+      'open-in-app.file/sidebar', 'open-in-app.file/float', 'open-in-app.file/reveal', 'open-in-app.file/open',
       'open-in-app.file/copyPath', 'file-actions.file/copyImage', 'file-actions.file/download', 'file-actions.file/saveAs',
     ])
     copying.select('open-in-app.file/copyPath')
@@ -66,5 +66,10 @@ it('offers image actions on file targets, copies absolute paths, and keeps save 
     expect(image.source.getSnapshot().find(action => action.id.endsWith('/reveal'))?.disabled).toBe(true)
     image.dispose()
     expect(failed).not.toHaveBeenCalled()
+    await fiber.dispose()
+    const unloaded = registry.resolve(file)
+    await unloaded.ready
+    expect(unloaded.source.getSnapshot().filter(action => action.id.startsWith('open-in-app.'))).toEqual([])
+    unloaded.dispose()
   } finally { registry.dispose(); await fiber.dispose() }
 })

@@ -18,6 +18,7 @@
   - button "Split" [disabled]
 - text: {{cwd}}/workspace
 - button "Reload"
-- list:
-  - listitem:
-    - button "t6-refresh.txt"
+- complementary "Workspace files":
+  - list:
+    - listitem:
+      - button "t6-refresh.txt"

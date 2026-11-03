@@ -3,23 +3,23 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-27-adjacent-agent-steer-messaging.md
 /agent-note-adjacent-agents-share-one-steer-send-message-operation:
-  en: 758d31ae04ce0d4f
-  zh: 112475efbd52b9f6
+  en: 9d0af2bae38b1eec
+  zh: 8a6e8502a5195548
 /agent-note-adjacent-agents-share-one-steer-send-message-operation/problem:
-  en: c988b8a3be4e6f19
-  zh: b58011fd8d2e878e
+  en: 5dc4c218f648c27e
+  zh: b48531fac94b25db
 /agent-note-adjacent-agents-share-one-steer-send-message-operation/decision:
-  en: 1188c699ce6e6ca2
-  zh: 4d5b974cd1216f06
+  en: f4789878ac0e79b2
+  zh: 68eb68d34cba810d
 /agent-note-adjacent-agents-share-one-steer-send-message-operation/decision/one-model-tool-and-one-return-instruction:
-  en: 4b0a25389324fa91
-  zh: c2cdd9f7e40ef43b
+  en: 62284bd7dd804188
+  zh: b3a8dfebffc01bdb
 /agent-note-adjacent-agents-share-one-steer-send-message-operation/decision/complete-removal-and-reintroduction-condition:
-  en: 5a9ec6478cf7430c
-  zh: f4c2f067cc72040e
+  en: 8c6d355d91ec83d2
+  zh: fcc74d1e6ef477bf
 /agent-note-adjacent-agents-share-one-steer-send-message-operation/alternatives-considered:
-  en: 1f62d5d938144666
-  zh: dec0f30228c5b7a7
+  en: 7386e88e7051dce7
+  zh: dcea5b9e30374be3
 /agent-note-adjacent-agents-share-one-steer-send-message-operation/consequences:
-  en: d55de74742c3af4b
-  zh: d894f9a33c8e4691
+  en: 9c23dd6ace029ec3
+  zh: f08ef3f142534843

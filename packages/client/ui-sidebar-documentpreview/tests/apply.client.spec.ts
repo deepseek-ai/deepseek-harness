@@ -43,6 +43,7 @@ interface Recorded {
   store?: unknown
   inject?: unknown
   component: unknown
+  children?: Record<string, unknown>
 }
 
 async function boot() {
@@ -103,6 +104,10 @@ describe('ui-sidebar-documentpreview apply', () => {
       ['sidebar.right.tab.document.office.pdf', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office', 'sidebarPdf', LazyPdfBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/excel', 'sidebarExcel', LazyExcelBody],
       ['sidebar.right.tab.document', '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/code', 'sidebarCodePreview', CodeBody],
+    ])
+    expect(Object.keys(registered[0]!.children!)).toEqual([
+      'sidebar.right.tab.document', 'sidebar.right.tab.document.actions',
+      'sidebar.right.tab.document.unpreviewable', 'sidebar.right.tab.document.action',
     ])
     expect(registered[0]?.store).toBeDefined()
     expect(typeof registered[0]?.inject).toBe('function')

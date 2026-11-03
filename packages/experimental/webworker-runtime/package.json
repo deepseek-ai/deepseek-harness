@@ -33,6 +33,8 @@
     "@yarnpkg/parsers": "^3.1.0",
     "acorn": "^8.18.0",
     "buffer": "^6.0.3",
+    "eslint-scope": "^9.1.2",
+    "eslint-visitor-keys": "^5.0.1",
     "picomatch": "^4.0.7",
     "readable-stream": "^4.7.0",
     "@deepseek-ai/dsh-client-web": "workspace:*",
@@ -63,6 +65,7 @@
     "@deepseek-ai/dsh-subagent": "workspace:*",
     "@deepseek-ai/dsh-subprocess-local": "workspace:*",
     "@deepseek-ai/node-addon-system": "workspace:~",
+    "@types/estree": "^1.0.9",
     "@types/picomatch": "^4.0.3",
     "@types/readable-stream": "^4.0.24",
     "chokidar": "5.0.0"

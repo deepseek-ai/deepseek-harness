@@ -394,13 +394,16 @@ describe('forgeSession lifecycle', () => {
   it('unregisters its projection and stops discovery when the service fiber is disposed', async () => {
     const { ctx, provider, session, service } = await open()
     create(session, 'create', pullUrl(1))
-    expect(ctx.sessionProjections.checkpoint(session).forgeChangeRequests?.val).toMatchObject({ bindings: [{ url: pullUrl(1) }] })
+    const row = ctx.sessionProjections.checkpoint(session).forgeChangeRequests
+    expect(row?.val).toMatchObject({ bindings: [{ url: pullUrl(1) }] })
 
     await service.dispose()
     push(session, 'push', 'feat')
     await settle()
 
-    expect(ctx.sessionProjections.checkpoint(session)).not.toHaveProperty('forgeChangeRequests')
+    // The released unit keeps its last row and folds no event after the unload.
+    expect(ctx.sessionProjections.checkpoint(session)).toHaveProperty('forgeChangeRequests', row)
+    expect(ctx.sessionProjections.checkpoint(ctx.sessions.create())).not.toHaveProperty('forgeChangeRequests')
     expect(provider.lookups).toEqual([])
   })
 
