@@ -129,6 +129,7 @@ function liveToolDetail(name: string, args: ToolArgs): string {
 
 /**
  * Rank categories by distinct call count, breaking ties by first appearance.
+ * A group whose members are all Context reports one `context` category counting those members; Context beside other members adds no count.
  * @param nodes - process members, including recursive tools.
  * @returns all ranked categories and the latest running tool category and bounded task detail.
  */

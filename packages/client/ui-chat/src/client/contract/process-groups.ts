@@ -1,4 +1,5 @@
 /** Business data for Chat process groups; source Nodes remain in the Chat store. */
+
 /** Process-group category ranked by distinct calls; `context` names a group whose members are all Context. */
 export type ProcessActivity = 'read' | 'readImage' | 'search' | 'write' | 'edit' | 'commands' | 'code'
   | 'webSearch' | 'webFetch' | 'subagents' | 'plan' | 'questions' | 'tools' | 'context'
@@ -6,7 +7,7 @@ export type ProcessActivity = 'read' | 'readImage' | 'search' | 'write' | 'edit'
 /** Categories a live tool call can report. */
 export type RunningProcessActivity = Exclude<ProcessActivity, 'context'>
 
-/** Distinct-call category ranking and the current live task detail. */
+/** Category ranking by distinct calls, or by member count for an all-Context group, and the current live task detail. */
 export interface ProcessActivitySummary {
   readonly counts: readonly { readonly kind: ProcessActivity; readonly count: number }[]
   readonly running: RunningProcessActivity | undefined

@@ -174,7 +174,7 @@ The labels below describe recorded activity, not successful outcomes. For exampl
 | `plan` | Updating the plan | Updated the plan |
 | `questions` | Waiting for your action | Asked questions |
 | `tools` | Calling tools | Called tools |
-| `context` (every member is Context) | — | Injected context |
+| `context` (every member is Context) | Analyzing the request | Injected context |
 
 | Group state | Title composition |
 |---|---|
