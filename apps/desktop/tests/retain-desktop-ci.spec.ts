@@ -1,7 +1,8 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { unzipSync } from 'fflate'
 import { afterEach, expect, it } from 'vitest'
 import { desktopReleasesRoot, retainDesktopCi, resolveDesktopRetentionRunner } from '../scripts/retain-desktop-ci.ts'
 import { verifyRetainedDesktopRelease } from '../scripts/desktop-release-store.ts'
@@ -11,9 +12,7 @@ import { prepareDesktopPublication } from '../scripts/publish-desktop-ci.ts'
 const roots: string[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
 
-it.each([
-  ['mac-arm64', 'notarized'], ['mac-x64', 'notarized'], ['mac-x64', 'unnotarized'], ['win-x64', 'signed'], ['mac-arm64', 'unnotarized'], ['win-x64', 'unsigned'],
-] as const)('retains the complete %s %s release without signing or upload credentials', async (target, qualification) => {
+async function retainedFixture(target: 'win-x64' | 'mac-x64' | 'mac-arm64', qualification: 'unsigned' | 'signed' | 'notarized' | 'unnotarized') {
   const root = await mkdtemp(join(tmpdir(), 'retain-ci-'))
   roots.push(root)
   const appRoot = join(root, 'checkout')
@@ -40,34 +39,63 @@ it.each([
   const directory = await retainDesktopCi(env, appRoot)
   const archiveEnv = { ...env, GITHUB_RUN_ATTEMPT: '3', DESKTOP_RETAINED_DIRECTORY: directory,
     DESKTOP_PACKAGE_ATTEMPT: '2', DESKTOP_PACKAGE_RUNNER: env.RUNNER_NAME }
-  if (target === 'win-x64' && qualification === 'signed' && ['darwin', 'win32'].includes(process.platform)) {
-    const timestamp = Date.UTC(2026, 9, 23, 8, 2, 43) / 1000
-    await utimes(join(directory, 'manifest.json'), timestamp, timestamp)
-    const output = join(root, 'archive-output')
-    execFileSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, '../scripts/archive-desktop-ci.ts')], {
-      env: { ...process.env, ...archiveEnv, DESKTOP_ARCHIVE_NAME: 'fixture.zip', GITHUB_OUTPUT: output, RUNNER_TEMP: root },
-    })
-    const path = (await readFile(output, 'utf8')).trim().slice('path='.length)
-    const listing = execFileSync(process.platform === 'win32' ? 'python' : 'python3', ['-c', `
-import datetime, json, struct, sys, zipfile
-with zipfile.ZipFile(sys.argv[1]) as archive:
-    entry = archive.getinfo('manifest.json')
-    seconds = int(sys.argv[2])
-    assert entry.date_time == datetime.datetime.fromtimestamp(seconds - 1).timetuple()[:6]
-    extra = entry.extra
-    while extra:
-        tag, size = struct.unpack_from('<HH', extra)
-        if tag == 0x5455:
-            assert extra[4] & 1 and struct.unpack_from('<I', extra, 5)[0] == seconds
-            break
-        extra = extra[4 + size:]
-    else:
-        raise AssertionError('missing Unix modification time')
-    assert archive.testzip() is None
-    print(json.dumps(archive.namelist()))
-`, path, String(timestamp)], { encoding: 'utf8' })
-    expect(JSON.parse(listing)).toEqual(['manifest.json', ...names])
+  return { root, debug, names, env, directory, archiveEnv }
+}
+
+const archiveScript = join(import.meta.dirname, '../scripts/archive-desktop-ci.ts')
+
+it.runIf(process.platform === 'darwin' || process.platform === 'win32')('stores installer bytes with local DOS and absolute Unix modification times', async () => {
+  const { root, directory, archiveEnv, names } = await retainedFixture('win-x64', 'signed')
+  const timestamp = Date.UTC(2026, 9, 23, 8, 2, 43) / 1000
+  await utimes(join(directory, 'manifest.json'), timestamp, timestamp)
+  const output = join(root, 'archive-output')
+  execFileSync(process.execPath, ['--import', 'tsx', archiveScript], {
+    env: { ...process.env, ...archiveEnv, TZ: 'TST-3', DESKTOP_ARCHIVE_NAME: 'fixture.zip', GITHUB_OUTPUT: output, RUNNER_TEMP: root },
+  })
+  const path = (await readFile(output, 'utf8')).trim().slice('path='.length)
+  const bytes = await readFile(path)
+  const entries = unzipSync(bytes)
+  expect(Object.keys(entries)).toEqual(['manifest.json', ...names])
+  for (const [name, content] of Object.entries(entries)) expect(Buffer.from(content)).toEqual(await readFile(join(directory, name)))
+  // The first central directory entry describes manifest.json. UTC+3 is 11:02:43 on every test host.
+  const directoryOffset = bytes.readUInt32LE(bytes.length - 22 + 16)
+  expect(bytes.readUInt32LE(directoryOffset)).toBe(0x02014b50)
+  const dosTime = bytes.readUInt16LE(directoryOffset + 12)
+  expect([dosTime >>> 11, (dosTime >>> 5) & 63, (dosTime & 31) * 2]).toEqual([11, 2, 42])
+  const start = directoryOffset + 46 + bytes.readUInt16LE(directoryOffset + 28)
+  const end = start + bytes.readUInt16LE(directoryOffset + 30)
+  let unixTime: number | undefined
+  for (let offset = start; offset < end; offset += 4 + bytes.readUInt16LE(offset + 2)) {
+    if (bytes.readUInt16LE(offset) === 0x5455 && (bytes[offset + 4]! & 1)) unixTime = bytes.readUInt32LE(offset + 5)
   }
+  expect(unixTime).toBe(timestamp)
+})
+
+it.runIf(process.platform === 'darwin' || process.platform === 'win32')('reports a ZIP creation failure without emitting an upload path', async () => {
+  const { root, archiveEnv } = await retainedFixture('win-x64', 'signed')
+  const output = join(root, 'archive-output')
+  const result = spawnSync(process.execPath, ['--import', 'tsx', archiveScript], { encoding: 'utf8',
+    env: { ...process.env, ...archiveEnv, RUNNER_TEMP: root, GITHUB_OUTPUT: output, DESKTOP_ARCHIVE_NAME: 'a'.repeat(256) + '.zip' } })
+  expect(result.status).toBe(1)
+  expect(result.stderr).toContain('desktop archival: ZIP creation failed')
+  await expect(readFile(output)).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it.each(['../escape.zip', '-option.zip', 'missing-extension', 'missing-output'])('rejects invalid archive settings %s without emitting an upload path', async (name) => {
+  const { root, archiveEnv } = await retainedFixture('win-x64', 'signed')
+  const output = join(root, 'archive-output')
+  const result = spawnSync(process.execPath, ['--import', 'tsx', archiveScript], { encoding: 'utf8',
+    env: { ...process.env, ...archiveEnv, RUNNER_TEMP: root, GITHUB_OUTPUT: name === 'missing-output' ? '' : output,
+      DESKTOP_ARCHIVE_NAME: name === 'missing-output' ? 'fixture.zip' : name } })
+  expect(result.status).toBe(1)
+  expect(result.stderr).toContain('desktop archival: invalid ZIP output settings')
+  await expect(readFile(output)).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+it.each([
+  ['mac-arm64', 'notarized'], ['mac-x64', 'notarized'], ['mac-x64', 'unnotarized'], ['win-x64', 'signed'], ['mac-arm64', 'unnotarized'], ['win-x64', 'unsigned'],
+] as const)('retains the complete %s %s release without signing or upload credentials', async (target, qualification) => {
+  const { debug, names, env, archiveEnv } = await retainedFixture(target, qualification)
   await verifyDesktopArchive(archiveEnv)
   await expect(verifyDesktopArchive({ ...archiveEnv, RUNNER_NAME: 'other' })).rejects.toThrow('wrong original machine')
   await expect(verifyDesktopArchive({ ...archiveEnv, DESKTOP_PACKAGE_ATTEMPT: '3' })).rejects.toThrow('original build')

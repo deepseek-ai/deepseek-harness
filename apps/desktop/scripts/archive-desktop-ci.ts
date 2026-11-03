@@ -1,4 +1,4 @@
-/** Validate the original machine and immutable inventory before GitHub artifact archival. */
+/** Create the verified installer ZIP and expose its path to the Actions upload step. */
 import { execFileSync } from 'node:child_process'
 import { appendFile, mkdtemp } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -31,7 +31,15 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     const { DESKTOP_ARCHIVE_NAME: name, DESKTOP_RETAINED_DIRECTORY: directory, RUNNER_TEMP: temp, GITHUB_OUTPUT: output } = process.env
     if (!name || !/^[a-zA-Z0-9][a-zA-Z0-9.+_-]*\.zip$/u.test(name) || !directory || !temp || !output) throw new Error('desktop archival: invalid ZIP output settings')
     const path = join(await mkdtemp(join(temp, 'desktop-archive-')), name)
-    execFileSync('tar', ['--format', 'zip', '--options', 'zip:compression=store', '--no-mac-metadata', '--no-xattrs', '-cf', path, '--', ...files], { cwd: directory, stdio: 'inherit' })
+    const windows = process.platform === 'win32'
+    if (windows && !process.env.SystemRoot) throw new Error('desktop archival: SystemRoot is required to locate Windows bsdtar')
+    const tar = windows ? join(process.env.SystemRoot!, 'System32', 'tar.exe') : '/usr/bin/tar'
+    const metadata = windows ? [] : ['--no-mac-metadata', '--no-xattrs']
+    try {
+      execFileSync(tar, ['--format', 'zip', '--options', 'zip:compression=store', ...metadata, '-cf', path, '--', ...files], { cwd: directory, stdio: 'inherit' })
+    } catch (cause) {
+      throw new Error(`desktop archival: ZIP creation failed with ${tar}. Check system bsdtar availability, its stderr and free space in RUNNER_TEMP.`, { cause })
+    }
     await appendFile(output, `path=${path}\n`)
   } catch (error) {
     process.stderr.write(`${JSON.stringify(desktopPublicationFailure(error, 'artifact archival'))}\n`)
