@@ -90,7 +90,7 @@ Headless/ACP 与 SDK 适配器在规范化之前，将原始目录中的子创�
 
 ### 固定请求 header 与系统提示
 
-每个 pin 默认拥有其生成的 `system-prompt.expected.md` 或 `tool-schemas.expected.json` 伴随文件；当完整的对应序列相同时，`systemPromptSource` 与 `toolSchemasSource` 指定另一个 pin 作为来源，因此每个不同版本只提交一次。系统提示是 surface 节点 0，作为 `system/message` 事件记录在该步骤第一个 `request/header` 之前；每个 fixture 把其文本块存储为 `"text":"{{system}}"`，提示词伴随文件保留完整文本。该 pin 的 `request/header` 事件存储 `"tools":"{{tools}}"`，同时保留配置与原因，结构化 schema 伴随文件保留完整目录。包含 developer 消息的日志会在各 header 中保留有序工具名，而不使用 token，以便继续校验历史工具添加引用。自身作用域组合出不同请求的 child Session 按 fixture 索引以 `pinsChildToolSchemas` 与 `pinsChildSystemPrompts` 单独声明。运行中改变请求 header 的场景声明 `expectedHeaderChanges`；运行中提示词发生变化的场景——替换节点 0，或在 `in-history` 路由上追加到已缓存历史之后——声明 `expectedPromptChanges`，每次变化在提示词伴随文件中增加一个 `<!-- system/message change N -->` 小节。manifest 中对应字段为 `header.changes` 与 `header.promptChanges`。
+每个 pin 默认拥有其生成的 `system-prompt.expected.md` 或 `tool-schemas.expected.json` 伴随文件；当完整的对应序列相同时，`systemPromptSource` 与 `toolSchemasSource` 指定另一个 pin 作为来源，因此每个不同版本只提交一次。系统提示是 surface 节点 0，作为 `system/message` 事件记录在该步骤第一个 `request/header` 之前；每个 fixture 把其文本块存储为 `"text":"{{system}}"`，提示词伴随文件保留完整文本。该 pin 的 `request/header` 事件存储 `"tools":"{{tools}}"`，同时保留配置与原因，结构化 schema 伴随文件保留完整目录。包含 developer 消息的日志会在各 header 中保留有序工具名，而不使用 token，以便继续校验历史工具添加引用。自身作用域组合出不同请求的 child Session 按 fixture 索引以 `pinsChildToolSchemas` 与 `pinsChildSystemPrompts` 单独声明。运行中改变请求 header 的场景声明 `expectedHeaderChanges`；运行中提示词发生变化的场景——替换节点 0，或在 `in-history` 路由上追加到已缓存历史之后——声明 `expectedPromptChanges`，每次变化在提示词伴随文件中增加一个 `<!-- system/message change N -->` 小节。manifest 中对应字段为 `header.changes` 与 `header.promptChanges`。没有工具的请求头在 sidecar 中保留空 schema 集，使后续首次添加仍与其请求头对齐。
 
 ### 平台与组合变体
 

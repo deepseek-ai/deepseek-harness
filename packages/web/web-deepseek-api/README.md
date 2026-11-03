@@ -42,6 +42,7 @@ Mount the plugin alongside `dsh-web` and select its providers. Shipped profiles 
 | `apiKeyEnv` | `DEEPSEEK_API_KEY` | Credential reference resolved for each operation |
 | `baseURL` | `https://api.deepseek.com/v1/tools` | Search and Fetch API base including its deployment path prefix; append `/search` or `/fetch` |
 | `count` | `10` | Search API results per search, an integer from 1 to 50; a smaller `maxResults` on the request wins |
+| `searchRequestsPerSecond` | `5` | Most Search requests this plugin instance sends in any one-second window, matching the service's account-wide 5 QPS limit; later searches wait, and the wait counts against the caller's timeout |
 | `sendOriginalQuestion` | `true` | Send the triggering human prompt, cut to 128 characters, as the Search API's `ori_question` |
 
 Fill `baseURL` with the complete API base, including its path prefix and excluding the operation name. The default reaches `https://api.deepseek.com/v1/tools/search` and `https://api.deepseek.com/v1/tools/fetch`; a deployment with another prefix, such as `/api/v1/tools`, needs its complete base.
@@ -116,6 +117,7 @@ A returning or removed web tool changes the declared tools as [`dsh-tool-web`](.
 - In 2026-10-16 probes, different `ori_question` values left result order, scores, and summaries unchanged; the provider still sends it because the guide documents it as an intent signal.
 - API query and URL constraints are enforced by the remote service. An unresolvable Fetch target returned HTTP 500 rather than the documented 404 on 2026-10-16, and its failure carries the same endpoint guidance as an endpoint failure. Fetch exposes neither the target status nor the final redirect URL, so results report HTTP 200 and the requested URL; the provider discards the API's page title.
 - `available()` cannot query asynchronous credential stores; `ready()` does, so model steps withhold the tools when the store lacks the key. A direct `ctx.web.search()` or `ctx.web.fetch()` call can still fail with a missing-credential error.
+- Search pacing limits send times within one plugin instance. Other processes and clients on the same account share the account-wide 5 QPS limit without coordination, and network jitter can still bunch arrivals; an HTTP 429 fails that search, and `dsh-tool-web` then fails the whole multi-query call. Fetch is not paced, so parallel `web_fetch` calls can exceed the Fetch limit.
 - When the official route chats through a gateway, operations still send the key to the configured API base and fail unless it accepts the key.
 
 <a id="dev-note"></a>

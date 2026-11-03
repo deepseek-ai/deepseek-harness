@@ -2670,7 +2670,7 @@ Search the web for current information. Returns an optional summary answer and a
   "properties": {
     "queries": {
       "type": "array",
-      "description": "1–4 search queries; their results are merged.",
+      "description": "1–10 search queries; their results are merged.",
       "items": {
         "type": "string"
       }
