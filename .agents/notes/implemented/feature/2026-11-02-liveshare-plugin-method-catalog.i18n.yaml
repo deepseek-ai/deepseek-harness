@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-02-liveshare-plugin-method-catalog.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-02-liveshare-plugin-method-catalog.md
+/agent-note-liveshare-plugin-method-catalog:
+  en: 1daaf32c7ea8d3cd
+  zh: 70a94350263d22c9
+/agent-note-liveshare-plugin-method-catalog/problem:
+  en: 2122ac5fdd75f900
+  zh: dc135aaa0d1dddc0
+/agent-note-liveshare-plugin-method-catalog/decision:
+  en: 6e0b897ba6460894
+  zh: f05866ccde01a5af
+/agent-note-liveshare-plugin-method-catalog/alternatives-considered:
+  en: 57896311cada7804
+  zh: 01fbd1cbd05353ef
+/agent-note-liveshare-plugin-method-catalog/consequences:
+  en: e2069a5f9801f767
+  zh: 0698f0b9e1e49201

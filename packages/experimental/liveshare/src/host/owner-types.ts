@@ -6,9 +6,9 @@
  * @module @deepseek-ai/dsh-experimental-liveshare/src/host/owner-types
  */
 
-import type { ShareAccessSelection } from '../share-api-types.ts'
+import type { ShareAccessSelection, ViewerPluginAccess } from '../share-api-types.ts'
 import type { ViewerSessionMode } from './fork-policy.ts'
-import type { ViewerCapabilityGroup } from './viewer-declarations.ts'
+import type { ViewerPluginPolicy } from './viewer-capability-types.ts'
 
 /** The ACL one share carried when it was stored, as both the loader and the owner view read it. */
 export interface ShareAccessSummary {
@@ -61,6 +61,8 @@ export interface OwnerShare {
    * Absent means the owner exposed none: the endpoints plugins offer stay refused. A selection grants
    * nothing on its own — the `share-viewer` policy intersects it with the plugin's live declaration.
    */
-  readonly viewerCapabilities?: readonly ViewerCapabilityGroup[]
+  readonly viewerPlugins?: readonly ViewerPluginPolicy[]
+  /** Whether every installed plugin's methods are open; absent reads as none. */
+  readonly viewerPluginAccess?: ViewerPluginAccess
   online: boolean
 }

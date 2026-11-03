@@ -1794,6 +1794,20 @@ describe('Policy workflows', () => {
     }
   })
 
+  it('runs on the release branches as well as master, on both pull requests and base-branch pushes', () => {
+    const branches = ['master', 'release/dsh-[0-9]+.[0-9]+.[0-9]+']
+    for (const file of ['pr-check-on-head-branch.yml', 'pr-check-after-approve.yml']) {
+      const workflow = loadWorkflow('.github/workflows/' + file)
+      const events = workflow.on
+      if (!isRecord(events) || !isRecord(events.pull_request_target)) throw new TypeError(`${file} must trigger on pull_request_target`)
+      expect(events.pull_request_target.branches).toEqual(branches)
+    }
+    const workflow = loadWorkflow('.github/workflows/pr-check-on-base-branch.yml')
+    const events = workflow.on
+    if (!isRecord(events) || !isRecord(events.push)) throw new TypeError('the base-branch workflow must trigger on push')
+    expect(events.push.branches).toEqual(branches)
+  })
+
   it('decides the review verdict in one Approve Check job that can publish the check run', () => {
     const workflow = loadWorkflow('.github/workflows/pr-check-after-approve.yml')
     if (!isRecord(workflow.jobs)) throw new TypeError('the workflow must define jobs')

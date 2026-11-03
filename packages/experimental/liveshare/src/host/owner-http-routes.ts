@@ -21,6 +21,7 @@ import {
 } from './owner-credential-file.ts'
 import type { TunnelSupervision } from './tunnel-supervision.ts'
 import { isRecord, json, readJsonBody } from './wire-json.ts'
+import { relayFetch, type RelayFetch } from './relay-fetch.ts'
 
 /** One owner operation's captured Relay, revision, and host instance. */
 export interface OwnerOperation {
@@ -34,6 +35,8 @@ export interface OwnerOperation {
 export interface OwnerHttpRouteDeps {
   /** Host Connection service the routes are registered on. */
   readonly connection: Context['connection']
+  /** Relay transport owned by this share host; absent callers use the module transport. */
+  readonly relayFetch?: RelayFetch
   /** Worker registration, credential state, and Relay probes. */
   readonly tunnel: TunnelSupervision
   /** Capture the Relay, revision, and instance an operation began under. */
@@ -73,6 +76,8 @@ function ownerLoginFailureCode(refusal: OwnerAuthorizationRefusal): string {
  * @param deps - Connection, worker channel, and owner credential state.
  */
 export function registerOwnerHttpRoutes(deps: OwnerHttpRouteDeps): void {
+  /* v8 ignore next -- unit fixtures omit the optional owned transport; the share host always passes it. */
+  const fetchRelay = deps.relayFetch ?? relayFetch
   const connection = deps.connection
   const tunnel = deps.tunnel
   const captureOwnerOperation = deps.captureOwnerOperation
@@ -236,7 +241,7 @@ export function registerOwnerHttpRoutes(deps: OwnerHttpRouteDeps): void {
     if (!outcome.ok) return json({ error: ownerLoginFailureCode(outcome.code) }, 403)
     let answer: { readonly credential?: unknown; readonly error?: unknown }
     try {
-      const response = await fetch(new URL(`${outcome.completed.relay}/__liveshare/owner-credential`), {
+      const response = await fetchRelay(new URL(`${outcome.completed.relay}/__liveshare/owner-credential`), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         signal: AbortSignal.timeout(10_000),

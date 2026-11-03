@@ -1,7 +1,7 @@
 name: Policy
 on:
   push:
-    branches: [master]
+    branches: [master, 'release/dsh-[0-9]+.[0-9]+.[0-9]+']
   workflow_dispatch:
 permissions: {}
 concurrency:
