@@ -117,15 +117,20 @@ const PARAMETER_NAMES: Readonly<Record<OfficeToolName, readonly string[]>> = {
   office_recalculate: Object.keys(RECALCULATE_PARAMETERS),
 }
 
-/** Output schema properties of a file-producing operation whose `format` is one of `formats`. */
-function fileProperties<const Formats extends readonly string[]>(formats: Formats) {
+/** Output definition of a file-producing `operation` whose `format` is one of `formats`. */
+function fileOutput<const Operation extends 'convert' | 'recalculate', const Formats extends readonly string[]>(operation: Operation, formats: Formats) {
   return {
-    path: { type: 'string', required: true, description: 'Canonical absolute input path.' },
-    file: { type: 'string', required: true, description: 'Absolute path of the temporary output file.' },
-    format: { type: 'string', required: true, enum: formats },
-    bytes: { type: 'integer', required: true },
-    pageCount: { type: 'integer', description: 'Page count the converter reports for the output.' },
-    missingFonts: MISSING_FONTS_SCHEMA,
+    schema: { type: 'object', additionalProperties: false, properties: {
+      operation: { type: 'string', const: operation, required: true },
+      path: { type: 'string', required: true, description: 'Canonical absolute input path.' },
+      file: { type: 'string', required: true, description: 'Absolute path of the temporary output file.' },
+      format: { type: 'string', required: true, enum: formats },
+      bytes: { type: 'integer', required: true },
+      pageCount: { type: 'integer', description: 'Page count the converter reports for the output.' },
+      missingFonts: MISSING_FONTS_SCHEMA,
+    } },
+    render: (_args: unknown, value: OfficeFileValue<Operation>) => renderFileContent(value),
+    presentationMeta: (_args: unknown, value: OfficeFileValue<Operation>) => ({ path: value.path, file: value.file }),
   } as const
 }
 
@@ -186,13 +191,7 @@ export function apply(ctx: Context, config: Config): void {
     name: 'office_convert',
     description: 'Convert a document to another format. Return a temporary file to copy to its destination with the shell.',
     parameters: CONVERT_PARAMETERS,
-    output: {
-      schema: { type: 'object', additionalProperties: false, properties: {
-        operation: { type: 'string', const: 'convert', required: true }, ...fileProperties(OUTPUT_FORMATS),
-      } },
-      render: (_args, value) => renderFileContent(value),
-      presentationMeta: (_args, value) => ({ path: value.path, file: value.file }),
-    },
+    output: fileOutput('convert', OUTPUT_FORMATS),
     isConcurrencySafe: () => false,
     async execute(args, exec): Promise<OfficeFileValue<'convert'>> {
       checkParameterNames('office_convert', args, PARAMETER_NAMES)
@@ -207,13 +206,7 @@ export function apply(ctx: Context, config: Config): void {
     name: 'office_recalculate',
     description: 'Recalculate spreadsheet formulas. Return a temporary workbook to copy to its destination with the shell.',
     parameters: RECALCULATE_PARAMETERS,
-    output: {
-      schema: { type: 'object', additionalProperties: false, properties: {
-        operation: { type: 'string', const: 'recalculate', required: true }, ...fileProperties(RECALCULATION_FORMATS),
-      } },
-      render: (_args, value) => renderFileContent(value),
-      presentationMeta: (_args, value) => ({ path: value.path, file: value.file }),
-    },
+    output: fileOutput('recalculate', RECALCULATION_FORMATS),
     isConcurrencySafe: () => false,
     async execute(args, exec): Promise<OfficeFileValue<'recalculate'>> {
       checkParameterNames('office_recalculate', args, PARAMETER_NAMES)
