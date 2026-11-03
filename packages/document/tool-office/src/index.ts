@@ -197,9 +197,8 @@ export function apply(ctx: Context, config: Config): void {
     async execute(args, exec): Promise<OfficeFileValue<'convert'>> {
       checkParameterNames('office_convert', args, PARAMETER_NAMES)
       // `inputFamily` rejects PDF for convert and recalculate.
-      const family = inputFamily('convert', args.input) as Exclude<OfficeFamily, 'pdf'>
+      checkConversionArguments(args, inputFamily('convert', args.input) as Exclude<OfficeFamily, 'pdf'>)
       const { agent, kit, target, source } = await prepareInput(ctx, exec, 'convert', args.input)
-      checkConversionArguments({ ...args, input: target.displayPath }, family)
       return convertFile(ctx, kit, agent, exec.signal, 'convert', args, target, source)
     },
     presentCall: args => ({ card: 'generic', title: `Convert ${args.input} to ${args.format}`, kind: 'other', locations: [{ path: args.input }] }),
@@ -226,20 +225,23 @@ export function apply(ctx: Context, config: Config): void {
   }), { when })
 }
 
-/** Authorize each read before a cache lookup and resolve the calling Agent and the current Office service. */
+/**
+ * Resolve the calling Agent and the current Office service, then authorize the read before a cache lookup. A missing
+ * service fails before any filesystem access.
+ */
 async function prepareInput(ctx: Context, exec: ToolExecution, operation: OfficeOperationName, input: string) {
   const { agent, signal } = exec
   // Conditional registrations execute only through a step tool set, which the calling Agent resolves.
   if (agent === undefined) throw new Error(`cannot ${operation} "${input}": Office tools run only in an Agent step`)
+  const kit = ctx.get('officeKit')
+  if (kit === undefined) {
+    throw officeFailure(operation, input, new OfficeKitError('unavailable', 'The document converter is unavailable.'))
+  }
   const cwd = await ctx.workingDirectory.ensure(agent, signal)
   const { target, info } = await readableInput(ctx, input, { cwd, signal })
   try {
     await authorizeContent(ctx, target, info, signal)
   } catch (error) { throw officeFailure(operation, target.displayPath, error) }
-  const kit = ctx.get('officeKit')
-  if (kit === undefined) {
-    throw officeFailure(operation, target.displayPath, new OfficeKitError('unavailable', 'The document converter is unavailable.'))
-  }
   return { agent, kit, target, source: officeSource(ctx, agent, target, info) }
 }
 

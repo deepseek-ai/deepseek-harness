@@ -423,9 +423,11 @@ describe('Office service failures', () => {
     ] as const) {
       const result = await office(ctx, args)
       expect(result.isError).toBe(true)
-      expect(text(result)).toBe(`Error: cannot ${verb} "${join(dir, args.input)}": The document converter is unavailable.${unavailableHint}`)
+      expect(text(result)).toBe(`Error: cannot ${verb} "${args.input}": The document converter is unavailable.${unavailableHint}`)
     }
     expect(kit.renderImages).not.toHaveBeenCalled()
+    const missing = await office(ctx, { operation: 'convert', input: 'missing.pptx', format: 'pdf' })
+    expect(text(missing)).toBe(`Error: cannot convert "missing.pptx": The document converter is unavailable.${unavailableHint}`)
     ctx.provide('officeKit', kit as never)
     const result = await office(ctx, { operation: 'render', input: 'deck.pptx' })
     expect(result.isError).toBe(false)
@@ -548,7 +550,9 @@ describe('arguments and paths', () => {
   ])('refuses %j', async (args, message) => {
     await mkdir(join(dir, 'folder.pptx'))
     const { ctx, kit } = await setup()
+    const resolve = vi.spyOn(ctx.fs, 'resolve')
     const result = await office(ctx, args)
+    if (args.input !== 'missing.pptx' && args.input !== 'folder.pptx') expect(resolve).not.toHaveBeenCalled()
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(message)
     expect(kit.renderImages).not.toHaveBeenCalled()

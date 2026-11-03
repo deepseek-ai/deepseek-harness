@@ -62,9 +62,9 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-工具通过 `ctx.fs` 解析输入并要求其为普通文件，用 `fs.readByteRange` 读取其第一个字节后再 stat 一次，因此没有内容读取权限的调用，或文件在 stat 之后被替换的调用，会在 Office 套件可能从缓存应答之前失败。随后工具向 Office 套件提交已授权的源；其延迟读取在有界的 `fs.readBytes` 前后各 stat 一次，版本变化时拒绝。渲染结果在返回前通过 `attachments.saveImages()` 提交，因此 `tool/result` 事件携带持久的图片引用；恢复、分叉和回放会还原相同的图片，图片卸载也像对待其他工具结果图片一样适用于它们。规范值携带附件引用和图片位置；`output.render` 先生成一条摘要文本，再为每个渲染的页面或区域生成位置标签和图片块。`presentationMeta` 记录规范化的输入路径，转换时还记录临时文件路径。输出存储中的文件归调用方 subagent 树的根 Session 所有：挂载 `subagents` 服务时通过 `subagents.rootOf()` 读取，否则为调用方 Session；文件以输入文件名加新扩展名命名。
+参数检查（包括依赖输入类型的转换格式）和 Office 套件查找在任何文件系统访问之前进行，因此参数错误或服务缺失的调用不会读取输入。随后工具通过 `ctx.fs` 解析输入并要求其为普通文件，用 `fs.readByteRange` 读取其第一个字节后再 stat 一次，因此没有内容读取权限的调用，或文件在 stat 之后被替换的调用，会在 Office 套件可能从缓存应答之前失败。随后工具向 Office 套件提交已授权的源；其延迟读取在有界的 `fs.readBytes` 前后各 stat 一次，版本变化时拒绝。渲染结果在返回前通过 `attachments.saveImages()` 提交，因此 `tool/result` 事件携带持久的图片引用；恢复、分叉和回放会还原相同的图片，图片卸载也像对待其他工具结果图片一样适用于它们。规范值携带附件引用和图片位置；`output.render` 先生成一条摘要文本，再为每个渲染的页面或区域生成位置标签和图片块。`presentationMeta` 记录规范化的输入路径，转换时还记录临时文件路径。输出存储中的文件归调用方 subagent 树的根 Session 所有：挂载 `subagents` 服务时通过 `subagents.rootOf()` 读取，否则为调用方 Session；文件以输入文件名加新扩展名命名。
 
-每个工具分别声明参数和结果 schema。受支持的 schema 子集无法表达页码唯一性、数值范围和跨参数规则，因此这些渲染选择以及依赖输入类型的转换格式在运行时检查。Office 套件的错误报告为 `cannot <operation> "<path>": <message>`，`unavailable` 附带告知用户的提示，`busy` 附带重试提示，渲染过大时附带缩小选择的提示。PTC 嵌套调用重新进入同一执行管线，因此策略和日志同样适用；嵌套渲染的图片在程序运行结束后附加。
+每个工具分别声明参数和结果 schema。受支持的 schema 子集无法表达页码唯一性、数值范围和跨参数规则，因此这些渲染选择以及依赖输入类型的转换格式在运行时检查。Office 套件的错误报告为 `cannot <operation> "<path>": <message>`，其中 `<path>` 为解析后的输入路径，服务缺失时为调用给出的路径；`unavailable` 附带告知用户的提示，`busy` 附带重试提示，渲染过大时附带缩小选择的提示。PTC 嵌套调用重新进入同一执行管线，因此策略和日志同样适用；嵌套渲染的图片在程序运行结束后附加。
 
 成功的 `tools/result` 通知将调用方 Agent 记入插件拥有的 WeakSet。提交后的 `session/event` 事件流也会标记用户直接调用的技能，不依赖 pre-step 监听器顺序。`agent/disposed` 清除标记。三个工具共用一个 `when`：Agent 已被标记，或 Session 最新的公开 `requestHeader()` 中列出了任一 Office 工具。不注册额外的 projection 或 Session 事件。
 
