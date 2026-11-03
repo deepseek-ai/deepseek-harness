@@ -24,7 +24,8 @@ import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import { PtcCalls } from './ptc-calls.ts'
-import { CodeRunFailedError } from './errors.ts'
+import { CodeRunFailedError, ToolCallLimitExceededError } from './errors.ts'
+import type { Config } from './config.ts'
 import type { ToolDefinition, ToolExecutionResult, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from './types.ts'
 
@@ -267,14 +268,15 @@ function resolveSandboxPolicy(ctx: Context, exec: ToolRunContext): SandboxExecut
  * Build the reserved `run_code` transport outside registered capabilities.
  * @param ctx - executor context owning policy listeners and active program cleanup.
  * @param executor - shared invocation pipeline for nested calls.
- * @param maxParallel - maximum overlapping concurrency-safe subcalls.
+ * @param config - validated per-program tool-call count and concurrency limits.
  * @returns the transport definition with runtime-dependent schema text.
  */
 export function createRunCodeTool(
   ctx: Context,
   executor: ToolExecutionPipeline,
-  maxParallel: number,
+  config: Config,
 ): ToolDefinition {
+  const { maxSubCalls, maxParallelSubCalls: maxParallel } = config
   // Retain services for log settlement after the executor context becomes inactive.
   const tools = ctx.tools
   const logger = ctx.logger
@@ -377,7 +379,7 @@ export function createRunCodeTool(
         const onOuterAbort = (): void => { runController.abort(callSignal.reason) }
         callSignal.addEventListener('abort', onOuterAbort, { once: true })
 
-        let dispatches = 0
+        let toolCallAttempts = 0
         // The per-run scheduler uses the registry's staged interface and follows
         // the same concurrency rules as the native loop. It also follows the
         // native loop's SEQUENCING: every ordered stage (the dispatch-start
@@ -504,8 +506,9 @@ export function createRunCodeTool(
           if (runOver()) {
             throw new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} not dispatched`)
           }
+          const n = ++toolCallAttempts
+          if (n > maxSubCalls) throw new ToolCallLimitExceededError(maxSubCalls, n)
           const normalized = jsonNormalizeArgs(rawArgs)
-          const n = ++dispatches
           const subCallId = brandString<ToolCallId>(`${String(exec.callId)}:ptc:${n}`)
           const input = {
             callId: subCallId,

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use this executor when models should call tools through `run_code` programs. Mount a compatible PTC runtime and tool registry first. Scoped restrictions determine the generated SDK; only `run_code` is directly callable. Configure concurrency for parallel-safe program subcalls.
+Use this executor when models should call tools through `run_code` programs. Mount a compatible PTC runtime and tool registry first. Scoped restrictions determine the generated SDK; only `run_code` is directly callable. Configure the total tool-call limit per program and concurrency for parallel-safe subcalls.
 
 ## Table of Contents
 
@@ -30,10 +30,13 @@ Add this row to a composition with `dsh-tools` mounted. The nearest scoped execu
 ```yaml
 - name: '@deepseek-ai/dsh-tool-executor-ptc'
   config:
+    maxSubCalls: 128
     maxParallelSubCalls: 10
 ```
 
 Root `run_code` calls are exclusive and execute serially. `maxParallelSubCalls` limits parallel-safe nested calls within each program and defaults to `10`; it must be a positive integer, with `1` selecting serial execution. Exclusive calls form barriers.
+
+`maxSubCalls` limits nested tool-call attempts per `run_code` invocation and defaults to `128`; it must be a positive integer. All tool bindings share the count, including queued calls, invalid arguments, and failed tools. The next attempt throws before dispatch, identifies the limit and rejected call number, and warns that the program may contain an infinite loop. Catching the error does not restore the allowance; a new `run_code` starts a fresh count. Completed tool effects remain. An uncaught limit error becomes the ordinary `CODE_RUN_FAILED` result.
 
 This package declares `ctx.ptcRuntime` and `ctx.systemPrompt` as required injections; Agent-owned programs need `ctx.workingDirectory`. The executor activates only after its runtime is available and withdraws when that runtime unloads. An enabled PTC executor without a runtime stops application startup. A withdrawn PTC selection never falls back to native execution.
 

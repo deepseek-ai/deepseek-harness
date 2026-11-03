@@ -4013,6 +4013,8 @@ export interface Config {
 ```ts config-catalog
 /** Program execution limits. */
 export interface Config {
+  /** Maximum nested tool-call attempts per run_code invocation, including failed calls. */
+  maxSubCalls: number
   /** Maximum overlapping concurrency-safe program subcalls. */
   maxParallelSubCalls: number
 }

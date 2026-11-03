@@ -1,0 +1,5 @@
+# The program keeps only the error name and message in its stack for portable replay.
+- id: tool-executor-ptc
+  config:
+    maxSubCalls: 2
+    maxParallelSubCalls: 10

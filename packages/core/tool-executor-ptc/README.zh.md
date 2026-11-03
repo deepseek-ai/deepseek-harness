@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-当模型应通过 `run_code` 程序调用工具时，使用此执行器。先挂载兼容的 PTC 运行时和工具注册表。作用域限制决定生成的 SDK；只有 `run_code` 能被直接调用。可配置并行安全的程序子调用并发上限。
+当模型应通过 `run_code` 程序调用工具时，使用此执行器。先挂载兼容的 PTC 运行时和工具注册表。作用域限制决定生成的 SDK；只有 `run_code` 能被直接调用。可配置每个程序的工具调用总数上限，以及并行安全的子调用并发上限。
 
 ## 目录
 
@@ -30,10 +30,13 @@ kind: "package-reference"
 ```yaml
 - name: '@deepseek-ai/dsh-tool-executor-ptc'
   config:
+    maxSubCalls: 128
     maxParallelSubCalls: 10
 ```
 
 根 `run_code` 调用是独占调用，按串行执行。`maxParallelSubCalls` 限制每个程序中并行安全的嵌套调用数，默认值为 `10`；值必须是正整数，`1` 表示串行执行。独占调用构成屏障。
+
+`maxSubCalls` 限制每次 `run_code` 的嵌套工具调用尝试次数，默认值为 `128`，必须是正整数。所有工具绑定共用计数，排队中的调用、无效参数和失败的工具调用也计入。达到上限后，下一次尝试会在执行前抛错，指出上限和被拒绝的调用序号，并提示程序可能存在死循环。捕获错误不会恢复额度；新的 `run_code` 会重新计数。已完成的工具操作仍然生效。未捕获的超限错误会成为普通的 `CODE_RUN_FAILED` 结果。
 
 本包将 `ctx.ptcRuntime` 和 `ctx.systemPrompt` 声明为必需注入；带 Agent 的程序要求 `ctx.workingDirectory`。执行器在运行时可用后才激活，并在运行时卸载时撤回。启用 PTC 执行器但未提供运行时会阻止应用启动。已撤回的 PTC 选择不会回退到原生执行。
 
