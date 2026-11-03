@@ -2219,9 +2219,14 @@ it.each(['file', 'env', 'project-env', 'user-env'] as const)('shows the existing
   fireEvent.change(input, { target: { value: 'new-key' } })
   expect(screen.queryByText(hint)).toBeNull()
   expect(screen.queryByText(/^API key source:/)).toBeNull()
-  expect(input.getAttribute('aria-describedby')).toBeNull()
+  if (source === 'file') {
+    expect(document.getElementById(input.getAttribute('aria-describedby')!)?.textContent).toBe(en.keyReplacePending)
+  } else {
+    expect(screen.queryByText(en.keyReplacePending)).toBeNull()
+    expect(input.getAttribute('aria-describedby')).toBeNull()
+  }
   fireEvent.change(input, { target: { value: '' } })
-  if (source === 'file') expect(screen.getByText(en.keyRemovePending)).toBeTruthy()
+  if (source === 'file') expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', 'OPENAI_API_KEY'))).toBeTruthy()
   else expect(screen.getAllByText(hint)).toHaveLength(1)
 })
 
@@ -2239,13 +2244,14 @@ it.each(['openai', 'anthropic', 'google', 'deepseek', 'acme-gateway'])('protects
   expect(fireEvent.cut(input)).toBe(false)
   fireEvent.change(input, { target: { value: 'replacement-key' } })
   expect(screen.queryByText(en.keySaved)).toBeNull()
+  expect(document.getElementById(input.getAttribute('aria-describedby')!)?.textContent).toBe(en.keyReplacePending)
   fireEvent.click(screen.getByRole('button', { name: en.keyReveal }))
   expect(input.type).toBe('text')
   expect(input.value).toBe('replacement-key')
   expect(fireEvent.copy(input)).toBe(true)
   expect(fireEvent.cut(input)).toBe(true)
   fireEvent.change(input, { target: { value: '' } })
-  expect(screen.getByText(en.keyRemovePending)).toBeTruthy()
+  expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', 'TEAM_API_KEY'))).toBeTruthy()
   expect(input.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'TEAM_API_KEY'))
   expect(screen.queryByLabelText(en.keyReveal)).toBeNull()
 })
@@ -2260,7 +2266,7 @@ it.each(['Backspace', 'Delete'])('stages whole saved-key deletion with %s and ca
   expect(input.placeholder).toBe('••••••••')
   fireEvent.keyDown(input, { key })
   expect(input.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'OPENAI_API_KEY'))
-  expect(screen.getByText(en.keyRemovePending)).toBeTruthy()
+  expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', 'OPENAI_API_KEY'))).toBeTruthy()
   expect(unset).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: en.cancel }))
   expect(unset).not.toHaveBeenCalled()
@@ -2309,8 +2315,10 @@ it.each([
     t={t} readOnly={false} onClose={closed} {...nativeAuth === undefined ? {} : { nativeAuth }}
     credential={{ configured: true, source: 'file', writable: true }} />)
   fireEvent.keyDown(screen.getByLabelText(en.keyInput), { key: 'Delete' })
+  const envRef = removesReference && nativeAuth !== undefined ? nativeAuth.env[0] : ref
   expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder)
-    .toBe(en.keyPlaceholderFallback.replace('{hint}', removesReference && nativeAuth !== undefined ? nativeAuth.env[0] : ref))
+    .toBe(en.keyPlaceholderFallback.replace('{hint}', envRef))
+  expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', envRef))).toBeTruthy()
   fireEvent.click(screen.getByText(en.customized))
   expect(screen.getByRole<HTMLButtonElement>('button', { name: en.fetchModels }).disabled).toBe(true)
   fireEvent.click(screen.getByRole('button', { name: en.apply }))
@@ -2320,6 +2328,16 @@ it.each([
   if (removesReference) expect(mutate.mock.calls[0]?.[1])
     .toEqual([{ op: 'unset', path: ['providers', provider, 'apiKeyEnv'] }])
   else expect(mutate).not.toHaveBeenCalled()
+})
+
+it('keeps the clear hint generic when native authentication has no visible environment reference', () => {
+  renderPiAiEditor('openai', piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' }), {
+    nativeAuth: { env: [], oauth: false },
+    credential: { configured: true, source: 'file', writable: true },
+  })
+  fireEvent.keyDown(screen.getByLabelText(en.keyInput), { key: 'Delete' })
+  expect(screen.getByText(en.keyRemovePending)).toBeTruthy()
+  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder).toBe(en.keyPlaceholder)
 })
 
 it.each(['cancel', 'replace'])('keeps authentication unchanged after refused deletion, then %s', async (action) => {
@@ -2336,7 +2354,7 @@ it.each(['cancel', 'replace'])('keeps authentication unchanged after refused del
   fireEvent.click(screen.getByRole('button', { name: en.apply }))
   await screen.findByText('credential store locked')
   expect(mutate).not.toHaveBeenCalled()
-  expect(screen.getByText(en.keyRemovePending)).toBeTruthy()
+  expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', 'GEMINI_API_KEY'))).toBeTruthy()
   if (action === 'cancel') {
     fireEvent.click(screen.getByRole('button', { name: en.cancel }))
     expect(closed).toHaveBeenCalledWith(false)

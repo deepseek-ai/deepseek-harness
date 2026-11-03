@@ -19,7 +19,7 @@
       - textbox "API 密钥":
         - /placeholder: ••••••••
       - button "显示密钥" [disabled]
-      - paragraph: 已保存 API key
+      - paragraph: 使用已保存的 API key。
       - group:
         - text: 自定义设置 API 地址
         - textbox "API 地址":

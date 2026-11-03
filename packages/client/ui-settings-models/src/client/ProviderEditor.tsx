@@ -441,15 +441,18 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const detectedVisibleRef = detectedRef === undefined || !visibleRefs.includes(detectedRef) ? undefined : detectedRef
     const missingRefs = checkedRefs.length > 0 && checkedRefs.every(([, info]) => info?.configured === false)
     const savedCredential = detected?.[1]?.source === 'file' && detectedVisibleRef !== undefined
-    const credentialHint = keyText.length > 0 || props.credentialRequired === true
+    const credentialHint = props.credentialRequired === true
       ? undefined
-      : keyRemoval !== undefined ? t(keyRemoval.removed === true ? 'keyRemoveApplied' : 'keyRemovePending')
-        : keyHint === undefined ? undefined
-          : savedCredential
-            ? t('keySaved')
-            : t(detectedRef === undefined ? missingRefs ? 'keyFallbackMissing' : 'keyFallbackUnchecked'
-              : detectedVisibleRef === undefined ? 'keyFallbackDetectedHidden' : 'keyFallbackDetected')
-              .replace('{hint}', () => detectedVisibleRef ?? keyHint)
+      : keyText.length > 0 ? savedCredential ? t('keyReplacePending') : undefined
+        : keyRemoval !== undefined ? keyRemoval.removed === true ? t('keyRemoveApplied')
+          : keyHint === undefined ? t('keyRemovePending')
+            : t('keyRemovePendingEnvironment').replace('{hint}', () => keyHint)
+          : keyHint === undefined ? undefined
+            : savedCredential
+              ? t('keySaved')
+              : t(detectedRef === undefined ? missingRefs ? 'keyFallbackMissing' : 'keyFallbackUnchecked'
+                : detectedVisibleRef === undefined ? 'keyFallbackDetectedHidden' : 'keyFallbackDetected')
+                .replace('{hint}', () => detectedVisibleRef ?? keyHint)
     const keyHelp = visibleRefs.length === 0
       ? undefined
       : t('keyHelp').replace('{env}', () => visibleRefs.join(' / '))
@@ -506,7 +509,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 setFailure(undefined)
               }}
             />
-            {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[keyRemoval !== undefined || missingRefs ? 'notice' : detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
+            {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[keyRemoval !== undefined || missingRefs ? 'notice' : keyText.length > 0 || detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
             {/* A key the protocol requires is a requirement still to meet, not a fault. */}
             {shownKeyFailure === undefined
               ? null
