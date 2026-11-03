@@ -1,0 +1,4 @@
+# One call per minute with the default two-minute timeout allows two calls.
+- id: tool-executor-ptc
+  config:
+    maxSubCallsPerMinute: 1

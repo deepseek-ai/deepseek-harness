@@ -24,7 +24,8 @@ import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { PtcCalls } from './ptc-calls.ts'
-import { CodeRunFailedError } from './errors.ts'
+import { CodeRunFailedError, ToolCallLimitExceededError } from './errors.ts'
+import type { Config } from './config.ts'
 import type { ToolDefinition, ToolExecutionResult, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from './types.ts'
 
@@ -267,16 +268,17 @@ function resolveSandboxPolicy(ctx: Context, exec: ToolRunContext): SandboxExecut
  * Build the reserved `run_code` transport outside registered capabilities.
  * @param ctx - executor context owning policy listeners and active program cleanup.
  * @param executor - shared invocation pipeline for nested calls.
- * @param maxParallel - maximum overlapping concurrency-safe subcalls.
+ * @param config - validated timeout-based tool-call allowance and concurrency limits.
  * @param calls - Executor-owned cancellation and reset coordination.
  * @returns the transport definition with runtime-dependent schema text.
  */
 export function createRunCodeTool(
   ctx: Context,
   executor: ToolExecutionPipeline,
-  maxParallel: number,
+  config: Config,
   calls: PtcCalls,
 ): ToolDefinition {
+  const { maxSubCallsPerMinute, maxParallelSubCalls: maxParallel } = config
   // Retain services for log settlement after the executor context becomes inactive.
   const tools = ctx.tools
   const logger = ctx.logger
@@ -378,7 +380,8 @@ export function createRunCodeTool(
         const onOuterAbort = (): void => { runController.abort(callSignal.reason) }
         callSignal.addEventListener('abort', onOuterAbort, { once: true })
 
-        let dispatches = 0
+        let toolCallAttempts = 0
+        let maxSubCalls: number
         // The per-run scheduler uses the registry's staged interface and follows
         // the same concurrency rules as the native loop. It also follows the
         // native loop's SEQUENCING: every ordered stage (the dispatch-start
@@ -505,8 +508,14 @@ export function createRunCodeTool(
           if (runOver()) {
             throw new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} not dispatched`)
           }
+          // Count before validation and queuing so repeated failed calls also exhaust the allowance.
+          const n = ++toolCallAttempts
+          if (n > maxSubCalls) {
+            const error = new ToolCallLimitExceededError(maxSubCalls, n, maxSubCallsPerMinute)
+            runController.abort(error)
+            throw error
+          }
           const normalized = jsonNormalizeArgs(rawArgs)
-          const n = ++dispatches
           const subCallId = brandString<ToolCallId>(`${String(exec.callId)}:ptc:${n}`)
           const input = {
             callId: subCallId,
@@ -673,7 +682,7 @@ export function createRunCodeTool(
                 runtimes.add(provider)
               }
             }
-            result = await runtime.run(runtime.resolve({
+            const spec = runtime.resolve({
               program: args.code,
               ...exec.agent === undefined || policy?.mode !== standingPolicy?.mode ? {} : { stateOwner: exec.agent },
               bindings: [{
@@ -685,7 +694,10 @@ export function createRunCodeTool(
               ...cwd !== undefined ? { cwd } : {},
               ...policy !== undefined ? { sandboxPolicy: policy } : {},
               ...args.timeoutMs !== undefined ? { timeoutMs: args.timeoutMs } : {},
-            }))
+            })
+            maxSubCalls = spec.timeoutMs === null ? Infinity
+              : Math.floor(spec.timeoutMs / 60_000 * maxSubCallsPerMinute)
+            result = await runtime.run(spec)
           } finally {
             // Abort sub-dispatches and drain every in-flight dispatch before
             // closing the turn (queued-unstarted ones are abandoned unlogged).
@@ -695,7 +707,9 @@ export function createRunCodeTool(
           }
 
           if (result.error) {
-            if (result.error.kind === 'abort' && exec.signal.aborted) {
+            const limitError = runController.signal.reason instanceof ToolCallLimitExceededError
+              ? runController.signal.reason : undefined
+            if (result.error.kind === 'abort' && exec.signal.aborted && limitError === undefined) {
               const message = runtime.retainsState ? `tool call aborted: ${result.error.message}` : 'tool call aborted'
               const error = new HarnessError(message, TOOL_ABORTED)
               error.name = 'AbortError'
@@ -704,7 +718,9 @@ export function createRunCodeTool(
             const logsText = result.logs.length > 0 ? `\nCaptured output:\n${result.logs.join('\n')}` : ''
             const sandboxText = result.sandbox === undefined ? ''
               : `\nFile sandbox: ${result.sandbox.mode}${result.sandbox.enforcement === undefined ? '' : `; enforcement: ${result.sandbox.enforcement}`}${result.sandbox.denied ? '; operation denied' : ''}.`
-            throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${result.error.message}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}`)
+            const failureText = limitError === undefined || limitError.message === result.error.message
+              ? result.error.message : `${limitError.message}\n${result.error.message}`
+            throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${failureText}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}`)
           }
           return {
             logs: result.logs,

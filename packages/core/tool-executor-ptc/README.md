@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use this executor when models should call tools through `run_code` programs. Mount a compatible PTC runtime and tool registry first. Scoped restrictions determine the generated SDK. Models call only `run_code` directly. Configure concurrency for parallel-safe program subcalls.
+Use this executor when models should call tools through `run_code` programs. Mount a compatible PTC runtime and tool registry first. Scoped restrictions determine the generated SDK; only `run_code` is directly callable. Configure the total tool-call limit per program and concurrency for parallel-safe subcalls.
 
 ## Table of Contents
 
@@ -30,10 +30,13 @@ Add this row to a composition with `dsh-tools` mounted. The nearest scoped execu
 ```yaml
 - name: '@deepseek-ai/dsh-tool-executor-ptc'
   config:
+    maxSubCallsPerMinute: 1024
     maxParallelSubCalls: 10
 ```
 
 Root `run_code` calls are exclusive and execute serially. `maxParallelSubCalls` limits parallel-safe nested calls within each program and defaults to `10`; it must be a positive integer, with `1` selecting serial execution. Exclusive calls form barriers.
+
+`maxSubCallsPerMinute` defaults to `1024` and must be a positive integer. Each `run_code` gets `floor(resolved timeoutMs / 60000 × maxSubCallsPerMinute)` tool-call attempts: the default Node timeout of two minutes allows 2048. Runtime defaults and timeout caps apply before this calculation; no deadline means no finite call allowance. This is a total allowance, not a rolling window, so calls may happen in a burst. All tool bindings share the count, including queued calls, invalid arguments, and failed tools. The next attempt terminates the entire program through the runtime abort path, cancels active subcalls, and abandons queued calls before returning `CODE_RUN_FAILED`. As with a timeout, catching a binding error cannot keep the program running; retained runtime state is discarded. Completed tool effects remain, and the next program starts a fresh count.
 
 This package declares `ctx.ptcRuntime` and `ctx.systemPrompt` as required injections; Agent-owned programs need `ctx.workingDirectory`. The executor activates only after its runtime is available and withdraws when that runtime unloads. An enabled PTC executor without a runtime stops application startup. A withdrawn PTC selection never falls back to native execution.
 
@@ -88,7 +91,7 @@ Custom host integrations retain their `PtcExecutor` instance and call `reset(age
 
 #### What the model sees
 
-PTC mode exposes the generated [`run_code` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-executor-ptc), the SDK instructions below, and the generated exact SDK block for the loaded runtime's language. Both runtime languages list `code` before `description`; this is presentation order, not an enforced JSON member order. REPL and Script runtimes share the generic tool description and SDK instructions; their `executionInstructions` supply syntax and state rules. The TypeScript bash example returns a value for function-body runtimes, and prints output for REPL and Script runtimes. The instructions identify generated declarations as program-only bindings. When the current `bash` parameter schema accepts the example arguments, they also show a complete `run_code` call around `tools.bash(...)`. The `tools:sdk` section uses first-party order 5000 and disables prompt-variable interpolation, preserving literal `{{…}}` text in tool descriptions and schemas for both runtime languages. Under `ptc`, the prompt also carries the `tools:ptc-only` rule earlier in the first-party order, so the model reads which tools it may call before it reads what each one is for.
+PTC mode exposes the generated [`run_code` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-executor-ptc), the SDK instructions below, and the generated exact SDK block for the loaded runtime's language. Both runtime languages list `code` before `description`; this is presentation order, not an enforced JSON member order. REPL and Script runtimes share the generic tool description and SDK instructions; their `executionInstructions` supply syntax and state rules. The TypeScript bash example returns a value for function-body runtimes, and prints output for REPL and Script runtimes. The instructions identify generated declarations as program-only bindings. When the current `bash` parameter schema accepts the example arguments, they also show a complete `run_code` call around `tools.bash(...)`. The `tools:sdk` section uses first-party order 5000 and disables prompt-variable interpolation, preserving literal `{{…}}` text in tool descriptions and schemas for both runtime languages. Under `ptc`, the prompt also carries the `tools:ptc-only` rule earlier in the first-party order, so the model reads which tools it may call before it reads what each one is for. Exhausting the tool-call allowance returns a failed `run_code` result with the limit, rejected call number, termination notice, and possible infinite-loop warning. Runtime cleanup diagnostics and captured output remain visible.
 
 ##### TypeScript PTC mode SDK instructions with bash
 
@@ -109,13 +112,19 @@ Inside the program:
 Program-only SDK bindings:
 ```
 
+##### Tool-call allowance exhausted
+
+```markdown
+Error: code run failed (abort): run_code exceeded its limit of 2048 tool calls (1024 per minute of its timeout); call 2049 was not dispatched. The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.
+```
+
 #### Token effect
 
-Fixed per-request cost proportional to the visible definitions. PTC mode trades end-tool schemas for generated SDK text plus one transport schema rather than promising a universal reduction.
+Fixed per-request cost proportional to the visible definitions. PTC mode trades end-tool schemas for generated SDK text plus one transport schema rather than promising a universal reduction. The allowance adds no SDK or schema text; its diagnostic contributes tokens through the failed run's result.
 
 #### KV Cache effect
 
-Prefix-stable while the PTC mode selection, generated SDK, transport schema, and visible tool set are unchanged. Mode or filter changes may invalidate reuse from the first changed prompt or schema token.
+Prefix-stable while the PTC mode selection, generated SDK, transport schema, and visible tool set are unchanged. Mode or filter changes may invalidate reuse from the first changed prompt or schema token. Changing `maxSubCallsPerMinute` does not change prompt or schema tokens.
 
 ## Known Limitations and Deferred Work
 

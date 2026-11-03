@@ -4080,6 +4080,8 @@ export interface Config {
 ```ts config-catalog
 /** Program execution limits. */
 export interface Config {
+  /** Nested tool-call attempts per minute of resolved runtime timeout, including failed calls. */
+  maxSubCallsPerMinute: number
   /** Maximum overlapping concurrency-safe program subcalls. */
   maxParallelSubCalls: number
 }
