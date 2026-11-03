@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-从 GUI 插件管理器添加 Git 工作树，让模型通过一次调用创建并进入新的 Git 工作树。此可选 bundle 随 Harness 安装，在选中之前保持关闭。原生工具调用与 PTC 程序获得相同的带类型结果，创建操作沿用现有文件策略。
+让模型通过一次调用创建并进入新的 Git 工作树。Web 与 Desktop 通过“变更请求与工作树”提供本工具；其他 profile 可以选择本独立组合包。原生工具调用与 PTC 程序获得相同的带类型结果，创建操作沿用现有文件策略。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 GUI 中打开**插件 → 官方 → Git 工作树**并启用开关。此 bundle 一起加载[工作树运行时](../worktree/README.zh.md)与本工具；所有随附 profile 默认关闭它。关闭后会移除 `create_worktree`，已有检出目录与分支会保留。内置 `working_directory` 工具仍然可用。
+在 GUI 中启用[变更请求与工作树](../forge-bundle/README.zh.md)。独立组合包在插件页没有卡片。未组合 Web 应用的 profile 可以在 `dsh.profile.bundles` 中选择它；它一起加载[工作树运行时](../worktree/README.zh.md)与本工具。关闭后会移除 `create_worktree`，已有检出目录与分支会保留。内置 `working_directory` 工具仍然可用。
 
 在显式组合中，将此函数插件挂载到工作树运行时和工具注册表之后。
 
