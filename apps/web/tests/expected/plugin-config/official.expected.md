@@ -11,8 +11,8 @@
     - button "查看 子智能体": 子智能体
     - text: 设置子智能体的递归层级、数量和模型。
   - listitem:
-    - button "查看 网页搜索": 网页搜索
-    - text: 设置 DeepSeek 的搜索提供方。
+    - button "查看 网页搜索与获取": 网页搜索与获取
+    - text: 选择网页搜索与网页获取使用的提供方。
   - listitem:
     - button "查看 Agent 循环": Agent 循环
     - text: 控制 Agent 派发工具调用的方式。

@@ -24,15 +24,14 @@ export const DEEPSEEK_SEARCH_REQUESTS_PER_SECOND = 5
 /** Longest `ori_question` the Search API accepts, in characters. */
 const ORIGINAL_QUESTION_MAX_CHARS = 128
 
-/** Settings named by endpoint failures of either API in this package. */
-export const DEEPSEEK_WEB_API_GUIDANCE: Omit<DeepSeekWebGuidance, 'subject'> = {
-  plugin: 'web-deepseek-api', field: 'baseURL', label: 'Search / Fetch API base URL', page: 'Web search',
-}
-
 /** Authentication, endpoint, and result settings snapshotted for one search. */
-export interface DeepSeekSearchApiOptions extends DeepSeekWebAuth {
-  /** API base including its path prefix; `/search` is appended. */
+export interface DeepSeekSearchApiOptions {
+  /** API base the API key is sent to, including its path prefix; `/search` is appended. An account token goes to its own base. */
   baseURL: string
+  /** Authentication sources of the search. */
+  auth: DeepSeekWebAuth
+  /** Settings that endpoint failures of the search name. */
+  guidance: DeepSeekWebGuidance
   /** Results requested per search, from 1 through 50; a smaller request bound wins. */
   count: number
   /** Most Search requests this provider starts in any one-second window. */
@@ -74,6 +73,17 @@ export class DeepSeekSearchApiProvider implements WebSearchProvider {
   readonly id = DEEPSEEK_SEARCH_API_PROVIDER_ID
   /** Monotonic start times (ms) of requests inside the current window, oldest first. */
   private readonly starts: number[] = []
+  /** Picker description: what this provider suits and what it costs or cannot do. */
+  readonly description: NonNullable<WebSearchProvider['description']> = {
+    en: 'Queries the search endpoint directly for titles, URLs, and snippets without an extra model call. Uses the DeepSeek account of the current conversation, or a DeepSeek API key, and may incur API charges.',
+    zh: '直接请求搜索接口返回标题、URL 与摘要，无需额外调用模型。使用当前会话的 DeepSeek 账号或 DeepSeek API Key，可能产生计费',
+    ja: '追加のモデル呼び出しなしで検索エンドポイントに直接問い合わせ、タイトル、URL、スニペットを返します。現在の会話の DeepSeek アカウント、または DeepSeek API キーを使用し、API 料金が発生する場合があります。',
+    es: 'Consulta directamente el punto de conexión de búsqueda y devuelve títulos, URL y fragmentos sin una llamada adicional al modelo. Usa la cuenta de DeepSeek de la conversación actual o una clave de API de DeepSeek, y puede generar cargos de API.',
+    fr: "Interroge directement le point de terminaison de recherche pour obtenir titres, URL et extraits, sans appel de modèle supplémentaire. Utilise le compte DeepSeek de la conversation en cours ou une clé API DeepSeek, et peut entraîner des frais d'API.",
+    de: 'Fragt den Suchendpunkt direkt nach Titeln, URLs und Ausschnitten ab, ohne zusätzlichen Modellaufruf. Verwendet das DeepSeek-Konto der aktuellen Unterhaltung oder einen DeepSeek-API-Schlüssel und kann API-Kosten verursachen.',
+    ru: 'Напрямую запрашивает поисковый сервис и возвращает заголовки, URL и фрагменты без дополнительного вызова модели. Использует учётную запись DeepSeek текущего разговора или ключ API DeepSeek; возможна оплата API.',
+    pt: 'Consulta diretamente o endpoint de pesquisa e retorna títulos, URLs e trechos sem uma chamada extra ao modelo. Usa a conta DeepSeek da conversa atual ou uma chave de API da DeepSeek e pode gerar cobranças de API.',
+  }
 
   /**
    * @param resolveOptions - the options for the NEXT search, read once at each
@@ -83,15 +93,16 @@ export class DeepSeekSearchApiProvider implements WebSearchProvider {
 
   available(): boolean {
     const options = this.resolveOptions()
-    return hasDeepSeekWebCredential(options) && URL.canParse(options.baseURL)
+    return hasDeepSeekWebCredential(options.auth) && URL.canParse(options.baseURL)
       && isPositiveInteger(options.count) && isPositiveInteger(options.requestsPerSecond)
   }
 
   async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
     const options = this.resolveOptions()
     const question = boundedQuestion(options.originalQuestion?.())
-    return dispatchDeepSeekWeb(options, {
-      endpoint: `${options.baseURL.replace(/\/+$/u, '')}/search`,
+    return dispatchDeepSeekWeb(options.auth, {
+      baseURL: options.baseURL,
+      path: '/search',
       body: {
         query: request.query,
         count: Math.min(options.count, request.maxResults ?? options.count),
@@ -100,7 +111,7 @@ export class DeepSeekSearchApiProvider implements WebSearchProvider {
       },
       decode: mapSearchResponse,
       waitToSend: waitSignal => this.waitForRequestSlot(options.requestsPerSecond, waitSignal),
-      guidance: { subject: 'Search', ...DEEPSEEK_WEB_API_GUIDANCE },
+      guidance: options.guidance,
     }, signal)
   }
 

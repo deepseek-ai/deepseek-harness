@@ -37,7 +37,7 @@ kind: "package-reference"
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'
-- name: '@deepseek-ai/dsh-web-search-exa'
+- name: '@deepseek-ai/dsh-web-deepseek-api'
 - name: '@deepseek-ai/dsh-tool-web'
 ```
 
