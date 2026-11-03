@@ -184,13 +184,6 @@ export abstract class CredentialProvider extends Service {
   abstract resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined>
 
   /**
-   * Read the provider-managed value without consulting environment fallbacks.
-   * @param ref - the reference to read.
-   * @returns the stored secret, or undefined when no non-empty value is stored.
-   */
-  abstract readStored(ref: CredentialRef): Promise<string | undefined>
-
-  /**
    * Describe one reference for configuration surfaces without exposing the
    * value.
    * @param ref - the reference to describe.

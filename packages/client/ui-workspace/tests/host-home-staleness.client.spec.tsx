@@ -15,6 +15,7 @@ import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotTestRuntime, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
+import { SECTION_HOOK_CONTEXT, SECTION_INJECT } from './section-scroller.client.ts'
 
 usePinnedBrowserLanguages('zh-CN')
 
@@ -24,7 +25,7 @@ beforeEach(() => { localStorage.clear() })
 /** Test-owned sidebar shell role: declares and renders the browsing region. */
 type FrameProps = PropsRenderSlots<'sidebar.workspaces'>
 function SidebarFrame({ renderSlot }: FrameProps) {
-  return <>{renderSlot('sidebar.workspaces', { wide: true, expandSidebar: () => {} })}</>
+  return <>{renderSlot('sidebar.workspaces', { wide: true, expandSidebar: () => {} }, { hookContext: SECTION_HOOK_CONTEXT })}</>
 }
 
 /** The assembled sidebar over one Workspace inside the POSIX home the Host reports. */
@@ -48,7 +49,7 @@ async function bench() {
     }] as never
   })
   await runtime.root.declare(
-    { 'sidebar.workspaces': { kind: 'single', scope: 'root' } } as never,
+    { 'sidebar.workspaces': { kind: 'single', scope: 'root', inject: SECTION_INJECT } } as never,
     SidebarFrame as never,
   )
   await runtime.mount({ inject: [...inject], apply })

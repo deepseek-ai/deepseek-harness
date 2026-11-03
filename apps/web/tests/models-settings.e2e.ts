@@ -2,7 +2,7 @@
 // wire — the one add card offers the dormant pi-ai catalog on its third-party
 // mode and the create form on its custom-API mode, a blank key saves a
 // reference-free profile for provider-native auth, and typing an API key later
-// stores it under the derived reference (`MINIMAX_CN_API_KEY`)
+// stores it write-only under the derived reference (`MINIMAX_CN_API_KEY`)
 // while the settings document records only that reference. Each saved row
 // appears after route topology invalidation without presenting liveness as
 // provider status. The customized-settings fold writes its curated fields —
@@ -154,7 +154,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await dialog.getByText('该 API 密钥格式错误，请检查。').waitFor({ timeout: 10_000 })
     await expect.poll(async () => save.isEnabled(), { timeout: 10_000 }).toBe(false)
 
-    // An empty field leaves this new profile on native authentication.
+    // Clearing it restores submit: an empty field means "keep what is stored",
+    // never a refusal, or editing any other setting would demand the key.
     await key.fill('')
     await expect.poll(async () => save.isEnabled(), { timeout: 10_000 }).toBe(true)
     expect(await dialog.getByText('该 API 密钥格式错误，请检查。').count()).toBe(0)
@@ -220,9 +221,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-customized'))
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByRole('button', { name: '编辑 minimax-cn' }).click()
-    const savedKey = dialog.getByLabel('API 密钥', { exact: true })
-    await expect.poll(() => savedKey.inputValue(), { timeout: 10_000 }).toBe('sk-e2e-minimax')
-    expect(await savedKey.getAttribute('type')).toBe('password')
+    await dialog.getByPlaceholder('留空使用已保存凭据', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.textContent()).not.toContain('API 密钥来源：')
     expect(await dialog.textContent()).not.toMatch(/oauth/i)
     await dialog.getByText('自定义设置').click()

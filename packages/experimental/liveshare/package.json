@@ -20,10 +20,6 @@
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
-    "./viewer-declarations": {
-      "types": "./lib/types/viewer-declarations.d.ts",
-      "default": "./lib/viewer-declarations.js"
-    },
     "./typert": {
       "types": "./lib/typert.host.d.ts",
       "default": "./lib/typert.host.js"
@@ -48,8 +44,6 @@
     "cordis.patch.yml",
     "lib/owner-gateway/cli.js",
     "lib/retry-backoff-*.js",
-    "lib/viewer-declarations.js",
-    "lib/viewer-declarations-*.js",
     "lib/types/**/*.d.ts",
     "lib/typert.host.js",
     "lib/typert.host.d.ts",
@@ -65,9 +59,12 @@
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-experimental-liveshare-protocol": "workspace:*",
+    "@deepseek-ai/dsh-http-proxy": "workspace:*",
+    "@deepseek-ai/dsh-official-bundles": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
+    "undici": "8.11.2",
     "ws": "^8.18.3",
     "zod": "4.4.3"
   },

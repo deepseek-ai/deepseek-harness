@@ -782,7 +782,7 @@ describe('systemPromptPrecedesRequests', () => {
 })
 
 describe('normalizedToolSchemas', () => {
-  it('extracts normalized schema arrays and omits absent or non-array fields', () => {
+  it('extracts normalized schema arrays, preserves empty headers, and omits invalid fields', () => {
     const log = [
       '{"type":"session","id":"a","createdAt":5,"cwd":"/w"}',
       '{"type":"request/header","seq":0,"time":9,"data":{"header":{"tools":[{"name":"read","description":"work in /w"}]}}}',
@@ -794,6 +794,7 @@ describe('normalizedToolSchemas', () => {
     ].join('\n')
     expect(normalizedToolSchemas(log, { sessionIds: [], cwd: '/w' })).toEqual([
       [{ name: 'read', description: 'work in {{cwd}}' }],
+      [],
     ])
   })
 })
@@ -891,6 +892,12 @@ describe('tool-schema snapshots', () => {
   it('restores initial schemas into the pinned header token', () => {
     expect(restorePinnedToolSchemas({ system: '{{system}}', tools: '{{tools}}' }, snapshot.initial))
       .toEqual({ system: '{{system}}', tools: snapshot.initial })
+  })
+
+  it('preserves absent tools only for an empty sidecar', () => {
+    const header = { config: { model: 'test' } }
+    expect(restorePinnedToolSchemas(header, [])).toBe(header)
+    expect(() => restorePinnedToolSchemas(header, snapshot.initial)).toThrow(/must equal/)
   })
 
   it('restores ordered tool names only when they match the sidecar', () => {

@@ -2,7 +2,7 @@
 
 [English](worktrees.md) | 中文
 
-实验性的 [`dsh-experimental-worktree`](../../packages/experimental/worktree/README.zh.md) 服务提供 `ctx.worktrees`。其消费方 [`create_worktree`](../../packages/experimental/tool-worktree/README.zh.md) 创建新的 Git 分支与检出目录，再通过[工作目录服务](working-directory.zh.md)选中它。[Git 工作树可选 bundle](../../packages/experimental/tool-worktree/README.zh.md#use-this-package)通过 GUI 插件管理器一起加载这两个包。它随安装提供，但默认关闭；显式组合也可以挂载这两个包。
+实验性的 [`dsh-experimental-worktree`](../../packages/experimental/worktree/README.zh.md) 服务提供 `ctx.worktrees`。其消费方 [`create_worktree`](../../packages/experimental/tool-worktree/README.zh.md) 创建新的 Git 分支与检出目录，再通过[工作目录服务](working-directory.zh.md)选中它。[变更请求与工作树组合包](../../packages/experimental/forge-bundle/README.zh.md#use-this-package)通过 GUI 插件管理器一起加载这两个包，随安装提供但默认关闭。其他 profile 可以选择[独立工作树组合包](../../packages/experimental/tool-worktree/README.zh.md#use-this-package)，或显式挂载这两个包。
 
 ## 创建与保留
 

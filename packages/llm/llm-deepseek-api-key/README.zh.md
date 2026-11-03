@@ -55,7 +55,7 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-注册和监听随插件生命周期释放，释放时会中止进行中的列表请求。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入列表目录和门控。列表请求、缓存和目录解析来自共享传输包；缓存只在内存中，以端点和 API key 的 SHA-256 为键，因此换一个 key 会加载它自己的列表。一个 `loader/volatile-update` 监听器在路由开始或停止使用列表时丢弃缓存的列表。
+API key 读取调用[共享凭据模块](../llm-deepseek/src/credential.ts)的 `resolveDeepSeekApiKey`。注册和监听随插件生命周期释放，释放时会中止进行中的列表请求。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入列表目录和门控。列表请求、缓存和目录解析来自共享传输包；缓存只在内存中，以端点和 API key 的 SHA-256 为键，因此换一个 key 会加载它自己的列表。一个 `loader/volatile-update` 监听器在路由开始或停止使用列表时丢弃缓存的列表。
 
 <a id="further-exploration"></a>
 ## 进一步探索

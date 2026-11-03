@@ -476,7 +476,7 @@ describe('Node runtime host failures', () => {
     expect(Object.hasOwn(spec?.env ?? {}, 'PATH')).toBe(false)
     expect(spec?.argv).toEqual([process.execPath, '134217728'])
     expect(Object.fromEntries(Object.entries(spec?.env ?? {}).filter(([, value]) => value !== undefined)))
-      .toEqual({ DSH_PTC_RUNTIME_NODE: '1', NODE_OPTIONS: '--max-old-space-size=512' })
+      .toEqual({ DSH_PTC_RUNTIME_NODE: '1', NODE_OPTIONS: '--max-old-space-size=512 --experimental-vm-modules' })
   })
 })
 

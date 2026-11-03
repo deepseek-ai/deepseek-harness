@@ -40,3 +40,8 @@
 
 - id: tool-executor-ptc
   disabled: false
+
+# The recorded tool catalog includes the optional patch tool.
+- id: tool-fs
+  config:
+    applyPatch: true

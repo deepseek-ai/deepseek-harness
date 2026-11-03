@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Add Git worktrees from the GUI plugin manager to let a model create and enter a new Git worktree with one call. This optional bundle is installed with Harness and stays off until selected. Native tool calls and PTC programs receive the same typed result, and the existing file policy governs creation.
+Let a model create and enter a new Git worktree with one call. Web and Desktop expose this tool through Change requests & worktrees; other profiles can select this standalone bundle. Native tool calls and PTC programs receive the same typed result, and the existing file policy governs creation.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Add Git worktrees from the GUI plugin manager to let a model create and enter a 
 <a id="use-this-package"></a>
 ## Use this package
 
-In the GUI, open **Plugins → Official → Git worktrees** and turn on the switch. The bundle loads the [worktree runtime](../worktree/README.md) and this tool together; it is off in every shipped profile. Turning it off removes `create_worktree` without deleting existing checkouts or branches. The built-in `working_directory` tool remains available.
+In the GUI, enable [Change requests & worktrees](../forge-bundle/README.md). The standalone bundle has no Plugins page card. Profiles without the Web application may select it in `dsh.profile.bundles`; it loads the [worktree runtime](../worktree/README.md) and this tool together. Turning it off removes `create_worktree` without deleting existing checkouts or branches. The built-in `working_directory` tool remains available.
 
 For an explicit composition, mount this function plugin after the worktree runtime and tool registry.
 

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClientRequest } from 'electron'
-import { DesktopUpdateHttpExecutor } from '../src/update-http-executor.ts'
+import { DesktopUpdateHttpExecutor } from '../src/updates/electron-updater/http-executor.ts'
 
 beforeEach(() => { vi.useFakeTimers() })
 afterEach(() => { vi.useRealTimers() })
